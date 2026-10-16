@@ -22,7 +22,7 @@ import { isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recogn
 import { splitLayout } from './recognize/layout';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { parseCoordinate } from './values/coords';
-import { combineDateTime, parseDate, parseTimeOfDay } from './values/dates';
+import { combineDateTime, detectDayMonthOrder, parseDate, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 
@@ -38,17 +38,20 @@ interface Acc {
   lines: Set<number>;
   values: string[];
   withLines: boolean;
+  /** template params of the finding; the first call for a column sets them, like the example value */
+  params?: Record<string, string | number>;
 }
 
 class Collector {
   private readonly accs = new Map<string, Acc>();
   constructor(private readonly file: string) {}
 
-  add(ruleId: RowRuleId, sheet: string, field: string, line: number, value?: string, withLines = true): void {
+  add(ruleId: RowRuleId, sheet: string, field: string, line: number, value?: string, withLines = true, params?: Record<string, string | number>): void {
     const key = `${ruleId}\u0000${sheet}\u0000${field}`;
     let acc = this.accs.get(key);
     if (!acc) this.accs.set(key, (acc = { ruleId, sheet, field, lines: new Set(), values: [], withLines }));
     if (withLines) acc.lines.add(line);
+    if (params !== undefined && acc.params === undefined) acc.params = params;
     if (value !== undefined && acc.values.length < (withLines ? MAX_TOKENS : 1) && !acc.values.includes(value)) acc.values.push(value);
   }
 
@@ -60,6 +63,7 @@ class Collector {
         field: a.field,
         ...(a.values.length > 0 ? { value: a.values.join(', ') } : {}),
         ...(a.withLines ? { lines: [...a.lines] } : {}),
+        ...(a.params !== undefined ? { params: a.params } : {}),
       }),
     );
   }
@@ -160,6 +164,9 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
   const dateCache = new Map<string, ParsedDate | DateError>();
   const whenUtc = specs.when ? UTC_HEADER.test(specs.when.header) : false;
   const timeUtc = specs.time ? UTC_HEADER.test(specs.time.header) : false;
+  // D?M/YYYY order is a property of the column, not of a cell: decided once from every cell of the date column
+  const whenIndex = specs.when?.index;
+  const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
 
   const coordinate = (row: RawRow, spec: Spec, axis: 'lat' | 'lon'): { value: number; decimals: number } | undefined => {
     const cell = row.cells[spec.index] ?? null;
@@ -200,7 +207,11 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
         const cacheKey = typeof cell === 'number' ? `n${cell}` : `s${cell}`;
         let d = dateCache.get(cacheKey);
         if (d === undefined) {
-          d = parseDate(cell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.when.index] === true });
+          d = parseDate(cell, {
+            date1904: file.date1904,
+            dateFormatted: sheet.dateFormatted?.[specs.when.index] === true,
+            ...(whenOrder === 'unknown' ? {} : { order: whenOrder }),
+          });
           dateCache.set(cacheKey, d);
         }
         if ('error' in d) {
@@ -208,7 +219,7 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
         } else {
           let date: ParsedDate = d;
           let tzField = specs.when.header;
-          if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false);
+          if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
           const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           if (specs.time && !isBlankCell(timeCell)) {
             if ('error' in parseTimeOfDay(timeCell)) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim());
@@ -261,6 +272,12 @@ function numericCell(raw: RawCell, line: number, field: string, sheet: string, d
       return { raw, line, status: 'non-numeric' };
   }
 }
+
+/**
+ * DataRow.values is keyed by header / parameter names taken from the file. A prototype-less object keeps names such
+ * as '__proto__', 'constructor' or 'toString' ordinary keys: writing them is safe and an absent key reads undefined.
+ */
+const newValues = (): Record<string, NumericCell> => Object.create(null) as Record<string, NumericCell>;
 
 /* ---------- variables ---------- */
 
@@ -355,7 +372,7 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   const variables = cols.map(({ v, key }) => variableFrom(key, v.header, v.role));
   const rows: DataRow[] = [];
   for (const r of sheet.rows) {
-    const row: DataRow = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: {} };
+    const row: DataRow = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: newValues() };
     for (const { v, key } of cols) row.values[key] = numericCell(r.cells[v.index] ?? null, r.line, v.header, sheet.name, dc, c);
     rows.push(row);
   }
@@ -399,7 +416,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     const id = JSON.stringify(keyCols.map((i) => str(r.cells[i] ?? null) ?? ''));
     let row = groups.get(id);
     if (!row) {
-      row = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: {} };
+      row = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: newValues() };
       groups.set(id, row);
       rows.push(row);
     }
@@ -493,7 +510,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma };
   return { dataset, findings };
 }
 

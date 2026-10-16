@@ -40,6 +40,23 @@ describe('host lists', () => {
   });
 });
 
+describe('map and analytics hosts', () => {
+  it('MAP_HOSTS are exactly the hosts the CARTO dark-matter-nolabels style, its tiles.json, glyphs and sprite use', () => {
+    expect([...MAP_HOSTS].sort()).toEqual([
+      'basemaps.cartocdn.com', // style.json
+      'tiles-a.basemaps.cartocdn.com', // vector tiles (tiles.json)
+      'tiles-b.basemaps.cartocdn.com',
+      'tiles-c.basemaps.cartocdn.com',
+      'tiles-d.basemaps.cartocdn.com',
+      'tiles.basemaps.cartocdn.com', // tiles.json, glyphs, sprite
+    ]);
+  });
+  it('GA_HOSTS include the GA4 EU collection host, as an explicit name', () => {
+    expect(GA_HOSTS).toContain('region1.analytics.google.com');
+    expect(GA_HOSTS).toContain('region1.google-analytics.com');
+  });
+});
+
 describe('buildCsp', () => {
   const csp = buildCsp();
   const directive = (name: string) => csp.split(';').map((s) => s.trim()).find((s) => s.startsWith(name + ' ')) ?? '';

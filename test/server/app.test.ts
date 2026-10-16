@@ -34,7 +34,10 @@ function make(over: Partial<Parameters<typeof createApp>[0]> = {}) {
 }
 
 const post = (app: ReturnType<typeof createApp>, body: unknown, ip = '9.9.9.9') =>
-  request(app).post('/api/fetch').set('X-Forwarded-For', ip).set('Content-Type', 'application/json').send(JSON.stringify(body));
+  request(app).post('/api/fetch').set('X-Forwarded-For', ip).set('Content-Type', 'application/json').buffer(true).send(JSON.stringify(body));
+
+/** Text of a proxied body: it is served as application/octet-stream, so supertest hands it over as a Buffer. */
+const bodyText = (res: request.Response): string => (Buffer.isBuffer(res.body) ? res.body.toString('utf8') : res.text);
 
 function expectCommonHeaders(res: request.Response, noindex = true) {
   expect(res.headers['content-security-policy']).toBe(buildCsp());
@@ -226,18 +229,43 @@ describe('POST /api/fetch — proxying', () => {
     const { app } = make();
     const res = await post(app, { url: 'https://opendap.iopan.pl/x.csv', accept: 'text/csv' });
     expect(res.status).toBe(200);
-    expect(res.text).toBe('upstream-body');
-    expect(res.headers['content-type']).toMatch(/^text\/csv/);
+    expect(bodyText(res)).toBe('upstream-body');
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+    expect(res.headers['content-disposition']).toBe('attachment');
+    expect(res.headers['x-upstream-content-type']).toBe('text/csv');
     expect(res.headers['set-cookie']).toBeUndefined();
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
     expect(res.headers['cache-control']).toBe('no-store');
     expectCommonHeaders(res);
   });
+  it('never serves upstream HTML as HTML: octet-stream + attachment + nosniff, the upstream type only in a side header', async () => {
+    const { app } = make({ upstream: async () => resp(200, '<html><script>alert(1)</script></html>', { 'content-type': 'text/html; charset=utf-8' }) });
+    const res = await post(app, { url: 'https://geonetwork.iopan.pl/x' });
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+    expect(res.headers['content-disposition']).toBe('attachment');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-upstream-content-type']).toBe('text/html; charset=utf-8');
+  });
+  it('without an upstream content-type: still octet-stream, no side header', async () => {
+    const { app } = make({ upstream: async () => resp(200, 'x') });
+    const res = await post(app, { url: 'https://zenodo.org/x' });
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+    expect(res.headers['x-upstream-content-type']).toBeUndefined();
+  });
+  it('sanitises the upstream type for the side header: printable ASCII only, at most 100 characters', async () => {
+    const dirty = 'text/csv; name=caf\u00e9\u0001\u007f' + 'x'.repeat(200);
+    const { app } = make({ upstream: async () => resp(200, 'x', { 'content-type': dirty }) });
+    const res = await post(app, { url: 'https://zenodo.org/x' });
+    const v = res.headers['x-upstream-content-type'];
+    expect(v).toMatch(/^[\x20-\x7e]+$/);
+    expect(v.length).toBeLessThanOrEqual(100);
+    expect(v.startsWith('text/csv; name=caf')).toBe(true);
+  });
   it('passes an upstream 404 through with its body', async () => {
     const { app } = make({ upstream: async () => resp(404, 'gone', { 'content-type': 'text/plain' }) });
     const res = await post(app, { url: 'https://zenodo.org/api/records/0' });
     expect(res.status).toBe(404);
-    expect(res.text).toBe('gone');
+    expect(bodyText(res)).toBe('gone');
   });
   it('413 when Content-Length is above the cap — no 200 header is ever sent', async () => {
     const { app } = make({ maxBytes: 10, upstream: async () => resp(200, 'x'.repeat(11), { 'content-length': '11' }) });

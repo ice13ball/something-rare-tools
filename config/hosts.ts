@@ -20,16 +20,17 @@ export const GA_HOSTS: readonly string[] = [
   'www.google-analytics.com',
   'region1.google-analytics.com',
   'analytics.google.com',
+  'region1.analytics.google.com',
   'stats.g.doubleclick.net',
 ];
 
 export const MAP_HOSTS: readonly string[] = [
-  'basemaps.cartocdn.com',
-  'tiles.basemaps.cartocdn.com',
-  'a.basemaps.cartocdn.com',
-  'b.basemaps.cartocdn.com',
-  'c.basemaps.cartocdn.com',
-  'd.basemaps.cartocdn.com',
+  'basemaps.cartocdn.com', // style.json
+  'tiles.basemaps.cartocdn.com', // tiles.json, glyphs, sprite
+  'tiles-a.basemaps.cartocdn.com', // vector tiles
+  'tiles-b.basemaps.cartocdn.com',
+  'tiles-c.basemaps.cartocdn.com',
+  'tiles-d.basemaps.cartocdn.com',
 ];
 
 /** https only, exact (case-insensitive) host match, no credentials in the URL. */

@@ -4,7 +4,7 @@ import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMappin
 import { parseCoordinate } from '../values/coords';
 import { parseDate } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
-import { canonicalFromKey, headerKey, normaliseUnit, p01CodeOf } from './vocab';
+import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
 
 export interface ProposeContext {
   decimalComma: boolean;
@@ -22,8 +22,9 @@ export function stripTypeSuffix(h: string): string {
   return s.replace(/<[A-Za-z][A-Za-z0-9]*>\s*$/, '').trim();
 }
 
-// A single-token tail ('Depth_m', 'TEMP_C') is a unit only from this short list; longer tails go through normaliseUnit.
-const SINGLE_TOKEN_UNITS = new Set(['m', 'cm', 'mm', 'c', 'dbar', 'db', 'psu']);
+// A single-token tail ('Depth_m', 'TEMP_C', 'temp_degC') is a unit only when it is a UNIT_VOCAB label or alias, or one
+// of these lengths that the vocabulary does not list; longer tails go through normaliseUnit.
+const SINGLE_TOKEN_EXTRA_UNITS = new Set(['cm', 'mm']);
 
 /** Is this text, found in round brackets, a unit ('m', 'µmol L-1', 'kg m-3') and not a remark ('at 25ºC')? */
 const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰']);
@@ -71,7 +72,7 @@ export function unitFromHeader(h: string): HeaderUnit {
       const tail = tokens.slice(-k).join('_');
       const head = tokens.slice(0, -k).join('_');
       if (head === '') continue;
-      if (k === 1 ? SINGLE_TOKEN_UNITS.has(tail.toLowerCase()) : normaliseUnit(tail) !== undefined) {
+      if (k === 1 ? SINGLE_TOKEN_EXTRA_UNITS.has(tail.toLowerCase()) || isUnitAlias(tail) : normaliseUnit(tail) !== undefined) {
         return done(head, tail.replace(/_/g, ' '));
       }
     }

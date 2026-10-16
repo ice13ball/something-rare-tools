@@ -5,6 +5,8 @@ import { buildDataset, buildDatasets } from '../src/core/dataset';
 import { proposeColumns, toMapping } from '../src/core/recognize/columns';
 import { proposeLayout, proposeMappings } from '../src/core/recognize/layout';
 import type { Finding, MetadataRecord, ParsedFile } from '../src/core/types';
+import { renderPlain } from '../src/core/report';
+import { LANGS } from '../src/core/types';
 import { dateCell, fixtureFile, textFile, xlsxFile } from './helpers/files';
 
 function build(file: ParsedFile, metadata: MetadataRecord[] = []) {
@@ -75,7 +77,19 @@ describe('buildDataset: dates and positions', () => {
     const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,21-07-25,100\nS2,71,11,21-08-24,110\n');
     const { dataset, findings } = build(f);
     expect(dataset.rows[0].datetime).toMatchObject({ iso: '2021-07-25', ambiguity: 'yy-mm-dd' });
-    expect(byRule(findings, 'ROW-DATE-YYMMDD')).toEqual([expect.objectContaining({ field: 'Date', value: '21-07-25' })]);
+    expect(byRule(findings, 'ROW-DATE-YYMMDD')).toEqual([expect.objectContaining({ field: 'Date', value: '21-07-25', params: { interpreted: '2021-07-25' } })]);
+  });
+
+  it('the YY-MM-DD message states the century it chose, in every language', () => {
+    const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,99-07-25,100\nS2,71,11,98-08-24,110\n');
+    const [finding] = byRule(build(f).findings, 'ROW-DATE-YYMMDD');
+    expect(finding.params).toEqual({ interpreted: '1999-07-25' });
+    for (const lang of LANGS) {
+      const text = renderPlain(finding, lang);
+      expect(text, lang).toContain('99-07-25');
+      expect(text, lang).toContain('1999-07-25');
+      expect(text, lang).not.toContain('{');
+    }
   });
 
   it('an unparseable date is reported with its lines and left undefined (dateRaw kept)', () => {
@@ -84,6 +98,34 @@ describe('buildDataset: dates and positions', () => {
     expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([expect.objectContaining({ field: 'Date', lines: [3, 4], value: '03/04/2021, soon' })]);
     expect(dataset.rows[1].datetime).toBeUndefined();
     expect(dataset.rows[1].dateRaw).toBe('03/04/2021');
+  });
+
+  describe('day/month order is decided once per date column', () => {
+    const csv = (dates: string[]) => textFile('o.csv', 'Station,Lat,Lon,Date,DIC_umol_kg\n' + dates.map((d, i) => `ST${i},70,10,${d},2100`).join('\n') + '\n');
+    const isos = (ds: ReturnType<typeof build>['dataset']) => ds.rows.map((r) => r.datetime?.iso);
+
+    it('one unambiguous DD/MM cell makes the whole column day-first', () => {
+      const { dataset, findings } = build(csv(['25/07/2021', '03/04/2021', '10/11/2021']));
+      expect(isos(dataset)).toEqual(['2021-07-25', '2021-04-03', '2021-11-10']);
+      expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    });
+    it('one unambiguous MM/DD cell makes the whole column month-first', () => {
+      const { dataset, findings } = build(csv(['07/25/2021', '03/04/2021']));
+      expect(isos(dataset)).toEqual(['2021-07-25', '2021-03-04']);
+      expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    });
+    it('both kinds in one column: ambiguous and conflicting cells are unparseable and listed', () => {
+      const { dataset, findings } = build(csv(['25/07/2021', '07/25/2021', '03/04/2021', '2021-08-01']));
+      expect(isos(dataset)).toEqual([undefined, undefined, undefined, '2021-08-01']);
+      expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([
+        expect.objectContaining({ field: 'Date', lines: [2, 3, 4], value: '25/07/2021, 07/25/2021, 03/04/2021' }),
+      ]);
+    });
+    it('no unambiguous cell: ambiguous cells stay unparseable', () => {
+      const { dataset, findings } = build(csv(['03/04/2021', '05/06/2021']));
+      expect(isos(dataset)).toEqual([undefined, undefined]);
+      expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([expect.objectContaining({ lines: [2, 3] })]);
+    });
   });
 
   it('missing dates and NA tokens in the date column are not findings', () => {
@@ -144,6 +186,34 @@ describe('buildDataset: depth sign', () => {
     expect(build(elev).dataset.depthPositive).toBe('up');
     const none = textFile('n.csv', 'Station,Lat,Lon,DIC_umol_kg\nST1,70,10,2100\n');
     expect(build(none).dataset.depthPositive).toBe('unknown');
+  });
+});
+
+describe('buildDataset: names from user data never reach Object.prototype', () => {
+  it('a wide column headed __proto__ becomes a normal variable with values', () => {
+    const f = textFile('p.csv', 'Station,Latitude,Longitude,Date,__proto__\nST1,70,10,2021-07-25,5.5\nST2,71,11,2021-07-26,6.5\n');
+    const { dataset } = build(f);
+    expect(dataset.variables.map((v) => v.key)).toContain('__proto__');
+    for (const [i, expected] of [5.5, 6.5].entries()) {
+      const row = dataset.rows[i];
+      expect(Object.hasOwn(row.values, '__proto__')).toBe(true);
+      expect(row.values['__proto__']).toMatchObject({ status: 'ok', value: expected });
+      expect(Object.getPrototypeOf(row.values)).toBeNull();
+    }
+  });
+
+  it('a long-format parameter named constructor becomes a normal variable with values', () => {
+    const f = textFile('l.csv', 'sample,depth,parameter,unit,value\ncore_A,-5,constructor,%,1.54\ncore_A,-5,toString,%,0.21\ncore_A,-15,constructor,%,1.41\n');
+    const layout = proposeLayout(f);
+    expect(layout.tables[0].long).toBeDefined();
+    const { dataset } = buildDataset(f, layout, proposeMappings(f, layout), [], 'ds1');
+    expect(dataset.variables.map((v) => v.key).sort()).toEqual(['constructor', 'toString']);
+    expect(dataset.rows).toHaveLength(2);
+    expect(dataset.rows[0].values['constructor']).toMatchObject({ status: 'ok', value: 1.54 });
+    expect(dataset.rows[0].values['toString']).toMatchObject({ status: 'ok', value: 0.21 });
+    // a parameter missing from a row is absent, not an inherited function
+    expect(dataset.rows[1].values['toString']).toBeUndefined();
+    expect(Object.getPrototypeOf(dataset.rows[1].values)).toBeNull();
   });
 });
 

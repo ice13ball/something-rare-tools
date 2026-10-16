@@ -204,7 +204,9 @@ function dateMissing(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]
   out.push(makeFinding('ROW-DATE-MISSING', { file: ds.file, sheet, lines: blank.map((r) => r.line), params: { count: blank.length, percent } }));
 }
 
-const YEAR_TOKEN = /(?<![0-9])(19[0-9]{2}|20[0-9]{2}|2100)(?![0-9])/g;
+// A year token is bounded by anything except a letter or digit: 'cruise_2021.csv' and '2021-data.csv' name 2021,
+// 'ctd_2000m.csv' (a depth) and 'data2021.csv' (letters glued to the digits) name no year.
+const YEAR_TOKEN = /(?<![\p{L}\p{N}])(19[0-9]{2}|20[0-9]{2}|2100)(?![\p{L}\p{N}])/gu;
 const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
 

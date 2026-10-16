@@ -93,6 +93,8 @@ export interface Dataset {
   mappings: SheetMapping[]; layout: LayoutPlan;
   metadata: MetadataRecord[];
   depthPositive: 'down' | 'up' | 'unknown';
+  /** The source file wrote decimals with a comma. Only then may the clean CSV swap the comma for a dot. */
+  decimalComma?: boolean;
 }
 
 /* ---------- findings and rules ---------- */

@@ -2,15 +2,15 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import type { ParsedDate } from '../../src/core/types';
-import { combineDateTime, excelSerialToDate, parseDate, parseTimeOfDay } from '../../src/core/values/dates';
+import { combineDateTime, detectDayMonthOrder, excelSerialToDate, parseDate, parseTimeOfDay } from '../../src/core/values/dates';
 
 const OPTS = { date1904: false, dateFormatted: false };
-const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number } = {}): ParsedDate => {
+const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number; order?: 'dmy' | 'mdy' | 'conflict' } = {}): ParsedDate => {
   const r = parseDate(raw, { ...OPTS, ...opts });
   if ('error' in r) throw new Error(`expected a date for ${String(raw)}`);
   return r;
 };
-const bad = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean } = {}) => {
+const bad = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; order?: 'dmy' | 'mdy' | 'conflict' } = {}) => {
   const r = parseDate(raw, { ...OPTS, ...opts });
   if (!('error' in r)) throw new Error(`expected error for ${String(raw)}, got ${r.iso}`);
   return r;
@@ -206,6 +206,45 @@ describe('parseDate: DD.MM.YYYY and slashes', () => {
   it('dashes behave like slashes for D-M-YYYY', () => {
     expect(ok('25-07-2021').iso).toBe('2021-07-25');
     expect(bad('03-04-2021').error).toBe('unparseable');
+  });
+});
+
+describe('parseDate: day/month order decided per column', () => {
+  const dmy = { order: 'dmy' as const };
+  const mdy = { order: 'mdy' as const };
+  it("order 'dmy' reads an ambiguous D/M/Y day-first, with slashes and dashes", () => {
+    expect(ok('03/04/2021', dmy).iso).toBe('2021-04-03');
+    expect(ok('03-04-2021 10:30', dmy).iso).toBe('2021-04-03T10:30');
+  });
+  it("order 'mdy' reads an ambiguous D/M/Y month-first", () => {
+    expect(ok('03/04/2021', mdy).iso).toBe('2021-03-04');
+  });
+  it("order 'conflict' leaves every differing-part slash date unparseable, even an unambiguous one", () => {
+    expect(bad('03/04/2021', { order: 'conflict' }).error).toBe('unparseable');
+    expect(bad('25/07/2021', { order: 'conflict' }).error).toBe('unparseable');
+    expect(bad('07/25/2021', { order: 'conflict' }).error).toBe('unparseable');
+    expect(ok('05/05/2021', { order: 'conflict' }).iso).toBe('2021-05-05');
+  });
+  it('an order never changes DD.MM.YYYY, ISO or invalid calendar days', () => {
+    expect(ok('03.04.2021', mdy).iso).toBe('2021-04-03');
+    expect(ok('2021-03-04', mdy).iso).toBe('2021-03-04');
+    expect(bad('31/04/2021', dmy).error).toBe('unparseable');
+  });
+});
+
+describe('detectDayMonthOrder', () => {
+  it("'dmy' when some cell is unambiguous day-first and none is month-first", () => {
+    expect(detectDayMonthOrder(['25/07/2021', '03/04/2021', null, 'x'])).toBe('dmy');
+  });
+  it("'mdy' when some cell is unambiguous month-first and none is day-first", () => {
+    expect(detectDayMonthOrder(['07/25/2021', '03-04-2021'])).toBe('mdy');
+  });
+  it("'conflict' when both kinds occur", () => {
+    expect(detectDayMonthOrder(['25/07/2021', '07/25/2021', '03/04/2021'])).toBe('conflict');
+  });
+  it("'unknown' when no cell is unambiguous (also for identical parts, ISO, numbers and empty input)", () => {
+    expect(detectDayMonthOrder(['03/04/2021', '05/05/2021', '2021-07-25', 12.5])).toBe('unknown');
+    expect(detectDayMonthOrder([])).toBe('unknown');
   });
 });
 

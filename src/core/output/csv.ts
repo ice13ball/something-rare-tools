@@ -23,23 +23,24 @@ export function guardText(s: string): string {
 }
 
 /**
- * Text of one value cell, from its original text. xlsx numbers: String(raw). A decimal-comma number keeps every
- * character except the separator ('3,14' -> '3.14'). Missing tokens ('NA', '', '-') are written as they are (a bare
+ * Text of one value cell, from its original text. xlsx numbers: String(raw). A number of a file that was read as
+ * decimal-comma (`decimalComma` true) keeps every character except the separator ('3,14' -> '3.14'). Without that
+ * flag nothing is ever re-read as a number: '1,234' in a dot-decimal file is text and stays '1,234'. Missing tokens ('NA', '', '-') are written as they are (a bare
  * '-' is not a formula). Everything else is text and goes through the formula guard.
  */
-export function valueText(raw: RawCell | undefined): string {
+export function valueText(raw: RawCell | undefined, decimalComma = false): string {
   if (raw === null || raw === undefined) return '';
   if (typeof raw === 'number') return String(raw);
   const t = raw.trim();
-  const dot = parseNumber(t, false);
-  if (dot.status === 'ok') return t;
-  const comma = parseNumber(t, true);
-  if (comma.status === 'ok') return t.replace(',', '.');
-  if (dot.status === 'missing') return t;
+  const p = parseNumber(t, decimalComma);
+  if (p.status === 'ok') return decimalComma ? t.replace(',', '.') : t;
+  // a dot number inside a decimal-comma file is already in output form; it is kept, not swapped
+  const dot = decimalComma ? parseNumber(t, false) : p;
+  if (dot.status === 'ok' || dot.status === 'missing' || p.status === 'missing') return t;
   return guardText(raw);
 }
 
-const cellText = (c: NumericCell | undefined): string => valueText(c?.raw);
+const cellText = (c: NumericCell | undefined, decimalComma: boolean): string => valueText(c?.raw, decimalComma);
 
 /**
  * Decimal degrees for a parsed coordinate, rounded to the precision the parser counted (latDecimals/lonDecimals).
@@ -132,7 +133,7 @@ export function toCleanCsv(ds: Dataset): CleanCsv {
 
   for (const v of ds.variables) {
     const name = unitFromHeader(v.header).name || v.header;
-    add(name, v.unit, (r) => cellText(r.values[v.key]), [v.header, v.unitSource ?? '', v.p01 ?? '']);
+    add(name, v.unit, (r) => cellText(r.values[v.key], ds.decimalComma === true), [v.header, v.unitSource ?? '', v.p01 ?? '']);
   }
 
   const lines = [csvLine(cols.map((c) => guardText(c.header))), ...rows.map((r) => csvLine(cols.map((c) => c.get(r))))];

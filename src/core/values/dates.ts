@@ -12,9 +12,17 @@ export interface TimeOfDay {
   text: string;
 }
 export type DateError = { error: 'unparseable'; raw: string };
+/** Day/month order of a column of D/M/YYYY dates, as decided from all its cells by detectDayMonthOrder. */
+export type DayMonthOrder = 'dmy' | 'mdy' | 'conflict' | 'unknown';
 export interface ParseDateOptions {
   date1904: boolean;
   dateFormatted: boolean;
+  /**
+   * Column-level order for slash / dash D?M/YYYY dates whose two parts are both <= 12. 'dmy' / 'mdy' read them in
+   * that order; 'conflict' (the column mixes unambiguous DD/MM and MM/DD cells) leaves EVERY such date with differing
+   * parts unparseable, ambiguous or not. Absent: an ambiguous cell is unparseable.
+   */
+  order?: Exclude<DayMonthOrder, 'unknown'>;
   /** full year used for the YY-MM-DD pivot; defaults to the current UTC year (tests pin it) */
   currentYear?: number;
 }
@@ -152,7 +160,8 @@ const YEAR_RE = /^\d{4}$/;
  * - 'YY-MM-DD' (exactly two digits each, dashes): year = 2000+YY when YY <= (current two-digit year + 1), else
  *   1900+YY; always flagged ambiguity 'yy-mm-dd'.
  * - 'DD.MM.YYYY' (day first by convention), 'DD/MM/YYYY' or 'MM/DD/YYYY' (also with '-') ONLY when one part > 12
- *   decides the order (identical parts are also unambiguous); otherwise unparseable. A trailing ' HH:MM[:SS]' is allowed.
+ *   decides the order (identical parts are also unambiguous), or when the caller passes the column's `order`
+ *   (see detectDayMonthOrder); otherwise unparseable. A trailing ' HH:MM[:SS]' is allowed.
  * - year only: a 4-digit STRING with dateFormatted false -> precision 'year'.
  * All calendar dates are validated (2021-02-30 is unparseable).
  */
@@ -206,12 +215,36 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
     const b = Number(m[3]);
     const y = Number(m[4]);
     if (a === b) return withTime(y, b, a, m[5], raw);
+    if (opts.order === 'conflict') return fail(raw);
     if (a > 12 && b <= 12) return withTime(y, b, a, m[5], raw); // DD/MM
     if (b > 12 && a <= 12) return withTime(y, a, b, m[5], raw); // MM/DD
-    return fail(raw); // ambiguous (both <= 12) or impossible (both > 12)
+    if (a <= 12 && b <= 12 && opts.order === 'dmy') return withTime(y, b, a, m[5], raw);
+    if (a <= 12 && b <= 12 && opts.order === 'mdy') return withTime(y, a, b, m[5], raw);
+    return fail(raw); // ambiguous (both <= 12, no column order) or impossible (both > 12)
   }
 
   return fail(raw);
+}
+
+/**
+ * Day/month order of one date column, from ALL its cells. Only slash / dash D?M/YYYY text counts, and only cells that
+ * decide it by themselves (first part > 12 -> DD/MM; second part > 12 -> MM/DD). 'dmy' or 'mdy' when only one kind
+ * occurs, 'conflict' when both do, 'unknown' when no cell is unambiguous. Pass the result to parseDate as `order`
+ * ('unknown' -> leave `order` out).
+ */
+export function detectDayMonthOrder(cells: readonly RawCell[]): DayMonthOrder {
+  let dmy = false;
+  let mdy = false;
+  for (const c of cells) {
+    if (typeof c !== 'string') continue;
+    const m = SLASH_RE.exec(c.trim());
+    if (!m) continue;
+    const a = Number(m[1]);
+    const b = Number(m[3]);
+    if (a > 12 && b <= 12) dmy = true;
+    else if (b > 12 && a <= 12) mdy = true;
+  }
+  return dmy && mdy ? 'conflict' : dmy ? 'dmy' : mdy ? 'mdy' : 'unknown';
 }
 
 /**

@@ -118,6 +118,10 @@ describe('messages', () => {
     });
   }
 
+  it('ROW-DATE-YYMMDD declares the interpreted date as a param', () => {
+    expect(RULE_PARAMS['ROW-DATE-YYMMDD']).toEqual(['interpreted']);
+  });
+
   it('Polish messages carry diacritics (no ASCII-fied text)', () => {
     const withDiacritics = RULES.filter((r) => /[ąćęłńóśźż]/i.test(r.plain.pl));
     expect(withDiacritics.length).toBeGreaterThanOrEqual(40);
