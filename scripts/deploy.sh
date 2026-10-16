@@ -9,11 +9,12 @@ PROJECT=something-rare
 REGION=europe-west1
 SERVICE=abyssal-tools
 SHA=$(git rev-parse --short HEAD)
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/abyssal/tools:${SHA}"
+IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/abyssal/tools"
+IMAGE="${IMAGE_REPO}:${SHA}"
 
 if [[ -n "$(git status --porcelain)" ]]; then echo "working tree not clean" >&2; exit 1; fi
 
-gcloud builds submit --project="$PROJECT" --region="$REGION" --tag "$IMAGE" .
+gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --substitutions="_IMAGE=${IMAGE_REPO},_SHA=${SHA}" .
 gcloud run deploy "$SERVICE" --project="$PROJECT" --region="$REGION" --image "$IMAGE" \
   --allow-unauthenticated --min-instances=0 --max-instances=2 --memory=512Mi --cpu=1 \
   --concurrency=40 --timeout=60s --port=8080

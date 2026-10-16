@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+#
+# Image build for Abyssal Claims Tools, submitted by scripts/deploy.sh. Same service account and logging
+# mode as the atlas build (the default compute account cannot read the Cloud Build source bucket).
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/something-rare/abyssal/tools
+  _SHA: manual
+serviceAccount: projects/something-rare/serviceAccounts/github-actions-deployer@something-rare.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 900s
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '--platform', 'linux/amd64', '-t', '${_IMAGE}:${_SHA}', '.']
+images:
+  - '${_IMAGE}:${_SHA}'
