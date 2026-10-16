@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rec:GetRecordByIdResponse xmlns:rec="http://example.org/wrapper">
+<md:MD_Metadata xmlns:md="http://www.isotc211.org/2005/gmd" xmlns:c="http://www.isotc211.org/2005/gco" xmlns:x="http://www.isotc211.org/2005/gmx" xmlns:g="http://www.opengis.net/gml/3.2" xmlns:l="http://www.w3.org/1999/xlink">
+  <md:identificationInfo>
+    <md:MD_DataIdentification>
+      <md:citation>
+        <md:CI_Citation>
+          <md:title><c:CharacterString>Synthetic clean record</c:CharacterString></md:title>
+          <md:edition><c:CharacterString>1.1</c:CharacterString></md:edition>
+        </md:CI_Citation>
+      </md:citation>
+      <md:abstract><c:CharacterString>Invented abstract of a clean synthetic record.</c:CharacterString></md:abstract>
+      <md:resourceConstraints>
+        <md:MD_LegalConstraints>
+          <md:accessConstraints>
+            <md:MD_RestrictionCode codeList="http://standards.iso.org/iso/19139/resources/gmxCodelists.xml#MD_RestrictionCode" codeListValue="otherRestrictions"/>
+          </md:accessConstraints>
+          <md:useConstraints>
+            <md:MD_RestrictionCode codeList="http://standards.iso.org/iso/19139/resources/gmxCodelists.xml#MD_RestrictionCode" codeListValue="license"/>
+          </md:useConstraints>
+          <md:otherConstraints>
+            <x:Anchor l:href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International</x:Anchor>
+          </md:otherConstraints>
+        </md:MD_LegalConstraints>
+      </md:resourceConstraints>
+      <md:extent>
+        <md:EX_Extent>
+          <md:geographicElement>
+            <md:EX_GeographicBoundingBox>
+              <md:westBoundLongitude><c:Decimal>10.5</c:Decimal></md:westBoundLongitude>
+              <md:eastBoundLongitude><c:Decimal>12.25</c:Decimal></md:eastBoundLongitude>
+              <md:southBoundLatitude><c:Decimal>-5.5</c:Decimal></md:southBoundLatitude>
+              <md:northBoundLatitude><c:Decimal>7.75</c:Decimal></md:northBoundLatitude>
+            </md:EX_GeographicBoundingBox>
+          </md:geographicElement>
+          <md:temporalElement>
+            <md:EX_TemporalExtent>
+              <md:extent>
+                <g:TimePeriod g:id="tp1">
+                  <g:beginPosition>2025-05-19</g:beginPosition>
+                  <g:endPosition>2025-05-31</g:endPosition>
+                </g:TimePeriod>
+              </md:extent>
+            </md:EX_TemporalExtent>
+          </md:temporalElement>
+        </md:EX_Extent>
+      </md:extent>
+    </md:MD_DataIdentification>
+  </md:identificationInfo>
+  <md:distributionInfo>
+    <md:MD_Distribution>
+      <md:transferOptions>
+        <md:MD_DigitalTransferOptions>
+          <md:onLine>
+            <md:CI_OnlineResource>
+              <md:linkage><md:URL>https://doi.org/10.0000/synthetic.1</md:URL></md:linkage>
+              <md:protocol><c:CharacterString>DOI</c:CharacterString></md:protocol>
+            </md:CI_OnlineResource>
+          </md:onLine>
+        </md:MD_DigitalTransferOptions>
+      </md:transferOptions>
+    </md:MD_Distribution>
+  </md:distributionInfo>
+</md:MD_Metadata>
+</rec:GetRecordByIdResponse>

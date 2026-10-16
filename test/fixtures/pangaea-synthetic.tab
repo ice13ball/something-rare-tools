@@ -1,0 +1,25 @@
+/* DATA DESCRIPTION:
+Citation:	Invented, Ann; Test, Bob (2099): Synthetic fjord CTD profiles. PANGAEA, https://doi.org/10.1594/PANGAEA.000000
+Abstract:	Invented abstract of a synthetic data set.
+Keyword(s):	synthetic; test
+Coverage:	MEDIAN LATITUDE: 70.5 * MEDIAN LONGITUDE: 10.25 * SOUTH-BOUND LATITUDE: 70 * WEST-BOUND LONGITUDE: 10 * NORTH-BOUND LATITUDE: 71 * EAST-BOUND LONGITUDE: 10.5
+	DATE/TIME START: 2099-01-02T00:00:00 * DATE/TIME END: 2099-03-04T12:30:00
+Event(s):	X/ST1 * LATITUDE: 12.5 * LONGITUDE: 33.5 * DATE/TIME: 2099-01-02T00:00:00
+Comment:	First comment line.
+	Second comment line.
+Parameter(s):	Event (Event) * PI: Invented, Ann * GEOCODE
+	DATE/TIME (Date/Time) * PI: Invented, Ann * GEOCODE
+	LATITUDE (Latitude) * PI: Invented, Ann * GEOCODE
+	LONGITUDE (Longitude) * PI: Invented, Ann * GEOCODE
+	Temperature, water [°C] (Temp) * PI: Invented, Ann * METHOD/DEVICE: CTD
+	Salinity (Sal) * COMMENT: Invented comment
+License:	Creative Commons Attribution 4.0 International (CC-BY-4.0) (URI: https://creativecommons.org/licenses/by/4.0/)
+Status:	in review
+Size:	3 data points
+*/
+Event	Date/Time	Latitude	Longitude	Temp [°C]	Sal
+ST1	2099-01-02T00:00	70.1	10.1	4.5	34.9
+ST1	2099-01-02T01:00	70.1	10.1	4.4	
+
+ST2	2099-03-04	70.9	10.4	-0.5	33.1
+ST2	2099-03-04	70.9	10.4	-0.4	33.2	extra

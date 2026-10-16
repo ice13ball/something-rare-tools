@@ -1,0 +1,5 @@
+{
+  "id": 2000002, "recid": "2000002", "doi": "10.0000/zenodo.2000002",
+  "metadata": { "title": "Synthetic report", "license": { "id": "cc-by-4.0" } },
+  "files": [{ "key": "report.pdf", "size": 100 }, { "key": "grid.nc", "size": 4000 }]
+}

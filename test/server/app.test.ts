@@ -1,0 +1,360 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import request from 'supertest';
+import { describe, expect, it } from 'vitest';
+import { buildCsp } from '../../config/hosts.js';
+import { createApp } from '../../server/index.js';
+import type { Upstream, UpstreamResponse } from '../../server/fetchProxy.js';
+
+const DIST = join(__dirname, '..', 'fixtures', 'dist');
+
+async function* chunks(...parts: string[]): AsyncGenerator<Uint8Array> {
+  for (const p of parts) yield new TextEncoder().encode(p);
+}
+
+function resp(status: number, body: AsyncIterable<Uint8Array> | string = '', headers: Record<string, string> = {}): UpstreamResponse {
+  return { status, headers, body: typeof body === 'string' ? chunks(body) : body, destroy() {} };
+}
+
+function make(over: Partial<Parameters<typeof createApp>[0]> = {}) {
+  const logs: string[] = [];
+  const app = createApp({
+    distDir: DIST,
+    resolver: async () => ['193.0.6.139'],
+    upstream: async () => resp(200, 'upstream-body', { 'content-type': 'text/csv', 'set-cookie': 'JSESSIONID=1' }),
+    log: (l) => logs.push(l),
+    ...over,
+  });
+  return { app, logs };
+}
+
+const post = (app: ReturnType<typeof createApp>, body: unknown, ip = '9.9.9.9') =>
+  request(app).post('/api/fetch').set('X-Forwarded-For', ip).set('Content-Type', 'application/json').send(JSON.stringify(body));
+
+function expectCommonHeaders(res: request.Response, noindex = true) {
+  expect(res.headers['content-security-policy']).toBe(buildCsp());
+  expect(res.headers['x-content-type-options']).toBe('nosniff');
+  expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
+  expect(res.headers['strict-transport-security']).toBe('max-age=31536000');
+  expect(res.headers['permissions-policy']).toBe('geolocation=(), camera=(), microphone=()');
+  expect(res.headers['x-powered-by']).toBeUndefined();
+  if (noindex) expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+  else expect(res.headers['x-robots-tag']).toBeUndefined();
+}
+
+describe('static routes', () => {
+  const { app } = make();
+
+  for (const [path, marker] of [
+    ['/', 'fixture-page-index'],
+    ['/check', 'fixture-page-check'],
+    ['/check/', 'fixture-page-check'],
+    ['/privacy', 'fixture-page-privacy'],
+    ['/privacy/', 'fixture-page-privacy'],
+  ] as const) {
+    it(`GET ${path} serves its page with every header`, async () => {
+      const res = await request(app).get(path);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/^text\/html/);
+      expect(res.text).toContain(marker);
+      expect(res.text).toContain('<meta name="robots" content="noindex,nofollow" />');
+      expectCommonHeaders(res);
+    });
+  }
+
+  it('HEAD /check works', async () => {
+    const res = await request(app).head('/check');
+    expect(res.status).toBe(200);
+    expectCommonHeaders(res);
+  });
+
+  it('GET /nope is a real 404 with the four-language page, a link home and every header', async () => {
+    const res = await request(app).get('/nope');
+    expect(res.status).toBe(404);
+    for (const phrase of ['Page not found', 'Nie znaleziono strony', 'Seite nicht gefunden', 'Page introuvable']) {
+      expect(res.text).toContain(phrase);
+    }
+    expect(res.text).toContain('href="/"');
+    expect(res.text).not.toContain('<script');
+    expectCommonHeaders(res);
+  });
+
+  it('404 for anything not listed: /check/anything, /index.html, /Check, /privacy/x, unlisted files in dist, /check//', async () => {
+    for (const p of ['/check/anything', '/check/index.html', '/index.html', '/Check', '/PRIVACY', '/privacy/x', '/secret.txt', '/check//', '/assets', '/assets/', '/assets/missing.js', '/favicon.ico']) {
+      const res = await request(app).get(p);
+      expect(res.status, p).toBe(404);
+      expect(res.text, p).not.toContain('fixture-page');
+      expectCommonHeaders(res);
+    }
+  });
+
+  it('path traversal out of /assets is refused', async () => {
+    for (const p of ['/assets/../secret.txt', '/assets/%2e%2e/secret.txt', '/assets/..%2fsecret.txt', '/assets/%2e%2e%2fsecret.txt', '/assets/x.js/../../secret.txt']) {
+      const res = await request(app).get(p);
+      expect(res.status, p).not.toBe(200);
+      expect(res.text, p).not.toContain('secret');
+    }
+  });
+
+  it('non-GET methods on page routes are 404', async () => {
+    expect((await request(app).post('/check')).status).toBe(404);
+    expect((await request(app).put('/')).status).toBe(404);
+  });
+
+  it('/assets/* is served with an immutable cache and the headers', async () => {
+    const res = await request(app).get('/assets/x.js');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/javascript/);
+    expect(res.headers['cache-control']).toMatch(/immutable/);
+    expect(res.headers['cache-control']).toMatch(/max-age=31536000/);
+    expectCommonHeaders(res);
+  });
+
+  it('/consent-default.js and /robots.txt', async () => {
+    const js = await request(app).get('/consent-default.js');
+    expect(js.status).toBe(200);
+    expect(js.headers['content-type']).toMatch(/javascript/);
+    const robots = await request(app).get('/robots.txt');
+    expect(robots.status).toBe(200);
+    expect(robots.headers['content-type']).toMatch(/^text\/plain/);
+    expect(robots.text).toBe('User-agent: *\nAllow: /\n');
+    expect(robots.text).not.toMatch(/disallow/i);
+    expectCommonHeaders(robots);
+  });
+
+  it('/favicon.svg is 404 when absent and served when present', async () => {
+    expect((await request(app).get('/favicon.svg')).status).toBe(404);
+    const dir = mkdtempSync(join(tmpdir(), 'dist-fav-'));
+    cpSync(DIST, dir, { recursive: true });
+    writeFileSync(join(dir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const res = await request(make({ distDir: dir }).app).get('/favicon.svg');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/svg/);
+  });
+
+  it('refuses to start without the three HTML pages', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dist-empty-'));
+    expect(() => make({ distDir: dir })).toThrow(/index\.html/);
+  });
+});
+
+describe('noindex flag', () => {
+  it('defaults to SITE.noindex (true)', async () => {
+    const res = await request(make().app).get('/check');
+    expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+  });
+  it('noindex:false drops X-Robots-Tag everywhere and strips the robots meta from served HTML', async () => {
+    const { app } = make({ noindex: false });
+    for (const p of ['/', '/check', '/check/', '/privacy', '/nope', '/robots.txt']) {
+      const res = await request(app).get(p);
+      expectCommonHeaders(res, false);
+      expect(res.text, p).not.toMatch(/name="robots"/);
+    }
+    const res = await request(app).get('/check');
+    expect(res.text).toContain('fixture-page-check');
+    expect(res.text).toContain('<meta charset="UTF-8" />');
+  });
+  it('noindex:true keeps the tag on /api responses too', async () => {
+    const res = await post(make({ noindex: true }).app, { url: 'http://zenodo.org/' });
+    expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+  });
+});
+
+describe('POST /api/fetch — input validation', () => {
+  const { app } = make();
+
+  it('GET /api/fetch is 405 and other /api paths are 404', async () => {
+    const g = await request(app).get('/api/fetch');
+    expect(g.status).toBe(405);
+    expect(g.headers.allow).toBe('POST');
+    expect((await request(app).post('/api/other')).status).toBe(404);
+  });
+
+  it('400 for a missing, non-string or oversized url', async () => {
+    for (const body of [{}, { url: 5 }, { url: null }, { url: ['https://zenodo.org/'] }, { url: '' }, [], 'str', null]) {
+      const res = await post(app, body);
+      expect(res.status, JSON.stringify(body)?.slice(0, 40)).toBe(400);
+    }
+  });
+  it('an oversized url is refused (the 2 kB body limit bites first: 413; the 2048-character check is the second line)', async () => {
+    const res = await post(app, { url: 'https://zenodo.org/' + 'a'.repeat(2048) });
+    expect([400, 413]).toContain(res.status);
+    // the largest URL that fits the 2 kB body (JSON overhead included) is accepted
+    const url = 'https://zenodo.org/' + 'a'.repeat(2000);
+    expect((await post(app, { url })).status).toBe(200);
+  });
+  it('400 for a non-string, oversized or non-printable accept', async () => {
+    for (const accept of [5, {}, 'a'.repeat(201), 'text/csv\r\nX-Evil: 1', 'tëxt']) {
+      expect((await post(app, { url: 'https://zenodo.org/', accept })).status, String(accept).slice(0, 20)).toBe(400);
+    }
+    expect((await post(app, { url: 'https://zenodo.org/', accept: 'a'.repeat(200) })).status).toBe(200);
+  });
+  it('400 for malformed JSON and for a non-JSON content type', async () => {
+    const bad = await request(app).post('/api/fetch').set('Content-Type', 'application/json').send('{bad');
+    expect(bad.status).toBe(400);
+    const text = await request(app).post('/api/fetch').set('Content-Type', 'text/plain').send('{"url":"https://zenodo.org/"}');
+    expect(text.status).toBe(400);
+    expectCommonHeaders(bad);
+  });
+  it('413 for a body above 2 kB', async () => {
+    const res = await post(app, { url: 'https://zenodo.org/', accept: 'x', pad: 'p'.repeat(2100) });
+    expect(res.status).toBe(413);
+    expectCommonHeaders(res);
+  });
+  it('refuses http, a non-allowlisted host, a private resolution and a redirect to the metadata address', async () => {
+    expect((await post(app, { url: 'http://zenodo.org/' })).status).toBe(400);
+    expect((await post(app, { url: 'https://evil.example/' })).status).toBe(403);
+    expect((await post(app, { url: 'https://169.254.169.254/' })).status).toBe(422);
+    const priv = make({ resolver: async () => ['127.0.0.1'] }).app;
+    expect((await post(priv, { url: 'https://zenodo.org/' })).status).toBe(422);
+    const redir = make({ upstream: async () => resp(302, '', { location: 'https://169.254.169.254/latest' }) }).app;
+    const r = await post(redir, { url: 'https://zenodo.org/' });
+    expect(r.status).toBe(422);
+    expect(r.headers['x-fetch-proxy-error']).toBeTruthy();
+    const redir2 = make({ upstream: async () => resp(302, '', { location: 'https://evil.example/' }) }).app;
+    expect((await post(redir2, { url: 'https://zenodo.org/' })).status).toBe(403);
+  });
+});
+
+describe('POST /api/fetch — proxying', () => {
+  it('streams the body, forwards only content-type, never a cookie, and sets the app headers', async () => {
+    const { app } = make();
+    const res = await post(app, { url: 'https://opendap.iopan.pl/x.csv', accept: 'text/csv' });
+    expect(res.status).toBe(200);
+    expect(res.text).toBe('upstream-body');
+    expect(res.headers['content-type']).toMatch(/^text\/csv/);
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    expect(res.headers['cache-control']).toBe('no-store');
+    expectCommonHeaders(res);
+  });
+  it('passes an upstream 404 through with its body', async () => {
+    const { app } = make({ upstream: async () => resp(404, 'gone', { 'content-type': 'text/plain' }) });
+    const res = await post(app, { url: 'https://zenodo.org/api/records/0' });
+    expect(res.status).toBe(404);
+    expect(res.text).toBe('gone');
+  });
+  it('413 when Content-Length is above the cap — no 200 header is ever sent', async () => {
+    const { app } = make({ maxBytes: 10, upstream: async () => resp(200, 'x'.repeat(11), { 'content-length': '11' }) });
+    const res = await post(app, { url: 'https://zenodo.org/' });
+    expect(res.status).toBe(413);
+  });
+  it('413 when the first streamed chunk already exceeds the cap', async () => {
+    const { app } = make({ maxBytes: 10, upstream: async () => resp(200, 'x'.repeat(11)) });
+    expect((await post(app, { url: 'https://zenodo.org/' })).status).toBe(413);
+  });
+  it('504 when upstream never answers', async () => {
+    const { app } = make({ timeoutMs: 40, upstream: () => new Promise(() => {}) });
+    expect((await post(app, { url: 'https://zenodo.org/' })).status).toBe(504);
+  });
+  it('502 when upstream is unreachable', async () => {
+    const { app } = make({
+      upstream: async () => {
+        throw new Error('ECONNREFUSED 10.0.0.1:443');
+      },
+    });
+    const res = await post(app, { url: 'https://zenodo.org/' });
+    expect(res.status).toBe(502);
+    expect(res.text).not.toMatch(/10\.0\.0\.1|ECONNREFUSED/);
+  });
+
+  it('a body that exceeds the cap mid-stream destroys the response (no clean end) and logs the bytes actually sent', async () => {
+    const { app, logs } = make({ maxBytes: 100, upstream: async () => resp(200, chunks('a'.repeat(60), 'b'.repeat(60)), { 'content-type': 'text/csv' }) });
+    const server = http.createServer(app);
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const outcome = await new Promise<string>((resolve) => {
+        const req = http.request({ host: '127.0.0.1', port, method: 'POST', path: '/api/fetch', headers: { 'content-type': 'application/json' } }, (res) => {
+          res.on('data', () => {});
+          res.on('end', () => resolve(res.complete ? 'clean-end' : 'aborted'));
+          res.on('aborted', () => resolve('aborted'));
+          res.on('error', () => resolve('aborted'));
+          res.on('close', () => resolve(res.complete ? 'clean-end' : 'aborted'));
+        });
+        req.on('error', () => resolve('aborted'));
+        req.end(JSON.stringify({ url: 'https://zenodo.org/big' }));
+      });
+      expect(outcome).toBe('aborted');
+      await new Promise((r) => setTimeout(r, 50));
+      expect(logs).toHaveLength(1);
+      expect(JSON.parse(logs[0])).toEqual({ host: 'zenodo.org', status: 200, bytes: 60 });
+    } finally {
+      server.closeAllConnections();
+      server.close();
+    }
+  });
+});
+
+describe('logging', () => {
+  it('writes one {host,status,bytes} JSON line per proxied request and never a path, query or body', async () => {
+    const { app, logs } = make();
+    const url = 'https://zenodo.org/api/records/123456?access_token=SECRETTOKEN&q=needle';
+    await post(app, { url });
+    expect(logs).toHaveLength(1);
+    expect(Object.keys(JSON.parse(logs[0])).sort()).toEqual(['bytes', 'host', 'status']);
+    expect(JSON.parse(logs[0])).toEqual({ host: 'zenodo.org', status: 200, bytes: 'upstream-body'.length });
+    for (const leak of ['api/records', '123456', 'SECRETTOKEN', 'needle', 'access_token', 'https://']) expect(logs[0]).not.toContain(leak);
+    expect(logs[0]).not.toContain('\n');
+  });
+  it('a refused request is logged with its status, 0 bytes, and no host unless it is an allowlisted one', async () => {
+    const { app, logs } = make();
+    await post(app, { url: 'https://evil.example/secret-path?token=1' });
+    await post(app, { url: 'https://opendap.iopan.pl/x', accept: 5 });
+    expect(logs.map((l) => JSON.parse(l))).toEqual([
+      { host: null, status: 403, bytes: 0 },
+      { host: 'opendap.iopan.pl', status: 400, bytes: 0 },
+    ]);
+    expect(logs.join('')).not.toMatch(/evil|secret|token/);
+  });
+});
+
+describe('rate limit', () => {
+  it('allows 30 requests per minute per client and answers the 31st with 429 + Retry-After', async () => {
+    const { app } = make();
+    for (let i = 0; i < 30; i++) expect((await post(app, { url: 'https://zenodo.org/' }, '7.7.7.7')).status, `request ${i + 1}`).toBe(200);
+    const res = await post(app, { url: 'https://zenodo.org/' }, '7.7.7.7');
+    expect(res.status).toBe(429);
+    expect(Number(res.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+    expect(Number(res.headers['retry-after'])).toBeLessThanOrEqual(60);
+    expectCommonHeaders(res);
+    // another client is unaffected
+    expect((await post(app, { url: 'https://zenodo.org/' }, '8.8.8.8')).status).toBe(200);
+  });
+  it('keys on the LAST X-Forwarded-For entry (trimmed); client-supplied earlier entries do not change the bucket', async () => {
+    const { app } = make();
+    for (let i = 0; i < 30; i++) {
+      const res = await request(app)
+        .post('/api/fetch')
+        .set('X-Forwarded-For', ` 10.0.0.${i} , 5.5.5.5 `)
+        .set('Content-Type', 'application/json')
+        .send('{"url":"https://zenodo.org/"}');
+      expect(res.status).toBe(200);
+    }
+    const res = await request(app).post('/api/fetch').set('X-Forwarded-For', '5.5.5.5').set('Content-Type', 'application/json').send('{"url":"https://zenodo.org/"}');
+    expect(res.status).toBe(429);
+  });
+  it('without X-Forwarded-For it keys on the socket address', async () => {
+    const { app } = make();
+    for (let i = 0; i < 30; i++) {
+      expect((await request(app).post('/api/fetch').set('Content-Type', 'application/json').send('{"url":"https://zenodo.org/"}')).status).toBe(200);
+    }
+    expect((await request(app).post('/api/fetch').set('Content-Type', 'application/json').send('{"url":"https://zenodo.org/"}')).status).toBe(429);
+  });
+  it('bad requests count against the limit too', async () => {
+    const { app } = make();
+    for (let i = 0; i < 30; i++) await post(app, {}, '6.6.6.6');
+    expect((await post(app, { url: 'https://zenodo.org/' }, '6.6.6.6')).status).toBe(429);
+  });
+  it('does not trust the proxy for anything else: req.ip stays the socket address', async () => {
+    const { app } = make();
+    // X-Forwarded-Proto / -Host must not alter anything the app produces
+    const res = await request(app).get('/check').set('X-Forwarded-Proto', 'http').set('X-Forwarded-Host', 'evil.example');
+    expect(res.status).toBe(200);
+  });
+});

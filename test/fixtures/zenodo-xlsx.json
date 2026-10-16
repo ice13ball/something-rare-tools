@@ -1,0 +1,21 @@
+{
+  "id": 1000002,
+  "recid": "1000002",
+  "doi": "10.0000/zenodo.1000002",
+  "links": { "self": "https://zenodo.org/api/records/1000002" },
+  "metadata": {
+    "title": "Synthetic database",
+    "description": "Invented description.",
+    "license": { "id": "CC-BY-NC-4.0" },
+    "resource_type": { "title": "Dataset", "type": "dataset" }
+  },
+  "files": [
+    {
+      "id": "00000000-0000-4000-8000-0000000000bb",
+      "key": "Synthetic database (updated 01.01.2024).xlsx",
+      "size": 565554,
+      "checksum": "md5:00000000000000000000000000000000",
+      "links": { "self": "https://zenodo.org/api/records/1000002/files/Synthetic%20database%20(updated%2001.01.2024).xlsx/content" }
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { describe, expect, it } from 'vitest';
+import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, buildCsp, isAllowedHost } from '../config/hosts';
+import { SITE } from '../config/site';
+
+describe('isAllowedHost', () => {
+  it('accepts https on an allowlisted host', () => {
+    expect(isAllowedHost('https://zenodo.org/api/records/1')).toBe(true);
+  });
+  it('refuses http', () => {
+    expect(isAllowedHost('http://zenodo.org/x')).toBe(false);
+  });
+  it('refuses a look-alike suffix host', () => {
+    expect(isAllowedHost('https://zenodo.org.evil.com/')).toBe(false);
+  });
+  it('refuses an allowlisted name that only appears in the query', () => {
+    expect(isAllowedHost('https://evil.com/?zenodo.org')).toBe(false);
+  });
+  it('refuses userinfo tricks and unparseable input', () => {
+    expect(isAllowedHost('https://zenodo.org@evil.com/')).toBe(false);
+    expect(isAllowedHost('not a url')).toBe(false);
+  });
+  it('is case-insensitive on the host name', () => {
+    expect(isAllowedHost('https://ZENODO.org/x')).toBe(true);
+  });
+});
+
+describe('host lists', () => {
+  it('contain no wildcards and no duplicates', () => {
+    const all = [...DATA_HOSTS, ...GA_HOSTS, ...MAP_HOSTS];
+    expect(all.length).toBeGreaterThan(10);
+    for (const h of all) expect(h).not.toContain('*');
+    expect(new Set(all).size).toBe(all.length);
+  });
+  it('DATA_HOSTS holds the hosts the plan names', () => {
+    for (const h of ['opendap.iopan.pl', 'geo.iopan.pl', 'geonetwork.iopan.pl', 'zenodo.org', 'doi.pangaea.de', 'api.datacite.org', 'data.crosscite.org', 'doi.org']) {
+      expect(DATA_HOSTS).toContain(h);
+    }
+  });
+});
+
+describe('buildCsp', () => {
+  const csp = buildCsp();
+  const directive = (name: string) => csp.split(';').map((s) => s.trim()).find((s) => s.startsWith(name + ' ')) ?? '';
+
+  it('has connect-src with self and the data hosts, and no wildcard', () => {
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain('https://api.datacite.org');
+    expect(csp).not.toContain('*');
+  });
+  it('lists every data, GA and map host in connect-src', () => {
+    const c = directive('connect-src');
+    for (const h of [...DATA_HOSTS, ...GA_HOSTS, ...MAP_HOSTS]) expect(c).toContain('https://' + h);
+  });
+  it('sets the fixed directives', () => {
+    expect(directive('worker-src')).toBe("worker-src 'self' blob:");
+    expect(directive('script-src')).toBe("script-src 'self' https://www.googletagmanager.com");
+    expect(directive('style-src')).toBe("style-src 'self' 'unsafe-inline'");
+    expect(directive('frame-ancestors')).toBe("frame-ancestors 'none'");
+    expect(directive('object-src')).toBe("object-src 'none'");
+    expect(directive('base-uri')).toBe("base-uri 'self'");
+  });
+  it('img-src allows data, blob, map and GA hosts', () => {
+    const i = directive('img-src');
+    expect(i).toContain("'self' data: blob:");
+    expect(i).toContain('https://basemaps.cartocdn.com');
+    expect(i).toContain('https://www.google-analytics.com');
+  });
+});
+
+describe('SITE', () => {
+  it('is noindex with the public GA id', () => {
+    expect(SITE.noindex).toBe(true);
+    expect(SITE.gaId).toBe('G-S5HR4WT0ZG');
+    expect(SITE.origin).toBe('https://tools.something-rare.com');
+  });
+});

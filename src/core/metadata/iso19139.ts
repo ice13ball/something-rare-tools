@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+// ISO 19139 (GeoNetwork) parser. Matches namespaceURI + localName, never prefixes.
+import type { LicenceStatement, MetadataRecord } from '../types';
+import { toSpdx } from './licence';
+import { NS, attr, child, children, descendants, elementChildren, num, parseXml, path, text } from './xml';
+
+/** Text of a gco:CharacterString or gmx:Anchor (with xlink:href) wrapped by `el`. */
+function textAndUri(el: Element | undefined): { text?: string; uri?: string } {
+  if (!el) return {};
+  const anchor = child(el, NS.gmx, 'Anchor');
+  if (anchor) return { text: text(anchor), uri: attr(anchor, NS.xlink, 'href') };
+  return { text: text(child(el, NS.gco, 'CharacterString')) };
+}
+
+function stmt(field: string, el: Element | undefined): LicenceStatement | undefined {
+  const { text: t, uri } = textAndUri(el);
+  if (!t && !uri) return undefined;
+  const s: LicenceStatement = { source: 'iso19139', field };
+  if (t) s.text = t;
+  if (uri) s.uri = uri;
+  const spdx = toSpdx(t, uri);
+  if (spdx) s.spdx = spdx;
+  return s;
+}
+
+function findMetadata(doc: Document): Element | undefined {
+  const root = doc.documentElement;
+  if (root.localName === 'MD_Metadata' && root.namespaceURI === NS.gmd) return root;
+  return descendants(root, NS.gmd, 'MD_Metadata')[0];
+}
+
+function parseBbox(ident: Element): MetadataRecord['bbox'] {
+  for (const box of descendants(ident, NS.gmd, 'EX_GeographicBoundingBox')) {
+    const dec = (name: string) => {
+      const e = child(box, NS.gmd, name);
+      return e ? num(text(child(e, NS.gco, 'Decimal'))) : undefined;
+    };
+    const west = dec('westBoundLongitude');
+    const east = dec('eastBoundLongitude');
+    const south = dec('southBoundLatitude');
+    const north = dec('northBoundLatitude');
+    if (west !== undefined && east !== undefined && south !== undefined && north !== undefined) {
+      return { west, east, south, north };
+    }
+  }
+  return undefined;
+}
+
+function position(period: Element, name: string): string | undefined {
+  const el = child(period, NS.gml, name);
+  if (!el) return undefined;
+  const ind = attr(el, null, 'indeterminatePosition');
+  if (ind) return undefined; // now / after / before / unknown: no date to compare
+  return text(el);
+}
+
+function parseTemporal(ident: Element): MetadataRecord['temporalExtent'] {
+  const starts: string[] = [];
+  const ends: string[] = [];
+  let open = false;
+  for (const ext of descendants(ident, NS.gmd, 'EX_TemporalExtent')) {
+    for (const period of descendants(ext, NS.gml, 'TimePeriod')) {
+      const b = position(period, 'beginPosition');
+      const e = position(period, 'endPosition');
+      if (b) starts.push(b);
+      if (e) ends.push(e);
+      else open = true;
+    }
+    for (const inst of descendants(ext, NS.gml, 'TimeInstant')) {
+      const p = text(child(inst, NS.gml, 'timePosition'));
+      if (p) { starts.push(p); ends.push(p); }
+    }
+  }
+  if (starts.length === 0 && ends.length === 0) return undefined;
+  starts.sort();
+  ends.sort();
+  return { start: starts[0], end: open ? undefined : ends[ends.length - 1] };
+}
+
+function pushConstraintText(rec: MetadataRecord, constraints: Element, prefix: string): void {
+  for (const name of ['useLimitation', 'otherConstraints']) {
+    for (const el of children(constraints, NS.gmd, name)) {
+      const s = stmt(prefix + name, el);
+      if (s) rec.licences.push(s);
+    }
+  }
+}
+
+export function parseIso19139(xml: string, label: string): MetadataRecord {
+  const doc = parseXml(xml, label);
+  const md = findMetadata(doc);
+  if (!md) throw new Error(`${label}: not an ISO 19139 record (no gmd:MD_Metadata)`);
+
+  const rec: MetadataRecord = { source: 'iso19139', label, licences: [], restrictionCodes: [], distributionLinks: [] };
+
+  const ident = child(md, NS.gmd, 'identificationInfo');
+  const idEl = ident ? (child(ident, NS.gmd, 'MD_DataIdentification') ?? elementChildren(ident)[0]) : undefined;
+
+  if (idEl) {
+    const cit = path(idEl, NS.gmd, 'citation', 'CI_Citation');
+    rec.title = textAndUri(child(cit ?? idEl, NS.gmd, 'title')).text;
+    rec.version = textAndUri(child(cit ?? idEl, NS.gmd, 'edition')).text;
+    rec.abstract = textAndUri(child(idEl, NS.gmd, 'abstract')).text;
+
+    for (const rc of children(idEl, NS.gmd, 'resourceConstraints')) {
+      for (const c of elementChildren(rc)) {
+        pushConstraintText(rec, c, '');
+        for (const holder of elementChildren(c)) {
+          for (const code of children(holder, NS.gmd, 'MD_RestrictionCode')) {
+            const v = attr(code, null, 'codeListValue') ?? text(code);
+            if (!v) continue;
+            const kind = holder.localName === 'accessConstraints' ? 'access' : holder.localName === 'useConstraints' ? 'use' : 'other';
+            rec.restrictionCodes.push({ kind, code: v });
+          }
+        }
+      }
+    }
+
+    rec.bbox = parseBbox(idEl);
+    rec.temporalExtent = parseTemporal(idEl);
+  }
+
+  // Constraints that describe the METADATA, not the data: kept apart by the field name.
+  for (const mc of children(md, NS.gmd, 'metadataConstraints')) {
+    for (const c of elementChildren(mc)) pushConstraintText(rec, c, 'metadataConstraints/');
+  }
+
+  for (const online of descendants(md, NS.gmd, 'onLine')) {
+    for (const res of children(online, NS.gmd, 'CI_OnlineResource')) {
+      const link: { url: string; name?: string; protocol?: string } = {
+        url: text(path(res, NS.gmd, 'linkage')) ?? '',
+      };
+      const name = textAndUri(child(res, NS.gmd, 'name')).text;
+      if (name) link.name = name;
+      const pe = child(res, NS.gmd, 'protocol');
+      const protocol = pe ? (textAndUri(pe).text ?? text(child(pe, NS.gmx, 'MimeFileType'))) : undefined;
+      if (protocol) link.protocol = protocol;
+      rec.distributionLinks.push(link);
+    }
+  }
+
+  return rec;
+}

@@ -1,0 +1,8 @@
+sample,depth,parameter,unit,value
+core_A,-5,Cx,%,1.54
+core_A,-5,Nx,%,0.21
+core_A,-15,Cx,%,1.41
+core_A,-15,Nx,%,0.19
+core_B,-5,Cx,%,1.10
+core_B,-5,Nx,%,abc
+core_B,-5,Cx,%,9.99
