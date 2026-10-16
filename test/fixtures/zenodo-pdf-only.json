@@ -1,0 +1,24 @@
+{
+  "id": 1000001,
+  "recid": "1000001",
+  "doi": "10.0000/zenodo.1000001",
+  "conceptrecid": "1000000",
+  "links": { "self": "https://zenodo.org/api/records/1000001", "self_html": "https://zenodo.org/records/1000001" },
+  "metadata": {
+    "title": "Synthetic report on porewater",
+    "description": "<p>Invented <b>description</b> of a report.</p>",
+    "version": "v2",
+    "access_right": "open",
+    "license": { "id": "cc-by-4.0" },
+    "resource_type": { "title": "Journal article", "type": "publication", "subtype": "article" }
+  },
+  "files": [
+    {
+      "id": "00000000-0000-4000-8000-0000000000aa",
+      "key": "Synthetic report.pdf",
+      "size": 123456,
+      "checksum": "md5:00000000000000000000000000000000",
+      "links": { "self": "https://zenodo.org/api/records/1000001/files/Synthetic%20report.pdf/content" }
+    }
+  ]
+}

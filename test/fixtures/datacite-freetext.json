@@ -1,0 +1,11 @@
+{
+  "data": {
+    "attributes": {
+      "doi": "10.0000/synthetic-freetext",
+      "titles": [{ "title": "Synthetic free-text rights record" }],
+      "rightsList": [{ "rights": "CC BY" }, { "lang": "eng" }],
+      "types": { "resourceTypeGeneral": "Dataset" },
+      "dates": [{ "date": "2020-03-01/", "dateType": "Collected" }]
+    }
+  }
+}

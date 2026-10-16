@@ -1,0 +1,19 @@
+{
+  "data": {
+    "id": "10.0000/synthetic-empty",
+    "type": "dois",
+    "attributes": {
+      "doi": "10.0000/synthetic-empty",
+      "url": "https://repo.example.org/resources/records/00000000-0000-4000-8000-000000000001",
+      "titles": [{ "title": "Synthetic record without rights" }],
+      "descriptions": [{ "description": "Invented abstract.", "descriptionType": "Abstract" }],
+      "rightsList": [],
+      "version": "1",
+      "types": { "resourceTypeGeneral": "Dataset" },
+      "dates": [{ "date": "2025", "dateType": "Issued" }],
+      "geoLocations": [
+        { "geoLocationBox": { "westBoundLongitude": "10.5", "eastBoundLongitude": "12.25", "southBoundLatitude": "-5.5", "northBoundLatitude": "7.75" } }
+      ]
+    }
+  }
+}

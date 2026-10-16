@@ -1,0 +1,19 @@
+{
+  "id": "1000003",
+  "pids": { "doi": { "identifier": "10.0000/zenodo.1000003", "provider": "datacite" } },
+  "links": { "self_html": "https://zenodo.org/records/1000003" },
+  "metadata": {
+    "title": "Synthetic RDM record",
+    "description": "Invented description.",
+    "resource_type": { "id": "dataset", "title": { "en": "Dataset" } },
+    "rights": [{ "id": "cc-by-sa-4.0", "title": { "en": "Creative Commons Attribution Share Alike 4.0 International" }, "link": "https://creativecommons.org/licenses/by-sa/4.0/legalcode" }],
+    "version": "1.0"
+  },
+  "files": {
+    "enabled": true,
+    "entries": {
+      "stations.csv": { "key": "stations.csv", "size": 2048, "mimetype": "text/csv", "links": { "content": "https://zenodo.org/api/records/1000003/files/stations.csv/content" } },
+      "notes & data.xlsx": { "key": "notes & data.xlsx", "size": 4096, "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "links": { "content": "https://zenodo.org/api/records/1000003/files/notes%20%26%20data.xlsx/content" } }
+    }
+  }
+}

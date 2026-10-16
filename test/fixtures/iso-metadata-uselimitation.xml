@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gmd:MD_Metadata xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gco="http://www.isotc211.org/2005/gco" xmlns:gmx="http://www.isotc211.org/2005/gmx" xmlns:gml="http://www.opengis.net/gml">
+  <gmd:identificationInfo>
+    <gmd:MD_DataIdentification>
+      <gmd:citation><gmd:CI_Citation><gmd:title><gco:CharacterString>Synthetic record with metadata-level limitation</gco:CharacterString></gmd:title></gmd:CI_Citation></gmd:citation>
+      <gmd:abstract><gco:CharacterString>Invented abstract.</gco:CharacterString></gmd:abstract>
+      <gmd:resourceConstraints>
+        <gmd:MD_LegalConstraints>
+          <gmd:accessConstraints>
+            <gmd:MD_RestrictionCode codeList="x" codeListValue="restricted"/>
+          </gmd:accessConstraints>
+        </gmd:MD_LegalConstraints>
+      </gmd:resourceConstraints>
+      <gmd:extent>
+        <gmd:EX_Extent>
+          <gmd:geographicElement>
+            <gmd:EX_GeographicBoundingBox>
+              <gmd:westBoundLongitude><gco:Decimal>1</gco:Decimal></gmd:westBoundLongitude>
+              <gmd:eastBoundLongitude><gco:Decimal>2</gco:Decimal></gmd:eastBoundLongitude>
+              <gmd:southBoundLatitude><gco:Decimal>3</gco:Decimal></gmd:southBoundLatitude>
+              <gmd:northBoundLatitude/>
+            </gmd:EX_GeographicBoundingBox>
+          </gmd:geographicElement>
+          <gmd:temporalElement>
+            <gmd:EX_TemporalExtent>
+              <gmd:extent>
+                <gml:TimePeriod gml:id="t1">
+                  <gml:beginPosition>2024-01-01T10:30:00Z</gml:beginPosition>
+                  <gml:endPosition indeterminatePosition="now"/>
+                </gml:TimePeriod>
+              </gmd:extent>
+            </gmd:EX_TemporalExtent>
+          </gmd:temporalElement>
+        </gmd:EX_Extent>
+      </gmd:extent>
+    </gmd:MD_DataIdentification>
+  </gmd:identificationInfo>
+  <gmd:metadataConstraints>
+    <gmd:MD_Constraints>
+      <gmd:useLimitation><gco:CharacterString>Metadata may be reused with attribution.</gco:CharacterString></gmd:useLimitation>
+    </gmd:MD_Constraints>
+  </gmd:metadataConstraints>
+</gmd:MD_Metadata>

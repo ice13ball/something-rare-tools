@@ -1,0 +1,6 @@
+{ "data": { "id": "10.0000/zenodo.2000001", "type": "dois", "attributes": {
+  "doi": "10.0000/zenodo.2000001",
+  "url": "https://zenodo.org/doi/10.0000/zenodo.2000001",
+  "titles": [{ "title": "Synthetic Zenodo dataset" }],
+  "rightsList": [{ "rights": "Creative Commons Attribution 4.0 International", "rightsUri": "https://creativecommons.org/licenses/by/4.0/legalcode", "rightsIdentifier": "cc-by-4.0" }]
+} } }

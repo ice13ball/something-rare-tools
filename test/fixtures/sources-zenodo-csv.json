@@ -1,0 +1,11 @@
+{
+  "id": 2000001, "recid": "2000001", "doi": "10.0000/zenodo.2000001",
+  "links": { "self_html": "https://zenodo.org/records/2000001" },
+  "metadata": { "title": "Synthetic Zenodo dataset", "license": { "id": "cc-by-4.0" } },
+  "files": [
+    { "key": "readme.pdf", "size": 100 },
+    { "key": "table A.csv", "size": 2000 },
+    { "key": "table B.xlsx", "size": 3000 },
+    { "key": "grid.nc", "size": 4000 }
+  ]
+}

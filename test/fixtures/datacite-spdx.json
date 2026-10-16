@@ -1,0 +1,33 @@
+{
+  "data": {
+    "id": "10.0000/synthetic-spdx",
+    "type": "dois",
+    "attributes": {
+      "doi": "10.0000/synthetic-spdx",
+      "url": "https://doi.pangaea.example/10.0000/synthetic-spdx",
+      "titles": [{ "title": "Synthetic CTD casts" }],
+      "descriptions": [
+        { "description": "Not the abstract.", "descriptionType": "Other" },
+        { "description": "Invented abstract of synthetic CTD casts.", "descriptionType": "Abstract" }
+      ],
+      "rightsList": [
+        {
+          "rights": "Creative Commons Attribution 4.0 International",
+          "rightsUri": "https://creativecommons.org/licenses/by/4.0/legalcode",
+          "schemeUri": "https://spdx.org/licenses/",
+          "rightsIdentifier": "cc-by-4.0",
+          "rightsIdentifierScheme": "SPDX"
+        }
+      ],
+      "types": { "resourceTypeGeneral": "Dataset", "resourceType": "Dataset" },
+      "dates": [
+        { "date": "2021-07-01", "dateType": "Issued" },
+        { "date": "2019-07-14T00:00:00/2019-08-02T12:30:00", "dateType": "Collected" }
+      ],
+      "geoLocations": [
+        { "geoLocationBox": { "westBoundLongitude": 10.5, "eastBoundLongitude": 12.25, "southBoundLatitude": -5.5, "northBoundLatitude": 7.75 } },
+        { "geoLocationPoint": { "pointLongitude": "13.0", "pointLatitude": "8" } }
+      ]
+    }
+  }
+}

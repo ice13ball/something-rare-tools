@@ -1,0 +1,7 @@
+{ "data": { "id": "10.0000/invented-gn-1", "type": "dois", "attributes": {
+  "doi": "10.0000/invented-gn-1",
+  "url": "https://geonetwork.iopan.pl/geonetwork/srv/resources/records/00000000-0000-4000-8000-000000000001",
+  "titles": [{ "title": "Synthetic GeoNetwork dataset" }],
+  "rightsList": [],
+  "types": { "resourceTypeGeneral": "Dataset" }
+} } }

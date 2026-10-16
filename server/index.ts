@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import express, { type ErrorRequestHandler, type Express, type Request, type Response } from 'express';
+import { DATA_HOSTS } from '../config/hosts.js';
+import { SITE } from '../config/site.js';
+import { proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
+import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
+import { createRateLimiter, type RateLimitOptions } from './rateLimit.js';
+
+export interface AppOptions {
+  distDir: string;
+  /** Resolves a host name to its addresses. Default: dns.lookup({ all: true }). */
+  resolver?: (host: string) => Promise<string[]>;
+  /** Transport to the origin server. Default: node:https pinned to the checked addresses. */
+  upstream?: Upstream;
+  /** Defaults to SITE.noindex. */
+  noindex?: boolean;
+  /** One JSON line per proxied request. Default: stdout. */
+  log?: (line: string) => void;
+  maxBytes?: number;
+  timeoutMs?: number;
+  rateLimit?: RateLimitOptions;
+}
+
+const MAX_URL_LENGTH = 2048;
+const MAX_ACCEPT_LENGTH = 200;
+
+function readRequired(dir: string, rel: string): Buffer {
+  const file = join(dir, rel);
+  if (!existsSync(file)) throw new Error(`distDir is missing ${rel} (looked in ${dir})`);
+  return readFileSync(file);
+}
+
+function readOptional(dir: string, rel: string): Buffer | undefined {
+  const file = join(dir, rel);
+  return existsSync(file) ? readFileSync(file) : undefined;
+}
+
+function parseBody(body: unknown): { url: string; accept?: string } {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new ProxyError(400, 'bad_body');
+  const { url, accept } = body as Record<string, unknown>;
+  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_URL_LENGTH) throw new ProxyError(400, 'bad_url');
+  if (accept !== undefined) {
+    // Printable ASCII only: the value becomes a header, so no CR/LF can ever get through.
+    if (typeof accept !== 'string' || accept.length > MAX_ACCEPT_LENGTH || !/^[\x20-\x7e]*$/.test(accept)) {
+      throw new ProxyError(400, 'bad_accept');
+    }
+  }
+  return { url, accept: accept === undefined || accept === '' ? undefined : accept };
+}
+
+/** Host name for the log: only an allowlisted one, never anything the caller could have made up. */
+function logHost(rawUrl: unknown): string | null {
+  if (typeof rawUrl !== 'string') return null;
+  try {
+    const h = new URL(rawUrl).hostname.toLowerCase();
+    return DATA_HOSTS.includes(h) ? h : null;
+  } catch {
+    return null;
+  }
+}
+
+function sendProxyError(res: Response, e: ProxyError): void {
+  if (res.headersSent || res.destroyed) return;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Fetch-Proxy-Error', e.code);
+  res.status(e.status >= 400 && e.status < 600 ? e.status : 502).json({ error: e.code });
+}
+
+export function createApp(opts: AppOptions): Express {
+  const noindex = opts.noindex ?? SITE.noindex;
+  const log = opts.log ?? ((line: string) => void process.stdout.write(line + '\n'));
+  const dist = opts.distDir;
+
+  // Pages and small static files are read once, at startup: nothing the request controls ever reaches the filesystem.
+  const pages = {
+    home: Buffer.from(prepareHtml(readRequired(dist, 'index.html').toString('utf8'), noindex)),
+    check: Buffer.from(prepareHtml(readRequired(dist, join('check', 'index.html')).toString('utf8'), noindex)),
+    privacy: Buffer.from(prepareHtml(readRequired(dist, join('privacy', 'index.html')).toString('utf8'), noindex)),
+  };
+  const consentJs = readOptional(dist, 'consent-default.js');
+  const favicon = readOptional(dist, 'favicon.svg');
+
+  const app = express();
+  app.disable('x-powered-by');
+  app.disable('etag');
+  app.set('case sensitive routing', true);
+  app.set('strict routing', true);
+  // `trust proxy` is intentionally left unset: only the rate limiter reads X-Forwarded-For, by design.
+
+  app.use(securityHeaders({ noindex }));
+
+  const sendHtml = (page: Buffer) => (_req: Request, res: Response): void => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.end(page);
+  };
+  for (const path of ['/', '/check', '/check/', '/privacy', '/privacy/']) {
+    app.get(path, sendHtml(path === '/' ? pages.home : path.startsWith('/check') ? pages.check : pages.privacy));
+  }
+
+  app.get('/robots.txt', (_req, res) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.end('User-agent: *\nAllow: /\n');
+  });
+  if (consentJs) {
+    app.get('/consent-default.js', (_req, res) => {
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.end(consentJs);
+    });
+  }
+  if (favicon) {
+    app.get('/favicon.svg', (_req, res) => {
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.end(favicon);
+    });
+  }
+
+  // Hashed build output only; no directory index, no redirects, no dotfiles; misses fall through to the 404 page.
+  app.use(
+    '/assets',
+    express.static(join(dist, 'assets'), { index: false, redirect: false, dotfiles: 'ignore', etag: false, immutable: true, maxAge: '1y' }),
+  );
+
+  const proxyDeps = (signal: AbortSignal): ProxyDeps => ({
+    resolver: opts.resolver,
+    upstream: opts.upstream,
+    maxBytes: opts.maxBytes,
+    timeoutMs: opts.timeoutMs,
+    signal,
+  });
+
+  app.post('/api/fetch', createRateLimiter(opts.rateLimit), express.json({ limit: '2kb' }), async (req: Request, res: Response) => {
+    const clientGone = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) clientGone.abort();
+    });
+    const host = logHost((req.body as { url?: unknown } | undefined)?.url);
+    let status = 500;
+    let bytes = 0;
+    try {
+      const { url, accept } = parseBody(req.body);
+      const upstream = await proxyFetch(url, accept, proxyDeps(clientGone.signal));
+      const it = upstream.body[Symbol.asyncIterator]();
+      // Nothing is sent before the first chunk is in: a refusal or a timeout up to here is still a proper status.
+      let next: IteratorResult<Uint8Array>;
+      try {
+        next = await it.next();
+      } catch (e) {
+        upstream.abort();
+        throw e;
+      }
+      status = upstream.status;
+      res.status(upstream.status);
+      res.setHeader('Content-Type', upstream.contentType ?? 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-store');
+      try {
+        while (!next.done) {
+          bytes += next.value.byteLength;
+          if (!res.write(next.value)) {
+            await new Promise<void>((resolve) => {
+              res.once('drain', resolve);
+              res.once('close', resolve);
+            });
+            if (res.destroyed) throw new ProxyError(499, 'client_closed');
+          }
+          next = await it.next();
+        }
+        res.end();
+      } catch {
+        // Headers are out: all that is left is to cut the connection so no one mistakes a truncated body for a whole one.
+        upstream.abort();
+        res.destroy();
+      }
+    } catch (e) {
+      const err = e instanceof ProxyError ? e : new ProxyError(500, 'internal');
+      status = err.status;
+      sendProxyError(res, err);
+    } finally {
+      log(JSON.stringify({ host, status, bytes }));
+    }
+  });
+  app.all('/api/fetch', (_req, res) => {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({ error: 'method_not_allowed' });
+  });
+
+  app.use((_req, res) => {
+    res.status(404);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(NOT_FOUND_PAGE);
+  });
+
+  const onError: ErrorRequestHandler = (err: { status?: number; type?: string }, _req, res, next) => {
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
+    const tooLarge = err.type === 'entity.too.large' || err.status === 413;
+    const status = tooLarge ? 413 : err.status && err.status >= 400 && err.status < 500 ? 400 : 500;
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(status).json({ error: tooLarge ? 'body_too_large' : status === 400 ? 'bad_request' : 'internal' });
+  };
+  app.use(onError);
+
+  return app;
+}
+
+const entry = process.argv[1];
+if (entry && import.meta.url === pathToFileURL(entry).href) {
+  // Compiled location: dist-server/server/index.js -> ../../dist
+  const distDir = fileURLToPath(new URL('../../dist', import.meta.url));
+  const port = Number(process.env.PORT) || 8080;
+  createApp({ distDir }).listen(port, () => {
+    process.stdout.write(JSON.stringify({ listening: port }) + '\n');
+  });
+}
