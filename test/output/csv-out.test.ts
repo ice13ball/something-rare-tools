@@ -16,13 +16,22 @@ function parse(csv: string): { header: string[]; rows: string[][] } {
 const v = (key: string, extra: Partial<Variable> = {}): Variable => ({ key, header: key, ...extra });
 
 describe('numbers are never altered', () => {
-  it('a negative number is exported unchanged, a decimal comma only loses its comma', () => {
+  it('a negative number is exported unchanged, a decimal comma only loses its comma (only when the source file was decimal-comma)', () => {
     const ds = dataset(
       [row(2, { values: { a: ok('-5.2', 2, -5.2, 1), b: ok('3,14', 2, 3.14, 2), c: ok('1,50', 2, 1.5, 2), d: ok('+5.20', 2, 5.2, 2), e: ok('1.5e-3', 2, 0.0015, 4) } })],
       ['a', 'b', 'c', 'd', 'e'].map((k) => v(k)),
+      { decimalComma: true },
     );
     const { rows } = parse(toCleanCsv(ds).csv);
     expect(rows[0].slice(-5)).toEqual(['-5.2', '3.14', '1.50', '+5.20', '1.5e-3']);
+  });
+
+  it('without decimalComma on the dataset the text is never converted', () => {
+    expect(valueText('3,14')).toBe('3,14');
+    expect(valueText('3,14', false)).toBe('3,14');
+    expect(valueText('3,14', true)).toBe('3.14');
+    const ds = dataset([row(2, { values: { b: text('3,14', 2) } })], [v('b')]);
+    expect(parse(toCleanCsv(ds).csv).rows[0].slice(-1)).toEqual(['3,14']);
   });
 
   it('xlsx numbers are written with String(raw): no toFixed, no precision, no locale', () => {
@@ -197,6 +206,25 @@ describe('end to end through the dataset builder', () => {
     expect(header).toEqual(['station', 'date [ISO 8601]', 'latitude [degrees_north]', 'longitude [degrees_east]', 'depth [m]', 'DIC [µmol/kg]']);
     expect(rows[0]).toEqual(['ST1', '2021-07-25', '76.50', '15.10', '2.50', '2110.50']);
     expect(rows[1].slice(-1)).toEqual(['-3.5']);
+  });
+});
+
+describe('a dot-decimal file with comma text', () => {
+  it("a ';'-delimited dot-decimal file keeps '1,234' as text, quoted, never '1.234'", () => {
+    const file = textFile('dot.csv', 'Station;Latitude;Longitude;Date;DIC [umol/kg]\nST1;76.5;15.1;2021-07-25;1,234\nST2;76.6;15.2;2021-07-26;2110.5\n');
+    expect(file.decimalComma).toBe(false);
+    const layout = proposeLayout(file);
+    const { dataset: ds } = buildDataset(file, layout, proposeMappings(file, layout), [], 'ds1');
+    expect(ds.decimalComma).toBe(false);
+    const { csv } = toCleanCsv(ds);
+    expect(csv.split('\n')[1]).toBe('ST1,2021-07-25,76.5,15.1,,"1,234"');
+    expect(parse(csv).rows[0].slice(-1)).toEqual(['1,234']);
+  });
+  it('the dataset carries the decimalComma of its source file', () => {
+    const file = textFile('dc.csv', 'Station;Latitude;Longitude;Date;DIC [umol/kg]\nST1;76,5;15,1;2021-07-25;2110,5\n');
+    const layout = proposeLayout(file);
+    const { dataset: ds } = buildDataset(file, layout, proposeMappings(file, layout), [], 'ds1');
+    expect(ds.decimalComma).toBe(true);
   });
 });
 

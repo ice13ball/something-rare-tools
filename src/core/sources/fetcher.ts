@@ -136,7 +136,8 @@ export function serverFetcher(endpoint = '/api/fetch', fetchImpl: FetchFn = glob
         throw new ProxyFetchError(proxyError, res.status, host);
       }
       const bytes = await readBody(res, host);
-      return { status: res.status, bytes, contentType: res.headers.get('content-type') ?? undefined, finalUrl: url };
+      // The proxy always answers application/octet-stream; the origin's own type is in X-Upstream-Content-Type.
+      return { status: res.status, bytes, contentType: res.headers.get('x-upstream-content-type') ?? undefined, finalUrl: url };
     },
   };
 }

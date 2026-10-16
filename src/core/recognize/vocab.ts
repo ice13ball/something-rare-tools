@@ -80,6 +80,11 @@ const UNIT_BY_ALIAS: ReadonlyMap<string, UnitEntry> = new Map(
 );
 const UNIT_BY_LABEL: ReadonlyMap<string, UnitEntry> = new Map(UNIT_VOCAB.map((u) => [u.label, u]));
 
+/** Is this text, as a whole, one of the UNIT_VOCAB labels or aliases ('degC', 'celsius', 'psu', 'db')? Concentration notations are not tried. */
+export function isUnitAlias(text: string): boolean {
+  return UNIT_BY_ALIAS.has(cleanUnitText(text));
+}
+
 export function unitEntry(label: string | undefined): UnitEntry | undefined {
   return label === undefined ? undefined : UNIT_BY_LABEL.get(label);
 }

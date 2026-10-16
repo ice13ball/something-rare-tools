@@ -87,9 +87,20 @@ describe('browserFetcher', () => {
   });
 });
 
+describe('serverFetcher: upstream content type', () => {
+  it('reads the type from X-Upstream-Content-Type, never from the proxy response Content-Type', async () => {
+    const fn = vi.fn(async () => reply('x', { status: 200, headers: { 'content-type': 'application/octet-stream' } }));
+    const r = await serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/1');
+    expect(r.contentType).toBeUndefined();
+    const fn2 = vi.fn(async () => reply('x', { status: 200, headers: { 'content-type': 'text/html', 'x-upstream-content-type': 'application/json' } }));
+    const r2 = await serverFetcher('/api/fetch', asFetch(fn2)).get('https://zenodo.org/api/records/1');
+    expect(r2.contentType).toBe('application/json');
+  });
+});
+
 describe('serverFetcher', () => {
   it('POSTs {url, accept} as JSON to the endpoint, never the URL in the query string', async () => {
-    const fn = vi.fn(async () => reply('abc', { status: 200, headers: { 'content-type': 'text/csv' } }));
+    const fn = vi.fn(async () => reply('abc', { status: 200, headers: { 'content-type': 'application/octet-stream', 'x-upstream-content-type': 'text/csv' } }));
     const f = serverFetcher('/api/fetch', asFetch(fn));
     const r = await f.get('https://opendap.iopan.pl/opendap/data/csv/P/a.csv', 'text/csv');
     const [endpoint, init] = fn.mock.calls[0] as unknown as [string, RequestInit];

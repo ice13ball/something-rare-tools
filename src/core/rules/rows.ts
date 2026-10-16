@@ -18,7 +18,7 @@ import type { RuleSpec } from './spec';
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
  *   ROW-YEAR-OUTLIER      years, declared  years = years of the flagged rows; declared = years named in label/file name/title/extent
- *   ROW-DATE-YYMMDD       (none)      field = column, value = example (once per column)
+ *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
  *   ROW-UNIT-MISSING      headers     column headers without a unit, comma-separated
  *   ROW-DEPTH-SIGN        header      the depth column header
@@ -184,14 +184,14 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DATE-YYMMDD',
     category: 'B',
     severity: 'info',
-    params: [],
+    params: ['interpreted'],
     plain: {
-      pl: `Daty w kolumnie „{field}” mają dwucyfrowy rok (np. „{value}”) i odczytano je jako 20RR-MM-DD. Używaj czterocyfrowego roku.`,
-      en: `Dates in column "{field}" have a two-digit year (e.g. "{value}") and were read as 20YY-MM-DD. Use a four-digit year.`,
-      de: `Daten in der Spalte „{field}“ haben eine zweistellige Jahreszahl (z. B. „{value}“) und wurden als 20JJ-MM-TT gelesen. Verwenden Sie eine vierstellige Jahreszahl.`,
-      fr: `Les dates de la colonne « {field} » ont une année à deux chiffres (par ex. « {value} ») et ont été lues comme 20AA-MM-JJ. Utilisez une année à quatre chiffres.`,
+      pl: `Daty w kolumnie „{field}” mają dwucyfrowy rok i dopisano do niego stulecie; np. „{value}” odczytano jako {interpreted}. Używaj czterocyfrowego roku.`,
+      en: `Dates in column "{field}" have a two-digit year and a century was added; e.g. "{value}" was read as {interpreted}. Use a four-digit year.`,
+      de: `Daten in der Spalte „{field}“ haben eine zweistellige Jahreszahl, das Jahrhundert wurde ergänzt; z. B. wurde „{value}“ als {interpreted} gelesen. Verwenden Sie eine vierstellige Jahreszahl.`,
+      fr: `Les dates de la colonne « {field} » ont une année à deux chiffres et un siècle a été ajouté ; par ex. « {value} » a été lu comme {interpreted}. Utilisez une année à quatre chiffres.`,
     },
-    technical: `{file} field {field} value '{value}': YY-MM-DD interpreted as 20YY-MM-DD (ambiguous).`,
+    technical: `{file} field {field} value '{value}': YY-MM-DD read as {interpreted} (century inferred; ambiguous).`,
   },
   {
     id: 'ROW-TZ-UNKNOWN',

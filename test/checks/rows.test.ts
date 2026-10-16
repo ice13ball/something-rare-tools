@@ -171,6 +171,20 @@ describe('ROW-YEAR-OUTLIER', () => {
     const ds = dataset(mixed(), { file: 'id120210.csv', label: 'id120210.csv' });
     expect(only(checkRows(ds), 'ROW-YEAR-OUTLIER')).toEqual([]);
   });
+
+  it('a year token is not followed or preceded by a letter or digit: ctd_2000m.csv and data2021.csv declare nothing', () => {
+    for (const file of ['ctd_2000m.csv', 'data2021.csv', 'v2021b.csv']) {
+      expect(only(checkRows(dataset(mixed(), { file, label: file })), 'ROW-YEAR-OUTLIER'), file).toEqual([]);
+    }
+  });
+
+  it('a year between punctuation still counts: cruise_2021.csv, 2021-data.csv, run (2021).csv', () => {
+    for (const file of ['cruise_2021.csv', '2021-data.csv', 'run (2021).csv']) {
+      const f = only(checkRows(dataset(mixed(), { file, label: file })), 'ROW-YEAR-OUTLIER');
+      expect(f, file).toHaveLength(1);
+      expect(f[0].params, file).toMatchObject({ years: '2017', declared: '2021' });
+    }
+  });
 });
 
 describe('ROW-UNIT-MISSING', () => {

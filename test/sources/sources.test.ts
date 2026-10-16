@@ -205,19 +205,19 @@ describe('loadRecord — DataCite / DOI', () => {
   });
 
   it('routes a PANGAEA landing page to the textfile download, named PANGAEA.<id>.tab', async () => {
-    const f = new MapFetcher({ [DC + '10.1594/PANGAEA.900001']: { body: fixture('sources-datacite-pangaea.json') } });
-    const rec = await loadRecord(resolveInput('10.1594/PANGAEA.900001'), f);
+    const f = new MapFetcher({ [DC + '10.1594/PANGAEA.000000']: { body: fixture('sources-datacite-pangaea.json') } });
+    const rec = await loadRecord(resolveInput('10.1594/PANGAEA.000000'), f);
     expect(rec.kind).toBe('pangaea');
-    expect(rec.files).toEqual([{ name: 'PANGAEA.900001.tab', url: 'https://doi.pangaea.de/10.1594/PANGAEA.900001?format=textfile' }]);
+    expect(rec.files).toEqual([{ name: 'PANGAEA.000000.tab', url: 'https://doi.pangaea.de/10.1594/PANGAEA.000000?format=textfile' }]);
     expect(rec.metadata.map((m) => m.source)).toEqual(['datacite']);
     expect(ids(rec)).toEqual([]);
   });
 
   it('direct PANGAEA input: DataCite record attached when available, silent when not', async () => {
-    const f1 = new MapFetcher({ [DC + '10.1594/PANGAEA.900001']: { body: fixture('sources-datacite-pangaea.json') } });
-    const r1 = await loadRecord({ kind: 'pangaea', id: '900001' }, f1);
+    const f1 = new MapFetcher({ [DC + '10.1594/PANGAEA.000000']: { body: fixture('sources-datacite-pangaea.json') } });
+    const r1 = await loadRecord({ kind: 'pangaea', id: '000000' }, f1);
     expect(r1.metadata.map((m) => m.source)).toEqual(['datacite']);
-    const r2 = await loadRecord({ kind: 'pangaea', id: '900001' }, new MapFetcher({}));
+    const r2 = await loadRecord({ kind: 'pangaea', id: '000000' }, new MapFetcher({}));
     expect(r2.findings).toEqual([]);
     expect(r2.files).toHaveLength(1);
   });

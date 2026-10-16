@@ -27,6 +27,14 @@ export interface AppOptions {
 
 const MAX_URL_LENGTH = 2048;
 const MAX_ACCEPT_LENGTH = 200;
+const MAX_UPSTREAM_TYPE_LENGTH = 100;
+
+/** The upstream Content-Type as a plain label for the client: printable ASCII only, at most 100 characters, else none. */
+function sanitiseUpstreamType(v: string | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  const clean = v.replace(/[^\x20-\x7e]/g, '').trim().slice(0, MAX_UPSTREAM_TYPE_LENGTH).trim();
+  return clean === '' ? undefined : clean;
+}
 
 function readRequired(dir: string, rel: string): Buffer {
   const file = join(dir, rel);
@@ -158,7 +166,12 @@ export function createApp(opts: AppOptions): Express {
       }
       status = upstream.status;
       res.status(upstream.status);
-      res.setHeader('Content-Type', upstream.contentType ?? 'application/octet-stream');
+      // The body is third-party data and is never served as a page: whatever the origin says, it leaves as an opaque
+      // download. The origin's type travels in a side header (the client reads that one, never Content-Type).
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment');
+      const upstreamType = sanitiseUpstreamType(upstream.contentType);
+      if (upstreamType !== undefined) res.setHeader('X-Upstream-Content-Type', upstreamType);
       res.setHeader('Cache-Control', 'no-store');
       try {
         while (!next.done) {

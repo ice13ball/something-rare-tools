@@ -64,7 +64,7 @@ function samplesOf(sheet: ParsedFile['sheets'][number]): string[][] {
 }
 
 function proposalsFor(file: ParsedFile, layout: LayoutPlan): Record<string, ColumnProposal[]> {
-  const out: Record<string, ColumnProposal[]> = {};
+  const out: Record<string, ColumnProposal[]> = Object.create(null) as Record<string, ColumnProposal[]>;
   const names: string[] = [];
   for (const t of layout.tables) if (!names.includes(t.sheet)) names.push(t.sheet);
   for (const j of layout.joins) for (const n of [j.left, j.right]) if (!names.includes(n)) names.push(n);
