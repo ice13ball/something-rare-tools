@@ -9,6 +9,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <meta name="description" content="Check marine dataset files and their metadata for coordinate, date, unit and licence problems. Files stay in your browser." />
+    <link rel="canonical" href="https://tools.something-rare.com/check" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Abyssal Claims Tools" />
+    <meta property="og:title" content="Data check — Abyssal Claims Tools" />
+    <meta property="og:description" content="Check marine dataset files and their metadata for coordinate, date, unit and licence problems. Files stay in your browser." />
+    <meta property="og:url" content="https://tools.something-rare.com/check" />
+    <meta property="og:image" content="https://tools.something-rare.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Abyssal Claims Tools: check marine data before you publish it" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Abyssal Claims Tools — Data check",
+  "url": "https://tools.something-rare.com/check",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web browser)",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  },
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+  "inLanguage": [
+    "en",
+    "pl",
+    "de",
+    "fr"
+  ],
+  "creator": {
+    "@type": "Person",
+    "name": "Michal Mazurowski",
+    "url": "https://something-rare.com"
+  },
+  "isBasedOn": "https://github.com/ice13ball/something-rare-tools"
+}
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Data check — Abyssal Claims Tools</title>
     <!-- Google Consent Mode v2 default (all denied), set BEFORE any gtag config.
@@ -17,7 +57,35 @@
     <script src="/consent-default.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <header class="site-header">
+        <a class="brand" href="/">Abyssal Claims Tools</a>
+        <nav aria-label="Main"><a href="/check">Data check</a></nav>
+      </header>
+      <main id="main" class="container">
+        <h1>Data check</h1>
+        <p>Check marine dataset files and their metadata before you publish them. Add your files or a link to a public Zenodo or GeoNetwork record or a DOI; the tool proposes a column mapping, you confirm it, and it reports each problem it finds in plain words, with the rule and its source.</p>
+        <h2>What it checks</h2>
+        <ul>
+          <li>Licence: is it stated, machine-readable (name, version and link), and the same in every record (ISO 19139, DataCite, Zenodo)?</li>
+          <li>Metadata against the data: dates outside the stated time span, points outside the bounding box, variables named in the abstract but missing from the file.</li>
+          <li>Rows: impossible coordinates, latitude written into the longitude column, ragged rows, text in numeric columns, unreadable or ambiguous dates, missing units.</li>
+          <li>Across several files: the same samples under different dates or unit labels, swapped or differing station positions.</li>
+          <li>Chemistry: unit pairs that disagree (e.g. mg/L against &micro;mol/L), DIC above alkalinity, values outside published QC ranges (Argo, GTSPP).</li>
+        </ul>
+        <h2>What this tool does not check</h2>
+        <ul>
+          <li>Whether the measurements are scientifically valid.</li>
+          <li>Instrument calibration and measurement accuracy.</li>
+          <li>Species names and taxonomy.</li>
+          <li>The contents of PDF files (tables are not extracted from PDFs).</li>
+          <li>Variables for which this tool has no cited range or unit rule.</li>
+        </ul>
+        <p>Files you drop here are read and checked by your own browser and never leave your computer. See the <a href="/privacy">privacy page</a>.</p>
+      </main>
+      <footer class="site-footer"><a href="/privacy">Privacy</a></footer>
+    </div>
+    <noscript><p>This tool needs JavaScript to check files; the description above works without it.</p></noscript>
     <script type="module" src="/src/app/entries/check.tsx"></script>
   </body>
 </html>

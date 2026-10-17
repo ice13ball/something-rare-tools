@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import express, { type ErrorRequestHandler, type Express, type Request, type Response } from 'express';
@@ -78,6 +78,15 @@ function sendProxyError(res: Response, e: ProxyError): void {
   res.status(e.status >= 400 && e.status < 600 ? e.status : 502).json({ error: e.code });
 }
 
+/** The three canonical pages; <lastmod> is the build date (mtime of dist/index.html, read once at startup). */
+function buildSitemap(built: Date): string {
+  const lastmod = built.toISOString().slice(0, 10);
+  const urls = ['/', '/check', '/privacy']
+    .map((p) => `  <url>\n    <loc>${SITE.origin}${p}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>\n`)
+    .join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>\n`;
+}
+
 export function createApp(opts: AppOptions): Express {
   const noindex = opts.noindex ?? SITE.noindex;
   const log = opts.log ?? ((line: string) => void process.stdout.write(line + '\n'));
@@ -91,6 +100,8 @@ export function createApp(opts: AppOptions): Express {
   };
   const consentJs = readOptional(dist, 'consent-default.js');
   const favicon = readOptional(dist, 'favicon.svg');
+  const ogImage = readOptional(dist, 'og.png');
+  const sitemap = Buffer.from(buildSitemap(statSync(join(dist, 'index.html')).mtime));
 
   const app = express();
   app.disable('x-powered-by');
@@ -106,20 +117,34 @@ export function createApp(opts: AppOptions): Express {
     res.setHeader('Cache-Control', 'no-cache');
     res.end(page);
   };
-  for (const path of ['/', '/check', '/check/', '/privacy', '/privacy/']) {
-    app.get(path, sendHtml(path === '/' ? pages.home : path.startsWith('/check') ? pages.check : pages.privacy));
+  for (const path of ['/', '/check', '/privacy']) {
+    app.get(path, sendHtml(path === '/' ? pages.home : path === '/check' ? pages.check : pages.privacy));
   }
+  // One canonical URL per page: the slash variants answer 301 to the slash-less one (fixed targets, nothing from the request).
+  for (const path of ['/check', '/privacy']) app.get(path + '/', (_req, res) => void res.redirect(301, path));
 
   app.get('/robots.txt', (_req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.end('User-agent: *\nAllow: /\n');
+    res.end(`User-agent: *\nAllow: /\nSitemap: ${SITE.origin}/sitemap.xml\n`);
+  });
+  app.get('/sitemap.xml', (_req, res) => {
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.end(sitemap);
   });
   if (consentJs) {
     app.get('/consent-default.js', (_req, res) => {
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.end(consentJs);
+    });
+  }
+  if (ogImage) {
+    app.get('/og.png', (_req, res) => {
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      res.end(ogImage);
     });
   }
   if (favicon) {

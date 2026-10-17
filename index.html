@@ -9,6 +9,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <meta name="description" content="Simple tools for checking marine data before it is published. Abyssal Claims Tools." />
+    <link rel="canonical" href="https://tools.something-rare.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Abyssal Claims Tools" />
+    <meta property="og:title" content="Abyssal Claims Tools" />
+    <meta property="og:description" content="Simple tools for checking marine data before it is published. Abyssal Claims Tools." />
+    <meta property="og:url" content="https://tools.something-rare.com/" />
+    <meta property="og:image" content="https://tools.something-rare.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Abyssal Claims Tools: check marine data before you publish it" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Abyssal Claims Tools",
+  "url": "https://tools.something-rare.com/"
+}
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Abyssal Claims Tools</title>
     <!-- Google Consent Mode v2 default (all denied), set BEFORE any gtag config.
@@ -17,7 +36,23 @@
     <script src="/consent-default.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <header class="site-header">
+        <a class="brand" href="/">Abyssal Claims Tools</a>
+        <nav aria-label="Main"><a href="/check">Data check</a></nav>
+      </header>
+      <main id="main" class="container">
+        <h1>Abyssal Claims Tools</h1>
+        <p class="lead">Simple tools for checking marine data before it is published.</p>
+        <article class="card">
+          <h2>Data check</h2>
+          <p>Checks marine dataset files and their metadata for coordinate, date, unit and licence problems and explains each one in plain words.</p>
+          <a class="button" href="/check">Open data check</a>
+        </article>
+        <p class="atlas-link">Part of the project: <a href="https://something-rare.com">Abyssal Claims — deep-sea atlas</a></p>
+      </main>
+      <footer class="site-footer"><a href="/privacy">Privacy</a></footer>
+    </div>
     <script type="module" src="/src/app/entries/index.tsx"></script>
   </body>
 </html>

@@ -56,9 +56,7 @@ describe('static routes', () => {
   for (const [path, marker] of [
     ['/', 'fixture-page-index'],
     ['/check', 'fixture-page-check'],
-    ['/check/', 'fixture-page-check'],
     ['/privacy', 'fixture-page-privacy'],
-    ['/privacy/', 'fixture-page-privacy'],
   ] as const) {
     it(`GET ${path} serves its page with every header`, async () => {
       const res = await request(app).get(path);
@@ -125,7 +123,7 @@ describe('static routes', () => {
     const robots = await request(app).get('/robots.txt');
     expect(robots.status).toBe(200);
     expect(robots.headers['content-type']).toMatch(/^text\/plain/);
-    expect(robots.text).toBe('User-agent: *\nAllow: /\n');
+    expect(robots.text).toBe('User-agent: *\nAllow: /\nSitemap: https://tools.something-rare.com/sitemap.xml\n');
     expect(robots.text).not.toMatch(/disallow/i);
     expectCommonHeaders(robots);
   });
@@ -153,7 +151,7 @@ describe('noindex flag', () => {
   });
   it('noindex:false drops X-Robots-Tag everywhere and strips the robots meta from served HTML', async () => {
     const { app } = make({ noindex: false });
-    for (const p of ['/', '/check', '/check/', '/privacy', '/nope', '/robots.txt']) {
+    for (const p of ['/', '/check', '/check/', '/privacy', '/nope', '/robots.txt', '/sitemap.xml']) {
       const res = await request(app).get(p);
       expectCommonHeaders(res, false);
       expect(res.text, p).not.toMatch(/name="robots"/);
