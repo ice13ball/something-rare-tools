@@ -16,6 +16,7 @@ const en = {
   'nav.check': `Data check`,
   'nav.privacy': `Privacy`,
   'nav.atlas': `Abyssal Claims — deep-sea atlas`,
+  'nav.atlasShort': `Atlas`,
   'nav.language': `Language`,
   'nav.skip': `Skip to content`,
 
@@ -213,6 +214,7 @@ const pl: Record<UiKey, string> = {
   'nav.check': `Sprawdzanie danych`,
   'nav.privacy': `Prywatność`,
   'nav.atlas': `Abyssal Claims — atlas głębin morskich`,
+  'nav.atlasShort': `Atlas`,
   'nav.language': `Język`,
   'nav.skip': `Przejdź do treści`,
 
@@ -408,6 +410,7 @@ const de: Record<UiKey, string> = {
   'nav.check': `Datenprüfung`,
   'nav.privacy': `Datenschutz`,
   'nav.atlas': `Abyssal Claims — Tiefsee-Atlas`,
+  'nav.atlasShort': `Atlas`,
   'nav.language': `Sprache`,
   'nav.skip': `Zum Inhalt springen`,
 
@@ -603,6 +606,7 @@ const fr: Record<UiKey, string> = {
   'nav.check': `Vérification des données`,
   'nav.privacy': `Confidentialité`,
   'nav.atlas': `Abyssal Claims — atlas des grands fonds marins`,
+  'nav.atlasShort': `Atlas`,
   'nav.language': `Langue`,
   'nav.skip': `Aller au contenu`,
 
