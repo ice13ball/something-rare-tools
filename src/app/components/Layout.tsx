@@ -33,12 +33,14 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
         </a>
         <nav aria-label="Main">
           <a href="/check">{t('nav.check')}</a>
+          <a href={SITE.atlasUrl}>{t('nav.atlasShort')}</a>
         </nav>
       </header>
       <main id="main" className="container" tabIndex={-1}>
         {children}
       </main>
       <footer className="site-footer">
+        <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
         <a href="/privacy">{t('nav.privacy')}</a>
         <button type="button" className="link-button" onClick={() => setCookieOpen(true)}>
           {t('footer.cookies')}

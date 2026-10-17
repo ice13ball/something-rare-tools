@@ -169,7 +169,7 @@ describe('pages', () => {
     expect(screen.getAllByText('Abyssal Claims Tools').length).toBeGreaterThan(0);
     const card = screen.getByRole('link', { name: /Open data check/ });
     expect(card.getAttribute('href')).toBe('/check');
-    expect(screen.getByRole('link', { name: 'Abyssal Claims — deep-sea atlas' }).getAttribute('href')).toBe('https://something-rare.com');
+    for (const a of screen.getAllByRole('link', { name: 'Abyssal Claims — deep-sea atlas' })) expect(a.getAttribute('href')).toBe('https://something-rare.com');
     expect(screen.getAllByRole('link', { name: 'Privacy' })[0].getAttribute('href')).toBe('/privacy');
     expect(screen.getByRole('combobox')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy();
