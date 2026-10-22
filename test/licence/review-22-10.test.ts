@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+// Second 22.10 review of the licence module: one test per reviewer case (points 1-11). The overriding principle: when in doubt the
+// result is "unrecognised — check manually", never a standard licence.
+import { describe, expect, it } from 'vitest';
+import { checkLicence } from '../../src/core/checks/licence';
+import { analyseLicences } from '../../src/core/licence/analyse';
+import { buildStatement, classifyStatement } from '../../src/core/metadata/licence';
+import type { Finding, LicenceStatement, MetadataRecord, MetadataSource } from '../../src/core/types';
+import { makeRecord } from '../helpers/build';
+
+const BY = 'https://creativecommons.org/licenses/by/4.0/';
+
+/** One statement the way the parsers build it. */
+const st = (text?: string, uri?: string, also?: string[], source: MetadataSource = 'datacite', field = 'rightsList[0]'): LicenceStatement =>
+  buildStatement({ source, field, text, uri, also })!;
+const klass = (s: LicenceStatement): string => {
+  const c = classifyStatement(s);
+  return c.kind === 'spdx' ? c.id : s.conflict ? `unrecognised (${s.conflict})` : 'unrecognised';
+};
+const rec = (source: MetadataSource, entries: [string | undefined, string | undefined, string?][], extra: Partial<MetadataRecord> = {}): MetadataRecord =>
+  makeRecord(source, {
+    licences: entries.map(([text, uri, field], i) => buildStatement({ source, field: field ?? (source === 'iso19139' ? 'otherConstraints' : `rightsList[${i}]`), text, uri })!),
+    ...extra,
+  });
+const lic = (f: Finding[]): string[] => f.filter((x) => x.ruleId.startsWith('LIC-')).map((x) => x.ruleId);
+const check = (records: MetadataRecord[], extra: { inaccessible?: boolean } = {}): string[] => lic(checkLicence(records, { label: 'rec', inaccessible: false, ...extra }));
+
+describe('review 1 — restrictions are never let through', () => {
+  it.each([
+    'CC BY 4.0 for noncommercial purposes',
+    'CC BY 4.0; commercial use requires written permission',
+    'CC BY 4.0, keine kommerzielle Nutzung',
+    'CC BY 4.0, do celów niekomercyjnych',
+    'CC BY 4.0 – użycie komercyjne niedozwolone',
+    'CC BY 4.0, utilisation commerciale soumise à autorisation',
+    'CC BY 4.0, commercial use requires permission',
+    'CC BY 4.0 with the consent of the author',
+    'CC BY 4.0, Genehmigung erforderlich',
+    'CC BY 4.0 for academic use',
+    'CC BY 4.0, za zgodą autora',
+  ])('"%s" is ADDED-CONDITIONS, never CC-BY-4.0', (text) => {
+    for (const s of [st(text), st(text, BY)]) {
+      expect(klass(s), text).toBe('unrecognised (restricted)');
+    }
+    expect(check([rec('datacite', [[text, undefined]])])).toContain('LIC-ADDED-CONDITIONS');
+  });
+
+  it.each([
+    'CC BY 4.0. You are free to share and adapt the material for any purpose, even commercially.',
+    'CC BY 4.0 — Nutzung für beliebige Zwecke, sogar kommerziell.',
+    'CC BY 4.0 : pour toute utilisation, y compris commerciale.',
+    'CC BY 4.0 – w dowolnym celu, nawet komercyjnym.',
+    'CC BY 4.0 (commercial use permitted)',
+    'CC BY 4.0 (commercial use allowed)',
+    'CC BY 4.0, commercial use is permitted',
+  ])('the affirmative deed wording "%s" stays CC-BY-4.0', (text) => {
+    for (const s of [st(text), st(text, BY)]) expect(klass(s), text).toBe('CC-BY-4.0');
+  });
+});
+
+describe('review 4 — a family or a second reading never disappears behind a standard licence', () => {
+  it('"Creative Commons Attribution 4.0 (CC BY-NC)" is not CC-BY-4.0', () => {
+    expect(klass(st('Creative Commons Attribution 4.0 (CC BY-NC)'))).toBe('unrecognised (readings)');
+    expect(klass(st('Creative Commons Attribution 4.0 (CC BY-NC)', BY))).toBe('unrecognised (text-uri)');
+  });
+  it('rights text against identifier with no link: a conflict that does not talk about a link, no free-text hint', () => {
+    const s = st('Creative Commons Attribution 4.0 International', undefined, ['cc-by-nc-4.0']);
+    expect(klass(s)).toBe('unrecognised (readings)');
+    expect(s.readings).toEqual(['CC-BY-4.0', 'CC-BY-NC-4.0']);
+    const f = checkLicence([makeRecord('datacite', { licences: [s] })], { label: 'rec', inaccessible: false });
+    expect(lic(f)).toEqual(['LIC-AMBIGUOUS']);
+    expect(f.find((x) => x.ruleId === 'LIC-AMBIGUOUS')!.params).toMatchObject({ readings: 'CC-BY-4.0 / CC-BY-NC-4.0' });
+  });
+  it('the family is compared with the link even when the text names a version', () => {
+    expect(klass(st('CC BY 4.0 (CC BY-SA)', 'https://creativecommons.org/licenses/by-sa/4.0/'))).toBe('unrecognised (text-uri)');
+  });
+});
+
+describe('review 5 — "OR" is not a country; two licences in one text are not one', () => {
+  it('"CC BY 3.0 OR CC BY-SA 3.0" is not CC-BY-SA-3.0', () => {
+    const s = st('CC BY 3.0 OR CC BY-SA 3.0');
+    expect(s.spdx).toBeUndefined();
+    expect(klass(s)).toBe('unrecognised (readings)');
+    expect(s.readings).toEqual(['CC-BY-3.0', 'CC-BY-SA-3.0']);
+  });
+  it('lower-case "or" and "CC BY 4.0 OR CC BY-SA 4.0" likewise', () => {
+    expect(st('CC BY 3.0 or CC BY-SA 3.0').spdx).toBeUndefined();
+    expect(st('CC BY 4.0 OR CC BY-SA 4.0').spdx).toBeUndefined();
+  });
+  it('an unrecognised licence name next to a recognised one, no link: unrecognised', () => {
+    expect(st('CC BY 4.0 and Open Government Licence - Canada').spdx).toBeUndefined();
+    expect(st('CC BY 3.0 PL and CC BY 4.0').spdx).toBeUndefined();
+  });
+});
+
+describe('review 8 — ports in text', () => {
+  it.each([
+    ['CC BY 3.0 Germany', 'CC-BY-3.0-DE'],
+    ['CC BY 3.0 (IGO)', 'CC-BY-3.0-IGO'],
+    ['cc by-sa 3.0 de', 'CC-BY-SA-3.0-DE'],
+    ['Creative Commons Attribution 3.0 Germany', 'CC-BY-3.0-DE'],
+    ['Creative Commons Attribution-NonCommercial 3.0 IGO', 'CC-BY-NC-3.0-IGO'],
+  ])('"%s" -> %s', (text, id) => {
+    expect(klass(st(text))).toBe(id);
+  });
+  it.each(['Creative Commons Attribution 3.0 Poland', 'CC BY 3.0 Poland', 'CC BY 3.0 PL'])('"%s" has no SPDX port: unrecognised, never CC-BY-3.0', (text) => {
+    expect(klass(st(text))).toBe('unrecognised');
+    expect(check([rec('datacite', [[text, undefined]])])).not.toContain('LIC-ADDED-CONDITIONS');
+  });
+  it('words that look like a port stay what they were', () => {
+    expect(klass(st('CC-BY-3.0 at Zenodo'))).toBe('CC-BY-3.0');
+    expect(klass(st('Creative Commons Attribution 3.0 Unported'))).toBe('CC-BY-3.0');
+    expect(klass(st('CC BY 4.0 DE'))).toBe('CC-BY-4.0');
+  });
+});
+
+describe('review 9 — ordinary texts are not "added conditions"', () => {
+  it.each([
+    ['Namensnennung - Nicht kommerziell 4.0 International', 'CC-BY-NC-4.0'],
+    ['Creative Commons Namensnennung - Nicht-kommerziell - Keine Bearbeitungen 4.0 International', 'CC-BY-NC-ND-4.0'],
+    ['Namensnennung - Weitergabe unter gleichen Bedingungen 4.0 International', 'CC-BY-SA-4.0'],
+    ['Namensnennung 4.0 International', 'CC-BY-4.0'],
+    ["Attribution - Pas d'Utilisation Commerciale 4.0 International", 'CC-BY-NC-4.0'],
+    ['Attribution - Pas de Modification 4.0 International', 'CC-BY-ND-4.0'],
+    ['Attribution - Partage dans les Mêmes Conditions 4.0 International', 'CC-BY-SA-4.0'],
+    ['Attribution 4.0 International', 'CC-BY-4.0'],
+    ['Uznanie autorstwa 4.0 Międzynarodowe', 'CC-BY-4.0'],
+    ['Uznanie autorstwa-Użycie niekomercyjne 4.0 Międzynarodowe', 'CC-BY-NC-4.0'],
+    ['Uznanie autorstwa – Bez utworów zależnych 4.0 Międzynarodowe', 'CC-BY-ND-4.0'],
+    ['Uznanie autorstwa-Na tych samych warunkach 4.0 Międzynarodowe', 'CC-BY-SA-4.0'],
+    ['Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International', 'CC-BY-NC-SA-4.0'],
+    ['Creative Commons Attribution-NoDerivatives 4.0 International', 'CC-BY-ND-4.0'],
+  ])('"%s" -> %s, clean', (text, id) => {
+    const s = st(text);
+    expect(klass(s), text).toBe(id);
+    expect(s.conflict).toBeUndefined();
+  });
+  it.each([
+    'CC BY 4.0, some rights reserved',
+    'CC BY 4.0 — no additional restrictions',
+    'CC BY 4.0 without restrictions',
+    'CC BY 4.0 without restriction',
+    'CC BY 4.0, no limitations',
+    'CC BY 4.0, but please cite the dataset',
+    '© Ocean Data Limited, CC BY 4.0',
+    'CC BY 4.0 © 2025 Ocean Data Limited',
+  ])('"%s" is CC-BY-4.0', (text) => {
+    expect(klass(st(text)), text).toBe('CC-BY-4.0');
+  });
+  it('"limited to" and an unqualified "all rights reserved" still count as conditions', () => {
+    expect(klass(st('CC BY 4.0, use limited to the project partners'))).toBe('unrecognised (restricted)');
+    expect(klass(st('CC BY 4.0. All rights reserved.'))).toBe('unrecognised (restricted)');
+  });
+  it('a restriction written with the official element words outside a licence name is still caught', () => {
+    expect(klass(st('CC BY 4.0, nicht kommerziell'))).toBe('unrecognised (restricted)');
+    expect(klass(st('CC BY 4.0, pas d\'utilisation commerciale'))).toBe('unrecognised (restricted)');
+  });
+});
+
+describe('review 2 — only explicitly repeated entries are dual licensing', () => {
+  const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
+  it('DataCite rightsList entries and Zenodo rights[] entries are dual licensing', () => {
+    expect(analyseLicences([rec('datacite', [['CC BY 4.0', BY], ['CC0 1.0', CC0]])]).contradictions).toEqual([]);
+    const z = makeRecord('zenodo', {
+      licences: [
+        buildStatement({ source: 'zenodo', field: 'rights[0]', text: 'cc-by-4.0' })!,
+        buildStatement({ source: 'zenodo', field: 'rights[1]', text: 'cc-zero' })!,
+      ],
+    });
+    expect(analyseLicences([z]).contradictions).toEqual([]);
+  });
+  it('two different licences in two ISO fields are LIC-MISMATCH, in the analysis and in /check', () => {
+    const iso = rec('iso19139', [['CC BY 4.0', BY, 'otherConstraints'], ['CC0 1.0', CC0, 'useLimitation']]);
+    expect(analyseLicences([iso]).contradictions).toMatchObject([{ kind: 'mismatch', licenceA: 'CC-BY-4.0', licenceB: 'CC0-1.0' }]);
+    expect(check([iso])).toContain('LIC-MISMATCH');
+  });
+  it('two otherConstraints in one record likewise', () => {
+    const iso = rec('iso19139', [['CC BY 4.0', BY, 'otherConstraints'], ['CC BY-SA 4.0', 'https://creativecommons.org/licenses/by-sa/4.0/', 'otherConstraints']]);
+    expect(check([iso])).toContain('LIC-MISMATCH');
+  });
+  it('the same licence in two fields is no mismatch', () => {
+    const iso = rec('iso19139', [['CC BY 4.0', BY, 'otherConstraints'], ['CC BY 4.0', BY, 'useLimitation']]);
+    expect(check([iso])).not.toContain('LIC-MISMATCH');
+  });
+});
+
+describe('review 3 — "no contradiction among N" counts only sources with a recognised licence', () => {
+  it('a recognised source next to an unrecognised one is not "compared"', () => {
+    const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('datacite', [['Open Access', undefined]])]);
+    expect(a.statedGroups).toBe(2);
+    expect(a.recognisedGroups).toBe(1);
+    expect(a.comparison).toBe('single-source');
+  });
+  it('only unrecognised statements: nothing is compared', () => {
+    const a = analyseLicences([rec('iso19139', [['Open Access', undefined]]), rec('datacite', [['Free to use', undefined]])]);
+    expect(a.statedGroups).toBe(2);
+    expect(a.recognisedGroups).toBe(0);
+    expect(a.comparison).toBe('single-source');
+  });
+  it('two recognised sources that agree are compared, N = 2', () => {
+    const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('datacite', [['CC BY 4.0', BY]])]);
+    expect(a.recognisedGroups).toBe(2);
+    expect(a.comparison).toBe('compared');
+  });
+});
+
+describe('review 7 — sources are grouped by deposit, not by source type', () => {
+  const dc = (doi: string, text = 'CC BY 4.0', uri = BY): MetadataRecord => rec('datacite', [[text, uri]], { doi, label: `DataCite ${doi}` });
+  it('two DataCite DOIs of different repositories are two groups', () => {
+    const a = analyseLicences([dc('10.17882/1'), dc('10.5285/2')]);
+    expect(a.groups).toHaveLength(2);
+    expect(a.groups.every((g) => g.sources.length === 1)).toBe(true);
+    expect(a.comparison).toBe('compared');
+  });
+  it('two such DOIs with different licences are a mismatch BETWEEN groups, not within one deposit', () => {
+    const a = analyseLicences([dc('10.17882/1'), dc('10.5285/2', 'CC BY-SA 4.0', 'https://creativecommons.org/licenses/by-sa/4.0/')]);
+    expect(a.contradictions).toMatchObject([{ kind: 'mismatch', sameGroup: false }]);
+  });
+  it('two GeoNetwork catalogues and two Zenodo deposits are two groups each', () => {
+    const iso = (label: string) => rec('iso19139', [['CC BY 4.0', BY]], { label });
+    expect(analyseLicences([iso('GeoNetwork A'), iso('GeoNetwork B')]).groups).toHaveLength(2);
+    const z = (n: number) => rec('zenodo', [['cc-by-4.0', undefined]], { doi: `10.5281/zenodo.${n}`, label: `Zenodo ${n}`, landingUrl: `https://zenodo.org/records/${n}` });
+    expect(analyseLicences([z(1), z(2)]).groups).toHaveLength(2);
+  });
+  it('a Zenodo record, the DataCite record of its version DOI and of its concept DOI are one group', () => {
+    const z = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.101', label: 'Zenodo 101', landingUrl: 'https://zenodo.org/records/101' });
+    const version = dc('10.5281/zenodo.101');
+    const concept = rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.100', label: 'DataCite concept', landingUrl: 'https://zenodo.org/records/101' });
+    const a = analyseLicences([z, version, concept]);
+    expect(a.groups).toHaveLength(1);
+    expect(a.groups[0].sources).toHaveLength(3);
+    expect(a.comparison).toBe('single-source');
+  });
+  it('a PANGAEA record and the DataCite record of its DOI are one group; a catalogue with the same DOI is not merged into it', () => {
+    const p = rec('pangaea', [['CC BY 4.0', BY, 'license']], { doi: '10.1594/PANGAEA.9', label: 'PANGAEA 9' });
+    const d = dc('10.1594/PANGAEA.9');
+    const iso = rec('iso19139', [['CC BY 4.0', BY]], { doi: '10.1594/PANGAEA.9', label: 'GeoNetwork X' });
+    const a = analyseLicences([p, d, iso]);
+    expect(a.groups.map((g) => g.sources.length).sort()).toEqual([1, 2]);
+  });
+});

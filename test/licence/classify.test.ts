@@ -110,12 +110,12 @@ describe('text and URI are read separately; the URI never silently wins', () => 
   it('several licences offered in one text cannot be reduced to one id; with a URI it is a conflict', () => {
     expect(st('CC BY 4.0 or CC BY-SA 4.0').spdx).toBeUndefined();
     expect(st('CC BY 4.0 or CC BY-SA 4.0', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('text-uri');
-    expect(st('CC BY 4.0 or CC BY-SA 4.0').conflict).toBeUndefined();
+    expect(st('CC BY 4.0 or CC BY-SA 4.0').conflict).toBe('readings'); // no link to blame: the statement reads two ways
   });
-  it('DataCite-style identifier and rights text that disagree: unrecognised; a text/URI conflict only when there is a URI', () => {
+  it('DataCite-style identifier and rights text that disagree: unrecognised; a text/URI conflict with a link, "readings" without', () => {
     const parts = { source: 'datacite' as const, field: 'x', text: 'CC BY 4.0', also: ['cc-by-sa-4.0'] };
     expect(buildStatement(parts)!.spdx).toBeUndefined();
-    expect(buildStatement(parts)!.conflict).toBeUndefined();
+    expect(buildStatement(parts)!.conflict).toBe('readings');
     expect(buildStatement({ ...parts, uri: 'https://creativecommons.org/licenses/by/4.0/' })!.conflict).toBe('text-uri');
   });
   it('conditions in the text, pl/en/de/fr, make the statement unrecognised', () => {

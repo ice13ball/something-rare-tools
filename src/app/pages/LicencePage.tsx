@@ -116,17 +116,25 @@ function SourceView({ src, failures }: { src: AnalysedSource; failures: LoadFail
   );
 }
 
-function GroupView({ group, failures }: { group: SourceGroup; failures: LoadFailure[] }): React.ReactElement {
+function GroupView({ group, failures, heading }: { group: SourceGroup; failures: LoadFailure[]; heading?: string }): React.ReactElement {
   const names = [...new Set(group.sources.map((s) => SOURCE_NAME[s.source]))].join(' + ');
   return (
     <section className="licence-group card" data-group={group.id}>
-      <h3>{names}</h3>
+      <h3>{heading ?? names}</h3>
       {group.sources.length > 1 && <p className="muted">{t('licence.group.shared', { names })}</p>}
       {group.sources.map((s, i) => (
         <SourceView key={i} src={s} failures={failures} />
       ))}
     </section>
   );
+}
+
+/** Deposits of the same kind (two DataCite DOIs, two catalogues) are told apart by the label of their first record. */
+function groupHeading(g: SourceGroup, all: SourceGroup[]): string {
+  const names = [...new Set(g.sources.map((s) => SOURCE_NAME[s.source]))].join(' + ');
+  const twin = all.some((o) => o !== g && [...new Set(o.sources.map((s) => SOURCE_NAME[s.source]))].join(' + ') === names);
+  const first = g.sources.find((s) => s.record);
+  return twin && first ? `${names} — ${first.label}` : names;
 }
 
 function CopyAttribution({ text, write }: { text: string; write: (s: string) => Promise<void> }): React.ReactElement {
@@ -184,11 +192,19 @@ function Summary({ r }: { r: Result }): React.ReactElement {
         </>
       ) : a.comparison === 'compared' ? (
         <p>
-          <strong>{t('licence.summary.none', { n: a.statedGroups })}</strong> {t('licence.summary.countOnce')}
+          <strong>{t('licence.summary.none', { n: a.recognisedGroups })}</strong> {t('licence.summary.countOnce')}
         </p>
       ) : (
         <p>
-          <strong>{a.statedGroups === 0 ? t('licence.summary.nostated') : t('licence.summary.single')}</strong>
+          <strong>
+            {a.statedGroups === 0
+              ? t('licence.summary.nostated')
+              : a.recognisedGroups === 0
+                ? t('licence.summary.uncompared')
+                : a.statedGroups > a.recognisedGroups
+                  ? t('licence.summary.partial')
+                  : t('licence.summary.single')}
+          </strong>
         </p>
       )}
       {a.hasUnreadable && <p className="notice">{t('licence.summary.unreadable')}</p>}
@@ -298,7 +314,7 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
           <section aria-labelledby="licence-sources-title">
             <h2 id="licence-sources-title">{t('licence.sources.title')}</h2>
             {result.analysis.groups.map((g) => (
-              <GroupView key={g.id} group={g} failures={result.failures} />
+              <GroupView key={g.id} group={g} failures={result.failures} heading={groupHeading(g, result.analysis.groups)} />
             ))}
           </section>
           <section aria-labelledby="licence-attr-title">

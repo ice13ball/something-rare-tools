@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Loads the METADATA of one dataset from one or several references (DOI, Zenodo, PANGAEA, GeoNetwork). Never downloads data files.
 // Used by the licence page and by the live corpus test, so both read records the same way.
-import { groupOf } from './analyse';
+import { sameDeposit } from './analyse';
 import type { Finding, LoadedRecord, MetadataRecord, MetadataSource } from '../types';
 import { lookupDatacite } from '../sources/datacite';
 import { fetchErrorFinding, type FetchResult, type Fetcher } from '../sources/fetcher';
@@ -107,7 +107,7 @@ export async function loadLicenceReferences(
     if (!doi || rec.source === 'datacite') continue;
     // Already there: the DataCite record of this DOI, or (Zenodo, PANGAEA) one DataCite record of the same deposit. A concept DOI and a
     // version DOI are two DataCite records of ONE Zenodo deposit; the second is not asked for.
-    if (records.some((r) => r.source === 'datacite' && (doiKey(r) === doi.toLowerCase() || groupOf(r) === groupOf(rec)))) continue;
+    if (records.some((r) => r.source === 'datacite' && (doiKey(r) === doi.toLowerCase() || sameDeposit(r, rec)))) continue;
     if (failures.some((f) => f.source === 'datacite' && f.ref === doi)) continue;
     const label = `DataCite ${doi}`;
     try {

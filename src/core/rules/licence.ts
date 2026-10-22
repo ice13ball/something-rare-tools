@@ -14,6 +14,9 @@ import type { RuleSpec } from './spec';
  *                                                    (incl. a link no SPDX id exists for); textLicence/uriLicence = SPDX id or '—'
  *   LIC-ADDED-CONDITIONS      text, textLicence      the text names a licence but adds or negates conditions; textLicence = the
  *                                                    SPDX id, or the text itself when no id could be read
+ *   LIC-AMBIGUOUS             text, readings         one statement WITHOUT a link that reads as more than one licence (rights text against
+ *                                                    identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to one that is not);
+ *                                                    readings = what it reads as, separated by " / " ("—" = a name no SPDX id exists for)
  *   LIC-RESTRICTION-CONFLICT  codes, licence         codes = restrictive MD_RestrictionCode values, comma-separated;
  *                                                    licence = the open licence (recognised SPDX id; NC/ND and unrecognised text are not open)
  *   LIC-DATACITE-EMPTY        licence                the licence another record states
@@ -75,6 +78,20 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
       fr: `Le texte (« {text} ») nomme la licence {textLicence} mais y ajoute des conditions ; tel qu'il est écrit, ce n'est plus cette licence standard. Vérifiez-le à la main et indiquez clairement la licence et les éventuelles conditions supplémentaires.`,
     },
     technical: `{file} field {field}: text '{text}' names {textLicence} but adds or negates conditions; the statement is not classified as that licence. Check manually.`,
+  },
+  {
+    id: 'LIC-AMBIGUOUS',
+    category: 'A',
+    severity: 'warning',
+    citations: [CITE.dataciteTitle, CITE.dataciteIdentifier],
+    params: ['text', 'readings'],
+    plain: {
+      pl: `Stwierdzenie o licencji („{text}”) można odczytać jako więcej niż jedną licencję ({readings}; „—” = nazwa, dla której nie ma identyfikatora), więc nie da się go przypisać do jednej licencji. Sprawdź to ręcznie i podaj jedną licencję.`,
+      en: `The licence statement ("{text}") can be read as more than one licence ({readings}; "—" = a name no identifier exists for), so it cannot be assigned to one licence. Check it by hand and state one licence.`,
+      de: `Die Lizenzangabe („{text}“) lässt sich als mehr als eine Lizenz lesen ({readings}; „—“ = ein Name, für den es keine Kennung gibt) und kann daher keiner einzelnen Lizenz zugeordnet werden. Prüfen Sie das von Hand und geben Sie eine Lizenz an.`,
+      fr: `La mention de licence (« {text} ») peut se lire comme plus d'une licence ({readings} ; « — » = un nom sans identifiant) et ne peut donc pas être rattachée à une seule licence. Vérifiez-la à la main et indiquez une seule licence.`,
+    },
+    technical: `{file} field {field}: statement '{text}' reads as {readings}; it is not classified as one licence. Check manually.`,
   },
   {
     id: 'LIC-RESTRICTION-CONFLICT',
