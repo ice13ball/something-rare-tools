@@ -182,12 +182,12 @@ describe('pages', () => {
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'mailto:m.mazurowski@ai-wall.com')).toBe(true);
   });
 
-  it('PrivacyPage describes the hosting logs (IP, 30 days) in every language', () => {
-    for (const [lang, heading, ip] of [
-      ['en', 'Hosting logs', 'IP address'],
-      ['pl', 'Logi hostingu', 'adres IP'],
-      ['de', 'Hosting-Protokolle', 'IP-Adresse'],
-      ['fr', "Journaux d'hébergement", "l'adresse IP"],
+  it('PrivacyPage describes the hosting logs (IP, 30 days), CARTO and the legal basis in every language', () => {
+    for (const [lang, heading, ip, gdpr] of [
+      ['en', 'Hosting logs', 'IP address', /Art\. 6\(1\)\(f\) GDPR[\s\S]*Art\. 6\(1\)\(a\) GDPR/],
+      ['pl', 'Logi hostingu', 'adres IP', /art\. 6 ust\. 1 lit\. f RODO[\s\S]*art\. 6 ust\. 1 lit\. a RODO/],
+      ['de', 'Hosting-Protokolle', 'IP-Adresse', /Art\. 6 Abs\. 1 lit\. f DSGVO[\s\S]*Art\. 6 Abs\. 1 lit\. a DSGVO/],
+      ['fr', "Journaux d'hébergement", "l'adresse IP", /point f, du RGPD[\s\S]*point a, du RGPD/],
     ] as const) {
       setLang(lang);
       const { container, unmount } = render(<PrivacyPage />);
@@ -196,6 +196,9 @@ describe('pages', () => {
       expect(text, lang).toContain(ip);
       expect(text, lang).toContain('Google Cloud Run (');
       expect(text, lang).toMatch(/30 (days|dniach|Tagen|jours)/);
+      expect(text, lang).toContain('CARTO (basemaps.cartocdn.com)');
+      expect(text, lang).toMatch(gdpr);
+      expect(container.querySelector('a[href="https://carto.com/privacy/"]'), lang).toBeTruthy();
       unmount();
     }
   });
