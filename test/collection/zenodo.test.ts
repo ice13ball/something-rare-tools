@@ -185,3 +185,68 @@ describe('Zenodo community', () => {
     );
   });
 });
+
+describe('a page that cannot be read (Zenodo: the next page is known, so the run goes on)', () => {
+  const failing = (z: ReturnType<typeof zenodoMock>, page: number, until: () => boolean): Net => ({
+    ...z.net,
+    get: async (url, a) => (new URL(url).searchParams.get('page') === String(page) && new URL(url).searchParams.get('size') === '25' && !until() ? res(503, '<html>queue full</html>') : z.net.get(url, a)),
+  });
+
+  it('is retried after the pass; when it then answers, the counts are exact and nothing was ever "throttled" in the end', async () => {
+    const clock = virtualClock();
+    const z = zenodoMock(small(100), clock);
+    let hits = 0;
+    const net = failing(z, 3, () => ++hits > 5); // 5 refusals = the whole retry budget of the first attempt
+    const r = new CollectionRunner(runnerDeps(net, clock));
+    await r.start({ spec: { kind: 'zenodo', community: 'fisheries' }, lang: 'en', sample: false });
+    await r.whenIdle();
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.states).toEqual({ checked: 100, unreachable: 0, throttled: 0, 'unsupported-profile': 0 });
+    expect(p.counts.records).toBe(100);
+    expect(p.deferred).toBe(0);
+  });
+
+  it('a page that stays refused is counted as throttled, produces no finding, and "resume" retries it', async () => {
+    const clock = virtualClock();
+    const z = zenodoMock(small(100), clock);
+    let open = false;
+    const net = failing(z, 3, () => open);
+    const r = new CollectionRunner(runnerDeps(net, clock));
+    await r.start({ spec: { kind: 'zenodo', community: 'fisheries' }, lang: 'en', sample: false });
+    await r.whenIdle();
+    let p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.deferred).toBe(1);
+    expect(p.resumable).toBe(true);
+    expect(p.counts.states).toMatchObject({ checked: 75, throttled: 25 });
+    expect(p.counts.records).toBe(100);
+    // 100 records, a quarter without licence (small()): the 25 unread ones add nothing to LIC-MISSING
+    const missingBefore = p.counts.rules['LIC-MISSING'];
+    open = true;
+    await r.resume();
+    await r.whenIdle();
+    p = r.progress();
+    expect(p.counts.states).toMatchObject({ checked: 100, throttled: 0 });
+    expect(p.counts.rules['LIC-MISSING']).toBeGreaterThanOrEqual(missingBefore);
+    expect(p.counts.rules['LIC-MISSING']).toBe(25);
+    expect(p.deferred).toBe(0);
+    expect(p.status).toBe('finished');
+    expect(p.resumable).toBe(false);
+  });
+
+  it('three failed pages in a row stop the run (interrupted) instead of burning through the community', async () => {
+    const clock = virtualClock();
+    const z = zenodoMock(small(500), clock);
+    const net: Net = { ...z.net, get: async (url, a) => (new URL(url).searchParams.get('size') === '25' ? res(503, '<html>x</html>') : z.net.get(url, a)) };
+    const r = new CollectionRunner(runnerDeps(net, clock));
+    await r.start({ spec: { kind: 'zenodo', community: 'fisheries' }, lang: 'en', sample: false });
+    await r.whenIdle();
+    const p = r.progress();
+    expect(p.status).toBe('interrupted');
+    expect(p.deferred).toBe(3);
+    expect(p.counts.states.checked).toBe(0);
+    expect(p.counts.rules).toEqual({});
+    expect(p.resumable).toBe(true);
+  });
+});
