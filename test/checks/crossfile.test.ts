@@ -201,7 +201,9 @@ describe('XF-POSITION-SWAP and XF-POSITION-CONFLICT', () => {
 });
 
 describe('performance', () => {
-  it('six datasets of 7000 rows finish well inside 2 s', () => {
+  // retry: the threshold is a wall-clock one and the full suite (scripts/deploy.sh) runs 50+ files in parallel; under that load the
+  // test took 2147/2181 ms and passed alone. A real regression stays slow on every attempt, so the threshold is NOT raised.
+  it('six datasets of 7000 rows finish well inside 2 s', { retry: 2 }, () => {
     const vars = [{ key: 'DIC', canonical: 'DIC', unit: 'µmol/L' }, { key: 'S', canonical: 'salinity' }];
     const make = (id: string, unit: string) =>
       makeCDataset(
