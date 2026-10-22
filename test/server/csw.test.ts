@@ -310,3 +310,82 @@ describe('createHostPacer', () => {
     await expect(pacer.acquire('a')).rejects.toMatchObject({ status: 429, retryAfterSec: 3 });
   });
 });
+
+describe('createHostPacer: one client cannot starve the others, a dead client frees its slot', () => {
+  it('(a) one client is limited to its share of the queue; another client is still served at the pace', async () => {
+    let t = 0;
+    const slept: number[] = [];
+    const pacer = createHostPacer({ minIntervalMs: 1000, maxQueue: 20, maxPerClient: 2, now: () => t, sleep: (ms) => { slept.push(ms); return new Promise<void>(() => undefined); } });
+    await pacer.acquire('h', 'flood'); // immediate
+    void pacer.acquire('h', 'flood');
+    void pacer.acquire('h', 'flood');
+    for (let i = 0; i < 10; i++) await expect(pacer.acquire('h', 'flood')).rejects.toMatchObject({ status: 429, retryAfterSec: 3 });
+    expect(pacer.waiting('h')).toBe(2);
+    // the second client queues behind the two reservations: slot 3000 ms away, not pushed further by the refused flood
+    void pacer.acquire('h', 'other');
+    expect(slept).toEqual([1000, 2000, 3000]);
+    expect(pacer.waiting('h')).toBe(3);
+  });
+
+  it('(b) an aborted waiter leaves the queue and gives its slot back', async () => {
+    let t = 0;
+    const slept: number[] = [];
+    const pacer = createHostPacer({ minIntervalMs: 1000, now: () => t, sleep: (ms) => { slept.push(ms); return new Promise<void>(() => undefined); } });
+    await pacer.acquire('h', 'a');
+    const ctl = new AbortController();
+    const dead = pacer.acquire('h', 'a', ctl.signal);
+    expect(pacer.waiting('h')).toBe(1);
+    ctl.abort();
+    await expect(dead).rejects.toMatchObject({ status: 499 });
+    expect(pacer.waiting('h')).toBe(0);
+    void pacer.acquire('h', 'b');
+    expect(slept).toEqual([1000, 1000]); // not 2000: the dead request's slot was returned
+  });
+
+  it('refuses at once for a request that is already aborted', async () => {
+    const pacer = createHostPacer({ minIntervalMs: 1000, now: () => 0 });
+    const ctl = new AbortController();
+    ctl.abort();
+    await expect(pacer.acquire('h', 'a', ctl.signal)).rejects.toMatchObject({ status: 499 });
+    await pacer.acquire('h', 'a'); // nothing was reserved
+    expect(pacer.waiting('h')).toBe(0);
+  });
+});
+
+describe('POST /api/csw under flood and disconnects', () => {
+  it('(a) one IP flooding a host gets 429s while a second IP is served', async () => {
+    const { app, calls } = make({ cswPacing: { minIntervalMs: 150, maxPerClient: 2, maxQueue: 20 }, cswRateLimit: { limit: 1000 } });
+    const flood = await Promise.all(Array.from({ length: 8 }, () => post(app, { catalogue: 'emodnet', op: 'GetCapabilities' }, '7.7.7.7')));
+    const codes = flood.map((r) => r.status);
+    expect(codes.filter((c) => c === 200).length).toBe(3); // one immediate, two waiting
+    expect(codes.filter((c) => c === 429).length).toBe(5);
+    const other = await post(app, { catalogue: 'emodnet', op: 'GetCapabilities' }, '8.8.8.8');
+    expect(other.status).toBe(200);
+    expect(calls).toHaveLength(4);
+  });
+
+  it('(b) a client that disconnects while waiting makes no upstream call and does not delay the next request', async () => {
+    const { app, calls } = make({ cswPacing: { minIntervalMs: 400 }, cswRateLimit: { limit: 1000 } });
+    const server = app.listen(0);
+    try {
+      const port = (server.address() as import('node:net').AddressInfo).port;
+      const first = await fetch(`http://127.0.0.1:${port}/api/csw`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '1.1.1.1' }, body: JSON.stringify({ catalogue: 'emodnet', op: 'GetCapabilities' }) });
+      await first.arrayBuffer();
+      expect(calls).toHaveLength(1);
+      const ctl = new AbortController();
+      const dead = fetch(`http://127.0.0.1:${port}/api/csw`, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '2.2.2.2' }, body: JSON.stringify({ catalogue: 'emodnet', op: 'GetCapabilities' }) }).catch(() => undefined);
+      await new Promise((r) => setTimeout(r, 60));
+      ctl.abort();
+      await dead;
+      await new Promise((r) => setTimeout(r, 40)); // the server notices the closed connection
+      const t0 = Date.now();
+      const live = await fetch(`http://127.0.0.1:${port}/api/csw`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '3.3.3.3' }, body: JSON.stringify({ catalogue: 'emodnet', op: 'GetCapabilities' }) });
+      await live.arrayBuffer();
+      expect(live.status).toBe(200);
+      expect(Date.now() - t0).toBeLessThan(700); // a dead slot would have made it ~800 ms
+      expect(calls).toHaveLength(2); // the first and the live one; none for the dead one
+    } finally {
+      server.close();
+    }
+  });
+});
