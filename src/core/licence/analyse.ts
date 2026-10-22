@@ -23,7 +23,7 @@ export interface AnalysedStatement {
    * Prose that merely contains an id ("CC-BY 4.0") is not machine-readable.
    */
   machineReadable: boolean;
-  /** Set when the statement is "unrecognised — check manually" because it contradicts itself or adds conditions. */
+  /** Set when the statement is "unrecognised — check manually": text and URI differ ('text-uri') or the text adds conditions ('restricted'). */
   conflict?: { kind: 'text-uri' | 'restricted'; text: string; uri: string; textLicence: string; uriLicence: string };
 }
 
@@ -49,7 +49,10 @@ export interface SourceGroup {
 export type Contradiction =
   /** Two sources whose sets of recognised licences are disjoint. `sameGroup` = e.g. Zenodo against its own DataCite record. */
   | { kind: 'mismatch'; sourceA: AnalysedSource; sourceB: AnalysedSource; licenceA: string; licenceB: string; sameGroup: boolean }
+  /** The statement has a URI and text and URI classify differently (incl. a URI no SPDX id exists for). */
   | { kind: 'text-uri'; source: AnalysedSource; statement: AnalysedStatement }
+  /** The text names a licence but adds or negates conditions ("CC BY 4.0, but not for commercial use"), with or without a URI. */
+  | { kind: 'added-conditions'; source: AnalysedSource; statement: AnalysedStatement }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
@@ -116,7 +119,7 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
       kind: s.conflict,
       text: s.text ?? '',
       uri: s.uri ?? '',
-      textLicence: s.textSpdx ?? '—',
+      textLicence: s.textSpdx ?? (s.conflict === 'restricted' ? (s.text ?? '—') : '—'),
       uriLicence: uriId ?? '—',
     };
   }
@@ -158,7 +161,7 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
 
   // A statement that contradicts itself is reported where it is.
   for (const source of sources) {
-    for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: 'text-uri', source, statement });
+    for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: statement.conflict.kind === 'restricted' ? 'added-conditions' : 'text-uri', source, statement });
   }
 
   // Restriction codes against an open licence. Only a recognised, open licence can be contradicted.

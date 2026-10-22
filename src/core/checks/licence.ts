@@ -50,6 +50,15 @@ export function checkLicence(
           }),
         );
         break;
+      case 'added-conditions':
+        out.push(
+          makeFinding('LIC-ADDED-CONDITIONS', {
+            file,
+            field: c.statement.statement.field,
+            params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence },
+          }),
+        );
+        break;
       case 'restriction-code':
         out.push(makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } }));
         break;

@@ -56,10 +56,10 @@ describe('bug 22.10: 2 — negation and added restrictions are not CC BY 4.0', (
   it.each(['CC BY 4.0', 'Creative Commons Attribution 4.0 International (CC BY 4.0)', 'Use under CC-BY 4.0 terms'])('"%s" still is', (text) => {
     expect(toSpdx(text)).toBe('CC-BY-4.0');
   });
-  it('a restricted text in a record raises LIC-TEXT-URI-CONFLICT', () => {
+  it('a restricted text in a record raises LIC-ADDED-CONDITIONS (and not LIC-TEXT-URI-CONFLICT: there is no link)', () => {
     const rec = dc([{ rights: 'CC BY 4.0, but not for commercial use' }]);
     expect(rec.licences[0]!.spdx).toBeUndefined();
-    expect(ids(run([rec]))).toContain('LIC-TEXT-URI-CONFLICT');
+    expect(ids(run([rec]))).toEqual(['LIC-ADDED-CONDITIONS']);
   });
 });
 
