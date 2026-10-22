@@ -9,7 +9,7 @@ import { parseIsoRecord } from '../../metadata/iso19115-3';
 import { NS, NS3, child, descendants, elementChildren, parseXml, text } from '../../metadata/xml';
 import type { MetadataRecord, MetadataSource } from '../../types';
 import type { CswSchema } from '../../../../config/catalogues';
-import { request } from '../net';
+import { StopSignal, request } from '../net';
 import { SourceFailure, type Estimate, type Item, type Notice, type PageData, type Pager } from '../types';
 import { lookupMany, type Deps } from './datacite';
 
@@ -165,9 +165,16 @@ async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageDa
   try {
     found = await lookupMany(deps, [...byDoi.keys()]);
   } catch (e) {
-    if (!(e instanceof SourceFailure)) throw e; // a stop is not a failed lookup
-    for (const list of byDoi.values()) for (const it of list) it.unreadable = ['datacite' as MetadataSource];
-    return { looked: byDoi.size, failed: byDoi.size };
+    // The comparison is optional: whatever goes wrong with it (DataCite down or answering HTML, an unreadable answer, a bug in parsing it)
+    // leaves these records checked on their ISO record alone and says so. Only the visitor's own stop passes through.
+    if (e instanceof StopSignal) throw e;
+    let n = 0;
+    for (const list of byDoi.values())
+      for (const it of list) {
+        it.unreadable = ['datacite' as MetadataSource];
+        n += 1;
+      }
+    return { looked: byDoi.size, failed: byDoi.size, notCompared: n };
   }
   let hit = 0;
   for (const [doi, list] of byDoi) {

@@ -35,4 +35,6 @@ export interface CollectionWireRequest {
 export type CollectionWireResponse =
   | { id: number; ok: true; result: unknown }
   | { id: number; ok: false; error: string }
-  | { event: 'progress'; progress: Progress };
+  | { event: 'progress'; progress: Progress }
+  /** The worker met an error nobody caught (an unhandled rejection): the run it was doing stops with this reason. */
+  | { event: 'fatal'; message: string };

@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CATALOGUES, catalogueById, type CswSchema } from '../../../config/catalogues';
+import { describeStop } from '../../core/collection/stop';
 import type { Estimate, Progress, RunSettings, Sample, SourceSpec, UnreadSample } from '../../core/collection/types';
 import { renderPlain } from '../../core/report';
 import { browserFetcher, type Fetcher } from '../../core/sources/fetcher';
@@ -396,6 +397,11 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               status: t(`collection.status.${saved.status}` as never),
             })}
           </p>
+          {saved.stop && (
+            <p data-testid="saved-stop">
+              <strong>{t('collection.stop.heading')}.</strong> {describeStop(saved.stop, lang)}
+            </p>
+          )}
           <button type="button" className="button" onClick={act(async () => { setSaved(null); await engine.resume(); })}>
             {t('collection.saved.resume')}
           </button>{' '}
@@ -552,6 +558,16 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
             {t('collection.progress.elapsed', { time: formatTime(progress.elapsedMs / 1000) })}
           </p>
           {progress.deferred > 0 && <p className="notice">{t('collection.progress.deferred', { n: progress.deferred })}</p>}
+          {progress.stop && !isRunning(progress) && (
+            <p className="notice" role="alert" data-testid="stop-reason">
+              <strong>{t('collection.stop.heading')}.</strong> {describeStop(progress.stop, lang)}
+            </p>
+          )}
+          {(c.crossSource.notCompared ?? 0) > 0 && (
+            <p className="notice" data-testid="cross-not-done">
+              {t('collection.cross.notDone', { n: c.crossSource.notCompared ?? 0 })}
+            </p>
+          )}
           {progress.notices.map((n, i) => (
             <p key={i} className="notice" data-testid="notice">
               <NoticeText code={n.code} params={n.params} />

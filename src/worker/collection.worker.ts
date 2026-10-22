@@ -34,3 +34,10 @@ ctx.onmessage = (e: MessageEvent<CollectionWireRequest>) => {
     (err: unknown) => ctx.postMessage({ id, ok: false, error: errorMessage(err) }),
   );
 };
+
+// An error nobody caught must not leave the page waiting for a run that is no longer going.
+self.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
+  e.preventDefault();
+  const r: unknown = e.reason;
+  ctx.postMessage({ event: 'fatal', message: errorMessage(r) });
+});

@@ -179,11 +179,14 @@ export async function request(ctx: NetContext, host: string, call: () => Promise
       res = await call();
     } catch (e) {
       if (e instanceof StopSignal || e instanceof HostNotAllowedError) {
-        if (e instanceof HostNotAllowedError) throw new SourceFailure('protocol', 'host-not-allowed');
+        if (e instanceof HostNotAllowedError) throw new SourceFailure('protocol', 'host-not-allowed', undefined, host);
         throw e;
       }
       if (e instanceof FetchTimeoutError) reason = 'timeout';
-      else if (!(e instanceof FetchBlockedError) && !(e instanceof TypeError)) throw e;
+      else if (!(e instanceof FetchBlockedError) && !(e instanceof TypeError)) {
+        // Any other failure of the call itself (an aborted body read, a proxy error): the page cannot be read now, which is not a bug of the run.
+        reason = `error:${e instanceof Error && e.name ? e.name : 'Error'}`;
+      }
       failure = 'unreachable';
     }
 
@@ -195,15 +198,15 @@ export async function request(ctx: NetContext, host: string, call: () => Promise
       }
       return res!;
     }
-    if (verdict === 'not-found') throw new SourceFailure('not-found', 'http-404', 404);
-    if (verdict === 'protocol') throw new SourceFailure('protocol', res!.proxyError ?? 'http', res!.status);
+    if (verdict === 'not-found') throw new SourceFailure('not-found', 'http-404', 404, host);
+    if (verdict === 'protocol') throw new SourceFailure('protocol', res!.proxyError ?? 'http', res!.status, host);
     if (res) reason = res.proxyError ?? `http-${res.status}`;
 
     if (verdict === 'throttled') ctx.stats.throttleEvents += 1;
     const limit = verdict === 'throttled' ? BACKOFF.attemptsThrottled : BACKOFF.attemptsUnreachable;
     const ra = verdict === 'throttled' ? res?.retryAfterMs : undefined;
     if (attempt >= limit || (ra !== undefined && ra > BACKOFF.retryAfterCapMs)) {
-      throw new SourceFailure(verdict, ra !== undefined && ra > BACKOFF.retryAfterCapMs ? 'retry-after-long' : reason, res?.status);
+      throw new SourceFailure(verdict, ra !== undefined && ra > BACKOFF.retryAfterCapMs ? 'retry-after-long' : reason, res?.status, host);
     }
     const expo = Math.min(BACKOFF.maxMs, BACKOFF.baseMs * 2 ** (attempt - 1));
     const wait = ra !== undefined ? ra : expo * (0.75 + 0.5 * ctx.random());

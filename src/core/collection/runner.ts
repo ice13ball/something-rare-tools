@@ -5,8 +5,9 @@
 // saved run) there are only counters, <= 50 samples per rule, the cursor and small plans: nothing grows with the number of records.
 import { getRule } from '../rules/registry';
 import type { Severity } from '../types';
+import { stopFromError, stopFromFailure } from './stop';
 import { StopSignal, makeNetContext, realClock, type Clock, type Net, type NetContext } from './net';
-import { evaluateItem, fixListHeader, fixListRow, sourceLabel, toSample } from './fixlist';
+import { UNFINISHED, evaluateItem, fixListHeader, incompleteRow, fixListRow, sourceLabel, toSample } from './fixlist';
 import { estimateSource, prepareSource, restorePager } from './sources';
 import type { Deps } from './sources/datacite';
 import type { NewPart, RunStore } from './store';
@@ -48,9 +49,12 @@ export interface RunnerDeps {
   year?: () => number;
 }
 
+const errorText = (e: unknown): string => (e instanceof Error ? `${e.name}: ${e.message}` : String(e)).slice(0, STOP_CLIP);
+
 const SEVERITY_RANK: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
 
 const RESUMABLE: readonly RunStatus[] = ['stopped', 'interrupted', 'paused'];
+const STOP_CLIP = 200;
 
 export class CollectionRunner {
   private st: RunRecord | null = null;
@@ -81,7 +85,9 @@ export class CollectionRunner {
       ...(st.estimate ? { estimate: st.estimate } : {}),
       notices: st.notices,
       deferred: st.deferred.length,
-      resumable: RESUMABLE.includes(st.status) || (st.status === 'finished' && st.deferred.length > 0),
+      // 'failed' can be tried again too (the cursor is the page that failed, and the run is still in memory); not after a start that failed.
+      resumable: RESUMABLE.includes(st.status) || (st.status === 'finished' && st.deferred.length > 0) || (st.status === 'failed' && st.plan !== null),
+      ...(st.stop ? { stop: st.stop } : {}),
       csv: { rows: st.csvRows, bytes: st.csvBytes },
       startedAt: st.startedAt,
       updatedAt: st.updatedAt,
@@ -94,7 +100,10 @@ export class CollectionRunner {
     if (this.st) return this.progress();
     const run = await this.d.store.load();
     if (!run) return null;
-    if (run.status === 'running' || run.status === 'preparing') run.status = 'interrupted';
+    if (run.status === 'running' || run.status === 'preparing') {
+      run.status = 'interrupted';
+      run.stop = { cause: 'closed', source: sourceLabel(run.settings.spec), page: (run.pagesTried ?? 0) + 1, request: run.stats.requests, kind: 'closed', at: run.updatedAt };
+    }
     this.st = run;
     this.pending = [];
     return this.progress();
@@ -164,7 +173,11 @@ export class CollectionRunner {
     } catch (e) {
       this.ctl = null;
       st.status = e instanceof StopSignal ? 'stopped' : 'failed';
-      if (e instanceof SourceFailure) this.notice({ code: e.reason, params: { kind: e.kind, ...(e.status ? { status: e.status } : {}) } });
+      st.plan = null;
+      if (e instanceof SourceFailure) {
+        this.notice({ code: e.reason, params: { kind: e.kind, ...(e.status ? { status: e.status } : {}) } });
+        st.stop = stopFromFailure(e, sourceLabel(settings.spec), 1, st.stats.requests, this.clock.now());
+      } else if (!(e instanceof StopSignal)) st.stop = stopFromError(e, sourceLabel(settings.spec), 1, st.stats.requests, this.clock.now());
       await this.d.store.clear();
       this.pending = [];
       this.emit();
@@ -186,6 +199,7 @@ export class CollectionRunner {
     const st = this.st;
     if (!st || !this.progress().resumable) throw new Error('Nothing to resume');
     st.status = 'running';
+    delete st.stop;
     const { ctl, deps } = this.begin(st);
     const pager = restorePager(deps, st.settings, st.plan);
     await this.checkpoint();
@@ -233,7 +247,8 @@ export class CollectionRunner {
     const st = this.st;
     if (!st) return [fixListHeader()];
     const parts = await this.d.store.parts(st.id, st.partCount);
-    return [fixListHeader(), ...parts, ...(this.pending.length > 0 ? this.pending.map((p) => p.blob) : []), st.csvBuffer];
+    const last = UNFINISHED.includes(st.status) ? [incompleteRow(st.status, st.stop, st.settings.lang, sourceLabel(st.settings.spec))] : [];
+    return [fixListHeader(), ...parts, ...(this.pending.length > 0 ? this.pending.map((p) => p.blob) : []), st.csvBuffer, ...last];
   }
 
   /** The fix list as one Blob built from the stored parts (disk-backed Blobs: no full copy in memory). */
@@ -284,15 +299,19 @@ export class CollectionRunner {
           if (!(e instanceof SourceFailure)) throw e;
           if (e.kind === 'protocol' || e.kind === 'not-found') return await this.fail(e);
           const skip = pager.skip(cur);
-          this.defer({ cursor: cur, kind: e.kind, expected: pager.expected(cur), reason: e.reason, ...(skip === null ? { blocking: true } : {}) });
+          const page = (st.pagesTried ?? 0) + 1;
+          this.defer({ cursor: cur, kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(skip === null ? { blocking: true } : {}) });
+          st.pagesTried = page;
           failures += 1;
-          if (skip === null || failures >= CONSECUTIVE_FAILURES || st.deferred.length >= MAX_DEFERRED) return await this.interrupt(e.reason);
-          st.cursor = skip;
+          // The page now sits in `deferred`; the cursor goes past it BEFORE the run may stop, or a resume would read it twice (deferred + cursor).
+          if (skip !== null) st.cursor = skip;
+          if (skip === null || failures >= CONSECUTIVE_FAILURES || st.deferred.length >= MAX_DEFERRED) return await this.interrupt(e, page);
           await this.checkpoint();
           continue;
         }
         failures = 0;
         this.apply(data);
+        st.pagesTried = (st.pagesTried ?? 0) + 1;
         st.cursor = data.next;
         await this.checkpoint();
       }
@@ -303,12 +322,20 @@ export class CollectionRunner {
       st.status = 'finished';
       await this.checkpoint();
     } catch (e) {
+      const source = sourceLabel(st.settings.spec);
+      const page = (st.pagesTried ?? 0) + 1;
       if (e instanceof StopSignal) {
         st.status = 'stopped';
+        st.stop = { cause: 'user', source, page, request: st.stats.requests, kind: 'user', at: this.clock.now() };
         await this.checkpoint().catch(() => undefined);
       } else {
+        const storage = e instanceof Error && /IndexedDB|Quota/i.test(`${e.name} ${e.message}`);
         st.status = 'failed';
-        this.notice({ code: e instanceof Error && /IndexedDB|Quota/i.test(`${e.name} ${e.message}`) ? 'storage-failed' : 'unexpected' });
+        this.notice({ code: storage ? 'storage-failed' : 'unexpected' });
+        st.stop = storage
+          ? { cause: 'storage', source, page, request: st.stats.requests, kind: 'error', detail: errorText(e), at: this.clock.now() }
+          : stopFromError(e, source, page, st.stats.requests, this.clock.now());
+        if (!storage) await this.checkpoint().catch(() => undefined);
         this.emit();
       }
     } finally {
@@ -338,7 +365,7 @@ export class CollectionRunner {
         entry.reason = e.reason;
         failures += 1;
         if (entry.blocking || failures >= CONSECUTIVE_FAILURES) {
-          await this.interrupt(e.reason);
+          await this.interrupt(e, entry.page);
           return false;
         }
         continue;
@@ -372,13 +399,15 @@ export class CollectionRunner {
     const st = this.st!;
     st.status = 'failed';
     this.notice({ code: e.reason, params: { kind: e.kind, ...(e.status ? { status: e.status } : {}) } });
+    st.stop = stopFromFailure(e, sourceLabel(st.settings.spec), (st.pagesTried ?? 0) + 1, st.stats.requests, this.clock.now());
     await this.checkpoint();
   }
 
-  private async interrupt(reason: string): Promise<void> {
+  private async interrupt(e: SourceFailure, page?: number): Promise<void> {
     const st = this.st!;
     st.status = 'interrupted';
-    this.notice({ code: 'interrupted', params: { reason } });
+    this.notice({ code: 'interrupted', params: { reason: e.reason } });
+    st.stop = stopFromFailure(e, sourceLabel(st.settings.spec), page ?? (st.pagesTried ?? 0) + 1, st.stats.requests, this.clock.now());
     await this.checkpoint();
   }
 
@@ -415,6 +444,7 @@ export class CollectionRunner {
       c.duplicatesInBatch += k.duplicatesInBatch ?? 0;
       c.invalidTokens += k.invalidTokens ?? 0;
       for (const key of ['looked', 'found', 'absent', 'failed'] as const) c.crossSource[key] += k.crossSource?.[key] ?? 0;
+      if (k.crossSource?.notCompared) c.crossSource.notCompared = (c.crossSource.notCompared ?? 0) + k.crossSource.notCompared;
     }
     for (const n of data.notices ?? []) this.notice(n);
   }
@@ -438,7 +468,12 @@ export class CollectionRunner {
     this.tick();
     st.updatedAt = this.clock.now();
     const parts = this.pending;
-    await this.d.store.save(st, parts);
+    try {
+      await this.d.store.save(st, parts);
+    } catch {
+      // One more try: a transient IndexedDB error (a busy backing store) is not a reason to end a run of thousands of pages.
+      await this.d.store.save(st, parts);
+    }
     this.pending = this.pending.filter((p) => !parts.includes(p));
     this.emit();
   }

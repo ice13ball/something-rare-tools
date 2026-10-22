@@ -6,7 +6,9 @@ import { checkLicence } from '../checks/licence';
 import { csvField, guardText } from '../output/csv';
 import { renderPlain } from '../report';
 import type { Finding, Lang } from '../types';
-import type { Item, Sample, SourceSpec } from './types';
+import { translate } from '../i18n/ui';
+import { describeStop } from './stop';
+import type { Item, RunStatus, Sample, SourceSpec, StopReason } from './types';
 
 export const FIX_LIST_COLUMNS = ['record', 'field', 'rule_id', 'severity', 'problem', 'suggested_fix', 'source'] as const;
 
@@ -44,4 +46,15 @@ export function fixListHeader(): string {
 /** One CSV line (with its newline). The formula guard of the clean-CSV export applies to every text field. */
 export function fixListRow(ref: string, f: Finding, lang: Lang, source: string): string {
   return `${line([ref, f.field ?? '', f.ruleId, f.severity, renderPlain(f, lang), suggestedFix(f), source])}\n`;
+}
+
+export const RUN_INCOMPLETE = 'RUN-INCOMPLETE';
+
+/** Statuses of a run that has not reached its end: its fix list says so on a last row. */
+export const UNFINISHED: readonly RunStatus[] = ['stopped', 'interrupted', 'paused', 'failed'];
+
+/** The status row at the end of an unfinished fix list: why the list stops where it does, and what to do. Same guard as every row. */
+export function incompleteRow(status: RunStatus, stop: StopReason | undefined, lang: Lang, source: string): string {
+  const problem = stop ? describeStop(stop, lang) : status === 'paused' ? translate(lang, 'collection.stop.paused') : translate(lang, 'collection.stop.userShort');
+  return `${line(['(run)', '', RUN_INCOMPLETE, 'info', problem, translate(lang, 'collection.stop.fix'), source])}\n`;
 }

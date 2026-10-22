@@ -351,6 +351,39 @@ describe('CollectionPage: saved run and deleting', () => {
     expect(screen.queryByTestId('saved-run')).toBeNull();
   });
 
+  it('names the reason a run stopped: in the progress, and in the prompt after a reload, in every language', async () => {
+    const stop = { cause: 'http', status: 503, source: 'api.datacite.org', page: 4, request: 10, kind: 'throttled', at: Date.UTC(2026, 9, 22, 14, 5) };
+    const stopped = progressOf({ status: 'interrupted', resumable: true, stop }, { kind: 'csw', catalogue: 'emodnet', schema: 'iso19139', crossSource: true });
+    for (const lang of LANGS) {
+      setLang(lang);
+      const f = fakeEngine({ saved: stopped });
+      render(<CollectionPage engine={f.engine} />);
+      const box = await screen.findByTestId('saved-run');
+      const reason = within(box).getByTestId('saved-stop').textContent ?? '';
+      expect(reason).toContain('HTTP 503');
+      expect(reason).toContain('DataCite');
+      expect(reason).toMatch(/4/);
+      expect(reason).not.toMatch(/collection\.|\{\w+\}/);
+      expect(screen.getByTestId('stop-reason').textContent).toBe(reason);
+      cleanup();
+    }
+    // a running run shows no stop reason; one that went on loses it
+    setLang('en');
+    const g = fakeEngine();
+    render(<CollectionPage engine={g.engine} />);
+    g.push(progressOf({ status: 'running', stop }));
+    expect(screen.queryByTestId('stop-reason')).toBeNull();
+  });
+
+  it('says how many records were checked without the DataCite comparison, and that the missing comparison is no finding', async () => {
+    const p = progressOf({ status: 'running' });
+    p.counts.crossSource = { looked: 50, found: 0, absent: 0, failed: 50, notCompared: 50 };
+    const f = fakeEngine({ saved: null });
+    render(<CollectionPage engine={f.engine} />);
+    f.push(p);
+    expect(screen.getByTestId('cross-not-done').textContent).toContain('50 records');
+  });
+
   it('discarding the saved run deletes it', async () => {
     const f = fakeEngine({ saved: progressOf({ status: 'stopped', resumable: true }) });
     render(<CollectionPage engine={f.engine} />);
