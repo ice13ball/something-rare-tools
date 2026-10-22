@@ -103,7 +103,7 @@ describe('LicencePage', () => {
     const result = await run(f, ['3000002', `https://geonetwork.iopan.pl/geonetwork/srv/api/records/${UUID}`]);
     const text = result.textContent ?? '';
     expect(text).toContain('could not read');
-    expect(text).toContain('error 403');
+    expect(text).toContain('HTTP 403');
     expect(text).not.toMatch(/missing/);
     expect(text).toContain('Single source — nothing to compare');
     expect(text).not.toContain('No contradiction');
@@ -120,6 +120,8 @@ describe('LicencePage', () => {
     const blocked: Fetcher = { get: async () => Promise.reject(new FetchBlockedError('api.datacite.org')) };
     const result = await run(blocked, ['10.0000/x']);
     expect(result.textContent).toContain('could not read');
+    expect(result.textContent).toContain('Your browser could not reach api.datacite.org');
+    expect(result.textContent).not.toMatch(/drop them here|missing/);
     fireEvent.click(screen.getByRole('button', { name: /server/i }));
     expect((screen.getByLabelText('Via the Abyssal Claims server') as HTMLInputElement).checked).toBe(true);
   });
