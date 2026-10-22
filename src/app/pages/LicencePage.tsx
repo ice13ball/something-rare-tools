@@ -2,13 +2,14 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useState } from 'react';
 import { contradictionFinding } from '../../core/checks/licence';
-import { analyseLicences, type AnalysedSource, type AnalysedStatement, type LicenceAnalysis, type SourceGroup } from '../../core/licence/analyse';
+import { analyseLicences, type AnalysedSource, type AnalysedStatement, type Contradiction, type LicenceAnalysis, type SourceGroup } from '../../core/licence/analyse';
 import { buildAttribution, type Attribution } from '../../core/licence/attribution';
 import { loadLicenceReferences, splitReferences, type LoadFailure } from '../../core/licence/load';
 import { renderPlain } from '../../core/report';
 import { browserFetcher, serverFetcher, type Fetcher } from '../../core/sources/fetcher';
-import type { MetadataSource } from '../../core/types';
+import type { Lang, MetadataSource } from '../../core/types';
 import { Layout } from '../components/Layout';
+import { SourceLink, sourcesOf } from '../components/ReportView';
 import { ModeSwitch, type ModeTexts } from '../components/ModeSwitch';
 import { t, useLang } from '../i18n';
 import { DEFAULT_MODE, type DownloadMode } from '../types';
@@ -170,6 +171,28 @@ function CopyAttribution({ text, write }: { text: string; write: (s: string) => 
   );
 }
 
+/** One contradiction in the rule's own words, with the sources the rule rests on. */
+function ContradictionItem({ c, lang }: { c: Contradiction; lang: Lang }): React.ReactElement {
+  useLang();
+  const f = contradictionFinding(c, 'dataset');
+  const sources = sourcesOf(f.ruleId);
+  return (
+    <li data-kind={c.kind}>
+      {renderPlain(f, lang)}
+      {sources.length > 0 && (
+        <details>
+          <summary>{t('report.sources')}</summary>
+          <ul className="sources">
+            {sources.map((s) => (
+              <SourceLink key={s.key} s={s} compact />
+            ))}
+          </ul>
+        </details>
+      )}
+    </li>
+  );
+}
+
 function Summary({ r }: { r: Result }): React.ReactElement {
   const { lang } = useLang();
   const a = r.analysis;
@@ -184,9 +207,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
           </p>
           <ul>
             {a.contradictions.map((c, i) => (
-              <li key={i} data-kind={c.kind}>
-                {renderPlain(contradictionFinding(c, 'dataset'), lang)}
-              </li>
+              <ContradictionItem key={i} c={c} lang={lang} />
             ))}
           </ul>
         </>

@@ -9,17 +9,24 @@ import { t, useLang } from '../i18n';
 
 export interface ReportViewProps {
   report: Report;
+  /**
+   * Rules whose citations are not listed under a finding. /check is under evaluation and shows exactly what it showed before the
+   * licence page existed: the licence rules got citations since (docs/rules.md and the licence page show them), /check does not.
+   */
+  hideCitations?: (ruleId: string) => boolean;
 }
+
+export const NO_CITATIONS_IN_CHECK = (ruleId: string): boolean => ruleId.startsWith('LIC-');
 
 const SEVERITIES: readonly Severity[] = ['error', 'warning', 'info'];
 
-interface Source {
+export interface Source {
   key: string;
   prefix?: string;
   citation: Citation;
 }
 
-function sourcesOf(ruleId: string): Source[] {
+export function sourcesOf(ruleId: string): Source[] {
   try {
     const rule = getRule(ruleId);
     const out: Source[] = [];
@@ -41,7 +48,8 @@ function safe<T>(fn: () => T, fallback: T): T {
   }
 }
 
-function SourceLink({ s }: { s: Source }): React.ReactElement {
+/** `compact`: the label and link only, without the quoted passage (the licence page keeps to its own wording). */
+export function SourceLink({ s, compact = false }: { s: Source; compact?: boolean }): React.ReactElement {
   const c = s.citation;
   return (
     <li>
@@ -53,16 +61,16 @@ function SourceLink({ s }: { s: Source }): React.ReactElement {
       ) : (
         <span>{c.label}</span>
       )}
-      {c.locator && <span className="muted"> ({c.locator})</span>}
+      {!compact && c.locator && <span className="muted"> ({c.locator})</span>}
     </li>
   );
 }
 
-function FindingItem({ f }: { f: Finding }): React.ReactElement {
+function FindingItem({ f, hideCitations }: { f: Finding; hideCitations: (ruleId: string) => boolean }): React.ReactElement {
   const { lang } = useLang();
   const plain = safe(() => renderPlain(f, lang), f.ruleId);
   const technical = safe(() => renderTechnical(f), '');
-  const sources = sourcesOf(f.ruleId);
+  const sources = hideCitations(f.ruleId) ? [] : sourcesOf(f.ruleId);
   const lines = formatLines(f.lines);
   const row = (label: string, value: React.ReactNode): React.ReactElement => (
     <>
@@ -109,7 +117,7 @@ function FindingItem({ f }: { f: Finding }): React.ReactElement {
  * then — always — what the tool does not check. The empty-result sentence appears only when there are
  * no findings. ⛔ Never claims that the data is "ready"; it reports what was not found in the checked categories.
  */
-export function ReportView({ report }: ReportViewProps): React.ReactElement {
+export function ReportView({ report, hideCitations = NO_CITATIONS_IN_CHECK }: ReportViewProps): React.ReactElement {
   useLang();
   const { counts, findings, notChecked } = report;
   return (
@@ -128,7 +136,7 @@ export function ReportView({ report }: ReportViewProps): React.ReactElement {
             </h3>
             <ul className="findings">
               {group.map((f, i) => (
-                <FindingItem key={i + ':' + f.ruleId} f={f} />
+                <FindingItem key={i + ':' + f.ruleId} f={f} hideCitations={hideCitations} />
               ))}
             </ul>
           </section>
