@@ -12,15 +12,15 @@ const lic = (f: Finding[]) => f.filter((x) => x.ruleId.startsWith('LIC-'));
 const withVersionAndExtent = { version: '1.0', temporalExtent: { start: '2020-01-01', end: '2020-02-01' } };
 
 describe('checkLicence', () => {
-  it('reports LIC-MISSING (error) once when nothing is stated and the record was inaccessible', () => {
-    const f = run([makeRecord('datacite')], true);
+  it('reports LIC-MISSING (error) once when nothing is stated in a record that was read', () => {
+    const f = run([makeRecord('datacite')]);
     expect(f.filter((x) => x.ruleId === 'LIC-MISSING')).toHaveLength(1);
     expect(f.find((x) => x.ruleId === 'LIC-MISSING')).toMatchObject({ severity: 'error', file: 'rec-1' });
     expect(ids(lic(f))).toEqual(['LIC-MISSING']);
   });
 
   it('reports LIC-MISSING with no records at all and no META noise', () => {
-    expect(ids(run([], true))).toEqual(['LIC-MISSING']);
+    expect(ids(run([]))).toEqual(['LIC-MISSING']);
   });
 
   it('ignores metadataConstraints statements for the data licence', () => {
@@ -55,17 +55,16 @@ describe('checkLicence', () => {
     const rec = makeRecord('iso19139', { licences: [makeLicence('iso19139', { field: 'otherConstraints', text: 'CC-BY 4.0', spdx: 'CC-BY-4.0' })] });
     const f = lic(run([rec]));
     expect(ids(f)).toEqual(['LIC-FREE-TEXT']);
-    expect(f[0].params).toEqual({ text: 'CC-BY 4.0', versionMissing: 'no' });
+    expect(f[0].params).toEqual({ text: 'CC-BY 4.0', versionMissing: 'no', hint: 'CC-BY-4.0' });
   });
 
-  it('copyright with a CC-BY free text gives LIC-RESTRICTION-CONFLICT and LIC-FREE-TEXT', () => {
+  it('copyright next to an UNRECOGNISED "CC-BY" text gives only LIC-FREE-TEXT: no open licence is established to contradict', () => {
     const rec = makeRecord('iso19139', {
       licences: [makeLicence('iso19139', { field: 'otherConstraints', text: 'CC-BY' })],
       restrictionCodes: [{ kind: 'access', code: 'copyright' }, { kind: 'use', code: 'copyright' }, { kind: 'other', code: 'otherRestrictions' }],
     });
     const f = lic(run([rec]));
-    expect(ids(f).sort()).toEqual(['LIC-FREE-TEXT', 'LIC-RESTRICTION-CONFLICT']);
-    expect(f.find((x) => x.ruleId === 'LIC-RESTRICTION-CONFLICT')).toMatchObject({ params: { codes: 'copyright', licence: 'CC-BY' } });
+    expect(ids(f)).toEqual(['LIC-FREE-TEXT']);
   });
 
   it('the code "license" next to a CC licence is normal and does not conflict; otherRestrictions neither', () => {

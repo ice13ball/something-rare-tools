@@ -36,6 +36,8 @@ describe('parseDataciteJson', () => {
         field: 'rightsList[0]',
         text: 'Creative Commons Attribution 4.0 International',
         uri: 'https://creativecommons.org/licenses/by/4.0/legalcode',
+        textSpdx: 'CC-BY-4.0',
+        uriSpdx: 'CC-BY-4.0',
         spdx: 'CC-BY-4.0',
       },
     ]);
@@ -86,6 +88,8 @@ describe('parseDataciteXml (kernel-4)', () => {
         field: 'rightsList[0]',
         text: 'Creative Commons Attribution 4.0 International',
         uri: 'https://creativecommons.org/licenses/by/4.0/legalcode',
+        textSpdx: 'CC-BY-4.0',
+        uriSpdx: 'CC-BY-4.0',
         spdx: 'CC-BY-4.0',
       },
       { source: 'datacite', field: 'rightsList[1]', text: 'CC BY' },

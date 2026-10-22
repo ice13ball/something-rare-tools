@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Zenodo record parser: legacy (files[] with key/links.self) and InvenioRDM (files.entries keyed by filename).
 import type { LicenceStatement, MetadataRecord } from '../types';
-import { toSpdx } from './licence';
+import { buildStatement } from './licence';
 import { stripTags } from './xml';
 
 type Obj = Record<string, unknown>;
@@ -20,14 +20,7 @@ export function zenodoFileUrl(recordId: string, key: string): string {
 }
 
 function licence(field: string, id: string | undefined, uri?: string, title?: string): LicenceStatement | undefined {
-  if (!id && !uri && !title) return undefined;
-  const s: LicenceStatement = { source: 'zenodo', field };
-  const t = id ?? title;
-  if (t) s.text = t;
-  if (uri) s.uri = uri;
-  const spdx = toSpdx(id, uri) ?? toSpdx(title);
-  if (spdx) s.spdx = spdx;
-  return s;
+  return buildStatement({ source: 'zenodo', field, text: id ?? title, also: [title], uri });
 }
 
 function localised(v: unknown): string | undefined {
@@ -53,6 +46,15 @@ export function parseZenodoRecord(json: unknown, label: string): MetadataRecord 
   const desc = str(md.description);
   if (desc) rec.abstract = stripTags(desc) || undefined;
   rec.version = str(md.version);
+  const creators = (Array.isArray(md.creators) ? md.creators : [])
+    .filter(isObj)
+    .map((c) => str(c.name) ?? (isObj(c.person_or_org) ? str(c.person_or_org.name) : undefined))
+    .filter((n): n is string => !!n);
+  if (creators.length > 0) rec.creators = creators;
+  const year = /^\s*(\d{4})/.exec(str(md.publication_date) ?? '');
+  if (year) rec.publicationYear = Number(year[1]);
+  const publisher = str(md.publisher);
+  if (publisher) rec.publisher = publisher;
   const pids = isObj(json.pids) && isObj(json.pids.doi) ? json.pids.doi : {};
   rec.doi = str(json.doi) ?? str(md.doi) ?? str(pids.identifier);
   rec.landingUrl = str(links.self_html) ?? (id ? `https://zenodo.org/records/${id}` : undefined);

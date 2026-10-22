@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding, LicenceStatement, MetadataRecord, ParsedFile, RawRow } from '../types';
-import { toSpdx } from '../metadata/licence';
+import { buildStatement } from '../metadata/licence';
 import type { DecodedText } from '../values/encoding';
 import { encodingFinding, raggedFinding, splitPhysicalLines } from './shared';
 
@@ -26,12 +26,19 @@ function readBlock(lines: readonly string[]): Map<string, string[]> {
   return entries;
 }
 
-/** "Authors (2099): Title. PANGAEA, https://doi.org/…" -> title and DOI. */
-function fromCitation(citation: string): { title?: string; doi?: string } {
+/** "Doe, J.; Roe, R. (2099): Title. PANGAEA, https://doi.org/…" -> authors, year, title and DOI. */
+function fromCitation(citation: string): { title?: string; doi?: string; authors?: string[]; year?: number } {
   const c = citation.replace(/\s+/g, ' ').trim();
   const t = /\((?:\d{4}[a-z]?|n\.d\.)\):\s*(.+?)(?:\.?\s+PANGAEA\b|$)/.exec(c);
   const d = /doi\.org\/(10\.\d+\/[^\s,;]+)/.exec(c);
-  return { title: t?.[1]?.trim() || undefined, doi: d?.[1]?.replace(/[.)]+$/, '') };
+  const head = /^(.*?)\s*\((\d{4})[a-z]?\):/.exec(c);
+  const authors = head?.[1] ? head[1].split(/\s*;\s*/).map((a) => a.trim()).filter(Boolean) : [];
+  return {
+    title: t?.[1]?.trim() || undefined,
+    doi: d?.[1]?.replace(/[.)]+$/, ''),
+    ...(authors.length > 0 ? { authors } : {}),
+    ...(head ? { year: Number(head[2]) } : {}),
+  };
 }
 
 /** "Long name [unit] (Short) * PI: …" -> long name and unit. Units come from the bracket only. */
@@ -75,20 +82,19 @@ function licenceOf(lines: readonly string[]): LicenceStatement | undefined {
   const text = lines.join(' ').trim();
   if (!text) return undefined;
   const uri = /\(URI:\s*([^)\s]+)\)/.exec(text)?.[1];
-  const l: LicenceStatement = { source: 'pangaea', field: 'License', text };
-  if (uri) l.uri = uri;
-  const spdx = toSpdx(text, uri);
-  if (spdx) l.spdx = spdx;
-  return l;
+  return buildStatement({ source: 'pangaea', field: 'License', text, uri });
 }
 
 function metadataOf(block: Map<string, string[]>, fileName: string): MetadataRecord {
   const rec: MetadataRecord = { source: 'pangaea', label: fileName, licences: [], restrictionCodes: [], distributionLinks: [] };
   const cit = block.get('Citation');
   if (cit) {
-    const { title, doi } = fromCitation(cit.join(' '));
+    const { title, doi, authors, year } = fromCitation(cit.join(' '));
     if (title) rec.title = title;
     if (doi) rec.doi = doi;
+    if (authors) rec.creators = authors;
+    if (year) rec.publicationYear = year;
+    rec.publisher = 'PANGAEA';
   }
   const abs = block.get('Abstract')?.join(' ').trim();
   if (abs) rec.abstract = abs;

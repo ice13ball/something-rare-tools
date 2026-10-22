@@ -114,7 +114,7 @@ describe('ISO 19139 output', () => {
     expect(r.temporalExtent).toEqual({ start: '2021-07-25', end: '2021-08-02' });
     expect(r.bbox).toEqual(full.bbox);
     expect(r.licences.filter((l) => !l.field.startsWith('metadataConstraints/'))).toEqual([
-      { source: 'iso19139', field: 'otherConstraints', text: 'Creative Commons Attribution 4.0 International', uri: 'https://creativecommons.org/licenses/by/4.0/', spdx: 'CC-BY-4.0' },
+      { source: 'iso19139', field: 'otherConstraints', text: 'Creative Commons Attribution 4.0 International', uri: 'https://creativecommons.org/licenses/by/4.0/', textSpdx: 'CC-BY-4.0', uriSpdx: 'CC-BY-4.0', spdx: 'CC-BY-4.0' },
     ]);
     expect(r.restrictionCodes).toEqual([{ kind: 'use', code: 'otherRestrictions' }]);
     expect(r.title).toBe(full.title);
@@ -158,7 +158,7 @@ describe('DataCite output', () => {
   it('parses back with the same licence spdx and bbox, extent, title', () => {
     const r = parseDataciteXml(xml, 'out');
     expect(r.licences).toEqual([
-      { source: 'datacite', field: 'rightsList[0]', text: 'Creative Commons Attribution 4.0 International', uri: 'https://creativecommons.org/licenses/by/4.0/', spdx: 'CC-BY-4.0' },
+      { source: 'datacite', field: 'rightsList[0]', text: 'Creative Commons Attribution 4.0 International', uri: 'https://creativecommons.org/licenses/by/4.0/', textSpdx: 'CC-BY-4.0', uriSpdx: 'CC-BY-4.0', spdx: 'CC-BY-4.0' },
     ]);
     expect(r.bbox).toEqual(full.bbox);
     expect(r.temporalExtent).toEqual({ start: '2021-07-25', end: '2021-08-02' });

@@ -1,71 +1,66 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
-import { isRestrictiveCode, toSpdx } from '../metadata/licence';
+import { analyseLicences, shownOf } from '../licence/analyse';
 import { makeFinding } from '../rules/registry';
-import type { Finding, LicenceStatement, MetadataRecord } from '../types';
-
-/** Statements about the metadata record itself (ISO `metadataConstraints`), not the data. */
-const isResourceLevel = (s: LicenceStatement): boolean => !s.field.startsWith('metadataConstraints/');
-
-/** What a statement says, for a finding: the SPDX id when recognised, else its text, else its URI. */
-const shown = (s: LicenceStatement): string => s.spdx ?? s.text ?? s.uri ?? '';
+import type { Finding, MetadataRecord, MetadataSource } from '../types';
 
 /**
- * Machine-readable = a licence URI that maps to the SPDX id, or text that is the SPDX id itself ("cc-by-4.0").
- * `spdx` alone is not enough: toSpdx() also recovers an id from prose such as "CC-BY 4.0", which a program
- * reading the record cannot do; that is exactly the free-text case LIC-FREE-TEXT reports.
+ * Category A — licence statements across ISO 19139, DataCite, Zenodo and PANGAEA records (Task 7).
+ * A thin mapping from analyseLicences() (src/core/licence/analyse.ts) to findings; no licence logic lives here.
+ * `unreadable`: the sources of this record that could not be loaded (their absence is not "no licence").
  */
-const isMachineReadable = (s: LicenceStatement): boolean =>
-  !!s.spdx && ((!s.text && !s.uri) || (!!s.uri && toSpdx(undefined, s.uri) === s.spdx) || s.text?.trim().toLowerCase() === s.spdx.toLowerCase());
-
-const OPEN_SPDX_PREFIX = /^(CC|ODbL|ODC|PDDL)/;
-const OPEN_TEXT = /\bCC[\s-]?BY|CC0|creative commons|open data commons/i;
-const isOpenStatement = (s: LicenceStatement): boolean =>
-  (s.spdx !== undefined && OPEN_SPDX_PREFIX.test(s.spdx)) || (s.spdx === undefined && !!s.text && OPEN_TEXT.test(s.text));
-
-/**
- * MD_RestrictionCode `license` is excluded here although RESTRICTIVE_CODES lists it: in ISO 19115 it is the
- * normal way to say "a licence applies" next to a Creative Commons statement, so it cannot contradict one.
- */
-const isConflictingCode = (code: string): boolean => code !== 'license' && isRestrictiveCode(code);
-
-/** Category A — licence statements across ISO 19139, DataCite, Zenodo and PANGAEA records (Task 7). */
-export function checkLicence(records: MetadataRecord[], ctx: { label: string; inaccessible: boolean }): Finding[] {
+export function checkLicence(
+  records: MetadataRecord[],
+  ctx: { label: string; inaccessible: boolean; unreadable?: readonly MetadataSource[] },
+): Finding[] {
   const file = ctx.label;
   const out: Finding[] = [];
+  const a = analyseLicences(records, { unreadable: ctx.unreadable, inaccessible: ctx.inaccessible });
 
-  const statements = records.flatMap((r) => r.licences.filter(isResourceLevel));
+  // A record that could not be read says nothing about a licence: IN-RECORD-INACCESSIBLE already reports it.
+  if (a.missing) out.push(makeFinding('LIC-MISSING', { file }));
 
-  if (statements.length === 0) {
-    // Also covers an inaccessible record whose DataCite rightsList is empty.
-    out.push(makeFinding('LIC-MISSING', { file }));
-  } else {
-    // Free text only: nothing machine-readable. One finding per record, not per source.
-    if (!statements.some(isMachineReadable)) {
-      const first = statements.find((s) => s.text) ?? statements[0];
-      // `text` shows the statement as written; an spdx id recovered from prose is not what the author wrote.
-      const text = first.text ?? shown(first);
-      out.push(
-        makeFinding('LIC-FREE-TEXT', {
-          file,
-          field: first.field,
-          params: { text, versionMissing: /\d(\.\d)?/.test(text) ? 'no' : 'yes' },
-        }),
-      );
+  // Free text only: nothing machine-readable. One finding per record, not per source.
+  if (a.freeText) {
+    const f = a.freeText;
+    out.push(
+      makeFinding('LIC-FREE-TEXT', {
+        file,
+        field: f.statement.statement.field,
+        // `text` shows the statement as written; an spdx id recovered from prose is not what the author wrote.
+        params: { text: f.statement.statement.text ?? shownOf(f.statement), versionMissing: f.versionMissing ? 'yes' : 'no', hint: f.hint },
+      }),
+    );
+  }
+
+  for (const c of a.contradictions) {
+    switch (c.kind) {
+      case 'text-uri':
+        out.push(
+          makeFinding('LIC-TEXT-URI-CONFLICT', {
+            file,
+            field: c.statement.statement.field,
+            params: {
+              text: c.statement.conflict!.text || '—',
+              uri: c.statement.conflict!.uri || '—',
+              textLicence: c.statement.conflict!.textLicence,
+              uriLicence: c.statement.conflict!.uriLicence,
+            },
+          }),
+        );
+        break;
+      case 'restriction-code':
+        out.push(makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } }));
+        break;
+      case 'datacite-empty':
+        out.push(makeFinding('LIC-DATACITE-EMPTY', { file, params: { licence: c.licence } }));
+        break;
+      case 'mismatch':
+        // Once per record, as before: the first disagreeing pair.
+        if (!out.some((f) => f.ruleId === 'LIC-MISMATCH')) out.push(makeFinding('LIC-MISMATCH', { file, params: { licenceA: c.licenceA, licenceB: c.licenceB } }));
+        break;
     }
-
-    const codes = [...new Set(records.flatMap((r) => r.restrictionCodes.map((c) => c.code)).filter(isConflictingCode))];
-    const open = statements.find(isOpenStatement);
-    if (codes.length > 0 && open) {
-      out.push(makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: codes.join(', '), licence: shown(open) } }));
-    }
-
-    const empty = records.find((r) => r.source === 'datacite' && r.licences.length === 0);
-    if (empty) out.push(makeFinding('LIC-DATACITE-EMPTY', { file, params: { licence: shown(statements[0]) } }));
-
-    const spdxIds = [...new Set(statements.map((s) => s.spdx).filter((x): x is string => !!x))];
-    if (spdxIds.length > 1) out.push(makeFinding('LIC-MISMATCH', { file, params: { licenceA: spdxIds[0], licenceB: spdxIds[1] } }));
   }
 
   const emptyLinks = records.reduce((n, r) => n + r.distributionLinks.filter((l) => l.url === '').length, 0);

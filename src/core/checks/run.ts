@@ -2,12 +2,20 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { buildReport } from '../report';
-import type { CheckSession, Finding, Report } from '../types';
+import type { CheckSession, Finding, LoadedRecord, MetadataSource, Report } from '../types';
 import { checkChemistry } from './chemistry';
 import { checkCrossFile } from './crossfile';
 import { checkLicence } from './licence';
 import { checkMetadataVsData } from './metadata';
 import { checkRows } from './rows';
+
+/** The metadata source a failed load leaves unread. A dropped file has none. */
+const SOURCE_OF_KIND: Partial<Record<LoadedRecord['kind'], MetadataSource>> = {
+  zenodo: 'zenodo',
+  geonetwork: 'iso19139',
+  datacite: 'datacite',
+  pangaea: 'pangaea',
+};
 
 /**
  * Runs every check over one session and builds the report.
@@ -23,7 +31,7 @@ export function runChecks(session: CheckSession): Report {
     // File-download failures reuse IN-RECORD-INACCESSIBLE with the file name; only the record's own label counts here.
     const inaccessible = record.findings.some((f) => f.ruleId === 'IN-RECORD-INACCESSIBLE' && f.file === record.label);
     if (record.metadata.length > 0 || inaccessible) {
-      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible }));
+      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: inaccessible ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [] }));
     }
   }
   for (const ds of session.datasets) {

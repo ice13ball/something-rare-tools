@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // ISO 19139 (GeoNetwork) parser. Matches namespaceURI + localName, never prefixes.
 import type { LicenceStatement, MetadataRecord } from '../types';
-import { toSpdx } from './licence';
+import { buildStatement } from './licence';
 import { NS, attr, child, children, descendants, elementChildren, num, parseXml, path, text } from './xml';
 
 /** Text of a gco:CharacterString or gmx:Anchor (with xlink:href) wrapped by `el`. */
@@ -15,13 +15,7 @@ function textAndUri(el: Element | undefined): { text?: string; uri?: string } {
 
 function stmt(field: string, el: Element | undefined): LicenceStatement | undefined {
   const { text: t, uri } = textAndUri(el);
-  if (!t && !uri) return undefined;
-  const s: LicenceStatement = { source: 'iso19139', field };
-  if (t) s.text = t;
-  if (uri) s.uri = uri;
-  const spdx = toSpdx(t, uri);
-  if (spdx) s.spdx = spdx;
-  return s;
+  return buildStatement({ source: 'iso19139', field, text: t, uri });
 }
 
 function findMetadata(doc: Document): Element | undefined {
@@ -30,11 +24,12 @@ function findMetadata(doc: Document): Element | undefined {
   return descendants(root, NS.gmd, 'MD_Metadata')[0];
 }
 
-function parseBbox(ident: Element): MetadataRecord['bbox'] {
-  for (const box of descendants(ident, NS.gmd, 'EX_GeographicBoundingBox')) {
+/** `ns`: where EX_* elements live (gmd in 19139, gex in 19115-3); `gcoNs`: the gco namespace of the Decimal wrappers. */
+export function parseBbox(ident: Element, ns: string | readonly string[] = NS.gmd, gcoNs: string | readonly string[] = NS.gco): MetadataRecord['bbox'] {
+  for (const box of descendants(ident, ns, 'EX_GeographicBoundingBox')) {
     const dec = (name: string) => {
-      const e = child(box, NS.gmd, name);
-      return e ? num(text(child(e, NS.gco, 'Decimal'))) : undefined;
+      const e = child(box, ns, name);
+      return e ? num(text(child(e, gcoNs, 'Decimal'))) : undefined;
     };
     const west = dec('westBoundLongitude');
     const east = dec('eastBoundLongitude');
@@ -55,11 +50,11 @@ function position(period: Element, name: string): string | undefined {
   return text(el);
 }
 
-function parseTemporal(ident: Element): MetadataRecord['temporalExtent'] {
+export function parseTemporal(ident: Element, ns: string | readonly string[] = NS.gmd): MetadataRecord['temporalExtent'] {
   const starts: string[] = [];
   const ends: string[] = [];
   let open = false;
-  for (const ext of descendants(ident, NS.gmd, 'EX_TemporalExtent')) {
+  for (const ext of descendants(ident, ns, 'EX_TemporalExtent')) {
     for (const period of descendants(ext, NS.gml, 'TimePeriod')) {
       const b = position(period, 'beginPosition');
       const e = position(period, 'endPosition');
@@ -87,12 +82,39 @@ function pushConstraintText(rec: MetadataRecord, constraints: Element, prefix: s
   }
 }
 
+const AUTHOR_ROLES = ['author', 'originator'];
+const codeOf = (el: Element | undefined): string | undefined => (el ? (attr(el.firstChild ? (elementChildren(el)[0] ?? el) : el, null, 'codeListValue') ?? text(el)) : undefined);
+
+/** Authors, publisher and publication year of a CI_Citation (for the attribution line). */
+function attribution(cit: Element | undefined, rec: MetadataRecord): void {
+  if (!cit) return;
+  const creators: string[] = [];
+  for (const party of children(cit, NS.gmd, 'citedResponsibleParty')) {
+    for (const p of children(party, NS.gmd, 'CI_ResponsibleParty')) {
+      const role = codeOf(child(p, NS.gmd, 'role'));
+      const name = textAndUri(child(p, NS.gmd, 'individualName')).text ?? textAndUri(child(p, NS.gmd, 'organisationName')).text;
+      if (!name) continue;
+      if (role && AUTHOR_ROLES.includes(role)) creators.push(name);
+      else if (role === 'publisher' && !rec.publisher) rec.publisher = textAndUri(child(p, NS.gmd, 'organisationName')).text ?? name;
+    }
+  }
+  if (creators.length > 0) rec.creators = creators;
+  for (const d of children(cit, NS.gmd, 'date')) {
+    for (const ci of children(d, NS.gmd, 'CI_Date')) {
+      if (codeOf(child(ci, NS.gmd, 'dateType')) !== 'publication') continue;
+      const v = text(child(child(ci, NS.gmd, 'date') ?? ci, NS.gco, 'Date')) ?? text(child(child(ci, NS.gmd, 'date') ?? ci, NS.gco, 'DateTime'));
+      const y = /^\d{4}/.exec(v ?? '');
+      if (y) rec.publicationYear = Number(y[0]);
+    }
+  }
+}
+
 export function parseIso19139(xml: string, label: string): MetadataRecord {
   const doc = parseXml(xml, label);
   const md = findMetadata(doc);
   if (!md) throw new Error(`${label}: not an ISO 19139 record (no gmd:MD_Metadata)`);
 
-  const rec: MetadataRecord = { source: 'iso19139', label, licences: [], restrictionCodes: [], distributionLinks: [] };
+  const rec: MetadataRecord = { source: 'iso19139', label, licences: [], restrictionCodes: [], distributionLinks: [], isoProfile: '19139' };
 
   const ident = child(md, NS.gmd, 'identificationInfo');
   const idEl = ident ? (child(ident, NS.gmd, 'MD_DataIdentification') ?? elementChildren(ident)[0]) : undefined;
@@ -102,6 +124,7 @@ export function parseIso19139(xml: string, label: string): MetadataRecord {
     rec.title = textAndUri(child(cit ?? idEl, NS.gmd, 'title')).text;
     rec.version = textAndUri(child(cit ?? idEl, NS.gmd, 'edition')).text;
     rec.abstract = textAndUri(child(idEl, NS.gmd, 'abstract')).text;
+    attribution(cit, rec);
 
     for (const rc of children(idEl, NS.gmd, 'resourceConstraints')) {
       for (const c of elementChildren(rc)) {

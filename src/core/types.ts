@@ -32,8 +32,15 @@ export interface LicenceStatement {
   field: string;                // 'useLimitation' | 'otherConstraints' | 'rightsList[0]' | 'license.id' | 'License'
   text?: string;
   uri?: string;
-  spdx?: string;                // normalised SPDX id when recognised, e.g. 'CC-BY-4.0'
+  /** The AGREED SPDX id, e.g. 'CC-BY-4.0'. Set only when the statement is unambiguous (see `conflict`). */
+  spdx?: string;
+  textSpdx?: string;            // what the text alone names
+  uriSpdx?: string;             // what the URI alone names
+  /** Why `spdx` is not set although something was recognised: text and URI name different licences, or the text adds conditions. */
+  conflict?: 'text-uri' | 'restricted';
 }
+/** A statement classified: one SPDX id, or unrecognised (check manually). */
+export type LicenceClass = { kind: 'spdx'; id: string } | { kind: 'unrecognised' };
 export interface MetadataRecord {
   source: MetadataSource;
   label: string;                // shown as the "file" of metadata findings
@@ -49,6 +56,10 @@ export interface MetadataRecord {
   resourceType?: string;
   doi?: string;
   landingUrl?: string;
+  isoProfile?: '19139' | '19115-3';   // source 'iso19139' covers both ISO profiles; this says which one was read
+  creators?: string[];          // for the attribution line, in source order
+  publicationYear?: number;
+  publisher?: string;
   parameters?: { name: string; unit?: string }[];      // PANGAEA parameter list
 }
 

@@ -70,6 +70,8 @@ describe('parseIso19139 — clean record (prefix-independent, GML 3.2, gmx:Ancho
         field: 'otherConstraints',
         text: 'Creative Commons Attribution 4.0 International',
         uri: 'https://creativecommons.org/licenses/by/4.0/',
+        textSpdx: 'CC-BY-4.0',
+        uriSpdx: 'CC-BY-4.0',
         spdx: 'CC-BY-4.0',
       },
     ]);
