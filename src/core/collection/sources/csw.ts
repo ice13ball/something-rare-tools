@@ -12,9 +12,13 @@ import type { CswSchema } from '../../../../config/catalogues';
 import { StopSignal, request } from '../net';
 import { SourceFailure, type Estimate, type Item, type Notice, type PageData, type Pager } from '../types';
 import { lookupMany, type Deps } from './datacite';
+import { splitCswPage, type SplitPage } from './cswsplit';
 
 export const CSW_PAGE = 25;
 export const CSW_SAMPLE_PAGE = 10;
+/** Pages of big records get smaller: the next page asks for as many records as fit in about this many characters of XML, but never fewer than CSW_MIN_PAGE. */
+export const CSW_TARGET_CHARS = 3_000_000;
+export const CSW_MIN_PAGE = 10;
 export const CSW_SAMPLE_REQUESTS = 20;
 const CSW_NS = 'http://www.opengis.net/cat/csw/2.0.2';
 const SCHEMA_URI: Record<CswSchema, string> = { iso19139: 'http://www.isotc211.org/2005/gmd', 'iso19115-3': 'http://standards.iso.org/iso/19115/-3/mdb/' };
@@ -38,6 +42,14 @@ export interface CswCursor {
   last?: string;
   /** Sample: index of the request. */
   i?: number;
+  /** maxRecords of this page (default CSW_PAGE): smaller after a page whose records were big. */
+  size?: number;
+}
+
+/** How many records the next page asks for, from what the last page weighed. A catalogue of ordinary records stays at CSW_PAGE. */
+export function nextPageSize(chars: number, records: number): number {
+  if (records <= 0) return CSW_PAGE;
+  return Math.max(CSW_MIN_PAGE, Math.min(CSW_PAGE, Math.floor((CSW_TARGET_CHARS * records) / Math.max(1, chars))));
 }
 
 const isException = (root: Element): boolean => root.localName === 'ExceptionReport';
@@ -134,21 +146,41 @@ function doiOf(rec: MetadataRecord, el: Element): string | undefined {
   return undefined;
 }
 
-/** One element of SearchResults as an item. Another profile, or a placeholder where the record should be, is 'unsupported-profile'. */
-function itemOf(el: Element, fallbackRef: string): Item {
+/**
+ * One element of SearchResults as an item. Another profile, or a placeholder where the record should be, is 'unsupported-profile'.
+ * `read` turns the element into a record: by default through its text (a record taken out of a whole-page DOM), or from the document
+ * the caller has parsed for this record alone.
+ */
+function itemOf(el: Element, fallbackRef: string, read: (ref: string) => MetadataRecord = (ref) => parseIsoRecord(serializer.serializeToString(el as never), ref)): Item {
   const ref = (identifierOf(el) ?? fallbackRef).trim();
   const iso = (el.localName === 'MD_Metadata') && (el.namespaceURI === NS.gmd || (NS3.mdb as readonly string[]).includes(el.namespaceURI ?? ''));
   if (!iso) return { ref, state: 'unsupported-profile', records: [], reason: `profile:${el.localName}` };
   // NOAA answers numberOfRecordsReturned=10 with text where the record should be ("Cannot disseminate schema ...").
   if (elementChildren(el).length === 0) return { ref, state: 'unsupported-profile', records: [], reason: 'not-disseminated' };
   try {
-    const rec = parseIsoRecord(serializer.serializeToString(el as never), ref);
+    const rec = read(ref);
     const doi = doiOf(rec, el);
     if (doi) rec.doi = doi;
     return { ref, state: 'checked', records: [rec] };
   } catch {
     return { ref, state: 'unsupported-profile', records: [], reason: 'unreadable-xml' };
   }
+}
+
+/** The records of a page one DOM at a time (see cswsplit.ts); null when the page is not plainly a list of MD_Metadata records. */
+function itemsOfSplit(split: SplitPage, pos: number): Item[] | null {
+  const items: Item[] = [];
+  for (const [i, text] of split.records.entries()) {
+    let doc: Document;
+    try {
+      doc = parseXml(text, 'catalogue record');
+    } catch {
+      return null; // not a clean cut: the whole page decides
+    }
+    const el = doc.documentElement;
+    items.push(itemOf(el, `#${pos + i}`, (ref) => parseIsoRecord(doc, ref)));
+  }
+  return items;
 }
 
 const DOI = /^10\.\d{4,9}\/\S+$/;
@@ -186,9 +218,24 @@ async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageDa
   return { looked: byDoi.size, found: hit, absent: byDoi.size - hit };
 }
 
-/** One GetRecords page → items, nextRecord, notices. Shared by the full walk and the sample. */
-async function readPage(deps: Deps, src: CswSource, pos: number, size: number, matched: number): Promise<{ items: Item[]; nextRecord: number; end?: Notice; first?: string; crossSource?: PageData<unknown>['counters'] }> {
+interface PageRead {
+  /** Characters of the XML answer. */
+  chars?: number;
+  items: Item[];
+  nextRecord: number;
+  end?: Notice;
+  first?: string;
+}
+
+/**
+ * One GetRecords request, read to the end of its XML in this function alone: when it returns, the answer's text and its DOM (a few MB of
+ * objects for a 1.3 MB page) are garbage. The DataCite comparison, which waits for the network, must not run while they are still held.
+ */
+async function fetchPage(deps: Deps, src: CswSource, pos: number, size: number, matched: number): Promise<PageRead> {
   const res = await request(deps.nctx, 'csw', () => deps.net.csw({ catalogue: src.catalogue, op: 'GetRecords', startPosition: pos, maxRecords: size, schema: src.schema }));
+  const split = splitCswPage(res.text);
+  const cut = split ? itemsOfSplit(split, pos) : null;
+  if (split && cut) return { items: cut, nextRecord: split.nextRecord ?? 0, first: cut[0]?.ref, chars: res.text.length };
   const root = parseResponse(res.text);
   if (isException(root)) {
     const msg = exceptionMessage(root);
@@ -198,20 +245,28 @@ async function readPage(deps: Deps, src: CswSource, pos: number, size: number, m
   }
   const sr = searchResults(root);
   if (!sr) throw new SourceFailure('unreachable', 'no-search-results');
-  const els = elementChildren(sr);
-  const items = els.map((el, i) => itemOf(el, `#${pos + i}`));
-  const crossSource = src.crossSource ? { crossSource: await crossCheck(deps, items) } : undefined;
-  return { items, nextRecord: intAttr(sr, 'nextRecord') ?? 0, first: items[0]?.ref, crossSource };
+  const items = elementChildren(sr).map((el, i) => itemOf(el, `#${pos + i}`));
+  return { items, nextRecord: intAttr(sr, 'nextRecord') ?? 0, first: items[0]?.ref, chars: res.text.length };
+}
+
+/** One GetRecords page → items, nextRecord, notices. Shared by the full walk and the sample. */
+async function readPage(deps: Deps, src: CswSource, pos: number, size: number, matched: number): Promise<PageRead & { crossSource?: PageData<unknown>['counters'] }> {
+  const page = await fetchPage(deps, src, pos, size, matched);
+  const crossSource = src.crossSource ? { crossSource: await crossCheck(deps, page.items) } : undefined;
+  return { ...page, crossSource };
 }
 
 export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCursor> {
   const { matched } = plan;
   return {
     initial: matched > 0 ? { pos: 1, seen: 0 } : null,
-    expected: (c) => Math.max(1, Math.min(CSW_PAGE, matched - c.pos + 1)),
-    skip: (c) => (c.pos + CSW_PAGE <= matched ? { pos: c.pos + CSW_PAGE, seen: c.seen + CSW_PAGE } : null),
+    expected: (c) => Math.max(1, Math.min(c.size ?? CSW_PAGE, matched - c.pos + 1)),
+    skip: (c) => {
+      const size = c.size ?? CSW_PAGE;
+      return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}) } : null;
+    },
     async fetch(c): Promise<PageData<CswCursor>> {
-      const page = await readPage(deps, src, c.pos, CSW_PAGE, matched);
+      const page = await readPage(deps, src, c.pos, c.size ?? CSW_PAGE, matched);
       const notices: Notice[] = [];
       const seen = c.seen + page.items.length;
       const counters = page.crossSource;
@@ -224,7 +279,10 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
           if (page.nextRecord <= c.pos) throw new SourceFailure('protocol', 'next-record-not-advancing');
           // The catalogue's own total is only a claim: a run that delivers far more than it must not go on for ever.
           if (seen > matched * 1.5 + 500) notices.push({ code: 'overrun-stopped', params: { seen, matched } });
-          else next = { pos: page.nextRecord, seen, last: page.first };
+          else {
+            const size = nextPageSize(page.chars ?? 0, page.items.length);
+            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}) };
+          }
         }
       } else if (!page.end && page.nextRecord > 0) {
         notices.push({ code: 'empty-page', params: { position: c.pos, matched } });

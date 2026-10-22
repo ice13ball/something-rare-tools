@@ -70,7 +70,8 @@ export function serverCsw(endpoint = '/api/csw', fetchImpl: FetchFn = (i, n) => 
       if (e instanceof TypeError) throw new FetchBlockedError('this site');
       throw e;
     }
-    const text = decode(new Uint8Array(await res.arrayBuffer()));
+    // text(): the browser decodes the body into one string; no second copy of an answer that can be 11 MB
+    const text = await res.text();
     return {
       status: res.status,
       text,
