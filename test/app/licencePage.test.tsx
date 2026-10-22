@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
+import { ModeSwitch } from '../../src/app/components/ModeSwitch';
 import { LicencePage } from '../../src/app/pages/LicencePage';
 import { IndexPage } from '../../src/app/pages/IndexPage';
 import { LANGS } from '../../src/core/types';
@@ -203,6 +204,37 @@ describe('LicencePage', () => {
         unmount();
       }
     }
+  });
+});
+
+describe('ModeSwitch texts', () => {
+  it("/check's ModeSwitch (no props) renders exactly the texts it always had, in every language", () => {
+    const expected = {
+      en: ['Download mode for linked files', 'In my browser only', 'Files are downloaded by your own browser. Some data servers do not allow this; then download the file yourself and drop it here.', 'Via the Abyssal Claims server', 'Our server downloads public files from known data servers for you and keeps nothing.', 'Files you drop here never leave your computer, in either mode.'],
+      pl: ['Tryb pobierania plików z linków', 'Tylko w mojej przeglądarce', 'Pliki pobiera Twoja własna przeglądarka. Niektóre serwery danych na to nie pozwalają — wtedy pobierz plik samodzielnie i upuść go tutaj.', 'Przez serwer Abyssal Claims', 'Nasz serwer pobiera za Ciebie publiczne pliki ze znanych serwerów danych i niczego nie przechowuje.', 'Pliki, które tu upuścisz, nigdy nie opuszczają Twojego komputera — w żadnym z trybów.'],
+    } as const;
+    for (const lang of ['en', 'pl'] as const) {
+      cleanup();
+      setLang(lang);
+      const { container } = render(<ModeSwitch />);
+      const text = container.textContent ?? '';
+      expect(text, lang).toBe(expected[lang].join(''));
+    }
+  });
+
+  it('/licence talks about metadata records, not linked files or dropping files, in every language', () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      const { container } = render(<LicencePage fetcherFor={() => new MapFetcher({})} />);
+      const mode = (container.querySelector('fieldset.mode-switch')?.textContent ?? '').toLowerCase();
+      expect(mode.length, lang).toBeGreaterThan(50);
+      expect(mode, lang).not.toMatch(/linked files|verlinkte|pliki z link|fichiers liés|drop|ablegen|upuść|déposez|never leave|verlassen|opuszczaj|quittent/);
+    }
+    cleanup();
+    setLang('en');
+    render(<LicencePage fetcherFor={() => new MapFetcher({})} />);
+    expect(screen.getByText('Only metadata records are read, in either mode. No data files are downloaded.')).toBeTruthy();
   });
 });
 
