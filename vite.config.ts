@@ -23,6 +23,7 @@ export default defineConfig({
         index: resolve(__dirname, 'index.html'),
         check: resolve(__dirname, 'check/index.html'),
         licence: resolve(__dirname, 'licence/index.html'),
+        collection: resolve(__dirname, 'collection/index.html'),
         privacy: resolve(__dirname, 'privacy/index.html'),
       },
     },
