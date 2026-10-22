@@ -20,6 +20,7 @@ const en = {
   'nav.language': `Language`,
   'nav.skip': `Skip to content`,
 
+  'index.docTitle': `Check marine data files before publishing`,
   'index.lead': `Simple tools for checking marine data before it is published.`,
   'index.card.title': `Data check`,
   'index.card.text': `Checks marine dataset files and their metadata for coordinate, date, unit and licence problems and explains each one in plain words.`,
@@ -29,6 +30,7 @@ const en = {
   'footer.cookies': `Cookie settings`,
 
   'check.title': `Data check`,
+  'check.docTitle': `Marine dataset check: coordinates, dates, units, licence`,
   'check.intro': `Choose how linked files are downloaded, then add your files or a link. The tool proposes, you confirm.`,
   'check.busy': `Checking…`,
   'check.error': `The check could not be completed.`,
@@ -218,6 +220,7 @@ const pl: Record<UiKey, string> = {
   'nav.language': `Język`,
   'nav.skip': `Przejdź do treści`,
 
+  'index.docTitle': `Sprawdź pliki z danymi morskimi przed publikacją`,
   'index.lead': `Proste narzędzia do sprawdzania danych morskich przed ich publikacją.`,
   'index.card.title': `Sprawdzanie danych`,
   'index.card.text': `Sprawdza pliki z danymi morskimi i ich metadane pod kątem błędów we współrzędnych, datach, jednostkach i licencji oraz wyjaśnia każdy problem prostymi słowami.`,
@@ -227,6 +230,7 @@ const pl: Record<UiKey, string> = {
   'footer.cookies': `Ustawienia cookies`,
 
   'check.title': `Sprawdzanie danych`,
+  'check.docTitle': `Sprawdzanie danych morskich: współrzędne, daty, jednostki, licencja`,
   'check.intro': `Wybierz, jak pobierać pliki z linków, a potem dodaj pliki lub link. Narzędzie proponuje, Ty potwierdzasz.`,
   'check.busy': `Sprawdzam…`,
   'check.error': `Nie udało się dokończyć sprawdzania.`,
@@ -414,6 +418,7 @@ const de: Record<UiKey, string> = {
   'nav.language': `Sprache`,
   'nav.skip': `Zum Inhalt springen`,
 
+  'index.docTitle': `Meeresdaten-Dateien vor der Veröffentlichung prüfen`,
   'index.lead': `Einfache Werkzeuge, um Meeresdaten vor der Veröffentlichung zu prüfen.`,
   'index.card.title': `Datenprüfung`,
   'index.card.text': `Prüft Dateien mit Meeresdaten und ihre Metadaten auf Fehler bei Koordinaten, Datumsangaben, Einheiten und Lizenz und erklärt jedes Problem in einfachen Worten.`,
@@ -423,6 +428,7 @@ const de: Record<UiKey, string> = {
   'footer.cookies': `Cookie-Einstellungen`,
 
   'check.title': `Datenprüfung`,
+  'check.docTitle': `Prüfung von Meeresdaten: Koordinaten, Datumsangaben, Einheiten, Lizenz`,
   'check.intro': `Wählen Sie, wie verlinkte Dateien heruntergeladen werden, und fügen Sie dann Dateien oder einen Link hinzu. Das Werkzeug macht Vorschläge, Sie bestätigen.`,
   'check.busy': `Prüfung läuft …`,
   'check.error': `Die Prüfung konnte nicht abgeschlossen werden.`,
@@ -610,6 +616,7 @@ const fr: Record<UiKey, string> = {
   'nav.language': `Langue`,
   'nav.skip': `Aller au contenu`,
 
+  'index.docTitle': `Vérifier des fichiers de données marines avant publication`,
   'index.lead': `Des outils simples pour vérifier des données marines avant leur publication.`,
   'index.card.title': `Vérification des données`,
   'index.card.text': `Vérifie les fichiers de données marines et leurs métadonnées (coordonnées, dates, unités, licence) et explique chaque problème en termes simples.`,
@@ -619,6 +626,7 @@ const fr: Record<UiKey, string> = {
   'footer.cookies': `Paramètres des cookies`,
 
   'check.title': `Vérification des données`,
+  'check.docTitle': `Vérification de données marines : coordonnées, dates, unités, licence`,
   'check.intro': `Choisissez comment les fichiers liés sont téléchargés, puis ajoutez vos fichiers ou un lien. L'outil propose, vous confirmez.`,
   'check.busy': `Vérification en cours…`,
   'check.error': `La vérification n'a pas pu être menée à terme.`,

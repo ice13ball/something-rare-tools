@@ -140,7 +140,7 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
   };
 
   return (
-    <Layout titleKey="check.title">
+    <Layout titleKey="check.docTitle">
       <h1>{t('check.title')}</h1>
       <p className="lead">{t('check.intro')}</p>
       <ModeSwitch value={mode} onChange={setMode} />
