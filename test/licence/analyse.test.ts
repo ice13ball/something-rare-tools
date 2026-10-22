@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
-import { analyseLicences, groupOf } from '../../src/core/licence/analyse';
+import { analyseLicences, depositGroups } from '../../src/core/licence/analyse';
 import { buildStatement } from '../../src/core/metadata/licence';
 import type { MetadataRecord, MetadataSource } from '../../src/core/types';
 import { makeRecord } from '../helpers/build';
@@ -16,14 +16,30 @@ const rec = (source: MetadataSource, rights: [string, string?][], extra: Partial
 const kinds = (r: ReturnType<typeof analyseLicences>) => r.contradictions.map((c) => c.kind);
 
 describe('source groups', () => {
-  it('Zenodo and the DataCite record of a Zenodo DOI are one group; PANGAEA likewise; others stand alone', () => {
-    expect(groupOf(makeRecord('zenodo'))).toBe('zenodo');
-    expect(groupOf(makeRecord('datacite', { doi: '10.5281/zenodo.1' }))).toBe('zenodo');
-    expect(groupOf(makeRecord('datacite', { doi: '10.1594/PANGAEA.9' }))).toBe('pangaea');
-    expect(groupOf(makeRecord('datacite', { doi: '10.9999/x', landingUrl: 'https://doi.pangaea.de/10.9999/x' }))).toBe('pangaea');
-    expect(groupOf(makeRecord('pangaea'))).toBe('pangaea');
-    expect(groupOf(makeRecord('datacite', { doi: '10.17882/1' }))).toBe('datacite');
-    expect(groupOf(makeRecord('iso19139'))).toBe('iso19139');
+  const groups = (...r: MetadataRecord[]) => depositGroups(r);
+  it('Zenodo and the DataCite record of a Zenodo DOI are one deposit; PANGAEA likewise', () => {
+    const [z, d] = groups(makeRecord('zenodo', { doi: '10.5281/zenodo.1' }), makeRecord('datacite', { doi: '10.5281/zenodo.1' }));
+    expect(z).toBe(d);
+    const [p, pd, pl] = groups(
+      makeRecord('pangaea', { doi: '10.1594/PANGAEA.9' }),
+      makeRecord('datacite', { doi: '10.1594/pangaea.9' }),
+      makeRecord('datacite', { doi: '10.9999/x', landingUrl: 'https://doi.pangaea.de/10.1594/PANGAEA.9' }),
+    );
+    expect(new Set([p, pd, pl]).size).toBe(1);
+  });
+  it('a concept DOI and a version DOI of one Zenodo deposit are one deposit (the concept leads to the version)', () => {
+    const g = groups(
+      makeRecord('datacite', { doi: '10.5281/zenodo.100', landingUrl: 'https://zenodo.org/records/101' }),
+      makeRecord('zenodo', { doi: '10.5281/zenodo.101', landingUrl: 'https://zenodo.org/records/101' }),
+      makeRecord('datacite', { doi: '10.5281/zenodo.101' }),
+    );
+    expect(new Set(g).size).toBe(1);
+  });
+  it('two DataCite DOIs of different repositories, two Zenodo deposits, two catalogues are different deposits', () => {
+    expect(new Set(groups(makeRecord('datacite', { doi: '10.17882/1' }), makeRecord('datacite', { doi: '10.5285/2' }))).size).toBe(2);
+    expect(new Set(groups(makeRecord('zenodo', { doi: '10.5281/zenodo.1' }), makeRecord('zenodo', { doi: '10.5281/zenodo.2' }))).size).toBe(2);
+    expect(new Set(groups(makeRecord('iso19139', { label: 'A', doi: '10.1/x' }), makeRecord('iso19139', { label: 'B', doi: '10.1/x' }))).size).toBe(2);
+    expect(new Set(groups(makeRecord('iso19139', { label: 'A', doi: '10.1/x' }), makeRecord('datacite', { doi: '10.1/x' }))).size).toBe(2);
   });
 
   it('their agreement confirms nothing: one group states a licence -> single source', () => {
@@ -49,7 +65,7 @@ describe('source groups', () => {
   it('a group that states nothing does not count', () => {
     const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('datacite', [])]);
     expect(a.statedGroups).toBe(1);
-    expect(a.groups.find((g) => g.id === 'datacite')?.state).toBe('missing');
+    expect(a.groups.find((g) => g.sources[0].source === 'datacite')?.state).toBe('missing');
     expect(kinds(a)).toEqual(['datacite-empty']);
   });
 });

@@ -25,6 +25,12 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
         field: c.statement.statement.field,
         params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence },
       });
+    case 'ambiguous':
+      return makeFinding('LIC-AMBIGUOUS', {
+        file,
+        field: c.statement.statement.field,
+        params: { text: c.statement.conflict!.text, readings: c.statement.conflict!.textLicence },
+      });
     case 'restriction-code':
       return makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } });
     case 'datacite-empty':

@@ -28,7 +28,7 @@ describe('loadLicenceReferences', () => {
     expect(load.failures).toEqual([]);
     expect(f.calls.some((u) => u.includes('format=textfile'))).toBe(false);
     const a = analyseLicences(load.records);
-    expect(a.groups.map((g) => g.id)).toEqual(['pangaea']);
+    expect(a.groups.map((g) => g.id)).toEqual(['pangaea:000000']);
     expect(a.statedGroups).toBe(1);
     expect(a.contradictions).toEqual([]);
   });

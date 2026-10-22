@@ -23,14 +23,17 @@ export interface AnalysedStatement {
    * Prose that merely contains an id ("CC-BY 4.0") is not machine-readable.
    */
   machineReadable: boolean;
-  /** Set when the statement is "unrecognised — check manually": text and URI differ ('text-uri') or the text adds conditions ('restricted'). */
-  conflict?: { kind: 'text-uri' | 'restricted'; text: string; uri: string; textLicence: string; uriLicence: string };
+  /**
+   * Set when the statement is "unrecognised — check manually": text and URI differ ('text-uri'), the text adds conditions
+   * ('restricted'), or there is no link and the text gives more than one reading of itself ('readings').
+   */
+  conflict?: { kind: 'text-uri' | 'restricted' | 'readings'; text: string; uri: string; textLicence: string; uriLicence: string };
 }
 
 export interface AnalysedSource {
   source: MetadataSource;
   label: string;
-  /** Source group id: sources of one deposit share it (see groupOf). */
+  /** Source group id: sources of one deposit share it (see depositGroups). */
   group: string;
   state: SourceState;
   /** Resource-level statements only. */
@@ -53,15 +56,19 @@ export type Contradiction =
   | { kind: 'text-uri'; source: AnalysedSource; statement: AnalysedStatement }
   /** The text names a licence but adds or negates conditions ("CC BY 4.0, but not for commercial use"), with or without a URI. */
   | { kind: 'added-conditions'; source: AnalysedSource; statement: AnalysedStatement }
+  /** No link, and the statement reads as more than one licence (text against identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to an unrecognised one). */
+  | { kind: 'ambiguous'; source: AnalysedSource; statement: AnalysedStatement }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
 export interface LicenceAnalysis {
   sources: AnalysedSource[];
   groups: SourceGroup[];
-  /** N for "no contradiction among N sources": groups that state a licence (agreement inside a group confirms nothing). */
+  /** Groups with at least one statement (recognised or not). */
   statedGroups: number;
-  /** 'single-source' = nothing to compare (0 or 1 group states a licence). */
+  /** N for "no contradiction among N sources": groups with at least one RECOGNISED licence (agreement inside a group confirms nothing). */
+  recognisedGroups: number;
+  /** 'single-source' = nothing to compare (fewer than 2 groups state a licence we recognise). */
   comparison: 'compared' | 'single-source';
   contradictions: Contradiction[];
   /** No source states a licence and none was unreadable: the licence is missing. */
@@ -79,27 +86,58 @@ export interface AnalyseOptions {
   inaccessible?: boolean;
 }
 
+const zenodoId = (text: string): string | undefined => /10\.5281\/zenodo\.(\d+)/i.exec(text)?.[1] ?? /zenodo\.org\/(?:api\/)?records?\/(\d+)/i.exec(text)?.[1];
+const pangaeaId = (text: string): string | undefined => /10\.1594\/pangaea\.(\d+)/i.exec(text)?.[1];
+
 /**
- * Source group of a record. One deposit is one source: a Zenodo record and the DataCite record of its DOI are written by
- * the same repository database, so their agreement confirms nothing. The same holds for PANGAEA and the DataCite
- * record of a PANGAEA DOI. Everything else is its own group.
+ * The identities of the deposit a record describes. Records that share one are the same deposit: a Zenodo record, the
+ * DataCite record of its DOI (a concept DOI and a version DOI of one deposit included: the concept's landing page is a
+ * version of the deposit), a PANGAEA record and the DataCite record of its DOI. A GeoNetwork record is its own deposit
+ * even when it carries a DOI: the catalogue and the DOI registry are written separately. Everything else is its own.
  */
-export function groupOf(rec: MetadataRecord): string {
-  const doi = (rec.doi ?? '').toLowerCase();
-  let host = '';
-  try {
-    host = rec.landingUrl ? new URL(rec.landingUrl).hostname.toLowerCase() : '';
-  } catch {
-    host = '';
+export function depositKeys(rec: MetadataRecord): string[] {
+  const doi = (rec.doi ?? '').trim().toLowerCase();
+  const landing = rec.landingUrl ?? '';
+  const keys: string[] = [];
+  if (rec.source === 'iso19139') return [`iso:${landing || rec.label}`];
+  if (doi) keys.push(`doi:${doi}`);
+  if (rec.source === 'zenodo' || rec.source === 'datacite') {
+    const z = new Set([zenodoId(doi), zenodoId(landing)].filter((x): x is string => !!x));
+    for (const id of z) keys.push(`zenodo:${id}`);
   }
-  if (rec.source === 'zenodo') return 'zenodo';
-  if (rec.source === 'pangaea') return 'pangaea';
-  if (rec.source === 'datacite') {
-    if (/^10\.5281\/zenodo\./.test(doi) || host === 'zenodo.org' || host === 'www.zenodo.org') return 'zenodo';
-    if (/^10\.1594\/pangaea\./.test(doi) || host === 'doi.pangaea.de') return 'pangaea';
-    return 'datacite';
+  if (rec.source === 'pangaea' || rec.source === 'datacite') {
+    const p = new Set([pangaeaId(doi), pangaeaId(landing)].filter((x): x is string => !!x));
+    for (const id of p) keys.push(`pangaea:${id}`);
   }
-  return rec.source;
+  if (keys.length === 0) keys.push(`${rec.source}:${rec.label}`);
+  return keys;
+}
+
+/** Two records describe the same deposit when they share an identity key. */
+export const sameDeposit = (a: MetadataRecord, b: MetadataRecord): boolean => {
+  const kb = depositKeys(b);
+  return depositKeys(a).some((k) => kb.includes(k));
+};
+
+/** Group id per record: records sharing a deposit key (directly or through a third record) get the same id. */
+export function depositGroups(records: readonly MetadataRecord[]): string[] {
+  const keys = records.map(depositKeys);
+  const parent = records.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const owner = new Map<string, number>();
+  keys.forEach((ks, i) => {
+    for (const k of ks) {
+      const o = owner.get(k);
+      if (o === undefined) owner.set(k, i);
+      else parent[find(i)] = find(o);
+    }
+  });
+  const priority = (k: string): number => (k.startsWith('zenodo:') ? 0 : k.startsWith('pangaea:') ? 1 : k.startsWith('doi:') ? 2 : 3);
+  return records.map((_, i) => {
+    const root = find(i);
+    const first = keys.findIndex((_k, j) => find(j) === root);
+    return [...keys[first]].sort((x, y) => priority(x) - priority(y))[0];
+  });
 }
 
 /** What a statement shows in a finding or a table: the id when recognised, else its text, else its URI. */
@@ -119,7 +157,7 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
       kind: s.conflict,
       text: s.text ?? '',
       uri: s.uri ?? '',
-      textLicence: s.textSpdx ?? (s.conflict === 'restricted' ? (s.text ?? '—') : '—'),
+      textLicence: s.textSpdx ?? (s.conflict === 'restricted' ? (s.text ?? '—') : s.readings && s.readings.length > 0 ? s.readings.join(' / ') : '—'),
       uriLicence: uriId ?? '—',
     };
   }
@@ -129,18 +167,27 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
 /** MD_RestrictionCode `license` is the normal ISO way to say "a licence applies", so it cannot contradict a CC licence. */
 const isConflictingCode = (code: string): boolean => code !== 'license' && isRestrictiveCode(code);
 
+/** Entries the publisher repeated on purpose (DataCite rightsList, Zenodo rights): several of them are dual licensing. */
+const isRepeatedEntry = (s: LicenceStatement): boolean => /^(?:rightsList|rights)\[\d+\]$/.test(s.field);
+
+/** Different licences in one source outside repeated entries (two ISO fields, two otherConstraints): they contradict each other. */
+const ownLicences = (src: AnalysedSource): string[] => [
+  ...new Set(src.statements.filter((a) => !isRepeatedEntry(a.statement)).flatMap((a) => (a.classification.kind === 'spdx' ? [a.classification.id] : []))),
+];
+
 const recognised = (src: AnalysedSource): string[] => [
   ...new Set(src.statements.flatMap((a) => (a.classification.kind === 'spdx' ? [a.classification.id] : []))),
 ];
 
 export function analyseLicences(records: readonly MetadataRecord[], opts: AnalyseOptions = {}): LicenceAnalysis {
-  const sources: AnalysedSource[] = records.map((record) => {
+  const groupIds = depositGroups(records);
+  const sources: AnalysedSource[] = records.map((record, i) => {
     const statements = record.licences.filter(isResourceLevel).map(analyseStatement);
-    return { source: record.source, label: record.label, group: groupOf(record), state: statements.length > 0 ? 'stated' : 'missing', statements, record };
+    return { source: record.source, label: record.label, group: groupIds[i], state: statements.length > 0 ? 'stated' : 'missing', statements, record };
   });
   for (const source of opts.unreadable ?? []) {
     if (sources.some((s) => s.source === source)) continue;
-    sources.push({ source, label: source, group: source === 'datacite' ? 'datacite' : source, state: 'unreadable', statements: [] });
+    sources.push({ source, label: source, group: `unreadable:${source}`, state: 'unreadable', statements: [] });
   }
 
   const groups: SourceGroup[] = [];
@@ -154,6 +201,7 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     g.licences = [...new Set(g.sources.flatMap(recognised))];
   }
   const statedGroups = groups.filter((g) => g.state === 'stated').length;
+  const recognisedGroups = groups.filter((g) => g.licences.length > 0).length;
   const statements = sources.flatMap((s) => s.statements);
   const hasUnreadable = !!opts.inaccessible || sources.some((s) => s.state === 'unreadable');
 
@@ -161,7 +209,7 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
 
   // A statement that contradicts itself is reported where it is.
   for (const source of sources) {
-    for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: statement.conflict.kind === 'restricted' ? 'added-conditions' : 'text-uri', source, statement });
+    for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: statement.conflict.kind === 'restricted' ? 'added-conditions' : statement.conflict.kind === 'readings' ? 'ambiguous' : 'text-uri', source, statement });
   }
 
   // Restriction codes against an open licence. Only a recognised, open licence can be contradicted.
@@ -173,7 +221,14 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
   const empty = sources.find((s) => s.source === 'datacite' && s.state === 'missing');
   if (empty && statements.length > 0) contradictions.push({ kind: 'datacite-empty', licence: shownOf(statements[0]) });
 
-  // Mismatch = two sources whose recognised sets are disjoint. Several entries of ONE source are dual licensing, never a mismatch.
+  // Dual licensing is only what the publisher repeated on purpose (rightsList / rights entries). Different licences in different
+  // fields of one source are a contradiction inside it, as they always were.
+  for (const src of sources) {
+    const own = ownLicences(src);
+    if (own.length > 1) contradictions.push({ kind: 'mismatch', sourceA: src, sourceB: src, licenceA: own[0], licenceB: own[1], sameGroup: true });
+  }
+
+  // Mismatch = two sources whose recognised sets are disjoint.
   const seen = new Set<string>();
   const comparable = sources.filter((s) => recognised(s).length > 0);
   for (let i = 0; i < comparable.length; i++) {
@@ -194,7 +249,8 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     sources,
     groups,
     statedGroups,
-    comparison: statedGroups >= 2 ? 'compared' : 'single-source',
+    recognisedGroups,
+    comparison: recognisedGroups >= 2 ? 'compared' : 'single-source',
     contradictions,
     missing: statements.length === 0 && !hasUnreadable,
     hasUnreadable,

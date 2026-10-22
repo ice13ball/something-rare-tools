@@ -36,8 +36,10 @@ export interface LicenceStatement {
   spdx?: string;
   textSpdx?: string;            // what the text alone names
   uriSpdx?: string;             // what the URI alone names
-  /** Why `spdx` is not set: 'text-uri' = the statement has a URI and text and URI classify differently; 'restricted' = the text names a licence but adds or negates conditions. */
-  conflict?: 'text-uri' | 'restricted';
+  /** Why `spdx` is not set: 'text-uri' = the statement has a URI and text and URI classify differently; 'restricted' = the text names a licence but adds or negates conditions; 'readings' = no link, but the text gives more than one reading of itself. */
+  conflict?: 'text-uri' | 'restricted' | 'readings';
+  /** The licences the text itself reads as, when it reads as more than one (several ids, a versionless family, "—" = a name no id exists for). */
+  readings?: string[];
 }
 /** A statement classified: one SPDX id, or unrecognised (check manually). */
 export type LicenceClass = { kind: 'spdx'; id: string } | { kind: 'unrecognised' };

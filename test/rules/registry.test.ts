@@ -22,6 +22,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'LIC-MISMATCH': ['warning', 'A'],
   'LIC-TEXT-URI-CONFLICT': ['warning', 'A'],
   'LIC-ADDED-CONDITIONS': ['warning', 'A'],
+  'LIC-AMBIGUOUS': ['warning', 'A'],
   'META-EMPTY-LINK': ['warning', 'A'],
   'META-NO-VERSION': ['info', 'A'],
   'META-NO-EXTENT': ['info', 'A'],
@@ -59,10 +60,10 @@ const EXPECTED: Record<string, [Severity, string]> = {
 const placeholders = (s: string): Set<string> => new Set([...s.matchAll(/\{([A-Za-z_][\w.]*)\}/g)].map((m) => m[1]));
 
 describe('rule table', () => {
-  it('has exactly the 47 planned ids, each once, with the planned severity and category', () => {
+  it('has exactly the 48 planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(47);
+    expect(ids.length).toBe(48);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -80,7 +81,7 @@ describe('rule table', () => {
       (Object.values(m).flat() as { id?: string }[]).map((r) => r.id ?? '');
     expect(idsOf(lic).every((id) => id.startsWith('LIC-'))).toBe(true);
     expect(idsOf(meta).every((id) => id.startsWith('META-'))).toBe(true);
-    expect(idsOf(lic).length).toBe(7);
+    expect(idsOf(lic).length).toBe(8);
     expect(idsOf(meta).length).toBe(7);
   });
 });

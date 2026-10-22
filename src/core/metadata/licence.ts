@@ -142,29 +142,78 @@ const PORT_NAMES: Record<string, string> = {
   'england and wales': 'UK',
   japan: 'JP',
 };
+const PORT_NAME_RE = Object.keys(PORT_NAMES)
+  .map((n) => n.replace(/ /g, '\\s+'))
+  .join('|');
 
-const NC_ND_SA = '(?:non[\\s-]?commercial|share[\\s-]?alike|no[\\s-]?derivatives?|no[\\s-]?derivs)';
+/** ISO 3166-1 alpha-2 codes (plus UK): a capitalised two-letter token after a version is read as a port only if it is one of them ("OR" is not). */
+const ISO_CODES = new Set(
+  `AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ
+DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP
+KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM
+PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ
+UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW UK EU`.split(/\s+/),
+);
+
+/** Words that may follow a version of a CC name and are not a jurisdiction. Any other capitalised word is taken for a port without an SPDX id. */
+const NOT_A_PORT = new Set([
+  'international', 'unported', 'generic', 'universal', 'license', 'licence', 'licensed', 'licenced', 'deed', 'legal', 'legalcode', 'code',
+  'attribution', 'public', 'and', 'or', 'with', 'for', 'to', 'at', 'by', 'under', 'the', 'a', 'in', 'of', 'on', 'see', 'version', 'only',
+]);
+
+/* The elements of the official CC names in en / de / fr / pl. Inside a licence name they are the licence, not conditions added to it. */
+const ELEM_NC = "non[\\s-]?commercial|nicht[\\s-]?kommerziell|pas\\s+d['’]utilisation\\s+commerciale|użycie\\s+niekomercyjne";
+const ELEM_ND = 'no[\\s-]?derivatives?|no[\\s-]?derivs|keine\\s+bearbeitungen|pas\\s+de\\s+modifications?|bez\\s+utworów\\s+zależnych';
+const ELEM_SA = 'share[\\s-]?alike|weitergabe\\s+unter\\s+gleichen\\s+bedingungen|partage\\s+dans\\s+les\\s+mêmes\\s+conditions|na\\s+tych\\s+samych\\s+warunkach';
+const ELEMS = `(?:${ELEM_NC}|${ELEM_ND}|${ELEM_SA})`;
+const ELEM_SEP = '[\\s,–—-]+';
+const NAME_START = '(attribution|namensnennung|uznanie\\s+autorstwa)';
 
 interface Pattern {
   re: RegExp;
-  read: (m: RegExpExecArray) => Read & { span?: [number, number] };
+  /** undefined = the match is not a licence name after all. */
+  read: (m: RegExpExecArray) => (Read & { span?: [number, number] }) | undefined;
 }
+
+/**
+ * What a port token after the version means. A capitalised ISO code, a country name or "(IGO)" is a port (an SPDX id exists only for some);
+ * a lower-case code only where SPDX has the port and it ends the phrase ("cc by-sa 3.0 de") or follows a dash ("cc-by-3.0-de"):
+ * "CC-BY-3.0 at Zenodo" is not Austria. 4.0 has no ports. Any other capitalised word after a version below 4.0 may be a jurisdiction
+ * ("3.0 Poland"): the licence is then unrecognised, never the generic one.
+ */
+function readPort(version: string, sep: string, code: string | undefined, fallback: string | undefined, after: string): { port?: string; ignored: boolean; unmapped: boolean } {
+  if (version === '4.0') return { ignored: !!code, unmapped: false };
+  if (code) {
+    const lower = code.toLowerCase().replace(/\s+/g, ' ');
+    const named = PORT_NAMES[lower];
+    if (named) return { port: named, ignored: false, unmapped: false };
+    const up = code.toUpperCase();
+    if (code === up) return ISO_CODES.has(up) || up === 'IGO' ? { port: up, ignored: false, unmapped: false } : { ignored: true, unmapped: false };
+    const endsPhrase = !/^\s*[\p{L}\p{N}]/u.test(after);
+    if (PORTS.includes(up) && (/[-/]/.test(sep) || endsPhrase)) return { port: up, ignored: false, unmapped: false };
+    return { ignored: true, unmapped: false };
+  }
+  if (fallback && /^\p{Lu}/u.test(fallback) && !NOT_A_PORT.has(fallback.toLowerCase())) return { ignored: true, unmapped: true };
+  return { ignored: false, unmapped: false };
+}
+
+const elementsOf = (chain: string): string[] =>
+  (chain.match(new RegExp(ELEMS, 'giu')) ?? []).map((p) => (new RegExp(`^(?:${ELEM_NC})$`, 'iu').test(p) ? 'NC' : new RegExp(`^(?:${ELEM_SA})$`, 'iu').test(p) ? 'SA' : 'ND'));
 
 const PATTERNS: Pattern[] = [
   {
-    // "CC BY 4.0", "cc-by-4.0", "CC BY-NC-SA 3.0 DE", "CC-BY-3.0-IGO". A version is mandatory for an id.
-    re: new RegExp(`(?<![a-z0-9])cc[\\s_-]*(by(?:[\\s_-]*(?:nc|sa|nd))*)[\\s_-]*(\\d\\.\\d)(?![\\d])(?:([\\s_/-]*)(igo|[a-z]{2})(?![a-z0-9]))?`, 'gi'),
+    // "CC BY 4.0", "cc-by-4.0", "CC BY-NC-SA 3.0 DE", "CC-BY-3.0-IGO", "CC BY 3.0 Germany", "CC BY 3.0 (IGO)". A version is mandatory for an id.
+    re: new RegExp(
+      `((?<![a-z0-9])cc[\\s_-]*(by(?:[\\s_-]*(?:nc|sa|nd))*)[\\s_-]*(\\d\\.\\d)(?![\\d]))(?:([\\s_/(-]*)(${PORT_NAME_RE}|[a-z]{2})(?![a-z0-9])|\\s+(\\p{L}[\\p{L}'’-]*))?`,
+      'giu',
+    ),
     read: (m) => {
-      // A port is written in capitals ("CC BY 3.0 DE"), or after a dash/slash in either case if SPDX has one ("cc-by-3.0-de"):
-      // "CC-BY-3.0 at Zenodo" is not Austria, "CC-BY-3.0-or-later" is not a port.
-      const sep = m[3] ?? '';
-      const code = m[4];
-      const isPort = !!code && m[2] !== '4.0' && (code === code.toUpperCase() || (/[-/]/.test(sep) && PORTS.includes(code.toUpperCase())));
-      const port = isPort ? code : undefined;
+      const [whole, core, variant, version, sep = '', code, fallback] = m;
+      const p = readPort(version, sep, code, fallback, m.input.slice(m.index + whole.length));
+      const coreEnd = m.index + core.length;
+      if (p.unmapped) return { unmapped: true, span: [m.index, coreEnd] };
       // An ignored port token stays outside the masked span.
-      const tail = code && !isPort ? sep.length + code.length : 0;
-      const r = ccId(m[1], m[2], port);
-      return { ...r, span: [m.index, m.index + m[0].length - tail] };
+      return { ...ccId(variant, version, p.port), span: [m.index, p.port ? coreEnd + sep.length + code.length : coreEnd] };
     },
   },
   {
@@ -173,13 +222,27 @@ const PATTERNS: Pattern[] = [
     read: (m) => ({ family: ccVariant(m[1]) }),
   },
   {
-    // "Creative Commons Attribution Non Commercial Share Alike 4.0 International", "... 3.0 Germany", "... 3.0 IGO"
-    re: new RegExp(`creative\\s+commons\\s+attribution((?:[\\s-]+${NC_ND_SA})*)[\\s-]*(\\d\\.\\d)(?![\\d])(?:\\s+(germany|austria|australia|netherlands|united\\s+states|igo|france|england\\s+and\\s+wales|japan))?`, 'gi'),
+    // "Creative Commons Attribution Non Commercial Share Alike 4.0 International", "... 3.0 Germany", "Namensnennung - Nicht kommerziell 4.0 International",
+    // "Attribution - Pas d'Utilisation Commerciale 4.0 International", "Uznanie autorstwa 4.0 Międzynarodowe". Without "Creative Commons" a bare
+    // "Attribution 4.0" is read only as a CC deed title: with an element or "International".
+    re: new RegExp(
+      `((creative\\s+commons\\s+)?${NAME_START}((?:${ELEM_SEP}${ELEMS})*)[\\s,–—-]*(\\d\\.\\d)(?![\\d]))(?:[\\s(]+(${PORT_NAME_RE})(?![\\p{L}\\p{N}])|\\s+(\\p{L}[\\p{L}'’-]*))?`,
+      'giu',
+    ),
     read: (m) => {
-      const parts = (m[1].match(/non[\s-]?commercial|share[\s-]?alike|no[\s-]?deriv\w*/gi) ?? []).map((p) => (/^non/i.test(p) ? 'NC' : /^share/i.test(p) ? 'SA' : 'ND'));
-      const port = m[3] ? PORT_NAMES[m[3].toLowerCase().replace(/\s+/g, ' ')] : undefined;
-      return ccId(['BY', ...parts].join('-'), m[2], port);
+      const [whole, core, prefix, , chain, version, portName, fallback] = m;
+      const elements = elementsOf(chain);
+      const coreEnd = m.index + core.length;
+      if (!prefix && elements.length === 0 && !/^\s*(?:international|internationale|międzynarodow|unported)/iu.test(m.input.slice(coreEnd))) return undefined;
+      const p = readPort(version, '', portName, fallback, m.input.slice(m.index + whole.length));
+      if (p.unmapped) return { unmapped: true, span: [m.index, coreEnd] };
+      return { ...ccId(['BY', ...elements].join('-'), version, p.port), span: [m.index, portName && p.port ? m.index + whole.length : coreEnd] };
     },
+  },
+  {
+    // "Creative Commons Attribution-ShareAlike" without a version: a family, compared like "CC BY-SA".
+    re: new RegExp(`creative\\s+commons\\s+${NAME_START}((?:${ELEM_SEP}${ELEMS})*)(?![\\s,–—-]*(?:\\d|${ELEMS}))`, 'giu'),
+    read: (m) => ({ family: ccVariant(['BY', ...elementsOf(m[2])].join('-')) }),
   },
   { re: /(?<![a-z0-9])cc[\s_-]*(?:0|zero)(?![a-z0-9])|creative\s+commons\s+zero/gi, read: () => ({ id: 'CC0-1.0' }) },
   { re: /(?<![a-z0-9])(?:odc[\s-]*)?odbl(?![a-z0-9])|open\s+database\s+licen[cs]e/gi, read: () => ({ id: 'ODbL-1.0' }) },
@@ -223,13 +286,40 @@ const MARKER_WORDS = [
   'ohne', 'mais', 'pas', 'sans', 'sauf', 'außer', 'ausser',
 ];
 const MARKER_STEMS = [
-  'excluding', 'exception', 'prohibit', 'forbidden', 'restrict', 'apart from', 'other than', 'limited',
-  'rights reserved', 'embargo', 'moratorium', 'confidential', 'proprietary',
-  'oprócz', 'wyjątk', 'wyłącznie', 'jedynie', 'zakaz', 'zabronion', 'ograniczon', 'zastrzeżon', 'zgod(?:y|ą)(?![\\p{L}])',
-  'ausgenommen', 'ausschließlich', 'ausschliesslich', 'verbot', 'untersag', 'nichtkommerz', 'vorbehalten',
-  'excepté', 'uniquement', 'seulement', 'exclusivement', 'interdit', 'interdiction', 'réservé',
+  'excluding', 'exception', 'prohibit', 'forbidden', 'restrict', 'apart from', 'other than', 'limited\\s+(?:to|use|access|distribution|re-?use|availability)',
+  'rights reserved', 'embargo', 'moratorium', 'confidential', 'proprietary', 'permission', 'consent', 'approv', 'research', 'academic',
+  'oprócz', 'wyjątk', 'wyłącznie', 'jedynie', 'zakaz', 'zabronion', 'ograniczon', 'zastrzeżon', 'zgod(?:a|y|ą|zie|ę)(?![\\p{L}])',
+  'ausgenommen', 'ausschließlich', 'ausschliesslich', 'verbot', 'untersag', 'nichtkommerz', 'vorbehalten', 'kein', 'genehmig', 'erlaubnis',
+  'excepté', 'uniquement', 'seulement', 'exclusivement', 'interdit', 'interdiction', 'réservé', 'autorisation',
 ];
 const MARKERS = new RegExp(`(?<![\\p{L}\\p{N}])(?:(?:${MARKER_WORDS.join('|')})(?![\\p{L}\\p{N}])|(?:${MARKER_STEMS.join('|')}))`, 'iu');
+/** Anything about commercial use, in any word ("noncommercial", "kommerziell", "niekomercyjne", "commerciale"), unless it is one of the affirmative phrases below. */
+const COMMERCIAL = /commerc|kommerz|komercyj/iu;
+
+/**
+ * Wording that is part of ordinary licence texts and adds nothing: removed before the markers are searched. None of these
+ * may swallow a restriction ("commercial use requires permission" stays a marker).
+ */
+const AFFIRMATIVE: RegExp[] = [
+  /\b(?:some|no)\s+rights\s+reserved\b/giu,
+  /\bno\s+(?:additional|further)\s+restrictions?\b/giu,
+  /\bwithout\s+(?:any\s+)?restrictions?\b/giu,
+  /\bno\s+limitations?\b/giu,
+  /\bbut\s+please\s+cite\b/giu,
+  // The CC deed's own sentence and the plain "permitted" variants, en / de / fr / pl.
+  /\b(?:for\s+any\s+purpose,?\s+)?(?:even|also)\s+commercially\b/giu,
+  /\bincluding\s+(?:commercially|commercial\s+(?:use|purposes?))\b/giu,
+  /\bcommercial\s+(?:use|re-?use|exploitation)\s+(?:is\s+|are\s+)?(?:permitted|allowed)\b/giu,
+  /(?<![\p{L}])(?:sogar|auch|selbst)\s+kommerziell(?![\p{L}])/giu,
+  /(?<![\p{L}])kommerzielle\s+nutzung\s+(?:ist\s+)?(?:erlaubt|gestattet|zulässig)(?![\p{L}])/giu,
+  /(?<![\p{L}])y\s+compris\s+(?:à\s+des\s+fins\s+)?commerciale?s?(?![\p{L}])/giu,
+  /(?<![\p{L}])utilisation\s+commerciale\s+(?:est\s+)?(?:autorisée|permise)(?![\p{L}])/giu,
+  /(?<![\p{L}])(?:nawet|także|również)\s+komercyjn\p{L}*/giu,
+  /(?<![\p{L}])użycie\s+komercyjne\s+(?:jest\s+)?dozwolone(?![\p{L}])/giu,
+];
+
+/** A licence name no pattern above reads (GNU GPL without a version, OGL of another country): next to a recognised one the text is ambiguous. */
+const UNREAD_NAME = /open\s+government\s+licen[cs]e|(?<![a-z0-9])(?:a|l)?gpl(?![a-z0-9])|gnu\s+(?:lesser\s+|affero\s+)?general\s+public|apache\s+licen[cs]e|mozilla\s+public|(?<![a-z0-9])bsd(?![a-z0-9])|(?<![a-z0-9])eupl(?![a-z0-9])|cecill/iu;
 
 interface TextRead {
   ids: string[];
@@ -248,6 +338,7 @@ function readText(raw: string): TextRead {
   for (const p of PATTERNS) {
     for (const m of text.matchAll(p.re)) {
       const r = p.read(m as RegExpExecArray);
+      if (!r) continue;
       out.any = true;
       if (r.id && !out.ids.includes(r.id)) out.ids.push(r.id);
       if (r.family && !out.families.includes(r.family)) out.families.push(r.family);
@@ -255,10 +346,16 @@ function readText(raw: string): TextRead {
       spans.push(r.span ?? [m.index!, m.index! + m[0].length]);
     }
   }
-  // Mask the licence names; what is left is the rest of the sentence.
+  // Mask the licence names (with the official wording of their elements); what is left is the rest of the sentence.
   const chars = text.split('');
   for (const [a, b] of spans) for (let i = a; i < b; i++) chars[i] = ' ';
-  out.restricted = MARKERS.test(chars.join('').replace(/\bno rights reserved\b/gi, ' '));
+  let rest = chars.join('');
+  if (UNREAD_NAME.test(rest)) {
+    out.any = true;
+    out.unmapped = true;
+  }
+  for (const re of AFFIRMATIVE) rest = rest.replace(re, ' ');
+  out.restricted = MARKERS.test(rest) || COMMERCIAL.test(rest);
   return out;
 }
 
@@ -282,6 +379,8 @@ const familyOf = (id: string): string | undefined => /^CC-(BY(?:-NC|-SA|-ND)*)-\
  * is set only when they do not contradict each other and the text adds no conditions. The URI never silently wins:
  * a text that names a different licence, or carries "but not for commercial use", makes the statement unrecognised
  * (`conflict`). A text that names no licence at all ("Open Access") but is harmless leaves the URI's reading.
+ * A text that gives more than one reading of itself ("CC BY 4.0 (CC BY-NC)", rights text and identifier that differ,
+ * a recognised name next to one that is not) is never one licence: `conflict: 'readings'` when there is no link to blame.
  */
 export function buildStatement(p: StatementParts): LicenceStatement | undefined {
   const texts = [...new Set([p.text, ...(p.also ?? [])].map((t) => t?.trim()).filter((t): t is string => !!t))];
@@ -294,29 +393,36 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   const reads = texts.map(readText);
   const ids = [...new Set(reads.flatMap((r) => r.ids))];
   const families = [...new Set(reads.flatMap((r) => r.families))];
-  // One string naming several different licences ("CC BY 4.0 or CC BY-SA 4.0") cannot give one id.
-  const multi = reads.some((r) => r.ids.length > 1);
-  const textId = ids.length === 1 && !multi ? ids[0] : undefined;
+  const unmappedText = reads.some((r) => r.unmapped);
+  // The text(s) read as more than one licence: several ids, an id and a different versionless family, two families,
+  // or a recognised name next to one that is not.
+  const clash =
+    ids.length > 1 ||
+    (ids.length === 1 && families.some((f) => f !== familyOf(ids[0]))) ||
+    families.length > 1 ||
+    (unmappedText && (ids.length > 0 || families.length > 0));
+  const textId = ids.length === 1 && !clash ? ids[0] : undefined;
   const u = uri ? readUri(uri) : {};
   if (textId) s.textSpdx = textId;
   if (u.id) s.uriSpdx = u.id;
+  if (clash) s.readings = [...ids, ...families.map((f) => `CC ${f}`), ...(unmappedText ? ['—'] : [])];
 
   const named = reads.some((r) => r.any);
   const conditions = reads.some((r) => r.restricted);
   const textVsUri =
     !!uri &&
-    ((ids.length > 1 && !multi) || // identifier and rights text disagree with each other
-      (multi && !!u.id) || // the text offers several licences, the URI names one
+    (clash || // the text itself offers or implies several licences
       (!!textId && !!u.id && textId !== u.id) ||
       (!!textId && !!u.unmapped && !u.oneOf?.includes(textId)) ||
-      (reads.some((r) => r.unmapped) && !!u.id) ||
-      (!textId && !!u.id && families.some((f) => f !== familyOf(u.id!))) ||
+      (unmappedText && !!u.id) ||
+      (!!u.id && families.some((f) => f !== familyOf(u.id!))) || // always: a versionless family against the link
       // the text names no licence but restricts, and the URI names one
       (conditions && !named && !!u.id));
   // A text that names a licence and adds or negates conditions is no longer that licence as written; this is the more
   // specific explanation, so it wins over a text/URI difference.
   if (conditions && named) s.conflict = 'restricted';
   else if (textVsUri) s.conflict = 'text-uri';
+  else if (clash) s.conflict = 'readings';
   else {
     const agreed = textId ?? u.id;
     if (agreed) s.spdx = agreed;
