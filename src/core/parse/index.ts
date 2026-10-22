@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { MetadataRecord, ParsedFile } from '../types';
 import { parseDataciteJson, parseDataciteXml } from '../metadata/datacite';
-import { parseIso19139 } from '../metadata/iso19139';
+import { parseIsoRecord } from '../metadata/iso19115-3';
 import { parseZenodoRecord } from '../metadata/zenodo';
 import { decodeText } from '../values/encoding';
 import { parseCsvText } from './csv';
@@ -67,7 +67,7 @@ export function parseFile(fileName: string, bytes: Uint8Array): ParsedFile {
 
   if (head.startsWith('<?xml') || head.startsWith('<gmd:') || /^<(?:[\w.-]+:)?(?:MD_Metadata|resource)[\s>]/.test(head)) {
     const isIso = /<(?:[\w.-]+:)?MD_Metadata[\s>]/.test(head);
-    return metadataFile(fileName, decoded, () => (isIso ? parseIso19139(head, fileName) : parseDataciteXml(head, fileName)));
+    return metadataFile(fileName, decoded, () => (isIso ? parseIsoRecord(head, fileName) : parseDataciteXml(head, fileName)));
   }
 
   if (head.startsWith('{')) {

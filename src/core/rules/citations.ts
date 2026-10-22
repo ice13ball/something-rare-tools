@@ -51,6 +51,33 @@ const W3C_DATETIME = {
   url: 'https://www.w3.org/TR/NOTE-datetime',
 };
 
+const INSPIRE_TG = {
+  label: 'INSPIRE Technical Guidelines for metadata based on ISO 19139, v2.2.1 (published 2025-01-31)',
+  url: 'https://inspire-mif.github.io/technical-guidelines/metadata/metadata-iso19139/metadata-iso19139.html',
+};
+const GOFAIR_R11 = {
+  label: 'GO FAIR, FAIR Principle R1.1',
+  url: 'https://www.go-fair.org/fair-principles/r1-1-metadata-released-clear-accessible-data-usage-license/',
+};
+const DATACITE_RIGHTS = {
+  label: 'DataCite Metadata Schema 4.6, 16. Rights',
+  url: 'https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/',
+};
+const OPENAIRE_RIGHTS = {
+  label: 'OpenAIRE Guidelines for Data Archives, 16. Rights (MA)',
+  url: 'https://guidelines.openaire.eu/en/latest/data/field_rights.html',
+};
+const SPDX_HANDLING = { label: 'SPDX, Handling license info', url: 'https://spdx.dev/learn/handling-license-info/' };
+const CC_FAQ = { label: 'Creative Commons FAQ', url: 'https://creativecommons.org/faq/' };
+const CC_ATTRIBUTION = {
+  label: 'Creative Commons wiki, Best practices for attribution',
+  url: 'https://wiki.creativecommons.org/wiki/Best_practices_for_attribution',
+};
+const ISO_CODELISTS = {
+  label: 'ISO/TS 19139 code lists (gmxCodelists.xml), MD_RestrictionCode',
+  url: 'https://standards.iso.org/iso/19139/resources/gmxCodelists.xml',
+};
+
 const cite = (base: { label: string; url: string }, locator: string): Citation => ({ ...base, locator });
 const th = (name: string, value: number, unit: string, citation: Citation): Threshold => ({ name, value, unit, citation });
 
@@ -75,6 +102,26 @@ export const CITE = {
   excelDateSystems: cite(MS_DATE_SYSTEMS, '1900 and 1904 date systems; "The difference between the two date systems is 1,462 days."'),
   dataciteDate: cite(DATACITE_DATE, 'section 8 Date, allowed formats'),
   w3cDatetime: cite(W3C_DATETIME, 'Formats: complete date YYYY-MM-DD'),
+  // licence rules (quotes verified against the fetched pages, 22.10.2026)
+  inspireValues: cite(INSPIRE_TG, 'section 2.3.7 (quoting Regulation 1205/2008 Part B 8.1): "The element must have values."'),
+  inspireNoConditions: cite(INSPIRE_TG, 'section 2.3.7 (quoting Regulation 1205/2008 Part B 8.1): "If no conditions apply to the access and use of the resource, ‘no conditions apply’ shall be used."'),
+  inspireLink: cite(INSPIRE_TG, 'TG Recommendation C.10, section 2.3.7: "For detailed information about the licensing of the resource it is recommended to provide a link to a license type (e.g. http://creativecommons.org/licenses/by/3.0 ), a website or to a document containing the necessary information."'),
+  inspireOtherRestrictions: cite(INSPIRE_TG, 'TG Requirement C.18, section 2.3.7: "In both cases this element shall contain a gmd:MD_RestrictionCode element with code list value "otherRestrictions"."'),
+  inspireOtherConstraints: cite(INSPIRE_TG, 'TG Requirement C.18, section 2.3.7: "Additionally at least one instance of gmd:otherConstraints shall be given describing the actual conditions."'),
+  isoRestricted: cite(ISO_CODELISTS, 'MD_RestrictionCode "restricted": "withheld from general circulation or disclosure"'),
+  fairLicence: cite(GOFAIR_R11, 'heading "Interpretation of R1.1": "Digital resources and their metadata must always, without exception, include a license that describes under which conditions the resource can be used, even if that is “unconditional”."'),
+  fairFindable: cite(GOFAIR_R11, 'heading "Interpretation of R1.1": "Note also that a license that cannot be found by an agent, is effectively the same as no license at all."'),
+  fairDifferent: cite(GOFAIR_R11, 'heading "Interpretation of R1.1": "Furthermore, the license may be different for a data resource and the metadata that describes it"'),
+  dataciteTitle: cite(DATACITE_RIGHTS, '16. Rights, allowed values, examples, other constraints: "Use the complete title of a license and include version information if applicable."'),
+  dataciteIdentifier: cite(DATACITE_RIGHTS, '16.b rightsIdentifier: "A short, standardized version of the license name."'),
+  dataciteUri: cite(DATACITE_RIGHTS, '16.a rightsURI: "The URI of the license."'),
+  dataciteRepeat: cite(DATACITE_RIGHTS, '16. Rights, definition: "The property may be repeated to record complex rights characteristics."'),
+  openaireRecommends: cite(OPENAIRE_RIGHTS, '16. Rights (MA), note: "In particular OpenAIRE also recommends including license information if available."'),
+  openaireMandatory: cite(OPENAIRE_RIGHTS, '16. Rights (MA), note: "Mandatory when applicable property in OpenAIRE instead of optional in DataCite."'),
+  spdxList: cite(SPDX_HANDLING, '"SPDX License List" paragraph: "The SPDX License List includes a standardized short identifier, the full name, the license text, and a canonical permanent URL for each license and exception."'),
+  ccDualLicensing: cite(CC_FAQ, 'separate agreements: "You may offer the licensed material under other licenses in addition to the CC license (a practice commonly referred to as “dual licensing”)."'),
+  ccDualChoice: cite(CC_FAQ, 'separate agreements: "A reuser may then choose which set of terms to comply with."'),
+  ccNameAndLink: cite(CC_ATTRIBUTION, 'section on licence attribution: "We recommend that you name and provide a link to the license, e.g., CC BY 4.0 ( http://creativecommons.org/licenses/by/4.0 ) for a work licensed under CC BY 4.0."'),
 };
 
 export { th };

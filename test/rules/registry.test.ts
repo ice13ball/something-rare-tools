@@ -20,6 +20,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'LIC-RESTRICTION-CONFLICT': ['warning', 'A'],
   'LIC-DATACITE-EMPTY': ['warning', 'A'],
   'LIC-MISMATCH': ['warning', 'A'],
+  'LIC-TEXT-URI-CONFLICT': ['warning', 'A'],
   'META-EMPTY-LINK': ['warning', 'A'],
   'META-NO-VERSION': ['info', 'A'],
   'META-NO-EXTENT': ['info', 'A'],
@@ -57,10 +58,10 @@ const EXPECTED: Record<string, [Severity, string]> = {
 const placeholders = (s: string): Set<string> => new Set([...s.matchAll(/\{([A-Za-z_][\w.]*)\}/g)].map((m) => m[1]));
 
 describe('rule table', () => {
-  it('has exactly the 45 planned ids, each once, with the planned severity and category', () => {
+  it('has exactly the 46 planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(45);
+    expect(ids.length).toBe(46);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -78,7 +79,7 @@ describe('rule table', () => {
       (Object.values(m).flat() as { id?: string }[]).map((r) => r.id ?? '');
     expect(idsOf(lic).every((id) => id.startsWith('LIC-'))).toBe(true);
     expect(idsOf(meta).every((id) => id.startsWith('META-'))).toBe(true);
-    expect(idsOf(lic).length).toBe(5);
+    expect(idsOf(lic).length).toBe(6);
     expect(idsOf(meta).length).toBe(7);
   });
 });
@@ -130,7 +131,9 @@ describe('messages', () => {
 
   it('licence wording tells the user what to write', () => {
     expect(getRule('LIC-MISSING').plain.en).toContain('CC BY 4.0');
-    expect(getRule('LIC-FREE-TEXT').plain.en).toContain('CC BY 4.0');
+    // LIC-FREE-TEXT asks for the licence's OWN identifier ({hint}); a fixed "CC BY 4.0" would tell a publisher to switch (bug 22.10: 6).
+    expect(getRule('LIC-FREE-TEXT').plain.en).toContain('{hint}');
+    expect(getRule('LIC-FREE-TEXT').plain.en).not.toContain('CC BY 4.0');
   });
 });
 

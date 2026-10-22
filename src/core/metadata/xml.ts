@@ -11,6 +11,20 @@ export const NS = {
   gml: ['http://www.opengis.net/gml', 'http://www.opengis.net/gml/3.2'],
 } as const;
 
+/** ISO 19115-3 module namespaces; every module exists in 1.0 and 2.0 (mdb, cit, mco in 2.0 for the same elements). */
+const iso3 = (module: string): readonly string[] => [`http://standards.iso.org/iso/19115/-3/${module}/1.0`, `http://standards.iso.org/iso/19115/-3/${module}/2.0`];
+export const NS3 = {
+  mdb: iso3('mdb'),
+  cit: iso3('cit'),
+  mri: iso3('mri'),
+  mco: iso3('mco'),
+  mrd: iso3('mrd'),
+  mcc: iso3('mcc'),
+  gex: iso3('gex'),
+  gco: iso3('gco'),
+  gcx: iso3('gcx'),
+} as const;
+
 export function parseXml(xml: string, what: string): Document {
   const errors: string[] = [];
   // xmldom's Document is structurally close to the DOM lib's but not assignable; it is what the helpers below use.

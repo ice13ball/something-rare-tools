@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { parseIso19139 } from '../metadata/iso19139';
+import { parseIsoRecord } from '../metadata/iso19115-3';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
 import { allowed, decodeUtf8, hasDataExtension, hostNotAllowed, inaccessible, noDataFile, ok2xx, attempt } from './common';
 import { hostOf, type Fetcher } from './fetcher';
@@ -64,7 +64,7 @@ function dataFiles(links: MetadataRecord['distributionLinks'], label: string): {
 }
 
 /**
- * GeoNetwork record as ISO 19139 XML. `known` is the DataCite record that led here (kept when the record is
+ * GeoNetwork record as ISO 19139 or ISO 19115-3 XML. `known` is the DataCite record that led here (kept when the record is
  * not readable). An unpublished record answers 403; a sign-in page answers 200 HTML: both are "inaccessible".
  */
 export async function loadGeoNetwork(host: string, uuid: string, fetcher: Fetcher, known?: MetadataRecord): Promise<LoadedRecord> {
@@ -79,9 +79,9 @@ export async function loadGeoNetwork(host: string, uuid: string, fetcher: Fetche
 
   let iso: MetadataRecord;
   try {
-    iso = parseIso19139(decodeUtf8(r.ok.bytes), label);
+    iso = parseIsoRecord(decodeUtf8(r.ok.bytes), label);
   } catch {
-    return { ...out, findings: [inaccessible(label, r.ok.status, host, 'response is not an ISO 19139 record (sign-in page?)')] };
+    return { ...out, findings: [inaccessible(label, r.ok.status, host, 'response is not an ISO 19139 or 19115-3 record (sign-in page?)')] };
   }
   out.metadata = known ? [iso, known] : [iso];
   const { files, findings } = dataFiles(iso.distributionLinks, label);

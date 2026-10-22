@@ -24,7 +24,7 @@ describe('parseZenodoRecord — legacy files[] shape', () => {
 
   it('reads licence, resource type, version, doi, title, plain-text abstract, landing url', () => {
     const rec = parseZenodoRecord(fx('zenodo-pdf-only.json'), 'x');
-    expect(rec.licences).toEqual([{ source: 'zenodo', field: 'license.id', text: 'cc-by-4.0', spdx: 'CC-BY-4.0' }]);
+    expect(rec.licences).toEqual([{ source: 'zenodo', field: 'license.id', text: 'cc-by-4.0', textSpdx: 'CC-BY-4.0', spdx: 'CC-BY-4.0' }]);
     expect(rec.resourceType).toBe('publication');
     expect(rec.version).toBe('v2');
     expect(rec.doi).toBe('10.0000/zenodo.1000001');
@@ -67,6 +67,8 @@ describe('parseZenodoRecord — InvenioRDM shape', () => {
         field: 'rights[0]',
         text: 'cc-by-sa-4.0',
         uri: 'https://creativecommons.org/licenses/by-sa/4.0/legalcode',
+        textSpdx: 'CC-BY-SA-4.0',
+        uriSpdx: 'CC-BY-SA-4.0',
         spdx: 'CC-BY-SA-4.0',
       },
     ]);

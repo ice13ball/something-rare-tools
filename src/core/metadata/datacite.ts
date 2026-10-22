@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // DataCite parsers: REST JSON (`data.attributes`, `attributes` or bare attributes) and kernel-3/4 XML.
 import type { LicenceStatement, MetadataRecord } from '../types';
-import { toSpdx } from './licence';
+import { buildStatement } from './licence';
 import { attr, child, children, descendants, num, parseXml, text } from './xml';
 
 type Obj = Record<string, unknown>;
@@ -16,15 +16,14 @@ const str = (v: unknown): string | undefined => {
 interface Rights { rights?: string; uri?: string; identifier?: string }
 
 function licenceOf(index: number, r: Rights): LicenceStatement | undefined {
-  if (!r.rights && !r.uri && !r.identifier) return undefined;
-  const s: LicenceStatement = { source: 'datacite', field: `rightsList[${index}]` };
-  const t = r.rights ?? r.identifier;
-  if (t) s.text = t;
-  if (r.uri) s.uri = r.uri;
-  const spdx = toSpdx(r.identifier, r.uri) ?? toSpdx(r.rights);
-  if (spdx) s.spdx = spdx;
-  return s;
+  // The rights text is shown; the identifier ("cc-by-4.0") is read as text too, so the two cannot disagree unnoticed.
+  return buildStatement({ source: 'datacite', field: `rightsList[${index}]`, text: r.rights ?? r.identifier, also: [r.identifier], uri: r.uri });
 }
+
+const yearOf = (v: unknown): number | undefined => {
+  const m = /^\s*(\d{4})/.exec(String(v ?? ''));
+  return m ? Number(m[1]) : undefined;
+};
 
 interface Box { west?: number; east?: number; south?: number; north?: number }
 interface Point { lon?: number; lat?: number }
@@ -78,6 +77,10 @@ export function parseDataciteJson(json: unknown, label: string): MetadataRecord 
   rec.version = str(a.version);
   rec.doi = str(a.doi);
   rec.landingUrl = str(a.url);
+  const creators = (Array.isArray(a.creators) ? a.creators : []).filter(isObj).map((c) => str(c.name) ?? str([str(c.familyName), str(c.givenName)].filter(Boolean).join(', '))).filter((n): n is string => !!n);
+  if (creators.length > 0) rec.creators = creators;
+  rec.publicationYear = yearOf(a.publicationYear);
+  rec.publisher = isObj(a.publisher) ? str(a.publisher.name) : str(a.publisher);
   if (isObj(a.types)) rec.resourceType = str(a.types.resourceTypeGeneral) ?? str(a.types.resourceType);
 
   (Array.isArray(a.rightsList) ? a.rightsList : []).forEach((r, i) => {
@@ -119,6 +122,10 @@ export function parseDataciteXml(xml: string, label: string): MetadataRecord {
   const descs = children(one(root, 'descriptions') ?? root, ns, 'description');
   rec.abstract = text(descs.find((d) => d.getAttribute('descriptionType') === 'Abstract') ?? (descs.length === 1 ? descs[0] : undefined));
   rec.version = text(one(root, 'version'));
+  const creators = children(one(root, 'creators') ?? root, ns, 'creator').map((c) => text(child(c, ns, 'creatorName'))).filter((n): n is string => !!n);
+  if (creators.length > 0) rec.creators = creators;
+  rec.publicationYear = yearOf(text(one(root, 'publicationYear')));
+  rec.publisher = text(one(root, 'publisher'));
   const rt = one(root, 'resourceType');
   rec.resourceType = attr(rt, null, 'resourceTypeGeneral') ?? text(rt);
 

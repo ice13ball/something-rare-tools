@@ -51,7 +51,8 @@ describe('toSpdx', () => {
     expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by-nc-sa/4.0/')).toBe('CC-BY-NC-SA-4.0');
     expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by-nd/4.0/')).toBe('CC-BY-ND-4.0');
     expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by-nc-nd/4.0/')).toBe('CC-BY-NC-ND-4.0');
-    expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by/3.0/pl/')).toBe('CC-BY-3.0');
+    // 3.0/pl/ is a port (jurisdiction) SPDX has no id for: unrecognised, never the generic id (bug 22.10: 3)
+    expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by/3.0/pl/')).toBeUndefined();
   });
 
   it('recognises CC0 and ODbL', () => {
