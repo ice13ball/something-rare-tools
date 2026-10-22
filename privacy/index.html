@@ -7,12 +7,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Privacy of Abyssal Claims Tools: files are processed in your browser, the server stores nothing, analytics only with consent." />
+    <meta name="description" content="Privacy of Abyssal Claims Tools: your files are checked in your browser and never uploaded, hosting logs are deleted after 30 days, analytics only with consent." />
     <link rel="canonical" href="https://tools.something-rare.com/privacy" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Abyssal Claims Tools" />
     <meta property="og:title" content="Privacy — Abyssal Claims Tools" />
-    <meta property="og:description" content="Privacy of Abyssal Claims Tools: files are processed in your browser, the server stores nothing, analytics only with consent." />
+    <meta property="og:description" content="Privacy of Abyssal Claims Tools: your files are checked in your browser and never uploaded, hosting logs are deleted after 30 days, analytics only with consent." />
     <meta property="og:url" content="https://tools.something-rare.com/privacy" />
     <meta property="og:image" content="https://tools.something-rare.com/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -55,7 +55,12 @@
             <li><code>data.crosscite.org</code></li>
             <li><code>doi.org</code></li>
           </ul>
-          <p>The server stores nothing: no files, no copies, no cache. Its log records only the host name, the status code and the size of each request, never the full address.</p>
+          <p>The server keeps no files, no copies and no cache. Its own application log records only the host name, the status code and the size of each download it makes for you, never the full address. That log is kept together with the hosting logs described below.</p>
+        </section>
+        <section>
+          <h2>Hosting logs</h2>
+          <p>This site runs on Google Cloud Run (region europe-west1). Like any web host, the platform keeps a standard log of every request to this site: the IP address, the time, the requested address, the browser (user agent) and the referring page. In server mode the requested address is the tool's own download address; the link you asked for is not in it. These logs are deleted automatically after 30 days.</p>
+          <p>They are used for security, to prevent abuse and for aggregated usage statistics, including which network (for example a university network) requests come from. No profiles of individuals are built from them, and they are not passed on to anyone else or sold.</p>
         </section>
         <section>
           <h2>Analytics</h2>
@@ -64,7 +69,8 @@
         </section>
         <section>
           <h2>Contact</h2>
-          <p>Questions or requests: see the main project site: <a href="https://something-rare.com">something-rare.com</a></p>
+          <p>The tool is run by Michal Mazurowski, an independent researcher. Privacy questions and requests: <a href="mailto:m.mazurowski@ai-wall.com">m.mazurowski@ai-wall.com</a></p>
+          <p>About the project: <a href="https://something-rare.com">something-rare.com</a></p>
         </section>
       </main>
       <footer class="site-footer"><a href="https://something-rare.com">Abyssal Claims — deep-sea atlas</a> <a href="/privacy">Privacy</a></footer>

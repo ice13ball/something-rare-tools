@@ -6,5 +6,7 @@ export const SITE = {
   noindex: false,
   gaId: 'G-S5HR4WT0ZG',
   atlasUrl: 'https://something-rare.com',
+  /** Same public address as the atlas's privacy text; also in the proxy's User-Agent. */
+  contactEmail: 'm.mazurowski@ai-wall.com',
   origin: 'https://tools.something-rare.com',
 } as const;
