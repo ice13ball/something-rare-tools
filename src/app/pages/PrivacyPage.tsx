@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
-import { DATA_HOSTS } from '../../../config/hosts';
+import { DATA_HOSTS, MAP_PRIVACY_URL } from '../../../config/hosts';
 import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
 import { t, useLang } from '../i18n';
@@ -18,6 +18,7 @@ export function PrivacyPage(): React.ReactElement {
       <section>
         <h2>{t('privacy.browser.h')}</h2>
         <p>{t('privacy.browser.p')}</p>
+        <p>{t('privacy.browser.p2')}</p>
       </section>
       <section>
         <h2>{t('privacy.server.h')}</h2>
@@ -37,9 +38,20 @@ export function PrivacyPage(): React.ReactElement {
         <p>{t('privacy.logs.p2')}</p>
       </section>
       <section>
+        <h2>{t('privacy.map.h')}</h2>
+        <p>{t('privacy.map.p')}</p>
+        <p>
+          {t('privacy.map.policy')}: <a href={MAP_PRIVACY_URL}>{MAP_PRIVACY_URL.replace('https://', '')}</a>
+        </p>
+      </section>
+      <section>
         <h2>{t('privacy.analytics.h')}</h2>
         <p>{t('privacy.analytics.p1')}</p>
         <p>{t('privacy.analytics.p2')}</p>
+      </section>
+      <section>
+        <h2>{t('privacy.legal.h')}</h2>
+        <p>{t('privacy.legal.p')}</p>
       </section>
       <section>
         <h2>{t('privacy.contact.h')}</h2>

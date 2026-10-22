@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
-import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, buildCsp, isAllowedHost } from '../config/hosts';
+import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, MAP_PRIVACY_URL, buildCsp, isAllowedHost } from '../config/hosts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SITE } from '../config/site';
@@ -113,12 +113,26 @@ describe('robots meta in the build', () => {
 });
 
 describe('static privacy page', () => {
-  it('carries the same English text as the app for the server, hosting-log and contact paragraphs', () => {
+  it('carries the same English text as the app for the third-party, hosting-log, legal-basis and contact paragraphs', () => {
     const html = readFileSync(join(__dirname, '..', 'privacy', 'index.html'), 'utf8');
-    for (const key of ['privacy.server.p2', 'privacy.logs.h', 'privacy.logs.p1', 'privacy.logs.p2', 'privacy.contact.p', 'privacy.contact.more'] as const) {
+    for (const key of [
+      'privacy.browser.p2',
+      'privacy.server.p2',
+      'privacy.logs.h',
+      'privacy.logs.p1',
+      'privacy.logs.p2',
+      'privacy.map.h',
+      'privacy.map.p',
+      'privacy.map.policy',
+      'privacy.legal.h',
+      'privacy.legal.p',
+      'privacy.contact.p',
+      'privacy.contact.more',
+    ] as const) {
       expect(html, key).toContain(UI.en[key]);
     }
     expect(html).toContain(`href="mailto:${SITE.contactEmail}"`);
+    expect(html).toContain(`href="${MAP_PRIVACY_URL}"`);
     expect(html).not.toMatch(/stores nothing/);
   });
 });

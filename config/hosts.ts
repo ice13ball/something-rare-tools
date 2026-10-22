@@ -33,6 +33,9 @@ export const MAP_HOSTS: readonly string[] = [
   'tiles-d.basemaps.cartocdn.com',
 ];
 
+/** CARTO's privacy notice, linked from the privacy page next to the map preview. */
+export const MAP_PRIVACY_URL = 'https://carto.com/privacy/';
+
 /** https only, exact (case-insensitive) host match, no credentials in the URL. */
 export function isAllowedHost(url: string): boolean {
   let u: URL;
