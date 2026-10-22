@@ -79,7 +79,7 @@ function SourceView({ src, failures }: { src: AnalysedSource; failures: LoadFail
             <strong>{t('licence.class')}:</strong> {t('licence.class.unreadable')}
           </p>
           {failures
-            .filter((f) => f.source === src.source)
+            .filter((f) => f.source === src.source && (src.label === src.source || f.ref === src.label))
             .map((f, i) => (
               <p key={i} className="muted">
                 {f.ref} — {reasonOf(f)}
@@ -218,7 +218,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
         </>
       ) : a.comparison === 'compared' ? (
         <p>
-          <strong>{t('licence.summary.none', { n: a.recognisedGroups })}</strong> {t('licence.summary.countOnce')}
+          <strong>{t(a.maybeSameDeposit ? 'licence.summary.noneMaybeSame' : 'licence.summary.none', { n: a.recognisedGroups })}</strong> {t('licence.summary.countOnce')}
         </p>
       ) : (
         <p>
@@ -265,8 +265,8 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
     setSwitched(false);
     try {
       const load = await loadLicenceReferences(refs, fetcherFor(mode));
-      const unreadable = [...new Set(load.failures.flatMap((f) => (f.source ? [f.source] : [])))];
-      const analysis = analyseLicences(load.records, { unreadable, inaccessible: load.failures.some((f) => !f.source) });
+      const failed = load.failures.flatMap((f) => (f.source ? [{ source: f.source, ref: f.ref }] : []));
+      const analysis = analyseLicences(load.records, { failures: failed, inaccessible: load.failures.some((f) => !f.source) });
       setResult({ analysis, failures: load.failures, attribution: buildAttribution(analysis) });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : String(err));
@@ -276,8 +276,8 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
   };
 
   // A failure that a source row already shows (its source is unreadable) is not listed twice.
-  const shown = new Set(result?.analysis.sources.filter((s) => s.state === 'unreadable').map((s) => s.source));
-  const listed = result?.failures.filter((f) => !f.source || !shown.has(f.source)) ?? [];
+  const shown = new Set(result?.analysis.sources.filter((s) => s.state === 'unreadable').map((s) => `${s.source}|${s.label}`));
+  const listed = result?.failures.filter((f) => !f.source || !shown.has(`${f.source}|${f.ref}`)) ?? [];
   const blockedInBrowser = mode === 'browser' && (result?.failures.some((f) => f.finding?.ruleId === 'IN-FETCH-BLOCKED' || f.finding?.ruleId === 'IN-FETCH-TIMEOUT') ?? false);
 
   return (

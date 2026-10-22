@@ -78,13 +78,25 @@ export interface LicenceAnalysis {
   missing: boolean;
   /** At least one source could not be read; absence of a licence then says nothing. */
   hasUnreadable: boolean;
+  /**
+   * At least two compared groups are DataCite records of Zenodo DOIs that no Zenodo record and no IsVersionOf / HasVersion link tie
+   * together (the Zenodo record could not be read): a concept DOI and a version DOI of one deposit look like two sources.
+   * "No contradiction among N sources" is then not honest without a caveat.
+   */
+  maybeSameDeposit: boolean;
   /** Statements exist but none is machine-readable and none is flagged as a conflict: the licence is free text only. */
   freeText?: { statement: AnalysedStatement; source: AnalysedSource; versionMissing: boolean; hint: string };
 }
 
 export interface AnalyseOptions {
-  /** Sources known to have failed to load; each appears as an 'unreadable' source unless a record of it is present. */
+  /** Sources known to have failed to load; each appears as an 'unreadable' source unless a record of the same source is present. */
   unreadable?: readonly MetadataSource[];
+  /**
+   * Reads that failed, each identified by its reference (what the user pasted, or the DOI looked up). Every one is an 'unreadable'
+   * source of its own and is NEVER hidden because another record of the same source type was read: Zenodo record A read without a
+   * licence next to Zenodo record B answering 429 is not "no source states a licence".
+   */
+  failures?: readonly { source: MetadataSource; ref: string }[];
   /** Some record could not be read but which source is not known: only suppresses `missing`. */
   inaccessible?: boolean;
 }
@@ -105,7 +117,9 @@ export function depositKeys(rec: MetadataRecord): string[] {
   if (rec.source === 'iso19139') return [`iso:${landing || rec.label}`];
   if (doi) keys.push(`doi:${doi}`);
   if (rec.source === 'zenodo' || rec.source === 'datacite') {
-    const z = new Set([zenodoId(doi), zenodoId(landing), rec.conceptId].filter((x): x is string => !!x));
+    // A DataCite record of a Zenodo DOI that names the concept / version DOIs of its deposit (IsVersionOf, HasVersion) joins them.
+    const linked = zenodoId(doi) ? (rec.versionDois ?? []).map(zenodoId) : [];
+    const z = new Set([zenodoId(doi), zenodoId(landing), rec.conceptId, ...linked].filter((x): x is string => !!x));
     for (const id of z) keys.push(`zenodo:${id}`);
   }
   if (rec.source === 'pangaea' || rec.source === 'datacite') {
@@ -194,6 +208,11 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     sources.push({ source, label: source, group: `unreadable:${source}`, state: 'unreadable', statements: [] });
   }
 
+  for (const f of opts.failures ?? []) {
+    if (sources.some((s) => s.state === 'unreadable' && s.source === f.source && s.label === f.ref)) continue;
+    sources.push({ source: f.source, label: f.ref, group: `unreadable:${f.source}:${f.ref}`, state: 'unreadable', statements: [] });
+  }
+
   const groups: SourceGroup[] = [];
   for (const src of sources) {
     let g = groups.find((x) => x.id === src.group);
@@ -256,6 +275,10 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     recognisedGroups,
     comparison: recognisedGroups >= 2 ? 'compared' : 'single-source',
     contradictions,
+    maybeSameDeposit:
+      groups.filter(
+        (g) => g.licences.length > 0 && g.sources.every((s) => s.source === 'datacite' && !!s.record && !!zenodoId(s.record.doi ?? '')),
+      ).length >= 2,
     missing: statements.length === 0 && !hasUnreadable,
     hasUnreadable,
   };

@@ -59,7 +59,7 @@ describe.skipIf(!enabled)('licence corpus (live)', () => {
       for (const doi of DOIS) {
         const load = await loadLicenceReferences([doi], fetcher);
         const unreadable = [...new Set(load.failures.flatMap((f) => (f.source ? [f.source] : [])))] as MetadataSource[];
-        const analysis = analyseLicences(load.records, { unreadable });
+        const analysis = analyseLicences(load.records, { failures: load.failures.flatMap((f) => (f.source ? [{ source: f.source, ref: f.ref }] : [])) });
         const findings = checkLicence(load.records, { label: doi, inaccessible: load.failures.length > 0, unreadable }).filter((f) => f.ruleId.startsWith('LIC-'));
         // the list was screened; a record that mentions IO PAN would mean it was not
         for (const r of load.records) expect(JSON.stringify([r.title, r.creators, r.publisher, r.landingUrl]), doi).not.toMatch(NOT_IOPAN);
@@ -77,6 +77,7 @@ describe.skipIf(!enabled)('licence corpus (live)', () => {
               classification: a.classification.kind === 'spdx' ? a.classification.id : 'unrecognised',
               shown: shownOf(a),
               conflict: a.conflict?.kind,
+              rest: a.conflict?.rest,
             })),
           })),
           statedGroups: analysis.statedGroups,

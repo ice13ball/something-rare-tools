@@ -15,6 +15,16 @@ const str = (v: unknown): string | undefined => {
 
 interface Rights { rights?: string; uri?: string; identifier?: string }
 
+/** relatedIdentifiers of type DOI that say "version of / has version": the DOIs of the other versions (or of the concept) of this deposit. */
+const VERSION_RELATIONS = /^(?:IsVersionOf|HasVersion)$/i;
+function versionDoisOf(items: { id?: string; type?: string; relation?: string }[]): string[] | undefined {
+  const dois = items
+    .filter((r) => r.id && /^doi$/i.test(r.type ?? '') && VERSION_RELATIONS.test(r.relation ?? ''))
+    .map((r) => r.id!.trim().toLowerCase().replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)/, ''));
+  const unique = [...new Set(dois)];
+  return unique.length > 0 ? unique : undefined;
+}
+
 function licenceOf(index: number, r: Rights): LicenceStatement | undefined {
   // The rights text is shown; the identifier ("cc-by-4.0") is read as text too, so the two cannot disagree unnoticed.
   return buildStatement({ source: 'datacite', field: `rightsList[${index}]`, text: r.rights ?? r.identifier, also: [r.identifier], uri: r.uri });
@@ -83,6 +93,9 @@ export function parseDataciteJson(json: unknown, label: string): MetadataRecord 
   rec.publisher = isObj(a.publisher) ? str(a.publisher.name) : str(a.publisher);
   if (isObj(a.types)) rec.resourceType = str(a.types.resourceTypeGeneral) ?? str(a.types.resourceType);
 
+  const related = versionDoisOf((Array.isArray(a.relatedIdentifiers) ? a.relatedIdentifiers : []).filter(isObj).map((r) => ({ id: str(r.relatedIdentifier), type: str(r.relatedIdentifierType), relation: str(r.relationType) })));
+  if (related) rec.versionDois = related;
+
   (Array.isArray(a.rightsList) ? a.rightsList : []).forEach((r, i) => {
     if (!isObj(r)) return;
     const l = licenceOf(i, { rights: str(r.rights), uri: str(r.rightsUri), identifier: str(r.rightsIdentifier) });
@@ -128,6 +141,11 @@ export function parseDataciteXml(xml: string, label: string): MetadataRecord {
   rec.publisher = text(one(root, 'publisher'));
   const rt = one(root, 'resourceType');
   rec.resourceType = attr(rt, null, 'resourceTypeGeneral') ?? text(rt);
+
+  const relatedXml = versionDoisOf(
+    children(one(root, 'relatedIdentifiers') ?? root, ns, 'relatedIdentifier').map((r) => ({ id: text(r), type: attr(r, null, 'relatedIdentifierType'), relation: attr(r, null, 'relationType') })),
+  );
+  if (relatedXml) rec.versionDois = relatedXml;
 
   children(one(root, 'rightsList') ?? root, ns, 'rights').forEach((r, i) => {
     const l = licenceOf(i, { rights: text(r), uri: attr(r, null, 'rightsURI'), identifier: attr(r, null, 'rightsIdentifier') });
