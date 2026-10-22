@@ -798,3 +798,45 @@ code.multiline {
   display: block;
   white-space: pre-wrap;
 }
+
+/* ---- licence check ---- */
+.field textarea {
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.licence-statement {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 1rem;
+  margin: 0.6rem 0;
+}
+
+.licence-statement dt {
+  color: var(--muted);
+}
+
+.licence-statement dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.licence-group h3,
+.licence-source h4 {
+  margin: 0.4rem 0;
+}
+
+.attribution {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

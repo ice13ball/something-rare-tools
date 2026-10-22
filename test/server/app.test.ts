@@ -58,6 +58,7 @@ describe('static routes', () => {
   for (const [path, marker] of [
     ['/', 'fixture-page-index'],
     ['/check', 'fixture-page-check'],
+    ['/licence', 'fixture-page-licence'],
     ['/privacy', 'fixture-page-privacy'],
   ] as const) {
     it(`GET ${path} serves its page with every header`, async () => {
@@ -70,6 +71,26 @@ describe('static routes', () => {
       expectCommonHeaders(res);
     });
   }
+
+  it('/licence/ answers 301 to /licence, like the other pages; the target is fixed', async () => {
+    for (const path of ['/check', '/licence', '/privacy']) {
+      const res = await request(app).get(path + '/');
+      expect(res.status, path).toBe(301);
+      expect(res.headers.location, path).toBe(path);
+      expectCommonHeaders(res);
+    }
+  });
+
+  it('/sitemap.xml lists the four pages, /licence among them', async () => {
+    const res = await request(app).get('/sitemap.xml');
+    expect(res.status).toBe(200);
+    expect([...res.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])).toEqual([
+      'https://tools.something-rare.com/',
+      'https://tools.something-rare.com/check',
+      'https://tools.something-rare.com/licence',
+      'https://tools.something-rare.com/privacy',
+    ]);
+  });
 
   it('HEAD /check works', async () => {
     const res = await request(app).head('/check');
@@ -89,7 +110,7 @@ describe('static routes', () => {
   });
 
   it('404 for anything not listed: /check/anything, /index.html, /Check, /privacy/x, unlisted files in dist, /check//', async () => {
-    for (const p of ['/check/anything', '/check/index.html', '/index.html', '/Check', '/PRIVACY', '/privacy/x', '/secret.txt', '/check//', '/assets', '/assets/', '/assets/missing.js', '/favicon.ico']) {
+    for (const p of ['/check/anything', '/licence/x', '/licence/index.html', '/Licence', '/check/index.html', '/index.html', '/Check', '/PRIVACY', '/privacy/x', '/secret.txt', '/check//', '/assets', '/assets/', '/assets/missing.js', '/favicon.ico']) {
       const res = await request(app).get(p);
       expect(res.status, p).toBe(404);
       expect(res.text, p).not.toContain('fixture-page');
@@ -141,7 +162,7 @@ describe('static routes', () => {
     expect(res.headers['content-type']).toMatch(/svg/);
   });
 
-  it('refuses to start without the three HTML pages', () => {
+  it('refuses to start without the HTML pages', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dist-empty-'));
     expect(() => make({ distDir: dir })).toThrow(/index\.html/);
   });
@@ -155,7 +176,7 @@ describe('noindex flag', () => {
   });
   it('noindex:true sends X-Robots-Tag and keeps the robots meta on every page', async () => {
     const { app } = make({ noindex: true });
-    for (const p of ['/', '/check', '/privacy']) {
+    for (const p of ['/', '/check', '/licence', '/privacy']) {
       const res = await request(app).get(p);
       expectCommonHeaders(res, true);
       expect(res.text, p).toContain('<meta name="robots" content="noindex,nofollow" />');
@@ -163,7 +184,7 @@ describe('noindex flag', () => {
   });
   it('noindex:false drops X-Robots-Tag everywhere and strips the robots meta from served HTML', async () => {
     const { app } = make({ noindex: false });
-    for (const p of ['/', '/check', '/check/', '/privacy', '/nope', '/robots.txt', '/sitemap.xml']) {
+    for (const p of ['/', '/check', '/check/', '/licence', '/licence/', '/privacy', '/nope', '/robots.txt', '/sitemap.xml']) {
       const res = await request(app).get(p);
       expectCommonHeaders(res, false);
       expect(res.text, p).not.toMatch(/name="robots"/);
