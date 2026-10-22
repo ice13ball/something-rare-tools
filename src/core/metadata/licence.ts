@@ -58,7 +58,22 @@ export function isOpenLicence(spdx?: string): boolean {
 /* ---------- URI -> id ---------- */
 
 /** `oneOf`: a URI that fits several SPDX ids (GPL-3.0-only and -or-later share one URL); a text naming one of them agrees with it. */
-type Read = { id?: string; unmapped?: boolean; family?: string; oneOf?: string[] };
+type Read = { id?: string; unmapped?: boolean; family?: string; oneOf?: string[]; /** a licence link with a tail we cannot read (query, fragment, unknown path): not a recognised licence */ dirty?: boolean };
+
+/**
+ * What may follow the version of a licence link: an optional port segment, "legalcode" / "deed" with an optional language tag
+ * (en, pl, zh-hans, en_GB), an optional "/". Anything else (a query, a fragment, "legalcode-modified-nc") makes the link unreadable.
+ * ONE exception: the Creative Commons licence chooser appends exactly "?ref=chooser-v1" to the links it generates; that is neutral.
+ */
+const LANG = '\\.[a-z]{2,3}(?:[-_][a-z0-9]+)*';
+const CHOOSER = '(?:\\?ref=chooser-v1)?';
+const CC_TAIL = new RegExp(`^(?:/(?!deed(?![a-z]))([a-z]{2,4}))?(?:/(?:legalcode|deed)(?:${LANG})?)?/?${CHOOSER}$`);
+const ZERO_TAIL = new RegExp(`^(?:/(?:legalcode|deed)(?:${LANG})?)?/?${CHOOSER}$`);
+/** Other licence families: the page itself, optionally ".html" / ".txt" and a closing "/". */
+const OTHER_TAIL = /^(?:\.(?:html?|txt))?\/?$/;
+const DIRTY: Read = { unmapped: true, dirty: true };
+/** The tail of `u` after the match `m` is clean for `re`, else the unreadable-link result. */
+const tailed = (u: string, m: RegExpExecArray, re: RegExp, ok: Read): Read => (re.test(u.slice(m.index + m[0].length)) ? ok : DIRTY);
 
 /** SPDX ids exist only for these ports; the suffix of a ported id is the upper-case country (or IGO) code. */
 const PORTS = [...new Set(SPDX_ENTRIES.map((e) => /^CC-.*-\d\.\d-([A-Z]+)$/.exec(e.id)?.[1]).filter((p): p is string => !!p))];
@@ -85,6 +100,7 @@ function readSoftwareUri(u: string): Read | undefined {
   const osi = /opensource\.org\/licen[sc]es?\/(mit|apache-2\.0|bsd-2-clause|bsd-3-clause|isc|mpl-2\.0|l?gpl-[23]\.[01]|agpl-3\.0)(?![a-z0-9.-])/.exec(u);
   const gnu = /gnu\.org\/licenses\/(?:old-licenses\/)?(l?gpl-[23]\.[01]|agpl-3\.0|agpl)(?:\.[a-z]{2})?(?:-standalone)?(?:\.(?:html|txt))?(?![a-z0-9.-])/.exec(u);
   const key = osi?.[1] ?? gnu?.[1];
+  if (key && !OTHER_TAIL.test(u.slice((osi ?? gnu)!.index + (osi ?? gnu)![0].length))) return DIRTY;
   if (key) {
     if (/gpl/.test(key)) {
       const base = (key === 'agpl' ? 'agpl-3.0' : key).toUpperCase();
@@ -92,9 +108,11 @@ function readSoftwareUri(u: string): Read | undefined {
     }
     return known({ mit: 'MIT', 'apache-2.0': 'Apache-2.0', 'bsd-2-clause': 'BSD-2-Clause', 'bsd-3-clause': 'BSD-3-Clause', isc: 'ISC', 'mpl-2.0': 'MPL-2.0' }[key]!);
   }
-  if (/apache\.org\/licenses\/license-2\.0/.test(u)) return { id: 'Apache-2.0' };
-  if (/mozilla\.org\/mpl\/2\.0/.test(u)) return { id: 'MPL-2.0' };
-  if (/(opensource\.org\/licen[sc]es?\/|gnu\.org\/licenses\/|apache\.org\/licenses\/|mozilla\.org\/mpl\/)/.test(u)) return { unmapped: true };
+  const apache = /apache\.org\/licenses\/license-2\.0/.exec(u);
+  if (apache) return tailed(u, apache, OTHER_TAIL, { id: 'Apache-2.0' });
+  const mpl = /mozilla\.org\/mpl\/2\.0/.exec(u);
+  if (mpl) return tailed(u, mpl, OTHER_TAIL, { id: 'MPL-2.0' });
+  if (/(opensource\.org\/licen[sc]es?\/|gnu\.org\/licenses\/|apache\.org\/licenses\/|mozilla\.org\/mpl\/)/.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   return undefined;
 }
 
@@ -102,25 +120,29 @@ function readUri(uri: string): Read {
   const u = uri.trim().toLowerCase();
   // https://creativecommons.org/licenses/by-nc-sa/4.0/{legalcode,deed.pl,pl/} — host, scheme, www, trailing parts are irrelevant.
   // A bare 2-4 letter segment after the version is a PORT (jurisdiction); "deed.pl" / "legalcode.de" are deed languages.
-  const cc = /creativecommons\.org\/licen[sc]es\/(by(?:-(?:nc|sa|nd))*)\/(\d\.\d)(?![\d])(?:\/([a-z]{2,4})(?=[/?#]|$))?/.exec(u);
-  if (cc) return ccId(cc[1], cc[2], cc[3] && cc[3] !== 'deed' ? cc[3] : undefined);
-  if (/creativecommons\.org\/licen[sc]es\//.test(u)) return { unmapped: true };
-  if (/creativecommons\.org\/publicdomain\/zero\/1\.0(?![\d])/.test(u)) return { id: 'CC0-1.0' };
-  if (/creativecommons\.org\/publicdomain\//.test(u)) return { unmapped: true };
+  const cc = /creativecommons\.org\/licen[sc]es\/(by(?:-(?:nc|sa|nd))*)\/(\d\.\d)(?![\d])/.exec(u);
+  if (cc) {
+    const t = CC_TAIL.exec(u.slice(cc.index + cc[0].length));
+    return t ? ccId(cc[1], cc[2], t[1] && t[1] !== 'deed' ? t[1] : undefined) : DIRTY;
+  }
+  if (/creativecommons\.org\/licen[sc]es\//.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
+  const zero = /creativecommons\.org\/publicdomain\/zero\/1\.0(?![\d])/.exec(u);
+  if (zero) return tailed(u, zero, ZERO_TAIL, { id: 'CC0-1.0' });
+  if (/creativecommons\.org\/publicdomain\//.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   const odc = /opendatacommons\.org\/licenses\/(odbl|pddl|by)\/(\d)[-.](\d)/.exec(u);
-  if (odc) return known(`${{ odbl: 'ODbL', pddl: 'PDDL', by: 'ODC-By' }[odc[1] as 'odbl']}-${odc[2]}.${odc[3]}`);
-  if (/opendatacommons\.org\/licenses\//.test(u)) return { unmapped: true };
+  if (odc) return tailed(u, odc, OTHER_TAIL, known(`${{ odbl: 'ODbL', pddl: 'PDDL', by: 'ODC-By' }[odc[1] as 'odbl']}-${odc[2]}.${odc[3]}`));
+  if (/opendatacommons\.org\/licenses\//.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   const ogl = /nationalarchives\.gov\.uk\/doc\/open-government-licen[cs]e\/version\/(\d)/.exec(u);
-  if (ogl) return known(`OGL-UK-${ogl[1]}.0`);
-  if (/nationalarchives\.gov\.uk\/doc\/open-government-licen[cs]e/.test(u)) return { unmapped: true };
+  if (ogl) return tailed(u, ogl, OTHER_TAIL, known(`OGL-UK-${ogl[1]}.0`));
+  if (/nationalarchives\.gov\.uk\/doc\/open-government-licen[cs]e/.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   const dl = /govdata\.de\/dl-de\/(by|zero)-(\d)-(\d)/.exec(u);
-  if (dl) return known(`DL-DE-${dl[1].toUpperCase()}-${dl[2]}.${dl[3]}`);
-  if (/govdata\.de\/dl-de\//.test(u)) return { unmapped: true };
+  if (dl) return tailed(u, dl, OTHER_TAIL, known(`DL-DE-${dl[1].toUpperCase()}-${dl[2]}.${dl[3]}`));
+  if (/govdata\.de\/dl-de\//.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   const soft = readSoftwareUri(u);
   if (soft) return soft;
   const nlod = /data\.norge\.no\/nlod\/(?:[a-z]{2}\/)?(\d)\.(\d)/.exec(u);
-  if (nlod) return known(`NLOD-${nlod[1]}.${nlod[2]}`);
-  if (/data\.norge\.no\/nlod/.test(u)) return { unmapped: true };
+  if (nlod) return tailed(u, nlod, OTHER_TAIL, known(`NLOD-${nlod[1]}.${nlod[2]}`));
+  if (/data\.norge\.no\/nlod/.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   return {};
 }
 
@@ -370,40 +392,70 @@ const COPYRIGHT_PIECES: RegExp[] = [
   /(?:Co|Ltd|Inc)\.|S\.A\.S?\.|B\.V\.|sp\.[ \t]*z[ \t]*o\.o\./yu, // company form with its dots: ends the name
   /\p{Lu}[\p{L}\p{N}'’&-]*(?![\p{L}\p{N}])/yu, // capitalised word (Ltd, GmbH, AG, SAS, Inc ...)
 ];
-const COPYRIGHT_MAX_PIECES = 10;
+/** The holder name is at most this many capitalised words (company forms and the year do not count). */
+const HOLDER_MAX_WORDS = 4;
+const COMPANY_FORMS = new Set(['ltd', 'limited', 'gmbh', 'ag', 'sas', 'inc', 'corp', 'co', 'llc', 'plc', 'sa', 'bv']);
+/**
+ * Words that END a copyright notice (en / de / fr / pl): "© Ocean Corp Internal Use", "© GEOMAR Lizenzgebühr Erforderlich". They only
+ * delimit the notice (what follows is leftover, even if it is otherwise neutral filler such as "Use"); they are not a general condition marker.
+ */
+const BOUNDARY_WORDS = new Set(
+  `use fee fees required registration members partners program programme internal until only paid licence license nutzung erforderlich utilisation payant redevance użytek`.split(' '),
+);
+const BOUNDARY_PREFIXES = ['gebühr', 'lizenz', 'mitglied', 'réservé', 'opłat', 'płatn', 'wymagan', 'członk'];
+const isBoundary = (word: string): boolean => {
+  const w = word.toLowerCase();
+  return BOUNDARY_WORDS.has(w) || BOUNDARY_PREFIXES.some((p) => w.startsWith(p)) || w.includes('pflichtig');
+};
 const TOKEN = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*|\p{S}+/gu;
 
-/** Blanks the neutral part of every copyright notice (same length). */
-function blankCopyright(m: string): string {
+/** Blanks the neutral part of every copyright notice (same length); `forced` = start offsets of the boundary words that end a notice. */
+function blankCopyright(m: string): { text: string; forced: Set<number> } {
   let out = m;
   let from = 0;
+  const forced = new Set<number>();
   for (const start of m.matchAll(COPYRIGHT_START)) {
     if (start.index! < from) continue;
     let pos = start.index! + start[0].length;
-    let n = 0;
-    while (n < COPYRIGHT_MAX_PIECES) {
+    let words = 0;
+    let tooLong = false;
+    let boundary: number | undefined;
+    for (;;) {
       while (/[ \t\u00a0]/.test(m[pos] ?? '')) pos++;
       let hit: RegExpExecArray | null = null;
-      let ends = false;
+      let idx = -1;
       for (const [i, re] of COPYRIGHT_PIECES.entries()) {
         re.lastIndex = pos;
         hit = re.exec(m);
         if (hit) {
-          ends = i === 4;
+          idx = i;
           break;
         }
       }
       if (!hit) break;
+      if (idx === 5 || idx === 3) {
+        // a capitalised word or an initial: a boundary word ends the notice; a name of more than four words is not swallowed
+        if (idx === 5 && isBoundary(hit[0])) {
+          boundary = pos;
+          break;
+        }
+        if (!(idx === 5 && COMPANY_FORMS.has(hit[0].toLowerCase()))) words++;
+        if (words > HOLDER_MAX_WORDS) {
+          tooLong = true;
+          break;
+        }
+      }
       pos += hit[0].length;
-      n++;
-      if (ends) break;
+      if (idx === 4) break;
     }
+    if (tooLong) continue;
+    if (boundary !== undefined) forced.add(boundary);
     const seg = m.slice(start.index!, pos);
     if (hasMarker(seg)) continue;
     out = out.slice(0, start.index!) + ' '.repeat(seg.length) + out.slice(pos);
     from = pos;
   }
-  return out;
+  return { text: out, forced };
 }
 
 const blank = (s: string, re: RegExp): string => s.replace(re, (m) => ' '.repeat(m.length));
@@ -418,13 +470,14 @@ function leftoverOf(raw: string, masked: string, foreign: { pos: number; text: s
   let m = masked.replace(/\(c\)/gi, '©  ');
   m = blank(m, /creative\s+commons/giu);
   for (const re of AFFIRMATIVE_CLOSING) m = blank(m, re);
-  m = blankCopyright(m);
+  const cr = blankCopyright(m);
+  m = cr.text;
   const shown: { pos: number; text: string }[] = [];
   const kept: string[] = [];
   // Fragments split on . ; , ( ) and line breaks ("." only at the end of a word: "4.0" and "Inc." inside a name do not split).
   for (const frag of m.matchAll(/(?:[^;,()\n.]|\.(?!\s|$))+/gu)) {
     const tokens = [...frag[0].matchAll(TOKEN)];
-    const content = tokens.filter((t) => !FILLER.has(t[0].toLowerCase()));
+    const content = tokens.filter((t) => !FILLER.has(t[0].toLowerCase()) || cr.forced.has(frag.index! + t.index!));
     if (content.length === 0) continue;
     const a = frag.index! + content[0].index!;
     let b = frag.index! + content[content.length - 1].index! + content[content.length - 1][0].length;
@@ -481,7 +534,8 @@ const isNeutralUnnamed = (raw: string): boolean => {
 };
 
 /** A link or DOI inside a text. Only a link the URI recogniser reads as a licence may be stripped; anything else is leftover. */
-const REFERENCE = /https?:\/\/\S+|(?<![\p{L}\p{N}])doi:\s*10\.\S+|(?<![\p{L}\p{N}])10\.\d{4,9}\/\S+/giu;
+/** A link ends at whitespace or , ( ) ; — what is glued to it with those is the rest of the text. */
+const REFERENCE = /https?:\/\/[^\s,();]+|(?<![\p{L}\p{N}])doi:\s*10\.[^\s,();]+|(?<![\p{L}\p{N}])10\.\d{4,9}\/[^\s,();]+/giu;
 
 /** Words that belong to the name of a licence already recognised: its short form in brackets, the rest of an official title. Blanked only next to THAT licence. */
 const NAME_WORDS: { re: RegExp; idPrefix: string }[] = [
@@ -508,7 +562,7 @@ function readText(raw: string): TextRead {
     const shown = ref[0].replace(/[.,;:)\]"'”’]+$/u, '');
     const r = /^https?:/i.test(shown) ? readUri(shown) : {};
     text = text.slice(0, ref.index!) + ' '.repeat(ref[0].length) + text.slice(ref.index! + ref[0].length);
-    if (r.id || r.unmapped || r.oneOf) {
+    if (!r.dirty && (r.id || r.unmapped || r.oneOf)) {
       out.any = true;
       if (r.id && !out.ids.includes(r.id)) out.ids.push(r.id);
       if (r.unmapped) out.unmapped = true;
