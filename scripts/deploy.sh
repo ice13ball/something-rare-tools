@@ -12,7 +12,16 @@ SHA=$(git rev-parse --short HEAD)
 IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/abyssal/tools"
 IMAGE="${IMAGE_REPO}:${SHA}"
 
-if [[ -n "$(git status --porcelain)" ]]; then echo "working tree not clean" >&2; exit 1; fi
+# Gate: the deployed code must equal the public source and pass its tests. There is no override flag on purpose.
+refuse() { echo "deploy refused: $*" >&2; exit 1; }
+
+[[ -z "$(git status --porcelain)" ]] || refuse "working tree not clean"
+git fetch --quiet origin main || refuse "cannot fetch origin/main"
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] \
+  || refuse "HEAD $(git rev-parse --short HEAD) is not origin/main $(git rev-parse --short origin/main); push or check out main first"
+[[ -d node_modules ]] || refuse "node_modules missing; run npm ci (tests must run, not be skipped)"
+npm test || refuse "tests failed"
+npm run typecheck || refuse "type check failed"
 
 gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --gcs-source-staging-dir=gs://something-rare-cloudbuild-src/source --substitutions="_IMAGE=${IMAGE_REPO},_SHA=${SHA}" .
 gcloud run deploy "$SERVICE" --project="$PROJECT" --region="$REGION" --image "$IMAGE" \
