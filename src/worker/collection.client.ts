@@ -84,11 +84,31 @@ export function createCollectionClient(create: () => CollectionWorkerLike): Coll
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   const listeners = new Set<(p: Progress) => void>();
 
-  const failAll = (message: string): void => {
+  let last: Progress | undefined;
+
+  /**
+   * The worker is gone (a script error, a crash, a message it could not send): every waiting request fails, and a run that was going
+   * is shown as interrupted with the reason. Its progress up to the last checkpoint is in IndexedDB; resume() starts a new worker.
+   */
+  const failAll = (message: string, detail?: string): void => {
     const waiting = [...pending.values()];
     pending.clear();
+    const dead = worker;
     worker = undefined;
+    try {
+      dead?.terminate();
+    } catch {
+      /* already gone */
+    }
     for (const p of waiting) p.reject(new Error(message));
+    const p = last;
+    if (p && p.settings && (p.status === 'running' || p.status === 'preparing' || p.status === 'paused')) {
+      const spec = p.settings.spec;
+      const source = spec.kind === 'csw' ? `csw:${spec.catalogue}` : spec.kind === 'dois' ? 'doi-list' : spec.kind;
+      const stop = { cause: 'worker', source, request: p.stats.requests, kind: 'error', detail: (detail ?? message).slice(0, 200), at: Date.now() };
+      last = { ...p, status: 'interrupted', resumable: true, stop };
+      for (const cb of listeners) cb(last);
+    }
   };
 
   const ensure = (): CollectionWorkerLike => {
@@ -102,6 +122,8 @@ export function createCollectionClient(create: () => CollectionWorkerLike): Coll
     w.onmessage = (e) => {
       const msg = e.data as CollectionWireResponse;
       if ('event' in msg) {
+        if (msg.event === 'fatal') return failAll(WORKER_FAILED, msg.message);
+        last = msg.progress;
         for (const cb of listeners) cb(msg.progress);
         return;
       }
@@ -117,7 +139,7 @@ export function createCollectionClient(create: () => CollectionWorkerLike): Coll
       } catch {
         /* nothing to prevent */
       }
-      failAll(WORKER_FAILED);
+      failAll(WORKER_FAILED, e.message || undefined);
     };
     w.onmessageerror = () => failAll(WORKER_FAILED);
     worker = w;

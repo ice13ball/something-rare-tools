@@ -73,7 +73,7 @@ export interface Counts {
   duplicatesInBatch: number;
   invalidTokens: number;
   /** CSW with the DataCite cross-check: lookups made, DOIs found, DOIs DataCite does not know, lookups that failed. */
-  crossSource: { looked: number; found: number; absent: number; failed: number };
+  crossSource: { looked: number; found: number; absent: number; failed: number; /** records checked on their ISO record only because the lookup failed */ notCompared?: number };
 }
 
 export const emptyCounts = (): Counts => ({
@@ -86,6 +86,27 @@ export const emptyCounts = (): Counts => ({
   crossSource: { looked: 0, found: 0, absent: 0, failed: 0 },
 });
 
+/**
+ * Why a run is not going on: saved with the run (IndexedDB), shown on the page and written as the last row of an unfinished fix list.
+ * `cause` is a code the page translates: 'user' | 'closed' | 'worker' | 'error' | a failure reason ('http', 'timeout', 'network',
+ * 'not-xml', 'exception', 'no-search-results', 'repeating-page', 'cursor-*', ...).
+ */
+export interface StopReason {
+  cause: string;
+  /** csw:<catalogue id> | api.datacite.org | zenodo.org | doi-list (what the failing request went to; a user stop: the source kind). */
+  source: string;
+  /** The page being read (1 = first). */
+  page?: number;
+  /** The engine's request counter when it stopped. */
+  request?: number;
+  status?: number;
+  /** throttled | unreachable | protocol | not-found | error */
+  kind?: string;
+  /** An unexpected error: its name and message, clipped. */
+  detail?: string;
+  at: number;
+}
+
 export type RunStatus = 'idle' | 'preparing' | 'running' | 'paused' | 'stopped' | 'interrupted' | 'finished' | 'failed';
 
 /** A page that could not be read and is retried at the end of the run and on resume. */
@@ -94,6 +115,8 @@ export interface Deferred {
   kind: 'unreachable' | 'throttled';
   expected: number;
   reason: string;
+  /** The page's number when it was deferred (for a stop reason). */
+  page?: number;
   /** The run cannot go past this page without it (the next cursor is only known from its answer). */
   blocking?: boolean;
 }
@@ -119,6 +142,8 @@ export interface Progress {
   csv: { rows: number; bytes: number };
   startedAt?: number;
   updatedAt?: number;
+  /** Why the run stopped (stopped, interrupted, failed). */
+  stop?: StopReason;
   /** Rules with findings, worst first (severity, then count). */
   ruleOrder: { ruleId: string; severity: Severity; count: number }[];
 }
@@ -143,6 +168,10 @@ export interface RunRecord {
   notices: Notice[];
   stats: RunStats;
   estimate?: Estimate;
+  /** Why the run stopped (cleared when it goes on). */
+  stop?: StopReason;
+  /** Pages read or deferred so far (for "page N" in a stop reason). */
+  pagesTried?: number;
   /** CSV rows not yet written as a part (< 1 MB). */
   csvBuffer: string;
   partCount: number;
@@ -175,6 +204,8 @@ export class SourceFailure extends Error {
     readonly kind: 'throttled' | 'unreachable' | 'protocol' | 'not-found',
     readonly reason: string,
     readonly status?: number,
+    /** The host the failing request went to ('csw' = our proxy), when known. */
+    readonly host?: string,
   ) {
     super(`${kind}: ${reason}`);
     this.name = 'SourceFailure';
