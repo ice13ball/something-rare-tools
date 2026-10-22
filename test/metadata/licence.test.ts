@@ -66,7 +66,9 @@ describe('toSpdx', () => {
   });
 
   it('lets a recognised URI win and falls back to text', () => {
-    expect(toSpdx('see licence', 'https://creativecommons.org/licenses/by/4.0/')).toBe('CC-BY-4.0');
+    expect(toSpdx('Open Access', 'https://creativecommons.org/licenses/by/4.0/')).toBe('CC-BY-4.0');
+    // a text that names no licence and says something else is a conflict with the link (round 4, point 1)
+    expect(toSpdx('see licence', 'https://creativecommons.org/licenses/by/4.0/')).toBeUndefined();
     expect(toSpdx('CC BY 4.0', 'https://example.org/licence')).toBe('CC-BY-4.0');
     expect(toSpdx('CC BY', 'https://example.org/licence')).toBeUndefined();
   });
