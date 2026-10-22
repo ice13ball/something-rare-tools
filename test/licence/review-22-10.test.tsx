@@ -1,8 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+// @vitest-environment jsdom
 // Second 22.10 review of the licence module: one test per reviewer case (points 1-11). The overriding principle: when in doubt the
 // result is "unrecognised — check manually", never a standard licence.
-import { describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { initLang, setLang } from '../../src/app/i18n';
+import { ReportView } from '../../src/app/components/ReportView';
+import { LicencePage } from '../../src/app/pages/LicencePage';
+import { buildReport } from '../../src/core/report';
+import { RULES, RULE_PARAMS } from '../../src/core/rules/registry';
+import type { Fetcher } from '../../src/core/sources/fetcher';
+import { MapFetcher } from '../sources/mapFetcher';
+import { caseB, dataciteJson, DC } from '../helpers/licenceFixtures';
 import { checkLicence } from '../../src/core/checks/licence';
 import { runChecks } from '../../src/core/checks/run';
 import { makeFinding } from '../../src/core/rules/registry';
@@ -265,5 +276,83 @@ describe('review 6 — /check does not claim "no licence" for a record it could 
   });
   it('a record that was read and states no licence still gets LIC-MISSING', () => {
     expect(runChecks(session('datacite', [], [makeRecord('datacite', { label: 'rec' })])).findings.map((x) => x.ruleId)).toContain('LIC-MISSING');
+  });
+});
+
+/* ---------- the pages ---------- */
+
+beforeEach(() => {
+  localStorage.clear();
+  initLang();
+  setLang('en');
+});
+afterEach(cleanup);
+
+async function runPage(fetcher: Fetcher, refs: string[]): Promise<HTMLElement> {
+  render(<LicencePage fetcherFor={() => fetcher} />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: refs.join('\n') } });
+  fireEvent.click(screen.getByRole('button', { name: 'Compare licences' }));
+  return waitFor(() => screen.getByTestId('licence-result'));
+}
+const cite = (doi: string, url: string) => ({ doi, title: `Dataset ${doi}`, creators: ['Smith, A'], year: 2024, publisher: 'Repo', url });
+
+describe('review 3 (page) — the headline never says "no contradiction" without two recognised sources', () => {
+  it('one recognised source and one unrecognised: "Only one source gives a licence this tool recognises"', async () => {
+    const a = cite('10.0000/a', 'https://repo-a.example.org/a');
+    const b = cite('10.0000/b', 'https://repo-b.example.org/b');
+    const f = new MapFetcher({
+      [DC + a.doi]: dataciteJson(a, [{ rights: 'CC BY 4.0', rightsUri: BY }]),
+      [DC + b.doi]: dataciteJson(b, [{ rights: 'Open Access' }]),
+    });
+    const text = (await runPage(f, [a.doi, b.doi])).textContent ?? '';
+    expect(text).toContain('Only one source gives a licence this tool recognises; the other statements could not be compared');
+    expect(text).not.toContain('No contradiction');
+  });
+  it('only unrecognised statements: they could not be compared', async () => {
+    const a = cite('10.0000/a', 'https://repo-a.example.org/a');
+    const f = new MapFetcher({ [DC + a.doi]: dataciteJson(a, [{ rights: 'Open Access' }]) });
+    const text = (await runPage(f, [a.doi])).textContent ?? '';
+    expect(text).toContain('none could be read as a licence this tool recognises — nothing was compared');
+    expect(text).not.toContain('No contradiction');
+  });
+});
+
+describe('review 7 (page) — two DataCite DOIs of different repositories are not "one deposit"', () => {
+  it('two groups, no "one deposit" sentence, "No contradiction among 2 sources"', async () => {
+    const a = cite('10.17882/1', 'https://repo-a.example.org/a');
+    const b = cite('10.5285/2', 'https://repo-b.example.org/b');
+    const f = new MapFetcher({
+      [DC + a.doi]: dataciteJson(a, [{ rights: 'CC BY 4.0', rightsUri: BY }]),
+      [DC + b.doi]: dataciteJson(b, [{ rights: 'CC BY 4.0', rightsUri: BY }]),
+    });
+    const result = await runPage(f, [a.doi, b.doi]);
+    expect(result.querySelectorAll('.licence-group')).toHaveLength(2);
+    const text = result.textContent ?? '';
+    expect(text).not.toContain('written by the same repository');
+    expect(text).toContain('No contradiction among 2 sources');
+  });
+});
+
+describe('review 10 — /check shows what it showed before; /licence shows the citations', () => {
+  const ruleParams = (id: string) => Object.fromEntries((RULE_PARAMS[id] ?? []).map((p) => [p, 'x']));
+  const finding = (id: string) => makeFinding(id, { file: 'rec', params: ruleParams(id) });
+  it.each(['LIC-MISSING', 'LIC-FREE-TEXT', 'LIC-MISMATCH', 'LIC-DATACITE-EMPTY', 'LIC-TEXT-URI-CONFLICT', 'LIC-ADDED-CONDITIONS', 'LIC-AMBIGUOUS', 'LIC-RESTRICTION-CONFLICT'])(
+    '/check renders no citation links under %s',
+    (id) => {
+      const { container } = render(<ReportView report={buildReport([finding(id)])} />);
+      expect(container.querySelector('ul.sources')).toBeNull();
+      expect(container.querySelector('a[href^="https://"]')).toBeNull();
+    },
+  );
+  it('other rules keep their citations in /check', () => {
+    const withCitations = RULES.find((r) => !r.id.startsWith('LIC-') && (r.citations?.length ?? 0) > 0)!;
+    const { container } = render(<ReportView report={buildReport([finding(withCitations.id)])} />);
+    expect(container.querySelector('ul.sources a')).toBeTruthy();
+  });
+  it('the licence page lists the sources of a contradiction', async () => {
+    const { refs, fetcher } = caseB();
+    const result = await runPage(fetcher, refs);
+    const links = result.querySelectorAll('li[data-kind="text-uri"] ul.sources a');
+    expect(links.length).toBeGreaterThan(0);
   });
 });
