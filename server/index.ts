@@ -4,8 +4,10 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import express, { type ErrorRequestHandler, type Express, type Request, type Response } from 'express';
+import { isCatalogueUrl } from '../config/catalogues.js';
 import { DATA_HOSTS } from '../config/hosts.js';
 import { SITE } from '../config/site.js';
+import { buildCswUpstream, createHostPacer, CSW_MAX_BYTES, CSW_TIMEOUT_MS, parseCswBody, type HostPacerOptions } from './csw.js';
 import { proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
 import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
 import { createRateLimiter, type RateLimitOptions } from './rateLimit.js';
@@ -23,6 +25,12 @@ export interface AppOptions {
   maxBytes?: number;
   timeoutMs?: number;
   rateLimit?: RateLimitOptions;
+  /** Per-IP limit of /api/csw (default 120 a minute: a run asks at most once a second, plus the capabilities and the estimate). */
+  cswRateLimit?: RateLimitOptions;
+  /** Turns at a catalogue host (default: at least 1 s apart, 20 may wait). */
+  cswPacing?: HostPacerOptions;
+  cswMaxBytes?: number;
+  cswTimeoutMs?: number;
 }
 
 const MAX_URL_LENGTH = 2048;
@@ -225,6 +233,80 @@ export function createApp(opts: AppOptions): Express {
     }
   });
   app.all('/api/fetch', (_req, res) => {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({ error: 'method_not_allowed' });
+  });
+
+  // Collection review: CSW catalogues, by id. Its own per-IP limit (a run needs about one request a second) and its own per-host pacing.
+  const cswPacer = createHostPacer(opts.cswPacing);
+  app.post('/api/csw', createRateLimiter({ limit: 120, ...opts.cswRateLimit }), express.json({ limit: '1kb' }), async (req: Request, res: Response) => {
+    const clientGone = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) clientGone.abort();
+    });
+    let host: string | null = null;
+    let status = 500;
+    let bytes = 0;
+    try {
+      const parsed = parseCswBody(req.body);
+      host = parsed.catalogue.host;
+      const target = buildCswUpstream(parsed);
+      try {
+        await cswPacer.acquire(host);
+      } catch (e) {
+        const wait = (e as { retryAfterSec?: number }).retryAfterSec;
+        if (wait !== undefined) res.setHeader('Retry-After', String(wait));
+        throw e;
+      }
+      const upstream = await proxyFetch(target.url, 'application/xml', {
+        ...proxyDeps(clientGone.signal),
+        allowUrl: isCatalogueUrl,
+        maxRedirects: 0,
+        maxBytes: opts.cswMaxBytes ?? CSW_MAX_BYTES,
+        timeoutMs: opts.cswTimeoutMs ?? CSW_TIMEOUT_MS,
+        ...(target.post ? { post: target.post } : {}),
+      });
+      const it = upstream.body[Symbol.asyncIterator]();
+      let next: IteratorResult<Uint8Array>;
+      try {
+        next = await it.next();
+      } catch (e) {
+        upstream.abort();
+        throw e;
+      }
+      status = upstream.status;
+      res.status(upstream.status);
+      // Opaque download, like /api/fetch: the catalogue's XML is never served as a page. Retry-After only as plain seconds.
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('Cache-Control', 'no-store');
+      if (upstream.retryAfter !== undefined && /^\d{1,5}$/.test(upstream.retryAfter.trim())) res.setHeader('Retry-After', upstream.retryAfter.trim());
+      try {
+        while (!next.done) {
+          bytes += next.value.byteLength;
+          if (!res.write(next.value)) {
+            await new Promise<void>((resolve) => {
+              res.once('drain', resolve);
+              res.once('close', resolve);
+            });
+            if (res.destroyed) throw new ProxyError(499, 'client_closed');
+          }
+          next = await it.next();
+        }
+        res.end();
+      } catch {
+        upstream.abort();
+        res.destroy();
+      }
+    } catch (e) {
+      const err = e instanceof ProxyError ? e : new ProxyError(500, 'internal');
+      status = err.status;
+      sendProxyError(res, err);
+    } finally {
+      log(JSON.stringify({ host, status, bytes }));
+    }
+  });
+  app.all('/api/csw', (_req, res) => {
     res.setHeader('Allow', 'POST');
     res.status(405).json({ error: 'method_not_allowed' });
   });

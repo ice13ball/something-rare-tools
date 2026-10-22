@@ -118,6 +118,9 @@ export interface UpstreamRequest {
   addresses: string[];
   headers: Record<string, string>;
   signal: AbortSignal;
+  /** Default GET. POST is used only by /api/csw, with a body the server built itself. */
+  method?: 'GET' | 'POST';
+  body?: string;
 }
 
 export interface UpstreamResponse {
@@ -162,8 +165,8 @@ export function createPinnedUpstream(transport: Transport = https): Upstream {
           hostname: url.hostname,
           port: url.port || undefined,
           path: url.pathname + url.search,
-          method: 'GET',
-          headers: req.headers,
+          method: req.method ?? 'GET',
+          headers: req.body === undefined ? req.headers : { ...req.headers, 'Content-Length': String(Buffer.byteLength(req.body)) },
           lookup: pinnedLookup(req.addresses),
           servername: url.hostname, // SNI + certificate check stay on the host name
           agent: false, // no shared connection pool: a pinned socket is never reused for another host
@@ -176,6 +179,7 @@ export function createPinnedUpstream(transport: Transport = https): Upstream {
               'content-type': first(res.headers['content-type']),
               'content-length': first(res.headers['content-length']),
               location: first(res.headers.location),
+              'retry-after': first(res.headers['retry-after']),
             },
             body: res,
             destroy: () => res.destroy(),
@@ -183,7 +187,7 @@ export function createPinnedUpstream(transport: Transport = https): Upstream {
         },
       );
       r.on('error', reject);
-      r.end();
+      r.end(req.body);
     });
 }
 
@@ -205,11 +209,19 @@ export interface ProxyDeps {
   timeoutMs?: number;
   /** Aborts everything (the client went away). */
   signal?: AbortSignal;
+  /** Which URLs may be contacted. Default: the DATA_HOSTS allowlist; /api/csw passes the catalogue list. */
+  allowUrl?: (url: string) => boolean;
+  /** POST with this body (/api/csw only). A POST is never redirected. */
+  post?: { body: string; contentType: string };
+  /** 0 = any redirect is an error (/api/csw). Default MAX_REDIRECTS. */
+  maxRedirects?: number;
 }
 
 export interface ProxyResponse {
   status: number;
   contentType?: string;
+  /** The origin's Retry-After as sent (seconds or a date), for the caller to interpret. */
+  retryAfter?: string;
   /** Counts bytes and throws ProxyError(413) above the cap, ProxyError(504) after the deadline. */
   body: AsyncIterable<Uint8Array>;
   abort(): void;
@@ -241,6 +253,8 @@ export async function proxyFetch(rawUrl: string, accept: string | undefined, dep
   const upstream = deps.upstream ?? (defaultUpstream ??= createPinnedUpstream(https));
   const maxBytes = deps.maxBytes ?? MAX_BYTES;
   const timeoutMs = deps.timeoutMs ?? TIMEOUT_MS;
+  const allowUrl = deps.allowUrl ?? isAllowedHost;
+  const maxRedirects = deps.maxRedirects ?? MAX_REDIRECTS;
 
   const ac = new AbortController();
   let timedOut = false;
@@ -272,20 +286,23 @@ export async function proxyFetch(rawUrl: string, accept: string | undefined, dep
     }
 
     for (let redirects = 0; ; redirects++) {
-      const addresses = await validateTarget(url, redirects > 0, resolver, ac.signal, abortError);
+      const addresses = await validateTarget(url, redirects > 0, resolver, ac.signal, abortError, allowUrl);
       const headers: Record<string, string> = {
         'User-Agent': USER_AGENT,
         Accept: accept && accept !== '' ? accept : '*/*',
         'Accept-Encoding': 'identity', // raw bytes: Content-Length and the byte cap mean what they say
+        ...(deps.post ? { 'Content-Type': deps.post.contentType } : {}),
       };
-      const res = await race(upstream({ url, addresses, headers, signal: ac.signal }), ac.signal, abortError).catch((e: unknown) => {
+      const call: UpstreamRequest = { url, addresses, headers, signal: ac.signal, ...(deps.post ? { method: 'POST' as const, body: deps.post.body } : {}) };
+      const res = await race(upstream(call), ac.signal, abortError).catch((e: unknown) => {
         throw mapError(e);
       });
       current = res;
 
       if (REDIRECT_STATUSES.has(res.status)) {
         res.destroy();
-        if (redirects >= MAX_REDIRECTS) throw new ProxyError(422, 'too_many_redirects');
+        if (deps.post || maxRedirects === 0) throw new ProxyError(502, 'redirect_refused');
+        if (redirects >= maxRedirects) throw new ProxyError(422, 'too_many_redirects');
         const location = res.headers.location;
         if (!location) throw new ProxyError(502, 'redirect_without_location');
         try {
@@ -329,6 +346,7 @@ export async function proxyFetch(rawUrl: string, accept: string | undefined, dep
       return {
         status: res.status,
         contentType: res.headers['content-type'],
+        retryAfter: res.headers['retry-after'],
         body,
         abort: () => {
           ac.abort();
@@ -352,6 +370,7 @@ async function validateTarget(
   resolver: (host: string) => Promise<string[]>,
   signal: AbortSignal,
   abortError: () => Error,
+  allowUrl: (url: string) => boolean,
 ): Promise<string[]> {
   if (url.protocol !== 'https:') throw isRedirect ? new ProxyError(422, 'bad_redirect') : new ProxyError(400, 'bad_scheme');
 
@@ -360,8 +379,8 @@ async function validateTarget(
     // A literal IP is never allowlisted; a forbidden one is reported as such.
     throw isForbiddenAddress(bare) ? new ProxyError(422, 'forbidden_address') : new ProxyError(403, 'host_not_allowed');
   }
-  // Default port only: isAllowedHost() looks at the host name, not at where we connect.
-  if (url.port !== '' || !isAllowedHost(url.href)) throw new ProxyError(403, 'host_not_allowed');
+  // Default port only: the allow check looks at the host name, not at where we connect.
+  if (url.port !== '' || !allowUrl(url.href)) throw new ProxyError(403, 'host_not_allowed');
 
   let addresses: string[];
   try {
