@@ -2,7 +2,10 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, buildCsp, isAllowedHost } from '../config/hosts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { SITE } from '../config/site';
+import { robotsMeta } from '../vite.config';
 
 describe('isAllowedHost', () => {
   it('accepts https on an allowlisted host', () => {
@@ -87,9 +90,23 @@ describe('buildCsp', () => {
 });
 
 describe('SITE', () => {
-  it('is noindex with the public GA id', () => {
-    expect(SITE.noindex).toBe(true);
+  it('is indexable with the public GA id', () => {
+    expect(SITE.noindex).toBe(false);
     expect(SITE.gaId).toBe('G-S5HR4WT0ZG');
     expect(SITE.origin).toBe('https://tools.something-rare.com');
+  });
+});
+
+describe('robots meta in the build', () => {
+  const inject = (noindex: boolean) => (robotsMeta(noindex).transformIndexHtml as () => unknown[])();
+
+  it('the HTML sources carry none: the flag alone decides', () => {
+    for (const f of ['index.html', 'check/index.html', 'privacy/index.html']) {
+      expect(readFileSync(join(__dirname, '..', f), 'utf8'), f).not.toMatch(/name="robots"/);
+    }
+  });
+  it('the Vite plugin injects it only while noindex', () => {
+    expect(inject(true)).toEqual([{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' }, injectTo: 'head-prepend' }]);
+    expect(inject(false)).toEqual([]);
   });
 });

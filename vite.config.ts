@@ -2,10 +2,20 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { SITE } from './config/site';
+
+/** The robots meta tag goes into the built pages only while the site is noindex; the HTML sources carry none. */
+export function robotsMeta(noindex: boolean): Plugin {
+  return {
+    name: 'robots-meta',
+    transformIndexHtml: () =>
+      noindex ? [{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' }, injectTo: 'head-prepend' }] : [],
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), robotsMeta(SITE.noindex)],
   build: {
     outDir: 'dist',
     rollupOptions: {

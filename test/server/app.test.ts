@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { buildCsp } from '../../config/hosts.js';
+import { SITE } from '../../config/site.js';
 import { createApp } from '../../server/index.js';
 import type { Upstream, UpstreamResponse } from '../../server/fetchProxy.js';
 
@@ -39,7 +40,8 @@ const post = (app: ReturnType<typeof createApp>, body: unknown, ip = '9.9.9.9') 
 /** Text of a proxied body: it is served as application/octet-stream, so supertest hands it over as a Buffer. */
 const bodyText = (res: request.Response): string => (Buffer.isBuffer(res.body) ? res.body.toString('utf8') : res.text);
 
-function expectCommonHeaders(res: request.Response, noindex = true) {
+/** `noindex` defaults to the site flag; /api responses pass true (they are noindex either way). */
+function expectCommonHeaders(res: request.Response, noindex: boolean = SITE.noindex) {
   expect(res.headers['content-security-policy']).toBe(buildCsp());
   expect(res.headers['x-content-type-options']).toBe('nosniff');
   expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
@@ -63,7 +65,8 @@ describe('static routes', () => {
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(/^text\/html/);
       expect(res.text).toContain(marker);
-      expect(res.text).toContain('<meta name="robots" content="noindex,nofollow" />');
+      if (SITE.noindex) expect(res.text).toContain('<meta name="robots" content="noindex,nofollow" />');
+      else expect(res.text).not.toMatch(/name="robots"/);
       expectCommonHeaders(res);
     });
   }
@@ -145,9 +148,18 @@ describe('static routes', () => {
 });
 
 describe('noindex flag', () => {
-  it('defaults to SITE.noindex (true)', async () => {
+  it('defaults to SITE.noindex (false: pages are indexable)', async () => {
     const res = await request(make().app).get('/check');
-    expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+    expect(res.headers['x-robots-tag']).toBeUndefined();
+    expect(res.text).not.toMatch(/name="robots"/);
+  });
+  it('noindex:true sends X-Robots-Tag and keeps the robots meta on every page', async () => {
+    const { app } = make({ noindex: true });
+    for (const p of ['/', '/check', '/privacy']) {
+      const res = await request(app).get(p);
+      expectCommonHeaders(res, true);
+      expect(res.text, p).toContain('<meta name="robots" content="noindex,nofollow" />');
+    }
   });
   it('noindex:false drops X-Robots-Tag everywhere and strips the robots meta from served HTML', async () => {
     const { app } = make({ noindex: false });
@@ -163,6 +175,15 @@ describe('noindex flag', () => {
   it('noindex:true keeps the tag on /api responses too', async () => {
     const res = await post(make({ noindex: true }).app, { url: 'http://zenodo.org/' });
     expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+  });
+  it('noindex:false still keeps every /api response out of the index', async () => {
+    const { app } = make({ noindex: false });
+    const ok = await post(app, { url: 'https://zenodo.org/' });
+    expect(ok.status).toBe(200);
+    const refused = await post(app, { url: 'http://zenodo.org/' });
+    const wrongMethod = await request(app).get('/api/fetch');
+    const unknown = await request(app).get('/api/other');
+    for (const res of [ok, refused, wrongMethod, unknown]) expectCommonHeaders(res, true);
   });
 });
 
@@ -200,12 +221,12 @@ describe('POST /api/fetch — input validation', () => {
     expect(bad.status).toBe(400);
     const text = await request(app).post('/api/fetch').set('Content-Type', 'text/plain').send('{"url":"https://zenodo.org/"}');
     expect(text.status).toBe(400);
-    expectCommonHeaders(bad);
+    expectCommonHeaders(bad, true);
   });
   it('413 for a body above 2 kB', async () => {
     const res = await post(app, { url: 'https://zenodo.org/', accept: 'x', pad: 'p'.repeat(2100) });
     expect(res.status).toBe(413);
-    expectCommonHeaders(res);
+    expectCommonHeaders(res, true);
   });
   it('refuses http, a non-allowlisted host, a private resolution and a redirect to the metadata address', async () => {
     expect((await post(app, { url: 'http://zenodo.org/' })).status).toBe(400);
@@ -234,7 +255,7 @@ describe('POST /api/fetch — proxying', () => {
     expect(res.headers['set-cookie']).toBeUndefined();
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
     expect(res.headers['cache-control']).toBe('no-store');
-    expectCommonHeaders(res);
+    expectCommonHeaders(res, true);
   });
   it('never serves upstream HTML as HTML: octet-stream + attachment + nosniff, the upstream type only in a side header', async () => {
     const { app } = make({ upstream: async () => resp(200, '<html><script>alert(1)</script></html>', { 'content-type': 'text/html; charset=utf-8' }) });
@@ -348,7 +369,7 @@ describe('rate limit', () => {
     expect(res.status).toBe(429);
     expect(Number(res.headers['retry-after'])).toBeGreaterThanOrEqual(1);
     expect(Number(res.headers['retry-after'])).toBeLessThanOrEqual(60);
-    expectCommonHeaders(res);
+    expectCommonHeaders(res, true);
     // another client is unaffected
     expect((await post(app, { url: 'https://zenodo.org/' }, '8.8.8.8')).status).toBe(200);
   });

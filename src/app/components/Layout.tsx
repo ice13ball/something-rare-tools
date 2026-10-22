@@ -8,7 +8,7 @@ import { CookieBanner } from './CookieBanner';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 export interface LayoutProps {
-  /** Key of the page title; shown in the tab as "<title> — Abyssal Claims Tools". Omit for the home page. */
+  /** Key of the page title; shown in the tab as "<title> — Abyssal Claims Tools" (keep it in step with the page's static <title>). */
   titleKey?: UiKey;
   children: React.ReactNode;
 }

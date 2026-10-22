@@ -8,7 +8,7 @@ import { t, useLang } from '../i18n';
 export function IndexPage(): React.ReactElement {
   useLang();
   return (
-    <Layout>
+    <Layout titleKey="index.docTitle">
       <h1>{t('brand')}</h1>
       <p className="lead">{t('index.lead')}</p>
       <article className="card">
