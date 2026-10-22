@@ -1,0 +1,90 @@
+<!--
+  SPDX-License-Identifier: AGPL-3.0-or-later
+  Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Check the licence and metadata of a whole collection (a DOI list, DataCite repository, Zenodo community or GeoNetwork catalogue). Get counts per problem, examples and a CSV fix list. Metadata only, read in your browser." />
+    <link rel="canonical" href="https://tools.something-rare.com/collection" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Abyssal Claims Tools" />
+    <meta property="og:title" content="Collection review: find licence and metadata problems across a whole repository — Abyssal Claims Tools" />
+    <meta property="og:description" content="Check the licence and metadata of a whole collection (a DOI list, DataCite repository, Zenodo community or GeoNetwork catalogue). Get counts per problem, examples and a CSV fix list. Metadata only, read in your browser." />
+    <meta property="og:url" content="https://tools.something-rare.com/collection" />
+    <meta property="og:image" content="https://tools.something-rare.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Abyssal Claims Tools: check marine data before you publish it" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Abyssal Claims Tools — Collection review",
+  "url": "https://tools.something-rare.com/collection",
+  "description": "Check the licence and metadata of a whole collection (a DOI list, DataCite repository, Zenodo community or GeoNetwork catalogue). Get counts per problem, examples and a CSV fix list. Metadata only, read in your browser.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web browser)",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  },
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+  "inLanguage": [
+    "en",
+    "pl",
+    "de",
+    "fr"
+  ],
+  "creator": {
+    "@type": "Person",
+    "name": "Michal Mazurowski",
+    "url": "https://something-rare.com"
+  },
+  "isBasedOn": "https://github.com/ice13ball/something-rare-tools"
+}
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Collection review: find licence and metadata problems across a whole repository — Abyssal Claims Tools</title>
+    <!-- Google Consent Mode v2 default (all denied), set BEFORE any gtag config.
+         Kept as an external same-origin file: the CSP allows no inline scripts.
+         No gtag.js and no gtag('config') here: analytics loads only after consent. -->
+    <script src="/consent-default.js"></script>
+  </head>
+  <body>
+    <div id="root">
+      <header class="site-header">
+        <a class="brand" href="/">Abyssal Claims Tools</a>
+        <nav aria-label="Main"><a href="/check">Data check</a> <a href="https://something-rare.com">Atlas</a></nav>
+      </header>
+      <main id="main" class="container">
+        <h1>Collection review</h1>
+        <p class="lead">Read the metadata of a whole collection and get counts per problem, a few examples of each and a fix list as a CSV file. Only metadata is read, never data files. A quick sample is labelled as a sample; nothing here ranks or compares institutions.</p>
+        <h2>What this page does</h2>
+        <p>It reads metadata records, never data files, and applies the licence and metadata rules of the other tools to each record it could read:</p>
+        <ul>
+          <li>a missing, free-text or unrecognised licence statement, and a licence given in the text that differs from its link;</li>
+          <li>contradictions between sources, when a catalogue record is also compared with DataCite;</li>
+          <li>empty links, a missing version and a missing spatial extent in the metadata.</li>
+        </ul>
+        <p>A record that cannot be read (unreachable, held back by the source, or in an unsupported profile) is listed as not read and gets no finding. Nothing is ranked and no institutions are compared.</p>
+        <h2>What it can read</h2>
+        <ul>
+          <li>A list of DOIs, looked up at DataCite by your browser.</li>
+          <li>A DataCite repository (client id) or a DOI prefix, listed page by page.</li>
+          <li>A Zenodo community; large communities are read in slices split by publication date.</li>
+          <li>A GeoNetwork catalogue from a fixed list, read over CSW (ISO 19139 and ISO 19115-3) through our server, optionally compared with DataCite.</li>
+        </ul>
+        <p>You get an estimate first, then a quick sample (labelled as a sample) or a full run, with pause, resume and stop. Progress and the fix list are kept only in your browser until you delete them. See the <a href="/privacy">privacy page</a>.</p>
+      </main>
+      <footer class="site-footer"><a href="https://something-rare.com">Abyssal Claims — deep-sea atlas</a> <a href="/privacy">Privacy</a></footer>
+    </div>
+    <noscript><p>This tool needs JavaScript to read a collection; the description above works without it.</p></noscript>
+    <script type="module" src="/src/app/entries/collection.tsx"></script>
+  </body>
+</html>

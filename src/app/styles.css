@@ -840,3 +840,33 @@ code.multiline {
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* ---- collection review ---- */
+fieldset.collection-kinds {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0.8rem 0;
+  padding: 0.6rem 0.9rem;
+}
+
+.inline-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 1.2rem;
+}
+
+.rule-group > summary {
+  cursor: pointer;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.record-check {
+  margin: 0.6rem 0;
+}

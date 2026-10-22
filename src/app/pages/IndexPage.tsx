@@ -25,6 +25,13 @@ export function IndexPage(): React.ReactElement {
           {t('index.licence.cta')}
         </a>
       </article>
+      <article className="card">
+        <h2>{t('index.collection.title')}</h2>
+        <p>{t('index.collection.text')}</p>
+        <a className="button" href="/collection">
+          {t('index.collection.cta')}
+        </a>
+      </article>
       <p className="atlas-link">
         {t('index.atlas.lead')} <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
       </p>

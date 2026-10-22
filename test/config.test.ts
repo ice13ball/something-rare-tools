@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
+import { CSW_HOSTS } from '../config/catalogues';
 import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, MAP_PRIVACY_URL, buildCsp, isAllowedHost } from '../config/hosts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -102,7 +103,7 @@ describe('robots meta in the build', () => {
   const inject = (noindex: boolean) => (robotsMeta(noindex).transformIndexHtml as () => unknown[])();
 
   it('the HTML sources carry none: the flag alone decides', () => {
-    for (const f of ['index.html', 'check/index.html', 'licence/index.html', 'privacy/index.html']) {
+    for (const f of ['index.html', 'check/index.html', 'licence/index.html', 'collection/index.html', 'privacy/index.html']) {
       expect(readFileSync(join(__dirname, '..', f), 'utf8'), f).not.toMatch(/name="robots"/);
     }
   });
@@ -118,6 +119,9 @@ describe('static privacy page', () => {
     for (const key of [
       'privacy.browser.p2',
       'privacy.server.p2',
+      'privacy.collection.h',
+      'privacy.collection.p1',
+      'privacy.collection.p2',
       'privacy.logs.h',
       'privacy.logs.p1',
       'privacy.logs.p2',
@@ -133,6 +137,7 @@ describe('static privacy page', () => {
     }
     expect(html).toContain(`href="mailto:${SITE.contactEmail}"`);
     expect(html).toContain(`href="${MAP_PRIVACY_URL}"`);
+    for (const host of CSW_HOSTS) expect(html, host).toContain(`<li><code>${host}</code></li>`);
     expect(html).not.toMatch(/stores nothing/);
   });
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
+import { CSW_HOSTS } from '../../../config/catalogues';
 import { DATA_HOSTS, MAP_PRIVACY_URL } from '../../../config/hosts';
 import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
@@ -31,6 +32,18 @@ export function PrivacyPage(): React.ReactElement {
           ))}
         </ul>
         <p>{t('privacy.server.p2')}</p>
+      </section>
+      <section>
+        <h2>{t('privacy.collection.h')}</h2>
+        <p>{t('privacy.collection.p1')}</p>
+        <ul className="host-list">
+          {CSW_HOSTS.map((h) => (
+            <li key={h}>
+              <code>{h}</code>
+            </li>
+          ))}
+        </ul>
+        <p>{t('privacy.collection.p2')}</p>
       </section>
       <section>
         <h2>{t('privacy.logs.h')}</h2>
