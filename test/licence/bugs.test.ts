@@ -162,7 +162,8 @@ describe('bug 22.10: 8 — SEANOE (DOI prefix 10.17882)', () => {
 
 describe('bug 22.10: 9 — a record that could not be read is not "no licence"', () => {
   it('checkLicence emits no LIC-MISSING for an inaccessible record', () => {
-    expect(ids(run([makeRecord('datacite')], true))).toEqual([]);
+    // A readable but empty DataCite record next to an unreadable one: not "no licence", but DataCite's own silence is reported.
+    expect(ids(run([makeRecord('datacite')], true))).toEqual(['LIC-DATACITE-EMPTY']);
     expect(ids(run([], true))).toEqual([]);
   });
   it('runChecks on a refused GeoNetwork record keeps IN-RECORD-INACCESSIBLE and adds no LIC-MISSING', () => {

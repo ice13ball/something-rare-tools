@@ -22,8 +22,9 @@ import type { RuleSpec } from './spec';
  *                                                    identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to one that is not);
  *                                                    readings = what it reads as, separated by " / " ("—" = a name no SPDX id exists for)
  *   LIC-RESTRICTION-CONFLICT  codes, licence         codes = restrictive MD_RestrictionCode values, comma-separated;
- *                                                    licence = the open licence (recognised SPDX id; NC/ND and unrecognised text are not open)
- *   LIC-DATACITE-EMPTY        licence                the licence another record states
+ *                                                    licence = the open licence: the recognised SPDX id, or the open family as written ("CC BY") for a
+ *                                                    statement that is not recognised; NC/ND never count
+ *   LIC-DATACITE-EMPTY        licence                the licence another record states; "—" = no other record states one (or the main record could not be read)
  *   LIC-MISMATCH              licenceA, licenceB     the two different SPDX ids
  */
 export const LICENCE_RULES: readonly RuleSpec[] = [
@@ -132,12 +133,12 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     citations: [CITE.openaireRecommends, CITE.openaireMandatory],
     params: ['licence'],
     plain: {
-      pl: `Rekord rejestracji DOI (DataCite) nie podaje licencji, choć inny rekord podaje {licence}. Dodaj licencję także w rekordzie DOI.`,
-      en: `The DOI registration record (DataCite) states no licence, although another record states {licence}. Add the licence to the DOI record too.`,
-      de: `Der DOI-Registrierungseintrag (DataCite) nennt keine Lizenz, obwohl ein anderer Eintrag {licence} angibt. Tragen Sie die Lizenz auch im DOI-Eintrag ein.`,
-      fr: `La notice d'enregistrement du DOI (DataCite) n'indique aucune licence, alors qu'une autre notice indique {licence}. Ajoutez aussi la licence à la notice du DOI.`,
+      pl: `Rekord rejestracji DOI (DataCite) nie podaje licencji. Inne rekordy: {licence} („—” = żaden nie podaje licencji albo nie udało się go odczytać). Dodaj licencję w rekordzie DOI.`,
+      en: `The DOI registration record (DataCite) states no licence. Other records: {licence} ("—" = none states one, or the record could not be read). Add the licence to the DOI record.`,
+      de: `Der DOI-Registrierungseintrag (DataCite) nennt keine Lizenz. Andere Einträge: {licence} („—“ = keiner nennt eine Lizenz oder der Eintrag ließ sich nicht lesen). Tragen Sie die Lizenz im DOI-Eintrag ein.`,
+      fr: `La notice d'enregistrement du DOI (DataCite) n'indique aucune licence. Autres notices : {licence} (« — » = aucune n'en indique, ou la notice n'a pas pu être lue). Ajoutez la licence à la notice du DOI.`,
     },
-    technical: `{file}: DataCite rightsList is empty while another record states '{licence}'.`,
+    technical: `{file}: DataCite rightsList is empty; other records state '{licence}' ('—' = none states one, or the main record could not be read).`,
   },
   {
     id: 'LIC-MISMATCH',

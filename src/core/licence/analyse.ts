@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The ONE place that compares what the metadata sources of a dataset say about its licence. Pure, no I/O.
 // /check maps the result to findings (checks/licence.ts); the licence page renders it directly.
-import { classifyStatement, isOpenLicence, isRestrictiveCode, spdxFromUri, spdxInfo, type SpdxInfo } from '../metadata/licence';
+import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, type SpdxInfo } from '../metadata/licence';
 import type { LicenceClass, LicenceStatement, MetadataRecord, MetadataSource } from '../types';
 
 /** Statements about the metadata record itself (ISO `metadataConstraints`), not the data. */
@@ -235,14 +235,16 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: { restricted: 'added-conditions', 'extra-text': 'extra-text', readings: 'ambiguous', 'text-uri': 'text-uri' }[statement.conflict.kind] as 'added-conditions' | 'extra-text' | 'ambiguous' | 'text-uri', source, statement });
   }
 
-  // Restriction codes against an open licence. Only a recognised, open licence can be contradicted.
+  // Restriction codes against an open licence: a recognised open id, or a statement that names an open family without being
+  // recognised (versionless "CC BY", "CC BY 4.0, commercial use requires permission"). NC / ND never count. The statement keeps its class.
   const codes = [...new Set(records.flatMap((r) => r.restrictionCodes.map((c) => c.code)).filter(isConflictingCode))];
-  const open = statements.find((a) => a.open);
-  if (codes.length > 0 && open) contradictions.push({ kind: 'restriction-code', codes, licence: shownOf(open) });
+  const openStated = statements.find((a) => a.open);
+  const openNamed = openStated ? shownOf(openStated) : statements.map((a) => openLicenceNamed(a.statement)).find((x) => !!x);
+  if (codes.length > 0 && openNamed) contradictions.push({ kind: 'restriction-code', codes, licence: openNamed });
 
-  // DataCite read but silent while another source states a licence.
+  // DataCite read but silent while another source states a licence, or while the main record could not be read (then licence = '—').
   const empty = sources.find((s) => s.source === 'datacite' && s.state === 'missing');
-  if (empty && statements.length > 0) contradictions.push({ kind: 'datacite-empty', licence: shownOf(statements[0]) });
+  if (empty && (statements.length > 0 || hasUnreadable)) contradictions.push({ kind: 'datacite-empty', licence: statements.length > 0 ? shownOf(statements[0]) : '—' });
 
   // Dual licensing is only what the publisher repeated on purpose (rightsList / rights entries). Different licences in different
   // fields of one source are a contradiction inside it, as they always were.
