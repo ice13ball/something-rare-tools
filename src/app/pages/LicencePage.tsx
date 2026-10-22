@@ -9,7 +9,7 @@ import { renderPlain } from '../../core/report';
 import { browserFetcher, serverFetcher, type Fetcher } from '../../core/sources/fetcher';
 import type { MetadataSource } from '../../core/types';
 import { Layout } from '../components/Layout';
-import { ModeSwitch } from '../components/ModeSwitch';
+import { ModeSwitch, type ModeTexts } from '../components/ModeSwitch';
 import { t, useLang } from '../i18n';
 import { DEFAULT_MODE, type DownloadMode } from '../types';
 
@@ -28,6 +28,14 @@ const defaultClipboard = (text: string): Promise<void> => {
 
 /** Proper names of the metadata sources; they are not translated. */
 const SOURCE_NAME: Record<MetadataSource, string> = { iso19139: 'GeoNetwork (ISO)', datacite: 'DataCite', zenodo: 'Zenodo', pangaea: 'PANGAEA' };
+
+/** The data-file wording of /check does not apply here: this page reads metadata records only. */
+const MODE_TEXTS: Partial<ModeTexts> = {
+  legend: 'licence.mode.legend',
+  browserText: 'licence.mode.browser.text',
+  serverText: 'licence.mode.server.text',
+  note: 'licence.mode.note',
+};
 
 interface Result {
   analysis: LicenceAnalysis;
@@ -234,7 +242,7 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
     <Layout titleKey="licence.docTitle">
       <h1>{t('licence.title')}</h1>
       <p className="lead">{t('licence.intro')}</p>
-      <ModeSwitch value={mode} onChange={setMode} />
+      <ModeSwitch value={mode} onChange={setMode} texts={MODE_TEXTS} />
       <form className="input-panel" onSubmit={(e) => void submit(e)} noValidate>
         <label className="field">
           <span>{t('licence.input.label')}</span>
