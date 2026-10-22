@@ -32,6 +32,11 @@ export function PrivacyPage(): React.ReactElement {
         <p>{t('privacy.server.p2')}</p>
       </section>
       <section>
+        <h2>{t('privacy.logs.h')}</h2>
+        <p>{t('privacy.logs.p1')}</p>
+        <p>{t('privacy.logs.p2')}</p>
+      </section>
+      <section>
         <h2>{t('privacy.analytics.h')}</h2>
         <p>{t('privacy.analytics.p1')}</p>
         <p>{t('privacy.analytics.p2')}</p>
@@ -39,7 +44,10 @@ export function PrivacyPage(): React.ReactElement {
       <section>
         <h2>{t('privacy.contact.h')}</h2>
         <p>
-          {t('privacy.contact.p')}: <a href={SITE.atlasUrl}>{SITE.atlasUrl.replace('https://', '')}</a>
+          {t('privacy.contact.p')}: <a href={'mailto:' + SITE.contactEmail}>{SITE.contactEmail}</a>
+        </p>
+        <p>
+          {t('privacy.contact.more')}: <a href={SITE.atlasUrl}>{SITE.atlasUrl.replace('https://', '')}</a>
         </p>
       </section>
     </Layout>

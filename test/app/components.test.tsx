@@ -179,6 +179,25 @@ describe('pages', () => {
     render(<PrivacyPage />);
     for (const h of DATA_HOSTS) expect(screen.getByText(h)).toBeTruthy();
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'https://something-rare.com')).toBe(true);
+    expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'mailto:m.mazurowski@ai-wall.com')).toBe(true);
+  });
+
+  it('PrivacyPage describes the hosting logs (IP, 30 days) in every language', () => {
+    for (const [lang, heading, ip] of [
+      ['en', 'Hosting logs', 'IP address'],
+      ['pl', 'Logi hostingu', 'adres IP'],
+      ['de', 'Hosting-Protokolle', 'IP-Adresse'],
+      ['fr', "Journaux d'hébergement", "l'adresse IP"],
+    ] as const) {
+      setLang(lang);
+      const { container, unmount } = render(<PrivacyPage />);
+      const text = container.textContent ?? '';
+      expect(screen.getByRole('heading', { name: heading }), lang).toBeTruthy();
+      expect(text, lang).toContain(ip);
+      expect(text, lang).toContain('Google Cloud Run (');
+      expect(text, lang).toMatch(/30 (days|dniach|Tagen|jours)/);
+      unmount();
+    }
   });
 });
 

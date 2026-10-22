@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SITE } from '../config/site';
 import { robotsMeta } from '../vite.config';
+import { UI } from '../src/core/i18n/ui';
 
 describe('isAllowedHost', () => {
   it('accepts https on an allowlisted host', () => {
@@ -108,5 +109,16 @@ describe('robots meta in the build', () => {
   it('the Vite plugin injects it only while noindex', () => {
     expect(inject(true)).toEqual([{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' }, injectTo: 'head-prepend' }]);
     expect(inject(false)).toEqual([]);
+  });
+});
+
+describe('static privacy page', () => {
+  it('carries the same English text as the app for the server, hosting-log and contact paragraphs', () => {
+    const html = readFileSync(join(__dirname, '..', 'privacy', 'index.html'), 'utf8');
+    for (const key of ['privacy.server.p2', 'privacy.logs.h', 'privacy.logs.p1', 'privacy.logs.p2', 'privacy.contact.p', 'privacy.contact.more'] as const) {
+      expect(html, key).toContain(UI.en[key]);
+    }
+    expect(html).toContain(`href="mailto:${SITE.contactEmail}"`);
+    expect(html).not.toMatch(/stores nothing/);
   });
 });
