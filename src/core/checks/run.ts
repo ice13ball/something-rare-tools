@@ -31,7 +31,7 @@ export function runChecks(session: CheckSession): Report {
     findings.push(...record.findings);
     // The same "could not be read" as on the licence page (a refused read, a blocked one, a host not allowed): the record then says nothing
     // about a licence. File-download failures reuse these rules with the file name; only the record's own label counts.
-    const inaccessible = !!ownLoadFailure(record.findings, record.label, record.metadata.length);
+    const inaccessible = !!ownLoadFailure(record.findings, record.label, record.kind, record.metadata.length);
     if (record.metadata.length > 0 || inaccessible) {
       findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: inaccessible ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [] }));
     }
