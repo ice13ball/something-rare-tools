@@ -1,0 +1,8 @@
+{ "data": { "id": "10.17882/000000", "type": "dois", "attributes": {
+  "doi": "10.17882/000000",
+  "url": "https://www.seanoe.org/data/00000/000000/",
+  "titles": [{ "title": "Synthetic dataset deposited in a repository the tool cannot read" }],
+  "publisher": "SEANOE",
+  "publicationYear": 2026,
+  "rightsList": [{ "rightsIdentifierScheme": "SPDX", "rightsUri": "https://creativecommons.org/licenses/by/4.0/legalcode", "schemeUri": "https://spdx.org/licenses/", "rights": "Creative Commons Attribution 4.0 International", "rightsIdentifier": "cc-by-4.0" }]
+} } }
