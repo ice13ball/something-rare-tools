@@ -42,3 +42,19 @@ export function downloadText(text: string, fileName: string, mime: string, deps:
     deps.schedule(() => deps.urls.revokeObjectURL(url));
   }
 }
+
+/** Offers a Blob (the stored fix list) as a file download: no copy into a string, the object URL is revoked shortly after the click. */
+export function downloadBlob(blob: Blob, fileName: string, deps: DownloadDeps = defaults()): void {
+  const url = deps.urls.createObjectURL(blob);
+  const a = deps.doc.createElement('a');
+  a.href = url;
+  a.download = safeFileName(fileName);
+  a.rel = 'noopener';
+  deps.doc.body.appendChild(a);
+  try {
+    a.click();
+  } finally {
+    a.remove();
+    deps.schedule(() => deps.urls.revokeObjectURL(url));
+  }
+}

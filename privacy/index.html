@@ -59,6 +59,15 @@
           <p>The server keeps no files, no copies and no cache. Its own application log records only the host name, the status code and the size of each download it makes for you, never the full address. That log is kept together with the hosting logs described below.</p>
         </section>
         <section>
+          <h2>Collection review</h2>
+          <p>A collection run reads metadata records only. DataCite (api.datacite.org) and Zenodo (zenodo.org) are asked by your own browser directly, so they receive your IP address and the address of this site, as with any website you open; their own privacy policies apply. Catalogues are read through the Abyssal Claims server, which passes the catalogue’s answer on to you and keeps nothing, and only from these known catalogues:</p>
+          <ul class="host-list">
+            <li><code>emodnet.ec.europa.eu</code></li>
+            <li><code>data.marine.ie</code></li>
+          </ul>
+          <p>The progress of a run and the parts of the fix list are stored only in your browser (IndexedDB), never on our server, until you delete them with “Delete all saved progress” on the collection page or discard the run. Apart from the catalogue requests, nothing about a collection run is sent to our server.</p>
+        </section>
+        <section>
           <h2>Hosting logs</h2>
           <p>This site runs on Google Cloud Run (region europe-west1). Like any web host, the platform keeps a standard log of every request to this site: the IP address, the time, the requested address, the browser (user agent) and the referring page. In server mode the requested address is the tool's own download address; the link you asked for is not in it. These logs are deleted automatically after 30 days.</p>
           <p>They are used for security, to prevent abuse and for aggregated usage statistics, including which network (for example a university network) requests come from. No profiles of individuals are built from them, and they are not passed on to anyone else or sold.</p>
