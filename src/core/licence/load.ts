@@ -6,7 +6,7 @@ import { groupOf } from './analyse';
 import type { Finding, LoadedRecord, MetadataRecord, MetadataSource } from '../types';
 import { lookupDatacite } from '../sources/datacite';
 import { fetchErrorFinding, type FetchResult, type Fetcher } from '../sources/fetcher';
-import { loadRecord, resolveInput } from '../sources';
+import { loadPangaeaMetainfo, loadRecord, resolveInput } from '../sources';
 
 /** A reference whose record could not be read. Never to be shown as "no licence". */
 export interface LoadFailure {
@@ -87,7 +87,7 @@ export async function loadLicenceReferences(
       failures.push({ ref, reason: 'unrecognised' });
     } else {
       try {
-        const loaded = await loadRecord(resolved, fetcher);
+        const loaded = await loadRecord(resolved, fetcher, { pangaea: loadPangaeaMetainfo });
         const source = SOURCE_OF_KIND[loaded.kind];
         // Only this record's own failure counts; findings about files (no data file, landing host) say nothing about the licence.
         const own = loaded.findings.find((f) => LOAD_FAILURES.includes(f.ruleId) && f.file === loaded.label && (f.ruleId !== 'IN-HOST-NOT-ALLOWED' || loaded.metadata.length === 0));

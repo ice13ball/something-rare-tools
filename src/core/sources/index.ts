@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Public entry of the source handlers: resolve what the user pasted, load the record (metadata + file list),
 // download files on request. Network errors that the user can act on become input findings; everything else throws.
-import type { LoadedRecord } from '../types';
+import type { LoadedRecord, MetadataRecord } from '../types';
 import { allowed, hostNotAllowed, noDataFile } from './common';
 import { lookupDatacite, routeFromDatacite } from './datacite';
 import { FileFetchError, hostOf, HostNotAllowedError, type Fetcher } from './fetcher';
@@ -16,7 +16,7 @@ export { resolveInput, DEFAULT_GEONETWORK_HOST, type ResolvedInput } from './res
 export { dataciteUrl, lookupDatacite, routeFromDatacite, type Route } from './datacite';
 export { loadZenodo } from './zenodo';
 export { loadGeoNetwork, geonetworkRecordUrl } from './geonetwork';
-export { loadPangaea, pangaeaTextfileUrl } from './pangaea';
+export { loadPangaea, loadPangaeaMetainfo, pangaeaMetainfoUrl, pangaeaTextfileUrl } from './pangaea';
 export { DATA_EXTENSIONS, hasDataExtension } from './common';
 
 /** The input could not be turned into a record reference ("unknown"): the UI asks the user to download and drop. */
@@ -27,7 +27,12 @@ export class UnresolvedInputError extends Error {
   }
 }
 
-async function loadDoi(doi: string, fetcher: Fetcher): Promise<LoadedRecord> {
+/** Which loader reads a PANGAEA record: the textfile header (/check, default) or the metadata XML (licence page). */
+export interface Loaders {
+  pangaea?: (id: string, fetcher: Fetcher, known?: MetadataRecord) => Promise<LoadedRecord>;
+}
+
+async function loadDoi(doi: string, fetcher: Fetcher, loaders: Loaders): Promise<LoadedRecord> {
   const label = `DOI ${doi}`;
   const lookup = await lookupDatacite(doi, fetcher, label);
   if ('finding' in lookup) return { label, kind: 'datacite', metadata: [], files: [], findings: [lookup.finding] };
@@ -39,7 +44,7 @@ async function loadDoi(doi: string, fetcher: Fetcher): Promise<LoadedRecord> {
     case 'geonetwork':
       return loadGeoNetwork(route.host, route.uuid, fetcher, dc);
     case 'pangaea':
-      return loadPangaea(route.id, fetcher, dc);
+      return (loaders.pangaea ?? loadPangaea)(route.id, fetcher, dc);
     case 'other': {
       const out: LoadedRecord = { label, kind: 'datacite', metadata: [dc], files: [], findings: [] };
       if (dc.landingUrl && !allowed(dc.landingUrl)) out.findings.push(hostNotAllowed(label, dc.landingUrl));
@@ -49,16 +54,16 @@ async function loadDoi(doi: string, fetcher: Fetcher): Promise<LoadedRecord> {
   }
 }
 
-export async function loadRecord(input: ResolvedInput, fetcher: Fetcher): Promise<LoadedRecord> {
+export async function loadRecord(input: ResolvedInput, fetcher: Fetcher, loaders: Loaders = {}): Promise<LoadedRecord> {
   switch (input.kind) {
     case 'zenodo':
       return loadZenodo(input.id, fetcher);
     case 'geonetwork':
       return loadGeoNetwork(input.host, input.uuid, fetcher);
     case 'pangaea':
-      return loadPangaea(input.id, fetcher);
+      return (loaders.pangaea ?? loadPangaea)(input.id, fetcher);
     case 'doi':
-      return loadDoi(input.doi, fetcher);
+      return loadDoi(input.doi, fetcher, loaders);
     case 'unknown':
       throw new UnresolvedInputError();
   }

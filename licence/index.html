@@ -66,10 +66,10 @@
         <h1>Licence check</h1>
         <p class="lead">Paste one or several references to the same dataset. The page shows what each metadata source states about its licence, how each statement is classified and where they contradict each other.</p>
         <h2>What this checks</h2>
-        <p>This page reads the metadata of the records you reference, never the data files. It reads the licence statements in Zenodo records, GeoNetwork records (ISO 19139 and ISO 19115-3) and the DataCite record of a DOI. For a PANGAEA reference that is the DataCite record; the licence inside PANGAEA's data file is not read, because that would mean downloading the data.</p>
+        <p>This page reads the metadata of the records you reference, never the data files. It reads the licence statements in Zenodo records, PANGAEA metadata records, GeoNetwork records (ISO 19139 and ISO 19115-3) and the DataCite record of a DOI.</p>
         <ul>
           <li>Each statement is classified by comparing its text and its link with the SPDX licence list: one SPDX identifier, or "unrecognised — check manually".</li>
-          <li>Sources are compared by the identifiers they state. A Zenodo record and its DataCite record are one deposit and count once.</li>
+          <li>Sources are compared by the identifiers they state. A Zenodo record and its DataCite record, or a PANGAEA record and its DataCite record, are one deposit and count once.</li>
           <li>Contradictions it reports: different licences in different sources, text and link that disagree, a text that adds conditions to a standard licence, access restrictions in an ISO record next to an open licence, and an empty DataCite record next to a licence stated elsewhere.</li>
           <li>It does not interpret the legal effect of a licence, does not read licence texts and does not look at the data itself.</li>
         </ul>

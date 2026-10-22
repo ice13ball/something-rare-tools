@@ -2,6 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
@@ -204,6 +206,34 @@ describe('LicencePage', () => {
         unmount();
       }
     }
+  });
+});
+
+describe('PANGAEA on the page', () => {
+  it('PANGAEA metadata and its DataCite record are one deposit: a single source, no claim of agreement', async () => {
+    const c = { doi: '10.1594/PANGAEA.000000', title: 'Synthetic CTD profiles from a test cruise', creators: ['Kowalska, Anna'], year: 2019, publisher: 'PANGAEA', url: 'https://doi.pangaea.de/10.1594/PANGAEA.000000' };
+    const f = new MapFetcher({
+      [DC + c.doi]: dataciteJson(c, [{ rights: 'Creative Commons Attribution 3.0 Unported', rightsUri: 'https://creativecommons.org/licenses/by/3.0/legalcode', rightsIdentifier: 'cc-by-3.0' }]),
+      'https://doi.pangaea.de/10.1594/PANGAEA.000000?format=metainfo_xml': { body: readFileSync(join(__dirname, '..', 'fixtures', 'pangaea-metainfo-synthetic.xml'), 'utf8') },
+    });
+    const result = await run(f, [c.doi]);
+    const text = result.textContent ?? '';
+    expect(text).toContain('Single source — nothing to compare');
+    expect(text).not.toContain('No contradiction among');
+    expect(text).toContain('PANGAEA + DataCite: one deposit');
+    expect(text).toContain('CC-BY-3.0 (Creative Commons Attribution 3.0 Unported)');
+    expect(text).not.toMatch(/missing|data file/);
+    expect(screen.getByTestId('attribution').textContent).toContain('Licence: Creative Commons Attribution 3.0 Unported (https://creativecommons.org/licenses/by/3.0/legalcode).');
+  });
+
+  it('the page text no longer carries the "PANGAEA licence is not read" caveat, in any language or in the static HTML', () => {
+    for (const lang of LANGS) {
+      setLang(lang);
+      const { container } = render(<LicencePage fetcherFor={() => new MapFetcher({})} />);
+      expect(container.textContent ?? '', lang).not.toMatch(/PANGAEA's data file|Datendatei von PANGAEA|danymi PANGAEA|fichier de données de PANGAEA|nie jest czytana|nicht gelesen|n'est pas lue/);
+      cleanup();
+    }
+    expect(readFileSync(join(__dirname, '..', '..', 'licence', 'index.html'), 'utf8')).not.toMatch(/data file is not read/);
   });
 });
 
