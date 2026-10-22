@@ -20,6 +20,17 @@ git fetch --quiet origin main || refuse "cannot fetch origin/main"
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] \
   || refuse "HEAD $(git rev-parse --short HEAD) is not origin/main $(git rev-parse --short origin/main); push or check out main first"
 [[ -d node_modules ]] || refuse "node_modules missing; run npm ci (tests must run, not be skipped)"
+# The golden test (real records, kept outside the repo) is part of npm test, but it skips itself when GOLDEN_DIR is unset.
+# Default to the local golden set so the gate really runs it; if that is missing too, say so out loud instead of skipping silently.
+GOLDEN_DEFAULT=/Users/ice13ball/data/sprawdzarka-golden/2026-10-16
+if [[ -z "${GOLDEN_DIR:-}" ]]; then
+  if [[ -d "$GOLDEN_DEFAULT" ]]; then
+    export GOLDEN_DIR="$GOLDEN_DEFAULT"
+  else
+    echo "WARNING: golden skipped - GOLDEN_DIR is unset and $GOLDEN_DEFAULT does not exist; the golden regression test did NOT run" >&2
+  fi
+fi
+[[ -z "${GOLDEN_DIR:-}" ]] || echo "golden test runs on $GOLDEN_DIR"
 npm test || refuse "tests failed"
 npm run typecheck || refuse "type check failed"
 
