@@ -13,11 +13,12 @@ import http from 'node:http';
 import https from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 import { isAllowedHost } from '../config/hosts.js';
+import { SITE } from '../config/site.js';
 
 export const MAX_BYTES = 30 * 1024 * 1024;
 export const TIMEOUT_MS = 20_000;
 export const MAX_REDIRECTS = 5;
-export const USER_AGENT = 'AbyssalClaimsTools/1.0 (+https://tools.something-rare.com)';
+export const USER_AGENT = `AbyssalClaimsTools/1.0 (+${SITE.origin}; mailto:${SITE.contactEmail})`;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 

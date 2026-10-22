@@ -147,7 +147,7 @@ describe('proxyFetch — what is sent and returned', () => {
     expect(seen!.addresses).toEqual(PUBLIC);
     expect(seen!.url.href).toBe('https://zenodo.org/api/records/1?x=1');
     const h = Object.fromEntries(Object.entries(seen!.headers).map(([k, v]) => [k.toLowerCase(), v]));
-    expect(h['user-agent']).toBe('AbyssalClaimsTools/1.0 (+https://tools.something-rare.com)');
+    expect(h['user-agent']).toBe('AbyssalClaimsTools/1.0 (+https://tools.something-rare.com; mailto:m.mazurowski@ai-wall.com)');
     expect(h['accept']).toBe('text/csv');
     expect(h['accept-encoding']).toBe('identity');
     expect(h['cookie']).toBeUndefined();
