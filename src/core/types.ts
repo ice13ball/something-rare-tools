@@ -133,6 +133,8 @@ export interface RuleDef {
   category: 'input' | 'A' | 'B' | 'C';
   severity: Severity;
   plain: Record<Lang, string>;   // template with {param} placeholders
+  /** Wordings for other classes of the `status` param (IN-RECORD-INACCESSIBLE): `plain` stays the 403/404 one. */
+  plainByStatus?: { server: Record<Lang, string>; other: Record<Lang, string> };
   technical: string;             // English, template with {param}
   thresholds?: Threshold[];
   citations?: Citation[];

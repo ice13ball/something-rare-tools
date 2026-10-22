@@ -41,6 +41,20 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       de: `Der Eintrag auf {host} konnte nicht geöffnet werden (Fehler {status}); er ist möglicherweise privat oder unveröffentlicht. Laden Sie die Dateien oder Metadaten herunter und ziehen Sie sie hierher.`,
       fr: `La notice sur {host} n'a pas pu être ouverte (erreur {status}) ; elle est peut-être privée ou non publiée. Téléchargez ses fichiers ou ses métadonnées et déposez-les ici.`,
     },
+    plainByStatus: {
+      server: {
+        pl: `Serwer {host} zwrócił błąd ({status}), więc rekordu nie udało się otworzyć. To zwykle chwilowa awaria po stronie serwera: spróbuj ponownie później albo pobierz pliki lub metadane i przeciągnij je tutaj.`,
+        en: `The server {host} returned an error ({status}), so the record could not be opened. This is usually a temporary fault on the server's side: try again later, or download its files or metadata and drop them here.`,
+        de: `Der Server {host} hat einen Fehler gemeldet ({status}), daher konnte der Eintrag nicht geöffnet werden. Meist ist das eine vorübergehende Störung auf Serverseite: Versuchen Sie es später erneut oder laden Sie die Dateien oder Metadaten herunter und ziehen Sie sie hierher.`,
+        fr: `Le serveur {host} a renvoyé une erreur ({status}), la notice n'a donc pas pu être ouverte. Il s'agit en général d'une panne passagère côté serveur : réessayez plus tard, ou téléchargez ses fichiers ou ses métadonnées et déposez-les ici.`,
+      },
+      other: {
+        pl: `Nie udało się otworzyć rekordu na {host} (błąd {status}). Spróbuj ponownie później albo pobierz jego pliki lub metadane i przeciągnij je tutaj.`,
+        en: `The record on {host} could not be opened (error {status}). Try again later, or download its files or metadata and drop them here.`,
+        de: `Der Eintrag auf {host} konnte nicht geöffnet werden (Fehler {status}). Versuchen Sie es später erneut oder laden Sie die Dateien oder Metadaten herunter und ziehen Sie sie hierher.`,
+        fr: `La notice sur {host} n'a pas pu être ouverte (erreur {status}). Réessayez plus tard, ou téléchargez ses fichiers ou ses métadonnées et déposez-les ici.`,
+      },
+    },
     technical: `{file}: HTTP {status} from {host}; record metadata not readable, continuing with what the other sources provided.`,
   },
   {
