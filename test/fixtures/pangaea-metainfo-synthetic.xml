@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<md:MetaData xmlns:md="http://www.pangaea.de/MetaData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <md:citation id="citation1">
+    <md:author id="author1"><md:lastName>Kowalska</md:lastName><md:firstName>Anna</md:firstName></md:author>
+    <md:author id="author2"><md:lastName>Nowak</md:lastName><md:firstName>Jan</md:firstName></md:author>
+    <md:year>2019</md:year>
+    <md:title>Synthetic CTD profiles from a test cruise</md:title>
+    <md:URI>https://doi.org/10.1594/PANGAEA.000000</md:URI>
+  </md:citation>
+  <md:abstract>An invented abstract.</md:abstract>
+  <md:license id="license101">
+    <md:label>CC-BY-3.0</md:label>
+    <md:name>Creative Commons Attribution 3.0 Unported</md:name>
+    <md:URI>https://creativecommons.org/licenses/by/3.0/</md:URI>
+  </md:license>
+</md:MetaData>

@@ -6,6 +6,9 @@ import { buildAttribution } from '../../src/core/licence/attribution';
 import { loadLicenceReferences, splitReferences } from '../../src/core/licence/load';
 import { MapFetcher } from '../sources/mapFetcher';
 import { DC, dataciteJson, zenodoJson, ZEN } from '../helpers/licenceFixtures';
+import { fixture } from '../sources/mapFetcher';
+
+const PANGAEA_META = 'https://doi.pangaea.de/10.1594/PANGAEA.000000?format=metainfo_xml';
 
 describe('splitReferences', () => {
   it('trims, drops empty lines and repeated lines', () => {
@@ -14,13 +17,34 @@ describe('splitReferences', () => {
 });
 
 describe('loadLicenceReferences', () => {
-  it('a PANGAEA DOI yields the DataCite record only (the data file is not read) and it is one source group with PANGAEA', async () => {
-    const c = { doi: '10.1594/PANGAEA.000001', title: 'P', url: 'https://doi.pangaea.de/10.1594/PANGAEA.000001' };
-    const f = new MapFetcher({ [DC + c.doi]: dataciteJson(c, [{ rightsIdentifier: 'cc-by-4.0' }]) });
+  it('a PANGAEA DOI yields PANGAEA\'s own metadata record and its DataCite record, in ONE group; the data file is never requested', async () => {
+    const c = { doi: '10.1594/PANGAEA.000000', title: 'P', url: 'https://doi.pangaea.de/10.1594/PANGAEA.000000' };
+    const f = new MapFetcher({
+      [DC + c.doi]: dataciteJson(c, [{ rightsIdentifier: 'cc-by-3.0', rightsUri: 'https://creativecommons.org/licenses/by/3.0/legalcode' }]),
+      [PANGAEA_META]: { body: fixture('pangaea-metainfo-synthetic.xml') },
+    });
     const load = await loadLicenceReferences([c.doi], f);
-    expect(load.records.map((r) => r.source)).toEqual(['datacite']);
+    expect(load.records.map((r) => r.source).sort()).toEqual(['datacite', 'pangaea']);
     expect(load.failures).toEqual([]);
-    expect(f.calls.every((u) => u.startsWith(DC))).toBe(true);
+    expect(f.calls.some((u) => u.includes('format=textfile'))).toBe(false);
+    const a = analyseLicences(load.records);
+    expect(a.groups.map((g) => g.id)).toEqual(['pangaea']);
+    expect(a.statedGroups).toBe(1);
+    expect(a.contradictions).toEqual([]);
+  });
+
+  it('PANGAEA metadata that cannot be read is a failure of source pangaea; the DataCite record is kept', async () => {
+    const c = { doi: '10.1594/PANGAEA.000000', title: 'P', url: 'https://doi.pangaea.de/10.1594/PANGAEA.000000' };
+    for (const meta of [{ status: 403 }, { body: '<html>sign in</html>' }]) {
+      const f = new MapFetcher({ [DC + c.doi]: dataciteJson(c, [{ rightsIdentifier: 'cc-by-3.0' }]), [PANGAEA_META]: meta });
+      const load = await loadLicenceReferences([c.doi], f);
+      expect(load.failures).toHaveLength(1);
+      expect(load.failures[0]).toMatchObject({ source: 'pangaea' });
+      expect(load.records.map((r) => r.source)).toEqual(['datacite']);
+      const a = analyseLicences(load.records, { unreadable: ['pangaea'] });
+      expect(a.sources.find((x) => x.source === 'pangaea')?.state).toBe('unreadable');
+      expect(a.missing).toBe(false);
+    }
   });
 
   it('a Zenodo link and its DOI give two records, not four, and each URL is fetched once', async () => {
