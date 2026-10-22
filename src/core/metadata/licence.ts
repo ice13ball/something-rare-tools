@@ -704,6 +704,26 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   return s;
 }
 
+/**
+ * The OPEN licence a statement names, even when the statement as a whole is not classified (versionless "CC BY", or a recognised
+ * licence plus leftover text): the id when the statement is recognised, else the ids / versionless families its text names, as
+ * written ("CC BY", "CC BY-SA"). undefined when it names none, or names any NC / ND / not-open licence (text or link).
+ * Never changes the classification; it only answers "does this statement name an open family?" (restriction-code conflicts).
+ */
+export function openLicenceNamed(s: LicenceStatement): string | undefined {
+  if (s.spdx) return isOpenLicence(s.spdx) ? s.spdx : undefined;
+  const reads = s.text ? [readText(s.text)] : [];
+  const ids = [...new Set(reads.flatMap((r) => r.ids))];
+  const families = [...new Set(reads.flatMap((r) => r.families))];
+  const uriId = s.uri ? readUri(s.uri).id : undefined;
+  const names = [...ids, ...families.map((f) => `CC ${f}`)];
+  if (names.length === 0 && uriId) names.push(uriId);
+  if (names.length === 0) return undefined;
+  if (ids.some((i) => !isOpenLicence(i)) || families.some((f) => /(?:^|-)(?:NC|ND)(?:-|$)/.test(f))) return undefined;
+  if (uriId && !isOpenLicence(uriId)) return undefined;
+  return names.join(' / ');
+}
+
 /** What a statement says once text and URI are weighed. Hand-built statements (only `spdx` set) are honoured. */
 export function classifyStatement(s: LicenceStatement): LicenceClass {
   if (s.conflict || !s.spdx) return { kind: 'unrecognised' };

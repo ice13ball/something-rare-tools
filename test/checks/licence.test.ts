@@ -58,13 +58,13 @@ describe('checkLicence', () => {
     expect(f[0].params).toEqual({ text: 'CC-BY 4.0', versionMissing: 'no', hint: 'CC-BY-4.0' });
   });
 
-  it('copyright next to an UNRECOGNISED "CC-BY" text gives only LIC-FREE-TEXT: no open licence is established to contradict', () => {
+  it('copyright next to a versionless "CC-BY" text: LIC-FREE-TEXT, plus LIC-RESTRICTION-CONFLICT (the text names an open family; it stays unrecognised)', () => {
     const rec = makeRecord('iso19139', {
       licences: [makeLicence('iso19139', { field: 'otherConstraints', text: 'CC-BY' })],
       restrictionCodes: [{ kind: 'access', code: 'copyright' }, { kind: 'use', code: 'copyright' }, { kind: 'other', code: 'otherRestrictions' }],
     });
     const f = lic(run([rec]));
-    expect(ids(f)).toEqual(['LIC-FREE-TEXT']);
+    expect(ids(f).sort()).toEqual(['LIC-FREE-TEXT', 'LIC-RESTRICTION-CONFLICT']);
   });
 
   it('the code "license" next to a CC licence is normal and does not conflict; otherRestrictions neither', () => {
