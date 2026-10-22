@@ -53,7 +53,7 @@ describe('bug 22.10: 2 — negation and added restrictions are not CC BY 4.0', (
   ])('"%s" is not recognised', (text) => {
     expect(toSpdx(text)).toBeUndefined();
   });
-  it.each(['CC BY 4.0', 'Creative Commons Attribution 4.0 International (CC BY 4.0)', 'Use under CC-BY 4.0 terms'])('"%s" still is', (text) => {
+  it.each(['CC BY 4.0', 'Creative Commons Attribution 4.0 International (CC BY 4.0)', 'Use under CC-BY 4.0'])('"%s" still is', (text) => {
     expect(toSpdx(text)).toBe('CC-BY-4.0');
   });
   it('a restricted text in a record raises LIC-ADDED-CONDITIONS (and not LIC-TEXT-URI-CONFLICT: there is no link)', () => {

@@ -10,7 +10,8 @@ import type { RuleSpec } from './spec';
  *   LIC-FREE-TEXT             text, versionMissing, hint   text = the licence text found; versionMissing = 'yes' | 'no';
  *                                                    hint = the SPDX id of the licence we recognised in it, or the example 'CC BY 4.0'
  *                                                    when nothing was recognised (never a licence the publisher did not name)
- *   LIC-TEXT-URI-CONFLICT     text, uri, textLicence, uriLicence   one statement WITH a link whose text and link classify differently
+ *   LIC-TEXT-URI-CONFLICT     text, uri, textLicence, uriLicence   one statement WITH a link whose text and link classify differently, or whose text names no
+                                                    licence and is not just "Open Access" (then textLicence = '—')
  *                                                    (incl. a link no SPDX id exists for); textLicence/uriLicence = SPDX id or '—'
  *   LIC-ADDED-CONDITIONS      text, textLicence, rest   the text names a licence and what is left of it after the licence name and the
  *                                                    neutral wording are removed contains a restriction marker; textLicence = the
@@ -61,12 +62,12 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     citations: [CITE.dataciteTitle, CITE.dataciteUri, CITE.ccNameAndLink],
     params: ['text', 'uri', 'textLicence', 'uriLicence'],
     plain: {
-      pl: `Tekst licencji („{text}”) i jej odnośnik wskazują różne licencje albo odnośnika nie da się rozpoznać. Z tekstu odczytano: {textLicence}; z odnośnika: {uriLicence} („—” = nierozpoznano). Sprawdź to ręcznie i podaj jedną licencję z jej własnym odnośnikiem.`,
-      en: `The licence text ("{text}") and its link point to different licences, or the link cannot be recognised. Read from the text: {textLicence}; read from the link: {uriLicence} ("—" = not recognised). Check it by hand and state one licence with its own link.`,
-      de: `Lizenztext („{text}“) und Link weisen auf unterschiedliche Lizenzen, oder der Link ist nicht erkennbar. Aus dem Text gelesen: {textLicence}; aus dem Link gelesen: {uriLicence} („—“ = nicht erkannt). Prüfen Sie das von Hand und geben Sie eine Lizenz mit ihrem eigenen Link an.`,
-      fr: `Le texte de la licence (« {text} ») et son lien désignent des licences différentes, ou le lien n'est pas reconnu. Lu dans le texte : {textLicence} ; lu dans le lien : {uriLicence} (« — » = non reconnu). Vérifiez-le à la main et indiquez une seule licence avec son propre lien.`,
+      pl: `Tekst licencji („{text}”) i odnośnik wskazują różne licencje, odnośnika nie da się rozpoznać albo tekst nie wymienia tej licencji i mówi coś innego. Z tekstu: {textLicence}; z odnośnika: {uriLicence} („—” = nierozpoznano). Sprawdź ręcznie i podaj jedną licencję z jej odnośnikiem.`,
+      en: `The licence text ("{text}") and its link point to different licences, the link is not recognised, or the text does not name this licence and says something else. From the text: {textLicence}; from the link: {uriLicence} ("—" = not recognised). Check by hand and state one licence with its own link.`,
+      de: `Lizenztext („{text}“) und Link nennen unterschiedliche Lizenzen, der Link ist nicht erkennbar, oder der Text nennt diese Lizenz nicht und sagt etwas anderes. Aus dem Text: {textLicence}; aus dem Link: {uriLicence} („—“ = nicht erkannt). Von Hand prüfen und eine Lizenz mit eigenem Link angeben.`,
+      fr: `Le texte de la licence (« {text} ») et son lien désignent des licences différentes, le lien n'est pas reconnu, ou le texte ne nomme pas cette licence et dit autre chose. Texte : {textLicence} ; lien : {uriLicence} (« — » = non reconnu). Vérifiez à la main et indiquez une seule licence avec son lien.`,
     },
-    technical: `{file} field {field}: text '{text}' reads as {textLicence}, link '{uri}' as {uriLicence}; the statement is not classified (text and link differ, or the link is not recognised). Check manually.`,
+    technical: `{file} field {field}: text '{text}' reads as {textLicence}, link '{uri}' as {uriLicence}; the statement is not classified (text and link differ, the link is not recognised, or the text names no licence and says something else). Check manually.`,
   },
   {
     id: 'LIC-ADDED-CONDITIONS',
