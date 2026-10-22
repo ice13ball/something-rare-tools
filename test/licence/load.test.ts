@@ -58,3 +58,18 @@ describe('buildAttribution', () => {
     expect(buildAttribution(analyseLicences([]))).toEqual({ text: '', omitted: 'none' });
   });
 });
+
+describe('one deposit, two DOIs', () => {
+  it('a concept DOI that leads to a Zenodo record with another DOI does not produce a second DataCite source', async () => {
+    const concept = { doi: '10.5281/zenodo.100', title: 'Z', url: 'https://zenodo.org/records/101' };
+    const version = { doi: '10.5281/zenodo.101', title: 'Z' };
+    const f = new MapFetcher({
+      [DC + concept.doi]: dataciteJson(concept, [{ rightsIdentifier: 'cc-by-4.0' }]),
+      [ZEN + '101']: zenodoJson('101', version, { id: 'cc-by-4.0' }),
+      [DC + version.doi]: dataciteJson(version, [{ rightsIdentifier: 'cc-by-4.0' }]),
+    });
+    const load = await loadLicenceReferences([concept.doi], f);
+    expect(load.records.map((r) => r.source).sort()).toEqual(['datacite', 'zenodo']);
+    expect(f.calls).not.toContain(DC + version.doi);
+  });
+});
