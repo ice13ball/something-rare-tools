@@ -9,7 +9,6 @@ import { renderPlain } from '../../core/report';
 import { browserFetcher, serverFetcher, type Fetcher } from '../../core/sources/fetcher';
 import type { MetadataSource } from '../../core/types';
 import { Layout } from '../components/Layout';
-import { LoadProblems, SwitchedNotice } from '../components/LoadProblems';
 import { ModeSwitch } from '../components/ModeSwitch';
 import { t, useLang } from '../i18n';
 import { DEFAULT_MODE, type DownloadMode } from '../types';
@@ -44,14 +43,18 @@ function ClassificationText({ a }: { a: AnalysedStatement }): React.ReactElement
   return <>{t('licence.class.unrecognised')}</>;
 }
 
-function reasonOf(f: LoadFailure, lang: ReturnType<typeof useLang>['lang']): string {
-  if (f.finding) return renderPlain(f.finding, lang);
+/** The reason in the visitor's language. Written for this page: the /check rules advise dropping files, which this page has no place for. */
+function reasonOf(f: LoadFailure): string {
+  const p = f.finding?.params ?? {};
+  if (f.finding?.ruleId === 'IN-FETCH-BLOCKED') return t('licence.reason.blocked', { host: String(p.host ?? '') });
+  if (f.finding?.ruleId === 'IN-HOST-NOT-ALLOWED') return t('licence.reason.notAllowed', { host: String(p.host ?? '') });
+  if (f.finding) return t('licence.reason.http', { host: String(p.host ?? ''), status: String(p.status ?? '') });
   if (f.reason === 'unrecognised') return t('licence.reason.unrecognised');
   return t('licence.reason.unexpected', { message: f.message ?? '' });
 }
 
 function SourceView({ src, failures }: { src: AnalysedSource; failures: LoadFailure[] }): React.ReactElement {
-  const { lang } = useLang();
+  useLang();
   const heading = src.record ? src.label : SOURCE_NAME[src.source];
   return (
     <article className="licence-source" data-state={src.state}>
@@ -65,7 +68,7 @@ function SourceView({ src, failures }: { src: AnalysedSource; failures: LoadFail
             .filter((f) => f.source === src.source)
             .map((f, i) => (
               <p key={i} className="muted">
-                {f.ref} — {reasonOf(f, lang)}
+                {f.ref} — {reasonOf(f)}
               </p>
             ))}
         </>
@@ -222,8 +225,10 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
     }
   };
 
-  const findings = result?.failures.flatMap((f) => (f.finding ? [f.finding] : [])) ?? [];
-  const plainFailures = result?.failures.filter((f) => !f.finding) ?? [];
+  // A failure that a source row already shows (its source is unreadable) is not listed twice.
+  const shown = new Set(result?.analysis.sources.filter((s) => s.state === 'unreadable').map((s) => s.source));
+  const listed = result?.failures.filter((f) => !f.source || !shown.has(f.source)) ?? [];
+  const blockedInBrowser = mode === 'browser' && (result?.failures.some((f) => f.finding?.ruleId === 'IN-FETCH-BLOCKED') ?? false);
 
   return (
     <Layout titleKey="licence.docTitle">
@@ -254,24 +259,32 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
 
       {result && (
         <div data-testid="licence-result">
-          <LoadProblems
-            findings={findings}
-            mode={mode}
-            onSwitchToServer={() => {
-              setMode('server');
-              setSwitched(true);
-            }}
-          />
-          {switched && <SwitchedNotice />}
-          {plainFailures.length > 0 && (
+          {listed.length > 0 && (
             <section className="notice" role="alert">
               <h2>{t('licence.failed.title')}</h2>
               <ul>
-                {plainFailures.map((f, i) => (
+                {listed.map((f, i) => (
                   <LangRow key={i} f={f} />
                 ))}
               </ul>
             </section>
+          )}
+          {blockedInBrowser && (
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                setMode('server');
+                setSwitched(true);
+              }}
+            >
+              {t('blocked.switch')}
+            </button>
+          )}
+          {switched && (
+            <p className="notice" role="status">
+              {t('licence.switched')}
+            </p>
           )}
           <Summary r={result} />
           <section aria-labelledby="licence-sources-title">
@@ -313,10 +326,10 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
 }
 
 function LangRow({ f }: { f: LoadFailure }): React.ReactElement {
-  const { lang } = useLang();
+  useLang();
   return (
     <li>
-      {f.ref} — {reasonOf(f, lang)}
+      {f.ref} — {reasonOf(f)}
     </li>
   );
 }
