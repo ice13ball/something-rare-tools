@@ -120,7 +120,6 @@ const PORT_NAMES: Record<string, string> = {
 };
 
 const NC_ND_SA = '(?:non[\\s-]?commercial|share[\\s-]?alike|no[\\s-]?derivatives?|no[\\s-]?derivs)';
-const PORT_CODES = PORTS.map((p) => p.toLowerCase()).join('|');
 
 interface Pattern {
   re: RegExp;
@@ -130,14 +129,18 @@ interface Pattern {
 const PATTERNS: Pattern[] = [
   {
     // "CC BY 4.0", "cc-by-4.0", "CC BY-NC-SA 3.0 DE", "CC-BY-3.0-IGO". A version is mandatory for an id.
-    re: new RegExp(`(?<![a-z0-9])cc[\\s_-]*(by(?:[\\s_-]*(?:nc|sa|nd))*)[\\s_-]*(\\d\\.\\d)(?![\\d])(?:([\\s_/-]*)(${PORT_CODES})(?![a-z0-9]))?`, 'gi'),
+    re: new RegExp(`(?<![a-z0-9])cc[\\s_-]*(by(?:[\\s_-]*(?:nc|sa|nd))*)[\\s_-]*(\\d\\.\\d)(?![\\d])(?:([\\s_/-]*)(igo|[a-z]{2})(?![a-z0-9]))?`, 'gi'),
     read: (m) => {
-      // A port after a space must be written in capitals ("CC BY 3.0 DE"), or "CC-BY-3.0 at Zenodo" would read as Austria.
+      // A port is written in capitals ("CC BY 3.0 DE"), or after a dash/slash in either case if SPDX has one ("cc-by-3.0-de"):
+      // "CC-BY-3.0 at Zenodo" is not Austria, "CC-BY-3.0-or-later" is not a port.
       const sep = m[3] ?? '';
-      const port = m[4] && m[2] !== '4.0' && (/[-/]/.test(sep) || m[4] === m[4].toUpperCase()) ? m[4] : undefined;
+      const code = m[4];
+      const isPort = !!code && m[2] !== '4.0' && (code === code.toUpperCase() || (/[-/]/.test(sep) && PORTS.includes(code.toUpperCase())));
+      const port = isPort ? code : undefined;
       // An ignored port token stays outside the masked span.
-      const tail = m[4] && !port ? sep.length + m[4].length : 0;
-      return { ...ccId(m[1], m[2], port), span: [m.index, m.index + m[0].length - tail] };
+      const tail = code && !isPort ? sep.length + code.length : 0;
+      const r = ccId(m[1], m[2], port);
+      return { ...r, span: [m.index, m.index + m[0].length - tail] };
     },
   },
   {
