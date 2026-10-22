@@ -75,11 +75,13 @@ describe('bug 22.10: 3 — ported Creative Commons URIs do not collapse to the g
   it('a port SPDX has no id for is unrecognised, not generic', () => {
     expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by/3.0/pl/')).toBeUndefined();
   });
+  it('4.0 has no ports: a segment after 4.0 is not a recognised link (round 6a; was read as a deed language)', () => {
+    expect(toSpdx(undefined, 'https://creativecommons.org/licenses/by/4.0/pl/')).toBeUndefined();
+  });
   it.each([
     ['https://creativecommons.org/licenses/by/3.0/deed.pl', 'CC-BY-3.0'],
     ['https://creativecommons.org/licenses/by/3.0/legalcode.de', 'CC-BY-3.0'],
     ['https://creativecommons.org/licenses/by/4.0/deed.de', 'CC-BY-4.0'],
-    ['https://creativecommons.org/licenses/by/4.0/pl/', 'CC-BY-4.0'],
   ])('%s is a deed language, not a port -> %s', (uri, id) => {
     expect(toSpdx(undefined, uri)).toBe(id);
   });

@@ -58,16 +58,20 @@ export function isOpenLicence(spdx?: string): boolean {
 /* ---------- URI -> id ---------- */
 
 /** `oneOf`: a URI that fits several SPDX ids (GPL-3.0-only and -or-later share one URL); a text naming one of them agrees with it. */
-type Read = { id?: string; unmapped?: boolean; family?: string; oneOf?: string[]; /** a licence link with a tail we cannot read (query, fragment, unknown path): not a recognised licence */ dirty?: boolean };
+type Read = { id?: string; unmapped?: boolean; /** a clean CC0 / Public Domain Mark link: the only link next to which "Public Domain" wording is neutral */ pd?: boolean; family?: string; oneOf?: string[]; /** a licence link with a tail we cannot read (query, fragment, unknown path): not a recognised licence */ dirty?: boolean };
 
 /**
  * What may follow the version of a licence link: an optional port segment, "legalcode" / "deed" with an optional language tag
  * (en, pl, zh-hans, en_GB), an optional "/". Anything else (a query, a fragment, "legalcode-modified-nc") makes the link unreadable.
  * ONE exception: the Creative Commons licence chooser appends exactly "?ref=chooser-v1" to the links it generates; that is neutral.
  */
-const LANG = '\\.[a-z]{2,3}(?:[-_][a-z0-9]+)*';
+// The language tag of a deed is [a-z]{2,3}([-_][a-z]{2}|[-_][a-z]{4})? and nothing else; a tag that reads as a licence element
+// ("deed.nc", "deed.en-nc", "deed.en-sa") or a script we do not know is not a language: the link stays unreadable. (Link is lower-case here.)
+const LANG = '\\.(?!n[cd](?![a-z]))[a-z]{2,3}(?:[-_](?:(?!(?:nc|nd|sa|by)(?![a-z]))[a-z]{2}|hans|hant|latn|cyrl|arab))?';
 const CHOOSER = '(?:\\?ref=chooser-v1)?';
+/** Below 4.0 a port (jurisdiction) segment may follow the version; from 4.0 on there are no ports and no other segment. */
 const CC_TAIL = new RegExp(`^(?:/(?!deed(?![a-z]))([a-z]{2,4}))?(?:/(?:legalcode|deed)(?:${LANG})?)?/?${CHOOSER}$`);
+const CC_TAIL_NOPORT = new RegExp(`^(?:/(?:legalcode|deed)(?:${LANG})?)?/?${CHOOSER}$`);
 const ZERO_TAIL = new RegExp(`^(?:/(?:legalcode|deed)(?:${LANG})?)?/?${CHOOSER}$`);
 /** Other licence families: the page itself, optionally ".html" / ".txt" and a closing "/". */
 const OTHER_TAIL = /^(?:\.(?:html?|txt))?\/?$/;
@@ -122,12 +126,16 @@ function readUri(uri: string): Read {
   // A bare 2-4 letter segment after the version is a PORT (jurisdiction); "deed.pl" / "legalcode.de" are deed languages.
   const cc = /creativecommons\.org\/licen[sc]es\/(by(?:-(?:nc|sa|nd))*)\/(\d\.\d)(?![\d])/.exec(u);
   if (cc) {
-    const t = CC_TAIL.exec(u.slice(cc.index + cc[0].length));
+    const tail = u.slice(cc.index + cc[0].length);
+    if (parseFloat(cc[2]) >= 4) return CC_TAIL_NOPORT.test(tail) ? ccId(cc[1], cc[2]) : DIRTY;
+    const t = CC_TAIL.exec(tail);
     return t ? ccId(cc[1], cc[2], t[1] && t[1] !== 'deed' ? t[1] : undefined) : DIRTY;
   }
   if (/creativecommons\.org\/licen[sc]es\//.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   const zero = /creativecommons\.org\/publicdomain\/zero\/1\.0(?![\d])/.exec(u);
-  if (zero) return tailed(u, zero, ZERO_TAIL, { id: 'CC0-1.0' });
+  if (zero) return tailed(u, zero, ZERO_TAIL, { id: 'CC0-1.0', pd: true });
+  const mark = /creativecommons\.org\/publicdomain\/mark\/1\.0(?![\d])/.exec(u);
+  if (mark && ZERO_TAIL.test(u.slice(mark.index + mark[0].length))) return { unmapped: true, pd: true };
   if (/creativecommons\.org\/publicdomain\//.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
   const odc = /opendatacommons\.org\/licenses\/(odbl|pddl|by)\/(\d)[-.](\d)/.exec(u);
   if (odc) return tailed(u, odc, OTHER_TAIL, known(`${{ odbl: 'ODbL', pddl: 'PDDL', by: 'ODC-By' }[odc[1] as 'odbl']}-${odc[2]}.${odc[3]}`));
@@ -400,12 +408,12 @@ const COMPANY_FORMS = new Set(['ltd', 'limited', 'gmbh', 'ag', 'sas', 'inc', 'co
  * delimit the notice (what follows is leftover, even if it is otherwise neutral filler such as "Use"); they are not a general condition marker.
  */
 const BOUNDARY_WORDS = new Set(
-  `use fee fees required registration members partners program programme internal until only paid licence license nutzung erforderlich utilisation payant redevance użytek`.split(' '),
+  `use fee fees required registration members partners program programme internal until only paid licence license nutzung erforderlich utilisation payant redevance użytek registrierung zustimmung kosten licensed usage interne`.split(' '),
 );
-const BOUNDARY_PREFIXES = ['gebühr', 'lizenz', 'mitglied', 'réservé', 'opłat', 'płatn', 'wymagan', 'członk'];
+const BOUNDARY_PREFIXES = ['gebühr', 'lizenz', 'mitglied', 'réservé', 'opłat', 'płatn', 'wymagan', 'członk', 'subscri', 'charge', 'użytk', 'wewnętrzn'];
 const isBoundary = (word: string): boolean => {
   const w = word.toLowerCase();
-  return BOUNDARY_WORDS.has(w) || BOUNDARY_PREFIXES.some((p) => w.startsWith(p)) || w.includes('pflichtig');
+  return BOUNDARY_WORDS.has(w) || BOUNDARY_PREFIXES.some((p) => w.startsWith(p)) || w.includes('pflichtig') || w.includes('bedingung');
 };
 const TOKEN = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*|\p{S}+/gu;
 
@@ -519,7 +527,14 @@ interface TextRead {
   any: boolean;
   /** Unnamed text only: empty or one of the neutral access statements ("Open Access", info:eu-repo/semantics/openAccess); says nothing else. */
   neutral: boolean;
+  /** Unnamed text only: the whole text is "Public Domain" wording; neutral only next to a CC0 / Public Domain Mark link. */
+  pd: boolean;
 }
+
+/** Public-domain wording (en / fr / de / pl). */
+const PD_WORDS = '(?:public\\s+domain(?:\\s+dedication)?|domaine\\s+public|gemeinfrei|domena\\s+publiczna)';
+const PD_WHOLE = new RegExp(`^${PD_WORDS}[\\s.,;:!]*$`, 'iu');
+const PD_IN_TEXT = new RegExp(`(?<![\\p{L}\\p{N}])${PD_WORDS}(?![\\p{L}\\p{N}])`, 'giu');
 
 /** What a text that names no licence may say next to a licence link: only that the data is open access (any case), as an eu-repo / COAR value or word. */
 const NEUTRAL_UNNAMED: RegExp[] = [
@@ -552,7 +567,8 @@ const NAME_WORDS: { re: RegExp; idPrefix: string }[] = [
 ];
 
 function readText(raw: string): TextRead {
-  const out: TextRead = { ids: [], families: [], unmapped: false, recognised: false, leftover: '', restricted: false, any: false, neutral: false };
+  const out: TextRead = { ids: [], families: [], unmapped: false, recognised: false, leftover: '', restricted: false, any: false, neutral: false, pd: false };
+  let pdLink = false;
   // Links and DOIs are blanked (same length, so positions stay aligned with `raw`). A licence link is a licence name like any other;
   // every other link or DOI is kept aside and shown as leftover.
   let text = raw;
@@ -564,6 +580,7 @@ function readText(raw: string): TextRead {
     text = text.slice(0, ref.index!) + ' '.repeat(ref[0].length) + text.slice(ref.index! + ref[0].length);
     if (!r.dirty && (r.id || r.unmapped || r.oneOf)) {
       out.any = true;
+      if (r.pd) pdLink = true;
       if (r.id && !out.ids.includes(r.id)) out.ids.push(r.id);
       if (r.unmapped) out.unmapped = true;
     } else foreign.push({ pos: ref.index!, text: shown });
@@ -591,6 +608,7 @@ function readText(raw: string): TextRead {
     rest = blank(rest, UNREAD_NAME_ALL);
   }
   if (out.any) {
+    if (pdLink) rest = blank(rest, PD_IN_TEXT);
     for (const n of NAME_WORDS) if (out.ids.some((id) => id.startsWith(n.idPrefix))) rest = blank(rest, n.re);
     const left = leftoverOf(raw, rest, foreign);
     out.leftover = left.text;
@@ -601,6 +619,7 @@ function readText(raw: string): TextRead {
     for (const re of AFFIRMATIVE_CLOSING) stripped = blank(stripped, re);
     out.restricted = MARKERS.test(stripped) || COMMERCIAL.test(stripped);
     out.neutral = isNeutralUnnamed(raw);
+    out.pd = PD_WHOLE.test(raw.trim());
   }
   return out;
 }
@@ -659,7 +678,7 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   const flagged = reads.filter((r) => r.leftover && (r.recognised || r.restricted));
   // A text that names no licence cannot vouch for the link: next to a licence link it may be empty or plain "Open Access" and nothing else
   // ("Free for scientific use", "Please contact the PI" are statements about the data, not the licence).
-  const unnamedSays = reads.some((r) => !r.any && !r.neutral);
+  const unnamedSays = reads.some((r) => !r.any && !r.neutral && !(r.pd && u.pd));
   const licenceUri = !!(u.id || u.unmapped || u.oneOf);
   const textVsUri =
     !!uri &&
