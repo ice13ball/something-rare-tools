@@ -12,8 +12,11 @@ import type { RuleSpec } from './spec';
  *                                                    when nothing was recognised (never a licence the publisher did not name)
  *   LIC-TEXT-URI-CONFLICT     text, uri, textLicence, uriLicence   one statement WITH a link whose text and link classify differently
  *                                                    (incl. a link no SPDX id exists for); textLicence/uriLicence = SPDX id or '—'
- *   LIC-ADDED-CONDITIONS      text, textLicence      the text names a licence but adds or negates conditions; textLicence = the
- *                                                    SPDX id, or the text itself when no id could be read
+ *   LIC-ADDED-CONDITIONS      text, textLicence, rest   the text names a licence and what is left of it after the licence name and the
+ *                                                    neutral wording are removed contains a restriction marker; textLicence = the
+ *                                                    SPDX id, or the text itself when no id could be read; rest = that leftover
+ *   LIC-EXTRA-TEXT            text, rest             the text names a licence and says something else (no restriction marker in it);
+ *                                                    rest = exactly that something else, as written
  *   LIC-AMBIGUOUS             text, readings         one statement WITHOUT a link that reads as more than one licence (rights text against
  *                                                    identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to one that is not);
  *                                                    readings = what it reads as, separated by " / " ("—" = a name no SPDX id exists for)
@@ -70,14 +73,28 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     category: 'A',
     severity: 'warning',
     citations: [CITE.ccModified],
-    params: ['text', 'textLicence'],
+    params: ['text', 'textLicence', 'rest'],
     plain: {
-      pl: `Tekst („{text}”) wymienia licencję {textLicence}, ale dodaje do niej warunki, więc w takim brzmieniu nie jest to już ta standardowa licencja. Sprawdź to ręcznie i podaj wyraźnie licencję oraz ewentualne dodatkowe warunki.`,
-      en: `The text ("{text}") names the licence {textLicence} but adds conditions to it, so as written it is no longer that standard licence. Check it by hand and state the licence and any extra conditions clearly.`,
-      de: `Der Text („{text}“) nennt die Lizenz {textLicence}, fügt ihr aber Bedingungen hinzu; so geschrieben ist es nicht mehr diese Standardlizenz. Prüfen Sie das von Hand und geben Sie die Lizenz und etwaige zusätzliche Bedingungen klar an.`,
-      fr: `Le texte (« {text} ») nomme la licence {textLicence} mais y ajoute des conditions ; tel qu'il est écrit, ce n'est plus cette licence standard. Vérifiez-le à la main et indiquez clairement la licence et les éventuelles conditions supplémentaires.`,
+      pl: `Tekst („{text}”) wymienia licencję {textLicence}, ale dodaje do niej warunki („{rest}”), więc w takim brzmieniu nie jest to już ta standardowa licencja. Sprawdź to ręcznie i podaj wyraźnie licencję oraz ewentualne dodatkowe warunki.`,
+      en: `The text ("{text}") names the licence {textLicence} but adds conditions to it ("{rest}"), so as written it is no longer that standard licence. Check it by hand and state the licence and any extra conditions clearly.`,
+      de: `Der Text („{text}“) nennt die Lizenz {textLicence}, fügt ihr aber Bedingungen hinzu („{rest}“); so geschrieben ist es nicht mehr diese Standardlizenz. Prüfen Sie das von Hand und geben Sie die Lizenz und etwaige zusätzliche Bedingungen klar an.`,
+      fr: `Le texte (« {text} ») nomme la licence {textLicence} mais y ajoute des conditions (« {rest} ») ; tel qu'il est écrit, ce n'est plus cette licence standard. Vérifiez-le à la main et indiquez clairement la licence et les éventuelles conditions supplémentaires.`,
     },
-    technical: `{file} field {field}: text '{text}' names {textLicence} but adds or negates conditions; the statement is not classified as that licence. Check manually.`,
+    technical: `{file} field {field}: text '{text}' names {textLicence} but the rest '{rest}' adds or negates conditions; the statement is not classified as that licence. Check manually.`,
+  },
+  {
+    id: 'LIC-EXTRA-TEXT',
+    category: 'A',
+    severity: 'warning',
+    citations: [CITE.ccModified],
+    params: ['text', 'rest'],
+    plain: {
+      pl: `Tekst („{text}”) zawiera oprócz nazwy licencji jeszcze inną treść („{rest}”). Sprawdź ręcznie, czy zmienia ona licencję; dopóki tego nie wiadomo, nie traktuj tego jako standardowej licencji.`,
+      en: `The text ("{text}") contains something besides the licence name ("{rest}"). Check by hand whether it changes the licence; until that is clear, do not treat this as the standard licence.`,
+      de: `Der Text („{text}“) enthält neben dem Lizenznamen noch weiteren Inhalt („{rest}“). Prüfen Sie von Hand, ob er die Lizenz verändert; solange das nicht geklärt ist, behandeln Sie dies nicht als die Standardlizenz.`,
+      fr: `Le texte (« {text} ») contient autre chose que le nom de la licence (« {rest} »). Vérifiez à la main si cela change la licence ; tant que ce n'est pas clair, ne le traitez pas comme la licence standard.`,
+    },
+    technical: `{file} field {field}: text '{text}' contains '{rest}' besides the licence name; the statement is not classified. Check manually whether it changes the licence.`,
   },
   {
     id: 'LIC-AMBIGUOUS',

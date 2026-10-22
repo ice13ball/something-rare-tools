@@ -44,7 +44,8 @@ describe('identifiers added from the SPDX list', () => {
     expect(toSpdx(undefined, 'https://creativecommons.org/publicdomain/mark/1.0/')).toBeUndefined();
   });
   it('a port word after a space needs capitals, so ordinary words are not read as a country', () => {
-    expect(toSpdx('CC-BY-3.0 at Zenodo')).toBe('CC-BY-3.0');
+    // "at" is not a port (and not Austria); "Zenodo" is text besides the licence name, so fail-closed: no id.
+    expect(toSpdx('CC-BY-3.0 at Zenodo')).toBeUndefined();
     expect(toSpdx('CC BY 4.0 DE')).toBe('CC-BY-4.0');
   });
   it('exposes official name and canonical URL for every classifiable id, and nothing else', () => {
@@ -93,8 +94,8 @@ describe('text and URI are read separately; the URI never silently wins', () => 
   it('an unrecognised text that restricts ("All rights reserved") against a licence URI is a text/URI conflict', () => {
     expect(st('All rights reserved', 'https://creativecommons.org/licenses/by/4.0/')).toMatchObject({ conflict: 'text-uri' });
   });
-  it('a text that names a licence and adds conditions is "restricted" even when a URI differs: the more specific explanation wins', () => {
-    expect(st('CC BY-NC 4.0, but not for commercial use', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('restricted');
+  it('precedence: readings that differ (text against link) win over the leftover; a leftover decides only when the readings agree', () => {
+    expect(st('CC BY-NC 4.0, but not for commercial use', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('text-uri');
     expect(st('CC BY 4.0 except for the maps', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('restricted');
   });
   it('the same restricting text without any licence URI is only unrecognised free text', () => {
@@ -118,6 +119,12 @@ describe('text and URI are read separately; the URI never silently wins', () => 
     expect(buildStatement(parts)!.conflict).toBe('readings');
     expect(buildStatement({ ...parts, uri: 'https://creativecommons.org/licenses/by/4.0/' })!.conflict).toBe('text-uri');
   });
+  it('fail-closed: wording that is not neutral next to the licence name makes the statement "extra-text" (no id)', () => {
+    for (const t of ['Data are licensed under CC BY 4.0. Please cite the dataset.', 'Unrestricted use under CC BY 4.0']) {
+      expect(st(t).conflict, t).toBe('extra-text');
+      expect(st(t).spdx, t).toBeUndefined();
+    }
+  });
   it('conditions in the text, pl/en/de/fr, make the statement unrecognised', () => {
     for (const t of ['CC BY 4.0 except for the maps', 'CC BY 4.0 – nur für Forschung', 'CC BY 4.0, sauf les images', 'CC BY 4.0 z wyjątkiem zdjęć']) {
       expect(st(t).conflict, t).toBe('restricted');
@@ -126,8 +133,6 @@ describe('text and URI are read separately; the URI never silently wins', () => 
   it('ordinary wording around the licence name is not a condition', () => {
     for (const t of [
       'Creative Commons Attribution 4.0 International (CC BY 4.0)',
-      'Data are licensed under CC BY 4.0. Please cite the dataset.',
-      'Unrestricted use under CC BY 4.0',
       'CC0 1.0 Universal (CC0 1.0) Public Domain Dedication',
       'No Rights Reserved. CC0 1.0',
     ]) {

@@ -36,8 +36,10 @@ export interface LicenceStatement {
   spdx?: string;
   textSpdx?: string;            // what the text alone names
   uriSpdx?: string;             // what the URI alone names
-  /** Why `spdx` is not set: 'text-uri' = the statement has a URI and text and URI classify differently; 'restricted' = the text names a licence but adds or negates conditions; 'readings' = no link, but the text gives more than one reading of itself. */
-  conflict?: 'text-uri' | 'restricted' | 'readings';
+  /** Why `spdx` is not set: 'text-uri' = the statement has a URI and text and URI classify differently; 'restricted' = the text names a licence and something is left over that contains a restriction marker (conditions); 'extra-text' = the text names a licence and something else is left over (fail-closed, see readText); 'readings' = no link, but the text gives more than one reading of itself. */
+  conflict?: 'text-uri' | 'restricted' | 'extra-text' | 'readings';
+  /** What the text says besides the licence name and neutral wording (set with conflict 'restricted' / 'extra-text'). */
+  leftover?: string;
   /** The licences the text itself reads as, when it reads as more than one (several ids, a versionless family, "—" = a name no id exists for). */
   readings?: string[];
 }
@@ -60,6 +62,8 @@ export interface MetadataRecord {
   landingUrl?: string;
   /** Zenodo: id of the concept record (the DOI that stands for all versions), to tell that a concept DOI and a version DOI are one deposit. */
   conceptId?: string;
+  /** DataCite relatedIdentifiers of type DOI with relation IsVersionOf / HasVersion, lower-case DOIs: links the records of a concept DOI and its version DOIs. */
+  versionDois?: string[];
   isoProfile?: '19139' | '19115-3';   // source 'iso19139' covers both ISO profiles; this says which one was read
   creators?: string[];          // for the attribution line, in source order
   publicationYear?: number;

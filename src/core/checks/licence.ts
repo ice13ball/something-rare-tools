@@ -23,7 +23,13 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
       return makeFinding('LIC-ADDED-CONDITIONS', {
         file,
         field: c.statement.statement.field,
-        params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence },
+        params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence, rest: c.statement.conflict!.rest },
+      });
+    case 'extra-text':
+      return makeFinding('LIC-EXTRA-TEXT', {
+        file,
+        field: c.statement.statement.field,
+        params: { text: c.statement.conflict!.text, rest: c.statement.conflict!.rest },
       });
     case 'ambiguous':
       return makeFinding('LIC-AMBIGUOUS', {
