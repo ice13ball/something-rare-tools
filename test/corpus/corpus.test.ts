@@ -80,6 +80,7 @@ describe.skipIf(!enabled)('licence corpus (live)', () => {
             })),
           })),
           statedGroups: analysis.statedGroups,
+          recognisedGroups: analysis.recognisedGroups,
           comparison: analysis.comparison,
           contradictions: analysis.contradictions.map((c) => c.kind),
           findings: findings.map((f) => ({ ruleId: f.ruleId, severity: f.severity, params: f.params })),

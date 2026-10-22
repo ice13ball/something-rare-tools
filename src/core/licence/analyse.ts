@@ -102,7 +102,7 @@ export function depositKeys(rec: MetadataRecord): string[] {
   if (rec.source === 'iso19139') return [`iso:${landing || rec.label}`];
   if (doi) keys.push(`doi:${doi}`);
   if (rec.source === 'zenodo' || rec.source === 'datacite') {
-    const z = new Set([zenodoId(doi), zenodoId(landing)].filter((x): x is string => !!x));
+    const z = new Set([zenodoId(doi), zenodoId(landing), rec.conceptId].filter((x): x is string => !!x));
     for (const id of z) keys.push(`zenodo:${id}`);
   }
   if (rec.source === 'pangaea' || rec.source === 'datacite') {

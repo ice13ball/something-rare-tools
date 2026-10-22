@@ -21,6 +21,7 @@ import { runChecks } from '../../src/core/checks/run';
 import { makeFinding } from '../../src/core/rules/registry';
 import { analyseLicences } from '../../src/core/licence/analyse';
 import { buildStatement, classifyStatement } from '../../src/core/metadata/licence';
+import { parseZenodoRecord } from '../../src/core/metadata/zenodo';
 import { LANGS, type Finding, type LicenceStatement, type MetadataRecord, type MetadataSource } from '../../src/core/types';
 import { makeRecord } from '../helpers/build';
 
@@ -246,6 +247,16 @@ describe('review 7 — sources are grouped by deposit, not by source type', () =
     expect(a.groups).toHaveLength(1);
     expect(a.groups[0].sources).toHaveLength(3);
     expect(a.comparison).toBe('single-source');
+  });
+  it('the Zenodo parser keeps the concept record id', () => {
+    expect(parseZenodoRecord({ id: 9, conceptrecid: '7', metadata: {} }, 'Zenodo 9').conceptId).toBe('7');
+  });
+  it('a Zenodo version record that names its concept record joins the DataCite record of the concept DOI (landing page = the concept itself)', () => {
+    const z = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.19475182', label: 'Zenodo 19475182', landingUrl: 'https://zenodo.org/records/19475182', conceptId: '3633185' });
+    const concept = rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.3633185', label: 'DataCite concept', landingUrl: 'https://zenodo.org/records/3633185' });
+    const other = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.5', label: 'Zenodo 5', landingUrl: 'https://zenodo.org/records/5', conceptId: '4' });
+    expect(analyseLicences([z, concept]).groups).toHaveLength(1);
+    expect(analyseLicences([z, concept, other]).groups).toHaveLength(2);
   });
   it('a PANGAEA record and the DataCite record of its DOI are one group; a catalogue with the same DOI is not merged into it', () => {
     const p = rec('pangaea', [['CC BY 4.0', BY, 'license']], { doi: '10.1594/PANGAEA.9', label: 'PANGAEA 9' });
