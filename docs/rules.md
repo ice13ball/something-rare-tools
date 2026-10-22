@@ -10,6 +10,7 @@ Every number a rule compares against is listed here with its source (`docs/resea
 | IN-RECORD-INACCESSIBLE | error | input | — | — |
 | IN-HOST-NOT-ALLOWED | warning | input | — | — |
 | IN-FETCH-BLOCKED | warning | input | — | — |
+| IN-FETCH-TIMEOUT | warning | input | — | — |
 | IN-LAYOUT-UNSUPPORTED | error | input | — | — |
 | IN-ENCODING-FALLBACK | info | input | — | — |
 | IN-DECIMAL-COMMA | info | input | — | — |

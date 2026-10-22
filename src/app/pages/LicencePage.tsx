@@ -57,6 +57,11 @@ function reasonOf(f: LoadFailure): string {
   const p = f.finding?.params ?? {};
   if (f.finding?.ruleId === 'IN-FETCH-BLOCKED') return t('licence.reason.blocked', { host: String(p.host ?? '') });
   if (f.finding?.ruleId === 'IN-HOST-NOT-ALLOWED') return t('licence.reason.notAllowed', { host: String(p.host ?? '') });
+  if (f.finding?.ruleId === 'IN-FETCH-TIMEOUT') return t('licence.reason.timeout', { host: String(p.host ?? '') });
+  // The generic "may be private or unpublished" is true of a refused record (401, 403), not of a busy host or a DOI DataCite does not know.
+  if (f.finding && Number(p.status) === 429) return t('licence.reason.rateLimit', { host: String(p.host ?? '') });
+  if (f.finding && (Number(p.status) === 408 || Number(p.status) === 504)) return t('licence.reason.timeout', { host: String(p.host ?? '') });
+  if (f.finding && f.source === 'datacite' && Number(p.status) === 404) return t('licence.reason.notDatacite', { host: String(p.host ?? '') });
   if (f.finding) return t('licence.reason.http', { host: String(p.host ?? ''), status: String(p.status ?? '') });
   if (f.reason === 'unrecognised') return t('licence.reason.unrecognised');
   return t('licence.reason.unexpected', { message: f.message ?? '' });
@@ -273,7 +278,7 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
   // A failure that a source row already shows (its source is unreadable) is not listed twice.
   const shown = new Set(result?.analysis.sources.filter((s) => s.state === 'unreadable').map((s) => s.source));
   const listed = result?.failures.filter((f) => !f.source || !shown.has(f.source)) ?? [];
-  const blockedInBrowser = mode === 'browser' && (result?.failures.some((f) => f.finding?.ruleId === 'IN-FETCH-BLOCKED') ?? false);
+  const blockedInBrowser = mode === 'browser' && (result?.failures.some((f) => f.finding?.ruleId === 'IN-FETCH-BLOCKED' || f.finding?.ruleId === 'IN-FETCH-TIMEOUT') ?? false);
 
   return (
     <Layout titleKey="licence.docTitle">

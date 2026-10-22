@@ -13,7 +13,7 @@ export interface LoadProblemsProps {
   onSwitchToServer: () => void;
 }
 
-export const LOAD_RULES: readonly string[] = ['IN-FETCH-BLOCKED', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
+export const LOAD_RULES: readonly string[] = ['IN-FETCH-BLOCKED', 'IN-FETCH-TIMEOUT', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
 
 /**
  * Downloads that failed, in plain words with the host. A browser download blocked by the data server (CORS/CSP) gets the
@@ -23,7 +23,7 @@ export function LoadProblems({ findings, mode, onSwitchToServer }: LoadProblemsP
   const { lang } = useLang();
   const list = findings.filter((f) => LOAD_RULES.includes(f.ruleId));
   if (list.length === 0) return null;
-  const blockedInBrowser = mode === 'browser' && list.some((f) => f.ruleId === 'IN-FETCH-BLOCKED');
+  const blockedInBrowser = mode === 'browser' && list.some((f) => f.ruleId === 'IN-FETCH-BLOCKED' || f.ruleId === 'IN-FETCH-TIMEOUT');
   const blockedInServerMode = mode === 'server' && list.some((f) => f.ruleId === 'IN-FETCH-BLOCKED');
   return (
     <section className="load-problems" role="alert" aria-label={t('blocked.title')}>

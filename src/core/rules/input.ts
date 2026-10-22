@@ -70,6 +70,19 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     technical: `{file}: fetch from {host} blocked in browser mode (CORS, CSP or network error).`,
   },
   {
+    id: 'IN-FETCH-TIMEOUT',
+    category: 'input',
+    severity: 'warning',
+    params: ['host'],
+    plain: {
+      pl: `{host} nie zaczął odpowiadać w ciągu 30 sekund, więc przeglądarka przestała czekać. Spróbuj ponownie później albo przełącz na tryb serwera.`,
+      en: `{host} did not start to answer within 30 seconds, so the browser stopped waiting. Try again later or switch to server mode.`,
+      de: `{host} hat innerhalb von 30 Sekunden nicht zu antworten begonnen, daher hat der Browser das Warten beendet. Versuchen Sie es später erneut oder wechseln Sie in den Servermodus.`,
+      fr: `{host} n'a pas commencé à répondre en 30 secondes ; le navigateur a cessé d'attendre. Réessayez plus tard ou passez en mode serveur.`,
+    },
+    technical: `{file}: no response from {host} within 30 s in browser mode; the request was abandoned.`,
+  },
+  {
     id: 'IN-LAYOUT-UNSUPPORTED',
     category: 'input',
     severity: 'error',
