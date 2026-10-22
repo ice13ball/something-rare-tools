@@ -121,6 +121,8 @@ export const CITE = {
   spdxList: cite(SPDX_HANDLING, '"SPDX License List" paragraph: "The SPDX License List includes a standardized short identifier, the full name, the license text, and a canonical permanent URL for each license and exception."'),
   ccDualLicensing: cite(CC_FAQ, 'separate agreements: "You may offer the licensed material under other licenses in addition to the CC license (a practice commonly referred to as “dual licensing”)."'),
   ccDualChoice: cite(CC_FAQ, 'separate agreements: "A reuser may then choose which set of terms to comply with."'),
+  ccModified: cite(CC_FAQ, 'Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"'),
+  ccCopyright: cite(CC_FAQ, 'How do CC licenses operate?: "CC licenses are operative only when applied to material in which a copyright exists, and even then only when a particular use would otherwise not be permitted by copyright."'),
   ccNameAndLink: cite(CC_ATTRIBUTION, 'section on licence attribution: "We recommend that you name and provide a link to the license, e.g., CC BY 4.0 ( http://creativecommons.org/licenses/by/4.0 ) for a work licensed under CC BY 4.0."'),
 };
 

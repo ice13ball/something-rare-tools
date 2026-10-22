@@ -263,15 +263,21 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   if (textId) s.textSpdx = textId;
   if (u.id) s.uriSpdx = u.id;
 
-  const restricted = reads.some((r) => r.restricted) && (reads.some((r) => r.any) || !!u.id);
+  const named = reads.some((r) => r.any);
+  const conditions = reads.some((r) => r.restricted);
   const textVsUri =
-    (ids.length > 1 && !multi) || // identifier and rights text disagree with each other
-    (multi && !!u.id) || // the text offers several licences, the URI names one
-    (!!textId && !!u.id && textId !== u.id) ||
-    (!!textId && !!u.unmapped) ||
-    (reads.some((r) => r.unmapped) && !!u.id) ||
-    (!textId && !!u.id && families.some((f) => f !== familyOf(u.id!)));
-  if (restricted) s.conflict = 'restricted';
+    !!uri &&
+    ((ids.length > 1 && !multi) || // identifier and rights text disagree with each other
+      (multi && !!u.id) || // the text offers several licences, the URI names one
+      (!!textId && !!u.id && textId !== u.id) ||
+      (!!textId && !!u.unmapped) ||
+      (reads.some((r) => r.unmapped) && !!u.id) ||
+      (!textId && !!u.id && families.some((f) => f !== familyOf(u.id!))) ||
+      // the text names no licence but restricts, and the URI names one
+      (conditions && !named && !!u.id));
+  // A text that names a licence and adds or negates conditions is no longer that licence as written; this is the more
+  // specific explanation, so it wins over a text/URI difference.
+  if (conditions && named) s.conflict = 'restricted';
   else if (textVsUri) s.conflict = 'text-uri';
   else {
     const agreed = textId ?? u.id;

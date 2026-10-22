@@ -87,8 +87,12 @@ describe('text and URI are read separately; the URI never silently wins', () => 
     expect(s).toMatchObject({ text: 'Open Access', spdx: 'CC-BY-4.0' });
     expect(s.conflict).toBeUndefined();
   });
-  it('an unrecognised text that restricts ("All rights reserved") against a licence URI is a conflict', () => {
-    expect(st('All rights reserved', 'https://creativecommons.org/licenses/by/4.0/')).toMatchObject({ conflict: 'restricted' });
+  it('an unrecognised text that restricts ("All rights reserved") against a licence URI is a text/URI conflict', () => {
+    expect(st('All rights reserved', 'https://creativecommons.org/licenses/by/4.0/')).toMatchObject({ conflict: 'text-uri' });
+  });
+  it('a text that names a licence and adds conditions is "restricted" even when a URI differs: the more specific explanation wins', () => {
+    expect(st('CC BY-NC 4.0, but not for commercial use', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('restricted');
+    expect(st('CC BY 4.0 except for the maps', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('restricted');
   });
   it('the same restricting text without any licence URI is only unrecognised free text', () => {
     const s = st('All rights reserved');
@@ -103,10 +107,13 @@ describe('text and URI are read separately; the URI never silently wins', () => 
   it('several licences offered in one text cannot be reduced to one id; with a URI it is a conflict', () => {
     expect(st('CC BY 4.0 or CC BY-SA 4.0').spdx).toBeUndefined();
     expect(st('CC BY 4.0 or CC BY-SA 4.0', 'https://creativecommons.org/licenses/by/4.0/').conflict).toBe('text-uri');
+    expect(st('CC BY 4.0 or CC BY-SA 4.0').conflict).toBeUndefined();
   });
-  it('DataCite-style identifier and rights text that disagree conflict', () => {
-    const s = buildStatement({ source: 'datacite', field: 'x', text: 'CC BY 4.0', also: ['cc-by-sa-4.0'] })!;
-    expect(s.conflict).toBe('text-uri');
+  it('DataCite-style identifier and rights text that disagree: unrecognised; a text/URI conflict only when there is a URI', () => {
+    const parts = { source: 'datacite' as const, field: 'x', text: 'CC BY 4.0', also: ['cc-by-sa-4.0'] };
+    expect(buildStatement(parts)!.spdx).toBeUndefined();
+    expect(buildStatement(parts)!.conflict).toBeUndefined();
+    expect(buildStatement({ ...parts, uri: 'https://creativecommons.org/licenses/by/4.0/' })!.conflict).toBe('text-uri');
   });
   it('conditions in the text, pl/en/de/fr, make the statement unrecognised', () => {
     for (const t of ['CC BY 4.0 except for the maps', 'CC BY 4.0 – nur für Forschung', 'CC BY 4.0, sauf les images', 'CC BY 4.0 z wyjątkiem zdjęć']) {

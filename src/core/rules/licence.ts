@@ -10,8 +10,10 @@ import type { RuleSpec } from './spec';
  *   LIC-FREE-TEXT             text, versionMissing, hint   text = the licence text found; versionMissing = 'yes' | 'no';
  *                                                    hint = the SPDX id of the licence we recognised in it, or the example 'CC BY 4.0'
  *                                                    when nothing was recognised (never a licence the publisher did not name)
- *   LIC-TEXT-URI-CONFLICT     text, uri, textLicence, uriLicence   one statement whose text and link name different licences,
- *                                                    or whose text adds conditions; textLicence/uriLicence = SPDX id or '—'
+ *   LIC-TEXT-URI-CONFLICT     text, uri, textLicence, uriLicence   one statement WITH a link whose text and link classify differently
+ *                                                    (incl. a link no SPDX id exists for); textLicence/uriLicence = SPDX id or '—'
+ *   LIC-ADDED-CONDITIONS      text, textLicence      the text names a licence but adds or negates conditions; textLicence = the
+ *                                                    SPDX id, or the text itself when no id could be read
  *   LIC-RESTRICTION-CONFLICT  codes, licence         codes = restrictive MD_RestrictionCode values, comma-separated;
  *                                                    licence = the open licence (recognised SPDX id; NC/ND and unrecognised text are not open)
  *   LIC-DATACITE-EMPTY        licence                the licence another record states
@@ -53,26 +55,40 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     citations: [CITE.dataciteTitle, CITE.dataciteUri, CITE.ccNameAndLink],
     params: ['text', 'uri', 'textLicence', 'uriLicence'],
     plain: {
-      pl: `Zapis licencji („{text}”) nie mówi jasno, która licencja obowiązuje. Z tekstu odczytano: {textLicence}; z odnośnika: {uriLicence} („—” = nierozpoznano). Albo się różnią, albo tekst dodaje do licencji warunki. Sprawdź to ręcznie i podaj jedną licencję z jej własnym odnośnikiem.`,
-      en: `The licence statement ("{text}") does not say clearly which licence applies. Read from the text: {textLicence}; read from the link: {uriLicence} ("—" = not recognised). Either the two differ or the text adds conditions to the licence. Check it by hand and state one licence with its own link.`,
-      de: `Die Lizenzangabe („{text}“) sagt nicht klar, welche Lizenz gilt. Aus dem Text gelesen: {textLicence}; aus dem Link gelesen: {uriLicence} („—“ = nicht erkannt). Entweder weichen beide voneinander ab, oder der Text fügt der Lizenz Bedingungen hinzu. Prüfen Sie das von Hand und geben Sie eine Lizenz mit ihrem eigenen Link an.`,
-      fr: `La mention de licence (« {text} ») ne dit pas clairement quelle licence s'applique. Lu dans le texte : {textLicence} ; lu dans le lien : {uriLicence} (« — » = non reconnu). Soit les deux diffèrent, soit le texte ajoute des conditions à la licence. Vérifiez-la à la main et indiquez une seule licence avec son propre lien.`,
+      pl: `Tekst licencji („{text}”) i jej odnośnik wskazują różne licencje albo odnośnika nie da się rozpoznać. Z tekstu odczytano: {textLicence}; z odnośnika: {uriLicence} („—” = nierozpoznano). Sprawdź to ręcznie i podaj jedną licencję z jej własnym odnośnikiem.`,
+      en: `The licence text ("{text}") and its link point to different licences, or the link cannot be recognised. Read from the text: {textLicence}; read from the link: {uriLicence} ("—" = not recognised). Check it by hand and state one licence with its own link.`,
+      de: `Lizenztext („{text}“) und Link weisen auf unterschiedliche Lizenzen, oder der Link ist nicht erkennbar. Aus dem Text gelesen: {textLicence}; aus dem Link gelesen: {uriLicence} („—“ = nicht erkannt). Prüfen Sie das von Hand und geben Sie eine Lizenz mit ihrem eigenen Link an.`,
+      fr: `Le texte de la licence (« {text} ») et son lien désignent des licences différentes, ou le lien n'est pas reconnu. Lu dans le texte : {textLicence} ; lu dans le lien : {uriLicence} (« — » = non reconnu). Vérifiez-le à la main et indiquez une seule licence avec son propre lien.`,
     },
-    technical: `{file} field {field}: text '{text}' reads as {textLicence}, link '{uri}' as {uriLicence}; the statement is not classified (conflict, or conditions added to the licence). Check manually.`,
+    technical: `{file} field {field}: text '{text}' reads as {textLicence}, link '{uri}' as {uriLicence}; the statement is not classified (text and link differ, or the link is not recognised). Check manually.`,
+  },
+  {
+    id: 'LIC-ADDED-CONDITIONS',
+    category: 'A',
+    severity: 'warning',
+    citations: [CITE.ccModified],
+    params: ['text', 'textLicence'],
+    plain: {
+      pl: `Tekst („{text}”) wymienia licencję {textLicence}, ale dodaje do niej warunki, więc w takim brzmieniu nie jest to już ta standardowa licencja. Sprawdź to ręcznie i podaj wyraźnie licencję oraz ewentualne dodatkowe warunki.`,
+      en: `The text ("{text}") names the licence {textLicence} but adds conditions to it, so as written it is no longer that standard licence. Check it by hand and state the licence and any extra conditions clearly.`,
+      de: `Der Text („{text}“) nennt die Lizenz {textLicence}, fügt ihr aber Bedingungen hinzu; so geschrieben ist es nicht mehr diese Standardlizenz. Prüfen Sie das von Hand und geben Sie die Lizenz und etwaige zusätzliche Bedingungen klar an.`,
+      fr: `Le texte (« {text} ») nomme la licence {textLicence} mais y ajoute des conditions ; tel qu'il est écrit, ce n'est plus cette licence standard. Vérifiez-le à la main et indiquez clairement la licence et les éventuelles conditions supplémentaires.`,
+    },
+    technical: `{file} field {field}: text '{text}' names {textLicence} but adds or negates conditions; the statement is not classified as that licence. Check manually.`,
   },
   {
     id: 'LIC-RESTRICTION-CONFLICT',
     category: 'A',
     severity: 'warning',
-    citations: [CITE.inspireOtherRestrictions, CITE.inspireOtherConstraints, CITE.isoRestricted],
+    citations: [CITE.inspireOtherRestrictions, CITE.inspireOtherConstraints, CITE.isoRestricted, CITE.ccCopyright],
     params: ['codes', 'licence'],
     plain: {
-      pl: `Metadane podają otwartą licencję ({licence}), a jednocześnie ograniczenie ({codes}). To się wyklucza; usuń ograniczenie albo zmień licencję.`,
-      en: `The metadata names an open licence ({licence}) and also a restriction ({codes}). These contradict each other; remove the restriction or change the licence.`,
-      de: `Die Metadaten nennen eine offene Lizenz ({licence}) und zugleich eine Einschränkung ({codes}). Das widerspricht sich; entfernen Sie die Einschränkung oder ändern Sie die Lizenz.`,
-      fr: `Les métadonnées indiquent une licence ouverte ({licence}) mais aussi une restriction ({codes}). C'est contradictoire ; supprimez la restriction ou changez la licence.`,
+      pl: `Metadane podają otwartą licencję ({licence}) razem z kodem ograniczenia {codes}. INSPIRE oczekuje kodu „otherRestrictions” z opisem warunków; sprawdź, czy {codes} ma oznaczać prawdziwe ograniczenie, a jeśli nie, zastąp go.`,
+      en: `The metadata names an open licence ({licence}) together with the restriction code {codes}. INSPIRE expects the code "otherRestrictions" with a description of the conditions; check whether {codes} is meant as a real restriction and, if not, replace it.`,
+      de: `Die Metadaten nennen eine offene Lizenz ({licence}) zusammen mit dem Einschränkungscode {codes}. INSPIRE erwartet den Code „otherRestrictions“ mit einer Beschreibung der Bedingungen; prüfen Sie, ob {codes} eine echte Einschränkung bedeuten soll, und ersetzen Sie ihn andernfalls.`,
+      fr: `Les métadonnées indiquent une licence ouverte ({licence}) avec le code de restriction {codes}. INSPIRE attend le code « otherRestrictions » avec une description des conditions ; vérifiez si {codes} doit être une vraie restriction et, sinon, remplacez-le.`,
     },
-    technical: `{file}: restriction code(s) {codes} (MD_RestrictionCode) together with the open licence statement '{licence}'.`,
+    technical: `{file}: restriction code(s) {codes} (MD_RestrictionCode) together with the open licence statement '{licence}'; INSPIRE TG Req. C.18 expects otherRestrictions plus otherConstraints describing the conditions. Check whether the code is a real restriction.`,
   },
   {
     id: 'LIC-DATACITE-EMPTY',

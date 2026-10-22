@@ -36,7 +36,7 @@ export interface LicenceStatement {
   spdx?: string;
   textSpdx?: string;            // what the text alone names
   uriSpdx?: string;             // what the URI alone names
-  /** Why `spdx` is not set although something was recognised: text and URI name different licences, or the text adds conditions. */
+  /** Why `spdx` is not set: 'text-uri' = the statement has a URI and text and URI classify differently; 'restricted' = the text names a licence but adds or negates conditions. */
   conflict?: 'text-uri' | 'restricted';
 }
 /** A statement classified: one SPDX id, or unrecognised (check manually). */

@@ -82,6 +82,12 @@ describe('contradictions', () => {
     expect(a.statedGroups).toBe(1);
     expect(a.sources[0].statements[0].classification).toEqual({ kind: 'unrecognised' });
   });
+  it('added conditions are their own contradiction kind, with or without a URI', () => {
+    for (const a of [analyseLicences([rec('datacite', [['CC BY 4.0, but not for commercial use']])]), analyseLicences([rec('datacite', [['CC BY 4.0, but not for commercial use', BY]])])]) {
+      expect(kinds(a)).toEqual(['added-conditions']);
+      expect(a.freeText).toBeUndefined();
+    }
+  });
   it('a restriction code contradicts a recognised OPEN licence only', () => {
     const copy = { restrictionCodes: [{ kind: 'use' as const, code: 'copyright' }] };
     expect(kinds(analyseLicences([rec('iso19139', [['CC BY 4.0', BY]], copy)]))).toEqual(['restriction-code']);
