@@ -187,6 +187,8 @@ function readPort(version: string, sep: string, code: string | undefined, fallba
     const lower = code.toLowerCase().replace(/\s+/g, ' ');
     const named = PORT_NAMES[lower];
     if (named) return { port: named, ignored: false, unmapped: false };
+    // "NC", "ND", "SA" after a version are licence elements (Saudi Arabia, New Caledonia are not what is meant): conditions, never a port.
+    if (/^(?:nc|nd|sa)$/i.test(code)) return { ignored: true, unmapped: false };
     const up = code.toUpperCase();
     if (code === up) return ISO_CODES.has(up) || up === 'IGO' ? { port: up, ignored: false, unmapped: false } : { ignored: true, unmapped: false };
     const endsPhrase = !/^\s*[\p{L}\p{N}]/u.test(after);
@@ -200,7 +202,27 @@ function readPort(version: string, sep: string, code: string | undefined, fallba
 const elementsOf = (chain: string): string[] =>
   (chain.match(new RegExp(ELEMS, 'giu')) ?? []).map((p) => (new RegExp(`^(?:${ELEM_NC})$`, 'iu').test(p) ? 'NC' : new RegExp(`^(?:${ELEM_SA})$`, 'iu').test(p) ? 'SA' : 'ND'));
 
+/**
+ * The official SPDX names of the non-Creative-Commons licences ("Open Data Commons Open Database License v1.0", "Norwegian Licence for
+ * Open Government Data (NLOD) 2.0"): a text that is the official name is the licence, not the licence plus extra words.
+ */
+const OFFICIAL_NAMES = SPDX_ENTRIES.filter((e) => (!e.id.startsWith('CC-') && !e.name.includes('"')) || e.id === 'CC0-1.0').map((e) => ({
+  id: e.id,
+  src: e.name
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+')
+    .replace(/&/g, '(?:&|and)')
+    .replace(/[–—]/g, '[–—-]'),
+}));
+
 const PATTERNS: Pattern[] = [
+  {
+    re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${[...OFFICIAL_NAMES].sort((a, b) => b.src.length - a.src.length).map((n) => n.src).join('|')})(?![\\p{L}\\p{N}])`, 'giu'),
+    read: (m) => {
+      const hit = OFFICIAL_NAMES.find((n) => new RegExp(`^${n.src}$`, 'iu').test(m[0]));
+      return hit ? known(hit.id) : undefined;
+    },
+  },
   {
     // "CC BY 4.0", "cc-by-4.0", "CC BY-NC-SA 3.0 DE", "CC-BY-3.0-IGO", "CC BY 3.0 Germany", "CC BY 3.0 (IGO)". A version is mandatory for an id.
     re: new RegExp(
@@ -244,7 +266,7 @@ const PATTERNS: Pattern[] = [
     re: new RegExp(`creative\\s+commons\\s+${NAME_START}((?:${ELEM_SEP}${ELEMS})*)(?![\\s,–—-]*(?:\\d|${ELEMS}))`, 'giu'),
     read: (m) => ({ family: ccVariant(['BY', ...elementsOf(m[2])].join('-')) }),
   },
-  { re: /(?<![a-z0-9])cc[\s_-]*(?:0|zero)(?![a-z0-9])|creative\s+commons\s+zero/gi, read: () => ({ id: 'CC0-1.0' }) },
+  { re: /(?<![a-z0-9])cc[\s_-]*(?:0|zero)(?![a-z0-9])(?:[\s_-]*(?:v|version\s*)?1\.0(?![\d]))?|creative\s+commons\s+zero(?:[\s_-]*(?:v|version\s*)?1\.0(?![\d]))?(?:\s+universal)?/gi, read: () => ({ id: 'CC0-1.0' }) },
   { re: /(?<![a-z0-9])(?:odc[\s-]*)?odbl(?![a-z0-9])|open\s+database\s+licen[cs]e/gi, read: () => ({ id: 'ODbL-1.0' }) },
   { re: /(?<![a-z0-9])odc[\s-]*by(?![a-z0-9])|open\s+data\s+commons\s+attribution/gi, read: () => ({ id: 'ODC-By-1.0' }) },
   { re: /(?<![a-z0-9])pddl(?![a-z0-9])|public\s+domain\s+dedication\s+(?:and|&)\s+licen[cs]e/gi, read: () => ({ id: 'PDDL-1.0' }) },
@@ -277,9 +299,10 @@ const PATTERNS: Pattern[] = [
 ];
 
 /**
- * Words that add conditions or take something away. Found OUTSIDE the licence name they mean the text is not just
- * the licence ("CC BY 4.0, but not for commercial use"). Exact words and word-start stems, pl/en/de/fr.
- * Deliberately generous: a false hit only sends the statement to "check manually".
+ * Words that add conditions or take something away. Found in what is LEFT OVER of a statement once the licence name and the
+ * neutral wording are removed, they say that the leftover is a condition ("CC BY 4.0, but not for commercial use") and not
+ * just extra text. This list no longer decides whether a statement is let through (readText does, fail-closed); it only
+ * explains the leftover (LIC-ADDED-CONDITIONS against LIC-EXTRA-TEXT). Exact words and word-start stems, pl/en/de/fr.
  */
 const MARKER_WORDS = [
   'no', 'not', 'non', 'but', 'only', 'except', 'unless', 'without', 'nie', 'bez', 'ale', 'poza', 'tylko', 'nur', 'aber', 'nicht',
@@ -293,47 +316,126 @@ const MARKER_STEMS = [
   'excepté', 'uniquement', 'seulement', 'exclusivement', 'interdit', 'interdiction', 'réservé', 'autorisation',
 ];
 const MARKERS = new RegExp(`(?<![\\p{L}\\p{N}])(?:(?:${MARKER_WORDS.join('|')})(?![\\p{L}\\p{N}])|(?:${MARKER_STEMS.join('|')}))`, 'iu');
-/** Anything about commercial use, in any word ("noncommercial", "kommerziell", "niekomercyjne", "commerciale"), unless it is one of the affirmative phrases below. */
+/** Anything about commercial use, in any word ("noncommercial", "kommerziell", "niekomercyjne", "commerciale"). */
 const COMMERCIAL = /commerc|kommerz|komercyj/iu;
+/** "nc", "nd", "sa" (any case) as a token of their own outside the licence name are conditions ("CC BY 4.0 NC", "CC BY 4.0 + ND"). */
+const CC_ELEMENT_TOKEN = /(?<![\p{L}\p{N}])(?:nc|nd|sa)(?![\p{L}\p{N}])/iu;
+const hasMarker = (s: string): boolean => MARKERS.test(s) || COMMERCIAL.test(s) || CC_ELEMENT_TOKEN.test(s);
 
 /**
- * Wording that is part of ordinary licence texts and adds nothing: removed before the markers are searched. None of these
- * may swallow a restriction ("commercial use requires permission" stays a marker).
+ * Neutral wording that may close a sentence or clause ("CC BY 4.0, some rights reserved", "(commercial use permitted)", the CC deed
+ * sentences). It is removed ONLY when it is followed by . ; , ) a dash or the end of the text: with anything after it inside the
+ * same clause ("commercial use allowed on request") it stays and so becomes part of the leftover.
  */
-const AFFIRMATIVE: RegExp[] = [
-  /\b(?:some|no)\s+rights\s+reserved\b/giu,
-  /\bno\s+(?:additional|further)\s+restrictions?\b/giu,
-  /\bwithout\s+(?:any\s+)?restrictions?\b/giu,
-  /\bno\s+limitations?\b/giu,
-  /\bbut\s+please\s+cite\b/giu,
+const L0 = '(?<![\\p{L}\\p{N}])';
+const CLOSES = '(?=\\s*(?:[.;,)–—]|$))';
+const AFFIRMATIVE_CLOSING: RegExp[] = [
+  `(?:some|no)\\s+rights\\s+reserved`,
+  `no\\s+(?:additional|further)\\s+restrictions?`,
+  `without\\s+(?:any\\s+)?restrictions?`,
+  `no\\s+limitations?`,
+  `but\\s+please\\s+cite`,
   // The CC deed's own sentence and the plain "permitted" variants, en / de / fr / pl.
-  /\b(?:for\s+any\s+purpose,?\s+)?(?:even|also)\s+commercially\b/giu,
-  /\bincluding\s+(?:commercially|commercial\s+(?:use|purposes?))\b/giu,
-  /\bcommercial\s+(?:use|re-?use|exploitation)\s+(?:is\s+|are\s+)?(?:permitted|allowed)\b/giu,
-  /(?<![\p{L}])(?:sogar|auch|selbst)\s+kommerziell(?![\p{L}])/giu,
-  /(?<![\p{L}])kommerzielle\s+nutzung\s+(?:ist\s+)?(?:erlaubt|gestattet|zulässig)(?![\p{L}])/giu,
-  /(?<![\p{L}])y\s+compris\s+(?:à\s+des\s+fins\s+)?commerciale?s?(?![\p{L}])/giu,
-  /(?<![\p{L}])utilisation\s+commerciale\s+(?:est\s+)?(?:autorisée|permise)(?![\p{L}])/giu,
-  /(?<![\p{L}])(?:nawet|także|również)\s+komercyjn\p{L}*/giu,
-  /(?<![\p{L}])użycie\s+komercyjne\s+(?:jest\s+)?dozwolone(?![\p{L}])/giu,
+  `(?:you\\s+are\\s+free\\s+to\\s+share\\s+and\\s+adapt\\s+the\\s+material\\s+)?(?:for\\s+any\\s+purpose,?\\s+)?(?:even|also)\\s+commercially`,
+  `including\\s+(?:commercially|commercial\\s+(?:use|purposes?))`,
+  `commercial\\s+(?:use|re-?use|exploitation)\\s+(?:is\\s+|are\\s+)?(?:permitted|allowed)`,
+  `(?:nutzung\\s+)?(?:für\\s+beliebige\\s+zwecke,?\\s+)?(?:sogar|auch|selbst)\\s+kommerziell`,
+  `kommerzielle\\s+nutzung\\s+(?:ist\\s+)?(?:erlaubt|gestattet|zulässig)`,
+  `(?:(?:pour\\s+toute\\s+utilisation|réutilisation\\s+à\\s+toutes\\s+fins),?\\s+)?y\\s+compris\\s+(?:à\\s+des\\s+fins\\s+)?commerciale?s?`,
+  `utilisation\\s+commerciale\\s+(?:est\\s+)?(?:autorisée|permise)`,
+  `(?:(?:wykorzystanie\\s+)?w\\s+dowolnym\\s+celu,?\\s+)?(?:nawet|także|również)\\s+komercyjn\\p{L}*`,
+  `użycie\\s+komercyjne\\s+(?:jest\\s+)?dozwolone`,
+].map((src) => new RegExp(`${L0}(?:${src})${CLOSES}`, 'giu'));
+
+/** Filler words of a licence statement (en / de / fr / pl). Everything else that is left is shown to the user. */
+const FILLER = new Set(
+  `licensed licenced use under the a an terms of this these dataset datasets data is are available distributed released published made international internationale unported międzynarodowe międzynarodowa międzynarodowy licence license see at and with
+   lizenziert unter der die das dieser datensatz daten ist sind verfügbar veröffentlicht lizenz siehe dem den
+   sous licence la le les de des du ce ces jeu données est sont disponible disponibles publié publiée publiés publiées distribué distribuée distribués distribuées voir
+   na licencji licencja licencją ten te zbiór zbioru dane danych jest są dostępny dostępne udostępniony udostępnione opublikowany zob zobacz`.split(/\s+/),
+);
+
+/** A copyright notice "© / (c) / Copyright [year] holder": own sentence or fragment. */
+const COPYRIGHT_START = /^[^\p{L}\p{N}©]*(?:©|copyright(?![\p{L}\p{N}]))/iu;
+/** Years and publication dates (neutral). */
+const DATES = [
+  /(?<![\p{L}\p{N}])\d{1,2}[-/.]\d{1,2}[-/.](?:1[5-9]|20)\d{2}(?![\p{L}\p{N}])/gu,
+  /(?<![\p{L}\p{N}])(?:1[5-9]|20)\d{2}(?:[-/.]\d{1,2}){0,2}(?:\s*[-–]\s*(?:1[5-9]|20)\d{2})?(?![\p{L}\p{N}])/gu,
 ];
+const TOKEN = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu;
+
+const blank = (s: string, re: RegExp): string => s.replace(re, (m) => ' '.repeat(m.length));
+
+/**
+ * What a statement says besides the licence name. `masked` is the text with the recognised licence names, URLs and DOIs blanked
+ * (same length as `raw`). Removes only what is neutral — the deed wording when it closes a clause, years and dates, copyright
+ * notices, a short list of filler words, punctuation — and returns the rest as the user wrote it ('' = nothing left), plus
+ * whether that rest contains a restriction marker.
+ */
+function leftoverOf(raw: string, masked: string): { text: string; marker: boolean } {
+  let m = masked.replace(/\(c\)/gi, '©  ');
+  m = blank(m, /creative\s+commons/giu);
+  for (const re of AFFIRMATIVE_CLOSING) m = blank(m, re);
+  for (const re of DATES) m = blank(m, re);
+  const shown: string[] = [];
+  const kept: string[] = [];
+  // Fragments split on . ; , ( ) and line breaks ("." only at the end of a word: "4.0" and "Inc." inside a name do not split).
+  for (const frag of m.matchAll(/(?:[^;,()\n.]|\.(?!\s|$))+/gu)) {
+    const tokens = [...frag[0].matchAll(TOKEN)];
+    const content = tokens.filter((t) => !FILLER.has(t[0].toLowerCase()));
+    if (content.length === 0) continue;
+    let withoutFiller = frag[0];
+    for (const t of tokens) if (FILLER.has(t[0].toLowerCase())) withoutFiller = withoutFiller.slice(0, t.index) + ' '.repeat(t[0].length) + withoutFiller.slice(t.index! + t[0].length);
+    if (COPYRIGHT_START.test(withoutFiller) && !hasMarker(withoutFiller)) continue;
+    const a = frag.index! + content[0].index!;
+    const b = frag.index! + content[content.length - 1].index! + content[content.length - 1][0].length;
+    shown.push(raw.slice(a, b).replace(/\s+/g, ' ').trim());
+    kept.push(content.map((t) => t[0]).join(' '));
+  }
+  return { text: shown.join('; '), marker: hasMarker(kept.join(' ')) };
+}
 
 /** A licence name no pattern above reads (GNU GPL without a version, OGL of another country): next to a recognised one the text is ambiguous. */
 const UNREAD_NAME = /open\s+government\s+licen[cs]e|(?<![a-z0-9])(?:a|l)?gpl(?![a-z0-9])|gnu\s+(?:lesser\s+|affero\s+)?general\s+public|apache\s+licen[cs]e|mozilla\s+public|(?<![a-z0-9])bsd(?![a-z0-9])|(?<![a-z0-9])eupl(?![a-z0-9])|cecill/iu;
+const UNREAD_NAME_ALL = new RegExp(UNREAD_NAME.source, 'giu');
 
 interface TextRead {
   ids: string[];
   families: string[];
   unmapped: boolean;
-  /** The text carries something besides the licence name. */
+  /** A licence name this tool can turn into an id or a family was found. */
+  recognised: boolean;
+  /**
+   * Named text: what is left after the licence name and the neutral wording are removed ('' = nothing). Unnamed text: ''.
+   */
+  leftover: string;
+  /** The leftover contains a restriction marker (named text), or the whole text does (unnamed text). */
   restricted: boolean;
   /** Licence names found at all (recognised or not). */
   any: boolean;
 }
 
+/** Words that belong to the name of a licence already recognised: its short form in brackets, the rest of an official title. Blanked only next to THAT licence. */
+const NAME_WORDS: { re: RegExp; idPrefix: string }[] = [
+  { re: /\(\s*mit\s*\)/giu, idPrefix: 'MIT' },
+  { re: /\(\s*isc\s*\)/giu, idPrefix: 'ISC' },
+  { re: /\(\s*odbl(?:[\s-]*v?1(?:\.0)?)?\s*\)/giu, idPrefix: 'ODbL' },
+  { re: /\(\s*(?:odc[\s-]*)?by(?:[\s-]*v?1(?:\.0)?)?\s*\)/giu, idPrefix: 'ODC-By' },
+  { re: /\(\s*pddl(?:[\s-]*v?1(?:\.0)?)?\s*\)/giu, idPrefix: 'PDDL' },
+  { re: /\(\s*nlod(?:[\s-]*v?\d(?:\.0)?)?\s*\)/giu, idPrefix: 'NLOD' },
+  { re: /\(\s*ogl(?:[\s-]*(?:uk[\s-]*)?v?\d(?:\.0)?)?\s*\)/giu, idPrefix: 'OGL' },
+  { re: /\(\s*mpl(?:[\s-]*v?2(?:\.0)?)?\s*\)/giu, idPrefix: 'MPL' },
+  { re: /\(\s*(?:apache|asl)(?:[\s-]*v?2(?:\.0)?)?\s*\)/giu, idPrefix: 'Apache' },
+  { re: /public\s+domain\s+dedication|universal/giu, idPrefix: 'CC0-' },
+];
+
 function readText(raw: string): TextRead {
-  const out: TextRead = { ids: [], families: [], unmapped: false, restricted: false, any: false };
-  const text = raw.replace(/https?:\/\/\S+/gi, ' ').replace(/\bURI:/gi, ' ');
+  const out: TextRead = { ids: [], families: [], unmapped: false, recognised: false, leftover: '', restricted: false, any: false };
+  // URLs, DOIs and "URI:" are blanked (same length, so positions stay aligned with `raw`).
+  let text = blank(raw, /https?:\/\/\S+/gi);
+  text = blank(text, /(?<![\p{L}\p{N}])doi:\s*10\.\S+/giu);
+  text = blank(text, /(?<![\p{L}\p{N}])10\.\d{4,9}\/\S+/gu);
+  text = blank(text, /\bURI:/gi);
   const spans: [number, number][] = [];
   for (const p of PATTERNS) {
     for (const m of text.matchAll(p.re)) {
@@ -346,6 +448,7 @@ function readText(raw: string): TextRead {
       spans.push(r.span ?? [m.index!, m.index! + m[0].length]);
     }
   }
+  out.recognised = out.ids.length > 0 || out.families.length > 0;
   // Mask the licence names (with the official wording of their elements); what is left is the rest of the sentence.
   const chars = text.split('');
   for (const [a, b] of spans) for (let i = a; i < b; i++) chars[i] = ' ';
@@ -353,9 +456,19 @@ function readText(raw: string): TextRead {
   if (UNREAD_NAME.test(rest)) {
     out.any = true;
     out.unmapped = true;
+    rest = blank(rest, UNREAD_NAME_ALL);
   }
-  for (const re of AFFIRMATIVE) rest = rest.replace(re, ' ');
-  out.restricted = MARKERS.test(rest) || COMMERCIAL.test(rest);
+  if (out.any) {
+    for (const n of NAME_WORDS) if (out.ids.some((id) => id.startsWith(n.idPrefix))) rest = blank(rest, n.re);
+    const left = leftoverOf(raw, rest);
+    out.leftover = left.text;
+    out.restricted = left.marker;
+  } else {
+    // No licence name: the text is unrecognised anyway; only its restrictions matter (a URI must not win over them).
+    let stripped = rest;
+    for (const re of AFFIRMATIVE_CLOSING) stripped = blank(stripped, re);
+    out.restricted = MARKERS.test(stripped) || COMMERCIAL.test(stripped);
+  }
   return out;
 }
 
@@ -408,7 +521,10 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   if (clash) s.readings = [...ids, ...families.map((f) => `CC ${f}`), ...(unmappedText ? ['—'] : [])];
 
   const named = reads.some((r) => r.any);
-  const conditions = reads.some((r) => r.restricted);
+  // Fail-closed: a text that names a recognised licence and says anything else is not that licence as written. A name this tool
+  // cannot turn into an id is unrecognised anyway; there only a restriction marker in the rest changes the verdict.
+  const flagged = reads.filter((r) => r.leftover && (r.recognised || r.restricted));
+  const conditionsUnnamed = reads.some((r) => !r.any && r.restricted);
   const textVsUri =
     !!uri &&
     (clash || // the text itself offers or implies several licences
@@ -417,13 +533,16 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
       (unmappedText && !!u.id) ||
       (!!u.id && families.some((f) => f !== familyOf(u.id!))) || // always: a versionless family against the link
       // the text names no licence but restricts, and the URI names one
-      (conditions && !named && !!u.id));
-  // A text that names a licence and adds or negates conditions is no longer that licence as written; this is the more
-  // specific explanation, so it wins over a text/URI difference.
-  if (conditions && named) s.conflict = 'restricted';
-  else if (textVsUri) s.conflict = 'text-uri';
+      (conditionsUnnamed && !named && !!u.id));
+  // Precedence: when the readings THEMSELVES differ (text against link, or the text against itself) that is the finding
+  // (LIC-TEXT-URI-CONFLICT / LIC-AMBIGUOUS). Only when the readings agree and something is left over does the leftover decide:
+  // a restriction marker in it -> LIC-ADDED-CONDITIONS, anything else -> LIC-EXTRA-TEXT.
+  if (textVsUri) s.conflict = 'text-uri';
   else if (clash) s.conflict = 'readings';
-  else {
+  else if (flagged.length > 0) {
+    s.conflict = flagged.some((r) => r.restricted) ? 'restricted' : 'extra-text';
+    s.leftover = [...new Set(flagged.map((r) => r.leftover))].join('; ');
+  } else {
     const agreed = textId ?? u.id;
     if (agreed) s.spdx = agreed;
   }

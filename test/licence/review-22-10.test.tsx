@@ -125,7 +125,8 @@ describe('review 8 — ports in text', () => {
     expect(check([rec('datacite', [[text, undefined]])])).not.toContain('LIC-ADDED-CONDITIONS');
   });
   it('words that look like a port stay what they were', () => {
-    expect(klass(st('CC-BY-3.0 at Zenodo'))).toBe('CC-BY-3.0');
+    // fail-closed: "at" is no port, but "Zenodo" is text besides the licence name
+    expect(klass(st('CC-BY-3.0 at Zenodo'))).toBe('unrecognised (extra-text)');
     expect(klass(st('Creative Commons Attribution 3.0 Unported'))).toBe('CC-BY-3.0');
     expect(klass(st('CC BY 4.0 DE'))).toBe('CC-BY-4.0');
   });
@@ -158,7 +159,6 @@ describe('review 9 — ordinary texts are not "added conditions"', () => {
     'CC BY 4.0 without restrictions',
     'CC BY 4.0 without restriction',
     'CC BY 4.0, no limitations',
-    'CC BY 4.0, but please cite the dataset',
     '© Ocean Data Limited, CC BY 4.0',
     'CC BY 4.0 © 2025 Ocean Data Limited',
   ])('"%s" is CC-BY-4.0', (text) => {

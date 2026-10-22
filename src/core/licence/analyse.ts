@@ -24,10 +24,11 @@ export interface AnalysedStatement {
    */
   machineReadable: boolean;
   /**
-   * Set when the statement is "unrecognised — check manually": text and URI differ ('text-uri'), the text adds conditions
-   * ('restricted'), or there is no link and the text gives more than one reading of itself ('readings').
+   * Set when the statement is "unrecognised — check manually": text and URI differ ('text-uri'), something besides the licence name is
+   * left in the text and it contains a restriction marker ('restricted') or not ('extra-text'), or there is no link and the text gives
+   * more than one reading of itself ('readings').
    */
-  conflict?: { kind: 'text-uri' | 'restricted' | 'readings'; text: string; uri: string; textLicence: string; uriLicence: string };
+  conflict?: { kind: 'text-uri' | 'restricted' | 'extra-text' | 'readings'; text: string; uri: string; textLicence: string; uriLicence: string; /** What the text says besides the licence name ('restricted' / 'extra-text'). */ rest: string };
 }
 
 export interface AnalysedSource {
@@ -56,6 +57,8 @@ export type Contradiction =
   | { kind: 'text-uri'; source: AnalysedSource; statement: AnalysedStatement }
   /** The text names a licence but adds or negates conditions ("CC BY 4.0, but not for commercial use"), with or without a URI. */
   | { kind: 'added-conditions'; source: AnalysedSource; statement: AnalysedStatement }
+  /** The text names a licence and says something else that is no condition word ("CC BY 4.0, please contact the PI"): check by hand whether it changes the licence. */
+  | { kind: 'extra-text'; source: AnalysedSource; statement: AnalysedStatement }
   /** No link, and the statement reads as more than one licence (text against identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to an unrecognised one). */
   | { kind: 'ambiguous'; source: AnalysedSource; statement: AnalysedStatement }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
@@ -157,8 +160,9 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
       kind: s.conflict,
       text: s.text ?? '',
       uri: s.uri ?? '',
-      textLicence: s.textSpdx ?? (s.conflict === 'restricted' ? (s.text ?? '—') : s.readings && s.readings.length > 0 ? s.readings.join(' / ') : '—'),
+      textLicence: s.textSpdx ?? (s.conflict === 'restricted' || s.conflict === 'extra-text' ? (s.text ?? '—') : s.readings && s.readings.length > 0 ? s.readings.join(' / ') : '—'),
       uriLicence: uriId ?? '—',
+      rest: s.leftover ?? '',
     };
   }
   return out;
@@ -209,7 +213,7 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
 
   // A statement that contradicts itself is reported where it is.
   for (const source of sources) {
-    for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: statement.conflict.kind === 'restricted' ? 'added-conditions' : statement.conflict.kind === 'readings' ? 'ambiguous' : 'text-uri', source, statement });
+    for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: { restricted: 'added-conditions', 'extra-text': 'extra-text', readings: 'ambiguous', 'text-uri': 'text-uri' }[statement.conflict.kind] as 'added-conditions' | 'extra-text' | 'ambiguous' | 'text-uri', source, statement });
   }
 
   // Restriction codes against an open licence. Only a recognised, open licence can be contradicted.

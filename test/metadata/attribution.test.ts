@@ -82,7 +82,8 @@ describe('ISO 19115-3', () => {
 
   it('reads the licence from useLimitation, otherConstraints (Anchor href) and mco:reference, plus the codes', () => {
     expect(rec.licences.map((l) => [l.field, l.spdx])).toEqual([
-      ['useLimitation', 'CC-BY-4.0'],
+      // "Use under CC BY 4.0, cite the dataset.": fail-closed, "cite the dataset" is text besides the licence name -> not an id.
+      ['useLimitation', undefined],
       ['otherConstraints', 'CC-BY-4.0'],
       ['reference', 'CC-BY-4.0'],
     ]);
