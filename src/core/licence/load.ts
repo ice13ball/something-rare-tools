@@ -3,6 +3,7 @@
 // Loads the METADATA of one dataset from one or several references (DOI, Zenodo, PANGAEA, GeoNetwork). Never downloads data files.
 // Used by the licence page and by the live corpus test, so both read records the same way.
 import { sameDeposit } from './analyse';
+import { ownLoadFailure } from './failure';
 import type { Finding, LoadedRecord, MetadataRecord, MetadataSource } from '../types';
 import { lookupDatacite } from '../sources/datacite';
 import { fetchErrorFinding, type FetchResult, type Fetcher } from '../sources/fetcher';
@@ -33,8 +34,6 @@ const SOURCE_OF_KIND: Partial<Record<LoadedRecord['kind'], MetadataSource>> = {
   datacite: 'datacite',
   pangaea: 'pangaea',
 };
-
-const LOAD_FAILURES = ['IN-FETCH-BLOCKED', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
 
 /** Lines of a pasted block: trimmed, empty ones dropped, repeated ones once. */
 export function splitReferences(text: string): string[] {
@@ -90,7 +89,7 @@ export async function loadLicenceReferences(
         const loaded = await loadRecord(resolved, fetcher, { pangaea: loadPangaeaMetainfo });
         const source = SOURCE_OF_KIND[loaded.kind];
         // Only this record's own failure counts; findings about files (no data file, landing host) say nothing about the licence.
-        const own = loaded.findings.find((f) => LOAD_FAILURES.includes(f.ruleId) && f.file === loaded.label && (f.ruleId !== 'IN-HOST-NOT-ALLOWED' || loaded.metadata.length === 0));
+        const own = ownLoadFailure(loaded.findings, loaded.label, loaded.metadata.length);
         if (own) failures.push({ ref, ...(source ? { source } : {}), finding: own });
         for (const rec of loaded.metadata) add(rec);
       } catch (e) {

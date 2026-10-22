@@ -4,6 +4,8 @@
 // result is "unrecognised — check manually", never a standard licence.
 import { describe, expect, it } from 'vitest';
 import { checkLicence } from '../../src/core/checks/licence';
+import { runChecks } from '../../src/core/checks/run';
+import { makeFinding } from '../../src/core/rules/registry';
 import { analyseLicences } from '../../src/core/licence/analyse';
 import { buildStatement, classifyStatement } from '../../src/core/metadata/licence';
 import type { Finding, LicenceStatement, MetadataRecord, MetadataSource } from '../../src/core/types';
@@ -238,5 +240,30 @@ describe('review 7 — sources are grouped by deposit, not by source type', () =
     const iso = rec('iso19139', [['CC BY 4.0', BY]], { doi: '10.1594/PANGAEA.9', label: 'GeoNetwork X' });
     const a = analyseLicences([p, d, iso]);
     expect(a.groups.map((g) => g.sources.length).sort()).toEqual([1, 2]);
+  });
+});
+
+describe('review 6 — /check does not claim "no licence" for a record it could not read', () => {
+  const session = (kind: 'datacite' | 'geonetwork', findings: Finding[], metadata: MetadataRecord[] = []) => ({
+    datasets: [],
+    parseFindings: [],
+    records: [{ label: 'rec', kind, metadata, files: [], findings }],
+  });
+  it.each([
+    ['IN-FETCH-BLOCKED', { host: 'geonetwork.example.org' }],
+    ['IN-HOST-NOT-ALLOWED', { host: 'evil.example.org' }],
+    ['IN-RECORD-INACCESSIBLE', { host: 'geonetwork.example.org', status: 403 }],
+  ])('%s on the record: its own finding stays, LIC-MISSING does not appear', (ruleId, params) => {
+    const f = runChecks(session('geonetwork', [makeFinding(ruleId, { file: 'rec', params })])).findings;
+    expect(f.map((x) => x.ruleId)).toContain(ruleId);
+    expect(f.map((x) => x.ruleId)).not.toContain('LIC-MISSING');
+  });
+  it('a failure of a DATA FILE (another file name) does not hide a missing licence of a record that was read', () => {
+    const read = makeRecord('datacite', { label: 'rec' });
+    const f = runChecks(session('datacite', [makeFinding('IN-FETCH-BLOCKED', { file: 'data.csv', params: { host: 'x.org' } })], [read])).findings;
+    expect(f.map((x) => x.ruleId)).toContain('LIC-MISSING');
+  });
+  it('a record that was read and states no licence still gets LIC-MISSING', () => {
+    expect(runChecks(session('datacite', [], [makeRecord('datacite', { label: 'rec' })])).findings.map((x) => x.ruleId)).toContain('LIC-MISSING');
   });
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
+import { ownLoadFailure } from '../licence/failure';
 import { buildReport } from '../report';
 import type { CheckSession, Finding, LoadedRecord, MetadataSource, Report } from '../types';
 import { checkChemistry } from './chemistry';
@@ -28,8 +29,9 @@ export function runChecks(session: CheckSession): Report {
   const findings: Finding[] = [...session.parseFindings];
   for (const record of session.records) {
     findings.push(...record.findings);
-    // File-download failures reuse IN-RECORD-INACCESSIBLE with the file name; only the record's own label counts here.
-    const inaccessible = record.findings.some((f) => f.ruleId === 'IN-RECORD-INACCESSIBLE' && f.file === record.label);
+    // The same "could not be read" as on the licence page (a refused read, a blocked one, a host not allowed): the record then says nothing
+    // about a licence. File-download failures reuse these rules with the file name; only the record's own label counts.
+    const inaccessible = !!ownLoadFailure(record.findings, record.label, record.metadata.length);
     if (record.metadata.length > 0 || inaccessible) {
       findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: inaccessible ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [] }));
     }
