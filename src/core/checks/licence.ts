@@ -1,9 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
-import { analyseLicences, shownOf } from '../licence/analyse';
+import { analyseLicences, shownOf, type Contradiction } from '../licence/analyse';
 import { makeFinding } from '../rules/registry';
 import type { Finding, MetadataRecord, MetadataSource } from '../types';
+
+/** The finding that states one contradiction in the rule's own words (the licence page renders it with renderPlain). */
+export function contradictionFinding(c: Contradiction, file: string): Finding {
+  switch (c.kind) {
+    case 'text-uri':
+      return makeFinding('LIC-TEXT-URI-CONFLICT', {
+        file,
+        field: c.statement.statement.field,
+        params: {
+          text: c.statement.conflict!.text || '—',
+          uri: c.statement.conflict!.uri || '—',
+          textLicence: c.statement.conflict!.textLicence,
+          uriLicence: c.statement.conflict!.uriLicence,
+        },
+      });
+    case 'added-conditions':
+      return makeFinding('LIC-ADDED-CONDITIONS', {
+        file,
+        field: c.statement.statement.field,
+        params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence },
+      });
+    case 'restriction-code':
+      return makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } });
+    case 'datacite-empty':
+      return makeFinding('LIC-DATACITE-EMPTY', { file, params: { licence: c.licence } });
+    case 'mismatch':
+      return makeFinding('LIC-MISMATCH', { file, params: { licenceA: c.licenceA, licenceB: c.licenceB } });
+  }
+}
 
 /**
  * Category A — licence statements across ISO 19139, DataCite, Zenodo and PANGAEA records (Task 7).
@@ -35,41 +64,9 @@ export function checkLicence(
   }
 
   for (const c of a.contradictions) {
-    switch (c.kind) {
-      case 'text-uri':
-        out.push(
-          makeFinding('LIC-TEXT-URI-CONFLICT', {
-            file,
-            field: c.statement.statement.field,
-            params: {
-              text: c.statement.conflict!.text || '—',
-              uri: c.statement.conflict!.uri || '—',
-              textLicence: c.statement.conflict!.textLicence,
-              uriLicence: c.statement.conflict!.uriLicence,
-            },
-          }),
-        );
-        break;
-      case 'added-conditions':
-        out.push(
-          makeFinding('LIC-ADDED-CONDITIONS', {
-            file,
-            field: c.statement.statement.field,
-            params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence },
-          }),
-        );
-        break;
-      case 'restriction-code':
-        out.push(makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } }));
-        break;
-      case 'datacite-empty':
-        out.push(makeFinding('LIC-DATACITE-EMPTY', { file, params: { licence: c.licence } }));
-        break;
-      case 'mismatch':
-        // Once per record, as before: the first disagreeing pair.
-        if (!out.some((f) => f.ruleId === 'LIC-MISMATCH')) out.push(makeFinding('LIC-MISMATCH', { file, params: { licenceA: c.licenceA, licenceB: c.licenceB } }));
-        break;
-    }
+    // Once per record, as before: the first disagreeing pair.
+    if (c.kind === 'mismatch' && out.some((f) => f.ruleId === 'LIC-MISMATCH')) continue;
+    out.push(contradictionFinding(c, file));
   }
 
   const emptyLinks = records.reduce((n, r) => n + r.distributionLinks.filter((l) => l.url === '').length, 0);

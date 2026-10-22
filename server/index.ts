@@ -78,10 +78,10 @@ function sendProxyError(res: Response, e: ProxyError): void {
   res.status(e.status >= 400 && e.status < 600 ? e.status : 502).json({ error: e.code });
 }
 
-/** The three canonical pages; <lastmod> is the build date (mtime of dist/index.html, read once at startup). */
+/** The canonical pages; <lastmod> is the build date (mtime of dist/index.html, read once at startup). */
 function buildSitemap(built: Date): string {
   const lastmod = built.toISOString().slice(0, 10);
-  const urls = ['/', '/check', '/privacy']
+  const urls = ['/', '/check', '/licence', '/privacy']
     .map((p) => `  <url>\n    <loc>${SITE.origin}${p}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>\n`)
     .join('');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>\n`;
@@ -96,6 +96,7 @@ export function createApp(opts: AppOptions): Express {
   const pages = {
     home: Buffer.from(prepareHtml(readRequired(dist, 'index.html').toString('utf8'), noindex)),
     check: Buffer.from(prepareHtml(readRequired(dist, join('check', 'index.html')).toString('utf8'), noindex)),
+    licence: Buffer.from(prepareHtml(readRequired(dist, join('licence', 'index.html')).toString('utf8'), noindex)),
     privacy: Buffer.from(prepareHtml(readRequired(dist, join('privacy', 'index.html')).toString('utf8'), noindex)),
   };
   const consentJs = readOptional(dist, 'consent-default.js');
@@ -117,11 +118,10 @@ export function createApp(opts: AppOptions): Express {
     res.setHeader('Cache-Control', 'no-cache');
     res.end(page);
   };
-  for (const path of ['/', '/check', '/privacy']) {
-    app.get(path, sendHtml(path === '/' ? pages.home : path === '/check' ? pages.check : pages.privacy));
-  }
+  const pageOf: Record<string, Buffer> = { '/': pages.home, '/check': pages.check, '/licence': pages.licence, '/privacy': pages.privacy };
+  for (const path of Object.keys(pageOf)) app.get(path, sendHtml(pageOf[path]));
   // One canonical URL per page: the slash variants answer 301 to the slash-less one (fixed targets, nothing from the request).
-  for (const path of ['/check', '/privacy']) app.get(path + '/', (_req, res) => void res.redirect(301, path));
+  for (const path of ['/check', '/licence', '/privacy']) app.get(path + '/', (_req, res) => void res.redirect(301, path));
 
   app.get('/robots.txt', (_req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');

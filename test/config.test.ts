@@ -102,7 +102,7 @@ describe('robots meta in the build', () => {
   const inject = (noindex: boolean) => (robotsMeta(noindex).transformIndexHtml as () => unknown[])();
 
   it('the HTML sources carry none: the flag alone decides', () => {
-    for (const f of ['index.html', 'check/index.html', 'privacy/index.html']) {
+    for (const f of ['index.html', 'check/index.html', 'licence/index.html', 'privacy/index.html']) {
       expect(readFileSync(join(__dirname, '..', f), 'utf8'), f).not.toMatch(/name="robots"/);
     }
   });
