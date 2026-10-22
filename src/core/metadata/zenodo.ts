@@ -59,6 +59,9 @@ export function parseZenodoRecord(json: unknown, label: string): MetadataRecord 
   rec.doi = str(json.doi) ?? str(md.doi) ?? str(pids.identifier);
   rec.landingUrl = str(links.self_html) ?? (id ? `https://zenodo.org/records/${id}` : undefined);
 
+  const concept = str(json.conceptrecid) ?? str(md.conceptrecid);
+  if (concept) rec.conceptId = concept;
+
   const rt = md.resource_type;
   if (isObj(rt)) rec.resourceType = str(rt.id) ?? str(rt.type);
 

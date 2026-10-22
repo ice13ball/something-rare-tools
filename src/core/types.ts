@@ -58,6 +58,8 @@ export interface MetadataRecord {
   resourceType?: string;
   doi?: string;
   landingUrl?: string;
+  /** Zenodo: id of the concept record (the DOI that stands for all versions), to tell that a concept DOI and a version DOI are one deposit. */
+  conceptId?: string;
   isoProfile?: '19139' | '19115-3';   // source 'iso19139' covers both ISO profiles; this says which one was read
   creators?: string[];          // for the attribution line, in source order
   publicationYear?: number;
