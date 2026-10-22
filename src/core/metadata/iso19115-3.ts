@@ -76,8 +76,8 @@ function partyNames(resp: Element): string[] {
   return names;
 }
 
-export function parseIso19115_3(xml: string, label: string): MetadataRecord {
-  const doc = parseXml(xml, label);
+export function parseIso19115_3(xml: string | Document, label: string): MetadataRecord {
+  const doc = typeof xml === 'string' ? parseXml(xml, label) : xml;
   const md = findMetadata(doc);
   if (!md) throw new Error(`${label}: not an ISO 19115-3 record (no mdb:MD_Metadata)`);
 
@@ -153,6 +153,8 @@ export function parseIso19115_3(xml: string, label: string): MetadataRecord {
 }
 
 /** An ISO record of either profile: 19115-3 when it carries the mdb namespace, else 19139. */
-export function parseIsoRecord(xml: string, label: string): MetadataRecord {
-  return /standards\.iso\.org\/iso\/19115\/-3\/mdb\//.test(xml) ? parseIso19115_3(xml, label) : parseIso19139(xml, label);
+export function parseIsoRecord(xml: string | Document, label: string): MetadataRecord {
+  // a parsed document: the profile is the namespace of its root; a text: whether it mentions the mdb namespace
+  const is3 = typeof xml === 'string' ? /standards\.iso\.org\/iso\/19115\/-3\/mdb\//.test(xml) : (NS3.mdb as readonly string[]).includes(xml.documentElement?.namespaceURI ?? '');
+  return is3 ? parseIso19115_3(xml, label) : parseIso19139(xml, label);
 }

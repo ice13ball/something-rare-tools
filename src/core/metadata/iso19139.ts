@@ -109,8 +109,9 @@ function attribution(cit: Element | undefined, rec: MetadataRecord): void {
   }
 }
 
-export function parseIso19139(xml: string, label: string): MetadataRecord {
-  const doc = parseXml(xml, label);
+/** `xml`: the record's text, or its document when the caller has parsed it already (the collection run parses a record once). */
+export function parseIso19139(xml: string | Document, label: string): MetadataRecord {
+  const doc = typeof xml === 'string' ? parseXml(xml, label) : xml;
   const md = findMetadata(doc);
   if (!md) throw new Error(`${label}: not an ISO 19139 record (no gmd:MD_Metadata)`);
 
