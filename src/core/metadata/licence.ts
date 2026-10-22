@@ -388,7 +388,13 @@ function leftoverOf(raw: string, masked: string): { text: string; marker: boolea
     for (const t of tokens) if (FILLER.has(t[0].toLowerCase())) withoutFiller = withoutFiller.slice(0, t.index) + ' '.repeat(t[0].length) + withoutFiller.slice(t.index! + t[0].length);
     if (COPYRIGHT_START.test(withoutFiller) && !hasMarker(withoutFiller)) continue;
     const a = frag.index! + content[0].index!;
-    const b = frag.index! + content[content.length - 1].index! + content[content.length - 1][0].length;
+    let b = frag.index! + content[content.length - 1].index! + content[content.length - 1][0].length;
+    // Filler words right after the last content word belong to what is shown ("but not for commercial use"), unless a licence name etc. sits between.
+    for (const t of tokens.filter((t) => t.index! + frag.index! >= b)) {
+      const end = frag.index! + t.index! + t[0].length;
+      if (raw.slice(b, end) !== m.slice(b, end)) break;
+      b = end;
+    }
     shown.push(raw.slice(a, b).replace(/\s+/g, ' ').trim());
     kept.push(content.map((t) => t[0]).join(' '));
   }

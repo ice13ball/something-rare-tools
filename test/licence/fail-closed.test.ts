@@ -91,6 +91,16 @@ describe('every confirmed leak is unrecognised, with the leftover shown', () => 
   });
 });
 
+describe('the leftover is shown as written, filler words inside it included', () => {
+  it.each([
+    ['Use under CC BY 4.0, cite the dataset.', 'cite the dataset'],
+    ['CC BY 4.0, but not for commercial use', 'but not for commercial use'],
+    ['Data under CC BY 4.0, on request of the author CC BY 4.0', 'on request of the author'],
+  ])('"%s" -> «%s»', (text, left) => {
+    expect(st(text).leftover).toBe(left);
+  });
+});
+
 describe('neutral wording stays the proper id with no ADDED / EXTRA finding', () => {
   const STAY: [string, string][] = [
     ['CC BY 4.0. You are free to share and adapt the material for any purpose, even commercially.', 'CC-BY-4.0'],
