@@ -26,6 +26,19 @@ export class FetchBlockedError extends Error {
   }
 }
 
+/** The host did not answer within the time the browser mode waits. Carries the host only. */
+export class FetchTimeoutError extends Error {
+  readonly host: string;
+  constructor(host: string) {
+    super(`Download from ${host} timed out`);
+    this.name = 'FetchTimeoutError';
+    this.host = host;
+  }
+}
+
+/** How long browser mode waits for a host to start answering (server mode: the proxy's own 20 s upstream limit plus the hop). */
+export const BROWSER_TIMEOUT_MS = 30_000;
+
 /** The host is not on the allowlist (config/hosts.ts). Carries the host only. */
 export class HostNotAllowedError extends Error {
   readonly host: string;
@@ -82,23 +95,40 @@ async function readBody(res: Response, host: string): Promise<Uint8Array> {
   }
 }
 
-/** Direct download from the page. `fetchImpl` exists for tests; the default is the global fetch. */
-export function browserFetcher(fetchImpl: FetchFn = globalFetch): Fetcher {
+/**
+ * Direct download from the page. `fetchImpl` exists for tests; the default is the global fetch. A host that has not started to
+ * answer after `timeoutMs` is a FetchTimeoutError (the wait ends with the response headers: a large body that keeps arriving is not cut).
+ */
+export function browserFetcher(fetchImpl: FetchFn = globalFetch, timeoutMs: number = BROWSER_TIMEOUT_MS): Fetcher {
   return {
     async get(url, accept) {
       const host = hostOf(url);
       if (!isAllowedHost(url)) throw new HostNotAllowedError(host);
       let res: Response;
+      const ctl = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expired = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          ctl.abort();
+          reject(new FetchTimeoutError(host));
+        }, timeoutMs);
+      });
       try {
-        res = await fetchImpl(url, {
+        const answer = fetchImpl(url, {
           credentials: 'omit',
           redirect: 'follow',
           mode: 'cors',
+          signal: ctl.signal,
           ...(accept ? { headers: { Accept: accept } } : {}),
         });
+        answer.catch(() => undefined); // after a timeout the abandoned request may still fail: that is not news
+        res = await Promise.race([answer, expired]);
       } catch (e) {
+        if (e instanceof FetchTimeoutError) throw e;
         if (e instanceof TypeError) throw new FetchBlockedError(host);
         throw e;
+      } finally {
+        clearTimeout(timer);
       }
       // CSP would stop a hop to a foreign host anyway; be explicit about it.
       const finalUrl = res.url || url;
@@ -148,6 +178,7 @@ export function serverFetcher(endpoint = '/api/fetch', fetchImpl: FetchFn = glob
  */
 export function fetchErrorFinding(err: unknown, file: string): Finding | undefined {
   if (err instanceof FetchBlockedError) return makeFinding('IN-FETCH-BLOCKED', { file, params: { host: err.host } });
+  if (err instanceof FetchTimeoutError) return makeFinding('IN-FETCH-TIMEOUT', { file, params: { host: err.host } });
   if (err instanceof HostNotAllowedError) return makeFinding('IN-HOST-NOT-ALLOWED', { file, params: { host: err.host } });
   if (err instanceof ProxyFetchError || err instanceof FileFetchError) {
     return makeFinding('IN-RECORD-INACCESSIBLE', { file, params: { status: err.status, host: err.host } });

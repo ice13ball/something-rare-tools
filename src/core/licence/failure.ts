@@ -4,7 +4,7 @@
 // silent about a licence ("no licence found") when the reason is a refused read.
 import type { Finding } from '../types';
 
-export const LOAD_FAILURES = ['IN-FETCH-BLOCKED', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
+export const LOAD_FAILURES = ['IN-FETCH-BLOCKED', 'IN-FETCH-TIMEOUT', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
 
 /**
  * The finding that says the record `label` could not be read, or undefined. Only the record's OWN failure counts (findings about

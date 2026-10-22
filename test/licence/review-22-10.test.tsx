@@ -11,7 +11,9 @@ import { ReportView } from '../../src/app/components/ReportView';
 import { LicencePage } from '../../src/app/pages/LicencePage';
 import { buildReport } from '../../src/core/report';
 import { RULES, RULE_PARAMS } from '../../src/core/rules/registry';
-import type { Fetcher } from '../../src/core/sources/fetcher';
+import { UI } from '../../src/core/i18n/ui';
+import { renderPlain } from '../../src/core/report';
+import { FetchTimeoutError, browserFetcher, fetchErrorFinding, type Fetcher } from '../../src/core/sources/fetcher';
 import { MapFetcher } from '../sources/mapFetcher';
 import { caseB, dataciteJson, DC } from '../helpers/licenceFixtures';
 import { checkLicence } from '../../src/core/checks/licence';
@@ -19,7 +21,7 @@ import { runChecks } from '../../src/core/checks/run';
 import { makeFinding } from '../../src/core/rules/registry';
 import { analyseLicences } from '../../src/core/licence/analyse';
 import { buildStatement, classifyStatement } from '../../src/core/metadata/licence';
-import type { Finding, LicenceStatement, MetadataRecord, MetadataSource } from '../../src/core/types';
+import { LANGS, type Finding, type LicenceStatement, type MetadataRecord, type MetadataSource } from '../../src/core/types';
 import { makeRecord } from '../helpers/build';
 
 const BY = 'https://creativecommons.org/licenses/by/4.0/';
@@ -354,5 +356,65 @@ describe('review 10 — /check shows what it showed before; /licence shows the c
     const result = await runPage(fetcher, refs);
     const links = result.querySelectorAll('li[data-kind="text-uri"] ul.sources a');
     expect(links.length).toBeGreaterThan(0);
+  });
+});
+
+describe('review 11 — a hanging host ends, and the reasons say what happened', () => {
+  it('browser mode gives up on a host that never answers, with a timeout error that names the host', async () => {
+    const hang: typeof fetch = () => new Promise<Response>(() => undefined);
+    const err = await browserFetcher(hang, 40).get('https://api.datacite.org/dois/10.1/x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FetchTimeoutError);
+    expect((err as FetchTimeoutError).host).toBe('api.datacite.org');
+    const f = fetchErrorFinding(err, 'DataCite 10.1/x')!;
+    expect(f.ruleId).toBe('IN-FETCH-TIMEOUT');
+    for (const lang of LANGS) {
+      const text = renderPlain(f, lang);
+      expect(text, lang).toContain('api.datacite.org');
+      expect(text, lang).not.toMatch(/[{}]/);
+    }
+    expect(renderPlain(f, 'en')).not.toBe(renderPlain(f, 'pl'));
+  });
+  it('a request that answers is unchanged: the response comes back, the timer does not fire later', async () => {
+    let seen: RequestInit | undefined;
+    const ok: typeof fetch = async (_u, init) => {
+      seen = init;
+      return new Response('{"a":1}', { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const r = await browserFetcher(ok, 20).get('https://api.datacite.org/dois/10.1/x', 'application/json');
+    expect(r.status).toBe(200);
+    expect(new TextDecoder().decode(r.bytes)).toBe('{"a":1}');
+    expect(seen).toMatchObject({ credentials: 'omit', redirect: 'follow', mode: 'cors' });
+    await new Promise((res) => setTimeout(res, 60));
+  });
+  it('a fetch error that is not a timeout still reads as blocked', async () => {
+    const blocked: typeof fetch = () => Promise.reject(new TypeError('Failed to fetch'));
+    const err = await browserFetcher(blocked, 40).get('https://api.datacite.org/dois/10.1/x').catch((e: unknown) => e);
+    expect(fetchErrorFinding(err, 'x')!.ruleId).toBe('IN-FETCH-BLOCKED');
+  });
+
+  const cite1 = { doi: '10.0000/a', title: 'A', creators: ['S, A'], year: 2024, publisher: 'R', url: 'https://repo-a.example.org/a' };
+  it('429 is "too many requests", never "private or unpublished"', async () => {
+    const f = new MapFetcher({ [DC + cite1.doi]: { status: 429 } });
+    const text = (await runPage(f, [cite1.doi])).textContent ?? '';
+    expect(text).toContain('too many requests were made');
+    expect(text).not.toContain('private or unpublished');
+  });
+  it('a DOI DataCite does not know says so, not "private or unpublished"', async () => {
+    const text = (await runPage(new MapFetcher({}), ['10.5555/not-at-datacite'])).textContent ?? '';
+    expect(text).toContain('DataCite has no record of this DOI');
+    expect(text).not.toContain('private or unpublished');
+  });
+  it('a refused record (403) keeps the old explanation', async () => {
+    const f = new MapFetcher({ [DC + cite1.doi]: { status: 403 } });
+    expect((await runPage(f, [cite1.doi])).textContent ?? '').toContain('private or unpublished');
+  });
+  it('a timeout is reported on the page, with the switch to server mode', async () => {
+    const f = new MapFetcher({ [DC + cite1.doi]: new FetchTimeoutError('api.datacite.org') });
+    const result = await runPage(f, [cite1.doi]);
+    expect(result.textContent ?? '').toContain('api.datacite.org did not answer in time');
+    expect(screen.getByRole('button', { name: /server mode/i })).toBeTruthy();
+  });
+  it('the three new reasons exist in all four languages and take the host', () => {
+    for (const lang of LANGS) for (const k of ['licence.reason.timeout', 'licence.reason.rateLimit', 'licence.reason.notDatacite'] as const) expect(UI[lang][k], `${lang} ${k}`).toContain('{host}');
   });
 });
