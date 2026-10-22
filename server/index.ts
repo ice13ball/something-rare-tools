@@ -10,7 +10,7 @@ import { SITE } from '../config/site.js';
 import { buildCswUpstream, createHostPacer, CSW_MAX_BYTES, CSW_TIMEOUT_MS, parseCswBody, type HostPacerOptions } from './csw.js';
 import { proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
 import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
-import { createRateLimiter, type RateLimitOptions } from './rateLimit.js';
+import { clientIp, createRateLimiter, type RateLimitOptions } from './rateLimit.js';
 
 export interface AppOptions {
   distDir: string;
@@ -252,12 +252,13 @@ export function createApp(opts: AppOptions): Express {
       host = parsed.catalogue.host;
       const target = buildCswUpstream(parsed);
       try {
-        await cswPacer.acquire(host);
+        await cswPacer.acquire(host, clientIp(req), clientGone.signal);
       } catch (e) {
         const wait = (e as { retryAfterSec?: number }).retryAfterSec;
         if (wait !== undefined) res.setHeader('Retry-After', String(wait));
         throw e;
       }
+      if (clientGone.signal.aborted) throw new ProxyError(499, 'client_closed');
       const upstream = await proxyFetch(target.url, 'application/xml', {
         ...proxyDeps(clientGone.signal),
         allowUrl: isCatalogueUrl,

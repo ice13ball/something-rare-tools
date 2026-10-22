@@ -104,41 +104,79 @@ export function buildCswUpstream(r: CswRequest): CswUpstream {
 
 export interface HostPacerOptions {
   minIntervalMs?: number;
+  /** Requests that may wait at one host, all clients together. */
   maxQueue?: number;
+  /** Requests that may wait at one host for one client key (an IP): one client cannot fill the queue. */
+  maxPerClient?: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
 
+export const CSW_MAX_PER_CLIENT = 2;
+
+interface HostState {
+  next: number;
+  waiting: number;
+  perClient: Map<string, number>;
+}
+
 /**
  * Turns at one catalogue host: upstream requests start at least `minIntervalMs` apart, whatever the number of visitors.
- * Up to `maxQueue` requests wait; one more is refused with ProxyError 429 (Retry-After = the wait it would have had, in seconds).
- * Independent of the per-IP limiter, which also applies.
+ * Up to `maxQueue` requests wait (at most `maxPerClient` of them per client key); one more is refused with ProxyError 429
+ * (Retry-After = the wait it would have had, in seconds). A waiter whose `signal` aborts leaves the queue at once and, when it
+ * held the last reservation, gives its time slot back. Independent of the per-IP limiter, which also applies.
  */
-export function createHostPacer(opts: HostPacerOptions = {}): { acquire(host: string): Promise<void>; waiting(host: string): number } {
+export function createHostPacer(opts: HostPacerOptions = {}): {
+  acquire(host: string, client?: string, signal?: AbortSignal): Promise<void>;
+  waiting(host: string): number;
+} {
   const interval = opts.minIntervalMs ?? CSW_MIN_INTERVAL_MS;
   const maxQueue = opts.maxQueue ?? CSW_MAX_QUEUE;
+  const maxPerClient = opts.maxPerClient ?? CSW_MAX_PER_CLIENT;
   const now = opts.now ?? Date.now;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const state = new Map<string, { next: number; waiting: number }>();
+  const state = new Map<string, HostState>();
+  const full = (wait: number): ProxyError => Object.assign(new ProxyError(429, 'csw_queue_full'), { retryAfterSec: Math.max(1, Math.ceil(wait / 1000)) });
 
   return {
     waiting: (host) => state.get(host)?.waiting ?? 0,
-    async acquire(host) {
+    async acquire(host, client = '', signal) {
+      if (signal?.aborted) throw new ProxyError(499, 'client_closed');
       let h = state.get(host);
-      if (!h) state.set(host, (h = { next: 0, waiting: 0 }));
+      if (!h) state.set(host, (h = { next: 0, waiting: 0, perClient: new Map() }));
       const t = now();
       const start = Math.max(t, h.next);
       const wait = start - t;
-      if (wait > 0 && h.waiting >= maxQueue) {
-        throw Object.assign(new ProxyError(429, 'csw_queue_full'), { retryAfterSec: Math.max(1, Math.ceil(wait / 1000)) });
+      if (wait <= 0) {
+        h.next = start + interval;
+        return;
       }
+      if (h.waiting >= maxQueue || (h.perClient.get(client) ?? 0) >= maxPerClient) throw full(wait);
       h.next = start + interval;
-      if (wait <= 0) return;
       h.waiting += 1;
-      try {
-        await sleep(wait);
-      } finally {
+      h.perClient.set(client, (h.perClient.get(client) ?? 0) + 1);
+      const leave = (): void => {
         h.waiting -= 1;
+        const n = (h.perClient.get(client) ?? 1) - 1;
+        if (n <= 0) h.perClient.delete(client);
+        else h.perClient.set(client, n);
+      };
+      let onAbort: (() => void) | undefined;
+      try {
+        await new Promise<void>((resolve, reject) => {
+          if (signal) {
+            onAbort = () => reject(new ProxyError(499, 'client_closed'));
+            signal.addEventListener('abort', onAbort, { once: true });
+          }
+          sleep(wait).then(resolve, reject);
+        });
+      } catch (e) {
+        // Aborted (or the timer failed): the slot goes back when nobody reserved after it.
+        if (h.next === start + interval) h.next = start;
+        throw e;
+      } finally {
+        if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+        leave();
       }
     },
   };
