@@ -4,7 +4,7 @@
 // fix-list CSV in ~1 MB parts, and a checkpoint after every page so a closed tab or a refusal loses nothing. In memory (and in the
 // saved run) there are only counters, <= 50 samples per rule, the cursor and small plans: nothing grows with the number of records.
 import { getRule } from '../rules/registry';
-import type { Severity } from '../types';
+import type { Finding, Severity } from '../types';
 import { stopFromError, stopFromFailure } from './stop';
 import { StopSignal, makeNetContext, realClock, type Clock, type Net, type NetContext } from './net';
 import { UNFINISHED, evaluateItem, fixListHeader, incompleteRow, fixListRow, sourceLabel, toSample } from './fixlist';
@@ -423,14 +423,23 @@ export class CollectionRunner {
     const st = this.st!;
     const c = st.counts;
     const source = sourceLabel(st.settings.spec);
-    for (const item of data.items) {
+    for (const raw of data.items) {
+      let item = raw;
+      let findings: Finding[] = [];
+      if (item.state === 'checked') {
+        try {
+          findings = evaluateItem(item);
+        } catch {
+          // One record the rules cannot take must not end a run of thousands: it is counted as not read, and gets no finding.
+          item = { ref: item.ref, state: 'unsupported-profile', records: [], reason: 'check-failed' };
+        }
+      }
       c.records += 1;
       c.states[item.state] += 1;
       if (item.state !== 'checked') {
         if (st.unread.length < SAMPLES_PER_RULE) st.unread.push({ ref: item.ref, state: item.state, reason: item.reason ?? '' });
         continue;
       }
-      const findings = evaluateItem(item);
       if (findings.length > 0) c.withFindings += 1;
       for (const f of findings) {
         c.rules[f.ruleId] = (c.rules[f.ruleId] ?? 0) + 1;
