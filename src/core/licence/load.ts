@@ -89,7 +89,7 @@ export async function loadLicenceReferences(
         const loaded = await loadRecord(resolved, fetcher, { pangaea: loadPangaeaMetainfo });
         const source = SOURCE_OF_KIND[loaded.kind];
         // Only this record's own failure counts; findings about files (no data file, landing host) say nothing about the licence.
-        const own = ownLoadFailure(loaded.findings, loaded.label, loaded.metadata.length);
+        const own = ownLoadFailure(loaded.findings, loaded.label, loaded.kind, loaded.metadata.length);
         if (own) failures.push({ ref, ...(source ? { source } : {}), finding: own });
         for (const rec of loaded.metadata) add(rec);
       } catch (e) {
