@@ -49,6 +49,7 @@ export const KNOWN_LICENCES: readonly SpdxInfo[] = SPDX_ENTRIES;
 /**
  * Open in the Open Definition sense: reuse and redistribution allowed without NC/ND restrictions.
  * Every classifiable id is open except Creative Commons NonCommercial and NoDerivatives. Unknown ids are not open.
+ * (Software licences count as open too: this only decides whether restriction codes next to the licence are a contradiction.)
  */
 export function isOpenLicence(spdx?: string): boolean {
   return !!spdx && INFO.has(spdx) && !/^CC-BY-(NC|ND)(-|$)/.test(spdx);
@@ -56,7 +57,8 @@ export function isOpenLicence(spdx?: string): boolean {
 
 /* ---------- URI -> id ---------- */
 
-type Read = { id?: string; unmapped?: boolean; family?: string };
+/** `oneOf`: a URI that fits several SPDX ids (GPL-3.0-only and -or-later share one URL); a text naming one of them agrees with it. */
+type Read = { id?: string; unmapped?: boolean; family?: string; oneOf?: string[] };
 
 /** SPDX ids exist only for these ports; the suffix of a ported id is the upper-case country (or IGO) code. */
 const PORTS = [...new Set(SPDX_ENTRIES.map((e) => /^CC-.*-\d\.\d-([A-Z]+)$/.exec(e.id)?.[1]).filter((p): p is string => !!p))];
@@ -74,6 +76,26 @@ function ccId(variant: string, version: string, port?: string): Read {
   // 4.0 has no ports: a trailing language segment there is a deed language.
   const p = version === '4.0' ? undefined : port;
   return known(`CC-${ccVariant(variant)}-${version}${p ? `-${p.toUpperCase()}` : ''}`);
+}
+
+const GNU_VARIANTS = (base: string): string[] => [`${base}-only`, `${base}-or-later`];
+
+/** Software licences by their canonical pages (opensource.org, apache.org, mozilla.org, gnu.org). `u` is lower-case. */
+function readSoftwareUri(u: string): Read | undefined {
+  const osi = /opensource\.org\/licen[sc]es?\/(mit|apache-2\.0|bsd-2-clause|bsd-3-clause|isc|mpl-2\.0|l?gpl-[23]\.[01]|agpl-3\.0)(?![a-z0-9.-])/.exec(u);
+  const gnu = /gnu\.org\/licenses\/(?:old-licenses\/)?(l?gpl-[23]\.[01]|agpl-3\.0|agpl)(?:\.[a-z]{2})?(?:-standalone)?(?:\.(?:html|txt))?(?![a-z0-9.-])/.exec(u);
+  const key = osi?.[1] ?? gnu?.[1];
+  if (key) {
+    if (/gpl/.test(key)) {
+      const base = (key === 'agpl' ? 'agpl-3.0' : key).toUpperCase();
+      return { unmapped: true, oneOf: GNU_VARIANTS(base).filter((id) => INFO.has(id)) };
+    }
+    return known({ mit: 'MIT', 'apache-2.0': 'Apache-2.0', 'bsd-2-clause': 'BSD-2-Clause', 'bsd-3-clause': 'BSD-3-Clause', isc: 'ISC', 'mpl-2.0': 'MPL-2.0' }[key]!);
+  }
+  if (/apache\.org\/licenses\/license-2\.0/.test(u)) return { id: 'Apache-2.0' };
+  if (/mozilla\.org\/mpl\/2\.0/.test(u)) return { id: 'MPL-2.0' };
+  if (/(opensource\.org\/licen[sc]es?\/|gnu\.org\/licenses\/|apache\.org\/licenses\/|mozilla\.org\/mpl\/)/.test(u)) return { unmapped: true };
+  return undefined;
 }
 
 function readUri(uri: string): Read {
@@ -94,6 +116,8 @@ function readUri(uri: string): Read {
   const dl = /govdata\.de\/dl-de\/(by|zero)-(\d)-(\d)/.exec(u);
   if (dl) return known(`DL-DE-${dl[1].toUpperCase()}-${dl[2]}.${dl[3]}`);
   if (/govdata\.de\/dl-de\//.test(u)) return { unmapped: true };
+  const soft = readSoftwareUri(u);
+  if (soft) return soft;
   const nlod = /data\.norge\.no\/nlod\/(?:[a-z]{2}\/)?(\d)\.(\d)/.exec(u);
   if (nlod) return known(`NLOD-${nlod[1]}.${nlod[2]}`);
   if (/data\.norge\.no\/nlod/.test(u)) return { unmapped: true };
@@ -172,6 +196,20 @@ const PATTERNS: Pattern[] = [
       return known(`DL-DE-${kind === 'zero' ? 'ZERO' : 'BY'}-${m[2] ?? m[5] ?? m[8]}.${m[3] ?? m[6] ?? m[9]}`);
     },
   },
+  // Software licences: exact ids and official names. Versionless "GPL" and a bare "MIT" inside prose (the institute) are not read.
+  { re: /^\s*mit\s*$|(?<![\p{L}\p{N}])mit[\s-]+licen[cs]e/giu, read: () => known('MIT') },
+  { re: /(?<![a-z0-9])apache[\s-]*(?:licen[cs]e[\s,-]*)?(?:version\s*|v)?2(?:\.0)?(?![\d.])/gi, read: () => known('Apache-2.0') },
+  { re: /(?<![a-z0-9])bsd[\s-]*([23])[\s-]*clause(?![\s-]*(?:clear|lbnl|attribution|patent|[a-z]))(?:\s*[“"‘']new[”"’']\s*or\s*[“"‘']revised[”"’']|\s*[“"‘']simplified[”"’'])?(?:\s+licen[cs]e)?/gi, read: (m) => known(`BSD-${m[1]}-Clause`) },
+  { re: /^\s*isc\s*$|(?<![a-z0-9])isc[\s-]+licen[cs]e/gi, read: () => known('ISC') },
+  { re: /(?<![a-z0-9])mpl[\s-]*2\.0|mozilla\s+public\s+licen[cs]e,?\s*(?:version\s*|v)?2\.0/gi, read: () => known('MPL-2.0') },
+  {
+    // "GPL-3.0-or-later", "LGPL-2.1-only", "GNU General Public License v3.0 only", "GNU Lesser General Public License, version 2.1 or later"
+    re: /(?<![a-z0-9])(a|l)?gpl-(\d\.\d)-(only|or-later)(?![a-z0-9])|gnu\s+(lesser\s+|affero\s+)?general\s+public\s+licen[cs]e,?\s+(?:version\s*|v)(\d\.\d)\s+(only|or\s+later)/gi,
+    read: (m) => {
+      const kind = (m[1] ?? m[4]?.trim()[0] ?? '').toUpperCase();
+      return known(`${kind === 'A' ? 'A' : kind === 'L' ? 'L' : ''}GPL-${m[2] ?? m[5]}-${(m[3] ?? m[6]).toLowerCase().replace(/\s+/, '-')}`);
+    },
+  },
   { re: /(?<![a-z0-9])nlod[\s)-]*(?:v|version\s*)?(\d)\.(\d)/gi, read: (m) => known(`NLOD-${m[1]}.${m[2]}`) },
 ];
 
@@ -182,14 +220,14 @@ const PATTERNS: Pattern[] = [
  */
 const MARKER_WORDS = [
   'no', 'not', 'non', 'but', 'only', 'except', 'unless', 'without', 'nie', 'bez', 'ale', 'poza', 'tylko', 'nur', 'aber', 'nicht',
-  'ohne', 'mais', 'pas', 'sans', 'sauf', 'fins', 'außer', 'ausser',
+  'ohne', 'mais', 'pas', 'sans', 'sauf', 'außer', 'ausser',
 ];
 const MARKER_STEMS = [
-  'excluding', 'exception', 'prohibit', 'forbidden', 'restrict', 'permission', 'apart from', 'other than', 'limited', 'purpose',
-  'commercial', 'rights reserved', 'embargo', 'moratorium', 'confidential', 'proprietary',
-  'oprócz', 'wyjątk', 'wyłącznie', 'jedynie', 'zakaz', 'zabronion', 'komercyjn', 'ograniczon', 'zastrzeżon', 'zgod', 'cel(?:ów|u|e|em)(?![\\p{L}])',
-  'ausgenommen', 'ausschließlich', 'ausschliesslich', 'verbot', 'untersag', 'kommerz', 'nichtkommerz', 'zweck', 'genehmigung', 'erlaubnis', 'vorbehalten',
-  'excepté', 'uniquement', 'seulement', 'exclusivement', 'interdit', 'interdiction', 'autorisation', 'réservé',
+  'excluding', 'exception', 'prohibit', 'forbidden', 'restrict', 'apart from', 'other than', 'limited',
+  'rights reserved', 'embargo', 'moratorium', 'confidential', 'proprietary',
+  'oprócz', 'wyjątk', 'wyłącznie', 'jedynie', 'zakaz', 'zabronion', 'ograniczon', 'zastrzeżon', 'zgod(?:y|ą)(?![\\p{L}])',
+  'ausgenommen', 'ausschließlich', 'ausschliesslich', 'verbot', 'untersag', 'nichtkommerz', 'vorbehalten',
+  'excepté', 'uniquement', 'seulement', 'exclusivement', 'interdit', 'interdiction', 'réservé',
 ];
 const MARKERS = new RegExp(`(?<![\\p{L}\\p{N}])(?:(?:${MARKER_WORDS.join('|')})(?![\\p{L}\\p{N}])|(?:${MARKER_STEMS.join('|')}))`, 'iu');
 
@@ -270,7 +308,7 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
     ((ids.length > 1 && !multi) || // identifier and rights text disagree with each other
       (multi && !!u.id) || // the text offers several licences, the URI names one
       (!!textId && !!u.id && textId !== u.id) ||
-      (!!textId && !!u.unmapped) ||
+      (!!textId && !!u.unmapped && !u.oneOf?.includes(textId)) ||
       (reads.some((r) => r.unmapped) && !!u.id) ||
       (!textId && !!u.id && families.some((f) => f !== familyOf(u.id!))) ||
       // the text names no licence but restricts, and the URI names one

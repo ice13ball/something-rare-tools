@@ -51,7 +51,9 @@ describe('identifiers added from the SPDX list', () => {
     expect(spdxInfo('OGL-UK-3.0')).toEqual({ id: 'OGL-UK-3.0', name: 'Open Government Licence v3.0', url: 'http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/' });
     expect(spdxInfo('CC-BY-4.0')).toMatchObject({ name: 'Creative Commons Attribution 4.0 International', url: 'https://creativecommons.org/licenses/by/4.0/legalcode' });
     expect(spdxInfo('CC-BY-3.0-DE')?.name).toBe('Creative Commons Attribution 3.0 Germany');
-    expect(spdxInfo('MIT')).toBeUndefined();
+    expect(spdxInfo('MIT')).toMatchObject({ name: 'MIT License' });
+    expect(spdxInfo('GPL-3.0')).toBeUndefined(); // the deprecated, ambiguous id
+    expect(spdxInfo('Proprietary')).toBeUndefined();
     expect(KNOWN_LICENCES.length).toBeGreaterThan(50);
     for (const l of KNOWN_LICENCES) expect(l.url, l.id).toMatch(/^https?:\/\//);
   });
@@ -63,7 +65,8 @@ describe('identifiers added from the SPDX list', () => {
     expect(isOpenLicence('CC-BY-SA-3.0-AT')).toBe(true);
     expect(isOpenLicence('CC-BY-NC-SA-3.0-DE')).toBe(false);
     expect(isOpenLicence('CC-BY-ND-3.0-IGO')).toBe(false);
-    expect(isOpenLicence('MIT')).toBe(false);
+    expect(isOpenLicence('MIT')).toBe(true); // software licences are open here; this only decides restriction-code contradictions
+    expect(isOpenLicence('Proprietary')).toBe(false);
   });
 });
 
@@ -150,7 +153,7 @@ describe('false-positive corpus: real-world rights entries stay quiet', () => {
     expect(s.conflict).toBeUndefined();
   });
   it.each([
-    ['MIT License', 'https://opensource.org/licenses/MIT'],
+    ['GNU General Public License', 'https://www.gnu.org/licenses/gpl-3.0.html'],
     ['© 2026 A. Author', 'http://rightsstatements.org/vocab/InC/1.0/'],
     ['Use and access constraints (from the FGDC record; no license is granted)', undefined],
     ['Data access is restricted (moratorium, sensitive data, license constraints)', undefined],

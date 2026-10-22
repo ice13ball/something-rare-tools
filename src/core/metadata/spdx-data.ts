@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // GENERATED from the SPDX licence list (https://github.com/spdx/license-list-data, json/licenses.json),
-// licenseListVersion 3.29.0, released 2026-09-16. Only the identifiers the tool can classify.
+// licenseListVersion 3.29.0, released 2026-09-16. Only the identifiers the tool can classify (data licences, plus the common software licences).
 // Names and URLs are the SPDX ones (first https seeAlso entry, else the first). Regenerate from a newer list; do not edit by hand.
 
 export const SPDX_LIST_VERSION = "3.29.0";
 
 export const SPDX_ENTRIES: readonly { id: string; name: string; url: string }[] = [
+  { id: "AGPL-3.0-only", name: "GNU Affero General Public License v3.0 only", url: "https://www.gnu.org/licenses/agpl.txt" },
+  { id: "AGPL-3.0-or-later", name: "GNU Affero General Public License v3.0 or later", url: "https://www.gnu.org/licenses/agpl.txt" },
+  { id: "Apache-2.0", name: "Apache License 2.0", url: "https://www.apache.org/licenses/LICENSE-2.0" },
+  { id: "BSD-2-Clause", name: "BSD 2-Clause \"Simplified\" License", url: "https://opensource.org/license/BSD-2-Clause" },
+  { id: "BSD-3-Clause", name: "BSD 3-Clause \"New\" or \"Revised\" License", url: "https://opensource.org/license/BSD-3-Clause" },
   { id: "CC-BY-1.0", name: "Creative Commons Attribution 1.0 Generic", url: "https://creativecommons.org/licenses/by/1.0/legalcode" },
   { id: "CC-BY-2.0", name: "Creative Commons Attribution 2.0 Generic", url: "https://creativecommons.org/licenses/by/2.0/legalcode" },
   { id: "CC-BY-2.5", name: "Creative Commons Attribution 2.5 Generic", url: "https://creativecommons.org/licenses/by/2.5/legalcode" },
@@ -62,6 +67,17 @@ export const SPDX_ENTRIES: readonly { id: string; name: string; url: string }[] 
   { id: "CC0-1.0", name: "Creative Commons Zero v1.0 Universal", url: "https://creativecommons.org/publicdomain/zero/1.0/legalcode" },
   { id: "DL-DE-BY-2.0", name: "Data licence Germany – attribution – version 2.0", url: "https://www.govdata.de/dl-de/by-2-0" },
   { id: "DL-DE-ZERO-2.0", name: "Data licence Germany – zero – version 2.0", url: "https://www.govdata.de/dl-de/zero-2-0" },
+  { id: "GPL-2.0-only", name: "GNU General Public License v2.0 only", url: "https://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html" },
+  { id: "GPL-2.0-or-later", name: "GNU General Public License v2.0 or later", url: "https://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html" },
+  { id: "GPL-3.0-only", name: "GNU General Public License v3.0 only", url: "https://www.gnu.org/licenses/gpl-3.0-standalone.html" },
+  { id: "GPL-3.0-or-later", name: "GNU General Public License v3.0 or later", url: "https://www.gnu.org/licenses/gpl-3.0-standalone.html" },
+  { id: "ISC", name: "ISC License", url: "https://www.isc.org/licenses/" },
+  { id: "LGPL-2.1-only", name: "GNU Lesser General Public License v2.1 only", url: "https://www.gnu.org/licenses/old-licenses/lgpl-2.1-standalone.html" },
+  { id: "LGPL-2.1-or-later", name: "GNU Lesser General Public License v2.1 or later", url: "https://www.gnu.org/licenses/old-licenses/lgpl-2.1-standalone.html" },
+  { id: "LGPL-3.0-only", name: "GNU Lesser General Public License v3.0 only", url: "https://www.gnu.org/licenses/lgpl-3.0-standalone.html" },
+  { id: "LGPL-3.0-or-later", name: "GNU Lesser General Public License v3.0 or later", url: "https://www.gnu.org/licenses/lgpl-3.0-standalone.html" },
+  { id: "MIT", name: "MIT License", url: "https://opensource.org/license/MIT" },
+  { id: "MPL-2.0", name: "Mozilla Public License 2.0", url: "https://www.mozilla.org/MPL/2.0/" },
   { id: "NLOD-1.0", name: "Norwegian Licence for Open Government Data (NLOD) 1.0", url: "http://data.norge.no/nlod/en/1.0" },
   { id: "NLOD-2.0", name: "Norwegian Licence for Open Government Data (NLOD) 2.0", url: "http://data.norge.no/nlod/en/2.0" },
   { id: "ODC-By-1.0", name: "Open Data Commons Attribution License v1.0", url: "https://opendatacommons.org/licenses/by/1.0/" },
