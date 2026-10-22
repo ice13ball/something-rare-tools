@@ -108,8 +108,14 @@ function fill(template: string, f: Finding): string {
 /** One or two sentences for a non-technical scientist, in `lang` (English when the language is unknown). */
 export function renderPlain(f: Finding, lang: Lang): string {
   const rule = getRule(f.ruleId);
-  const template = rule.plain[lang] || rule.plain.en;
-  return fill(template, f);
+  let texts: Record<Lang, string> = rule.plain;
+  if (rule.plainByStatus) {
+    // 403 / 404: the record is probably not public; 5xx: the server failed; anything else: no guess about the reason
+    const status = Number(f.params.status);
+    if (status >= 500 && status <= 599) texts = rule.plainByStatus.server;
+    else if (status !== 403 && status !== 404) texts = rule.plainByStatus.other;
+  }
+  return fill(texts[lang] || texts.en, f);
 }
 
 /** The English technical detail line (file, lines, field, value, parameters). */
