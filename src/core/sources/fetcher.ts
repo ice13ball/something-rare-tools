@@ -11,6 +11,8 @@ export interface FetchResult {
   bytes: Uint8Array;
   contentType?: string;
   finalUrl: string;
+  /** Pacing headers the host lets the page read (lower-case names: retry-after, x-ratelimit-remaining, x-ratelimit-reset), when present. */
+  headers?: Record<string, string>;
 }
 export interface Fetcher {
   get(url: string, accept?: string): Promise<FetchResult>;
@@ -134,7 +136,12 @@ export function browserFetcher(fetchImpl: FetchFn = globalFetch, timeoutMs: numb
       const finalUrl = res.url || url;
       if (!isAllowedHost(finalUrl)) throw new HostNotAllowedError(hostOf(finalUrl));
       const bytes = await readBody(res, host);
-      return { status: res.status, bytes, contentType: res.headers.get('content-type') ?? undefined, finalUrl };
+      const headers: Record<string, string> = {};
+      for (const name of ['retry-after', 'x-ratelimit-remaining', 'x-ratelimit-reset']) {
+        const v = res.headers.get(name);
+        if (v !== null) headers[name] = v;
+      }
+      return { status: res.status, bytes, contentType: res.headers.get('content-type') ?? undefined, finalUrl, ...(Object.keys(headers).length > 0 ? { headers } : {}) };
     },
   };
 }
