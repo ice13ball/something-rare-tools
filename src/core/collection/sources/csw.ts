@@ -151,7 +151,7 @@ function doiOf(rec: MetadataRecord, el: Element): string | undefined {
  * `read` turns the element into a record: by default through its text (a record taken out of a whole-page DOM), or from the document
  * the caller has parsed for this record alone.
  */
-function itemOf(el: Element, fallbackRef: string, read: (ref: string) => MetadataRecord = (ref) => parseIsoRecord(serializer.serializeToString(el as never), ref)): Item {
+function itemOf(el: Element, fallbackRef: string, read: (ref: string) => MetadataRecord = (ref) => parseIsoRecord(parseXml(serializer.serializeToString(el as never), ref), ref)): Item {
   const ref = (identifierOf(el) ?? fallbackRef).trim();
   const iso = (el.localName === 'MD_Metadata') && (el.namespaceURI === NS.gmd || (NS3.mdb as readonly string[]).includes(el.namespaceURI ?? ''));
   if (!iso) return { ref, state: 'unsupported-profile', records: [], reason: `profile:${el.localName}` };

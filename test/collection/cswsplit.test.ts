@@ -75,4 +75,18 @@ describe('splitCswPage', () => {
     const empty = `<csw:GetRecordsResponse xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"><csw:SearchResults numberOfRecordsMatched="0" numberOfRecordsReturned="0" nextRecord="0"/></csw:GetRecordsResponse>`;
     expect(splitCswPage(empty)).toEqual({ nextRecord: 0, records: [] });
   });
+
+  it('a 19139 record that merely declares the 19115-3 namespace is read as 19139 (the profile is its root, not a string in its text)', async () => {
+    const rec = gmdRecord({ id: 'declares-mdb', licence: 'CC BY 4.0' }).replace('<gmd:MD_Metadata ', '<gmd:MD_Metadata xmlns:mdb="http://standards.iso.org/iso/19115/-3/mdb/2.0" ');
+    const page = searchResults(1, 1, 0, [rec]);
+    const split = await read(page);
+    expect(split.items.map((i) => [i.ref, i.state])).toEqual([['declares-mdb', 'checked']]);
+    expect(split.items[0].records[0].isoProfile).toBe('19139');
+    // a comment after SearchResults makes the page uncut: the whole-page path reads the record the same way
+    const uncut = page.replace('</csw:GetRecordsResponse>', '<!-- end --></csw:GetRecordsResponse>');
+    expect(splitCswPage(uncut)).toBeNull();
+    const whole = await read(uncut);
+    expect(whole.items.map((i) => [i.ref, i.state])).toEqual([['declares-mdb', 'checked']]);
+    expect(whole.items[0].records[0].isoProfile).toBe('19139');
+  });
 });
