@@ -12,5 +12,5 @@ export interface CheckInput {
   mode: DownloadMode;
 }
 
-/** File types the drop zone accepts (CSV/TSV/text tables, Excel, XML and JSON metadata). */
-export const ACCEPTED_EXTENSIONS: readonly string[] = ['.csv', '.tsv', '.txt', '.tab', '.xlsx', '.xls', '.xml', '.json'];
+/** File types the drop zone accepts (CSV/TSV/text tables, Excel, Darwin Core Archive zips, XML and JSON metadata). */
+export const ACCEPTED_EXTENSIONS: readonly string[] = ['.csv', '.tsv', '.txt', '.tab', '.xlsx', '.xls', '.xml', '.json', '.zip'];

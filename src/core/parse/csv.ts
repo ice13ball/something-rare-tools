@@ -19,9 +19,10 @@ const SNIFF_LINES = 50;
  * RFC 4180 tokeniser. Counts every line break (CRLF = one, lone CR = one, LF = one) including inside quotes.
  * A quote opens a quoted field only at the very start of a field; elsewhere it is literal. Stray characters
  * after a closing quote are kept. An unterminated quote runs to the end of the text. Stops after `maxRecords`
- * non-blank records (used by delimiter sniffing).
+ * non-blank records (used by delimiter sniffing). `quote` is the enclosing character; '' means fields are never
+ * enclosed (a Darwin Core Archive with fieldsEnclosedBy="" must not read a stray quote as the start of a field).
  */
-export function tokenizeCsv(text: string, delim: string, maxRecords = Infinity): CsvRecord[] {
+export function tokenizeCsv(text: string, delim: string, maxRecords = Infinity, quote = '"'): CsvRecord[] {
   const out: CsvRecord[] = [];
   let nonBlank = 0;
   let line = 1;
@@ -55,9 +56,9 @@ export function tokenizeCsv(text: string, delim: string, maxRecords = Infinity):
     const c = text[i];
     pending = true;
     if (inQ) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          cur += '"';
+      if (c === quote) {
+        if (text[i + 1] === quote) {
+          cur += quote;
           i++;
         } else {
           inQ = false;
@@ -77,7 +78,7 @@ export function tokenizeCsv(text: string, delim: string, maxRecords = Infinity):
     }
     if (c === delim) {
       endField();
-    } else if (c === '"' && fieldStart) {
+    } else if (c === quote && fieldStart) {
       inQ = true;
       wasQuoted = true;
       quotedInRecord = true;

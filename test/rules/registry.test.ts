@@ -16,6 +16,12 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'IN-ENCODING-FALLBACK': ['info', 'input'],
   'IN-DECIMAL-COMMA': ['info', 'input'],
   'IN-DATE1904': ['info', 'input'],
+  'IN-DWCA-NOT-ARCHIVE': ['error', 'input'],
+  'IN-DWCA-UNSUPPORTED-CORE': ['error', 'input'],
+  'IN-DWCA-UNREADABLE': ['error', 'input'],
+  'IN-DWCA-PARTIAL': ['warning', 'input'],
+  'IN-DWCA-VERSION': ['info', 'input'],
+  'IN-DWCA-EVENT-CORE': ['info', 'input'],
   'LIC-MISSING': ['error', 'A'],
   'LIC-FREE-TEXT': ['warning', 'A'],
   'LIC-RESTRICTION-CONFLICT': ['warning', 'A'],
@@ -68,7 +74,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(53);
+    expect(ids.length).toBe(59);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);

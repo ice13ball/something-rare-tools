@@ -15,6 +15,12 @@ import type { RuleSpec } from './spec';
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
  *   IN-DATE1904             (none)
+ *   IN-DWCA-NOT-ARCHIVE     (none)
+ *   IN-DWCA-UNSUPPORTED-CORE core    local name of the core rowType (e.g. Taxon), or the raw rowType when it has none
+ *   IN-DWCA-UNREADABLE      reason   language-neutral code (ZIP-ENCRYPTED, ZIP-BOMB, DWCA-META-INVALID, ...)
+ *   IN-DWCA-PARTIAL         read, total    rows read / rows in the core file
+ *   IN-DWCA-VERSION         title, version, core   dataset title, 'v1.0, 2025-09-17' (or n/a), core type
+ *   IN-DWCA-EVENT-CORE      occurrences    rows of the Occurrence extension
  */
 export const INPUT_RULES: readonly RuleSpec[] = [
   {
@@ -148,5 +154,83 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `Ce fichier Excel utilise l'ancien système de dates 1904 (les dates diffèrent de 1462 jours par rapport au système habituel). Les dates ont été converties en conséquence ; vérifiez-en quelques-unes.`,
     },
     technical: `{file}: workbook date1904 flag is set; serial dates converted with epoch 1904-01-01 (1462 days offset from the 1900 system).`,
+  },
+  {
+    id: 'IN-DWCA-NOT-ARCHIVE',
+    category: 'input',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `To archiwum ZIP, ale nie archiwum Darwin Core (brak pliku meta.xml), więc niczego nie sprawdzono. Dodaj archiwum DwC-A pobrane z IPT, OBIS lub GBIF albo samą tabelę jako CSV lub Excel.`,
+      en: `This is a ZIP file, but not a Darwin Core Archive (it has no meta.xml), so nothing was checked. Add a DwC-A downloaded from an IPT, OBIS or GBIF, or the table itself as CSV or Excel.`,
+      de: `Dies ist eine ZIP-Datei, aber kein Darwin-Core-Archiv (es fehlt die meta.xml), daher wurde nichts geprüft. Fügen Sie ein DwC-A von einem IPT, OBIS oder GBIF hinzu oder die Tabelle selbst als CSV oder Excel.`,
+      fr: `Ce fichier est un ZIP, mais pas une archive Darwin Core (il n'a pas de meta.xml) ; rien n'a donc été vérifié. Ajoutez un DwC-A issu d'un IPT, d'OBIS ou du GBIF, ou le tableau lui-même en CSV ou Excel.`,
+    },
+    technical: `{file}: zip archive without a meta.xml at its root; not a Darwin Core Archive, nothing read.`,
+  },
+  {
+    id: 'IN-DWCA-UNSUPPORTED-CORE',
+    category: 'input',
+    severity: 'error',
+    params: ['core'],
+    plain: {
+      pl: `To archiwum Darwin Core, którego tabela główna to {core}. Narzędzie sprawdza tylko archiwa typu Occurrence lub Event, więc tego archiwum nie sprawdzono. To nie znaczy, że jest w porządku.`,
+      en: `This is a Darwin Core Archive whose core table is {core}. The tool only checks Occurrence or Event archives, so this archive was not checked. That does not mean it is fine.`,
+      de: `Dies ist ein Darwin-Core-Archiv, dessen Kerntabelle {core} ist. Das Werkzeug prüft nur Archive vom Typ Occurrence oder Event, daher wurde dieses Archiv nicht geprüft. Das heißt nicht, dass es in Ordnung ist.`,
+      fr: `Cette archive Darwin Core a pour table centrale {core}. L'outil ne vérifie que les archives Occurrence ou Event ; celle-ci n'a donc pas été vérifiée. Cela ne veut pas dire qu'elle est correcte.`,
+    },
+    technical: `{file}: Darwin Core Archive with core rowType {core}; only Occurrence and Event cores are checked. Not checked.`,
+  },
+  {
+    id: 'IN-DWCA-UNREADABLE',
+    category: 'input',
+    severity: 'error',
+    params: ['reason'],
+    plain: {
+      pl: `Nie udało się bezpiecznie odczytać tego archiwum ({reason}), więc niczego nie sprawdzono. Plik może być uszkodzony, zaszyfrowany lub zbyt duży. Pobierz go ponownie albo dodaj samą tabelę (np. occurrence.txt).`,
+      en: `This archive could not be read safely ({reason}), so nothing was checked. The file may be damaged, encrypted or too large. Download it again, or add the table itself (for example occurrence.txt).`,
+      de: `Dieses Archiv konnte nicht sicher gelesen werden ({reason}), daher wurde nichts geprüft. Die Datei ist möglicherweise beschädigt, verschlüsselt oder zu groß. Laden Sie sie erneut herunter oder fügen Sie die Tabelle selbst hinzu (z. B. occurrence.txt).`,
+      fr: `Cette archive n'a pas pu être lue en toute sécurité ({reason}) ; rien n'a donc été vérifié. Le fichier est peut-être endommagé, chiffré ou trop volumineux. Téléchargez-le à nouveau ou ajoutez le tableau lui-même (par ex. occurrence.txt).`,
+    },
+    technical: `{file}: archive rejected or unreadable: {reason}. Nothing was checked.`,
+  },
+  {
+    id: 'IN-DWCA-PARTIAL',
+    category: 'input',
+    severity: 'warning',
+    params: ['read', 'total'],
+    plain: {
+      pl: `CZĘŚCIOWE SPRAWDZENIE: tabela w archiwum jest duża, więc odczytano tylko pierwsze {read} z {total} wierszy. Pozostałych wierszy nie sprawdzono; brak uwag nie dotyczy całego pliku.`,
+      en: `PARTIAL CHECK: the table in this archive is large, so only the first {read} of {total} rows were read. The remaining rows were not checked; a clean result does not cover the whole file.`,
+      de: `TEILWEISE PRÜFUNG: Die Tabelle in diesem Archiv ist groß, daher wurden nur die ersten {read} von {total} Zeilen gelesen. Die übrigen Zeilen wurden nicht geprüft; ein unauffälliges Ergebnis gilt nicht für die ganze Datei.`,
+      fr: `VÉRIFICATION PARTIELLE : le tableau de cette archive est volumineux ; seules les {read} premières lignes sur {total} ont été lues. Les autres n'ont pas été vérifiées ; l'absence de remarque ne couvre pas tout le fichier.`,
+    },
+    technical: `{file}: only the first {read} of {total} rows of the core file were read (row cap); the rest is unchecked. PARTIAL run.`,
+  },
+  {
+    id: 'IN-DWCA-VERSION',
+    category: 'input',
+    severity: 'info',
+    params: ['title', 'version', 'core'],
+    plain: {
+      pl: `Odczytano archiwum Darwin Core „{title}”, wersja: {version}. Sprawdzono jego tabelę główną ({core}). Jeśli archiwum zostało od tego czasu zaktualizowane, wynik dotyczy starej wersji.`,
+      en: `Read the Darwin Core Archive "{title}", version: {version}. Its core table ({core}) was checked. If the archive has been updated since, this result covers the older version.`,
+      de: `Das Darwin-Core-Archiv „{title}“ wurde gelesen, Version: {version}. Seine Kerntabelle ({core}) wurde geprüft. Wurde das Archiv inzwischen aktualisiert, gilt dieses Ergebnis für die ältere Version.`,
+      fr: `Archive Darwin Core « {title} » lue, version : {version}. Sa table centrale ({core}) a été vérifiée. Si l'archive a été mise à jour depuis, ce résultat concerne l'ancienne version.`,
+    },
+    technical: `{file}: Darwin Core Archive "{title}", version {version} (eml.xml packageId / pubDate); core rowType {core}.`,
+  },
+  {
+    id: 'IN-DWCA-EVENT-CORE',
+    category: 'input',
+    severity: 'info',
+    params: ['occurrences'],
+    plain: {
+      pl: `Rdzeniem archiwum są zdarzenia (Event); rozszerzenie Occurrence ma {occurrences} wierszy. Pozycje i daty pochodzą ze zdarzeń, więc sprawdzono tabelę zdarzeń, a nie osobne wiersze występowań.`,
+      en: `The archive's core is Event; its Occurrence extension has {occurrences} rows. Positions and dates belong to the events, so the event table was checked, not the occurrence rows one by one.`,
+      de: `Der Kern des Archivs ist Event; die Occurrence-Erweiterung hat {occurrences} Zeilen. Positionen und Daten gehören zu den Events, daher wurde die Event-Tabelle geprüft, nicht die einzelnen Occurrence-Zeilen.`,
+      fr: `Le cœur de l'archive est Event ; son extension Occurrence compte {occurrences} lignes. Positions et dates appartiennent aux événements : c'est la table des événements qui a été vérifiée, pas les occurrences une à une.`,
+    },
+    technical: `{file}: Event core with an Occurrence extension of {occurrences} rows; positions and dates are the events', the event table was checked.`,
   },
 ];
