@@ -141,3 +141,37 @@ describe('a deferred page judged in the retry pass is judged against its own ran
     expect(p.notices).toContainEqual({ code: 'records-missing', params: { missing: 13 } });
   });
 });
+
+describe('the daily budget running out in the retry pass', () => {
+  it('interrupts the run (resumable, with that cause) instead of finishing with "unread pages"; resume reads everything', async () => {
+    let spent = true;
+    let calls26 = 0;
+    const net = cswNet(recs(100), (c) => {
+      if (c.startPosition !== 26) return undefined;
+      calls26 += 1;
+      if (calls26 <= 5) return { status: 504, text: '', proxyError: 'csw_slow' };
+      return spent ? { status: 429, text: '', retryAfterMs: 80_000_000, proxyError: 'csw_daily_budget' } : undefined;
+    });
+    const r = new CollectionRunner(runnerDeps(net, virtualClock()));
+    await r.start(spec);
+    await r.whenIdle();
+    let p = r.progress();
+    expect(p.status).toBe('interrupted');
+    expect(p.resumable).toBe(true);
+    expect(p.stop).toMatchObject({ cause: 'csw_daily_budget' });
+    spent = false;
+    await r.resume();
+    await r.whenIdle();
+    p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.states.checked).toBe(100);
+    expect(p.notices.some((n) => n.code === 'unread-pages')).toBe(false);
+  });
+
+  it('the budget messages say it is per IP address, in four languages', async () => {
+    const { UI } = await import('../../src/core/i18n/ui');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      for (const k of ['collection.cause.csw_daily_budget', 'collection.error.dailyBudget'] as const) expect(UI[lang][k], `${lang} ${k}`).toMatch(/IP/);
+    }
+  });
+});

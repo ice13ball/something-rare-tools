@@ -422,6 +422,11 @@ export class CollectionRunner {
           await this.fail(e);
           return false;
         }
+        // The day's budget ran out in the retry pass: as in the normal pass, the run is interrupted (resumable), not finished with "unread pages".
+        if (e.reason === 'csw_daily_budget') {
+          await this.interrupt(e, entry.page);
+          return false;
+        }
         if (e.kind !== entry.kind) this.moveState(entry, e.kind);
         entry.reason = e.reason;
         failures += 1;
