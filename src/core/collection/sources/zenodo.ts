@@ -30,14 +30,21 @@ export interface Slice {
   total: number;
   /** One day alone holds more than the window: the records beyond it cannot be listed. */
   capped?: boolean;
+  /**
+   * A REMAINDER slice: the records inside from..to that none of these finer ranges holds. The index matches a range query only for records
+   * whose date lies inside it, so a record dated only "2010" or "2010-08" is in the year's slice but in none of its month or day slices.
+   * Its total is (parent count - sum of the children's counts).
+   */
+  except?: { from: string; to: string }[];
 }
 
 export function validateSlug(slug: string): void {
   if (!SLUG.test(slug)) throw new SourceFailure('protocol', 'bad-id');
 }
 
-export function zenodoUrl(slug: string, page: number, size: number, sort: 'oldest' | 'mostrecent', slice?: Pick<Slice, 'from' | 'to'>): string {
-  const q = slice && (slice.from || slice.to) ? `&q=${enc(`publication_date:[${slice.from ?? '*'} TO ${slice.to ?? '*'}]`)}` : '';
+export function zenodoUrl(slug: string, page: number, size: number, sort: 'oldest' | 'mostrecent', slice?: Pick<Slice, 'from' | 'to' | 'except'>): string {
+  const not = (slice?.except ?? []).map((e) => ` AND NOT publication_date:[${e.from} TO ${e.to}]`).join('');
+  const q = slice && (slice.from || slice.to) ? `&q=${enc(`publication_date:[${slice.from ?? '*'} TO ${slice.to ?? '*'}]${not}`)}` : '';
   return `https://${ZENODO_HOST}/api/communities/${enc(slug)}/records?size=${size}&page=${page}&sort=${sort}${q}`;
 }
 
@@ -58,7 +65,7 @@ function totalOf(json: Obj): number {
 }
 
 /** hits.total of a community (one request with size=1); an unknown community is SourceFailure 'not-found'. */
-export async function zenodoTotal(deps: Deps, slug: string, slice?: Pick<Slice, 'from' | 'to'>): Promise<number> {
+export async function zenodoTotal(deps: Deps, slug: string, slice?: Pick<Slice, 'from' | 'to' | 'except'>): Promise<number> {
   validateSlug(slug);
   return totalOf(await getJson(deps, zenodoUrl(slug, 1, 1, 'oldest', slice)));
 }
@@ -110,32 +117,49 @@ function finer(s: Slice, thisYear: number): Pick<Slice, 'from' | 'to'>[] {
   return out;
 }
 
-/** Builds the slice list for a community above the window: counts every candidate (one request each) and refines the big ones. */
+/** Both ends inside one calendar year and a month at most: the parents whose finer slices can miss partial dates (a year, a month). */
+const splitsWithinYear = (w: Pick<Slice, 'from' | 'to'>): boolean => !!w.from && !!w.to && w.from.slice(0, 4) === w.to.slice(0, 4) && (w.from.slice(5, 7) !== w.to.slice(5, 7) || w.from.slice(8, 10) !== w.to.slice(8, 10));
+
+/**
+ * Builds the slice list for a community above the window: counts every candidate (one request each) and refines the big ones. Where a year
+ * is cut into months (or a month into days) the children can add up to less than the parent, because a record dated only "2010" or "2010-08"
+ * matches the parent's range but none of the children's: what is missing is read as a REMAINDER slice (the parent's range minus the children's).
+ */
 export async function planSlices(deps: Deps, slug: string, total: number, thisYear: number): Promise<{ slices: Slice[]; sum: number }> {
   const slices: Slice[] = [];
+  const expand = async (w: Pick<Slice, 'from' | 'to'>, n: number): Promise<void> => {
+    if (n === 0) return;
+    if (n <= ZENODO_WINDOW) {
+      slices.push({ ...w, total: n });
+      return;
+    }
+    const parts = finer({ ...w, total: n }, thisYear);
+    if (parts.length === 0) {
+      slices.push({ ...w, total: n, capped: true });
+      return;
+    }
+    let childSum = 0;
+    for (const p of parts) {
+      const c = await zenodoTotal(deps, slug, p);
+      childSum += c;
+      await expand(p, c);
+      if (slices.length > MAX_SLICES) throw new SourceFailure('protocol', 'too-many-slices');
+    }
+    const rest = n - childSum;
+    if (rest > 0 && splitsWithinYear(w)) {
+      // Not splittable further (what is left has no date to cut by): above the window it is capped, and the run says so.
+      const except = parts.map((p) => ({ from: p.from!, to: p.to! }));
+      slices.push({ ...w, except, total: rest, ...(rest > ZENODO_WINDOW ? { capped: true } : {}) });
+    }
+  };
   const work: Pick<Slice, 'from' | 'to'>[] = [{ to: `${FIRST_YEAR - 1}-12-31` }];
   for (let y = FIRST_YEAR; y <= thisYear; y++) work.push({ from: `${y}-01-01`, to: `${y}-12-31` });
   work.push({ from: `${thisYear + 1}-01-01` });
-  let sum = 0;
-  for (let i = 0; i < work.length; i++) {
-    const w = work[i];
-    const count = await zenodoTotal(deps, slug, w);
-    if (count === 0) continue;
-    if (count <= ZENODO_WINDOW) {
-      slices.push({ ...w, total: count });
-      sum += count;
-    } else {
-      const parts = finer({ ...w, total: count }, thisYear);
-      if (parts.length === 0) {
-        slices.push({ ...w, total: count, capped: true });
-        sum += Math.min(count, ZENODO_WINDOW);
-      } else {
-        // depth first, so the slices stay in date order
-        work.splice(i + 1, 0, ...parts);
-      }
-    }
-    if (slices.length > MAX_SLICES) throw new SourceFailure('protocol', 'too-many-slices');
+  for (const w of work) {
+    const n = await zenodoTotal(deps, slug, w);
+    await expand(w, n);
   }
+  const sum = slices.reduce((a, s) => a + Math.min(s.total, ZENODO_WINDOW), 0);
   return { slices, sum: total === 0 ? 0 : sum };
 }
 
@@ -169,7 +193,8 @@ export function yearOfSplit(s: Slice): string | undefined {
   if (!s.from || !s.to) return undefined;
   const y = s.from.slice(0, 4);
   if (s.to.slice(0, 4) !== y) return undefined;
-  return s.from === `${y}-01-01` && s.to === `${y}-12-31` ? undefined : y;
+  // a remainder of a whole year belongs to that year's group: it can overlap the months it was cut from only through a repeated id
+  return s.from === `${y}-01-01` && s.to === `${y}-12-31` && !s.except ? undefined : y;
 }
 
 /** The records of a page, each with its numeric Zenodo id (undefined when the id is not a plain integer: such a record is never dropped as a repeat). */
