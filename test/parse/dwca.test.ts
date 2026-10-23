@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Darwin Core Archives built in the test from synthetic files: no real third-party data.
 import { describe, expect, it } from 'vitest';
-import { isArchiveZip, parseDwca, parseFileAsync } from '../../src/core/parse';
+import { isArchiveZip, parseFile, parseDwca, parseFileAsync } from '../../src/core/parse';
 import type { ParsedFile } from '../../src/core/types';
 import { emlXml, makeZip, metaXml, nodeInflate, type TestEntry } from '../helpers/zipfile';
 import { createDirectEngine } from '../../src/worker/handler';
@@ -243,6 +243,13 @@ describe('dispatch and the worker', () => {
     expect(parsed.problems[0].fileName).toBe('book.xlsx');
     const asZip = await parseFileAsync('book.zip', corrupt, nodeInflate);
     expect(ids(asZip)).toContain('IN-DWCA-UNREADABLE');
+  });
+
+  it('a real zip cut after its first local header, named .xlsx, is refused at once (SheetJS alone never returns on it)', () => {
+    const cut = dwca(HEADER).slice(0, 40);
+    const t0 = performance.now();
+    expect(() => parseFile('cut.xlsx', cut)).toThrow(/cut\.xlsx.*damaged workbook/);
+    expect(performance.now() - t0).toBeLessThan(1000);
   });
 
   it('end to end: the engine checks the core, a bad latitude points at its physical line, the version and PARTIAL travel with the report', async () => {

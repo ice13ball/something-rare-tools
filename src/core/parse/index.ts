@@ -10,7 +10,7 @@ import { parseDwca, type DwcaOptions } from './dwca';
 import { parsePangaeaText } from './pangaea';
 import { ParseError, encodingFinding } from './shared';
 import { parseXlsx } from './xlsx';
-import { looksLikeWorkbook, type Inflate } from './zip';
+import { looksLikeWorkbook, openZip, ZipError, type Inflate, type ZipLimits } from './zip';
 
 export { ParseError } from './shared';
 export { parseCsvText } from './csv';
@@ -59,8 +59,21 @@ function metadataFile(fileName: string, bytesText: ReturnType<typeof decodeText>
  * names the file) for a corrupt workbook, malformed XML/JSON, or JSON that is neither a DataCite nor a Zenodo
  * record. Oddities inside a readable file are Findings on the result, not errors.
  */
+/** Only the zip structure is checked before SheetJS reads a workbook: no size or ratio limit applies to a workbook here. */
+const WORKBOOK_ZIP: ZipLimits = { maxArchiveBytes: Infinity, maxTotalBytes: Infinity, maxEntryBytes: Infinity, maxEntries: 100_000, maxRatio: Infinity, ratioFloorBytes: Infinity };
+
 export function parseFile(fileName: string, bytes: Uint8Array): ParsedFile {
-  if (startsWith(bytes, ZIP) || startsWith(bytes, CFB)) return parseXlsx(bytes, fileName);
+  if (startsWith(bytes, ZIP)) {
+    // SheetJS never returns on some damaged zips (a local header without a central directory): read the directory first
+    try {
+      openZip(bytes, WORKBOOK_ZIP);
+    } catch (e) {
+      if (e instanceof ZipError) throw new ParseError(fileName, 'is a damaged workbook: its zip structure cannot be read');
+      throw e;
+    }
+    return parseXlsx(bytes, fileName);
+  }
+  if (startsWith(bytes, CFB)) return parseXlsx(bytes, fileName);
   if (startsWith(bytes, PDF)) {
     return { fileName, kind: 'pdf', sheets: [], date1904: false, decimalComma: false, encoding: 'utf-8', findings: [] };
   }
