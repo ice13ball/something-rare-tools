@@ -66,11 +66,12 @@ function done(tx: IDBTransaction): Promise<void> {
 /** IndexedDB behind RunStore. `factory` exists for tests (fake-indexeddb); the default is the global one (window or worker). */
 export function idbStore(factory: IDBFactory = indexedDB): RunStore {
   let opened: Promise<IDBDatabase> | undefined;
-  const db = (): Promise<IDBDatabase> =>
-    (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-      // a rejected open is not kept: the next call asks again (another tab may have let go since)
+  const db = (): Promise<IDBDatabase> => {
+    if (opened) return opened;
+    const mine: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
+      // a rejected open is not kept: the next call asks again (another tab may have let go since); a late failure of an EARLIER open must not clear a newer one
       const fail = (e: Error): void => {
-        opened = undefined;
+        if (opened === mine) opened = undefined;
         reject(e);
       };
       const req = factory.open(DB_NAME, DB_VERSION);
@@ -78,10 +79,21 @@ export function idbStore(factory: IDBFactory = indexedDB): RunStore {
         // version 1: run + parts; version 2 adds the pasted DOI list
         for (const name of ['run', 'parts', 'texts']) if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const d = req.result;
+        // another tab that wants a newer version of the database must not be blocked by this one: let go, open again on the next call
+        d.onversionchange = () => {
+          d.close();
+          if (opened === mine) opened = undefined;
+        };
+        resolve(d);
+      };
       req.onerror = () => fail(req.error ?? new Error('IndexedDB could not be opened'));
       req.onblocked = () => fail(new Error('IndexedDB is blocked by another tab that uses the saved progress'));
-    }));
+    });
+    opened = mine;
+    return mine;
+  };
 
   return {
     async load() {

@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The pasted DOI list is stored ONCE (its own entry); checkpoints keep only the position and progress messages never carry the list.
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CollectionRunner } from '../../src/core/collection/runner';
 import { idbStore, memoryStore } from '../../src/core/collection/store';
 import type { Progress } from '../../src/core/collection/types';
@@ -154,5 +154,44 @@ describe('idbStore after a blocked open', () => {
     await expect(store.load()).rejects.toThrow(/another tab/); // the old connection (another tab) is still open
     old.close();
     expect(await store.load()).toBeNull();
+  });
+});
+
+describe('resume() when the checkpoint cannot be written', () => {
+  it('restores the previous status and throws the storage error (no "running" without a loop)', async () => {
+    const first = await interruptedRun();
+    const inner = first.store;
+    let breaking = false;
+    const store = { ...inner, load: inner.load, parts: inner.parts, clear: inner.clear, saveText: inner.saveText, loadText: inner.loadText, save: async (run: never, parts?: never) => { if (breaking) throw new Error('QuotaExceededError'); return inner.save(run, parts); } };
+    const r = new CollectionRunner(runnerDeps(first.mock.net, first.clock, { store }));
+    await r.saved();
+    breaking = true;
+    await expect(r.resume()).rejects.toThrow(/Quota/);
+    expect(r.progress().status).toBe('finished');
+    expect(r.progress().notices.some((n) => n.code === 'unread-pages')).toBe(true);
+    breaking = false;
+    first.fix();
+    await r.resume();
+    await r.whenIdle();
+    expect(r.progress().counts.states.checked).toBe(250);
+  });
+});
+
+describe('idbStore and other tabs', () => {
+  it('lets go when another tab wants a newer version (its upgrade is not blocked), and the next call opens again', async () => {
+    const factory = new IDBFactory();
+    const store = idbStore(factory);
+    expect(await store.load()).toBeNull(); // open at the current version
+    const blocked = vi.fn();
+    await new Promise<void>((resolve, reject) => {
+      const req = factory.open('collection-review', 99);
+      req.onblocked = blocked;
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    expect(blocked).not.toHaveBeenCalled();
   });
 });
