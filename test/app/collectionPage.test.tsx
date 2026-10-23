@@ -179,6 +179,40 @@ describe('CollectionPage: inputs and estimate', () => {
     expect(screen.getByTestId('estimate').textContent).toContain('5 slices split by publication date');
   });
 
+  it('a very large Zenodo community: the time is said in days, the quick sample is advised first, in every language; a small one is not', async () => {
+    const big = estimate({ records: 2_090_000, requests: 84_675, seconds: 84_675 * 2.6, strategy: 'date-split', slices: 209, approximate: true, sampleFirst: true });
+    const expected: Record<string, { time: RegExp; advice: RegExp }> = {
+      en: { time: /about 3 days\./, advice: /Start with the quick sample/ },
+      pl: { time: /około 3 dni\./, advice: /Zacznij od szybkiej próbki/ },
+      de: { time: /etwa 3 Tage\./, advice: /Beginnen Sie mit der schnellen Stichprobe/ },
+      fr: { time: /environ 3 jours\./, advice: /Commencez par l’échantillon rapide/ },
+    };
+    for (const lang of LANGS) {
+      setLang(lang);
+      const f = fakeEngine({ estimateFull: big });
+      render(<CollectionPage engine={f.engine} />);
+      fireEvent.click(screen.getByLabelText(UI[lang]['collection.kind.zenodo']));
+      fireEvent.change(screen.getByLabelText(UI[lang]['collection.zen.label']), { target: { value: 'biosyslit' } });
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['collection.estimate.button'] }));
+      await waitFor(() => screen.getByTestId('estimate'));
+      const text = screen.getByTestId('estimate').textContent ?? '';
+      expect(text, lang).toMatch(expected[lang].time);
+      expect(text, lang).toMatch(expected[lang].advice);
+      expect(text, lang).not.toMatch(/\{\w+\}|\b(OK|valid|allowed)\b/i);
+      expect(screen.getByTestId('sample-first')).toBeTruthy();
+      cleanup();
+    }
+    setLang('en');
+    const small = fakeEngine({ estimateFull: estimate({ records: 686, requests: 28, seconds: 73 }) });
+    render(<CollectionPage engine={small.engine} />);
+    fireEvent.click(screen.getByLabelText('A Zenodo community'));
+    fireEvent.change(screen.getByLabelText('Community name (as in its address on Zenodo)'), { target: { value: 'fisheries' } });
+    fireEvent.click(button('Estimate size and time'));
+    await waitFor(() => screen.getByTestId('estimate'));
+    expect(screen.getByTestId('estimate').textContent).toContain('Full run: 686 records, about 28 requests, about 73 s.');
+    expect(screen.queryByTestId('sample-first')).toBeNull();
+  });
+
   it('a catalogue comes from the config list, says it goes through our server and compares with DataCite by default (extra requests shown)', async () => {
     const f = fakeEngine({ estimateFull: estimate({ records: 831, requests: 17, extraRequests: 800 }) });
     render(<CollectionPage engine={f.engine} />);
