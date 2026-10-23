@@ -1,0 +1,6 @@
+id	occurrenceID	eventID	locationID	locality	country	decimalLatitude	decimalLongitude	eventDate	year	month	day	minimumDepthInMeters	maximumDepthInMeters	catalogNumber	individualCount	scientificName	basisOfRecord
+urn:x:1	occ-1	ev-1		Test Bay A	Nowhere	61.25	4.5	2008-05-01/2008-05-14	2008	5	1	10	12	CAT-001	3	Synthetica alpha	HumanObservation
+urn:x:2	occ-2	ev-1		Test Bay A	Nowhere	61.26	4.51	2008-05-01T10:00Z/2008-05-01T11:00Z	2008	5	1	15	15	CAT-002	1	Synthetica beta	HumanObservation
+urn:x:3	occ-3	ev-2		Test Bay B	Nowhere	61.30	4.60		2009	7	21	20	22	CAT-003	7	Synthetica alpha	HumanObservation
+urn:x:4	occ-4	ev-2		Test Bay B	Nowhere	61.31	4.61		2009	7		25	25	CAT-004	2	Synthetica gamma	HumanObservation
+urn:x:5	occ-5	ev-3		Test Bay C	Nowhere	61.32	4.62		2010			30	31	CAT-005	4	Synthetica beta	HumanObservation

@@ -18,7 +18,7 @@ import type {
   Variable,
 } from './types';
 import { makeFinding } from './rules/registry';
-import { isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
+import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { splitLayout } from './recognize/layout';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { parseCoordinate } from './values/coords';
@@ -159,6 +159,40 @@ function reportBadNumber(c: Collector, sheet: string, field: string, line: numbe
   else if (p.status === 'non-numeric') c.add('ROW-NON-NUMERIC', sheet, field, line, p.token);
 }
 
+/** Columns named year / month / day (DwC terms, prefix allowed) of a sheet; undefined when there is no year column. */
+function dwcDateParts(sheet: RawSheet): { year: number; month?: number; day?: number } | undefined {
+  const find = (term: string): number | undefined => {
+    const i = sheet.header.findIndex((h) => dwcTermOf(h) === term);
+    return i < 0 ? undefined : i;
+  };
+  const year = find('year');
+  if (year === undefined) return undefined;
+  const month = find('month');
+  const day = find('day');
+  return { year, ...(month === undefined ? {} : { month }), ...(day === undefined ? {} : { day }) };
+}
+
+function wholeNumber(c: RawCell): number | undefined {
+  if (c === null) return undefined;
+  const t = String(c).trim();
+  if (!/^\d{1,4}(\.0+)?$/.test(t)) return undefined;
+  return Number(t);
+}
+
+/** A date from DwC year (+ month, day) cells, with year / month / day precision; undefined when the year is missing or invalid. */
+function composeYmd(row: RawRow, cols: { year: number; month?: number; day?: number }): ParsedDate | undefined {
+  const y = wholeNumber(row.cells[cols.year] ?? null);
+  if (y === undefined || y < 1) return undefined;
+  const mo = cols.month === undefined ? undefined : wholeNumber(row.cells[cols.month] ?? null);
+  const d = cols.day === undefined ? undefined : wholeNumber(row.cells[cols.day] ?? null);
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const yy = String(y).padStart(4, '0');
+  if (mo === undefined || mo < 1 || mo > 12) return { iso: yy, year: y, precision: 'year', tz: 'unknown' };
+  const dim = new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), mo, 0)).getUTCDate();
+  if (d === undefined || d < 1 || d > dim) return { iso: `${yy}-${p2(mo)}`, year: y, precision: 'month', tz: 'unknown' };
+  return { iso: `${yy}-${p2(mo)}-${p2(d)}`, year: y, precision: 'day', tz: 'unknown' };
+}
+
 function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector): (row: RawRow) => Meta {
   const dc = file.decimalComma;
   const dateCache = new Map<string, ParsedDate | DateError>();
@@ -166,6 +200,8 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
   const timeUtc = specs.time ? UTC_HEADER.test(specs.time.header) : false;
   // D?M/YYYY order is a property of the column, not of a cell: decided once from every cell of the date column
   const whenIndex = specs.when?.index;
+  // Darwin Core: where eventDate is empty, the same row's year / month / day columns give the date
+  const dwcParts = specs.when && dwcTermOf(specs.when.header) === 'eventdate' ? dwcDateParts(sheet) : undefined;
   const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
 
   const coordinate = (row: RawRow, spec: Spec, axis: 'lat' | 'lon'): { value: number; decimals: number } | undefined => {
@@ -202,6 +238,13 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
     }
     if (specs.when) {
       const cell = row.cells[specs.when.index] ?? null;
+      if (isBlankCell(cell) && dwcParts) {
+        const d = composeYmd(row, dwcParts);
+        if (d) {
+          m.datetime = d;
+          m.dateRaw = d.iso;
+        }
+      }
       if (!isBlankCell(cell)) {
         m.dateRaw = cell;
         const cacheKey = typeof cell === 'number' ? `n${cell}` : `s${cell}`;
