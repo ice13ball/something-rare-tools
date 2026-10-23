@@ -70,13 +70,26 @@ export function serverCsw(endpoint = '/api/csw', fetchImpl: FetchFn = (i, n) => 
       if (e instanceof TypeError) throw new FetchBlockedError('this site');
       throw e;
     }
-    // text(): the browser decodes the body into one string; no second copy of an answer that can be 11 MB
-    let text: string;
+    // The body is read chunk by chunk (decoded as it comes: still one string, no second copy of an answer that can be 11 MB), so a cut stream
+    // tells HOW MUCH had arrived: our server stops a catalogue answer at CSW_MAX_BYTES, and that cut is not the 45 s one.
+    let text = '';
+    let received = 0;
     try {
-      text = await res.text();
+      if (res.body) {
+        const reader = res.body.getReader();
+        const dec = new TextDecoder('utf-8');
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += value.byteLength;
+          text += dec.decode(value, { stream: true });
+        }
+        text += dec.decode();
+      } else text = await res.text();
     } catch {
-      // The status came, the body did not: our server cuts a catalogue that has not finished within its upstream timeout (45 s) and the
-      // browser sees a broken stream. Most likely the catalogue answered too slowly: said so (CSW_SLOW) instead of "network error".
+      // The status came, the body did not. Either the answer grew past the size our server accepts (the cut comes at that size) or our server
+      // cut a catalogue that has not finished within its upstream timeout (45 s) and the browser sees a broken stream.
+      if (received >= CSW_CUT_BYTES) return { status: 413, text: '', proxyError: CSW_TOO_LARGE };
       return { status: 504, text: '', proxyError: CSW_SLOW };
     }
     const proxyError = res.headers.get('x-fetch-proxy-error');
@@ -85,13 +98,17 @@ export function serverCsw(endpoint = '/api/csw', fetchImpl: FetchFn = (i, n) => 
       text,
       retryAfterMs: parseRetryAfter(res.headers.get('retry-after')),
       // the server's own 504 "timeout" (nothing came within its 45 s) is the same story
-      ...(proxyError ? { proxyError: res.status === 504 && proxyError === 'timeout' ? CSW_SLOW : proxyError } : {}),
+      ...(proxyError ? { proxyError: res.status === 504 && proxyError === 'timeout' ? CSW_SLOW : res.status === 413 && proxyError === 'too_large' ? CSW_TOO_LARGE : proxyError } : {}),
     };
   };
 }
 
 /** Stop cause of a catalogue page that did not arrive in time (our server waits 45 s for a catalogue, then gives up). */
 export const CSW_SLOW = 'csw_slow';
+/** Stop cause of a catalogue page larger than our server accepts (server/csw.ts CSW_MAX_BYTES, 15 MB). */
+export const CSW_TOO_LARGE = 'csw_too_large';
+/** A stream cut after at least this much came is the size cut (the server stops within one chunk of its 15 MB), not the timeout. */
+export const CSW_CUT_BYTES = 15 * 1024 * 1024 - 1024 * 1024;
 
 export interface Clock {
   now(): number;
@@ -183,7 +200,7 @@ export function verdictOf(res: NetResponse): Verdict {
  * One request with pacing and bounded retries. Returns a 2xx answer or throws SourceFailure ('throttled' | 'unreachable' after the retries,
  * 'not-found' on 404, 'protocol' for any other refusal). `host` keys the pacing ('csw' for the proxy).
  */
-export async function request(ctx: NetContext, host: string, call: () => Promise<NetResponse>): Promise<NetResponse> {
+export async function request(ctx: NetContext, host: string, call: () => Promise<NetResponse>, opts: { failFast?: boolean } = {}): Promise<NetResponse> {
   const pace = ctx.paceMs[host] ?? 0;
   for (let attempt = 1; ; attempt++) {
     const start = Math.max(ctx.now(), ctx.next.get(host) ?? 0);
@@ -222,6 +239,10 @@ export async function request(ctx: NetContext, host: string, call: () => Promise
     if (verdict === 'not-found') throw new SourceFailure('not-found', 'http-404', 404, host);
     if (verdict === 'protocol') throw new SourceFailure('protocol', res!.proxyError ?? 'http', res!.status, host);
     if (res) reason = res.proxyError ?? `http-${res.status}`;
+
+    // The same page would be too large again: asking again does not help. A page that was too slow is not asked again either when the caller
+    // has a smaller page to try (failFast), which is cheaper than waiting 45 s three times.
+    if (reason === CSW_TOO_LARGE || (opts.failFast && reason === CSW_SLOW)) throw new SourceFailure('unreachable', reason, res?.status, host);
 
     if (verdict === 'throttled') ctx.stats.throttleEvents += 1;
     const limit = verdict === 'throttled' ? BACKOFF.attemptsThrottled : BACKOFF.attemptsUnreachable;
