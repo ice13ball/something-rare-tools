@@ -129,6 +129,8 @@ describe('loadDataverse', () => {
     expect(out.files).toEqual([]);
     expect(rules(out.findings)).toContain('IN-FILE-HELD-BACK');
     expect(rules(out.findings)).not.toContain('IN-NO-DATA-FILE');
+    const info = out.findings.find((x) => x.ruleId === 'IN-DATAVERSE-FILES')!;
+    expect(renderPlain(info, 'pl')).toContain('Nie odczytano żadnego pliku z danymi');
   });
 
   it('no data file at all is IN-NO-DATA-FILE', async () => {

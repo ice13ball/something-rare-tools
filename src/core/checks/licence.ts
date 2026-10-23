@@ -52,6 +52,17 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
 }
 
 /**
+ * Restricted or embargoed files (Dataverse): whatever licence is stated, access to them is decided by the repository, so the licence
+ * verdict covers the open files only. Shared by checkLicence and the /licence page, which shows the analysis without checkLicence.
+ */
+export function heldBackFinding(records: readonly MetadataRecord[], file: string): Finding | undefined {
+  const heldBack = [...new Set(records.flatMap((r) => r.heldBackFiles ?? []))];
+  if (heldBack.length === 0) return undefined;
+  const shown = heldBack.slice(0, 10).join(', ');
+  return makeFinding('LIC-FILES-HELD-BACK', { file, params: { files: heldBack.length > 10 ? `${shown}, … (+${heldBack.length - 10})` : shown } });
+}
+
+/**
  * Category A — licence statements across ISO 19139, DataCite, Zenodo and PANGAEA records (Task 7).
  * A thin mapping from analyseLicences() (src/core/licence/analyse.ts) to findings; no licence logic lives here.
  * `unreadable`: the sources of this record that could not be loaded (their absence is not "no licence").
@@ -95,12 +106,8 @@ export function checkLicence(
     out.push(contradictionFinding(c, file));
   }
 
-  // Restricted or embargoed files: whatever licence is stated, access to them is decided by the repository, and the verdict above covers the open files only.
-  const heldBack = [...new Set(records.flatMap((r) => r.heldBackFiles ?? []))];
-  if (heldBack.length > 0) {
-    const shown = heldBack.slice(0, 10).join(', ');
-    out.push(makeFinding('LIC-FILES-HELD-BACK', { file, params: { files: heldBack.length > 10 ? `${shown}, … (+${heldBack.length - 10})` : shown } }));
-  }
+  const held = heldBackFinding(records, file);
+  if (held) out.push(held);
 
   const emptyLinks = records.reduce((n, r) => n + r.distributionLinks.filter((l) => l.url === '').length, 0);
   if (emptyLinks > 0) out.push(makeFinding('META-EMPTY-LINK', { file, params: { count: emptyLinks } }));

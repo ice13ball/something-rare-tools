@@ -20,7 +20,7 @@ import type { RuleSpec } from './spec';
  *   IN-FILE-HELD-BACK       host     a file the source holds back (restricted access or an embargo): not downloaded, not checked
  *   IN-FILE-TOO-LARGE       mb       a file above the size read from a link (config/dataverse.ts LINKED_FILE_MAX_BYTES): not downloaded, not checked
  *   IN-FILES-NOT-READ       files    files of a linked dataset in a format the tool does not read (zip, NetCDF, ...), documents and images left out: the names
- *   IN-DATAVERSE-FILES      host, version   which version of a Dataverse dataset was read; optional original / converted (names) say in which form its converted tables were read; value = the same in English
+ *   IN-DATAVERSE-FILES      host, version   which version of a Dataverse dataset was read; optional none = 'yes' when no data file is read; optional original / converted (names) say in which form its converted tables were read; value = the same in English
  *   IN-FILE-UNREADABLE      files    no input file could be read at all (a damaged workbook, ...): the names, comma-separated
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
@@ -258,6 +258,15 @@ export const INPUT_RULES: readonly RuleSpec[] = [
           en: `Tables read as the .tab copy Dataverse made, because the original cannot be read: {converted}.`,
           de: `Tabellen als .tab-Kopie von Dataverse gelesen, weil das Original nicht lesbar ist: {converted}.`,
           fr: `Tableaux lus dans la copie .tab faite par Dataverse, car l'original est illisible : {converted}.`,
+        },
+      },
+      {
+        param: 'none',
+        plain: {
+          pl: `Nie odczytano żadnego pliku z danymi, więc danych nie sprawdzono.`,
+          en: `No data file was read, so the data were not checked.`,
+          de: `Keine Datendatei wurde gelesen, die Daten wurden also nicht geprüft.`,
+          fr: `Aucun fichier de données n'a été lu : les données n'ont donc pas été vérifiées.`,
         },
       },
     ],
