@@ -202,10 +202,18 @@ export class CollectionRunner {
     if (!this.st) await this.saved();
     const st = this.st;
     if (!st || !this.progress().resumable) throw new Error('Nothing to resume');
+    // The run only becomes 'running' once everything it needs is in hand: a list that is gone or a plan that cannot be restored leaves it as it was.
+    const { ctl, deps } = this.begin(st);
+    let pager: Pager<unknown>;
+    try {
+      pager = restorePager(deps, await this.fullSettings(st), st.plan);
+    } catch (e) {
+      this.ctl = null;
+      throw e;
+    }
     st.status = 'running';
     delete st.stop;
-    const { ctl, deps } = this.begin(st);
-    const pager = restorePager(deps, await this.fullSettings(st), st.plan);
+    st.notices = st.notices.filter((n) => !GAP_NOTICES.includes(n.code)); // rebuilt when the run ends again
     await this.checkpoint();
     this.loopDone = this.loop(pager, ctl).finally(() => {
       this.loopDone = null;
