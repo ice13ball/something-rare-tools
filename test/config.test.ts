@@ -140,4 +140,15 @@ describe('static privacy page', () => {
     for (const host of CSW_HOSTS) expect(html, host).toContain(`<li><code>${host}</code></li>`);
     expect(html).not.toMatch(/stores nothing/);
   });
+
+  it('does not say the server "keeps nothing" about catalogue requests: it logs host, status and size, and keeps a counter for at most 24 hours (4 languages)', () => {
+    const html = readFileSync(join(__dirname, '..', 'privacy', 'index.html'), 'utf8');
+    expect(html).not.toMatch(/keeps nothing/);
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const text = UI[lang]['privacy.collection.p1'];
+      expect(text, lang).toMatch(/24/);
+      expect(text, lang).not.toMatch(/keeps nothing|niczego nie przechowuje|nichts speichert|ne conserve rien/);
+    }
+    expect(UI.en['privacy.collection.p1']).toMatch(/logged \(catalogue host, status, size\).*per-connection request counter.*at most 24 hours/);
+  });
 });
