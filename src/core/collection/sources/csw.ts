@@ -20,6 +20,8 @@ export const CSW_SAMPLE_PAGE = 10;
 export const CSW_TARGET_CHARS = 3_000_000;
 export const CSW_MIN_PAGE = 10;
 export const CSW_SAMPLE_REQUESTS = 20;
+/** Pages in a row that go well at a reduced page size before it doubles again (never above CSW_PAGE, never to a size that was too large). */
+export const CSW_RELAX_AFTER = 5;
 const CSW_NS = 'http://www.opengis.net/cat/csw/2.0.2';
 const SCHEMA_URI: Record<CswSchema, string> = { iso19139: 'http://www.isotc211.org/2005/gmd', 'iso19115-3': 'http://standards.iso.org/iso/19115/-3/mdb/' };
 
@@ -46,6 +48,10 @@ export interface CswCursor {
   size?: number;
   /** After a page had to be asked smaller (too slow, too large): the page size the rest of the run stays within. */
   cap?: number;
+  /** Pages in a row read at the reduced size without trouble: after CSW_RELAX_AFTER the cap steps back up. */
+  ok?: number;
+  /** The smallest page size that was TOO LARGE (15 MB) for this catalogue: the cap never steps back up to it. */
+  big?: number;
   /** Last position already processed, when it can lie beyond `pos` (the catalogue's nextRecord pointed back into a page already read). */
   through?: number;
 }
@@ -259,6 +265,8 @@ interface PageRead {
   nextRecord: number;
   end?: Notice;
   first?: string;
+  /** The smallest size at which this page was too large (15 MB), when it was. */
+  large?: number;
   /** Only when the page had to be asked smaller (too slow, too large): the maxRecords it was finally read with. */
   size?: number;
 }
@@ -271,6 +279,7 @@ async function fetchPage(deps: Deps, src: CswSource, pos: number, size: number, 
   // A page that was too slow (45 s) or larger than our server accepts (15 MB) is asked again with a smaller page, down to CSW_MIN_PAGE,
   // before it is given up (deferred): a smaller page often gets through where the big one never does.
   let used = size;
+  let large: number | undefined;
   let res: Awaited<ReturnType<typeof request>>;
   for (;;) {
     const maxRecords = used;
@@ -278,6 +287,7 @@ async function fetchPage(deps: Deps, src: CswSource, pos: number, size: number, 
       res = await request(deps.nctx, 'csw', () => deps.net.csw({ catalogue: src.catalogue, op: 'GetRecords', startPosition: pos, maxRecords, schema: src.schema }), { failFast: used > CSW_MIN_PAGE });
       break;
     } catch (e) {
+      if (e instanceof SourceFailure && e.reason === CSW_TOO_LARGE) large = used;
       if (e instanceof SourceFailure && (e.reason === CSW_SLOW || e.reason === CSW_TOO_LARGE) && used > CSW_MIN_PAGE) {
         used = Math.max(CSW_MIN_PAGE, Math.floor(used / 2));
         continue;
@@ -287,18 +297,18 @@ async function fetchPage(deps: Deps, src: CswSource, pos: number, size: number, 
   }
   const split = splitCswPage(res.text);
   const cut = split ? itemsOfSplit(split, pos) : null;
-  if (split && cut) return { items: cut, nextRecord: split.nextRecord ?? 0, first: cut[0]?.ref, chars: res.text.length, ...(used < size ? { size: used } : {}) };
+  if (split && cut) return { items: cut, nextRecord: split.nextRecord ?? 0, first: cut[0]?.ref, chars: res.text.length, ...(used < size ? { size: used } : {}), ...(large !== undefined ? { large } : {}) };
   const root = parseResponse(res.text);
   if (isException(root)) {
     const msg = exceptionMessage(root);
     // HTTP 200 + exception past the end: GeoNetwork "Start position (N) can't be greater than number of matching records".
-    if (pos > matched || /greater than number of matching/i.test(msg)) return { items: [], nextRecord: 0, ...(used < size ? { size: used } : {}), end: { code: 'ended-by-exception', params: { position: pos, matched } } };
+    if (pos > matched || /greater than number of matching/i.test(msg)) return { items: [], nextRecord: 0, ...(used < size ? { size: used } : {}), ...(large !== undefined ? { large } : {}), end: { code: 'ended-by-exception', params: { position: pos, matched } } };
     throw new SourceFailure('unreachable', 'exception');
   }
   const sr = searchResults(root);
   if (!sr) throw new SourceFailure('unreachable', 'no-search-results');
   const items = elementChildren(sr).map((el, i) => itemOf(el, `#${pos + i}`));
-  return { items, nextRecord: intAttr(sr, 'nextRecord') ?? 0, first: items[0]?.ref, chars: res.text.length, ...(used < size ? { size: used } : {}) };
+  return { items, nextRecord: intAttr(sr, 'nextRecord') ?? 0, first: items[0]?.ref, chars: res.text.length, ...(used < size ? { size: used } : {}), ...(large !== undefined ? { large } : {}) };
 }
 
 /** One GetRecords page → items, nextRecord, notices. Shared by the full walk and the sample. */
@@ -318,7 +328,7 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
     expected: (c) => Math.max(1, Math.min(c.size ?? CSW_PAGE, matched - c.pos + 1)),
     skip: (c) => {
       const size = c.size ?? CSW_PAGE;
-      return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}), ...(c.cap !== undefined ? { cap: c.cap } : {}) } : null;
+      return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}), ...(c.cap !== undefined ? { cap: c.cap } : {}), ...(c.big !== undefined ? { big: c.big } : {}) } : null;
     },
     rest: (c, data, owed) => {
       // A deferred page read again at a smaller size covers only its first positions: what is left of its range is still owed.
@@ -333,7 +343,18 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
       const overlap = c.through !== undefined && c.through >= c.pos ? c.through - c.pos + 1 : 0;
       const page = await readPage(deps, src, c.pos, c.size ?? CSW_PAGE, matched, overlap);
       // a page that had to be asked smaller keeps the pages after it small: the next big one would fail the same way
-      const cap = page.size ?? c.cap;
+      let cap = page.size ?? c.cap;
+      const big = page.large !== undefined ? Math.min(page.large, c.big ?? page.large) : c.big;
+      let ok = page.size !== undefined ? 0 : (c.ok ?? 0);
+      if (cap !== undefined && page.size === undefined) {
+        // a stretch of good pages: try the next size up (a slow moment passes), but never one that was too large
+        ok += 1;
+        if (ok >= CSW_RELAX_AFTER) {
+          const up = Math.min(CSW_PAGE, cap * 2);
+          if (big === undefined || up < big) cap = up >= CSW_PAGE ? undefined : up;
+          ok = 0;
+        }
+      }
       const notices: Notice[] = [];
       if (overlap > 0 && page.listed > 0) notices.push({ code: 'overlapping-pages' });
       const through = Math.max(c.through ?? 0, c.pos + page.listed - 1);
@@ -350,7 +371,7 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
           if (seen > matched * 1.5 + 500) notices.push({ code: 'overrun-stopped', params: { seen, matched } });
           else {
             const size = Math.min(nextPageSize(page.chars ?? 0, page.items.length), cap ?? CSW_PAGE);
-            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}), ...(cap !== undefined ? { cap } : {}), ...(through >= page.nextRecord ? { through } : {}) };
+            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}), ...(cap !== undefined ? { cap, ...(ok > 0 ? { ok } : {}) } : {}), ...(big !== undefined ? { big } : {}), ...(through >= page.nextRecord ? { through } : {}) };
           }
         }
       } else if (!page.end && page.nextRecord > 0) {

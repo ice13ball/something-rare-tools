@@ -8,6 +8,7 @@ import { gapText } from '../../src/core/collection/stop';
 import { UI, translate } from '../../src/core/i18n/ui';
 import type { Lang } from '../../src/core/types';
 import type { Net } from '../../src/core/collection/net';
+import type { Notice } from '../../src/core/collection/types';
 import { MAX_NOTICES } from '../../src/core/collection/runner';
 import { dataciteMock, json, res, runnerDeps, virtualClock } from './helpers';
 
@@ -125,7 +126,7 @@ describe('a Zenodo slice that ends before its own total makes the run incomplete
 
 describe('counts in the notices never sit in front of a noun (no "1 pages")', () => {
   it('a single page, a single record: no number glued to a plural noun, in any language', () => {
-    const notices = [
+    const notices: Notice[] = [
       { code: 'unread-pages', params: { pages: 1, records: 1, reason: 'http-503' } },
       { code: 'records-missing', params: { missing: 1 } },
       { code: 'zenodo-slice-short', params: { from: '2020-01-01', to: '2020-12-31', total: 1, seen: 0 } },

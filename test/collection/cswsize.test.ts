@@ -108,3 +108,35 @@ describe.each([
     expect(r.progress().counts.states.checked).toBe(60);
   });
 });
+
+describe('the reduced page size steps back up after a stretch of good pages', () => {
+  it('slow once at 25: 12 for the retry and five good pages, then 24 (and 25 five pages later), every record read once', async () => {
+    let first = true;
+    const w = net(recs(600), (c) => {
+      if (first && (c.maxRecords ?? 0) > 12) {
+        first = false;
+        return { status: 504, text: '', proxyError: 'csw_slow' };
+      }
+      return undefined;
+    });
+    const r = new CollectionRunner(runnerDeps(w.net, virtualClock()));
+    await r.start(spec);
+    await r.whenIdle();
+    const sizes = w.asked.map((a) => a.max);
+    expect(sizes.slice(0, 8)).toEqual([25, 12, 12, 12, 12, 12, 12, 24]);
+    expect(sizes.slice(0, 20)).toContain(24);
+    expect(sizes).toContain(25);
+    expect(r.progress().counts.states.checked).toBe(600);
+    expect(r.progress().counts.records).toBe(600);
+  });
+
+  it('too large at 25: it steps up at most to 24 once, never back to a size that was too large', async () => {
+    const w = net(recs(600), (c) => ((c.maxRecords ?? 0) > 20 ? { status: 413, text: '', proxyError: 'csw_too_large' } : undefined));
+    const r = new CollectionRunner(runnerDeps(w.net, virtualClock()));
+    await r.start(spec);
+    await r.whenIdle();
+    // 25 failed (too large) so nothing at or above 25 is asked again; 24 is tried once per stretch and also fails, after which 12 stays
+    expect(w.asked.filter((a) => a.max === 25)).toHaveLength(1);
+    expect(r.progress().counts.states.checked).toBe(600);
+  });
+});
