@@ -2,6 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CookieBanner } from '../../src/app/components/CookieBanner';
 import { InputPanel } from '../../src/app/components/InputPanel';
@@ -12,6 +14,7 @@ import { CheckPage } from '../../src/app/pages/CheckPage';
 import { IndexPage } from '../../src/app/pages/IndexPage';
 import { PrivacyPage } from '../../src/app/pages/PrivacyPage';
 import { DATA_HOSTS } from '../../config/hosts';
+import { UI } from '../../src/core/i18n/ui';
 import { buildReport } from '../../src/core/report';
 import { createDirectEngine } from '../../src/worker/handler';
 import { makeFinding } from '../../src/core/rules/registry';
@@ -187,6 +190,20 @@ describe('pages', () => {
     render(<IndexPage />);
     expect(document.querySelector('header a[aria-current="page"]')?.getAttribute('href')).toBe('/check');
     window.history.pushState({}, '', '/');
+  });
+
+  it('every page footer links the source code with the licence of package.json, in four languages and in the static pages', () => {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { license: string };
+    expect(pkg.license).toBe('AGPL-3.0-or-later');
+    render(<IndexPage />);
+    const link = screen.getByRole('link', { name: `Source code (${pkg.license})` });
+    expect(link.getAttribute('href')).toBe('https://github.com/ice13ball/something-rare-tools');
+    expect(link.closest('footer')).not.toBeNull();
+    for (const lang of ['pl', 'de', 'fr'] as const) expect(UI[lang]['footer.source']).toContain(`(${pkg.license})`);
+    for (const page of ['index.html', 'check/index.html', 'licence/index.html', 'collection/index.html', 'privacy/index.html']) {
+      const html = readFileSync(join(__dirname, '..', '..', page), 'utf8');
+      expect(html, page).toContain('<a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a></footer>');
+    }
   });
 
   it('PrivacyPage lists every allowlisted host and the contact link', () => {
