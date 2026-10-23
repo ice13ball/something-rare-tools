@@ -130,6 +130,8 @@ function hop(a: Run, b: Run): Hop | undefined {
 interface Item {
   rule: 'ROW-SHIP-SPEED' | 'ROW-SHIP-SPEED-UNUSUAL' | 'ROW-SHIP-SPEED-PAIR';
   group: string;
+  /** More than MIXED_SHARE of the group's places are named in findings: the group is probably not one ship (set once the group is done). */
+  mixed?: boolean;
   /** the runs the finding is about: [this] or [first, second] */
   runs: Run[];
   /** every run named in the case text, in order: previous, this, next | first, second */
@@ -150,9 +152,22 @@ function runsOf(events: Ev[]): Run[] {
   return runs;
 }
 
+/**
+ * A true error is rare. When this share of a group's places, and at least MIXED_MIN of them, are named in findings, the likely
+ * cause is not the data but the premise (several ships, boats or cruises in one group): the findings then say so. A stated choice
+ * (see docs/research/qc-sources.md), not a published threshold; the CoastDOM compilation under a wrong tick names 3 in 4 places.
+ */
+const MIXED_SHARE = 0.2;
+const MIXED_MIN = 5;
+
 function testGroup(group: string, events: Ev[], out: Item[]): void {
+  const first = out.length;
   const extreme = threshold('ROW-SHIP-SPEED', 'speed.extreme');
   const unusual = threshold('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual');
+  // Sorted once. Events that share a date (no time of day) keep their original row order across the files: files concatenated from one
+  // cruise are usually chronological, and nothing else orders them. The result does not hang on that choice: the longest possible gap
+  // inside one date is 24 h whichever event comes first, and a true track cannot cover more than 24 h x the vessel's speed within one date,
+  // so a wrong order inside a date cannot make a hop exceed a limit (docs/research/qc-sources.md, "Ship speed").
   events.sort((a, b) => a.start.lo - b.start.lo || a.seq - b.seq);
   const runs = runsOf(events);
   const flagged = new Set<Run>();
@@ -178,6 +193,9 @@ function testGroup(group: string, events: Ev[], out: Item[]): void {
     const h = hop(runs[i], runs[i + 1]);
     if (h && h.kn > extreme) out.push({ rule: 'ROW-SHIP-SPEED-PAIR', group, runs: [runs[i], runs[i + 1]], chain: [runs[i], runs[i + 1]], hops: [h] });
   }
+  const named = new Set<Run>();
+  for (const item of out.slice(first)) for (const r of item.runs) named.add(r);
+  if (named.size >= MIXED_MIN && named.size > MIXED_SHARE * runs.length) for (const item of out.slice(first)) item.mixed = true;
 }
 
 /* ---------- findings ---------- */
@@ -196,7 +214,8 @@ function lineRef(run: Run, bucket: string): string {
 }
 
 const num = (v: number): string => String(v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
-const hopText = (h: Hop): string => `${num(h.km)} km, ${num(h.hours)} h, ≥${Math.floor(h.kn)} kn`;
+const hoursText = (v: number): string => (v < 0.1 ? v.toFixed(2) : num(v)); // "0.02 h": events stamped within the same minute stay visible
+const hopText = (h: Hop): string => `${num(h.km)} km, ${hoursText(h.hours)} h, ≥${Math.floor(h.kn)} kn`;
 
 function caseText(item: Item, bucket: string): string {
   return `${item.chain.map((r) => lineRef(r, bucket)).join('→')}: ${item.hops.map(hopText).join('; ')}`;
@@ -226,6 +245,7 @@ function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
       const cases = shown.join(' | ') + (b.items.length > shown.length ? ` | …+${b.items.length - shown.length}` : '');
       const params: Record<string, string | number> = { count: b.items.length, cases };
       if (declaredGroup && b.items.some((i) => i.group === DECLARED)) params.declared = 'yes';
+      if (b.items.some((i) => i.mixed)) params.mixed = 'yes';
       out.push(makeFinding(rule, { file: b.file, sheet: b.sheet, lines: b.lines, params }));
     }
   }
@@ -248,12 +268,15 @@ export interface SpeedResult {
 export function checkShipSpeed(datasets: readonly Dataset[], opts: SpeedOptions): SpeedResult {
   const groups = new Map<string, Map<string, Ev>>();
   let anyCruiseColumn = false;
+  let positioned = 0;
   let seq = 0;
   for (const ds of datasets) {
     const cruiseColumn = ds.mappings.some((m) => m.columns.some((c) => c.role.kind === 'cruise'));
     anyCruiseColumn ||= cruiseColumn;
     for (const r of ds.rows) {
-      if (r.lat === undefined || r.lon === undefined || !r.datetime) continue;
+      if (r.lat === undefined || r.lon === undefined) continue;
+      positioned++;
+      if (!r.datetime) continue;
       const start = windowOf(r.datetime);
       if (!start) continue;
       let group = DECLARED;
@@ -288,6 +311,6 @@ export function checkShipSpeed(datasets: readonly Dataset[], opts: SpeedOptions)
 
   const notChecked: string[] = [];
   if (!opts.singleCruise && (groups.get(DECLARED)?.size ?? 0) >= MIN_EVENTS) notChecked.push('notChecked.shipSpeed');
-  else if ((opts.singleCruise || anyCruiseColumn) && tested === 0) notChecked.push('notChecked.shipSpeedFew');
+  else if (tested === 0 && (opts.singleCruise || anyCruiseColumn || positioned >= MIN_EVENTS)) notChecked.push('notChecked.shipSpeedFew');
   return { findings: findingsOf(items, opts.singleCruise), notChecked };
 }
