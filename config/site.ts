@@ -6,6 +6,8 @@ export const SITE = {
   noindex: false,
   gaId: 'G-S5HR4WT0ZG',
   atlasUrl: 'https://something-rare.com',
+  /** The public repository; the licence label next to it is package.json's SPDX id. */
+  sourceUrl: 'https://github.com/ice13ball/something-rare-tools',
   /** Same public address as the atlas's privacy text; also in the proxy's User-Agent. */
   contactEmail: 'm.mazurowski@ai-wall.com',
   origin: 'https://tools.something-rare.com',

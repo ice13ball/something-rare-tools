@@ -282,6 +282,7 @@ https://zenodo.org/records/…`,
   'licence.checks.li4': `It does not interpret the legal effect of a licence, does not read licence texts and does not look at the data itself.`,
   'index.atlas.lead': `Part of the project:`,
 
+  'footer.source': `Source code (AGPL-3.0-or-later)`,
   'footer.cookies': `Cookie settings`,
 
   'check.title': `Data check`,
@@ -751,6 +752,7 @@ https://zenodo.org/records/…`,
   'licence.checks.li4': `Nie interpretuje skutków prawnych licencji, nie czyta tekstów licencji i nie patrzy na same dane.`,
   'index.atlas.lead': `Część projektu:`,
 
+  'footer.source': `Kod źródłowy (AGPL-3.0-or-later)`,
   'footer.cookies': `Ustawienia cookies`,
 
   'check.title': `Sprawdzanie danych`,
@@ -1218,6 +1220,7 @@ https://zenodo.org/records/…`,
   'licence.checks.li4': `Sie deutet die rechtliche Wirkung einer Lizenz nicht, liest keine Lizenztexte und sieht sich die Daten selbst nicht an.`,
   'index.atlas.lead': `Teil des Projekts:`,
 
+  'footer.source': `Quellcode (AGPL-3.0-or-later)`,
   'footer.cookies': `Cookie-Einstellungen`,
 
   'check.title': `Datenprüfung`,
@@ -1685,6 +1688,7 @@ https://zenodo.org/records/…`,
   'licence.checks.li4': `Elle n'interprète pas l'effet juridique d'une licence, ne lit pas les textes de licence et n'examine pas les données elles-mêmes.`,
   'index.atlas.lead': `Fait partie du projet :`,
 
+  'footer.source': `Code source (AGPL-3.0-or-later)`,
   'footer.cookies': `Paramètres des cookies`,
 
   'check.title': `Vérification des données`,

@@ -56,6 +56,7 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
       <footer className="site-footer">
         <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
         <a href="/privacy">{t('nav.privacy')}</a>
+        <a href={SITE.sourceUrl}>{t('footer.source')}</a>
         <button type="button" className="link-button" onClick={() => setCookieOpen(true)}>
           {t('footer.cookies')}
         </button>
