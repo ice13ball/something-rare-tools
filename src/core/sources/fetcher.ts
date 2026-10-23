@@ -65,6 +65,19 @@ export class ArchiveTooLargeError extends Error {
 /** The proxy's X-Fetch-Proxy-Error for a spent daily archive budget (server/rateLimit.ts ARCHIVE_BUDGET_CODE). */
 export const ARCHIVE_BUDGET_ERROR = 'archive_daily_budget';
 
+/** The proxy's code for more archive downloads in flight than one client may have (server/rateLimit.ts ARCHIVE_BUSY_CODE). */
+export const ARCHIVE_BUSY_ERROR = 'archive_busy';
+
+/** Too many archive downloads at once from this IP address. Carries the host only. */
+export class ArchiveBusyError extends Error {
+  readonly host: string;
+  constructor(host: string) {
+    super(`Too many archive downloads at once (${host})`);
+    this.name = 'ArchiveBusyError';
+    this.host = host;
+  }
+}
+
 /** This IP address has used up the proxy's daily budget for archive downloads. Carries the host only. */
 export class ArchiveBudgetError extends Error {
   readonly host: string;
@@ -234,6 +247,7 @@ export function serverFetcher(endpoint = '/api/fetch', fetchImpl: FetchFn = glob
         if (proxyError === 'host_not_allowed') throw new HostNotAllowedError(host);
         if (isArchiveUrl(url) && proxyError === 'timeout') throw new FetchInterruptedError(host);
         if (isArchiveUrl(url) && proxyError === 'too_large') throw new ArchiveTooLargeError(host);
+        if (proxyError === ARCHIVE_BUSY_ERROR) throw new ArchiveBusyError(host);
         if (proxyError === ARCHIVE_BUDGET_ERROR) throw new ArchiveBudgetError(host);
         throw new ProxyFetchError(proxyError, res.status, host);
       }
@@ -253,6 +267,7 @@ export function fetchErrorFinding(err: unknown, file: string): Finding | undefin
   if (err instanceof FetchTimeoutError) return makeFinding('IN-FETCH-TIMEOUT', { file, params: { host: err.host } });
   if (err instanceof FetchInterruptedError) return makeFinding('IN-FETCH-INTERRUPTED', { file, params: { host: err.host } });
   if (err instanceof ArchiveTooLargeError) return makeFinding('IN-ARCHIVE-TOO-LARGE', { file, params: { host: err.host, mb: Math.round(IPT_MAX_BYTES / 1024 / 1024) } });
+  if (err instanceof ArchiveBusyError) return makeFinding('IN-ARCHIVE-BUSY', { file, params: { host: err.host } });
   if (err instanceof ArchiveBudgetError) return makeFinding('IN-ARCHIVE-DAILY-BUDGET', { file, params: { host: err.host } });
   if (err instanceof HostNotAllowedError) return makeFinding('IN-HOST-NOT-ALLOWED', { file, params: { host: err.host } });
   if (err instanceof ProxyFetchError || err instanceof FileFetchError) {
