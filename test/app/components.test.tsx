@@ -175,6 +175,20 @@ describe('pages', () => {
     expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy();
   });
 
+  it('IndexPage: one tile per tool, each a single link named by its full action, and the header marks the current page', () => {
+    render(<IndexPage />);
+    const tiles = document.querySelectorAll('li.tool');
+    expect(tiles.length).toBe(3);
+    for (const tile of tiles) expect(tile.querySelectorAll('a').length).toBe(1);
+    expect(screen.getByRole('link', { name: 'Open licence check' }).getAttribute('href')).toBe('/licence');
+    expect(document.querySelector('header a[aria-current]')).toBeNull();
+    cleanup();
+    window.history.pushState({}, '', '/check');
+    render(<IndexPage />);
+    expect(document.querySelector('header a[aria-current="page"]')?.getAttribute('href')).toBe('/check');
+    window.history.pushState({}, '', '/');
+  });
+
   it('PrivacyPage lists every allowlisted host and the contact link', () => {
     render(<PrivacyPage />);
     for (const h of DATA_HOSTS) expect(screen.getByText(h)).toBeTruthy();

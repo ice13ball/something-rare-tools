@@ -13,10 +13,14 @@ export interface LayoutProps {
   children: React.ReactNode;
 }
 
+/** Tools in the header. /licence and /collection stay out until Artur Palacz (IO PAN) has given his opinion (Michal's decision). */
+const NAV_TOOLS = [['/check', 'nav.check']] as const;
+
 /** Brand header, main area, footer (privacy link, cookie settings, language switcher) and the cookie banner. */
 export function Layout({ titleKey, children }: LayoutProps): React.ReactElement {
   const { lang } = useLang();
   const [cookieOpen, setCookieOpen] = useState(false);
+  const here = typeof location === 'undefined' ? '' : location.pathname.replace(/\/+$/, '');
 
   useEffect(() => {
     document.title = titleKey ? t(titleKey) + ' — ' + SITE.brand : SITE.brand;
@@ -32,8 +36,14 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
           {t('brand')}
         </a>
         <nav aria-label="Main">
-          <a href="/check">{t('nav.check')}</a>
-          <a href={SITE.atlasUrl}>{t('nav.atlasShort')}</a>
+          {NAV_TOOLS.map(([href, key]) => (
+            <a key={href} href={href} aria-current={here === href ? 'page' : undefined}>
+              {t(key)}
+            </a>
+          ))}
+          <a className="nav-external" href={SITE.atlasUrl}>
+            {t('nav.atlasShort')}
+          </a>
         </nav>
       </header>
       <main id="main" className="container" tabIndex={-1}>

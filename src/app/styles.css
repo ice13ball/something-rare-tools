@@ -153,6 +153,16 @@ code {
   text-decoration: underline;
 }
 
+.site-header nav a[aria-current='page'] {
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.site-header nav .nav-external {
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--border);
+}
+
 .container {
   flex: 1;
   width: 100%;
@@ -270,36 +280,45 @@ select {
   color: var(--muted);
 }
 
-/* Home: one row per tool, the whole row opens the tool. */
+/* Home: one tile per tool, the whole tile opens the tool. */
 .tools {
   list-style: none;
   padding: 0;
   margin: 2rem 0;
-  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: 0.75rem;
 }
 
 .tool {
   position: relative;
-  display: grid;
-  grid-template-columns: 13rem 1fr;
-  gap: 0.35rem 1.5rem;
-  padding: 1.1rem 0.75rem;
-  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .tool h2 {
-  grid-row: span 2;
   margin: 0;
   font-size: 1.1rem;
 }
 
 .tool p {
+  flex: 1;
   margin: 0;
   color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .tool-link {
-  justify-self: start;
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0.35rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
   font-weight: 600;
   text-decoration: none;
 }
@@ -310,13 +329,19 @@ select {
   inset: 0;
 }
 
+.tool:focus-within {
+  border-color: var(--accent);
+}
+
 @media (hover: hover) {
   .tool:hover {
-    background: var(--surface);
+    border-color: var(--accent);
+    background: var(--surface-2);
   }
 
   .tool:hover .tool-link {
-    text-decoration: underline;
+    background: var(--accent);
+    color: var(--accent-ink);
   }
 }
 
@@ -696,14 +721,6 @@ select.input-short {
 }
 
 @media (max-width: 36rem) {
-  .tool {
-    grid-template-columns: 1fr;
-  }
-
-  .tool h2 {
-    grid-row: auto;
-  }
-
   .finding dl {
     grid-template-columns: 1fr;
   }

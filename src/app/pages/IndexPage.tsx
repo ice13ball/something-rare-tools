@@ -5,7 +5,7 @@ import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
 import { t, useLang } from '../i18n';
 
-/** One row per tool; the whole row is the link target (see .tool-link in styles.css). */
+/** One tile per tool, from one file to a whole collection; the whole tile is the link target (see .tool-link in styles.css). */
 const TOOLS = [
   ['/check', 'index.card'],
   ['/licence', 'index.licence'],
@@ -23,8 +23,8 @@ export function IndexPage(): React.ReactElement {
           <li key={href} className="tool">
             <h2>{t(`${key}.title`)}</h2>
             <p>{t(`${key}.text`)}</p>
-            <a className="tool-link" href={href}>
-              {t(`${key}.cta`)}
+            <a className="tool-link" href={href} aria-label={t(`${key}.cta`)}>
+              {t('index.open')}
             </a>
           </li>
         ))}
