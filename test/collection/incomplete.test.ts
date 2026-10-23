@@ -5,9 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionRunner } from '../../src/core/collection/runner';
 import { gapText } from '../../src/core/collection/stop';
-import { UI } from '../../src/core/i18n/ui';
+import { UI, translate } from '../../src/core/i18n/ui';
 import type { Lang } from '../../src/core/types';
-import { dataciteMock, res, runnerDeps, virtualClock } from './helpers';
+import type { Net } from '../../src/core/collection/net';
+import { MAX_NOTICES } from '../../src/core/collection/runner';
+import { dataciteMock, json, res, runnerDeps, virtualClock } from './helpers';
 
 const LANGS: Lang[] = ['en', 'pl', 'de', 'fr'];
 
@@ -52,5 +54,71 @@ describe('a run that finishes with pages it could not read does not present as c
     expect(p.deferred).toBe(0);
     expect(p.notices.some((n) => n.code === 'unread-pages')).toBe(false);
     expect(await (await r.csvBlob()).text()).not.toContain('RUN-INCOMPLETE');
+  });
+});
+
+const hit = (i: number) => ({ id: 1000 + i, doi: `10.5281/zenodo.${1000 + i}`, metadata: { title: `t${i}`, publication_date: '2020-01-01', license: { id: 'cc-by-4.0' }, resource_type: { type: 'dataset' } } });
+
+async function zenodoRun(net: Net) {
+  const r = new CollectionRunner(runnerDeps(net, virtualClock()));
+  await r.start({ spec: { kind: 'zenodo', community: 'abc' }, lang: 'en', sample: false });
+  await r.whenIdle();
+  return r;
+}
+
+describe('a Zenodo slice that ends before its own total makes the run incomplete', () => {
+  it('an empty page in the middle of a slice: a notice for the slice, a count of the missing records, and the RUN-INCOMPLETE row', async () => {
+    const net = {
+      async get(url: string) {
+        const u = new URL(url);
+        const size = Number(u.searchParams.get('size'));
+        const page = Number(u.searchParams.get('page'));
+        if (size === 1) return json({ hits: { hits: [hit(0)], total: 60 } });
+        if (page === 2) return json({ hits: { hits: [], total: 60 } });
+        const from = (page - 1) * size;
+        const n = Math.max(0, Math.min(size, 60 - from));
+        return json({ hits: { hits: Array.from({ length: n }, (_, k) => hit(from + k)), total: 60 } });
+      },
+      async csw() {
+        throw new Error('no');
+      },
+    } as Net;
+    const r = await zenodoRun(net);
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.records).toBe(25);
+    expect(p.notices).toContainEqual({ code: 'zenodo-slice-short', params: { from: '…', to: '…', total: 60, seen: 25 } });
+    expect(p.notices).toContainEqual({ code: 'records-missing', params: { missing: 35 } });
+    const lines = (await (await r.csvBlob()).text()).trimEnd().split('\n');
+    expect(lines[lines.length - 1]).toMatch(/^\(run\),,RUN-INCOMPLETE,info,.*35 records.*NOT part of these results.*Run the review again later\./);
+    for (const lang of LANGS) {
+      for (const n of p.notices) expect(translate(lang, `collection.notice.${n.code}` as never, n.params), lang).not.toMatch(/\{\w+\}/);
+    }
+  });
+
+  it('the end-of-run notice survives a notice list that is already full (many short slices)', async () => {
+    const YEAR = 400;
+    const net = {
+      async get(url: string) {
+        const u = new URL(url);
+        const size = Number(u.searchParams.get('size'));
+        const page = Number(u.searchParams.get('page'));
+        const q = u.searchParams.get('q');
+        const m = q ? /publication_date:\[(\d{4})-01-01 TO (\d{4})-12-31\]/.exec(q) : null;
+        const total = !q ? 27 * YEAR : m && m[1] === m[2] && Number(m[1]) >= 2000 && Number(m[1]) <= 2026 ? YEAR : 0;
+        if (size === 1) return json({ hits: { hits: total ? [hit(0)] : [], total } });
+        // every year slice announces 400 records and delivers 25, then an empty page
+        return json({ hits: { hits: page === 1 && total ? Array.from({ length: 25 }, (_, k) => hit(k)) : [], total } });
+      },
+      async csw() {
+        throw new Error('no');
+      },
+    } as Net;
+    const r = await zenodoRun(net);
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.notices.filter((n) => n.code === 'zenodo-slice-short').length).toBe(MAX_NOTICES - p.notices.filter((n) => n.code !== 'zenodo-slice-short' && n.code !== 'records-missing').length);
+    expect(p.notices.find((n) => n.code === 'records-missing')).toMatchObject({ params: { missing: 27 * (YEAR - 25) } });
+    expect(await (await r.csvBlob()).text()).toContain('RUN-INCOMPLETE');
   });
 });
