@@ -5,7 +5,7 @@
 // saved run) there are only counters, <= 50 samples per rule, the cursor and small plans: nothing grows with the number of records.
 import { getRule } from '../rules/registry';
 import type { Finding, Severity } from '../types';
-import { GAP_NOTICES, stopFromError, stopFromFailure } from './stop';
+import { GAP_NOTICES, isGapNotice, stopFromError, stopFromFailure } from './stop';
 import { StopSignal, makeNetContext, realClock, type Clock, type Net, type NetContext } from './net';
 import { UNFINISHED, evaluateItem, fixListHeader, gapRow, incompleteRow, fixListRow, sourceLabel, toSample } from './fixlist';
 import { estimateSource, prepareSource, restorePager } from './sources';
@@ -393,7 +393,7 @@ export class CollectionRunner {
       stop: st.stop,
       lang: st.settings.lang,
       source: sourceLabel(st.settings.spec),
-      gap: st.status === 'finished' && st.notices.some((n) => GAP_NOTICES.includes(n.code)),
+      gap: st.status === 'finished' && st.notices.some(isGapNotice),
       gapRow: st.status === 'finished' ? gapRow(st.notices, st.deferred.length > 0, st.settings.lang, sourceLabel(st.settings.spec)) : '',
     };
     const parts = (await this.d.store.parts(snap.id, snap.stored)).slice(0, snap.stored);
@@ -470,9 +470,10 @@ export class CollectionRunner {
           // The daily budget of this connection is spent: every further page would be refused too. The page stays at the cursor (not deferred), the run is saved and resumes later.
           if (e.reason === 'csw_daily_budget') return await this.interrupt(e, (st.pagesTried ?? 0) + 1);
           const skip = pager.skip(cur);
+          const isPage = pager.isPage?.(cur) ?? true;
           const page = (st.pagesTried ?? 0) + 1;
           this.defer({ cursor: skip === null ? cur : (pager.retryCursor?.(cur) ?? cur), kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(skip === null ? { blocking: true } : {}) });
-          st.pagesTried = page;
+          if (isPage) st.pagesTried = page;
           failures += 1;
           // The page now sits in `deferred`; the cursor goes past it BEFORE the run may stop, or a resume would read it twice (deferred + cursor).
           if (skip !== null) st.cursor = skip;
@@ -482,7 +483,7 @@ export class CollectionRunner {
         }
         failures = 0;
         this.apply(data);
-        st.pagesTried = (st.pagesTried ?? 0) + 1;
+        if (pager.isPage?.(cur) ?? true) st.pagesTried = (st.pagesTried ?? 0) + 1;
         st.cursor = data.next;
         await this.checkpoint();
       }
@@ -622,7 +623,7 @@ export class CollectionRunner {
     const st = this.st!;
     const key = JSON.stringify(n);
     // the gap notices of the end of the run are added by gapNotices() and always fit: room is kept for them
-    if (st.notices.some((x) => JSON.stringify(x) === key) || st.notices.filter((x) => !GAP_NOTICES.includes(x.code)).length >= MAX_NOTICES) return;
+    if (st.notices.some((x) => JSON.stringify(x) === key) || st.notices.filter((x) => !isGapNotice(x)).length >= MAX_NOTICES) return;
     st.notices.push(n);
   }
 

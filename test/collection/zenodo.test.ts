@@ -161,7 +161,7 @@ describe('Zenodo community', () => {
       const jan = await pager.fetch({ si: 0, page: 1 }); // a cursor of the old shape (index into the plan)
       expect(jan.items).toHaveLength(3);
       // the slice ended: the next step (nothing asked of Zenodo: February is already counted) starts February, the ids travelling with it
-      expect(jan.next).toMatchObject({ page: 1, yr: '2021', work: [{ from: '2021-02-01', total: 2 }, { from: '2022-01-01', total: 1 }] });
+      expect(jan.next).toMatchObject({ page: 1, yr: '2021', work: [{ from: '2021-02-01', total: 2 }], ni: 2 });
       expect(jan.next?.ids).toBeTruthy();
       const startFeb = await pager.fetch(jan.next!);
       expect(startFeb.items).toHaveLength(0);
@@ -169,7 +169,7 @@ describe('Zenodo community', () => {
       const feb = await pager.fetch(startFeb.next!);
       expect(feb.items).toHaveLength(1); // id 3 was read in January
       expect(feb.counters).toEqual({ duplicatesInBatch: 1 });
-      expect(feb.next).toEqual({ page: 1, work: [{ from: '2022-01-01', to: '2022-12-31', total: 1 }] }); // no ids into 2022
+      expect(feb.next).toEqual({ page: 1, work: [{ from: '2022-01-01', to: '2022-12-31', total: 1 }], ni: 3 }); // no ids into 2022
       const startY22 = await pager.fetch(feb.next!);
       expect(startY22.next).toMatchObject({ cur: { from: '2022-01-01' } });
       expect(startY22.next?.ids).toBeUndefined();

@@ -232,6 +232,8 @@ export interface Pager<C = unknown> {
   expected(cursor: C): number;
   /** What a deferred page keeps of its cursor (only what reading that page again needs); default: the whole cursor. */
   retryCursor?(cursor: C): C;
+  /** false = this step only counts or plans (no page of records): it is not a "page N" in a stop reason. Default: true. */
+  isPage?(cursor: C): boolean;
   /**
    * A page that was left for later and is now read again (a CSW page, possibly asked smaller): compares what its answer covered with its
    * ORIGINAL range of `owed` records. `next` = the cursor to read next and the records still owed when the answer covers only the first

@@ -140,7 +140,11 @@ function finer(s: Slice, thisYear: number): Pick<Slice, 'from' | 'to'>[] {
 const splitsWithinYear = (w: Pick<Slice, 'from' | 'to'>): boolean => !!w.from && !!w.to && w.from.slice(0, 4) === w.to.slice(0, 4) && (w.from.slice(5, 7) !== w.to.slice(5, 7) || w.from.slice(8, 10) !== w.to.slice(8, 10));
 
 /** A slice in the work list: counted (`total` known) or not yet (one count request when the run reaches it). */
-export type Pending = Omit<Slice, 'total'> & { total?: number };
+export type Pending = Omit<Slice, 'total'> & {
+  total?: number;
+  /** A REMAINDER slice whose size is not stored: it is counted with its own NOT query when the run reaches it (a size derived from two counts taken far apart drifts). */
+  rest?: boolean;
+};
 
 /** More than this many slices waiting at once means the splitting is not converging: the run stops instead of growing without bound. */
 const MAX_WORK = 500;
@@ -187,6 +191,8 @@ export interface ZenodoCursor {
   yr?: string;
   /** Legacy: index into the plan's slices (a cursor saved by the up-front planner). */
   si?: number;
+  /** Legacy run: index of the next slice of the saved plan not yet taken into `work` (the old plan stays in the saved plan, once). */
+  ni?: number;
 }
 
 /**
@@ -239,7 +245,7 @@ function upgrade(c: ZenodoCursor, plan: ZenodoPlan): ZenodoCursor {
   if (typeof c.si !== 'number' || !plan.slices) return c;
   const cur = plan.slices[c.si];
   if (!cur) return cursor({ page: 1, work: [] });
-  return cursor({ page: c.page, cur, work: plan.slices.slice(c.si + 1), ...(c.sort ? { sort: c.sort } : {}), ...(c.got !== undefined ? { got: c.got } : {}), ...(c.ids !== undefined ? { ids: c.ids, yr: yearOfSplit(cur) } : {}) });
+  return cursor({ page: c.page, cur, work: [], ni: c.si + 1, ...(c.sort ? { sort: c.sort } : {}), ...(c.got !== undefined ? { got: c.got } : {}), ...(c.ids !== undefined ? { ids: c.ids, yr: yearOfSplit(cur) } : {}) });
 }
 
 /**
@@ -263,11 +269,18 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
   const final = (c: ZenodoCursor): PageData<ZenodoCursor>['notices'] => (c.sum !== undefined && c.sum !== plan.total ? [{ code: 'slices-differ', params: { sum: c.sum, total: plan.total } }] : []);
   /** What follows a slice that ended: the next one to count, or the end of the run (with the check of what the slices added up to). */
   const after = (c: ZenodoCursor, ids: string | undefined): { next: ZenodoCursor | null; notices: NonNullable<PageData<ZenodoCursor>['notices']> } => {
-    const work = c.work ?? [];
+    let work = c.work ?? [];
+    let ni = c.ni;
+    if (work.length === 0 && ni !== undefined && plan.slices?.[ni]) {
+      // a run saved with the whole plan: its next slice (a remainder is counted again, like a new one)
+      const { total, capped, ...next } = plan.slices[ni];
+      work = [next.except ? { ...next, rest: true } : { ...next, total, ...(capped ? { capped } : {}) }];
+      ni += 1;
+    }
     if (work.length === 0) return { next: null, notices: final(c) ?? [] };
     const y = work[0].from?.slice(0, 4);
     const keep = ids !== undefined && y !== undefined && y === c.yr && work[0].to?.slice(0, 4) === y;
-    return { next: cursor({ page: 1, work, sum: c.sum, ...(keep ? { ids, yr: c.yr } : {}) }), notices: [] };
+    return { next: cursor({ page: 1, work, sum: c.sum, ni, ...(keep ? { ids, yr: c.yr } : {}) }), notices: [] };
   };
   const advance = (c: ZenodoCursor, ids: string | undefined = c.ids, got: number | undefined = c.got): { next: ZenodoCursor | null; notices: NonNullable<PageData<ZenodoCursor>['notices']> } => {
     const s = c.cur!;
@@ -279,7 +292,7 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
   const expectedOf = (c: ZenodoCursor): number => (c.cur ? Math.max(0, Math.min(ZENODO_PAGE, sliceTotal(c.cur) - (c.page - 1) * ZENODO_PAGE)) : 0);
   const listing = (c: ZenodoCursor, slice: Slice, rest: Pending[]): ZenodoCursor => {
     const y = yearOfSplit(slice);
-    return cursor({ page: 1, cur: slice, work: rest, ...(c.sum !== undefined ? { sum: c.sum + sliceTotal(slice) } : {}), ...(y !== undefined && c.ids !== undefined && c.yr === y ? { ids: c.ids, yr: y } : {}) });
+    return cursor({ page: 1, cur: slice, work: rest, ni: c.ni, ...(c.sum !== undefined ? { sum: c.sum + sliceTotal(slice) } : {}), ...(y !== undefined && c.ids !== undefined && c.yr === y ? { ids: c.ids, yr: y } : {}) });
   };
   const step = (next: ZenodoCursor | null, notices: PageData<ZenodoCursor>['notices'] = []): PageData<ZenodoCursor> => ({ items: [], next, notices });
   const guard = (work: Pending[]): void => {
@@ -288,17 +301,15 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
 
   /** The finer slices of a split slice are all counted: they go in front of the work list, followed by the remainder. */
   const resolve = (c: ZenodoCursor, parent: Slice, parts: Pending[]): PageData<ZenodoCursor> => {
-    const childSum = parts.reduce((a, p) => a + (p.total ?? 0), 0);
     const out: Pending[] = parts.filter((p) => (p.total ?? 0) > 0);
-    const rest = parent.total - childSum;
-    if (rest > 0 && splitsWithinYear(parent)) {
-      // Not splittable further (what is left has no date to cut by): above the window it is capped, and the run says so.
-      const except = parts.map((p) => ({ from: p.from!, to: p.to! }));
-      out.push({ from: parent.from, to: parent.to, except, total: rest, ...(rest > ZENODO_WINDOW ? { capped: true } : {}) });
+    if (splitsWithinYear(parent)) {
+      // What the children miss (partial dates: no date to cut by) is a slice of its own. Its size is NOT worked out as parent - children:
+      // the parent was counted long before the days are (records are added meanwhile). It is counted when reached; above the window it is capped.
+      out.push({ from: parent.from, to: parent.to, except: parts.map((p) => ({ from: p.from!, to: p.to! })), rest: true });
     }
     const work = [...out, ...(c.work ?? [])];
     guard(work);
-    return step(cursor({ page: 1, work, sum: c.sum, ids: c.ids, yr: c.yr }));
+    return step(cursor({ page: 1, work, sum: c.sum, ids: c.ids, yr: c.yr, ni: c.ni }));
   };
 
   /** One planning step: count the next slice, decide what to do with it, or count the next finer slice of a split. */
@@ -317,8 +328,10 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
     const [first, ...rest] = work;
     const n = first.total ?? (await zenodoTotal(deps, slug, first));
     if (n === 0) return step(cursor({ ...c, work: rest }));
-    const w: Slice = { ...first, total: n };
-    if (n <= ZENODO_WINDOW || w.capped) return step(listing(c, w, rest));
+    const w: Slice & { rest?: boolean } = { ...first, total: n };
+    delete w.rest;
+    const isRest = first.rest === true;
+    if (n <= ZENODO_WINDOW || w.capped || isRest) return step(listing(c, n > ZENODO_WINDOW ? { ...w, capped: true } : w, rest));
     const parts = finer(w, thisYear);
     if (parts.length === 0) return step(listing(c, { ...w, capped: true }, rest));
     if (splitsWithinYear(w)) return step(cursor({ ...c, work: rest, split: { parent: w, parts } }));
@@ -331,6 +344,8 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
   return {
     initial: initial(),
     expected: (c) => expectedOf(upgrade(c, plan)),
+    // only a page of records is a "page N" for the visitor; counting a slice is not
+    isPage: (c) => upgrade(c, plan).cur !== undefined,
     // a page left for later is counted as expected, so it is not also reported as missing when the slice ends
     skip: (raw) => {
       const c = upgrade(raw, plan);
