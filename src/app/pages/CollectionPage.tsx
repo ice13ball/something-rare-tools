@@ -170,9 +170,14 @@ function ExampleRow({ s, lang, create, fetcher }: { s: Sample; lang: ReturnType<
     <li>
       <code>{s.ref}</code> — {text}{' '}
       {looksLikeDoi(s.ref) && !open && (
-        <button type="button" className="link-button" onClick={() => setOpen(true)}>
-          {t('collection.record.check')}
-        </button>
+        <>
+          <button type="button" className="link-button" onClick={() => setOpen(true)}>
+            {t('collection.record.check')}
+          </button>{' '}
+          <span className="muted" data-testid="record-check-browser-only">
+            ({t('collection.record.browserOnly')})
+          </span>
+        </>
       )}
       {open && <RecordCheck doi={s.ref} create={create} fetcher={fetcher} onClose={() => setOpen(false)} />}
     </li>
