@@ -301,6 +301,13 @@ select {
   border-radius: var(--radius);
 }
 
+.tool img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: -0.25rem 0 0.25rem;
+}
+
 .tool h2 {
   margin: 0;
   font-size: 1.1rem;
@@ -315,6 +322,7 @@ select {
 
 .tool-link {
   align-self: flex-start;
+  justify-self: start;
   margin-top: 0.25rem;
   padding: 0.35rem 1rem;
   border: 1px solid var(--accent);
@@ -721,6 +729,20 @@ select.input-short {
 }
 
 @media (max-width: 36rem) {
+  /* Stacked tiles: the picture goes beside the name so the three tools still fit on a phone screen. */
+  .tool {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    column-gap: 0.9rem;
+    align-items: start;
+  }
+
+  .tool img {
+    grid-row: span 3;
+    margin: 0;
+    align-self: center;
+  }
+
   .finding dl {
     grid-template-columns: 1fr;
   }

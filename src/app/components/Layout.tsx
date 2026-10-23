@@ -13,8 +13,12 @@ export interface LayoutProps {
   children: React.ReactNode;
 }
 
-/** Tools in the header. /licence and /collection stay out until Artur Palacz (IO PAN) has given his opinion (Michal's decision). */
-const NAV_TOOLS = [['/check', 'nav.check']] as const;
+/** All three tools, with the same names as the home tiles; the current page is marked. */
+const NAV_TOOLS = [
+  ['/check', 'index.card.title'],
+  ['/licence', 'index.licence.title'],
+  ['/collection', 'index.collection.title'],
+] as const;
 
 /** Brand header, main area, footer (privacy link, cookie settings, language switcher) and the cookie banner. */
 export function Layout({ titleKey, children }: LayoutProps): React.ReactElement {
