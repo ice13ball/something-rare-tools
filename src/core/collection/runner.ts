@@ -47,7 +47,19 @@ export interface RunnerDeps {
   newId?: () => string;
   /** Current year (the last Zenodo date slice). */
   year?: () => number;
+  /** Web Locks (default navigator.locks): one tab at a time may run a saved run. */
+  locks?: LockManagerLike | null;
 }
+
+/** The part of the Web Locks API the runner uses. */
+export interface LockManagerLike {
+  request(name: string, options: { mode: 'exclusive'; ifAvailable: true }, callback: (lock: unknown) => Promise<void> | void): Promise<unknown>;
+}
+
+/** Held for the whole loop of a run; the saved run belongs to one tab at a time. */
+export const RUN_LOCK = 'collection-review-run';
+/** The message of the refusal when another tab holds the run (the page shows it in the visitor's language). */
+export const RUN_OPEN_ELSEWHERE = 'run-open-elsewhere';
 
 /** The settings as they are saved and shown: the pasted DOI list is kept apart (RunStore.saveText), never in a checkpoint or a progress message. */
 const withoutText = (settings: RunSettings): RunSettings => (settings.spec.kind === 'dois' ? { ...settings, spec: { kind: 'dois', text: '' } } : settings);
@@ -67,6 +79,7 @@ export class CollectionRunner {
   private pending: NewPart[] = [];
   /** Set synchronously by start()/resume() before their first await and held until the loop exists: a second call in that window cannot start a second loop. */
   private busy = false;
+  private unlock: (() => void) | null = null;
   private readonly clock: Clock;
 
   constructor(private readonly d: RunnerDeps) {
@@ -139,7 +152,14 @@ export class CollectionRunner {
     if (this.loopDone || this.busy) throw new Error('A run is already going');
     this.busy = true;
     try {
-      await this.startRun(settings);
+      if (!(await this.takeLock())) throw new Error(RUN_OPEN_ELSEWHERE); // before anything of the saved run is touched
+      try {
+        await this.startRun(settings);
+      } catch (e) {
+        this.releaseLock();
+        throw e;
+      }
+      if (!this.loopDone) this.releaseLock();
     } finally {
       this.busy = false;
     }
@@ -182,9 +202,7 @@ export class CollectionRunner {
       for (const n of prepared.notices) this.notice(n);
       st.status = 'running';
       await this.checkpoint();
-      this.loopDone = this.loop(prepared.pager, ctl).finally(() => {
-        this.loopDone = null;
-      });
+      this.launch(prepared.pager, ctl);
     } catch (e) {
       this.ctl = null;
       st.status = e instanceof StopSignal ? 'stopped' : 'failed';
@@ -212,7 +230,14 @@ export class CollectionRunner {
     if (this.loopDone || this.busy) return; // already going (or being started): a second call must not start a second loop
     this.busy = true;
     try {
-      await this.resumeRun();
+      if (!(await this.takeLock())) throw new Error(RUN_OPEN_ELSEWHERE);
+      try {
+        await this.resumeRun();
+      } catch (e) {
+        this.releaseLock();
+        throw e;
+      }
+      if (!this.loopDone) this.releaseLock();
     } finally {
       this.busy = false;
     }
@@ -245,8 +270,43 @@ export class CollectionRunner {
       this.ctl = null;
       throw e;
     }
+    this.launch(pager, ctl);
+  }
+
+  /**
+   * Takes the run lock (exclusive, only if free) for the loop that is about to start. false = another tab holds it. Where the browser has no
+   * Web Locks API (old browsers, some test environments) there is no lock and the behaviour is as before: the run goes ahead.
+   */
+  private async takeLock(): Promise<boolean> {
+    const locks = this.d.locks === undefined ? (globalThis as { navigator?: { locks?: LockManagerLike } }).navigator?.locks : this.d.locks;
+    if (!locks) return true;
+    return new Promise<boolean>((resolve, reject) => {
+      locks
+        .request(RUN_LOCK, { mode: 'exclusive', ifAvailable: true }, (lock) => {
+          if (!lock) {
+            resolve(false);
+            return;
+          }
+          resolve(true);
+          return new Promise<void>((release) => {
+            this.unlock = release;
+          });
+        })
+        .catch(reject);
+    });
+  }
+
+  private releaseLock(): void {
+    const u = this.unlock;
+    this.unlock = null;
+    u?.();
+  }
+
+  /** Starts the loop; the run lock is let go when it ends. */
+  private launch(pager: Pager<unknown>, ctl: AbortController): void {
     this.loopDone = this.loop(pager, ctl).finally(() => {
       this.loopDone = null;
+      this.releaseLock();
     });
   }
 
@@ -389,7 +449,7 @@ export class CollectionRunner {
         st.stop = { cause: 'user', source, page, request: st.stats.requests, kind: 'user', at: this.clock.now() };
         await this.checkpoint().catch(() => undefined);
       } else {
-        const storage = e instanceof Error && /IndexedDB|Quota/i.test(`${e.name} ${e.message}`);
+        const storage = e instanceof Error && /IndexedDB|Quota|VersionError|InvalidStateError/i.test(`${e.name} ${e.message}`);
         st.status = 'failed';
         this.notice({ code: storage ? 'storage-failed' : 'unexpected' });
         st.stop = storage
