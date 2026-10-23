@@ -377,6 +377,48 @@ const AFFIRMATIVE_CLOSING: RegExp[] = [
   `użycie\\s+komercyjne\\s+(?:jest\\s+)?dozwolone`,
 ].map((src) => new RegExp(`${L0}(?:${src})${CLOSES}`, 'giu'));
 
+/**
+ * The Creative Commons 4.0 deed's own sentences that LOOK like restrictions ("but not in any way that suggests the licensor endorses
+ * you", "You may not apply legal terms...", "No warranties are given") but restate the licence itself. Wording copied from
+ * creativecommons.org/licenses/by/4.0/deed.{en,pl,de,fr} (read 23.10.2026). A statement whose only restriction markers sit in these
+ * sentences is extra text (LIC-EXTRA-TEXT), not added conditions (LIC-ADDED-CONDITIONS). Used ONLY to decide that marker: the leftover
+ * is still shown whole and still keeps the statement from being recognised as a licence id. Like the other neutral wording, a sentence
+ * counts only when it closes its clause (. ; , ) a dash or the end): one that goes on ("No warranties are given for commercial reuse") stays.
+ */
+const DEED_SENTENCES: string[] = [
+  // en
+  `but not in any way that suggests the licensor endorses you or your use`,
+  `you may not apply legal terms or technological measures that legally restrict others from doing anything the license permits`,
+  `you do not have to comply with the license for elements of the material in the public domain or where your use is permitted by an applicable exception or limitation`,
+  `no warranties are given`,
+  `the license may not give you all of the permissions necessary for your intended use`,
+  // pl
+  `o ile nie sugeruje to udzielania prze licencjodawcę poparcia dla Ciebie lub sposobu, w jaki wykorzystujesz ten utwór`,
+  `nie możesz korzystać ze środków prawnych lub technologicznych, które ograniczają innych w korzystaniu z utworu na warunkach określonych w licencji`,
+  `warunki licencyjne nie muszą być przestrzegane w odniesieniu do tych fragmentów licencjonowanych treści, które znajdują się w domenie publicznej, lub w przypadku sposobów korzystania dozwolonych przez odpowiednie wyjątki lub ograniczenia prawa autorskiego`,
+  `licencjodawca nie daje żadnych gwarancji`,
+  `licencja może nie zapewniać wszystkich niezbędnych zgód dla niektórych użyć utworu`,
+  // de
+  `allerdings nicht so, dass der Eindruck entsteht, der Lizenzgeber unterstütze gerade Sie oder Ihre Nutzung besonders`,
+  `sie dürfen keine zusätzlichen Klauseln oder technische Verfahren einsetzen, die anderen rechtlich irgendetwas untersagen, was die Lizenz erlaubt`,
+  `sie müssen sich nicht an diese Lizenz halten hinsichtlich solcher Teile des Materials, die gemeinfrei sind, oder soweit Ihre Nutzungshandlungen durch Ausnahmen und Schranken des Urheberrechts gedeckt sind`,
+  `es werden keine Garantien gegeben und auch keine Gewähr geleistet`,
+  `die Lizenz verschafft Ihnen möglicherweise nicht alle Erlaubnisse, die Sie für die jeweilige Nutzung brauchen`,
+  // fr
+  `sans toutefois suggérer que l'Offrant vous soutient ou soutient la façon dont vous avez utilisé son Oeuvre`,
+  `vous n'êtes pas autorisé à appliquer des conditions légales ou des mesures techniques qui restreindraient légalement autrui à utiliser l'Oeuvre dans les conditions décrites par la licence`,
+  `vous n'êtes pas dans l'obligation de respecter la licence pour les éléments ou matériel appartenant au domaine public ou dans le cas où l'utilisation que vous souhaitez faire est couverte par une exception`,
+  `aucune garantie n'est donnée`,
+  `il se peut que la licence ne vous donne pas toutes les permissions nécessaires pour votre utilisation`,
+];
+const DEED_CLOSING: RegExp[] = DEED_SENTENCES.map((sentence) => {
+  const src = sentence
+    .split(/\s+/)
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/'/g, "['’]").replace(/licen[cs]e/giu, 'licen[cs]e').replace(/Oeuvre/g, '(?:oe|œ)uvre'))
+    .join('\\s+');
+  return new RegExp(`${L0}(?:${src})${CLOSES}`, 'giu');
+});
+
 /** Filler words of a licence statement (en / de / fr / pl). Everything else that is left is shown to the user. */
 const FILLER = new Set(
   `licensed licenced use under the a an of this these dataset datasets data is are available distributed released published made international internationale unported międzynarodowe międzynarodowa międzynarodowy licence license at and with
@@ -480,8 +522,11 @@ function leftoverOf(raw: string, masked: string, foreign: { pos: number; text: s
   for (const re of AFFIRMATIVE_CLOSING) m = blank(m, re);
   const cr = blankCopyright(m);
   m = cr.text;
+  // For the MARKER decision only: the same text with the CC deed's own sentences blanked (same length, so the fragments below line up).
+  let markable = m;
+  for (const re of DEED_CLOSING) markable = blank(markable, re);
   const shown: { pos: number; text: string }[] = [];
-  const kept: string[] = [];
+  const keptForMarker: string[] = [];
   // Fragments split on . ; , ( ) and line breaks ("." only at the end of a word: "4.0" and "Inc." inside a name do not split).
   for (const frag of m.matchAll(/(?:[^;,()\n.]|\.(?!\s|$))+/gu)) {
     const tokens = [...frag[0].matchAll(TOKEN)];
@@ -496,15 +541,16 @@ function leftoverOf(raw: string, masked: string, foreign: { pos: number; text: s
       b = end;
     }
     shown.push({ pos: a, text: raw.slice(a, b).replace(/\s+/g, ' ').trim() });
-    kept.push(content.map((t) => t[0]).join(' '));
+    const here = markable.slice(frag.index!, frag.index! + frag[0].length);
+    keptForMarker.push([...here.matchAll(TOKEN)].filter((t) => !FILLER.has(t[0].toLowerCase()) || cr.forced.has(frag.index! + t.index!)).map((t) => t[0]).join(' '));
   }
   // A link or DOI that is not a recognised licence URL says something we cannot read: leftover as written.
   for (const f of foreign) {
     shown.push(f);
-    kept.push(f.text);
+    keptForMarker.push(f.text);
   }
   shown.sort((x, y) => x.pos - y.pos);
-  return { text: shown.map((x) => x.text).join('; '), marker: hasMarker(kept.join(' ')) };
+  return { text: shown.map((x) => x.text).join('; '), marker: hasMarker(keptForMarker.join(' ')) };
 }
 
 /** A licence name no pattern above reads (GNU GPL without a version, OGL of another country): next to a recognised one the text is ambiguous. */
