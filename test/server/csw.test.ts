@@ -287,6 +287,52 @@ describe('POST /api/csw', () => {
   });
 });
 
+describe('M1: per-minute limit and daily budget of /api/csw', () => {
+  const caps = { catalogue: 'emodnet', op: 'GetCapabilities' };
+
+  it('the default per-IP limit is 20 a minute: the 21st request of one IP is 429, another IP is not affected', async () => {
+    const { app } = make({ cswPacing: { minIntervalMs: 0 } });
+    for (let i = 0; i < 20; i++) expect((await post(app, caps, '6.6.6.6')).status).toBe(200);
+    const over = await post(app, caps, '6.6.6.6');
+    expect(over.status).toBe(429);
+    expect(Number(over.headers['retry-after'])).toBeGreaterThan(0);
+    expect((await post(app, caps, '6.6.6.7')).status).toBe(200);
+  });
+
+  it('the default daily budget is 3000 requests and 2 GB', async () => {
+    const { CSW_DAILY_BYTES, CSW_DAILY_REQUESTS } = await import('../../server/rateLimit.js');
+    expect(CSW_DAILY_REQUESTS).toBe(3000);
+    expect(CSW_DAILY_BYTES).toBe(2 * 1024 ** 3);
+  });
+
+  it('over the daily REQUEST budget: 429 + Retry-After until the window resets + csw_daily_budget; nothing reaches the catalogue; the window then starts again', async () => {
+    let t = 1_000_000;
+    const { app, calls } = make({ cswPacing: { minIntervalMs: 0 }, cswRateLimit: { limit: 1000 }, cswDailyBudget: { requests: 3, now: () => t } });
+    for (let i = 0; i < 3; i++) expect((await post(app, caps, '7.7.7.7')).status).toBe(200);
+    t += 60_000;
+    const over = await post(app, caps, '7.7.7.7');
+    expect(over.status).toBe(429);
+    expect(over.headers['x-fetch-proxy-error']).toBe('csw_daily_budget');
+    expect(Number(over.headers['retry-after'])).toBe(24 * 3600 - 60);
+    expect(calls).toHaveLength(3);
+    expect((await post(app, caps, '7.7.7.8')).status).toBe(200); // another connection has its own budget
+    t += 24 * 3600_000;
+    expect((await post(app, caps, '7.7.7.7')).status).toBe(200);
+  });
+
+  it('over the daily BYTE budget: the request that crosses the line is served whole, the next one is refused', async () => {
+    const big = '<csw>' + 'x'.repeat(1000) + '</csw>';
+    const { app, calls } = make({ cswPacing: { minIntervalMs: 0 }, cswRateLimit: { limit: 1000 }, cswDailyBudget: { bytes: 500 } }, () => resp(200, big));
+    const first = await post(app, caps, '8.8.8.8');
+    expect(first.status).toBe(200);
+    expect(Buffer.from(first.body).length).toBeGreaterThan(1000);
+    const second = await post(app, caps, '8.8.8.8');
+    expect(second.status).toBe(429);
+    expect(second.headers['x-fetch-proxy-error']).toBe('csw_daily_budget');
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe('createHostPacer', () => {
   it('starts requests to one host at least minIntervalMs apart and does not mix hosts', async () => {
     let t = 0;

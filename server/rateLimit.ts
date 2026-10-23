@@ -68,3 +68,64 @@ export function createRateLimiter(opts: RateLimitOptions = {}): RequestHandler &
   };
   return Object.assign(handler, { size: () => windows.size });
 }
+
+export interface DailyBudgetOptions {
+  /** Requests per window and client. */
+  requests?: number;
+  /** Response bytes per window and client. Counted as they are sent, so the request that crosses the line is still served whole. */
+  bytes?: number;
+  windowMs?: number;
+  now?: () => number;
+  maxKeys?: number;
+}
+
+/** What /api/csw lets one connection take from the catalogues in a day: about 10 full runs of the 7 193-record catalogue by count, 4 by size. */
+export const CSW_DAILY_REQUESTS = 3000;
+export const CSW_DAILY_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * Fixed 24-hour window per client key (the same key as the per-minute limiter), counting requests AND bytes. In memory, so per server
+ * instance: a restart or a second Cloud Run instance gives a fresh budget. Over budget: 429 + Retry-After (seconds until the window
+ * resets) + X-Fetch-Proxy-Error: csw_daily_budget, which the page turns into a stopped, resumable run.
+ */
+export function createDailyBudget(opts: DailyBudgetOptions = {}): { admit: RequestHandler; addBytes(req: Pick<Request, 'headers' | 'socket'>, n: number): void; size(): number } {
+  const maxRequests = opts.requests ?? CSW_DAILY_REQUESTS;
+  const maxBytes = opts.bytes ?? CSW_DAILY_BYTES;
+  const windowMs = opts.windowMs ?? 24 * 60 * 60_000;
+  const now = opts.now ?? Date.now;
+  const maxKeys = opts.maxKeys ?? 10_000;
+  const windows = new Map<string, { start: number; requests: number; bytes: number }>();
+
+  const windowOf = (key: string, t: number): { start: number; requests: number; bytes: number } => {
+    let w = windows.get(key);
+    if (!w || t - w.start >= windowMs) {
+      w = { start: t, requests: 0, bytes: 0 };
+      windows.delete(key);
+      windows.set(key, w);
+      if (windows.size > maxKeys) {
+        for (const [k, o] of windows) if (t - o.start >= windowMs) windows.delete(k);
+        while (windows.size > maxKeys) {
+          const oldest = windows.keys().next().value;
+          if (oldest === undefined) break;
+          windows.delete(oldest);
+        }
+      }
+    }
+    return w;
+  };
+
+  const admit: RequestHandler = (req, res, next) => {
+    const t = now();
+    const w = windowOf(clientIp(req), t);
+    if (w.requests >= maxRequests || w.bytes >= maxBytes) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((w.start + windowMs - t) / 1000))));
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-Fetch-Proxy-Error', 'csw_daily_budget');
+      res.status(429).json({ error: 'csw_daily_budget' });
+      return;
+    }
+    w.requests += 1;
+    next();
+  };
+  return { admit, addBytes: (req, n) => void (windowOf(clientIp(req), now()).bytes += n), size: () => windows.size };
+}

@@ -298,6 +298,8 @@ export class CollectionRunner {
         } catch (e) {
           if (!(e instanceof SourceFailure)) throw e;
           if (e.kind === 'protocol' || e.kind === 'not-found') return await this.fail(e);
+          // The daily budget of this connection is spent: every further page would be refused too. The page stays at the cursor (not deferred), the run is saved and resumes later.
+          if (e.reason === 'csw_daily_budget') return await this.interrupt(e, (st.pagesTried ?? 0) + 1);
           const skip = pager.skip(cur);
           const page = (st.pagesTried ?? 0) + 1;
           this.defer({ cursor: cur, kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(skip === null ? { blocking: true } : {}) });

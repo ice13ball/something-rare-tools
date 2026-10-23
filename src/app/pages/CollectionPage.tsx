@@ -327,7 +327,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
     }
   };
 
-  const failureText = (m: string): string => (m.startsWith('not-found') ? t('collection.error.notFound') : m);
+  const failureText = (m: string): string => (m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);
 
   const run = async (sample: boolean): Promise<void> => {
     if (!spec) return;

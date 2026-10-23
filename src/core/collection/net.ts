@@ -124,11 +124,17 @@ export const BACKOFF = {
   retryAfterCapMs: 120_000,
 } as const;
 
+/**
+ * /api/csw lets one connection 20 requests a minute; a run asks at most once in 3.2 s (18.75 a minute), so its own pacing keeps it under
+ * that limit and a normal run never collects 429s. The server paces per catalogue host on top.
+ */
+export const CSW_PACE_MS = 3200;
+
 /** Minimum gap between the STARTS of two requests to one host (ms). DataCite: one a second; Zenodo guests: 30 a minute with a margin. */
 export const PACE_MS: Readonly<Record<string, number>> = {
   'api.datacite.org': 1000,
   'zenodo.org': 2100,
-  csw: 0, // the server paces per catalogue host
+  csw: CSW_PACE_MS,
 };
 
 export interface Stats {
@@ -199,6 +205,8 @@ export async function request(ctx: NetContext, host: string, call: () => Promise
       }
       return res!;
     }
+    // The server's daily budget for this connection is spent: waiting does not help within a run. The run stops, saved, and resumes later.
+    if (res?.status === 429 && res.proxyError === 'csw_daily_budget') throw new SourceFailure('throttled', 'csw_daily_budget', 429, host);
     if (verdict === 'not-found') throw new SourceFailure('not-found', 'http-404', 404, host);
     if (verdict === 'protocol') throw new SourceFailure('protocol', res!.proxyError ?? 'http', res!.status, host);
     if (res) reason = res.proxyError ?? `http-${res.status}`;

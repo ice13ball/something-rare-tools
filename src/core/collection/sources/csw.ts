@@ -9,7 +9,7 @@ import { parseIsoRecord } from '../../metadata/iso19115-3';
 import { NS, NS3, child, descendants, elementChildren, parseXml, text } from '../../metadata/xml';
 import type { MetadataRecord, MetadataSource } from '../../types';
 import type { CswSchema } from '../../../../config/catalogues';
-import { StopSignal, request } from '../net';
+import { CSW_PACE_MS, StopSignal, request } from '../net';
 import { SourceFailure, type Estimate, type Item, type Notice, type PageData, type Pager } from '../types';
 import { lookupMany, type Deps } from './datacite';
 import { splitCswPage, type SplitPage } from './cswsplit';
@@ -106,15 +106,16 @@ export async function cswMatched(deps: Deps, src: CswSource): Promise<number> {
   return matched;
 }
 
+/** The catalogue requests are paced at CSW_PACE_MS; the DataCite lookups of a page run inside that gap, so they add no time of their own. */
 export function estimateCsw(matched: number, sample: boolean, crossSource: boolean): Estimate {
   if (sample) {
     const requests = Math.min(CSW_SAMPLE_REQUESTS, Math.ceil(matched / CSW_SAMPLE_PAGE));
     const extra = crossSource ? requests : 0;
-    return { records: Math.min(matched, requests * CSW_SAMPLE_PAGE), requests, extraRequests: extra, seconds: (requests + extra) * 3.5, strategy: 'spread-positions', sample: true, empty: matched === 0 };
+    return { records: Math.min(matched, requests * CSW_SAMPLE_PAGE), requests, extraRequests: extra, seconds: (requests * CSW_PACE_MS) / 1000, strategy: 'spread-positions', sample: true, empty: matched === 0 };
   }
   const requests = Math.ceil(matched / CSW_PAGE);
   const extra = crossSource ? requests : 0;
-  return { records: matched, requests, extraRequests: extra, seconds: (requests + extra) * 3.5, strategy: 'start-position', sample: false, empty: matched === 0 };
+  return { records: matched, requests, extraRequests: extra, seconds: (requests * CSW_PACE_MS) / 1000, strategy: 'start-position', sample: false, empty: matched === 0 };
 }
 
 const identifierOf = (md: Element): string | undefined => {
