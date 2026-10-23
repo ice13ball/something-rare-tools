@@ -18,10 +18,14 @@ export function hasDataExtension(name: string): boolean {
   return DATA_EXTENSIONS.includes(extensionOf(name));
 }
 
-/** README, ReadMe.txt, 00_readme_v2.txt: a description of the deposit, never data (Michal, 24.10.2026: only the data are checked). */
+/**
+ * README, ReadMe.txt, 00_readme_v2.txt, README_EN.md: a description of the deposit, never data (Michal, 24.10.2026: only the data are
+ * checked). Only a name that is "readme" apart from a number prefix, a version or language suffix and the extension: "Data_and_README.xlsx"
+ * may hold the data and is read.
+ */
 export function isReadme(name: string): boolean {
-  const base = name.split('/').pop() ?? name;
-  return /(?:^|[\s._-])read[\s_-]?me(?:[\s._-]|$)/i.test(base);
+  const base = (name.split('/').pop() ?? name).replace(/\.[A-Za-z0-9]{1,5}$/, '');
+  return /^[\d\s._-]*read[\s_-]?me(?:[\s._-]*(?:v?\d+(?:\.\d+)*|[a-z]{2}))?$/i.test(base);
 }
 
 /** A file of a linked record that is read as data: a table extension, and not a README. */

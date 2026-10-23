@@ -6,7 +6,7 @@ import type { LicenceAnalysis } from './analyse';
 import type { MetadataRecord } from '../types';
 
 /** Why the licence part is left out. */
-export type LicenceOmitted = 'none' | 'several' | 'contradiction' | 'unrecognised';
+export type LicenceOmitted = 'none' | 'unreadable' | 'several' | 'contradiction' | 'unrecognised';
 
 export interface Attribution {
   /** The text to paste; '' when the sources hold nothing to cite. */
@@ -41,7 +41,8 @@ export function buildAttribution(a: LicenceAnalysis): Attribution {
   let omitted: LicenceOmitted | undefined;
   // DataCite saying nothing is not a contrary statement: the licence another record of the deposit states is still the licence.
   if (a.contradictions.some((c) => c.kind !== 'datacite-empty')) omitted = 'contradiction';
-  else if (ids.length === 0) omitted = 'none';
+  // Nothing recognised while a source could not be read: the licence could not be looked up, which is not "no source states one".
+  else if (ids.length === 0) omitted = a.hasUnreadable ? 'unreadable' : 'none';
   else if (ids.length > 1) omitted = 'several';
   else if (statements.some((s) => s.classification.kind !== 'spdx')) omitted = 'unrecognised';
   const info = omitted ? undefined : statements.find((s) => s.info)?.info;
