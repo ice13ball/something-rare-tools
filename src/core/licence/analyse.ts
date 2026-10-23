@@ -19,7 +19,7 @@ export interface AnalysedStatement {
   /** Open Definition sense (isOpenLicence); false when unrecognised. */
   open: boolean;
   /**
-   * A program could read it: a licence URI naming the id, the bare id as text, or an id with no free text at all.
+   * A program could read it: a licence URI naming the id, the bare id as text or as the identifier, or an id with no free text at all.
    * Prose that merely contains an id ("CC-BY 4.0") is not machine-readable.
    */
   machineReadable: boolean;
@@ -165,7 +165,7 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
   const id = classification.kind === 'spdx' ? classification.id : undefined;
   // Hand-built statements may carry only `spdx`; the URI reading is recomputed then.
   const uriId = s.uriSpdx ?? (s.uri ? spdxFromUri(s.uri) : undefined);
-  const machineReadable = !!id && ((!s.text && !s.uri) || (!!s.uri && uriId === id) || s.text?.trim().toLowerCase() === id.toLowerCase());
+  const machineReadable = !!id && ((!s.text && !s.uri) || (!!s.uri && uriId === id) || s.text?.trim().toLowerCase() === id.toLowerCase() || !!s.idExact);
   const out: AnalysedStatement = { statement: s, classification, open: isOpenLicence(id), machineReadable };
   const info = spdxInfo(id);
   if (info) out.info = info;

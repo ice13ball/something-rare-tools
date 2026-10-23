@@ -42,6 +42,8 @@ export interface LicenceStatement {
   leftover?: string;
   /** The licences the text itself reads as, when it reads as more than one (several ids, a versionless family, "—" = a name no id exists for). */
   readings?: string[];
+  /** Set with `spdx` when the SPDX id itself, whole and in any case, was given as the text or as the identifier ("agpl-3.0-or-later"): a program can read it. */
+  idExact?: true;
 }
 /** A statement classified: one SPDX id, or unrecognised (check manually). */
 export type LicenceClass = { kind: 'spdx'; id: string } | { kind: 'unrecognised' };

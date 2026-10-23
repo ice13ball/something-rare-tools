@@ -4,6 +4,7 @@
 // and the ONLY definition of "open" (isOpenLicence). The cross-source analysis lives in ../licence/analyse.ts.
 import type { LicenceClass, LicenceStatement, MetadataSource } from '../types';
 import { SPDX_ENTRIES, SPDX_LIST_VERSION } from './spdx-data';
+import { ZENODO_LICENCES } from './zenodo-licences';
 
 export { SPDX_LIST_VERSION };
 
@@ -120,6 +121,37 @@ function readSoftwareUri(u: string): Read | undefined {
   return undefined;
 }
 
+/* ---------- exact names: Zenodo's own licence titles and URLs, the SPDX ids ---------- */
+
+/**
+ * A whole string compared as a licence name: Unicode-compatible form, one space between words, no trailing punctuation, lower case.
+ * Used ONLY for an exact match of the whole text; it never reads a name inside longer text.
+ */
+const nameKey = (s: string): string => s.normalize('NFKC').replace(/\s+/g, ' ').trim().replace(/[.,;:]+$/u, '').trim().toLowerCase();
+
+/** Every SPDX id the tool knows, and the title Zenodo gives each of them (its rights text in DataCite), by exact whole string. */
+const EXACT_NAMES: ReadonlyMap<string, string> = (() => {
+  const m = new Map<string, string>();
+  for (const e of SPDX_ENTRIES) m.set(nameKey(e.id), e.id);
+  for (const z of ZENODO_LICENCES) if (INFO.has(z.id)) m.set(nameKey(z.title), z.id);
+  return m;
+})();
+
+/** The licence an exact whole-string name (an SPDX id in any case, or Zenodo's title for one) stands for. */
+export function exactLicenceName(text: string): string | undefined {
+  return EXACT_NAMES.get(nameKey(text));
+}
+
+/**
+ * Zenodo's licence URLs that name exactly ONE known id. A URL shared by several ids (the GNU pages serve -only and -or-later alike) is
+ * left out: it cannot decide alone, the text or the identifier has to say which. Compared as the whole link, lower case.
+ */
+const EXACT_URLS: ReadonlyMap<string, string> = (() => {
+  const byUrl = new Map<string, Set<string>>();
+  for (const z of ZENODO_LICENCES) if (INFO.has(z.id)) byUrl.set(z.url.trim().toLowerCase(), (byUrl.get(z.url.trim().toLowerCase()) ?? new Set()).add(z.id));
+  return new Map([...byUrl].filter(([, ids]) => ids.size === 1).map(([url, ids]) => [url, [...ids][0]]));
+})();
+
 function readUri(uri: string): Read {
   const u = uri.trim().toLowerCase();
   // https://creativecommons.org/licenses/by-nc-sa/4.0/{legalcode,deed.pl,pl/} — host, scheme, www, trailing parts are irrelevant.
@@ -151,7 +183,9 @@ function readUri(uri: string): Read {
   const nlod = /data\.norge\.no\/nlod\/(?:[a-z]{2}\/)?(\d)\.(\d)/.exec(u);
   if (nlod) return tailed(u, nlod, OTHER_TAIL, known(`NLOD-${nlod[1]}.${nlod[2]}`));
   if (/data\.norge\.no\/nlod/.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
-  return {};
+  // Last: a link no reader above knows, but which is exactly the one Zenodo lists for one known licence.
+  const exact = EXACT_URLS.get(u);
+  return exact ? { id: exact } : {};
 }
 
 /** The id a licence URI names, or undefined (unknown URI, a port or version SPDX has no id for). */
@@ -614,6 +648,9 @@ const NAME_WORDS: { re: RegExp; idPrefix: string }[] = [
 
 function readText(raw: string): TextRead {
   const out: TextRead = { ids: [], families: [], unmapped: false, recognised: false, leftover: '', restricted: false, any: false, neutral: false, pd: false };
+  // The whole text is exactly a licence name (an SPDX id, or the title Zenodo gives a licence): that name, fully consumed, nothing left over.
+  const exact = exactLicenceName(raw);
+  if (exact) return { ...out, ids: [exact], recognised: true, any: true };
   let pdLink = false;
   // Links and DOIs are blanked (same length, so positions stay aligned with `raw`). A licence link is a licence name like any other;
   // every other link or DOI is kept aside and shown as leftover.
@@ -745,7 +782,12 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
     s.leftover = [...new Set(flagged.map((r) => r.leftover))].join('; ');
   } else {
     const agreed = textId ?? u.id;
-    if (agreed) s.spdx = agreed;
+    if (agreed) {
+      s.spdx = agreed;
+      // The id itself as the text or as the identifier (Zenodo's rightsIdentifier): machine-readable whatever the free text beside it says.
+      // Recorded only where it adds something: a link naming the id, or the id as the shown text, already make the statement readable.
+      if (u.id !== agreed && nameKey(s.text ?? '') !== nameKey(agreed) && texts.some((t) => nameKey(t) === nameKey(agreed))) s.idExact = true;
+    }
   }
   return s;
 }
