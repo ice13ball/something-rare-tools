@@ -15,7 +15,11 @@ export const FIX_LIST_COLUMNS = ['record', 'field', 'rule_id', 'severity', 'prob
 /** Findings of one record. Only a 'checked' record is looked at; an unread one has no finding, whatever it lacks. */
 export function evaluateItem(item: Item): Finding[] {
   if (item.state !== 'checked' || item.records.length === 0) return [];
-  return checkLicence(item.records, { label: item.ref, inaccessible: false, unreadable: item.unreadable });
+  // A failed DataCite comparison is not an unread record: the catalogue record WAS read, so whether it states a licence is judged on it
+  // alone (LIC-MISSING, with a note that DataCite was not compared). Any other unreadable source still makes absence say nothing.
+  const notCompared = item.unreadable?.includes('datacite') ?? false;
+  const unreadable = item.unreadable?.filter((s) => s !== 'datacite');
+  return checkLicence(item.records, { label: item.ref, inaccessible: false, unreadable, dataciteNotCompared: notCompared });
 }
 
 const clip = (s: string, n = 300): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);

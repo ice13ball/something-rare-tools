@@ -53,14 +53,14 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
  */
 export function checkLicence(
   records: MetadataRecord[],
-  ctx: { label: string; inaccessible: boolean; unreadable?: readonly MetadataSource[] },
+  ctx: { label: string; inaccessible: boolean; unreadable?: readonly MetadataSource[]; dataciteNotCompared?: boolean },
 ): Finding[] {
   const file = ctx.label;
   const out: Finding[] = [];
   const a = analyseLicences(records, { unreadable: ctx.unreadable, inaccessible: ctx.inaccessible });
 
   // A record that could not be read says nothing about a licence: IN-RECORD-INACCESSIBLE already reports it.
-  if (a.missing) out.push(makeFinding('LIC-MISSING', { file }));
+  if (a.missing) out.push(makeFinding('LIC-MISSING', { file, ...(ctx.dataciteNotCompared ? { params: { dataciteCompared: 'no' } } : {}) }));
 
   // Free text only: nothing machine-readable. One finding per record, not per source.
   if (a.freeText) {

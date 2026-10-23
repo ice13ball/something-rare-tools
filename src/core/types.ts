@@ -135,6 +135,8 @@ export interface RuleDef {
   plain: Record<Lang, string>;   // template with {param} placeholders
   /** Wordings for other classes of the `status` param (IN-RECORD-INACCESSIBLE): `plain` stays the 403/404 one. */
   plainByStatus?: { server: Record<Lang, string>; other: Record<Lang, string> };
+  /** LIC-MISSING of a catalogue record whose DataCite comparison could not be made (param dataciteCompared = 'no'): the same finding, with a note. */
+  plainDataciteNotCompared?: Record<Lang, string>;
   technical: string;             // English, template with {param}
   thresholds?: Threshold[];
   citations?: Citation[];
