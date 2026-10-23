@@ -64,18 +64,34 @@ function itemsOf(json: Obj): Item[] {
   return data.map((d) => {
     const attrs = isObj(d.attributes) ? d.attributes : {};
     const doi = (typeof attrs.doi === 'string' && attrs.doi) || (typeof d.id === 'string' ? d.id : '');
-    const rec = parseDataciteJson(d, `DataCite ${doi}`);
-    return { ref: doi.toLowerCase(), state: 'checked' as const, records: [rec] };
+    try {
+      return { ref: doi.toLowerCase(), state: 'checked' as const, records: [parseDataciteJson(d, `DataCite ${doi}`)] };
+    } catch {
+      // One record that cannot be parsed is a record that was not read, not the end of a run of thousands (only a page that is no JSON at all is a page failure).
+      return { ref: doi.toLowerCase(), state: 'unsupported-profile' as const, records: [], reason: UNREADABLE_RECORD };
+    }
   });
 }
 
+/** Reason of a record the source delivered but this tool could not parse. */
+export const UNREADABLE_RECORD = 'unreadable-record';
+
 /** DataCite records of up to 100 DOIs; a DOI DataCite does not know is simply absent from the map (keys lower-case). */
 export async function lookupMany(deps: Deps, dois: readonly string[]): Promise<Map<string, MetadataRecord>> {
-  const out = new Map<string, MetadataRecord>();
-  if (dois.length === 0) return out;
+  return (await lookupManyRead(deps, dois)).found;
+}
+
+/** Like lookupMany, and also says which DOIs DataCite DID answer with a record this tool could not parse (not the same as "DataCite does not know it"). */
+export async function lookupManyRead(deps: Deps, dois: readonly string[]): Promise<{ found: Map<string, MetadataRecord>; unreadable: Set<string> }> {
+  const found = new Map<string, MetadataRecord>();
+  const unreadable = new Set<string>();
+  if (dois.length === 0) return { found, unreadable };
   const json = await getJson(deps, dataciteIdsUrl(dois));
-  for (const it of itemsOf(json)) out.set(it.ref, it.records[0]);
-  return out;
+  for (const it of itemsOf(json)) {
+    if (it.state === 'checked') found.set(it.ref, it.records[0]);
+    else unreadable.add(it.ref);
+  }
+  return { found, unreadable };
 }
 
 export async function dataciteTotal(deps: Deps, by: 'client' | 'prefix', id: string): Promise<number> {

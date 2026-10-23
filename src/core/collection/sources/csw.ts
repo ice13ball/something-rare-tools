@@ -11,7 +11,7 @@ import type { MetadataRecord, MetadataSource } from '../../types';
 import type { CswSchema } from '../../../../config/catalogues';
 import { CSW_PACE_MS, CSW_SLOW, CSW_TOO_LARGE, StopSignal, request } from '../net';
 import { SourceFailure, type Estimate, type Item, type Notice, type PageData, type Pager } from '../types';
-import { lookupMany, type Deps } from './datacite';
+import { lookupManyRead, type Deps } from './datacite';
 import { splitCswPage, type SplitPage } from './cswsplit';
 
 export const CSW_PAGE = 25;
@@ -221,8 +221,9 @@ async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageDa
   const none = noDoi > 0 ? { noDoi } : {};
   if (byDoi.size === 0) return none;
   let found: Map<string, MetadataRecord>;
+  let unreadable: Set<string>;
   try {
-    found = await lookupMany(deps, [...byDoi.keys()]);
+    ({ found, unreadable } = await lookupManyRead(deps, [...byDoi.keys()]));
   } catch (e) {
     // The comparison is optional: whatever goes wrong with it (DataCite down or answering HTML, an unreadable answer, a bug in parsing it)
     // leaves these records checked on their ISO record alone and says so. Only the visitor's own stop passes through.
@@ -236,13 +237,19 @@ async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageDa
     return { looked: byDoi.size, failed: byDoi.size, notCompared: n, ...none };
   }
   let hit = 0;
+  let notCompared = 0;
   for (const [doi, list] of byDoi) {
     const rec = found.get(doi);
-    if (!rec) continue;
+    if (!rec) {
+      // DataCite answered with a record this tool cannot parse: the comparison failed for it, which is not "DataCite does not know it"
+      if (unreadable.has(doi)) for (const it of list) { it.unreadable = ['datacite' as MetadataSource]; notCompared += 1; }
+      continue;
+    }
     hit += 1;
     for (const it of list) it.records.push(rec);
   }
-  return { looked: byDoi.size, found: hit, absent: byDoi.size - hit, ...none };
+  const failed = [...byDoi.keys()].filter((d) => unreadable.has(d) && !found.has(d)).length;
+  return { looked: byDoi.size, found: hit, absent: byDoi.size - hit - failed, ...(failed > 0 ? { failed, notCompared } : {}), ...none };
 }
 
 interface PageRead {

@@ -6,7 +6,7 @@
 import { parseZenodoRecord } from '../../metadata/zenodo';
 import { request } from '../net';
 import { SourceFailure, type Estimate, type Item, type PageData, type Pager } from '../types';
-import type { Deps } from './datacite';
+import { UNREADABLE_RECORD, type Deps } from './datacite';
 import { addIds, decodeIds, encodeIds, hasId, idOf } from './idset';
 
 export const ZENODO_HOST = 'zenodo.org';
@@ -204,8 +204,13 @@ function itemsOf(json: Obj): { item: Item; id?: number }[] {
   const hits = isObj(json.hits) && Array.isArray(json.hits.hits) ? json.hits.hits.filter(isObj) : [];
   return hits.map((h) => {
     const id = typeof h.id === 'number' || typeof h.id === 'string' ? String(h.id) : '';
-    const rec = parseZenodoRecord(h, `Zenodo ${id}`);
-    return { item: { ref: (rec.doi ?? `zenodo.${id}`).toLowerCase(), state: 'checked' as const, records: [rec] }, id: idOf(h.id) };
+    try {
+      const rec = parseZenodoRecord(h, `Zenodo ${id}`);
+      return { item: { ref: (rec.doi ?? `zenodo.${id}`).toLowerCase(), state: 'checked' as const, records: [rec] }, id: idOf(h.id) };
+    } catch {
+      // One record that cannot be parsed is a record that was not read; the run goes on.
+      return { item: { ref: (typeof h.doi === 'string' && h.doi ? h.doi : `zenodo.${id}`).toLowerCase(), state: 'unsupported-profile' as const, records: [], reason: UNREADABLE_RECORD }, id: idOf(h.id) };
+    }
   });
 }
 

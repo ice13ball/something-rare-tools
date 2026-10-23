@@ -234,7 +234,7 @@ function UnreadList({ engine }: { engine: CollectionEngine }): React.ReactElemen
     if (open) void engine.unread().then(setRows, () => setRows([]));
   }, [engine, open]);
   const reasonText = (reason: string): string =>
-    ['not-found-at-datacite', 'not-disseminated', 'unreadable-xml', 'unsupported-profile', 'check-failed'].includes(reason) ? t(`collection.reason.${reason}` as never) : t('collection.reason.other', { reason });
+    ['not-found-at-datacite', 'not-disseminated', 'unreadable-xml', 'unsupported-profile', 'check-failed', 'unreadable-record'].includes(reason) ? t(`collection.reason.${reason}` as never) : t('collection.reason.other', { reason });
   const stateText = (s: UnreadSample['state']): string => t(`collection.unreadState.${s}` as never);
   const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
   return (
