@@ -32,6 +32,7 @@ export function LoadProblems({ findings, mode, onSwitchToServer }: LoadProblemsP
         {list.map((f, i) => (
           <li key={i + f.ruleId + (f.file ?? '')}>
             <p>{renderPlain(f, lang)}</p>
+            {(f.ruleId === 'IN-FILE-HELD-BACK' || f.ruleId === 'IN-FILE-TOO-LARGE') && f.file && <p className="muted">{f.file}</p>}
             {f.ruleId === 'IN-FETCH-BLOCKED' && typeof f.params.host === 'string' && (
               <p className="muted">
                 {t('blocked.host', { host: f.params.host })}
