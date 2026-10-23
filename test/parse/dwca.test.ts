@@ -358,3 +358,31 @@ describe('dispatch and the worker', () => {
     expect(report.findings.map((x) => [x.ruleId, x.severity])).toEqual([['IN-DWCA-UNSUPPORTED-CORE', 'error']]);
   });
 });
+
+describe('Darwin Core Archive, a hostile meta.xml cannot widen the table', () => {
+  const withCore = (inner: string) =>
+    metaXml({ fields: FIELDS }).replace('</core>', `${inner}</core>`);
+  it('tens of thousands of default fields (the most a 5 MB meta.xml holds) are refused quickly, as an invalid meta.xml', async () => {
+    const m = withCore(Array.from({ length: 30_000 }, (_, i) => `<field default="x" term="http://rs.tdwg.org/dwc/terms/t${i}"/>`).join(''));
+    const t0 = performance.now();
+    const f = await read(dwca([HEADER, ROWS[0]!].join('\n'), [], m));
+    expect(ids(f)).toEqual(['IN-DWCA-UNREADABLE']);
+    expect(f.findings[0]!.params.reason).toBe('DWCA-META-INVALID');
+    expect(f.sheets).toEqual([]);
+    expect(performance.now() - t0).toBeLessThan(2000);
+  });
+  it('a field index of 10 000 000 is refused before a header of that width exists', async () => {
+    const m = withCore('<field index="10000000" term="http://rs.tdwg.org/dwc/terms/country"/>');
+    const t0 = performance.now();
+    const f = await read(dwca([HEADER, ROWS[0]!].join('\n'), [], m));
+    expect(f.findings[0]!.params.reason).toBe('DWCA-META-INVALID');
+    expect(performance.now() - t0).toBeLessThan(2000);
+  });
+  it('a few defaults and a normal width still work; 1000 columns with defaults over the cap do not', async () => {
+    const ok = withCore('<field default="a" term="http://rs.tdwg.org/dwc/terms/country"/>'.repeat(3));
+    const f = await read(dwca([HEADER, ROWS[0]!].join('\n'), [], ok));
+    expect(f.sheets[0]!.header.slice(-3)).toEqual(['country', 'country_2', 'country_3']);
+    const wide = withCore('<field index="999" term="http://rs.tdwg.org/dwc/terms/country"/><field default="a" term="http://rs.tdwg.org/dwc/terms/year"/>');
+    expect((await read(dwca(HEADER, [], wide))).findings[0]!.params.reason).toBe('DWCA-META-INVALID');
+  });
+});
