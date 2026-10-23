@@ -200,6 +200,8 @@ describe('CollectionPage: inputs and estimate', () => {
       expect(text, lang).toMatch(expected[lang].advice);
       expect(text, lang).not.toMatch(/\{\w+\}|\b(OK|valid|allowed)\b/i);
       expect(screen.getByTestId('sample-first')).toBeTruthy();
+      expect(text, lang).toMatch(/209/);
+      expect(text, lang).toMatch({ en: /at least about 209/, pl: /co najmniej około 209/, de: /mindestens etwa 209/, fr: /au moins environ 209/ }[lang]!);
       cleanup();
     }
     setLang('en');
