@@ -7,18 +7,20 @@
  *   0      no claim (the coastal band, uncertain)
  *   1      sea, at least COAST_BUFFER_KM km from land or a lake
  *   2 + i  land or an inland lake, at least bucketKm[i] km from the sea (a marine record in a lake is as misplaced as one on land)
- * The grid ships gzip-compressed (about 0.26 MB) and is loaded only when a dataset has positions.
+ * The grid ships gzip-compressed (about 0.45 MB) and is loaded only when a dataset has positions.
  */
 
 export const LAND_SOURCE = 'Natural Earth 1:10m (public domain)';
 /** The coastal band, km, in which the grid calls nothing land or sea (scripts/land-mask.py BUFFER_KM). */
 export const COAST_BUFFER_KM = 5;
 /**
- * ROW-ON-LAND only speaks about positions at least this far inside. Measured on real data: with 5 km, inner Svalbard fjords
- * (glaciers retreated since the coastline was drawn) and estuaries that Natural Earth draws as land (CoastDOM v1, PANGAEA
- * 964012: 1 249 rows) were flagged; at 20 km those are gone, and gross errors (a wrong sign, swapped axes) lie far beyond.
+ * ROW-ON-LAND only speaks about positions at least this far inside. Measured on real data (23.10.2026):
+ * - at 5 km, inner Svalbard fjords (glaciers retreated since the coastline was drawn) were called land;
+ * - at 20 km, 40 rows of CoastDOM v1 (PANGAEA 964012) on rivers Natural Earth does not draw (Tyne, Clarence, Hawkesbury...);
+ * - at 50 km, with river and canal corridors blanked, only 2 CoastDOM rows remain ("Baltic Sea" placed 50 km inland), and on
+ *   ChEssBase 92 of OBIS's 95 ON_LAND records are found (the 3 others are 5-50 km inland or beside a river).
  */
-export const ON_LAND_MIN_KM = 20;
+export const ON_LAND_MIN_KM = 50;
 
 export type Place = { kind: 'land'; atLeastKm: number } | { kind: 'sea' } | { kind: 'unknown' };
 

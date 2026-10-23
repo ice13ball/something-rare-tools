@@ -213,16 +213,24 @@ const firstLine = (p: Pos): number => Math.min(...p.rows.map((r) => r.line));
  * (docs/research/qc-sources.md, item 6); 10 km is a stated choice, far above the position error of a ship on station
  * (satellite navigation, drift during a cast) and below the size at which a name usually stands for an area. A note,
  * not a warning: transects, cruises and named areas legitimately span more. Names that say they are general or unknown
- * are skipped. At most MAX_SPREAD_POSITIONS positions, spread evenly over the station's rows, are compared, so a long
- * track stays cheap (the distance may then be a little short of the true widest, never longer).
+ * are skipped, and so are positions with latitude = longitude (ROW-LAT-EQ-LON reports those). At most MAX_SPREAD_POSITIONS
+ * positions are compared (an even sample plus the extremes), so a long track stays cheap; the distance may then be a little
+ * short of the true widest, never longer. Beyond FAR_KM the text adds that one position is almost certainly wrong.
  */
 const SPREAD_KM = 10;
+const FAR_KM = 1000;
 const MAX_SPREAD_POSITIONS = 200;
 const GENERIC_STATION = /\((general|unknown|various)\)|^(general|unknown|n\/?a|none|various|multiple|several|misc(ellaneous)?|other|not recorded|-+|\?+)$/i;
 
 function widest(positions: readonly Pos[]): number {
   const n = positions.length;
-  const ps = n <= MAX_SPREAD_POSITIONS ? positions : Array.from({ length: MAX_SPREAD_POSITIONS }, (_, i) => positions[Math.floor((i * (n - 1)) / (MAX_SPREAD_POSITIONS - 1))]);
+  let ps: readonly Pos[] = positions;
+  if (n > MAX_SPREAD_POSITIONS) {
+    // an even sample plus the four extreme positions, so a single far outlier is never sampled away
+    const by = (f: (p: Pos) => number, max: boolean) => positions.reduce((a, b) => ((max ? f(b) > f(a) : f(b) < f(a)) ? b : a));
+    const extremes = [by((p) => p.lat, false), by((p) => p.lat, true), by((p) => p.lon, false), by((p) => p.lon, true)];
+    ps = [...new Set([...extremes, ...Array.from({ length: MAX_SPREAD_POSITIONS - 4 }, (_, i) => positions[Math.floor((i * (n - 1)) / (MAX_SPREAD_POSITIONS - 5))])])];
+  }
   let best = 0;
   for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) best = Math.max(best, km(ps[i].lat, ps[i].lon, ps[j].lat, ps[j].lon));
   return best;
@@ -258,11 +266,15 @@ function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[
     }
     if (involved.size === 0) {
       if (GENERIC_STATION.test(station.trim())) continue;
-      const spread = widest(positions);
+      const real = positions.filter((p) => p.lat !== p.lon);
+      if (real.length < 2) continue;
+      const spread = widest(real);
       if (spread <= SPREAD_KM) continue;
-      const shown = positions.slice(0, MAX_DATES + 2);
-      const text = shown.map(positionText).join('; ') + (positions.length > shown.length ? `; …+${positions.length - shown.length}` : '');
-      out.push(makeFinding('ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params: { station, km: Math.round(spread), positions: text } }));
+      const shown = real.slice(0, MAX_DATES + 2);
+      const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
+      const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
+      if (spread > FAR_KM) params.far = 'yes';
+      out.push(makeFinding('ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
       continue;
     }
     const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
@@ -278,7 +290,8 @@ function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[
 const MAX_PLACES = 5;
 
 const coord = (v: number, dec: number, pos: string, neg: string): string => `${fmt(Math.abs(v), dec)} ${v < 0 ? neg : pos}`;
-const place = (lat: number, lon: number, latDec: number, lonDec: number): string => `${coord(lat, latDec, 'N', 'S')}, ${coord(lon, lonDec, 'E', 'W')}`;
+// longitude first, as positionText writes positions in the station findings of the same report
+const place = (lat: number, lon: number, latDec: number, lonDec: number): string => `${coord(lon, lonDec, 'E', 'W')}, ${coord(lat, latDec, 'N', 'S')}`;
 
 /*
  * A marine position on land or in an inland lake, at least ON_LAND_MIN_KM inside (src/core/geo/land.ts). Positions nearer

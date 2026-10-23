@@ -116,6 +116,18 @@ describe('ISO 8601 interval dates', () => {
     expect(parseDate('2008/2009', opts)).toMatchObject({ iso: '2008', precision: 'year' });
     expect(parseDate('2008-05-01T10:00Z/2008-05-01T11:00Z', opts)).toMatchObject({ iso: '2008-05-01T10:00Z', precision: 'minute', tz: 'utc' });
   });
+  it('reads the reduced end forms of ISO 8601 (the Darwin Core examples)', () => {
+    expect(parseDate('2007-11-13/15', opts)).toMatchObject({ iso: '2007-11-13', precision: 'day' });
+    expect(parseDate('2007-11-13/12-02', opts)).toMatchObject({ iso: '2007-11-13', precision: 'day' });
+    expect(parseDate('2008-05-01T10:00Z/11:00Z', opts)).toMatchObject({ iso: '2008-05-01T10:00Z', precision: 'minute' });
+  });
+  it('is unparseable when the end comes before the start, or a reduced end does not fit', () => {
+    expect('error' in parseDate('2009/2008', opts)).toBe(true);
+    expect('error' in parseDate('2008-05-14/2008-05-01', opts)).toBe(true);
+    expect('error' in parseDate('2007-11-13/10', opts)).toBe(true);
+    expect('error' in parseDate('2007-11-13/32', opts)).toBe(true);
+    expect('error' in parseDate('2008/15', opts)).toBe(true);
+  });
   it('is unparseable when a half does not parse', () => {
     expect('error' in parseDate('2008-05-01/garbage', opts)).toBe(true);
     expect('error' in parseDate('2008-13-01/2008-14-01', opts)).toBe(true);
