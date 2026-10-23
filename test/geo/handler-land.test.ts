@@ -28,11 +28,21 @@ describe('check worker and the land mask', () => {
     let loads = 0;
     const h = createHandler({ land: () => (loads++, realLoader()) });
     await session(h);
-    expect(loads).toBe(1); // started by the proposal (lat and lon proposed)
+    expect(loads).toBe(1); // started at parse (lat and lon proposed)
     const [a, b] = await Promise.all([check(h), check(h)]);
     expect(loads).toBe(1);
     expect(onLand(a)).toHaveLength(1);
     expect(onLand(b)[0].lines).toEqual([2]);
+  });
+
+  it('the parse alone starts the download when latitude and longitude are proposed, and not otherwise', async () => {
+    let loads = 0;
+    const h = createHandler({ land: () => (loads++, realLoader()) });
+    h.handle({ type: 'parse', files: [{ name: 'a.csv', bytes: new TextEncoder().encode(CSV), source: 'dropped' }], records: [], extraFindings: [] });
+    expect(loads).toBe(1);
+    const h2 = createHandler({ land: () => (loads++, realLoader()) });
+    h2.handle({ type: 'parse', files: [{ name: 'b.csv', bytes: new TextEncoder().encode('station,temp\nA,4.5\n'), source: 'dropped' }], records: [], extraFindings: [] });
+    expect(loads).toBe(1);
   });
 
   it('a failed load is reported as not checked, and the next check tries again', async () => {

@@ -323,6 +323,7 @@ These numbers are the tool's own choices, stated in the rule texts. No citable s
     - at 5 km, inner Svalbard fjords (IO PAN) were called land;
     - at 20 km, 40 CoastDOM v1 rows on small rivers that Natural Earth does not draw were still called land;
     - at 50 km, CoastDOM keeps 2 rows ("Baltic Sea" placed 50 km inland), and ChEssBase finds 92 of OBIS's 95 ON_LAND records. The other 3 are 5–50 km inland or beside a river. The 5 records only this rule finds are among those OBIS dropped.
+  - Trade-off: no position on an island less than about 100 km across (Hawaii's Big Island, Crete, Puerto Rico) can be called land, and river corridors make no claim within 200 km of the sea (a gross error beyond that is still found).
   - OpenStreetMap land polygons (what OBIS uses) are finer, but they are ODbL: attribution plus share-alike on a derived grid, and a source about 1 000 times larger. At a 50 km band the resolution gains nothing, so we use Natural Earth.
 - **ROW-STATION-MOVED, sign pattern.** It applies when the two positions are, as written, ≥ 100 km apart, and, with one sign flipped, ≤ 50 km apart and ≥ 10 times closer. Menez Gwen (ChEssBase): 5 423 km as written, 1.2 km once flipped.
 - **ROW-STATION-SPREAD.** It applies to a station whose positions are more than 10 km apart (note level). This is far above a ship's position error on station and below the size of a named area. Item 6 above still holds: there is no published tolerance.

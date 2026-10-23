@@ -41,6 +41,7 @@ const PAGE_404 = `<!doctype html>
     <p lang="de">Seite nicht gefunden</p>
     <p lang="fr">Page introuvable</p>
     <p><a href="/">/</a></p>
+    <p><a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a></p>
   </body>
 </html>
 `;
