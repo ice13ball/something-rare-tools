@@ -182,7 +182,7 @@ describe('CheckPage flow', () => {
 
   it('an unknown link says to download the file and drop it here, in all four languages', async () => {
     const texts: Record<string, RegExp> = {
-      en: /not a Zenodo, GeoNetwork, PANGAEA, GBIF or OBIS record or a DOI\. Download the file and drop it here\./,
+      en: /not a Zenodo, GeoNetwork, PANGAEA, Dataverse \(RepOD\), GBIF or OBIS record or a DOI\. Download the file and drop it here\./,
       pl: /Ten link nie jest rekordem Zenodo/,
       de: /Dieser Link ist kein Zenodo/,
       fr: /Ce lien n'est ni une fiche Zenodo/,

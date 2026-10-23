@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Turns whatever the user pasted into a typed record reference. Pure string work, no network.
+import { isDataverseHost } from '../../../config/dataverse';
+
 /** A GBIF dataset: by its DOI (10.15468/…) or by its registry key (the UUID of gbif.org/dataset/{key}). */
 export type GbifRef = { doi: string } | { key: string };
 
 export type ResolvedInput =
+  | { kind: 'dataverse'; host: string; pid: string }
   | { kind: 'zenodo'; id: string }
   | { kind: 'geonetwork'; host: string; uuid: string }
   | { kind: 'doi'; doi: string }
@@ -19,6 +22,8 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const UUID_ONLY = new RegExp(`^${UUID}$`, 'i');
 const UUID_IN = new RegExp(UUID, 'i');
 const DOI_ONLY = /^10\.\d{4,9}\/\S+$/;
+/** A Dataverse persistent id as the installations write it: doi:10.18150/C45FCC (hdl: and perma: exist too). Case is kept: the ids are case-sensitive. */
+const DATAVERSE_PID = /^(?:doi|hdl|perma):\S+$/i;
 const PANGAEA_PATH = /^\/10\.1594\/PANGAEA\.(\d+)\/?$/i;
 
 /** Quotes, angle brackets, brackets and sentence punctuation around a pasted value. */
@@ -89,6 +94,13 @@ export function resolveInput(text: string): ResolvedInput {
   if (host === 'doi.pangaea.de') {
     const m = PANGAEA_PATH.exec(path);
     return m ? { kind: 'pangaea', id: m[1]! } : { kind: 'unknown' };
+  }
+  // A dataset page of a listed Dataverse installation: /dataset.xhtml?persistentId=doi:... (or /citation?, the DataCite landing page).
+  // A host that is not listed is never a Dataverse here: the link stays unknown and the user is asked to download and drop.
+  if (isDataverseHost(host) && u.protocol === 'https:') {
+    const pid = u.searchParams.get('persistentId')?.trim();
+    if (/^\/(?:dataset\.xhtml|citation)\/?$/.test(path) && pid && DATAVERSE_PID.test(pid)) return { kind: 'dataverse', host, pid };
+    return { kind: 'unknown' };
   }
   // GeoNetwork: a UUID in the path or in the hash route of a catalogue URL.
   if (/(^|\/)geonetwork(\/|$)|\/srv\//i.test(path)) {

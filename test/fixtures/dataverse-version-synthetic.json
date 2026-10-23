@@ -1,0 +1,230 @@
+{
+  "status": "OK",
+  "data": {
+    "id": 7001,
+    "versionNumber": 2,
+    "versionMinorNumber": 0,
+    "versionState": "RELEASED",
+    "releaseTime": "2025-03-02T10:00:00Z",
+    "metadataBlocks": {
+      "citation": {
+        "displayName": "Citation Metadata",
+        "fields": [
+          {
+            "typeName": "title",
+            "multiple": false,
+            "typeClass": "primitive",
+            "value": "Synthetic fjord temperature series"
+          },
+          {
+            "typeName": "author",
+            "multiple": true,
+            "typeClass": "compound",
+            "value": [
+              {
+                "authorName": {
+                  "typeName": "authorName",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "Nowak, Anna"
+                },
+                "authorAffiliation": {
+                  "typeName": "authorAffiliation",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "Invented Institute"
+                }
+              }
+            ]
+          },
+          {
+            "typeName": "dsDescription",
+            "multiple": true,
+            "typeClass": "compound",
+            "value": [
+              {
+                "dsDescriptionValue": {
+                  "typeName": "dsDescriptionValue",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "<p>Invented CTD casts in an invented fjord.</p>"
+                }
+              }
+            ]
+          },
+          {
+            "typeName": "timePeriodCovered",
+            "multiple": true,
+            "typeClass": "compound",
+            "value": [
+              {
+                "timePeriodCoveredStart": {
+                  "typeName": "timePeriodCoveredStart",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "2021-06-01"
+                },
+                "timePeriodCoveredEnd": {
+                  "typeName": "timePeriodCoveredEnd",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "2021-08-31"
+                }
+              }
+            ]
+          },
+          {
+            "typeName": "dateOfCollection",
+            "multiple": true,
+            "typeClass": "compound",
+            "value": [
+              {
+                "dateOfCollectionStart": {
+                  "typeName": "dateOfCollectionStart",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "2020"
+                },
+                "dateOfCollectionEnd": {
+                  "typeName": "dateOfCollectionEnd",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "2022"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "geospatial": {
+        "displayName": "Geospatial Metadata",
+        "fields": [
+          {
+            "typeName": "geographicBoundingBox",
+            "multiple": true,
+            "typeClass": "compound",
+            "value": [
+              {
+                "westLongitude": {
+                  "typeName": "westLongitude",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "14.0"
+                },
+                "eastLongitude": {
+                  "typeName": "eastLongitude",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "16.5"
+                },
+                "northLatitude": {
+                  "typeName": "northLatitude",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "78.5"
+                },
+                "southLatitude": {
+                  "typeName": "southLatitude",
+                  "multiple": false,
+                  "typeClass": "primitive",
+                  "value": "76.5"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "files": [
+      {
+        "label": "ctd_stations.tab",
+        "restricted": false,
+        "version": 1,
+        "dataFile": {
+          "id": 9001,
+          "filename": "ctd_stations.tab",
+          "contentType": "text/tab-separated-values",
+          "filesize": 14000,
+          "originalFileFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "originalFormatLabel": "MS Excel (XLSX)",
+          "originalFileSize": 18000,
+          "originalFileName": "ctd_stations.xlsx"
+        },
+        "licenseName": "CC BY Creative Commons Attribution License 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "termsOfUseType": "LICENSE_BASED"
+      },
+      {
+        "label": "bottle.csv",
+        "restricted": false,
+        "version": 1,
+        "dataFile": {
+          "id": 9002,
+          "filename": "bottle.csv",
+          "contentType": "text/csv",
+          "filesize": 2000
+        },
+        "licenseName": "CC BY Creative Commons Attribution License 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "termsOfUseType": "LICENSE_BASED"
+      },
+      {
+        "label": "survey_spss.tab",
+        "restricted": false,
+        "version": 1,
+        "dataFile": {
+          "id": 9003,
+          "filename": "survey_spss.tab",
+          "contentType": "text/tab-separated-values",
+          "filesize": 5000,
+          "originalFileFormat": "application/x-spss-sav",
+          "originalFormatLabel": "SPSS Statistical Package"
+        },
+        "licenseName": "CC BY Creative Commons Attribution License 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "termsOfUseType": "LICENSE_BASED"
+      },
+      {
+        "label": "restricted_run.tab",
+        "restricted": true,
+        "version": 1,
+        "dataFile": {
+          "id": 9004,
+          "filename": "restricted_run.tab",
+          "contentType": "text/tab-separated-values",
+          "filesize": 3000
+        },
+        "termsOfUseType": "RESTRICTED",
+        "accessConditions": "ACADEMIC_PURPOSE_AND_NOT_FOR_REDISTRIBUTION"
+      },
+      {
+        "label": "huge.csv",
+        "restricted": false,
+        "version": 1,
+        "dataFile": {
+          "id": 9005,
+          "filename": "huge.csv",
+          "contentType": "text/csv",
+          "filesize": 41943040
+        },
+        "licenseName": "CC BY Creative Commons Attribution License 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "termsOfUseType": "LICENSE_BASED"
+      },
+      {
+        "label": "report.pdf",
+        "restricted": false,
+        "version": 1,
+        "dataFile": {
+          "id": 9006,
+          "filename": "report.pdf",
+          "contentType": "application/pdf",
+          "filesize": 9000
+        },
+        "licenseName": "CC BY Creative Commons Attribution License 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "termsOfUseType": "LICENSE_BASED"
+      }
+    ]
+  }
+}

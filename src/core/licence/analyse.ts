@@ -189,8 +189,8 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
 /** MD_RestrictionCode `license` is the normal ISO way to say "a licence applies", so it cannot contradict a CC licence. */
 const isConflictingCode = (code: string): boolean => code !== 'license' && isRestrictiveCode(code);
 
-/** Entries the publisher repeated on purpose (DataCite rightsList, Zenodo rights): several of them are dual licensing. */
-const isRepeatedEntry = (s: LicenceStatement): boolean => /^(?:rightsList|rights)\[\d+\]$/.test(s.field);
+/** Entries the publisher repeated on purpose (DataCite rightsList, Zenodo rights, the licences a Dataverse states per file): several of them are dual licensing. */
+const isRepeatedEntry = (s: LicenceStatement): boolean => /^(?:rightsList|rights|files\.license)\[\d+\]$/.test(s.field);
 
 /** Different licences in one source outside repeated entries (two ISO fields, two otherConstraints): they contradict each other. */
 const ownLicences = (src: AnalysedSource): string[] => [

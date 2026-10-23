@@ -28,7 +28,7 @@ const defaultClipboard = (text: string): Promise<void> => {
 };
 
 /** Proper names of the metadata sources; they are not translated. */
-const SOURCE_NAME: Record<MetadataSource, string> = { iso19139: 'GeoNetwork (ISO)', datacite: 'DataCite', zenodo: 'Zenodo', pangaea: 'PANGAEA' };
+const SOURCE_NAME: Record<MetadataSource, string> = { iso19139: 'GeoNetwork (ISO)', datacite: 'DataCite', zenodo: 'Zenodo', pangaea: 'PANGAEA', dataverse: 'Dataverse' };
 
 /** The data-file wording of /check does not apply here: this page reads metadata records only. */
 const MODE_TEXTS: Partial<ModeTexts> = {

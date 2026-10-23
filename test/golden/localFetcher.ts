@@ -26,6 +26,7 @@ export const decode = (s: string): string => {
 
 const DATACITE = /^https:\/\/api\.datacite\.org\/dois\/([^?#]+)/i;
 const ZENODO = /^https:\/\/zenodo\.org\/api\/records\/([^/?#]+)\/?(?:[?#].*)?$/i;
+const DATAVERSE = /^https:\/\/[^/]+\/api\/datasets\/:persistentId\/versions\/:latest-published\?persistentId=doi:([^&#]+)/i;
 const GEONETWORK = /\/srv\/api\/records\/([0-9a-f-]{36})\/formatters\/xml/i;
 
 export function createLocalFetcher(goldenDir: string, urlFiles: Record<string, string>): Fetcher {
@@ -52,6 +53,11 @@ export function createLocalFetcher(goldenDir: string, urlFiles: Record<string, s
       const zn = ZENODO.exec(url);
       if (zn) {
         const rec = recordIn(findDir(`zenodo-${decode(zn[1])}`));
+        return rec ? reply(200, url, bytesOf(rec), 'application/json') : reply(404, url);
+      }
+      const dv = DATAVERSE.exec(url);
+      if (dv) {
+        const rec = recordIn(findDir(`dataverse-${decode(dv[1]).replace(/\//g, '_')}`));
         return rec ? reply(200, url, bytesOf(rec), 'application/json') : reply(404, url);
       }
       const gn = GEONETWORK.exec(url);

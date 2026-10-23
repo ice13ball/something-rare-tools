@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { DATAVERSE_HOSTS } from './dataverse.js';
 import { IPT_HOSTS, REGISTRY_HOSTS } from './ipt.js';
 
 /**
@@ -15,6 +16,8 @@ export const DATA_HOSTS: readonly string[] = [
   'api.datacite.org',
   'data.crosscite.org',
   'doi.org',
+  // Dataverse installations read through their API (config/dataverse.ts)
+  ...DATAVERSE_HOSTS,
   // GBIF and OBIS registries, then the static list of servers their archives may come from (config/ipt.ts)
   ...REGISTRY_HOSTS,
   ...IPT_HOSTS,

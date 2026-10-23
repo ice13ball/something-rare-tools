@@ -145,11 +145,25 @@ export const versionless = (z: { id: string; title: string }): boolean => {
 /** The family of an id without its version ("NLOD" for NLOD-1.0): what a versionless title of it names. */
 const familyOfTitle = (z: { id: string }): string => z.id.replace(/-?\d+(?:\.\d+)*(?:-[a-z]+)*$/i, '');
 
+/**
+ * The licence names RepOD's file records carry (licenseName, a fixed list of the installation; every one seen on 23.10.2026 over the 4557
+ * published datasets). Whole strings, like Zenodo's titles. Not listed on purpose: "GNU General Public License 3.0" and "GNU Affero General
+ * Public License version 3" (the name does not say -only or -or-later), "CreativeML Open RAIL-M" and the BSD one (not ids the tool knows).
+ */
+const DATAVERSE_NAMES: readonly (readonly [string, string])[] = [
+  ['CC0 Creative Commons Zero 1.0 Waiver', 'CC0-1.0'],
+  ['CC BY Creative Commons Attribution License 4.0', 'CC-BY-4.0'],
+  ['CC BY-SA Creative Commons Attribution - ShareAlike License 4.0', 'CC-BY-SA-4.0'],
+  ['CC BY-NC Creative Commons Attribution - NonCommercial License 4.0', 'CC-BY-NC-4.0'],
+  ['CC BY-NC-SA Creative Commons Attribution - NonCommercial - ShareAlike License 4.0', 'CC-BY-NC-SA-4.0'],
+];
+
 /** Every SPDX id the tool knows, and the title Zenodo gives each of them (its rights text in DataCite), by exact whole string. */
 const EXACT_NAMES: ReadonlyMap<string, string> = (() => {
   const m = new Map<string, string>();
   for (const e of SPDX_ENTRIES) m.set(nameKey(e.id), e.id);
   for (const z of ZENODO_LICENCES) if (INFO.has(z.id) && !versionless(z)) m.set(nameKey(z.title), z.id);
+  for (const [name, id] of DATAVERSE_NAMES) if (INFO.has(id)) m.set(nameKey(name), id);
   return m;
 })();
 
