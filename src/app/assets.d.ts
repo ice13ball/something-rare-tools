@@ -11,3 +11,9 @@ declare module '*.webp' {
   const url: string;
   export default url;
 }
+
+// A file bundled as-is, imported for its URL (the land mask the check worker loads on demand).
+declare module '*.bin?url' {
+  const url: string;
+  export default url;
+}
