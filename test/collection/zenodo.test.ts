@@ -3,14 +3,17 @@
 import { describe, expect, it } from 'vitest';
 import { CollectionRunner } from '../../src/core/collection/runner';
 import { PACE_MS, type Net, type NetResponse } from '../../src/core/collection/net';
-import { zenodoUrl, ZENODO_WINDOW } from '../../src/core/collection/sources/zenodo';
+import { yearOfSplit, zenodoPager, zenodoUrl, ZENODO_WINDOW } from '../../src/core/collection/sources/zenodo';
 import type { ZenodoPlan } from '../../src/core/collection/sources/zenodo';
+import { makeNetContext } from '../../src/core/collection/net';
 import { json, res, runnerDeps, virtualClock } from './helpers';
 
 interface Rec {
   id: number;
   date: string;
   licence?: string;
+  /** A partial date ("2021", "2021-03") indexed as a range: it matches every query range it intersects. */
+  span?: [string, string];
 }
 
 /** A guest-limited Zenodo: 25 a page, a 10 000 window (400 otherwise), 30 requests a minute (429 + Retry-After beyond), q=publication_date ranges. */
@@ -39,7 +42,14 @@ function zenodoMock(records: Rec[], clock: { now(): number }, opts: { unknown?: 
         let pool = sorted;
         const q = u.searchParams.get('q');
         const m = q ? /publication_date:\[(\S+) TO (\S+)\]/.exec(q) : null;
-        if (m) pool = pool.filter((r) => (m[1] === '*' || r.date >= m[1]) && (m[2] === '*' || r.date <= m[2]));
+        if (m) {
+          const lo = m[1];
+          const hi = m[2];
+          pool = pool.filter((r) => {
+            const [a, b] = r.span ?? [r.date, r.date];
+            return (hi === '*' || a <= hi) && (lo === '*' || b >= lo);
+          });
+        }
         if (u.searchParams.get('sort') === 'mostrecent') pool = [...pool].reverse();
         const hits = pool.slice((page - 1) * size, page * size).map((r) => ({
           id: r.id,
@@ -147,6 +157,87 @@ describe('Zenodo community', () => {
       // no page beyond the window was ever asked for
       for (const l of z.log) expect(Number(new URL(l.url).searchParams.get('page')) * Number(new URL(l.url).searchParams.get('size'))).toBeLessThanOrEqual(ZENODO_WINDOW);
     }, 60_000);
+
+    it('partial dates indexed as ranges fall into several slices of their year: each record is read once, repeats are counted, and a pager restarted at EVERY page (a resumed run) gives the same result', async () => {
+      // 2021: 10 300 dated records over twelve months (a year above the window), plus 30 dated "2021" (a range over the whole year)
+      // and 20 dated "2021-03" (a range over March); 2020: 100 ordinary records
+      const recs: Rec[] = [];
+      let n = 1;
+      for (let i = 0; i < 10_300; i++) recs.push(rec(n++, `2021-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}`));
+      const wholeYear = Array.from({ length: 30 }, () => ({ ...rec(n++, '2021'), span: ['2021-01-01', '2021-12-31'] as [string, string] }));
+      const marchOnly = Array.from({ length: 20 }, () => ({ ...rec(n++, '2021-03'), span: ['2021-03-01', '2021-03-31'] as [string, string] }));
+      for (let i = 0; i < 100; i++) recs.push(rec(n++, '2020-02-02'));
+      const all = [...recs, ...wholeYear, ...marchOnly];
+
+      const clock = virtualClock();
+      const z = zenodoMock(all, clock);
+      const r = new CollectionRunner(runnerDeps(z.net, clock));
+      await r.start({ spec: { kind: 'zenodo', community: 'partial-dates' }, lang: 'en', sample: false });
+      await r.whenIdle();
+      const p = r.progress();
+      expect(p.status).toBe('finished');
+      expect(p.counts.records).toBe(all.length); // every record once
+      expect(p.counts.states.checked).toBe(all.length);
+      expect(p.counts.duplicatesInBatch).toBe(30 * 11 + 0); // "2021": listed in twelve months, kept once; "2021-03" lies in one month only
+      const plan = (r as unknown as { st: { plan: ZenodoPlan } }).st.plan;
+
+      // the same plan walked by a NEW pager for every page, the cursor going through JSON each time
+      const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
+      let c: unknown = zenodoPager({ net: z.net, nctx }, plan).initial;
+      const refs: string[] = [];
+      let dups = 0;
+      let maxIds = 0;
+      while (c) {
+        const pager = zenodoPager({ net: z.net, nctx }, plan);
+        const d = await pager.fetch(JSON.parse(JSON.stringify(c)));
+        refs.push(...d.items.map((i) => i.ref));
+        dups += d.counters?.duplicatesInBatch ?? 0;
+        c = d.next;
+        maxIds = Math.max(maxIds, ((c as { ids?: string } | null)?.ids ?? '').length);
+      }
+      expect(refs).toHaveLength(all.length);
+      expect(new Set(refs).size).toBe(all.length);
+      expect(dups).toBe(30 * 11);
+      expect(maxIds).toBeGreaterThan(0);
+    }, 120_000);
+
+    it('the ids live only inside one year\'s split slices: kept from one month to the next, dropped when the year ends, absent in a whole-year slice', async () => {
+      const clock = virtualClock();
+      const recs = [rec(1, '2021-01-10'), rec(2, '2021-01-11'), { ...rec(3, '2021'), span: ['2021-01-01', '2021-02-28'] as [string, string] }, rec(4, '2021-02-02'), rec(5, '2022-06-06')];
+      const z = zenodoMock(recs, clock);
+      const plan: ZenodoPlan = {
+        slug: 'x',
+        total: 5,
+        sum: 6,
+        slices: [
+          { from: '2021-01-01', to: '2021-01-31', total: 3 },
+          { from: '2021-02-01', to: '2021-02-28', total: 2 },
+          { from: '2022-01-01', to: '2022-12-31', total: 1 },
+        ],
+      };
+      const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
+      const pager = zenodoPager({ net: z.net, nctx }, plan);
+      const jan = await pager.fetch({ si: 0, page: 1 });
+      expect(jan.items).toHaveLength(3);
+      expect(jan.next).toMatchObject({ si: 1, page: 1 });
+      expect(jan.next?.ids).toBeTruthy();
+      const feb = await pager.fetch(jan.next!);
+      expect(feb.items).toHaveLength(1); // id 3 was read in January
+      expect(feb.counters).toEqual({ duplicatesInBatch: 1 });
+      expect(feb.next).toEqual({ si: 2, page: 1 }); // no ids into 2022
+      const y22 = await pager.fetch(feb.next!);
+      expect(y22.items).toHaveLength(1);
+      expect(y22.next).toBeNull();
+    });
+
+    it('yearOfSplit: only a month or a day of one year is a split slice', () => {
+      expect(yearOfSplit({ from: '2021-03-01', to: '2021-03-31', total: 1 })).toBe('2021');
+      expect(yearOfSplit({ from: '2021-03-05', to: '2021-03-05', total: 1 })).toBe('2021');
+      expect(yearOfSplit({ from: '2021-01-01', to: '2021-12-31', total: 1 })).toBeUndefined();
+      expect(yearOfSplit({ from: '2020-01-01', to: '2021-12-31', total: 1 })).toBeUndefined();
+      expect(yearOfSplit({ to: '1999-12-31', total: 1 })).toBeUndefined();
+      expect(yearOfSplit({ total: 1 })).toBeUndefined();
+    });
 
     it('one day above the window cannot be listed: it is capped and the run says so', async () => {
       const clock = virtualClock();
