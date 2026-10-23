@@ -3,6 +3,7 @@
 // Licence normalisation. Pure functions, no I/O. The ONLY place that turns licence text or a URI into an SPDX id
 // and the ONLY definition of "open" (isOpenLicence). The cross-source analysis lives in ../licence/analyse.ts.
 import type { LicenceClass, LicenceStatement, MetadataSource } from '../types';
+import { EU_LICENCE_AUTHORITY } from './eu-licence-authority';
 import { SPDX_ENTRIES, SPDX_LIST_VERSION } from './spdx-data';
 import { ZENODO_LICENCES } from './zenodo-licences';
 
@@ -82,6 +83,8 @@ const tailed = (u: string, m: RegExpExecArray, re: RegExp, ok: Read): Read => (r
 
 /** SPDX ids exist only for these ports; the suffix of a ported id is the upper-case country (or IGO) code. */
 const PORTS = [...new Set(SPDX_ENTRIES.map((e) => /^CC-.*-\d\.\d-([A-Z]+)$/.exec(e.id)?.[1]).filter((p): p is string => !!p))];
+
+const LOWER_IDS: ReadonlyMap<string, string> = new Map(SPDX_ENTRIES.map((e) => [e.id.toLowerCase(), e.id]));
 
 const known = (id: string): Read => (INFO.has(id) ? { id } : { unmapped: true });
 
@@ -199,6 +202,15 @@ function readUri(uri: string): Read {
   const nlod = /data\.norge\.no\/nlod\/(?:[a-z]{2}\/)?(\d)\.(\d)/.exec(u);
   if (nlod) return tailed(u, nlod, OTHER_TAIL, known(`NLOD-${nlod[1]}.${nlod[2]}`));
   if (/data\.norge\.no\/nlod/.test(u)) return /[?#]/.test(u) ? DIRTY : { unmapped: true };
+  // spdx.org/licenses/<id>[.html|.json|.txt] and the EU Publications Office licence authority: exact forms, known ids only.
+  const spdxPage = /^https?:\/\/(?:www\.)?spdx\.org\/licenses\/([^/?#]+?)(?:\.(?:html|json|txt))?\/?$/.exec(u);
+  if (spdxPage) return LOWER_IDS.has(spdxPage[1]) ? { id: LOWER_IDS.get(spdxPage[1])! } : {};
+  const eu = /^https?:\/\/publications\.europa\.eu\/resource\/authority\/licence\/([a-z0-9_]+)\/?$/.exec(u);
+  const euId = eu ? EU_LICENCE_AUTHORITY[eu[1].toUpperCase()] : undefined;
+  if (euId && INFO.has(euId)) return { id: euId };
+  // Open Definition's own pages for the data licences it lists.
+  const od = /^https?:\/\/(?:www\.)?opendefinition\.org\/licenses\/(cc-zero|odc-odbl|odc-by|odc-pddl)\/?$/.exec(u);
+  if (od) return known({ 'cc-zero': 'CC0-1.0', 'odc-odbl': 'ODbL-1.0', 'odc-by': 'ODC-By-1.0', 'odc-pddl': 'PDDL-1.0' }[od[1]]!);
   // Last: a link no reader above knows, but which is exactly the one Zenodo lists for one known licence.
   const exact = EXACT_URLS.get(u);
   return exact ? { id: exact } : {};
@@ -806,7 +818,7 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
       // the text names no licence, says something besides "Open Access", and the URI names one
       (unnamedSays && licenceUri) ||
       // every string is an exact licence name and the link is no licence link and no access value: it says something else about the data
-      (!licenceUri && !isNeutralUnnamed(uri) && ids.length === 1 && reads.every((r, i) => r.neutral || !!exactLicenceName(texts[i]))));
+      ((p.source === 'datacite' || p.source === 'zenodo') && !licenceUri && !isNeutralUnnamed(uri) && ids.length === 1 && reads.every((r, i) => r.neutral || !!exactLicenceName(texts[i]))));
   // Precedence: when the readings THEMSELVES differ (text against link, or the text against itself) that is the finding
   // (LIC-TEXT-URI-CONFLICT / LIC-AMBIGUOUS). Only when the readings agree and something is left over does the leftover decide:
   // a restriction marker in it -> LIC-ADDED-CONDITIONS, anything else -> LIC-EXTRA-TEXT.
@@ -846,36 +858,55 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   return s;
 }
 
-/** A copyright notice that is only © / Copyright, a year and a holder. */
-const holderNotice = (t: string): boolean => /©|copyright/iu.test(t) && leftoverOf(t, t, []).text === '';
+/** The people and body a record names: its creators and its publisher. */
+export interface RecordParties {
+  creators?: readonly string[];
+  publisher?: string;
+}
+
+const partyTokens = (s: string): string[] =>
+  s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
+
 /**
- * Only names: capitalised words and initials ("Krašovec N., Marsetič A."), with name particles. Words that are statements ("Access",
- * "Rights", "Reserved", "Closed"...) never pass. Used ONLY next to the rightsstatements.org "In Copyright" link, where Zenodo writes the
- * copyright holders as the text of the entry.
+ * One name of a holder entry is a party of the record: every word of it is a word of one creator (or of the publisher), a single letter
+ * counting as the initial of one of them, and at least one whole word matches. "Krašovec N." is "Krašovec, Nina"; "Krašovec N. Internal" is nobody.
  */
-const NAME_PARTICLES = new Set(['van', 'von', 'de', 'der', 'den', 'da', 'di', 'del', 'la', 'le', 'du', 'dos', 'and', 'et', 'und']);
-const NOT_A_NAME = new Set(
-  'access rights reserved copyright closed open restricted embargo embargoed confidential private public free commercial permission contact request use data licence license all none'.split(' '),
-);
-const namesOnly = (t: string): boolean => {
-  if (t.length > 200 || !/^[\p{L}\s.,;&'’-]+$/u.test(t)) return false;
-  const words = t.match(/\p{L}[\p{L}'’-]*/gu) ?? [];
-  return words.length > 0 && words.every((w) => !NOT_A_NAME.has(w.toLowerCase()) && (/^\p{Lu}/u.test(w) || NAME_PARTICLES.has(w.toLowerCase())));
-};
+function isParty(name: string, who: RecordParties): boolean {
+  const words = partyTokens(name);
+  if (words.length === 0) return false;
+  return [...(who.creators ?? []), ...(who.publisher ? [who.publisher] : [])].some((p) => {
+    const have = partyTokens(p);
+    return words.every((w) => (w.length === 1 ? have.some((h) => h.startsWith(w)) : have.includes(w))) && words.some((w) => w.length > 1 && have.includes(w));
+  });
+}
+
+/**
+ * The text of a holder entry ("© 2026 Nina Krašovec", "Krašovec N., Marsetič A.", "CERN") when EVERY name in it is a creator or the publisher of the
+ * same record; false for anything else (fail-closed: no list of words). ©, "(c)", "Copyright" and years are the notice itself.
+ */
+function isHolderOfRecord(text: string, who: RecordParties): boolean {
+  const names = text
+    .replace(/©|\(c\)|(?<![\p{L}\p{N}])copyright(?![\p{L}\p{N}])/giu, ' ')
+    .replace(/(?<![\p{L}\p{N}])(?:1[5-9]|20)\d{2}(?:\s*[-–]\s*(?:1[5-9]|20)\d{2})?(?![\p{L}\p{N}])/gu, ' ')
+    .split(/[,;&]|(?<![\p{L}\p{N}])(?:and|und|et)(?![\p{L}\p{N}])/giu)
+    .map((n) => n.trim())
+    .filter(Boolean);
+  return names.length > 0 && names.every((n) => isParty(n, who));
+}
 const IN_COPYRIGHT_LINK = /rightsstatements\.org\/vocab\/inc\/1\.0/i;
 
 /**
  * A repeated rights entry that says nothing the licence check needs to look at: empty, an access value ("Open Access", eu-repo / COAR
- * openAccess, as text or as link) or a copyright holder notice (© + holder, or just the holders' names next to the "In Copyright" link,
- * as Zenodo writes it). Anything else in an entry that names no recognised licence is something the licence should be checked against
- * (fail-closed: no list of "restriction words").
+ * openAccess, as text or as link) or a copyright holder entry whose names are all creators / the publisher of the same record (with or
+ * without the "In Copyright" link, as Zenodo writes it). Anything else in an entry that names no recognised licence is something the
+ * licence should be checked against (fail-closed). A record with no creators and no publisher has no neutral holder entry.
  */
-export function isNeutralEntry(text?: string, uri?: string): boolean {
+export function isNeutralEntry(text?: string, uri?: string, who: RecordParties = {}): boolean {
   const t = text?.trim();
   const l = uri?.trim();
-  const notice = !!t && (holderNotice(t) || (!!l && IN_COPYRIGHT_LINK.test(l) && namesOnly(t)));
-  const textNeutral = !t || isNeutralUnnamed(t) || notice;
-  const uriNeutral = !l || isNeutralUnnamed(l) || (IN_COPYRIGHT_LINK.test(l) && notice);
+  const holder = !!t && isHolderOfRecord(t, who);
+  const textNeutral = !t || isNeutralUnnamed(t) || holder;
+  const uriNeutral = !l || isNeutralUnnamed(l) || (IN_COPYRIGHT_LINK.test(l) && holder);
   return textNeutral && uriNeutral;
 }
 
