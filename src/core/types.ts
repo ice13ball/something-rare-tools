@@ -40,6 +40,10 @@ export interface LicenceStatement {
   conflict?: 'text-uri' | 'restricted' | 'extra-text' | 'readings';
   /** What the text says besides the licence name and neutral wording (set with conflict 'restricted' / 'extra-text'). */
   leftover?: string;
+  /** The string of the statement the `leftover` is quoted from (the shown text, or the identifier / Zenodo title when only that one leaves something). */
+  leftoverFrom?: string;
+  /** Leftover of another string of the statement (identifier, Zenodo title), next to the shown text's own `leftover`. */
+  otherLeftover?: string;
   /** The licences the text itself reads as, when it reads as more than one (several ids, a versionless family, "—" = a name no id exists for). */
   readings?: string[];
   /** Set with `spdx` when the SPDX id itself, whole and in any case, was given as the text or as the identifier ("agpl-3.0-or-later"): a program can read it. */
@@ -141,6 +145,8 @@ export interface RuleDef {
   plainDataciteNotCompared?: Record<Lang, string>;
   /** META-NO-EXTENT in Collection review (param scope = 'collection'): the same finding without a reference to the /check table, which Collection review does not have. */
   plainCollection?: Record<Lang, string>;
+  /** Appended to LIC-EXTRA-TEXT / LIC-ADDED-CONDITIONS when param otherRest is set: another string of the statement (identifier, Zenodo title) leaves something too. */
+  plainOtherRest?: Record<Lang, string>;
   technical: string;             // English, template with {param}
   thresholds?: Threshold[];
   citations?: Citation[];

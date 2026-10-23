@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The ONE place that compares what the metadata sources of a dataset say about its licence. Pure, no I/O.
 // /check maps the result to findings (checks/licence.ts); the licence page renders it directly.
-import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, type SpdxInfo } from '../metadata/licence';
+import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, statesRestrictionOnly, type SpdxInfo } from '../metadata/licence';
 import type { LicenceClass, LicenceStatement, MetadataRecord, MetadataSource } from '../types';
 
 /** Statements about the metadata record itself (ISO `metadataConstraints`), not the data. */
@@ -28,7 +28,7 @@ export interface AnalysedStatement {
    * left in the text and it contains a restriction marker ('restricted') or not ('extra-text'), or there is no link and the text gives
    * more than one reading of itself ('readings').
    */
-  conflict?: { kind: 'text-uri' | 'restricted' | 'extra-text' | 'readings'; text: string; uri: string; textLicence: string; uriLicence: string; /** What the text says besides the licence name ('restricted' / 'extra-text'). */ rest: string };
+  conflict?: { kind: 'text-uri' | 'restricted' | 'extra-text' | 'readings'; text: string; uri: string; textLicence: string; uriLicence: string; /** What the text says besides the licence name ('restricted' / 'extra-text'). */ rest: string; /** Leftover of another string of the statement (identifier, Zenodo title) next to the shown text's own. */ otherRest: string };
 }
 
 export interface AnalysedSource {
@@ -61,6 +61,8 @@ export type Contradiction =
   | { kind: 'extra-text'; source: AnalysedSource; statement: AnalysedStatement }
   /** No link, and the statement reads as more than one licence (text against identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to an unrecognised one). */
   | { kind: 'ambiguous'; source: AnalysedSource; statement: AnalysedStatement }
+  /** A statement that names no licence but states a restriction in words, next to a recognised licence of the same record. */
+  | { kind: 'restriction-text'; source: AnalysedSource; statement: AnalysedStatement; licence: string }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
@@ -172,11 +174,13 @@ function analyseStatement(s: LicenceStatement): AnalysedStatement {
   if (s.conflict) {
     out.conflict = {
       kind: s.conflict,
-      text: s.text ?? '',
+      // The text shown is the string the leftover is quoted from (the identifier or the Zenodo title when only that one leaves something).
+      text: (s.conflict === 'restricted' || s.conflict === 'extra-text' ? s.leftoverFrom : undefined) ?? s.text ?? '',
       uri: s.uri ?? '',
       textLicence: s.textSpdx ?? (s.conflict === 'restricted' || s.conflict === 'extra-text' ? (s.text ?? '—') : s.readings && s.readings.length > 0 ? s.readings.join(' / ') : '—'),
       uriLicence: uriId ?? '—',
       rest: s.leftover ?? '',
+      otherRest: s.otherLeftover ?? '',
     };
   }
   return out;
@@ -233,6 +237,15 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
   // A statement that contradicts itself is reported where it is.
   for (const source of sources) {
     for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: { restricted: 'added-conditions', 'extra-text': 'extra-text', readings: 'ambiguous', 'text-uri': 'text-uri' }[statement.conflict.kind] as 'added-conditions' | 'extra-text' | 'ambiguous' | 'text-uri', source, statement });
+  }
+
+  // A statement that names no licence but states a restriction in words ("Not for commercial use", "All rights reserved") next to a licence the
+  // same record states: once per record.
+  for (const source of sources) {
+    const licence = source.statements.find((a) => a.classification.kind === 'spdx');
+    if (!licence) continue;
+    const statement = source.statements.find((a) => !a.conflict && a.classification.kind !== 'spdx' && statesRestrictionOnly(a.statement.text));
+    if (statement) contradictions.push({ kind: 'restriction-text', source, statement, licence: shownOf(licence) });
   }
 
   // Restriction codes against an open licence: a recognised open id, or a statement that names an open family without being

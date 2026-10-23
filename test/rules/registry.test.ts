@@ -25,6 +25,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'LIC-ADDED-CONDITIONS': ['warning', 'A'],
   'LIC-EXTRA-TEXT': ['warning', 'A'],
   'LIC-AMBIGUOUS': ['warning', 'A'],
+  'LIC-RESTRICTION-TEXT': ['warning', 'A'],
   'META-EMPTY-LINK': ['warning', 'A'],
   'META-NO-VERSION': ['info', 'A'],
   'META-NO-EXTENT': ['info', 'A'],
@@ -65,7 +66,7 @@ describe('rule table', () => {
   it('has exactly the 50 planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(50);
+    expect(ids.length).toBe(51);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -83,7 +84,7 @@ describe('rule table', () => {
       (Object.values(m).flat() as { id?: string }[]).map((r) => r.id ?? '');
     expect(idsOf(lic).every((id) => id.startsWith('LIC-'))).toBe(true);
     expect(idsOf(meta).every((id) => id.startsWith('META-'))).toBe(true);
-    expect(idsOf(lic).length).toBe(9);
+    expect(idsOf(lic).length).toBe(10);
     expect(idsOf(meta).length).toBe(7);
   });
 });

@@ -20,7 +20,7 @@ export function zenodoFileUrl(recordId: string, key: string): string {
 }
 
 function licence(field: string, id: string | undefined, uri?: string, title?: string): LicenceStatement | undefined {
-  return buildStatement({ source: 'zenodo', field, text: id ?? title, also: [title], alsoLabel: 'title', uri });
+  return buildStatement({ source: 'zenodo', field, text: id ?? title, also: [title], uri });
 }
 
 function localised(v: unknown): string | undefined {

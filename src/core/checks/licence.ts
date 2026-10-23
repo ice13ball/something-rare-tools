@@ -5,6 +5,9 @@ import { analyseLicences, shownOf, type Contradiction } from '../licence/analyse
 import { makeFinding } from '../rules/registry';
 import type { Finding, MetadataRecord, MetadataSource } from '../types';
 
+/** `otherRest` is an optional marker read by renderPlain (plainOtherRest): leftover of another string of the statement, with a clause of its own. */
+const otherRest = (a: { conflict?: { otherRest: string } }): { otherRest?: string } => (a.conflict?.otherRest ? { otherRest: a.conflict.otherRest } : {});
+
 /** The finding that states one contradiction in the rule's own words (the licence page renders it with renderPlain). */
 export function contradictionFinding(c: Contradiction, file: string): Finding {
   switch (c.kind) {
@@ -23,13 +26,13 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
       return makeFinding('LIC-ADDED-CONDITIONS', {
         file,
         field: c.statement.statement.field,
-        params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence, rest: c.statement.conflict!.rest },
+        params: { text: c.statement.conflict!.text, textLicence: c.statement.conflict!.textLicence, rest: c.statement.conflict!.rest, ...otherRest(c.statement) },
       });
     case 'extra-text':
       return makeFinding('LIC-EXTRA-TEXT', {
         file,
         field: c.statement.statement.field,
-        params: { text: c.statement.conflict!.text, rest: c.statement.conflict!.rest },
+        params: { text: c.statement.conflict!.text, rest: c.statement.conflict!.rest, ...otherRest(c.statement) },
       });
     case 'ambiguous':
       return makeFinding('LIC-AMBIGUOUS', {
@@ -37,6 +40,8 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
         field: c.statement.statement.field,
         params: { text: c.statement.conflict!.text, readings: c.statement.conflict!.textLicence },
       });
+    case 'restriction-text':
+      return makeFinding('LIC-RESTRICTION-TEXT', { file, field: c.statement.statement.field, params: { licence: c.licence, text: c.statement.statement.text ?? '' } });
     case 'restriction-code':
       return makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } });
     case 'datacite-empty':
