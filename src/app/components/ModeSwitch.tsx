@@ -31,7 +31,7 @@ const CHECK_TEXTS: ModeTexts = {
   note: 'mode.local',
 };
 
-/** Chosen before any input. Both sentences are visible at all times, the chosen one is not hidden behind a click. */
+/** Chosen before anything is sent. Both sentences are visible at all times, the chosen one is not hidden behind a click; the two options sit side by side where there is room. */
 export function ModeSwitch({ value, onChange, texts }: ModeSwitchProps): React.ReactElement {
   useLang();
   const [own, setOwn] = useState<DownloadMode>(DEFAULT_MODE);
@@ -53,9 +53,11 @@ export function ModeSwitch({ value, onChange, texts }: ModeSwitchProps): React.R
   return (
     <fieldset className="mode-switch">
       <legend>{t(k.legend)}</legend>
-      {option('browser', t(k.browserLabel), t(k.browserText))}
-      {option('server', t(k.serverLabel), t(k.serverText))}
-      <p className="muted">{t(k.note)}</p>
+      <div className="mode-options">
+        {option('browser', t(k.browserLabel), t(k.browserText))}
+        {option('server', t(k.serverLabel), t(k.serverText))}
+      </div>
+      <p className="muted mode-note">{t(k.note)}</p>
     </fieldset>
   );
 }

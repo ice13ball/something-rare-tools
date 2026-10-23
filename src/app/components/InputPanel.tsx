@@ -8,6 +8,8 @@ export interface InputPanelProps {
   mode: DownloadMode;
   onSubmit: (input: CheckInput) => void;
   disabled?: boolean;
+  /** Rendered right after the link field: the download mode only matters for links, dropped files never leave the computer. */
+  modeSwitch?: React.ReactNode;
 }
 
 function accepted(f: File): boolean {
@@ -21,7 +23,7 @@ const sameFile = (a: File, b: File): boolean => a.name === b.name && a.size === 
  * Drop zone + link/DOI field + Check button. Files and the link stay in component state and go to
  * onSubmit; they are never written to the URL (the form never navigates: submit is always prevented).
  */
-export function InputPanel({ mode, onSubmit, disabled }: InputPanelProps): React.ReactElement {
+export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelProps): React.ReactElement {
   useLang();
   const [files, setFiles] = useState<File[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
@@ -101,6 +103,7 @@ export function InputPanel({ mode, onSubmit, disabled }: InputPanelProps): React
         <span>{t('input.link.label')}</span>
         <input type="text" value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('input.link.placeholder')} autoComplete="off" spellCheck={false} />
       </label>
+      {modeSwitch}
       {empty && (
         <p className="error-text" role="alert">
           {t('input.empty')}

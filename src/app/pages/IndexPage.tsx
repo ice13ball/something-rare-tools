@@ -5,33 +5,30 @@ import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
 import { t, useLang } from '../i18n';
 
+/** One row per tool; the whole row is the link target (see .tool-link in styles.css). */
+const TOOLS = [
+  ['/check', 'index.card'],
+  ['/licence', 'index.licence'],
+  ['/collection', 'index.collection'],
+] as const;
+
 export function IndexPage(): React.ReactElement {
   useLang();
   return (
     <Layout titleKey="index.docTitle">
       <h1>{t('brand')}</h1>
       <p className="lead">{t('index.lead')}</p>
-      <article className="card">
-        <h2>{t('index.card.title')}</h2>
-        <p>{t('index.card.text')}</p>
-        <a className="button" href="/check">
-          {t('index.card.cta')}
-        </a>
-      </article>
-      <article className="card">
-        <h2>{t('index.licence.title')}</h2>
-        <p>{t('index.licence.text')}</p>
-        <a className="button" href="/licence">
-          {t('index.licence.cta')}
-        </a>
-      </article>
-      <article className="card">
-        <h2>{t('index.collection.title')}</h2>
-        <p>{t('index.collection.text')}</p>
-        <a className="button" href="/collection">
-          {t('index.collection.cta')}
-        </a>
-      </article>
+      <ul className="tools">
+        {TOOLS.map(([href, key]) => (
+          <li key={href} className="tool">
+            <h2>{t(`${key}.title`)}</h2>
+            <p>{t(`${key}.text`)}</p>
+            <a className="tool-link" href={href}>
+              {t(`${key}.cta`)}
+            </a>
+          </li>
+        ))}
+      </ul>
       <p className="atlas-link">
         {t('index.atlas.lead')} <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
       </p>

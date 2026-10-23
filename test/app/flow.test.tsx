@@ -152,6 +152,12 @@ describe('CheckPage flow', () => {
     expect(map.maps).toHaveLength(0);
   });
 
+  it('puts the drop zone first and the download mode right after the link field it applies to, still before the Check button', () => {
+    const { container } = render(<CheckPage engine={createDirectEngine()} mapLib={fakeLib().load} />);
+    const order = [...container.querySelectorAll('.dropzone, input[type="text"], fieldset.mode-switch, button[type="submit"]')].map((e) => e.className || e.tagName);
+    expect(order).toEqual(['dropzone', 'INPUT', 'mode-switch', 'button']);
+  });
+
   it('shows at most 5 sample values per column even for a 70k-row file', async () => {
     const lines = ['Station,Lat,Lon,Date,DIC_umol_kg'];
     for (let i = 0; i < 70000; i++) lines.push(`ST${i % 50},76.5,15.1,2021-07-25,${2100 + (i % 7)}`);

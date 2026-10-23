@@ -284,13 +284,13 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
     <Layout titleKey="licence.docTitle">
       <h1>{t('licence.title')}</h1>
       <p className="lead">{t('licence.intro')}</p>
-      <ModeSwitch value={mode} onChange={setMode} texts={MODE_TEXTS} />
       <form className="input-panel" onSubmit={(e) => void submit(e)} noValidate>
         <label className="field">
           <span>{t('licence.input.label')}</span>
           <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('licence.input.placeholder')} autoComplete="off" spellCheck={false} />
         </label>
         <p className="muted">{t('licence.input.hint')}</p>
+        <ModeSwitch value={mode} onChange={setMode} texts={MODE_TEXTS} />
         {empty && (
           <p className="error-text" role="alert">
             {t('licence.empty')}
@@ -361,7 +361,7 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
         </div>
       )}
 
-      <section aria-labelledby="licence-checks-title">
+      <section className="about" aria-labelledby="licence-checks-title">
         <h2 id="licence-checks-title">{t('licence.checks.title')}</h2>
         <p>{t('licence.checks.p1')}</p>
         <ul>
