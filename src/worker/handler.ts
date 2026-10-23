@@ -12,6 +12,7 @@ import { toCleanCsv } from '../core/output/csv';
 import { toGeoJson } from '../core/output/geojson';
 import { draftToIso19139 } from '../core/output/iso19139';
 import { isArchiveZip, parseDwca, parseFile } from '../core/parse';
+import { readMappingFile } from '../core/parse/mappingFile';
 import { inflateInBrowser } from '../core/parse/inflate';
 import type { Inflate } from '../core/parse/zip';
 import { proposeColumns, unitFromHeader } from '../core/recognize/columns';
@@ -141,6 +142,8 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
   let hasDropped = false;
   let parseFindings: Finding[] = [];
   let report: Report | undefined;
+  // the declaration of the LAST check of this session, only so that the sidecar download can write it; parse/reset clear it
+  let singleCruise = false;
   let rowIndex: Map<string, { ds: Dataset; rowIdx: number }> | undefined;
 
   // a check that awaited the mask must not write its report into a session that was reset meanwhile
@@ -155,6 +158,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     hasDropped = false;
     parseFindings = [];
     report = undefined;
+    singleCruise = false;
     rowIndex = undefined;
   };
 
@@ -201,7 +205,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
   }
 
   function finishParse(req: Extract<Request, { type: 'parse' }>, pre: Map<InputFile, ParsedFile>): ParseResult {
-    const result: ParseResult = { files: [], problems: [], metadataFiles: [], notRead: [] };
+    const result: ParseResult = { files: [], problems: [], metadataFiles: [], notRead: [], mappingFiles: [], singleCruise: false };
     const parsedAll: { parsed: ParsedFile; source: InputFile['source'] }[] = [];
     for (const f of req.files) {
       let parsed: ParsedFile;
@@ -227,6 +231,13 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     // Pass 2: data files.
     for (const { parsed, source } of parsedAll) {
       if (parsed.kind === 'metadata') continue;
+      // the sidecar of an earlier run is not a table: its settings (one cruise of one ship) are read and the file is not checked
+      const settings = readMappingFile(parsed);
+      if (settings) {
+        result.mappingFiles.push(parsed.fileName);
+        if (settings.singleCruise) result.singleCruise = true;
+        continue;
+      }
       if (!isTable(parsed)) {
         result.notRead.push({ fileName: parsed.fileName, kind: parsed.kind });
         continue;
@@ -274,7 +285,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     return { datasets: out.datasets.map(summaryOf) };
   }
 
-  async function check(): Promise<CheckResult> {
+  async function check(req: Extract<Request, { type: 'check' }>): Promise<CheckResult> {
     const datasets = allDatasets();
     const sessionRecords: LoadedRecord[] = [...records];
     if (hasDropped) sessionRecords.push({ label: 'dropped files', kind: 'dropped', metadata: droppedMeta, files: [], findings: [] });
@@ -283,7 +294,8 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     const started = session;
     const mask = pending === undefined ? undefined : await pending;
     if (started !== session) throw new Error('The files were replaced by a newer check while this one was waiting. Check again.');
-    report = runChecks({ datasets, records: sessionRecords, parseFindings: findings }, { land: mask });
+    singleCruise = req.singleCruise === true;
+    report = runChecks({ datasets, records: sessionRecords, parseFindings: findings }, { land: mask, singleCruise });
     rowIndex = undefined;
     return { report, datasets: datasets.map(summaryOf) };
   }
@@ -294,7 +306,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
       case 'cleanCsv':
         return toCleanCsv(picked[0]).csv;
       case 'sidecar':
-        return toCleanCsv(picked[0]).sidecar;
+        return toCleanCsv(picked[0], { singleCruise }).sidecar;
       case 'geojson':
         return toGeoJson(picked, report ?? buildReport([]));
       case 'iso19139':
@@ -349,7 +361,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
         case 'build':
           return build(req);
         case 'check':
-          return check();
+          return check(req);
         case 'export':
           return exportText(req);
         case 'draft':

@@ -107,6 +107,8 @@ export interface ParsedDate {
   precision: 'year' | 'month' | 'day' | 'minute' | 'second';
   tz: 'utc' | 'offset' | 'unknown';
   ambiguity?: 'yy-mm-dd';
+  /** Darwin Core eventDate interval 'start/end': the end, parsed on its own. `iso` and `precision` above stay the START (every existing reader keeps working). */
+  end?: ParsedDate;
 }
 export interface NumericCell { raw: RawCell; line: number; value?: number; decimals?: number; status: 'ok' | 'missing' | 'non-numeric' | 'na-variant' }
 export interface Variable { key: string; header: string; canonical?: string; unit?: string; unitSource?: 'header' | 'p01' | 'metadata' | 'user'; p01?: string }

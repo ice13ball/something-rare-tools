@@ -3,11 +3,15 @@
 // Clean CSV export + sidecar. Values are WRITTEN FROM THEIR ORIGINAL TEXT: nothing is parsed and re-formatted.
 import { unitFromHeader } from '../recognize/columns';
 import type { ColumnRole, DataRow, Dataset, NumericCell, ParsedDate, RawCell } from '../types';
+import { SETTING_ROW, SINGLE_CRUISE_SETTING } from '../parse/mappingFile';
 import { parseNumber } from '../values/numbers';
 
 export interface CleanCsv {
   csv: string;
-  /** CSV: original_column,output_column,unit,unit_source,p01. Notes are rows with original_column '(note)' and the text in output_column. */
+  /**
+   * CSV: original_column,output_column,unit,unit_source,p01. Notes are rows with original_column '(note)' and the text in output_column.
+   * Dataset-level settings are rows with original_column '(setting)' and `name=value` in output_column (see parse/mappingFile.ts): the companion file is the only place they are kept.
+   */
   sidecar: string;
 }
 
@@ -88,7 +92,12 @@ class Namer {
   }
 }
 
-export function toCleanCsv(ds: Dataset): CleanCsv {
+export interface CleanCsvOptions {
+  /** The user declared "all measurements in these files come from one cruise of one ship": written into the sidecar so a re-run keeps it. */
+  singleCruise?: boolean;
+}
+
+export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   const rows = ds.rows;
   const has = (f: (r: DataRow) => unknown) => rows.some((r) => f(r) !== undefined);
   const namer = new Namer();
@@ -145,6 +154,7 @@ export function toCleanCsv(ds: Dataset): CleanCsv {
   const sidecar = [
     csvLine(['original_column', 'output_column', 'unit', 'unit_source', 'p01']),
     ...side.map((s) => csvLine(s.map(guardText))),
+    ...(opts.singleCruise ? [csvLine([SETTING_ROW, SINGLE_CRUISE_SETTING, '', '', ''])] : []),
     ...notes.map((n) => csvLine(['(note)', n, '', '', ''])),
   ];
   return { csv: lines.join('\n') + '\n', sidecar: sidecar.join('\n') + '\n' };

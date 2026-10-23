@@ -51,6 +51,19 @@ const W3C_DATETIME = {
   url: 'https://www.w3.org/TR/NOTE-datetime',
 };
 
+const MARINE_QC = {
+  label: 'Met Office marine-qc (marine_qc) documentation, "Track check"',
+  url: 'https://marine-qc.readthedocs.io/en/latest/track_check.html',
+};
+const MEDATLAS = {
+  label: 'MEDATLAS Protocol, Part I: exchange format and quality checks for observed profiles, v3 (SISMER/IFREMER, Dec 2001)',
+  url: 'https://nodc.ogs.it/repository/documents/guidelines/medman_v3.pdf',
+};
+const WOD18 = {
+  label: 'World Ocean Database 2018 User\'s Manual (prerelease, v0.10; Garcia et al.)',
+  url: 'https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf',
+};
+
 const INSPIRE_TG = {
   label: 'INSPIRE Technical Guidelines for metadata based on ISO 19139, v2.2.1 (published 2025-01-31)',
   url: 'https://inspire-mif.github.io/technical-guidelines/metadata/metadata-iso19139/metadata-iso19139.html',
@@ -88,6 +101,11 @@ export const CITE = {
   argoLand: cite(ARGO_CTD, 'section 2.1.2, Test 4 "Position on land test", p.11'),
   naturalEarthLand: { label: 'Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)', url: 'https://www.naturalearthdata.com/downloads/10m-physical-vectors/', locator: 'layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py' },
   gtsppLocation: cite(GTSPP, 'Annex B, Test 1.3 "Impossible Location", PDF p.44'),
+  // ROW-SHIP-SPEED*: the two numbers (read in the opened documents, 24.10.2026) and the sources that name date or position as the possible error
+  marineQcExtremeSpeed: cite(MARINE_QC, 'section "Extreme speed check": "If the speed estimated from the locations at t-1 and t exceeds 40 knots, set the extreme speed check flag to fail." (the check itself compares one pair; both-sides logic: sections "Speed check" and "The combined track check")'),
+  medatlasShipVelocity: cite(MEDATLAS, 'section 4.4.4 "Check the ship velocity", PDF p.29: "If the ship velocity > maximum velocity of the ship (default is 15 knots) between two consecutive profiles, find the erroneous data (date or location)"'),
+  gtsppImpossibleSpeed: cite(GTSPP, 'Annex B, Test 1.5 "Impossible Speed", PDF p.53 (per-platform maximum speed; the operator decides whether position or date/time is wrong)'),
+  wodSpeedCheck: cite(WOD18, 'section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."'),
   // global range tests
   argoCtdRange: cite(ARGO_CTD, 'section 2.1.2, Test 6 "Global range test", p.12'),
   argoDoxyRange: cite(ARGO_DOXY, 'section 2.2.1, Test 6 "Global range test", p.9'),

@@ -9,7 +9,7 @@ export function makeEngine(send: <K extends RequestType>(req: Extract<Request, {
     parse: (files, records, extraFindings) => send({ type: 'parse', files, records, extraFindings }),
     propose: (fileId, layout) => send({ type: 'propose', fileId, layout }),
     build: (fileId, layout, mappings) => send({ type: 'build', fileId, layout, mappings }),
-    check: () => send({ type: 'check' }),
+    check: (opts) => send({ type: 'check', ...(opts?.singleCruise ? { singleCruise: true } : {}) }),
     export: (kind, datasetIds) => send({ type: 'export', kind, datasetIds }),
     draft: (datasetIds) => send({ type: 'draft', datasetIds }),
     row: (file, line) => send({ type: 'row', file, line }),
