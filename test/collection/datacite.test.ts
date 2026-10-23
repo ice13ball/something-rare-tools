@@ -5,7 +5,7 @@ import { FetchBlockedError } from '../../src/core/sources/fetcher';
 import { CollectionRunner } from '../../src/core/collection/runner';
 import { BACKOFF, PACE_MS, makeNetContext, request, parseRetryAfter, type NetResponse } from '../../src/core/collection/net';
 import { cursorEpoch, dataciteListUrl, DATACITE_FIELDS } from '../../src/core/collection/sources/datacite';
-import { scanBatch, countDois } from '../../src/core/collection/sources/dois';
+import { scanBatch, countDois, doiListPager } from '../../src/core/collection/sources/dois';
 import type { RunSettings } from '../../src/core/collection/types';
 import { HTML_503, dataciteMock, dcResource, json, res, runnerDeps, virtualClock } from './helpers';
 
@@ -161,7 +161,7 @@ describe('DataCite quick sample', () => {
 describe('DOI list', () => {
   const list = (n: number, extra = ''): string => Array.from({ length: n }, (_, i) => `10.5555/r${i}`).join('\n') + extra;
 
-  it('reads doi.org and doi: forms, drops repeats inside a batch, counts tokens that are no DOI', () => {
+  it('reads doi.org and doi: forms, drops repeats inside a batch (and, given the DOIs before it, repeats of those), counts tokens that are no DOI', () => {
     const b = scanBatch('https://doi.org/10.5555/R1 doi:10.5555/r1 10.5555/r2,\nhello 12345 http://dx.doi.org/10.5555/r3', 0);
     expect(b.dois).toEqual(['10.5555/r1', '10.5555/r2', '10.5555/r3']);
     expect(b.duplicates).toBe(1);
@@ -196,6 +196,55 @@ describe('DOI list', () => {
     expect(r.unread()).toEqual([{ ref: '10.9999/unknown.1', state: 'unreachable', reason: 'not-found-at-datacite' }]);
     // the unknown DOI added no licence finding: LIC-MISSING counts only the 30 records that really state none
     expect(p.counts.rules['LIC-MISSING']).toBe(30);
+  });
+
+  it('a DOI repeated anywhere in the list counts once (also across batches, any case or form); a resumed run equals an uninterrupted one', async () => {
+    // 250 distinct DOIs; r5 again in batch 2, r120 again in batch 3 (as doi.org form, upper case), r249 twice at the very end
+    const text = list(250) + '\nhttps://doi.org/10.5555/R5 10.5555/r120 not-a-doi doi:10.5555/R120 10.5555/r249 10.5555/r249';
+    expect(countDois(text)).toEqual({ dois: 250, batches: 3 });
+
+    const clock = virtualClock();
+    const mock = dataciteMock({ total: 1000, clock });
+    const deps = runnerDeps(mock.net, clock);
+    const r = new CollectionRunner(deps);
+    await r.start({ spec: { kind: 'dois', text }, lang: 'en', sample: false });
+    await r.whenIdle();
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.records).toBe(250);
+    expect(p.counts.states.checked).toBe(250);
+    expect(p.counts.duplicatesInBatch).toBe(5);
+    expect(p.counts.invalidTokens).toBe(1);
+    const asked = mock.urls.flatMap((u) => new URL(u).searchParams.get('ids')?.split(',') ?? []);
+    expect(asked).toHaveLength(250);
+    expect(new Set(asked).size).toBe(250);
+
+    // pager level: walking from the start, and starting afresh (a resumed run: a NEW pager, no memory) at every cursor, give the same batches
+    const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 }, undefined, {});
+    const walk = async (pager: ReturnType<typeof doiListPager>, from: { offset: number } | null) => {
+      const out: string[][] = [];
+      let c = from;
+      while (c) {
+        const d = await pager.fetch(c);
+        out.push(d.items.map((i) => i.ref));
+        c = d.next;
+      }
+      return out;
+    };
+    const whole = await walk(doiListPager({ net: mock.net, nctx }, text), { offset: 0 });
+    expect(whole.flat()).toHaveLength(250);
+    expect(new Set(whole.flat()).size).toBe(250);
+    const cursors: { offset: number }[] = [{ offset: 0 }];
+    for (let c = doiListPager({ net: mock.net, nctx }, text).skip(cursors[0]); c; c = doiListPager({ net: mock.net, nctx }, text).skip(c)) cursors.push(c);
+    expect(cursors).toHaveLength(3);
+    for (let i = 1; i < cursors.length; i++) {
+      const resumed = await walk(doiListPager({ net: mock.net, nctx }, text), cursors[i]);
+      expect(resumed).toEqual(whole.slice(i));
+    }
+    // a page retried later (an earlier cursor after a later one) sees the same thing
+    const pager = doiListPager({ net: mock.net, nctx }, text);
+    await walk(pager, cursors[2]);
+    expect(await walk(pager, cursors[1])).toEqual(whole.slice(1));
   });
 
   it('has no sample mode', async () => {

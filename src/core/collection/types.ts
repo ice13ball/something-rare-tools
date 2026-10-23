@@ -69,7 +69,7 @@ export interface Counts {
   rules: Record<string, number>;
   /** Checked records with at least one finding. */
   withFindings: number;
-  /** DOI list: repeated DOIs inside one batch of 100 (dropped) and tokens that are no DOI. */
+  /** DOI list: repeats of a DOI met earlier ANYWHERE in the list (dropped; the name predates the whole-list dedupe) and tokens that are no DOI. */
   duplicatesInBatch: number;
   invalidTokens: number;
   /** CSW with the DataCite cross-check: lookups made, DOIs found, DOIs DataCite does not know, lookups that failed. */
