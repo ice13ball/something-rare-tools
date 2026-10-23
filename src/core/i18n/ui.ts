@@ -23,7 +23,7 @@ const en = {
   'index.docTitle': `Check marine data files before publishing`,
   'index.lead': `Simple tools for checking marine data before it is published.`,
   'index.card.title': `Data check`,
-  'index.card.text': `One data file or a link to a record: coordinates, dates, units and licence, explained in plain words.`,
+  'index.card.text': `Data files or a link to a record: coordinates, dates, units and licence, explained in plain words.`,
   'index.card.cta': `Open data check`,
   'index.licence.title': `Licence check`,
   'index.licence.text': `One dataset: what licence each metadata source states and where they disagree.`,
