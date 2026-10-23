@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CATALOGUES, catalogueById, type CswSchema } from '../../../config/catalogues';
-import { describeStop, gapText } from '../../core/collection/stop';
+import { describeStop, gapText, reasonText } from '../../core/collection/stop';
 import type { Estimate, Progress, RunSettings, Sample, SourceSpec, UnreadSample } from '../../core/collection/types';
 import { renderPlain } from '../../core/report';
 import { browserFetcher, type Fetcher } from '../../core/sources/fetcher';
@@ -333,10 +333,25 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
       const sample = spec.kind === 'dois' || full.empty ? null : await engine.estimate(spec, true);
       setEstimate({ key: specKey, full, sample });
     } catch (e) {
-      setError(t('collection.error.estimate', { message: failureText(messageOf(e)) }));
+      const m = messageOf(e);
+      const csw = spec.kind === 'csw' && !m.includes('csw_daily_budget') ? cswFailureText(m, spec.catalogue) : undefined;
+      setError(csw ?? t('collection.error.estimate', { message: failureText(m) }));
     } finally {
       setEstimating(false);
     }
+  };
+
+  /**
+   * A catalogue that cannot be read, in words: not answering now (5xx, timeout, network, an answer that is not XML), or answering but no
+   * longer as the CSW service at the known address (404, another refusal, no capabilities, the schema gone: a reinstalled or moved server).
+   * Nothing was read either way, and no estimate is shown, so a run cannot start on it.
+   */
+  const cswFailureText = (m: string, catalogue: string): string | undefined => {
+    const f = /^(unreachable|throttled|protocol|not-found): (\S+)/.exec(m);
+    if (!f) return undefined;
+    const label = catalogueById(catalogue)?.label ?? catalogue;
+    const cause = reasonText(f[2], lang);
+    return f[1] === 'unreachable' || f[1] === 'throttled' ? t('collection.error.cswDown', { catalogue: label, cause }) : t('collection.error.cswChanged', { catalogue: label, cause });
   };
 
   const failureText = (m: string): string => (m.includes('run-open-elsewhere') ? t('collection.error.otherTab') : m.includes('run-changed') ? t('collection.error.runChanged') : m.includes('csv-damaged') ? t('collection.notice.csv-damaged') : m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);

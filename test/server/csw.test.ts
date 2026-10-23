@@ -53,14 +53,15 @@ describe('catalogue list', () => {
       expect(isCatalogueUrl(c.cswUrl)).toBe(true);
     }
     expect(new Set(CATALOGUES.map((c) => c.id)).size).toBe(CATALOGUES.length);
-    expect(CATALOGUES.map((c) => c.method).sort()).toEqual(['GET', 'POST']);
+    expect(new Set(CATALOGUES.map((c) => c.method))).toEqual(new Set(['GET', 'POST'])); // both request paths are in use
   });
   it('has no partnership wording: a label is an address', () => {
     for (const c of CATALOGUES) expect(c.label).toMatch(/^[a-z0-9.-]+\.[a-z]{2,}(\/[a-z]+)?$/);
   });
-  it('contains no IO PAN host and does not widen the fetch allowlist', () => {
-    for (const h of CSW_HOSTS) expect(h).not.toMatch(/iopan/);
-    for (const h of CSW_HOSTS) expect(DATA_HOSTS).not.toContain(h);
+  it('lists IO PAN only at the GeoNetwork host /check already reads (Michal, 23.10.2026) and adds nothing to the fetch allowlist', () => {
+    expect(CSW_HOSTS.filter((h) => /iopan/.test(h))).toEqual(['geonetwork.iopan.pl']);
+    // the only catalogue host that is also a data host is that one, which was a data host before it became a catalogue
+    for (const h of CSW_HOSTS) if (h !== 'geonetwork.iopan.pl') expect(DATA_HOSTS).not.toContain(h);
   });
   it('isCatalogueUrl refuses look-alikes, http and userinfo', () => {
     const h = CSW_HOSTS[0];
