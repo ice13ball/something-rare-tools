@@ -103,3 +103,41 @@ describe('a run that ends before the total its source announced is not complete'
     expect(await (await r.csvBlob()).text()).toContain('RUN-INCOMPLETE');
   });
 });
+
+describe('a deferred page judged in the retry pass is judged against its own range', () => {
+  const bad = { status: 504, text: '', proxyError: 'csw_slow' };
+  const records = recs(100);
+  async function go(answer26: (n: number) => NetResponse | undefined) {
+    const calls = new Map<number, number>();
+    const net = cswNet(records, (c) => {
+      const pos = c.startPosition ?? 0;
+      calls.set(pos, (calls.get(pos) ?? 0) + 1);
+      return pos === 26 ? answer26(calls.get(26)!) : undefined;
+    });
+    const r = new CollectionRunner(runnerDeps(net, virtualClock()));
+    await r.start(spec);
+    await r.whenIdle();
+    return { r, p: r.progress() };
+  }
+
+  it('A: a retried page that comes back empty owes its 25 records, not 75', async () => {
+    const { r, p } = await go((n) => (n <= 5 ? bad : { status: 200, text: searchResults(100, 0, 51, []) }));
+    expect(p.status).toBe('finished');
+    expect(p.counts.states.checked).toBe(75);
+    expect(p.notices).toContainEqual({ code: 'records-missing', params: { missing: 25 } });
+    expect(await (await r.csvBlob()).text()).toContain('RUN-INCOMPLETE');
+  });
+
+  it('B: a retried page that returns 12 of 25 and jumps to 51 owes 13 records', async () => {
+    const { r, p } = await go((n) => (n <= 5 ? bad : { status: 200, text: searchResults(100, 12, 51, records.slice(25, 37).map(gmdRecord)) }));
+    expect(p.counts.states.checked).toBe(87);
+    expect(p.notices).toContainEqual({ code: 'records-missing', params: { missing: 13 } });
+    expect(await (await r.csvBlob()).text()).toContain('RUN-INCOMPLETE');
+  });
+
+  it('control: the same short answer in the normal pass is still 13', async () => {
+    const { p } = await go(() => ({ status: 200, text: searchResults(100, 12, 51, records.slice(25, 37).map(gmdRecord)) }));
+    expect(p.counts.states.checked).toBe(87);
+    expect(p.notices).toContainEqual({ code: 'records-missing', params: { missing: 13 } });
+  });
+});

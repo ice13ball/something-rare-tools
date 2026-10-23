@@ -229,10 +229,11 @@ export interface Pager<C = unknown> {
   /** How many records that page was expected to hold. */
   expected(cursor: C): number;
   /**
-   * A page that was left for later and is now read in smaller pieces (a CSW page asked smaller): what of its ORIGINAL range its answer did not
-   * cover, as the cursor to read next and the records still owed; null when the range is covered.
+   * A page that was left for later and is now read again (a CSW page, possibly asked smaller): compares what its answer covered with its
+   * ORIGINAL range of `owed` records. `next` = the cursor to read next and the records still owed when the answer covers only the first
+   * positions; `missing` = records of the covered part that the answer did not hold (it came back short, or jumped past the rest).
    */
-  rest?(cursor: C, data: PageData<C>, owed: number): { cursor: C; expected: number } | null;
+  rest?(cursor: C, data: PageData<C>, owed: number): { next: { cursor: C; expected: number } | null; missing: number };
 }
 
 export type { Finding, Lang };
