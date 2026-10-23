@@ -102,6 +102,10 @@ describe('rule table', () => {
   });
 });
 
+// Wording decided by Michal word for word (ROW-ON-LAND-NEAR, 23.10.2026: the map, not the position, says land; the skip list
+// names estuaries and tidal inlets): longer than the usual cap, allowed explicitly.
+const LONG_TEXT_ALLOWED: Record<string, number> = { 'ROW-ON-LAND-NEAR': 420 };
+
 describe('messages', () => {
   const GENERIC = new Set<string>(GENERIC_PARAMS);
 
@@ -111,7 +115,7 @@ describe('messages', () => {
       for (const lang of LANGS) {
         expect(r.plain[lang], `${r.id} ${lang}`).toBeTruthy();
         expect(r.plain[lang].trim().length).toBeGreaterThan(20);
-        expect(r.plain[lang].length, `${r.id} ${lang} too long`).toBeLessThanOrEqual(330);
+        expect(r.plain[lang].length, `${r.id} ${lang} too long`).toBeLessThanOrEqual(LONG_TEXT_ALLOWED[r.id] ?? 330);
         for (const p of placeholders(r.plain[lang])) {
           expect(tech.has(p), `${r.id} ${lang} uses {${p}} that technical lacks`).toBe(true);
         }
