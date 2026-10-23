@@ -268,15 +268,19 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
   };
   const final = (c: ZenodoCursor): PageData<ZenodoCursor>['notices'] => (c.sum !== undefined && c.sum !== plan.total ? [{ code: 'slices-differ', params: { sum: c.sum, total: plan.total } }] : []);
   /** What follows a slice that ended: the next one to count, or the end of the run (with the check of what the slices added up to). */
+  /**
+   * A run saved with the whole plan: when the work list is empty its next slice (from the plan kept in the saved plan) is taken into it; a remainder
+   * is counted again, like a new one. Called wherever the work list can run dry, so the old plan is drained before the run can end.
+   */
+  const refill = (c: ZenodoCursor): ZenodoCursor => {
+    if ((c.work?.length ?? 0) > 0 || c.ni === undefined || !plan.slices?.[c.ni]) return c;
+    const { total, capped, ...next } = plan.slices[c.ni];
+    return { ...c, work: [next.except ? { ...next, rest: true } : { ...next, total, ...(capped ? { capped } : {}) }], ni: c.ni + 1 };
+  };
   const after = (c: ZenodoCursor, ids: string | undefined): { next: ZenodoCursor | null; notices: NonNullable<PageData<ZenodoCursor>['notices']> } => {
-    let work = c.work ?? [];
-    let ni = c.ni;
-    if (work.length === 0 && ni !== undefined && plan.slices?.[ni]) {
-      // a run saved with the whole plan: its next slice (a remainder is counted again, like a new one)
-      const { total, capped, ...next } = plan.slices[ni];
-      work = [next.except ? { ...next, rest: true } : { ...next, total, ...(capped ? { capped } : {}) }];
-      ni += 1;
-    }
+    c = refill(c);
+    const work = c.work ?? [];
+    const ni = c.ni;
     if (work.length === 0) return { next: null, notices: final(c) ?? [] };
     const y = work[0].from?.slice(0, 4);
     const keep = ids !== undefined && y !== undefined && y === c.yr && work[0].to?.slice(0, 4) === y;
@@ -313,7 +317,8 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
   };
 
   /** One planning step: count the next slice, decide what to do with it, or count the next finer slice of a split. */
-  async function plan1(c: ZenodoCursor): Promise<PageData<ZenodoCursor>> {
+  async function plan1(c0: ZenodoCursor): Promise<PageData<ZenodoCursor>> {
+    let c = c0;
     if (c.split) {
       const { parent, parts } = c.split;
       const i = parts.findIndex((p) => p.total === undefined);
@@ -323,6 +328,7 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
       if (counted.some((p) => p.total === undefined)) return step(cursor({ ...c, split: { parent, parts: counted } }));
       return resolve({ ...c, split: undefined }, parent, counted);
     }
+    c = refill(c); // a zero count or an empty slice just before may have emptied the list while the old plan still has slices
     const work = c.work ?? [];
     if (work.length === 0) return step(null, final(c));
     const [first, ...rest] = work;

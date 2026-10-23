@@ -102,6 +102,8 @@ export interface StopReason {
   source: string;
   /** The page being read (1 = first). */
   page?: number;
+  /** The step that failed only counts or plans (a Zenodo slice count), it is no page: said as such. */
+  counting?: boolean;
   /** The engine's request counter when it stopped. */
   request?: number;
   status?: number;
@@ -122,6 +124,8 @@ export interface Deferred {
   reason: string;
   /** The page's number when it was deferred (for a stop reason). */
   page?: number;
+  /** A counting step (no page of records): named so in a stop reason. */
+  counting?: boolean;
   /** The run cannot go past this page without it (the next cursor is only known from its answer). */
   blocking?: boolean;
 }

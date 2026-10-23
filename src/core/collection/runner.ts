@@ -466,18 +466,18 @@ export class CollectionRunner {
           data = await pager.fetch(cur);
         } catch (e) {
           if (!(e instanceof SourceFailure)) throw e;
-          if (e.kind === 'protocol' || e.kind === 'not-found') return await this.fail(e);
+          if (e.kind === 'protocol' || e.kind === 'not-found') return await this.fail(e, !(pager.isPage?.(cur) ?? true));
           // The daily budget of this connection is spent: every further page would be refused too. The page stays at the cursor (not deferred), the run is saved and resumes later.
           if (e.reason === 'csw_daily_budget') return await this.interrupt(e, (st.pagesTried ?? 0) + 1);
           const skip = pager.skip(cur);
           const isPage = pager.isPage?.(cur) ?? true;
           const page = (st.pagesTried ?? 0) + 1;
-          this.defer({ cursor: skip === null ? cur : (pager.retryCursor?.(cur) ?? cur), kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(skip === null ? { blocking: true } : {}) });
+          this.defer({ cursor: skip === null ? cur : (pager.retryCursor?.(cur) ?? cur), kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(isPage ? {} : { counting: true }), ...(skip === null ? { blocking: true } : {}) });
           if (isPage) st.pagesTried = page;
           failures += 1;
           // The page now sits in `deferred`; the cursor goes past it BEFORE the run may stop, or a resume would read it twice (deferred + cursor).
           if (skip !== null) st.cursor = skip;
-          if (skip === null || failures >= CONSECUTIVE_FAILURES || st.deferred.length >= MAX_DEFERRED) return await this.interrupt(e, page);
+          if (skip === null || failures >= CONSECUTIVE_FAILURES || st.deferred.length >= MAX_DEFERRED) return await this.interrupt(e, page, !isPage);
           await this.checkpoint();
           continue;
         }
@@ -533,19 +533,19 @@ export class CollectionRunner {
       } catch (e) {
         if (!(e instanceof SourceFailure)) throw e;
         if (e.kind === 'protocol' || e.kind === 'not-found') {
-          await this.fail(e);
+          await this.fail(e, entry.counting);
           return false;
         }
         // The day's budget ran out in the retry pass: as in the normal pass, the run is interrupted (resumable), not finished with "unread pages".
         if (e.reason === 'csw_daily_budget') {
-          await this.interrupt(e, entry.page);
+          await this.interrupt(e, entry.page, entry.counting);
           return false;
         }
         if (e.kind !== entry.kind) this.moveState(entry, e.kind);
         entry.reason = e.reason;
         failures += 1;
         if (entry.blocking || failures >= CONSECUTIVE_FAILURES) {
-          await this.interrupt(e, entry.page);
+          await this.interrupt(e, entry.page, entry.counting);
           return false;
         }
         continue;
@@ -586,19 +586,19 @@ export class CollectionRunner {
     st.counts.records += d.expected;
   }
 
-  private async fail(e: SourceFailure): Promise<void> {
+  private async fail(e: SourceFailure, counting = false): Promise<void> {
     const st = this.st!;
     st.status = 'failed';
     this.notice({ code: e.reason, params: { kind: e.kind, ...(e.status ? { status: e.status } : {}) } });
-    st.stop = stopFromFailure(e, sourceLabel(st.settings.spec), (st.pagesTried ?? 0) + 1, st.stats.requests, this.clock.now());
+    st.stop = stopFromFailure(e, sourceLabel(st.settings.spec), (st.pagesTried ?? 0) + 1, st.stats.requests, this.clock.now(), counting);
     await this.checkpoint();
   }
 
-  private async interrupt(e: SourceFailure, page?: number): Promise<void> {
+  private async interrupt(e: SourceFailure, page?: number, counting = false): Promise<void> {
     const st = this.st!;
     st.status = 'interrupted';
     this.notice({ code: 'interrupted', params: { reason: e.reason } });
-    st.stop = stopFromFailure(e, sourceLabel(st.settings.spec), page ?? (st.pagesTried ?? 0) + 1, st.stats.requests, this.clock.now());
+    st.stop = stopFromFailure(e, sourceLabel(st.settings.spec), page ?? (st.pagesTried ?? 0) + 1, st.stats.requests, this.clock.now(), counting);
     await this.checkpoint();
   }
 
