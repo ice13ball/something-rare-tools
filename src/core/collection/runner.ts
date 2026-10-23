@@ -456,6 +456,7 @@ export class CollectionRunner {
       c.invalidTokens += k.invalidTokens ?? 0;
       for (const key of ['looked', 'found', 'absent', 'failed'] as const) c.crossSource[key] += k.crossSource?.[key] ?? 0;
       if (k.crossSource?.notCompared) c.crossSource.notCompared = (c.crossSource.notCompared ?? 0) + k.crossSource.notCompared;
+      if (k.crossSource?.noDoi) c.crossSource.noDoi = (c.crossSource.noDoi ?? 0) + k.crossSource.noDoi;
     }
     for (const n of data.notices ?? []) this.notice(n);
   }
