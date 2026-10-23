@@ -132,7 +132,7 @@ export function doiListPager(deps: Deps, text: string): Pager<DoiCursor> {
       const found = await lookupMany(deps, b.dois);
       const items: Item[] = b.dois.map((doi) => {
         const rec = found.get(doi);
-        return rec ? { ref: doi, state: 'checked', records: [rec] } : { ref: doi, state: 'unreachable', records: [], reason: 'not-found-at-datacite' };
+        return rec ? { ref: doi, state: 'checked', records: [rec] } : { ref: doi, state: 'not-in-datacite', records: [], reason: 'not-found-at-datacite' };
       });
       return { items, next: afterOf(c), counters: { invalidTokens: b.invalid, duplicatesInBatch: b.duplicates } }; // (the counter keeps its saved name; it now counts repeats anywhere in the list)
     },

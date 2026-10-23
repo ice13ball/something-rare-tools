@@ -552,6 +552,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
             <li>{t('collection.state.unreachable', { n: c.states.unreachable })}</li>
             <li>{t('collection.state.throttled', { n: c.states.throttled })}</li>
             <li>{t('collection.state.unsupported', { n: c.states['unsupported-profile'] })}</li>
+            {(c.states['not-in-datacite'] ?? 0) > 0 && <li data-testid="state-not-in-datacite">{t('collection.state.notInDatacite', { n: c.states['not-in-datacite'] })}</li>}
           </ul>
           <p className="muted">
             {t('collection.progress.requests', { requests: progress.stats.requests, retries: progress.stats.retries, throttled: progress.stats.throttleEvents })}{' '}

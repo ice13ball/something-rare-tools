@@ -437,7 +437,7 @@ export class CollectionRunner {
         }
       }
       c.records += 1;
-      c.states[item.state] += 1;
+      c.states[item.state] = (c.states[item.state] ?? 0) + 1; // `?? 0`: a run saved before 'not-in-datacite' existed has no such counter
       if (item.state !== 'checked') {
         if (st.unread.length < SAMPLES_PER_RULE) st.unread.push({ ref: item.ref, state: item.state, reason: item.reason ?? '' });
         continue;

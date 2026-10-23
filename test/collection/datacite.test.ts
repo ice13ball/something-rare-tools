@@ -5,6 +5,8 @@ import { FetchBlockedError } from '../../src/core/sources/fetcher';
 import { CollectionRunner } from '../../src/core/collection/runner';
 import { BACKOFF, PACE_MS, makeNetContext, request, parseRetryAfter, type NetResponse } from '../../src/core/collection/net';
 import { cursorEpoch, dataciteListUrl, DATACITE_FIELDS } from '../../src/core/collection/sources/datacite';
+import { UI } from '../../src/core/i18n/ui';
+import { LANGS } from '../../src/core/types';
 import { scanBatch, countDois, doiListPager } from '../../src/core/collection/sources/dois';
 import type { RunSettings } from '../../src/core/collection/types';
 import { HTML_503, dataciteMock, dcResource, json, res, runnerDeps, virtualClock } from './helpers';
@@ -191,9 +193,16 @@ describe('DOI list', () => {
     expect(mock.urls[0]).toContain('ids=');
     expect(p.counts.records).toBe(151);
     expect(p.counts.states.checked).toBe(150);
-    expect(p.counts.states.unreachable).toBe(1);
+    // not reachable is something else: DataCite answered, it just has no record (a Crossref DOI, a typo) - its own state and label
+    expect(p.counts.states.unreachable).toBe(0);
+    expect(p.counts.states['not-in-datacite']).toBe(1);
     expect(p.counts.invalidTokens).toBe(1);
-    expect(r.unread()).toEqual([{ ref: '10.9999/unknown.1', state: 'unreachable', reason: 'not-found-at-datacite' }]);
+    expect(r.unread()).toEqual([{ ref: '10.9999/unknown.1', state: 'not-in-datacite', reason: 'not-found-at-datacite' }]);
+    for (const lang of LANGS) {
+      expect(UI[lang]['collection.state.notInDatacite'], lang).toContain('DataCite');
+      expect(UI[lang]['collection.unreadState.not-in-datacite'], lang).toContain('DataCite');
+      expect(UI[lang]['collection.state.notInDatacite'], lang).not.toBe(UI[lang]['collection.state.unreachable']);
+    }
     // the unknown DOI added no licence finding: LIC-MISSING counts only the 30 records that really state none
     expect(p.counts.rules['LIC-MISSING']).toBe(30);
   });
@@ -327,7 +336,7 @@ describe('backoff and unread pages', () => {
     await r.whenIdle();
     p = r.progress();
     expect(p.status).toBe('finished');
-    expect(p.counts.states).toEqual({ checked: 3000, unreachable: 0, throttled: 0, 'unsupported-profile': 0 });
+    expect(p.counts.states).toEqual({ checked: 3000, unreachable: 0, throttled: 0, 'unsupported-profile': 0, 'not-in-datacite': 0 });
     expect(p.counts.records).toBe(3000);
     expect(p.counts.rules['LIC-MISSING']).toBe(600);
     expect(p.deferred).toBe(0);
