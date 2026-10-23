@@ -166,6 +166,15 @@ const YEAR_RE = /^\d{4}$/;
  * - year only: a 4-digit STRING with dateFormatted false -> precision 'year'.
  * All calendar dates are validated (2021-02-30 is unparseable).
  */
+/** The end of an ISO 8601 interval written in full: a reduced end takes the leading parts it leaves out from the start. */
+function completeIntervalEnd(start: string, end: string): string | undefined {
+  if (/^\d{4}/.test(end)) return end;
+  if (/^\d{2}$/.test(end) && /^\d{4}-\d{2}/.test(start)) return `${start.slice(0, 7)}-${end}`;
+  if (/^\d{2}-\d{2}$/.test(end)) return `${start.slice(0, 4)}-${end}`;
+  if (/^\d{2}:\d{2}/.test(end) && /^\d{4}-\d{2}-\d{2}/.test(start)) return `${start.slice(0, 10)}T${end}`;
+  return undefined;
+}
+
 export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | DateError {
   if (raw === null) return fail('');
   if (typeof raw === 'number') {
@@ -185,12 +194,17 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
     return { iso: pad4(y), year: y, precision: 'year', tz: 'unknown' };
   }
 
-  // ISO 8601 interval 'start/end' (Darwin Core eventDate): the START is the date, with the start's precision
-  const iv = /^(\d{4}(?:-[^/]*)?)\/(\d{4}(?:-[^/]*)?)$/.exec(s);
+  // ISO 8601 interval 'start/end' (Darwin Core eventDate): the START is the date, with the start's precision. The end may be
+  // reduced as ISO 8601 allows ('2007-11-13/15', '2007-11-13/12-02', '2008-05-01T10:00Z/11:00Z'); it must parse and not precede the start.
+  const iv = /^(\d{4}(?:-[^/]*)?)\/([^/]+)$/.exec(s);
   if (iv) {
     const start = parseDate(iv[1], opts);
-    const end = parseDate(iv[2], opts);
-    if (!('error' in start) && !('error' in end)) return start;
+    const endText = completeIntervalEnd(iv[1], iv[2]);
+    const end = endText === undefined ? undefined : parseDate(endText, opts);
+    if (!('error' in start) && end !== undefined && !('error' in end)) {
+      const n = Math.min(start.iso.length, end.iso.length);
+      if (end.iso.slice(0, n) >= start.iso.slice(0, n)) return start;
+    }
   }
 
   let m = ISO_RE.exec(s);

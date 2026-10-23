@@ -27,17 +27,17 @@ describe('ROW-ON-LAND', () => {
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ severity: 'warning', lines: [5, 6, 7, 8, 9, 10] });
     expect(f[0].params.count).toBe(6);
-    expect(f[0].params.places).toBe('37.85 N, 31.517 E (4; ≥100 km); 30.07 N, 42.07 E (2; ≥200 km)');
+    expect(f[0].params.places).toBe('31.517 E, 37.85 N (4; ≥100 km); 42.07 E, 30.07 N (2; ≥200 km)');
     // both flips are true at sea: Menez Gwen is at 31.5 W, the Lost City field at 42.1 W
-    expect(f[0].params.flips).toBe('37.85 N, 31.517 E → 37.85 N, 31.517 W; 30.07 N, 42.07 E → 30.07 N, 42.07 W');
+    expect(f[0].params.flips).toBe('31.517 E, 37.85 N → 31.517 W, 37.85 N; 42.07 E, 30.07 N → 42.07 W, 30.07 N');
     const pl = renderPlain(f[0], 'pl');
-    expect(pl).toContain('6 wierszy (5–10)');
+    expect(pl).toContain('W wierszach 5–10 (razem: 6)');
     expect(pl).toContain('To tylko wskazówka, nie poprawka.');
   });
 
   it('prints a single-precision artefact as the number that was meant (37.8499984741211 -> 37.85)', () => {
     const ds = dataset(rows(2, 1, { lat: 37.8499984741211, lon: 31.5170001983643 }));
-    expect(only(checkRows(ds, { land }), 'ROW-ON-LAND')[0].params.places).toBe('37.85 N, 31.517 E (1; ≥100 km)');
+    expect(only(checkRows(ds, { land }), 'ROW-ON-LAND')[0].params.places).toBe('31.517 E, 37.85 N (1; ≥100 km)');
   });
 
   it('says nothing about coastal, fjord and open-sea positions', () => {
@@ -51,11 +51,16 @@ describe('ROW-ON-LAND', () => {
     expect(only(checkRows(ds, { land }), 'ROW-ON-LAND')).toEqual([]);
   });
 
-  it('gives no hint when no flip or swap reaches the sea', () => {
-    const ds = dataset(rows(2, 1, { lat: 52.23, lon: 21.01 })); // Warsaw: flipped it is in the Atlantic? no — check the rule decides from the mask
-    const f = only(checkRows(ds, { land }), 'ROW-ON-LAND')[0];
-    const flipsAtSea = [[52.23, -21.01], [-52.23, 21.01], [21.01, 52.23]].some(([a, b]) => land.place(a, b).kind === 'sea');
-    expect(f.params.flips !== undefined).toBe(flipsAtSea);
+  it('gives a hint only for an alternative the mask calls sea, and judges only from 50 km inland (controlled mask)', () => {
+    const fake = (answers: Record<string, ReturnType<LandMask['place']>>): LandMask => ({ width: 0, height: 0, place: (la, lo) => answers[`${la},${lo}`] ?? { kind: 'unknown' } });
+    const ds = dataset([...rows(2, 1, { lat: 10, lon: 20 }), ...rows(3, 1, { lat: 11, lon: 21 }), ...rows(4, 1, { lat: 12, lon: 22 })]);
+    const noSea = fake({ '10,20': { kind: 'land', atLeastKm: 100 }, '10,-20': { kind: 'land', atLeastKm: 100 }, '-10,20': { kind: 'unknown' }, '20,10': { kind: 'land', atLeastKm: 5 }, '11,21': { kind: 'land', atLeastKm: 20 } });
+    const f = only(checkRows(ds, { land: noSea }), 'ROW-ON-LAND');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([2]); // 11,21 is only 20 km inland: not judged
+    expect(f[0].params.flips).toBeUndefined();
+    const swapAtSea = fake({ '10,20': { kind: 'land', atLeastKm: 100 }, '20,10': { kind: 'sea' } });
+    expect(only(checkRows(ds, { land: swapAtSea }), 'ROW-ON-LAND')[0].params.flips).toBe('20 E, 10 N → 10 E, 20 N');
   });
 
   it('does not run without the mask', () => {
@@ -118,6 +123,22 @@ describe('ROW-STATION-SPREAD', () => {
     expect(f[0]).toMatchObject({ severity: 'info', value: 'RIDGE 1' });
     expect(f[0].params.km).toBe(171);
     expect(renderPlain(f[0], 'pl')).toContain('nawet o 171 km');
+  });
+
+  it('adds that one position is almost certainly wrong beyond 1000 km, and leaves lat = lon positions to ROW-LAT-EQ-LON', () => {
+    const far = dataset([...rows(2, 3, { lat: -41.025, lon: -129.56, station: 'SEAMOUNT' }), ...rows(6, 2, { lat: 45.93, lon: -129.98, station: 'SEAMOUNT' })]);
+    const f = only(checkRows(far), 'ROW-STATION-SPREAD')[0];
+    expect(f.params.far).toBe('yes');
+    expect(renderPlain(f, 'en')).toContain('almost certainly a wrong position');
+    const eq = dataset([...rows(2, 3, { lat: 76.9975, lon: 16.5047, station: 'SGD5' }), ...rows(6, 1, { lat: 76.989444, lon: 76.989444, station: 'SGD5' })]);
+    expect(only(checkRows(eq), 'ROW-STATION-SPREAD')).toEqual([]);
+  });
+
+  it('never samples away a single far outlier on a long track', () => {
+    const at = (v: number) => Number(v.toFixed(5));
+    const track = Array.from({ length: 900 }, (_, i) => rows(2 + i, 1, { lat: at(54.00001 + i * 0.00002), lon: at(18.00001 + i * 0.00002), latDecimals: 5, lonDecimals: 5, station: 'T' })).flat();
+    const ds = dataset([...track.slice(0, 450), ...rows(5000, 1, { lat: 58.5, lon: 18.0, station: 'T' }), ...track.slice(450)]);
+    expect(only(checkRows(ds), 'ROW-STATION-SPREAD')[0]?.params.km).toBeGreaterThan(400);
   });
 
   it('is silent within 10 km (repeated casts drift)', () => {

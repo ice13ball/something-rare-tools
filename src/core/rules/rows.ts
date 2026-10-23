@@ -16,7 +16,7 @@ import type { RuleSpec } from './spec';
  *   ROW-NA-VARIANT        (none)      field = column, value = example token (e.g. NANA), lines = rows
  *   ROW-STATION-MOVED     station, positions   positions = compact text such as "76.9N 15.5E (9 rows); 76.9N 16.5E (14 rows)"
  *                         signLon / signLat    'yes' when two positions differ (almost) only by the sign of that coordinate (optional)
- *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded)
+ *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded); far = 'yes' above 1000 km (optional)
  *   ROW-ON-LAND           count, places, flips   count = rows on land; places = up to 5 positions "lat, lon (rows; ≥N km)";
  *                         flips (optional) = "position → the same with a sign flipped or axes exchanged" where that lies at sea
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
@@ -175,6 +175,17 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Station {station} hat Positionen, die bis zu {km} km auseinanderliegen ({positions}). Eine Station ist meist ein Ort, und 10 km sind weit mehr als der Positionsfehler eines Schiffs auf Station. Steht der Name für ein Gebiet, einen Transekt oder eine Fahrt, ignorieren Sie diesen Hinweis.`,
       fr: `La station {station} a des positions distantes de {km} km au plus ({positions}). Une station correspond d'habitude à un seul lieu, et 10 km dépassent de loin l'erreur de position d'un navire en station. Si ce nom désigne une zone, un transect ou une campagne, ignorez cette remarque.`,
     },
+    plainIf: [
+      {
+        param: 'far',
+        plain: {
+          pl: `Przy ponad 1000 km to niemal na pewno błąd jednej z pozycji, nie obszar.`,
+          en: `At more than 1000 km this is almost certainly a wrong position, not an area.`,
+          de: `Bei mehr als 1000 km ist das fast sicher eine falsche Position, kein Gebiet.`,
+          fr: `Au-delà de 1000 km, c'est presque certainement une position erronée, pas une zone.`,
+        },
+      },
+    ],
     technical: `{file} station {station}: positions up to {km} km apart (more than 10 km; great-circle distance) at {positions}.`,
   },
   {
@@ -184,10 +195,10 @@ export const ROW_RULES: readonly RuleSpec[] = [
     params: ['count', 'places'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
-      pl: `{count} wierszy ({lines}) ma pozycję na lądzie lub w jeziorze, z dala od morza: {places} (wiersze; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. Pas 20 km przy brzegu nie jest oceniany.`,
-      en: `{count} rows ({lines}) have a position on land or in a lake, away from the sea: {places} (rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. The 20 km band along the coast is not judged.`,
-      de: `{count} Zeilen ({lines}) haben eine Position an Land oder in einem See, abseits des Meeres: {places} (Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten ist das meist ein Fehler: falsches Vorzeichen, vertauschte Achsen oder ein Tippfehler. Der 20-km-Küstenstreifen wird nicht bewertet.`,
-      fr: `{count} lignes ({lines}) ont une position sur terre ou dans un lac, loin de la mer : {places} (lignes ; distance minimale à la mer). Pour des données marines, c'est le plus souvent une erreur : signe erroné, axes inversés ou faute de frappe. La bande côtière de 20 km n'est pas évaluée.`,
+      pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, z dala od morza: {places} (wiersze; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. Pas 50 km od brzegu i brzegi rzek nie są oceniane.`,
+      en: `In lines {lines} ({count} in all) the position lies on land or in a lake, away from the sea: {places} (rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. The 50 km band along the coast and river banks are not judged.`,
+      de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position an Land oder in einem See, abseits des Meeres: {places} (Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten ist das meist ein Fehler: falsches Vorzeichen, vertauschte Achsen oder ein Tippfehler. Der 50-km-Küstenstreifen und Flussufer werden nicht bewertet.`,
+      fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, loin de la mer : {places} (lignes ; distance minimale à la mer). Pour des données marines, c'est le plus souvent une erreur : signe erroné, axes inversés ou faute de frappe. La bande côtière de 50 km et les rives des fleuves ne sont pas évaluées.`,
     },
     plainIf: [
       {
@@ -200,7 +211,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 20 km from the sea (Natural Earth 1:10m, 0.05 degree cells; nearer the coast nothing is judged): {places}.`,
+    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; nearer the coast, near rivers and canals nothing is judged): {places}.`,
   },
   {
     id: 'ROW-DATE-UNPARSEABLE',

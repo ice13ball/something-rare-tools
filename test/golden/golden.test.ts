@@ -114,10 +114,17 @@ describe.skipIf(!GOLDEN_DIR)('golden set', () => {
   });
 
   describe('positions on land', () => {
-    // coastal and fjord controls (Svalbard fjords, porewater at the coast, Baltic): no position may be called land.
-    // gn-6fe405e2 line 275 has latitude 58 for 78 (Siberia): the one true hit. CoastDOM (pangaea-964012) is coastal water
-    // including rivers; only positions far up rivers, and Baltic samples placed far inland, are expected there.
+    // Coastal and fjord controls (Svalbard fjords, porewater at the coast, the Baltic, CoastDOM's estuaries and river ports):
+    // no correct position may be called land. gn-6fe405e2 line 275 has latitude 58 for 78 (Siberia). CoastDOM (pangaea-964012)
+    // has two "Baltic Sea" samples with sea salinity placed some 50 km inland in Kashubia (18.0 E, 54.0 N; 17.335 E, 54.083 N).
+    const expectedPlaces: Record<string, string[]> = { 'pangaea-964012': ['18.000000 E, 54.000000 N', '17.335000 E, 54.083000 N'] };
     const expectedLines: Record<string, number[]> = { 'gn-6fe405e2': [275] };
+    it('pangaea-964012 (CoastDOM): only the two Baltic samples placed inland', () => {
+      const hits = got('pangaea-964012').filter((f) => f.ruleId === 'ROW-ON-LAND');
+      expect(hits).toHaveLength(1);
+      expect(hits[0].params.count).toBe(2);
+      for (const p of expectedPlaces['pangaea-964012']) expect(String(hits[0].params.places)).toContain(p);
+    }, TIMEOUT);
     for (const input of exp.inputs.filter((i) => i.id !== 'pangaea-964012')) {
       it(`${input.id}: ROW-ON-LAND only where the position is really wrong`, () => {
         const lines = got(input.id).filter((f) => f.ruleId === 'ROW-ON-LAND').flatMap((f) => f.lines ?? []);

@@ -98,8 +98,11 @@ export interface Handler {
 export type LandLoader = () => Promise<LandMask>;
 
 /** In the browser: the bundled grid from our own /assets, gunzipped with DecompressionStream. */
+/** A mask download that has not finished in this time is given up (the report then says positions were not compared with land). */
+const LAND_TIMEOUT_MS = 30_000;
+
 export const browserLandLoader: LandLoader = async () => {
-  const res = await fetch(landMaskUrl);
+  const res = await fetch(landMaskUrl, { signal: AbortSignal.timeout(LAND_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`land mask: HTTP ${res.status}`);
   return loadLandMask(new Uint8Array(await res.arrayBuffer()), gunzipInBrowser);
 };
@@ -135,7 +138,10 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
   let report: Report | undefined;
   let rowIndex: Map<string, { ds: Dataset; rowIdx: number }> | undefined;
 
+  // a check that awaited the mask must not write its report into a session that was reset meanwhile
+  let session = 0;
   const reset = (): void => {
+    session += 1;
     files = new Map();
     built = new Map();
     droppedMeta = [];
@@ -223,7 +229,11 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
 
   function propose(req: Extract<Request, { type: 'propose' }>): ProposeResult {
     const h = held(req.fileId);
-    return { mappings: proposeMappings(h.parsed, req.layout), proposals: proposalsFor(h.parsed, req.layout) };
+    const mappings = proposeMappings(h.parsed, req.layout);
+    // a proposed latitude and longitude: start the mask download while the user reads the proposal
+    const roles = mappings.flatMap((m) => m.columns.map((c) => c.role.kind));
+    if (roles.includes('latitude') && roles.includes('longitude')) void land();
+    return { mappings, proposals: proposalsFor(h.parsed, req.layout) };
   }
 
   function build(req: Extract<Request, { type: 'build' }>): BuildResult {
@@ -232,7 +242,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     built.set(req.fileId, { datasets: out.datasets, findings: out.findings });
     report = undefined;
     rowIndex = undefined;
-    if (hasPositions(out.datasets)) void land(); // start the download while the user reads the confirmation
+    if (hasPositions(out.datasets)) void land(); // a mapping the user edited by hand may only now have positions
     return { datasets: out.datasets.map(summaryOf) };
   }
 
@@ -242,7 +252,9 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     if (hasDropped) sessionRecords.push({ label: 'dropped files', kind: 'dropped', metadata: droppedMeta, files: [], findings: [] });
     const findings = [...parseFindings, ...[...built.values()].flatMap((b) => b.findings)];
     const pending = hasPositions(datasets) ? land() : undefined;
+    const started = session;
     const mask = pending === undefined ? undefined : await pending;
+    if (started !== session) throw new Error('The files were replaced by a newer check while this one was waiting. Check again.');
     report = runChecks({ datasets, records: sessionRecords, parseFindings: findings }, { land: mask });
     rowIndex = undefined;
     return { report, datasets: datasets.map(summaryOf) };
