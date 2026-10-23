@@ -131,6 +131,10 @@ interface Cand {
   kind: 'latitude' | 'longitude' | 'datetime' | 'date' | 'time' | 'depth' | 'station' | 'cruise' | 'sampleId';
   reason: string;
   elevation?: boolean;
+  /** Darwin Core depth: always metres, positive down; never inferred from the values. */
+  dwcDepth?: boolean;
+  /** Every sampled value is blank; set after the columns are read. */
+  empty?: boolean;
 }
 
 const SITE_DEPTH =
@@ -169,6 +173,80 @@ function nameCandidate(key: string): Cand | undefined {
   }
   if (/^(sample( id| no| number| name| code| label)?|core( id| name| no| number)?|specimen( id)?|bottle( id| no| number)?|id)$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', reason: 'name says sample or core identifier' };
+  }
+  return undefined;
+}
+
+/* ---------- Darwin Core ---------- */
+
+const DWC_URI = /^https?:\/\/rs\.tdwg\.org\/dwc\/(?:terms|iri)\/(?:[a-z]+\/)?/i;
+
+/** 'dwc:decimalLatitude' / 'http://rs.tdwg.org/dwc/terms/decimalLatitude' -> term and whether the header carried a DwC prefix. */
+function dwcHeader(header: string): { term: string; prefixed: boolean } | undefined {
+  const h = header.trim();
+  let t = h;
+  let prefixed = false;
+  if (DWC_URI.test(t)) {
+    t = t.replace(DWC_URI, '');
+    prefixed = true;
+  } else if (/^dwc:/i.test(t)) {
+    t = t.slice(4);
+    prefixed = true;
+  }
+  return /^[A-Za-z]+$/.test(t) ? { term: t, prefixed } : undefined;
+}
+
+/** The lower-cased DwC term a header names (prefix removed), for the dataset builder. */
+export function dwcTermOf(header: string): string | undefined {
+  return dwcHeader(stripTypeSuffix(header))?.term.toLowerCase();
+}
+
+const DWC_CAND: Record<string, Omit<Cand, 'reason'> & { reason?: string }> = {
+  decimallatitude: { slot: 'latitude', tier: 0, kind: 'latitude' },
+  decimallongitude: { slot: 'longitude', tier: 0, kind: 'longitude' },
+  verbatimlatitude: { slot: 'latitude', tier: 1, kind: 'latitude' },
+  verbatimlongitude: { slot: 'longitude', tier: 1, kind: 'longitude' },
+  eventdate: { slot: 'when', tier: 0, kind: 'date', reason: 'Darwin Core eventDate (where eventDate is empty, year/month/day are used)' },
+  eventtime: { slot: 'time', tier: 0, kind: 'time' },
+  minimumdepthinmeters: { slot: 'depth', tier: 0, kind: 'depth', dwcDepth: true, reason: 'Darwin Core: depth below the surface in metres (positive down)' },
+  maximumdepthinmeters: { slot: 'depth', tier: 1, kind: 'depth', dwcDepth: true, reason: 'Darwin Core: depth below the surface in metres (positive down)' },
+  locationid: { slot: 'station', tier: 0, kind: 'station' },
+  occurrenceid: { slot: 'sampleId', tier: 0, kind: 'sampleId' },
+  eventid: { slot: 'sampleId', tier: 2, kind: 'sampleId' },
+};
+/** Terms whose names are specific enough to be read without any DwC context. */
+const DWC_IGNORED = new Set([
+  'catalognumber', 'recordnumber', 'othercatalognumbers', 'fieldnumber', 'individualcount', 'organismquantity',
+  'coordinateuncertaintyinmeters', 'coordinateprecision', 'minimumelevationinmeters', 'maximumelevationinmeters',
+  'minimumdistanceabovesurfaceinmeters', 'maximumdistanceabovesurfaceinmeters', 'startdayofyear', 'enddayofyear',
+]);
+/** Ordinary words that are DwC terms only when the sheet is a DwC table (or the header is prefixed). */
+const DWC_GENERIC = new Set(['year', 'month', 'day', 'modified', 'locality']);
+const DWC_MARKERS = new Set([
+  ...Object.keys(DWC_CAND), ...DWC_IGNORED, 'scientificname', 'basisofrecord', 'occurrencestatus', 'taxonid',
+  'scientificnameid', 'taxonrank', 'decimalcoordinates', 'geodeticdatum', 'datasetid', 'datasetname', 'kingdom',
+]);
+
+/** Is this sheet a Darwin Core table: does any header name a distinctive DwC term, or carry a dwc: prefix? */
+function isDwcSheet(headers: readonly string[]): boolean {
+  return headers.some((h) => {
+    const d = dwcHeader(stripTypeSuffix(h));
+    return d !== undefined && (d.prefixed || DWC_MARKERS.has(d.term.toLowerCase()));
+  });
+}
+
+function dwcColumn(header: string, dwcSheet: boolean): { cand: Cand } | { ignore: string } | undefined {
+  const d = dwcHeader(header);
+  if (!d) return undefined;
+  const t = d.term.toLowerCase();
+  const generic = DWC_GENERIC.has(t);
+  if (!d.prefixed && generic && !dwcSheet) return undefined;
+  if (!d.prefixed && !generic && !DWC_MARKERS.has(t) && !(dwcSheet && /id$/.test(t) && t.length > 2 && t !== 'id')) return undefined;
+  const c = DWC_CAND[t];
+  if (c) return { cand: { ...c, reason: c.reason ?? `Darwin Core ${d.term}` } };
+  if (t === 'locality') return { cand: { slot: 'station', tier: 1, kind: 'station', reason: 'Darwin Core locality' } };
+  if (DWC_IGNORED.has(t) || DWC_GENERIC.has(t) || t.endsWith('id')) {
+    return { ignore: `Darwin Core ${d.term}: identifier, count or bookkeeping, not a measured variable` };
   }
   return undefined;
 }
@@ -245,6 +323,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     cand?: Cand;
     elevation?: boolean;
   }
+  const dwcSheet = isDwcSheet(sheet.header);
   const entries: Entry[] = sheet.header.map((header, index): Entry => {
     const cleanHeader = stripTypeSuffix(header);
     const base = { index, header, cleanHeader };
@@ -263,7 +342,9 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     // 1. header names
     if (FLAG.test(key)) return ignore('quality flag column');
 
-    const cand = nameCandidate(key);
+    const dwc = dwcColumn(cleanHeader, dwcSheet);
+    if (dwc && 'ignore' in dwc) return ignore(dwc.ignore);
+    const cand = dwc ? dwc.cand : nameCandidate(key);
     let candidate: Cand | undefined = cand;
     let pressure = isPressureName(key);
     let variableKey: string | undefined;
@@ -349,13 +430,23 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     return { proposal: { ...base, role, confidence: canonical ? 'high' : 'low', reason } };
   });
 
-  // one column per slot: the best tier wins, then the leftmost
+  // a candidate whose sampled values are all blank cannot win a slot over one that has values
+  for (const e of entries) {
+    if (e.cand) {
+      const col = e.proposal.index;
+      e.cand.empty = rows.every((r) => isBlank(r.cells[col] ?? null));
+    }
+  }
+
+  // one column per slot: a column with values first, then the best tier, then the leftmost
   const bySlot = new Map<SlotKind, number[]>();
   entries.forEach((e, i) => {
     if (e.cand) bySlot.set(e.cand.slot, [...(bySlot.get(e.cand.slot) ?? []), i]);
   });
   for (const [slot, idxs] of bySlot) {
-    const winner = idxs.slice().sort((a, b) => entries[a].cand!.tier - entries[b].cand!.tier || a - b)[0];
+    const winner = idxs
+      .slice()
+      .sort((a, b) => Number(entries[a].cand!.empty) - Number(entries[b].cand!.empty) || entries[a].cand!.tier - entries[b].cand!.tier || a - b)[0];
     for (const i of idxs) {
       const e = entries[i];
       const c = e.cand!;
@@ -363,7 +454,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
         const w = entries[winner].proposal.cleanHeader;
         e.proposal.role = { kind: 'ignore' };
         e.proposal.confidence = 'low';
-        e.proposal.reason = `another column ("${w}") is used for ${slot === 'when' ? 'the date' : slot}`;
+        const used = `another column ("${w}") is used for ${slot === 'when' ? 'the date' : slot}`;
+        e.proposal.reason = c.empty && !entries[winner].cand!.empty ? `column is empty; ${used}` : used;
         continue;
       }
       const hu = unitFromHeader(e.proposal.header);
@@ -381,6 +473,10 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
           break;
         case 'depth': {
           const unit = hu.unit ?? code?.hint?.unit;
+          if (c.dwcDepth) {
+            e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
+            break;
+          }
           const positive = depthPositive(rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
           e.proposal.role = unit === undefined ? { kind: 'depth', positive } : { kind: 'depth', positive, unit };
           if (positive === 'up' && !c.elevation) e.proposal.reason += `; ${NEGATIVE_UP}`;

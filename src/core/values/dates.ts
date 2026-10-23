@@ -162,6 +162,7 @@ const YEAR_RE = /^\d{4}$/;
  * - 'DD.MM.YYYY' (day first by convention), 'DD/MM/YYYY' or 'MM/DD/YYYY' (also with '-') ONLY when one part > 12
  *   decides the order (identical parts are also unambiguous), or when the caller passes the column's `order`
  *   (see detectDayMonthOrder); otherwise unparseable. A trailing ' HH:MM[:SS]' is allowed.
+ * - ISO 8601 interval 'start/end' ('2008-05-01/2008-05-14'): the start, when both halves parse.
  * - year only: a 4-digit STRING with dateFormatted false -> precision 'year'.
  * All calendar dates are validated (2021-02-30 is unparseable).
  */
@@ -182,6 +183,14 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
     const y = Number(s);
     if (opts.dateFormatted || y < 1) return fail(raw);
     return { iso: pad4(y), year: y, precision: 'year', tz: 'unknown' };
+  }
+
+  // ISO 8601 interval 'start/end' (Darwin Core eventDate): the START is the date, with the start's precision
+  const iv = /^(\d{4}(?:-[^/]*)?)\/(\d{4}(?:-[^/]*)?)$/.exec(s);
+  if (iv) {
+    const start = parseDate(iv[1], opts);
+    const end = parseDate(iv[2], opts);
+    if (!('error' in start) && !('error' in end)) return start;
   }
 
   let m = ISO_RE.exec(s);
