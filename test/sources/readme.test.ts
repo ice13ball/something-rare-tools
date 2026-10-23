@@ -9,8 +9,8 @@ import { fixture, MapFetcher } from './mapFetcher';
 
 describe('isReadme', () => {
   it('README in its usual spellings, and nothing that only starts with "read"', () => {
-    for (const n of ['README.txt', 'readme.txt', 'ReadMe.md', 'Readme.txt', 'README', '00_README_v2.txt', 'data/read_me.txt', 'Read me.txt', 'project-readme.txt']) expect(isReadme(n), n).toBe(true);
-    for (const n of ['readings.csv', 'readmeasurements.csv', 'thread_me.csv', 'bottle.csv', 'spread_meta.txt']) expect(isReadme(n), n).toBe(false);
+    for (const n of ['README.txt', 'readme.txt', 'ReadMe.md', 'Readme.txt', 'README', '00_README_v2.txt', 'data/read_me.txt', 'Read me.txt', 'README_EN.txt', 'readme-1.2.txt']) expect(isReadme(n), n).toBe(true);
+    for (const n of ['readings.csv', 'readmeasurements.csv', 'thread_me.csv', 'bottle.csv', 'spread_meta.txt', 'read_metadata.csv', 'Data_and_README.xlsx', 'README_and_data.xlsx', 'Dataset_ReadMe.xlsx', 'Readme-Daten-und-Messwerte.xlsx']) expect(isReadme(n), n).toBe(false);
   });
   it('a README with a table extension is still not a data file', () => {
     expect(isDataFile('README.txt')).toBe(false);

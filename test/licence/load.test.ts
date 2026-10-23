@@ -96,6 +96,7 @@ describe('buildAttribution', () => {
     const a = analyseLicences(load.records, { failures: [], inaccessible: true });
     expect(a.missing).toBe(false);
     expect(a.contradictions).toEqual([{ kind: 'datacite-empty', licence: '—' }]);
+    expect(buildAttribution(a).omitted).toBe('unreadable');
   });
 
   it('is empty when nothing was read', () => {
