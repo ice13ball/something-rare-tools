@@ -36,13 +36,16 @@ export interface RunOptions {
 
 export function runChecks(session: CheckSession, opts: RunOptions = {}): Report {
   const findings: Finding[] = [...session.parseFindings];
+  // archives whose eml.xml states a version: a record whose data came in one of them states a version
+  const versioned = new Set(session.parseFindings.filter((f) => f.ruleId === 'IN-DWCA-VERSION' && f.params.version !== 'n/a' && f.file).map((f) => f.file as string));
   for (const record of session.records) {
     findings.push(...record.findings);
     // The same "could not be read" as on the licence page (a refused read, a blocked one, a host not allowed): the record then says nothing
     // about a licence. File-download failures reuse these rules with the file name; only the record's own label counts.
     const inaccessible = !!ownLoadFailure(record.findings, record.label, record.kind, record.metadata.length);
     if (record.metadata.length > 0 || inaccessible) {
-      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: inaccessible ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [] }));
+      const versionInArchive = record.files.some((f) => versioned.has(f.name));
+      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: inaccessible ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [], versionInArchive }));
     }
   }
   for (const ds of session.datasets) {

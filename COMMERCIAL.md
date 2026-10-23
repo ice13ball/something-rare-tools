@@ -41,7 +41,7 @@ Copyright is **not** for sale — this is licensing, not assignment.
 
 2. **The dependency tree is permissive.** The runtime and bundled dependencies are MIT
    (Express, React, @xmldom/xmldom), BSD-3-Clause (MapLibre GL JS) and Apache-2.0 (SheetJS
-   Community Edition). None is copyleft, so a proprietary licence covers the whole codebase.
+   Community Edition). None is copyleft, so a proprietary licence can cover all of our code; the dependencies keep their own permissive licences (and their notice requirements, e.g. Apache-2.0 for SheetJS).
 
 ## Contact
 

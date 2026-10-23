@@ -99,6 +99,19 @@ function buildSitemap(built: Date): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>\n`;
 }
 
+/** Waits for the response to drain or close, and removes both listeners again (one wait per full buffer, so they must not pile up). */
+function drainOrClose(res: Response): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const done = (): void => {
+      res.off('drain', done);
+      res.off('close', done);
+      resolve();
+    };
+    res.once('drain', done);
+    res.once('close', done);
+  });
+}
+
 export function createApp(opts: AppOptions): Express {
   const noindex = opts.noindex ?? SITE.noindex;
   const log = opts.log ?? ((line: string) => void process.stdout.write(line + '\n'));
@@ -234,10 +247,7 @@ export function createApp(opts: AppOptions): Express {
           bytes += next.value.byteLength;
           if (archive) archiveBudget.addBytes(req, next.value.byteLength);
           if (!res.write(next.value)) {
-            await new Promise<void>((resolve) => {
-              res.once('drain', resolve);
-              res.once('close', resolve);
-            });
+            await drainOrClose(res);
             if (res.destroyed) throw new ProxyError(499, 'client_closed');
           }
           next = await it.next();
@@ -313,10 +323,7 @@ export function createApp(opts: AppOptions): Express {
           bytes += next.value.byteLength;
           cswBudget.addBytes(req, next.value.byteLength);
           if (!res.write(next.value)) {
-            await new Promise<void>((resolve) => {
-              res.once('drain', resolve);
-              res.once('close', resolve);
-            });
+            await drainOrClose(res);
             if (res.destroyed) throw new ProxyError(499, 'client_closed');
           }
           next = await it.next();

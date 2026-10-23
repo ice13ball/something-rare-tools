@@ -264,6 +264,14 @@ describe('Darwin Core Archive, row counts and shapes (review 23.10)', () => {
     expect(ids(f)).not.toContain('ROW-RAGGED');
   });
 
+  it('a field default stays in its own column when a row carries an extra trailing field', async () => {
+    const m = metaXml({ fields: FIELDS }).replace('</core>', '<field default="HumanObservation" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/></core>');
+    const f = await read(dwca([HEADER, row(1) + '\textra', row(2)].join('\n'), [], m));
+    const s = f.sheets[0];
+    const col = s.header.indexOf('basisOfRecord');
+    expect(s.rows.map((r) => r.cells[col])).toEqual(['HumanObservation', 'HumanObservation']);
+  });
+
   it('an HTML error page named .zip is IN-DWCA-NOT-ARCHIVE, not a CSV layout problem', async () => {
     const html = new TextEncoder().encode('<html><body>Service unavailable</body></html>');
     const f = await parseFileAsync('dataset.zip', html, nodeInflate);

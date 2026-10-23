@@ -58,7 +58,16 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
  */
 export function checkLicence(
   records: MetadataRecord[],
-  ctx: { label: string; inaccessible: boolean; unreadable?: readonly MetadataSource[]; dataciteNotCompared?: boolean; /** Collection review: findings that mention the /check table are worded without it. */ collection?: boolean },
+  ctx: {
+    label: string;
+    inaccessible: boolean;
+    unreadable?: readonly MetadataSource[];
+    dataciteNotCompared?: boolean;
+    /** Collection review: findings that mention the /check table are worded without it. */
+    collection?: boolean;
+    /** The record's data came as a Darwin Core Archive whose eml.xml states a version (IN-DWCA-VERSION): the version is stated. */
+    versionInArchive?: boolean;
+  },
 ): Finding[] {
   const file = ctx.label;
   const out: Finding[] = [];
@@ -91,7 +100,7 @@ export function checkLicence(
 
   // Nothing was loaded (record refused): absence of version and extent says nothing about the record.
   if (records.length > 0) {
-    if (!records.some((r) => r.version)) out.push(makeFinding('META-NO-VERSION', { file }));
+    if (!records.some((r) => r.version) && !ctx.versionInArchive) out.push(makeFinding('META-NO-VERSION', { file }));
     if (!records.some((r) => r.bbox || r.temporalExtent)) out.push(makeFinding('META-NO-EXTENT', { file, ...(ctx.collection ? { params: { scope: 'collection' } } : {}) }));
   }
   return out;

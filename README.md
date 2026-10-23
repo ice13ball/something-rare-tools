@@ -46,10 +46,10 @@ the code, but not present a derivative as Abyssal Claims or Abyssal Claims Tools
 | Use | What the AGPL asks |
 |---|---|
 | Use the public site | nothing; files you drop never leave your browser |
-| Run it unmodified, internally or publicly | keep the licence and the source link |
+| Run it unmodified, internally or publicly | keep the licence and notices; offering the source to users is the simple way to stay safe |
 | Modify it for internal staff only | offer the modified source to those users; no public release needed |
 | Modify it and run it publicly | publish your changes under the AGPL; the footer source link must point to your version |
-| Embed the code in your own system or product | the whole networked work falls under the AGPL, or ask for a commercial licence ([`COMMERCIAL.md`](COMMERCIAL.md)) |
+| Embed the code in your own system or product | the combined work is likely covered by the AGPL too; if that does not fit, ask for a commercial licence ([`COMMERCIAL.md`](COMMERCIAL.md)) |
 
 In every case keep the attribution notice in [`LICENSE-ADDITIONAL-TERMS.md`](LICENSE-ADDITIONAL-TERMS.md).
 This table is a summary, not legal advice; the text of [`LICENSE`](LICENSE) governs.
