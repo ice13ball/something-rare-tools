@@ -10,7 +10,7 @@ import { SITE } from '../config/site.js';
 import { buildCswUpstream, createHostPacer, CSW_MAX_BYTES, CSW_TIMEOUT_MS, parseCswBody, type HostPacerOptions } from './csw.js';
 import { proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
 import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
-import { clientIp, createRateLimiter, type RateLimitOptions } from './rateLimit.js';
+import { clientIp, createDailyBudget, createRateLimiter, type DailyBudgetOptions, type RateLimitOptions } from './rateLimit.js';
 
 export interface AppOptions {
   distDir: string;
@@ -25,8 +25,10 @@ export interface AppOptions {
   maxBytes?: number;
   timeoutMs?: number;
   rateLimit?: RateLimitOptions;
-  /** Per-IP limit of /api/csw (default 120 a minute: a run asks at most once a second, plus the capabilities and the estimate). */
+  /** Per-IP limit of /api/csw (default 20 a minute; the page itself asks at most once in 3.2 s, so a normal run stays under it). */
   cswRateLimit?: RateLimitOptions;
+  /** Per-IP daily budget of /api/csw: requests and bytes (defaults in rateLimit.ts). */
+  cswDailyBudget?: DailyBudgetOptions;
   /** Turns at a catalogue host (default: at least 1 s apart, 20 may wait). */
   cswPacing?: HostPacerOptions;
   cswMaxBytes?: number;
@@ -238,9 +240,10 @@ export function createApp(opts: AppOptions): Express {
     res.status(405).json({ error: 'method_not_allowed' });
   });
 
-  // Collection review: CSW catalogues, by id. Its own per-IP limit (a run needs about one request a second) and its own per-host pacing.
+  // Collection review: CSW catalogues, by id. Its own per-IP limit (20 a minute) and daily budget, and its own per-host pacing.
   const cswPacer = createHostPacer(opts.cswPacing);
-  app.post('/api/csw', createRateLimiter({ limit: 120, ...opts.cswRateLimit }), express.json({ limit: '1kb' }), async (req: Request, res: Response) => {
+  const cswBudget = createDailyBudget(opts.cswDailyBudget);
+  app.post('/api/csw', createRateLimiter({ limit: 20, ...opts.cswRateLimit }), cswBudget.admit, express.json({ limit: '1kb' }), async (req: Request, res: Response) => {
     const clientGone = new AbortController();
     res.on('close', () => {
       if (!res.writableFinished) clientGone.abort();
@@ -305,6 +308,7 @@ export function createApp(opts: AppOptions): Express {
       status = err.status;
       sendProxyError(res, err);
     } finally {
+      if (bytes > 0) cswBudget.addBytes(req, bytes);
       log(JSON.stringify({ host, status, bytes }));
     }
   });

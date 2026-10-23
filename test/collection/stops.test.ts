@@ -345,3 +345,50 @@ describe('the unfinished fix list ends with one RUN-INCOMPLETE row', () => {
     expect(lastRow([row])[0]).toBe('(run)');
   });
 });
+
+describe('M1: the daily catalogue budget of this connection', () => {
+  const records = recs(200);
+
+  it('a refusal "csw_daily_budget" is not retried and not deferred: the run is interrupted at that page, saved, and resume reads every record exactly once', async () => {
+    let spent = true;
+    const calls: number[] = [];
+    const inner = catalogue(records);
+    const net: Net = {
+      get: inner.net.get,
+      async csw(call: CswCall): Promise<NetResponse> {
+        if (call.op === 'GetRecords' && call.maxRecords === 25) {
+          calls.push(call.startPosition ?? 0);
+          if (spent && (call.startPosition ?? 0) >= 76) return { status: 429, text: '{"error":"csw_daily_budget"}', retryAfterMs: 80_000_000, proxyError: 'csw_daily_budget' };
+        }
+        return inner.net.csw(call);
+      },
+    };
+    const store = memoryStore();
+    const r = await run(net, settings(false), store);
+    const p = r.progress();
+    expect(p.status).toBe('interrupted');
+    expect(p.resumable).toBe(true);
+    expect(p.deferred).toBe(0);
+    expect(p.stop).toMatchObject({ cause: 'csw_daily_budget', source: 'csw:emodnet', kind: 'throttled', status: 429 });
+    expect(calls.filter((c) => c === 76)).toHaveLength(1); // no backoff loop on a budget that is gone for hours
+    expect(p.counts.records).toBe(75);
+    for (const lang of LANGS) {
+      const text = describeStop(p.stop!, lang);
+      expect(text, lang).not.toContain('csw_daily_budget');
+      expect(text, lang).not.toMatch(/\{\w+\}/);
+    }
+    spent = false;
+    await r.resume();
+    await r.whenIdle();
+    const q = r.progress();
+    expect(q.status).toBe('finished');
+    expect(q.counts.records).toBe(200);
+    expect(q.counts.states.checked).toBe(200);
+  });
+
+  it('the page notice exists in four languages', () => {
+    for (const lang of LANGS) {
+      for (const k of ['collection.cause.csw_daily_budget', 'collection.error.dailyBudget'] as const) expect(UI[lang][k], `${lang} ${k}`).toMatch(/24/);
+    }
+  });
+});

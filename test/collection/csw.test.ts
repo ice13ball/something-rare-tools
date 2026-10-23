@@ -249,3 +249,23 @@ describe('CSW with the DataCite cross-check (on by default in the page)', () => 
 function res503(): NetResponse {
   return { status: 503, text: '<html>queue full</html>' };
 }
+
+describe('M1: the engine paces its own /api/csw calls under the server limit', () => {
+  it('at least 3.1 s between two catalogue requests (under 20 a minute), capabilities and estimate included', async () => {
+    const { CSW_PACE_MS } = await import('../../src/core/collection/net');
+    expect(CSW_PACE_MS).toBeGreaterThanOrEqual(3100);
+    expect(60_000 / CSW_PACE_MS).toBeLessThan(20);
+    const w = wire({ claimed: 100, records: records(100) });
+    const clock = virtualClock();
+    const times: number[] = [];
+    const net: Net = { get: w.net.get, csw: async (c) => (times.push(clock.now()), w.net.csw(c)) };
+    const r = new CollectionRunner(runnerDeps(net, clock));
+    await r.start(settings('emodnet'));
+    await r.whenIdle();
+    expect(r.progress().status).toBe('finished');
+    expect(times.length).toBeGreaterThanOrEqual(6);
+    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(3100);
+    // the estimate says what that costs: 4 pages of 25 take about 13 s, not 14 s of "3.5 s a request" guesses
+    expect(r.progress().estimate?.seconds).toBeCloseTo((4 * CSW_PACE_MS) / 1000, 5);
+  });
+});
