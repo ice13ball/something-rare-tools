@@ -7,6 +7,7 @@ import { CollectionRunner } from '../../src/core/collection/runner';
 import { makeNetContext, type Net } from '../../src/core/collection/net';
 import { estimateZenodo, zenodoPager, type ZenodoCursor, type ZenodoPlan } from '../../src/core/collection/sources/zenodo';
 import { memoryStore } from '../../src/core/collection/store';
+import { isGapNotice } from '../../src/core/collection/stop';
 import type { RunRecord } from '../../src/core/collection/types';
 import { json, rec, runnerDeps, virtualClock, zenodoMock, type Rec } from './helpers';
 import { mixedCommunity, runCommunity, shortened, summarize, touchingCommunity, type Summary } from './zenodoScenario';
@@ -36,7 +37,8 @@ const REF_TOUCHING: Summary = {
 };
 /** The old planner made 70 requests before the first page of records (mixed) and 573 in all; the planning is the same work, now spread over the run. */
 const OLD_FIRST_PAGE = 70;
-const REQUESTS_MIXED = 573;
+/** 573 for the old planner; the two remainder slices are now counted directly (+1 request per split year or month) instead of worked out from two counts taken far apart. */
+const REQUESTS_MIXED = 575;
 
 const q = (url: string): string => new URL(url).searchParams.get('q') ?? '';
 const param = (url: string, name: string): string | null => new URL(url).searchParams.get(name);
@@ -342,4 +344,107 @@ describe('the estimate', () => {
     expect(estimateZenodo(50_000, false).sampleFirst).toBeUndefined();
     expect(estimateZenodo(50_001, false).sampleFirst).toBe(true);
   });
+});
+
+describe('review fixes', () => {
+  const run = async (net: Net, clock: ReturnType<typeof virtualClock>, community = 'x') => {
+    const r = new CollectionRunner(runnerDeps(net, clock, { year: () => 2026 }));
+    await r.start({ spec: { kind: 'zenodo', community }, lang: 'en', sample: false });
+    await r.whenIdle();
+    return r;
+  };
+  const p2 = (n: number): string => String(n).padStart(2, '0');
+
+  it('records added to a month between its count and its day counts do not shrink the remainder: every "2024-02" record (60) is read', async () => {
+    const recs: Rec[] = [];
+    let id = 1;
+    for (let i = 0; i < 9000; i++) recs.push(rec(id++, `2024-01-${p2((i % 28) + 1)}`));
+    for (let i = 0; i < 10_200; i++) recs.push(rec(id++, `2024-02-${p2((i % 29) + 1)}`));
+    for (let i = 0; i < 60; i++) recs.push({ ...rec(id++, '2024-02'), span: ['2024-02-01', '2024-02-29'] });
+    const clock = virtualClock();
+    const before = zenodoMock(recs, clock, { within: true });
+    const extra = Array.from({ length: 10 }, (_, i) => rec(100_000 + i, '2024-02-10')); // a stored remainder of 50 would stop after two pages: 10 of the 60 unread
+    const after = zenodoMock([...recs, ...extra], clock, { within: true });
+    let switched = false;
+    const net: Net = {
+      ...before.net,
+      get: async (url, a) => {
+        const out = await (switched ? after : before).net.get(url, a);
+        // 10 fully dated February records are published right after the run counted February (before its days are counted)
+        if (param(url, 'size') === '1' && q(url) === 'publication_date:[2024-02-01 TO 2024-02-29]') switched = true;
+        return out;
+      },
+    };
+    const r = await run(net, clock);
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.records).toBe(recs.length + 10); // all 60 partial-date records included
+    expect(p.notices.map((n) => n.code)).not.toContain('records-missing');
+  }, 120_000);
+
+  it('a run that ends with slices adding up to FEWER records than the community holds, or with a slice cut by the window, is not complete: notice and RUN-INCOMPLETE row', async () => {
+    const clock = virtualClock();
+    const day: Rec[] = Array.from({ length: 10_100 }, (_, i) => rec(i + 1, '2022-05-05'));
+    const r = await run(zenodoMock(day, clock).net, clock, 'busy-day');
+    const csv = await (await r.csvBlob()).text();
+    expect(r.progress().status).toBe('finished');
+    expect(csv).toContain('RUN-INCOMPLETE');
+    expect(csv).toMatch(/first 10 000 of that slice/); // the window text is in the row
+    expect(isGapNotice({ code: 'window-exceeded', params: {} })).toBe(true);
+    expect(isGapNotice({ code: 'slices-differ', params: { sum: 9, total: 10 } })).toBe(true);
+    expect(isGapNotice({ code: 'slices-differ', params: { sum: 11, total: 10 } })).toBe(false); // more than the total is not missing data
+  }, 120_000);
+
+  it('more than the window before 1900 is capped, not split into itself for ever', async () => {
+    const clock = virtualClock();
+    const old: Rec[] = Array.from({ length: 10_050 }, (_, i) => rec(i + 1, '1850-03-03'));
+    const r = await run(zenodoMock(old, clock).net, clock, 'ancient');
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.records).toBe(10_000);
+    expect(p.notices.map((n) => n.code)).toContain('window-exceeded');
+    expect(await (await r.csvBlob()).text()).toContain('RUN-INCOMPLETE');
+  }, 120_000);
+
+  it('an upgraded old-shape cursor keeps the old plan once, in the saved plan: the cursor carries an index, not the rest of the plan', async () => {
+    const clock = virtualClock();
+    const slices = Array.from({ length: 300 }, (_, i) => ({ from: `${1700 + i}-01-01`, to: `${1700 + i}-12-31`, total: 1 }));
+    const z = zenodoMock(
+      slices.map((s, i) => rec(i + 1, s.from)),
+      clock,
+    );
+    const plan: ZenodoPlan = { slug: 'x', total: 300, slices, sum: 300 };
+    const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
+    const pager = zenodoPager({ net: z.net, nctx }, plan);
+    const d = await pager.fetch({ si: 0, page: 1 });
+    const size = JSON.stringify(d.next).length;
+    const after = await pager.fetch(d.next!);
+    expect(JSON.stringify(after.next).length).toBeLessThan(600);
+    expect(size).toBeLessThan(600);
+    // walked to the end: all 300 slices
+    let c = d.next;
+    let n = d.items.length;
+    while (c) {
+      const x = await pager.fetch(c);
+      n += x.items.length;
+      c = x.next;
+    }
+    expect(n).toBe(300);
+  });
+
+  it('counting steps are not pages: "page N" of a stop counts the pages of records only', async () => {
+    const clock = virtualClock();
+    const recs: Rec[] = [];
+    for (let i = 0; i < 6000; i++) recs.push(rec(i + 1, `2020-0${(i % 9) + 1}-10`));
+    for (let i = 0; i < 5200; i++) recs.push(rec(6001 + i, `2021-0${(i % 9) + 1}-10`));
+    const z = zenodoMock(recs, clock);
+    const net: Net = {
+      ...z.net,
+      get: async (url, a) => (param(url, 'size') === '1' && q(url).startsWith('publication_date:[2021-01-01 TO 2021-12-31]') ? json({ message: 'down' }, { status: 503 }) : z.net.get(url, a)),
+    };
+    const r = await run(net, clock);
+    const p = r.progress();
+    expect(p.status).toBe('interrupted');
+    expect(p.stop?.page).toBe(241); // 240 pages of 2020 were read; the failed step is the next one
+  }, 120_000);
 });

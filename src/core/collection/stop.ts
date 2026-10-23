@@ -65,7 +65,16 @@ export function describeStop(s: StopReason, lang: Lang): string {
 /** Notices that say the run FINISHED without having read everything: always kept (never dropped by the notice cap), rebuilt when the run ends. */
 export const GAP_NOTICES: readonly string[] = ['unread-pages', 'records-missing'];
 
-/** A notice in words (the two gap notices; the page has its own renderer for all the others). */
+/**
+ * Any notice that says the finished run is NOT complete: the two gap notices, a window that cut a slice, and slices that add up to FEWER records than the
+ * community holds (more than it holds is not missing data: it stays informational). Kept past the notice cap and written as the last row of the fix list.
+ */
+export function isGapNotice(n: Notice): boolean {
+  if (GAP_NOTICES.includes(n.code) || n.code === 'window-exceeded') return true;
+  return n.code === 'slices-differ' && Number(n.params?.sum) < Number(n.params?.total);
+}
+
+/** A notice in words (the gap notices; the page has its own renderer for all the others). */
 export function gapText(n: Notice, lang: Lang): string {
   const p = { ...(n.params ?? {}) };
   if (n.code === 'unread-pages' && typeof p.reason === 'string') p.reason = reasonText(p.reason, lang);
