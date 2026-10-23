@@ -19,7 +19,7 @@ export function evaluateItem(item: Item): Finding[] {
   // alone (LIC-MISSING, with a note that DataCite was not compared). Any other unreadable source still makes absence say nothing.
   const notCompared = item.unreadable?.includes('datacite') ?? false;
   const unreadable = item.unreadable?.filter((s) => s !== 'datacite');
-  return checkLicence(item.records, { label: item.ref, inaccessible: false, unreadable, dataciteNotCompared: notCompared });
+  return checkLicence(item.records, { label: item.ref, inaccessible: false, unreadable, dataciteNotCompared: notCompared, collection: true });
 }
 
 const clip = (s: string, n = 300): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);

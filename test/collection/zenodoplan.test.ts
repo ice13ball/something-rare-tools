@@ -12,7 +12,10 @@ import type { RunRecord } from '../../src/core/collection/types';
 import { json, rec, runnerDeps, virtualClock, zenodoMock, type Rec } from './helpers';
 import { mixedCommunity, runCommunity, shortened, summarize, touchingCommunity, type Summary } from './zenodoScenario';
 
-/** What the up-front planner (d453b59) gave on exactly these communities (its own run, same mock): the incremental planner must give the same. */
+/**
+ * What the up-front planner (d453b59) gave on exactly these communities (its own run, same mock): the incremental planner must give the same.
+ * csvSha: re-pinned when META-NO-EXTENT got its Collection wording (no "table"): the only difference in the CSV is that text.
+ */
 const REF_MIXED: Summary = {
   status: 'finished',
   records: 12457,
@@ -22,7 +25,7 @@ const REF_MIXED: Summary = {
   duplicates: 0,
   notices: ['records-missing', 'zenodo-slice-short'],
   csvRows: 25954,
-  csvSha: 'ed318081bf9ce07f',
+  csvSha: '41a102677aa9d54f',
 };
 const REF_TOUCHING: Summary = {
   status: 'finished',
@@ -33,7 +36,7 @@ const REF_TOUCHING: Summary = {
   duplicates: 330,
   notices: ['slices-differ'],
   csvRows: 20900,
-  csvSha: '94f7e05d4d3b3cca',
+  csvSha: 'bb0a847057d9cb41',
 };
 /** The old planner made 70 requests before the first page of records (mixed) and 573 in all; the planning is the same work, now spread over the run. */
 const OLD_FIRST_PAGE = 70;
