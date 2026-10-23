@@ -5,7 +5,7 @@
 // host: an archive URL off that list is a finding that names the host, not a download.
 import { iptArchiveUrl } from '../../../config/ipt';
 import { makeFinding } from '../rules/registry';
-import type { Finding, LoadedRecord } from '../types';
+import type { Finding, LoadedRecord, MetadataRecord } from '../types';
 import { decodeUtf8, getJson, inaccessible, ok2xx } from './common';
 import { hostOf, type Fetcher } from './fetcher';
 import type { GbifRef } from './resolve';
@@ -36,8 +36,8 @@ const noArchive = (label: string, registry: 'GBIF' | 'OBIS'): LoadedRecord['find
   makeFinding('IN-NO-DWC-ARCHIVE', { file: label, params: { registry } });
 
 /** The record for an archive URL the registry gave: the file to download (named .zip, so the archive reader takes it), or a finding. */
-function archiveRecord(label: string, kind: 'gbif' | 'obis', id: string, archiveUrl: string): LoadedRecord {
-  const out: LoadedRecord = { label, kind, metadata: [], files: [], findings: [] };
+function archiveRecord(label: string, kind: 'gbif' | 'obis', id: string, archiveUrl: string, known?: MetadataRecord): LoadedRecord {
+  const out: LoadedRecord = { label, kind, metadata: known ? [known] : [], files: [], findings: [] };
   const url = iptArchiveUrl(archiveUrl);
   if (!url) {
     out.findings.push(makeFinding('IN-IPT-HOST-NOT-LISTED', { file: label, params: { host: hostOf(archiveUrl) || '?' } }));
@@ -51,9 +51,10 @@ function archiveRecord(label: string, kind: 'gbif' | 'obis', id: string, archive
  * GBIF dataset by DOI or key: /v1/dataset/doi/{doi} (results[0].key) or /v1/dataset/{key}, then /v1/dataset/{key}/endpoint,
  * the entry of type DWC_ARCHIVE gives the archive URL.
  */
-export async function loadGbif(ref: GbifRef, fetcher: Fetcher): Promise<LoadedRecord> {
+export async function loadGbif(ref: GbifRef, fetcher: Fetcher, known?: MetadataRecord): Promise<LoadedRecord> {
   const label = `GBIF ${'doi' in ref ? ref.doi : ref.key}`;
-  const fail = (f: Finding): LoadedRecord => ({ label, kind: 'gbif', metadata: [], files: [], findings: [f] });
+  // `known` is the DataCite record that led here: it stays a metadata source (/check licence cross-check, /licence page).
+  const fail = (f: Finding): LoadedRecord => ({ label, kind: 'gbif', metadata: known ? [known] : [], files: [], findings: [f] });
 
   let key: string;
   if ('doi' in ref) {
@@ -67,8 +68,11 @@ export async function loadGbif(ref: GbifRef, fetcher: Fetcher): Promise<LoadedRe
     key = k.toLowerCase();
   } else {
     key = ref.key;
-    const r = await registryJson(fetcher, `https://${GBIF_HOST}/v1/dataset/${encodeURIComponent(key)}`, label, GBIF_HOST);
-    if ('finding' in r) return fail(r.finding);
+    // From DataCite the key is already vouched for by the landing page; the endpoint call below says "no such dataset" by itself.
+    if (!known) {
+      const r = await registryJson(fetcher, `https://${GBIF_HOST}/v1/dataset/${encodeURIComponent(key)}`, label, GBIF_HOST);
+      if ('finding' in r) return fail(r.finding);
+    }
   }
 
   const ep = await registryJson(fetcher, `https://${GBIF_HOST}/v1/dataset/${encodeURIComponent(key)}/endpoint`, label, GBIF_HOST);
@@ -76,7 +80,7 @@ export async function loadGbif(ref: GbifRef, fetcher: Fetcher): Promise<LoadedRe
   const endpoints = Array.isArray(ep.json) ? ep.json : [];
   const archive = endpoints.find((e): e is Obj & { url: string } => isObj(e) && e.type === 'DWC_ARCHIVE' && typeof e.url === 'string' && e.url.trim() !== '');
   if (!archive) return fail(noArchive(label, 'GBIF'));
-  return archiveRecord(label, 'gbif', key, archive.url);
+  return archiveRecord(label, 'gbif', key, archive.url, known);
 }
 
 /** OBIS dataset by its UUID: /v3/dataset/{uuid}, results[0].archive is the archive URL (results[0].url is the IPT resource page). */

@@ -19,7 +19,6 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const UUID_ONLY = new RegExp(`^${UUID}$`, 'i');
 const UUID_IN = new RegExp(UUID, 'i');
 const DOI_ONLY = /^10\.\d{4,9}\/\S+$/;
-const GBIF_DOI = /^10\.15468\//i;
 const PANGAEA_PATH = /^\/10\.1594\/PANGAEA\.(\d+)\/?$/i;
 
 /** Quotes, angle brackets, brackets and sentence punctuation around a pasted value. */
@@ -40,9 +39,9 @@ function asDoi(s: string): string | undefined {
   return DOI_ONLY.test(t) ? t : undefined;
 }
 
-/** A DOI: the GBIF prefix goes to the GBIF registry directly, every other one through DataCite. */
+/** A DOI of any prefix stays a DOI: DataCite routes it (a GBIF dataset DOI to loadGbif, with its DataCite record kept as a metadata source). */
 function doiInput(doi: string): ResolvedInput {
-  return GBIF_DOI.test(doi) ? { kind: 'gbif', ref: { doi } } : { kind: 'doi', doi };
+  return { kind: 'doi', doi };
 }
 
 export function resolveInput(text: string): ResolvedInput {
@@ -80,7 +79,7 @@ export function resolveInput(text: string): ResolvedInput {
     return d ? { kind: 'doi', doi: d } : { kind: 'unknown' };
   }
   if (host === 'gbif.org' || host === 'www.gbif.org') {
-    const m = new RegExp(`^/(?:[a-z]{2}/)?dataset/(${UUID})(?:/|$)`, 'i').exec(path);
+    const m = new RegExp(`^/(?:[a-z]{2,3}(?:-[a-z]{2,4})?/)?dataset/(${UUID})(?:/|$)`, 'i').exec(path);
     return m ? { kind: 'gbif', ref: { key: m[1]!.toLowerCase() } } : { kind: 'unknown' };
   }
   if (host === 'obis.org' || host === 'www.obis.org') {

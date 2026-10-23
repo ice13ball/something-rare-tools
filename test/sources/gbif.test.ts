@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { IPT_HOSTS, iptArchiveUrl } from '../../config/ipt';
 import { loadInputs } from '../../src/app/loadInput';
 import { fetchErrorFinding, FetchInterruptedError, FetchTimeoutError, browserFetcher, serverFetcher, type Fetcher } from '../../src/core/sources/fetcher';
-import { fetchFile, loadRecord, resolveInput } from '../../src/core/sources';
+import { fetchFile, loadGbif, loadRecord, resolveInput } from '../../src/core/sources';
 import { createDirectEngine } from '../../src/worker/handler';
 import { emlXml, makeZip, metaXml, nodeInflate } from '../helpers/zipfile';
 import { MapFetcher } from './mapFetcher';
@@ -22,15 +22,18 @@ const ids = (r: { findings: { ruleId: string }[] }) => r.findings.map((f) => f.r
 
 describe('resolveInput — GBIF and OBIS', () => {
   it.each([
-    [DOI, { doi: DOI }],
-    [`doi:${DOI}`, { doi: DOI }],
-    [`https://doi.org/${DOI}`, { doi: DOI }],
-    [`https://dx.doi.org/${DOI}.`, { doi: DOI }],
     [`https://www.gbif.org/dataset/${KEY}`, { key: KEY }],
     [`https://www.gbif.org/dataset/${KEY.toUpperCase()}/metrics`, { key: KEY }],
     [`https://gbif.org/de/dataset/${KEY}`, { key: KEY }],
+    [`https://www.gbif.org/zh-tw/dataset/${KEY}`, { key: KEY }],
+    [`https://www.gbif.org/pt-br/dataset/${KEY}/`, { key: KEY }],
   ])('%s -> gbif', (input, ref) => {
     expect(resolveInput(input)).toEqual({ kind: 'gbif', ref });
+  });
+  it('a GBIF DOI stays a DOI (DataCite routes it), in every written form', () => {
+    for (const input of [DOI, `doi:${DOI}`, `https://doi.org/${DOI}`, `https://dx.doi.org/${DOI}.`]) {
+      expect(resolveInput(input), input).toEqual({ kind: 'doi', doi: DOI });
+    }
   });
   it('an obis.org dataset link -> obis; other pages of those sites and other prefixes are not', () => {
     expect(resolveInput(`https://obis.org/dataset/${OBIS}`)).toEqual({ kind: 'obis', uuid: OBIS });
@@ -66,16 +69,29 @@ describe('iptArchiveUrl — the static list', () => {
 });
 
 describe('loadRecord — GBIF', () => {
-  it('DOI: dataset/doi -> key -> endpoint DWC_ARCHIVE -> one file to download', async () => {
+  const dcOf = (doi: string) => ({ data: { id: doi, type: 'dois', attributes: { doi, url: `https://www.gbif.org/dataset/${KEY}`, titles: [{ title: 'T' }], rightsList: [{ rightsIdentifier: 'cc-by-4.0' }] } } });
+
+  it('DOI 10.15468/…: DataCite (landing page gbif.org/dataset/{key}) -> endpoint -> archive, and the DataCite record stays a metadata source', async () => {
     const f = new MapFetcher({
-      [`${G}/doi/${DOI}`]: json({ count: 1, results: [{ key: KEY, title: 'T' }] }),
+      [`https://api.datacite.org/dois/${DOI}`]: json(dcOf(DOI)),
       [`${G}/${KEY}/endpoint`]: endpoints({ type: 'EML', url: 'https://ipt.vliz.be/eurobis/eml.do?r=synthetic' }, { type: 'DWC_ARCHIVE', url: ARCHIVE }),
     });
     const rec = await loadRecord(resolveInput(DOI), f);
     expect(rec.kind).toBe('gbif');
     expect(rec.findings).toEqual([]);
     expect(rec.files).toEqual([{ name: `${KEY}.zip`, url: ARCHIVE }]);
-    expect(f.calls).toEqual([`${G}/doi/${DOI}`, `${G}/${KEY}/endpoint`]);
+    expect(rec.metadata.map((m) => m.source)).toEqual(['datacite']);
+    expect(rec.metadata[0]!.doi).toBe(DOI);
+    expect(f.calls).toEqual([`https://api.datacite.org/dois/${DOI}`, `${G}/${KEY}/endpoint`]);
+  });
+
+  it('the registry lookup by DOI (loadGbif with a doi ref) still works: dataset/doi -> key -> endpoint', async () => {
+    const f = new MapFetcher({
+      [`${G}/doi/${DOI}`]: json({ count: 1, results: [{ key: KEY, title: 'T' }] }),
+      [`${G}/${KEY}/endpoint`]: endpoints({ type: 'DWC_ARCHIVE', url: ARCHIVE }),
+    });
+    const rec = await loadGbif({ doi: DOI }, f);
+    expect(rec.files).toEqual([{ name: `${KEY}.zip`, url: ARCHIVE }]);
   });
 
   it('gbif.org link: dataset/{key} -> endpoint -> archive', async () => {
@@ -120,7 +136,7 @@ describe('loadRecord — GBIF', () => {
     const a = await loadRecord(resolveInput(`https://www.gbif.org/dataset/${KEY}`), new MapFetcher({}));
     expect(a.findings[0]!.ruleId).toBe('IN-RECORD-INACCESSIBLE');
     expect(a.findings[0]!.params).toEqual({ status: 404, host: 'api.gbif.org' });
-    const b = await loadRecord(resolveInput(DOI), new MapFetcher({ [`${G}/doi/${DOI}`]: json({ count: 0, results: [] }) }));
+    const b = await loadGbif({ doi: DOI }, new MapFetcher({ [`${G}/doi/${DOI}`]: json({ count: 0, results: [] }) }));
     expect(b.findings[0]!.params).toEqual({ status: 404, host: 'api.gbif.org' });
     expect(b.files).toEqual([]);
   });
