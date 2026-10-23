@@ -91,7 +91,7 @@ function NoticeText({ code, params }: { code: string; params?: Record<string, st
   const { lang } = useLang();
   const known = [
     'no-records', 'split-by-date', 'slices-differ', 'window-exceeded', 'ended-before-total', 'ended-before-matched', 'more-than-matched',
-    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected', 'unread-pages', 'records-missing',
+    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected', 'unread-pages', 'records-missing', 'zenodo-slice-short',
   ];
   // an interruption names its cause in words where there are some (the catalogue answered too slowly, the day's budget is spent)
   if (code === 'interrupted' && typeof params?.reason === 'string' && ['csw_slow', 'csw_daily_budget', 'csw_queue_full'].includes(params.reason)) {

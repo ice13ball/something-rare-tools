@@ -21,7 +21,7 @@
  *   dispose()                   terminate the worker (a saved run stays in IndexedDB)
  *
  * Progress.notices are codes the page translates: no-records, split-by-date, slices-differ, window-exceeded, ended-before-total,
- * ended-before-matched, more-than-matched, ended-by-exception, empty-page, overrun-stopped, interrupted, storage-failed, unexpected, or a
+ * ended-before-matched, more-than-matched, zenodo-slice-short, unread-pages, records-missing, ended-by-exception, empty-page, overrun-stopped, interrupted, storage-failed, unexpected, or a
  * failure reason of start()/the run (cursor-restarted, cursor-stuck, cursor-not-monotonic, cursor-overrun, repeating-page, ...).
  */
 import { createCollectionHandler, errorMessage } from './collection.handler';

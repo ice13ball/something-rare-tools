@@ -177,6 +177,8 @@ export interface ZenodoCursor {
   page: number;
   /** Sort order of this slice's pages (a sample alternates). */
   sort?: 'oldest' | 'mostrecent';
+  /** Records listed (or skipped as a deferred page) in this slice before this page: the slice is compared with its own announced total when it ends. Absent in a run saved before this existed. */
+  got?: number;
   /**
    * Record ids already read in the slices of this slice's year that were split below year level (see yearOfSplit), sorted, as base64
    * (idset.ts); absent outside such slices. Saved with the cursor, so a resumed run drops the same repeats an uninterrupted one does.
@@ -216,15 +218,19 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
     const y = yearOfSplit(slices[next.si]);
     return y !== undefined && y === yearOfSplit(slices[c.si]) ? { ...next, ids } : next;
   };
-  const advance = (c: ZenodoCursor, ids: string | undefined = c.ids): ZenodoCursor | null => {
+  const advance = (c: ZenodoCursor, ids: string | undefined = c.ids, got: number | undefined = c.got): ZenodoCursor | null => {
     const s = slices[c.si];
-    if (c.page * ZENODO_PAGE < sliceTotal(s)) return carry({ si: c.si, page: c.page + 1 }, c, ids);
+    if (c.page * ZENODO_PAGE < sliceTotal(s)) return carry({ si: c.si, page: c.page + 1, ...(got !== undefined ? { got } : {}) }, c, ids);
     return c.si + 1 < slices.length ? carry({ si: c.si + 1, page: 1 }, c, ids) : null;
   };
+  /** Records of the slice before this page (0 on its first page); unknown (undefined) for a cursor saved without the count. */
+  const before = (c: ZenodoCursor): number | undefined => (c.page === 1 ? 0 : c.got);
+  const expected = (c: ZenodoCursor): number => Math.max(0, Math.min(ZENODO_PAGE, sliceTotal(slices[c.si]) - (c.page - 1) * ZENODO_PAGE));
   return {
     initial: slices.length > 0 ? { si: 0, page: 1 } : null,
-    expected: (c) => Math.max(0, Math.min(ZENODO_PAGE, sliceTotal(slices[c.si]) - (c.page - 1) * ZENODO_PAGE)),
-    skip: advance,
+    expected,
+    // a page left for later is counted as expected, so it is not also reported as missing when the slice ends
+    skip: (c) => advance(c, c.ids, before(c) === undefined ? undefined : (before(c) ?? 0) + expected(c)),
     async fetch(c): Promise<PageData<ZenodoCursor>> {
       const s = slices[c.si];
       const json = await getJson(deps, zenodoUrl(slug, c.page, ZENODO_PAGE, 'oldest', s));
@@ -247,11 +253,19 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
         }
         ids = encodeIds(addIds(seen, fresh));
       }
-      let next = advance(c, ids);
-      // The slice ended earlier than its count said (records deleted meanwhile): go to the next slice.
+      const b = before(c);
+      const got = b === undefined ? undefined : b + listed.length;
+      let next = advance(c, ids, got);
+      // The slice ended earlier than its count said (records deleted meanwhile, or an empty page in the middle): go to the next slice.
       if (listed.length === 0 && next && next.si === c.si) next = carry(c.si + 1 < slices.length ? { si: c.si + 1, page: 1 } : null, c, ids);
+      // ... and say so: the records it announced and did not deliver are not part of the run, and the run is not complete.
+      let shortfall = 0;
+      if ((next === null || next.si !== c.si) && got !== undefined && got < sliceTotal(s)) {
+        shortfall = sliceTotal(s) - got;
+        notices.push({ code: 'zenodo-slice-short', params: { from: s.from ?? '…', to: s.to ?? '…', total: sliceTotal(s), seen: got } });
+      }
       if (s.capped && c.page * ZENODO_PAGE >= ZENODO_WINDOW) notices.push({ code: 'window-exceeded', params: { from: s.from ?? '', to: s.to ?? '', total: s.total } });
-      return { items, next, notices, ...(repeats > 0 ? { counters: { duplicatesInBatch: repeats } } : {}) };
+      return { items, next, notices, ...(shortfall > 0 ? { shortfall } : {}), ...(repeats > 0 ? { counters: { duplicatesInBatch: repeats } } : {}) };
     },
   };
 }
