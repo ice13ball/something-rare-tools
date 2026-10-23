@@ -13,6 +13,7 @@ import {
   CAPABILITIES,
   catalogueAnswer,
   dataciteMock,
+  dcResource,
   parseUpstream,
   runnerDeps,
   searchResults,
@@ -227,7 +228,7 @@ describe('CSW with the DataCite cross-check (on by default in the page)', () => 
     expect(c.rules['LIC-DATACITE-EMPTY'] ?? 0).toBeLessThanOrEqual(1);
   });
 
-  it('a failed DataCite lookup never turns into "no licence": the record keeps `unreadable: datacite`', async () => {
+  it('a failed DataCite lookup is not a licence finding of its own, and does not hide a record that was read in full: no licence in the ISO record is LIC-MISSING, with a note', async () => {
     const recs: CatalogueRecord[] = [{ id: 'a', licence: null, doi: '10.5555/r1' }];
     const clock = virtualClock();
     const w = wire({ claimed: 1, records: recs }, { dc: { total: 1, clock, override: () => res503() } });
@@ -238,11 +239,50 @@ describe('CSW with the DataCite cross-check (on by default in the page)', () => 
     expect(p.status).toBe('finished');
     expect(p.counts.crossSource.failed).toBe(1);
     expect(p.counts.states.checked).toBe(1);
-    // the catalogue states no licence AND DataCite could not be read: absence says nothing, so no LIC-MISSING
-    expect(p.counts.rules['LIC-MISSING']).toBeUndefined();
+    expect(p.counts.rules['LIC-MISSING']).toBe(1);
+    expect(p.counts.rules['LIC-DATACITE-EMPTY']).toBeUndefined();
+    const sample = r.samples('LIC-MISSING', 0, 5)[0];
+    expect(sample.params).toEqual({ dataciteCompared: 'no' });
+    const csv = await (await r.csvBlob()).text();
+    expect(csv).toMatch(/LIC-MISSING,error,"?No licence was found[^\n]*DataCite could not be compared/);
+    // the same record without the comparison: LIC-MISSING without the note
     const without = wire({ claimed: 1, records: recs });
     const r2 = await runCsw(without.net, settings('emodnet', { crossSource: false }));
     expect(r2.progress().counts.rules['LIC-MISSING']).toBe(1);
+    expect(r2.samples('LIC-MISSING', 0, 5)[0].params).toEqual({});
+    expect(await (await r2.csvBlob()).text()).not.toContain('DataCite');
+  });
+
+  it('a failed DataCite lookup and an ISO record WITH a licence: no LIC-MISSING; the outcome equals a successful lookup that finds an empty DataCite record only in its own rule', async () => {
+    const recs: CatalogueRecord[] = [{ id: 'a', licence: 'CC BY 4.0', doi: '10.5555/r1' }];
+    const clock = virtualClock();
+    const failed = wire({ claimed: 1, records: recs }, { dc: { total: 1, clock, override: () => res503() } });
+    const r = new CollectionRunner(runnerDeps(failed.net, clock));
+    await r.start(settings('emodnet', { crossSource: true }));
+    await r.whenIdle();
+    expect(r.progress().counts.crossSource.failed).toBe(1);
+    expect(r.progress().counts.rules['LIC-MISSING']).toBeUndefined();
+    expect(r.progress().counts.rules['LIC-DATACITE-EMPTY']).toBeUndefined();
+    // DataCite answers, the record exists and states no licence: DATACITE-EMPTY rules, as before; LIC-MISSING only from a missing ISO licence
+    const clock2 = virtualClock();
+    const ok = wire({ claimed: 1, records: recs }, { dc: { total: 5, clock: clock2, resource: (i) => dcResource(i, 'none') } });
+    const r3 = new CollectionRunner(runnerDeps(ok.net, clock2));
+    await r3.start(settings('emodnet', { crossSource: true }));
+    await r3.whenIdle();
+    expect(r3.progress().counts.rules['LIC-DATACITE-EMPTY']).toBe(1);
+    expect(r3.progress().counts.rules['LIC-MISSING']).toBeUndefined();
+  });
+
+  it('the note exists in four languages', async () => {
+    const { renderPlain } = await import('../../src/core/report');
+    const { makeFinding } = await import('../../src/core/rules/registry');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const plain = renderPlain(makeFinding('LIC-MISSING', { file: 'x' }), lang);
+      const noted = renderPlain(makeFinding('LIC-MISSING', { file: 'x', params: { dataciteCompared: 'no' } }), lang);
+      expect(noted.startsWith(plain), lang).toBe(true);
+      expect(noted.length, lang).toBeGreaterThan(plain.length + 40);
+      expect(noted).toMatch(/DataCite/);
+    }
   });
 });
 

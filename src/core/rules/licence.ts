@@ -6,7 +6,7 @@ import type { RuleSpec } from './spec';
 /*
  * Licence rules (category 'A'), emitted by checkLicence() (Task 7). `file` = the record label.
  * Declared params per rule:
- *   LIC-MISSING               (none)
+ *   LIC-MISSING               dataciteCompared (optional, 'no' only: the catalogue record states no licence and the DataCite comparison could not be made)
  *   LIC-FREE-TEXT             text, versionMissing, hint   text = the licence text found; versionMissing = 'yes' | 'no';
  *                                                    hint = the SPDX id of the licence we recognised in it, or the example 'CC BY 4.0'
  *                                                    when nothing was recognised (never a licence the publisher did not name)
@@ -33,12 +33,20 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     category: 'A',
     severity: 'error',
     citations: [CITE.inspireValues, CITE.inspireNoConditions, CITE.fairLicence, CITE.openaireRecommends],
+    // `dataciteCompared` ('no') is an optional marker read by renderPlain (plainDataciteNotCompared) and is deliberately not a declared
+    // template param: /check never sets it, and the technical line has no place for it.
     params: [],
     plain: {
       pl: `W metadanych nie znaleziono licencji. Podaj nazwę licencji z wersją i odnośnik, np. CC BY 4.0.`,
       en: `No licence was found in the metadata. State the licence name with its version and a link, e.g. CC BY 4.0.`,
       de: `In den Metadaten wurde keine Lizenz gefunden. Geben Sie den Lizenznamen mit Version und einen Link an, z. B. CC BY 4.0.`,
       fr: `Aucune licence n'a été trouvée dans les métadonnées. Indiquez le nom de la licence avec sa version et un lien, par ex. CC BY 4.0.`,
+    },
+    plainDataciteNotCompared: {
+      pl: `W metadanych nie znaleziono licencji. Podaj nazwę licencji z wersją i odnośnik, np. CC BY 4.0. Uwaga: rekordu DOI w DataCite nie udało się porównać, więc to ustalenie opiera się tylko na rekordzie z katalogu.`,
+      en: `No licence was found in the metadata. State the licence name with its version and a link, e.g. CC BY 4.0. Note: the DOI record at DataCite could not be compared, so this finding rests on the catalogue record alone.`,
+      de: `In den Metadaten wurde keine Lizenz gefunden. Geben Sie den Lizenznamen mit Version und einen Link an, z. B. CC BY 4.0. Hinweis: Der DOI-Eintrag bei DataCite konnte nicht verglichen werden, dieser Befund beruht daher nur auf dem Katalogeintrag.`,
+      fr: `Aucune licence n'a été trouvée dans les métadonnées. Indiquez le nom de la licence avec sa version et un lien, par ex. CC BY 4.0. Remarque : la notice du DOI chez DataCite n'a pas pu être comparée ; ce constat repose donc sur la seule notice du catalogue.`,
     },
     technical: `{file}: no licence statement (useLimitation, otherConstraints, rightsList, license) in any record.`,
   },

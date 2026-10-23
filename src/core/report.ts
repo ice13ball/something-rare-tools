@@ -115,6 +115,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
     if (status >= 500 && status <= 599) texts = rule.plainByStatus.server;
     else if (status !== 403 && status !== 404) texts = rule.plainByStatus.other;
   }
+  if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   return fill(texts[lang] || texts.en, f);
 }
 
