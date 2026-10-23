@@ -39,7 +39,7 @@
     <div id="root">
       <header class="site-header">
         <a class="brand" href="/">Abyssal Claims Tools</a>
-        <nav aria-label="Main"><a href="/check">Data check</a> <a href="https://something-rare.com">Atlas</a></nav>
+        <nav aria-label="Main"><a href="/check">Data check</a> <a class="nav-external" href="https://something-rare.com">Atlas</a></nav>
       </header>
       <main id="main" class="container">
         <h1>Abyssal Claims Tools</h1>
@@ -47,18 +47,18 @@
         <ul class="tools">
           <li class="tool">
             <h2>Data check</h2>
-            <p>Checks marine dataset files and their metadata for coordinate, date, unit and licence problems and explains each one in plain words.</p>
-            <a class="tool-link" href="/check">Open data check</a>
+            <p>One data file or a link to a record: coordinates, dates, units and licence, explained in plain words.</p>
+            <a class="tool-link" href="/check" aria-label="Open data check">Open</a>
           </li>
           <li class="tool">
             <h2>Licence check</h2>
-            <p>Compares the licence that the metadata sources of one dataset state (Zenodo, PANGAEA, GeoNetwork, DataCite), shows how each is classified and where they contradict each other.</p>
-            <a class="tool-link" href="/licence">Open licence check</a>
+            <p>One dataset: what licence each metadata source states and where they disagree.</p>
+            <a class="tool-link" href="/licence" aria-label="Open licence check">Open</a>
           </li>
           <li class="tool">
             <h2>Collection review</h2>
-            <p>Reads the metadata of a whole collection (a DOI list, a DataCite repository, a Zenodo community or a GeoNetwork catalogue) and lists missing, unclear or contradictory licences and empty metadata fields as a fix list.</p>
-            <a class="tool-link" href="/collection">Open collection review</a>
+            <p>A whole collection: a fix list of missing, unclear or conflicting licences and empty metadata fields.</p>
+            <a class="tool-link" href="/collection" aria-label="Open collection review">Open</a>
           </li>
         </ul>
         <p class="atlas-link">Part of the project: <a href="https://something-rare.com">Abyssal Claims — deep-sea atlas</a></p>
