@@ -97,10 +97,10 @@ export interface Handler {
 /** Loads the land/sea grid for ROW-ON-LAND. */
 export type LandLoader = () => Promise<LandMask>;
 
-/** In the browser: the bundled grid from our own /assets, gunzipped with DecompressionStream. */
 /** A mask download that has not finished in this time is given up (the report then says positions were not compared with land). */
 const LAND_TIMEOUT_MS = 30_000;
 
+/** In the browser: the bundled grid from our own /assets, gunzipped with DecompressionStream. */
 export const browserLandLoader: LandLoader = async () => {
   const res = await fetch(landMaskUrl, { signal: AbortSignal.timeout(LAND_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`land mask: HTTP ${res.status}`);
@@ -223,16 +223,21 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
         samples: Object.fromEntries(parsed.sheets.map((s) => [s.name, samplesOf(s)])),
       };
       result.files.push(summary);
+      prefetchLand(summary.mappings);
     }
     return result;
+  }
+
+  /** A proposed latitude and longitude: start the mask download while the user reads the proposal. */
+  function prefetchLand(mappings: readonly SheetMapping[]): void {
+    const roles = mappings.flatMap((m) => m.columns.map((c) => c.role.kind));
+    if (roles.includes('latitude') && roles.includes('longitude')) void land();
   }
 
   function propose(req: Extract<Request, { type: 'propose' }>): ProposeResult {
     const h = held(req.fileId);
     const mappings = proposeMappings(h.parsed, req.layout);
-    // a proposed latitude and longitude: start the mask download while the user reads the proposal
-    const roles = mappings.flatMap((m) => m.columns.map((c) => c.role.kind));
-    if (roles.includes('latitude') && roles.includes('longitude')) void land();
+    prefetchLand(mappings);
     return { mappings, proposals: proposalsFor(h.parsed, req.layout) };
   }
 

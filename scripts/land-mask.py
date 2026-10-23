@@ -17,7 +17,8 @@ Method
   land-or-lake pixel, is computed in km with a Euclidean distance transform per latitude band. The east-west pixel size
   of a band is taken at the band's highest latitude (the smallest pixel), so distances are never overstated.
 - Cells near rivers and canals (Natural Earth river lines, three sea canals) and over sea-connected lakes and listed lagoons
-  make no claim: Natural Earth draws them as land, and estuarine and river samples are taken there.
+  make no claim when they are less than RIVER_REACH_KM from the sea: Natural Earth draws them as land, and estuarine and river
+  samples are taken there. Further inland a river corridor is land like any other.
 - The output grid is 0.05 degree (5 x 5 pixels). A cell is LAND with a guaranteed distance when all 25 pixels are land:
   the smallest pixel distance minus one pixel diagonal (rasterisation and pixel-centre error), bucketed DOWN. A cell is
   SEA when all 25 pixels are sea at least BUFFER_KM from land by the same rule. Everything else is 0 = no claim.
@@ -50,6 +51,7 @@ RIVER_LAYERS = ['ne_10m_rivers_lake_centerlines.geojson', 'ne_10m_rivers_europe.
 # RIVER_HALF_WIDTH_PX of a river or canal line make no claim. Lake centerlines are NOT rivers: a lake far from the sea stays land.
 RIVER_CLASSES = {'River', 'Canal'}  # perennial only: a desert wadi carries no estuarine samples
 RIVER_HALF_WIDTH_PX = 7  # about 7.7 km north-south (less east-west towards the poles)
+RIVER_REACH_KM = 200  # corridors make no claim only this close to the sea (every CoastDOM river sample lies within 100 km)
 # Sea-connected waters Natural Earth draws as land or as a lake: no claim either way (lon, lat polylines / names).
 SEA_CORRIDORS = {
     'Suez Canal': [(32.302, 31.265), (32.31, 30.9), (32.28, 30.58), (32.38, 30.35), (32.47, 30.15), (32.56, 29.95)],
@@ -188,7 +190,8 @@ def main() -> None:
     diag = math.hypot(KM_PER_DEG_LAT / FINE, KM_PER_DEG_LON_EQ / FINE)  # largest pixel diagonal, km
     land_km = coarse_distances(not_sea) - diag
     sea_km = coarse_distances(~not_sea) - diag
-    all_land = coarse_all(not_sea) & ~coarse_any(no_claim)
+    # a river corridor only matters within reach of the sea: beyond RIVER_REACH_KM a gross error must still be found
+    all_land = coarse_all(not_sea) & ~(coarse_any(no_claim) & (land_km < RIVER_REACH_KM))
     all_sea = coarse_all(~not_sea) & ~coarse_any(no_claim)
     del not_sea, no_claim
 

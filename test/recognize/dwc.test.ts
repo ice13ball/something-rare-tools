@@ -120,6 +120,7 @@ describe('ISO 8601 interval dates', () => {
     expect(parseDate('2007-11-13/15', opts)).toMatchObject({ iso: '2007-11-13', precision: 'day' });
     expect(parseDate('2007-11-13/12-02', opts)).toMatchObject({ iso: '2007-11-13', precision: 'day' });
     expect(parseDate('2008-05-01T10:00Z/11:00Z', opts)).toMatchObject({ iso: '2008-05-01T10:00Z', precision: 'minute' });
+    expect(parseDate('2008-05-01T10:00+02:00/2008-05-01T09:30Z', opts)).toMatchObject({ precision: 'minute' }); // 08:00Z to 09:30Z
   });
   it('is unparseable when the end comes before the start, or a reduced end does not fit', () => {
     expect('error' in parseDate('2009/2008', opts)).toBe(true);
