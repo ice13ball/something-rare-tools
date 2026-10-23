@@ -78,6 +78,26 @@ describe('buildAttribution', () => {
     );
   });
 
+  it('DataCite saying nothing is not a contradiction for the attribution: the licence the repository record states stays in it', async () => {
+    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
+    const f = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    const a = analyseLicences((await loadLicenceReferences(['https://zenodo.org/records/9'], f)).records);
+    expect(a.contradictions.map((x) => x.kind)).toEqual(['datacite-empty']);
+    const attr = buildAttribution(a);
+    expect(attr.omitted).toBeUndefined();
+    expect(attr.text).toContain('Licence: Creative Commons Attribution 4.0 International');
+  });
+
+  it('a DOI whose repository is not supported and whose landing host is not allowed: listed as a failure without a source, never "no licence anywhere"', async () => {
+    const c = { doi: '10.60894/ABC', title: 'R', url: 'https://rds.icm.edu.pl/citation?persistentId=doi:10.60894/ABC' };
+    const load = await loadLicenceReferences([c.doi], new MapFetcher({ [DC + c.doi]: dataciteJson(c, []) }));
+    expect(load.records.map((r) => r.source)).toEqual(['datacite']);
+    expect(load.failures.map((x) => [x.source, x.finding?.ruleId])).toEqual([[undefined, 'IN-HOST-NOT-ALLOWED']]);
+    const a = analyseLicences(load.records, { failures: [], inaccessible: true });
+    expect(a.missing).toBe(false);
+    expect(a.contradictions).toEqual([{ kind: 'datacite-empty', licence: '—' }]);
+  });
+
   it('is empty when nothing was read', () => {
     expect(buildAttribution(analyseLicences([]))).toEqual({ text: '', omitted: 'none' });
   });

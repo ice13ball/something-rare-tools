@@ -39,7 +39,8 @@ export function buildAttribution(a: LicenceAnalysis): Attribution {
   const statements = a.sources.flatMap((s) => s.statements);
   const ids = [...new Set(statements.flatMap((s) => (s.classification.kind === 'spdx' ? [s.classification.id] : [])))];
   let omitted: LicenceOmitted | undefined;
-  if (a.contradictions.length > 0) omitted = 'contradiction';
+  // DataCite saying nothing is not a contrary statement: the licence another record of the deposit states is still the licence.
+  if (a.contradictions.some((c) => c.kind !== 'datacite-empty')) omitted = 'contradiction';
   else if (ids.length === 0) omitted = 'none';
   else if (ids.length > 1) omitted = 'several';
   else if (statements.some((s) => s.classification.kind !== 'spdx')) omitted = 'unrecognised';

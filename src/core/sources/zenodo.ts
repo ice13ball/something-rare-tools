@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { parseZenodoRecord } from '../metadata/zenodo';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
-import { decodeUtf8, getJson, hasDataExtension, inaccessible, noDataFile, ok2xx } from './common';
+import { decodeUtf8, getJson, inaccessible, isDataFile, noDataFile, ok2xx } from './common';
 import { lookupDatacite } from './datacite';
 import type { Fetcher } from './fetcher';
 
@@ -41,7 +41,7 @@ export async function loadZenodo(id: string, fetcher: Fetcher, known?: MetadataR
   if (dc) out.metadata.push(dc);
 
   const all = rec.files ?? [];
-  out.files = all.filter((f) => hasDataExtension(f.key)).map((f) => ({ name: f.key, url: f.url }));
+  out.files = all.filter((f) => isDataFile(f.key)).map((f) => ({ name: f.key, url: f.url }));
   if (out.files.length === 0) out.findings.push(noDataFile(label, all.map((f) => f.key)));
   return out;
 }

@@ -3,7 +3,7 @@
 // Loads the METADATA of one dataset from one or several references (DOI, Zenodo, PANGAEA, GeoNetwork). Never downloads data files.
 // Used by the licence page and by the live corpus test, so both read records the same way.
 import { sameDeposit } from './analyse';
-import { ownLoadFailure } from './failure';
+import { landingNotRead, ownLoadFailure } from './failure';
 import type { Finding, LoadedRecord, MetadataRecord, MetadataSource } from '../types';
 import { lookupDatacite } from '../sources/datacite';
 import { fetchErrorFinding, type FetchResult, type Fetcher } from '../sources/fetcher';
@@ -92,6 +92,12 @@ export async function loadLicenceReferences(
         // Only this record's own failure counts; findings about files (no data file, landing host) say nothing about the licence.
         const own = ownLoadFailure(loaded.findings, loaded.label, loaded.kind, loaded.metadata.length);
         if (own) failures.push({ ref, ...(source ? { source } : {}), finding: own });
+        else {
+          // The repository behind the DOI was not opened: listed without a source (DataCite itself was read), so the page says the
+          // licence could not be looked up there instead of "no source states a licence".
+          const landing = landingNotRead(loaded.findings, loaded.label, loaded.kind, loaded.metadata.length);
+          if (landing) failures.push({ ref, finding: landing });
+        }
         for (const rec of loaded.metadata) add(rec);
       } catch (e) {
         const finding = fetchErrorFinding(e, ref);

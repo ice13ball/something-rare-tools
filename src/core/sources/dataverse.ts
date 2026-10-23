@@ -7,7 +7,7 @@ import { dataverseName, isDataverseHost, LINKED_FILE_MAX_BYTES } from '../../../
 import { doiOfPersistentId, parseDataverseVersion, type DataverseFile } from '../metadata/dataverse';
 import { makeFinding } from '../rules/registry';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
-import { attempt, decodeUtf8, extensionOf, hasDataExtension, hostNotAllowed, inaccessible, noDataFile, ok2xx } from './common';
+import { attempt, decodeUtf8, extensionOf, hostNotAllowed, inaccessible, isDataFile, isReadme, noDataFile, ok2xx } from './common';
 import { lookupDatacite } from './datacite';
 import type { Fetcher, FetchResult } from './fetcher';
 
@@ -84,13 +84,14 @@ export async function loadDataverse(host: string, pid: string, fetcher: Fetcher,
     }
   }
 
-  const readable = read.files.filter((f) => hasDataExtension(f.name));
+  const readable = read.files.filter((f) => isDataFile(f.name));
   const toRead: DataverseFile[] = [];
   // Files the tool cannot read that may hold data (zip, NetCDF, SPSS...): named, so the report never reads as if the whole dataset was checked.
   const notRead: string[] = [];
   for (const f of read.files) {
-    const data = hasDataExtension(f.name);
-    if (!data && DOCUMENT_EXTENSIONS.includes(extensionOf(f.name))) continue;
+    const data = isDataFile(f.name);
+    // Documents, pictures and READMEs describe the deposit: not data, not listed as "not read".
+    if (!data && (DOCUMENT_EXTENSIONS.includes(extensionOf(f.name)) || isReadme(f.name))) continue;
     if (f.heldBack) out.findings.push(makeFinding('IN-FILE-HELD-BACK', { file: f.name, params: { host } }));
     else if (!data) notRead.push(f.name);
     else if (f.size !== undefined && f.size > LINKED_FILE_MAX_BYTES) out.findings.push(makeFinding('IN-FILE-TOO-LARGE', { file: f.name, params: { mb: Math.round(LINKED_FILE_MAX_BYTES / 1024 / 1024) } }));
