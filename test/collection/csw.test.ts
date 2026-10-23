@@ -131,6 +131,30 @@ describe.each([
     expect(r.progress().notices).toEqual([]);
   });
 
+  it('overlapping pages (nextRecord points back into the page just read): a notice, every position counted once, no second DataCite lookup', async () => {
+    const recs = records(100).map((r, i) => ({ ...r, licence: i % 10 === 0 ? null : 'CC BY 4.0', doi: `10.5555/r${i}` }));
+    const w = wire({ claimed: 100, records: recs, overlap: 5 });
+    const r = await runCsw(w.net, settings(catalogue));
+    const p = r.progress();
+    expect(p.status).toBe('finished');
+    expect(p.counts.records).toBe(100);
+    expect(p.counts.states.checked).toBe(100);
+    expect(p.counts.rules['LIC-MISSING']).toBe(10); // not 12 or so: the records of the overlap were not judged twice
+    expect(p.notices).toContainEqual({ code: 'overlapping-pages' });
+    expect(p.notices.map((n) => n.code)).not.toContain('more-than-matched');
+    const reads = w.upstreamCalls.filter((c) => c.op === 'GetRecords' && c.max === 25).map((c) => c.start);
+    expect(reads.slice(0, 3)).toEqual([1, 21, 41]);
+    // the same walk without an overlap gives the same counts
+    const plain = await runCsw(wire({ claimed: 100, records: recs }).net, settings(catalogue));
+    expect(p.counts.rules).toEqual(plain.progress().counts.rules);
+    expect(plain.progress().notices.map((n) => n.code)).not.toContain('overlapping-pages');
+    // with the DataCite comparison on, each DOI is looked up once
+    const dcw = wire({ claimed: 100, records: recs, overlap: 5 }, { dc: { total: 100 } });
+    const withDc = await runCsw(dcw.net, settings(catalogue, { crossSource: true }));
+    expect(withDc.progress().counts.crossSource.looked).toBe(100);
+    expect(withDc.progress().counts.records).toBe(100);
+  });
+
   it('a stalled catalogue (the same page for ever) stops the run instead of looping', async () => {
     const w = wire({ claimed: 1000, records: records(10), stalled: true });
     const r = await runCsw(w.net, settings(catalogue));
