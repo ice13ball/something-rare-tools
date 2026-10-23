@@ -632,11 +632,18 @@ describe('home and privacy pages', () => {
     expect(screen.getByRole('link', { name: 'Open collection review' }).getAttribute('href')).toBe('/collection');
   });
 
-  it('the header and footer carry no link to the collection page', () => {
+  it('the header links all three tools under the home-tile names and marks this page; the footer does not link the tool', () => {
+    window.history.pushState({}, '', '/collection');
     render(<CollectionPage engine={fakeEngine().engine} />);
-    const nav = document.querySelector('header');
-    expect(nav?.querySelector('a[href="/collection"]')).toBeNull();
+    const links = [...document.querySelectorAll('header nav a')].map((a) => [a.getAttribute('href'), a.textContent, a.getAttribute('aria-current')]);
+    expect(links).toEqual([
+      ['/check', 'Data check', null],
+      ['/licence', 'Licence check', null],
+      ['/collection', 'Collection review', 'page'],
+      ['https://something-rare.com', 'Atlas', null],
+    ]);
     expect(document.querySelector('footer a[href="/collection"]')).toBeNull();
+    window.history.pushState({}, '', '/');
   });
 
   it('the privacy page lists the catalogue hosts from the config and says what stays in the browser', () => {
@@ -655,7 +662,7 @@ describe('home and privacy pages', () => {
     expect(html).toContain('<meta property="og:url" content="https://tools.something-rare.com/collection" />');
     expect(html).toContain('<meta name="twitter:card"');
     expect(html).not.toMatch(/name="robots"/);
-    expect(html).not.toMatch(/href="\/collection"/); // the page does not link to itself from a nav
+    expect(html).toContain('<a href="/collection" aria-current="page">Collection review</a>'); // the header marks this page, as the app does
   });
 
   it('the static home page has the same card text', () => {

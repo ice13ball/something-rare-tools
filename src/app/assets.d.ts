@@ -5,3 +5,9 @@ declare module '*?worker&url' {
   const url: string;
   export default url;
 }
+
+// Images imported by a page: Vite bundles them into /assets with a hashed name.
+declare module '*.webp' {
+  const url: string;
+  export default url;
+}
