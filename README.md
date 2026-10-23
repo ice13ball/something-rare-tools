@@ -25,4 +25,31 @@ and are never part of this repository; the test is skipped when `GOLDEN_DIR` is 
 
 ## Licence
 
-AGPL-3.0-or-later. See `LICENSE`.
+The code is licensed **GNU AGPL-3.0-or-later** (see [`LICENSE`](LICENSE)). AGPL means a modified
+version offered to users over a network must also offer its complete source.
+
+One **additional term under AGPL section 7(b)** applies: the author-attribution notice must be
+preserved in the source and in the notices displayed by the running program (the footer of every
+page carries it). It asks for a preserved line of text and a link — no logo, no badge. See
+[`LICENSE-ADDITIONAL-TERMS.md`](LICENSE-ADDITIONAL-TERMS.md) and [`NOTICE`](NOTICE).
+
+A commercial licence is available: see [`COMMERCIAL.md`](COMMERCIAL.md). Contributions: see
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Names and marks
+
+"Abyssal Claims" and "something-rare.com" are not licensed under the AGPL. You may fork and adapt
+the code, but not present a derivative as Abyssal Claims or Abyssal Claims Tools.
+
+## Can I run this at my institution?
+
+| Use | What the AGPL asks |
+|---|---|
+| Use the public site | nothing; files you drop never leave your browser |
+| Run it unmodified, internally or publicly | keep the licence and the source link |
+| Modify it for internal staff only | offer the modified source to those users; no public release needed |
+| Modify it and run it publicly | publish your changes under the AGPL; the footer source link must point to your version |
+| Embed the code in your own system or product | the whole networked work falls under the AGPL, or ask for a commercial licence ([`COMMERCIAL.md`](COMMERCIAL.md)) |
+
+In every case keep the attribution notice in [`LICENSE-ADDITIONAL-TERMS.md`](LICENSE-ADDITIONAL-TERMS.md).
+This table is a summary, not legal advice; the text of [`LICENSE`](LICENSE) governs.

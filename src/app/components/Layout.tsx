@@ -57,6 +57,10 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
         <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
         <a href="/privacy">{t('nav.privacy')}</a>
         <a href={SITE.sourceUrl}>{t('footer.source')}</a>
+        {/* the attribution notice is a licence condition: the same English words in every UI language */}
+        <a href={SITE.attributionUrl} lang="en">
+          {SITE.attribution}
+        </a>
         <button type="button" className="link-button" onClick={() => setCookieOpen(true)}>
           {t('footer.cookies')}
         </button>
