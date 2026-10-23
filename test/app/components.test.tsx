@@ -110,7 +110,7 @@ describe('InputPanel', () => {
     expect(input.accept).toBe('.csv,.tsv,.txt,.tab,.xlsx,.xls,.xml,.json,.zip');
     const f = csv('one.csv');
     fireEvent.change(input, { target: { files: [f] } });
-    fireEvent.change(screen.getByLabelText(/Zenodo, GeoNetwork, GBIF or OBIS link/), { target: { value: '  10.5281/zenodo.1  ' } });
+    fireEvent.change(screen.getByLabelText(/Zenodo, GeoNetwork, Dataverse \(RepOD\), GBIF or OBIS link/), { target: { value: '  10.5281/zenodo.1  ' } });
     const form = container.querySelector('form') as HTMLFormElement;
     const notPrevented = fireEvent.submit(form);
     expect(notPrevented).toBe(false);
@@ -144,7 +144,7 @@ describe('CheckPage', () => {
     expect((screen.getByRole('radio', { name: /In my browser only/ }) as HTMLInputElement).checked).toBe(true);
     const file = new File(['Station,Lat,Lon,Date\nST1,76.5,15.1,2021-07-25\n'], 'secret-name.csv');
     fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText(/Zenodo, GeoNetwork, GBIF or OBIS link/), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText(/Zenodo, GeoNetwork, Dataverse \(RepOD\), GBIF or OBIS link/), { target: { value: '' } });
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and check' }));
     await screen.findByRole('heading', { name: 'Report' });

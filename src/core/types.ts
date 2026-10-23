@@ -26,7 +26,7 @@ export interface ParsedFile {
 }
 
 /* ---------- metadata ---------- */
-export type MetadataSource = 'iso19139' | 'datacite' | 'zenodo' | 'pangaea';
+export type MetadataSource = 'iso19139' | 'datacite' | 'zenodo' | 'pangaea' | 'dataverse';
 export interface LicenceStatement {
   source: MetadataSource;
   field: string;                // 'useLimitation' | 'otherConstraints' | 'rightsList[0]' | 'license.id' | 'License'
@@ -160,7 +160,7 @@ export interface RuleDef {
 /* ---------- session and report ---------- */
 export interface LoadedRecord {
   label: string;
-  kind: 'zenodo' | 'geonetwork' | 'datacite' | 'pangaea' | 'gbif' | 'obis' | 'dropped';
+  kind: 'zenodo' | 'geonetwork' | 'datacite' | 'pangaea' | 'dataverse' | 'gbif' | 'obis' | 'dropped';
   metadata: MetadataRecord[];
   files: { name: string; url?: string; bytes?: Uint8Array }[];
   findings: Finding[];

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // DataCite lookup (REST JSON) and routing of a DOI to the repository that holds the data.
+import { isDataverseHost } from '../../../config/dataverse';
 import { parseDataciteJson } from '../metadata/datacite';
 import type { Finding, MetadataRecord } from '../types';
 import { attempt, decodeUtf8, inaccessible, ok2xx } from './common';
@@ -35,6 +36,7 @@ export type Route =
   | { kind: 'geonetwork'; host: string; uuid: string }
   | { kind: 'pangaea'; id: string }
   | { kind: 'gbif'; key: string }
+  | { kind: 'dataverse'; host: string; pid: string }
   | { kind: 'other'; host?: string };
 
 const ZENODO_DOI = /^10\.5281\/zenodo\.(\d+)$/i;
@@ -69,6 +71,11 @@ export function routeFromDatacite(rec: MetadataRecord, doi: string): Route {
   if (host === 'doi.pangaea.de') {
     const m = /\/10\.1594\/PANGAEA\.(\d+)/i.exec(path);
     if (m) return { kind: 'pangaea', id: m[1]! };
+  }
+  // A listed Dataverse installation: its landing page (/citation?persistentId=doi:... or /dataset.xhtml?...) carries the id with the exact case.
+  if (host && isDataverseHost(host) && url?.protocol === 'https:' && /^\/(?:dataset\.xhtml|citation)\/?$/.test(path)) {
+    const pid = url.searchParams.get('persistentId')?.trim();
+    if (pid && /^(?:doi|hdl|perma):\S+$/i.test(pid)) return { kind: 'dataverse', host, pid };
   }
   // No usable landing page: the DOI itself may still name the repository.
   const z = ZENODO_DOI.exec(own) ?? ZENODO_DOI.exec(doi);

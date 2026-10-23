@@ -17,6 +17,7 @@ const SOURCE_OF_KIND: Partial<Record<LoadedRecord['kind'], MetadataSource>> = {
   geonetwork: 'iso19139',
   datacite: 'datacite',
   pangaea: 'pangaea',
+  dataverse: 'dataverse',
 };
 
 /**

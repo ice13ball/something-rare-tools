@@ -3,7 +3,9 @@
 // Step 3 of the flow: dropped files -> bytes (File.arrayBuffer, they never leave the browser), a link -> record ->
 // files, one status line per file. Download problems the user can act on become findings (host only) and the
 // loading goes on with the rest. Parsing is NOT done here: the worker does it.
-import { fetchErrorFinding, type Fetcher } from '../core/sources/fetcher';
+import { makeFinding } from '../core/rules/registry';
+import { LINKED_FILE_MAX_BYTES } from '../../config/dataverse';
+import { fetchErrorFinding, FileFetchError, ProxyFetchError, type Fetcher } from '../core/sources/fetcher';
 import { fetchFile, loadRecord, resolveInput } from '../core/sources';
 import type { Finding, LoadedRecord } from '../core/types';
 import type { InputFile } from '../worker/protocol';
@@ -25,7 +27,7 @@ export interface LoadedInput {
   findings: Finding[];
 }
 
-/** The pasted text is not a Zenodo / GeoNetwork / PANGAEA reference or a DOI. */
+/** The pasted text is not a Zenodo / GeoNetwork / PANGAEA / Dataverse reference or a DOI. */
 export class UnknownLinkError extends Error {
   constructor() {
     super('Unknown link');
@@ -89,7 +91,15 @@ export async function loadInputs(input: CheckInput, deps: LoadDeps): Promise<Loa
       out.files.push({ name: f.name, bytes: await fetchFile(f, fetcher), source: 'record' });
       set(`r${i}`, 'done');
     } catch (e) {
-      const finding = fetchErrorFinding(e, f.name);
+      // A Dataverse file the server refuses to an anonymous client (401, 403) is held back by the source, not a failed record.
+      const heldBack = record.kind === 'dataverse' && e instanceof FileFetchError && (e.status === 401 || e.status === 403);
+      // A Dataverse file above the proxy's per-download limit (its own 413) whose size the API did not give: said as what it is.
+      const tooLarge = record.kind === 'dataverse' && e instanceof ProxyFetchError && e.code === 'too_large';
+      const finding = heldBack
+        ? makeFinding('IN-FILE-HELD-BACK', { file: f.name, params: { host: e.host } })
+        : tooLarge
+          ? makeFinding('IN-FILE-TOO-LARGE', { file: f.name, params: { mb: Math.round(LINKED_FILE_MAX_BYTES / 1024 / 1024) } })
+          : fetchErrorFinding(e, f.name);
       if (!finding) throw e;
       out.findings.push(finding);
       set(`r${i}`, 'failed');

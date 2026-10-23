@@ -17,6 +17,9 @@ import type { RuleSpec } from './spec';
  *   IN-ARCHIVE-BUSY         host     more archive downloads at once from this IP address than the proxy allows (2)
  *   IN-IPT-HOST-NOT-LISTED  host     a GBIF/OBIS archive lives on a server that is not on the static list (config/ipt.ts)
  *   IN-NO-DWC-ARCHIVE       registry  GBIF or OBIS knows the dataset but lists no Darwin Core Archive for it
+ *   IN-FILE-HELD-BACK       host     a file the source holds back (restricted access or an embargo): not downloaded, not checked
+ *   IN-FILE-TOO-LARGE       mb       a file above the size read from a link (config/dataverse.ts LINKED_FILE_MAX_BYTES): not downloaded, not checked
+ *   IN-DATAVERSE-FILES      host, version   which version of a Dataverse dataset was read; optional original / converted (names) say in which form its converted tables were read; value = the same in English
  *   IN-FILE-UNREADABLE      files    no input file could be read at all (a damaged workbook, ...): the names, comma-separated
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
@@ -186,6 +189,65 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `{registry} connaît ce jeu de données mais n'indique aucune archive Darwin Core (.zip) à télécharger, il n'y a donc rien à vérifier. Obtenez les données auprès de l'éditeur et déposez-les ici.`,
     },
     technical: `{file}: {registry} lists no DWC_ARCHIVE endpoint (GBIF) or no archive URL (OBIS) for this dataset.`,
+  },
+  {
+    id: 'IN-FILE-HELD-BACK',
+    category: 'input',
+    severity: 'warning',
+    params: ['host'],
+    plain: {
+      pl: `Tego pliku nie sprawdzono: {host} wstrzymuje do niego dostęp (ograniczony dostęp lub embargo). To nie jest błąd w danych, ale brak uwag nic o nim nie mówi. Poproś właściciela danych o dostęp i przeciągnij plik tutaj.`,
+      en: `This file was not checked: {host} holds it back (restricted access or an embargo). That is not an error in the data, but the absence of remarks says nothing about it. Ask the data owner for access, then drop the file here.`,
+      de: `Diese Datei wurde nicht geprüft: {host} hält sie zurück (eingeschränkter Zugang oder Embargo). Das ist kein Fehler in den Daten, aber das Fehlen von Hinweisen sagt nichts über sie aus. Bitten Sie die Dateneigner um Zugang und ziehen Sie die Datei dann hierher.`,
+      fr: `Ce fichier n'a pas été vérifié : {host} le retient (accès restreint ou embargo). Ce n'est pas une erreur dans les données, mais l'absence de remarque ne dit rien à son sujet. Demandez l'accès aux détenteurs des données, puis déposez le fichier ici.`,
+    },
+    technical: `{file}: held back by {host} (restricted access or embargo); not downloaded, not checked.`,
+  },
+  {
+    id: 'IN-FILE-TOO-LARGE',
+    category: 'input',
+    severity: 'warning',
+    params: ['mb'],
+    plain: {
+      pl: `Tego pliku nie odczytano: jest większy niż {mb} MB, czyli najwięcej, ile pobiera się z linku. Nie został sprawdzony, więc brak uwag nic o nim nie mówi. Pobierz go i przeciągnij tutaj.`,
+      en: `This file was not read: it is larger than {mb} MB, the most that is read from a link. It was not checked, so the absence of remarks says nothing about it. Download it and drop it here.`,
+      de: `Diese Datei wurde nicht gelesen: Sie ist größer als {mb} MB, dem Maximum für Dateien aus einem Link. Sie wurde nicht geprüft, das Fehlen von Hinweisen sagt also nichts über sie aus. Laden Sie sie herunter und ziehen Sie sie hierher.`,
+      fr: `Ce fichier n'a pas été lu : il dépasse {mb} Mo, le maximum lu depuis un lien. Il n'a pas été vérifié ; l'absence de remarque ne dit donc rien à son sujet. Téléchargez-le et déposez-le ici.`,
+    },
+    technical: `{file}: larger than {mb} MB; not downloaded, not checked.`,
+  },
+  {
+    id: 'IN-DATAVERSE-FILES',
+    category: 'input',
+    severity: 'info',
+    params: ['host', 'version'],
+    plain: {
+      pl: `Odczytano wersję {version} tego zbioru, najnowszą opublikowaną, z {host}.`,
+      en: `Read version {version} of this dataset, the latest published one, from {host}.`,
+      de: `Version {version} dieses Datensatzes, die neueste veröffentlichte, von {host} gelesen.`,
+      fr: `Version {version} de ce jeu de données, la dernière publiée, lue depuis {host}.`,
+    },
+    plainIf: [
+      {
+        param: 'original',
+        plain: {
+          pl: `Tabele odczytane w oryginale, tak jak wgrał je autor: {original}.`,
+          en: `Tables read as the author uploaded them (the original): {original}.`,
+          de: `Tabellen im Original gelesen, wie vom Autor hochgeladen: {original}.`,
+          fr: `Tableaux lus dans leur original, tel que déposé par l'auteur : {original}.`,
+        },
+      },
+      {
+        param: 'converted',
+        plain: {
+          pl: `Tabele odczytane z kopii .tab zrobionej przez Dataverse, bo oryginału nie da się odczytać: {converted}.`,
+          en: `Tables read as the .tab copy Dataverse made, because the original cannot be read: {converted}.`,
+          de: `Tabellen als .tab-Kopie von Dataverse gelesen, weil das Original nicht lesbar ist: {converted}.`,
+          fr: `Tableaux lus dans la copie .tab faite par Dataverse, car l'original est illisible : {converted}.`,
+        },
+      },
+    ],
+    technical: `{file}: read version {version} (latest published) from {host}. {value}`,
   },
   {
     id: 'IN-FILE-UNREADABLE',

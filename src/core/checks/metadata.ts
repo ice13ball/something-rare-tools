@@ -6,7 +6,7 @@ import { CANONICAL_VARIABLES, headerKey } from '../recognize/vocab';
 import type { DataRow, Dataset, Finding, MetadataRecord, MetadataSource } from '../types';
 
 /** Which record answers for extents when several give one: ISO first, then DataCite, then PANGAEA; never a union. */
-const EXTENT_ORDER: readonly MetadataSource[] = ['iso19139', 'datacite', 'pangaea', 'zenodo'];
+const EXTENT_ORDER: readonly MetadataSource[] = ['iso19139', 'datacite', 'pangaea', 'zenodo', 'dataverse'];
 
 function pick<T>(records: MetadataRecord[], get: (r: MetadataRecord) => T | undefined): T | undefined {
   for (const source of EXTENT_ORDER) {
