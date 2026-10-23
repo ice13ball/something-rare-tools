@@ -17,6 +17,7 @@ import type { RuleSpec } from './spec';
  *   ROW-STATION-MOVED     station, positions   positions = compact text such as "76.9N 15.5E (9 rows); 76.9N 16.5E (14 rows)"
  *                         signLon / signLat    'yes' when two positions differ (almost) only by the sign of that coordinate (optional)
  *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded); far = 'yes' above 1000 km (optional)
+ *   ROW-ON-LAND-NEAR      count, places   the same for positions 10-50 km inside (note, no hint)
  *   ROW-ON-LAND           count, places, flips   count = rows on land; places = up to 5 positions "lat, lon (rows; ≥N km)";
  *                         flips (optional) = "position → the same with a sign flipped or axes exchanged" where that lies at sea
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
@@ -189,16 +190,30 @@ export const ROW_RULES: readonly RuleSpec[] = [
     technical: `{file} station {station}: positions up to {km} km apart (more than 10 km; great-circle distance) at {positions}.`,
   },
   {
+    id: 'ROW-ON-LAND-NEAR',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'places'],
+    citations: [CITE.argoLand, CITE.naturalEarthLand],
+    plain: {
+      pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, 10–50 km od morza: {places} (liczba wierszy; najmniejsza odległość od morza). Jeśli to próbka z rzeki, jeziora albo laguny przy brzegu, pomiń tę uwagę. Jeśli nie, sprawdź cyfry i kolejność współrzędnych.`,
+      en: `In lines {lines} ({count} in all) the position lies on land or in a lake, 10–50 km from the sea: {places} (number of rows; least distance from the sea). If this is a river, lake or coastal lagoon sample, ignore this note. If not, check the digits and the order of the coordinates.`,
+      de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position an Land oder in einem See, 10–50 km vom Meer: {places} (Anzahl Zeilen; kleinster Abstand zum Meer). Bei einer Probe aus Fluss, See oder Küstenlagune ignorieren Sie dies; sonst prüfen Sie Ziffern und Reihenfolge der Koordinaten.`,
+      fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, à 10–50 km de la mer : {places} (nombre de lignes ; distance min. à la mer). Pour un échantillon de rivière, de lac ou de lagune, ignorez ceci ; sinon vérifiez les chiffres et l'ordre des coordonnées.`,
+    },
+    technical: `{file}:{lines} {count} rows on land or in an inland lake 10 to 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; no sign hint at this level): {places}.`,
+  },
+  {
     id: 'ROW-ON-LAND',
     category: 'B',
     severity: 'warning',
     params: ['count', 'places'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
-      pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, z dala od morza: {places} (liczba wierszy; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. Pas 50 km od brzegu i brzegi rzek blisko morza nie są oceniane.`,
-      en: `In lines {lines} ({count} in all) the position lies on land or in a lake, away from the sea: {places} (number of rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. The 50 km band along the coast and river banks near the sea are not judged.`,
-      de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position an Land oder in einem See, abseits des Meeres: {places} (Anzahl Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten meist ein Fehler: Vorzeichen, vertauschte Achsen oder Tippfehler. Der 50-km-Küstenstreifen und Flussufer nahe dem Meer werden nicht bewertet.`,
-      fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, loin de la mer : {places} (nombre de lignes ; distance min. à la mer). En données marines, c'est souvent une erreur : signe, axes inversés ou faute de frappe. La bande côtière de 50 km et les rives proches de la mer ne sont pas évaluées.`,
+      pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, z dala od morza: {places} (liczba wierszy; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. 10–50 km od morza: osobna uwaga; pas 10 km i brzegi rzek przy morzu nie są oceniane.`,
+      en: `In lines {lines} ({count} in all) the position lies on land or in a lake, away from the sea: {places} (number of rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. 10–50 km from the sea: a separate note; the 10 km band and river banks near the sea are not judged.`,
+      de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position an Land oder in einem See, abseits des Meeres: {places} (Anzahl Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten meist ein Fehler: Vorzeichen, vertauschte Achsen oder Tippfehler. 10–50 km: eigener Hinweis; 10-km-Streifen und Flussufer am Meer bleiben unbewertet.`,
+      fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, loin de la mer : {places} (nombre de lignes ; distance min. à la mer). En données marines, c'est souvent une erreur : signe, axes inversés ou faute de frappe. À 10–50 km : remarque à part ; bande de 10 km et rives près de la mer non évaluées.`,
     },
     plainIf: [
       {
@@ -211,7 +226,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; nearer the coast, near rivers and canals nothing is judged): {places}.`,
+    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; 10-50 km is ROW-ON-LAND-NEAR; nearer the coast, near rivers and canals nothing is judged): {places}.`,
   },
   {
     id: 'ROW-DATE-UNPARSEABLE',

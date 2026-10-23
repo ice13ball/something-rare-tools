@@ -78,6 +78,44 @@ describe('ROW-ON-LAND', () => {
   });
 });
 
+describe('ROW-ON-LAND-NEAR (10-50 km inland, note)', () => {
+  // (33.35, -117.3) of the acceptance table lies exactly on a cell edge: 90 - 33.35 = 56.649999… puts it in the bucket-5 cell, like
+  // the stored float position of Grey Whale Carcass; (33.36, -117.29), inside the neighbouring cell, is the bucket-10 case
+  it('acceptance table: Loihi >= 20 km and a position >= 10 km inland are notes; the float position of Grey Whale Carcass is bucket 5 and silent', () => {
+    const ds = dataset([
+      ...rows(2, 1, { lat: 19.5333, lon: -155.45 }),
+      ...rows(3, 1, { lat: 33.36, lon: -117.29 }),
+      ...rows(4, 1, { lat: 33.3499984741211, lon: -117.300003051758 }),
+    ]);
+    const f = checkRows(ds, { land });
+    const near = only(f, 'ROW-ON-LAND-NEAR');
+    expect(near).toHaveLength(1);
+    expect(near[0]).toMatchObject({ severity: 'info', lines: [2, 3] });
+    expect(near[0].params.places).toContain('155.45 W, 19.5333 N (1; ≥20 km)');
+    expect(near[0].params.places).toContain('117.29 W, 33.36 N (1; ≥10 km)');
+    expect(near[0].params.flips).toBeUndefined();
+    expect(only(f, 'ROW-ON-LAND')).toEqual([]);
+    expect(land.place(33.35, -117.3)).toEqual({ kind: 'land', atLeastKm: 5 }); // the cell-edge case, documented
+  });
+
+  it('a position far inland is ROW-ON-LAND only, never both', () => {
+    const ds = dataset([...rows(2, 1, { lat: 54.0, lon: 18.0 }), ...rows(3, 1, { lat: 40.42, lon: -3.7 })]);
+    const f = checkRows(ds, { land });
+    expect(only(f, 'ROW-ON-LAND')[0].lines).toEqual([2, 3]);
+    expect(only(f, 'ROW-ON-LAND-NEAR')).toEqual([]);
+  });
+
+  it('one row is never reported by both levels, and the note carries no sign hint (controlled mask)', () => {
+    const fake: LandMask = { width: 0, height: 0, place: (la) => (la === 1 ? { kind: 'land', atLeastKm: 100 } : la === 2 ? { kind: 'land', atLeastKm: 10 } : la === 3 ? { kind: 'land', atLeastKm: 5 } : { kind: 'sea' }) };
+    const ds = dataset([...rows(2, 1, { lat: 1, lon: 5 }), ...rows(3, 1, { lat: 2, lon: 5 }), ...rows(4, 1, { lat: 3, lon: 5 })]);
+    const f = checkRows(ds, { land: fake });
+    expect(only(f, 'ROW-ON-LAND')[0].lines).toEqual([2]);
+    expect(only(f, 'ROW-ON-LAND-NEAR')[0].lines).toEqual([3]);
+    expect(Object.keys(only(f, 'ROW-ON-LAND-NEAR')[0].params).sort()).toEqual(['count', 'places']);
+    expect(renderPlain(only(f, 'ROW-ON-LAND-NEAR')[0], 'pl')).toContain('Jeśli to próbka z rzeki, jeziora albo laguny przy brzegu, pomiń tę uwagę.');
+  });
+});
+
 describe('ROW-STATION-MOVED: sign pattern', () => {
   it('reports one station at two positions that differ (almost) only by the longitude sign, with single-precision values', () => {
     const ds = dataset([

@@ -322,7 +322,15 @@ These numbers are the tool's own choices, stated in the rule texts. No citable s
   - The 50 km is measured, not tuned to a count:
     - at 5 km, inner Svalbard fjords (IO PAN) were called land;
     - at 20 km, 40 CoastDOM v1 rows on small rivers that Natural Earth does not draw were still called land;
-    - at 50 km, CoastDOM keeps 2 rows ("Baltic Sea" placed 50 km inland), and ChEssBase finds 92 of OBIS's 95 ON_LAND records. The other 3 are 5–50 km inland or beside a river. The 5 records only this rule finds are among those OBIS dropped.
+    - at 50 km, CoastDOM keeps 2 rows ("Baltic Sea" placed 50 km inland), and ChEssBase flags 98 rows, all among OBIS's 100 ON_LAND records. OBIS's 100 include 5 it dropped for taxonomy (NO_MATCH), not for position.
+- **ROW-ON-LAND-NEAR.** This note covers positions 10–50 km inside, with no sign hint. Michal decided on two levels on 23.10.2026.
+  - The 10 km floor was measured by the AI-Wall thread on production: 4 703 OBIS sea positions from 41 fjord, Arctic and lagoon regions read 0 cells at ≥ 10 km and 12 at 5 km. The set is `test_fiordy.csv` in GOLDEN_DIR, and the test asserts 0 findings.
+  - ChEssBase: the note fires only for Loihi Seamount (line 3480). The stored float position of Grey Whale Carcass falls in a 5 km cell: a known limitation.
+  - CoastDOM gives 269 note rows:
+    - rivers and estuaries: Tyne, Hastings, Clarence and others;
+    - lagoons: Lake Macquarie, Wallis Lake, St Georges Basin;
+    - inland position errors with sea salinity: "Gulf of Trieste" 53 rows on the Slovenian karst, "Baltic Sea" 4 in Kashubia, "Guanabara Bay" 1;
+    - 1 likely correct station at the head of a Kimberley tidal inlet (−16.502, 124.404), which Natural Earth draws as land. Michal accepted this cost (decision 23.10, variant A).
   - Trade-off: no position on an island less than about 100 km across (Hawaii's Big Island, Crete, Puerto Rico) can be called land, and river corridors make no claim within 200 km of the sea (a gross error beyond that is still found).
   - OpenStreetMap land polygons (what OBIS uses) are finer, but they are ODbL: attribution plus share-alike on a derived grid, and a source about 1 000 times larger. At a 50 km band the resolution gains nothing, so we use Natural Earth.
 - **ROW-STATION-MOVED, sign pattern.** It applies when the two positions are, as written, ≥ 100 km apart, and, with one sign flipped, ≤ 50 km apart and ≥ 10 times closer. Menez Gwen (ChEssBase): 5 423 km as written, 1.2 km once flipped.
