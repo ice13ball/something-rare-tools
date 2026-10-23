@@ -4,7 +4,7 @@
 // run, a dying worker; the stop reason is saved, shown in four languages and written as the last row of an unfinished fix list.
 import { describe, expect, it } from 'vitest';
 import { CollectionRunner } from '../../src/core/collection/runner';
-import type { CswCall, Net, NetResponse } from '../../src/core/collection/net';
+import { makeNetContext, request, serverCsw, type CswCall, type Net, type NetResponse } from '../../src/core/collection/net';
 import { describeStop } from '../../src/core/collection/stop';
 import { memoryStore, type RunStore } from '../../src/core/collection/store';
 import type { Progress, RunSettings, StopReason } from '../../src/core/collection/types';
@@ -390,5 +390,60 @@ describe('M1: the daily catalogue budget of this connection', () => {
     for (const lang of LANGS) {
       for (const k of ['collection.cause.csw_daily_budget', 'collection.error.dailyBudget'] as const) expect(UI[lang][k], `${lang} ${k}`).toMatch(/24/);
     }
+  });
+});
+
+describe('a catalogue that answers too slowly says so, a real network error keeps the generic text', () => {
+  const call = { catalogue: 'emodnet', op: 'GetRecords', startPosition: 1, maxRecords: 25, schema: 'iso19139' } as const;
+  const cutBody = (): Response => new Response(new ReadableStream({ start: (c) => c.error(new TypeError('network error')) }), { status: 200 });
+
+  it('our server cut the stream after its 45 s (status came, body did not): csw_slow, unreachable, retried, never "network"', async () => {
+    const csw = serverCsw('/api/csw', async () => cutBody());
+    expect(await csw(call)).toMatchObject({ status: 504, proxyError: 'csw_slow' });
+    const clock = virtualClock();
+    const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 }, undefined, {});
+    await expect(request(nctx, 'csw', () => csw(call))).rejects.toMatchObject({ kind: 'unreachable', reason: 'csw_slow', status: 504 });
+    expect(nctx.stats.requests).toBe(3);
+  });
+
+  it("the server's own 504 \"timeout\" (nothing came within 45 s) is the same cause", async () => {
+    const csw = serverCsw('/api/csw', async () => new Response('{"error":"timeout"}', { status: 504, headers: { 'X-Fetch-Proxy-Error': 'timeout' } }));
+    expect(await csw(call)).toMatchObject({ status: 504, proxyError: 'csw_slow' });
+  });
+
+  it('a failed fetch (the server cannot be reached) is still the generic network error', async () => {
+    const csw = serverCsw('/api/csw', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const nctx = makeNetContext(virtualClock(), { requests: 0, retries: 0, throttleEvents: 0 }, undefined, {});
+    await expect(request(nctx, 'csw', () => csw(call))).rejects.toMatchObject({ kind: 'unreachable', reason: 'network' });
+  });
+
+  it('a run whose pages keep arriving too slowly is interrupted with that cause, resumable, in four languages, and the notice names it too', async () => {
+    let slow = true;
+    const inner = catalogue(recs(120));
+    const net: Net = {
+      get: inner.net.get,
+      async csw(c: CswCall): Promise<NetResponse> {
+        if (slow && c.op === 'GetRecords' && c.maxRecords === 25 && (c.startPosition ?? 0) >= 51) return { status: 504, text: '', proxyError: 'csw_slow' };
+        return inner.net.csw(c);
+      },
+    };
+    const r = await run(net, settings(false));
+    const p = r.progress();
+    expect(p.status).toBe('interrupted');
+    expect(p.resumable).toBe(true);
+    expect(p.stop).toMatchObject({ cause: 'csw_slow', source: 'csw:emodnet', kind: 'unreachable' });
+    expect(p.notices).toContainEqual({ code: 'interrupted', params: { reason: 'csw_slow' } });
+    for (const lang of LANGS) {
+      const text = describeStop(p.stop!, lang);
+      expect(text, lang).toMatch(/45/);
+      expect(text, lang).not.toMatch(/csw_slow|network error|\{\w+\}/i);
+    }
+    slow = false;
+    await r.resume();
+    await r.whenIdle();
+    expect(r.progress().status).toBe('finished');
+    expect(r.progress().counts.records).toBe(120);
   });
 });
