@@ -146,19 +146,19 @@ export const ROW_RULES: readonly RuleSpec[] = [
       {
         param: 'signLon',
         plain: {
-          pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem długości geograficznej — przy jednej z nich brakuje albo jest zbędny minus (W/E).`,
-          en: `Two of these positions differ (almost) only in the sign of the longitude — one of them is missing a minus sign or has one too many (W/E).`,
-          de: `Zwei dieser Positionen unterscheiden sich (fast) nur im Vorzeichen der Länge — bei einer fehlt ein Minus oder es ist eines zu viel (W/O).`,
-          fr: `Deux de ces positions ne diffèrent (presque) que par le signe de la longitude — il manque un signe moins à l'une d'elles, ou il y en a un de trop (O/E).`,
+          pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem długości geograficznej: możliwe, że brakuje minusa albo jest zbędny (W/E). Sprawdź też inne kolumny — znak nie musi być całą przyczyną.`,
+          en: `Two of these positions differ (almost) only in the sign of the longitude: possibly a missing or extra minus (W/E). Check the other columns too — the sign need not be the whole cause.`,
+          de: `Zwei Positionen unterscheiden sich (fast) nur im Vorzeichen der Länge: vielleicht fehlt ein Minus oder eines ist zu viel (W/O). Prüfen Sie auch andere Spalten — es muss nicht die ganze Ursache sein.`,
+          fr: `Deux positions ne diffèrent (presque) que par le signe de la longitude : peut-être un moins manquant ou en trop (O/E). Vérifiez aussi les autres colonnes — le signe n'explique pas forcément tout.`,
         },
       },
       {
         param: 'signLat',
         plain: {
-          pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem szerokości geograficznej — przy jednej z nich brakuje albo jest zbędny minus (S/N).`,
-          en: `Two of these positions differ (almost) only in the sign of the latitude — one of them is missing a minus sign or has one too many (S/N).`,
-          de: `Zwei dieser Positionen unterscheiden sich (fast) nur im Vorzeichen der Breite — bei einer fehlt ein Minus oder es ist eines zu viel (S/N).`,
-          fr: `Deux de ces positions ne diffèrent (presque) que par le signe de la latitude — il manque un signe moins à l'une d'elles, ou il y en a un de trop (S/N).`,
+          pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem szerokości geograficznej: możliwe, że brakuje minusa albo jest zbędny (S/N). Sprawdź też inne kolumny — znak nie musi być całą przyczyną.`,
+          en: `Two of these positions differ (almost) only in the sign of the latitude: possibly a missing or extra minus (S/N). Check the other columns too — the sign need not be the whole cause.`,
+          de: `Zwei Positionen unterscheiden sich (fast) nur im Vorzeichen der Breite: vielleicht fehlt ein Minus oder eines ist zu viel (S/N). Prüfen Sie auch andere Spalten — es muss nicht die ganze Ursache sein.`,
+          fr: `Deux positions ne diffèrent (presque) que par le signe de la latitude : peut-être un moins manquant ou en trop (S/N). Vérifiez aussi les autres colonnes — le signe n'explique pas forcément tout.`,
         },
       },
     ],
