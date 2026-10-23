@@ -6,7 +6,7 @@
 // or a page retried later, sees exactly what an uninterrupted run saw. Memory: one set of the list's normalised DOIs; the text is
 // already in memory (the user pasted it).
 import { resolveInput } from '../../sources/resolve';
-import { DATACITE_BATCH, lookupMany, type Deps } from './datacite';
+import { DATACITE_BATCH, UNREADABLE_RECORD, lookupManyRead, type Deps } from './datacite';
 import type { Estimate, Item, PageData, Pager } from '../types';
 
 /** The address of one request must stay short (DOIs can be long). */
@@ -129,9 +129,10 @@ export function doiListPager(deps: Deps, text: string): Pager<DoiCursor> {
     skip: afterOf,
     async fetch(c): Promise<PageData<DoiCursor>> {
       const b = batchAt(c.offset);
-      const found = await lookupMany(deps, b.dois);
+      const { found, unreadable } = await lookupManyRead(deps, b.dois);
       const items: Item[] = b.dois.map((doi) => {
         const rec = found.get(doi);
+        if (!rec && unreadable.has(doi)) return { ref: doi, state: 'unsupported-profile', records: [], reason: UNREADABLE_RECORD };
         return rec ? { ref: doi, state: 'checked', records: [rec] } : { ref: doi, state: 'not-in-datacite', records: [], reason: 'not-found-at-datacite' };
       });
       return { items, next: afterOf(c), counters: { invalidTokens: b.invalid, duplicatesInBatch: b.duplicates } }; // (the counter keeps its saved name; it now counts repeats anywhere in the list)
