@@ -7,7 +7,7 @@ import { CollectionRunner } from '../../src/core/collection/runner';
 import { makeNetContext, type Net } from '../../src/core/collection/net';
 import { estimateZenodo, zenodoPager, type ZenodoCursor, type ZenodoPlan } from '../../src/core/collection/sources/zenodo';
 import { memoryStore } from '../../src/core/collection/store';
-import { isGapNotice } from '../../src/core/collection/stop';
+import { describeStop, isGapNotice } from '../../src/core/collection/stop';
 import type { RunRecord } from '../../src/core/collection/types';
 import { json, rec, runnerDeps, virtualClock, zenodoMock, type Rec } from './helpers';
 import { mixedCommunity, runCommunity, shortened, summarize, touchingCommunity, type Summary } from './zenodoScenario';
@@ -446,5 +446,56 @@ describe('review fixes', () => {
     const p = r.progress();
     expect(p.status).toBe('interrupted');
     expect(p.stop?.page).toBe(241); // 240 pages of 2020 were read; the failed step is the next one
+  }, 120_000);
+
+  it('an old plan whose recounted remainder is now empty is still read to its end (the work list is refilled wherever it runs dry)', async () => {
+    const clock = virtualClock();
+    const recs: Rec[] = [...Array.from({ length: 10 }, (_, i) => rec(i + 1, '2021-03-05')), ...Array.from({ length: 5 }, (_, i) => rec(100 + i, '2022-06-06'))];
+    const z = zenodoMock(recs, clock, { within: true });
+    const slices = [
+      { from: '2021-03-01', to: '2021-03-31', total: 10 },
+      { from: '2021-03-01', to: '2021-03-31', except: [{ from: '2021-03-05', to: '2021-03-05' }], total: 3 }, // drifted: nothing is left in it now
+      { from: '2022-01-01', to: '2022-12-31', total: 5 },
+    ];
+    const plan: ZenodoPlan = { slug: 'x', total: 15, slices, sum: 13 };
+    const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
+    const pager = zenodoPager({ net: z.net, nctx }, plan);
+    let c: ZenodoCursor | null = { si: 0, page: 1 } as ZenodoCursor;
+    let n = 0;
+    while (c) {
+      const d = await pager.fetch(JSON.parse(JSON.stringify(c)));
+      n += d.items.length;
+      c = d.next;
+    }
+    expect(n).toBe(15);
+  });
+
+  it('a new-plan remainder that counts zero is fine: the run goes on to the slices after it', async () => {
+    const clock = virtualClock();
+    const recs: Rec[] = [];
+    for (let i = 0; i < 10_100; i++) recs.push(rec(i + 1, `2023-05-${p2((i % 27) + 1)}`));
+    for (let i = 0; i < 50; i++) recs.push(rec(20_000 + i, '2024-07-07'));
+    const r = await run(zenodoMock(recs, clock, { within: true }).net, clock);
+    expect(r.progress().status).toBe('finished');
+    expect(r.progress().counts.records).toBe(10_150);
+    expect(r.progress().notices.map((x) => x.code)).not.toContain('slices-differ');
+  }, 120_000);
+
+  it('a failing count is named as a counting step, not "page N", in every language', async () => {
+    const clock = virtualClock();
+    const z = zenodoMock(Array.from({ length: 11_000 }, (_, i) => rec(i + 1, `2021-0${(i % 9) + 1}-10`)), clock);
+    const net: Net = { ...z.net, get: async (url, a) => (param(url, 'size') === '1' && q(url).startsWith('publication_date:[2021-01-01 TO 2021-12-31]') ? json({}, { status: 503 }) : z.net.get(url, a)) };
+    const r = await run(net, clock);
+    const stop = r.progress().stop!;
+    expect(r.progress().status).toBe('interrupted');
+    expect(stop.counting).toBe(true);
+    const text = (lang: 'en' | 'pl' | 'de' | 'fr'): string => describeStop(stop, lang);
+    expect(text('en')).toMatch(/while counting a slice of the community, request \d+/);
+    expect(text('pl')).toMatch(/podczas liczenia fragmentu/);
+    expect(text('de')).toMatch(/beim Zählen eines Abschnitts/);
+    expect(text('fr')).toMatch(/pendant le comptage d’une tranche/);
+    for (const l of ['en', 'pl', 'de', 'fr'] as const) expect(text(l)).not.toMatch(/page \d|strona \d|Seite \d/);
+    const saved = (await (r as unknown as { d: { store: { load(): Promise<{ deferred: { counting?: boolean }[] }> } } }).d.store.load()).deferred;
+    expect(saved.some((d) => d.counting)).toBe(true);
   }, 120_000);
 });

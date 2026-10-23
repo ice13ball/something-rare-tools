@@ -9,10 +9,10 @@ import { SourceFailure, type Notice, type StopReason } from './types';
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** The stop reason of a failure. `source` is what the run reads; a failure that names its own host (DataCite, Zenodo) wins. */
-export function stopFromFailure(e: SourceFailure, source: string, page: number, request: number, at: number): StopReason {
+export function stopFromFailure(e: SourceFailure, source: string, page: number, request: number, at: number, counting = false): StopReason {
   const host = e.host && e.host !== 'csw' ? e.host : source;
   const cause = /^http-\d{3}$/.test(e.reason) ? 'http' : e.reason;
-  return { cause, source: host, page, request, kind: e.kind, ...(e.status ? { status: e.status } : {}), at };
+  return { cause, source: host, page, request, ...(counting ? { counting } : {}), kind: e.kind, ...(e.status ? { status: e.status } : {}), at };
 }
 
 export function stopFromError(e: unknown, source: string, page: number, request: number, at: number): StopReason {
@@ -58,7 +58,7 @@ export function describeStop(s: StopReason, lang: Lang): string {
   const cause = causeText(s, lang);
   const time = new Date(s.at).toISOString().slice(0, 16).replace('T', ' ');
   if (s.cause === 'user') return translate(lang, 'collection.stop.user', { time });
-  const where = s.page !== undefined ? translate(lang, 'collection.stop.where', { page: s.page, request: s.request ?? 0 }) : '';
+  const where = s.counting ? translate(lang, 'collection.stop.counting', { request: s.request ?? 0 }) : s.page !== undefined ? translate(lang, 'collection.stop.where', { page: s.page, request: s.request ?? 0 }) : '';
   return translate(lang, 'collection.stop.line', { cause, source: sourceName(s.source), where, time });
 }
 
