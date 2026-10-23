@@ -113,3 +113,46 @@ describe('IndexedDB store: the pasted list has its own entry', () => {
     expect(await store.loadText('old')).toBe('x');
   });
 });
+
+describe('resume() changes nothing until it can go on', () => {
+  it('the pasted list is gone: resume throws, the run keeps its status (still resumable and discardable), and the end-of-run notice is not cleared', async () => {
+    const run = (await interruptedRun()).r; // finished with one unread page; its entry for the list is then lost
+    const s = (run as unknown as { d: { store: ReturnType<typeof memoryStore> } }).d.store;
+    s.loadText = async () => null;
+    await expect(run.resume()).rejects.toThrow(/no longer saved/);
+    expect(run.progress().status).toBe('finished');
+    expect(run.progress().notices.some((n) => n.code === 'unread-pages')).toBe(true);
+    await run.discard();
+    expect(run.progress().status).toBe('idle');
+  });
+
+  it('a resumed run drops the stale end-of-run notice as soon as it is running again', async () => {
+    const first = await interruptedRun();
+    expect(first.r.progress().notices.some((n) => n.code === 'unread-pages')).toBe(true);
+    const seen: Progress[] = [];
+    const again = new CollectionRunner(runnerDeps(first.mock.net, first.clock, { store: first.store, onProgress: (p) => seen.push(p) }));
+    await again.saved();
+    await again.resume();
+    expect(seen.find((p) => p.status === 'running')?.notices.some((n) => n.code === 'unread-pages')).toBe(false);
+    await again.whenIdle();
+  });
+});
+
+describe('idbStore after a blocked open', () => {
+  it('asks again on the next call instead of keeping the rejection', async () => {
+    const factory = new IDBFactory();
+    const old = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = factory.open('collection-review', 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore('run');
+        req.result.createObjectStore('parts');
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const store = idbStore(factory);
+    await expect(store.load()).rejects.toThrow(/another tab/); // the old connection (another tab) is still open
+    old.close();
+    expect(await store.load()).toBeNull();
+  });
+});

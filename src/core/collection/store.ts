@@ -68,14 +68,19 @@ export function idbStore(factory: IDBFactory = indexedDB): RunStore {
   let opened: Promise<IDBDatabase> | undefined;
   const db = (): Promise<IDBDatabase> =>
     (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
+      // a rejected open is not kept: the next call asks again (another tab may have let go since)
+      const fail = (e: Error): void => {
+        opened = undefined;
+        reject(e);
+      };
       const req = factory.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
         // version 1: run + parts; version 2 adds the pasted DOI list
         for (const name of ['run', 'parts', 'texts']) if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
       };
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error ?? new Error('IndexedDB could not be opened'));
-      req.onblocked = () => reject(new Error('IndexedDB is blocked'));
+      req.onerror = () => fail(req.error ?? new Error('IndexedDB could not be opened'));
+      req.onblocked = () => fail(new Error('IndexedDB is blocked by another tab that uses the saved progress'));
     }));
 
   return {
