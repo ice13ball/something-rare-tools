@@ -112,7 +112,8 @@ describe('ROW-ON-LAND-NEAR (10-50 km inland, note)', () => {
     expect(only(f, 'ROW-ON-LAND')[0].lines).toEqual([2]);
     expect(only(f, 'ROW-ON-LAND-NEAR')[0].lines).toEqual([3]);
     expect(Object.keys(only(f, 'ROW-ON-LAND-NEAR')[0].params).sort()).toEqual(['count', 'places']);
-    expect(renderPlain(only(f, 'ROW-ON-LAND-NEAR')[0], 'pl')).toContain('Jeśli to próbka z rzeki, jeziora albo laguny przy brzegu, pomiń tę uwagę.');
+    expect(renderPlain(only(f, 'ROW-ON-LAND-NEAR')[0], 'pl')).toContain('pozycja wypada na mapie lądu Natural Earth (1:10m) na lądzie lub w jeziorze');
+    expect(renderPlain(only(f, 'ROW-ON-LAND-NEAR')[0], 'pl')).toContain('Jeśli to próbka z rzeki, estuarium, zatoki pływowej, jeziora albo laguny przy brzegu, pomiń tę uwagę: w takich miejscach mapa bywa niedokładna.');
   });
 });
 
