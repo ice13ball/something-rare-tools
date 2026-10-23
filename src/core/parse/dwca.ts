@@ -336,7 +336,8 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
   const header = [...indexed, ...defaultNames(core, indexed)];
   const rows: RawRow[] = kept.map((r) => ({
     line: r.line,
-    cells: defaults.length === 0 ? r.fields : [...r.fields, ...Array<string>(Math.max(0, indexed.length - r.fields.length)).fill(''), ...defaults],
+    // defaults sit after the indexed columns: extra trailing fields of a row (an unmapped column, a trailing tab) are cut first
+    cells: defaults.length === 0 ? r.fields : [...r.fields.slice(0, indexed.length), ...Array<string>(Math.max(0, indexed.length - r.fields.length)).fill(''), ...defaults],
     fieldCount: r.fields.length,
   }));
   if (total > rows.length) findings.push(makeFinding('IN-DWCA-PARTIAL', { file: fileName, params: { read: rows.length, total } }));
