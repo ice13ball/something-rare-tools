@@ -134,9 +134,13 @@ const nameKey = (s: string): string => s.normalize('NFKC').replace(/\s+/g, ' ').
  * that version: it is not an exact name (the link and the identifier still resolve it).
  */
 export const versionless = (z: { id: string; title: string }): boolean => {
-  const v = /\d+(?:\.\d+)*/.exec(z.id)?.[0];
+  // The version is the LAST number of the id, before only letters ("-only", "-or-later", a port): CC0-1.0 is 1.0, not 0.
+  const v = /(\d+(?:\.\d+)*)(?:-[a-z]+)*$/i.exec(z.id)?.[1];
   return !!v && !new RegExp(`(?<![\\d.])${v.replace(/\./g, '\\.')}(?![\\d])`).test(z.title);
 };
+
+/** The family of an id without its version ("NLOD" for NLOD-1.0): what a versionless title of it names. */
+const familyOfTitle = (z: { id: string }): string => z.id.replace(/-?\d+(?:\.\d+)*(?:-[a-z]+)*$/i, '');
 
 /** Every SPDX id the tool knows, and the title Zenodo gives each of them (its rights text in DataCite), by exact whole string. */
 const EXACT_NAMES: ReadonlyMap<string, string> = (() => {
@@ -147,7 +151,7 @@ const EXACT_NAMES: ReadonlyMap<string, string> = (() => {
 })();
 
 /** Zenodo titles that name a licence family without its version: they name a licence (so they do not read as "no licence named") but give no id. */
-const VERSIONLESS_TITLES: ReadonlySet<string> = new Set(ZENODO_LICENCES.filter((z) => INFO.has(z.id) && versionless(z)).map((z) => nameKey(z.title)));
+const VERSIONLESS_TITLES: ReadonlyMap<string, string> = new Map(ZENODO_LICENCES.filter((z) => INFO.has(z.id) && versionless(z)).map((z) => [nameKey(z.title), familyOfTitle(z)]));
 
 /** The licence an exact whole-string name (an SPDX id in any case, or Zenodo's title for one) stands for. */
 export function exactLicenceName(text: string): string | undefined {
@@ -606,6 +610,8 @@ const UNREAD_NAME_ALL = new RegExp(UNREAD_NAME.source, 'giu');
 interface TextRead {
   ids: string[];
   families: string[];
+  /** The whole text is a Zenodo title that names a licence family without its version ("NLOD"): any id or link outside that family is a conflict. */
+  titleFamily?: string;
   unmapped: boolean;
   /** A licence name this tool can turn into an id or a family was found. */
   recognised: boolean;
@@ -663,7 +669,8 @@ function readText(raw: string): TextRead {
   // The whole text is exactly a licence name (an SPDX id, or the title Zenodo gives a licence): that name, fully consumed, nothing left over.
   const exact = exactLicenceName(raw);
   if (exact) return { ...out, ids: [exact], recognised: true, any: true };
-  if (VERSIONLESS_TITLES.has(nameKey(raw))) return { ...out, any: true };
+  const family = VERSIONLESS_TITLES.get(nameKey(raw));
+  if (family) return { ...out, any: true, titleFamily: family };
   let pdLink = false;
   // Links and DOIs are blanked (same length, so positions stay aligned with `raw`). A licence link is a licence name like any other;
   // every other link or DOI is kept aside and shown as leftover.
@@ -762,7 +769,14 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   // same statement that supplies a licence (the identifier, the title): the statement is then two statements. This holds with or without a link.
   // Neutral: empty / "Open Access" wording, and "Public Domain" wording next to a CC0 link or id.
   const says = (r: TextRead): boolean => !r.any && !r.neutral && !(r.pd && (u.pd || ids.includes('CC0-1.0')));
-  const mixed = reads.length > 1 && reads.some(says) && reads.some((r) => r.ids.length > 0 || r.families.length > 0);
+  const fams = reads.flatMap((r) => (r.titleFamily ? [r.titleFamily] : []));
+  const inFamily = (id: string): boolean => fams.every((f) => id.startsWith(`${f}-`));
+  const famMismatch =
+    fams.length > 0 &&
+    (ids.some((i) => !inFamily(i)) ||
+      (!!u.id && !inFamily(u.id)) ||
+      (!!(u.unmapped || u.oneOf) && !u.id && !fams.every((f) => uri!.toLowerCase().includes(f.toLowerCase()))));
+  const mixed = (reads.length > 1 && reads.some(says) && reads.some((r) => r.ids.length > 0 || r.families.length > 0)) || famMismatch;
   const clash =
     mixed ||
     ids.length > 1 ||
@@ -790,7 +804,9 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
       (unmappedText && !!u.id) ||
       (!!u.id && families.some((f) => f !== familyOf(u.id!))) || // always: a versionless family against the link
       // the text names no licence, says something besides "Open Access", and the URI names one
-      (unnamedSays && licenceUri));
+      (unnamedSays && licenceUri) ||
+      // every string is an exact licence name and the link is no licence link and no access value: it says something else about the data
+      (!licenceUri && !isNeutralUnnamed(uri) && ids.length === 1 && reads.every((r, i) => r.neutral || !!exactLicenceName(texts[i]))));
   // Precedence: when the readings THEMSELVES differ (text against link, or the text against itself) that is the finding
   // (LIC-TEXT-URI-CONFLICT / LIC-AMBIGUOUS). Only when the readings agree and something is left over does the leftover decide:
   // a restriction marker in it -> LIC-ADDED-CONDITIONS, anything else -> LIC-EXTRA-TEXT.
@@ -830,15 +846,37 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   return s;
 }
 
+/** A copyright notice that is only © / Copyright, a year and a holder. */
+const holderNotice = (t: string): boolean => /©|copyright/iu.test(t) && leftoverOf(t, t, []).text === '';
 /**
- * The statement's text names no licence at all and states a restriction in words ("Not for commercial use", "All rights reserved").
- * Neutral wording ("Open Access", a copyright notice that is only © + holder) never counts. Used to warn when a record states
- * such a restriction next to a recognised licence.
+ * Only names: capitalised words and initials ("Krašovec N., Marsetič A."), with name particles. Words that are statements ("Access",
+ * "Rights", "Reserved", "Closed"...) never pass. Used ONLY next to the rightsstatements.org "In Copyright" link, where Zenodo writes the
+ * copyright holders as the text of the entry.
  */
-export function statesRestrictionOnly(text: string | undefined): boolean {
-  if (!text?.trim()) return false;
-  const r = readText(text.trim());
-  return !r.any && !r.neutral && r.restricted;
+const NAME_PARTICLES = new Set(['van', 'von', 'de', 'der', 'den', 'da', 'di', 'del', 'la', 'le', 'du', 'dos', 'and', 'et', 'und']);
+const NOT_A_NAME = new Set(
+  'access rights reserved copyright closed open restricted embargo embargoed confidential private public free commercial permission contact request use data licence license all none'.split(' '),
+);
+const namesOnly = (t: string): boolean => {
+  if (t.length > 200 || !/^[\p{L}\s.,;&'’-]+$/u.test(t)) return false;
+  const words = t.match(/\p{L}[\p{L}'’-]*/gu) ?? [];
+  return words.length > 0 && words.every((w) => !NOT_A_NAME.has(w.toLowerCase()) && (/^\p{Lu}/u.test(w) || NAME_PARTICLES.has(w.toLowerCase())));
+};
+const IN_COPYRIGHT_LINK = /rightsstatements\.org\/vocab\/inc\/1\.0/i;
+
+/**
+ * A repeated rights entry that says nothing the licence check needs to look at: empty, an access value ("Open Access", eu-repo / COAR
+ * openAccess, as text or as link) or a copyright holder notice (© + holder, or just the holders' names next to the "In Copyright" link,
+ * as Zenodo writes it). Anything else in an entry that names no recognised licence is something the licence should be checked against
+ * (fail-closed: no list of "restriction words").
+ */
+export function isNeutralEntry(text?: string, uri?: string): boolean {
+  const t = text?.trim();
+  const l = uri?.trim();
+  const notice = !!t && (holderNotice(t) || (!!l && IN_COPYRIGHT_LINK.test(l) && namesOnly(t)));
+  const textNeutral = !t || isNeutralUnnamed(t) || notice;
+  const uriNeutral = !l || isNeutralUnnamed(l) || (IN_COPYRIGHT_LINK.test(l) && notice);
+  return textNeutral && uriNeutral;
 }
 
 /**

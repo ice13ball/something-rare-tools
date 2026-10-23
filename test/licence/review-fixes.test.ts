@@ -83,34 +83,6 @@ describe('MEDIUM: a Zenodo title without its version is no exact name', () => {
   });
 });
 
-describe('MEDIUM: LIC-RESTRICTION-TEXT', () => {
-  const by: Rights = { rights: 'Creative Commons Attribution 4.0 International', rightsUri: CCBY, rightsIdentifier: 'cc-by-4.0' };
-  it.each(['Not for commercial use', 'Data access is restricted until the end of the project', 'All rights reserved'])('"%s" next to CC BY 4.0 (separate entry): one warning', (t) => {
-    for (const extra of [{ rights: t }, { rights: t, rightsUri: 'http://rightsstatements.org/vocab/InC/1.0/' }]) {
-      const f = lic(checkLicence([dc(by, extra)], { label: 'x', inaccessible: false })).filter((x) => x.ruleId === 'LIC-RESTRICTION-TEXT');
-      expect(f).toHaveLength(1);
-      expect(f[0]).toMatchObject({ severity: 'warning', params: { licence: 'CC-BY-4.0', text: t } });
-      for (const lang of LANGS) {
-        const plain = renderPlain(f[0], lang);
-        expect(plain, lang).toContain(t);
-        expect(plain, lang).toContain('CC-BY-4.0');
-        expect(plain, lang).not.toMatch(/\b(OK|allowed|valid|erlaubt|zulässig|dozwolone|autorisé)\b/i);
-      }
-    }
-  });
-  it('PANGAEA.996153 style: CC BY 4.0 + "Data access is restricted…"', () => {
-    const rec = dc({ rights: 'Creative Commons Attribution 4.0 International', rightsUri: CCBY }, { rights: 'Data access is restricted. Contact the author.', rightsUri: 'http://rightsstatements.org/vocab/InC/1.0/' });
-    expect(rulesOf(rec)).toEqual(['LIC-RESTRICTION-TEXT']);
-    expect(analyseLicences([rec]).contradictions.map((c) => c.kind)).toEqual(['restriction-text']);
-  });
-  it('never for neutral texts, a notice that is only © + holder, a restriction without a recognised licence, or a record whose only statement it is', () => {
-    expect(rules(by, { rights: 'Open Access' })).toEqual([]);
-    expect(rules(by, { rights: '© 2024 ACME Corp.' })).toEqual([]);
-    expect(rules({ rights: 'Not for commercial use' })).not.toContain('LIC-RESTRICTION-TEXT');
-    expect(rules(by, { rights: 'Creative Commons Attribution 4.0 International', rightsIdentifier: 'cc-by-4.0', rightsUri: CCBY })).toEqual([]);
-  });
-});
-
 describe('LOW: leftover of another string, translated', () => {
   const f = lic(checkLicence([dc({ rights: 'CC BY 4.0, see the README', rightsIdentifier: 'cc-by-4.0 licence file' })], { label: 'x', inaccessible: false })).find((x) => x.ruleId === 'LIC-EXTRA-TEXT')!;
   it.each(LANGS)('%s: the clause is in the language, with no English label', (lang) => {

@@ -18,8 +18,8 @@ import type { RuleSpec } from './spec';
  *                                                    SPDX id, or the text itself when no id could be read; rest = that leftover
  *   LIC-EXTRA-TEXT            text, rest             the text names a licence and says something else (no restriction marker in it);
  *                                                    rest = exactly that something else, as written
- *   LIC-RESTRICTION-TEXT      licence, text          a statement of the record names no licence and states a restriction in words (text), while another statement of the same record
- *                                                    states the recognised licence {licence}; once per record
+ *   LIC-OTHER-RIGHTS-ENTRY    licence, text          a repeated rights entry (DataCite rightsList, Zenodo rights[]) that is no recognised licence and no plain access value / holder-only notice
+ *                                                    (text = what it says, or its link), next to the recognised licence {licence} (name and id) of the same record; once per record; never ISO fields
  *   LIC-AMBIGUOUS             text, readings         one statement WITHOUT a link that reads as more than one licence (rights text against
  *                                                    identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to one that is not);
  *                                                    readings = what it reads as, separated by " / " ("—" = a name no SPDX id exists for)
@@ -119,18 +119,18 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     technical: `{file} field {field}: text '{text}' contains '{rest}' besides the licence name; the statement is not classified. Check manually whether it changes the licence.`,
   },
   {
-    id: 'LIC-RESTRICTION-TEXT',
+    id: 'LIC-OTHER-RIGHTS-ENTRY',
     category: 'A',
     severity: 'warning',
     citations: [CITE.ccModified],
     params: ['licence', 'text'],
     plain: {
-      pl: `Obok licencji {licence} rekord podaje ograniczenie słowami („{text}”). Sprawdź, czy ma ono zastosowanie, i podaj wyraźnie licencję oraz warunki.`,
-      en: `Next to the licence {licence}, the record states a restriction in words ("{text}"). Check whether it applies and state the licence and the conditions clearly.`,
-      de: `Neben der Lizenz {licence} nennt der Eintrag in Worten eine Einschränkung („{text}“). Prüfen Sie, ob sie gilt, und geben Sie Lizenz und Bedingungen klar an.`,
-      fr: `À côté de la licence {licence}, la notice énonce une restriction en toutes lettres (« {text} »). Vérifiez si elle s'applique et indiquez clairement la licence et les conditions.`,
+      pl: `Obok licencji {licence} inny wpis o prawach mówi: „{text}”. Sprawdź, czy ogranicza on licencję albo ją zmienia.`,
+      en: `Next to the licence {licence}, another rights entry says: "{text}". Check whether it restricts or changes the licence.`,
+      de: `Neben der Lizenz {licence} sagt ein weiterer Rechteeintrag: „{text}“. Prüfen Sie, ob er die Lizenz einschränkt oder verändert.`,
+      fr: `À côté de la licence {licence}, une autre mention de droits indique : « {text} ». Vérifiez si elle restreint ou modifie la licence.`,
     },
-    technical: `{file} field {field}: a statement '{text}' names no licence and states a restriction, next to the recognised licence {licence}. Check manually whether the restriction applies.`,
+    technical: `{file} field {field}: a rights entry '{text}' is no recognised licence and no plain access value, next to the recognised licence {licence}. Check manually whether it restricts or changes the licence.`,
   },
   {
     id: 'LIC-AMBIGUOUS',

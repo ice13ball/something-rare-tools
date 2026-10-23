@@ -25,7 +25,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'LIC-ADDED-CONDITIONS': ['warning', 'A'],
   'LIC-EXTRA-TEXT': ['warning', 'A'],
   'LIC-AMBIGUOUS': ['warning', 'A'],
-  'LIC-RESTRICTION-TEXT': ['warning', 'A'],
+  'LIC-OTHER-RIGHTS-ENTRY': ['warning', 'A'],
   'META-EMPTY-LINK': ['warning', 'A'],
   'META-NO-VERSION': ['info', 'A'],
   'META-NO-EXTENT': ['info', 'A'],

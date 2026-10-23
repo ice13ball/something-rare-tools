@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The ONE place that compares what the metadata sources of a dataset say about its licence. Pure, no I/O.
 // /check maps the result to findings (checks/licence.ts); the licence page renders it directly.
-import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, statesRestrictionOnly, type SpdxInfo } from '../metadata/licence';
+import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, isNeutralEntry, type SpdxInfo } from '../metadata/licence';
 import type { LicenceClass, LicenceStatement, MetadataRecord, MetadataSource } from '../types';
 
 /** Statements about the metadata record itself (ISO `metadataConstraints`), not the data. */
@@ -61,8 +61,8 @@ export type Contradiction =
   | { kind: 'extra-text'; source: AnalysedSource; statement: AnalysedStatement }
   /** No link, and the statement reads as more than one licence (text against identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to an unrecognised one). */
   | { kind: 'ambiguous'; source: AnalysedSource; statement: AnalysedStatement }
-  /** A statement that names no licence but states a restriction in words, next to a recognised licence of the same record. */
-  | { kind: 'restriction-text'; source: AnalysedSource; statement: AnalysedStatement; licence: string }
+  /** A repeated rights entry (DataCite rightsList, Zenodo rights[]) that is no recognised licence and no neutral access value, next to a recognised licence of the same record. */
+  | { kind: 'other-rights-entry'; source: AnalysedSource; statement: AnalysedStatement; licence: string }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
@@ -239,13 +239,16 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     for (const statement of source.statements) if (statement.conflict) contradictions.push({ kind: { restricted: 'added-conditions', 'extra-text': 'extra-text', readings: 'ambiguous', 'text-uri': 'text-uri' }[statement.conflict.kind] as 'added-conditions' | 'extra-text' | 'ambiguous' | 'text-uri', source, statement });
   }
 
-  // A statement that names no licence but states a restriction in words ("Not for commercial use", "All rights reserved") next to a licence the
-  // same record states: once per record.
+  // A repeated rights entry that is no recognised licence, no conflict of its own and not neutral, next to a licence the same record
+  // recognises: once per record. Only DataCite rightsList / Zenodo rights[]; ISO fields (useLimitation, otherConstraints) are never looked at.
   for (const source of sources) {
     const licence = source.statements.find((a) => a.classification.kind === 'spdx');
     if (!licence) continue;
-    const statement = source.statements.find((a) => !a.conflict && a.classification.kind !== 'spdx' && statesRestrictionOnly(a.statement.text));
-    if (statement) contradictions.push({ kind: 'restriction-text', source, statement, licence: shownOf(licence) });
+    const statement = source.statements.find((a) => isRepeatedEntry(a.statement) && !a.conflict && a.classification.kind !== 'spdx' && !isNeutralEntry(a.statement.text, a.statement.uri));
+    if (statement) {
+      const id = licence.classification.kind === 'spdx' ? licence.classification.id : '';
+      contradictions.push({ kind: 'other-rights-entry', source, statement, licence: licence.info ? `${licence.info.name} (${id})` : shownOf(licence) });
+    }
   }
 
   // Restriction codes against an open licence: a recognised open id, or a statement that names an open family without being
