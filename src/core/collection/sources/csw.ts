@@ -320,6 +320,14 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
       const size = c.size ?? CSW_PAGE;
       return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}), ...(c.cap !== undefined ? { cap: c.cap } : {}) } : null;
     },
+    rest: (c, data, owed) => {
+      // A deferred page read again at a smaller size covers only its first positions: what is left of its range is still owed.
+      const end = c.pos + owed - 1; // `owed` records from the page's position: the range of the deferred entry
+      if (!data.next || data.next.pos > end) return null;
+      const left = end - data.next.pos + 1;
+      // asked for no more than is owed: the positions after the range were read by the main walk
+      return { cursor: { ...data.next, size: Math.min(data.next.size ?? CSW_PAGE, left) }, expected: left };
+    },
     async fetch(c): Promise<PageData<CswCursor>> {
       // nextRecord pointed back into a page already read: the first positions of this page were processed with the one before.
       const overlap = c.through !== undefined && c.through >= c.pos ? c.through - c.pos + 1 : 0;
@@ -348,11 +356,14 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
       } else if (!page.end && page.nextRecord > 0) {
         notices.push({ code: 'empty-page', params: { position: c.pos, matched } });
       }
+      let shortfall = 0;
       if (next === null) {
-        if (seen < matched) notices.push({ code: 'ended-before-matched', params: { seen, matched } });
-        else if (seen > matched) notices.push({ code: 'more-than-matched', params: { seen, matched } });
+        if (seen < matched) {
+          notices.push({ code: 'ended-before-matched', params: { seen, matched } });
+          shortfall = matched - seen; // owed, and said at the end of the run where no cap can drop it
+        } else if (seen > matched) notices.push({ code: 'more-than-matched', params: { seen, matched } });
       }
-      return { items: page.items, next, notices, ...(counters ? { counters } : {}) };
+      return { items: page.items, next, notices, ...(shortfall > 0 ? { shortfall } : {}), ...(counters ? { counters } : {}) };
     },
   };
 }

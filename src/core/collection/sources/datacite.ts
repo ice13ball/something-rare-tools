@@ -163,6 +163,7 @@ export function dataciteListPager(deps: Deps, by: 'client' | 'prefix', id: strin
       if (c.n > 0 && c.anchor !== undefined && items.length > 0 && items[0].ref === c.anchor) throw new SourceFailure('protocol', 'cursor-restarted');
       if (c.n + items.length > total + DATACITE_PAGE) throw new SourceFailure('protocol', 'cursor-overrun');
       let next: DataciteCursor | null = null;
+      let shortfall = 0;
       if (nextUrl !== undefined && items.length > 0) {
         if (nextUrl === c.url || !isDataciteListUrl(nextUrl)) throw new SourceFailure('protocol', 'cursor-stuck');
         const epoch = cursorEpoch(nextUrl);
@@ -170,8 +171,9 @@ export function dataciteListPager(deps: Deps, by: 'client' | 'prefix', id: strin
         next = { url: nextUrl, n: c.n + items.length, anchor: c.anchor ?? items[0].ref, ...(epoch !== undefined ? { epoch } : {}) };
       } else if (c.n + items.length < total) {
         notices.push({ code: 'ended-before-total', params: { seen: c.n + items.length, total } });
+        shortfall = total - (c.n + items.length);
       }
-      return { items, next, notices };
+      return { items, next, notices, ...(shortfall > 0 ? { shortfall } : {}) };
     },
   };
 }

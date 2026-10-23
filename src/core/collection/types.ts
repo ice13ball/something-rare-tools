@@ -228,6 +228,11 @@ export interface Pager<C = unknown> {
   skip(cursor: C): C | null;
   /** How many records that page was expected to hold. */
   expected(cursor: C): number;
+  /**
+   * A page that was left for later and is now read in smaller pieces (a CSW page asked smaller): what of its ORIGINAL range its answer did not
+   * cover, as the cursor to read next and the records still owed; null when the range is covered.
+   */
+  rest?(cursor: C, data: PageData<C>, owed: number): { cursor: C; expected: number } | null;
 }
 
 export type { Finding, Lang };
