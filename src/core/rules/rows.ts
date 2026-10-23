@@ -195,10 +195,10 @@ export const ROW_RULES: readonly RuleSpec[] = [
     params: ['count', 'places'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
-      pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, z dala od morza: {places} (liczba wierszy; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. Pas 50 km od brzegu i brzegi rzek nie są oceniane.`,
-      en: `In lines {lines} ({count} in all) the position lies on land or in a lake, away from the sea: {places} (number of rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. The 50 km band along the coast and river banks are not judged.`,
-      de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position an Land oder in einem See, abseits des Meeres: {places} (Anzahl Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten ist das meist ein Fehler: falsches Vorzeichen, vertauschte Achsen oder ein Tippfehler. Der 50-km-Küstenstreifen und Flussufer werden nicht bewertet.`,
-      fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, loin de la mer : {places} (lignes ; distance minimale à la mer). En données marines, c'est le plus souvent une erreur : signe erroné, axes inversés ou faute de frappe. La bande côtière de 50 km et les rives des fleuves ne sont pas évaluées.`,
+      pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, z dala od morza: {places} (liczba wierszy; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. Pas 50 km od brzegu i brzegi rzek blisko morza nie są oceniane.`,
+      en: `In lines {lines} ({count} in all) the position lies on land or in a lake, away from the sea: {places} (number of rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. The 50 km band along the coast and river banks near the sea are not judged.`,
+      de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position an Land oder in einem See, abseits des Meeres: {places} (Anzahl Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten meist ein Fehler: Vorzeichen, vertauschte Achsen oder Tippfehler. Der 50-km-Küstenstreifen und Flussufer nahe dem Meer werden nicht bewertet.`,
+      fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, loin de la mer : {places} (nombre de lignes ; distance min. à la mer). En données marines, c'est souvent une erreur : signe, axes inversés ou faute de frappe. La bande côtière de 50 km et les rives proches de la mer ne sont pas évaluées.`,
     },
     plainIf: [
       {

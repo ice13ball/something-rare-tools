@@ -39,12 +39,19 @@ authors:
     orcid: "https://orcid.org/0009-0007-3786-0310"
     affiliation: "Independent Researcher"
 identifiers:
-  - description: "Methods and data documentation of Abyssal Claims (Zenodo concept DOI, CC-BY-4.0)"
-    type: doi
-    value: "10.5281/zenodo.19745884"
-  - description: "Source code of the Abyssal Claims engine (Zenodo concept DOI)"
-    type: doi
-    value: "10.5281/zenodo.22728476"
   - description: "Live tools"
     type: url
     value: "https://tools.something-rare.com"
+references:
+  - type: generic
+    title: "Abyssal Claims: methods and data documentation"
+    authors:
+      - family-names: "Mazurowski"
+        given-names: "Michal"
+    doi: "10.5281/zenodo.19745884"
+  - type: software
+    title: "Abyssal Claims: source code"
+    authors:
+      - family-names: "Mazurowski"
+        given-names: "Michal"
+    doi: "10.5281/zenodo.22728476"
