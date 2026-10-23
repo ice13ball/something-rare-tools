@@ -14,6 +14,10 @@ import { openZip, ZipError, ZIP_LIMITS, type Inflate, type ZipArchive, type ZipL
 
 /** Core rows read at most. /check had no row limit before; 200 000 rows of a wide occurrence table is a few hundred MB in the worker. */
 export const DWCA_MAX_ROWS = 200_000;
+/** A core table is at most this many columns wide, indexed fields, default-value fields and the highest field index together: a hostile meta.xml cannot widen every row. */
+export const DWCA_MAX_COLUMNS = 1000;
+/** Default-value fields (`<field default=…/>` without an index) a core may have; each is copied into every row. */
+export const DWCA_MAX_DEFAULTS = 200;
 /** meta.xml and eml.xml are small by nature; anything bigger is not read. */
 const MAX_XML_BYTES = 5 * 1024 * 1024;
 
@@ -90,8 +94,9 @@ function tableSpec(el: Element, isCore: boolean): TableSpec {
 function headerOf(spec: TableSpec): string[] {
   const names = new Map<number, string>();
   if (spec.idIndex !== undefined) names.set(spec.idIndex, 'id');
+  let width = 0;
   for (const f of spec.fields) names.set(f.index, localName(f.term));
-  const width = Math.max(-1, ...names.keys()) + 1;
+  for (const k of names.keys()) if (k >= width) width = k + 1;
   const seen = new Set<string>();
   const header: string[] = [];
   for (let i = 0; i < width; i++) {
@@ -106,10 +111,14 @@ function headerOf(spec: TableSpec): string[] {
 /** The names of the default-value columns, appended after the indexed ones, unique within the whole header. */
 function defaultNames(spec: TableSpec, indexed: readonly string[]): string[] {
   const seen = new Set(indexed.map((n) => n.toLowerCase()));
+  const next = new Map<string, number>(); // one running suffix per base name: linear however many repeat
   return spec.defaults.map((d) => {
     const base = localName(d.term);
+    const key = base.toLowerCase();
     let n = base;
-    for (let k = 2; seen.has(n.toLowerCase()); k++) n = `${base}_${k}`;
+    let k = next.get(key) ?? 2;
+    while (seen.has(n.toLowerCase())) n = `${base}_${k++}`;
+    next.set(key, k);
     seen.add(n.toLowerCase());
     return n;
   });
@@ -242,6 +251,12 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
     return failed(fileName, [makeFinding('IN-DWCA-UNSUPPORTED-CORE', { file: fileName, params: { core: core.type || core.rowType || 'unknown' } })]);
   }
   if (!core.location || core.locations !== 1) throw new DwcaError('DWCA-META-INVALID', 'the core must name exactly one file');
+  // Bounds first, before any header or row is built: the counts come from a stranger's meta.xml.
+  let maxIndex = core.idIndex ?? -1;
+  for (const f of core.fields) if (f.index > maxIndex) maxIndex = f.index;
+  if (core.defaults.length > DWCA_MAX_DEFAULTS || core.fields.length > DWCA_MAX_COLUMNS || maxIndex + 1 + core.defaults.length > DWCA_MAX_COLUMNS) {
+    throw new DwcaError('DWCA-META-INVALID', `the core is wider than ${DWCA_MAX_COLUMNS} columns or has more than ${DWCA_MAX_DEFAULTS} default values`);
+  }
   if (core.fields.length === 0) throw new DwcaError('DWCA-META-INVALID', 'the core lists no fields');
   const entry = zip.find(base + core.location);
   if (!entry) throw new DwcaError('DWCA-CORE-MISSING', `${core.location} is not in the archive`);
