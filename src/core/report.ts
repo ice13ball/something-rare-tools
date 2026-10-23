@@ -117,7 +117,9 @@ export function renderPlain(f: Finding, lang: Lang): string {
   }
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
-  return fill(texts[lang] || texts.en, f);
+  const base = fill(texts[lang] || texts.en, f);
+  if (rule.plainOtherRest && f.params.otherRest) return `${base} ${fill(rule.plainOtherRest[lang] || rule.plainOtherRest.en, f)}`;
+  return base;
 }
 
 /** The English technical detail line (file, lines, field, value, parameters). */

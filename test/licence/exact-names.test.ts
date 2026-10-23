@@ -4,6 +4,7 @@
 // else in the text stays leftover (fail-closed unchanged). Reported on production: ODbL (10.5281/zenodo.23541397) and the GNU "or later"
 // licences (10.5281/zenodo.22728476, 10.23695/ajyp-y830).
 import { describe, expect, it } from 'vitest';
+import { renderPlain } from '../../src/core/report';
 import { checkLicence } from '../../src/core/checks/licence';
 import { analyseLicences } from '../../src/core/licence/analyse';
 import { parseDataciteJson } from '../../src/core/metadata/datacite';
@@ -119,12 +120,14 @@ describe('the leftover quoted is text that is in the record', () => {
     expect(r).toContain('see the README');
     expect(r).not.toMatch(/identifier|; 1\.0/);
   });
-  it('an identifier with leftover of its own is quoted separately and labelled', () => {
-    const r = rest({ rights: 'CC BY 4.0, see the README', rightsIdentifier: 'cc-by-4.0 licence file' });
-    expect(r).toBe('see the README; identifier: file');
+  it('an identifier with leftover of its own is a separate param, not glued into the quote', () => {
+    const f = findings({ rights: 'CC BY 4.0, see the README', rightsIdentifier: 'cc-by-4.0 licence file' }).find((x) => x.ruleId === 'LIC-EXTRA-TEXT')!;
+    expect(f.params).toMatchObject({ text: 'CC BY 4.0, see the README', rest: 'see the README', otherRest: 'file' });
+    expect(renderPlain(f, 'en')).toContain('also leaves: "file"');
   });
-  it('leftover only in the identifier: named as the identifier, not as the rights text', () => {
-    expect(rest({ rights: 'Creative Commons Attribution 4.0 International', rightsIdentifier: 'cc-by-4.0 file' })).toBe('identifier: file');
+  it('leftover only in the identifier: quoted from the identifier, with no label word', () => {
+    const f = findings({ rights: 'Creative Commons Attribution 4.0 International', rightsIdentifier: 'cc-by-4.0 file' }).find((x) => x.ruleId === 'LIC-EXTRA-TEXT')!;
+    expect(f.params).toEqual({ text: 'cc-by-4.0 file', rest: 'file' });
   });
   it('no quote glues strings from two fields', () => {
     const rights = 'ODC Open Database License v1.0 for non-commercial use';
