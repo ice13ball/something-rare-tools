@@ -471,7 +471,7 @@ export class CollectionRunner {
           if (e.reason === 'csw_daily_budget') return await this.interrupt(e, (st.pagesTried ?? 0) + 1);
           const skip = pager.skip(cur);
           const page = (st.pagesTried ?? 0) + 1;
-          this.defer({ cursor: cur, kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(skip === null ? { blocking: true } : {}) });
+          this.defer({ cursor: skip === null ? cur : (pager.retryCursor?.(cur) ?? cur), kind: e.kind, expected: pager.expected(cur), reason: e.reason, page, ...(skip === null ? { blocking: true } : {}) });
           st.pagesTried = page;
           failures += 1;
           // The page now sits in `deferred`; the cursor goes past it BEFORE the run may stop, or a resume would read it twice (deferred + cursor).

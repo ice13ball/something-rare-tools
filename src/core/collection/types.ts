@@ -44,6 +44,8 @@ export interface Estimate {
   slices?: number;
   /** Zenodo: the number of requests to build the slices is a rough guess. */
   approximate?: boolean;
+  /** Zenodo: so large that the quick sample is worth running first. */
+  sampleFirst?: boolean;
   sample: boolean;
   /** No record found at all ("no records found for this client or prefix", an empty list). */
   empty?: boolean;
@@ -151,7 +153,7 @@ export interface Progress {
   ruleOrder: { ruleId: string; severity: Severity; count: number }[];
 }
 
-/** The saved run (IndexedDB 'run' store). Bounded: counters, <= 50 samples per rule, <= 200 deferred pages, a plan of <= 2000 slices, <= ~1 MB of CSV text. */
+/** The saved run (IndexedDB 'run' store). Bounded: counters, <= 50 samples per rule, <= 200 deferred pages, <= ~1 MB of CSV text. */
 export interface RunRecord {
   id: string;
   version: 1;
@@ -162,7 +164,7 @@ export interface RunRecord {
   activeMs: number;
   /** null = the source is read to its end. */
   cursor: unknown;
-  /** Source-specific plan made once (Zenodo date slices, CSW total); never grows with the records read. */
+  /** Source-specific plan made once (the totals; a Zenodo run saved with its slices up front has them here); never grows with the records read. */
   plan: unknown;
   deferred: Deferred[];
   counts: Counts;
@@ -228,6 +230,8 @@ export interface Pager<C = unknown> {
   skip(cursor: C): C | null;
   /** How many records that page was expected to hold. */
   expected(cursor: C): number;
+  /** What a deferred page keeps of its cursor (only what reading that page again needs); default: the whole cursor. */
+  retryCursor?(cursor: C): C;
   /**
    * A page that was left for later and is now read again (a CSW page, possibly asked smaller): compares what its answer covered with its
    * ORIGINAL range of `owed` records. `next` = the cursor to read next and the records still owed when the answer covers only the first
