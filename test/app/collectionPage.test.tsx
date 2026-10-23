@@ -497,6 +497,10 @@ describe('CollectionPage: check the data files of one example', () => {
     group.open = true;
     fireEvent(group, new Event('toggle'));
     await waitFor(() => expect(within(group).getAllByRole('button', { name: 'Check its data files' }).length).toBeGreaterThan(0));
+    // the button stays, and says next to itself that it works in browser mode only
+    expect(within(group).getAllByTestId('record-check-browser-only')[0].textContent).toContain('browser mode only');
+    for (const lang of LANGS) expect(UI[lang]['collection.record.browserOnly'], lang).toMatch(/\S{5}/);
+    expect(new Set(LANGS.map((l) => UI[l]['collection.record.browserOnly'])).size).toBe(LANGS.length);
     expect(create).not.toHaveBeenCalled(); // nothing is started before the visitor asks
     fireEvent.click(within(group).getAllByRole('button', { name: 'Check its data files' })[0]);
     await waitFor(() => expect(group.querySelector('.record-check')).not.toBeNull());
