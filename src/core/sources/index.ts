@@ -48,7 +48,7 @@ async function loadDoi(doi: string, fetcher: Fetcher, loaders: Loaders): Promise
     case 'pangaea':
       return (loaders.pangaea ?? loadPangaea)(route.id, fetcher, dc);
     case 'gbif':
-      return loadGbif({ key: route.key }, fetcher);
+      return loadGbif({ key: route.key }, fetcher, dc);
     case 'other': {
       const out: LoadedRecord = { label, kind: 'datacite', metadata: [dc], files: [], findings: [] };
       if (dc.landingUrl && !allowed(dc.landingUrl)) out.findings.push(hostNotAllowed(label, dc.landingUrl));

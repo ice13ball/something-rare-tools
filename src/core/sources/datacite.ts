@@ -63,7 +63,7 @@ export function routeFromDatacite(rec: MetadataRecord, doi: string): Route {
     if (m) return { kind: 'geonetwork', host, uuid: m[0].toLowerCase() };
   }
   if (host === 'www.gbif.org' || host === 'gbif.org') {
-    const m = new RegExp(`^/(?:[a-z]{2}/)?dataset/(${UUID.source})`, 'i').exec(path);
+    const m = new RegExp(`^/(?:[a-z]{2,3}(?:-[a-z]{2,4})?/)?dataset/(${UUID.source})`, 'i').exec(path);
     if (m) return { kind: 'gbif', key: m[1]!.toLowerCase() };
   }
   if (host === 'doi.pangaea.de') {
