@@ -35,6 +35,8 @@ interface TableSpec {
   encoding: string;
   idIndex: number | undefined;
   fields: { index: number; term: string }[];
+  /** <field default="…" term="…"/> without an index: the same value in every row */
+  defaults: { term: string; value: string }[];
 }
 
 class DwcaError extends Error {
@@ -62,6 +64,11 @@ function tableSpec(el: Element, isCore: boolean): TableSpec {
     const term = f.getAttribute('term');
     return index !== null && /^\d+$/.test(index) && term ? [{ index: Number(index), term }] : [];
   });
+  const defaults = byLocal(el, 'field').flatMap((f) => {
+    const term = f.getAttribute('term');
+    const value = f.getAttribute('default');
+    return f.getAttribute('index') === null && term && value !== null ? [{ term, value }] : [];
+  });
   const ign = el.getAttribute('ignoreHeaderLines');
   return {
     rowType,
@@ -75,6 +82,7 @@ function tableSpec(el: Element, isCore: boolean): TableSpec {
     encoding: (el.getAttribute('encoding') ?? 'UTF-8').trim(),
     idIndex: idRaw !== null && idRaw !== undefined && /^\d+$/.test(idRaw) ? Number(idRaw) : undefined,
     fields,
+    defaults,
   };
 }
 
@@ -95,6 +103,18 @@ function headerOf(spec: TableSpec): string[] {
   return header;
 }
 
+/** The names of the default-value columns, appended after the indexed ones, unique within the whole header. */
+function defaultNames(spec: TableSpec, indexed: readonly string[]): string[] {
+  const seen = new Set(indexed.map((n) => n.toLowerCase()));
+  return spec.defaults.map((d) => {
+    const base = localName(d.term);
+    let n = base;
+    for (let k = 2; seen.has(n.toLowerCase()); k++) n = `${base}_${k}`;
+    seen.add(n.toLowerCase());
+    return n;
+  });
+}
+
 const isByteText = (enc: string): boolean => !/^(?:utf-?16|ucs-?2|utf-?32)/i.test(enc);
 
 /** Byte offset just after the `n`-th line terminator, or bytes.length when there are fewer lines. */
@@ -106,11 +126,35 @@ function offsetAfterLines(bytes: Uint8Array, term: number, n: number): number {
   return bytes.length;
 }
 
+/** Lines from `from` on that hold anything but white space: what a capped read left unread (blank lines are not rows). */
+function countNonBlankLines(bytes: Uint8Array, from: number, term: number): number {
+  let n = 0;
+  let blank = true;
+  for (let i = from; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (b === term) {
+      if (!blank) n++;
+      blank = true;
+    } else if (b !== 13 && b !== 10 && b !== 32 && b !== 9) {
+      blank = false;
+    }
+  }
+  if (!blank) n++;
+  return n;
+}
+
 function countLines(bytes: Uint8Array, term: number): number {
   let n = 0;
   for (let i = 0; i < bytes.length; i++) if (bytes[i] === term) n++;
   if (bytes.length > 0 && bytes[bytes.length - 1] !== term) n++;
   return n;
+}
+
+/** Where the archive's files live: the root, or the single top-level folder a zip of a folder has (found by its meta.xml). */
+function archiveRoot(zip: ZipArchive): string | undefined {
+  if (zip.find('meta.xml')) return '';
+  const inFolder = zip.entries.filter((e) => e.safe && /^[^/]+\/meta\.xml$/.test(e.name));
+  return inFolder.length === 1 ? inFolder[0]!.name.slice(0, -'meta.xml'.length) : undefined;
 }
 
 async function readXml(zip: ZipArchive, name: string, inflate: Inflate): Promise<Document> {
@@ -157,8 +201,8 @@ const unreadable = (fileName: string, reason: string): ParsedFile => failed(file
 const failed = (fileName: string, findings: Finding[]): ParsedFile => ({ fileName, kind: 'unknown', sheets: [], date1904: false, decimalComma: false, encoding: 'utf-8', findings });
 
 /** Rows of an extension file, for information only; undefined when it cannot be read within the limits. */
-async function countRows(zip: ZipArchive, spec: TableSpec, inflate: Inflate): Promise<number | undefined> {
-  const entry = spec.location ? zip.find(spec.location) : undefined;
+async function countRows(zip: ZipArchive, spec: TableSpec, inflate: Inflate, base: string): Promise<number | undefined> {
+  const entry = spec.location ? zip.find(base + spec.location) : undefined;
   if (!entry || !isByteText(spec.encoding)) return undefined;
   try {
     const bytes = await zip.read(entry, inflate);
@@ -181,10 +225,14 @@ export async function parseDwca(fileName: string, bytes: Uint8Array, inflate: In
 
 async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts: DwcaOptions): Promise<ParsedFile> {
   const maxRows = opts.maxRows ?? DWCA_MAX_ROWS;
+  // Named .zip but not a zip at all (an HTML error page, a text file): not an archive, said as such rather than as a damaged zip.
+  if (!(bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b)) return failed(fileName, [makeFinding('IN-DWCA-NOT-ARCHIVE', { file: fileName })]);
   const zip = openZip(bytes, opts.limits ?? ZIP_LIMITS);
-  if (!zip.find('meta.xml')) return failed(fileName, [makeFinding('IN-DWCA-NOT-ARCHIVE', { file: fileName })]);
+  const base0 = archiveRoot(zip);
+  if (base0 === undefined) return failed(fileName, [makeFinding('IN-DWCA-NOT-ARCHIVE', { file: fileName })]);
+  const base: string = base0;
 
-  const meta = await readXml(zip, 'meta.xml', inflate);
+  const meta = await readXml(zip, base + 'meta.xml', inflate);
   const root = meta.documentElement;
   if (root.localName !== 'archive') throw new DwcaError('DWCA-META-INVALID', 'meta.xml has no archive element');
   const coreEl = byLocal(root, 'core')[0];
@@ -195,11 +243,11 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
   }
   if (!core.location || core.locations !== 1) throw new DwcaError('DWCA-META-INVALID', 'the core must name exactly one file');
   if (core.fields.length === 0) throw new DwcaError('DWCA-META-INVALID', 'the core lists no fields');
-  const entry = zip.find(core.location);
+  const entry = zip.find(base + core.location);
   if (!entry) throw new DwcaError('DWCA-CORE-MISSING', `${core.location} is not in the archive`);
 
   const emlName = root.getAttribute('metadata')?.trim() || 'eml.xml';
-  const eml = await readEml(zip, emlName, inflate);
+  const eml = await readEml(zip, base + emlName, inflate);
 
   const findings: Finding[] = [];
   findings.push(
@@ -210,52 +258,76 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
   );
   if (core.type === 'Event') {
     const ext = byLocal(root, 'extension').map((x) => tableSpec(x, false)).find((x) => x.type === 'Occurrence');
-    const n = ext ? await countRows(zip, ext, inflate) : undefined;
+    const n = ext ? await countRows(zip, ext, inflate, base) : undefined;
     if (n !== undefined) findings.push(makeFinding('IN-DWCA-EVENT-CORE', { file: fileName, params: { occurrences: n } }));
   }
 
-  // The core file: a physical line is a row; the cap cuts the text, and so the work, before it is decoded.
+  // The core file: the cap cuts the text, and so the work, before it is decoded. The cut is made after `maxRows` physical lines
+  // (a line is a row unless it is blank or inside a quoted field); what the cut left unread is counted below.
   const data = await zip.read(entry, inflate);
   const byteText = isByteText(core.encoding);
   const termByte = core.lineTerminator.endsWith('\r') ? 13 : 10;
-  let body = data;
-  let total: number | undefined;
-  if (byteText) {
-    total = Math.max(0, countLines(data, termByte) - core.ignoreHeaderLines);
-    if (total > maxRows) body = data.subarray(0, offsetAfterLines(data, termByte, core.ignoreHeaderLines + maxRows));
-  }
-
-  let text: string;
-  let encoding: string;
-  if (/^(?:utf-?8|ascii|us-ascii)$/i.test(core.encoding)) {
-    const d = decodeText(body);
-    text = d.text;
-    encoding = d.encoding;
-    const f = encodingFinding(fileName, d);
-    if (f) findings.push(f);
-  } else {
-    try {
-      text = new TextDecoder(core.encoding).decode(body);
-    } catch {
-      throw new DwcaError('DWCA-META-INVALID', `unknown encoding ${core.encoding}`);
-    }
-    encoding = core.encoding.toLowerCase();
-  }
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-
   const delim = core.delimiter;
   if (delim.length !== 1) throw new DwcaError('DWCA-META-INVALID', 'fieldsTerminatedBy must be one character');
   if (core.enclosure.length > 1) throw new DwcaError('DWCA-META-INVALID', 'fieldsEnclosedBy must be one character');
-  const records = tokenizeCsv(text, delim, Infinity, core.enclosure);
 
-  const header = headerOf(core);
-  const dataRecords = records.filter((r) => r.line > core.ignoreHeaderLines && !r.blank);
-  if (total === undefined) total = dataRecords.length;
-  const rows: RawRow[] = dataRecords.slice(0, maxRows).map((r) => ({ line: r.line, cells: r.fields, fieldCount: r.fields.length }));
+  let encoding = core.encoding.toLowerCase();
+  let encodingNote: Finding | undefined;
+  /** Decodes and tokenises the first `cut` bytes of the core file. */
+  const tokenise = (cut: number): { dataRecords: ReturnType<typeof tokenizeCsv> } => {
+    const body = data.subarray(0, cut);
+    let text: string;
+    if (/^(?:utf-?8|ascii|us-ascii)$/i.test(core.encoding)) {
+      const d = decodeText(body);
+      text = d.text;
+      encoding = d.encoding;
+      encodingNote = encodingFinding(fileName, d);
+    } else {
+      try {
+        text = new TextDecoder(core.encoding).decode(body);
+      } catch {
+        throw new DwcaError('DWCA-META-INVALID', `unknown encoding ${core.encoding}`);
+      }
+    }
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    return { dataRecords: tokenizeCsv(text, delim, Infinity, core.enclosure).filter((r) => r.line > core.ignoreHeaderLines && !r.blank) };
+  };
+
+  let cutAt = data.length;
+  let dataRecords: ReturnType<typeof tokenizeCsv>;
+  if (byteText && countLines(data, termByte) - core.ignoreHeaderLines > maxRows) {
+    // Cut after `maxRows` physical lines; blank lines and quoted line breaks make that fewer than `maxRows` rows, so the cut is
+    // moved on by the shortfall until the rows are there (or the file ends).
+    let lines = core.ignoreHeaderLines + maxRows;
+    for (let round = 0; ; round++) {
+      cutAt = offsetAfterLines(data, termByte, lines);
+      dataRecords = tokenise(cutAt).dataRecords;
+      const short = maxRows - dataRecords.length;
+      if (short <= 0 || cutAt >= data.length || round >= 8) break;
+      lines += short;
+    }
+  } else {
+    dataRecords = tokenise(data.length).dataRecords;
+  }
+  if (encodingNote) findings.push(encodingNote);
+
+  const indexed = headerOf(core);
+  // Rows of the table = non-blank records. Taken from what was tokenised, never from the line count alone (a file whose
+  // line endings differ from meta.xml's, blank lines and quoted line breaks all make the two differ); plus what the cut left unread.
+  const unread = cutAt < data.length ? countNonBlankLines(data, cutAt, termByte) : 0;
+  const total = dataRecords.length + unread;
+  const kept = dataRecords.slice(0, maxRows);
+  const defaults = core.defaults.map((d) => d.value);
+  const header = [...indexed, ...defaultNames(core, indexed)];
+  const rows: RawRow[] = kept.map((r) => ({
+    line: r.line,
+    cells: defaults.length === 0 ? r.fields : [...r.fields, ...Array<string>(Math.max(0, indexed.length - r.fields.length)).fill(''), ...defaults],
+    fieldCount: r.fields.length,
+  }));
   if (total > rows.length) findings.push(makeFinding('IN-DWCA-PARTIAL', { file: fileName, params: { read: rows.length, total } }));
 
   const sheet = { name: core.location, header, headerLine: core.ignoreHeaderLines, rows };
-  const rag = raggedFinding(fileName, sheet.name, header.length, rows);
+  const rag = raggedFinding(fileName, sheet.name, indexed.length, rows);
   if (rag) findings.push(rag);
   return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings };
 }
