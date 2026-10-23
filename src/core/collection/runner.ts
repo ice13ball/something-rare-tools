@@ -65,6 +65,8 @@ export class CollectionRunner {
   private loopDone: Promise<void> | null = null;
   private pausedGate: { promise: Promise<void>; release: () => void } | null = null;
   private pending: NewPart[] = [];
+  /** Set synchronously by start()/resume() before their first await and held until the loop exists: a second call in that window cannot start a second loop. */
+  private busy = false;
   private readonly clock: Clock;
 
   constructor(private readonly d: RunnerDeps) {
@@ -134,7 +136,16 @@ export class CollectionRunner {
 
   /** Starts a run (replacing the saved one). Resolves when the source has answered the first questions; the run goes on in the background. */
   async start(settings: RunSettings): Promise<void> {
-    if (this.loopDone) throw new Error('A run is already going');
+    if (this.loopDone || this.busy) throw new Error('A run is already going');
+    this.busy = true;
+    try {
+      await this.startRun(settings);
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async startRun(settings: RunSettings): Promise<void> {
     await this.d.store.clear();
     const now = this.clock.now();
     const st: RunRecord = {
@@ -198,7 +209,16 @@ export class CollectionRunner {
       this.emit();
       return;
     }
-    if (this.loopDone) return;
+    if (this.loopDone || this.busy) return; // already going (or being started): a second call must not start a second loop
+    this.busy = true;
+    try {
+      await this.resumeRun();
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async resumeRun(): Promise<void> {
     if (!this.st) await this.saved();
     const st = this.st;
     if (!st || !this.progress().resumable) throw new Error('Nothing to resume');
@@ -211,10 +231,20 @@ export class CollectionRunner {
       this.ctl = null;
       throw e;
     }
+    const before = { status: st.status, stop: st.stop, notices: st.notices };
     st.status = 'running';
     delete st.stop;
     st.notices = st.notices.filter((n) => !GAP_NOTICES.includes(n.code)); // rebuilt when the run ends again
-    await this.checkpoint();
+    try {
+      await this.checkpoint();
+    } catch (e) {
+      // the saved state could not be written: the run is as it was (not "running" with no loop), and the storage error is the visitor's to see
+      st.status = before.status;
+      if (before.stop) st.stop = before.stop;
+      st.notices = before.notices;
+      this.ctl = null;
+      throw e;
+    }
     this.loopDone = this.loop(pager, ctl).finally(() => {
       this.loopDone = null;
     });

@@ -339,7 +339,24 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
 
   const failureText = (m: string): string => (m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);
 
-  const run = async (sample: boolean): Promise<void> => {
+  // one start/resume at a time: the second click of a double click, and any click before the engine has answered, does nothing
+  const acting = useRef(false);
+  const [actingNow, setActingNow] = useState(false);
+  const guarded = async (fn: () => Promise<void>): Promise<void> => {
+    if (acting.current) return;
+    acting.current = true;
+    setActingNow(true);
+    try {
+      await fn();
+    } finally {
+      acting.current = false;
+      setActingNow(false);
+    }
+  };
+
+  const run = (sample: boolean): Promise<void> => guarded(() => runUnguarded(sample));
+
+  const runUnguarded = async (sample: boolean): Promise<void> => {
     if (!spec) return;
     setError(null);
     setSaved(null);
@@ -354,8 +371,8 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
     refresh();
   };
 
-  const act = (fn: () => Promise<void>) => (): void => {
-    void fn().then(refresh, (e: unknown) => setError(messageOf(e)));
+  const act = (fn: () => Promise<void>, once = false) => (): void => {
+    void (once ? guarded(fn) : fn()).then(refresh, (e: unknown) => setError(messageOf(e)));
   };
 
   const discard = async (): Promise<void> => {
@@ -412,7 +429,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               <strong>{t('collection.stop.heading')}.</strong> {describeStop(saved.stop, lang)}
             </p>
           )}
-          <button type="button" className="button" onClick={act(async () => { setSaved(null); await engine.resume(); })}>
+          <button type="button" className="button" disabled={actingNow} onClick={act(async () => { setSaved(null); await engine.resume(); }, true)}>
             {t('collection.saved.resume')}
           </button>{' '}
           <button type="button" className="button secondary" onClick={act(discard)}>
@@ -533,12 +550,12 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               <p className="muted">{t('collection.run.hint')}</p>
               {current.sample && (
                 <>
-                  <button type="button" className="button" onClick={() => void run(true)} disabled={progress !== null && isRunning(progress)}>
+                  <button type="button" className="button" onClick={() => void run(true)} disabled={actingNow || (progress !== null && isRunning(progress))}>
                     {t('collection.run.sample')}
                   </button>{' '}
                 </>
               )}
-              <button type="button" className="button" onClick={() => void run(false)} disabled={progress !== null && isRunning(progress)}>
+              <button type="button" className="button" onClick={() => void run(false)} disabled={actingNow || (progress !== null && isRunning(progress))}>
                 {t('collection.run.full')}
               </button>
             </>
@@ -596,7 +613,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               </button>
             )}
             {progress.resumable && !isRunning(progress) && (
-              <button type="button" className="button secondary" onClick={act(() => { setSaved(null); return engine.resume(); })}>
+              <button type="button" className="button secondary" disabled={actingNow} onClick={act(() => { setSaved(null); return engine.resume(); }, true)}>
                 {t('collection.resume')}
               </button>
             )}{' '}
@@ -648,7 +665,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
       <section aria-labelledby="collection-delete-title">
         <h2 id="collection-delete-title">{t('collection.delete.button')}</h2>
         <p className="muted">{t('collection.delete.note')}</p>
-        <button type="button" className="button secondary" onClick={act(discard)} disabled={progress !== null && isRunning(progress)}>
+        <button type="button" className="button secondary" onClick={act(discard)} disabled={actingNow || (progress !== null && isRunning(progress))}>
           {t('collection.delete.button')}
         </button>
         {deleted && (
