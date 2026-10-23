@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-// Live false-positive corpus: 30 public DOIs (PANGAEA, Zenodo, SEANOE) loaded with the SAME loading code as the licence page,
+// Live false-positive corpus: 35 public DOIs (PANGAEA, Zenodo, SEANOE) loaded with the SAME loading code as the licence page,
 // then analyseLicences + checkLicence. Network test: skipped unless LICENCE_CORPUS=1 (like test/golden without GOLDEN_DIR).
 //   LICENCE_CORPUS=1 npx vitest run test/corpus
 // LICENCE_CORPUS_OUT=<file> additionally writes the per-DOI result as JSON there. ⛔ No DOI from IO PAN / iopan.pl in this list.
@@ -20,7 +20,21 @@ const DOIS: readonly string[] = [
   '10.5281/zenodo.21641183', '10.5281/zenodo.21107205', '10.5281/zenodo.19682997', '10.5281/zenodo.23276197', '10.5281/zenodo.23567886',
   '10.17882/93375', '10.17882/102950', '10.17882/58407', '10.17882/54563', '10.17882/62513',
   '10.17882/70205', '10.17882/52153', '10.17882/59800', '10.17882/86286', '10.17882/104709',
+  // Standard licences as Zenodo writes them (title + url + SPDX id): false licence findings reported on production, and two controls.
+  '10.5281/zenodo.23541397', '10.5281/zenodo.22728476', '10.23695/ajyp-y830', '10.5281/zenodo.23597500', '10.5281/zenodo.23595401',
 ];
+
+/**
+ * DOIs whose licence is known: that id is among the classes of their statements, any other class is one of `alongside`, and there is no
+ * LIC-* finding. 23541397 states ODbL next to CC BY 4.0 (its Zenodo licence) and a copyright statement that names no licence ("InC").
+ */
+const EXPECTED: Readonly<Record<string, { id: string; alongside?: readonly string[] }>> = {
+  '10.5281/zenodo.23541397': { id: 'ODbL-1.0', alongside: ['CC-BY-4.0', 'unrecognised'] },
+  '10.5281/zenodo.22728476': { id: 'AGPL-3.0-or-later' },
+  '10.23695/ajyp-y830': { id: 'GPL-3.0-or-later' },
+  '10.5281/zenodo.23597500': { id: 'CC0-1.0' },
+  '10.5281/zenodo.23595401': { id: 'Apache-2.0' },
+};
 
 /** Like the server proxy: https only, allowlisted hosts only, every redirect hop checked, no cookies. */
 export function nodeFetcher(): Fetcher {
@@ -88,6 +102,16 @@ describe.skipIf(!enabled)('licence corpus (live)', () => {
         });
       }
       if (process.env.LICENCE_CORPUS_OUT) writeFileSync(process.env.LICENCE_CORPUS_OUT, JSON.stringify(out, null, 1));
+      // known licences (after the JSON is written, so a failure leaves the evidence behind)
+      for (const r of out) {
+        const expected = EXPECTED[r.doi];
+        if (!expected) continue;
+        const classes = r.sources.flatMap((src) => src.statements.map((st) => st.classification));
+        expect(classes.length, r.doi).toBeGreaterThan(0);
+        expect(classes, r.doi).toContain(expected.id);
+        for (const c of classes) expect([expected.id, ...(expected.alongside ?? [])], r.doi).toContain(c);
+        expect(r.findings.map((f) => f.ruleId), r.doi).toEqual([]);
+      }
       // every DOI was read at DataCite at least: a corpus that could not be loaded proves nothing
       for (const r of out) expect(r.sources.length, r.doi).toBeGreaterThan(0);
     },
