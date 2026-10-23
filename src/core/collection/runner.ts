@@ -405,13 +405,15 @@ export class CollectionRunner {
       st.deferred.splice(st.deferred.indexOf(entry), 1);
       st.counts.states[entry.kind] -= entry.expected;
       st.counts.records -= entry.expected;
-      this.apply(data);
+      const judge = !entry.blocking && pager.rest !== undefined; // a retried page is judged against its own range, not the source's position
+      this.apply(data, judge);
       if (entry.blocking) st.cursor = data.next;
-      else {
+      else if (judge) {
         // The answer may cover only the first positions of the page's range (a page asked smaller): what is left is owed, and is read next.
-        const rest = pager.rest?.(entry.cursor, data, entry.expected);
-        if (rest) {
-          const owed: Deferred = { cursor: rest.cursor, kind: entry.kind, expected: rest.expected, reason: entry.reason, ...(entry.page !== undefined ? { page: entry.page } : {}) };
+        const rest = pager.rest!(entry.cursor, data, entry.expected);
+        if (rest.missing > 0) st.shortfall = (st.shortfall ?? 0) + rest.missing;
+        if (rest.next) {
+          const owed: Deferred = { cursor: rest.next.cursor, kind: entry.kind, expected: rest.next.expected, reason: entry.reason, ...(entry.page !== undefined ? { page: entry.page } : {}) };
           this.defer(owed);
           queue.unshift(owed);
         }
@@ -477,7 +479,7 @@ export class CollectionRunner {
   }
 
   /** Counts, samples and CSV rows of one page. Only a record that was READ meets the rules. */
-  private apply(data: PageData<unknown>): void {
+  private apply(data: PageData<unknown>, ignoreShortfall = false): void {
     const st = this.st!;
     const c = st.counts;
     const source = sourceLabel(st.settings.spec);
@@ -515,7 +517,7 @@ export class CollectionRunner {
       if (k.crossSource?.noDoi) c.crossSource.noDoi = (c.crossSource.noDoi ?? 0) + k.crossSource.noDoi;
     }
     for (const n of data.notices ?? []) this.notice(n);
-    if (data.shortfall) st.shortfall = (st.shortfall ?? 0) + data.shortfall;
+    if (data.shortfall && !ignoreShortfall) st.shortfall = (st.shortfall ?? 0) + data.shortfall;
   }
 
   private addRow(row: string): void {

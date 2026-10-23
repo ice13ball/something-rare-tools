@@ -331,12 +331,13 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
       return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}), ...(c.cap !== undefined ? { cap: c.cap } : {}), ...(c.big !== undefined ? { big: c.big } : {}) } : null;
     },
     rest: (c, data, owed) => {
-      // A deferred page read again at a smaller size covers only its first positions: what is left of its range is still owed.
       const end = c.pos + owed - 1; // `owed` records from the page's position: the range of the deferred entry
-      if (!data.next || data.next.pos > end) return null;
+      const covered = Math.min(data.next?.pos ?? end + 1, end + 1); // positions this answer accounts for (it may jump past the rest of the range)
+      const missing = Math.max(0, covered - c.pos - data.items.length);
+      if (!data.next || data.next.pos > end) return { next: null, missing };
       const left = end - data.next.pos + 1;
       // asked for no more than is owed: the positions after the range were read by the main walk
-      return { cursor: { ...data.next, size: Math.min(data.next.size ?? CSW_PAGE, left) }, expected: left };
+      return { next: { cursor: { ...data.next, size: Math.min(data.next.size ?? CSW_PAGE, left) }, expected: left }, missing };
     },
     async fetch(c): Promise<PageData<CswCursor>> {
       // nextRecord pointed back into a page already read: the first positions of this page were processed with the one before.
