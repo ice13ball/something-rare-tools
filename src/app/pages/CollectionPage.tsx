@@ -67,6 +67,8 @@ function formatTime(seconds: number): string {
   if (s < 90) return t('collection.time.seconds', { n: s });
   const m = Math.round(s / 60);
   if (m < 90) return t('collection.time.minutes', { n: m });
+  // Two days and more are said in days ("about 3 days"): a run over a very large community takes that long, and "61 h 12 min" hides it.
+  if (m >= 48 * 60) return t('collection.time.days', { n: Math.round(m / (24 * 60)) });
   return t('collection.time.hours', { h: Math.floor(m / 60), m: m % 60 });
 }
 
@@ -547,6 +549,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               {current.full.extraRequests > 0 && <p>{t('collection.estimate.extra', { n: current.full.extraRequests })}</p>}
               {current.full.slices !== undefined && current.full.slices > 1 && <p>{t('collection.estimate.slices', { slices: current.full.slices })}</p>}
               {current.full.approximate && <p className="muted">{t('collection.estimate.approx')}</p>}
+              {current.full.sampleFirst && current.sample && <p data-testid="sample-first">{t('collection.estimate.sampleFirst')}</p>}
               <p className="muted">{t('collection.run.hint')}</p>
               {current.sample && (
                 <>
