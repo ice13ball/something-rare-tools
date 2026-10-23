@@ -8,6 +8,9 @@ export const SITE = {
   atlasUrl: 'https://something-rare.com',
   /** The public repository; the licence label next to it is package.json's SPDX id. */
   sourceUrl: 'https://github.com/ice13ball/something-rare-tools',
+  /** The AGPL section 7(b) attribution notice (LICENSE-ADDITIONAL-TERMS.md), word for word in every language, and where it links. */
+  attribution: 'Based on Abyssal Claims — © 2026 Michal Mazurowski',
+  attributionUrl: 'https://doi.org/10.5281/zenodo.19745884',
   /** Same public address as the atlas's privacy text; also in the proxy's User-Agent. */
   contactEmail: 'm.mazurowski@ai-wall.com',
   origin: 'https://tools.something-rare.com',

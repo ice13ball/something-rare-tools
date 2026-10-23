@@ -1,0 +1,24 @@
+Abyssal Claims Tools
+Copyright (c) 2026 Michal Mazurowski
+
+This product includes software developed by Michal Mazurowski.
+Licensed under the GNU Affero General Public License v3.0 or later (see LICENSE),
+with one additional term under section 7(b) requiring that the author-attribution
+notice below be preserved in the source and in the Appropriate Legal Notices
+displayed by the running program (see LICENSE-ADDITIONAL-TERMS.md):
+
+    Based on Abyssal Claims — (c) 2026 Michal Mazurowski
+    https://something-rare.com
+    https://doi.org/10.5281/zenodo.19745884
+
+The name "Abyssal Claims" and the domain something-rare.com are reserved and are
+NOT covered by the AGPL-3.0 licence. You may fork and adapt the code, but you may
+not present a derivative as "Abyssal Claims" or "Abyssal Claims Tools". A commercial
+licence is available — see COMMERCIAL.md.
+
+No data is distributed with this source code. The tools read the files and records
+their users point them at; dropped files are read in the user's browser. Test fixtures
+are synthetic, except a corpus of short licence statements quoted from public metadata
+catalogues; reference vocabularies (SPDX License List, Zenodo licence vocabulary, EU
+Publications Office licence authority) stay under their publishers' terms; the land/sea
+grid is derived from Natural Earth (public domain).

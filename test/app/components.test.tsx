@@ -193,6 +193,23 @@ describe('pages', () => {
     window.history.pushState({}, '', '/');
   });
 
+  it('every page footer carries the section 7(b) attribution notice word for word, linking the documentation DOI, in every language and page', () => {
+    const terms = readFileSync(join(__dirname, '..', '..', 'LICENSE-ADDITIONAL-TERMS.md'), 'utf8');
+    expect(terms).toContain('Based on Abyssal Claims — © 2026 Michal Mazurowski\nhttps://something-rare.com\nhttps://doi.org/10.5281/zenodo.19745884');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      setLang(lang);
+      render(<IndexPage />);
+      const link = screen.getByRole('link', { name: 'Based on Abyssal Claims — © 2026 Michal Mazurowski' });
+      expect(link.getAttribute('href')).toBe('https://doi.org/10.5281/zenodo.19745884');
+      expect(link.closest('footer')).not.toBeNull();
+      cleanup();
+    }
+    setLang('en');
+    for (const page of ['index.html', 'check/index.html', 'licence/index.html', 'collection/index.html', 'privacy/index.html']) {
+      expect(readFileSync(join(__dirname, '..', '..', page), 'utf8'), page).toContain('<a href="https://doi.org/10.5281/zenodo.19745884" lang="en">Based on Abyssal Claims — © 2026 Michal Mazurowski</a></footer>');
+    }
+  });
+
   it('every page footer links the source code with the licence of package.json, in four languages and in the static pages', () => {
     const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { license: string };
     expect(pkg.license).toBe('AGPL-3.0-or-later');
@@ -203,7 +220,7 @@ describe('pages', () => {
     for (const lang of ['pl', 'de', 'fr'] as const) expect(UI[lang]['footer.source']).toContain(`(${pkg.license})`);
     for (const page of ['index.html', 'check/index.html', 'licence/index.html', 'collection/index.html', 'privacy/index.html']) {
       const html = readFileSync(join(__dirname, '..', '..', page), 'utf8');
-      expect(html, page).toContain('<a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a></footer>');
+      expect(html, page).toContain('<a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a>');
     }
   });
 
