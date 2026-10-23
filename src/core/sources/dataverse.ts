@@ -113,7 +113,7 @@ export async function loadDataverse(host: string, pid: string, fetcher: Fetcher,
         version: read.versionLabel ?? '—',
         ...(original.length > 0 ? { original: listOf(original) } : {}),
         ...(converted.length > 0 ? { converted: listOf(converted) } : {}),
-        ...(toRead.length === 0 ? { none: 'yes' } : {}),
+        ...(toRead.length === 0 && readable.length > 0 ? { none: 'yes' } : {}),
       },
     }),
   );
