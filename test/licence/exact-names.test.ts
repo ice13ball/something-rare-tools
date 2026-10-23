@@ -106,3 +106,29 @@ describe('fail-closed stays', () => {
     expect(rules(r)).toEqual(['LIC-FREE-TEXT']);
   });
 });
+
+describe('the leftover quoted is text that is in the record', () => {
+  const rest = (...rights: Rights[]) => {
+    const f = findings(...rights).find((x) => x.ruleId === 'LIC-EXTRA-TEXT' || x.ruleId === 'LIC-ADDED-CONDITIONS');
+    return String(f?.params.rest);
+  };
+  it('the rights text leftover alone is the quote; the exact identifier adds nothing', () => {
+    expect(rest({ rights: 'CC BY 4.0, see the README', rightsIdentifier: 'cc-by-4.0' })).toBe('see the README');
+    // a title with words added is not an exact name: it stays leftover as written (fail-closed), without the identifier's leftover glued on
+    const r = rest({ rights: 'ODC Open Database License v1.0, see the README', rightsIdentifier: 'odbl-1.0' });
+    expect(r).toContain('see the README');
+    expect(r).not.toMatch(/identifier|; 1\.0/);
+  });
+  it('an identifier with leftover of its own is quoted separately and labelled', () => {
+    const r = rest({ rights: 'CC BY 4.0, see the README', rightsIdentifier: 'cc-by-4.0 licence file' });
+    expect(r).toBe('see the README; identifier: file');
+  });
+  it('leftover only in the identifier: named as the identifier, not as the rights text', () => {
+    expect(rest({ rights: 'Creative Commons Attribution 4.0 International', rightsIdentifier: 'cc-by-4.0 file' })).toBe('identifier: file');
+  });
+  it('no quote glues strings from two fields', () => {
+    const rights = 'ODC Open Database License v1.0 for non-commercial use';
+    const r = rest({ rights, rightsIdentifier: 'odbl-1.0' });
+    expect(rights).toContain(r);
+  });
+});
