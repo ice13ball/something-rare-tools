@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
@@ -156,6 +156,17 @@ describe('CheckPage flow', () => {
     const { container } = render(<CheckPage engine={createDirectEngine()} mapLib={fakeLib().load} />);
     const order = [...container.querySelectorAll('.dropzone, input[type="text"], fieldset.mode-switch, button[type="submit"]')].map((e) => e.className || e.tagName);
     expect(order).toEqual(['dropzone', 'INPUT', 'mode-switch', 'button']);
+  });
+
+  it('Enter on a download-mode radio does not submit the form the switch now sits in', () => {
+    const { container } = render(<CheckPage engine={createDirectEngine()} mapLib={fakeLib().load} />);
+    const radio = container.querySelector('input[name="download-mode"]') as HTMLInputElement;
+    const enter = createEvent.keyDown(radio, { key: 'Enter' });
+    fireEvent(radio, enter);
+    expect(enter.defaultPrevented).toBe(true);
+    const other = createEvent.keyDown(radio, { key: 'ArrowRight' });
+    fireEvent(radio, other);
+    expect(other.defaultPrevented).toBe(false);
   });
 
   it('shows at most 5 sample values per column even for a 70k-row file', async () => {

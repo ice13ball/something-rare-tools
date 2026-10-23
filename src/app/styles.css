@@ -338,7 +338,7 @@ fieldset.choice-group {
 
 .mode-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
   gap: 0.5rem;
 }
 
@@ -443,7 +443,7 @@ select.input-short {
 }
 
 .housekeeping {
-  margin-top: 2.5rem;
+  margin-top: 4rem;
 }
 
 .housekeeping p {

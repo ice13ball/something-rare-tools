@@ -50,8 +50,12 @@ export function ModeSwitch({ value, onChange, texts }: ModeSwitchProps): React.R
       <p id={'mode-' + m + '-text'}>{text}</p>
     </div>
   );
+  // The switch may sit inside the input form: Enter on a radio must not submit it (it never did when the switch stood apart).
+  const noSubmit = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') e.preventDefault();
+  };
   return (
-    <fieldset className="mode-switch">
+    <fieldset className="mode-switch" onKeyDown={noSubmit}>
       <legend>{t(k.legend)}</legend>
       <div className="mode-options">
         {option('browser', t(k.browserLabel), t(k.browserText))}
