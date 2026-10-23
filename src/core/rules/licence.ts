@@ -28,6 +28,7 @@ import type { RuleSpec } from './spec';
  *                                                    statement that is not recognised; NC/ND never count
  *   LIC-DATACITE-EMPTY        licence                the licence another record states; "—" = no other record states one (or the main record could not be read)
  *   LIC-MISMATCH              licenceA, licenceB     the two different SPDX ids
+ *   LIC-FILES-HELD-BACK       files                  files of a Dataverse dataset under restricted access or an embargo (names)
  */
 /** Appended to LIC-ADDED-CONDITIONS / LIC-EXTRA-TEXT when another string of the statement (identifier, Zenodo title) leaves something too (param otherRest). */
 const OTHER_REST: Record<'pl' | 'en' | 'de' | 'fr', string> = {
@@ -159,6 +160,19 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
       fr: `Les métadonnées indiquent une licence ouverte ({licence}) avec le code de restriction {codes}. INSPIRE attend le code « otherRestrictions » avec une description des conditions ; vérifiez si {codes} doit être une vraie restriction et, sinon, remplacez-le.`,
     },
     technical: `{file}: restriction code(s) {codes} (MD_RestrictionCode) together with the open licence statement '{licence}'; INSPIRE TG Req. C.18 expects otherRestrictions plus otherConstraints describing the conditions. Check whether the code is a real restriction.`,
+  },
+  {
+    id: 'LIC-FILES-HELD-BACK',
+    category: 'A',
+    severity: 'warning',
+    params: ['files'],
+    plain: {
+      pl: `Część plików tego zbioru ma ograniczony dostęp lub embargo: {files}. O dostępie do nich decyduje repozytorium, nie licencja z metadanych, więc ocena licencji dotyczy tylko plików otwartych. Jeśli to dane, napisz w opisie, na jakich warunkach można je dostać.`,
+      en: `Some files of this dataset are restricted or under embargo: {files}. Access to them is decided by the repository, not by the licence in the metadata, so the licence verdict covers only the open files. If these are the data, state in the description how they can be obtained.`,
+      de: `Einige Dateien dieses Datensatzes sind zugangsbeschränkt oder unter Embargo: {files}. Über den Zugang entscheidet das Repositorium, nicht die Lizenz in den Metadaten; die Lizenzbewertung gilt daher nur für die offenen Dateien. Wenn es die Daten sind, geben Sie in der Beschreibung an, wie man sie erhält.`,
+      fr: `Certains fichiers de ce jeu de données sont en accès restreint ou sous embargo : {files}. L'accès est décidé par le dépôt, non par la licence des métadonnées ; l'évaluation de la licence ne porte donc que sur les fichiers ouverts. S'il s'agit des données, indiquez dans la description comment les obtenir.`,
+    },
+    technical: `{file}: restricted or embargoed files ({files}); the stated licence does not open them, so the licence result covers the open files only.`,
   },
   {
     id: 'LIC-DATACITE-EMPTY',

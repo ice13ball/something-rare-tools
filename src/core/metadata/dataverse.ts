@@ -258,6 +258,8 @@ export function parseDataverseVersion(json: unknown, label: string, ctx: { host:
     names.add(file.name);
     files.push(file);
   }
+  const heldBack = files.filter((f) => f.heldBack).map((f) => f.name);
+  if (heldBack.length > 0) rec.heldBackFiles = heldBack;
   rec.files = files.map((f) => ({ key: f.name, url: f.url, ...(f.size !== undefined ? { size: f.size } : {}), ...(f.mimetype ? { mimetype: f.mimetype } : {}) }));
   return { record: rec, files, ...(versionLabel ? { versionLabel } : {}), ...(str(data.versionState) ? { versionState: str(data.versionState) } : {}) };
 }

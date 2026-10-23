@@ -95,6 +95,13 @@ export function checkLicence(
     out.push(contradictionFinding(c, file));
   }
 
+  // Restricted or embargoed files: whatever licence is stated, access to them is decided by the repository, and the verdict above covers the open files only.
+  const heldBack = [...new Set(records.flatMap((r) => r.heldBackFiles ?? []))];
+  if (heldBack.length > 0) {
+    const shown = heldBack.slice(0, 10).join(', ');
+    out.push(makeFinding('LIC-FILES-HELD-BACK', { file, params: { files: heldBack.length > 10 ? `${shown}, … (+${heldBack.length - 10})` : shown } }));
+  }
+
   const emptyLinks = records.reduce((n, r) => n + r.distributionLinks.filter((l) => l.url === '').length, 0);
   if (emptyLinks > 0) out.push(makeFinding('META-EMPTY-LINK', { file, params: { count: emptyLinks } }));
 

@@ -20,6 +20,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'IN-NO-DWC-ARCHIVE': ['error', 'input'],
   'IN-FILE-HELD-BACK': ['warning', 'input'],
   'IN-FILE-TOO-LARGE': ['warning', 'input'],
+  'IN-FILES-NOT-READ': ['warning', 'input'],
   'IN-DATAVERSE-FILES': ['info', 'input'],
   'IN-FILE-UNREADABLE': ['error', 'input'],
   'IN-LAYOUT-UNSUPPORTED': ['error', 'input'],
@@ -36,6 +37,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'LIC-FREE-TEXT': ['warning', 'A'],
   'LIC-RESTRICTION-CONFLICT': ['warning', 'A'],
   'LIC-DATACITE-EMPTY': ['warning', 'A'],
+  'LIC-FILES-HELD-BACK': ['warning', 'A'],
   'LIC-MISMATCH': ['warning', 'A'],
   'LIC-TEXT-URI-CONFLICT': ['warning', 'A'],
   'LIC-ADDED-CONDITIONS': ['warning', 'A'],
@@ -85,7 +87,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(70);
+    expect(ids.length).toBe(72);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -103,7 +105,7 @@ describe('rule table', () => {
       (Object.values(m).flat() as { id?: string }[]).map((r) => r.id ?? '');
     expect(idsOf(lic).every((id) => id.startsWith('LIC-'))).toBe(true);
     expect(idsOf(meta).every((id) => id.startsWith('META-'))).toBe(true);
-    expect(idsOf(lic).length).toBe(10);
+    expect(idsOf(lic).length).toBe(11);
     expect(idsOf(meta).length).toBe(7);
   });
 });
