@@ -191,7 +191,9 @@ describe('pages', () => {
 
   it('PrivacyPage lists every allowlisted host and the contact link', () => {
     render(<PrivacyPage />);
-    for (const h of DATA_HOSTS) expect(screen.getByText(h)).toBeTruthy();
+    // the first host list is the data hosts of /check (a host can also be a Collection review catalogue, listed further down)
+    const dataHosts = document.querySelector('ul.host-list') as HTMLElement;
+    for (const h of DATA_HOSTS) expect(within(dataHosts).getByText(h)).toBeTruthy();
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'https://something-rare.com')).toBe(true);
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'mailto:m.mazurowski@ai-wall.com')).toBe(true);
   });

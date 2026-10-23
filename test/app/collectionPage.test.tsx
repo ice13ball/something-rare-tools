@@ -232,6 +232,45 @@ describe('CollectionPage: inputs and estimate', () => {
     expect(screen.queryByTestId('estimate')).toBeNull(); // changed input: the old estimate is gone
   });
 
+  it('the IO PAN catalogue is on the list, ISO 19139 only', () => {
+    expect(CATALOGUES.find((c) => c.id === 'iopan')).toMatchObject({ host: 'geonetwork.iopan.pl', cswUrl: 'https://geonetwork.iopan.pl/geonetwork/srv/eng/csw', schemas: ['iso19139'] });
+  });
+
+  for (const [thrown, expected] of [
+    ['unreachable: http-500', 'The catalogue geonetwork.iopan.pl/geonetwork is not answering now: the server returned an error (HTTP 500). Nothing was read; try again later.'],
+    ['unreachable: timeout', 'The catalogue geonetwork.iopan.pl/geonetwork is not answering now: the server did not answer in time. Nothing was read; try again later.'],
+    ['unreachable: not-xml', 'The catalogue geonetwork.iopan.pl/geonetwork is not answering now: the answer was not readable XML. Nothing was read; try again later.'],
+    ['not-found: http-404', 'The catalogue geonetwork.iopan.pl/geonetwork answers, but not as the CSW service at the known address: the server refused the request (HTTP 404); its server may have been reinstalled or moved.'],
+    ['protocol: not-capabilities', 'answers, but not as the CSW service at the known address: the address did not answer like a CSW catalogue'],
+  ] as const) {
+    it(`a catalogue that cannot be read (${thrown}) says so in words, shows no estimate and offers no run`, async () => {
+      const f = fakeEngine();
+      f.engine.estimate = async () => {
+        throw new Error(thrown);
+      };
+      render(<CollectionPage engine={f.engine} />);
+      fireEvent.click(screen.getByLabelText('A GeoNetwork catalogue'));
+      fireEvent.change(screen.getByLabelText('Catalogue'), { target: { value: 'iopan' } });
+      fireEvent.click(button('Estimate size and time'));
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain(expected);
+      expect(alert.textContent).not.toMatch(/0 records|unreachable|not-found|http-/);
+      expect(screen.queryByTestId('estimate')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Full run' })).toBeNull();
+    });
+  }
+
+  it('the daily budget keeps its own message for a catalogue too', async () => {
+    const f = fakeEngine();
+    f.engine.estimate = async () => {
+      throw new Error('throttled: csw_daily_budget');
+    };
+    render(<CollectionPage engine={f.engine} />);
+    fireEvent.click(screen.getByLabelText('A GeoNetwork catalogue'));
+    fireEvent.click(button('Estimate size and time'));
+    expect((await screen.findByRole('alert')).textContent).toContain(UI.en['collection.error.dailyBudget']);
+  });
+
   it('an empty answer says no records were found and offers no run', async () => {
     const f = fakeEngine({ estimateFull: estimate({ records: 0, requests: 1, empty: true }) });
     await estimateDatacite(f, vi.fn(), 'nosuch.client');
@@ -648,7 +687,9 @@ describe('home and privacy pages', () => {
 
   it('the privacy page lists the catalogue hosts from the config and says what stays in the browser', () => {
     render(<PrivacyPage />);
-    for (const c of CATALOGUES) expect(screen.getByText(c.host, { selector: 'code' })).toBeTruthy();
+    // a catalogue host may also be a data host of /check (geonetwork.iopan.pl): look in the collection section only
+    const section = screen.getByRole('heading', { name: 'Collection review' }).closest('section') as HTMLElement;
+    for (const c of CATALOGUES) expect(within(section).getByText(c.host, { selector: 'code' })).toBeTruthy();
     expect(document.body.textContent).toContain('stored only in your browser (IndexedDB)');
     expect(document.body.textContent).toContain('nothing about a collection run is sent to our server');
   });
