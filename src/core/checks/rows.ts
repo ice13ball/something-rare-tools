@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
-import { ON_LAND_MIN_KM, type LandMask } from '../geo/land';
+import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
 import { makeFinding, threshold } from '../rules/registry';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
 
@@ -294,38 +294,52 @@ const coord = (v: number, dec: number, pos: string, neg: string): string => `${f
 const place = (lat: number, lon: number, latDec: number, lonDec: number): string => `${coord(lon, lonDec, 'E', 'W')}, ${coord(lat, latDec, 'N', 'S')}`;
 
 /*
- * A marine position on land or in an inland lake, at least ON_LAND_MIN_KM inside (src/core/geo/land.ts). Positions nearer
- * the coast, out of range, or where the mask makes no claim give nothing. When the same position with a flipped sign or
- * exchanged axes lies at sea (the mask's sea class, also at least COAST_BUFFER_KM out), that is shown as a hint, never applied.
+ * A marine position on land or in an inland lake (src/core/geo/land.ts), on two levels:
+ * - ROW-ON-LAND (warning): at least ON_LAND_MIN_KM inside. When the same position with a flipped sign or exchanged axes lies at
+ *   sea (the mask's sea class), that is shown as a hint, never applied.
+ * - ROW-ON-LAND-NEAR (note): ON_LAND_NEAR_MIN_KM to ON_LAND_MIN_KM inside. No hint: a flipped sign puts most of the globe at sea,
+ *   and a row this close to the coast is far more likely a digit typo or a river, lake or lagoon sample.
+ * A row is reported by one level only. Nearer the coast, out of range, or where the mask makes no claim gives nothing.
  */
-function onLand(ds: Dataset, sheet: string, rows: DataRow[], land: LandMask, out: Finding[]): void {
-  interface Hit { lat: number; lon: number; latDec: number; lonDec: number; km: number; n: number }
-  const hits = new Map<string, Hit>();
-  const lines: number[] = [];
-  for (const r of rows) {
-    if (r.lat === undefined || r.lon === undefined) continue;
-    const at = land.place(r.lat, r.lon);
-    if (at.kind !== 'land' || at.atLeastKm < ON_LAND_MIN_KM) continue;
-    lines.push(r.line);
-    const key = `${r.lat}\u0000${r.lon}`;
-    const h = hits.get(key);
-    if (h) h.n++;
-    else hits.set(key, { lat: r.lat, lon: r.lon, latDec: writtenDecimals(r.lat, r.latDecimals ?? decimalsOfNumber(r.lat)), lonDec: writtenDecimals(r.lon, r.lonDecimals ?? decimalsOfNumber(r.lon)), km: at.atLeastKm, n: 1 });
-  }
-  if (lines.length === 0) return;
+interface LandHit { lat: number; lon: number; latDec: number; lonDec: number; km: number; n: number }
+
+function landPlaces(hits: Map<string, LandHit>): { shown: LandHit[]; places: string } {
   const all = [...hits.values()].sort((a, b) => b.n - a.n);
   const shown = all.slice(0, MAX_PLACES);
   const places = shown.map((h) => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n}; ≥${h.km} km)`).join('; ') + (all.length > shown.length ? `; …+${all.length - shown.length}` : '');
-  const flips: string[] = [];
-  for (const h of shown) {
-    const options: [number, number, number, number][] = [[h.lat, -h.lon, h.latDec, h.lonDec], [-h.lat, h.lon, h.latDec, h.lonDec]];
-    if (Math.abs(h.lon) <= 90) options.push([h.lon, h.lat, h.lonDec, h.latDec]);
-    const sea = options.find(([la, lo]) => land.place(la, lo).kind === 'sea');
-    if (sea) flips.push(`${place(h.lat, h.lon, h.latDec, h.lonDec)} → ${place(sea[0], sea[1], sea[2], sea[3])}`);
+  return { shown, places };
+}
+
+function onLand(ds: Dataset, sheet: string, rows: DataRow[], land: LandMask, out: Finding[]): void {
+  const far = { hits: new Map<string, LandHit>(), lines: [] as number[] };
+  const near = { hits: new Map<string, LandHit>(), lines: [] as number[] };
+  for (const r of rows) {
+    if (r.lat === undefined || r.lon === undefined) continue;
+    const at = land.place(r.lat, r.lon);
+    if (at.kind !== 'land' || at.atLeastKm < ON_LAND_NEAR_MIN_KM) continue;
+    const level = at.atLeastKm >= ON_LAND_MIN_KM ? far : near;
+    level.lines.push(r.line);
+    const key = `${r.lat}\u0000${r.lon}`;
+    const h = level.hits.get(key);
+    if (h) h.n++;
+    else level.hits.set(key, { lat: r.lat, lon: r.lon, latDec: writtenDecimals(r.lat, r.latDecimals ?? decimalsOfNumber(r.lat)), lonDec: writtenDecimals(r.lon, r.lonDecimals ?? decimalsOfNumber(r.lon)), km: at.atLeastKm, n: 1 });
   }
-  const params: Record<string, string | number> = { count: lines.length, places };
-  if (flips.length > 0) params.flips = flips.join('; ');
-  out.push(makeFinding('ROW-ON-LAND', { file: ds.file, sheet, lines, params }));
+  if (far.lines.length > 0) {
+    const { shown, places } = landPlaces(far.hits);
+    const flips: string[] = [];
+    for (const h of shown) {
+      const options: [number, number, number, number][] = [[h.lat, -h.lon, h.latDec, h.lonDec], [-h.lat, h.lon, h.latDec, h.lonDec]];
+      if (Math.abs(h.lon) <= 90) options.push([h.lon, h.lat, h.lonDec, h.latDec]);
+      const sea = options.find(([la, lo]) => land.place(la, lo).kind === 'sea');
+      if (sea) flips.push(`${place(h.lat, h.lon, h.latDec, h.lonDec)} → ${place(sea[0], sea[1], sea[2], sea[3])}`);
+    }
+    const params: Record<string, string | number> = { count: far.lines.length, places };
+    if (flips.length > 0) params.flips = flips.join('; ');
+    out.push(makeFinding('ROW-ON-LAND', { file: ds.file, sheet, lines: far.lines, params }));
+  }
+  if (near.lines.length > 0) {
+    out.push(makeFinding('ROW-ON-LAND-NEAR', { file: ds.file, sheet, lines: near.lines, params: { count: near.lines.length, places: landPlaces(near.hits).places } }));
+  }
 }
 
 /* ---------- ROW-DATE-MISSING, ROW-YEAR-OUTLIER ---------- */

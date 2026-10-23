@@ -53,6 +53,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-STATION-MOVED': ['warning', 'B'],
   'ROW-STATION-SPREAD': ['info', 'B'],
   'ROW-ON-LAND': ['warning', 'B'],
+  'ROW-ON-LAND-NEAR': ['info', 'B'],
   'ROW-DATE-UNPARSEABLE': ['warning', 'B'],
   'ROW-DATE-MISSING': ['info', 'B'],
   'ROW-YEAR-OUTLIER': ['warning', 'B'],
@@ -78,7 +79,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(63);
+    expect(ids.length).toBe(64);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);

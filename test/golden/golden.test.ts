@@ -119,6 +119,11 @@ describe.skipIf(!GOLDEN_DIR)('golden set', () => {
     // has two "Baltic Sea" samples with sea salinity placed some 50 km inland in Kashubia (18.0 E, 54.0 N; 17.335 E, 54.083 N).
     const expectedPlaces: Record<string, string[]> = { 'pangaea-964012': ['18.000000 E, 54.000000 N', '17.335000 E, 54.083000 N'] };
     const expectedLines: Record<string, number[]> = { 'gn-6fe405e2': [275] };
+    it('pangaea-964012 (CoastDOM): 269 rows in the 10-50 km note (rivers, lagoons, inland errors, one Kimberley inlet station)', () => {
+      const near = got('pangaea-964012').filter((f) => f.ruleId === 'ROW-ON-LAND-NEAR');
+      expect(near.flatMap((f) => f.lines ?? [])).toHaveLength(269);
+      for (const input of exp.inputs.filter((i) => i.id !== 'pangaea-964012')) expect(got(input.id).filter((f) => f.ruleId === 'ROW-ON-LAND-NEAR'), input.id).toEqual([]);
+    }, TIMEOUT);
     it('pangaea-964012 (CoastDOM): only the two Baltic samples placed inland', () => {
       const hits = got('pangaea-964012').filter((f) => f.ruleId === 'ROW-ON-LAND');
       expect(hits).toHaveLength(1);
