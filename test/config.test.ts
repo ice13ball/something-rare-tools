@@ -149,6 +149,6 @@ describe('static privacy page', () => {
       expect(text, lang).toMatch(/24/);
       expect(text, lang).not.toMatch(/keeps nothing|niczego nie przechowuje|nichts speichert|ne conserve rien/);
     }
-    expect(UI.en['privacy.collection.p1']).toMatch(/logged \(catalogue host, status, size\).*per-connection request counter.*at most 24 hours/);
+    expect(UI.en['privacy.collection.p1']).toMatch(/logged \(catalogue host, status, size\).*request counter per IP address is kept for at most 24 hours/);
   });
 });

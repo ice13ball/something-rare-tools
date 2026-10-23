@@ -90,7 +90,7 @@ describe('a Zenodo slice that ends before its own total makes the run incomplete
     expect(p.notices).toContainEqual({ code: 'zenodo-slice-short', params: { from: '…', to: '…', total: 60, seen: 25 } });
     expect(p.notices).toContainEqual({ code: 'records-missing', params: { missing: 35 } });
     const lines = (await (await r.csvBlob()).text()).trimEnd().split('\n');
-    expect(lines[lines.length - 1]).toMatch(/^\(run\),,RUN-INCOMPLETE,info,.*35 records.*NOT part of these results.*Run the review again later\./);
+    expect(lines[lines.length - 1]).toMatch(/^\(run\),,RUN-INCOMPLETE,info,.*NOT part of these results: 35\..*Run the review again later\./);
     for (const lang of LANGS) {
       for (const n of p.notices) expect(translate(lang, `collection.notice.${n.code}` as never, n.params), lang).not.toMatch(/\{\w+\}/);
     }
@@ -120,5 +120,19 @@ describe('a Zenodo slice that ends before its own total makes the run incomplete
     expect(p.notices.filter((n) => n.code === 'zenodo-slice-short').length).toBe(MAX_NOTICES - p.notices.filter((n) => n.code !== 'zenodo-slice-short' && n.code !== 'records-missing').length);
     expect(p.notices.find((n) => n.code === 'records-missing')).toMatchObject({ params: { missing: 27 * (YEAR - 25) } });
     expect(await (await r.csvBlob()).text()).toContain('RUN-INCOMPLETE');
+  });
+});
+
+describe('counts in the notices never sit in front of a noun (no "1 pages")', () => {
+  it('a single page, a single record: no number glued to a plural noun, in any language', () => {
+    const notices = [
+      { code: 'unread-pages', params: { pages: 1, records: 1, reason: 'http-503' } },
+      { code: 'records-missing', params: { missing: 1 } },
+      { code: 'zenodo-slice-short', params: { from: '2020-01-01', to: '2020-12-31', total: 1, seen: 0 } },
+    ];
+    for (const lang of LANGS) {
+      for (const n of notices) expect(gapText(n, lang), `${lang} ${n.code}`).not.toMatch(/(^|\s)1 (pages?|records?|rekord\w*|stron\w*|Seiten?|Datens\w+|notices?|pages)\b/i);
+      expect(translate(lang, 'collection.progress.deferred', { n: 1 }), lang).not.toMatch(/(^|\s)1 \p{L}/u);
+    }
   });
 });
