@@ -106,7 +106,7 @@ describe('InputPanel', () => {
     const { container } = render(<InputPanel mode="server" onSubmit={onSubmit} />);
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input.multiple).toBe(true);
-    expect(input.accept).toBe('.csv,.tsv,.txt,.tab,.xlsx,.xls,.xml,.json');
+    expect(input.accept).toBe('.csv,.tsv,.txt,.tab,.xlsx,.xls,.xml,.json,.zip');
     const f = csv('one.csv');
     fireEvent.change(input, { target: { files: [f] } });
     fireEvent.change(screen.getByLabelText(/Zenodo or GeoNetwork link/), { target: { value: '  10.5281/zenodo.1  ' } });

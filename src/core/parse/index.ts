@@ -6,14 +6,19 @@ import { parseIsoRecord } from '../metadata/iso19115-3';
 import { parseZenodoRecord } from '../metadata/zenodo';
 import { decodeText } from '../values/encoding';
 import { parseCsvText } from './csv';
+import { parseDwca, type DwcaOptions } from './dwca';
 import { parsePangaeaText } from './pangaea';
 import { ParseError, encodingFinding } from './shared';
 import { parseXlsx } from './xlsx';
+import { looksLikeWorkbook, type Inflate } from './zip';
 
 export { ParseError } from './shared';
 export { parseCsvText } from './csv';
 export { parseXlsx } from './xlsx';
 export { parsePangaeaText } from './pangaea';
+export { parseDwca, DWCA_MAX_ROWS } from './dwca';
+export { ZipError, openZip, ZIP_LIMITS } from './zip';
+export type { Inflate } from './zip';
 
 const startsWith = (b: Uint8Array, magic: readonly number[]) => magic.every((m, i) => b[i] === m);
 const ZIP = [0x50, 0x4b, 0x03, 0x04]; // xlsx
@@ -91,4 +96,18 @@ export function parseFile(fileName: string, bytes: Uint8Array): ParsedFile {
   }
 
   return parseCsvText(decoded.text, fileName, decoded);
+}
+
+/**
+ * A zip that is not an Excel workbook: a Darwin Core Archive, or something that is not one. parseFile cannot read
+ * it (inflating is asynchronous), so the caller sends it to parseFileAsync.
+ */
+export const isArchiveZip = (bytes: Uint8Array): boolean => startsWith(bytes, ZIP) && !looksLikeWorkbook(bytes);
+
+/**
+ * parseFile for every upload, including archives. A zip that is not a workbook is read as a Darwin Core Archive
+ * (never throws: a refusal is a parse-level finding); everything else goes through parseFile unchanged.
+ */
+export async function parseFileAsync(fileName: string, bytes: Uint8Array, inflate: Inflate, opts?: DwcaOptions): Promise<ParsedFile> {
+  return isArchiveZip(bytes) ? parseDwca(fileName, bytes, inflate, opts) : parseFile(fileName, bytes);
 }

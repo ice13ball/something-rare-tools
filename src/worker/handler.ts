@@ -11,7 +11,9 @@ import { metadataDraft, type MetadataDraft } from '../core/output/draft';
 import { toCleanCsv } from '../core/output/csv';
 import { toGeoJson } from '../core/output/geojson';
 import { draftToIso19139 } from '../core/output/iso19139';
-import { parseFile } from '../core/parse';
+import { isArchiveZip, parseDwca, parseFile } from '../core/parse';
+import { inflateInBrowser } from '../core/parse/inflate';
+import type { Inflate } from '../core/parse/zip';
 import { proposeColumns, unitFromHeader } from '../core/recognize/columns';
 import { proposeLayout, proposeMappings } from '../core/recognize/layout';
 import { buildReport } from '../core/report';
@@ -110,6 +112,8 @@ export const browserLandLoader: LandLoader = async () => {
 export interface HandlerOptions {
   /** Without a loader ROW-ON-LAND does not run and nothing is said about it (tests that do not need it). */
   land?: LandLoader;
+  /** Inflates zip entries (Darwin Core Archives). Default: the browser's DecompressionStream; tests may pass node zlib. */
+  inflate?: Inflate;
 }
 
 const hasPositions = (datasets: readonly Dataset[]): boolean => datasets.some((ds) => ds.rows.some((r) => r.lat !== undefined && r.lon !== undefined));
@@ -175,19 +179,33 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
 
   const metadataOf = (datasets: Dataset[]): MetadataRecord[] => [...new Set(datasets.flatMap((d) => d.metadata))];
 
-  function parse(req: Extract<Request, { type: 'parse' }>): ParseResult {
+  /** Sync for everything but an archive zip: its entries inflate asynchronously, so the answer is then a promise. */
+  function parse(req: Extract<Request, { type: 'parse' }>): ParseResult | Promise<ParseResult> {
     reset();
     records = req.records.map((r) => ({ ...r, files: r.files.map((f) => ({ name: f.name, ...(f.url ? { url: f.url } : {}) })) }));
     parseFindings = [...req.extraFindings];
     hasDropped = req.files.some((f) => f.source === 'dropped');
     for (const r of records) recordMeta.push(...r.metadata);
 
+    const archives = req.files.filter((f) => isArchiveZip(f.bytes));
+    if (archives.length === 0) return finishParse(req, new Map());
+    const started = session;
+    return (async () => {
+      const pre = new Map<InputFile, ParsedFile>();
+      // parseDwca never throws: a refusal is a parse finding on the result
+      for (const f of archives) pre.set(f, await parseDwca(f.name, f.bytes, opts.inflate ?? inflateInBrowser));
+      if (started !== session) throw new Error('The files were replaced by a newer check while the archive was being read. Check again.');
+      return finishParse(req, pre);
+    })();
+  }
+
+  function finishParse(req: Extract<Request, { type: 'parse' }>, pre: Map<InputFile, ParsedFile>): ParseResult {
     const result: ParseResult = { files: [], problems: [], metadataFiles: [], notRead: [] };
     const parsedAll: { parsed: ParsedFile; source: InputFile['source'] }[] = [];
     for (const f of req.files) {
       let parsed: ParsedFile;
       try {
-        parsed = parseFile(f.name, f.bytes);
+        parsed = pre.get(f) ?? parseFile(f.name, f.bytes);
       } catch (e) {
         result.problems.push({ fileName: f.name, message: e instanceof Error ? e.message : String(e) });
         continue;
