@@ -14,6 +14,7 @@ import { CheckPage } from '../../src/app/pages/CheckPage';
 import { IndexPage } from '../../src/app/pages/IndexPage';
 import { PrivacyPage } from '../../src/app/pages/PrivacyPage';
 import { DATA_HOSTS } from '../../config/hosts';
+import { IPT_HOSTS } from '../../config/ipt';
 import { UI } from '../../src/core/i18n/ui';
 import { buildReport } from '../../src/core/report';
 import { createDirectEngine } from '../../src/worker/handler';
@@ -210,9 +211,31 @@ describe('pages', () => {
     render(<PrivacyPage />);
     // the first host list is the data hosts of /check (a host can also be a Collection review catalogue, listed further down)
     const dataHosts = document.querySelector('ul.host-list') as HTMLElement;
-    for (const h of DATA_HOSTS) expect(within(dataHosts).getByText(h)).toBeTruthy();
+    for (const h of DATA_HOSTS.filter((x) => !IPT_HOSTS.includes(x))) expect(within(dataHosts).getByText(h)).toBeTruthy();
+    // the IPT servers GBIF and OBIS archives come from: rendered from config/ipt.ts, in their own list
+    const ipt = document.querySelector('ul.ipt-hosts') as HTMLElement;
+    for (const h of IPT_HOSTS) expect(within(ipt).getByText(h)).toBeTruthy();
+    expect(within(ipt).getAllByRole('listitem')).toHaveLength(IPT_HOSTS.length);
+    expect(document.body.textContent).toContain('api.gbif.org for GBIF, api.obis.org for OBIS');
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'https://something-rare.com')).toBe(true);
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'mailto:m.mazurowski@ai-wall.com')).toBe(true);
+  });
+
+  it('the static privacy page lists the registries and the same IPT hosts, with the same GBIF/OBIS text as the app (English)', () => {
+    const html = readFileSync(join(__dirname, '..', '..', 'privacy', 'index.html'), 'utf8');
+    for (const h of [...DATA_HOSTS, ...IPT_HOSTS]) expect(html, h).toContain(`<li><code>${h}</code></li>`);
+    for (const k of ['privacy.gbif.h', 'privacy.gbif.p1', 'privacy.gbif.p2', 'privacy.gbif.p3'] as const) expect(html, k).toContain(UI.en[k]);
+  });
+
+  it('PrivacyPage describes GBIF and OBIS in every language', () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      for (const k of ['privacy.gbif.h', 'privacy.gbif.p1', 'privacy.gbif.p2', 'privacy.gbif.p3'] as const) {
+        expect(UI[lang][k].length, `${lang} ${k}`).toBeGreaterThan(10);
+        if (k !== 'privacy.gbif.h') expect(UI[lang][k]).toMatch(/api\.gbif\.org|IPT|100 M/);
+      }
+      expect(UI[lang]['privacy.gbif.p1']).toContain('api.gbif.org');
+      expect(UI[lang]['privacy.gbif.p1']).toContain('api.obis.org');
+    }
   });
 
   it('PrivacyPage describes the hosting logs (IP, 30 days), CARTO and the legal basis in every language', () => {

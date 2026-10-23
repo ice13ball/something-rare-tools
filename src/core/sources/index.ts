@@ -6,6 +6,7 @@ import type { LoadedRecord, MetadataRecord } from '../types';
 import { allowed, hostNotAllowed, noDataFile } from './common';
 import { lookupDatacite, routeFromDatacite } from './datacite';
 import { FileFetchError, hostOf, HostNotAllowedError, type Fetcher } from './fetcher';
+import { loadGbif, loadObis } from './gbif';
 import { loadGeoNetwork } from './geonetwork';
 import { loadPangaea } from './pangaea';
 import { resolveInput, type ResolvedInput } from './resolve';
@@ -15,6 +16,7 @@ export * from './fetcher';
 export { resolveInput, DEFAULT_GEONETWORK_HOST, type ResolvedInput } from './resolve';
 export { dataciteUrl, lookupDatacite, routeFromDatacite, type Route } from './datacite';
 export { loadZenodo } from './zenodo';
+export { loadGbif, loadObis } from './gbif';
 export { loadGeoNetwork, geonetworkRecordUrl } from './geonetwork';
 export { loadPangaea, loadPangaeaMetainfo, pangaeaMetainfoUrl, pangaeaTextfileUrl } from './pangaea';
 export { DATA_EXTENSIONS, hasDataExtension } from './common';
@@ -22,7 +24,7 @@ export { DATA_EXTENSIONS, hasDataExtension } from './common';
 /** The input could not be turned into a record reference ("unknown"): the UI asks the user to download and drop. */
 export class UnresolvedInputError extends Error {
   constructor() {
-    super('Unknown input: not a Zenodo, GeoNetwork, PANGAEA or DOI reference');
+    super('Unknown input: not a Zenodo, GeoNetwork, PANGAEA, GBIF, OBIS or DOI reference');
     this.name = 'UnresolvedInputError';
   }
 }
@@ -45,6 +47,8 @@ async function loadDoi(doi: string, fetcher: Fetcher, loaders: Loaders): Promise
       return loadGeoNetwork(route.host, route.uuid, fetcher, dc);
     case 'pangaea':
       return (loaders.pangaea ?? loadPangaea)(route.id, fetcher, dc);
+    case 'gbif':
+      return loadGbif({ key: route.key }, fetcher);
     case 'other': {
       const out: LoadedRecord = { label, kind: 'datacite', metadata: [dc], files: [], findings: [] };
       if (dc.landingUrl && !allowed(dc.landingUrl)) out.findings.push(hostNotAllowed(label, dc.landingUrl));
@@ -62,6 +66,10 @@ export async function loadRecord(input: ResolvedInput, fetcher: Fetcher, loaders
       return loadGeoNetwork(input.host, input.uuid, fetcher);
     case 'pangaea':
       return (loaders.pangaea ?? loadPangaea)(input.id, fetcher);
+    case 'gbif':
+      return loadGbif(input.ref, fetcher);
+    case 'obis':
+      return loadObis(input.uuid, fetcher);
     case 'doi':
       return loadDoi(input.doi, fetcher, loaders);
     case 'unknown':

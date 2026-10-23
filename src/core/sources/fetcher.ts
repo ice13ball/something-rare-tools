@@ -3,6 +3,7 @@
 // Download seam: one Fetcher interface, a browser implementation (direct, CORS) and a server implementation
 // (POST /api/fetch). Core code only ever talks to the interface, so tests use an in-memory fetcher.
 import { isAllowedHost } from '../../../config/hosts';
+import { IPT_MAX_BYTES, isIptHost } from '../../../config/ipt';
 import type { Finding } from '../types';
 import { makeFinding } from '../rules/registry';
 
@@ -34,6 +35,29 @@ export class FetchTimeoutError extends Error {
   constructor(host: string) {
     super(`Download from ${host} timed out`);
     this.name = 'FetchTimeoutError';
+    this.host = host;
+  }
+}
+
+/**
+ * A download from a listed IPT server that started but did not finish: the server mode proxy gave up after its archive
+ * time limit, or the connection was cut while the body was arriving. Never a "blocked" (CORS fails before the body).
+ */
+export class FetchInterruptedError extends Error {
+  readonly host: string;
+  constructor(host: string) {
+    super(`Download from ${host} was interrupted`);
+    this.name = 'FetchInterruptedError';
+    this.host = host;
+  }
+}
+
+/** The proxy refused an archive above its size limit. Carries the host only. */
+export class ArchiveTooLargeError extends Error {
+  readonly host: string;
+  constructor(host: string) {
+    super(`Archive from ${host} is too large`);
+    this.name = 'ArchiveTooLargeError';
     this.host = host;
   }
 }
@@ -92,7 +116,8 @@ async function readBody(res: Response, host: string): Promise<Uint8Array> {
   try {
     return new Uint8Array(await res.arrayBuffer());
   } catch (e) {
-    if (e instanceof TypeError) throw new FetchBlockedError(host);
+    // A body that breaks off half way is an interruption; at an IPT it is said so (the headers, hence CORS, were fine).
+    if (e instanceof TypeError) throw isIptHost(host) ? new FetchInterruptedError(host) : new FetchBlockedError(host);
     throw e;
   }
 }
@@ -170,6 +195,8 @@ export function serverFetcher(endpoint = '/api/fetch', fetchImpl: FetchFn = glob
       const proxyError = res.headers.get('x-fetch-proxy-error');
       if (proxyError) {
         if (proxyError === 'host_not_allowed') throw new HostNotAllowedError(host);
+        if (isIptHost(host) && proxyError === 'timeout') throw new FetchInterruptedError(host);
+        if (isIptHost(host) && proxyError === 'too_large') throw new ArchiveTooLargeError(host);
         throw new ProxyFetchError(proxyError, res.status, host);
       }
       const bytes = await readBody(res, host);
@@ -186,6 +213,8 @@ export function serverFetcher(endpoint = '/api/fetch', fetchImpl: FetchFn = glob
 export function fetchErrorFinding(err: unknown, file: string): Finding | undefined {
   if (err instanceof FetchBlockedError) return makeFinding('IN-FETCH-BLOCKED', { file, params: { host: err.host } });
   if (err instanceof FetchTimeoutError) return makeFinding('IN-FETCH-TIMEOUT', { file, params: { host: err.host } });
+  if (err instanceof FetchInterruptedError) return makeFinding('IN-FETCH-INTERRUPTED', { file, params: { host: err.host } });
+  if (err instanceof ArchiveTooLargeError) return makeFinding('IN-ARCHIVE-TOO-LARGE', { file, params: { host: err.host, mb: Math.round(IPT_MAX_BYTES / 1024 / 1024) } });
   if (err instanceof HostNotAllowedError) return makeFinding('IN-HOST-NOT-ALLOWED', { file, params: { host: err.host } });
   if (err instanceof ProxyFetchError || err instanceof FileFetchError) {
     return makeFinding('IN-RECORD-INACCESSIBLE', { file, params: { status: err.status, host: err.host } });

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { IPT_HOSTS, REGISTRY_HOSTS } from './ipt.js';
+
 /**
  * One host allowlist for both download modes: the CSP connect-src (browser mode)
  * and the fetch proxy (server mode). Exact host names only, never wildcards.
@@ -13,6 +15,9 @@ export const DATA_HOSTS: readonly string[] = [
   'api.datacite.org',
   'data.crosscite.org',
   'doi.org',
+  // GBIF and OBIS registries, then the static list of servers their archives may come from (config/ipt.ts)
+  ...REGISTRY_HOSTS,
+  ...IPT_HOSTS,
 ];
 
 export const GA_HOSTS: readonly string[] = [

@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Turns whatever the user pasted into a typed record reference. Pure string work, no network.
+/** A GBIF dataset: by its DOI (10.15468/…) or by its registry key (the UUID of gbif.org/dataset/{key}). */
+export type GbifRef = { doi: string } | { key: string };
+
 export type ResolvedInput =
   | { kind: 'zenodo'; id: string }
   | { kind: 'geonetwork'; host: string; uuid: string }
   | { kind: 'doi'; doi: string }
   | { kind: 'pangaea'; id: string }
+  | { kind: 'gbif'; ref: GbifRef }
+  | { kind: 'obis'; uuid: string }
   | { kind: 'unknown' };
 
 export const DEFAULT_GEONETWORK_HOST = 'geonetwork.iopan.pl';
@@ -14,6 +19,7 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const UUID_ONLY = new RegExp(`^${UUID}$`, 'i');
 const UUID_IN = new RegExp(UUID, 'i');
 const DOI_ONLY = /^10\.\d{4,9}\/\S+$/;
+const GBIF_DOI = /^10\.15468\//i;
 const PANGAEA_PATH = /^\/10\.1594\/PANGAEA\.(\d+)\/?$/i;
 
 /** Quotes, angle brackets, brackets and sentence punctuation around a pasted value. */
@@ -34,13 +40,18 @@ function asDoi(s: string): string | undefined {
   return DOI_ONLY.test(t) ? t : undefined;
 }
 
+/** A DOI: the GBIF prefix goes to the GBIF registry directly, every other one through DataCite. */
+function doiInput(doi: string): ResolvedInput {
+  return GBIF_DOI.test(doi) ? { kind: 'gbif', ref: { doi } } : { kind: 'doi', doi };
+}
+
 export function resolveInput(text: string): ResolvedInput {
   const s = clean(text);
   if (s === '') return { kind: 'unknown' };
   if (/^\d+$/.test(s)) return { kind: 'zenodo', id: s };
   if (UUID_ONLY.test(s)) return { kind: 'geonetwork', host: DEFAULT_GEONETWORK_HOST, uuid: s.toLowerCase() };
   const bare = asDoi(s);
-  if (bare) return { kind: 'doi', doi: bare };
+  if (bare) return doiInput(bare);
 
   let u: URL;
   try {
@@ -59,7 +70,7 @@ export function resolveInput(text: string): ResolvedInput {
 
   if (host === 'doi.org' || host === 'dx.doi.org' || host === 'www.doi.org') {
     const doi = asDoi(path.replace(/^\//, ''));
-    return doi ? { kind: 'doi', doi } : { kind: 'unknown' };
+    return doi ? doiInput(doi) : { kind: 'unknown' };
   }
   if (host === 'zenodo.org' || host === 'www.zenodo.org') {
     const rec = /^\/(?:api\/)?records?\/(\d+)(?:\/|$)/.exec(path);
@@ -67,6 +78,14 @@ export function resolveInput(text: string): ResolvedInput {
     const doi = /^\/doi\/(.+?)\/?$/.exec(path);
     const d = doi ? asDoi(doi[1]!) : undefined;
     return d ? { kind: 'doi', doi: d } : { kind: 'unknown' };
+  }
+  if (host === 'gbif.org' || host === 'www.gbif.org') {
+    const m = new RegExp(`^/(?:[a-z]{2}/)?dataset/(${UUID})(?:/|$)`, 'i').exec(path);
+    return m ? { kind: 'gbif', ref: { key: m[1]!.toLowerCase() } } : { kind: 'unknown' };
+  }
+  if (host === 'obis.org' || host === 'www.obis.org') {
+    const m = new RegExp(`^/dataset/(${UUID})(?:/|$)`, 'i').exec(path);
+    return m ? { kind: 'obis', uuid: m[1]!.toLowerCase() } : { kind: 'unknown' };
   }
   if (host === 'doi.pangaea.de') {
     const m = PANGAEA_PATH.exec(path);
