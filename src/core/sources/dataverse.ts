@@ -7,7 +7,7 @@ import { dataverseName, isDataverseHost, LINKED_FILE_MAX_BYTES } from '../../../
 import { doiOfPersistentId, parseDataverseVersion, type DataverseFile } from '../metadata/dataverse';
 import { makeFinding } from '../rules/registry';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
-import { attempt, decodeUtf8, hasDataExtension, hostNotAllowed, inaccessible, noDataFile, ok2xx } from './common';
+import { attempt, decodeUtf8, extensionOf, hasDataExtension, hostNotAllowed, inaccessible, noDataFile, ok2xx } from './common';
 import { lookupDatacite } from './datacite';
 import type { Fetcher, FetchResult } from './fetcher';
 
@@ -27,6 +27,8 @@ function upperVariant(pid: string): string {
 }
 
 const MAX_NAMES = 10;
+/** Documentation and pictures: not data, so not listed as "not read". */
+const DOCUMENT_EXTENSIONS: readonly string[] = ['pdf', 'doc', 'docx', 'odt', 'rtf', 'md', 'html', 'htm', 'png', 'jpg', 'jpeg', 'gif', 'tif', 'tiff', 'svg'];
 const listOf = (names: string[]): string => {
   if (names.length === 0) return '—';
   const shown = names.slice(0, MAX_NAMES).join(', ');
@@ -84,13 +86,20 @@ export async function loadDataverse(host: string, pid: string, fetcher: Fetcher,
 
   const readable = read.files.filter((f) => hasDataExtension(f.name));
   const toRead: DataverseFile[] = [];
-  for (const f of readable) {
+  // Files the tool cannot read that may hold data (zip, NetCDF, SPSS...): named, so the report never reads as if the whole dataset was checked.
+  const notRead: string[] = [];
+  for (const f of read.files) {
+    const data = hasDataExtension(f.name);
+    if (!data && DOCUMENT_EXTENSIONS.includes(extensionOf(f.name))) continue;
     if (f.heldBack) out.findings.push(makeFinding('IN-FILE-HELD-BACK', { file: f.name, params: { host } }));
+    else if (!data) notRead.push(f.name);
     else if (f.size !== undefined && f.size > LINKED_FILE_MAX_BYTES) out.findings.push(makeFinding('IN-FILE-TOO-LARGE', { file: f.name, params: { mb: Math.round(LINKED_FILE_MAX_BYTES / 1024 / 1024) } }));
     else toRead.push(f);
   }
   out.files = toRead.map((f) => ({ name: f.name, url: f.url }));
+  // No table at all: one error naming every file (IN-NO-DATA-FILE) says it; the held-back notes above stay.
   if (readable.length === 0) out.findings.push(noDataFile(label, read.files.map((f) => f.name)));
+  else if (notRead.length > 0) out.findings.push(makeFinding('IN-FILES-NOT-READ', { file: label, params: { files: listOf(notRead) } }));
 
   const original = toRead.filter((f) => f.form === 'original').map((f) => f.name);
   const converted = toRead.filter((f) => f.form === 'tab').map((f) => f.name);

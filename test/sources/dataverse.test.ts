@@ -138,6 +138,31 @@ describe('loadDataverse', () => {
     expect(rules(out.findings)).toContain('IN-NO-DATA-FILE');
   });
 
+  it('files that may hold data in a format the tool does not read (zip, NetCDF) are named, documents are not; a held-back one is held back', async () => {
+    const doc = base();
+    const as = (name: string, id: string, restricted = false) => {
+      const f = JSON.parse(JSON.stringify(doc.data.files[1]));
+      f.label = name;
+      f.dataFile.filename = name;
+      f.dataFile.id = id;
+      f.restricted = restricted;
+      return f;
+    };
+    doc.data.files.push(as('data.zip', '9101'), as('model.nc', '9102'), as('secret.zip', '9103', true));
+    const out = await loadDataverse(HOST, PID, new MapFetcher({ [VERSION]: reply(doc), [DC + DOI]: dc() }));
+    const notRead = out.findings.filter((x) => x.ruleId === 'IN-FILES-NOT-READ');
+    expect(notRead).toHaveLength(1);
+    expect(notRead[0]!.severity).toBe('warning');
+    expect(notRead[0]!.params.files).toBe('data.zip, model.nc');
+    expect(out.findings.filter((x) => x.ruleId === 'IN-FILE-HELD-BACK').map((x) => x.file)).toContain('secret.zip');
+    expect(renderPlain(notRead[0]!, 'pl')).toContain('data.zip, model.nc');
+  });
+
+  it('only a PDF beside the tables: nothing is listed as not read', async () => {
+    const out = await loadDataverse(HOST, PID, new MapFetcher({ [VERSION]: reply(base()), [DC + DOI]: dc() }));
+    expect(rules(out.findings)).not.toContain('IN-FILES-NOT-READ');
+  });
+
   it('a lower-case id that the server does not know is asked once more in the case the registry writes it', async () => {
     const lower = 'doi:10.18150/abc123';
     const f = new MapFetcher({ [VERSION]: reply(base()), [DC + DOI]: dc() });
@@ -285,6 +310,19 @@ describe('licence: one deposit with its DataCite record, custom terms stay unrec
     const load = await loadLicenceReferences([DOI], f);
     const a = analyseLicences(load.records);
     expect(a.contradictions).toEqual([]);
+  });
+
+  it('restricted files: /licence says the verdict covers only the open files; none restricted, nothing said', () => {
+    const read = parseDataverseVersion(base(), 'x', { host: HOST, pid: PID })!;
+    expect(read.record.heldBackFiles).toEqual(['restricted_run.tab']);
+    const held = checkLicence([read.record], { label: 'x', inaccessible: false }).filter((x) => x.ruleId === 'LIC-FILES-HELD-BACK');
+    expect(held).toHaveLength(1);
+    expect(held[0]!.params.files).toBe('restricted_run.tab');
+    const open = base();
+    open.data.files = open.data.files.filter((f: Record<string, any>) => !f.restricted); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const rec = parseDataverseVersion(open, 'x', { host: HOST, pid: PID })!.record;
+    expect(rec.heldBackFiles).toBeUndefined();
+    expect(rules(checkLicence([rec], { label: 'x', inaccessible: false }))).not.toContain('LIC-FILES-HELD-BACK');
   });
 
   it('CUSTOM terms are unrecognised (fail-closed): never read as a known licence', () => {

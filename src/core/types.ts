@@ -65,6 +65,8 @@ export interface MetadataRecord {
   bbox?: { west: number; east: number; south: number; north: number };
   distributionLinks: { url: string; name?: string; protocol?: string }[];  // url may be ''
   files?: { key: string; url: string; size?: number; mimetype?: string }[];
+  /** Dataverse: files under restricted access or an embargo; the licence the record states does not open them. */
+  heldBackFiles?: string[];
   resourceType?: string;
   doi?: string;
   landingUrl?: string;

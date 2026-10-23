@@ -19,6 +19,7 @@ import type { RuleSpec } from './spec';
  *   IN-NO-DWC-ARCHIVE       registry  GBIF or OBIS knows the dataset but lists no Darwin Core Archive for it
  *   IN-FILE-HELD-BACK       host     a file the source holds back (restricted access or an embargo): not downloaded, not checked
  *   IN-FILE-TOO-LARGE       mb       a file above the size read from a link (config/dataverse.ts LINKED_FILE_MAX_BYTES): not downloaded, not checked
+ *   IN-FILES-NOT-READ       files    files of a linked dataset in a format the tool does not read (zip, NetCDF, ...), documents and images left out: the names
  *   IN-DATAVERSE-FILES      host, version   which version of a Dataverse dataset was read; optional original / converted (names) say in which form its converted tables were read; value = the same in English
  *   IN-FILE-UNREADABLE      files    no input file could be read at all (a damaged workbook, ...): the names, comma-separated
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
@@ -215,6 +216,19 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `Ce fichier n'a pas été lu : il dépasse {mb} Mo, le maximum lu depuis un lien. Il n'a pas été vérifié ; l'absence de remarque ne dit donc rien à son sujet. Téléchargez-le et déposez-le ici.`,
     },
     technical: `{file}: larger than {mb} MB; not downloaded, not checked.`,
+  },
+  {
+    id: 'IN-FILES-NOT-READ',
+    category: 'input',
+    severity: 'warning',
+    params: ['files'],
+    plain: {
+      pl: `Tych plików zbioru nie sprawdzono, bo narzędzie nie czyta ich formatu (np. zip, NetCDF): {files}. Brak uwag nic o nich nie mówi. Jeśli są w nich dane, rozpakuj je lub zapisz jako CSV albo Excel i przeciągnij tutaj.`,
+      en: `These files of the dataset were not checked because the tool does not read their format (such as zip or NetCDF): {files}. The absence of remarks says nothing about them. If they hold data, unpack them or save them as CSV or Excel and drop them here.`,
+      de: `Diese Dateien des Datensatzes wurden nicht geprüft, weil das Werkzeug ihr Format nicht liest (z. B. zip, NetCDF): {files}. Das Fehlen von Hinweisen sagt nichts über sie aus. Wenn sie Daten enthalten, entpacken Sie sie oder speichern Sie sie als CSV oder Excel und ziehen Sie sie hierher.`,
+      fr: `Ces fichiers du jeu de données n'ont pas été vérifiés, car l'outil ne lit pas leur format (par ex. zip, NetCDF) : {files}. L'absence de remarque ne dit rien à leur sujet. S'ils contiennent des données, décompressez-les ou enregistrez-les en CSV ou Excel et déposez-les ici.`,
+    },
+    technical: `{file}: not read (format not supported): {files}.`,
   },
   {
     id: 'IN-DATAVERSE-FILES',
