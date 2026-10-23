@@ -180,6 +180,8 @@ export interface CatalogueBehaviour {
   stalled?: boolean;
   /** nextRecord never moves forward. */
   stuckNext?: boolean;
+  /** nextRecord points this many records back into the page just sent (overlapping pages). */
+  overlap?: number;
 }
 
 /** The catalogue's XML for one GetRecords request (what the real server would stream back). */
@@ -192,7 +194,7 @@ export function catalogueAnswer(b: CatalogueBehaviour, start: number, max: numbe
   const size = Math.min(max, b.cap ?? max);
   const slice = b.records.slice(start - 1, start - 1 + size);
   const end = start - 1 + slice.length;
-  const next = end >= total ? (b.lastNext === 'past-end' ? end + 1 : 0) : b.stuckNext ? start : end + 1;
+  const next = end >= total ? (b.lastNext === 'past-end' ? end + 1 : 0) : b.stuckNext ? start : Math.max(start + 1, end + 1 - (b.overlap ?? 0));
   return searchResults(b.claimed, slice.length, next, slice.map(gmdRecord));
 }
 

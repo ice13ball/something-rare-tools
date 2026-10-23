@@ -44,6 +44,8 @@ export interface CswCursor {
   i?: number;
   /** maxRecords of this page (default CSW_PAGE): smaller after a page whose records were big. */
   size?: number;
+  /** Last position already processed, when it can lie beyond `pos` (the catalogue's nextRecord pointed back into a page already read). */
+  through?: number;
 }
 
 /** How many records the next page asks for, from what the last page weighed. A catalogue of ordinary records stays at CSW_PAGE. */
@@ -251,10 +253,13 @@ async function fetchPage(deps: Deps, src: CswSource, pos: number, size: number, 
 }
 
 /** One GetRecords page → items, nextRecord, notices. Shared by the full walk and the sample. */
-async function readPage(deps: Deps, src: CswSource, pos: number, size: number, matched: number): Promise<PageRead & { crossSource?: PageData<unknown>['counters'] }> {
+async function readPage(deps: Deps, src: CswSource, pos: number, size: number, matched: number, skipFirst = 0): Promise<PageRead & { crossSource?: PageData<unknown>['counters']; listed: number }> {
   const page = await fetchPage(deps, src, pos, size, matched);
+  const listed = page.items.length;
+  // Positions this run has already processed (overlapping pages): neither compared with DataCite nor counted again.
+  if (skipFirst > 0) page.items = page.items.slice(skipFirst);
   const crossSource = src.crossSource ? { crossSource: await crossCheck(deps, page.items) } : undefined;
-  return { ...page, crossSource };
+  return { ...page, listed, crossSource };
 }
 
 export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCursor> {
@@ -267,14 +272,18 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
       return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}) } : null;
     },
     async fetch(c): Promise<PageData<CswCursor>> {
-      const page = await readPage(deps, src, c.pos, c.size ?? CSW_PAGE, matched);
+      // nextRecord pointed back into a page already read: the first positions of this page were processed with the one before.
+      const overlap = c.through !== undefined && c.through >= c.pos ? c.through - c.pos + 1 : 0;
+      const page = await readPage(deps, src, c.pos, c.size ?? CSW_PAGE, matched, overlap);
       const notices: Notice[] = [];
+      if (overlap > 0 && page.listed > 0) notices.push({ code: 'overlapping-pages' });
+      const through = Math.max(c.through ?? 0, c.pos + page.listed - 1);
       const seen = c.seen + page.items.length;
       const counters = page.crossSource;
       if (page.end) notices.push(page.end);
 
       let next: CswCursor | null = null;
-      if (!page.end && page.items.length > 0) {
+      if (!page.end && page.listed > 0) {
         if (page.first !== undefined && page.first === c.last) throw new SourceFailure('protocol', 'repeating-page');
         if (page.nextRecord > 0) {
           if (page.nextRecord <= c.pos) throw new SourceFailure('protocol', 'next-record-not-advancing');
@@ -282,7 +291,7 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
           if (seen > matched * 1.5 + 500) notices.push({ code: 'overrun-stopped', params: { seen, matched } });
           else {
             const size = nextPageSize(page.chars ?? 0, page.items.length);
-            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}) };
+            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}), ...(through >= page.nextRecord ? { through } : {}) };
           }
         }
       } else if (!page.end && page.nextRecord > 0) {

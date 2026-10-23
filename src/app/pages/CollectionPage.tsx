@@ -91,7 +91,7 @@ function NoticeText({ code, params }: { code: string; params?: Record<string, st
   useLang();
   const known = [
     'no-records', 'split-by-date', 'slices-differ', 'window-exceeded', 'ended-before-total', 'ended-before-matched', 'more-than-matched',
-    'ended-by-exception', 'empty-page', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected',
+    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected',
   ];
   if (known.includes(code)) return <>{t(`collection.notice.${code}` as never, params)}</>;
   if (code.startsWith('cursor-') || code === 'repeating-page') return <>{t('collection.notice.cursor', { code })}</>;
