@@ -131,20 +131,38 @@ const identifierOf = (md: Element): string | undefined => {
 const serializer = new XMLSerializer();
 
 const DOI_IN = /\b(10\.\d{4,9}\/[^\s"<>]+)/;
+const DOI_LINK = /^https?:\/\/(?:dx\.)?doi\.org\/(10\.\d{4,9}\/\S+)$/i;
+
+const kids = (el: Element | undefined, local: string): Element[] => (el ? elementChildren(el).filter((c) => c.localName === local) : []);
+const trimDoi = (d: string): string => d.replace(/[.,;)]+$/, '');
 
 /**
- * The DOI of an ISO record: the 19115-3 parser reads it, the 19139 parser does not, so it is looked up here (citation identifiers, then
- * a doi.org link among the online resources). Needed only to ask DataCite about the same deposit.
+ * The DOI of an ISO record: the DOI of THIS record, nothing else. Taken from the identifiers of the record's own citation
+ * (identificationInfo / MD_DataIdentification / citation / CI_Citation / identifier, in 19139 and 19115-3 alike) and, failing that, from the
+ * record-level dataSetURI / metadataLinkage when that is a doi.org link. Never from the lineage (LI_Source/sourceCitation: the DOI of the
+ * INPUT data), from another citation (a publication, a related dataset) or from any identifier elsewhere in the record: such a DOI would
+ * compare the catalogue record with the DataCite record of ANOTHER deposit and file the differences under this record. No DOI: no comparison.
  */
 function doiOf(rec: MetadataRecord, el: Element): string | undefined {
   if (rec.doi) return rec.doi;
-  for (const id of allByLocalName(el, 'identifier')) {
-    const m = DOI_IN.exec(text(id) ?? '');
-    if (m) return m[1].replace(/[.,;)]+$/, '');
+  for (const info of kids(el, 'identificationInfo')) {
+    for (const ident of elementChildren(info).slice(0, 1)) {
+      for (const cit of kids(kids(ident, 'citation')[0], 'CI_Citation')) {
+        for (const id of kids(cit, 'identifier')) {
+          for (const code of allByLocalName(id, 'code')) {
+            const m = DOI_IN.exec(text(code) ?? '');
+            if (m) return trimDoi(m[1]);
+          }
+        }
+      }
+    }
   }
-  for (const l of rec.distributionLinks) {
-    const m = /^https?:\/\/(?:dx\.)?doi\.org\/(10\.\d{4,9}\/\S+)$/i.exec(l.url.trim());
-    if (m) return m[1];
+  for (const f of [...kids(el, 'dataSetURI'), ...kids(el, 'metadataLinkage')]) {
+    const urls = [text(f) ?? '', ...allByLocalName(f, 'linkage').map((l) => text(l) ?? '')];
+    for (const u of urls) {
+      const m = DOI_LINK.exec(u.trim());
+      if (m) return trimDoi(m[1]);
+    }
   }
   return undefined;
 }
@@ -191,11 +209,15 @@ const DOI = /^10\.\d{4,9}\/\S+$/;
 /** Looks the records' DOIs up at DataCite (one request per page); a failed lookup leaves those records with `unreadable: ['datacite']`. */
 async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageData<unknown>['counters']>['crossSource']> {
   const byDoi = new Map<string, Item[]>();
+  let noDoi = 0;
   for (const it of items) {
-    const doi = it.state === 'checked' ? it.records[0]?.doi?.trim().toLowerCase() : undefined;
+    if (it.state !== 'checked') continue;
+    const doi = it.records[0]?.doi?.trim().toLowerCase();
     if (doi && DOI.test(doi)) byDoi.set(doi, [...(byDoi.get(doi) ?? []), it]);
+    else noDoi += 1; // nothing to compare: not a finding
   }
-  if (byDoi.size === 0) return {};
+  const none = noDoi > 0 ? { noDoi } : {};
+  if (byDoi.size === 0) return none;
   let found: Map<string, MetadataRecord>;
   try {
     found = await lookupMany(deps, [...byDoi.keys()]);
@@ -209,7 +231,7 @@ async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageDa
         it.unreadable = ['datacite' as MetadataSource];
         n += 1;
       }
-    return { looked: byDoi.size, failed: byDoi.size, notCompared: n };
+    return { looked: byDoi.size, failed: byDoi.size, notCompared: n, ...none };
   }
   let hit = 0;
   for (const [doi, list] of byDoi) {
@@ -218,7 +240,7 @@ async function crossCheck(deps: Deps, items: Item[]): Promise<NonNullable<PageDa
     hit += 1;
     for (const it of list) it.records.push(rec);
   }
-  return { looked: byDoi.size, found: hit, absent: byDoi.size - hit };
+  return { looked: byDoi.size, found: hit, absent: byDoi.size - hit, ...none };
 }
 
 interface PageRead {

@@ -76,7 +76,7 @@ export interface Counts {
   duplicatesInBatch: number;
   invalidTokens: number;
   /** CSW with the DataCite cross-check: lookups made, DOIs found, DOIs DataCite does not know, lookups that failed. */
-  crossSource: { looked: number; found: number; absent: number; failed: number; /** records checked on their ISO record only because the lookup failed */ notCompared?: number };
+  crossSource: { looked: number; found: number; absent: number; failed: number; /** records checked on their ISO record only because the lookup failed */ notCompared?: number; /** checked records that name no DOI of their own: nothing to compare */ noDoi?: number };
 }
 
 export const emptyCounts = (): Counts => ({
