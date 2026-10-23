@@ -10,7 +10,7 @@ import type { Lang } from '../../src/core/types';
 import type { Net } from '../../src/core/collection/net';
 import type { Notice } from '../../src/core/collection/types';
 import { MAX_NOTICES } from '../../src/core/collection/runner';
-import { dataciteMock, json, res, runnerDeps, virtualClock } from './helpers';
+import { CAPABILITIES, catalogueAnswer, dataciteMock, gmdRecord, json, res, runnerDeps, searchResults, virtualClock } from './helpers';
 
 const LANGS: Lang[] = ['en', 'pl', 'de', 'fr'];
 
@@ -135,5 +135,47 @@ describe('counts in the notices never sit in front of a noun (no "1 pages")', ()
       for (const n of notices) expect(gapText(n, lang), `${lang} ${n.code}`).not.toMatch(/(^|\s)1 (pages?|records?|rekord\w*|stron\w*|Seiten?|Datens\w+|notices?|pages)\b/i);
       expect(translate(lang, 'collection.progress.deferred', { n: 1 }), lang).not.toMatch(/(^|\s)1 \p{L}/u);
     }
+  });
+});
+
+describe('one loop per run: concurrent calls', () => {
+  const recs200 = Array.from({ length: 200 }, (_, i) => ({ id: `u${i + 1}`, licence: 'CC BY 4.0' }));
+  const mk = () =>
+    ({
+      async get() {
+        throw new Error('no');
+      },
+      async csw(c: { op: string; startPosition?: number; maxRecords?: number }) {
+        if (c.op === 'GetCapabilities') return { status: 200, text: CAPABILITIES };
+        if (c.startPosition === 1 && c.maxRecords === 1) return { status: 200, text: searchResults(200, 1, 2, [gmdRecord(recs200[0])]) };
+        return { status: 200, text: catalogueAnswer({ claimed: 200, records: recs200 }, c.startPosition ?? 1, c.maxRecords ?? 25) };
+      },
+    }) as Net;
+  const s = { spec: { kind: 'csw', catalogue: 'emodnet', schema: 'iso19139', crossSource: false }, lang: 'en', sample: false } as const;
+
+  it('two start() calls at once: the second is refused, the run reads each record once', async () => {
+    const r = new CollectionRunner(runnerDeps(mk(), virtualClock()));
+    const results = await Promise.allSettled([r.start(s), r.start(s)]);
+    expect(results.map((x) => x.status)).toEqual(['fulfilled', 'rejected']);
+    await r.whenIdle();
+    expect(r.progress().counts.records).toBe(200);
+  });
+
+  it('two resume() calls at once read each record once (counts equal a single run)', async () => {
+    const clock = virtualClock();
+    const deps = runnerDeps(mk(), clock);
+    const first = new CollectionRunner(deps);
+    await first.start(s);
+    await first.stop();
+    await first.whenIdle();
+    const r = new CollectionRunner(deps);
+    await r.saved();
+    await Promise.all([r.resume(), r.resume()]);
+    await r.whenIdle();
+    const whole = new CollectionRunner(runnerDeps(mk(), virtualClock()));
+    await whole.start(s);
+    await whole.whenIdle();
+    expect(r.progress().status).toBe('finished');
+    expect(r.progress().counts).toEqual(whole.progress().counts);
   });
 });

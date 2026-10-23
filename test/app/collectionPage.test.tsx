@@ -407,6 +407,25 @@ describe('CollectionPage: saved run and deleting', () => {
     expect(screen.queryByTestId('saved-run')).toBeNull();
   });
 
+  it('a double click on Resume (or Start) reaches the engine once: the button waits until the engine has answered', async () => {
+    const saved = progressOf({ status: 'interrupted', resumable: true });
+    const g = fakeEngine({ saved });
+    let release!: () => void;
+    const slow = new Promise<void>((r) => (release = r));
+    g.engine.resume = async () => {
+      g.calls.push('resume');
+      await slow;
+    };
+    render(<CollectionPage engine={g.engine} />);
+    const button = within(await screen.findByTestId('saved-run')).getByRole('button', { name: 'Resume this run' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await act(async () => undefined);
+    expect(g.calls.filter((c) => c === 'resume')).toHaveLength(1);
+    release();
+    await act(async () => undefined);
+  });
+
   it('names the reason a run stopped: in the progress, and in the prompt after a reload, in every language', async () => {
     const stop = { cause: 'http', status: 503, source: 'api.datacite.org', page: 4, request: 10, kind: 'throttled', at: Date.UTC(2026, 9, 22, 14, 5) };
     const stopped = progressOf({ status: 'interrupted', resumable: true, stop }, { kind: 'csw', catalogue: 'emodnet', schema: 'iso19139', crossSource: true });
