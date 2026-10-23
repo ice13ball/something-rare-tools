@@ -177,7 +177,7 @@ describe('ship speed: how events, time and neighbours are treated', () => {
   });
 
   it('a normal research cruise at 12 knots gives nothing', () => {
-    expect(checkShipSpeed([makeDataset(track(40, { stepHours: 5 }))], { singleCruise: true }).findings).toEqual([]);
+    expect(checkShipSpeed([makeDataset(track(40, { stepHours: 5, lat0: 20 }))], { singleCruise: true }).findings).toEqual([]);
   });
 
   it('groups of fewer than 3 events are skipped, and the report says so when nothing could be judged', () => {
@@ -247,7 +247,7 @@ describe('ship speed: how events, time and neighbours are treated', () => {
 
   it('a long track: the listing is capped and counted, and the lines are all there', () => {
     // 40 events 6 h apart, every fourth one 30 degrees off the track: nine isolated, two-sided outliers
-    const rows = track(40);
+    const rows = track(40, { lat0: 20 });
     for (let i = 2; i < 38; i += 4) rows[i] = { ...rows[i], lat: (rows[i].lat as number) + 30 };
     const { findings } = checkShipSpeed([makeDataset(rows)], { singleCruise: true });
     const warn = findings.filter((f) => f.ruleId === 'ROW-SHIP-SPEED');
@@ -259,11 +259,19 @@ describe('ship speed: how events, time and neighbours are treated', () => {
   });
 
   it('when the events alternate between two places every one of them is two-sided, and still it is one capped finding', () => {
-    const rows = track(40);
+    const rows = track(40, { lat0: 20 });
     for (let i = 1; i < 39; i += 2) rows[i] = { ...rows[i], lat: (rows[i].lat as number) + 30 };
     const { findings } = checkShipSpeed([makeDataset(rows)], { singleCruise: true });
     expect(findings.filter((f) => f.ruleId === 'ROW-SHIP-SPEED')).toHaveLength(1);
     expect(findings.length).toBeLessThanOrEqual(3);
+  });
+
+  it('positions another rule calls wrong (latitude = longitude, out of range) are left out: a correct event between two of them is not blamed', () => {
+    const rows = track(12);
+    rows[4] = { ...rows[4], lat: 15.5, lon: 15.5 };
+    rows[6] = { ...rows[6], lat: 15.5, lon: 15.5 };
+    rows[9] = { ...rows[9], lat: 95 };
+    expect(checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings).toEqual([]);
   });
 
   it('200 000 rows: sorted once, no quadratic step', () => {
