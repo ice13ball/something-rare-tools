@@ -1,6 +1,6 @@
 {
   "title": "Abyssal Claims Tools: browser-based checks of marine data files, metadata and licences",
-  "description": "<p>Source code of <a href=\"https://tools.something-rare.com\">Abyssal Claims Tools</a>, a set of web tools that check marine datasets before they are published or reused.</p><ul><li><strong>Data check</strong> reads data tables (CSV, TSV, Excel, PANGAEA, Darwin Core) and their metadata and reports problems with coordinates, positions on land, stations at inconsistent positions, dates, units, value ranges and licences, each explained in plain words with the source of every threshold.</li><li><strong>Licence check</strong> compares the licence that the metadata sources of one dataset state (Zenodo, PANGAEA, GeoNetwork, DataCite) and shows how each statement is classified.</li><li><strong>Collection review</strong> reads the metadata of a whole collection (a DOI list, a DataCite repository, a Zenodo community or a GeoNetwork catalogue) and produces a fix list of missing, unclear or contradictory licences and empty metadata fields.</li></ul><p>Files dropped by a user are read in the user's browser and never leave it. Public records named by a link or DOI are read by the browser directly or, at the user's choice, through the project's server, which stores nothing.</p><p>Licensed GNU AGPL-3.0-or-later.</p>",
+  "description": "<p>Source code of <a href=\"https://tools.something-rare.com\">Abyssal Claims Tools</a>, a set of web tools that check marine datasets before they are published or reused.</p><ul><li><strong>Data check</strong> reads data tables (CSV, TSV, Excel, PANGAEA, Darwin Core) and their metadata and reports problems with coordinates, positions on land, stations at inconsistent positions, dates, units, value ranges and licences, each explained in plain words with the source of every threshold.</li><li><strong>Licence check</strong> compares the licence that the metadata sources of one dataset state (Zenodo, PANGAEA, GeoNetwork, DataCite) and shows how each statement is classified.</li><li><strong>Collection review</strong> reads the metadata of a whole collection (a DOI list, a DataCite repository, a Zenodo community or a GeoNetwork catalogue) and produces a fix list of missing, unclear or contradictory licences and empty metadata fields.</li></ul><p>Files dropped by a user are read in the user's browser and never leave it. Public records named by a link or DOI are read by the browser directly or, at the user's choice, through the project's server, which keeps no copies of the records.</p><p>Licensed GNU AGPL-3.0-or-later.</p>",
   "upload_type": "software",
   "license": "agpl-3.0-or-later",
   "access_right": "open",
@@ -23,12 +23,6 @@
       "relation": "references",
       "resource_type": "software",
       "scheme": "doi"
-    },
-    {
-      "identifier": "https://tools.something-rare.com",
-      "relation": "isIdenticalTo",
-      "resource_type": "software",
-      "scheme": "url"
     }
   ],
   "keywords": [
