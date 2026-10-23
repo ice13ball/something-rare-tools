@@ -91,7 +91,7 @@ function NoticeText({ code, params }: { code: string; params?: Record<string, st
   const { lang } = useLang();
   const known = [
     'no-records', 'split-by-date', 'slices-differ', 'window-exceeded', 'ended-before-total', 'ended-before-matched', 'more-than-matched',
-    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected', 'unread-pages', 'records-missing', 'zenodo-slice-short',
+    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected', 'unread-pages', 'records-missing', 'zenodo-slice-short', 'csv-damaged',
   ];
   // an interruption names its cause in words where there are some (the catalogue answered too slowly, the day's budget is spent)
   if (code === 'interrupted' && typeof params?.reason === 'string' && ['csw_slow', 'csw_too_large', 'csw_daily_budget', 'csw_queue_full'].includes(params.reason)) {
@@ -337,7 +337,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
     }
   };
 
-  const failureText = (m: string): string => (m.includes('run-open-elsewhere') ? t('collection.error.otherTab') : m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);
+  const failureText = (m: string): string => (m.includes('run-open-elsewhere') ? t('collection.error.otherTab') : m.includes('run-changed') ? t('collection.error.runChanged') : m.includes('csv-damaged') ? t('collection.notice.csv-damaged') : m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);
 
   // one start/resume at a time: the second click of a double click, and any click before the engine has answered, does nothing
   const acting = useRef(false);
@@ -389,7 +389,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
       const { blob, fileName } = await engine.download();
       download(blob, fileName);
     } catch (e) {
-      setCsvError(t('collection.csv.failed', { message: messageOf(e) }));
+      setCsvError(messageOf(e).includes('csv-damaged') ? t('collection.notice.csv-damaged') : t('collection.csv.failed', { message: messageOf(e) }));
     }
   };
   const saveCsv = async (): Promise<void> => {
@@ -400,7 +400,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
       if (handle) await engine.saveTo(handle);
     } catch (e) {
       // closing the picker is not a failure
-      if (!(e instanceof DOMException && e.name === 'AbortError')) setCsvError(t('collection.csv.failed', { message: messageOf(e) }));
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setCsvError(messageOf(e).includes('csv-damaged') ? t('collection.notice.csv-damaged') : t('collection.csv.failed', { message: messageOf(e) }));
     }
   };
 
