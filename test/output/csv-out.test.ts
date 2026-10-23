@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { buildDataset } from '../../src/core/dataset';
-import { toCleanCsv, valueText } from '../../src/core/output/csv';
+import { guardText, toCleanCsv, valueText } from '../../src/core/output/csv';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import type { Variable } from '../../src/core/types';
 import { textFile } from '../helpers/files';
@@ -61,6 +61,31 @@ describe('formula guard is for text cells only', () => {
     expect(valueText('@cmd')).toBe("'@cmd");
     expect(valueText('\tx')).toBe("'\tx");
     expect(valueText('\rx')).toBe("'\rx");
+  });
+
+  it('guards a formula that follows leading spaces or tabs, and the full-width = + - @', () => {
+    expect(valueText(' =SUM(A1)')).toBe("' =SUM(A1)");
+    expect(valueText('   -abc')).toBe("'   -abc");
+    expect(valueText(' \t+48 600')).toBe("' \t+48 600");
+    expect(valueText('\t @cmd')).toBe("'\t @cmd");
+    expect(valueText('＝1+1')).toBe("'＝1+1");
+    expect(valueText('＋48 600')).toBe("'＋48 600");
+    expect(valueText('－abc')).toBe("'－abc");
+    expect(valueText('＠cmd')).toBe("'＠cmd");
+    expect(valueText('  ＝SUM(A1)')).toBe("'  ＝SUM(A1)");
+  });
+
+  it('does not touch text where the formula character is not the first non-blank one', () => {
+    expect(valueText(' abc =1')).toBe(' abc =1');
+    expect(valueText('a ＝ b')).toBe('a ＝ b');
+    expect(valueText('x－y')).toBe('x－y');
+    expect(valueText(' 5 - 3 ok')).toBe(' 5 - 3 ok');
+  });
+
+  it('the guard also covers headers and the sidecar through the same function', () => {
+    expect(guardText(' =HYPERLINK("x")')).toBe("' =HYPERLINK(\"x\")");
+    expect(guardText('＝cmd')).toBe("'＝cmd");
+    expect(guardText('plain')).toBe('plain');
   });
 
   it('leaves numbers, missing tokens and ordinary text alone', () => {

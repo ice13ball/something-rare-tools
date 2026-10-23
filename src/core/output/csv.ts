@@ -17,9 +17,12 @@ export function csvField(s: string): string {
 }
 const csvLine = (fields: readonly string[]): string => fields.map(csvField).join(',');
 
-/** OWASP CSV injection: a TEXT cell starting with = + @ - tab or CR gets a leading apostrophe. */
+/**
+ * OWASP CSV injection: a TEXT cell gets a leading apostrophe when it starts with tab or CR, or with = + @ - (also after leading spaces or
+ * tabs, which a spreadsheet may drop before it reads the cell) or with their full-width forms ＝ ＋ － ＠ (U+FF1D U+FF0B U+FF0D U+FF20).
+ */
 export function guardText(s: string): string {
-  return /^[=+@\-\t\r]/.test(s) ? `'${s}` : s;
+  return /^(?:[\t\r]|[ \t]*[=+@\-\uFF1D\uFF0B\uFF0D\uFF20])/.test(s) ? `'${s}` : s;
 }
 
 /**
