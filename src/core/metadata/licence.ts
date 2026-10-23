@@ -716,6 +716,8 @@ export interface StatementParts {
   text?: string;
   /** Further strings that say the same thing in other words (DataCite identifier next to the rights text). */
   also?: (string | undefined)[];
+  /** What the `also` strings are, for the leftover quoted to the user ("identifier: …"); default 'identifier'. */
+  alsoLabel?: string;
   uri?: string;
 }
 
@@ -759,6 +761,9 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   // Fail-closed: a text that names a recognised licence and says anything else is not that licence as written. A name this tool
   // cannot turn into an id is unrecognised anyway; there only a restriction marker in the rest changes the verdict.
   const flagged = reads.filter((r) => r.leftover && (r.recognised || r.restricted));
+  // The leftover quoted to the user must be text that is in the record: the leftover of the shown text as it is; the leftover of any other
+  // string (the identifier) on its own, labelled. Never two strings glued into one quote.
+  const quoted = reads.flatMap((r, i) => (flagged.includes(r) ? [i === 0 ? r.leftover : `${p.alsoLabel ?? 'identifier'}: ${r.leftover}`] : []));
   // A text that names no licence cannot vouch for the link: next to a licence link it may be empty or plain "Open Access" and nothing else
   // ("Free for scientific use", "Please contact the PI" are statements about the data, not the licence).
   const unnamedSays = reads.some((r) => !r.any && !r.neutral && !(r.pd && u.pd));
@@ -779,7 +784,7 @@ export function buildStatement(p: StatementParts): LicenceStatement | undefined 
   else if (clash) s.conflict = 'readings';
   else if (flagged.length > 0) {
     s.conflict = flagged.some((r) => r.restricted) ? 'restricted' : 'extra-text';
-    s.leftover = [...new Set(flagged.map((r) => r.leftover))].join('; ');
+    s.leftover = [...new Set(quoted)].join('; ');
   } else {
     const agreed = textId ?? u.id;
     if (agreed) {
