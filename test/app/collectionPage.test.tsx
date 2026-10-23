@@ -317,6 +317,22 @@ describe('CollectionPage: progress, results, download', () => {
     setLang('en');
   });
 
+  it('the interruption notice of a catalogue that answered too slowly names the cause in every language, not the raw code', () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      const f = fakeEngine();
+      render(<CollectionPage engine={f.engine} />);
+      const stop = { cause: 'csw_slow', source: 'csw:emodnet', page: 3, request: 11, kind: 'unreachable', at: Date.UTC(2026, 9, 22, 14, 5) } as const;
+      f.push(progressOf({ status: 'interrupted', resumable: true, stop, notices: [{ code: 'interrupted', params: { reason: 'csw_slow' } }] }));
+      const notice = screen.getAllByTestId('notice').map((n) => n.textContent ?? '').join(' ');
+      expect(notice, lang).toMatch(/45/);
+      expect(notice, lang).not.toMatch(/csw_slow|\{\w+\}/);
+      expect(screen.getByTestId('stop-reason').textContent, lang).toMatch(/45/);
+    }
+    setLang('en');
+  });
+
   it('a run stopped by the daily catalogue budget says so in every language and offers to continue', () => {
     for (const lang of LANGS) {
       cleanup();

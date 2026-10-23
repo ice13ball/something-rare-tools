@@ -71,15 +71,27 @@ export function serverCsw(endpoint = '/api/csw', fetchImpl: FetchFn = (i, n) => 
       throw e;
     }
     // text(): the browser decodes the body into one string; no second copy of an answer that can be 11 MB
-    const text = await res.text();
+    let text: string;
+    try {
+      text = await res.text();
+    } catch {
+      // The status came, the body did not: our server cuts a catalogue that has not finished within its upstream timeout (45 s) and the
+      // browser sees a broken stream. Most likely the catalogue answered too slowly: said so (CSW_SLOW) instead of "network error".
+      return { status: 504, text: '', proxyError: CSW_SLOW };
+    }
+    const proxyError = res.headers.get('x-fetch-proxy-error');
     return {
       status: res.status,
       text,
       retryAfterMs: parseRetryAfter(res.headers.get('retry-after')),
-      ...(res.headers.get('x-fetch-proxy-error') ? { proxyError: res.headers.get('x-fetch-proxy-error')! } : {}),
+      // the server's own 504 "timeout" (nothing came within its 45 s) is the same story
+      ...(proxyError ? { proxyError: res.status === 504 && proxyError === 'timeout' ? CSW_SLOW : proxyError } : {}),
     };
   };
 }
+
+/** Stop cause of a catalogue page that did not arrive in time (our server waits 45 s for a catalogue, then gives up). */
+export const CSW_SLOW = 'csw_slow';
 
 export interface Clock {
   now(): number;
