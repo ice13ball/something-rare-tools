@@ -568,6 +568,11 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               {t('collection.cross.notDone', { n: c.crossSource.notCompared ?? 0 })}
             </p>
           )}
+          {c.duplicatesInBatch > 0 && (
+            <p className="notice" data-testid="duplicates">
+              {t('collection.duplicates', { n: c.duplicatesInBatch })}
+            </p>
+          )}
           {progress.notices.map((n, i) => (
             <p key={i} className="notice" data-testid="notice">
               <NoticeText code={n.code} params={n.params} />

@@ -7,6 +7,7 @@ import { parseZenodoRecord } from '../../metadata/zenodo';
 import { request } from '../net';
 import { SourceFailure, type Estimate, type Item, type PageData, type Pager } from '../types';
 import type { Deps } from './datacite';
+import { addIds, decodeIds, encodeIds, hasId, idOf } from './idset';
 
 export const ZENODO_HOST = 'zenodo.org';
 export const ZENODO_PAGE = 25;
@@ -152,24 +153,48 @@ export interface ZenodoCursor {
   page: number;
   /** Sort order of this slice's pages (a sample alternates). */
   sort?: 'oldest' | 'mostrecent';
+  /**
+   * Record ids already read in the slices of this slice's year that were split below year level (see yearOfSplit), sorted, as base64
+   * (idset.ts); absent outside such slices. Saved with the cursor, so a resumed run drops the same repeats an uninterrupted one does.
+   */
+  ids?: string;
 }
 
-function itemsOf(json: Obj): Item[] {
+/**
+ * The year whose split slices (a month or a day, not the whole year) this slice belongs to; undefined for any other slice. Only these can
+ * overlap one another: Zenodo accepts partial publication dates ("2021", "2021-05"), and an index that stores those as ranges may list a
+ * record in several month or day slices. Slices of different years are never compared, so the ids can be dropped at every year's end.
+ */
+export function yearOfSplit(s: Slice): string | undefined {
+  if (!s.from || !s.to) return undefined;
+  const y = s.from.slice(0, 4);
+  if (s.to.slice(0, 4) !== y) return undefined;
+  return s.from === `${y}-01-01` && s.to === `${y}-12-31` ? undefined : y;
+}
+
+/** The records of a page, each with its numeric Zenodo id (undefined when the id is not a plain integer: such a record is never dropped as a repeat). */
+function itemsOf(json: Obj): { item: Item; id?: number }[] {
   const hits = isObj(json.hits) && Array.isArray(json.hits.hits) ? json.hits.hits.filter(isObj) : [];
   return hits.map((h) => {
     const id = typeof h.id === 'number' || typeof h.id === 'string' ? String(h.id) : '';
     const rec = parseZenodoRecord(h, `Zenodo ${id}`);
-    return { ref: (rec.doi ?? `zenodo.${id}`).toLowerCase(), state: 'checked' as const, records: [rec] };
+    return { item: { ref: (rec.doi ?? `zenodo.${id}`).toLowerCase(), state: 'checked' as const, records: [rec] }, id: idOf(h.id) };
   });
 }
 
 export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
   const { slug, slices } = plan;
   const sliceTotal = (s: Slice): number => Math.min(s.total, ZENODO_WINDOW);
-  const advance = (c: ZenodoCursor): ZenodoCursor | null => {
+  /** The ids travel to the next cursor while it stays inside the same year's split slices, and are dropped when the year ends. */
+  const carry = (next: ZenodoCursor | null, c: ZenodoCursor, ids: string | undefined): ZenodoCursor | null => {
+    if (!next || ids === undefined) return next;
+    const y = yearOfSplit(slices[next.si]);
+    return y !== undefined && y === yearOfSplit(slices[c.si]) ? { ...next, ids } : next;
+  };
+  const advance = (c: ZenodoCursor, ids: string | undefined = c.ids): ZenodoCursor | null => {
     const s = slices[c.si];
-    if (c.page * ZENODO_PAGE < sliceTotal(s)) return { si: c.si, page: c.page + 1 };
-    return c.si + 1 < slices.length ? { si: c.si + 1, page: 1 } : null;
+    if (c.page * ZENODO_PAGE < sliceTotal(s)) return carry({ si: c.si, page: c.page + 1 }, c, ids);
+    return c.si + 1 < slices.length ? carry({ si: c.si + 1, page: 1 }, c, ids) : null;
   };
   return {
     initial: slices.length > 0 ? { si: 0, page: 1 } : null,
@@ -178,13 +203,30 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
     async fetch(c): Promise<PageData<ZenodoCursor>> {
       const s = slices[c.si];
       const json = await getJson(deps, zenodoUrl(slug, c.page, ZENODO_PAGE, 'oldest', s));
-      const items = itemsOf(json);
+      const listed = itemsOf(json);
       const notices: PageData<ZenodoCursor>['notices'] = [];
-      let next = advance(c);
+      // A record already read in another slice of this year (a partial date listed in several months or days) is read once.
+      let items = listed.map((l) => l.item);
+      let ids: string | undefined;
+      let repeats = 0;
+      if (yearOfSplit(s) !== undefined) {
+        const seen = decodeIds(c.ids);
+        const fresh: number[] = [];
+        items = [];
+        for (const l of listed) {
+          if (l.id !== undefined && (hasId(seen, l.id) || fresh.includes(l.id))) repeats += 1;
+          else {
+            items.push(l.item);
+            if (l.id !== undefined) fresh.push(l.id);
+          }
+        }
+        ids = encodeIds(addIds(seen, fresh));
+      }
+      let next = advance(c, ids);
       // The slice ended earlier than its count said (records deleted meanwhile): go to the next slice.
-      if (items.length === 0 && next && next.si === c.si) next = c.si + 1 < slices.length ? { si: c.si + 1, page: 1 } : null;
+      if (listed.length === 0 && next && next.si === c.si) next = carry(c.si + 1 < slices.length ? { si: c.si + 1, page: 1 } : null, c, ids);
       if (s.capped && c.page * ZENODO_PAGE >= ZENODO_WINDOW) notices.push({ code: 'window-exceeded', params: { from: s.from ?? '', to: s.to ?? '', total: s.total } });
-      return { items, next, notices };
+      return { items, next, notices, ...(repeats > 0 ? { counters: { duplicatesInBatch: repeats } } : {}) };
     },
   };
 }
@@ -206,7 +248,7 @@ export function zenodoSamplePager(deps: Deps, slug: string, total: number): Page
     skip: after,
     async fetch(c) {
       const json = await getJson(deps, zenodoUrl(slug, c.page, ZENODO_PAGE, sortOf(c.si)));
-      return { items: itemsOf(json), next: after(c) };
+      return { items: itemsOf(json).map((l) => l.item), next: after(c) };
     },
   };
 }
