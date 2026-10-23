@@ -7,8 +7,8 @@ import { csvField, guardText } from '../output/csv';
 import { renderPlain } from '../report';
 import type { Finding, Lang } from '../types';
 import { translate } from '../i18n/ui';
-import { describeStop } from './stop';
-import type { Item, RunStatus, Sample, SourceSpec, StopReason } from './types';
+import { GAP_NOTICES, describeStop, gapText } from './stop';
+import type { Item, Notice, RunStatus, Sample, SourceSpec, StopReason } from './types';
 
 export const FIX_LIST_COLUMNS = ['record', 'field', 'rule_id', 'severity', 'problem', 'suggested_fix', 'source'] as const;
 
@@ -61,4 +61,10 @@ export const UNFINISHED: readonly RunStatus[] = ['stopped', 'interrupted', 'paus
 export function incompleteRow(status: RunStatus, stop: StopReason | undefined, lang: Lang, source: string): string {
   const problem = stop ? describeStop(stop, lang) : status === 'paused' ? translate(lang, 'collection.stop.paused') : translate(lang, 'collection.stop.userShort');
   return `${line(['(run)', '', RUN_INCOMPLETE, 'info', problem, translate(lang, 'collection.stop.fix'), source])}\n`;
+}
+
+/** The row at the end of a run that finished WITHOUT reading every page or record: what is missing and what to do about it. */
+export function gapRow(notices: readonly Notice[], resumable: boolean, lang: Lang, source: string): string {
+  const problem = notices.filter((n) => GAP_NOTICES.includes(n.code)).map((n) => gapText(n, lang)).join(' ');
+  return `${line(['(run)', '', RUN_INCOMPLETE, 'info', problem, translate(lang, resumable ? 'collection.stop.fix' : 'collection.incomplete.fixAgain'), source])}\n`;
 }

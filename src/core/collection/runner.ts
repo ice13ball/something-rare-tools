@@ -5,9 +5,9 @@
 // saved run) there are only counters, <= 50 samples per rule, the cursor and small plans: nothing grows with the number of records.
 import { getRule } from '../rules/registry';
 import type { Finding, Severity } from '../types';
-import { stopFromError, stopFromFailure } from './stop';
+import { GAP_NOTICES, stopFromError, stopFromFailure } from './stop';
 import { StopSignal, makeNetContext, realClock, type Clock, type Net, type NetContext } from './net';
-import { UNFINISHED, evaluateItem, fixListHeader, incompleteRow, fixListRow, sourceLabel, toSample } from './fixlist';
+import { UNFINISHED, evaluateItem, fixListHeader, gapRow, incompleteRow, fixListRow, sourceLabel, toSample } from './fixlist';
 import { estimateSource, prepareSource, restorePager } from './sources';
 import type { Deps } from './sources/datacite';
 import type { NewPart, RunStore } from './store';
@@ -247,7 +247,13 @@ export class CollectionRunner {
     const st = this.st;
     if (!st) return [fixListHeader()];
     const parts = await this.d.store.parts(st.id, st.partCount);
-    const last = UNFINISHED.includes(st.status) ? [incompleteRow(st.status, st.stop, st.settings.lang, sourceLabel(st.settings.spec))] : [];
+    const source = sourceLabel(st.settings.spec);
+    const gap = st.status === 'finished' && st.notices.some((n) => GAP_NOTICES.includes(n.code));
+    const last = UNFINISHED.includes(st.status)
+      ? [incompleteRow(st.status, st.stop, st.settings.lang, source)]
+      : gap
+        ? [gapRow(st.notices, st.deferred.length > 0, st.settings.lang, source)]
+        : [];
     return [fixListHeader(), ...parts, ...(this.pending.length > 0 ? this.pending.map((p) => p.blob) : []), st.csvBuffer, ...last];
   }
 
@@ -321,6 +327,7 @@ export class CollectionRunner {
         await this.clock.sleep(RETRY_COOLDOWN_MS, ctl.signal);
         if (!(await this.retryDeferred(pager, ctl))) return;
       }
+      this.gapNotices();
       st.status = 'finished';
       await this.checkpoint();
     } catch (e) {
@@ -413,10 +420,28 @@ export class CollectionRunner {
     await this.checkpoint();
   }
 
+  /**
+   * A run that ends with pages it could not read, or records its source announced and did not deliver, is "finished" but NOT complete:
+   * it says so in a notice that no cap can drop (rebuilt each time the run ends, so a resumed run does not keep a stale one) and in the
+   * last row of the fix list.
+   */
+  private gapNotices(): void {
+    const st = this.st!;
+    st.notices = st.notices.filter((n) => !GAP_NOTICES.includes(n.code));
+    if (st.deferred.length > 0) {
+      const byReason = new Map<string, number>();
+      for (const d of st.deferred) byReason.set(d.reason, (byReason.get(d.reason) ?? 0) + 1);
+      const reason = [...byReason.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      st.notices.push({ code: 'unread-pages', params: { pages: st.deferred.length, records: st.deferred.reduce((a, d) => a + d.expected, 0), reason } });
+    }
+    if ((st.shortfall ?? 0) > 0) st.notices.push({ code: 'records-missing', params: { missing: st.shortfall ?? 0 } });
+  }
+
   private notice(n: Notice): void {
     const st = this.st!;
     const key = JSON.stringify(n);
-    if (st.notices.some((x) => JSON.stringify(x) === key) || st.notices.length >= MAX_NOTICES) return;
+    // the gap notices of the end of the run are added by gapNotices() and always fit: room is kept for them
+    if (st.notices.some((x) => JSON.stringify(x) === key) || st.notices.filter((x) => !GAP_NOTICES.includes(x.code)).length >= MAX_NOTICES) return;
     st.notices.push(n);
   }
 
@@ -459,6 +484,7 @@ export class CollectionRunner {
       if (k.crossSource?.noDoi) c.crossSource.noDoi = (c.crossSource.noDoi ?? 0) + k.crossSource.noDoi;
     }
     for (const n of data.notices ?? []) this.notice(n);
+    if (data.shortfall) st.shortfall = (st.shortfall ?? 0) + data.shortfall;
   }
 
   private addRow(row: string): void {

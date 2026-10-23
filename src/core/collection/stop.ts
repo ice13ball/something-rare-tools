@@ -4,7 +4,7 @@
 import { catalogueById } from '../../../config/catalogues';
 import { translate } from '../i18n/ui';
 import type { Lang } from '../types';
-import { SourceFailure, type StopReason } from './types';
+import { SourceFailure, type Notice, type StopReason } from './types';
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -47,6 +47,12 @@ function causeText(s: StopReason, lang: Lang): string {
   return translate(lang, 'collection.cause.other', { code: s.cause });
 }
 
+/** A failure reason code of a page (`http-503`, `csw_slow`, `timeout`, ...) in words. */
+export function reasonText(reason: string, lang: Lang): string {
+  const http = /^http-(\d{3})$/.exec(reason);
+  return causeText({ cause: http ? 'http' : reason, source: '', ...(http ? { status: Number(http[1]) } : {}), at: 0 }, lang);
+}
+
 /** One sentence: what happened, at which source, page and request, and when (UTC). */
 export function describeStop(s: StopReason, lang: Lang): string {
   const cause = causeText(s, lang);
@@ -54,4 +60,14 @@ export function describeStop(s: StopReason, lang: Lang): string {
   if (s.cause === 'user') return translate(lang, 'collection.stop.user', { time });
   const where = s.page !== undefined ? translate(lang, 'collection.stop.where', { page: s.page, request: s.request ?? 0 }) : '';
   return translate(lang, 'collection.stop.line', { cause, source: sourceName(s.source), where, time });
+}
+
+/** Notices that say the run FINISHED without having read everything: always kept (never dropped by the notice cap), rebuilt when the run ends. */
+export const GAP_NOTICES: readonly string[] = ['unread-pages', 'records-missing'];
+
+/** A notice in words (the two gap notices; the page has its own renderer for all the others). */
+export function gapText(n: Notice, lang: Lang): string {
+  const p = { ...(n.params ?? {}) };
+  if (n.code === 'unread-pages' && typeof p.reason === 'string') p.reason = reasonText(p.reason, lang);
+  return translate(lang, `collection.notice.${n.code}` as never, p);
 }

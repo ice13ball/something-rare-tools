@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CATALOGUES, catalogueById, type CswSchema } from '../../../config/catalogues';
-import { describeStop } from '../../core/collection/stop';
+import { describeStop, gapText } from '../../core/collection/stop';
 import type { Estimate, Progress, RunSettings, Sample, SourceSpec, UnreadSample } from '../../core/collection/types';
 import { renderPlain } from '../../core/report';
 import { browserFetcher, type Fetcher } from '../../core/sources/fetcher';
@@ -88,15 +88,16 @@ function kindLabel(spec: SourceSpec | undefined): string {
 
 /** The notice codes of the engine, in the visitor's language. An unknown code is shown as such, never swallowed. */
 function NoticeText({ code, params }: { code: string; params?: Record<string, string | number> }): React.ReactElement {
-  useLang();
+  const { lang } = useLang();
   const known = [
     'no-records', 'split-by-date', 'slices-differ', 'window-exceeded', 'ended-before-total', 'ended-before-matched', 'more-than-matched',
-    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected',
+    'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected', 'unread-pages', 'records-missing',
   ];
   // an interruption names its cause in words where there are some (the catalogue answered too slowly, the day's budget is spent)
   if (code === 'interrupted' && typeof params?.reason === 'string' && ['csw_slow', 'csw_daily_budget', 'csw_queue_full'].includes(params.reason)) {
     return <>{t('collection.notice.interrupted' as never, { reason: t(`collection.cause.${params.reason}` as never) })}</>;
   }
+  if (code === 'unread-pages' && typeof params?.reason === 'string') return <>{gapText({ code, params }, lang)}</>;
   if (known.includes(code)) return <>{t(`collection.notice.${code}` as never, params)}</>;
   if (code.startsWith('cursor-') || code === 'repeating-page') return <>{t('collection.notice.cursor', { code })}</>;
   return <>{t('collection.notice.unknown', { code })}</>;

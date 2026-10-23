@@ -175,6 +175,8 @@ export interface RunRecord {
   stop?: StopReason;
   /** Pages read or deferred so far (for "page N" in a stop reason). */
   pagesTried?: number;
+  /** Records the source announced and did not deliver (a slice that ended before its own total): the run finishes, but not complete. */
+  shortfall?: number;
   /** CSV rows not yet written as a part (< 1 MB). */
   csvBuffer: string;
   partCount: number;
@@ -198,6 +200,8 @@ export interface PageData<C> {
   /** null = the source is read to its end. */
   next: C | null;
   notices?: Notice[];
+  /** Records this page's slice announced and did not deliver (the slice ended early). */
+  shortfall?: number;
   counters?: Partial<Pick<Counts, 'duplicatesInBatch' | 'invalidTokens'>> & { crossSource?: Partial<Counts['crossSource']> };
 }
 
