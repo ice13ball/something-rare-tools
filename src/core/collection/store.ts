@@ -16,13 +16,17 @@ export interface RunStore {
   save(run: RunRecord, parts?: readonly NewPart[]): Promise<void>;
   /** The saved parts of a run in order (0 .. count-1). */
   parts(runId: string, count: number): Promise<Blob[]>;
-  /** Deletes the saved run and every part. */
+  /** The pasted DOI list of a run, stored ONCE (not in every checkpoint of the run record). */
+  saveText(runId: string, text: string): Promise<void>;
+  loadText(runId: string): Promise<string | null>;
+  /** Deletes the saved run, its parts and its pasted text. */
   clear(): Promise<void>;
 }
 
 export function memoryStore(): RunStore & { partCount(): number } {
   let run: RunRecord | null = null;
   const parts = new Map<string, Blob>();
+  const texts = new Map<string, string>();
   return {
     load: async () => (run ? structuredClone(run) : null),
     async save(r, add = []) {
@@ -30,16 +34,19 @@ export function memoryStore(): RunStore & { partCount(): number } {
       for (const p of add) parts.set(`${r.id}:${p.index}`, p.blob);
     },
     parts: async (id, count) => Array.from({ length: count }, (_, i) => parts.get(`${id}:${i}`)).filter((b): b is Blob => b !== undefined),
+    saveText: async (id, text) => void texts.set(id, text),
+    loadText: async (id) => texts.get(id) ?? null,
     async clear() {
       run = null;
       parts.clear();
+      texts.clear();
     },
     partCount: () => parts.size,
   };
 }
 
 const DB_NAME = 'collection-review';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function wrap<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -63,8 +70,8 @@ export function idbStore(factory: IDBFactory = indexedDB): RunStore {
     (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
       const req = factory.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
-        req.result.createObjectStore('run');
-        req.result.createObjectStore('parts');
+        // version 1: run + parts; version 2 adds the pasted DOI list
+        for (const name of ['run', 'parts', 'texts']) if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error ?? new Error('IndexedDB could not be opened'));
@@ -94,11 +101,23 @@ export function idbStore(factory: IDBFactory = indexedDB): RunStore {
       }
       return out;
     },
+    async saveText(runId, text) {
+      const d = await db();
+      const tx = d.transaction('texts', 'readwrite');
+      tx.objectStore('texts').put(text, runId);
+      await done(tx);
+    },
+    async loadText(runId) {
+      const d = await db();
+      const v = await wrap<string | undefined>(d.transaction('texts', 'readonly').objectStore('texts').get(runId));
+      return v ?? null;
+    },
     async clear() {
       const d = await db();
-      const tx = d.transaction(['run', 'parts'], 'readwrite');
+      const tx = d.transaction(['run', 'parts', 'texts'], 'readwrite');
       tx.objectStore('run').clear();
       tx.objectStore('parts').clear();
+      tx.objectStore('texts').clear();
       await done(tx);
     },
   };

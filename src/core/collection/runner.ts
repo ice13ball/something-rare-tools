@@ -49,6 +49,9 @@ export interface RunnerDeps {
   year?: () => number;
 }
 
+/** The settings as they are saved and shown: the pasted DOI list is kept apart (RunStore.saveText), never in a checkpoint or a progress message. */
+const withoutText = (settings: RunSettings): RunSettings => (settings.spec.kind === 'dois' ? { ...settings, spec: { kind: 'dois', text: '' } } : settings);
+
 const errorText = (e: unknown): string => (e instanceof Error ? `${e.name}: ${e.message}` : String(e)).slice(0, STOP_CLIP);
 
 const SEVERITY_RANK: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
@@ -78,7 +81,7 @@ export class CollectionRunner {
       .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count || a.ruleId.localeCompare(b.ruleId));
     return {
       status: st.status,
-      settings: st.settings,
+      settings: withoutText(st.settings),
       counts: st.counts,
       stats: st.stats,
       elapsedMs: st.activeMs,
@@ -137,7 +140,7 @@ export class CollectionRunner {
     const st: RunRecord = {
       id: this.d.newId?.() ?? `r${now.toString(36)}${Math.floor(this.clock.random() * 1e6).toString(36)}`,
       version: 1,
-      settings,
+      settings: withoutText(settings),
       status: 'preparing',
       startedAt: now,
       updatedAt: now,
@@ -160,6 +163,7 @@ export class CollectionRunner {
     this.emit();
     const { ctl, deps } = this.begin(st);
     try {
+      if (settings.spec.kind === 'dois') await this.d.store.saveText(st.id, settings.spec.text); // once, here; checkpoints keep only the position
       const prepared = await prepareSource(deps, settings, (this.d.year?.() ?? new Date(this.clock.now()).getUTCFullYear()));
       st.plan = prepared.plan;
       st.estimate = prepared.estimate;
@@ -201,11 +205,20 @@ export class CollectionRunner {
     st.status = 'running';
     delete st.stop;
     const { ctl, deps } = this.begin(st);
-    const pager = restorePager(deps, st.settings, st.plan);
+    const pager = restorePager(deps, await this.fullSettings(st), st.plan);
     await this.checkpoint();
     this.loopDone = this.loop(pager, ctl).finally(() => {
       this.loopDone = null;
     });
+  }
+
+  /** The settings with the pasted DOI list put back (a run saved before the list had its own entry still carries it in the record). */
+  private async fullSettings(st: RunRecord): Promise<RunSettings> {
+    const spec = st.settings.spec;
+    if (spec.kind !== 'dois') return st.settings;
+    const text = (await this.d.store.loadText(st.id)) ?? (spec.text !== '' ? spec.text : null);
+    if (text === null) throw new Error('The pasted DOI list is no longer saved');
+    return { ...st.settings, spec: { kind: 'dois', text } };
   }
 
   /** Holds the run at the next page boundary (the tab stays open); `resume()` releases it. */
