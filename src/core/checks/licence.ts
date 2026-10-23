@@ -40,8 +40,8 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
         field: c.statement.statement.field,
         params: { text: c.statement.conflict!.text, readings: c.statement.conflict!.textLicence },
       });
-    case 'restriction-text':
-      return makeFinding('LIC-RESTRICTION-TEXT', { file, field: c.statement.statement.field, params: { licence: c.licence, text: c.statement.statement.text ?? '' } });
+    case 'other-rights-entry':
+      return makeFinding('LIC-OTHER-RIGHTS-ENTRY', { file, field: c.statement.statement.field, params: { licence: c.licence, text: c.statement.statement.text ?? c.statement.statement.uri ?? '' } });
     case 'restriction-code':
       return makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } });
     case 'datacite-empty':
