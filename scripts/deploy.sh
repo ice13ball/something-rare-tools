@@ -32,6 +32,9 @@ if [[ -z "${GOLDEN_DIR:-}" ]]; then
 fi
 [[ -z "${GOLDEN_DIR:-}" ]] || echo "golden test runs on $GOLDEN_DIR"
 npm test || refuse "tests failed"
+# The wall-clock test is not part of the full suite (under its parallel load the 2 s threshold measures the machine): it runs here, ALONE,
+# after the suite, with its threshold unchanged. A failure refuses the deploy like any other test.
+npm run test:perf || refuse "performance test failed"
 npm run typecheck || refuse "type check failed"
 
 gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --gcs-source-staging-dir=gs://something-rare-cloudbuild-src/source --substitutions="_IMAGE=${IMAGE_REPO},_SHA=${SHA}" .

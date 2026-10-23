@@ -199,27 +199,3 @@ describe('XF-POSITION-SWAP and XF-POSITION-CONFLICT', () => {
     expect(byRule(checkCrossFile([a, defect]), 'XF-POSITION-CONFLICT')).toHaveLength(0);
   });
 });
-
-describe('performance', () => {
-  // retry: the threshold is a wall-clock one and the full suite (scripts/deploy.sh) runs 50+ files in parallel; under that load the
-  // test took 2147/2181 ms and passed alone. A real regression stays slow on every attempt, so the threshold is NOT raised.
-  it('six datasets of 7000 rows finish well inside 2 s', { retry: 2 }, () => {
-    const vars = [{ key: 'DIC', canonical: 'DIC', unit: 'µmol/L' }, { key: 'S', canonical: 'salinity' }];
-    const make = (id: string, unit: string) =>
-      makeCDataset(
-        { id, file: `${id}.csv`, vars: vars.map((v) => (v.key === 'DIC' ? { ...v, unit } : v)) },
-        Array.from({ length: 7000 }, (_, i) => ({
-          station: `ST${i % 40}`,
-          lat: 70 + (i % 40) * 0.01,
-          lon: 15 + (i % 40) * 0.01,
-          date: `2021-07-${String(1 + (i % 28)).padStart(2, '0')}`,
-          depth: i % 175,
-          v: { DIC: 2000 + (i % 91), S: 34 + (i % 7) / 10 },
-        })),
-      );
-    const ds = ['µmol/L', 'µmol/kg', 'µmol/L', 'µmol/kg', 'µmol/L', 'µmol/kg'].map((u, i) => make(`d${i}`, u));
-    const t0 = Date.now();
-    checkCrossFile(ds);
-    expect(Date.now() - t0).toBeLessThan(2000);
-  });
-});
