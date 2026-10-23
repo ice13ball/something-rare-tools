@@ -107,6 +107,9 @@ describe('static routes', () => {
       expect(res.text).toContain(phrase);
     }
     expect(res.text).toContain('href="/"');
+    // the AGPL source link and the section 7(b) attribution notice are reachable from every page, the 404 included
+    expect(res.text).toContain('href="https://github.com/ice13ball/something-rare-tools"');
+    expect(res.text).toContain('<a href="https://doi.org/10.5281/zenodo.19745884">Based on Abyssal Claims — © 2026 Michal Mazurowski</a>');
     expect(res.text).not.toContain('<script');
     expectCommonHeaders(res);
   });

@@ -42,6 +42,7 @@ const PAGE_404 = `<!doctype html>
     <p lang="fr">Page introuvable</p>
     <p><a href="/">/</a></p>
     <p><a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a></p>
+    <p><a href="https://doi.org/10.5281/zenodo.19745884">Based on Abyssal Claims — © 2026 Michal Mazurowski</a></p>
   </body>
 </html>
 `;
