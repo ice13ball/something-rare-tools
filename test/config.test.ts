@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { CSW_HOSTS } from '../config/catalogues';
+import { IPT_HOSTS, REGISTRY_HOSTS } from '../config/ipt';
 import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, MAP_PRIVACY_URL, buildCsp, isAllowedHost } from '../config/hosts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,6 +43,20 @@ describe('host lists', () => {
     for (const h of ['opendap.iopan.pl', 'geo.iopan.pl', 'geonetwork.iopan.pl', 'zenodo.org', 'doi.pangaea.de', 'api.datacite.org', 'data.crosscite.org', 'doi.org']) {
       expect(DATA_HOSTS).toContain(h);
     }
+  });
+});
+
+describe('GBIF and OBIS hosts', () => {
+  it('the registries and every IPT host on the static list are in DATA_HOSTS (proxy and CSP) and nothing else is', () => {
+    expect(DATA_HOSTS).toEqual(expect.arrayContaining(['api.gbif.org', 'api.obis.org', ...IPT_HOSTS]));
+    expect(IPT_HOSTS.length).toBeGreaterThanOrEqual(15);
+    const csp = buildCsp();
+    for (const h of [...REGISTRY_HOSTS, ...IPT_HOSTS]) expect(csp).toContain('https://' + h);
+    expect(isAllowedHost('https://ipt.vliz.be/eurobis/archive.do?r=x')).toBe(true);
+    expect(isAllowedHost('http://ipt.vliz.be/eurobis/archive.do?r=x')).toBe(false);
+    expect(isAllowedHost('https://ipt.vliz.be.evil.com/x')).toBe(false);
+    expect(isAllowedHost('https://ipt.vliz.be@evil.com/x')).toBe(false);
+    expect(isAllowedHost('https://ipt.example.org/x')).toBe(false);
   });
 });
 

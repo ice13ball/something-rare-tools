@@ -11,6 +11,10 @@ import type { RuleSpec } from './spec';
  *   IN-RECORD-INACCESSIBLE  status, host     HTTP status (number) and host of the record
  *   IN-HOST-NOT-ALLOWED     host
  *   IN-FETCH-BLOCKED        host
+ *   IN-FETCH-INTERRUPTED    host     a download from a listed IPT server timed out or was cut off
+ *   IN-ARCHIVE-TOO-LARGE    host, mb  the proxy refused an archive above its size limit
+ *   IN-IPT-HOST-NOT-LISTED  host     a GBIF/OBIS archive lives on a server that is not on the static list (config/ipt.ts)
+ *   IN-NO-DWC-ARCHIVE       registry  GBIF or OBIS knows the dataset but lists no Darwin Core Archive for it
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
@@ -101,6 +105,58 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `{host} n'a pas commencé à répondre en 30 secondes ; le navigateur a cessé d'attendre. Réessayez plus tard ou passez en mode serveur.`,
     },
     technical: `{file}: no response from {host} within 30 s in browser mode; the request was abandoned.`,
+  },
+  {
+    id: 'IN-FETCH-INTERRUPTED',
+    category: 'input',
+    severity: 'error',
+    params: ['host'],
+    plain: {
+      pl: `Pobieranie z {host} przerwało się albo trwało zbyt długo, więc archiwum nie zostało sprawdzone. Takie serwery bywają wolne: spróbuj ponownie za kilka minut albo pobierz archiwum (.zip) samodzielnie i przeciągnij je tutaj.`,
+      en: `The download from {host} was cut off or took too long, so the archive was not checked. Such servers can be slow: try again in a few minutes, or download the archive (.zip) yourself and drop it here.`,
+      de: `Der Download von {host} wurde abgebrochen oder dauerte zu lange, daher wurde das Archiv nicht geprüft. Solche Server sind manchmal langsam: Versuchen Sie es in einigen Minuten erneut oder laden Sie das Archiv (.zip) selbst herunter und ziehen Sie es hierher.`,
+      fr: `Le téléchargement depuis {host} a été interrompu ou a duré trop longtemps, l'archive n'a donc pas été vérifiée. Ces serveurs sont parfois lents : réessayez dans quelques minutes, ou téléchargez l'archive (.zip) vous-même et déposez-la ici.`,
+    },
+    technical: `{file}: download from {host} timed out (server mode: proxy limit) or the connection was cut before the body was complete; nothing was read.`,
+  },
+  {
+    id: 'IN-ARCHIVE-TOO-LARGE',
+    category: 'input',
+    severity: 'error',
+    params: ['host', 'mb'],
+    plain: {
+      pl: `Archiwum z {host} jest większe niż {mb} MB, więc serwer nie przekazał go do sprawdzenia. Pobierz je samodzielnie i przeciągnij tutaj albo sprawdź jego fragment.`,
+      en: `The archive on {host} is larger than {mb} MB, so the server did not pass it on to be checked. Download it yourself and drop it here, or check a part of it.`,
+      de: `Das Archiv auf {host} ist größer als {mb} MB, daher hat der Server es nicht zur Prüfung weitergegeben. Laden Sie es selbst herunter und ziehen Sie es hierher, oder prüfen Sie einen Teil davon.`,
+      fr: `L'archive sur {host} dépasse {mb} Mo, le serveur ne l'a donc pas transmise pour vérification. Téléchargez-la vous-même et déposez-la ici, ou vérifiez-en une partie.`,
+    },
+    technical: `{file}: archive from {host} above the proxy limit of {mb} MB (HTTP 413); not read.`,
+  },
+  {
+    id: 'IN-IPT-HOST-NOT-LISTED',
+    category: 'input',
+    severity: 'warning',
+    params: ['host'],
+    plain: {
+      pl: `Archiwum tego zbioru leży na serwerze {host}, którego to narzędzie jeszcze nie odczytuje (zna tylko stałą listę serwerów IPT). Pobierz archiwum (.zip) samodzielnie i przeciągnij je tutaj.`,
+      en: `The archive of this dataset is on {host}, a server this tool does not read from yet (it knows only a fixed list of IPT servers). Download the archive (.zip) yourself and drop it here.`,
+      de: `Das Archiv dieses Datensatzes liegt auf {host}, einem Server, von dem dieses Werkzeug noch nicht liest (es kennt nur eine feste Liste von IPT-Servern). Laden Sie das Archiv (.zip) selbst herunter und ziehen Sie es hierher.`,
+      fr: `L'archive de ce jeu de données se trouve sur {host}, un serveur que cet outil ne lit pas encore (il ne connaît qu'une liste fixe de serveurs IPT). Téléchargez l'archive (.zip) vous-même et déposez-la ici.`,
+    },
+    technical: `{file}: archive host {host} (or its scheme, port or credentials) is not on the static IPT list (config/ipt.ts); not fetched.`,
+  },
+  {
+    id: 'IN-NO-DWC-ARCHIVE',
+    category: 'input',
+    severity: 'error',
+    params: ['registry'],
+    plain: {
+      pl: `{registry} zna ten zbiór danych, ale nie podaje dla niego archiwum Darwin Core (.zip) do pobrania, więc nie ma czego sprawdzić. Pobierz dane od wydawcy i przeciągnij je tutaj.`,
+      en: `{registry} knows this dataset but lists no downloadable Darwin Core Archive (.zip) for it, so there is nothing to check. Get the data from the publisher and drop it here.`,
+      de: `{registry} kennt diesen Datensatz, führt dafür aber kein herunterladbares Darwin-Core-Archiv (.zip) auf, es gibt also nichts zu prüfen. Besorgen Sie die Daten beim Herausgeber und ziehen Sie sie hierher.`,
+      fr: `{registry} connaît ce jeu de données mais n'indique aucune archive Darwin Core (.zip) à télécharger, il n'y a donc rien à vérifier. Obtenez les données auprès de l'éditeur et déposez-les ici.`,
+    },
+    technical: `{file}: {registry} lists no DWC_ARCHIVE endpoint (GBIF) or no archive URL (OBIS) for this dataset.`,
   },
   {
     id: 'IN-LAYOUT-UNSUPPORTED',

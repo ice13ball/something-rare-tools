@@ -160,7 +160,7 @@ export interface RuleDef {
 /* ---------- session and report ---------- */
 export interface LoadedRecord {
   label: string;
-  kind: 'zenodo' | 'geonetwork' | 'datacite' | 'pangaea' | 'dropped';
+  kind: 'zenodo' | 'geonetwork' | 'datacite' | 'pangaea' | 'gbif' | 'obis' | 'dropped';
   metadata: MetadataRecord[];
   files: { name: string; url?: string; bytes?: Uint8Array }[];
   findings: Finding[];

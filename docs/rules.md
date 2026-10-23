@@ -11,6 +11,10 @@ Every number a rule compares against is listed here with its source (`docs/resea
 | IN-HOST-NOT-ALLOWED | warning | input | — | — |
 | IN-FETCH-BLOCKED | warning | input | — | — |
 | IN-FETCH-TIMEOUT | warning | input | — | — |
+| IN-FETCH-INTERRUPTED | error | input | — | — |
+| IN-ARCHIVE-TOO-LARGE | error | input | — | — |
+| IN-IPT-HOST-NOT-LISTED | warning | input | — | — |
+| IN-NO-DWC-ARCHIVE | error | input | — | — |
 | IN-LAYOUT-UNSUPPORTED | error | input | — | — |
 | IN-ENCODING-FALLBACK | info | input | — | — |
 | IN-DECIMAL-COMMA | info | input | — | — |

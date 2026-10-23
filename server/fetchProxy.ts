@@ -13,11 +13,23 @@ import http from 'node:http';
 import https from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 import { isAllowedHost } from '../config/hosts.js';
+import { IPT_MAX_BYTES, IPT_TIMEOUT_MS, isIptHost } from '../config/ipt.js';
 import { SITE } from '../config/site.js';
 
 export const MAX_BYTES = 30 * 1024 * 1024;
 export const TIMEOUT_MS = 20_000;
 export const MAX_REDIRECTS = 5;
+/** Only a URL on the static IPT list (config/ipt.ts) gets the archive limits; every other host keeps MAX_BYTES / TIMEOUT_MS. */
+export const ARCHIVE_MAX_BYTES = IPT_MAX_BYTES;
+export const ARCHIVE_TIMEOUT_MS = IPT_TIMEOUT_MS;
+
+function hostOfUrl(raw: string): string {
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return '';
+  }
+}
 export const USER_AGENT = `AbyssalClaimsTools/1.0 (+${SITE.origin}; mailto:${SITE.contactEmail})`;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -251,8 +263,10 @@ function race<T>(p: Promise<T>, signal: AbortSignal, onAbort: () => Error): Prom
 export async function proxyFetch(rawUrl: string, accept: string | undefined, deps: ProxyDeps = {}): Promise<ProxyResponse> {
   const resolver = deps.resolver ?? defaultResolver;
   const upstream = deps.upstream ?? (defaultUpstream ??= createPinnedUpstream(https));
-  const maxBytes = deps.maxBytes ?? MAX_BYTES;
-  const timeoutMs = deps.timeoutMs ?? TIMEOUT_MS;
+  // The archive limits are chosen by the host the request STARTS at (an IPT on the static list); redirects never raise them.
+  const archive = isIptHost(hostOfUrl(rawUrl));
+  const maxBytes = deps.maxBytes ?? (archive ? ARCHIVE_MAX_BYTES : MAX_BYTES);
+  const timeoutMs = deps.timeoutMs ?? (archive ? ARCHIVE_TIMEOUT_MS : TIMEOUT_MS);
   const allowUrl = deps.allowUrl ?? isAllowedHost;
   const maxRedirects = deps.maxRedirects ?? MAX_REDIRECTS;
 

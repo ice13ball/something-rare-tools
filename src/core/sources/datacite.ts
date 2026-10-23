@@ -34,6 +34,7 @@ export type Route =
   | { kind: 'zenodo'; id: string }
   | { kind: 'geonetwork'; host: string; uuid: string }
   | { kind: 'pangaea'; id: string }
+  | { kind: 'gbif'; key: string }
   | { kind: 'other'; host?: string };
 
 const ZENODO_DOI = /^10\.5281\/zenodo\.(\d+)$/i;
@@ -60,6 +61,10 @@ export function routeFromDatacite(rec: MetadataRecord, doi: string): Route {
   if (host && (host.startsWith('geonetwork.') || /\/geonetwork\//i.test(path))) {
     const m = UUID.exec(path);
     if (m) return { kind: 'geonetwork', host, uuid: m[0].toLowerCase() };
+  }
+  if (host === 'www.gbif.org' || host === 'gbif.org') {
+    const m = new RegExp(`^/(?:[a-z]{2}/)?dataset/(${UUID.source})`, 'i').exec(path);
+    if (m) return { kind: 'gbif', key: m[1]!.toLowerCase() };
   }
   if (host === 'doi.pangaea.de') {
     const m = /\/10\.1594\/PANGAEA\.(\d+)/i.exec(path);

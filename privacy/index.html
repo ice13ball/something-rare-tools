@@ -55,8 +55,35 @@
             <li><code>api.datacite.org</code></li>
             <li><code>data.crosscite.org</code></li>
             <li><code>doi.org</code></li>
+            <li><code>api.gbif.org</code></li>
+            <li><code>api.obis.org</code></li>
           </ul>
           <p>The server keeps no files, no copies and no cache. Its own application log records only the host name, the status code and the size of each download it makes for you, never the full address. That log is kept together with the hosting logs described below.</p>
+        </section>
+        <section>
+          <h2>GBIF and OBIS datasets</h2>
+          <p>If you paste a GBIF or OBIS dataset link or a GBIF DOI, the tool first asks the registry for the address of the dataset’s Darwin Core Archive: api.gbif.org for GBIF, api.obis.org for OBIS. In browser mode your own browser asks them directly, in server mode the Abyssal Claims server asks them for you. Either way the registry sees the dataset identifier you pasted.</p>
+          <p>The archive itself is then downloaded only from one of these known IPT servers, never from any other address a registry may name; this holds in both modes. A dataset whose archive lies elsewhere is reported by host name, and you can download the archive yourself and drop it here:</p>
+          <ul class="host-list ipt-hosts">
+            <li><code>ipt.vliz.be</code></li>
+            <li><code>www.marine.csiro.au</code></li>
+            <li><code>hosted-datasets.gbif.org</code></li>
+            <li><code>ipt-obis.gbif.us</code></li>
+            <li><code>ipt.iobis.org</code></li>
+            <li><code>ipt.env.duke.edu</code></li>
+            <li><code>ipt.obis.org</code></li>
+            <li><code>members.oceantrack.org</code></li>
+            <li><code>ipt.inbo.be</code></li>
+            <li><code>nzobisipt.niwa.co.nz</code></li>
+            <li><code>ipt.biodiversity.aq</code></li>
+            <li><code>ipt.sibbr.gov.br</code></li>
+            <li><code>ipt.biodiversidad.co</code></li>
+            <li><code>ipt.medobis.eu</code></li>
+            <li><code>geo.abds.is</code></li>
+            <li><code>data.aad.gov.au</code></li>
+            <li><code>datasets.obis.org</code></li>
+          </ul>
+          <p>In browser mode the IPT server receives your IP address and the address of this site, as with any website you open; in server mode it receives the server’s address instead. Their own privacy policies apply. Most of these servers do not allow a browser to download from another site: the tool then says so and offers server mode. Archives up to 100 MB are read; in server mode the server waits up to 90 seconds for an archive. It keeps no copy.</p>
         </section>
         <section>
           <h2>Collection review</h2>

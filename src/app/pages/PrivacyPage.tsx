@@ -3,6 +3,7 @@
 import React from 'react';
 import { CSW_HOSTS } from '../../../config/catalogues';
 import { DATA_HOSTS, MAP_PRIVACY_URL } from '../../../config/hosts';
+import { IPT_HOSTS } from '../../../config/ipt';
 import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
 import { t, useLang } from '../i18n';
@@ -25,13 +26,26 @@ export function PrivacyPage(): React.ReactElement {
         <h2>{t('privacy.server.h')}</h2>
         <p>{t('privacy.server.p1')}</p>
         <ul className="host-list">
-          {DATA_HOSTS.map((h) => (
+          {DATA_HOSTS.filter((h) => !IPT_HOSTS.includes(h)).map((h) => (
             <li key={h}>
               <code>{h}</code>
             </li>
           ))}
         </ul>
         <p>{t('privacy.server.p2')}</p>
+      </section>
+      <section>
+        <h2>{t('privacy.gbif.h')}</h2>
+        <p>{t('privacy.gbif.p1')}</p>
+        <p>{t('privacy.gbif.p2')}</p>
+        <ul className="host-list ipt-hosts">
+          {IPT_HOSTS.map((h) => (
+            <li key={h}>
+              <code>{h}</code>
+            </li>
+          ))}
+        </ul>
+        <p>{t('privacy.gbif.p3')}</p>
       </section>
       <section>
         <h2>{t('privacy.collection.h')}</h2>
