@@ -1211,7 +1211,7 @@ https://zenodo.org/records/…`,
 
   'check.title': `Datenprüfung`,
   'check.docTitle': `Prüfung von Meeresdaten: Koordinaten, Datumsangaben, Einheiten, Lizenz`,
-  'check.intro': `Fügen Sie Dateien hinzu oder einen Link ein. Das Werkzeug schlägt vor, wie sie gelesen werden, Sie bestätigen.`,
+  'check.intro': `Fügen Sie Dateien oder einen Link hinzu. Das Werkzeug schlägt vor, wie sie gelesen werden, Sie bestätigen.`,
   'check.busy': `Prüfung läuft …`,
   'check.error': `Die Prüfung konnte nicht abgeschlossen werden.`,
 
