@@ -99,15 +99,18 @@ export function parseFile(fileName: string, bytes: Uint8Array): ParsedFile {
 }
 
 /**
- * A zip that is not an Excel workbook: a Darwin Core Archive, or something that is not one. parseFile cannot read
- * it (inflating is asynchronous), so the caller sends it to parseFileAsync.
+ * A zip file that is not an Excel workbook: a Darwin Core Archive, or something that is not one. parseFile cannot read
+ * it (inflating is asynchronous), so the caller sends it to parseFileAsync. The NAME decides too: only a ".zip" goes
+ * here. A file named .xlsx (or anything else) whose zip cannot be opened stays on the workbook path, so a corrupt
+ * workbook is still reported as a corrupt workbook, not as an unreadable archive.
  */
-export const isArchiveZip = (bytes: Uint8Array): boolean => startsWith(bytes, ZIP) && !looksLikeWorkbook(bytes);
+export const isArchiveZip = (bytes: Uint8Array, fileName: string): boolean =>
+  startsWith(bytes, ZIP) && /\.zip$/i.test(fileName.trim()) && !looksLikeWorkbook(bytes);
 
 /**
  * parseFile for every upload, including archives. A zip that is not a workbook is read as a Darwin Core Archive
  * (never throws: a refusal is a parse-level finding); everything else goes through parseFile unchanged.
  */
 export async function parseFileAsync(fileName: string, bytes: Uint8Array, inflate: Inflate, opts?: DwcaOptions): Promise<ParsedFile> {
-  return isArchiveZip(bytes) ? parseDwca(fileName, bytes, inflate, opts) : parseFile(fileName, bytes);
+  return isArchiveZip(bytes, fileName) ? parseDwca(fileName, bytes, inflate, opts) : parseFile(fileName, bytes);
 }

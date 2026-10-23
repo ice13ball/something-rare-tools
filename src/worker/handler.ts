@@ -187,7 +187,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     hasDropped = req.files.some((f) => f.source === 'dropped');
     for (const r of records) recordMeta.push(...r.metadata);
 
-    const archives = req.files.filter((f) => isArchiveZip(f.bytes));
+    const archives = req.files.filter((f) => isArchiveZip(f.bytes, f.name));
     if (archives.length === 0) return finishParse(req, new Map());
     const started = session;
     return (async () => {

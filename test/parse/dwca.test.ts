@@ -216,19 +216,34 @@ describe('Darwin Core Archive, sample cap', () => {
 
 describe('dispatch and the worker', () => {
   it('isArchiveZip: a DwC-A and any non-workbook zip yes, an xlsx and non-zip bytes no', () => {
-    expect(isArchiveZip(dwca(HEADER))).toBe(true);
-    expect(isArchiveZip(makeZip([{ name: 'readme.txt', data: 'hi' }]))).toBe(true);
-    expect(isArchiveZip(new TextEncoder().encode('a,b\n1,2\n'))).toBe(false);
+    expect(isArchiveZip(dwca(HEADER), 'survey.zip')).toBe(true);
+    expect(isArchiveZip(dwca(HEADER), 'SURVEY.ZIP')).toBe(true);
+    expect(isArchiveZip(makeZip([{ name: 'readme.txt', data: 'hi' }]), 'x.zip')).toBe(true);
+    expect(isArchiveZip(new TextEncoder().encode('a,b\n1,2\n'), 'x.zip')).toBe(false);
   });
 
   it('an xlsx still goes through the workbook parser', async () => {
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['station', 'lat'], ['A', 1]]), 'S');
     const bytes = new Uint8Array(XLSX.write(book, { type: 'array', bookType: 'xlsx' }));
-    expect(isArchiveZip(bytes)).toBe(false);
+    expect(isArchiveZip(bytes, 'w.xlsx')).toBe(false);
     const f = await parseFileAsync('w.xlsx', bytes, nodeInflate);
     expect(f.kind).toBe('xlsx');
       });
+
+  it('a file NAMED .xlsx whose zip is corrupt keeps the workbook error path, not IN-DWCA-UNREADABLE; the same bytes named .zip are an archive refusal', async () => {
+    const corrupt = new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new Array<number>(100).fill(0x41)]); // zip magic, no central directory
+    expect(isArchiveZip(corrupt, 'book.xlsx')).toBe(false);
+    expect(isArchiveZip(dwca(HEADER), 'book.xlsx')).toBe(false); // a readable non-workbook zip under an .xlsx name is still the workbook path
+    await expect(parseFileAsync('book.xlsx', corrupt, nodeInflate)).rejects.toThrow(/book\.xlsx/);
+    const engine = createDirectEngine({ inflate: nodeInflate });
+    const parsed = await engine.parse([{ name: 'book.xlsx', bytes: corrupt, source: 'dropped' }], [], []);
+    expect(parsed.files).toEqual([]);
+    expect(parsed.problems).toHaveLength(1);
+    expect(parsed.problems[0].fileName).toBe('book.xlsx');
+    const asZip = await parseFileAsync('book.zip', corrupt, nodeInflate);
+    expect(ids(asZip)).toContain('IN-DWCA-UNREADABLE');
+  });
 
   it('end to end: the engine checks the core, a bad latitude points at its physical line, the version and PARTIAL travel with the report', async () => {
     const rows = ['1\to1\tBay A\t61.25\t4.5\t2008-05-01\t10', '2\to2\tBay A\t95.5\t4.51\t2008-05-02\t15', '3\to3\tBay B\t61.30\t4.6\t2009-07-21\t20'];

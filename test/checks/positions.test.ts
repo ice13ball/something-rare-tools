@@ -94,6 +94,19 @@ describe('ROW-STATION-MOVED: sign pattern', () => {
     expect(only(checkRows(ds), 'ROW-STATION-SPREAD')).toEqual([]);
   });
 
+  it('the sign sentence is a hypothesis, not a verdict: it says "possibly" and sends the user to the other columns, in four languages', () => {
+    const lon = only(checkRows(dataset([...rows(2, 5, { lat: 37.84, lon: -31.52, station: 'VENT A' }), ...rows(8, 3, { lat: 37.85, lon: 31.52, station: 'VENT A' })])), 'ROW-STATION-MOVED')[0];
+    const lat = only(checkRows(dataset([...rows(2, 5, { lat: -34.03, lon: 179.198, station: 'CALDERA' }), ...rows(8, 3, { lat: 34.03, lon: 179.198, station: 'CALDERA' })])), 'ROW-STATION-MOVED')[0];
+    expect(renderPlain(lon, 'en')).toContain('possibly a missing or extra minus (W/E). Check the other columns too — the sign need not be the whole cause.');
+    expect(renderPlain(lat, 'en')).toContain('possibly a missing or extra minus (S/N). Check the other columns too');
+    expect(renderPlain(lon, 'pl')).toMatch(/możliwe, że brakuje minusa albo jest zbędny \(W\/E\)\. Sprawdź też inne kolumny/);
+    expect(renderPlain(lon, 'de')).toMatch(/vielleicht fehlt ein Minus oder eines ist zu viel \(W\/O\)\. Prüfen Sie auch andere Spalten/);
+    expect(renderPlain(lat, 'fr')).toMatch(/peut-être un moins manquant ou en trop \(S\/N\)\. Vérifiez aussi les autres colonnes/);
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      expect(renderPlain(lon, lang)).not.toMatch(/one of them is missing|przy jednej z nich brakuje|bei einer fehlt|il manque un signe moins à l'une/);
+    }
+  });
+
   it('reports a latitude sign flip', () => {
     const ds = dataset([...rows(2, 5, { lat: -34.03, lon: 179.198, station: 'CALDERA' }), ...rows(8, 3, { lat: 34.03, lon: 179.198, station: 'CALDERA' })]);
     const f = only(checkRows(ds), 'ROW-STATION-MOVED');
