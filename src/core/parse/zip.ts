@@ -44,15 +44,16 @@ export interface ZipLimits {
 
 /**
  * Chosen limits. /check had none for file size or row count before this module; these are proposals:
- * 100 MB archive (a worker holds the bytes, the inflated entry and its text at once), 300 MB uncompressed in total
- * (3x the archive cap: real DwC-A text compresses 5-20x, so a legitimate archive near the archive cap is refused
- * with a clear message rather than risking the tab), 1000 entries (a DwC-A has a handful of files), ratio 200 above 1 MiB
+ * 100 MB archive (a worker holds the bytes, the inflated entry and its text at once), 150 MB uncompressed in total and
+ * per entry (a 3.7 MB archive that inflated to 290 MB crashed the Chromium tab at the former 300 MB, with the bytes, the
+ * inflated entry and its decoded text alive together: 150 MB keeps that peak, about 3x, inside what a tab survives; real
+ * DwC-A text compresses 5-20x, so an archive that large is refused with a clear message rather than risking the tab), 1000 entries (a DwC-A has a handful of files), ratio 200 above 1 MiB
  * (sparse tab-separated tables reach about 100; a bomb starts at 1000).
  */
 export const ZIP_LIMITS: ZipLimits = {
   maxArchiveBytes: 100 * 1024 * 1024,
-  maxTotalBytes: 300 * 1024 * 1024,
-  maxEntryBytes: 300 * 1024 * 1024,
+  maxTotalBytes: 150 * 1024 * 1024,
+  maxEntryBytes: 150 * 1024 * 1024,
   maxEntries: 1000,
   maxRatio: 200,
   ratioFloorBytes: 1024 * 1024,

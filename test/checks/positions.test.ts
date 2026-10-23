@@ -139,7 +139,7 @@ describe('ROW-STATION-MOVED: sign pattern', () => {
     expect(renderPlain(lon, 'en')).toContain('possibly a missing or extra minus (W/E). Check the other columns too — the sign need not be the whole cause.');
     expect(renderPlain(lat, 'en')).toContain('possibly a missing or extra minus (S/N). Check the other columns too');
     expect(renderPlain(lon, 'pl')).toMatch(/możliwe, że brakuje minusa albo jest zbędny \(W\/E\)\. Sprawdź też inne kolumny/);
-    expect(renderPlain(lon, 'de')).toMatch(/vielleicht fehlt ein Minus oder eines ist zu viel \(W\/O\)\. Prüfen Sie auch andere Spalten/);
+    expect(renderPlain(lon, 'de')).toMatch(/vielleicht fehlt ein Minus oder eins zu viel \(W\/O\)\. Prüfen Sie auch andere Spalten/);
     expect(renderPlain(lat, 'fr')).toMatch(/peut-être un moins manquant ou en trop \(S\/N\)\. Vérifiez aussi les autres colonnes/);
     for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
       expect(renderPlain(lon, lang)).not.toMatch(/one of them is missing|przy jednej z nich brakuje|bei einer fehlt|il manque un signe moins à l'une/);

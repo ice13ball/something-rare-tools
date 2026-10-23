@@ -17,6 +17,7 @@ import type { RuleSpec } from './spec';
  *   IN-ARCHIVE-BUSY         host     more archive downloads at once from this IP address than the proxy allows (2)
  *   IN-IPT-HOST-NOT-LISTED  host     a GBIF/OBIS archive lives on a server that is not on the static list (config/ipt.ts)
  *   IN-NO-DWC-ARCHIVE       registry  GBIF or OBIS knows the dataset but lists no Darwin Core Archive for it
+ *   IN-FILE-UNREADABLE      files    no input file could be read at all (a damaged workbook, ...): the names, comma-separated
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
@@ -187,6 +188,19 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     technical: `{file}: {registry} lists no DWC_ARCHIVE endpoint (GBIF) or no archive URL (OBIS) for this dataset.`,
   },
   {
+    id: 'IN-FILE-UNREADABLE',
+    category: 'input',
+    severity: 'error',
+    params: ['files'],
+    plain: {
+      pl: `Nie udało się odczytać żadnego z podanych plików ({files}); może być uszkodzony lub w nieobsługiwanym formacie. Niczego nie sprawdzono, więc brak uwag nie oznacza, że dane są w porządku. Zapisz plik ponownie (np. jako CSV lub Excel) i dodaj go jeszcze raz.`,
+      en: `None of the files could be read ({files}); a file may be damaged or in an unsupported format. Nothing was checked, so the absence of other remarks does not mean the data are fine. Save the file again (for example as CSV or Excel) and add it once more.`,
+      de: `Keine der Dateien konnte gelesen werden ({files}); eine Datei ist möglicherweise beschädigt oder nicht unterstützt. Es wurde nichts geprüft, das Fehlen weiterer Hinweise heißt also nicht, dass die Daten in Ordnung sind. Speichern Sie die Datei erneut (z. B. als CSV oder Excel) und fügen Sie sie noch einmal hinzu.`,
+      fr: `Aucun des fichiers n'a pu être lu ({files}) ; un fichier est peut-être endommagé ou dans un format non pris en charge. Rien n'a été vérifié : l'absence d'autres remarques ne signifie donc pas que les données sont correctes. Enregistrez à nouveau le fichier (par ex. en CSV ou Excel) et ajoutez-le une fois de plus.`,
+    },
+    technical: `{file}: no input file could be parsed ({files}); nothing was checked.`,
+  },
+  {
     id: 'IN-LAYOUT-UNSUPPORTED',
     category: 'input',
     severity: 'error',
@@ -245,12 +259,12 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: [],
     plain: {
-      pl: `To archiwum ZIP, ale nie archiwum Darwin Core (brak pliku meta.xml), więc niczego nie sprawdzono. Dodaj archiwum DwC-A pobrane z IPT, OBIS lub GBIF albo samą tabelę jako CSV lub Excel.`,
-      en: `This is a ZIP file, but not a Darwin Core Archive (it has no meta.xml), so nothing was checked. Add a DwC-A downloaded from an IPT, OBIS or GBIF, or the table itself as CSV or Excel.`,
-      de: `Dies ist eine ZIP-Datei, aber kein Darwin-Core-Archiv (es fehlt die meta.xml), daher wurde nichts geprüft. Fügen Sie ein DwC-A von einem IPT, OBIS oder GBIF hinzu oder die Tabelle selbst als CSV oder Excel.`,
-      fr: `Ce fichier est un ZIP, mais pas une archive Darwin Core (il n'a pas de meta.xml) ; rien n'a donc été vérifié. Ajoutez un DwC-A issu d'un IPT, d'OBIS ou du GBIF, ou le tableau lui-même en CSV ou Excel.`,
+      pl: `Ten plik .zip nie jest archiwum Darwin Core (brak pliku meta.xml; może to w ogóle nie być ZIP, np. zapisana strona z błędem), więc niczego nie sprawdzono. Dodaj archiwum DwC-A pobrane z IPT, OBIS lub GBIF albo samą tabelę jako CSV lub Excel.`,
+      en: `This .zip file is not a Darwin Core Archive (it has no meta.xml; it may not even be a ZIP, for example a saved error page), so nothing was checked. Add a DwC-A downloaded from an IPT, OBIS or GBIF, or the table itself as CSV or Excel.`,
+      de: `Diese .zip-Datei ist kein Darwin-Core-Archiv (es fehlt die meta.xml; es ist womöglich gar kein ZIP, z. B. eine gespeicherte Fehlerseite), daher wurde nichts geprüft. Fügen Sie ein DwC-A von einem IPT, OBIS oder GBIF hinzu oder die Tabelle selbst als CSV oder Excel.`,
+      fr: `Ce fichier .zip n'est pas une archive Darwin Core (il n'a pas de meta.xml ; ce n'est peut-être même pas un ZIP, par ex. une page d'erreur enregistrée) ; rien n'a donc été vérifié. Ajoutez un DwC-A issu d'un IPT, d'OBIS ou du GBIF, ou le tableau lui-même en CSV ou Excel.`,
     },
-    technical: `{file}: zip archive without a meta.xml at its root; not a Darwin Core Archive, nothing read.`,
+    technical: `{file}: file named .zip without a meta.xml at its root or in its single top-level folder (or not a zip at all); not a Darwin Core Archive, nothing read.`,
   },
   {
     id: 'IN-DWCA-UNSUPPORTED-CORE',

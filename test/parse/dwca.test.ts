@@ -3,6 +3,7 @@
 // Darwin Core Archives built in the test from synthetic files: no real third-party data.
 import { describe, expect, it } from 'vitest';
 import { isArchiveZip, parseFile, parseDwca, parseFileAsync } from '../../src/core/parse';
+import { ZIP_LIMITS } from '../../src/core/parse/zip';
 import type { ParsedFile } from '../../src/core/types';
 import { emlXml, makeZip, metaXml, nodeInflate, type TestEntry } from '../helpers/zipfile';
 import { createDirectEngine } from '../../src/worker/handler';
@@ -214,12 +215,80 @@ describe('Darwin Core Archive, sample cap', () => {
   });
 });
 
+describe('Darwin Core Archive, row counts and shapes (review 23.10)', () => {
+  const meta = (attrs = 'encoding="UTF-8" fieldsTerminatedBy="\\t" linesTerminatedBy="\\n" fieldsEnclosedBy="&quot;" ignoreHeaderLines="1"') => metaXml({ fields: FIELDS, coreAttrs: attrs });
+  const row = (i: number) => `${i}\to${i}\tBay\t61.25\t4.5\t2008-05-01\t10`;
+
+  it('blank lines and quoted line breaks are not rows: a full read is not "PARTIAL" (was "only the first 1 of 2")', async () => {
+    const blank = await read(dwca([HEADER, row(1), '', row(2), ''].join('\n')), 2);
+    expect(blank.sheets[0].rows).toHaveLength(2);
+    expect(ids(blank)).not.toContain('IN-DWCA-PARTIAL');
+    const quoted = await read(dwca([HEADER, `1\to1\t"Bay\nA"\t61.25\t4.5\t2008-05-01\t10`, row(2)].join('\n') + '\n', [], meta()), 2);
+    expect(quoted.sheets[0].rows).toHaveLength(2);
+    expect(ids(quoted)).not.toContain('IN-DWCA-PARTIAL');
+  });
+
+  it('a cut that leaves only blank lines unread is not partial either; one that leaves rows says the non-blank total', async () => {
+    const tail = await read(dwca([HEADER, row(1), row(2), '', '', ''].join('\n')), 2);
+    expect(ids(tail)).not.toContain('IN-DWCA-PARTIAL');
+    const more = await read(dwca([HEADER, row(1), '', row(2), row(3), row(4)].join('\n')), 2);
+    expect(one(more, 'IN-DWCA-PARTIAL')!.params).toEqual({ read: 2, total: 4 });
+  });
+
+  it('a CR-only file whose meta.xml says \\n still says PARTIAL when the row cap cuts rows', async () => {
+    const f = await read(dwca([HEADER, row(1), row(2), row(3), row(4)].join('\r')), 2);
+    expect(f.sheets[0].rows).toHaveLength(2);
+    expect(one(f, 'IN-DWCA-PARTIAL')!.params).toEqual({ read: 2, total: 4 });
+  });
+
+  it('a zip of a folder (meta.xml inside one top-level folder) is read, locations relative to it', async () => {
+    const zip = makeZip([
+      { name: 'ds/meta.xml', data: meta() },
+      { name: 'ds/eml.xml', data: EML },
+      { name: 'ds/occurrence.txt', data: [HEADER, row(1), row(2)].join('\n') },
+    ]);
+    const f = await read(zip);
+    expect(f.sheets[0].rows).toHaveLength(2);
+    expect(one(f, 'IN-DWCA-VERSION')!.params.version).toMatch(/v1\.4/);
+    // two candidate folders: no guess
+    const two = makeZip([{ name: 'a/meta.xml', data: meta() }, { name: 'b/meta.xml', data: meta() }]);
+    expect(ids(await read(two))).toEqual(['IN-DWCA-NOT-ARCHIVE']);
+  });
+
+  it('<field default=".." term=".."/> without an index fills that column in every row', async () => {
+    const m = metaXml({ fields: FIELDS }).replace('</core>', '<field default="HumanObservation" term="http://rs.tdwg.org/dwc/terms/basisOfRecord"/></core>');
+    const f = await read(dwca([HEADER, row(1), row(2)].join('\n'), [], m));
+    const s = f.sheets[0];
+    expect(s.header[s.header.length - 1]).toBe('basisOfRecord');
+    expect(s.rows.map((r) => r.cells[r.cells.length - 1])).toEqual(['HumanObservation', 'HumanObservation']);
+    expect(ids(f)).not.toContain('ROW-RAGGED');
+  });
+
+  it('an HTML error page named .zip is IN-DWCA-NOT-ARCHIVE, not a CSV layout problem', async () => {
+    const html = new TextEncoder().encode('<html><body>Service unavailable</body></html>');
+    const f = await parseFileAsync('dataset.zip', html, nodeInflate);
+    expect(ids(f)).toEqual(['IN-DWCA-NOT-ARCHIVE']);
+  });
+
+  it('limits: 150 MB inflated (entry and total) so a 290 MB entry is refused before it is inflated', async () => {
+    expect(ZIP_LIMITS.maxEntryBytes).toBe(150 * 1024 * 1024);
+    expect(ZIP_LIMITS.maxTotalBytes).toBe(150 * 1024 * 1024);
+    expect(ZIP_LIMITS.maxArchiveBytes).toBe(100 * 1024 * 1024);
+    const lying = makeZip([{ name: 'meta.xml', data: meta() }, { name: 'occurrence.txt', data: 'x', size: 290 * 1024 * 1024 }]);
+    const f = await read(lying);
+    expect(ids(f)).toEqual(['IN-DWCA-UNREADABLE']);
+    expect(f.findings[0].params.reason).toBe('ZIP-ENTRY-TOO-LARGE');
+  });
+});
+
 describe('dispatch and the worker', () => {
   it('isArchiveZip: a DwC-A and any non-workbook zip yes, an xlsx and non-zip bytes no', () => {
     expect(isArchiveZip(dwca(HEADER), 'survey.zip')).toBe(true);
     expect(isArchiveZip(dwca(HEADER), 'SURVEY.ZIP')).toBe(true);
     expect(isArchiveZip(makeZip([{ name: 'readme.txt', data: 'hi' }]), 'x.zip')).toBe(true);
-    expect(isArchiveZip(new TextEncoder().encode('a,b\n1,2\n'), 'x.zip')).toBe(false);
+    // any file NAMED .zip is an archive candidate, whatever its bytes: parseDwca says what is wrong
+    expect(isArchiveZip(new TextEncoder().encode('a,b\n1,2\n'), 'x.zip')).toBe(true);
+    expect(isArchiveZip(new TextEncoder().encode('a,b\n1,2\n'), 'x.csv')).toBe(false);
   });
 
   it('an xlsx still goes through the workbook parser', async () => {
@@ -243,6 +312,20 @@ describe('dispatch and the worker', () => {
     expect(parsed.problems[0].fileName).toBe('book.xlsx');
     const asZip = await parseFileAsync('book.zip', corrupt, nodeInflate);
     expect(ids(asZip)).toContain('IN-DWCA-UNREADABLE');
+  });
+
+  it('when no file could be read at all the report carries an error, never "no problems" (truncated .xlsx)', async () => {
+    const corrupt = new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new Array<number>(100).fill(0x41)]);
+    const engine = createDirectEngine({ inflate: nodeInflate });
+    const parsed = await engine.parse([{ name: 'book.xlsx', bytes: corrupt, source: 'dropped' }], [], []);
+    expect(parsed.files).toEqual([]);
+    const { report } = await engine.check();
+    expect(report.findings.map((x) => [x.ruleId, x.severity])).toEqual([['IN-FILE-UNREADABLE', 'error']]);
+    expect(report.findings[0]!.params.files).toBe('book.xlsx');
+    // one readable file next to a broken one: the broken one is still said in the parse problems, no extra finding
+    const ok = await engine.parse([{ name: 'book.xlsx', bytes: corrupt, source: 'dropped' }, { name: 'a.csv', bytes: new TextEncoder().encode('lat,lon\n1,2\n'), source: 'dropped' }], [], []);
+    expect(ok.files).toHaveLength(1);
+    expect((await engine.check()).report.findings.map((x) => x.ruleId)).not.toContain('IN-FILE-UNREADABLE');
   });
 
   it('a real zip cut after its first local header, named .xlsx, is refused at once (SheetJS alone never returns on it)', () => {

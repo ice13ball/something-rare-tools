@@ -17,6 +17,7 @@ import type { Inflate } from '../core/parse/zip';
 import { proposeColumns, unitFromHeader } from '../core/recognize/columns';
 import { proposeLayout, proposeMappings } from '../core/recognize/layout';
 import { buildReport } from '../core/report';
+import { makeFinding } from '../core/rules/registry';
 import type { ColumnProposal, Dataset, Finding, LayoutPlan, LoadedRecord, MetadataRecord, ParsedFile, RawCell, Report, SheetMapping } from '../core/types';
 import { makeEngine } from './engine';
 import {
@@ -212,6 +213,10 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
       }
       parseFindings.push(...parsed.findings);
       parsedAll.push({ parsed, source: f.source });
+    }
+    // Nothing could be read at all: the report must say so itself, or an empty report reads as "no problems found".
+    if (result.problems.length > 0 && parsedAll.length === 0) {
+      parseFindings.push(makeFinding('IN-FILE-UNREADABLE', { file: result.problems[0]!.fileName, params: { files: result.problems.map((p) => p.fileName).join(', ') } }));
     }
     // Pass 1: metadata files, so every data file sees them whatever the order of the drop.
     for (const { parsed, source } of parsedAll) {
