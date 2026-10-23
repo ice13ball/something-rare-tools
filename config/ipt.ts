@@ -58,6 +58,20 @@ export function isIptHost(host: string): boolean {
 }
 
 /**
+ * A Darwin Core Archive download: https, a host of the static IPT list, no port, and a path ending in `/archive.do` (any query).
+ * That is the only shape the archive limits (100 MB, 90 s) and the daily archive budget apply to: another page of an IPT, or a
+ * static .zip, is not an IPT export and keeps the ordinary limits.
+ */
+export function isArchiveUrl(raw: string | URL): boolean {
+  let u: URL;
+  try {
+    u = typeof raw === 'string' ? new URL(raw) : raw;
+  } catch {
+    return false;
+  }
+  return u.protocol === 'https:' && u.port === '' && isIptHost(u.hostname) && /\/archive\.do$/i.test(u.pathname);
+}
+/**
  * The https URL an archive may be fetched from, or undefined when its host is not on the list (or it carries
  * credentials or a port). http:// on a listed host on the default port is upgraded to https://.
  */

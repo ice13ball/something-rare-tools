@@ -13,6 +13,7 @@ import type { RuleSpec } from './spec';
  *   IN-FETCH-BLOCKED        host
  *   IN-FETCH-INTERRUPTED    host     a download from a listed IPT server timed out or was cut off
  *   IN-ARCHIVE-TOO-LARGE    host, mb  the proxy refused an archive above its size limit
+ *   IN-ARCHIVE-DAILY-BUDGET host     this IP address has used the proxy's daily budget for archive downloads
  *   IN-IPT-HOST-NOT-LISTED  host     a GBIF/OBIS archive lives on a server that is not on the static list (config/ipt.ts)
  *   IN-NO-DWC-ARCHIVE       registry  GBIF or OBIS knows the dataset but lists no Darwin Core Archive for it
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
@@ -125,12 +126,25 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['host', 'mb'],
     plain: {
-      pl: `Archiwum z {host} jest większe niż {mb} MB, więc serwer nie przekazał go do sprawdzenia. Pobierz je samodzielnie i przeciągnij tutaj albo sprawdź jego fragment.`,
-      en: `The archive on {host} is larger than {mb} MB, so the server did not pass it on to be checked. Download it yourself and drop it here, or check a part of it.`,
-      de: `Das Archiv auf {host} ist größer als {mb} MB, daher hat der Server es nicht zur Prüfung weitergegeben. Laden Sie es selbst herunter und ziehen Sie es hierher, oder prüfen Sie einen Teil davon.`,
-      fr: `L'archive sur {host} dépasse {mb} Mo, le serveur ne l'a donc pas transmise pour vérification. Téléchargez-la vous-même et déposez-la ici, ou vérifiez-en une partie.`,
+      pl: `Archiwum z {host} jest większe niż {mb} MB, więc serwer nie przekazał go do sprawdzenia. Pobierz je samodzielnie, rozpakuj i przeciągnij tutaj sam plik główny (np. occurrence.txt); przeciągnięte archiwum ma ten sam limit.`,
+      en: `The archive on {host} is larger than {mb} MB, so the server did not pass it on to be checked. Download it yourself, unpack it and drop the core file (for example occurrence.txt) here; a dropped archive has the same limit.`,
+      de: `Das Archiv auf {host} ist größer als {mb} MB, daher hat der Server es nicht zur Prüfung weitergegeben. Laden Sie es selbst herunter, entpacken Sie es und ziehen Sie die Kerndatei (z. B. occurrence.txt) hierher; ein hierher gezogenes Archiv hat dieselbe Grenze.`,
+      fr: `L'archive sur {host} dépasse {mb} Mo, le serveur ne l'a donc pas transmise pour vérification. Téléchargez-la vous-même, décompressez-la et déposez ici le fichier central (par ex. occurrence.txt) ; une archive déposée a la même limite.`,
     },
     technical: `{file}: archive from {host} above the proxy limit of {mb} MB (HTTP 413); not read.`,
+  },
+  {
+    id: 'IN-ARCHIVE-DAILY-BUDGET',
+    category: 'input',
+    severity: 'error',
+    params: ['host'],
+    plain: {
+      pl: `Dzienny limit pobierania archiwów przez serwer (z {host}) dla tego adresu IP został wykorzystany, więc archiwum nie zostało sprawdzone. Limit odnawia się w ciągu 24 godzin; możesz też przełączyć na tryb przeglądarki albo pobrać archiwum (.zip) samodzielnie i przeciągnąć je tutaj.`,
+      en: `The daily budget for archive downloads through the server (from {host}) is used up for this IP address, so the archive was not checked. It starts again within 24 hours; you can also switch to browser mode, or download the archive (.zip) yourself and drop it here.`,
+      de: `Das Tageskontingent für Archiv-Downloads über den Server (von {host}) ist für diese IP-Adresse aufgebraucht, daher wurde das Archiv nicht geprüft. Es beginnt innerhalb von 24 Stunden neu; Sie können auch in den Browsermodus wechseln oder das Archiv (.zip) selbst herunterladen und hierher ziehen.`,
+      fr: `Le quota quotidien de téléchargements d'archives via le serveur (depuis {host}) est épuisé pour cette adresse IP ; l'archive n'a donc pas été vérifiée. Il repart dans les 24 heures ; vous pouvez aussi passer en mode navigateur, ou télécharger l'archive (.zip) vous-même et la déposer ici.`,
+    },
+    technical: `{file}: the proxy answered 429 archive_daily_budget for {host}: this client used its daily archive requests or bytes; not read.`,
   },
   {
     id: 'IN-IPT-HOST-NOT-LISTED',

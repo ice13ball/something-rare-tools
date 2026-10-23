@@ -8,9 +8,9 @@ import { isCatalogueUrl } from '../config/catalogues.js';
 import { DATA_HOSTS } from '../config/hosts.js';
 import { SITE } from '../config/site.js';
 import { buildCswUpstream, createHostPacer, CSW_MAX_BYTES, CSW_TIMEOUT_MS, parseCswBody, type HostPacerOptions } from './csw.js';
-import { proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
+import { isArchiveUrl, proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
 import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
-import { clientIp, createDailyBudget, createRateLimiter, type DailyBudgetOptions, type RateLimitOptions } from './rateLimit.js';
+import { ARCHIVE_BUDGET_CODE, ARCHIVE_DAILY_BYTES, ARCHIVE_DAILY_REQUESTS, clientIp, createDailyBudget, createRateLimiter, type DailyBudgetOptions, type RateLimitOptions } from './rateLimit.js';
 
 export interface AppOptions {
   distDir: string;
@@ -29,6 +29,8 @@ export interface AppOptions {
   cswRateLimit?: RateLimitOptions;
   /** Per-IP daily budget of /api/csw: requests and bytes (defaults in rateLimit.ts). */
   cswDailyBudget?: DailyBudgetOptions;
+  /** Per-IP daily budget of the archive route of /api/fetch (IPT /archive.do): requests and bytes (defaults in rateLimit.ts). */
+  archiveDailyBudget?: DailyBudgetOptions;
   /** Turns at a catalogue host (default: at least 1 s apart, 20 may wait). */
   cswPacing?: HostPacerOptions;
   cswMaxBytes?: number;
@@ -180,6 +182,7 @@ export function createApp(opts: AppOptions): Express {
     signal,
   });
 
+  const archiveBudget = createDailyBudget({ requests: ARCHIVE_DAILY_REQUESTS, bytes: ARCHIVE_DAILY_BYTES, code: ARCHIVE_BUDGET_CODE, ...opts.archiveDailyBudget });
   app.post('/api/fetch', createRateLimiter(opts.rateLimit), express.json({ limit: '2kb' }), async (req: Request, res: Response) => {
     const clientGone = new AbortController();
     res.on('close', () => {
@@ -188,8 +191,14 @@ export function createApp(opts: AppOptions): Express {
     const host = logHost((req.body as { url?: unknown } | undefined)?.url);
     let status = 500;
     let bytes = 0;
+    let archive = false;
     try {
       const { url, accept } = parseBody(req.body);
+      archive = isArchiveUrl(url);
+      if (archive && !archiveBudget.check(req, res)) {
+        status = 429;
+        return;
+      }
       const upstream = await proxyFetch(url, accept, proxyDeps(clientGone.signal));
       const it = upstream.body[Symbol.asyncIterator]();
       // Nothing is sent before the first chunk is in: a refusal or a timeout up to here is still a proper status.
@@ -232,6 +241,7 @@ export function createApp(opts: AppOptions): Express {
       status = err.status;
       sendProxyError(res, err);
     } finally {
+      if (archive && bytes > 0) archiveBudget.addBytes(req, bytes);
       log(JSON.stringify({ host, status, bytes }));
     }
   });

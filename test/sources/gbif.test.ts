@@ -218,6 +218,43 @@ describe('archive download problems are said, never a silent pass', () => {
     expect(e).toBeInstanceOf(FetchInterruptedError);
   });
 
+  it('the daily archive budget answered by the proxy (429) is its own finding, not "record inaccessible 429"', async () => {
+    const proxy = (async () => new Response('', { status: 429, headers: { 'x-fetch-proxy-error': 'archive_daily_budget' } })) as unknown as typeof fetch;
+    const e = await serverFetcher('/api/fetch', proxy).get(ARCHIVE).catch((x: unknown) => x);
+    const finding = fetchErrorFinding(e, 'a.zip')!;
+    expect(finding.ruleId).toBe('IN-ARCHIVE-DAILY-BUDGET');
+    expect(finding.severity).toBe('error');
+    expect(finding.params).toEqual({ host: 'ipt.vliz.be' });
+  });
+
+  it('too_large on an IPT page that is not an archive.do is an ordinary proxy error (the 100 MB text would be false there)', async () => {
+    const proxy = (async () => new Response('', { status: 413, headers: { 'x-fetch-proxy-error': 'too_large' } })) as unknown as typeof fetch;
+    const e = await serverFetcher('/api/fetch', proxy).get('https://ipt.vliz.be/eurobis/resource?r=x').catch((x: unknown) => x);
+    expect(fetchErrorFinding(e, 'r')!.ruleId).toBe('IN-RECORD-INACCESSIBLE');
+  });
+
+  it('an archive cut by the proxy at its cap WITHOUT Content-Length says "too large", not "interrupted"', async () => {
+    const cut = (received: number): typeof fetch =>
+      (async () => {
+        let sent = false;
+        const body = new ReadableStream<Uint8Array>({
+          pull(c) {
+            if (!sent) {
+              sent = true;
+              c.enqueue(new Uint8Array(received));
+              return;
+            }
+            throw new TypeError('network error');
+          },
+        });
+        return new Response(body, { status: 200 });
+      }) as unknown as typeof fetch;
+    const atCap = await serverFetcher('/api/fetch', cut(100 * 1024 * 1024 - 16384)).get(ARCHIVE).catch((x: unknown) => x);
+    expect(fetchErrorFinding(atCap, 'a.zip')!.ruleId).toBe('IN-ARCHIVE-TOO-LARGE');
+    const early = await serverFetcher('/api/fetch', cut(1024)).get(ARCHIVE).catch((x: unknown) => x);
+    expect(fetchErrorFinding(early, 'a.zip')!.ruleId).toBe('IN-FETCH-INTERRUPTED');
+  });
+
   it('browser mode: a server without CORS headers fails the fetch itself, which is the existing "blocked, switch to server mode" finding', async () => {
     const noCors = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
     const f = browserFetcher(noCors as unknown as typeof fetch);
