@@ -27,7 +27,7 @@ function versionDoisOf(items: { id?: string; type?: string; relation?: string }[
 
 function licenceOf(index: number, r: Rights): LicenceStatement | undefined {
   // The rights text is shown; the identifier ("cc-by-4.0") is read as text too, so the two cannot disagree unnoticed.
-  return buildStatement({ source: 'datacite', field: `rightsList[${index}]`, text: r.rights ?? r.identifier, also: [r.identifier], uri: r.uri });
+  return buildStatement({ source: 'datacite', field: `rightsList[${index}]`, text: r.rights ?? r.identifier, also: [r.identifier], identifier: r.identifier, uri: r.uri });
 }
 
 const yearOf = (v: unknown): number | undefined => {
@@ -89,6 +89,8 @@ export function parseDataciteJson(json: unknown, label: string): MetadataRecord 
   rec.landingUrl = str(a.url);
   const creators = (Array.isArray(a.creators) ? a.creators : []).filter(isObj).map((c) => str(c.name) ?? str([str(c.familyName), str(c.givenName)].filter(Boolean).join(', '))).filter((n): n is string => !!n);
   if (creators.length > 0) rec.creators = creators;
+  const orgs = (Array.isArray(a.creators) ? a.creators : []).filter(isObj).filter((c) => /^organi[sz]ation/i.test(str(c.nameType) ?? '')).map((c) => str(c.name)).filter((n): n is string => !!n);
+  if (orgs.length > 0) rec.organisations = orgs;
   rec.publicationYear = yearOf(a.publicationYear);
   rec.publisher = isObj(a.publisher) ? str(a.publisher.name) : str(a.publisher);
   if (isObj(a.types)) rec.resourceType = str(a.types.resourceTypeGeneral) ?? str(a.types.resourceType);
@@ -137,6 +139,8 @@ export function parseDataciteXml(xml: string, label: string): MetadataRecord {
   rec.version = text(one(root, 'version'));
   const creators = children(one(root, 'creators') ?? root, ns, 'creator').map((c) => text(child(c, ns, 'creatorName'))).filter((n): n is string => !!n);
   if (creators.length > 0) rec.creators = creators;
+  const orgs = children(one(root, 'creators') ?? root, ns, 'creator').flatMap((c) => { const n = child(c, ns, 'creatorName'); return n && /^organi[sz]ation/i.test(n.getAttribute('nameType') ?? '') ? [text(n)] : []; }).filter((n): n is string => !!n);
+  if (orgs.length > 0) rec.organisations = orgs;
   rec.publicationYear = yearOf(text(one(root, 'publicationYear')));
   rec.publisher = text(one(root, 'publisher'));
   const rt = one(root, 'resourceType');
