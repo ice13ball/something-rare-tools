@@ -441,14 +441,16 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
       )}
 
       <form className="input-panel" onSubmit={(e) => { e.preventDefault(); void runEstimate(); }} noValidate>
-        <fieldset className="collection-kinds">
+        <fieldset className="choice-group">
           <legend>{t('collection.kind.legend')}</legend>
-          {KINDS.map((k) => (
-            <label key={k} className="inline-choice">
-              <input type="radio" name="collection-kind" value={k} checked={kind === k} onChange={() => setKind(k)} />
-              <span>{t(`collection.kind.${k}` as never)}</span>
-            </label>
-          ))}
+          <div className="choice-row">
+            {KINDS.map((k) => (
+              <label key={k} className="choice">
+                <input type="radio" name="collection-kind" value={k} checked={kind === k} onChange={() => setKind(k)} />
+                <span>{t(`collection.kind.${k}` as never)}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
 
         {kind === 'dois' && (
@@ -463,18 +465,20 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
         )}
         {kind === 'datacite' && (
           <>
-            <fieldset className="collection-kinds">
+            <fieldset className="choice-group">
               <legend>{t('collection.dc.by')}</legend>
-              {(['client', 'prefix'] as const).map((b) => (
-                <label key={b} className="inline-choice">
-                  <input type="radio" name="collection-dc-by" value={b} checked={dcBy === b} onChange={() => setDcBy(b)} />
-                  <span>{t(`collection.dc.${b}` as never)}</span>
-                </label>
-              ))}
+              <div className="choice-row">
+                {(['client', 'prefix'] as const).map((b) => (
+                  <label key={b} className="choice">
+                    <input type="radio" name="collection-dc-by" value={b} checked={dcBy === b} onChange={() => setDcBy(b)} />
+                    <span>{t(`collection.dc.${b}` as never)}</span>
+                  </label>
+                ))}
+              </div>
             </fieldset>
             <label className="field">
               <span>{t('collection.dc.label')}</span>
-              <input type="text" value={dcId} onChange={(e) => setDcId(e.target.value)} autoComplete="off" spellCheck={false} />
+              <input type="text" className="input-short" value={dcId} onChange={(e) => setDcId(e.target.value)} autoComplete="off" spellCheck={false} />
             </label>
             <p className="muted">{t('collection.dc.hint')}</p>
           </>
@@ -483,7 +487,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
           <>
             <label className="field">
               <span>{t('collection.zen.label')}</span>
-              <input type="text" value={community} onChange={(e) => setCommunity(e.target.value)} autoComplete="off" spellCheck={false} />
+              <input type="text" className="input-short" value={community} onChange={(e) => setCommunity(e.target.value)} autoComplete="off" spellCheck={false} />
             </label>
             <p className="muted">{t('collection.zen.hint')}</p>
           </>
@@ -492,7 +496,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
           <>
             <label className="field">
               <span>{t('collection.csw.label')}</span>
-              <select value={catalogue} onChange={(e) => setCatalogue(e.target.value)}>
+              <select className="input-short" value={catalogue} onChange={(e) => setCatalogue(e.target.value)}>
                 {CATALOGUES.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.label}
@@ -502,7 +506,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
             </label>
             <label className="field">
               <span>{t('collection.csw.schema')}</span>
-              <select value={schema} onChange={(e) => setSchema(e.target.value as CswSchema)}>
+              <select className="input-short" value={schema} onChange={(e) => setSchema(e.target.value as CswSchema)}>
                 {(catalogueById(catalogue)?.schemas ?? ['iso19139']).map((s) => (
                   <option key={s} value={s}>
                     {t(`collection.schema.${s}` as never)}
@@ -665,10 +669,9 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
         </section>
       )}
 
-      <section aria-labelledby="collection-delete-title">
-        <h2 id="collection-delete-title">{t('collection.delete.button')}</h2>
+      <section className="housekeeping" aria-label={t('collection.delete.button')}>
         <p className="muted">{t('collection.delete.note')}</p>
-        <button type="button" className="button secondary" onClick={act(discard)} disabled={actingNow || (progress !== null && isRunning(progress))}>
+        <button type="button" className="button secondary small" onClick={act(discard)} disabled={actingNow || (progress !== null && isRunning(progress))}>
           {t('collection.delete.button')}
         </button>
         {deleted && (
@@ -678,7 +681,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
         )}
       </section>
 
-      <section aria-labelledby="collection-checks-title">
+      <section className="about" aria-labelledby="collection-checks-title">
         <h2 id="collection-checks-title">{t('collection.checks.title')}</h2>
         <p>{t('collection.checks.p1')}</p>
         <ul>

@@ -143,8 +143,7 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
     <Layout titleKey="check.docTitle">
       <h1>{t('check.title')}</h1>
       <p className="lead">{t('check.intro')}</p>
-      <ModeSwitch value={mode} onChange={setMode} />
-      <InputPanel mode={mode} onSubmit={(i) => void submit(i)} disabled={busy} />
+      <InputPanel mode={mode} onSubmit={(i) => void submit(i)} disabled={busy} modeSwitch={<ModeSwitch value={mode} onChange={setMode} />} />
 
       {problem?.kind === 'unknownLink' && (
         <p className="error-text" role="alert">

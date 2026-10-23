@@ -661,7 +661,7 @@ describe('home and privacy pages', () => {
   it('the static home page has the same card text', () => {
     const html = readFileSync(join(__dirname, '..', '..', 'index.html'), 'utf8');
     expect(html).toContain(UI.en['index.collection.text']);
-    expect(html).toContain('<a class="button" href="/collection">Open collection review</a>');
+    expect(html).toContain('<a class="tool-link" href="/collection">Open collection review</a>');
   });
 });
 
