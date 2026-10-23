@@ -17,7 +17,7 @@ interface Rec {
 }
 
 /** A guest-limited Zenodo: 25 a page, a 10 000 window (400 otherwise), 30 requests a minute (429 + Retry-After beyond), q=publication_date ranges. */
-function zenodoMock(records: Rec[], clock: { now(): number }, opts: { unknown?: boolean } = {}) {
+function zenodoMock(records: Rec[], clock: { now(): number }, opts: { unknown?: boolean; within?: boolean } = {}) {
   const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   const log: { url: string; at: number; status: number }[] = [];
   const window: number[] = [];
@@ -41,14 +41,15 @@ function zenodoMock(records: Rec[], clock: { now(): number }, opts: { unknown?: 
       else {
         let pool = sorted;
         const q = u.searchParams.get('q');
-        const m = q ? /publication_date:\[(\S+) TO (\S+)\]/.exec(q) : null;
-        if (m) {
-          const lo = m[1];
-          const hi = m[2];
-          pool = pool.filter((r) => {
+        if (q) {
+          const hit = (r: Rec, lo: string, hi: string): boolean => {
             const [a, b] = r.span ?? [r.date, r.date];
-            return (hi === '*' || a <= hi) && (lo === '*' || b >= lo);
-          });
+            // a range query matches a record whose date range lies INSIDE it ('within', what the live index does) or merely touches it
+            return opts.within ? (hi === '*' || b <= hi) && (lo === '*' || a >= lo) : (hi === '*' || a <= hi) && (lo === '*' || b >= lo);
+          };
+          const first = /^publication_date:\[(\S+) TO (\S+)\]/.exec(q);
+          const nots = [...q.matchAll(/ AND NOT publication_date:\[(\S+) TO (\S+)\]/g)];
+          if (first) pool = pool.filter((r) => hit(r, first[1], first[2]) && !nots.some((n) => hit(r, n[1], n[2])));
         }
         if (u.searchParams.get('sort') === 'mostrecent') pool = [...pool].reverse();
         const hits = pool.slice((page - 1) * size, page * size).map((r) => ({
@@ -228,6 +229,81 @@ describe('Zenodo community', () => {
       const y22 = await pager.fetch(feb.next!);
       expect(y22.items).toHaveLength(1);
       expect(y22.next).toBeNull();
+    });
+
+    describe('partial dates the month and day slices miss (the live index matches a range only for records inside it)', () => {
+      const partial = (id: number, date: string, span: [string, string]): Rec => ({ ...rec(id, date), span });
+      const build = () => {
+        const recs: Rec[] = [];
+        let n = 1;
+        // 2019: 10 300 dated records over twelve months, plus 40 dated "2019" (in the year's range, in no month's) and 15 dated "2019-03" (inside March: found there)
+        for (let i = 0; i < 10_300; i++) recs.push(rec(n++, `2019-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}`));
+        for (let i = 0; i < 40; i++) recs.push(partial(n++, '2019', ['2019-01-01', '2019-12-31']));
+        for (let i = 0; i < 15; i++) recs.push(partial(n++, '2019-03', ['2019-03-01', '2019-03-31']));
+        // 2022: May alone holds 10 100 dated records (a month above the window, cut into days), plus 12 dated "2022-05"
+        for (let i = 0; i < 10_100; i++) recs.push(rec(n++, `2022-05-${String((i % 27) + 1).padStart(2, '0')}`));
+        for (let i = 0; i < 12; i++) recs.push(partial(n++, '2022-05', ['2022-05-01', '2022-05-31']));
+        for (let i = 0; i < 50; i++) recs.push(rec(n++, '2020-02-02'));
+        return recs;
+      };
+
+      it('a remainder slice per split year or month reads exactly those records: the slices add up to the total, nothing is lost or read twice', async () => {
+        const all = build();
+        const clock = virtualClock();
+        const z = zenodoMock(all, clock, { within: true });
+        const r = new CollectionRunner(runnerDeps(z.net, clock));
+        await r.start({ spec: { kind: 'zenodo', community: 'partial-lost' }, lang: 'en', sample: false });
+        const plan = (r as unknown as { st: { plan: ZenodoPlan } }).st.plan;
+        const rests = plan.slices.filter((s) => s.except);
+        expect(rests.map((s) => [s.from, s.to, s.total])).toEqual([
+          ['2019-01-01', '2019-12-31', 40],
+          ['2022-05-01', '2022-05-31', 12],
+        ]);
+        expect(rests[0].except).toHaveLength(12);
+        expect(rests[1].except).toHaveLength(31);
+        expect(plan.total).toBe(all.length);
+        expect(plan.sum).toBe(plan.total);
+        expect(r.progress().notices.map((n) => n.code)).not.toContain('slices-differ');
+        await r.whenIdle();
+        const p = r.progress();
+        expect(p.status).toBe('finished');
+        expect(p.counts.records).toBe(all.length);
+        expect(p.counts.states.checked).toBe(all.length);
+        expect(p.counts.duplicatesInBatch ?? 0).toBe(0);
+        expect(z.log.every((l) => l.status === 200)).toBe(true);
+
+        // resumed in the middle of a remainder slice: a NEW pager for every page, the cursor through JSON each time
+        const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
+        let c: unknown = zenodoPager({ net: z.net, nctx }, plan).initial;
+        const refs: string[] = [];
+        let inRemainder = 0;
+        while (c) {
+          const cur = JSON.parse(JSON.stringify(c)) as { si: number; page: number };
+          if (plan.slices[cur.si].except) inRemainder += 1;
+          const d = await zenodoPager({ net: z.net, nctx }, plan).fetch(cur as never);
+          refs.push(...d.items.map((i) => i.ref));
+          c = d.next;
+        }
+        expect(inRemainder).toBeGreaterThan(1); // 40 records = two pages, each started by a fresh pager
+        expect(refs).toHaveLength(all.length);
+        expect(new Set(refs).size).toBe(all.length);
+      }, 120_000);
+
+      it('a remainder above the window cannot be cut by date: it is capped and the run says so', async () => {
+        const clock = virtualClock();
+        const recs: Rec[] = [];
+        let n = 1;
+        for (let i = 0; i < 10_050; i++) recs.push(rec(n++, `2018-${String((i % 12) + 1).padStart(2, '0')}-10`));
+        for (let i = 0; i < 10_030; i++) recs.push({ ...rec(n++, '2018'), span: ['2018-01-01', '2018-12-31'] });
+        const z = zenodoMock(recs, clock, { within: true });
+        const r = new CollectionRunner(runnerDeps(z.net, clock));
+        await r.start({ spec: { kind: 'zenodo', community: 'all-partial' }, lang: 'en', sample: false });
+        await r.whenIdle();
+        const p = r.progress();
+        expect(p.counts.records).toBe(10_050 + ZENODO_WINDOW);
+        expect(p.notices.map((x) => x.code)).toContain('window-exceeded');
+        expect(p.notices).toContainEqual({ code: 'slices-differ', params: { sum: 10_050 + ZENODO_WINDOW, total: 20_080 } });
+      }, 120_000);
     });
 
     it('yearOfSplit: only a month or a day of one year is a split slice', () => {
