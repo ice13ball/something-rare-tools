@@ -150,6 +150,8 @@ export interface RuleDef {
   plainCollection?: Record<Lang, string>;
   /** Appended to LIC-EXTRA-TEXT / LIC-ADDED-CONDITIONS when param otherRest is set: another string of the statement (identifier, Zenodo title) leaves something too. */
   plainOtherRest?: Record<Lang, string>;
+  /** Sentences appended, in order, when the finding has the named param (set and non-empty). */
+  plainIf?: readonly { param: string; plain: Record<Lang, string> }[];
   technical: string;             // English, template with {param}
   thresholds?: Threshold[];
   citations?: Citation[];

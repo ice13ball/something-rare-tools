@@ -5,7 +5,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { gunzipSync } from 'node:zlib';
 import { runChecks } from '../../src/core/checks/run';
+import { decodeLandMask } from '../../src/core/geo/land';
 import { formatLines, renderPlain } from '../../src/core/report';
 import type { Finding } from '../../src/core/types';
 import { runInput, runSession, type GoldenInput } from './pipeline';
@@ -55,6 +57,9 @@ function missingLines(cands: Finding[], e: Expectation): number[] {
 const label = (e: Expectation) =>
   `${e.input ?? e.session}: ${e.rule} (${e.severity})${e.file ? ` @ ${e.file}` : ''}${e.files ? ` @ ${e.files.join(' + ')}` : ''}${e.valueIncludes ? ` ~ "${e.valueIncludes}"` : ''}${e.lines ? ` lines ${formatLines(e.lines)}` : ''}`;
 
+// the land mask the worker uses, so ROW-ON-LAND runs on real coastal and fjord data
+const land = decodeLandMask(new Uint8Array(gunzipSync(readFileSync(join(__dirname, '..', '..', 'src', 'core', 'geo', 'land-mask.bin')))));
+
 describe.skipIf(!GOLDEN_DIR)('golden set', () => {
   const dir = GOLDEN_DIR ?? '';
   const byId = new Map(exp.inputs.map((i) => [i.id, i]));
@@ -64,7 +69,7 @@ describe.skipIf(!GOLDEN_DIR)('golden set', () => {
   beforeAll(async () => {
     for (const input of exp.inputs) {
       const r = await runInput(input, dir);
-      findings.set(input.id, runChecks({ datasets: r.datasets, records: r.records, parseFindings: r.parseFindings }).findings);
+      findings.set(input.id, runChecks({ datasets: r.datasets, records: r.records, parseFindings: r.parseFindings }, { land }).findings);
       for (const s of r.skipped) skippedAll.push(`${input.id}: ${s.file} (${s.reason})`);
     }
     for (const s of exp.sessions) {
@@ -104,6 +109,19 @@ describe.skipIf(!GOLDEN_DIR)('golden set', () => {
       it(`${fb.input}: no ${fb.rulePrefix}*`, () => {
         const hit = got(fb.input).filter((f) => f.ruleId.startsWith(fb.rulePrefix));
         expect(hit.map((f) => `${f.ruleId} ${f.severity} ${f.file ?? '-'}`), 'forbidden findings present').toEqual([]);
+      }, TIMEOUT);
+    }
+  });
+
+  describe('positions on land', () => {
+    // coastal and fjord controls (Svalbard fjords, porewater at the coast, Baltic): no position may be called land.
+    // gn-6fe405e2 line 275 has latitude 58 for 78 (Siberia): the one true hit. CoastDOM (pangaea-964012) is coastal water
+    // including rivers; only positions far up rivers, and Baltic samples placed far inland, are expected there.
+    const expectedLines: Record<string, number[]> = { 'gn-6fe405e2': [275] };
+    for (const input of exp.inputs.filter((i) => i.id !== 'pangaea-964012')) {
+      it(`${input.id}: ROW-ON-LAND only where the position is really wrong`, () => {
+        const lines = got(input.id).filter((f) => f.ruleId === 'ROW-ON-LAND').flatMap((f) => f.lines ?? []);
+        expect(lines).toEqual(expectedLines[input.id] ?? []);
       }, TIMEOUT);
     }
   });

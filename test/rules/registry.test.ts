@@ -41,6 +41,8 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-NON-NUMERIC': ['warning', 'B'],
   'ROW-NA-VARIANT': ['warning', 'B'],
   'ROW-STATION-MOVED': ['warning', 'B'],
+  'ROW-STATION-SPREAD': ['info', 'B'],
+  'ROW-ON-LAND': ['warning', 'B'],
   'ROW-DATE-UNPARSEABLE': ['warning', 'B'],
   'ROW-DATE-MISSING': ['info', 'B'],
   'ROW-YEAR-OUTLIER': ['warning', 'B'],
@@ -63,10 +65,10 @@ const EXPECTED: Record<string, [Severity, string]> = {
 const placeholders = (s: string): Set<string> => new Set([...s.matchAll(/\{([A-Za-z_][\w.]*)\}/g)].map((m) => m[1]));
 
 describe('rule table', () => {
-  it('has exactly the 50 planned ids, each once, with the planned severity and category', () => {
+  it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(51);
+    expect(ids.length).toBe(53);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -113,6 +115,18 @@ describe('messages', () => {
         }
       }
       for (const p of declared) expect(tech.has(p), `${r.id} declares {${p}} but technical never uses it`).toBe(true);
+    });
+
+    it(`${r.id}: appended sentences (plainIf) in four languages, using only their own optional param or declared ones`, () => {
+      for (const extra of r.plainIf ?? []) {
+        expect(GENERIC.has(extra.param) || new Set(RULE_PARAMS[r.id]).has(extra.param), `${r.id} plainIf on declared {${extra.param}}`).toBe(false);
+        for (const lang of LANGS) {
+          const t = extra.plain[lang];
+          expect(t.trim().length, `${r.id} plainIf ${extra.param} ${lang}`).toBeGreaterThan(20);
+          expect(t.length, `${r.id} plainIf ${extra.param} ${lang} too long`).toBeLessThanOrEqual(200);
+          for (const p of placeholders(t)) expect(p === extra.param || GENERIC.has(p) || new Set(RULE_PARAMS[r.id]).has(p), `${r.id} plainIf uses {${p}}`).toBe(true);
+        }
+      }
     });
 
     it(`${r.id}: plain stays jargon-free and makes no readiness claim`, () => {

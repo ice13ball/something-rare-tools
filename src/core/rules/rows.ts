@@ -15,6 +15,10 @@ import type { RuleSpec } from './spec';
  *   ROW-NON-NUMERIC       (none)      field = column, value = example token, lines = rows
  *   ROW-NA-VARIANT        (none)      field = column, value = example token (e.g. NANA), lines = rows
  *   ROW-STATION-MOVED     station, positions   positions = compact text such as "76.9N 15.5E (9 rows); 76.9N 16.5E (14 rows)"
+ *                         signLon / signLat    'yes' when two positions differ (almost) only by the sign of that coordinate (optional)
+ *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded)
+ *   ROW-ON-LAND           count, places, flips   count = rows on land; places = up to 5 positions "lat, lon (rows; ≥N km)";
+ *                         flips (optional) = "position → the same with a sign flipped or axes exchanged" where that lies at sea
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
  *   ROW-YEAR-OUTLIER      years, declared  years = years of the flagged rows; declared = years named in label/file name/title/extent
@@ -138,7 +142,65 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Station {station} erscheint an verschiedenen Positionen ({positions}). Prüfen Sie, welche richtig ist — eine Ziffer wurde vielleicht falsch getippt oder die Koordinaten wurden vertauscht.`,
       fr: `La station {station} apparaît à des positions différentes ({positions}). Vérifiez laquelle est correcte — un chiffre a peut-être été mal saisi ou les coordonnées inversées.`,
     },
-    technical: `{file}:{lines} station {station} at {positions}: positions differ by a typed digit or by exchanged axes.`,
+    plainIf: [
+      {
+        param: 'signLon',
+        plain: {
+          pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem długości geograficznej — przy jednej z nich brakuje albo jest zbędny minus (W/E).`,
+          en: `Two of these positions differ (almost) only in the sign of the longitude — one of them is missing a minus sign or has one too many (W/E).`,
+          de: `Zwei dieser Positionen unterscheiden sich (fast) nur im Vorzeichen der Länge — bei einer fehlt ein Minus oder es ist eines zu viel (W/O).`,
+          fr: `Deux de ces positions ne diffèrent (presque) que par le signe de la longitude — il manque un signe moins à l'une d'elles, ou il y en a un de trop (O/E).`,
+        },
+      },
+      {
+        param: 'signLat',
+        plain: {
+          pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem szerokości geograficznej — przy jednej z nich brakuje albo jest zbędny minus (S/N).`,
+          en: `Two of these positions differ (almost) only in the sign of the latitude — one of them is missing a minus sign or has one too many (S/N).`,
+          de: `Zwei dieser Positionen unterscheiden sich (fast) nur im Vorzeichen der Breite — bei einer fehlt ein Minus oder es ist eines zu viel (S/N).`,
+          fr: `Deux de ces positions ne diffèrent (presque) que par le signe de la latitude — il manque un signe moins à l'une d'elles, ou il y en a un de trop (S/N).`,
+        },
+      },
+    ],
+    technical: `{file}:{lines} station {station} at {positions}: positions differ by a typed digit, by exchanged axes, or by a sign (as written at least 100 km apart, within 50 km and at least 10 times closer once flipped).`,
+  },
+  {
+    id: 'ROW-STATION-SPREAD',
+    category: 'B',
+    severity: 'info',
+    params: ['station', 'km', 'positions'],
+    plain: {
+      pl: `Stacja {station} ma pozycje odległe od siebie nawet o {km} km ({positions}). Jedna stacja to zwykle jedno miejsce, a 10 km to znacznie więcej niż błąd pozycji statku na stacji. Jeśli ta nazwa oznacza obszar, transekt lub rejs, pomiń tę uwagę.`,
+      en: `Station {station} has positions up to {km} km apart ({positions}). A station is usually one place, and 10 km is far more than a ship's position error on station. If this name stands for an area, a transect or a cruise, ignore this note.`,
+      de: `Die Station {station} hat Positionen, die bis zu {km} km auseinanderliegen ({positions}). Eine Station ist meist ein Ort, und 10 km sind weit mehr als der Positionsfehler eines Schiffs auf Station. Steht der Name für ein Gebiet, einen Transekt oder eine Fahrt, ignorieren Sie diesen Hinweis.`,
+      fr: `La station {station} a des positions distantes de {km} km au plus ({positions}). Une station correspond d'habitude à un seul lieu, et 10 km dépassent de loin l'erreur de position d'un navire en station. Si ce nom désigne une zone, un transect ou une campagne, ignorez cette remarque.`,
+    },
+    technical: `{file} station {station}: positions up to {km} km apart (more than 10 km; great-circle distance) at {positions}.`,
+  },
+  {
+    id: 'ROW-ON-LAND',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'places'],
+    citations: [CITE.argoLand, CITE.naturalEarthLand],
+    plain: {
+      pl: `{count} wierszy ({lines}) ma pozycję na lądzie lub w jeziorze, z dala od morza: {places} (wiersze; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. Pas 20 km przy brzegu nie jest oceniany.`,
+      en: `{count} rows ({lines}) have a position on land or in a lake, away from the sea: {places} (rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. The 20 km band along the coast is not judged.`,
+      de: `{count} Zeilen ({lines}) haben eine Position an Land oder in einem See, abseits des Meeres: {places} (Zeilen; kleinster Abstand zum Meer). Bei Meeresdaten ist das meist ein Fehler: falsches Vorzeichen, vertauschte Achsen oder ein Tippfehler. Der 20-km-Küstenstreifen wird nicht bewertet.`,
+      fr: `{count} lignes ({lines}) ont une position sur terre ou dans un lac, loin de la mer : {places} (lignes ; distance minimale à la mer). Pour des données marines, c'est le plus souvent une erreur : signe erroné, axes inversés ou faute de frappe. La bande côtière de 20 km n'est pas évaluée.`,
+    },
+    plainIf: [
+      {
+        param: 'flips',
+        plain: {
+          pl: `Po zmianie znaku albo zamianie współrzędnych te pozycje wypadają na morzu: {flips}. To tylko wskazówka, nie poprawka.`,
+          en: `With a sign flipped or the coordinates swapped, these positions lie at sea: {flips}. This is only a hint, not a correction.`,
+          de: `Mit umgekehrtem Vorzeichen oder vertauschten Koordinaten liegen diese Positionen im Meer: {flips}. Das ist nur ein Hinweis, keine Korrektur.`,
+          fr: `Avec un signe inversé ou les coordonnées permutées, ces positions se trouvent en mer : {flips}. Ce n'est qu'une indication, pas une correction.`,
+        },
+      },
+    ],
+    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 20 km from the sea (Natural Earth 1:10m, 0.05 degree cells; nearer the coast nothing is judged): {places}.`,
   },
   {
     id: 'ROW-DATE-UNPARSEABLE',

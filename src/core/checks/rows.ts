@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
+import { ON_LAND_MIN_KM, type LandMask } from '../geo/land';
 import { makeFinding, threshold } from '../rules/registry';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
 
@@ -18,6 +19,19 @@ const MAX_DATES = 3;
 /* ---------- small helpers ---------- */
 
 const decimalsOfNumber = (v: number): number => (String(v).split('.')[1] ?? '').length;
+
+/**
+ * Decimals as written, except for a single-precision artefact: "37.8499984741211" is 37.85 stored as a 32-bit float and
+ * printed in full. Such a value counts with the decimals of the shortest number that is the same 32-bit float, so the
+ * position compares and prints as 37.85. A genuinely precise value is not a float32 and keeps its decimals.
+ */
+function writtenDecimals(v: number, dec: number): number {
+  if (dec <= 6) return dec;
+  const f = Math.fround(v);
+  if (Math.abs(v - f) > 1e-12 * Math.max(1, Math.abs(v))) return dec;
+  for (let d = 0; d < dec; d++) if (Math.fround(Number(v.toFixed(d))) === f) return d;
+  return dec;
+}
 
 function fmt(v: number, decimals: number | undefined): string {
   return decimals !== undefined && decimals >= 0 && decimals <= 20 ? v.toFixed(decimals) : String(v);
@@ -123,20 +137,51 @@ function exchanged(p: Pos, q: Pos): boolean {
   return sameAtCoarser(p.lat, p.latDec, q.lon, q.lonDec) && sameAtCoarser(p.lon, p.lonDec, q.lat, q.latDec);
 }
 
+/* Great-circle distance in km (spherical Earth, mean radius 6371 km), correct across the antimeridian. */
+function km(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const r = Math.PI / 180;
+  const h = Math.sin(((bLat - aLat) * r) / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(((bLon - aLon) * r) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/*
+ * Pattern (c): one coordinate has the other sign. With that sign flipped the two positions are within SIGN_FLIP_KM of each
+ * other, and as written they are at least SIGN_FLIP_MIN_KM and SIGN_FLIP_RATIO times further apart. Not a published
+ * tolerance: it only says that a sign explains the difference far better than anything else (Menez Gwen: 5 423 km as
+ * written, 1.2 km flipped). The minimum keeps positions on both sides of 0 or of 180 degrees, which a flip barely moves,
+ * out of it.
+ */
+const SIGN_FLIP_KM = 50;
+const SIGN_FLIP_MIN_KM = 100;
+const SIGN_FLIP_RATIO = 10;
+function flippedAxis(p: Pos, q: Pos): 'lat' | 'lon' | undefined {
+  if (p.lon * q.lon >= 0 && p.lat * q.lat >= 0) return undefined; // no opposite sign: skip the distance (pairs are many)
+  const written = km(p.lat, p.lon, q.lat, q.lon);
+  if (written < SIGN_FLIP_MIN_KM) return undefined;
+  const near = (d: number) => d <= SIGN_FLIP_KM && written >= SIGN_FLIP_RATIO * Math.max(d, 0.001);
+  if (p.lon * q.lon < 0 && near(km(p.lat, p.lon, q.lat, -q.lon))) return 'lon';
+  if (p.lat * q.lat < 0 && near(km(p.lat, p.lon, -q.lat, q.lon))) return 'lat';
+  return undefined;
+}
+
+/** More distinct positions than this under one name is a track, not a station: the pattern search (quadratic) is skipped. */
+const MAX_STATION_POSITIONS = 500;
+
 function positionsOf(rows: DataRow[]): Pos[] {
   const exact = new Map<string, Pos>();
   for (const r of rows) {
     if (r.lat === undefined || r.lon === undefined) continue;
     const key = `${r.lat}\u0000${r.lon}`;
     const hit = exact.get(key);
-    const latDec = r.latDecimals ?? decimalsOfNumber(r.lat);
-    const lonDec = r.lonDecimals ?? decimalsOfNumber(r.lon);
+    const latDec = writtenDecimals(r.lat, r.latDecimals ?? decimalsOfNumber(r.lat));
+    const lonDec = writtenDecimals(r.lon, r.lonDecimals ?? decimalsOfNumber(r.lon));
     if (hit) {
       hit.rows.push(r);
       hit.latDec = Math.max(hit.latDec, latDec);
       hit.lonDec = Math.max(hit.lonDec, lonDec);
     } else exact.set(key, { lat: r.lat, lon: r.lon, latDec, lonDec, rows: [r] });
   }
+  if (exact.size > MAX_STATION_POSITIONS) return [...exact.values()];
   // positions that agree at the coarser reported precision are one position (15.5 and 15.53)
   const merged: Pos[] = [];
   for (const p of exact.values()) {
@@ -163,6 +208,26 @@ const firstLine = (p: Pos): number => Math.min(...p.rows.map((r) => r.line));
  * and no ship speed either (item 5): this check is pattern-only. A station is reported when two of its positions differ by a
  * typed digit or by exchanged axes. A position with latitude === longitude is left to ROW-LAT-EQ-LON.
  */
+/*
+ * ROW-STATION-SPREAD: a station whose positions are more than SPREAD_KM apart. No published tolerance exists
+ * (docs/research/qc-sources.md, item 6); 10 km is a stated choice, far above the position error of a ship on station
+ * (satellite navigation, drift during a cast) and below the size at which a name usually stands for an area. A note,
+ * not a warning: transects, cruises and named areas legitimately span more. Names that say they are general or unknown
+ * are skipped. At most MAX_SPREAD_POSITIONS positions, spread evenly over the station's rows, are compared, so a long
+ * track stays cheap (the distance may then be a little short of the true widest, never longer).
+ */
+const SPREAD_KM = 10;
+const MAX_SPREAD_POSITIONS = 200;
+const GENERIC_STATION = /\((general|unknown|various)\)|^(general|unknown|n\/?a|none|various|multiple|several|misc(ellaneous)?|other|not recorded|-+|\?+)$/i;
+
+function widest(positions: readonly Pos[]): number {
+  const n = positions.length;
+  const ps = n <= MAX_SPREAD_POSITIONS ? positions : Array.from({ length: MAX_SPREAD_POSITIONS }, (_, i) => positions[Math.floor((i * (n - 1)) / (MAX_SPREAD_POSITIONS - 1))]);
+  let best = 0;
+  for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) best = Math.max(best, km(ps[i].lat, ps[i].lon, ps[j].lat, ps[j].lon));
+  return best;
+}
+
 function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
   const byStation = new Map<string, DataRow[]>();
   for (const r of rows) {
@@ -174,23 +239,80 @@ function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[
   for (const [station, srows] of byStation) {
     const positions = positionsOf(srows);
     if (positions.length < 2) continue;
+    const track = positions.length > MAX_STATION_POSITIONS;
     const involved = new Set<Pos>();
     const minority = new Set<DataRow>();
-    for (let i = 0; i < positions.length; i++) {
+    const flipped = new Set<'lat' | 'lon'>();
+    for (let i = 0; i < (track ? 0 : positions.length); i++) {
       for (let j = i + 1; j < positions.length; j++) {
         const p = positions[i];
         const q = positions[j];
         if (p.lat === p.lon || q.lat === q.lon) continue;
-        if (!typedDigit(p, q) && !exchanged(p, q)) continue;
+        const axis = flippedAxis(p, q);
+        if (!typedDigit(p, q) && !exchanged(p, q) && axis === undefined) continue;
+        if (axis) flipped.add(axis);
         involved.add(p).add(q);
         const small = q.rows.length < p.rows.length ? q : p.rows.length < q.rows.length ? p : firstLine(p) < firstLine(q) ? q : p;
         for (const r of small.rows) minority.add(r);
       }
     }
-    if (involved.size === 0) continue;
+    if (involved.size === 0) {
+      if (GENERIC_STATION.test(station.trim())) continue;
+      const spread = widest(positions);
+      if (spread <= SPREAD_KM) continue;
+      const shown = positions.slice(0, MAX_DATES + 2);
+      const text = shown.map(positionText).join('; ') + (positions.length > shown.length ? `; …+${positions.length - shown.length}` : '');
+      out.push(makeFinding('ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params: { station, km: Math.round(spread), positions: text } }));
+      continue;
+    }
     const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
-    out.push(makeFinding('ROW-STATION-MOVED', { file: ds.file, sheet, value: station, lines: [...minority].map((r) => r.line), params: { station, positions: text } }));
+    const params: Record<string, string> = { station, positions: text };
+    if (flipped.has('lon')) params.signLon = 'yes';
+    if (flipped.has('lat')) params.signLat = 'yes';
+    out.push(makeFinding('ROW-STATION-MOVED', { file: ds.file, sheet, value: station, lines: [...minority].map((r) => r.line), params }));
   }
+}
+
+/* ---------- ROW-ON-LAND ---------- */
+
+const MAX_PLACES = 5;
+
+const coord = (v: number, dec: number, pos: string, neg: string): string => `${fmt(Math.abs(v), dec)} ${v < 0 ? neg : pos}`;
+const place = (lat: number, lon: number, latDec: number, lonDec: number): string => `${coord(lat, latDec, 'N', 'S')}, ${coord(lon, lonDec, 'E', 'W')}`;
+
+/*
+ * A marine position on land or in an inland lake, at least ON_LAND_MIN_KM inside (src/core/geo/land.ts). Positions nearer
+ * the coast, out of range, or where the mask makes no claim give nothing. When the same position with a flipped sign or
+ * exchanged axes lies at sea (the mask's sea class, also at least COAST_BUFFER_KM out), that is shown as a hint, never applied.
+ */
+function onLand(ds: Dataset, sheet: string, rows: DataRow[], land: LandMask, out: Finding[]): void {
+  interface Hit { lat: number; lon: number; latDec: number; lonDec: number; km: number; n: number }
+  const hits = new Map<string, Hit>();
+  const lines: number[] = [];
+  for (const r of rows) {
+    if (r.lat === undefined || r.lon === undefined) continue;
+    const at = land.place(r.lat, r.lon);
+    if (at.kind !== 'land' || at.atLeastKm < ON_LAND_MIN_KM) continue;
+    lines.push(r.line);
+    const key = `${r.lat}\u0000${r.lon}`;
+    const h = hits.get(key);
+    if (h) h.n++;
+    else hits.set(key, { lat: r.lat, lon: r.lon, latDec: writtenDecimals(r.lat, r.latDecimals ?? decimalsOfNumber(r.lat)), lonDec: writtenDecimals(r.lon, r.lonDecimals ?? decimalsOfNumber(r.lon)), km: at.atLeastKm, n: 1 });
+  }
+  if (lines.length === 0) return;
+  const all = [...hits.values()].sort((a, b) => b.n - a.n);
+  const shown = all.slice(0, MAX_PLACES);
+  const places = shown.map((h) => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n}; ≥${h.km} km)`).join('; ') + (all.length > shown.length ? `; …+${all.length - shown.length}` : '');
+  const flips: string[] = [];
+  for (const h of shown) {
+    const options: [number, number, number, number][] = [[h.lat, -h.lon, h.latDec, h.lonDec], [-h.lat, h.lon, h.latDec, h.lonDec]];
+    if (Math.abs(h.lon) <= 90) options.push([h.lon, h.lat, h.lonDec, h.latDec]);
+    const sea = options.find(([la, lo]) => land.place(la, lo).kind === 'sea');
+    if (sea) flips.push(`${place(h.lat, h.lon, h.latDec, h.lonDec)} → ${place(sea[0], sea[1], sea[2], sea[3])}`);
+  }
+  const params: Record<string, string | number> = { count: lines.length, places };
+  if (flips.length > 0) params.flips = flips.join('; ');
+  out.push(makeFinding('ROW-ON-LAND', { file: ds.file, sheet, lines, params }));
 }
 
 /* ---------- ROW-DATE-MISSING, ROW-YEAR-OUTLIER ---------- */
@@ -295,13 +417,19 @@ function depthSign(ds: Dataset, out: Finding[]): void {
 
 /* ---------- public ---------- */
 
+export interface RowContext {
+  /** The land/sea grid; without it ROW-ON-LAND does not run (the report then says so, see runChecks). */
+  land?: LandMask;
+}
+
 /** Category B — row checks. */
-export function checkRows(ds: Dataset): Finding[] {
+export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
   const out: Finding[] = [];
   const declared = declaredYears(ds);
   for (const [sheet, rows] of bySheet(ds.rows)) {
     positionRules(ds, sheet, rows, out);
     stationMoved(ds, sheet, rows, out);
+    if (ctx.land) onLand(ds, sheet, rows, ctx.land, out);
     dateMissing(ds, sheet, rows, out);
     yearOutlier(ds, sheet, rows, declared, out);
   }

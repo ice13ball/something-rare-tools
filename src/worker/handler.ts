@@ -4,6 +4,8 @@
 // (check.worker.ts) only moves messages; tests and the jsdom component tests call this directly.
 import { buildDatasets } from '../core/dataset';
 import { runChecks } from '../core/checks/run';
+import { gunzipInBrowser, loadLandMask, type LandMask } from '../core/geo/land';
+import landMaskUrl from '../core/geo/land-mask.bin?url';
 import { draftToDataciteXml } from '../core/output/datacite';
 import { metadataDraft, type MetadataDraft } from '../core/output/draft';
 import { toCleanCsv } from '../core/output/csv';
@@ -92,8 +94,36 @@ export interface Handler {
   handle(req: Request): unknown;
 }
 
+/** Loads the land/sea grid for ROW-ON-LAND. */
+export type LandLoader = () => Promise<LandMask>;
+
+/** In the browser: the bundled grid from our own /assets, gunzipped with DecompressionStream. */
+export const browserLandLoader: LandLoader = async () => {
+  const res = await fetch(landMaskUrl);
+  if (!res.ok) throw new Error(`land mask: HTTP ${res.status}`);
+  return loadLandMask(new Uint8Array(await res.arrayBuffer()), gunzipInBrowser);
+};
+
+export interface HandlerOptions {
+  /** Without a loader ROW-ON-LAND does not run and nothing is said about it (tests that do not need it). */
+  land?: LandLoader;
+}
+
+const hasPositions = (datasets: readonly Dataset[]): boolean => datasets.some((ds) => ds.rows.some((r) => r.lat !== undefined && r.lon !== undefined));
+
 /** One session: parse -> build (per file) -> check -> export / draft / row. `parse` and `reset` start a new session. */
-export function createHandler(): Handler {
+export function createHandler(opts: HandlerOptions = {}): Handler {
+  // the grid is fetched once per worker, on the first check (or build) that has positions; a failed fetch is retried next time
+  let landPromise: Promise<LandMask | null> | undefined;
+  const land = (): Promise<LandMask | null> | undefined => {
+    const loader = opts.land;
+    if (!loader) return undefined;
+    landPromise ??= loader().catch(() => {
+      landPromise = undefined;
+      return null;
+    });
+    return landPromise;
+  };
   let seq = 0;
   let files = new Map<string, Held>();
   let built = new Map<string, Built>();
@@ -202,15 +232,18 @@ export function createHandler(): Handler {
     built.set(req.fileId, { datasets: out.datasets, findings: out.findings });
     report = undefined;
     rowIndex = undefined;
+    if (hasPositions(out.datasets)) void land(); // start the download while the user reads the confirmation
     return { datasets: out.datasets.map(summaryOf) };
   }
 
-  function check(): CheckResult {
+  async function check(): Promise<CheckResult> {
     const datasets = allDatasets();
     const sessionRecords: LoadedRecord[] = [...records];
     if (hasDropped) sessionRecords.push({ label: 'dropped files', kind: 'dropped', metadata: droppedMeta, files: [], findings: [] });
     const findings = [...parseFindings, ...[...built.values()].flatMap((b) => b.findings)];
-    report = runChecks({ datasets, records: sessionRecords, parseFindings: findings });
+    const pending = hasPositions(datasets) ? land() : undefined;
+    const mask = pending === undefined ? undefined : await pending;
+    report = runChecks({ datasets, records: sessionRecords, parseFindings: findings }, { land: mask });
     rowIndex = undefined;
     return { report, datasets: datasets.map(summaryOf) };
   }
@@ -289,12 +322,12 @@ export function createHandler(): Handler {
 }
 
 /** The default session of this module (a worker has exactly one). */
-const shared = createHandler();
+const shared = createHandler({ land: browserLandLoader });
 export const handle = (req: Request): unknown => shared.handle(req);
 
 /** An Engine that runs the handler in the calling thread: for tests. Each engine has its own session. */
-export function createDirectEngine(): Engine {
-  const h = createHandler();
+export function createDirectEngine(opts: HandlerOptions = {}): Engine {
+  const h = createHandler(opts);
   return makeEngine((req) =>
     new Promise((resolve, reject) => {
       try {

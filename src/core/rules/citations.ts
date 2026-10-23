@@ -84,6 +84,9 @@ const th = (name: string, value: number, unit: string, citation: Citation): Thre
 export const CITE = {
   // position test: Argo Test 3 "Impossible location test"
   argoLocation: cite(ARGO_CTD, 'section 2.1.2, Test 3 "Impossible location test", p.11'),
+  // ROW-ON-LAND: the published test, and the land map it uses here (verified 2026-10-23 in the opened PDF)
+  argoLand: cite(ARGO_CTD, 'section 2.1.2, Test 4 "Position on land test", p.11'),
+  naturalEarthLand: { label: 'Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)', url: 'https://www.naturalearthdata.com/downloads/10m-physical-vectors/', locator: 'layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py' },
   gtsppLocation: cite(GTSPP, 'Annex B, Test 1.3 "Impossible Location", PDF p.44'),
   // global range tests
   argoCtdRange: cite(ARGO_CTD, 'section 2.1.2, Test 6 "Global range test", p.12'),

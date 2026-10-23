@@ -117,8 +117,12 @@ export function renderPlain(f: Finding, lang: Lang): string {
   }
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
-  const base = fill(texts[lang] || texts.en, f);
-  if (rule.plainOtherRest && f.params.otherRest) return `${base} ${fill(rule.plainOtherRest[lang] || rule.plainOtherRest.en, f)}`;
+  let base = fill(texts[lang] || texts.en, f);
+  if (rule.plainOtherRest && f.params.otherRest) base = `${base} ${fill(rule.plainOtherRest[lang] || rule.plainOtherRest.en, f)}`;
+  for (const extra of rule.plainIf ?? []) {
+    const v = f.params[extra.param];
+    if (v !== undefined && v !== '') base = `${base} ${fill(extra.plain[lang] || extra.plain.en, f)}`;
+  }
   return base;
 }
 

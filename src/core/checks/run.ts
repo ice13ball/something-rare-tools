@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { ownLoadFailure } from '../licence/failure';
+import type { LandMask } from '../geo/land';
 import { buildReport } from '../report';
 import type { CheckSession, Finding, LoadedRecord, MetadataSource, Report } from '../types';
 import { checkChemistry } from './chemistry';
@@ -25,7 +26,15 @@ const SOURCE_OF_KIND: Partial<Record<LoadedRecord['kind'], MetadataSource>> = {
  * set of files the user dropped). A record that carries no metadata at all and was not refused by
  * its server is skipped: a dropped CSV without a metadata file says nothing about a licence.
  */
-export function runChecks(session: CheckSession): Report {
+export interface RunOptions {
+  /**
+   * The land/sea grid for ROW-ON-LAND. `null` = it was needed but could not be loaded: the report then says that positions
+   * were not compared with the land (never a silent pass). `undefined` = not requested (no positions, or no loader).
+   */
+  land?: LandMask | null;
+}
+
+export function runChecks(session: CheckSession, opts: RunOptions = {}): Report {
   const findings: Finding[] = [...session.parseFindings];
   for (const record of session.records) {
     findings.push(...record.findings);
@@ -37,8 +46,10 @@ export function runChecks(session: CheckSession): Report {
     }
   }
   for (const ds of session.datasets) {
-    findings.push(...checkMetadataVsData(ds), ...checkRows(ds), ...checkChemistry(ds));
+    findings.push(...checkMetadataVsData(ds), ...checkRows(ds, opts.land ? { land: opts.land } : {}), ...checkChemistry(ds));
   }
   if (session.datasets.length > 1) findings.push(...checkCrossFile(session.datasets));
-  return buildReport(findings);
+  const report = buildReport(findings);
+  if (opts.land === null) report.notChecked.unshift('notChecked.landMask');
+  return report;
 }

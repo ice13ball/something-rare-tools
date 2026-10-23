@@ -313,3 +313,12 @@ Not shipped for lack of a citable threshold: ship-speed / impossible-jump betwee
 tolerance for "same station at different positions" (ROW-STATION-MOVED and XF-POSITION-CONFLICT ship as
 pattern checks without a distance threshold); nutrient and DIC global ranges (seawater ranges do not
 apply to porewater, and DIC has no citable global range); porewater ranges.
+
+## Stated choices for position checks (2026-10-23) — NOT published thresholds
+
+These numbers are the tool's own choices, stated in the rule texts. No citable source gives them.
+- **ROW-ON-LAND.** Positions are judged only when they are at least 20 km inside land or an inland lake, as measured on Natural Earth 1:10m (public domain), rasterised at 0.01° to 0.05° cells by `scripts/land-mask.py`.
+  - The published test is Argo QC Manual v3.9, section 2.1.2, Test 4 "Position on land test", p.11 (verified in the opened PDF). It names no distance.
+  - 20 km is a measured choice. With 5 km, two inner Svalbard fjord stations (IO PAN, glaciers retreated since the coastline was drawn) and 1 249 estuary and river rows of CoastDOM v1 (PANGAEA 964012) were called land. At 20 km those are gone, and every gross ChEssBase error stays in.
+- **ROW-STATION-MOVED, sign pattern.** It applies when the two positions are, as written, ≥ 100 km apart, and, with one sign flipped, ≤ 50 km apart and ≥ 10 times closer. Menez Gwen (ChEssBase): 5 423 km as written, 1.2 km once flipped.
+- **ROW-STATION-SPREAD.** It applies to a station whose positions are more than 10 km apart (note level). This is far above a ship's position error on station and below the size of a named area. Item 6 above still holds: there is no published tolerance.
