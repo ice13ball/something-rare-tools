@@ -44,8 +44,8 @@ describe('HIGH: a holder entry is neutral only when every name is a creator or t
       expect(ids(dc({}, by, { rights: t, rightsUri: INC })), t).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
     }
   });
-  it('the In Copyright link alone, with no text, still warns', () => {
-    expect(ids(dc(OWN, by, { rightsUri: INC }))).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
+  it('the In Copyright link alone, with no text, is neutral (it says only that the work is in copyright; round 5)', () => {
+    expect(ids(dc(OWN, by, { rightsUri: INC }))).toEqual([]);
   });
   it('a Zenodo record: its rights[] holder entry is checked against its own creators', () => {
     const rec = (title: string) => parseZenodoRecord({ id: 1, metadata: { title: 'x', creators: [{ name: 'Fabbian, Ignacio' }], license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: title }, link: INC }] } }, 'z');

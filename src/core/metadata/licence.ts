@@ -895,7 +895,7 @@ const NAME_PARTICLES = new Set(['van', 'von', 'de', 'der', 'den', 'da', 'di', 'd
  * and one whole word matches ("Krašovec N." is "Krašovec, Nina"); or it is "Given Middle… Surname" with the given name first and the
  * whole surname last ("Kevin Thorsen Baird" is "Baird, Kevin"). Anything before, after or outside that is nobody ("Krašovec N. Internal").
  */
-function isPerson(words: string[], c: string): boolean {
+function isPerson(words: string[], c: string, capital: ReadonlySet<string>): boolean {
   const have = partyTokens(c);
   // The first initial must be one of the creator's; a further one is a middle initial and says nothing.
   const initials = words.filter((w) => w.length === 1);
@@ -909,7 +909,12 @@ function isPerson(words: string[], c: string): boolean {
   if (given.length === 0 || surname.length === 0 || words.length <= surname.length + 1) return false;
   if (words.slice(words.length - surname.length).join(' ') !== surname.join(' ')) return false;
   const first = words[0];
-  return first.length === 1 ? given[0].startsWith(first) : given.includes(first);
+  if (!(first.length === 1 ? given[0].startsWith(first) : given.includes(first))) return false;
+  // What sits between the given name and the surname is a middle name, not a clause: initials, the creator's own other names, and at most
+  // ONE other capitalised word.
+  const middle = words.slice(1, words.length - surname.length);
+  const unknown = middle.filter((w) => w.length > 1 && !have.includes(w));
+  return unknown.length <= 1 && unknown.every((w) => capital.has(w));
 }
 
 /** One name of a holder entry is a party of the record. Organisations and the publisher match as a whole name; people as above. */
@@ -918,7 +923,8 @@ function isParty(name: string, who: RecordParties): boolean {
   if (words.length === 0) return false;
   const whole = words.join(' ');
   if (who.publisher && partyTokens(who.publisher).join(' ') === whole) return true;
-  return (who.creators ?? []).some((c) => (isOrganisation(c, who) ? partyTokens(c).join(' ') === whole : isPerson(words, c)));
+  const capital = new Set((name.match(/\p{Lu}[\p{L}'’-]*/gu) ?? []).flatMap(partyTokens));
+  return (who.creators ?? []).some((c) => (isOrganisation(c, who) ? partyTokens(c).join(' ') === whole : isPerson(words, c, capital)));
 }
 
 const HONORIFIC = /(?<![\p{L}\p{N}])(?:dr|prof|professor|ph\.?\s?d|m\.?\s?d|mr|mrs|ms|mx|dipl|ing|msc|mgr|hab)(?![\p{L}\p{N}])\.?/giu;
@@ -938,7 +944,9 @@ const AUTHOR_WORDS = new Set(
  */
 function isHolderOfRecord(text: string, who: RecordParties): boolean {
   const base = text
-    .replace(/\(\s*(?:[^()]*orcid[^()]*|[^\s()]*\d[^\s()]*)\)/giu, ' ')
+    // Only an ORCID iD (alone in its bracket, optionally labelled or as an orcid.org link) or a plain letters-and-digits handle is dropped.
+    .replace(/\(\s*(?:orcid(?:\s*i[dD])?\s*:?\s*)?(?:https?:\/\/orcid\.org\/)?\d{4}-\d{4}-\d{4}-\d{3}[\dXx]\s*\)/giu, ' ')
+    .replace(/\(\s*(?=\p{L}*\d)[\p{L}\p{N}]+\s*\)/gu, ' ')
     .replace(/©|\(c\)|(?<![\p{L}\p{N}])copyright(?![\p{L}\p{N}])/giu, ' ')
     .replace(/(?<![\p{L}\p{N}])(?:1[5-9]|20)\d{2}(?:\s*[-–]\s*(?:1[5-9]|20)\d{2})?(?![\p{L}\p{N}])/gu, ' ');
   // Only letters, digits, spaces and the punctuation of names: a symbol (an emoji, "$", "+") may carry a condition.
@@ -950,7 +958,9 @@ function isHolderOfRecord(text: string, who: RecordParties): boolean {
   const stripped = base.replace(/(?<![\p{L}\p{N}])et\s+al\b\.?/giu, ' ');
   if (!etAl && (who.creators?.length ?? 0) > 0 && AUTHOR_WORDS.has(partyTokens(stripped).join(' '))) return true;
   const pieces = stripped
-    .split(/[,;&]|(?<![\p{L}\p{N}])(?:and|und|et|y|e)(?![\p{L}\p{N}])/giu)
+    .split(/[,;&]|(?<![\p{L}\p{N}])(?:and|und|et)(?![\p{L}\p{N}])/giu)
+    // "e" / "y" ("Ana Costa e Jan Berg") only as the lowercase word between two names, never an initial "E." / "Y."
+    .flatMap((n) => n.split(/(?<=\p{L}\p{L})\s[ey]\s(?=\p{Lu})/u))
     .map((n) => n.trim())
     .filter(Boolean);
   // "Surname, I." is one name: a piece of initials only belongs to the piece before it.
@@ -961,6 +971,8 @@ function isHolderOfRecord(text: string, who: RecordParties): boolean {
     else names.push(piece);
   }
   const clean = names.map((n) => n.replace(HONORIFIC, ' ').trim()).filter((n) => partyTokens(n).length > 0);
+  // A name is no sentence and holds no bracket: "Jan Berg. Reuse only…", "Kevin (internal use only) Baird".
+  if (clean.some((n) => /\p{L}{2,}[.!?]\s+\p{L}/u.test(n) || /[()]/.test(n))) return false;
   // "Surname, Given" arrives as two pieces: two consecutive pieces together may be one person.
   for (let i = 0; i < clean.length; ) {
     if (i + 1 < clean.length && isParty(`${clean[i]} ${clean[i + 1]}`, who)) i += 2;
@@ -969,7 +981,7 @@ function isHolderOfRecord(text: string, who: RecordParties): boolean {
   }
   return clean.length > 0;
 }
-const IN_COPYRIGHT_LINK = /rightsstatements\.org\/vocab\/inc\/1\.0/i;
+const IN_COPYRIGHT_LINK = /^https?:\/\/rightsstatements\.org\/vocab\/inc\/1\.0\/?$/i;
 
 /**
  * A repeated rights entry that says nothing the licence check needs to look at: empty, an access value ("Open Access", eu-repo / COAR
@@ -984,8 +996,9 @@ export function isNeutralEntry(text?: string, uri?: string, who: RecordParties =
   const i = identifier?.trim();
   if (i && nameKey(i) !== 'inc' && !isNeutralUnnamed(i)) return false;
   const holder = !!t && isHolderOfRecord(t, who);
-  const textNeutral = !t || isNeutralUnnamed(t) || holder;
-  const uriNeutral = !l || isNeutralUnnamed(l) || (IN_COPYRIGHT_LINK.test(l) && holder);
+  const textNeutral = !t || isNeutralUnnamed(t) || holder || nameKey(t) === 'inc';
+  // The In Copyright link says only that the work is in copyright, which every licensed work is: neutral alone, or next to a holder.
+  const uriNeutral = !l || isNeutralUnnamed(l) || (IN_COPYRIGHT_LINK.test(l) && (!t || holder || nameKey(t) === 'inc'));
   return textNeutral && uriNeutral;
 }
 

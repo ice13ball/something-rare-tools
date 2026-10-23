@@ -76,7 +76,7 @@ describe('HIGH 1: the version of an id is its last number', () => {
 describe('HIGH 2: LIC-OTHER-RIGHTS-ENTRY, only for repeated rights entries', () => {
   const INC = 'http://rightsstatements.org/vocab/InC/1.0/';
   const WARN: Rights[] = [
-    { rights: 'Closed Access' }, { rights: 'info:eu-repo/semantics/closedAccess' }, { rights: 'In Copyright', rightsUri: INC }, { rightsUri: INC },
+    { rights: 'Closed Access' }, { rights: 'info:eu-repo/semantics/closedAccess' }, { rights: 'In Copyright', rightsUri: INC },
     { rights: 'Available upon request' }, { rights: 'Please contact the PI' }, { rights: 'Free for scientific use' }, { rights: 'Nutzung nach Absprache' },
     { rights: 'CC BY-NC' }, { rights: 'All rights reserved' }, { rights: 'Closed Access', rightsUri: INC }, { rights: 'All Rights Reserved', rightsUri: INC }, { rights: 'Restricted Access', rightsUri: INC }, { rights: 'Not for commercial use' }, { rights: 'Data access is restricted until the end of the project' },
   ];
