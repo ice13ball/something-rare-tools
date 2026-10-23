@@ -6,67 +6,8 @@ import { PACE_MS, type Net, type NetResponse } from '../../src/core/collection/n
 import { yearOfSplit, zenodoPager, zenodoUrl, ZENODO_WINDOW } from '../../src/core/collection/sources/zenodo';
 import type { ZenodoPlan } from '../../src/core/collection/sources/zenodo';
 import { makeNetContext } from '../../src/core/collection/net';
-import { json, res, runnerDeps, virtualClock } from './helpers';
+import { rec, res, runnerDeps, virtualClock, zenodoMock, type Rec } from './helpers';
 
-interface Rec {
-  id: number;
-  date: string;
-  licence?: string;
-  /** A partial date ("2021", "2021-03") indexed as a range: it matches every query range it intersects. */
-  span?: [string, string];
-}
-
-/** A guest-limited Zenodo: 25 a page, a 10 000 window (400 otherwise), 30 requests a minute (429 + Retry-After beyond), q=publication_date ranges. */
-function zenodoMock(records: Rec[], clock: { now(): number }, opts: { unknown?: boolean; within?: boolean } = {}) {
-  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
-  const log: { url: string; at: number; status: number }[] = [];
-  const window: number[] = [];
-  const get: Net['get'] = async (url) => {
-    const u = new URL(url);
-    const now = clock.now();
-    while (window.length > 0 && now - window[0] >= 60_000) window.shift();
-    let out: NetResponse;
-    if (!u.pathname.startsWith('/api/communities/') || !u.pathname.endsWith('/records')) {
-      // /api/records?communities= is the trap: an unknown slug returns EVERYTHING
-      out = json({ hits: { total: 7_549_808, hits: [] } });
-    } else if (opts.unknown) {
-      out = res(404, '{"status":404,"message":"The persistent identifier does not exist."}');
-    } else if (window.length >= 30) {
-      out = res(429, '{"message":"30 per 1 minute","status":429}', { retryAfterMs: 60_000 - (now - window[0]), rateRemaining: 0 });
-    } else {
-      window.push(now);
-      const size = Number(u.searchParams.get('size'));
-      const page = Number(u.searchParams.get('page'));
-      if (size > 25 || size * page > ZENODO_WINDOW) out = res(400, '{"status":400,"message":"Invalid querystring parameters."}');
-      else {
-        let pool = sorted;
-        const q = u.searchParams.get('q');
-        if (q) {
-          const hit = (r: Rec, lo: string, hi: string): boolean => {
-            const [a, b] = r.span ?? [r.date, r.date];
-            // a range query matches a record whose date range lies INSIDE it ('within', what the live index does) or merely touches it
-            return opts.within ? (hi === '*' || b <= hi) && (lo === '*' || a >= lo) : (hi === '*' || a <= hi) && (lo === '*' || b >= lo);
-          };
-          const first = /^publication_date:\[(\S+) TO (\S+)\]/.exec(q);
-          const nots = [...q.matchAll(/ AND NOT publication_date:\[(\S+) TO (\S+)\]/g)];
-          if (first) pool = pool.filter((r) => hit(r, first[1], first[2]) && !nots.some((n) => hit(r, n[1], n[2])));
-        }
-        if (u.searchParams.get('sort') === 'mostrecent') pool = [...pool].reverse();
-        const hits = pool.slice((page - 1) * size, page * size).map((r) => ({
-          id: r.id,
-          doi: `10.5281/zenodo.${r.id}`,
-          metadata: { publication_date: r.date, ...(r.licence === undefined ? {} : r.licence ? { license: { id: r.licence } } : {}), title: `T${r.id}` },
-        }));
-        out = json({ hits: { total: pool.length, hits } }, { rateRemaining: 30 - window.length, retryAfterMs: 60_000 - (now - window[0]) });
-      }
-    }
-    log.push({ url, at: now, status: out.status });
-    return out;
-  };
-  return { net: { get, csw: async () => res(500, '') } as Net, log };
-}
-
-const rec = (id: number, date: string, licence: string | null = 'cc-by-4.0'): Rec => ({ id, date, licence: licence ?? '' });
 const small = (n: number): Rec[] => Array.from({ length: n }, (_, i) => rec(i + 1, `2021-0${(i % 9) + 1}-15`, i % 4 === 0 ? null : 'cc-by-4.0'));
 
 describe('Zenodo community', () => {
@@ -142,10 +83,7 @@ describe('Zenodo community', () => {
       const r = new CollectionRunner(runnerDeps(z.net, clock));
       await r.start({ spec: { kind: 'zenodo', community: 'big-one' }, lang: 'en', sample: false });
       const plan = (r as unknown as { st: { plan: ZenodoPlan } }).st.plan;
-      expect(plan.slices.length).toBeGreaterThan(3);
-      for (const s of plan.slices) expect(s.total).toBeLessThanOrEqual(ZENODO_WINDOW);
-      expect(plan.sum).toBe(plan.total);
-      expect(plan.total).toBe(big.length);
+      expect(plan).toEqual({ slug: 'big-one', total: big.length, thisYear: 2026 }); // nothing is planned at the start
       expect(r.progress().estimate).toMatchObject({ strategy: 'date-split', approximate: true });
       expect(r.progress().notices.map((n) => n.code)).toContain('split-by-date');
       await r.whenIdle();
@@ -155,6 +93,7 @@ describe('Zenodo community', () => {
       expect(p.counts.rules['LIC-MISSING']).toBe(1040);
       expect(z.log.every((l) => l.status === 200)).toBe(true);
       expect(p.notices.map((n) => n.code)).not.toContain('slices-differ');
+      expect(z.log.filter((l) => new URL(l.url).searchParams.get('size') === '1').length).toBeGreaterThan(3); // the slices were counted on the way
       // no page beyond the window was ever asked for
       for (const l of z.log) expect(Number(new URL(l.url).searchParams.get('page')) * Number(new URL(l.url).searchParams.get('size'))).toBeLessThanOrEqual(ZENODO_WINDOW);
     }, 60_000);
@@ -182,7 +121,7 @@ describe('Zenodo community', () => {
       expect(p.counts.duplicatesInBatch).toBe(30 * 11 + 0); // "2021": listed in twelve months, kept once; "2021-03" lies in one month only
       const plan = (r as unknown as { st: { plan: ZenodoPlan } }).st.plan;
 
-      // the same plan walked by a NEW pager for every page, the cursor going through JSON each time
+      // the same community walked by a NEW pager for every page, the cursor going through JSON each time
       const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
       let c: unknown = zenodoPager({ net: z.net, nctx }, plan).initial;
       const refs: string[] = [];
@@ -195,6 +134,7 @@ describe('Zenodo community', () => {
         dups += d.counters?.duplicatesInBatch ?? 0;
         c = d.next;
         maxIds = Math.max(maxIds, ((c as { ids?: string } | null)?.ids ?? '').length);
+        if (c) expect(JSON.stringify(c).length - ((c as { ids?: string }).ids ?? '').length).toBeLessThan(6000); // the work list stays small
       }
       expect(refs).toHaveLength(all.length);
       expect(new Set(refs).size).toBe(all.length);
@@ -202,7 +142,7 @@ describe('Zenodo community', () => {
       expect(maxIds).toBeGreaterThan(0);
     }, 120_000);
 
-    it('the ids live only inside one year\'s split slices: kept from one month to the next, dropped when the year ends, absent in a whole-year slice', async () => {
+    it('a plan saved by the up-front planner is read to its end; the ids live only inside one year\'s split slices: kept from one month to the next, dropped when the year ends, absent in a whole-year slice', async () => {
       const clock = virtualClock();
       const recs = [rec(1, '2021-01-10'), rec(2, '2021-01-11'), { ...rec(3, '2021'), span: ['2021-01-01', '2021-02-28'] as [string, string] }, rec(4, '2021-02-02'), rec(5, '2022-06-06')];
       const z = zenodoMock(recs, clock);
@@ -218,15 +158,22 @@ describe('Zenodo community', () => {
       };
       const nctx = makeNetContext(clock, { requests: 0, retries: 0, throttleEvents: 0 });
       const pager = zenodoPager({ net: z.net, nctx }, plan);
-      const jan = await pager.fetch({ si: 0, page: 1 });
+      const jan = await pager.fetch({ si: 0, page: 1 }); // a cursor of the old shape (index into the plan)
       expect(jan.items).toHaveLength(3);
-      expect(jan.next).toMatchObject({ si: 1, page: 1 });
+      // the slice ended: the next step (nothing asked of Zenodo: February is already counted) starts February, the ids travelling with it
+      expect(jan.next).toMatchObject({ page: 1, yr: '2021', work: [{ from: '2021-02-01', total: 2 }, { from: '2022-01-01', total: 1 }] });
       expect(jan.next?.ids).toBeTruthy();
-      const feb = await pager.fetch(jan.next!);
+      const startFeb = await pager.fetch(jan.next!);
+      expect(startFeb.items).toHaveLength(0);
+      expect(startFeb.next).toMatchObject({ page: 1, cur: { from: '2021-02-01', to: '2021-02-28', total: 2 }, yr: '2021' });
+      const feb = await pager.fetch(startFeb.next!);
       expect(feb.items).toHaveLength(1); // id 3 was read in January
       expect(feb.counters).toEqual({ duplicatesInBatch: 1 });
-      expect(feb.next).toEqual({ si: 2, page: 1 }); // no ids into 2022
-      const y22 = await pager.fetch(feb.next!);
+      expect(feb.next).toEqual({ page: 1, work: [{ from: '2022-01-01', to: '2022-12-31', total: 1 }] }); // no ids into 2022
+      const startY22 = await pager.fetch(feb.next!);
+      expect(startY22.next).toMatchObject({ cur: { from: '2022-01-01' } });
+      expect(startY22.next?.ids).toBeUndefined();
+      const y22 = await pager.fetch(startY22.next!);
       expect(y22.items).toHaveLength(1);
       expect(y22.next).toBeNull();
     });
@@ -254,17 +201,9 @@ describe('Zenodo community', () => {
         const r = new CollectionRunner(runnerDeps(z.net, clock));
         await r.start({ spec: { kind: 'zenodo', community: 'partial-lost' }, lang: 'en', sample: false });
         const plan = (r as unknown as { st: { plan: ZenodoPlan } }).st.plan;
-        const rests = plan.slices.filter((s) => s.except);
-        expect(rests.map((s) => [s.from, s.to, s.total])).toEqual([
-          ['2019-01-01', '2019-12-31', 40],
-          ['2022-05-01', '2022-05-31', 12],
-        ]);
-        expect(rests[0].except).toHaveLength(12);
-        expect(rests[1].except).toHaveLength(31);
         expect(plan.total).toBe(all.length);
-        expect(plan.sum).toBe(plan.total);
-        expect(r.progress().notices.map((n) => n.code)).not.toContain('slices-differ');
         await r.whenIdle();
+        expect(r.progress().notices.map((n) => n.code)).not.toContain('slices-differ');
         const p = r.progress();
         expect(p.status).toBe('finished');
         expect(p.counts.records).toBe(all.length);
@@ -277,14 +216,24 @@ describe('Zenodo community', () => {
         let c: unknown = zenodoPager({ net: z.net, nctx }, plan).initial;
         const refs: string[] = [];
         let inRemainder = 0;
+        const rests: { from?: string; to?: string; total: number; except?: unknown[] }[] = [];
         while (c) {
-          const cur = JSON.parse(JSON.stringify(c)) as { si: number; page: number };
-          if (plan.slices[cur.si].except) inRemainder += 1;
+          const cur = JSON.parse(JSON.stringify(c)) as { cur?: { from?: string; to?: string; total: number; except?: unknown[] }; page: number };
+          if (cur.cur?.except) {
+            inRemainder += 1;
+            if (cur.page === 1) rests.push(cur.cur);
+          }
           const d = await zenodoPager({ net: z.net, nctx }, plan).fetch(cur as never);
           refs.push(...d.items.map((i) => i.ref));
           c = d.next;
         }
         expect(inRemainder).toBeGreaterThan(1); // 40 records = two pages, each started by a fresh pager
+        expect(rests.map((x) => [x.from, x.to, x.total])).toEqual([
+          ['2019-01-01', '2019-12-31', 40],
+          ['2022-05-01', '2022-05-31', 12],
+        ]);
+        expect(rests[0].except).toHaveLength(12);
+        expect(rests[1].except).toHaveLength(31);
         expect(refs).toHaveLength(all.length);
         expect(new Set(refs).size).toBe(all.length);
       }, 120_000);

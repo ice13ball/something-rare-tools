@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Synthetic sources for the collection review tests: a virtual clock, a mock DataCite / Zenodo, and a synthetic CSW catalogue.
+import { ZENODO_WINDOW } from '../../src/core/collection/sources/zenodo';
 import { StopSignal, type Clock, type CswCall, type Net, type NetResponse } from '../../src/core/collection/net';
 import type { RunnerDeps } from '../../src/core/collection/runner';
 import { memoryStore } from '../../src/core/collection/store';
@@ -210,3 +211,65 @@ export function parseUpstream(url: URL, method: string | undefined, body: string
 }
 
 export type { CswCall };
+
+// ---- synthetic Zenodo ---------------------------------------------------------------------------------------------------------
+
+export interface Rec {
+  id: number;
+  date: string;
+  licence?: string;
+  /** A partial date ("2021", "2021-03") indexed as a range: it matches every query range it intersects. */
+  span?: [string, string];
+}
+
+/** A guest-limited Zenodo: 25 a page, a 10 000 window (400 otherwise), 30 requests a minute (429 + Retry-After beyond), q=publication_date ranges. */
+export function zenodoMock(records: Rec[], clock: { now(): number }, opts: { unknown?: boolean; within?: boolean } = {}) {
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  const log: { url: string; at: number; status: number }[] = [];
+  const window: number[] = [];
+  const get: Net['get'] = async (url) => {
+    const u = new URL(url);
+    const now = clock.now();
+    while (window.length > 0 && now - window[0] >= 60_000) window.shift();
+    let out: NetResponse;
+    if (!u.pathname.startsWith('/api/communities/') || !u.pathname.endsWith('/records')) {
+      // /api/records?communities= is the trap: an unknown slug returns EVERYTHING
+      out = json({ hits: { total: 7_549_808, hits: [] } });
+    } else if (opts.unknown) {
+      out = res(404, '{"status":404,"message":"The persistent identifier does not exist."}');
+    } else if (window.length >= 30) {
+      out = res(429, '{"message":"30 per 1 minute","status":429}', { retryAfterMs: 60_000 - (now - window[0]), rateRemaining: 0 });
+    } else {
+      window.push(now);
+      const size = Number(u.searchParams.get('size'));
+      const page = Number(u.searchParams.get('page'));
+      if (size > 25 || size * page > ZENODO_WINDOW) out = res(400, '{"status":400,"message":"Invalid querystring parameters."}');
+      else {
+        let pool = sorted;
+        const q = u.searchParams.get('q');
+        if (q) {
+          const hit = (r: Rec, lo: string, hi: string): boolean => {
+            const [a, b] = r.span ?? [r.date, r.date];
+            // a range query matches a record whose date range lies INSIDE it ('within', what the live index does) or merely touches it
+            return opts.within ? (hi === '*' || b <= hi) && (lo === '*' || a >= lo) : (hi === '*' || a <= hi) && (lo === '*' || b >= lo);
+          };
+          const first = /^publication_date:\[(\S+) TO (\S+)\]/.exec(q);
+          const nots = [...q.matchAll(/ AND NOT publication_date:\[(\S+) TO (\S+)\]/g)];
+          if (first) pool = pool.filter((r) => hit(r, first[1], first[2]) && !nots.some((n) => hit(r, n[1], n[2])));
+        }
+        if (u.searchParams.get('sort') === 'mostrecent') pool = [...pool].reverse();
+        const hits = pool.slice((page - 1) * size, page * size).map((r) => ({
+          id: r.id,
+          doi: `10.5281/zenodo.${r.id}`,
+          metadata: { publication_date: r.date, ...(r.licence === undefined ? {} : r.licence ? { license: { id: r.licence } } : {}), title: `T${r.id}` },
+        }));
+        out = json({ hits: { total: pool.length, hits } }, { rateRemaining: 30 - window.length, retryAfterMs: 60_000 - (now - window[0]) });
+      }
+    }
+    log.push({ url, at: now, status: out.status });
+    return out;
+  };
+  return { net: { get, csw: async () => res(500, '') } as Net, log };
+}
+
+export const rec = (id: number, date: string, licence: string | null = 'cc-by-4.0'): Rec => ({ id, date, licence: licence ?? '' });

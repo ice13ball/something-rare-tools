@@ -6,7 +6,7 @@ import { SourceFailure, type Estimate, type Pager, type RunSettings, type Source
 import { dataciteListPager, dataciteSamplePager, dataciteTotal, estimateDatacite, validateSourceId, type Deps } from './datacite';
 import { doiListPager, estimateDois } from './dois';
 import { cswMatched, cswPager, cswSamplePager, estimateCsw, type CswPlan } from './csw';
-import { estimateZenodo, planSlices, validateSlug, zenodoPager, zenodoSamplePager, zenodoTotal, ZENODO_WINDOW, type ZenodoPlan } from './zenodo';
+import { estimateZenodo, validateSlug, zenodoPager, zenodoSamplePager, zenodoTotal, ZENODO_WINDOW, type ZenodoPlan } from './zenodo';
 
 export interface Prepared {
   pager: Pager<unknown>;
@@ -40,7 +40,7 @@ export async function estimateSource(deps: Deps, spec: SourceSpec, sample: boole
   }
 }
 
-/** The start of a run: asks what the source holds (and, for a Zenodo community above the window, builds the date slices). */
+/** The start of a run: asks what the source holds (for a Zenodo community above the window the date slices are NOT built here: the pager counts them as the run goes). */
 export async function prepareSource(deps: Deps, settings: RunSettings, thisYear: number): Promise<Prepared> {
   const { spec, sample } = settings;
   checkSpec(spec, sample);
@@ -58,15 +58,11 @@ export async function prepareSource(deps: Deps, settings: RunSettings, thisYear:
       const total = await zenodoTotal(deps, spec.community);
       if (sample) return { pager: zenodoSamplePager(deps, spec.community, total) as Pager<unknown>, plan: { total }, estimate: estimateZenodo(total, true), notices: total === 0 ? [{ code: 'no-records' }] : [] };
       const notices: Prepared['notices'] = total === 0 ? [{ code: 'no-records' }] : [];
-      let plan: ZenodoPlan;
-      if (total <= ZENODO_WINDOW) plan = { slug: spec.community, total, slices: total > 0 ? [{ total }] : [], sum: total };
-      else {
-        const { slices, sum } = await planSlices(deps, spec.community, total, thisYear);
-        plan = { slug: spec.community, total, slices, sum };
-        notices.push({ code: 'split-by-date', params: { slices: slices.length } });
-        if (sum !== total) notices.push({ code: 'slices-differ', params: { sum, total } });
-      }
-      const estimate = { ...estimateZenodo(total, false), slices: Math.max(1, plan.slices.length) };
+      // Nothing is planned here: a community above the window is cut into slices as the run reaches them (zenodoPager), so records
+      // appear after the first counts and a saved run resumes in the middle of its planning.
+      const plan: ZenodoPlan = { slug: spec.community, total, thisYear };
+      const estimate = estimateZenodo(total, false);
+      if (total > ZENODO_WINDOW) notices.push({ code: 'split-by-date', params: { slices: estimate.slices ?? 1 } });
       return { pager: zenodoPager(deps, plan) as Pager<unknown>, plan, estimate, notices };
     }
     case 'csw': {
