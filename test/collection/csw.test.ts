@@ -200,7 +200,7 @@ describe.each([
     const w = wire({ claimed: 4, records: recs });
     const r = await runCsw(w.net, settings(catalogue));
     const p = r.progress();
-    expect(p.counts.states).toEqual({ checked: 2, unreachable: 0, throttled: 0, 'unsupported-profile': 2 });
+    expect(p.counts.states).toEqual({ checked: 2, unreachable: 0, throttled: 0, 'unsupported-profile': 2, 'not-in-datacite': 0 });
     expect(p.counts.rules['LIC-MISSING']).toBe(1);
     expect(r.unread().map((u) => [u.state, u.reason])).toEqual([
       ['unsupported-profile', 'not-disseminated'],

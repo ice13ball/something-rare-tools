@@ -4,9 +4,12 @@
 import type { CswSchema } from '../../../config/catalogues';
 import type { Finding, Lang, MetadataRecord, MetadataSource, Severity } from '../types';
 
-/** A record the run did not read is never a licence or metadata finding: only 'checked' records meet the rules. */
-export type RecordState = 'checked' | 'unreachable' | 'throttled' | 'unsupported-profile';
-export const RECORD_STATES: readonly RecordState[] = ['checked', 'unreachable', 'throttled', 'unsupported-profile'];
+/**
+ * A record the run did not read is never a licence or metadata finding: only 'checked' records meet the rules.
+ * 'not-in-datacite': a DOI of a pasted list that DataCite does not know (a Crossref DOI, a typo): nothing was unreachable, there is just no record.
+ */
+export type RecordState = 'checked' | 'unreachable' | 'throttled' | 'unsupported-profile' | 'not-in-datacite';
+export const RECORD_STATES: readonly RecordState[] = ['checked', 'unreachable', 'throttled', 'unsupported-profile', 'not-in-datacite'];
 
 export type SourceSpec =
   | { kind: 'dois'; text: string }
@@ -78,7 +81,7 @@ export interface Counts {
 
 export const emptyCounts = (): Counts => ({
   records: 0,
-  states: { checked: 0, unreachable: 0, throttled: 0, 'unsupported-profile': 0 },
+  states: { checked: 0, unreachable: 0, throttled: 0, 'unsupported-profile': 0, 'not-in-datacite': 0 },
   rules: {},
   withFindings: 0,
   duplicatesInBatch: 0,

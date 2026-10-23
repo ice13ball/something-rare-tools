@@ -33,7 +33,7 @@ const estimate = (o: Partial<Estimate> = {}): Estimate => ({ records: 2124, requ
 function progressOf(o: Partial<Progress> = {}, spec?: SourceSpec, sample = false): Progress {
   const counts = emptyCounts();
   counts.records = 110;
-  counts.states = { checked: 100, unreachable: 4, throttled: 5, 'unsupported-profile': 1 };
+  counts.states = { checked: 100, unreachable: 4, throttled: 5, 'unsupported-profile': 1, 'not-in-datacite': 0 };
   counts.rules = { 'LIC-MISSING': 80, 'META-NO-VERSION': 30 };
   counts.withFindings = 90;
   return {
@@ -292,6 +292,46 @@ describe('CollectionPage: progress, results, download', () => {
     delete (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker;
   });
 
+  it('a DOI DataCite does not know has its own line (not "not reachable"), and repeats counted once are shown', async () => {
+    const f = fakeEngine();
+    render(<CollectionPage engine={f.engine} />);
+    const counts = emptyCounts();
+    counts.records = 12;
+    counts.states = { checked: 7, unreachable: 0, throttled: 0, 'unsupported-profile': 0, 'not-in-datacite': 5 };
+    counts.duplicatesInBatch = 4;
+    f.push(progressOf({ counts, status: 'finished' }));
+    const progress = screen.getByTestId('progress');
+    expect(progress.textContent).toContain('not in DataCite (e.g. a Crossref DOI): 5');
+    expect(screen.getByTestId('duplicates').textContent).toContain('4 repeats were counted once');
+    cleanup();
+    for (const lang of LANGS) {
+      setLang(lang);
+      const g = fakeEngine();
+      render(<CollectionPage engine={g.engine} />);
+      g.push(progressOf({ counts, status: 'finished' }));
+      expect(screen.getByTestId('state-not-in-datacite').textContent, lang).toContain('5');
+      expect(screen.getByTestId('state-not-in-datacite').textContent, lang).not.toMatch(/\{\w+\}/);
+      expect(screen.getByTestId('duplicates').textContent, lang).not.toMatch(/\{\w+\}/);
+      cleanup();
+    }
+    setLang('en');
+  });
+
+  it('a run stopped by the daily catalogue budget says so in every language and offers to continue', () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      const f = fakeEngine();
+      render(<CollectionPage engine={f.engine} />);
+      const stop = { cause: 'csw_daily_budget', source: 'csw:emodnet', page: 12, request: 40, kind: 'throttled', status: 429, at: Date.UTC(2026, 9, 22, 14, 5) } as const;
+      f.push(progressOf({ status: 'interrupted', resumable: true, stop }));
+      const text = screen.getByTestId('stop-reason').textContent ?? '';
+      expect(text, lang).toMatch(/24/);
+      expect(text, lang).not.toMatch(/csw_daily_budget|\{\w+\}/);
+    }
+    setLang('en');
+  });
+
   it('records that were not read are listed apart, with the reason, and the page says they get no finding', async () => {
     const unread: UnreadSample[] = [{ ref: '10.1234/gone', state: 'unreachable', reason: 'not-found-at-datacite' }];
     const f = fakeEngine({ unread });
@@ -310,7 +350,7 @@ describe('CollectionPage: progress, results, download', () => {
       { code: 'no-records' }, { code: 'split-by-date', params: { slices: 3 } }, { code: 'slices-differ', params: { sum: 9, total: 10 } },
       { code: 'window-exceeded', params: { from: '2020', to: '2021', total: 12000 } }, { code: 'ended-before-total', params: { seen: 5, total: 9 } },
       { code: 'ended-before-matched', params: { seen: 5, matched: 9 } }, { code: 'more-than-matched', params: { seen: 9, matched: 5 } },
-      { code: 'ended-by-exception', params: { position: 6, matched: 9 } }, { code: 'empty-page', params: { position: 6, matched: 9 } },
+      { code: 'ended-by-exception', params: { position: 6, matched: 9 } }, { code: 'empty-page', params: { position: 6, matched: 9 } }, { code: 'overlapping-pages' },
       { code: 'overrun-stopped', params: { seen: 9, matched: 5 } }, { code: 'interrupted', params: { reason: 'offline' } },
       { code: 'storage-failed' }, { code: 'unexpected' }, { code: 'cursor-restarted' }, { code: 'repeating-page' }, { code: 'brand-new-code' },
     ];

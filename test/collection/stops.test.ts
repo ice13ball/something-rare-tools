@@ -198,7 +198,7 @@ describe('a worker that dies mid-run', () => {
   const running = (): Progress => ({
     status: 'running',
     settings: settings(true),
-    counts: { records: 75, states: { checked: 75, unreachable: 0, throttled: 0, 'unsupported-profile': 0 }, rules: {}, withFindings: 0, duplicatesInBatch: 0, invalidTokens: 0, crossSource: { looked: 0, found: 0, absent: 0, failed: 0 } },
+    counts: { records: 75, states: { checked: 75, unreachable: 0, throttled: 0, 'unsupported-profile': 0, 'not-in-datacite': 0 }, rules: {}, withFindings: 0, duplicatesInBatch: 0, invalidTokens: 0, crossSource: { looked: 0, found: 0, absent: 0, failed: 0 } },
     stats: { requests: 10, retries: 0, throttleEvents: 0 },
     elapsedMs: 1000, notices: [], deferred: 0, resumable: false, csv: { rows: 0, bytes: 0 }, ruleOrder: [],
   });

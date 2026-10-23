@@ -293,7 +293,7 @@ describe('a page that cannot be read (Zenodo: the next page is known, so the run
     await r.whenIdle();
     const p = r.progress();
     expect(p.status).toBe('finished');
-    expect(p.counts.states).toEqual({ checked: 100, unreachable: 0, throttled: 0, 'unsupported-profile': 0 });
+    expect(p.counts.states).toEqual({ checked: 100, unreachable: 0, throttled: 0, 'unsupported-profile': 0, 'not-in-datacite': 0 });
     expect(p.counts.records).toBe(100);
     expect(p.deferred).toBe(0);
   });
