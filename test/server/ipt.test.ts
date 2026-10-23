@@ -221,3 +221,68 @@ describe('archive route — daily budget per IP', () => {
     expect((await post(a, ARCH, '9.9.9.3')).status).toBe(200);
   });
 });
+
+describe('archive route — parallel requests cannot outrun the budget', () => {
+  const ARCH = 'https://ipt.vliz.be/eurobis/archive.do?r=x';
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  /** A body of `n` chunks of 4 bytes, `gap` ms apart. */
+  const slow = (n: number, gap: number): Upstream => async () => ({
+    status: 200,
+    headers: {},
+    destroy() {},
+    body: (async function* () {
+      for (let i = 0; i < n; i++) {
+        await sleep(gap);
+        yield new TextEncoder().encode('PKab');
+      }
+    })(),
+  });
+  const mk = (upstream: Upstream, archiveDailyBudget = {}) => createApp({ distDir: DIST, resolver: async () => PUBLIC, upstream, log: () => {}, archiveDailyBudget });
+  const post = (a: ReturnType<typeof createApp>, ip: string, url = ARCH) => request(a).post('/api/fetch').set('X-Forwarded-For', ip).set('Content-Type', 'application/json').buffer(true).send(JSON.stringify({ url }));
+
+  it('the third archive in flight from one IP is 429 archive_busy; the slot is free again when they end; another IP is not affected', async () => {
+    const a = mk(slow(3, 40));
+    const first = [post(a, '5.5.5.1'), post(a, '5.5.5.1'), (async () => (await sleep(15), post(a, '5.5.5.1')))()];
+    const other = post(a, '5.5.5.2');
+    const res = await Promise.all([...first, other]);
+    expect(res.map((r) => r.status)).toEqual([200, 200, 429, 200]);
+    expect(res[2]!.headers['x-fetch-proxy-error']).toBe('archive_busy');
+    expect((await post(a, '5.5.5.1')).status).toBe(200);
+  });
+
+  it('a non-archive request is not counted against the cap', async () => {
+    const a = mk(slow(3, 40));
+    const res = await Promise.all([post(a, '5.5.5.3'), post(a, '5.5.5.3'), post(a, '5.5.5.3', 'https://zenodo.org/api/records/1')]);
+    expect(res.map((r) => r.status)).toEqual([200, 200, 200]);
+  });
+
+  it('bytes are charged as they are sent: an archive that is still streaming has already used the budget, so a parallel one is refused', async () => {
+    const a = mk(slow(5, 40), { bytes: 6 });
+    const running = post(a, '5.5.5.4').then((r) => r); // supertest sends only when awaited or chained // 4 bytes after 40 ms, 8 after 80 ms: over the budget while still running
+    await sleep(120);
+    const second = await post(a, '5.5.5.4');
+    expect(second.status).toBe(429);
+    expect(second.headers['x-fetch-proxy-error']).toBe('archive_daily_budget');
+    expect((await running).status).toBe(200);
+  });
+
+  it('the slot is released when the client goes away mid-stream', async () => {
+    const a = mk(slow(5, 40));
+    const srv = a.listen(0);
+    try {
+      const port = (srv.address() as { port: number }).port;
+      const abort = new AbortController();
+      const body = JSON.stringify({ url: ARCH });
+      const one = (signal?: AbortSignal) => fetch(`http://127.0.0.1:${port}/api/fetch`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '5.5.5.5' }, body, signal });
+      const r1 = one(abort.signal).then((r) => r.arrayBuffer()).catch(() => undefined);
+      const r2 = one(abort.signal).then((r) => r.arrayBuffer()).catch(() => undefined);
+      await sleep(60);
+      abort.abort();
+      await Promise.all([r1, r2]);
+      await sleep(80);
+      expect((await one()).status).toBe(200);
+    } finally {
+      srv.close();
+    }
+  });
+});

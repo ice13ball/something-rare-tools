@@ -147,3 +147,29 @@ export function createDailyBudget(opts: DailyBudgetOptions = {}): { admit: Reque
   };
   return { admit, check, addBytes: (req, n) => void (windowOf(clientIp(req), now()).bytes += n), size: () => windows.size };
 }
+
+/** Archive downloads running at once for one client: each can hold a slot for 90 s and carry 100 MB, so two is a person using the page, three is a script. */
+export const ARCHIVE_MAX_CONCURRENT = 2;
+export const ARCHIVE_BUSY_CODE = 'archive_busy';
+
+/** Per-client cap on requests in flight. `acquire` returns the release function (safe to call twice), or undefined when the client is at the cap. */
+export function createConcurrencyGate(max: number): { acquire(req: Pick<Request, 'headers' | 'socket'>): (() => void) | undefined; inFlight(req: Pick<Request, 'headers' | 'socket'>): number } {
+  const active = new Map<string, number>();
+  return {
+    acquire(req) {
+      const key = clientIp(req);
+      const n = active.get(key) ?? 0;
+      if (n >= max) return undefined;
+      active.set(key, n + 1);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        const m = (active.get(key) ?? 1) - 1;
+        if (m <= 0) active.delete(key);
+        else active.set(key, m);
+      };
+    },
+    inFlight: (req) => active.get(clientIp(req)) ?? 0,
+  };
+}

@@ -10,7 +10,7 @@ import { SITE } from '../config/site.js';
 import { buildCswUpstream, createHostPacer, CSW_MAX_BYTES, CSW_TIMEOUT_MS, parseCswBody, type HostPacerOptions } from './csw.js';
 import { isArchiveUrl, proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
 import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
-import { ARCHIVE_BUDGET_CODE, ARCHIVE_DAILY_BYTES, ARCHIVE_DAILY_REQUESTS, clientIp, createDailyBudget, createRateLimiter, type DailyBudgetOptions, type RateLimitOptions } from './rateLimit.js';
+import { ARCHIVE_BUDGET_CODE, ARCHIVE_BUSY_CODE, ARCHIVE_DAILY_BYTES, ARCHIVE_DAILY_REQUESTS, ARCHIVE_MAX_CONCURRENT, clientIp, createConcurrencyGate, createDailyBudget, createRateLimiter, type DailyBudgetOptions, type RateLimitOptions } from './rateLimit.js';
 
 export interface AppOptions {
   distDir: string;
@@ -182,6 +182,7 @@ export function createApp(opts: AppOptions): Express {
     signal,
   });
 
+  const archiveGate = createConcurrencyGate(ARCHIVE_MAX_CONCURRENT);
   const archiveBudget = createDailyBudget({ requests: ARCHIVE_DAILY_REQUESTS, bytes: ARCHIVE_DAILY_BYTES, code: ARCHIVE_BUDGET_CODE, ...opts.archiveDailyBudget });
   app.post('/api/fetch', createRateLimiter(opts.rateLimit), express.json({ limit: '2kb' }), async (req: Request, res: Response) => {
     const clientGone = new AbortController();
@@ -192,12 +193,22 @@ export function createApp(opts: AppOptions): Express {
     let status = 500;
     let bytes = 0;
     let archive = false;
+    let release: (() => void) | undefined;
     try {
       const { url, accept } = parseBody(req.body);
       archive = isArchiveUrl(url);
-      if (archive && !archiveBudget.check(req, res)) {
-        status = 429;
-        return;
+      if (archive) {
+        // At most two archives in flight per IP; the budget's bytes are charged chunk by chunk below, so parallel requests cannot outrun it.
+        release = archiveGate.acquire(req);
+        if (!release) {
+          status = 429;
+          res.setHeader('Retry-After', '30');
+          throw new ProxyError(429, ARCHIVE_BUSY_CODE);
+        }
+        if (!archiveBudget.check(req, res)) {
+          status = 429;
+          return;
+        }
       }
       const upstream = await proxyFetch(url, accept, proxyDeps(clientGone.signal));
       const it = upstream.body[Symbol.asyncIterator]();
@@ -221,6 +232,7 @@ export function createApp(opts: AppOptions): Express {
       try {
         while (!next.done) {
           bytes += next.value.byteLength;
+          if (archive) archiveBudget.addBytes(req, next.value.byteLength);
           if (!res.write(next.value)) {
             await new Promise<void>((resolve) => {
               res.once('drain', resolve);
@@ -241,7 +253,7 @@ export function createApp(opts: AppOptions): Express {
       status = err.status;
       sendProxyError(res, err);
     } finally {
-      if (archive && bytes > 0) archiveBudget.addBytes(req, bytes);
+      release?.();
       log(JSON.stringify({ host, status, bytes }));
     }
   });
@@ -299,6 +311,7 @@ export function createApp(opts: AppOptions): Express {
       try {
         while (!next.done) {
           bytes += next.value.byteLength;
+          cswBudget.addBytes(req, next.value.byteLength);
           if (!res.write(next.value)) {
             await new Promise<void>((resolve) => {
               res.once('drain', resolve);
@@ -318,7 +331,6 @@ export function createApp(opts: AppOptions): Express {
       status = err.status;
       sendProxyError(res, err);
     } finally {
-      if (bytes > 0) cswBudget.addBytes(req, bytes);
       log(JSON.stringify({ host, status, bytes }));
     }
   });

@@ -13,7 +13,7 @@ export interface LoadProblemsProps {
   onSwitchToServer: () => void;
 }
 
-export const LOAD_RULES: readonly string[] = ['IN-FETCH-BLOCKED', 'IN-FETCH-TIMEOUT', 'IN-FETCH-INTERRUPTED', 'IN-ARCHIVE-TOO-LARGE', 'IN-ARCHIVE-DAILY-BUDGET', 'IN-IPT-HOST-NOT-LISTED', 'IN-NO-DWC-ARCHIVE', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
+export const LOAD_RULES: readonly string[] = ['IN-FETCH-BLOCKED', 'IN-FETCH-TIMEOUT', 'IN-FETCH-INTERRUPTED', 'IN-ARCHIVE-TOO-LARGE', 'IN-ARCHIVE-DAILY-BUDGET', 'IN-ARCHIVE-BUSY', 'IN-IPT-HOST-NOT-LISTED', 'IN-NO-DWC-ARCHIVE', 'IN-HOST-NOT-ALLOWED', 'IN-RECORD-INACCESSIBLE'];
 
 /**
  * Downloads that failed, in plain words with the host. A browser download blocked by the data server (CORS/CSP) gets the

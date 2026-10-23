@@ -14,6 +14,7 @@ import type { RuleSpec } from './spec';
  *   IN-FETCH-INTERRUPTED    host     a download from a listed IPT server timed out or was cut off
  *   IN-ARCHIVE-TOO-LARGE    host, mb  the proxy refused an archive above its size limit
  *   IN-ARCHIVE-DAILY-BUDGET host     this IP address has used the proxy's daily budget for archive downloads
+ *   IN-ARCHIVE-BUSY         host     more archive downloads at once from this IP address than the proxy allows (2)
  *   IN-IPT-HOST-NOT-LISTED  host     a GBIF/OBIS archive lives on a server that is not on the static list (config/ipt.ts)
  *   IN-NO-DWC-ARCHIVE       registry  GBIF or OBIS knows the dataset but lists no Darwin Core Archive for it
  *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
@@ -145,6 +146,19 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `Le quota quotidien de téléchargements d'archives via le serveur (depuis {host}) est épuisé pour cette adresse IP ; l'archive n'a donc pas été vérifiée. Il repart dans les 24 heures ; vous pouvez aussi passer en mode navigateur, ou télécharger l'archive (.zip) vous-même et la déposer ici.`,
     },
     technical: `{file}: the proxy answered 429 archive_daily_budget for {host}: this client used its daily archive requests or bytes; not read.`,
+  },
+  {
+    id: 'IN-ARCHIVE-BUSY',
+    category: 'input',
+    severity: 'error',
+    params: ['host'],
+    plain: {
+      pl: `Z tego adresu IP trwają dwa pobierania archiwów przez serwer, więc archiwum z {host} nie zostało sprawdzone. Poczekaj, aż się skończą, i sprawdź ponownie (po jednym archiwum naraz).`,
+      en: `Two archive downloads through the server are in progress from this IP address, so the archive from {host} was not checked. Wait for them to finish and check again (one archive at a time).`,
+      de: `Von dieser IP-Adresse laufen zwei Archiv-Downloads über den Server, daher wurde das Archiv von {host} nicht geprüft. Warten Sie, bis sie fertig sind, und prüfen Sie erneut (ein Archiv nach dem anderen).`,
+      fr: `Deux téléchargements d'archives via le serveur sont en cours depuis cette adresse IP ; l'archive de {host} n'a donc pas été vérifiée. Attendez leur fin puis vérifiez à nouveau (une archive à la fois).`,
+    },
+    technical: `{file}: the proxy answered 429 archive_busy for {host}: this client already has the maximum of 2 archive downloads in flight; not read.`,
   },
   {
     id: 'IN-IPT-HOST-NOT-LISTED',
