@@ -167,7 +167,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['files'],
     plain: {
-      pl: `Część plików tego zbioru ma ograniczony dostęp lub embargo: {files}. O dostępie do nich decyduje repozytorium, nie licencja z metadanych, więc ocena licencji dotyczy tylko plików otwartych. Jeśli to dane, napisz w opisie, na jakich warunkach można je dostać.`,
+      pl: `Część plików tego zbioru ma ograniczony dostęp lub jest objęta embargiem: {files}. O dostępie do nich decyduje repozytorium, nie licencja z metadanych, więc ocena licencji dotyczy tylko plików otwartych. Jeśli to dane, napisz w opisie, na jakich warunkach można je dostać.`,
       en: `Some files of this dataset are restricted or under embargo: {files}. Access to them is decided by the repository, not by the licence in the metadata, so the licence verdict covers only the open files. If these are the data, state in the description how they can be obtained.`,
       de: `Einige Dateien dieses Datensatzes sind zugangsbeschränkt oder unter Embargo: {files}. Über den Zugang entscheidet das Repositorium, nicht die Lizenz in den Metadaten; die Lizenzbewertung gilt daher nur für die offenen Dateien. Wenn es die Daten sind, geben Sie in der Beschreibung an, wie man sie erhält.`,
       fr: `Certains fichiers de ce jeu de données sont en accès restreint ou sous embargo : {files}. L'accès est décidé par le dépôt, non par la licence des métadonnées ; l'évaluation de la licence ne porte donc que sur les fichiers ouverts. S'il s'agit des données, indiquez dans la description comment les obtenir.`,

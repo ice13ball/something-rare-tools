@@ -12,7 +12,8 @@ import { LicencePage } from '../../src/app/pages/LicencePage';
 import { IndexPage } from '../../src/app/pages/IndexPage';
 import { LANGS } from '../../src/core/types';
 import { FetchBlockedError, type Fetcher } from '../../src/core/sources/fetcher';
-import { MapFetcher } from '../sources/mapFetcher';
+import { fixture, MapFetcher } from '../sources/mapFetcher';
+import { dataverseVersionUrl } from '../../src/core/sources';
 import { caseA, caseB, caseC, dataciteJson, DC, isoXml, GN, UUID, zenodoJson, ZEN } from '../helpers/licenceFixtures';
 
 beforeEach(() => {
@@ -54,6 +55,20 @@ describe('LicencePage', () => {
     render(<LicencePage fetcherFor={() => new MapFetcher({})} />);
     fireEvent.click(screen.getByRole('button', { name: 'Compare licences' }));
     expect(screen.getByRole('alert').textContent).toBe('Add at least one reference.');
+  });
+
+  it('a Dataverse dataset with restricted files says the verdict covers only the open files, in the summary', async () => {
+    const pid = 'doi:10.18150/ABC123';
+    const page = `https://repod.icm.edu.pl/dataset.xhtml?persistentId=${pid}`;
+    const fetcher = new MapFetcher({
+      [dataverseVersionUrl('repod.icm.edu.pl', pid)]: { body: fixture('dataverse-version-synthetic.json') },
+      [DC + '10.18150/ABC123']: dataciteJson({ doi: '10.18150/ABC123', title: 'DC', url: page, publisher: 'RepOD' }, []),
+    });
+    await run(fetcher, [page]);
+    const held = screen.getByTestId('licence-held-back').textContent ?? '';
+    expect(held).toContain('restricted_run.tab');
+    expect(held).toContain('covers only the open files');
+    expect(held).not.toMatch(FORBIDDEN);
   });
 
   it('sources agree: ISO and DataCite are two sources, no contradiction', async () => {

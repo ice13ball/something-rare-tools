@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useState } from 'react';
-import { contradictionFinding } from '../../core/checks/licence';
+import { contradictionFinding, heldBackFinding } from '../../core/checks/licence';
 import { analyseLicences, type AnalysedSource, type AnalysedStatement, type Contradiction, type LicenceAnalysis, type SourceGroup } from '../../core/licence/analyse';
 import { buildAttribution, type Attribution } from '../../core/licence/attribution';
 import { loadLicenceReferences, splitReferences, type LoadFailure } from '../../core/licence/load';
@@ -202,6 +202,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
   const { lang } = useLang();
   const a = r.analysis;
   const unrecognised = a.sources.some((s) => s.statements.some((x) => x.classification.kind !== 'spdx'));
+  const held = heldBackFinding(a.sources.flatMap((s) => (s.record ? [s.record] : [])), 'dataset');
   return (
     <section className="licence-summary" aria-labelledby="licence-summary-title">
       <h2 id="licence-summary-title">{t('licence.summary.title')}</h2>
@@ -235,6 +236,11 @@ function Summary({ r }: { r: Result }): React.ReactElement {
       )}
       {a.hasUnreadable && <p className="notice">{t('licence.summary.unreadable')}</p>}
       {unrecognised && <p className="notice">{t('licence.summary.unrecognised')}</p>}
+      {held && (
+        <p className="notice" data-testid="licence-held-back">
+          {renderPlain(held, lang)}
+        </p>
+      )}
     </section>
   );
 }

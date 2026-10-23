@@ -27,8 +27,8 @@ function upperVariant(pid: string): string {
 }
 
 const MAX_NAMES = 10;
-/** Documentation and pictures: not data, so not listed as "not read". */
-const DOCUMENT_EXTENSIONS: readonly string[] = ['pdf', 'doc', 'docx', 'odt', 'rtf', 'md', 'html', 'htm', 'png', 'jpg', 'jpeg', 'gif', 'tif', 'tiff', 'svg'];
+/** Documentation and pictures: not data, so not listed as "not read" (TIFF stays listed: GeoTIFF rasters are data). */
+const DOCUMENT_EXTENSIONS: readonly string[] = ['pdf', 'doc', 'docx', 'odt', 'rtf', 'md', 'html', 'htm', 'png', 'jpg', 'jpeg', 'gif', 'svg'];
 const listOf = (names: string[]): string => {
   if (names.length === 0) return '—';
   const shown = names.slice(0, MAX_NAMES).join(', ');
@@ -113,6 +113,7 @@ export async function loadDataverse(host: string, pid: string, fetcher: Fetcher,
         version: read.versionLabel ?? '—',
         ...(original.length > 0 ? { original: listOf(original) } : {}),
         ...(converted.length > 0 ? { converted: listOf(converted) } : {}),
+        ...(toRead.length === 0 ? { none: 'yes' } : {}),
       },
     }),
   );
