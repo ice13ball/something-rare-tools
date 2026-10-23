@@ -108,7 +108,7 @@ export class CollectionRunner {
       notices: st.notices,
       deferred: st.deferred.length,
       // 'failed' can be tried again too (the cursor is the page that failed, and the run is still in memory); not after a start that failed.
-      resumable: RESUMABLE.includes(st.status) || (st.status === 'finished' && st.deferred.length > 0) || (st.status === 'failed' && st.plan !== null),
+      resumable: !st.notices.some((n) => n.code === CSV_DAMAGED) && (RESUMABLE.includes(st.status) || (st.status === 'finished' && st.deferred.length > 0) || (st.status === 'failed' && st.plan !== null)),
       ...(st.stop ? { stop: st.stop } : {}),
       csv: { rows: st.csvRows, bytes: st.csvBytes },
       startedAt: st.startedAt,
@@ -128,7 +128,12 @@ export class CollectionRunner {
     }
     this.st = run;
     this.pending = [];
-    if (!(await this.partsIntact(run))) this.markDamaged();
+    try {
+      if (!(await this.partsIntact(run))) this.markDamaged();
+    } catch {
+      // The parts cannot even be read: the saved run is still shown (and can be discarded), with the storage notice.
+      if (!run.notices.some((n) => n.code === 'storage-failed')) run.notices.push({ code: 'storage-failed' });
+    }
     return this.progress();
   }
 
@@ -377,21 +382,28 @@ export class CollectionRunner {
   private async csvPieces(): Promise<BlobPart[]> {
     const st = this.st;
     if (!st) return [fixListHeader()];
-    // parts written to the store so far = all but the ones still waiting in `pending`; a store that holds fewer is damaged, never silently shorter
-    const stored = st.partCount - this.pending.length;
-    const parts = await this.d.store.parts(st.id, stored);
-    if (parts.length !== stored) {
+    // ONE synchronous snapshot of everything that moves while the run goes on (a checkpoint empties `pending` while the store read below
+    // waits for it): the file is built from these copies and from the stored parts below the snapshot's count, never from live state.
+    const snap = {
+      id: st.id,
+      stored: (st.partCount ?? 0) - this.pending.length, // parts written to the store at this moment; the rest are in `pending`
+      pending: this.pending.map((p) => p.blob),
+      buffer: st.csvBuffer,
+      status: st.status,
+      stop: st.stop,
+      lang: st.settings.lang,
+      source: sourceLabel(st.settings.spec),
+      gap: st.status === 'finished' && st.notices.some((n) => GAP_NOTICES.includes(n.code)),
+      gapRow: st.status === 'finished' ? gapRow(st.notices, st.deferred.length > 0, st.settings.lang, sourceLabel(st.settings.spec)) : '',
+    };
+    const parts = (await this.d.store.parts(snap.id, snap.stored)).slice(0, snap.stored);
+    // a store that holds fewer than the run wrote is damaged, never silently shorter
+    if (parts.length !== snap.stored) {
       this.markDamaged();
       throw new Error(CSV_DAMAGED);
     }
-    const source = sourceLabel(st.settings.spec);
-    const gap = st.status === 'finished' && st.notices.some((n) => GAP_NOTICES.includes(n.code));
-    const last = UNFINISHED.includes(st.status)
-      ? [incompleteRow(st.status, st.stop, st.settings.lang, source)]
-      : gap
-        ? [gapRow(st.notices, st.deferred.length > 0, st.settings.lang, source)]
-        : [];
-    return [fixListHeader(), ...parts, ...(this.pending.length > 0 ? this.pending.map((p) => p.blob) : []), st.csvBuffer, ...last];
+    const last = UNFINISHED.includes(snap.status) ? [incompleteRow(snap.status, snap.stop, snap.lang, snap.source)] : snap.gap ? [snap.gapRow] : [];
+    return [fixListHeader(), ...parts, ...snap.pending, snap.buffer, ...last];
   }
 
   /** The fix list on disk is damaged: said in a notice (the list cannot be presented as complete). */
@@ -404,7 +416,7 @@ export class CollectionRunner {
 
   /** Are all the parts the run wrote still in the store? */
   private async partsIntact(st: RunRecord): Promise<boolean> {
-    const stored = st.partCount - this.pending.length;
+    const stored = (st.partCount ?? 0) - this.pending.length;
     return (await this.d.store.parts(st.id, stored)).length === stored;
   }
 

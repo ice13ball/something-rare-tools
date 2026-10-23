@@ -130,3 +130,107 @@ describe('resume() from a stale copy', () => {
     await expect(a.resume()).rejects.toThrow(RUN_CHANGED);
   });
 });
+
+describe('the file is built from one snapshot (race with a checkpoint)', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  /** IndexedDB-like ordering: a read issued while a save is in flight waits for it to commit. */
+  function orderedStore() {
+    const inner = memoryStore();
+    let q: Promise<unknown> = Promise.resolve();
+    const s: RunStore = {
+      ...inner,
+      load: inner.load,
+      clear: inner.clear,
+      saveText: inner.saveText,
+      loadText: inner.loadText,
+      save: (r, add) => {
+        const p = q.then(async () => {
+          await sleep(5);
+          await inner.save(r, add);
+        });
+        q = p.catch(() => undefined);
+        return p;
+      },
+      parts: (id, n) => {
+        const p = q.then(async () => {
+          await sleep(1);
+          return inner.parts(id, n);
+        });
+        q = p.catch(() => undefined);
+        return p;
+      },
+    };
+    return s;
+  }
+
+  it('a download clicked while a part-carrying checkpoint is being written has every row up to that moment, in order, plus the "still going" row', async () => {
+    const store = orderedStore();
+    let a!: CollectionRunner;
+    let dl: Promise<Blob> | null = null;
+    let rowsAtClick = 0;
+    const save0 = store.save;
+    store.save = (r, add) => {
+      const p = save0(r, add);
+      if (add && add.length > 0 && !dl && r.partCount >= 2) {
+        rowsAtClick = r.csvRows;
+        dl = a.csvBlob();
+      }
+      return p;
+    };
+    a = new CollectionRunner(runnerDeps(mkNet(3000, 200), virtualClock(), { store }));
+    await a.start(spec);
+    await a.whenIdle();
+    const lines = (await (await dl!).text()).trimEnd().split('\n');
+    expect(lines[lines.length - 1]).toMatch(/^\(run\),,RUN-INCOMPLETE,info,The run is still going: this list is partial\./);
+    expect(lines.length - 2).toBeGreaterThanOrEqual(rowsAtClick); // header + rows + the marker; nothing of the newest part lost
+    const ids = (lines.join('\n').match(/u(\d+)x/g) ?? []).map((x) => Number(x.slice(1, -1)));
+    expect(new Set(ids).size).toBe(Math.max(...ids)); // no hole: records 1..max all present
+  });
+});
+
+describe('a download while the run is going carries the "still going" row (4 languages)', () => {
+  it('has RUN-INCOMPLETE as its last row; a finished run has none', async () => {
+    const store = memoryStore();
+    const a = new CollectionRunner(runnerDeps(mkNet(3000), virtualClock(), { store }));
+    await a.start(spec);
+    while (a.progress().csv.rows < 300) await sleep0();
+    expect(a.progress().status).toBe('running');
+    const lines = (await (await a.csvBlob()).text()).trimEnd().split('\n');
+    expect(lines[lines.length - 1]).toContain('RUN-INCOMPLETE');
+    await a.whenIdle();
+    expect(await (await a.csvBlob()).text()).not.toContain('RUN-INCOMPLETE');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) for (const k of ['collection.stop.running', 'collection.incomplete.fixRunning'] as const) expect(UI[lang][k], `${lang} ${k}`).toBeTruthy();
+  });
+});
+const sleep0 = () => new Promise((r) => setTimeout(r, 1));
+
+describe('a damaged run and a saved run whose parts cannot be read', () => {
+  it('a damaged run does not offer Resume', async () => {
+    const inner = memoryStore();
+    const r0 = new CollectionRunner(runnerDeps(mkNet(3000, 300), virtualClock(), { store: inner }));
+    await r0.start(spec);
+    while (r0.progress().csv.bytes < 1_300_000) await sleep0(); // at least one part is written
+    await r0.stop();
+    const damaged: RunStore = { ...inner, load: inner.load, save: inner.save, clear: inner.clear, saveText: inner.saveText, loadText: inner.loadText, parts: async (id, n) => (await inner.parts(id, n)).slice(1) };
+    const r = new CollectionRunner(runnerDeps(mkNet(3000, 300), virtualClock(), { store: damaged }));
+    const p = await r.saved();
+    expect(p?.status).toBe('stopped');
+    expect(p?.notices).toContainEqual({ code: 'csv-damaged' });
+    expect(p?.resumable).toBe(false);
+    await expect(r.resume()).rejects.toThrow();
+  });
+
+  it('parts that cannot be read: saved() still shows the run with the storage notice, and it can be discarded', async () => {
+    const inner = memoryStore();
+    const r0 = new CollectionRunner(runnerDeps(mkNet(3000, 300), virtualClock(), { store: inner }));
+    await r0.start(spec);
+    await r0.whenIdle();
+    const broken: RunStore = { ...inner, load: inner.load, save: inner.save, clear: inner.clear, saveText: inner.saveText, loadText: inner.loadText, parts: async () => { throw new Error('IndexedDB read failed'); } };
+    const r = new CollectionRunner(runnerDeps(mkNet(3000, 300), virtualClock(), { store: broken }));
+    const p = await r.saved();
+    expect(p?.status).toBe('finished');
+    expect(p?.notices).toContainEqual({ code: 'storage-failed' });
+    await r.discard();
+    expect(r.progress().status).toBe('idle');
+  });
+});

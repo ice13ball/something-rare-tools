@@ -309,7 +309,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
             if (p.resumable) setSaved(p);
           }
         },
-        () => undefined,
+        () => setError(t('collection.notice.storage-failed')),
       );
     }
     return off;
