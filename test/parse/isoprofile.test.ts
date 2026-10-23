@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-// The profile of an ISO record is the profile of its ROOT element, in /check (a dropped file), /licence (GeoNetwork) and the collection
+// The profile of an ISO record is the profile of its FIRST MD_Metadata element (the root, or inside a wrapper), in /check (a dropped file), /licence (GeoNetwork) and the collection
 // review alike: one function (parseIsoRecord). A string that merely mentions the 19115-3 namespace is not a 19115-3 record.
 import { describe, expect, it } from 'vitest';
 import { parseFile } from '../../src/core/parse';
@@ -46,5 +46,28 @@ describe('ISO profile = the root element', () => {
     expect(rec.findings.map((x) => x.ruleId)).not.toContain('IN-RECORD-INACCESSIBLE');
     expect(rec.metadata[0]?.isoProfile).toBe('19139');
     expect(rec.metadata[0]?.licences.length).toBeGreaterThan(0);
+  });
+});
+
+describe('ISO profile = the first MD_Metadata element (a wrapper around it does not change the profile)', () => {
+  const strip = (x: string): string => x.replace(/^<\?xml[^>]*\?>\s*/, '');
+  const wrap = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>\n<csw:GetRecordByIdResponse xmlns:csw="http://www.opengis.net/cat/csw/2.0.2">${strip(inner)}</csw:GetRecordByIdResponse>`;
+
+  it('/check: a csw:GetRecordByIdResponse wrapping a 19115-3 record is read as 19115-3', () => {
+    const f = parseFile('wrapped3.xml', enc(wrap(fixture('iso19115-3-synthetic.xml'))));
+    expect(f.kind).toBe('metadata');
+    expect(f.embeddedMetadata?.isoProfile).toBe('19115-3');
+    expect(f.embeddedMetadata?.licences.length).toBeGreaterThan(0);
+  });
+
+  it('a wrapped 19139 record is 19139, also when it declares xmlns:mdb', () => {
+    for (const rec of [gmdRecord({ id: 'w', licence: 'CC BY 4.0' }), declares]) {
+      expect(parseIsoRecord(wrap(rec), 'x').isoProfile).toBe('19139');
+    }
+  });
+
+  it('a plain 19139 record declaring xmlns:mdb stays 19139; a plain 19115-3 record stays 19115-3', () => {
+    expect(parseIsoRecord(declares, 'x').isoProfile).toBe('19139');
+    expect(parseIsoRecord(fixture('iso19115-3-synthetic.xml'), 'x').isoProfile).toBe('19115-3');
   });
 });

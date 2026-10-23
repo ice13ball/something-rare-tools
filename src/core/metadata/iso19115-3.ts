@@ -152,13 +152,27 @@ export function parseIso19115_3(xml: string | Document, label: string): Metadata
   return rec;
 }
 
+/** The first MD_Metadata element in document order (the root, or the first one inside a wrapper such as csw:GetRecordByIdResponse), in the gmd or the mdb namespace. */
+function firstMetadata(doc: Document): Element | undefined {
+  const isMd = (e: Element): boolean => e.localName === 'MD_Metadata' && (e.namespaceURI === NS.gmd || (NS3.mdb as readonly string[]).includes(e.namespaceURI ?? ''));
+  const walk = (e: Element): Element | undefined => {
+    if (isMd(e)) return e;
+    for (const c of elementChildren(e)) {
+      const f = walk(c);
+      if (f) return f;
+    }
+    return undefined;
+  };
+  return doc.documentElement ? walk(doc.documentElement) : undefined;
+}
+
 /**
- * The profile of an ISO document is the one of its ROOT element: 19115-3 when the root is in the mdb namespace, else 19139. A record that only
- * DECLARES xmlns:mdb (or mentions the address in its text) is not 19115-3. The one place this is decided, for /check, /licence and the
- * collection review.
+ * The profile of an ISO document is the one of its FIRST MD_Metadata element: the root when it is one, else the first one inside a wrapper
+ * (a dropped csw:GetRecordByIdResponse). 19115-3 when that element is in the mdb namespace, else 19139. A record that only DECLARES xmlns:mdb
+ * (or mentions the address in its text) is not 19115-3. The one place this is decided, for /check, /licence and the collection review.
  */
 export function isIso19115_3(doc: Document): boolean {
-  return (NS3.mdb as readonly string[]).includes(doc.documentElement?.namespaceURI ?? '');
+  return (NS3.mdb as readonly string[]).includes(firstMetadata(doc)?.namespaceURI ?? '');
 }
 
 /** An ISO record of either profile (text or an already parsed document); a text is parsed once, here. */
