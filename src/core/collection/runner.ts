@@ -372,7 +372,8 @@ export class CollectionRunner {
   private async retryDeferred(pager: Pager<unknown>, ctl: AbortController): Promise<boolean> {
     const st = this.st!;
     let failures = 0;
-    for (const entry of [...st.deferred]) {
+    const queue = [...st.deferred];
+    for (let entry = queue.shift(); entry !== undefined; entry = queue.shift()) {
       await this.gate(ctl);
       let data: PageData<unknown>;
       try {
@@ -398,6 +399,15 @@ export class CollectionRunner {
       st.counts.records -= entry.expected;
       this.apply(data);
       if (entry.blocking) st.cursor = data.next;
+      else {
+        // The answer may cover only the first positions of the page's range (a page asked smaller): what is left is owed, and is read next.
+        const rest = pager.rest?.(entry.cursor, data, entry.expected);
+        if (rest) {
+          const owed: Deferred = { cursor: rest.cursor, kind: entry.kind, expected: rest.expected, reason: entry.reason, ...(entry.page !== undefined ? { page: entry.page } : {}) };
+          this.defer(owed);
+          queue.unshift(owed);
+        }
+      }
       await this.checkpoint();
     }
     return true;
