@@ -20,11 +20,11 @@ const both = (t: string): Rights[] => [{ rights: t, rightsUri: INC }, { rights: 
 describe('MEDIUM 1: a middle name is one word, not a clause', () => {
   it.each([
     '© 2020 Jan Berg. Reuse only with permission of Jan Berg.', 'Jan Berg; restricted to Jan Berg', 'Kevin restricted Baird', 'Kevin (internal use only) Baird',
-    'Kevin Not For Redistribution Baird', 'Jan Berg. Internal', 'Jan reuse only with permission of Jan Berg', 'Nina (restricted) Krašovec', 'Kevin Baird (see licence file)',
+    'Kevin Not For Redistribution Baird', 'Kevin Restricted Baird', 'Jan Restricted Berg', 'Kevin Thorsen Baird', '© 2026 Kevin Thorsen Baird', 'Jan Berg. Internal', 'Jan reuse only with permission of Jan Berg', 'Nina (restricted) Krašovec', 'Kevin Baird (see licence file)',
   ])('"%s" warns', (t) => {
     for (const e of both(t)) expect(ids(dc(PEOPLE, by, e)), JSON.stringify(e)).toEqual(WARN);
   });
-  it.each(['Kevin Thorsen Baird', '© 2026 Kevin Thorsen Baird', 'Kevin T. Baird', 'Kevin T. J. Baird', 'Prof. Nina Krašovec', 'Nora Claire Smith', 'Jan Berg.', 'Berg, Jan.'])(
+  it.each(['Kevin T. Baird', 'Kevin T. J. Baird', 'Prof. Nina Krašovec', 'Nora Claire Smith', 'Jan Berg.', 'Berg, Jan.'])(
     '"%s" is still a creator: clean',
     (t) => {
       for (const e of both(t)) expect(ids(dc(PEOPLE, by, e)), JSON.stringify(e)).toEqual([]);
@@ -35,13 +35,13 @@ describe('MEDIUM 1: a middle name is one word, not a clause', () => {
 describe('MEDIUM 2: only a real ORCID iD or a plain handle in brackets is dropped', () => {
   it.each([
     'Jan Berg (ORCID: restricted)', 'Jan Berg (ORCID 0000-0002-1825-0097; no commercial use)', 'Jan Berg (not for redistribution, see orcid profile)', 'Jan Berg (NC-4.0)',
-    'Jan Berg (BY-NC-4.0)', 'Jan Berg (embargo-until-2030)', 'Jan Berg (orcid)', 'Jan Berg (0000-0002-1825-009)', 'Jan Berg (ORCID: 0000-0002-1825-0097 restricted)',
+    'Jan Berg (janberg99)', 'Jan Berg (nonCommercial2024)', 'Copyright (c) 2026 Qirui Cui (cuiqirui99)', 'Jan Berg (hdl)', 'Jan Berg (BY-NC-4.0)', 'Jan Berg (embargo-until-2030)', 'Jan Berg (orcid)', 'Jan Berg (0000-0002-1825-009)', 'Jan Berg (ORCID: 0000-0002-1825-0097 restricted)',
   ])('"%s" warns', (t) => {
     for (const e of both(t)) expect(ids(dc(PEOPLE, by, e)), JSON.stringify(e)).toEqual(WARN);
   });
   it.each([
     'Jan Berg (ORCID: 0000-0002-1825-0097)', 'Jan Berg (ORCID iD: 0000-0002-1825-009X)', 'Jan Berg (0000-0002-1825-0097)', 'Jan Berg (https://orcid.org/0000-0002-1825-0097)',
-    'Jan Berg (janberg99)', 'Copyright (c) 2026 Nina Krašovec (nkrasovec1)',
+    'Jan Berg (2024)', 'Copyright (c) 2026 Nina Krašovec (2026)',
   ])('"%s": clean', (t) => {
     for (const e of both(t)) expect(ids(dc(PEOPLE, by, e)), JSON.stringify(e)).toEqual([]);
   });
@@ -62,5 +62,21 @@ describe('LOW: InC-only entry; "e" / "y"; anchored link', () => {
       for (const e of both(t)) expect(ids(dc(ppl, by, e)), JSON.stringify(e)).toEqual([]);
     }
     for (const t of ['Ana Costa e Internal', 'Kevin Baird y restricted']) expect(ids(dc(ppl, by, { rights: t })), t).toEqual(WARN);
+  });
+});
+
+describe('fail-closed round: no unknown middle word, no bracketed handle, access-value identifier', () => {
+  it('Kevin Thorsen Baird is clean only when the creator is recorded with that middle name', () => {
+    for (const t of ['Kevin Thorsen Baird', '© 2026 Kevin Thorsen Baird', 'Baird, Kevin Thorsen', 'Kevin Baird']) {
+      expect(ids(dc(['Baird, Kevin Thorsen'], by, ...both(t))), t).toEqual([]);
+    }
+    expect(ids(dc(['Baird, Kevin'], by, { rights: 'Kevin Thorsen Baird' }))).toEqual(WARN);
+    expect(ids(dc(['Baird, Kevin Thorsen'], by, { rights: 'Kevin Restricted Baird' }))).toEqual(WARN);
+  });
+  it('an entry whose only content is an access value as identifier is neutral', () => {
+    for (const e of [{ rightsIdentifier: 'info:eu-repo/semantics/openAccess' }, { rightsIdentifier: 'open access' }, { rightsIdentifier: 'Open Access' }]) {
+      expect(ids(dc(PEOPLE, by, e)), JSON.stringify(e)).toEqual([]);
+    }
+    for (const e of [{ rightsIdentifier: 'info:eu-repo/semantics/closedAccess' }, { rightsIdentifier: 'open access; inc' }]) expect(ids(dc(PEOPLE, by, e)), JSON.stringify(e)).toEqual(WARN);
   });
 });

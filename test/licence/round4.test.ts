@@ -34,8 +34,8 @@ describe('MEDIUM: "the authors" and name variants', () => {
     }
   });
   it.each([
-    '© 2026 Kevin Thorsen Baird', 'Kevin T. Baird', 'K. Baird', 'Dr. Jan Berg', 'Prof. Nina Krašovec, PhD', 'Dr. Jan Berg (ORCID: 0000-0002-1825-0097)',
-    'Copyright (c) 2026 Qirui Cui (cuiqirui99)', 'Narr et al.', '© 2026 Narr et al.', 'Narr et al.; Jan Berg', 'Krašovec, N.', 'Berg, J.; Baird, K.', 'Krašovec, N. A.',
+    'Kevin T. Baird', 'K. Baird', 'Dr. Jan Berg', 'Prof. Nina Krašovec, PhD', 'Dr. Jan Berg (ORCID: 0000-0002-1825-0097)',
+    'Narr et al.', '© 2026 Narr et al.', 'Narr et al.; Jan Berg', 'Krašovec, N.', 'Berg, J.; Baird, K.', 'Krašovec, N. A.',
   ])('name variant "%s" is a creator: clean', (t) => {
     for (const e of withLink(t)) expect(ids(dc(PEOPLE, 'Zenodo', by, e)), JSON.stringify(e)).toEqual([]);
   });

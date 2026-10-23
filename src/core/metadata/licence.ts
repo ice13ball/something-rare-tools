@@ -892,10 +892,11 @@ const NAME_PARTICLES = new Set(['van', 'von', 'de', 'der', 'den', 'da', 'di', 'd
 
 /**
  * `words` (one name of a holder entry) is the person `c`: every word is a word of the creator, a single letter counting as an initial of one,
- * and one whole word matches ("Krašovec N." is "Krašovec, Nina"); or it is "Given Middle… Surname" with the given name first and the
- * whole surname last ("Kevin Thorsen Baird" is "Baird, Kevin"). Anything before, after or outside that is nobody ("Krašovec N. Internal").
+ * and one whole word matches ("Krašovec N." is "Krašovec, Nina"); or it is "Given Middle… Surname" with the given name first, the whole
+ * surname last and between them only initials and the creator's own other given names ("Kevin Thorsen Baird" is "Baird, Kevin Thorsen", not
+ * "Baird, Kevin"). Anything before, after or outside that is nobody ("Krašovec N. Internal", "Kevin Restricted Baird").
  */
-function isPerson(words: string[], c: string, capital: ReadonlySet<string>): boolean {
+function isPerson(words: string[], c: string): boolean {
   const have = partyTokens(c);
   // The first initial must be one of the creator's; a further one is a middle initial and says nothing.
   const initials = words.filter((w) => w.length === 1);
@@ -910,11 +911,9 @@ function isPerson(words: string[], c: string, capital: ReadonlySet<string>): boo
   if (words.slice(words.length - surname.length).join(' ') !== surname.join(' ')) return false;
   const first = words[0];
   if (!(first.length === 1 ? given[0].startsWith(first) : given.includes(first))) return false;
-  // What sits between the given name and the surname is a middle name, not a clause: initials, the creator's own other names, and at most
-  // ONE other capitalised word.
+  // What sits between the given name and the surname may only be initials and the creator's OWN other given names, as the record has them.
   const middle = words.slice(1, words.length - surname.length);
-  const unknown = middle.filter((w) => w.length > 1 && !have.includes(w));
-  return unknown.length <= 1 && unknown.every((w) => capital.has(w));
+  return middle.every((w) => w.length === 1 || have.includes(w));
 }
 
 /** One name of a holder entry is a party of the record. Organisations and the publisher match as a whole name; people as above. */
@@ -923,8 +922,7 @@ function isParty(name: string, who: RecordParties): boolean {
   if (words.length === 0) return false;
   const whole = words.join(' ');
   if (who.publisher && partyTokens(who.publisher).join(' ') === whole) return true;
-  const capital = new Set((name.match(/\p{Lu}[\p{L}'’-]*/gu) ?? []).flatMap(partyTokens));
-  return (who.creators ?? []).some((c) => (isOrganisation(c, who) ? partyTokens(c).join(' ') === whole : isPerson(words, c, capital)));
+  return (who.creators ?? []).some((c) => (isOrganisation(c, who) ? partyTokens(c).join(' ') === whole : isPerson(words, c)));
 }
 
 const HONORIFIC = /(?<![\p{L}\p{N}])(?:dr|prof|professor|ph\.?\s?d|m\.?\s?d|mr|mrs|ms|mx|dipl|ing|msc|mgr|hab)(?![\p{L}\p{N}])\.?/giu;
@@ -944,9 +942,9 @@ const AUTHOR_WORDS = new Set(
  */
 function isHolderOfRecord(text: string, who: RecordParties): boolean {
   const base = text
-    // Only an ORCID iD (alone in its bracket, optionally labelled or as an orcid.org link) or a plain letters-and-digits handle is dropped.
+    // Only an ORCID iD (alone in its bracket, optionally labelled or as an orcid.org link) or a bare 4-digit year in brackets is dropped.
     .replace(/\(\s*(?:orcid(?:\s*i[dD])?\s*:?\s*)?(?:https?:\/\/orcid\.org\/)?\d{4}-\d{4}-\d{4}-\d{3}[\dXx]\s*\)/giu, ' ')
-    .replace(/\(\s*(?=\p{L}*\d)[\p{L}\p{N}]+\s*\)/gu, ' ')
+    .replace(/\(\s*(?:1[5-9]|20)\d{2}\s*\)/gu, ' ')
     .replace(/©|\(c\)|(?<![\p{L}\p{N}])copyright(?![\p{L}\p{N}])/giu, ' ')
     .replace(/(?<![\p{L}\p{N}])(?:1[5-9]|20)\d{2}(?:\s*[-–]\s*(?:1[5-9]|20)\d{2})?(?![\p{L}\p{N}])/gu, ' ');
   // Only letters, digits, spaces and the punctuation of names: a symbol (an emoji, "$", "+") may carry a condition.
