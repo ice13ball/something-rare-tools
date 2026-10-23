@@ -42,6 +42,8 @@ export interface LicenceStatement {
   leftover?: string;
   /** The string of the statement the `leftover` is quoted from (the shown text, or the identifier / Zenodo title when only that one leaves something). */
   leftoverFrom?: string;
+  /** The DataCite rightsIdentifier of an entry that is not a recognised licence and differs from `text`: part of what the entry says. */
+  identifier?: string;
   /** Leftover of another string of the statement (identifier, Zenodo title), next to the shown text's own `leftover`. */
   otherLeftover?: string;
   /** The licences the text itself reads as, when it reads as more than one (several ids, a versionless family, "—" = a name no id exists for). */
@@ -72,6 +74,7 @@ export interface MetadataRecord {
   versionDois?: string[];
   isoProfile?: '19139' | '19115-3';   // source 'iso19139' covers both ISO profiles; this says which one was read
   creators?: string[];          // for the attribution line, in source order
+  organisations?: string[];     // the creators the source marks as organisations (DataCite nameType Organizational, Zenodo person_or_org.type organizational)
   publicationYear?: number;
   publisher?: string;
   parameters?: { name: string; unit?: string }[];      // PANGAEA parameter list

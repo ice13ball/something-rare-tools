@@ -51,6 +51,8 @@ export function parseZenodoRecord(json: unknown, label: string): MetadataRecord 
     .map((c) => str(c.name) ?? (isObj(c.person_or_org) ? str(c.person_or_org.name) : undefined))
     .filter((n): n is string => !!n);
   if (creators.length > 0) rec.creators = creators;
+  const orgs = (Array.isArray(md.creators) ? md.creators : []).filter(isObj).filter((c) => isObj(c.person_or_org) && /^organi[sz]ation/i.test(str(c.person_or_org.type) ?? '')).map((c) => str((c.person_or_org as Record<string, unknown>).name)).filter((n): n is string => !!n);
+  if (orgs.length > 0) rec.organisations = orgs;
   const year = /^\s*(\d{4})/.exec(str(md.publication_date) ?? '');
   if (year) rec.publicationYear = Number(year[1]);
   const publisher = str(md.publisher);

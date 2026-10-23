@@ -244,7 +244,7 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
   for (const source of sources) {
     const licence = source.statements.find((a) => a.classification.kind === 'spdx');
     if (!licence) continue;
-    const statement = source.statements.find((a) => isRepeatedEntry(a.statement) && !a.conflict && a.classification.kind !== 'spdx' && !isNeutralEntry(a.statement.text, a.statement.uri, { creators: source.record?.creators, publisher: source.record?.publisher }));
+    const statement = source.statements.find((a) => isRepeatedEntry(a.statement) && !a.conflict && a.classification.kind !== 'spdx' && !isNeutralEntry(a.statement.text, a.statement.uri, { creators: source.record?.creators, organisations: source.record?.organisations, publisher: source.record?.publisher }, a.statement.identifier));
     if (statement) {
       const id = licence.classification.kind === 'spdx' ? licence.classification.id : '';
       contradictions.push({ kind: 'other-rights-entry', source, statement, licence: licence.info ? `${licence.info.name} (${id})` : shownOf(licence) });

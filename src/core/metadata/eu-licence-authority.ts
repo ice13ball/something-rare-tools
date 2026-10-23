@@ -4,7 +4,7 @@
 // whose own skos:exactMatch is an SPDX licence URI of an id the classifier knows. Fetched 2026-10-23 from the authority's SPARQL endpoint
 // (https://publications.europa.eu/webapi/rdf/sparql):
 //   SELECT ?c ?s WHERE { ?c a euvoc:Licence ; skos:exactMatch ?s . FILTER(CONTAINS(STR(?s), "spdx.org")) }
-// 145 authority entries match SPDX; 52 map to known ids, each one-to-one. The four plain GNU codes (AGPL_3_0, GPL_2_0, GPL_3_0, LGPL_2_1,
+// 145 authority entries match SPDX; 52 map to known ids, each one-to-one. The five plain GNU codes (AGPL_3_0, GPL_2_0, GPL_3_0, LGPL_2_1,
 // LGPL_3_0: the authority maps them to "-only") are left out: a code that does not say "only" or "or later" never decides alone.
 // Never fetched at build or test time; regenerate by hand.
 
