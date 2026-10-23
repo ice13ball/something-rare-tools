@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: "If you use these tools, please cite the Zenodo software record of Abyssal Claims Tools."
+title: "Abyssal Claims Tools: browser-based checks of marine data files, metadata and licences"
+abstract: >-
+  Web tools that check marine datasets before they are published or reused.
+  Data check reads data tables (CSV, TSV, Excel, PANGAEA, Darwin Core) and their
+  metadata and reports problems with coordinates, positions on land, stations at
+  inconsistent positions, dates, units, value ranges and licences, each explained
+  in plain words with the source of every threshold. Licence check compares the
+  licence that the metadata sources of one dataset state (Zenodo, PANGAEA,
+  GeoNetwork, DataCite). Collection review reads the metadata of a whole
+  collection and produces a fix list of missing, unclear or contradictory
+  licences and empty metadata fields. Files dropped by a user are read in the
+  user's browser and never leave it.
+type: software
+# `version`, `date-released` and the record's own `doi` are set at release time and must match the tag.
+license: AGPL-3.0-or-later
+url: "https://tools.something-rare.com"
+repository-code: "https://github.com/ice13ball/something-rare-tools"
+keywords:
+  - FAIR data
+  - data quality
+  - quality control
+  - marine data
+  - oceanography
+  - metadata
+  - licences
+  - DataCite
+  - Darwin Core
+  - ISO 19139
+  - GeoNetwork
+  - Zenodo
+  - PANGAEA
+  - research software
+  - open science
+authors:
+  - family-names: "Mazurowski"
+    given-names: "Michal"
+    orcid: "https://orcid.org/0009-0007-3786-0310"
+    affiliation: "Independent Researcher"
+identifiers:
+  - description: "Methods and data documentation of Abyssal Claims (Zenodo concept DOI, CC-BY-4.0)"
+    type: doi
+    value: "10.5281/zenodo.19745884"
+  - description: "Source code of the Abyssal Claims engine (Zenodo concept DOI)"
+    type: doi
+    value: "10.5281/zenodo.22728476"
+  - description: "Live tools"
+    type: url
+    value: "https://tools.something-rare.com"
