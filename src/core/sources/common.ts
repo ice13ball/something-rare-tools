@@ -18,6 +18,17 @@ export function hasDataExtension(name: string): boolean {
   return DATA_EXTENSIONS.includes(extensionOf(name));
 }
 
+/** README, ReadMe.txt, 00_readme_v2.txt: a description of the deposit, never data (Michal, 24.10.2026: only the data are checked). */
+export function isReadme(name: string): boolean {
+  const base = name.split('/').pop() ?? name;
+  return /(?:^|[\s._-])read[\s_-]?me(?:[\s._-]|$)/i.test(base);
+}
+
+/** A file of a linked record that is read as data: a table extension, and not a README. */
+export function isDataFile(name: string): boolean {
+  return hasDataExtension(name) && !isReadme(name);
+}
+
 export type Attempt<T> = { ok: T } | { finding: Finding };
 
 /** Runs a download; a blocked / refused / proxy-failed one becomes a finding, anything else is rethrown. */

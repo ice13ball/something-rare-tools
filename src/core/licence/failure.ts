@@ -17,3 +17,14 @@ export function ownLoadFailure(findings: readonly Finding[], label: string, kind
   const landingOnly = kind === 'datacite' && metadataCount > 0;
   return findings.find((f) => LOAD_FAILURES.includes(f.ruleId) && f.file === label && (f.ruleId !== 'IN-HOST-NOT-ALLOWED' || !landingOnly));
 }
+
+/**
+ * A DOI routed to no supported repository whose landing page is on a host that is not allowed (kind 'datacite', its DataCite record
+ * read): the repository was never opened, so its own metadata may state a licence the tool did not see. Not a failed read of DataCite
+ * (ownLoadFailure stays undefined), but no "no licence in the metadata" either: an empty DataCite record is then LIC-DATACITE-EMPTY
+ * ("—"), as for any record that could not be read.
+ */
+export function landingNotRead(findings: readonly Finding[], label: string, kind: LoadedRecord['kind'], metadataCount: number): Finding | undefined {
+  if (kind !== 'datacite' || metadataCount === 0) return undefined;
+  return findings.find((f) => f.ruleId === 'IN-HOST-NOT-ALLOWED' && f.file === label);
+}

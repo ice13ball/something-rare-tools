@@ -293,10 +293,11 @@ describe('review 6 — /check does not claim "no licence" for a record it could 
     expect(f.map((x) => x.ruleId)).toContain('IN-HOST-NOT-ALLOWED');
     expect(f.map((x) => x.ruleId)).not.toContain('LIC-MISSING');
   });
-  it('a DOI routed nowhere (only a landing page on a host not allowed): DataCite was read, so LIC-MISSING stays as on main', () => {
+  it('a DOI routed nowhere (only a landing page on a host not allowed): the repository was not read, so an empty DataCite is LIC-DATACITE-EMPTY, never LIC-MISSING', () => {
     const read = makeRecord('datacite', { label: 'rec' });
-    const f = runChecks(session('datacite', [makeFinding('IN-HOST-NOT-ALLOWED', { file: 'rec', params: { host: 'www.example.org' } })], [read])).findings;
-    expect(f.map((x) => x.ruleId)).toContain('LIC-MISSING');
+    const f = runChecks(session('datacite', [makeFinding('IN-HOST-NOT-ALLOWED', { file: 'rec', params: { host: 'rds.icm.edu.pl' } })], [read])).findings;
+    expect(f.map((x) => x.ruleId)).not.toContain('LIC-MISSING');
+    expect(f.find((x) => x.ruleId === 'LIC-DATACITE-EMPTY')?.params.licence).toBe('—');
   });
   it('a record that was read and states no licence still gets LIC-MISSING', () => {
     expect(runChecks(session('datacite', [], [makeRecord('datacite', { label: 'rec' })])).findings.map((x) => x.ruleId)).toContain('LIC-MISSING');

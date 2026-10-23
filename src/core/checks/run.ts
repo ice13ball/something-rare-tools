@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
-import { ownLoadFailure } from '../licence/failure';
+import { landingNotRead, ownLoadFailure } from '../licence/failure';
 import type { LandMask } from '../geo/land';
 import { buildReport } from '../report';
 import type { CheckSession, Finding, LoadedRecord, MetadataSource, Report } from '../types';
@@ -43,10 +43,12 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
     findings.push(...record.findings);
     // The same "could not be read" as on the licence page (a refused read, a blocked one, a host not allowed): the record then says nothing
     // about a licence. File-download failures reuse these rules with the file name; only the record's own label counts.
-    const inaccessible = !!ownLoadFailure(record.findings, record.label, record.kind, record.metadata.length);
+    const own = !!ownLoadFailure(record.findings, record.label, record.kind, record.metadata.length);
+    // A landing page that was not read: DataCite was, so it is not unreadable, but its silence is not "no licence anywhere".
+    const inaccessible = own || !!landingNotRead(record.findings, record.label, record.kind, record.metadata.length);
     if (record.metadata.length > 0 || inaccessible) {
       const versionInArchive = record.files.some((f) => versioned.has(f.name));
-      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: inaccessible ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [], versionInArchive }));
+      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: own ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [], versionInArchive }));
     }
   }
   for (const ds of session.datasets) {
