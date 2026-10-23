@@ -337,7 +337,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
     }
   };
 
-  const failureText = (m: string): string => (m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);
+  const failureText = (m: string): string => (m.includes('run-open-elsewhere') ? t('collection.error.otherTab') : m.startsWith('not-found') ? t('collection.error.notFound') : m.includes('csw_daily_budget') ? t('collection.error.dailyBudget') : m);
 
   // one start/resume at a time: the second click of a double click, and any click before the engine has answered, does nothing
   const acting = useRef(false);
@@ -372,7 +372,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
   };
 
   const act = (fn: () => Promise<void>, once = false) => (): void => {
-    void (once ? guarded(fn) : fn()).then(refresh, (e: unknown) => setError(messageOf(e)));
+    void (once ? guarded(fn) : fn()).then(refresh, (e: unknown) => setError(failureText(messageOf(e))));
   };
 
   const discard = async (): Promise<void> => {

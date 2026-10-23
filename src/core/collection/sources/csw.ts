@@ -333,7 +333,9 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
     rest: (c, data, owed) => {
       const end = c.pos + owed - 1; // `owed` records from the page's position: the range of the deferred entry
       const covered = Math.min(data.next?.pos ?? end + 1, end + 1); // positions this answer accounts for (it may jump past the rest of the range)
-      const missing = Math.max(0, covered - c.pos - data.items.length);
+      // the first positions the page's cursor had already processed (`through`) were sliced off the answer: they are not missing
+      const ov = c.through !== undefined && c.through >= c.pos ? c.through - c.pos + 1 : 0;
+      const missing = Math.max(0, covered - c.pos - Math.min(ov, covered - c.pos) - data.items.length);
       if (!data.next || data.next.pos > end) return { next: null, missing };
       const left = end - data.next.pos + 1;
       // asked for no more than is owed: the positions after the range were read by the main walk
