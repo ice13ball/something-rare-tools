@@ -25,7 +25,7 @@ const decimalsOfNumber = (v: number): number => (String(v).split('.')[1] ?? '').
  * printed in full. Such a value counts with the decimals of the shortest number that is the same 32-bit float, so the
  * position compares and prints as 37.85. A genuinely precise value is not a float32 and keeps its decimals.
  */
-function writtenDecimals(v: number, dec: number): number {
+export function writtenDecimals(v: number, dec: number): number {
   if (dec <= 6) return dec;
   const f = Math.fround(v);
   if (Math.abs(v - f) > 1e-12 * Math.max(1, Math.abs(v))) return dec;
@@ -138,7 +138,7 @@ function exchanged(p: Pos, q: Pos): boolean {
 }
 
 /* Great-circle distance in km (spherical Earth, mean radius 6371 km), correct across the antimeridian. */
-function km(aLat: number, aLon: number, bLat: number, bLon: number): number {
+export function km(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const r = Math.PI / 180;
   const h = Math.sin(((bLat - aLat) * r) / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(((bLon - aLon) * r) / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));

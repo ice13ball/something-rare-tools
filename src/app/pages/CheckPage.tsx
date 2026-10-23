@@ -14,6 +14,7 @@ import { LoadProblems, SwitchedNotice } from '../components/LoadProblems';
 import { MapPreview, type MapLib } from '../components/MapPreview';
 import { ModeSwitch } from '../components/ModeSwitch';
 import { ReportView } from '../components/ReportView';
+import { SingleCruise } from '../components/SingleCruise';
 import type { downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { classifyInput } from '../inputType';
@@ -59,15 +60,17 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
   const [mappings, setMappings] = useState<Record<string, SheetMapping[]>>({});
   const [proposals, setProposals] = useState<Record<string, Record<string, ColumnProposal[]>>>({});
   const [result, setResult] = useState<CheckResult | null>(null);
+  // the declaration "one cruise of one ship": per upload, set from the dropped mapping file or unticked; never read from storage
+  const [singleCruise, setSingleCruise] = useState(false);
   const analytics = useRef<{ inputType: ReturnType<typeof classifyInput>; mode: DownloadMode } | null>(null);
 
   const busy = phase === 'loading' || phase === 'checking';
 
-  const finish = async (files: ParseResult['files'], lay: Record<string, LayoutPlan>, maps: Record<string, SheetMapping[]>): Promise<void> => {
+  const finish = async (files: ParseResult['files'], lay: Record<string, LayoutPlan>, maps: Record<string, SheetMapping[]>, declared: boolean): Promise<void> => {
     setPhase('checking');
     try {
       for (const f of files) await engine.build(f.fileId, lay[f.fileId] ?? f.layout, maps[f.fileId] ?? f.mappings);
-      const res = await engine.check();
+      const res = await engine.check({ singleCruise: declared });
       setResult(res);
       setPhase('report');
       const a = analytics.current;
@@ -94,6 +97,7 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
     setParsed(null);
     setLoadFindings([]);
     setSwitched(false);
+    setSingleCruise(false);
     setLines([]);
     setPhase('loading');
     try {
@@ -102,11 +106,12 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
       setLoadFindings([...loaded.records.flatMap((r) => r.findings), ...loaded.findings]);
       const p = await engine.parse(loaded.files, loaded.records, loaded.findings);
       setParsed(p);
+      setSingleCruise(p.singleCruise);
       setLayouts(Object.fromEntries(p.files.map((f) => [f.fileId, f.layout])));
       setMappings(Object.fromEntries(p.files.map((f) => [f.fileId, f.mappings])));
       setProposals(Object.fromEntries(p.files.map((f) => [f.fileId, f.proposals])));
       if (p.files.length > 0) setPhase('confirm');
-      else await finish([], {}, {});
+      else await finish([], {}, {}, false);
     } catch (e) {
       setProblem(e instanceof UnknownLinkError ? { kind: 'unknownLink' } : { kind: 'failed', message: messageOf(e) });
       setPhase('input');
@@ -132,7 +137,9 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
     setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === mapping.sheet ? mapping : m)) }));
 
   const files = parsed?.files ?? [];
+  const cruiseColumnFiles = files.filter((f) => (mappings[f.fileId] ?? f.mappings).some((m) => m.columns.some((c) => c.role.kind === 'cruise'))).map((f) => f.fileName);
   const reset = (): void => {
+    setSingleCruise(false);
     setPhase('input');
     setParsed(null);
     setResult(null);
@@ -190,6 +197,7 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
         </section>
       )}
       {parsed && parsed.metadataFiles.length > 0 && <p className="muted">{t('confirm.metadataFiles', { names: parsed.metadataFiles.join(', ') })}</p>}
+      {parsed && parsed.mappingFiles.length > 0 && <p className="muted">{t('confirm.mappingFiles', { names: parsed.mappingFiles.join(', ') })}</p>}
       {parsed && parsed.notRead.length > 0 && <p className="muted">{t('confirm.notRead', { names: parsed.notRead.map((n) => n.fileName).join(', ') })}</p>}
 
       {phase === 'confirm' && parsed && (
@@ -207,8 +215,9 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
               onMapping={(m) => changeMapping(f.fileId, m)}
             />
           ))}
+          <SingleCruise checked={singleCruise} onChange={setSingleCruise} columnFiles={cruiseColumnFiles} />
           <div className="confirm-actions">
-            <button type="button" className="button" onClick={() => void finish(files, layouts, mappings)}>
+            <button type="button" className="button" onClick={() => void finish(files, layouts, mappings, singleCruise)}>
               {t('confirm.submit')}
             </button>
             <button type="button" className="link-button" onClick={reset}>

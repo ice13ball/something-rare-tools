@@ -10,6 +10,7 @@ import { checkCrossFile } from './crossfile';
 import { checkLicence } from './licence';
 import { checkMetadataVsData } from './metadata';
 import { checkRows } from './rows';
+import { checkShipSpeed } from './speed';
 
 /** The metadata source a failed load leaves unread. A dropped file has none. */
 const SOURCE_OF_KIND: Partial<Record<LoadedRecord['kind'], MetadataSource>> = {
@@ -33,6 +34,12 @@ export interface RunOptions {
    * were not compared with the land (never a silent pass). `undefined` = not requested (no positions, or no loader).
    */
   land?: LandMask | null;
+  /**
+   * "All measurements in these files come from one cruise of one ship" (the declaration at the confirm step). It switches ROW-SHIP-SPEED on for every
+   * file without a cruise column, all files together as one track. Absent or false: only a cruise column switches the rule on, and without either the
+   * report says the speed was not checked and how to switch it on. A per-run value: nothing here remembers it.
+   */
+  singleCruise?: boolean;
 }
 
 export function runChecks(session: CheckSession, opts: RunOptions = {}): Report {
@@ -55,7 +62,10 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
     findings.push(...checkMetadataVsData(ds), ...checkRows(ds, opts.land ? { land: opts.land } : {}), ...checkChemistry(ds));
   }
   if (session.datasets.length > 1) findings.push(...checkCrossFile(session.datasets));
+  const speed = checkShipSpeed(session.datasets, { singleCruise: opts.singleCruise === true });
+  findings.push(...speed.findings);
   const report = buildReport(findings);
+  report.notChecked.unshift(...speed.notChecked);
   if (opts.land === null) report.notChecked.unshift('notChecked.landMask');
   return report;
 }

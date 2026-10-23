@@ -62,6 +62,9 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-STATION-SPREAD': ['info', 'B'],
   'ROW-ON-LAND': ['warning', 'B'],
   'ROW-ON-LAND-NEAR': ['info', 'B'],
+  'ROW-SHIP-SPEED': ['warning', 'B'],
+  'ROW-SHIP-SPEED-UNUSUAL': ['info', 'B'],
+  'ROW-SHIP-SPEED-PAIR': ['info', 'B'],
   'ROW-DATE-UNPARSEABLE': ['warning', 'B'],
   'ROW-DATE-MISSING': ['info', 'B'],
   'ROW-YEAR-OUTLIER': ['warning', 'B'],
@@ -87,7 +90,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(72);
+    expect(ids.length).toBe(75);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -180,9 +183,9 @@ describe('messages', () => {
 });
 
 describe('thresholds and citations', () => {
-  it('only the four rules named in the decisions carry numeric thresholds', () => {
+  it('only the rules named in the decisions carry numeric thresholds', () => {
     const withTh = RULES.filter((r) => (r.thresholds?.length ?? 0) > 0).map((r) => r.id).sort();
-    expect(withTh).toEqual(['CHEM-RANGE', 'CHEM-UNIT-PAIR', 'ROW-LAT-RANGE', 'ROW-LON-RANGE']);
+    expect(withTh).toEqual(['CHEM-RANGE', 'CHEM-UNIT-PAIR', 'ROW-LAT-RANGE', 'ROW-LON-RANGE', 'ROW-SHIP-SPEED', 'ROW-SHIP-SPEED-PAIR', 'ROW-SHIP-SPEED-UNUSUAL']);
   });
 
   it('every threshold has a finite value, a unit and an https citation with label and locator', () => {
@@ -206,6 +209,17 @@ describe('thresholds and citations', () => {
     for (const r of RULES) {
       const names = (r.thresholds ?? []).map((t) => t.name);
       expect(new Set(names).size, r.id).toBe(names.length);
+    }
+  });
+
+  it('the ship-speed limits are the two cited ones (marine-qc 40 kn, MEDATLAS 15 kn) and the pair rule shares the 40', () => {
+    expect(threshold('ROW-SHIP-SPEED', 'speed.extreme')).toBe(40);
+    expect(threshold('ROW-SHIP-SPEED-PAIR', 'speed.extreme')).toBe(40);
+    expect(threshold('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual')).toBe(15);
+    expect(getRule('ROW-SHIP-SPEED').thresholds?.[0].citation.url).toContain('marine-qc');
+    expect(getRule('ROW-SHIP-SPEED-UNUSUAL').thresholds?.[0].citation.url).toContain('medman_v3');
+    for (const id of ['ROW-SHIP-SPEED', 'ROW-SHIP-SPEED-UNUSUAL', 'ROW-SHIP-SPEED-PAIR']) {
+      expect(getRule(id).technical, id).toMatch(/marine-qc|MEDATLAS/);
     }
   });
 

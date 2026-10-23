@@ -205,7 +205,7 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
       // with a zone on both ends compare instants ('…T10:00+02:00/…T09:30Z' is 08:00Z to 09:30Z), otherwise the common prefix
       const zoned = start.tz !== 'unknown' && end.tz !== 'unknown';
       const n = Math.min(start.iso.length, end.iso.length);
-      if (zoned ? Date.parse(end.iso) >= Date.parse(start.iso) : end.iso.slice(0, n) >= start.iso.slice(0, n)) return start;
+      if (zoned ? Date.parse(end.iso) >= Date.parse(start.iso) : end.iso.slice(0, n) >= start.iso.slice(0, n)) return { ...start, end };
     }
   }
 

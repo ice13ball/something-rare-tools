@@ -48,6 +48,10 @@ export interface ParseResult {
   metadataFiles: string[];
   /** Files that hold no table the tool reads (PDF, unknown content). */
   notRead: { fileName: string; kind: ParsedFile['kind'] }[];
+  /** Companion mapping files (the sidecar CSV of an earlier run): not data tables, only their settings are read. */
+  mappingFiles: string[];
+  /** A mapping file of THIS drop says "all measurements come from one cruise of one ship". The page starts the tick from it, per upload, and from nothing else. */
+  singleCruise: boolean;
 }
 
 export interface ProposeResult {
@@ -93,7 +97,7 @@ export interface Protocol {
   parse: { req: { files: InputFile[]; records: LoadedRecord[]; extraFindings: Finding[] }; res: ParseResult };
   propose: { req: { fileId: string; layout: LayoutPlan }; res: ProposeResult };
   build: { req: { fileId: string; layout: LayoutPlan; mappings: SheetMapping[] }; res: BuildResult };
-  check: { req: Record<never, never>; res: CheckResult };
+  check: { req: { singleCruise?: boolean }; res: CheckResult };
   export: { req: { kind: ExportKind; datasetIds: string[] }; res: string };
   draft: { req: { datasetIds: string[] }; res: MetadataDraft };
   row: { req: { file: string; line: number }; res: RowDetail | null };
@@ -118,7 +122,8 @@ export interface Engine {
   parse(files: InputFile[], records: LoadedRecord[], extraFindings: Finding[]): Promise<ParseResult>;
   propose(fileId: string, layout: LayoutPlan): Promise<ProposeResult>;
   build(fileId: string, layout: LayoutPlan, mappings: SheetMapping[]): Promise<BuildResult>;
-  check(): Promise<CheckResult>;
+  /** `singleCruise`: the declaration of this run (per call, never remembered between runs). */
+  check(opts?: { singleCruise?: boolean }): Promise<CheckResult>;
   export(kind: ExportKind, datasetIds: string[]): Promise<string>;
   draft(datasetIds: string[]): Promise<MetadataDraft>;
   row(file: string, line: number): Promise<RowDetail | null>;
