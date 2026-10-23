@@ -743,6 +743,12 @@ select.input-short {
     align-self: center;
   }
 
+  /* Atlas may wrap to a row of its own: no divider in front of it then. */
+  .site-header nav .nav-external {
+    padding-left: 0;
+    border-left: 0;
+  }
+
   .finding dl {
     grid-template-columns: 1fr;
   }
@@ -753,6 +759,12 @@ select.input-short {
 
   .cookie-actions .button {
     flex: 1;
+  }
+}
+
+@media (max-width: 22rem) {
+  .tool {
+    grid-template-columns: 4.5rem 1fr;
   }
 }
 
