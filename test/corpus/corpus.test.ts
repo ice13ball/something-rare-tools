@@ -79,6 +79,7 @@ describe.skipIf(!enabled)('licence corpus (live)', () => {
         for (const r of load.records) expect(JSON.stringify([r.title, r.creators, r.publisher, r.landingUrl]), doi).not.toMatch(NOT_IOPAN);
         out.push({
           doi,
+          parties: load.records.map((r) => [r.source, r.creators, r.publisher]),
           failures: load.failures.map((f) => ({ source: f.source, rule: f.finding?.ruleId, status: f.finding?.params.status, reason: f.reason })),
           sources: analysis.sources.map((s) => ({
             source: s.source,

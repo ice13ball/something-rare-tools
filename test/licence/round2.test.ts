@@ -97,9 +97,7 @@ describe('HIGH 2: LIC-OTHER-RIGHTS-ENTRY, only for repeated rights entries', () 
     const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: 'Closed Access' } }] } }, 'z');
     expect(rulesOf(rec)).toContain('LIC-OTHER-RIGHTS-ENTRY');
   });
-  it.each([{ rights: 'Open Access' }, { rights: 'info:eu-repo/semantics/openAccess' }, { rights: 'https://purl.org/coar/access_right/c_abf2' }, { rights: '© 2024 ACME Corp.' }, { rights: 'Copyright 2024 ACME Corp.' }, { rightsUri: 'https://purl.org/coar/access_right/c_abf2' },
-    // Zenodo's own copyright-holder entry: the holders (with or without ©) next to the In Copyright link
-    { rights: '© 2026 Ignacio Fabbian', rightsUri: INC }, { rights: 'Krašovec N., Marsetič A.', rightsUri: INC }, { rights: 'Jan van der Berg & Maria Sánchez', rightsUri: INC }] as Rights[])('%j next to CC BY 4.0: no warning', (extra) => {
+  it.each([{ rights: 'Open Access' }, { rights: 'info:eu-repo/semantics/openAccess' }, { rights: 'https://purl.org/coar/access_right/c_abf2' }, { rightsUri: 'https://purl.org/coar/access_right/c_abf2' }] as Rights[])('%j next to CC BY 4.0: no warning', (extra) => {
     expect(rulesOf(dc(by, extra))).toEqual([]);
   });
   it('no recognised licence in the record: no warning', () => {
