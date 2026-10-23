@@ -193,6 +193,23 @@ describe('ship speed: how events, time and neighbours are treated', () => {
     expect(checkShipSpeed([makeDataset(rows)], { singleCruise: true }).notChecked).toEqual(['notChecked.shipSpeedFew']);
   });
 
+  it('data without dates (a vent database): no declaration, nothing judged, and the report says the rule could not run', () => {
+    const rows: Spec[] = Array.from({ length: 10 }, (_, i) => ({ lat: 40 + i * 0.5, lon: -127, latDecimals: 2, lonDecimals: 2 }));
+    expect(checkShipSpeed([makeDataset(rows)], { singleCruise: false })).toEqual({ findings: [], notChecked: ['notChecked.shipSpeedFew'] });
+  });
+
+  it('when most places are named the finding says the premise (one ship) is the likelier culprit; a single bad cast does not', () => {
+    const a = track(10, { lat0: 70 });
+    const b = track(10, { lat0: 40, offsetHours: 3, lon: -20 });
+    const mixed = checkShipSpeed([makeDataset(a.flatMap((x, i) => [x, b[i]]))], { singleCruise: true }).findings;
+    expect(mixed.length).toBeGreaterThan(0);
+    expect(mixed.every((f) => f.params.mixed === 'yes')).toBe(true);
+    expect(renderPlain(mixed[0], 'pl')).toContain('więcej niż jednego statku lub rejsu');
+    const rows = track(12);
+    rows[8] = { ...rows[8], lat: 58 };
+    expect(checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings[0].params.mixed).toBeUndefined();
+  });
+
   it('events with an interval use the END of the previous and the START of the next', () => {
     const interval = (a: string, b: string): ParsedDate => ({ ...makeDate(a), end: makeDate(b) });
     // A is a tow 06:00 to 18:00; B starts at 20:00, 400 km away. Start to start: 14 h = 15.4 knots (not above the 40 of a pair);

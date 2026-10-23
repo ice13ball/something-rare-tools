@@ -191,7 +191,7 @@ O2 molar mass (gas, not in the CIAAW table): derive 2 x 15.999 = 31.998 (my arit
 
 ## Item 5. Ship speed / maximum plausible speed between stations
 
-NO CITABLE SHIP-SPEED THRESHOLD FOUND. What exists:
+NO CITABLE SHIP-SPEED THRESHOLD FOUND in the 16.10.2026 pass. (Superseded 24.10.2026: the 23.10 research found two citable numbers, marine-qc 40 knots and MEDATLAS 15 knots; see "Ship speed" at the end of this file. The table below stays as read on 16.10.) What exists:
 
 | source | what it says | exact quote | URL | page/section | verified |
 |---|---|---|---|---|---|
@@ -309,7 +309,7 @@ Not found / not opened: SeaDataNet ODV format specification (I located only biol
 | XF-UNIT-CONFLICT | no numeric threshold — µmol/L and µmol/kg differ by the seawater density factor | GLODAPv2.2023 §3.1; UNESCO Tech. Pap. 44 |
 | Excel serial dates | 1900 and 1904 date systems | Microsoft "Date systems in Excel" |
 
-Not shipped for lack of a citable threshold: ship-speed / impossible-jump between stations; a distance
+Not shipped for lack of a citable threshold (ship speed was shipped on 24.10.2026, see the end of this file): a distance
 tolerance for "same station at different positions" (ROW-STATION-MOVED and XF-POSITION-CONFLICT ship as
 pattern checks without a distance threshold); nutrient and DIC global ranges (seawater ranges do not
 apply to porewater, and DIC has no citable global range); porewater ranges.
@@ -335,3 +335,36 @@ These numbers are the tool's own choices, stated in the rule texts. No citable s
   - OpenStreetMap land polygons (what OBIS uses) are finer, but they are ODbL: attribution plus share-alike on a derived grid, and a source about 1 000 times larger. At a 50 km band the resolution gains nothing, so we use Natural Earth.
 - **ROW-STATION-MOVED, sign pattern.** It applies when the two positions are, as written, ≥ 100 km apart, and, with one sign flipped, ≤ 50 km apart and ≥ 10 times closer. Menez Gwen (ChEssBase): 5 423 km as written, 1.2 km once flipped.
 - **ROW-STATION-SPREAD.** It applies to a station whose positions are more than 10 km apart (note level). This is far above a ship's position error on station and below the size of a named area. Item 6 above still holds: there is no published tolerance.
+
+## Ship speed (2026-10-24): ROW-SHIP-SPEED, ROW-SHIP-SPEED-UNUSUAL, ROW-SHIP-SPEED-PAIR
+
+Source of the design: `AI-Wall/handoff/HANDOFF-SR-TOOLS-PREDKOSC-STATKU.md` and the research of 23.10.2026. The two limits are citable; everything else below is a stated choice of the tool, with its reason. Michal's decisions of 24.10 are marked.
+
+**Cited limits (opened and read on 24.10.2026)**
+- **40 knots, ROW-SHIP-SPEED and ROW-SHIP-SPEED-PAIR.** Met Office `marine-qc`, documentation page "Track check", section "Extreme speed check": "If the speed estimated from the locations at t-1 and t exceeds 40 knots, set the extreme speed check flag to fail." https://marine-qc.readthedocs.io/en/latest/track_check.html
+  - That check compares ONE pair. Applying 40 knots on BOTH sides of an event, with the previous-to-next hop not exceeding it, is Michal's decision (24.10) and borrows the both-sides logic of marine-qc's own "Speed check" and "combined track check" (a report fails only when the speeds on both sides are too high) and of iQuam. It is not literally marine-qc's extreme check.
+- **15 knots, ROW-SHIP-SPEED-UNUSUAL.** MEDATLAS Protocol Part I (SISMER/IFREMER, v3, Dec 2001), section 4.4.4 "Check the ship velocity", PDF p.29: "If the ship velocity > maximum velocity of the ship (default is 15 knots) between two consecutive profiles, find the erroneous data (date or location)". https://nodc.ogs.it/repository/documents/guidelines/medman_v3.pdf
+  - MEDATLAS applies it to one pair; the two-sided form at this level is Michal's decision (24.10). The wording says "unusual for a research vessel", never "impossible".
+- Sources that name the date or time, not only the position, as the possible error (hence the wording): WOD18 manual section 4 "Speed check", printed p.31; GTSPP MG22 Annex B Test 1.5; SeaDataNet QC v2.0 section 5.1. None gives a number (Item 5 above).
+
+**Stated choices (NOT published thresholds)**
+- **Minimum separation 10 km.** Two consecutive events closer than 10 km are one place (parallel casts, a mothership and its boats, two casts on one station, the same station written in two files with slightly different positions): they are joined into one run and no speed is computed between them.
+  - Reason: it is the tool's own size of "one station" (ROW-STATION-SPREAD uses the same 10 km, far above a ship's drift during a cast), so the two rules agree on what one place is.
+  - IOOS QARTOD's 20 km (Location Test, RANGEMAX) is a displacement limit set by the operator, not a separation, and a larger value would hide pairs with short gaps (below about 16 minutes at 40 knots) for no gain on the pairs that matter. Two stations 10 to 29 km apart that carry the same minute are therefore reported (IO PAN: JMW4-Deep and Yol2, SGD9 and SGD29).
+  - Rounding is not absorbed by this number. Each distance is reduced by the rounding of the two written positions (half a unit of the last written decimal, along both axes), which is the idea of the "minimum separation in time and space" of iQuam / marine-qc, derived from the data instead of a constant.
+- **Order of events that share a date and have no time of day: date, then original row order across the files.** Files concatenated from one cruise are usually chronological, and this is the only information there is.
+  - The answer does not depend on the order. The longest possible gap between two events of one date is 24 h whichever comes first, and a true track cannot move more than 24 h x the vessel's speed within one date, so a wrong order inside a date cannot produce a hop above the limit (360 nautical miles at 15 knots). Events of different dates are ordered by their windows. Ties of timed events fall back to row order too.
+- **Event key when merging rows: start text + end text + position rounded to 1e-4 degrees (about 11 m); station names and file names are not part of it.**
+  - One station cast (all depths, all variables) has one time and one position, so its rows are one event; the same station in several files has the same time and position, so it is one event across files.
+  - The station name is left out on purpose: a row of a cast with a mistyped latitude must appear as its own event (same time, other place). Files that disagree slightly on time or position for one station are joined later by the 10 km run, not by the key.
+- **Time and the longest possible gap.** A written time is a window: a date is the whole UTC day, a time to the minute is that minute, to the second that second. The gap used is (latest the later event may start) minus (earliest the earlier event may end): same date = 24 h, adjacent dates = 48 h, and so on, and a minute adds its own minute. A date is never read as 00:00 (OBIS's `date_start` does, and the research counts 5% of timed records at exactly T00:00). Month and year precision are not used. Times without a zone are read as UTC, one zone for the whole file. An `eventDate` interval uses the END of the previous event and the START of the next (GTSPP FAQ wording), and intervals that overlap in time are not timed at all (a mooring spans other stations).
+- **A single impossible pair (first or last event, or two bad events in a row) uses only the 40-knot limit and is an info.** One pair cannot say which event is wrong; reporting it at 15 knots would turn every fast transit into a note. The pair is not reported when either event already has a two-sided finding (one event, one finding). Wording, by Michal's decision: "the position or the time of one of these two events is wrong".
+- **Groups.** A group needs at least 3 events. A cruise column groups by its values (the column wins over the tick, per file); files without one form ONE group only when the user ticked "one cruise of one ship", and then all those files are one track. With neither, the rule does not run and the report says how to switch it on (`notChecked.shipSpeed`); a group that cannot be judged says so too (`notChecked.shipSpeedFew`).
+- **"Probably more than one ship": 20% of the places, at least 5.** When that share of a group's places is named in findings, the text adds that the data probably come from several ships or cruises. A true error is rare; this is not a published number. CoastDOM (a global compilation) under a wrong tick names 3 places in 4.
+- **The declaration is stored only in the companion mapping file** (the sidecar CSV, row `(setting),singleCruise=yes`). No localStorage, cookie or module state: it starts unticked for every upload, or from a mapping file dropped with the files.
+
+**Measured (24.10.2026; real data, never in the repository; local folder `ship-speed-2026-10-24`)**
+- OBIS AMT12 and AMT13 (James Clark Ross, `eventDate` intervals) and the AMT13 net hauls, with the declaration: 0 findings.
+- OBIS JERICO / Simon Stevin (day and month swapped in `eventDate`): one ROW-SHIP-SPEED-PAIR, 117 km in at most 0.5 h, at least 126 knots; the second hop of the research (22.6 knots) is below the lone-pair limit and not reported.
+- IO PAN files of `2026-10-16` with the declaration, 3 rules, classified in the report of the session that wrote the rule: true errors (`lat = lon` rows, the shifted row of the water-column file), copied time stamps, one collateral flag on a correct event between two wrong ones, and CoastDOM as false alarms by construction (a global compilation; the tick does not hold).
+- ChEssBase (no `eventDate`) without the declaration: not run, reported as not checked.

@@ -7,6 +7,17 @@ import type { RuleSpec } from './spec';
 const SHIP_SPEED_EXTREME_KN = 40;
 const SHIP_SPEED_UNUSUAL_KN = 15;
 
+/** Sentence added when a large share of the places is named: the premise (one ship) is then the likelier culprit. */
+const SHIP_MIXED = {
+  param: 'mixed',
+  plain: {
+    pl: `Zastrzeżenia dotyczą tak wielu zdarzeń, że dane pochodzą raczej z więcej niż jednego statku lub rejsu: wskaż kolumnę z rejsem albo nie zaznaczaj pola o jednym rejsie.`,
+    en: `So many events are named that the data probably come from more than one ship or cruise: map a cruise column, or do not tick the one-cruise box.`,
+    de: `So viele Ereignisse sind betroffen, dass die Daten wohl von mehr als einem Schiff oder einer Fahrt stammen: ordnen Sie eine Fahrt-Spalte zu oder setzen Sie das Häkchen nicht.`,
+    fr: `Tant d'événements sont cités que les données viennent sans doute de plusieurs navires ou campagnes : indiquez une colonne de campagne ou ne cochez pas la case.`,
+  },
+} as const;
+
 /** Sentence added when the group came from the tick (not from a cruise column): the likely cause of a false alarm is mixed ships. */
 const SHIP_DECLARED = {
   param: 'declared',
@@ -37,7 +48,7 @@ const SHIP_DECLARED = {
  *                         flips (optional) = "position → the same with a sign flipped or axes exchanged" where that lies at sea
  *   ROW-SHIP-SPEED        count, cases   count = events flagged (a merged cast = one event); cases = up to 5 of "previous→this→next: km, h, ≥kn; km, h, ≥kn"
  *                         (line numbers; km = distance, h = LONGEST possible time between the two events, kn = the speed at least); declared (optional) = 'yes' when
- *                         the single-cruise tick, not a cruise column, formed the group
+ *                         the single-cruise tick, not a cruise column, formed the group; mixed (optional) = 'yes' when a large share of the places is named
  *   ROW-SHIP-SPEED-UNUSUAL  the same, at the lower limit (info)
  *   ROW-SHIP-SPEED-PAIR   count, cases   count = pairs; cases = "first→second: km, h, ≥kn"; declared as above
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
@@ -261,7 +272,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Um hierher und weiter zu kommen, müsste das Schiff schneller als {threshold.speed.extreme} Knoten fahren, obwohl die Ereignisse davor und danach zusammenpassen: {cases} (Zeilen vorher→dieses→nächstes; km; h = längstmöglicher Abstand). Position oder Datum bzw. Uhrzeit eines davon ist falsch.`,
       fr: `Numéros de ligne : {lines}. Pour arriver ici et repartir, le navire devrait filer à plus de {threshold.speed.extreme} nœuds, alors que les événements d'avant et d'après concordent : {cases} (lignes précédent→celui-ci→suivant ; km ; h = écart maximal possible ). La position, la date ou l'heure de l'un d'eux est fausse.`,
     },
-    plainIf: [SHIP_DECLARED],
+    plainIf: [SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} event(s) whose implied speed from the previous event and to the next event both exceed {threshold.speed.extreme} knots while previous-to-next does not (Met Office marine-qc extreme speed limit, applied on both sides; MEDATLAS 4.4.4, GTSPP Test 1.5 and WOD18 name position or date/time as the possible error). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow (end of the previous event to start of the next): {cases}.`,
   },
   {
@@ -277,7 +288,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Um hierher und weiter zu kommen, müsste das Schiff schneller als {threshold.speed.unusual} Knoten fahren, ungewöhnlich für ein Forschungsschiff, obwohl davor und danach alles passt: {cases} (Zeilen vorher→dieses→nächstes; km; h = längstmöglicher Abstand). Fuhr das Schiff so schnell, ignorieren Sie dies.`,
       fr: `Numéros de ligne : {lines}. Pour arriver ici et repartir, le navire devrait filer à plus de {threshold.speed.unusual} nœuds, inhabituel pour un navire de recherche, alors que les voisins concordent : {cases} (lignes précédent→celui-ci→suivant ; km ; h = écart maximal possible ). Si c'est exact, ignorez cette remarque.`,
     },
-    plainIf: [SHIP_DECLARED],
+    plainIf: [SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} event(s) whose implied speed from the previous event and to the next event both exceed {threshold.speed.unusual} knots (MEDATLAS 4.4.4 default maximum ship velocity) while previous-to-next does not, and which ROW-SHIP-SPEED does not already report. Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: {cases}.`,
   },
   {
@@ -293,7 +304,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Zwischen diesen beiden Ereignissen müsste das Schiff schneller als {threshold.speed.extreme} Knoten fahren: {cases} (Zeilen erstes→zweites; km; h = längstmöglicher Abstand). Position oder Zeit eines der beiden Ereignisse ist falsch, welches, ist unklar. Vertauschte Tage und Monate wirken genauso.`,
       fr: `Numéros de ligne : {lines}. Entre ces deux événements, le navire devrait filer à plus de {threshold.speed.extreme} nœuds : {cases} (lignes premier→second ; km ; h = écart maximal possible ). La position ou l'heure de l'un des deux est fausse, sans qu'on sache lequel. Un jour et un mois inversés ont le même effet.`,
     },
-    plainIf: [SHIP_DECLARED],
+    plainIf: [SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} pair(s) of consecutive events whose implied speed exceeds {threshold.speed.extreme} knots (Met Office marine-qc extreme speed limit) and which are not part of a two-sided finding (first or last event, or two bad events in a row). Position or date/time of either event may be wrong (WOD18 speed check; MEDATLAS 4.4.4). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: {cases}.`,
   },
   {
