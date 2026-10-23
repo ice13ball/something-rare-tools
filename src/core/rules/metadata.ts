@@ -54,6 +54,14 @@ export const METADATA_RULES: readonly RuleSpec[] = [
       de: `Die Metadaten nennen weder einen Zeitraum noch ein Gebiet für die Daten, daher war kein Abgleich mit der Tabelle möglich. Ergänzen Sie beides.`,
       fr: `Les métadonnées n'indiquent ni période ni zone géographique, la comparaison avec le tableau n'a donc pas été possible. Ajoutez les deux.`,
     },
+    // Collection review has no table: its findings carry scope = 'collection' (an optional marker read by renderPlain, like
+    // LIC-MISSING's dataciteCompared; /check never sets it, so its text above is unchanged).
+    plainCollection: {
+      pl: `Metadane nie podają ani zakresu czasu, ani obszaru geograficznego danych, więc rekord nie mówi, jakiego okresu i miejsca dotyczą dane. Uzupełnij oba.`,
+      en: `The metadata gives neither a time span nor an area for the data, so the record does not say what period and place the data cover. Add both.`,
+      de: `Die Metadaten nennen weder einen Zeitraum noch ein Gebiet für die Daten, der Eintrag sagt also nicht, welchen Zeitraum und Ort die Daten abdecken. Ergänzen Sie beides.`,
+      fr: `Les métadonnées n'indiquent ni période ni zone géographique, la notice ne dit donc pas quelle période et quel lieu les données couvrent. Ajoutez les deux.`,
+    },
     technical: `{file}: no temporal extent and no geographic bounding box in any record.`,
   },
   {

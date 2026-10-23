@@ -139,6 +139,8 @@ export interface RuleDef {
   plainByStatus?: { server: Record<Lang, string>; other: Record<Lang, string> };
   /** LIC-MISSING of a catalogue record whose DataCite comparison could not be made (param dataciteCompared = 'no'): the same finding, with a note. */
   plainDataciteNotCompared?: Record<Lang, string>;
+  /** META-NO-EXTENT in Collection review (param scope = 'collection'): the same finding without a reference to the /check table, which Collection review does not have. */
+  plainCollection?: Record<Lang, string>;
   technical: string;             // English, template with {param}
   thresholds?: Threshold[];
   citations?: Citation[];
