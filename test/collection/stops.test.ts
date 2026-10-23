@@ -425,7 +425,7 @@ describe('a catalogue that answers too slowly says so, a real network error keep
     const net: Net = {
       get: inner.net.get,
       async csw(c: CswCall): Promise<NetResponse> {
-        if (slow && c.op === 'GetRecords' && c.maxRecords === 25 && (c.startPosition ?? 0) >= 51) return { status: 504, text: '', proxyError: 'csw_slow' };
+        if (slow && c.op === 'GetRecords' && (c.startPosition ?? 0) >= 51) return { status: 504, text: '', proxyError: 'csw_slow' };
         return inner.net.csw(c);
       },
     };

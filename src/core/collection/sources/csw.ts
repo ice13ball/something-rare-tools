@@ -9,7 +9,7 @@ import { parseIsoRecord } from '../../metadata/iso19115-3';
 import { NS, NS3, child, descendants, elementChildren, parseXml, text } from '../../metadata/xml';
 import type { MetadataRecord, MetadataSource } from '../../types';
 import type { CswSchema } from '../../../../config/catalogues';
-import { CSW_PACE_MS, StopSignal, request } from '../net';
+import { CSW_PACE_MS, CSW_SLOW, CSW_TOO_LARGE, StopSignal, request } from '../net';
 import { SourceFailure, type Estimate, type Item, type Notice, type PageData, type Pager } from '../types';
 import { lookupMany, type Deps } from './datacite';
 import { splitCswPage, type SplitPage } from './cswsplit';
@@ -44,6 +44,8 @@ export interface CswCursor {
   i?: number;
   /** maxRecords of this page (default CSW_PAGE): smaller after a page whose records were big. */
   size?: number;
+  /** After a page had to be asked smaller (too slow, too large): the page size the rest of the run stays within. */
+  cap?: number;
   /** Last position already processed, when it can lie beyond `pos` (the catalogue's nextRecord pointed back into a page already read). */
   through?: number;
 }
@@ -250,6 +252,8 @@ interface PageRead {
   nextRecord: number;
   end?: Notice;
   first?: string;
+  /** Only when the page had to be asked smaller (too slow, too large): the maxRecords it was finally read with. */
+  size?: number;
 }
 
 /**
@@ -257,21 +261,37 @@ interface PageRead {
  * objects for a 1.3 MB page) are garbage. The DataCite comparison, which waits for the network, must not run while they are still held.
  */
 async function fetchPage(deps: Deps, src: CswSource, pos: number, size: number, matched: number): Promise<PageRead> {
-  const res = await request(deps.nctx, 'csw', () => deps.net.csw({ catalogue: src.catalogue, op: 'GetRecords', startPosition: pos, maxRecords: size, schema: src.schema }));
+  // A page that was too slow (45 s) or larger than our server accepts (15 MB) is asked again with a smaller page, down to CSW_MIN_PAGE,
+  // before it is given up (deferred): a smaller page often gets through where the big one never does.
+  let used = size;
+  let res: Awaited<ReturnType<typeof request>>;
+  for (;;) {
+    const maxRecords = used;
+    try {
+      res = await request(deps.nctx, 'csw', () => deps.net.csw({ catalogue: src.catalogue, op: 'GetRecords', startPosition: pos, maxRecords, schema: src.schema }), { failFast: used > CSW_MIN_PAGE });
+      break;
+    } catch (e) {
+      if (e instanceof SourceFailure && (e.reason === CSW_SLOW || e.reason === CSW_TOO_LARGE) && used > CSW_MIN_PAGE) {
+        used = Math.max(CSW_MIN_PAGE, Math.floor(used / 2));
+        continue;
+      }
+      throw e;
+    }
+  }
   const split = splitCswPage(res.text);
   const cut = split ? itemsOfSplit(split, pos) : null;
-  if (split && cut) return { items: cut, nextRecord: split.nextRecord ?? 0, first: cut[0]?.ref, chars: res.text.length };
+  if (split && cut) return { items: cut, nextRecord: split.nextRecord ?? 0, first: cut[0]?.ref, chars: res.text.length, ...(used < size ? { size: used } : {}) };
   const root = parseResponse(res.text);
   if (isException(root)) {
     const msg = exceptionMessage(root);
     // HTTP 200 + exception past the end: GeoNetwork "Start position (N) can't be greater than number of matching records".
-    if (pos > matched || /greater than number of matching/i.test(msg)) return { items: [], nextRecord: 0, end: { code: 'ended-by-exception', params: { position: pos, matched } } };
+    if (pos > matched || /greater than number of matching/i.test(msg)) return { items: [], nextRecord: 0, ...(used < size ? { size: used } : {}), end: { code: 'ended-by-exception', params: { position: pos, matched } } };
     throw new SourceFailure('unreachable', 'exception');
   }
   const sr = searchResults(root);
   if (!sr) throw new SourceFailure('unreachable', 'no-search-results');
   const items = elementChildren(sr).map((el, i) => itemOf(el, `#${pos + i}`));
-  return { items, nextRecord: intAttr(sr, 'nextRecord') ?? 0, first: items[0]?.ref, chars: res.text.length };
+  return { items, nextRecord: intAttr(sr, 'nextRecord') ?? 0, first: items[0]?.ref, chars: res.text.length, ...(used < size ? { size: used } : {}) };
 }
 
 /** One GetRecords page → items, nextRecord, notices. Shared by the full walk and the sample. */
@@ -291,12 +311,14 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
     expected: (c) => Math.max(1, Math.min(c.size ?? CSW_PAGE, matched - c.pos + 1)),
     skip: (c) => {
       const size = c.size ?? CSW_PAGE;
-      return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}) } : null;
+      return c.pos + size <= matched ? { pos: c.pos + size, seen: c.seen + size, ...(c.size ? { size: c.size } : {}), ...(c.cap !== undefined ? { cap: c.cap } : {}) } : null;
     },
     async fetch(c): Promise<PageData<CswCursor>> {
       // nextRecord pointed back into a page already read: the first positions of this page were processed with the one before.
       const overlap = c.through !== undefined && c.through >= c.pos ? c.through - c.pos + 1 : 0;
       const page = await readPage(deps, src, c.pos, c.size ?? CSW_PAGE, matched, overlap);
+      // a page that had to be asked smaller keeps the pages after it small: the next big one would fail the same way
+      const cap = page.size ?? c.cap;
       const notices: Notice[] = [];
       if (overlap > 0 && page.listed > 0) notices.push({ code: 'overlapping-pages' });
       const through = Math.max(c.through ?? 0, c.pos + page.listed - 1);
@@ -312,8 +334,8 @@ export function cswPager(deps: Deps, src: CswSource, plan: CswPlan): Pager<CswCu
           // The catalogue's own total is only a claim: a run that delivers far more than it must not go on for ever.
           if (seen > matched * 1.5 + 500) notices.push({ code: 'overrun-stopped', params: { seen, matched } });
           else {
-            const size = nextPageSize(page.chars ?? 0, page.items.length);
-            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}), ...(through >= page.nextRecord ? { through } : {}) };
+            const size = Math.min(nextPageSize(page.chars ?? 0, page.items.length), cap ?? CSW_PAGE);
+            next = { pos: page.nextRecord, seen, last: page.first, ...(size < CSW_PAGE ? { size } : {}), ...(cap !== undefined ? { cap } : {}), ...(through >= page.nextRecord ? { through } : {}) };
           }
         }
       } else if (!page.end && page.nextRecord > 0) {

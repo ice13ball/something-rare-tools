@@ -30,7 +30,7 @@ function sourceName(source: string): string {
 
 const CAUSES = new Set([
   'user', 'closed', 'worker', 'error', 'timeout', 'network', 'not-xml', 'exception', 'no-search-results', 'not-json', 'not-capabilities',
-  'schema-not-offered', 'retry-after-long', 'repeating-page', 'next-record-not-advancing', 'host-not-allowed', 'csw_queue_full', 'csw_daily_budget', 'csw_slow',
+  'schema-not-offered', 'retry-after-long', 'repeating-page', 'next-record-not-advancing', 'host-not-allowed', 'csw_queue_full', 'csw_daily_budget', 'csw_slow', 'csw_too_large',
 ]);
 
 function causeText(s: StopReason, lang: Lang): string {

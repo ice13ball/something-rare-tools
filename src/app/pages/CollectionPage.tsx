@@ -94,7 +94,7 @@ function NoticeText({ code, params }: { code: string; params?: Record<string, st
     'ended-by-exception', 'empty-page', 'overlapping-pages', 'overrun-stopped', 'interrupted', 'storage-failed', 'unexpected', 'unread-pages', 'records-missing', 'zenodo-slice-short',
   ];
   // an interruption names its cause in words where there are some (the catalogue answered too slowly, the day's budget is spent)
-  if (code === 'interrupted' && typeof params?.reason === 'string' && ['csw_slow', 'csw_daily_budget', 'csw_queue_full'].includes(params.reason)) {
+  if (code === 'interrupted' && typeof params?.reason === 'string' && ['csw_slow', 'csw_too_large', 'csw_daily_budget', 'csw_queue_full'].includes(params.reason)) {
     return <>{t('collection.notice.interrupted' as never, { reason: t(`collection.cause.${params.reason}` as never) })}</>;
   }
   if (code === 'unread-pages' && typeof params?.reason === 'string') return <>{gapText({ code, params }, lang)}</>;
