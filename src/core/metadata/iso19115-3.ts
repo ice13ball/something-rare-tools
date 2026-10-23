@@ -152,9 +152,17 @@ export function parseIso19115_3(xml: string | Document, label: string): Metadata
   return rec;
 }
 
-/** An ISO record of either profile: 19115-3 when it carries the mdb namespace, else 19139. */
+/**
+ * The profile of an ISO document is the one of its ROOT element: 19115-3 when the root is in the mdb namespace, else 19139. A record that only
+ * DECLARES xmlns:mdb (or mentions the address in its text) is not 19115-3. The one place this is decided, for /check, /licence and the
+ * collection review.
+ */
+export function isIso19115_3(doc: Document): boolean {
+  return (NS3.mdb as readonly string[]).includes(doc.documentElement?.namespaceURI ?? '');
+}
+
+/** An ISO record of either profile (text or an already parsed document); a text is parsed once, here. */
 export function parseIsoRecord(xml: string | Document, label: string): MetadataRecord {
-  // a parsed document: the profile is the namespace of its root; a text: whether it mentions the mdb namespace
-  const is3 = typeof xml === 'string' ? /standards\.iso\.org\/iso\/19115\/-3\/mdb\//.test(xml) : (NS3.mdb as readonly string[]).includes(xml.documentElement?.namespaceURI ?? '');
-  return is3 ? parseIso19115_3(xml, label) : parseIso19139(xml, label);
+  const doc = typeof xml === 'string' ? parseXml(xml, label) : xml;
+  return isIso19115_3(doc) ? parseIso19115_3(doc, label) : parseIso19139(doc, label);
 }
