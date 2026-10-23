@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { Request, RequestHandler } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 
 const MAX_KEY_LENGTH = 100;
 
@@ -77,7 +77,20 @@ export interface DailyBudgetOptions {
   windowMs?: number;
   now?: () => number;
   maxKeys?: number;
+  /** The X-Fetch-Proxy-Error code and JSON error of the 429. Default csw_daily_budget. */
+  code?: string;
 }
+
+/**
+ * What /api/fetch lets one connection take as Darwin Core Archives (IPT /archive.do downloads) in a day. Archives are the only
+ * route where one request can cost 100 MB of egress and 90 s of a 40-slot instance, so they get their own budget on top of the
+ * per-minute limit. 200 archives covers screening a few hundred datasets in a sitting (most OBIS/GBIF archives are a few MB); 2 GB
+ * is 20 archives at the 100 MB cap, which is the real brake on bandwidth. The request that crosses the byte line is still served.
+ * In memory per instance (max 2 instances), so the effective ceiling is at most twice that.
+ */
+export const ARCHIVE_DAILY_REQUESTS = 200;
+export const ARCHIVE_DAILY_BYTES = 2 * 1024 * 1024 * 1024;
+export const ARCHIVE_BUDGET_CODE = 'archive_daily_budget';
 
 /** What /api/csw lets one connection take from the catalogues in a day: about 10 full runs of the 7 193-record catalogue by count, 4 by size. */
 export const CSW_DAILY_REQUESTS = 3000;
@@ -88,12 +101,13 @@ export const CSW_DAILY_BYTES = 2 * 1024 * 1024 * 1024;
  * instance: a restart or a second Cloud Run instance gives a fresh budget. Over budget: 429 + Retry-After (seconds until the window
  * resets) + X-Fetch-Proxy-Error: csw_daily_budget, which the page turns into a stopped, resumable run.
  */
-export function createDailyBudget(opts: DailyBudgetOptions = {}): { admit: RequestHandler; addBytes(req: Pick<Request, 'headers' | 'socket'>, n: number): void; size(): number } {
+export function createDailyBudget(opts: DailyBudgetOptions = {}): { admit: RequestHandler; check(req: Pick<Request, 'headers' | 'socket'>, res: Pick<Response, 'setHeader' | 'status'> & { json(b: unknown): unknown }): boolean; addBytes(req: Pick<Request, 'headers' | 'socket'>, n: number): void; size(): number } {
   const maxRequests = opts.requests ?? CSW_DAILY_REQUESTS;
   const maxBytes = opts.bytes ?? CSW_DAILY_BYTES;
   const windowMs = opts.windowMs ?? 24 * 60 * 60_000;
   const now = opts.now ?? Date.now;
   const maxKeys = opts.maxKeys ?? 10_000;
+  const code = opts.code ?? 'csw_daily_budget';
   const windows = new Map<string, { start: number; requests: number; bytes: number }>();
 
   const windowOf = (key: string, t: number): { start: number; requests: number; bytes: number } => {
@@ -114,18 +128,22 @@ export function createDailyBudget(opts: DailyBudgetOptions = {}): { admit: Reque
     return w;
   };
 
-  const admit: RequestHandler = (req, res, next) => {
+  /** Counts one request; false (after answering 429) when the window's budget is spent. */
+  const check = (req: Pick<Request, 'headers' | 'socket'>, res: Pick<Response, 'setHeader' | 'status'> & { json(b: unknown): unknown }): boolean => {
     const t = now();
     const w = windowOf(clientIp(req), t);
     if (w.requests >= maxRequests || w.bytes >= maxBytes) {
       res.setHeader('Retry-After', String(Math.max(1, Math.ceil((w.start + windowMs - t) / 1000))));
       res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('X-Fetch-Proxy-Error', 'csw_daily_budget');
-      res.status(429).json({ error: 'csw_daily_budget' });
-      return;
+      res.setHeader('X-Fetch-Proxy-Error', code);
+      res.status(429).json({ error: code });
+      return false;
     }
     w.requests += 1;
-    next();
+    return true;
   };
-  return { admit, addBytes: (req, n) => void (windowOf(clientIp(req), now()).bytes += n), size: () => windows.size };
+  const admit: RequestHandler = (req, res, next) => {
+    if (check(req, res)) next();
+  };
+  return { admit, check, addBytes: (req, n) => void (windowOf(clientIp(req), now()).bytes += n), size: () => windows.size };
 }

@@ -3,7 +3,7 @@
 // Download seam: one Fetcher interface, a browser implementation (direct, CORS) and a server implementation
 // (POST /api/fetch). Core code only ever talks to the interface, so tests use an in-memory fetcher.
 import { isAllowedHost } from '../../../config/hosts';
-import { IPT_MAX_BYTES, isIptHost } from '../../../config/ipt';
+import { IPT_MAX_BYTES, isArchiveUrl, isIptHost } from '../../../config/ipt';
 import type { Finding } from '../types';
 import { makeFinding } from '../rules/registry';
 
@@ -62,6 +62,19 @@ export class ArchiveTooLargeError extends Error {
   }
 }
 
+/** The proxy's X-Fetch-Proxy-Error for a spent daily archive budget (server/rateLimit.ts ARCHIVE_BUDGET_CODE). */
+export const ARCHIVE_BUDGET_ERROR = 'archive_daily_budget';
+
+/** This IP address has used up the proxy's daily budget for archive downloads. Carries the host only. */
+export class ArchiveBudgetError extends Error {
+  readonly host: string;
+  constructor(host: string) {
+    super(`Daily archive budget used up (${host})`);
+    this.name = 'ArchiveBudgetError';
+    this.host = host;
+  }
+}
+
 /** How long browser mode waits for a host to start answering (server mode: the proxy's own 20 s upstream limit plus the hop). */
 export const BROWSER_TIMEOUT_MS = 30_000;
 
@@ -112,14 +125,38 @@ export function hostOf(url: string): string {
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 const globalFetch: FetchFn = (input, init) => globalThis.fetch(input, init);
 
-async function readBody(res: Response, host: string): Promise<Uint8Array> {
+/**
+ * `capBytes`: the size at which the server mode proxy cuts a body that had no Content-Length. It cannot say so (the headers are
+ * out), so a body that breaks off within CAP_SLACK_BYTES below that size (the proxy forwards whole network chunks, a few tens of
+ * KB each) is "too large", not "interrupted, try again".
+ */
+const CAP_SLACK_BYTES = 1024 * 1024;
+
+async function readBody(res: Response, host: string, capBytes?: number): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let received = 0;
   try {
-    return new Uint8Array(await res.arrayBuffer());
+    if (!res.body) return new Uint8Array(await res.arrayBuffer());
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.byteLength;
+    }
   } catch (e) {
+    if (capBytes !== undefined && received >= capBytes - CAP_SLACK_BYTES) throw new ArchiveTooLargeError(host);
     // A body that breaks off half way is an interruption; at an IPT it is said so (the headers, hence CORS, were fine).
     if (e instanceof TypeError) throw isIptHost(host) ? new FetchInterruptedError(host) : new FetchBlockedError(host);
     throw e;
   }
+  const out = new Uint8Array(received);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
 }
 
 /**
@@ -195,11 +232,12 @@ export function serverFetcher(endpoint = '/api/fetch', fetchImpl: FetchFn = glob
       const proxyError = res.headers.get('x-fetch-proxy-error');
       if (proxyError) {
         if (proxyError === 'host_not_allowed') throw new HostNotAllowedError(host);
-        if (isIptHost(host) && proxyError === 'timeout') throw new FetchInterruptedError(host);
-        if (isIptHost(host) && proxyError === 'too_large') throw new ArchiveTooLargeError(host);
+        if (isArchiveUrl(url) && proxyError === 'timeout') throw new FetchInterruptedError(host);
+        if (isArchiveUrl(url) && proxyError === 'too_large') throw new ArchiveTooLargeError(host);
+        if (proxyError === ARCHIVE_BUDGET_ERROR) throw new ArchiveBudgetError(host);
         throw new ProxyFetchError(proxyError, res.status, host);
       }
-      const bytes = await readBody(res, host);
+      const bytes = await readBody(res, host, isArchiveUrl(url) ? IPT_MAX_BYTES : undefined);
       // The proxy always answers application/octet-stream; the origin's own type is in X-Upstream-Content-Type.
       return { status: res.status, bytes, contentType: res.headers.get('x-upstream-content-type') ?? undefined, finalUrl: url };
     },
@@ -215,6 +253,7 @@ export function fetchErrorFinding(err: unknown, file: string): Finding | undefin
   if (err instanceof FetchTimeoutError) return makeFinding('IN-FETCH-TIMEOUT', { file, params: { host: err.host } });
   if (err instanceof FetchInterruptedError) return makeFinding('IN-FETCH-INTERRUPTED', { file, params: { host: err.host } });
   if (err instanceof ArchiveTooLargeError) return makeFinding('IN-ARCHIVE-TOO-LARGE', { file, params: { host: err.host, mb: Math.round(IPT_MAX_BYTES / 1024 / 1024) } });
+  if (err instanceof ArchiveBudgetError) return makeFinding('IN-ARCHIVE-DAILY-BUDGET', { file, params: { host: err.host } });
   if (err instanceof HostNotAllowedError) return makeFinding('IN-HOST-NOT-ALLOWED', { file, params: { host: err.host } });
   if (err instanceof ProxyFetchError || err instanceof FileFetchError) {
     return makeFinding('IN-RECORD-INACCESSIBLE', { file, params: { status: err.status, host: err.host } });

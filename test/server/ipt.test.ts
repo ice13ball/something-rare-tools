@@ -6,7 +6,7 @@ import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IPT_HOSTS, IPT_MAX_BYTES, IPT_TIMEOUT_MS } from '../../config/ipt.js';
 import { createApp } from '../../server/index.js';
-import { ARCHIVE_MAX_BYTES, ARCHIVE_TIMEOUT_MS, MAX_BYTES, TIMEOUT_MS, proxyFetch, ProxyError, USER_AGENT, type Upstream, type UpstreamRequest, type UpstreamResponse } from '../../server/fetchProxy.js';
+import { ARCHIVE_MAX_BYTES, ARCHIVE_TIMEOUT_MS, MAX_BYTES, isArchiveUrl, TIMEOUT_MS, proxyFetch, ProxyError, USER_AGENT, type Upstream, type UpstreamRequest, type UpstreamResponse } from '../../server/fetchProxy.js';
 
 const DIST = join(__dirname, '..', 'fixtures', 'dist');
 const PUBLIC = ['193.0.6.139'];
@@ -96,23 +96,48 @@ describe('IPT route — limits are raised for the archive route only', () => {
     expect(IPT_TIMEOUT_MS).toBe(90_000);
   });
 
-  it('50 MB declared by an IPT passes, by zenodo.org or a registry it is refused (413); above 100 MB the IPT is refused too', async () => {
+  const ARCH = 'https://ipt.vliz.be/eurobis/archive.do?r=x';
+
+  it('50 MB declared at an IPT archive.do passes, by zenodo.org or a registry it is refused (413); above 100 MB the IPT is refused too', async () => {
     const big = (n: number): Upstream => async () => resp(200, '', { 'content-length': String(n) });
     const d = (n: number) => ({ upstream: big(n), resolver: async () => PUBLIC });
     const fifty = 50 * 1024 * 1024;
-    expect((await proxyFetch('https://ipt.vliz.be/a', undefined, d(fifty))).status).toBe(200);
+    expect((await proxyFetch(ARCH, undefined, d(fifty))).status).toBe(200);
     expect((await rejection(proxyFetch('https://zenodo.org/a', undefined, d(fifty)))).status).toBe(413);
     expect((await rejection(proxyFetch('https://api.gbif.org/a', undefined, d(fifty)))).status).toBe(413);
-    expect((await rejection(proxyFetch('https://ipt.vliz.be/a', undefined, d(100 * 1024 * 1024 + 1)))).status).toBe(413);
+    expect((await rejection(proxyFetch(ARCH, undefined, d(100 * 1024 * 1024 + 1)))).status).toBe(413);
   });
 
-  it('a redirect from zenodo.org to an IPT does not raise the limits (they follow the host the request started at)', async () => {
+  it('any other path on an IPT host (a resource page, a static file) keeps the ordinary 30 MB limit', async () => {
+    const big: Upstream = async () => resp(200, '', { 'content-length': String(50 * 1024 * 1024) });
+    for (const url of ['https://ipt.vliz.be/a', 'https://ipt.vliz.be/eurobis/resource?r=x', 'https://ipt.vliz.be/eurobis/archive.do/x', 'https://ipt.vliz.be/eurobis/notarchive.do?r=x', 'https://ipt.vliz.be/x.zip']) {
+      expect((await rejection(proxyFetch(url, undefined, { upstream: big, resolver: async () => PUBLIC }))).status, url).toBe(413);
+    }
+    expect(isArchiveUrl('https://ipt.vliz.be/eurobis/archive.do')).toBe(true);
+    expect(isArchiveUrl('https://ipt.vliz.be/archive.do?r=x&v=1.2')).toBe(true);
+    expect(isArchiveUrl('https://zenodo.org/archive.do')).toBe(false);
+  });
+
+  it('a redirect from zenodo.org to an IPT archive does not raise the limits (they follow the URL the request started at)', async () => {
     let n = 0;
-    const up: Upstream = async () => (n++ === 0 ? resp(302, '', { location: 'https://ipt.vliz.be/a' }) : resp(200, '', { 'content-length': String(50 * 1024 * 1024) }));
+    const up: Upstream = async () => (n++ === 0 ? resp(302, '', { location: ARCH }) : resp(200, '', { 'content-length': String(50 * 1024 * 1024) }));
     expect((await rejection(proxyFetch('https://zenodo.org/a', undefined, { upstream: up, resolver: async () => PUBLIC }))).status).toBe(413);
   });
 
-  it('an IPT that stalls is cut after 90 s (504), any other host after 20 s', async () => {
+  it('a redirect from an IPT archive to another host (zenodo) drops back to the ordinary limit; to another IPT archive it keeps the archive limit', async () => {
+    const fifty = String(50 * 1024 * 1024);
+    let n = 0;
+    const toZenodo: Upstream = async () => (n++ === 0 ? resp(302, '', { location: 'https://zenodo.org/api/files/x' }) : resp(200, '', { 'content-length': fifty }));
+    expect((await rejection(proxyFetch(ARCH, undefined, { upstream: toZenodo, resolver: async () => PUBLIC }))).status).toBe(413);
+    n = 0;
+    const toIptPage: Upstream = async () => (n++ === 0 ? resp(302, '', { location: 'https://ipt.obis.org/x/resource?r=x' }) : resp(200, '', { 'content-length': fifty }));
+    expect((await rejection(proxyFetch(ARCH, undefined, { upstream: toIptPage, resolver: async () => PUBLIC }))).status).toBe(413);
+    n = 0;
+    const toIptArchive: Upstream = async () => (n++ === 0 ? resp(302, '', { location: 'https://ipt.obis.org/x/archive.do?r=y' }) : resp(200, '', { 'content-length': fifty }));
+    expect((await proxyFetch(ARCH, undefined, { upstream: toIptArchive, resolver: async () => PUBLIC })).status).toBe(200);
+  });
+
+  it('an IPT archive that stalls is cut after 90 s (504), any other URL (also on an IPT host) after 20 s', async () => {
     vi.useFakeTimers();
     const stall: Upstream = (req) => new Promise(() => void req.signal);
     const settle = (url: string) => {
@@ -120,14 +145,26 @@ describe('IPT route — limits are raised for the archive route only', () => {
       void proxyFetch(url, undefined, { upstream: stall, resolver: async () => PUBLIC }).catch((e: ProxyError) => void (out.e = e));
       return out;
     };
-    const ipt = settle('https://ipt.vliz.be/a');
+    const ipt = settle(ARCH);
+    const page = settle('https://ipt.vliz.be/a');
     const other = settle('https://zenodo.org/a');
     await vi.advanceTimersByTimeAsync(20_100);
     expect(other.e?.status).toBe(504);
+    expect(page.e?.status).toBe(504);
     expect(ipt.e).toBeUndefined();
     await vi.advanceTimersByTimeAsync(70_000);
     expect(ipt.e?.status).toBe(504);
     expect(ipt.e?.code).toBe('timeout');
+  });
+
+  it('a redirect off the archive route also ends the longer wait: the time already spent counts against the 20 s', async () => {
+    vi.useFakeTimers();
+    let n = 0;
+    const up: Upstream = (req) => (n++ === 0 ? Promise.resolve(resp(302, '', { location: 'https://zenodo.org/f' })) : new Promise(() => void req.signal));
+    const out: { e?: ProxyError } = {};
+    void proxyFetch(ARCH, undefined, { upstream: up, resolver: async () => PUBLIC }).catch((e: ProxyError) => void (out.e = e));
+    await vi.advanceTimersByTimeAsync(20_100);
+    expect(out.e?.status).toBe(504);
   });
 });
 
@@ -153,5 +190,34 @@ describe('IPT route through /api/fetch', () => {
     expect(ok.headers['content-type']).toBe('application/octet-stream');
     expect(ok.headers['x-upstream-content-type']).toBe('application/zip');
     for (const m of ['get', 'put', 'delete'] as const) expect((await request(a)[m]('/api/fetch').set('X-Forwarded-For', '8.8.8.2')).status, m).toBe(405);
+  });
+});
+
+describe('archive route — daily budget per IP', () => {
+  const ARCH = 'https://ipt.vliz.be/eurobis/archive.do?r=x';
+  const app = (archiveDailyBudget: { requests?: number; bytes?: number }, now?: () => number) =>
+    createApp({ distDir: DIST, resolver: async () => PUBLIC, upstream: async () => resp(200, 'PKxxxx'), log: () => {}, archiveDailyBudget: { ...archiveDailyBudget, ...(now ? { now } : {}) } });
+  const post = (a: ReturnType<typeof createApp>, url: string, ip: string) => request(a).post('/api/fetch').set('X-Forwarded-For', ip).set('Content-Type', 'application/json').buffer(true).send(JSON.stringify({ url }));
+
+  it('requests: the third archive of a day is 429 archive_daily_budget with Retry-After; other URLs and other IPs are not affected', async () => {
+    const a = app({ requests: 2 });
+    expect((await post(a, ARCH, '9.9.9.1')).status).toBe(200);
+    expect((await post(a, ARCH, '9.9.9.1')).status).toBe(200);
+    const over = await post(a, ARCH, '9.9.9.1');
+    expect(over.status).toBe(429);
+    expect(over.headers['x-fetch-proxy-error']).toBe('archive_daily_budget');
+    expect(Number(over.headers['retry-after'])).toBeGreaterThan(0);
+    expect((await post(a, 'https://zenodo.org/api/records/1', '9.9.9.1')).status).toBe(200);
+    expect((await post(a, 'https://ipt.vliz.be/page', '9.9.9.1')).status).toBe(200);
+    expect((await post(a, ARCH, '9.9.9.2')).status).toBe(200);
+  });
+
+  it('bytes: once the day\'s bytes are used the next archive is 429; a new window starts after 24 h', async () => {
+    let t = 1_000_000;
+    const a = app({ bytes: 5 }, () => t);
+    expect((await post(a, ARCH, '9.9.9.3')).status).toBe(200); // 6 bytes sent: over the 5 byte budget
+    expect((await post(a, ARCH, '9.9.9.3')).status).toBe(429);
+    t += 24 * 3600_000 + 1;
+    expect((await post(a, ARCH, '9.9.9.3')).status).toBe(200);
   });
 });

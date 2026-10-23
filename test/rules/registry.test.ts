@@ -14,6 +14,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'IN-FETCH-TIMEOUT': ['warning', 'input'],
   'IN-FETCH-INTERRUPTED': ['error', 'input'],
   'IN-ARCHIVE-TOO-LARGE': ['error', 'input'],
+  'IN-ARCHIVE-DAILY-BUDGET': ['error', 'input'],
   'IN-IPT-HOST-NOT-LISTED': ['warning', 'input'],
   'IN-NO-DWC-ARCHIVE': ['error', 'input'],
   'IN-LAYOUT-UNSUPPORTED': ['error', 'input'],
@@ -79,7 +80,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(64);
+    expect(ids.length).toBe(65);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);

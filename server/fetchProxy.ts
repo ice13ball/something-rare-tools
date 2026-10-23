@@ -13,23 +13,18 @@ import http from 'node:http';
 import https from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 import { isAllowedHost } from '../config/hosts.js';
-import { IPT_MAX_BYTES, IPT_TIMEOUT_MS, isIptHost } from '../config/ipt.js';
+import { IPT_MAX_BYTES, IPT_TIMEOUT_MS, isArchiveUrl } from '../config/ipt.js';
 import { SITE } from '../config/site.js';
+
+export { isArchiveUrl };
 
 export const MAX_BYTES = 30 * 1024 * 1024;
 export const TIMEOUT_MS = 20_000;
 export const MAX_REDIRECTS = 5;
-/** Only a URL on the static IPT list (config/ipt.ts) gets the archive limits; every other host keeps MAX_BYTES / TIMEOUT_MS. */
+/** Only an archive URL (isArchiveUrl) gets the archive limits; every other URL, on any host, keeps MAX_BYTES / TIMEOUT_MS. */
 export const ARCHIVE_MAX_BYTES = IPT_MAX_BYTES;
 export const ARCHIVE_TIMEOUT_MS = IPT_TIMEOUT_MS;
 
-function hostOfUrl(raw: string): string {
-  try {
-    return new URL(raw).hostname;
-  } catch {
-    return '';
-  }
-}
 export const USER_AGENT = `AbyssalClaimsTools/1.0 (+${SITE.origin}; mailto:${SITE.contactEmail})`;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -263,19 +258,26 @@ function race<T>(p: Promise<T>, signal: AbortSignal, onAbort: () => Error): Prom
 export async function proxyFetch(rawUrl: string, accept: string | undefined, deps: ProxyDeps = {}): Promise<ProxyResponse> {
   const resolver = deps.resolver ?? defaultResolver;
   const upstream = deps.upstream ?? (defaultUpstream ??= createPinnedUpstream(https));
-  // The archive limits are chosen by the host the request STARTS at (an IPT on the static list); redirects never raise them.
-  const archive = isIptHost(hostOfUrl(rawUrl));
-  const maxBytes = deps.maxBytes ?? (archive ? ARCHIVE_MAX_BYTES : MAX_BYTES);
-  const timeoutMs = deps.timeoutMs ?? (archive ? ARCHIVE_TIMEOUT_MS : TIMEOUT_MS);
+  // The archive limits belong to an archive URL (an IPT's /archive.do) and survive a redirect only to another one; a redirect to
+  // anything else (a Zenodo file, an IPT page) drops back to the ordinary limits, also for the time already spent.
+  let archive = isArchiveUrl(rawUrl);
+  const limitsFor = (a: boolean): { bytes: number; ms: number } => ({ bytes: deps.maxBytes ?? (a ? ARCHIVE_MAX_BYTES : MAX_BYTES), ms: deps.timeoutMs ?? (a ? ARCHIVE_TIMEOUT_MS : TIMEOUT_MS) });
+  let maxBytes = limitsFor(archive).bytes;
+  const startedAt = Date.now();
   const allowUrl = deps.allowUrl ?? isAllowedHost;
   const maxRedirects = deps.maxRedirects ?? MAX_REDIRECTS;
 
   const ac = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    ac.abort();
-  }, timeoutMs);
+  let timer: ReturnType<typeof setTimeout>;
+  const armTimer = (ms: number): void => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timedOut = true;
+      ac.abort();
+    }, Math.max(0, ms - (Date.now() - startedAt)));
+  };
+  armTimer(limitsFor(archive).ms);
   const onExternalAbort = (): void => ac.abort();
   if (deps.signal?.aborted) ac.abort();
   else deps.signal?.addEventListener('abort', onExternalAbort, { once: true });
@@ -323,6 +325,12 @@ export async function proxyFetch(rawUrl: string, accept: string | undefined, dep
           url = new URL(location, url);
         } catch {
           throw new ProxyError(422, 'bad_redirect');
+        }
+        if (archive && !isArchiveUrl(url)) {
+          archive = false;
+          const l = limitsFor(false);
+          maxBytes = l.bytes;
+          armTimer(l.ms);
         }
         continue;
       }

@@ -13,6 +13,7 @@ Every number a rule compares against is listed here with its source (`docs/resea
 | IN-FETCH-TIMEOUT | warning | input | — | — |
 | IN-FETCH-INTERRUPTED | error | input | — | — |
 | IN-ARCHIVE-TOO-LARGE | error | input | — | — |
+| IN-ARCHIVE-DAILY-BUDGET | error | input | — | — |
 | IN-IPT-HOST-NOT-LISTED | warning | input | — | — |
 | IN-NO-DWC-ARCHIVE | error | input | — | — |
 | IN-LAYOUT-UNSUPPORTED | error | input | — | — |
