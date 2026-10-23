@@ -60,6 +60,10 @@ export interface LockManagerLike {
 export const RUN_LOCK = 'collection-review-run';
 /** The message of the refusal when another tab holds the run (the page shows it in the visitor's language). */
 export const RUN_OPEN_ELSEWHERE = 'run-open-elsewhere';
+/** The saved run is not the one this tab holds in memory (another tab started, finished or deleted it): reload the page. */
+export const RUN_CHANGED = 'run-changed';
+/** The stored parts of the fix list are fewer than the run wrote: the list cannot be presented as complete. */
+export const CSV_DAMAGED = 'csv-damaged';
 
 /** The settings as they are saved and shown: the pasted DOI list is kept apart (RunStore.saveText), never in a checkpoint or a progress message. */
 const withoutText = (settings: RunSettings): RunSettings => (settings.spec.kind === 'dois' ? { ...settings, spec: { kind: 'dois', text: '' } } : settings);
@@ -124,6 +128,7 @@ export class CollectionRunner {
     }
     this.st = run;
     this.pending = [];
+    if (!(await this.partsIntact(run))) this.markDamaged();
     return this.progress();
   }
 
@@ -245,8 +250,17 @@ export class CollectionRunner {
 
   private async resumeRun(): Promise<void> {
     if (!this.st) await this.saved();
+    else {
+      // This tab's copy may be stale: another tab can have started, finished or deleted the saved run since. Never write over a newer one.
+      const stored = await this.d.store.load();
+      if (!stored || stored.id !== this.st.id || stored.updatedAt > this.st.updatedAt) throw new Error(RUN_CHANGED);
+    }
     const st = this.st;
     if (!st || !this.progress().resumable) throw new Error('Nothing to resume');
+    if (!(await this.partsIntact(st))) {
+      this.markDamaged();
+      throw new Error(CSV_DAMAGED);
+    }
     // The run only becomes 'running' once everything it needs is in hand: a list that is gone or a plan that cannot be restored leaves it as it was.
     const { ctl, deps } = this.begin(st);
     let pager: Pager<unknown>;
@@ -340,10 +354,16 @@ export class CollectionRunner {
   /** Deletes the saved progress and the fix-list parts. */
   async discard(): Promise<void> {
     await this.stop();
-    await this.d.store.clear();
-    this.st = null;
-    this.pending = [];
-    this.emit();
+    // Another tab that is running this saved run must not lose it under its feet: the same lock as a run, and the same refusal.
+    if (!(await this.takeLock())) throw new Error(RUN_OPEN_ELSEWHERE);
+    try {
+      await this.d.store.clear();
+      this.st = null;
+      this.pending = [];
+      this.emit();
+    } finally {
+      this.releaseLock();
+    }
   }
 
   // ---- the fix list --------------------------------------------------------------------------------------------------------
@@ -357,7 +377,13 @@ export class CollectionRunner {
   private async csvPieces(): Promise<BlobPart[]> {
     const st = this.st;
     if (!st) return [fixListHeader()];
-    const parts = await this.d.store.parts(st.id, st.partCount);
+    // parts written to the store so far = all but the ones still waiting in `pending`; a store that holds fewer is damaged, never silently shorter
+    const stored = st.partCount - this.pending.length;
+    const parts = await this.d.store.parts(st.id, stored);
+    if (parts.length !== stored) {
+      this.markDamaged();
+      throw new Error(CSV_DAMAGED);
+    }
     const source = sourceLabel(st.settings.spec);
     const gap = st.status === 'finished' && st.notices.some((n) => GAP_NOTICES.includes(n.code));
     const last = UNFINISHED.includes(st.status)
@@ -366,6 +392,20 @@ export class CollectionRunner {
         ? [gapRow(st.notices, st.deferred.length > 0, st.settings.lang, source)]
         : [];
     return [fixListHeader(), ...parts, ...(this.pending.length > 0 ? this.pending.map((p) => p.blob) : []), st.csvBuffer, ...last];
+  }
+
+  /** The fix list on disk is damaged: said in a notice (the list cannot be presented as complete). */
+  private markDamaged(): void {
+    const st = this.st;
+    if (!st || st.notices.some((n) => n.code === CSV_DAMAGED)) return;
+    st.notices.push({ code: CSV_DAMAGED });
+    this.emit();
+  }
+
+  /** Are all the parts the run wrote still in the store? */
+  private async partsIntact(st: RunRecord): Promise<boolean> {
+    const stored = st.partCount - this.pending.length;
+    return (await this.d.store.parts(st.id, stored)).length === stored;
   }
 
   /** The fix list as one Blob built from the stored parts (disk-backed Blobs: no full copy in memory). */
@@ -439,6 +479,7 @@ export class CollectionRunner {
         if (!(await this.retryDeferred(pager, ctl))) return;
       }
       this.gapNotices();
+      if (!(await this.partsIntact(st))) this.markDamaged();
       st.status = 'finished';
       await this.checkpoint();
     } catch (e) {
