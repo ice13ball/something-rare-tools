@@ -3,7 +3,7 @@
 // ROW-ZERO-COORD, ROW-DEPTH-RANGE (depth conventions), ROW-DATE-FUTURE (today handed in) on in-memory datasets.
 import { describe, expect, it } from 'vitest';
 import { checkRows } from '../../src/core/checks/rows';
-import { parseDate, utcDayOf } from '../../src/core/values/dates';
+import { earliestUtcDayOf, parseDate, utcDayOf } from '../../src/core/values/dates';
 import type { DataRow, Dataset, Finding, ParsedDate } from '../../src/core/types';
 import { dataset, row } from './rows.helpers';
 
@@ -64,6 +64,13 @@ describe('ROW-DEPTH-RANGE: the bounds of obis-qc, positive down, in metres', () 
     expect(only(checkRows(depths([500000], m)), 'ROW-DEPTH-RANGE')).toHaveLength(1);
   });
 
+  it('a depth written in feet, fathoms or kilometres in its header is not judged as metres', () => {
+    const named = (header: string): Dataset => dataset([row({ line: 2, depth: 20000 }), row({ line: 3, depth: 5 })], { mappings: [{ sheet: 'a.csv', columns: [{ index: 0, header, role: { kind: 'depth' as const, positive: 'down' as const } }] }] });
+    for (const h of ['Depth (ft)', 'depth_ft', 'Depth [feet]', 'depth_fathoms', 'Depth km']) expect(only(checkRows(named(h)), 'ROW-DEPTH-RANGE'), h).toEqual([]);
+    expect(only(checkRows(named('Depth water [m]')), 'ROW-DEPTH-RANGE')).toHaveLength(1);
+    expect(only(checkRows(named('Depth')), 'ROW-DEPTH-RANGE')).toHaveLength(1);
+  });
+
   it('Darwin Core bounds are judged each on its own and ROW-DEPTH-SIGN is not involved', () => {
     const r = (line: number, depthMin: number, depthMax: number): DataRow => ({ ...row({ line }), depthMin, depthMax });
     const f = only(checkRows(dataset([r(2, 1, 5), r(3, -1, 12000)])), 'ROW-DEPTH-RANGE');
@@ -72,13 +79,13 @@ describe('ROW-DEPTH-RANGE: the bounds of obis-qc, positive down, in metres', () 
 });
 
 describe('ROW-DATE-FUTURE: a UTC calendar day against today, today handed in', () => {
-  it('a date equal to today is not in the future, the next day is, the day before is not', () => {
-    expect(futureLines(['2026-10-23', '2026-10-24', '2026-10-25'])).toEqual([4]);
+  it('a date-only value is future only if its day starts after now in the latest zone (UTC+14): today and tomorrow in UTC are not, the day after is', () => {
+    expect(futureLines(['2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26'])).toEqual([5]);
   });
 
   it('an interval counts by its END, a start in the past does not save it', () => {
-    expect(futureLines(['2026-10-01/2026-10-24', '2026-10-01/2026-10-25', '2027-01-01/2027-01-02'])).toEqual([3, 4]);
-    expect(futureLines(['2026-10-20/25'])).toEqual([2]);
+    expect(futureLines(['2026-10-01/2026-10-24', '2026-10-01/2026-10-26', '2027-01-01/2027-01-02'])).toEqual([3, 4]);
+    expect(futureLines(['2026-10-20/26'])).toEqual([2]);
   });
 
   it('a year or month counts by its first day: the current year and month are not in the future', () => {
@@ -91,8 +98,15 @@ describe('ROW-DATE-FUTURE: a UTC calendar day against today, today handed in', (
     expect(futureLines(['2026-10-24T22:00-05:00', '2026-10-25T01:00+05:00', '2026-10-24T23:59:59Z'])).toEqual([2]);
   });
 
-  it('a time without a zone is read as UTC, like the rest of the tool reads it', () => {
-    expect(futureLines(['2026-10-24T23:59', '2026-10-25T00:00'])).toEqual([3]);
+  it('a time without a zone may be the wall clock of UTC+14, so 14 hours are given', () => {
+    expect(futureLines(['2026-10-25T09:59', '2026-10-25T14:01', '2026-10-26T00:00'])).toEqual([3, 4]);
+  });
+
+  it('earliestUtcDayOf', () => {
+    expect(earliestUtcDayOf(parsed('2026-10-25'))).toBe('2026-10-24');
+    expect(earliestUtcDayOf(parsed('2026'))).toBe('2025-12-31');
+    expect(earliestUtcDayOf(parsed('2026-10-25T14:01'))).toBe('2026-10-25');
+    expect(earliestUtcDayOf(parsed('2026-10-25T01:00Z'))).toBe('2026-10-25');
   });
 
   it('utcDayOf', () => {

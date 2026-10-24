@@ -261,7 +261,9 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
       // a blank (not unreadable) coordinate cell on a row that holds something else: ROW-NO-COORD decides whether other rows have a position
       const latBlank = isBlankCell(row.cells[specs.lat.index] ?? null);
       const lonBlank = isBlankCell(row.cells[specs.lon.index] ?? null);
-      if ((latBlank || lonBlank) && holdsRecord(row, [specs.lat.index, specs.lon.index])) m.posBlank = latBlank && lonBlank ? 'both' : latBlank ? 'lat' : 'lon';
+      // the other cell holding an NA variant ("NANA") is reported by ROW-NA-VARIANT: not a second time as a missing position
+      const na = (spec: Spec): boolean => parseNumber(row.cells[spec.index] ?? null, dc).status === 'na-variant';
+      if ((latBlank || lonBlank) && !(latBlank && !lonBlank && na(specs.lon)) && !(lonBlank && !latBlank && na(specs.lat)) && holdsRecord(row, [specs.lat.index, specs.lon.index])) m.posBlank = latBlank && lonBlank ? 'both' : latBlank ? 'lat' : 'lon';
     }
     if (specs.lat) {
       const r = coordinate(row, specs.lat, 'lat');
@@ -680,8 +682,11 @@ export function buildDatasets(
   const findings: Finding[] = [];
   if (layout.unsupported) findings.push(makeFinding('IN-LAYOUT-UNSUPPORTED', { file: file.fileName, params: { reason: layout.unsupported } }));
   const groups = splitLayout(layout);
-  // no table could be built (no position, no measurement): a Darwin Core table is still judged, because it is exactly then that it lacks terms
-  if (groups.length === 0) for (const sheet of file.sheets) findings.push(...checkRawTable(file, sheet, []));
+  // a sheet that is not built as a table (no position, no measurement, or another sheet of the workbook is the data): a Darwin Core sheet is still judged
+  // (a workbook of an OBIS template has event, occurrence and emof sheets: the layout builds one of them as data, the Darwin Core
+  // structure of every sheet is still judged here, whatever the layout did with it)
+  const built = new Set(layout.tables.map((t) => t.sheet));
+  for (const sheet of file.sheets) if (!built.has(sheet.name)) findings.push(...checkRawTable(file, sheet, []));
   const datasets: Dataset[] = [];
   for (const g of groups) {
     const sheet = g.tables[0].sheet;

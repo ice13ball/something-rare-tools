@@ -298,3 +298,19 @@ export function utcDayOf(d: ParsedDate): string {
   }
   return d.iso.slice(0, 10);
 }
+
+const LATEST_ZONE_MS = 14 * 3_600_000; // UTC+14, the furthest-ahead zone in use (Line Islands)
+
+/**
+ * The UTC calendar day on which a parsed date can FIRST have begun anywhere on Earth. A date-only value (a day, a month, a year: its first
+ * day) begins at 00:00 in the latest zone, UTC+14, which is 10:00 UTC of the day before; a time without a zone may be that zone's wall clock,
+ * so 14 hours are taken off it; a time with a zone (or Z) is an instant and is only moved to UTC. Comparing this day with today's UTC day
+ * tells a value that is in the future for everybody from one that is merely today's date somewhere east of Greenwich.
+ */
+export function earliestUtcDayOf(d: ParsedDate): string {
+  const dateOnly = d.precision === 'year' || d.precision === 'month' || d.precision === 'day';
+  if (!dateOnly && d.tz !== 'unknown') return utcDayOf(d);
+  const wall = dateOnly ? Date.parse(`${utcDayOf(d)}T00:00:00Z`) : Date.parse(`${d.iso}Z`);
+  if (!Number.isFinite(wall)) return utcDayOf(d);
+  return new Date(wall - LATEST_ZONE_MS).toISOString().slice(0, 10);
+}
