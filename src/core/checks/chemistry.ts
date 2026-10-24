@@ -224,6 +224,16 @@ function checkRange(ds: Dataset): Finding[] {
 
 /* ---------- entry point ---------- */
 
+/**
+ * Oxygen with values in a unit the cited range does not use (per volume: mL/L, mg/L, µmol/L; or any other): CHEM-RANGE skips it,
+ * and the report says so (notChecked.oxygenUnit) instead of staying silent. No conversion: per-volume to per-mass needs the
+ * density of the water, which the tool does not guess. A column with no unit is ROW-UNIT-MISSING's, not this note's.
+ */
+export function oxygenRangeSkipped(ds: Dataset): boolean {
+  const skipped = ds.variables.filter((v) => v.canonical === 'oxygen' && v.unit !== undefined && !QUANTITIES.find((q) => q.name === 'oxygen')!.applies(v));
+  return skipped.some((v) => ds.rows.some((r) => okCell(r, v.key)));
+}
+
 /** Chemistry checks for one dataset. */
 export function checkChemistry(ds: Dataset): Finding[] {
   return [...checkUnitPairs(ds), ...checkDicTa(ds), ...checkRange(ds)];

@@ -5,7 +5,7 @@ import { landingNotRead, ownLoadFailure } from '../licence/failure';
 import type { LandMask } from '../geo/land';
 import { buildReport } from '../report';
 import type { CheckSession, Finding, LoadedRecord, MetadataSource, Report } from '../types';
-import { checkChemistry } from './chemistry';
+import { checkChemistry, oxygenRangeSkipped } from './chemistry';
 import { checkCrossFile } from './crossfile';
 import { checkLicence } from './licence';
 import { checkMetadataVsData } from './metadata';
@@ -70,6 +70,7 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
   const report = buildReport(findings);
   report.notChecked.unshift(...speed.notChecked);
   if (opts.land === null) report.notChecked.unshift('notChecked.landMask');
+  if (session.datasets.some(oxygenRangeSkipped)) report.notChecked.unshift('notChecked.oxygenUnit');
   // a Darwin Core Archive was read: its extension tables were not (the core only), so their eventIDs were not compared with the core's
   if (session.parseFindings.some((f) => f.ruleId === 'IN-DWCA-VERSION')) report.notChecked.unshift('notChecked.dwcExtensions');
   return report;
