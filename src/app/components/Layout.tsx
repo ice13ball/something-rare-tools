@@ -3,12 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import { SITE } from '../../../config/site';
 import type { UiKey } from '../../core/i18n/ui';
-import { t, useLang } from '../i18n';
+import { atlasHref, t, useLang } from '../i18n';
 import { CookieBanner } from './CookieBanner';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 export interface LayoutProps {
-  /** Key of the page title; shown in the tab as "<title> — Abyssal Claims Tools" (keep it in step with the page's static <title>). */
+  /** Key of the page title; shown in the tab as "<title> — Abyssal Claims" (keep it in step with the page's static <title>). */
   titleKey?: UiKey;
   children: React.ReactNode;
 }
@@ -37,7 +37,7 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
       </a>
       <header className="site-header">
         <a className="brand" href="/">
-          {t('brand')}
+          {t('brand')} <span className="brand-part">{t('nav.tools')}</span>
         </a>
         <nav aria-label="Main">
           {NAV_TOOLS.map(([href, key]) => (
@@ -45,8 +45,8 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
               {t(key)}
             </a>
           ))}
-          <a className="nav-external" href={SITE.atlasUrl}>
-            {t('nav.atlasShort')}
+          <a className="nav-external" href={atlasHref(SITE.atlasUrl, lang)}>
+            {t('nav.atlas')}
           </a>
         </nav>
       </header>
@@ -54,7 +54,7 @@ export function Layout({ titleKey, children }: LayoutProps): React.ReactElement 
         {children}
       </main>
       <footer className="site-footer">
-        <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
+        <a href={atlasHref(SITE.atlasUrl, lang)}>{t('nav.atlas')}</a>
         <a href="/privacy">{t('nav.privacy')}</a>
         <a href={SITE.sourceUrl}>{t('footer.source')}</a>
         {/* the attribution notice is a licence condition: the same English words in every UI language */}

@@ -7,8 +7,13 @@ import { denyConsent, getStoredConsent, grantConsent, track } from '../../src/ap
 const win = window as unknown as { dataLayer: unknown[]; gtag?: unknown };
 const entries = (): unknown[][] => win.dataLayer.map((e) => Array.from(e as ArrayLike<unknown>));
 
+const clearCookie = (): void => {
+  document.cookie = 'ac_consent=; Path=/; Max-Age=0';
+};
+
 beforeEach(() => {
   localStorage.clear();
+  clearCookie();
   win.dataLayer = [];
   delete win.gtag;
   document.head.querySelectorAll('script').forEach((s) => s.remove());
@@ -49,7 +54,8 @@ describe('consent', () => {
   it('grant: stores the decision, updates consent first, loads gtag.js once, then configures with an explicit page_location', () => {
     grantConsent();
     grantConsent();
-    expect(localStorage.getItem('consent')).toBe('granted');
+    expect(document.cookie).toContain('ac_consent=granted');
+    expect(localStorage.getItem('consent')).toBeNull();
     const e = entries();
     const update = e.findIndex((x) => x[0] === 'consent' && x[1] === 'update');
     const config = e.findIndex((x) => x[0] === 'config');
@@ -64,7 +70,7 @@ describe('consent', () => {
 
   it('deny: stores the decision, updates consent to denied, loads nothing', () => {
     denyConsent();
-    expect(localStorage.getItem('consent')).toBe('denied');
+    expect(document.cookie).toContain('ac_consent=denied');
     expect(entries().some((x) => x[0] === 'consent' && (x[2] as { analytics_storage: string }).analytics_storage === 'denied')).toBe(true);
     expect(document.head.querySelectorAll('script').length).toBe(0);
   });

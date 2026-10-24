@@ -4,7 +4,7 @@ import React from 'react';
 import { SITE } from '../../../config/site';
 import { HeadingTip } from '../components/InfoTip';
 import { Layout } from '../components/Layout';
-import { t, useLang } from '../i18n';
+import { atlasHref, t, useLang } from '../i18n';
 import collectionImage from '../images/menu/collection-review.webp';
 import dataImage from '../images/menu/data-check.webp';
 import licenceImage from '../images/menu/licence-check.webp';
@@ -17,10 +17,12 @@ const TOOLS = [
 ] as const;
 
 export function IndexPage(): React.ReactElement {
-  useLang();
+  const { lang } = useLang();
   return (
     <Layout titleKey="index.docTitle">
-      <h1>{t('brand')}</h1>
+      <h1>
+        {t('brand')} — {t('nav.tools')}
+      </h1>
       <p className="lead">{t('index.lead')}</p>
       <ul className="tools">
         {TOOLS.map(([href, key, image, tip]) => (
@@ -37,7 +39,7 @@ export function IndexPage(): React.ReactElement {
         ))}
       </ul>
       <p className="atlas-link">
-        {t('index.atlas.lead')} <a href={SITE.atlasUrl}>{t('nav.atlas')}</a>
+        {t('index.atlas.lead')} <a href={atlasHref(SITE.atlasUrl, lang)}>{t('nav.atlas')}</a>
       </p>
     </Layout>
   );

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
 import { ACCEPTED_EXTENSIONS, type CheckInput, type DownloadMode } from '../types';
@@ -9,6 +9,8 @@ export interface InputPanelProps {
   mode: DownloadMode;
   onSubmit: (input: CheckInput) => void;
   disabled?: boolean;
+  /** Called with the number of chosen files whenever it changes (the page warns before leaving while there are any). */
+  onFilesChange?: (count: number) => void;
   /** Rendered right after the link field: the download mode only matters for links, dropped files never leave the computer. */
   modeSwitch?: React.ReactNode;
 }
@@ -24,7 +26,7 @@ const sameFile = (a: File, b: File): boolean => a.name === b.name && a.size === 
  * Drop zone + link/DOI field + Check button. Files and the link stay in component state and go to
  * onSubmit; they are never written to the URL (the form never navigates: submit is always prevented).
  */
-export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelProps): React.ReactElement {
+export function InputPanel({ mode, onSubmit, disabled, onFilesChange, modeSwitch }: InputPanelProps): React.ReactElement {
   useLang();
   const [files, setFiles] = useState<File[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
@@ -32,6 +34,7 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
   const [empty, setEmpty] = useState(false);
   const [dragging, setDragging] = useState(false);
   const linkId = useId();
+  useEffect(() => onFilesChange?.(files.length), [files.length, onFilesChange]);
 
   const add = (list: ArrayLike<File> | null | undefined): void => {
     if (!list) return;

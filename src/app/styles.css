@@ -1,20 +1,99 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later
    Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com */
 
-/* Dark navy theme like the atlas. System fonts only: the CSP allows no external font hosts. */
+/* Look shared with the atlas (something-rare.com): page #0a0e14, accent cyan #22d3ee, Barlow, JetBrains Mono.
+   Fonts are self-hosted (public/fonts, SIL OFL, see NOTICE): the CSP allows no external font host.
+   Barlow 400/600/700 for text; JetBrains Mono 400 only for code, host names and value samples.
+   WCAG 2.x contrast ratios (computed, AA needs 4.5:1 for text and 3:1 for UI parts):
+     text #e6edf7 on bg 16.4, on surface 15.3, on surface-2 (ⓘ bubble) 13.8, on the selected choice (#0d262e) 13.4
+     muted #9aa8c2 on bg 8.1, on surface 7.5, on surface-2 6.8 (footer, lead, ⓘ icon, bubble border)
+     accent #22d3ee as link on bg 10.7, on surface 10.0, on surface-2 9.0; hover #67e8f9 on bg 13.3
+     --accent-ink #031a20 on the accent button 9.9, on the hovered button (#67e8f9) 12.4
+     focus ring #22d3ee against bg 10.7 (UI needs 3:1)
+     severities on bg: error #ef4444 5.1, warning #f59e0b 9.0, info #38bdf8 9.0, ok #22c55e 8.5; error text #fca5a5 10.2
+     badge text (bg colour) on error 5.1, warning 9.0, info 9.0, ok 8.5; map legend ring #fff on bg 19.3 */
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/barlow-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/barlow-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/barlow-latin-ext-600-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/barlow-latin-600-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/barlow-latin-ext-700-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/barlow-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
 :root {
-  --bg: #0b1120;
-  --surface: #111a2e;
-  --surface-2: #17223a;
+  --bg: #0a0e14;
+  --surface: #111720;
+  --surface-2: #182030;
   --border: rgba(255, 255, 255, 0.14);
   --text: #e6edf7;
   --muted: #9aa8c2;
-  --accent: #2dd4bf;
-  --accent-ink: #04201c;
+  --accent: #22d3ee;
+  --accent-hover: #67e8f9;
+  --accent-soft: rgba(34, 211, 238, 0.12);
+  --accent-ink: #031a20;
   --error: #ef4444;
   --warning: #f59e0b;
   --info: #38bdf8;
   --radius: 10px;
+  --font: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: dark;
 }
 
@@ -32,7 +111,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font);
   font-size: 1rem;
   line-height: 1.55;
   min-height: 100vh;
@@ -50,7 +129,7 @@ a {
 }
 
 a:hover {
-  color: #5eead4;
+  color: var(--accent-hover);
 }
 
 h1,
@@ -84,7 +163,7 @@ p {
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.9em;
   overflow-wrap: anywhere;
 }
@@ -136,6 +215,11 @@ code {
   color: var(--text);
   text-decoration: none;
   letter-spacing: 0.01em;
+}
+
+.brand-part {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .site-header nav {
@@ -197,7 +281,7 @@ code {
 }
 
 .button:hover {
-  background: #5eead4;
+  background: var(--accent-hover);
   color: var(--accent-ink);
 }
 
@@ -461,7 +545,7 @@ fieldset.choice-group {
 
 .choice input:checked + span {
   border-color: var(--accent);
-  background: rgba(45, 212, 191, 0.12);
+  background: var(--accent-soft);
   font-weight: 600;
 }
 
@@ -634,7 +718,7 @@ select.input-short {
   border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #0b1120;
+  color: var(--bg);
 }
 
 .sev-error {
@@ -906,7 +990,7 @@ select.input-short {
   padding: 0.05rem 0.4rem;
   background: var(--surface-2);
   border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.8rem;
   overflow: hidden;
   text-overflow: ellipsis;

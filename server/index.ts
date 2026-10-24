@@ -9,7 +9,8 @@ import { DATA_HOSTS } from '../config/hosts.js';
 import { SITE } from '../config/site.js';
 import { buildCswUpstream, createHostPacer, CSW_MAX_BYTES, CSW_TIMEOUT_MS, parseCswBody, type HostPacerOptions } from './csw.js';
 import { isArchiveUrl, proxyFetch, ProxyError, type ProxyDeps, type Upstream } from './fetchProxy.js';
-import { NOT_FOUND_PAGE, prepareHtml, securityHeaders } from './headers.js';
+import { prepareHtml, securityHeaders } from './headers.js';
+import { NOT_FOUND_LANGS, pickLang, renderNotFound, stylesheetsOf } from './notFound.js';
 import { ARCHIVE_BUDGET_CODE, ARCHIVE_BUSY_CODE, ARCHIVE_DAILY_BYTES, ARCHIVE_DAILY_REQUESTS, ARCHIVE_MAX_CONCURRENT, clientIp, createConcurrencyGate, createDailyBudget, createRateLimiter, type DailyBudgetOptions, type RateLimitOptions } from './rateLimit.js';
 
 export interface AppOptions {
@@ -126,7 +127,11 @@ export function createApp(opts: AppOptions): Express {
     privacy: Buffer.from(prepareHtml(readRequired(dist, join('privacy', 'index.html')).toString('utf8'), noindex)),
   };
   const consentJs = readOptional(dist, 'consent-default.js');
+  const notFoundJs = readOptional(dist, 'not-found.js');
   const favicon = readOptional(dist, 'favicon.svg');
+  // The 404 page wears the site's built stylesheet; one rendering per language, made once.
+  const sheets = stylesheetsOf(pages.home.toString('utf8'));
+  const notFoundPages = Object.fromEntries(NOT_FOUND_LANGS.map((l) => [l, renderNotFound(l, sheets)]));
   const ogImage = readOptional(dist, 'og.png');
   const sitemap = Buffer.from(buildSitemap(statSync(join(dist, 'index.html')).mtime));
 
@@ -166,6 +171,15 @@ export function createApp(opts: AppOptions): Express {
       res.end(consentJs);
     });
   }
+  if (notFoundJs) {
+    app.get('/not-found.js', (_req, res) => {
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.end(notFoundJs);
+    });
+  }
+  // Self-hosted fonts (SIL OFL, see NOTICE): a fixed directory, no index, no redirects, no dotfiles.
+  app.use('/fonts', express.static(join(dist, 'fonts'), { index: false, redirect: false, dotfiles: 'ignore', etag: false, maxAge: '30d' }));
   if (ogImage) {
     app.get('/og.png', (_req, res) => {
       res.setHeader('Content-Type', 'image/png');
@@ -346,11 +360,13 @@ export function createApp(opts: AppOptions): Express {
     res.status(405).json({ error: 'method_not_allowed' });
   });
 
-  app.use((_req, res) => {
+  app.use((req, res) => {
+    const lang = pickLang(req.query.lang, req.headers['accept-language']);
     res.status(404);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(NOT_FOUND_PAGE);
+    res.setHeader('Vary', 'Accept-Language');
+    res.end(notFoundPages[lang]);
   });
 
   const onError: ErrorRequestHandler = (err: { status?: number; type?: string }, _req, res, next) => {

@@ -22,3 +22,18 @@ are synthetic, except a corpus of short licence statements quoted from public me
 catalogues; reference vocabularies (SPDX License List, Zenodo licence vocabulary, EU
 Publications Office licence authority) stay under their publishers' terms; the land/sea
 grid is derived from Natural Earth (public domain).
+
+Fonts (self-hosted, public/fonts/), both under the SIL Open Font License, Version 1.1
+(http://scripts.sil.org/OFL; the licence texts with the copyright lines are
+public/fonts/OFL-Barlow.txt and public/fonts/OFL-JetBrainsMono.txt):
+
+    Barlow, Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+      weights 400, 600, 700; latin and latin-ext subsets (woff2)
+    JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+      (https://github.com/JetBrains/JetBrainsMono)
+      weight 400; latin and latin-ext subsets (woff2)
+
+    Source of the files: the npm packages @fontsource/barlow 5.3.0 and
+    @fontsource/jetbrains-mono 5.3.0 (https://github.com/fontsource/font-files,
+    files unmodified), fetched 2026-10-25. The fonts are not sold on their own and are
+    not renamed; the Reserved Font Names are not used for any derivative.

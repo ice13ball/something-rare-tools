@@ -4,6 +4,7 @@ import React, { useId, useState } from 'react';
 import { contradictionFinding, heldBackFinding } from '../../core/checks/licence';
 import { analyseLicences, type AnalysedSource, type AnalysedStatement, type Contradiction, type LicenceAnalysis, type SourceGroup } from '../../core/licence/analyse';
 import { buildAttribution, type Attribution } from '../../core/licence/attribution';
+import { notReadReasonKey } from '../../core/licence/failure';
 import { loadLicenceReferences, splitReferences, type LoadFailure } from '../../core/licence/load';
 import { renderPlain } from '../../core/report';
 import { browserFetcher, serverFetcher, type Fetcher } from '../../core/sources/fetcher';
@@ -65,7 +66,7 @@ function reasonOf(f: LoadFailure): string {
   if (f.finding && f.source === 'datacite' && Number(p.status) === 404) return t('licence.reason.notDatacite', { host: String(p.host ?? '') });
   if (f.finding) return t('licence.reason.http', { host: String(p.host ?? ''), status: String(p.status ?? '') });
   if (f.reason === 'unrecognised') return t('licence.reason.unrecognised');
-  if (f.reason === 'not-read') return t('licence.reason.notRead');
+  if (f.reason === 'not-read') return t(notReadReasonKey(f.ref));
   return t('licence.reason.unexpected', { message: f.message ?? '' });
 }
 

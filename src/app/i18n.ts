@@ -5,8 +5,9 @@ import { translate, type UiKey } from '../core/i18n/ui';
 import { LANGS, type Lang } from '../core/types';
 
 /*
- * Language state for the whole page. Order: localStorage 'lang' -> navigator.languages -> 'en'.
- * ⛔ Never writes to location or history: the language is not in the URL.
+ * Language state for the whole page. Order: ?lang= on arrival (from the atlas) -> localStorage 'lang' -> navigator.languages -> 'en'.
+ * The one write to the address is removing that single ?lang= parameter on arrival (history.replaceState); nothing else in the
+ * query or the hash is touched, and the language is never put into the URL by this page.
  */
 const STORAGE_KEY = 'lang';
 
@@ -24,7 +25,56 @@ export function detectLang(stored: string | null, browserLanguages: readonly str
   return 'en';
 }
 
+/** Pure: the language named by a `lang` query parameter if it is one of ours (the last one wins if repeated), else null. */
+export function langFromSearch(search: string): Lang | null {
+  const values = new URLSearchParams(search).getAll('lang');
+  const v = values.length > 0 ? values[values.length - 1] : null;
+  return isLang(v) ? v : null;
+}
+
+function nameOf(part: string): string {
+  const raw = part.split('=')[0]!.replace(/\+/g, ' ');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Pure: the query string without any `lang` parameter, every other parameter kept as written ('' or '?a=b'). */
+export function searchWithoutLang(search: string): string {
+  const keep = search
+    .replace(/^\?/, '')
+    .split('&')
+    .filter((part) => part !== '' && nameOf(part) !== 'lang');
+  return keep.length > 0 ? '?' + keep.join('&') : '';
+}
+
+/**
+ * Takes ?lang= from the address, stores it where the choice is stored, and removes only that parameter (other parameters and the
+ * hash stay). An unknown value is ignored and left in place. Runs before the first render, so there is no flash of another language.
+ */
+function takeLangFromUrl(): void {
+  if (typeof location === 'undefined') return;
+  const lang = langFromSearch(location.search);
+  if (!lang) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, lang);
+  } catch {
+    /* private mode: the language then only applies to this page (detectLang reads the stored value, so remember it here) */
+    arrived = lang;
+  }
+  try {
+    history.replaceState(history.state, '', location.pathname + searchWithoutLang(location.search) + location.hash);
+  } catch {
+    /* no history API: the address stays as it was */
+  }
+}
+
+let arrived: Lang | null = null;
+
 function readStored(): string | null {
+  if (arrived) return arrived;
   try {
     return localStorage.getItem(STORAGE_KEY);
   } catch {
@@ -50,8 +100,16 @@ function apply(lang: Lang): void {
 /** Detects the language and sets <html lang>. Safe to call again (re-detects). */
 export function initLang(): Lang {
   initialised = true;
+  takeLangFromUrl();
   apply(detectLang(readStored(), browserLanguages()));
   return current;
+}
+
+/** The atlas address with the current language appended as ?lang= (any query or hash the address already has is kept). */
+export function atlasHref(base: string, lang: Lang): string {
+  const u = new URL(base);
+  u.searchParams.set('lang', lang);
+  return u.toString();
 }
 
 export function getLang(): Lang {
@@ -61,6 +119,7 @@ export function getLang(): Lang {
 
 export function setLang(lang: Lang): void {
   initialised = true;
+  arrived = null;
   try {
     localStorage.setItem(STORAGE_KEY, lang);
   } catch {

@@ -28,3 +28,17 @@ export function landingNotRead(findings: readonly Finding[], label: string, kind
   if (kind !== 'datacite' || metadataCount === 0) return undefined;
   return findings.find((f) => f.ruleId === 'IN-HOST-NOT-ALLOWED' && f.file === label);
 }
+
+/**
+ * Which message explains an unread gbif.org / obis.org link. GBIF datasets have a DOI, OBIS datasets have none: for obis.org the advice
+ * is the DOI of the same dataset where it is also published through GBIF or the provider's IPT.
+ */
+export function notReadReasonKey(ref: string): 'licence.reason.notRead' | 'licence.reason.notReadObis' {
+  try {
+    const host = new URL(ref.trim()).hostname.toLowerCase();
+    if (host === 'obis.org' || host.endsWith('.obis.org')) return 'licence.reason.notReadObis';
+  } catch {
+    /* not a URL: the generic message */
+  }
+  return 'licence.reason.notRead';
+}

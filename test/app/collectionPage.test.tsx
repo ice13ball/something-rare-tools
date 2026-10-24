@@ -121,7 +121,7 @@ describe('CollectionPage: inputs and estimate', () => {
   it('is a static explanation plus a form; the title is function-first, brand last', () => {
     render(<CollectionPage engine={fakeEngine().engine} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Collection review' })).toBeTruthy();
-    expect(document.title).toBe('Collection review: find licence and metadata problems across a whole repository — Abyssal Claims Tools');
+    expect(document.title).toBe('Collection review: find licence and metadata problems across a whole repository — Abyssal Claims');
     expect(screen.queryByTestId('results')).toBeNull();
     expect(screen.queryByTestId('progress')).toBeNull();
   });
@@ -585,7 +585,12 @@ describe('CollectionPage: nothing the visitor types reaches the URL', () => {
     expect(location.search + location.hash).toBe('');
     expect(location.href).not.toMatch(/secret/);
     // the form never navigates, and the page has no link that carries an entry
-    for (const a of document.querySelectorAll('a')) expect(a.getAttribute('href') ?? '').not.toMatch(/secret|\?|#(?!main)/);
+    // (the links to the atlas carry the interface language, ?lang=, and nothing else)
+    for (const a of document.querySelectorAll('a')) {
+      const href = a.getAttribute('href') ?? '';
+      if (/^https:\/\/something-rare\.com\/(privacy)?\?lang=(pl|en|de|fr)$/.test(href)) continue;
+      expect(href).not.toMatch(/secret|\?|#(?!main)/);
+    }
     expect(document.querySelector('form')?.getAttribute('action')).toBeNull();
   });
 });
@@ -679,7 +684,7 @@ describe('home and privacy pages', () => {
       ['/check', 'Data check', null],
       ['/licence', 'Licence check', null],
       ['/collection', 'Collection review', 'page'],
-      ['https://something-rare.com', 'Atlas', null],
+      ['https://something-rare.com/?lang=en', 'Atlas', null],
     ]);
     expect(document.querySelector('footer a[href="/collection"]')).toBeNull();
     window.history.pushState({}, '', '/');
@@ -697,7 +702,7 @@ describe('home and privacy pages', () => {
   it('the static page carries the same English text as the app', () => {
     const html = readFileSync(join(__dirname, '..', '..', 'collection', 'index.html'), 'utf8');
     for (const key of ['collection.intro', 'collection.checks.p1', 'collection.checks.li1', 'collection.checks.li2', 'collection.checks.li3', 'collection.checks.li4'] as const) expect(html, key).toContain(UI.en[key]);
-    expect(html).toContain(`<title>${UI.en['collection.docTitle']} — Abyssal Claims Tools</title>`);
+    expect(html).toContain(`<title>${UI.en['collection.docTitle']} — Abyssal Claims</title>`);
     expect(html).toContain('<link rel="canonical" href="https://tools.something-rare.com/collection" />');
     expect(html).toContain('"@type": "WebApplication"');
     expect(html).toContain('<meta property="og:url" content="https://tools.something-rare.com/collection" />');
@@ -740,5 +745,37 @@ describe('page with the real engine (in this thread, synthetic DataCite)', () =>
     const csv = await (download.mock.calls[0][0] as Blob).text();
     expect(csv.split('\n')[0]).toBe('record,field,rule_id,severity,problem,suggested_fix,source');
     expect(csv).toContain(',LIC-MISSING,');
+  });
+});
+
+describe('leaving /collection: the browser prompt', () => {
+  const leave = (): boolean => {
+    const e = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+
+  it('warns only while a run is running or preparing; not idle, paused, stopped, finished or failed', () => {
+    const f = fakeEngine();
+    render(<CollectionPage engine={f.engine} />);
+    expect(leave()).toBe(false); // idle
+    for (const status of ['running', 'preparing'] as const) {
+      f.push(progressOf({ status }));
+      expect(leave(), status).toBe(true);
+    }
+    for (const status of ['paused', 'stopped', 'finished', 'idle'] as const) {
+      f.push(progressOf({ status }));
+      expect(leave(), status).toBe(false);
+    }
+  });
+
+  it('a saved run offered on arrival does not warn, and the listener goes with the page', () => {
+    const f = fakeEngine({ saved: progressOf({ status: 'stopped', resumable: true }) });
+    const { unmount } = render(<CollectionPage engine={f.engine} />);
+    expect(leave()).toBe(false);
+    f.push(progressOf({ status: 'running' }));
+    expect(leave()).toBe(true);
+    unmount();
+    expect(leave()).toBe(false);
   });
 });
