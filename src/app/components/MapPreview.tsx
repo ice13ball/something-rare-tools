@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { DatasetSummary, Engine, RowDetail } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
+import { InfoTip } from './InfoTip';
 import { BASEMAP_STYLE, SEVERITIES_ORDER, SEVERITY_COLORS, popupContent, prepareMapData, type MapData, type PopupProps } from '../mapModel';
 
 /** The few maplibre calls the preview uses, so a test can stand in for the library (WebGL does not exist in jsdom). */
@@ -171,14 +172,17 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
           )}
           {skipped > 0 && <p className="muted">{t('map.skipped', { count: skipped })}</p>}
           <div ref={container} className="map-canvas" role="img" aria-label={t('map.title')} hidden={status === 'failed'} />
-          <ul className="map-legend" aria-label={t('map.legend')}>
-            {SEVERITIES_ORDER.map((s) => (
-              <li key={s}>
-                <span className="swatch" style={{ background: SEVERITY_COLORS[s] }} aria-hidden="true" />
-                {t(`map.legend.${s}` as never)}
-              </li>
-            ))}
-          </ul>
+          <div className="with-tip">
+            <ul className="map-legend" aria-label={t('map.legend')}>
+              {SEVERITIES_ORDER.map((s) => (
+                <li key={s}>
+                  <span className="swatch" style={{ background: SEVERITY_COLORS[s] }} aria-hidden="true" />
+                  {t(`map.legend.${s}` as never)}
+                </li>
+              ))}
+            </ul>
+            <InfoTip id="mapLegend" />
+          </div>
         </>
       )}
     </section>

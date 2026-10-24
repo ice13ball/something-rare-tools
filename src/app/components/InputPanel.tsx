@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { t, useLang } from '../i18n';
+import { FieldLabel, InfoTip } from './InfoTip';
 import { ACCEPTED_EXTENSIONS, type CheckInput, type DownloadMode } from '../types';
 
 export interface InputPanelProps {
@@ -30,6 +31,7 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
   const [link, setLink] = useState('');
   const [empty, setEmpty] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const linkId = useId();
 
   const add = (list: ArrayLike<File> | null | undefined): void => {
     if (!list) return;
@@ -54,6 +56,7 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
   return (
     <form className="input-panel" onSubmit={submit} noValidate>
       <h2>{t('input.heading')}</h2>
+      <div className="dropzone-wrap">
       <label
         className={dragging ? 'dropzone dragging' : 'dropzone'}
         onDragOver={(e) => {
@@ -83,6 +86,8 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
           }}
         />
       </label>
+      <InfoTip id="dropZone" />
+      </div>
       {rejected.length > 0 && <p className="notice">{t('input.rejected', { names: rejected.join(', ') })}</p>}
       {files.length > 0 && (
         <div className="file-list">
@@ -99,10 +104,12 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
           </ul>
         </div>
       )}
-      <label className="field">
-        <span>{t('input.link.label')}</span>
-        <input type="text" value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('input.link.placeholder')} autoComplete="off" spellCheck={false} />
-      </label>
+      <div className="field">
+        <FieldLabel htmlFor={linkId} tip="linkField">
+          {t('input.link.label')}
+        </FieldLabel>
+        <input id={linkId} type="text" value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('input.link.placeholder')} autoComplete="off" spellCheck={false} />
+      </div>
       {modeSwitch}
       {empty && (
         <p className="error-text" role="alert">

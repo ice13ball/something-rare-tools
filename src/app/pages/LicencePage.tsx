@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { contradictionFinding, heldBackFinding } from '../../core/checks/licence';
 import { analyseLicences, type AnalysedSource, type AnalysedStatement, type Contradiction, type LicenceAnalysis, type SourceGroup } from '../../core/licence/analyse';
 import { buildAttribution, type Attribution } from '../../core/licence/attribution';
@@ -8,6 +8,7 @@ import { loadLicenceReferences, splitReferences, type LoadFailure } from '../../
 import { renderPlain } from '../../core/report';
 import { browserFetcher, serverFetcher, type Fetcher } from '../../core/sources/fetcher';
 import type { Lang, MetadataSource } from '../../core/types';
+import { FieldLabel, HeadingTip, InfoTip } from '../components/InfoTip';
 import { Layout } from '../components/Layout';
 import { SourceLink, sourcesOf } from '../components/ReportView';
 import { ModeSwitch, type ModeTexts } from '../components/ModeSwitch';
@@ -208,7 +209,8 @@ function DataciteSilent({ s }: { s: NonNullable<LicenceAnalysis['dataciteSilent'
   return (
     <div className="notice" data-testid="licence-datacite-silent">
       <p>
-        <strong>{t('licence.summary.dataciteSilent')}</strong>{' '}
+        <strong>{t('licence.summary.dataciteSilent')}</strong>
+        <InfoTip id="licenceDatacite" />{' '}
         {s.where.length > 0 ? t('licence.summary.dataciteSilent.where', { where: s.where.join('; ') }) : t('licence.summary.dataciteSilent.unread')}{' '}
         {t('licence.summary.dataciteSilent.openaire')}
       </p>
@@ -233,7 +235,9 @@ function Summary({ r }: { r: Result }): React.ReactElement {
   const held = heldBackFinding(a.sources.flatMap((s) => (s.record ? [s.record] : [])), 'dataset');
   return (
     <section className="licence-summary" aria-labelledby="licence-summary-title">
-      <h2 id="licence-summary-title">{t('licence.summary.title')}</h2>
+      <HeadingTip tip="licenceOneDeposit">
+        <h2 id="licence-summary-title">{t('licence.summary.title')}</h2>
+      </HeadingTip>
       {a.contradictions.length > 0 ? (
         <>
           <p>
@@ -281,6 +285,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
  */
 export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defaultClipboard }: LicencePageProps): React.ReactElement {
   useLang();
+  const inputId = useId();
   const [mode, setMode] = useState<DownloadMode>(DEFAULT_MODE);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -320,10 +325,12 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
       <h1>{t('licence.title')}</h1>
       <p className="lead">{t('licence.intro')}</p>
       <form className="input-panel" onSubmit={(e) => void submit(e)} noValidate>
-        <label className="field">
-          <span>{t('licence.input.label')}</span>
-          <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('licence.input.placeholder')} autoComplete="off" spellCheck={false} />
-        </label>
+        <div className="field">
+          <FieldLabel htmlFor={inputId} tip="licenceInput">
+            {t('licence.input.label')}
+          </FieldLabel>
+          <textarea id={inputId} rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('licence.input.placeholder')} autoComplete="off" spellCheck={false} />
+        </div>
         <p className="muted">{t('licence.input.hint')}</p>
         <ModeSwitch value={mode} onChange={setMode} texts={MODE_TEXTS} />
         {empty && (
@@ -373,13 +380,17 @@ export function LicencePage({ fetcherFor = defaultFetcher, writeClipboard = defa
           )}
           <Summary r={result} />
           <section aria-labelledby="licence-sources-title">
-            <h2 id="licence-sources-title">{t('licence.sources.title')}</h2>
+            <HeadingTip tip="licenceSpdx">
+              <h2 id="licence-sources-title">{t('licence.sources.title')}</h2>
+            </HeadingTip>
             {result.analysis.groups.map((g) => (
               <GroupView key={g.id} group={g} failures={result.failures} heading={groupHeading(g, result.analysis.groups)} />
             ))}
           </section>
           <section aria-labelledby="licence-attr-title">
-            <h2 id="licence-attr-title">{t('licence.attr.title')}</h2>
+            <HeadingTip tip="licenceAttribution">
+              <h2 id="licence-attr-title">{t('licence.attr.title')}</h2>
+            </HeadingTip>
             {result.attribution.text === '' ? (
               <p>{t('licence.attr.empty')}</p>
             ) : (

@@ -6,6 +6,7 @@ import { getRule } from '../../core/rules/registry';
 import type { Citation, Finding, Report, Severity } from '../../core/types';
 import { isUiKey, type UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
+import { HeadingTip } from './InfoTip';
 
 export interface ReportViewProps {
   report: Report;
@@ -122,7 +123,9 @@ export function ReportView({ report, hideCitations = NO_CITATIONS_IN_CHECK }: Re
   const { counts, findings, notChecked } = report;
   return (
     <section className="report" aria-labelledby="report-title">
-      <h2 id="report-title">{t('report.title')}</h2>
+      <HeadingTip tip="severities">
+        <h2 id="report-title">{t('report.title')}</h2>
+      </HeadingTip>
       <p className="summary" data-testid="summary">
         {t('report.summary', { errors: counts.error, warnings: counts.warning, notes: counts.info })}
       </p>
@@ -144,7 +147,9 @@ export function ReportView({ report, hideCitations = NO_CITATIONS_IN_CHECK }: Re
       })}
       {findings.length === 0 && <p className="no-problems">{t('report.noProblems')}</p>}
       <section className="not-checked">
-        <h3>{t('notChecked.title')}</h3>
+        <HeadingTip tip="notChecked">
+          <h3>{t('notChecked.title')}</h3>
+        </HeadingTip>
         <ul data-testid="not-checked">
           {notChecked.map((key) => (
             <li key={key}>{isUiKey(key) ? t(key) : key}</li>

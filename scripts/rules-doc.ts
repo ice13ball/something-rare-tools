@@ -37,10 +37,11 @@ export function rulesDoc(): string {
     'Generated from `src/core/rules/` by `scripts/rules-doc.ts` — do not edit by hand.',
     'Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-doc.test.ts`.',
     'Every number a rule compares against is listed here with its source (`docs/research/qc-sources.md`).',
+    'Each row ends with an invisible anchor named after the rule id: the ⓘ explanations link to `docs/rules.md#<RULE-ID>`.',
     '',
     '| id | severity | category | thresholds | citations |',
     '|---|---|---|---|---|',
-    ...RULES.map((r) => `| ${r.id} | ${r.severity} | ${r.category} | ${thresholdCell(r)} | ${citationCell(r)} |`),
+    ...RULES.map((r) => `| ${r.id} | ${r.severity} | ${r.category} | ${thresholdCell(r)} | ${citationCell(r)}<a id="${r.id}"></a> |`),
     '',
   ];
   return lines.join('\n');

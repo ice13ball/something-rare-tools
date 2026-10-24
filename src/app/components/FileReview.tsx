@@ -4,6 +4,7 @@ import React from 'react';
 import type { ColumnProposal, LayoutPlan, SheetMapping } from '../../core/types';
 import type { FileSummary } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
+import { InfoTip } from './InfoTip';
 import { LayoutConfirm } from './LayoutConfirm';
 import { MappingEditor } from './MappingEditor';
 
@@ -22,7 +23,10 @@ export function FileReview({ file, layout, mappings, proposals, onLayout, onMapp
   return (
     <section className="file-review">
       <h3>{t('confirm.file', { name: file.fileName })}</h3>
-      <p className="muted">{t('confirm.encoding', { encoding: file.encoding })}</p>
+      <p className="muted">
+        {t('confirm.encoding', { encoding: file.encoding })}
+        <InfoTip id="encoding" />
+      </p>
       <LayoutConfirm plan={layout} sheets={file.sheets} onChange={onLayout} />
       {mappings.map((m) => {
         const long = layout.tables.find((tb) => tb.sheet === m.sheet)?.long;

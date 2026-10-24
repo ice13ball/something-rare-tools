@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
 import { t, useLang } from '../i18n';
+import { InfoTip } from './InfoTip';
 
 export interface SingleCruiseProps {
   checked: boolean;
@@ -19,10 +20,13 @@ export function SingleCruise({ checked, onChange, columnFiles }: SingleCruisePro
   useLang();
   return (
     <div className="single-cruise">
-      <label className="inline-choice">
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-describedby="single-cruise-help" />
-        <span>{t('confirm.singleCruise')}</span>
-      </label>
+      <div className="choice-line">
+        <label className="inline-choice">
+          <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-describedby="single-cruise-help" />
+          <span>{t('confirm.singleCruise')}</span>
+        </label>
+        <InfoTip id="singleCruise" />
+      </div>
       <p id="single-cruise-help" className="muted">
         {t('confirm.singleCruise.help')}
       </p>

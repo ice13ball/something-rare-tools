@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CATALOGUES, catalogueById, type CswSchema } from '../../../config/catalogues';
 import { describeStop, gapText, reasonText } from '../../core/collection/stop';
 import type { Estimate, Progress, RunSettings, Sample, SourceSpec, UnreadSample } from '../../core/collection/types';
@@ -11,6 +11,7 @@ import { createWorkerClient, type WorkerLike } from '../../worker/client';
 import { getCollectionEngine, type CollectionEngine } from '../../worker/collection.client';
 import type { FileHandleLike } from '../../worker/collection.protocol';
 import type { Engine } from '../../worker/protocol';
+import { FieldLabel, InfoTip } from '../components/InfoTip';
 import { Layout } from '../components/Layout';
 import { ReportView } from '../components/ReportView';
 import { downloadBlob } from '../download';
@@ -263,6 +264,8 @@ const isRunning = (p: Progress): boolean => p.status === 'running' || p.status =
  */
 export function CollectionPage({ engine: engineProp, createCheckEngine = newCheckEngine, fetcher, download = downloadBlob, pickFile = defaultPickFile }: CollectionPageProps): React.ReactElement {
   const { lang } = useLang();
+  const fieldId = useId();
+  const ids = { dois: fieldId + 'dois', zenodo: fieldId + 'zenodo', catalogue: fieldId + 'catalogue' };
   const engine = useMemo(() => engineProp ?? getCollectionEngine(), [engineProp]);
   const recordFetcher = useMemo(() => fetcher ?? browserFetcher(), [fetcher]);
 
@@ -465,15 +468,18 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
                 <span>{t(`collection.kind.${k}` as never)}</span>
               </label>
             ))}
+            <InfoTip id="collectionKind" />
           </div>
         </fieldset>
 
         {kind === 'dois' && (
           <>
-            <label className="field">
-              <span>{t('collection.dois.label')}</span>
-              <textarea rows={6} value={dois} onChange={(e) => setDois(e.target.value)} placeholder={t('collection.dois.placeholder')} autoComplete="off" spellCheck={false} />
-            </label>
+            <div className="field">
+              <FieldLabel htmlFor={ids.dois} tip="collectionDois">
+                {t('collection.dois.label')}
+              </FieldLabel>
+              <textarea id={ids.dois} rows={6} value={dois} onChange={(e) => setDois(e.target.value)} placeholder={t('collection.dois.placeholder')} autoComplete="off" spellCheck={false} />
+            </div>
             <p className="muted">{t('collection.dois.hint')}</p>
             <p className="muted">{t('collection.dois.sampleNote')}</p>
           </>
@@ -489,6 +495,7 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
                     <span>{t(`collection.dc.${b}` as never)}</span>
                   </label>
                 ))}
+                <InfoTip id="collectionDatacite" />
               </div>
             </fieldset>
             <label className="field">
@@ -500,25 +507,29 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
         )}
         {kind === 'zenodo' && (
           <>
-            <label className="field">
-              <span>{t('collection.zen.label')}</span>
-              <input type="text" className="input-short" value={community} onChange={(e) => setCommunity(e.target.value)} autoComplete="off" spellCheck={false} />
-            </label>
+            <div className="field">
+              <FieldLabel htmlFor={ids.zenodo} tip="collectionZenodo">
+                {t('collection.zen.label')}
+              </FieldLabel>
+              <input id={ids.zenodo} type="text" className="input-short" value={community} onChange={(e) => setCommunity(e.target.value)} autoComplete="off" spellCheck={false} />
+            </div>
             <p className="muted">{t('collection.zen.hint')}</p>
           </>
         )}
         {kind === 'csw' && (
           <>
-            <label className="field">
-              <span>{t('collection.csw.label')}</span>
-              <select className="input-short" value={catalogue} onChange={(e) => setCatalogue(e.target.value)}>
+            <div className="field">
+              <FieldLabel htmlFor={ids.catalogue} tip="collectionCsw">
+                {t('collection.csw.label')}
+              </FieldLabel>
+              <select id={ids.catalogue} className="input-short" value={catalogue} onChange={(e) => setCatalogue(e.target.value)}>
                 {CATALOGUES.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.label}
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
             <label className="field">
               <span>{t('collection.csw.schema')}</span>
               <select className="input-short" value={schema} onChange={(e) => setSchema(e.target.value as CswSchema)}>
@@ -530,10 +541,13 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
               </select>
             </label>
             <p className="muted">{t('collection.csw.note')}</p>
-            <label className="inline-choice">
-              <input type="checkbox" checked={cross} onChange={(e) => setCross(e.target.checked)} />
-              <span>{t('collection.csw.cross')}</span>
-            </label>
+            <div className="choice-line">
+              <label className="inline-choice">
+                <input type="checkbox" checked={cross} onChange={(e) => setCross(e.target.checked)} />
+                <span>{t('collection.csw.cross')}</span>
+              </label>
+              <InfoTip id="collectionCross" />
+            </div>
             <p className="muted">{t('collection.csw.cross.note')}</p>
           </>
         )}
@@ -543,9 +557,12 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
             {t('collection.estimate.none')}
           </p>
         )}
-        <button type="submit" className="button" disabled={estimating || (progress !== null && isRunning(progress))}>
-          {estimating ? t('collection.estimate.busy') : t('collection.estimate.button')}
-        </button>
+        <span className="download-item">
+          <button type="submit" className="button" disabled={estimating || (progress !== null && isRunning(progress))}>
+            {estimating ? t('collection.estimate.busy') : t('collection.estimate.button')}
+          </button>
+          <InfoTip id="collectionRun" />
+        </span>
       </form>
 
       {error !== null && (

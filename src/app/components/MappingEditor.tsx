@@ -5,6 +5,7 @@ import { CANONICAL_VARIABLES } from '../../core/recognize/vocab';
 import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types';
 import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
+import { InfoTip } from './InfoTip';
 import { ROLE_KINDS, changeRole, mappingWith, roleLabelKey, roleUnit, setPositive, setUnit, setVariableName, type RoleKind } from '../mappingModel';
 
 export interface MappingEditorProps {
@@ -42,7 +43,10 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
             <tr>
               <th scope="col">{t('mapping.column')}</th>
               <th scope="col">{t('mapping.samples')}</th>
-              <th scope="col">{t('mapping.role')}</th>
+              <th scope="col" aria-label={t('mapping.role')}>
+                {t('mapping.role')}
+                <InfoTip id="roles" />
+              </th>
             </tr>
           </thead>
           <tbody>

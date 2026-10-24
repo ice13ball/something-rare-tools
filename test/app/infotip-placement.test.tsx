@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+// @vitest-environment jsdom
+// Where the ⓘ explanations stand: every tool page carries the full list of its placements (by data-tip key and by accessible name),
+// and every tip of the registry stands somewhere. A new tool or decision without its ⓘ is a failed review (CONTRIBUTING.md).
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import React from 'react';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { MapLib } from '../../src/app/components/MapPreview';
+import { initLang, setLang } from '../../src/app/i18n';
+import { CheckPage } from '../../src/app/pages/CheckPage';
+import { CollectionPage } from '../../src/app/pages/CollectionPage';
+import { IndexPage } from '../../src/app/pages/IndexPage';
+import { LicencePage } from '../../src/app/pages/LicencePage';
+import { TIPS, TIP_IDS, type TipId } from '../../src/app/tips';
+import { UI, translate, type UiKey } from '../../src/core/i18n/ui';
+import { LANGS } from '../../src/core/types';
+import { createDirectEngine } from '../../src/worker/handler';
+import { createDirectCollectionEngine } from '../../src/worker/collection.client';
+import { dataciteMock, runnerDeps, virtualClock } from '../collection/helpers';
+import { DC, dataciteJson, zenodoJson, ZEN } from '../helpers/licenceFixtures';
+import { MapFetcher } from '../sources/mapFetcher';
+
+const wideCsv = readFileSync(join(__dirname, '..', 'fixtures', 'layout-wide.csv'), 'utf-8');
+const seen = new Set<TipId>();
+
+beforeEach(() => {
+  localStorage.clear();
+  initLang();
+  setLang('en');
+});
+afterEach(cleanup);
+
+/** The tip is on the page, once or more, and its button is named "Explanation: <the label it explains>". */
+function expectTips(ids: readonly TipId[], lang: (typeof LANGS)[number] = 'en'): void {
+  for (const id of ids) {
+    const found = document.querySelectorAll(`[data-tip="${id}"]`);
+    expect(found.length, `${id} is placed`).toBeGreaterThan(0);
+    for (const el of found) {
+      const button = el.querySelector('button');
+      expect(button?.getAttribute('aria-label'), id).toBe(translate(lang, 'tip.aria', { label: UI[lang][TIPS[id].label as UiKey] }));
+    }
+    seen.add(id);
+  }
+}
+
+const fakeLib = (): (() => Promise<MapLib>) => {
+  class FakeMap {
+    on() {}
+    addSource() {}
+    addLayer() {}
+    fitBounds() {}
+    getCanvas() {
+      return { style: { cursor: '' } };
+    }
+    remove() {}
+  }
+  class FakePopup {
+    setLngLat() {
+      return this;
+    }
+    setDOMContent() {
+      return this;
+    }
+    addTo() {
+      return this;
+    }
+    remove() {}
+  }
+  return () => Promise.resolve({ Map: FakeMap, Popup: FakePopup } as unknown as MapLib);
+};
+
+describe('/check', () => {
+  it('input, confirm step, report and downloads each carry their ⓘ', async () => {
+    const { container } = render(<CheckPage engine={createDirectEngine()} mapLib={fakeLib()} />);
+    // input: the drop zone, the link field, the download mode
+    expectTips(['dropZone', 'linkField', 'downloadMode']);
+    // the field keeps its own clean name: the icon is not inside the label
+    expect(screen.getByRole('textbox', { name: /Zenodo, GeoNetwork/ })).toBeTruthy();
+
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File([wideCsv], 'layout-wide.csv', { type: 'text/csv' })] } });
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+    await screen.findByRole('heading', { name: 'Confirm how your files are read' });
+    // confirm step: the layout question, the column meanings, the encoding line, the one-cruise checkbox
+    expectTips(['layout', 'roles', 'encoding', 'singleCruise']);
+    // the visible help stays
+    expect(screen.getByText(UI.en['confirm.singleCruise.help'])).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Table layout' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Meaning' })).toBeTruthy();
+    expect(screen.getByLabelText(UI.en['confirm.singleCruise'])).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and check' }));
+    await screen.findByRole('heading', { name: 'Report' });
+    // report: the severities, what is not checked, the map legend; downloads: each export and the draft
+    await waitFor(() => expect(document.querySelector('[data-tip="mapLegend"]')).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('[data-tip="draft"]')).toBeTruthy());
+    expectTips(['severities', 'notChecked', 'mapLegend', 'cleanCsv', 'sidecar', 'iso19139', 'datacite', 'draft', 'geojson']);
+    expect(screen.getByRole('heading', { name: UI.en['notChecked.title'] })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Downloads' })).toBeTruthy();
+    // the exports are still found by their own names
+    for (const k of ['downloads.cleanCsv', 'downloads.sidecar', 'downloads.iso', 'downloads.datacite', 'downloads.geojson'] as const) {
+      expect(screen.getByRole('button', { name: UI.en[k] })).toBeTruthy();
+    }
+  });
+});
+
+describe('/licence', () => {
+  it('the input and the download mode stand before a result; the comparison, classification, DataCite line and attribution after it', async () => {
+    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
+    const fetcher = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    render(<LicencePage fetcherFor={() => fetcher} />);
+    expectTips(['licenceInput', 'downloadMode']);
+    fireEvent.change(screen.getByRole('textbox', { name: UI.en['licence.input.label'] }), { target: { value: 'https://zenodo.org/records/9' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Compare licences' }));
+    await screen.findByTestId('licence-result');
+    expectTips(['licenceOneDeposit', 'licenceSpdx', 'licenceDatacite', 'licenceAttribution']);
+    // the page's own explanation stays
+    expect(screen.getByRole('heading', { name: 'What this checks' })).toBeTruthy();
+  });
+});
+
+describe('/collection', () => {
+  it('the kinds, each kind\'s inputs and options, and the run carry their ⓘ', () => {
+    const clock = virtualClock();
+    const engine = createDirectCollectionEngine(runnerDeps(dataciteMock({ total: 5, clock }).net, clock));
+    render(<CollectionPage engine={engine} />);
+    expectTips(['collectionKind', 'collectionRun']);
+    fireEvent.click(screen.getByLabelText('A list of DOIs'));
+    expectTips(['collectionDois']);
+    fireEvent.click(screen.getByLabelText('A DataCite repository or DOI prefix'));
+    expectTips(['collectionDatacite']);
+    fireEvent.click(screen.getByLabelText('A Zenodo community'));
+    expectTips(['collectionZenodo']);
+    fireEvent.click(screen.getByLabelText('A GeoNetwork catalogue'));
+    expectTips(['collectionCsw', 'collectionCross']);
+    // the fields keep their names
+    expect(screen.getByRole('combobox', { name: UI.en['collection.csw.label'] })).toBeTruthy();
+  });
+});
+
+describe('the index page', () => {
+  it('one ⓘ per tool, beside its name, outside the link', () => {
+    render(<IndexPage />);
+    expectTips(['indexCheck', 'indexLicence', 'indexCollection']);
+    expect(document.querySelectorAll('.tool .infotip').length).toBe(3);
+    expect(document.querySelectorAll('.tool a .infotip').length).toBe(0);
+    expect(screen.getByRole('heading', { name: 'Data check' })).toBeTruthy();
+  });
+
+  it('the names are right in every language', () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      render(<IndexPage />);
+      expectTips(['indexCheck', 'indexLicence', 'indexCollection'], lang);
+    }
+  });
+});
+
+afterAll(() => {
+  // runs last in this file: every tip of the registry was seen on a page above
+  expect([...seen].sort()).toEqual([...TIP_IDS].sort());
+});

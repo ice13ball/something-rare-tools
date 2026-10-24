@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Lang } from '../types';
+import { tipDe, tipEn, tipFr, tipPl } from './tips-text';
 
 /*
  * UI strings in pl, en, de, fr (en is the fallback). Pure data: no DOM, no React.
@@ -492,6 +493,7 @@ https://zenodo.org/records/…`,
   'downloads.licenceUri': `Licence link`,
   'downloads.variables': `Variables`,
   'downloads.copyAll': `Copy all`,
+  ...tipEn,
 } as const;
 
 export type UiKey = keyof typeof en;
@@ -979,6 +981,7 @@ https://zenodo.org/records/…`,
   'downloads.licenceUri': `Link do licencji`,
   'downloads.variables': `Zmienne`,
   'downloads.copyAll': `Kopiuj wszystko`,
+  ...tipPl,
 };
 
 const de: Record<UiKey, string> = {
@@ -1464,6 +1467,7 @@ https://zenodo.org/records/…`,
   'downloads.licenceUri': `Lizenz-Link`,
   'downloads.variables': `Variablen`,
   'downloads.copyAll': `Alles kopieren`,
+  ...tipDe,
 };
 
 const fr: Record<UiKey, string> = {
@@ -1949,6 +1953,7 @@ https://zenodo.org/records/…`,
   'downloads.licenceUri': `Lien de la licence`,
   'downloads.variables': `Variables`,
   'downloads.copyAll': `Tout copier`,
+  ...tipFr,
 };
 
 export const UI: Record<Lang, Record<UiKey, string>> = { en, pl, de, fr };
