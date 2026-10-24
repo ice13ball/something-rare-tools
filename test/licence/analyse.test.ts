@@ -71,6 +71,10 @@ describe('source groups', () => {
     expect(a.dataciteSilent).toMatchObject({ kind: 'datacite-empty', licence: 'CC-BY-4.0' });
     expect(a.dataciteSilent?.where).toHaveLength(1);
   });
+  it('the DataCite line names each source with its own licence (two sources, two licences)', () => {
+    const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('zenodo', [['cc0-1.0']], { doi: '10.5281/zenodo.2' }), rec('datacite', [])]);
+    expect(a.dataciteSilent?.where.map((w) => w.split(': ')[1])).toEqual(['CC-BY-4.0', 'CC0-1.0']);
+  });
 });
 
 describe('contradictions', () => {

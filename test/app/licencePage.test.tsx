@@ -79,7 +79,7 @@ describe('LicencePage', () => {
     expect(text).not.toContain('Contradictions found');
     const silent = screen.getByTestId('licence-datacite-silent').textContent ?? '';
     expect(silent).toContain('DataCite states no licence.');
-    expect(silent).toContain('It is stated by Zenodo 9: CC-BY-4.0.');
+    expect(silent).toContain('Stated by Zenodo 9: CC-BY-4.0.');
     expect(silent).toContain('OpenAIRE');
     expect(screen.getByTestId('attribution').textContent).toContain('Licence: Creative Commons Attribution 4.0 International');
   });
@@ -99,7 +99,7 @@ describe('LicencePage', () => {
     expect(text).toContain('rds.icm.edu.pl');
     expect(text).toContain('No source that could be read states a licence');
     expect(text).toContain('At least one source could not be read');
-    expect(screen.getByTestId('licence-datacite-silent').textContent).toContain('no licence was found anywhere');
+    expect(screen.getByTestId('licence-datacite-silent').textContent).toContain('so no licence was found');
     expect(text).not.toContain('Contradictions found');
   });
 

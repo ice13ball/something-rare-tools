@@ -209,7 +209,7 @@ function DataciteSilent({ s }: { s: NonNullable<LicenceAnalysis['dataciteSilent'
     <div className="notice" data-testid="licence-datacite-silent">
       <p>
         <strong>{t('licence.summary.dataciteSilent')}</strong>{' '}
-        {s.where.length > 0 ? t('licence.summary.dataciteSilent.where', { where: s.where.join(', '), licence: s.licence }) : t('licence.summary.dataciteSilent.unread')}{' '}
+        {s.where.length > 0 ? t('licence.summary.dataciteSilent.where', { where: s.where.join('; ') }) : t('licence.summary.dataciteSilent.unread')}{' '}
         {t('licence.summary.dataciteSilent.openaire')}
       </p>
       {sources.length > 0 && (
