@@ -235,17 +235,29 @@ function placeLabel(run: Run, bucket: string, arrive: boolean, leave: boolean): 
   return into === outOf ? into : `${into}…${outOf}`;
 }
 
-/** The rows of a place, event by event ("+" joins events less than SHIP_SPEED_MIN_SEPARATION_KM apart); undefined for a one-row place. */
+/** At most this many events of one place are listed (the first two and the last two, which hold the hops' endpoints), each in at most EVENT_ROWS_CHARS. */
+const MAX_PLACE_EVENTS = 5;
+const EVENT_ROWS_CHARS = 60;
+
+function eventRows(e: Ev, bucket: string): string {
+  const here = e.rows.filter((r) => bucketOf(r) === bucket).map((r) => r.line);
+  const there = e.rows.filter((r) => bucketOf(r) !== bucket).map((r) => `${r.file}:${r.line}`);
+  const text = [formatLines(here), ...there.slice(0, 3), ...(there.length > 3 ? [`…+${there.length - 3}`] : [])].filter((x) => x !== '').join(', ');
+  if (text.length <= EVENT_ROWS_CHARS) return text;
+  const cut = text.lastIndexOf(', ', EVENT_ROWS_CHARS);
+  return `${text.slice(0, cut > 0 ? cut : EVENT_ROWS_CHARS)}, …`;
+}
+
+/**
+ * The rows of a place, event by event ("+" joins the events of one place); undefined for a one-row place. Bounded: a fixed station with
+ * hundreds of events lists its first two and last two (the hop endpoints are among them) and counts the rest; every row stays in the
+ * finding's own line list.
+ */
 function placeRows(run: Run, bucket: string): string | undefined {
-  const rows = runRows(run);
-  if (rows.length < 2) return undefined;
-  return run.events
-    .map((e) => {
-      const here = e.rows.filter((r) => bucketOf(r) === bucket).map((r) => r.line);
-      const there = e.rows.filter((r) => bucketOf(r) !== bucket).map((r) => `${r.file}:${r.line}`);
-      return [formatLines(here), ...there.slice(0, 3), ...(there.length > 3 ? [`…+${there.length - 3}`] : [])].filter((x) => x !== '').join(', ');
-    })
-    .join(' + ');
+  if (runRows(run).length < 2) return undefined;
+  const ev = run.events;
+  const parts = ev.length <= MAX_PLACE_EVENTS ? ev.map((e) => eventRows(e, bucket)) : [...ev.slice(0, 2).map((e) => eventRows(e, bucket)), `…+${ev.length - 4}`, ...ev.slice(-2).map((e) => eventRows(e, bucket))];
+  return parts.join(' + ');
 }
 
 const num = (v: number): string => String(v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
@@ -260,7 +272,8 @@ function caseText(item: Item, bucket: string): { text: string; places: boolean; 
     return rows ? [`${labels[i]}: ${rows}`] : [];
   });
   const text = `${labels.join('→')}: ${item.hops.map(hopText).join('; ')}${legend.length > 0 ? ` [${legend.join('; ')}]` : ''}`;
-  return { text, places: legend.length > 0, split: labels.some((l) => l.includes('/')) };
+  // "a/b" is decided by the events, not by looking for "/" in the text (a file name inside a zip may hold one)
+  return { text, places: legend.length > 0, split: item.chain.some((r, i) => i < n - 1 && r.endEv !== r.last) };
 }
 
 function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {

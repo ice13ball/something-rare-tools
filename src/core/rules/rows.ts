@@ -45,10 +45,10 @@ const SHIP_IMPOSSIBLE_HOP = {
 const SHIP_PLACES = {
   param: 'places',
   plain: {
-    pl: `W nawiasie kwadratowym: wiersze każdego punktu trasy; „+” łączy zdarzenia odległe o mniej niż 10 km, liczone jako jeden punkt.`,
-    en: `In square brackets: the rows of each point of the track; "+" joins events less than 10 km apart, counted as one point.`,
-    de: `In eckigen Klammern: die Zeilen jedes Punkts der Fahrt; „+“ verbindet Ereignisse unter 10 km Abstand, als ein Punkt gezählt.`,
-    fr: `Entre crochets : les lignes de chaque point du trajet ; « + » relie des événements à moins de 10 km, comptés comme un seul point.`,
+    pl: `W nawiasie kwadratowym: wiersze każdego punktu trasy; „+” łączy zdarzenia w promieniu 10 km od pierwszego z nich, liczone jako jeden punkt.`,
+    en: `In square brackets: the rows of each point of the track; "+" joins events within 10 km of the first of them, counted as one point.`,
+    de: `In eckigen Klammern: die Zeilen jedes Punkts der Fahrt; „+“ verbindet Ereignisse im Umkreis von 10 km um das erste, als ein Punkt gezählt.`,
+    fr: `Entre crochets : les lignes de chaque point du trajet ; « + » relie des événements à moins de 10 km du premier, comptés comme un seul point.`,
   },
 } as const;
 
