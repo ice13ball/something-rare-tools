@@ -72,6 +72,10 @@ describe('ship speed: the six cases of the spec', () => {
     expect(findings.map((f) => f.ruleId)).toEqual(['ROW-SHIP-SPEED-UNUSUAL']);
     expect(findings[0].lines).toEqual([lineOf(8)]);
     expect(findings[0].severity).toBe('info');
+    // one side (52 kn) is above the extreme limit: the text says so, and does not advise ignoring the note
+    expect(findings[0].params.impossible).toBe('yes');
+    expect(renderPlain(findings[0], 'pl')).toContain('czego statek nie przepłynie');
+    expect(renderPlain(findings[0], 'pl')).not.toContain('pomiń tę uwagę');
   });
 
   it('4. two interleaved vessels without a declaration or a cruise column: the rule does not run, and the report says how to switch it on', () => {
@@ -272,6 +276,23 @@ describe('ship speed: how events, time and neighbours are treated', () => {
     rows[6] = { ...rows[6], lat: 15.5, lon: 15.5 };
     rows[9] = { ...rows[9], lat: 95 };
     expect(checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings).toEqual([]);
+  });
+
+  it('a date-only row among the timed rows of its day is not pinned to midnight (CTD with times + biology with dates, one cruise)', () => {
+    // CTD: 00:30 at 70 N, 12:30 at 72 N, then every 12 h two degrees further (10 kn). Biology: the same cruise, dated 2021-07-01 only, at 72 N.
+    // Sorted by earliest instant the biology row comes first; the gap to the 00:30 station must be the longer order (23.5 h), not 0.5 h.
+    const ctd = track(5, { stepHours: 12, offsetHours: 0.5 });
+    const bio: Spec[] = [{ lat: 72, lon: 15.5, latDecimals: 2, lonDecimals: 2, datetime: '2021-07-01' }];
+    expect(checkShipSpeed([makeDataset(ctd), makeDataset(bio, [], { file: 'bio.csv' })], { singleCruise: true }).findings).toEqual([]);
+  });
+
+  it('an unusual case whose hops are all below the extreme limit keeps "ignore if the ship did sail that fast"', () => {
+    const rows = track(12, { lat0: 20 });
+    rows[6] = { ...rows[6], lat: (rows[6].lat as number) + 2.75 }; // about 37 kn in and 17 kn out over 6 h: both above 15, below 40
+    const f = checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings;
+    expect(f.map((x) => x.ruleId)).toEqual(['ROW-SHIP-SPEED-UNUSUAL']);
+    expect(renderPlain(f[0], 'pl')).toContain('pomiń tę uwagę');
+    expect(f[0].params.impossible).toBeUndefined();
   });
 
   it('200 000 rows: sorted once, no quadratic step', () => {

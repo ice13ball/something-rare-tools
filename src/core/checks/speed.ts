@@ -116,7 +116,10 @@ interface Hop {
 }
 
 function hop(a: Run, b: Run): Hop | undefined {
-  const gap = b.first.start.hi - a.end.lo;
+  // The longest gap the written times allow. When the two windows overlap (a date-only row and a timed row of the same day), the order
+  // of the two events is unknown, so the larger of both orders counts: a date-only row is never pinned to midnight by the sort.
+  const forward = b.first.start.hi - a.end.lo;
+  const gap = a.end.hi > b.first.start.lo ? Math.max(forward, a.end.hi - b.first.start.lo) : forward;
   if (!(gap > 0)) return undefined;   // intervals that overlap in time: nothing can be said (a mooring spans other stations)
   const d = km(a.last.lat, a.last.lon, b.first.lat, b.first.lon);
   if (d < SHIP_SPEED_MIN_SEPARATION_KM) return undefined;
@@ -153,21 +156,22 @@ function runsOf(events: Ev[]): Run[] {
 }
 
 /**
- * A true error is rare. When this share of a group's places, and at least MIXED_MIN of them, are named in findings, the likely
+ * A true error is rare. When findings blame more than this share of a group's places, and at least MIXED_MIN of them, the likely
  * cause is not the data but the premise (several ships, boats or cruises in one group): the findings then say so. A stated choice
  * (see docs/research/qc-sources.md), not a published threshold; the CoastDOM compilation under a wrong tick names 3 in 4 places.
  */
-const MIXED_SHARE = 0.2;
-const MIXED_MIN = 5;
+const MIXED_SHARE = 1 / 3;
+const MIXED_MIN = 8;
 
 function testGroup(group: string, events: Ev[], out: Item[]): void {
   const first = out.length;
   const extreme = threshold('ROW-SHIP-SPEED', 'speed.extreme');
   const unusual = threshold('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual');
-  // Sorted once. Events that share a date (no time of day) keep their original row order across the files: files concatenated from one
-  // cruise are usually chronological, and nothing else orders them. The result does not hang on that choice: the longest possible gap
-  // inside one date is 24 h whichever event comes first, and a true track cannot cover more than 24 h x the vessel's speed within one date,
-  // so a wrong order inside a date cannot make a hop exceed a limit (docs/research/qc-sources.md, "Ship speed").
+  // Sorted once, by the earliest instant each written time allows. Events that share a date (no time of day) keep their original row order
+  // across the files: files concatenated from one cruise are usually chronological, and nothing else orders them. The result does not hang
+  // on that choice: hop() takes the longer of both orders whenever two time windows overlap (24 h for two rows of one date, up to 24 h for a
+  // date-only row against a timed row of that day), so a sort that puts a date-only row before the day's timed rows cannot shorten a gap
+  // (docs/research/qc-sources.md, "Ship speed").
   events.sort((a, b) => a.start.lo - b.start.lo || a.seq - b.seq);
   const runs = runsOf(events);
   const flagged = new Set<Run>();
@@ -180,6 +184,8 @@ function testGroup(group: string, events: Ev[], out: Item[]): void {
     // two-sided: both hops exceed the limit while the way from the previous to the next event does not (that one is then
     // explained by the middle event). A skipped across-hop (the vessel is back at one place) counts as "does not exceed".
     const bad = (limit: number): boolean => h1.kn > limit && h2.kn > limit && !(across && across.kn > limit);
+    // One side above the extreme limit and the other only unusual stays "unusual" (the spec's two-sided 15 kn case), but its text then says
+    // that one hop is impossible instead of "ignore this if the ship did sail that fast" (param impossible, set in findingsOf).
     const rule = bad(extreme) ? 'ROW-SHIP-SPEED' : bad(unusual) ? 'ROW-SHIP-SPEED-UNUSUAL' : undefined;
     if (!rule) continue;
     flagged.add(c);
@@ -193,9 +199,9 @@ function testGroup(group: string, events: Ev[], out: Item[]): void {
     const h = hop(runs[i], runs[i + 1]);
     if (h && h.kn > extreme) out.push({ rule: 'ROW-SHIP-SPEED-PAIR', group, runs: [runs[i], runs[i + 1]], chain: [runs[i], runs[i + 1]], hops: [h] });
   }
-  const named = new Set<Run>();
-  for (const item of out.slice(first)) for (const r of item.runs) named.add(r);
-  if (named.size >= MIXED_MIN && named.size > MIXED_SHARE * runs.length) for (const item of out.slice(first)) item.mixed = true;
+  // Each finding blames one place: a two-sided one its middle event, a pair one of its two events (not both).
+  const blamed = out.length - first;
+  if (blamed >= MIXED_MIN && blamed > MIXED_SHARE * runs.length) for (const item of out.slice(first)) item.mixed = true;
 }
 
 /* ---------- findings ---------- */
@@ -246,6 +252,11 @@ function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
       const params: Record<string, string | number> = { count: b.items.length, cases };
       if (declaredGroup && b.items.some((i) => i.group === DECLARED)) params.declared = 'yes';
       if (b.items.some((i) => i.mixed)) params.mixed = 'yes';
+      if (rule === 'ROW-SHIP-SPEED-UNUSUAL') {
+        const extreme = threshold('ROW-SHIP-SPEED', 'speed.extreme');
+        if (b.items.some((i) => i.hops.some((h) => h.kn > extreme))) params.impossible = 'yes';
+        else params.mayBeReal = 'yes';
+      }
       out.push(makeFinding(rule, { file: b.file, sheet: b.sheet, lines: b.lines, params }));
     }
   }
