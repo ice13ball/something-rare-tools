@@ -3,6 +3,7 @@
 import type { Finding, RuleDef } from '../types';
 import { CHEMISTRY_RULES } from './chemistry';
 import { CROSSFILE_RULES } from './crossfile';
+import { DWC_RULES } from './dwc';
 import { INPUT_RULES } from './input';
 import { LICENCE_RULES } from './licence';
 import { METADATA_RULES } from './metadata';
@@ -18,6 +19,7 @@ const SPECS: readonly RuleSpec[] = [
   ...LICENCE_RULES,
   ...METADATA_RULES,
   ...ROW_RULES,
+  ...DWC_RULES,
   ...CROSSFILE_RULES,
   ...CHEMISTRY_RULES,
 ];

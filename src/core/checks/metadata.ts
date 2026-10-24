@@ -68,7 +68,8 @@ function pointOutsideBbox(ds: Dataset): Finding[] {
     const lonOk = bbox.west <= bbox.east ? row.lon >= w && row.lon <= e : row.lon >= w || row.lon <= e;
     return latOk && lonOk;
   };
-  const bad = ds.rows.filter((r): r is DataRow & { lat: number; lon: number } => r.lat !== undefined && r.lon !== undefined && !inside(r as DataRow & { lat: number; lon: number }));
+  // (0, 0) is a defect of its own (ROW-ZERO-COORD) and is not reported a second time as a point outside the box
+  const bad = ds.rows.filter((r): r is DataRow & { lat: number; lon: number } => r.lat !== undefined && r.lon !== undefined && !(r.lat === 0 && r.lon === 0) && !inside(r as DataRow & { lat: number; lon: number }));
   if (bad.length === 0) return [];
   return [
     makeFinding('META-POINT-OUTSIDE-BBOX', {

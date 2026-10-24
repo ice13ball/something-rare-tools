@@ -92,8 +92,16 @@ describe('META-POINT-OUTSIDE-BBOX', () => {
 
   it('skips rows without a position and handles an antimeridian box', () => {
     const am = makeRecord('iso19139', { bbox: { west: 170, east: -170, south: -10, north: 10 } });
-    const d = makeDataset([{ lat: 0, lon: 175, latDecimals: 0, lonDecimals: 0 }, { lat: 0, lon: -175, latDecimals: 0, lonDecimals: 0 }, { lat: 0, lon: 0, latDecimals: 0, lonDecimals: 0 }, {}]);
+    const d = makeDataset([{ lat: 0, lon: 175, latDecimals: 0, lonDecimals: 0 }, { lat: 0, lon: -175, latDecimals: 0, lonDecimals: 0 }, { lat: 0, lon: 10, latDecimals: 0, lonDecimals: 0 }, {}]);
     const f = only(checkMetadataVsData(withMeta(d, am)), 'META-POINT-OUTSIDE-BBOX');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([4]);
+  });
+
+  it('does not report (0, 0) a second time: ROW-ZERO-COORD names it', () => {
+    const box = makeRecord('iso19139', { bbox: { west: 10, east: 20, south: 50, north: 60 } });
+    const d = makeDataset([{ lat: 55, lon: 15, latDecimals: 0, lonDecimals: 0 }, { lat: 0, lon: 0, latDecimals: 0, lonDecimals: 0 }, { lat: 1, lon: 0, latDecimals: 0, lonDecimals: 0 }]);
+    const f = only(checkMetadataVsData(withMeta(d, box)), 'META-POINT-OUTSIDE-BBOX');
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual([4]);
   });

@@ -86,7 +86,8 @@ const SHIP_DECLARED = {
  *   ROW-NA-VARIANT        (none)      field = column, value = example token (e.g. NANA), lines = rows
  *   ROW-STATION-MOVED     station, positions   positions = compact text such as "76.9N 15.5E (9 rows); 76.9N 16.5E (14 rows)"
  *                         signLon / signLat    'yes' when two positions differ (almost) only by the sign of that coordinate (optional)
- *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded); far = 'yes' above 1000 km (optional)
+ *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded), 10 to 1000 km (note)
+ *   ROW-STATION-SPREAD-FAR  the same, above 1000 km (warning)
  *   ROW-ON-LAND-NEAR      count, places   the same for positions 10-50 km inside (note, no hint)
  *   ROW-ON-LAND           count, places, flips   count = rows on land; places = up to 5 positions "lat, lon (rows; ≥N km)";
  *                         flips (optional) = "position → the same with a sign flipped or axes exchanged" where that lies at sea
@@ -103,6 +104,12 @@ const SHIP_DECLARED = {
  *   ROW-UNIT-MISSING      headers     column headers without a unit, comma-separated
  *   ROW-DEPTH-SIGN        header      the depth column header
  *   ROW-DM-COORDS         (none)      field = column, value = example text (once per column)
+ *   ROW-ZERO-COORD        (none)      lines = rows with latitude and longitude both 0
+ *   ROW-NO-COORD          count       lines = rows with a blank latitude or longitude cell, count = how many
+ *   ROW-DEPTH-MIN-MAX     (none)      value = "min > max" of the first row
+ *   ROW-DEPTH-RANGE       (none)      field = column, value = first value outside the range, lines = rows
+ *   ROW-DATE-FUTURE       (none)      field = column, value = first date as written, lines = rows
+ *   ROW-INVISIBLE-CHAR    chars       field = column, value = first value with the characters made visible, chars = "U+00A0 no-break space, ..."
  */
 export const ROW_RULES: readonly RuleSpec[] = [
   {
@@ -251,18 +258,20 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Station {station} hat Positionen, die bis zu {km} km auseinanderliegen ({positions}). Eine Station ist meist ein Ort, und 10 km sind weit mehr als der Positionsfehler eines Schiffs auf Station. Steht der Name für ein Gebiet, einen Transekt oder eine Fahrt, ignorieren Sie diesen Hinweis.`,
       fr: `La station {station} a des positions distantes de {km} km au plus ({positions}). Une station correspond d'habitude à un seul lieu, et 10 km dépassent de loin l'erreur de position d'un navire en station. Si ce nom désigne une zone, un transect ou une campagne, ignorez cette remarque.`,
     },
-    plainIf: [
-      {
-        param: 'far',
-        plain: {
-          pl: `Przy ponad 1000 km to niemal na pewno błąd jednej z pozycji, nie obszar.`,
-          en: `At more than 1000 km this is almost certainly a wrong position, not an area.`,
-          de: `Bei mehr als 1000 km ist das fast sicher eine falsche Position, kein Gebiet.`,
-          fr: `Au-delà de 1000 km, c'est presque certainement une position erronée, pas une zone.`,
-        },
-      },
-    ],
     technical: `{file} station {station}: positions up to {km} km apart (more than 10 km; great-circle distance) at {positions}.`,
+  },
+  {
+    id: 'ROW-STATION-SPREAD-FAR',
+    category: 'B',
+    severity: 'warning',
+    params: ['station', 'km', 'positions'],
+    plain: {
+      pl: `Stacja {station} ma pozycje odległe od siebie nawet o {km} km, czyli ponad 1000 km ({positions}). Jedna stacja to zwykle jedno miejsce, więc to niemal na pewno błąd jednej z pozycji (znak, cyfra, zamienione osie), a nie obszar. Sprawdź, która pozycja jest właściwa.`,
+      en: `Station {station} has positions up to {km} km apart, more than 1000 km ({positions}). A station is usually one place, so this is almost certainly a wrong position (a sign, a digit, swapped axes), not an area. Check which position is right.`,
+      de: `Die Station {station} hat Positionen, die bis zu {km} km auseinanderliegen, mehr als 1000 km ({positions}). Eine Station ist meist ein Ort, das ist also fast sicher eine falsche Position (Vorzeichen, Ziffer, vertauschte Achsen), kein Gebiet. Prüfen Sie, welche Position stimmt.`,
+      fr: `La station {station} a des positions distantes de {km} km au plus, soit plus de 1000 km ({positions}). Une station correspond d'habitude à un seul lieu : c'est presque certainement une position erronée (signe, chiffre, axes inversés), pas une zone. Vérifiez quelle position est la bonne.`,
+    },
+    technical: `{file} station {station}: positions up to {km} km apart (more than 1000 km; great-circle distance) at {positions}. The 10 to 1000 km case is the note ROW-STATION-SPREAD; 1000 km is a stated choice, not a published threshold.`,
   },
   {
     id: 'ROW-ON-LAND-NEAR',
@@ -455,5 +464,93 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Les coordonnées de la colonne « {field} » sont écrites en degrés et minutes (par ex. « {value} »). Elles ont été converties en degrés décimaux ; vérifiez-en quelques-unes.`,
     },
     technical: `{file} field {field} value '{value}': degree-minute(-second) text converted to decimal degrees.`,
+  },
+  {
+    id: 'ROW-ZERO-COORD',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    citations: [CITE.obisZeroCoord, CITE.biocheckZeroCoord],
+    plain: {
+      pl: `W wierszach {lines} szerokość i długość geograficzna wynoszą jednocześnie 0. To punkt w Zatoce Gwinejskiej, który zwykle oznacza brakujące współrzędne wpisane jako zero. Wpisz właściwą pozycję albo zostaw puste komórki.`,
+      en: `In lines {lines} latitude and longitude are both 0. That point lies in the Gulf of Guinea and usually stands for coordinates that are missing and were typed as zero. Enter the real position or leave the cells empty.`,
+      de: `In den Zeilen {lines} sind Breite und Länge beide 0. Dieser Punkt liegt im Golf von Guinea und steht meist für fehlende Koordinaten, die als Null eingetragen wurden. Tragen Sie die echte Position ein oder lassen Sie die Zellen leer.`,
+      fr: `Aux lignes {lines}, la latitude et la longitude valent toutes deux 0. Ce point se trouve dans le golfe de Guinée et signale d'habitude des coordonnées manquantes saisies comme zéro. Saisissez la vraie position ou laissez les cellules vides.`,
+    },
+    technical: `{file}:{lines} latitude and longitude are both 0 (obis-qc ZERO_COORD, which drops the record; Biocheck "0-0 coordinates"). Reported instead of ROW-LAT-EQ-LON, which it would also match.`,
+  },
+  {
+    id: 'ROW-NO-COORD',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    citations: [CITE.obisNoCoord],
+    plain: {
+      pl: `W wierszach {lines} (razem: {count}) brakuje szerokości lub długości geograficznej, choć pozostałe wiersze mają pozycję. Takiego rekordu nie da się nanieść na mapę. Uzupełnij współrzędne; jeśli to wiersz zbiorczy lub pomocniczy, pomiń tę uwagę.`,
+      en: `In lines {lines} ({count} in all) the latitude or the longitude is missing although the other rows have a position. Such a record cannot be placed on a map. Fill in the coordinates; if it is a summary or helper row, ignore this note.`,
+      de: `In den Zeilen {lines} (insgesamt {count}) fehlt die Breite oder die Länge, obwohl die übrigen Zeilen eine Position haben. Ein solcher Datensatz lässt sich nicht auf einer Karte einordnen. Ergänzen Sie die Koordinaten; bei einer Summen- oder Hilfszeile ignorieren Sie den Hinweis.`,
+      fr: `Aux lignes {lines} ({count} au total), la latitude ou la longitude manque alors que les autres lignes ont une position. Un tel enregistrement ne peut pas être placé sur une carte. Complétez les coordonnées ; pour une ligne de synthèse ou d'aide, ignorez cette remarque.`,
+    },
+    technical: `{file}:{lines} {count} row(s) with a blank latitude or longitude cell while other rows of the sheet have a position (obis-qc NO_COORD, which drops the record). Blank trailing rows, summary rows and rows that inherit a position from a parent event are not counted.`,
+  },
+  {
+    id: 'ROW-DEPTH-MIN-MAX',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    citations: [CITE.obisDepthMinMax, CITE.obistoolsDepthMinMax],
+    plain: {
+      pl: `W wierszach {lines} głębokość minimalna jest większa od maksymalnej (np. {value}). Obie kolumny mogły zostać zamienione albo wpisane błędnie; popraw wartości.`,
+      en: `In lines {lines} the minimum depth is greater than the maximum depth (e.g. {value}). The two columns may be swapped or mistyped; correct the values.`,
+      de: `In den Zeilen {lines} ist die minimale Tiefe größer als die maximale (z. B. {value}). Die beiden Spalten sind vielleicht vertauscht oder falsch eingegeben; korrigieren Sie die Werte.`,
+      fr: `Aux lignes {lines}, la profondeur minimale dépasse la profondeur maximale (par ex. {value}). Les deux colonnes sont peut-être inversées ou mal saisies ; corrigez les valeurs.`,
+    },
+    technical: `{file}:{lines} minimumDepthInMeters greater than maximumDepthInMeters (first: {value}); obis-qc MIN_DEPTH_EXCEEDS_MAX, obistools check_depth.`,
+  },
+  {
+    id: 'ROW-DEPTH-RANGE',
+    category: 'B',
+    severity: 'warning',
+    params: [],
+    thresholds: [
+      th('depth.min', -100000, 'm', CITE.obisDepthRange),
+      th('depth.max', 11000, 'm', CITE.obisDepthRange),
+    ],
+    citations: [CITE.noaaDeepest],
+    plain: {
+      pl: `Głębokość w kolumnie „{field}” (wiersze {lines}, np. {value} m) jest poza zakresem od {threshold.depth.min} do {threshold.depth.max} m, który OBIS uznaje za możliwy. Najgłębszy punkt oceanu ma ok. 10 935 m. Sprawdź jednostkę (metry) i znak.`,
+      en: `Depth in column "{field}" (lines {lines}, e.g. {value} m) is outside the range {threshold.depth.min} to {threshold.depth.max} m that OBIS accepts. The deepest point of the ocean is about 10,935 m. Check the unit (metres) and the sign.`,
+      de: `Die Tiefe in der Spalte „{field}“ (Zeilen {lines}, z. B. {value} m) liegt außerhalb des Bereichs {threshold.depth.min} bis {threshold.depth.max} m, den OBIS zulässt. Der tiefste Punkt des Ozeans liegt bei etwa 10 935 m. Prüfen Sie Einheit (Meter) und Vorzeichen.`,
+      fr: `La profondeur de la colonne « {field} » (lignes {lines}, par ex. {value} m) sort de l'intervalle {threshold.depth.min} à {threshold.depth.max} m accepté par OBIS. Le point le plus profond de l'océan est à environ 10 935 m. Vérifiez l'unité (mètres) et le signe.`,
+    },
+    technical: `{file}:{lines} field {field} value '{value}': depth outside {threshold.depth.min}..{threshold.depth.max} m (obis-qc DEPTH_OUT_OF_RANGE bounds, inclusive; positive down; a column with an upward convention is judged after the sign is turned). The deepest point of the ocean, Challenger Deep, is about 10,935 m (NOAA).`,
+  },
+  {
+    id: 'ROW-DATE-FUTURE',
+    category: 'B',
+    severity: 'warning',
+    params: [],
+    citations: [CITE.obisDateFuture],
+    plain: {
+      pl: `Data w kolumnie „{field}” (wiersze {lines}, np. {value}) jest późniejsza niż dzisiaj; dla przedziału liczy się jego koniec. Zdarzenie z przyszłości nie mogło się jeszcze odbyć: sprawdź rok, miesiąc i dzień.`,
+      en: `The date in column "{field}" (lines {lines}, e.g. {value}) is later than today; for an interval its end counts. An event in the future cannot have happened yet: check the year, month and day.`,
+      de: `Das Datum in der Spalte „{field}“ (Zeilen {lines}, z. B. {value}) liegt nach dem heutigen Tag; bei einem Zeitraum zählt sein Ende. Ein Ereignis in der Zukunft kann noch nicht stattgefunden haben: Prüfen Sie Jahr, Monat und Tag.`,
+      fr: `La date de la colonne « {field} » (lignes {lines}, par ex. {value}) est postérieure à aujourd'hui ; pour un intervalle, sa fin compte. Un événement futur n'a pas pu avoir lieu : vérifiez l'année, le mois et le jour.`,
+    },
+    technical: `{file}:{lines} field {field} value '{value}': the date, or the end of the interval, is later than today (UTC calendar day; a date equal to today is not in the future; a year or month counts by its first day; a time without a zone is read as UTC). obis-qc DATE_IN_FUTURE.`,
+  },
+  {
+    id: 'ROW-INVISIBLE-CHAR',
+    category: 'B',
+    severity: 'warning',
+    params: ['chars'],
+    citations: [CITE.obisHiddenChars],
+    plain: {
+      pl: `W kolumnie „{field}” wartości w wierszach {lines} zawierają niewidoczne znaki ({chars}), np. „{value}”. Wyglądają jak zwykła spacja, ale nazwa lub identyfikator z takim znakiem nie zgodzi się z tą samą nazwą wpisaną normalnie. Zastąp je zwykłą spacją albo usuń.`,
+      en: `In column "{field}" the values in lines {lines} contain invisible characters ({chars}), e.g. "{value}". They look like an ordinary space, but a name or an identifier with such a character will not match the same name typed normally. Replace them with a plain space or remove them.`,
+      de: `In der Spalte „{field}“ enthalten die Werte in den Zeilen {lines} unsichtbare Zeichen ({chars}), z. B. „{value}“. Sie sehen wie ein normales Leerzeichen aus, aber ein Name oder eine ID mit so einem Zeichen stimmt nicht mit dem normal getippten überein. Ersetzen Sie sie durch ein normales Leerzeichen oder löschen Sie sie.`,
+      fr: `Dans la colonne « {field} », les valeurs des lignes {lines} contiennent des caractères invisibles ({chars}), par ex. « {value} ». Ils ressemblent à une espace ordinaire, mais un nom ou un identifiant avec un tel caractère ne correspond pas au même nom saisi normalement. Remplacez-les par une espace ordinaire ou supprimez-les.`,
+    },
+    technical: `{file}:{lines} field {field} value '{value}': invisible characters inside the value ({chars}). OBIS trims only the ends of a value, so inside they break name matching, vocabulary matching and duplicate checks (OBIS Manual, "Hidden characters and non-breaking spaces"). Checked columns: station, cruise and sample identifiers, and the name, identifier and vocabulary columns of Darwin Core input.`,
   },
 ];

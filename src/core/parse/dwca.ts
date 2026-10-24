@@ -345,5 +345,5 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
   const sheet = { name: core.location, header, headerLine: core.ignoreHeaderLines, rows };
   const rag = raggedFinding(fileName, sheet.name, indexed.length, rows);
   if (rag) findings.push(rag);
-  return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings };
+  return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings, dwca: { core: core.type, partial: total > rows.length } };
 }

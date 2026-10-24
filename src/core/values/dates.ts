@@ -284,3 +284,17 @@ export function combineDateTime(d: ParsedDate, time: RawCell): ParsedDate {
   if ('error' in t) return d;
   return { ...d, iso: `${d.iso}T${t.text}`, precision: t.ss === undefined ? 'minute' : 'second', tz: t.tz };
 }
+
+/**
+ * The UTC calendar day ('YYYY-MM-DD') a parsed date falls on, for comparing days. A value with a zone is moved to UTC; a time without a
+ * zone is read as UTC (as everywhere else a file's times are compared); a year or a month stands for its FIRST day, so '2026' is 2026-01-01.
+ */
+export function utcDayOf(d: ParsedDate): string {
+  if (d.precision === 'year') return `${d.iso.slice(0, 4)}-01-01`;
+  if (d.precision === 'month') return `${d.iso.slice(0, 7)}-01`;
+  if (d.tz === 'offset') {
+    const t = Date.parse(d.iso);
+    if (Number.isFinite(t)) return new Date(t).toISOString().slice(0, 10);
+  }
+  return d.iso.slice(0, 10);
+}
