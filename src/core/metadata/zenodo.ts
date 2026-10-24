@@ -2,8 +2,9 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Zenodo record parser: legacy (files[] with key/links.self) and InvenioRDM (files.entries keyed by filename).
 import type { LicenceStatement, MetadataRecord } from '../types';
+import { boxOfPoints, COVERAGE_DATE_TYPES, extentOfDate, unionBoxes, unionExtents, type Bbox } from './extent';
 import { buildStatement } from './licence';
-import { stripTags } from './xml';
+import { num, stripTags } from './xml';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -26,6 +27,48 @@ function licence(field: string, id: string | undefined, uri?: string, title?: st
 function localised(v: unknown): string | undefined {
   if (isObj(v)) return str(v.en) ?? str(Object.values(v)[0]);
   return str(v);
+}
+
+type Pos = { lon?: number; lat?: number };
+
+/** Every [lon, lat(, alt)] position of a GeoJSON coordinates value, whatever the nesting (Point, LineString, Polygon, Multi*). */
+function positions(c: unknown): Pos[] {
+  if (!Array.isArray(c)) return [];
+  if (c.length >= 2 && c.every((x) => typeof x === 'number' || typeof x === 'string')) return [{ lon: num(c[0]), lat: num(c[1]) }];
+  return c.flatMap(positions);
+}
+
+function geometryPositions(g: unknown): Pos[] {
+  if (!isObj(g)) return [];
+  if (Array.isArray(g.geometries)) return g.geometries.flatMap(geometryPositions);
+  return positions(g.coordinates);
+}
+
+/**
+ * Where the DATA are, from `metadata.locations` only: legacy list [{ lat, lon, place }] or InvenioRDM
+ * { features: [{ geometry, place }] }. A place name alone, or the repository's address, is not a location.
+ * Each feature is one shape; shapes are merged by unionBoxes. Off-the-globe shapes are ignored.
+ */
+function bboxOfLocations(locations: unknown): Bbox | undefined {
+  const items: unknown[] = Array.isArray(locations) ? locations : isObj(locations) && Array.isArray(locations.features) ? locations.features : [];
+  const boxes: Bbox[] = [];
+  for (const it of items) {
+    if (!isObj(it)) continue;
+    const pts = isObj(it.geometry) ? geometryPositions(it.geometry) : [{ lon: num(it.lon), lat: num(it.lat) }];
+    const b = boxOfPoints(pts);
+    if (b) boxes.push(b);
+  }
+  return unionBoxes(boxes);
+}
+
+/** Only "collected" dates: legacy { start, end, type: "collected" } and RDM { date: "a/b", type: { id: "collected" } }. Publication, creation, issued, valid ... never. */
+function extentOfDates(dates: unknown): MetadataRecord['temporalExtent'] {
+  if (!Array.isArray(dates)) return undefined;
+  const found = dates.filter(isObj).filter((d) => {
+    const t = isObj(d.type) ? str(d.type.id) ?? localised(d.type.title) : str(d.type);
+    return COVERAGE_DATE_TYPES.test(t ?? '');
+  });
+  return unionExtents(found.map((d) => extentOfDate({ date: str(d.date), start: str(d.start), end: str(d.end) })));
 }
 
 export function parseZenodoRecord(json: unknown, label: string): MetadataRecord {
@@ -76,6 +119,11 @@ export function parseZenodoRecord(json: unknown, label: string): MetadataRecord 
     const l = licence(`rights[${i}]`, str(r.id), str(r.link), localised(r.title));
     if (l) rec.licences.push(l);
   });
+
+  const bbox = bboxOfLocations(md.locations);
+  if (bbox) rec.bbox = bbox;
+  const temporal = extentOfDates(md.dates);
+  if (temporal) rec.temporalExtent = temporal;
 
   const raw = json.files;
   const entries: Obj[] = Array.isArray(raw)
