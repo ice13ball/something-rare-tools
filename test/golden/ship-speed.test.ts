@@ -58,8 +58,12 @@ describe.skipIf(!haveShip)('ship speed: public OBIS cruises (AMT12, AMT13, JERIC
     expect(summary(report.findings)).toEqual(expected.obis['jerico.csv']);
     const pair = found.find((f) => f.ruleId === 'ROW-SHIP-SPEED-PAIR');
     expect(pair?.params.cases).toMatch(/117 km, 0\.5 h, ≥126 kn/);
-    expect(renderPlain(pair as Finding, 'en')).toContain('The position or the time of one of these two events is wrong');
-    expect(renderPlain(pair as Finding, 'pl')).toContain('Pozycja albo data lub godzina jednego z nich jest błędna');
+    // the label names the events the numbers come from (line 85 at 01:31, line 100 at 02:01), not the lowest line of the place
+    expect(pair?.params.cases).toBe('85→100: 117 km, 0.5 h, ≥126 kn [85: 85, 164, 332, 347, 426; 100: 100, 156, 309, 431, 446 + 20, 130, 159, 228, 243]');
+    expect(pair?.params.places).toBe('yes');
+    expect(renderPlain(pair as Finding, 'pl')).not.toContain('dwoma zdarzeniami');
+    expect(renderPlain(pair as Finding, 'en')).toContain('The position or the time at one of them is wrong');
+    expect(renderPlain(pair as Finding, 'pl')).toContain('Pozycja albo data lub godzina w jednym z nich jest błędna');
   }, 120_000);
 });
 

@@ -160,7 +160,7 @@ describe('ship speed: how events, time and neighbours are treated', () => {
     expect(findings[0].lines).toEqual([lineOf(8), lineOf(9)]);
     expect(findings[0].severity).toBe('info');
     const plain = renderPlain(findings[0], 'en');
-    expect(plain).toContain('The position or the time of one of these two events is wrong');
+    expect(plain).toContain('The position or the time at one of them is wrong');
     expect(plain).toContain('day and month swapped');
   });
 
@@ -293,6 +293,41 @@ describe('ship speed: how events, time and neighbours are treated', () => {
     expect(f.map((x) => x.ruleId)).toEqual(['ROW-SHIP-SPEED-UNUSUAL']);
     expect(renderPlain(f[0], 'pl')).toContain('pomiń tę uwagę');
     expect(f[0].params.impossible).toBeUndefined();
+  });
+
+  it('labels name the events each hop is computed from: the place it leaves by its last event, the place it reaches by its first', () => {
+    // a place of two events 3 km apart (06:00 and 06:30) between two good stations, then a far outlier right after it
+    const rows = track(6);
+    rows.splice(2, 0, { ...rows[1], lat: (rows[1].lat as number) + 0.027, datetime: iso(T0 + 6.5 * 3_600_000) }); // index 2: 3 km on, 30 min later
+    rows[3] = { ...rows[3], lat: 40 }; // index 3: the outlier
+    const f = checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings;
+    // the hop into the outlier leaves from the later event of the two-event place (line 4, 06:30: 5.5 h to 12:00), never from its lowest
+    // line (line 3, 06:00); the place's rows are listed event by event
+    expect(f.map((x) => x.ruleId)).toEqual(['ROW-SHIP-SPEED']);
+    expect(String(f[0].params.cases)).toMatch(/^4→5→6: \d+ km, 5\.5 h, /);
+    expect(String(f[0].params.cases)).toContain('[4: 3 + 4]');
+    expect(f[0].params.places).toBe('yes');
+    expect(renderPlain(f[0], 'pl')).toContain('„+” łączy zdarzenia');
+  });
+
+  it('a place whose earlier interval ends after its later event: the label names both (position from one, time from the other)', () => {
+    const interval = (a: string, b: string): ParsedDate => ({ ...makeDate(a), end: makeDate(b) });
+    const rows = track(6);
+    // index 1: an interval 06:00-09:00; index 2: a point at 07:00, 3 km away (same place); the hop out leaves at 09:00 from line 3's position
+    rows[1] = { ...rows[1], datetime: interval('2021-07-01T06:00', '2021-07-01T09:00') };
+    rows.splice(2, 0, { ...rows[1], lat: (rows[1].lat as number) + 0.027, datetime: '2021-07-01T07:00' });
+    rows[3] = { ...rows[3], lat: 40 };
+    const f = checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings;
+    expect(String(f[0].params.cases)).toMatch(/^4\/3→5→6: \d+ km, 3 h, /);
+    expect(renderPlain(f[0], 'pl')).toContain('Zapis „a/b”');
+  });
+
+  it('a one-row-per-event track has no square-bracket listing (58/78 case unchanged)', () => {
+    const rows = track(12);
+    rows[8] = { ...rows[8], lat: 58 };
+    const [w] = checkShipSpeed([makeDataset(rows)], { singleCruise: true }).findings;
+    expect(w.params.cases).toBe('9→10→11: 2113 km, 6 h, ≥189 kn; 2335 km, 6 h, ≥209 kn');
+    expect(w.params.places).toBeUndefined();
   });
 
   it('200 000 rows: sorted once, no quadratic step', () => {
