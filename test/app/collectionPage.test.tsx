@@ -183,7 +183,7 @@ describe('CollectionPage: inputs and estimate', () => {
     const big = estimate({ records: 2_090_000, requests: 84_675, seconds: 84_675 * 2.6, strategy: 'date-split', slices: 209, approximate: true, sampleFirst: true });
     const expected: Record<string, { time: RegExp; advice: RegExp }> = {
       en: { time: /about 3 days\./, advice: /Start with the quick sample/ },
-      pl: { time: /około 3 dni\./, advice: /Zacznij od szybkiej próbki/ },
+      pl: { time: /około 3 dni\./, advice: /Zacznij od szybkiej próby/ },
       de: { time: /etwa 3 Tage\./, advice: /Beginnen Sie mit der schnellen Stichprobe/ },
       fr: { time: /environ 3 jours\./, advice: /Commencez par l’échantillon rapide/ },
     };

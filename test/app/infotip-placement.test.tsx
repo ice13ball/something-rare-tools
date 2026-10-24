@@ -10,6 +10,7 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MapLib } from '../../src/app/components/MapPreview';
 import { initLang, setLang } from '../../src/app/i18n';
+import { InputPanel } from '../../src/app/components/InputPanel';
 import { CheckPage } from '../../src/app/pages/CheckPage';
 import { CollectionPage } from '../../src/app/pages/CollectionPage';
 import { IndexPage } from '../../src/app/pages/IndexPage';
@@ -85,6 +86,13 @@ describe('/check', () => {
     await screen.findByRole('heading', { name: 'Confirm how your files are read' });
     // confirm step: the layout question, the column meanings, the encoding line, the one-cruise checkbox
     expectTips(['layout', 'roles', 'encoding', 'singleCruise']);
+    // the column-meaning tip sits in a scrolling table, yet its bubble is outside every scroll container
+    fireEvent.click(document.querySelector('[data-tip="roles"] button') as HTMLElement);
+    const rolesBubble = document.querySelector('[data-tip-bubble="roles"]') as HTMLElement;
+    expect(rolesBubble.closest('.table-scroll')).toBeNull();
+    expect(rolesBubble.parentElement).toBe(document.body);
+    expect(rolesBubble.textContent).toContain('ROW-LAT-RANGE');
+    fireEvent.click(document.querySelector('[data-tip="roles"] button') as HTMLElement);
     // the visible help stays
     expect(screen.getByText(UI.en['confirm.singleCruise.help'])).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Table layout' })).toBeTruthy();
@@ -103,6 +111,19 @@ describe('/check', () => {
     for (const k of ['downloads.cleanCsv', 'downloads.sidecar', 'downloads.iso', 'downloads.datacite', 'downloads.geojson'] as const) {
       expect(screen.getByRole('button', { name: UI.en[k] })).toBeTruthy();
     }
+  });
+});
+
+describe('the drop zone', () => {
+  it('a file dropped on the ⓘ beside the zone is taken, and the browser is not allowed to open it', () => {
+    render(<InputPanel mode="browser" onSubmit={() => {}} />);
+    const icon = document.querySelector('[data-tip="dropZone"] button') as HTMLElement;
+    const over = new Event('dragover', { bubbles: true, cancelable: true });
+    icon.dispatchEvent(over);
+    expect(over.defaultPrevented).toBe(true);
+    const drop = fireEvent.drop(icon, { dataTransfer: { files: [new File(['a,b\n1,2\n'], 'dropped-on-icon.csv', { type: 'text/csv' })] } });
+    expect(drop).toBe(false); // default prevented
+    expect(screen.getByText('dropped-on-icon.csv')).toBeTruthy();
   });
 });
 

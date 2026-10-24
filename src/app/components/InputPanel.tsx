@@ -56,9 +56,9 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
   return (
     <form className="input-panel" onSubmit={submit} noValidate>
       <h2>{t('input.heading')}</h2>
-      <div className="dropzone-wrap">
-      <label
-        className={dragging ? 'dropzone dragging' : 'dropzone'}
+      {/* the drag handlers stand on the wrapper, so a file dropped on the ⓘ beside the zone is taken too and the browser never opens it */}
+      <div
+        className="dropzone-wrap"
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -70,6 +70,7 @@ export function InputPanel({ mode, onSubmit, disabled, modeSwitch }: InputPanelP
           add(e.dataTransfer?.files);
         }}
       >
+      <label className={dragging ? 'dropzone dragging' : 'dropzone'}>
         <strong>{t('input.drop')}</strong>
         <span className="muted">{t('input.dropHint')}</span>
         <input

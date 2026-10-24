@@ -16,20 +16,20 @@ const en = {
   'tip.does': `What it does`,
   'tip.logic': `The logic`,
   'tip.ruleLink': `Rule details →`,
-  'tip.roles.feeds': `feeds rules`,
+  'tip.roles.feeds': `used by rules`,
   'tip.encoding.label': `Text encoding`,
 
-  'tip.role.ignore': `the column is not interpreted and is not part of any check.`,
+  'tip.role.ignore': `the column is not part of any check, nor of the clean CSV.`,
   'tip.role.latitude': `the north–south position of the point.`,
   'tip.role.longitude': `the east–west position of the point.`,
   'tip.role.datetime': `date and time in one column.`,
   'tip.role.date': `the date alone, without a time of day.`,
-  'tip.role.time': `the time of day alone, combined with the date column.`,
+  'tip.role.time': `the time of day, combined with the date of the date column; without a date column it is not used.`,
   'tip.role.depth': `distance below the surface; you give the positive direction and the unit beside it.`,
-  'tip.role.pressure': `water pressure; kept with its unit in the sidecar file.`,
+  'tip.role.pressure': `the column is recognised, but no check or output file uses it.`,
   'tip.role.station': `the name or number of a station; groups the rows taken at one place.`,
-  'tip.role.cruise': `the name of a cruise; separates cruises in the ship-speed test, instead of the one-cruise tick.`,
-  'tip.role.sampleId': `the id of a sample or core; used to find the same sample in two files.`,
+  'tip.role.cruise': `in the ship-speed test, separates cruises and replaces the one-cruise tick.`,
+  'tip.role.sampleId': `the id of a sample or core; when the file has no station column, it stands in for the station.`,
   'tip.role.variable': `a measured quantity; needs a name and a unit, and the tool never guesses the unit.`,
 
   'tip.dropZone.does': `Reads files from your computer so that they can be checked.`,
@@ -40,10 +40,10 @@ const en = {
   'tip.linkField.does': `Fetches a record from a repository by its link or DOI and checks its metadata and data files.`,
   'tip.linkField.logic': `• Recognised: Zenodo, PANGAEA, GBIF, OBIS, any DOI (through DataCite), Dataverse ({dataverse}) and GeoNetwork ({geonetwork}).
 • Files are downloaded only from servers on the allowed list (see the Privacy page); for any other server, download the file yourself and drop it above.
-• A file from a link may be at most {maxFile}; an archive from an IPT server, at most {maxArchive}.`,
+• Size limits: through the server, a file from a link may be at most {maxFile} and an archive from an IPT server at most {maxArchive}; a file of a Dataverse dataset larger than {maxFile} is skipped.`,
   'tip.downloadMode.does': `Chooses who downloads the files behind a link: your browser or our server.`,
   'tip.downloadMode.logic': `• Browser: files go straight from the data server to you; some servers do not allow this.
-• Abyssal Claims server: downloads the file for you from servers on the allowed list, at most {maxFile}, and stores nothing.
+• Abyssal Claims server: downloads the file for you from servers on the allowed list (at most {maxFile}, IPT archives at most {maxArchive}) and stores nothing.
 • Files you drop here never leave your computer, in either mode.`,
 
   'tip.layout.does': `Shows how the tool understood the structure of the file, and lets you correct it.`,
@@ -79,22 +79,21 @@ No findings only means that no problems were found in the checked categories.`,
 • Findings about the whole dataset rather than a row do not change the colours.
 • Rows without a position are not on the map.`,
 
-  'tip.cleanCsv.does': `Saves the table from your data in one uniform CSV layout.`,
-  'tip.cleanCsv.logic': `• Values are copied exactly as written in the file: nothing is converted or corrected.
-• Long-format tables and joined sheets are flattened to one row per sample.
-• Text starting with =, +, - or @ gets a leading apostrophe, so that a spreadsheet does not run it as a formula.
-• The description of the columns is in the separate sidecar file.`,
+  'tip.cleanCsv.does': `Saves your data in one CSV layout: fixed columns first, then the variables.`,
+  'tip.cleanCsv.logic': `• Fixed columns: station, cruise, sample id, date, latitude and longitude, depth; then each measured variable as “name [unit]”. Ignored columns, the time column (merged into the date) and the pressure column are not written.
+• The date is written in ISO 8601, coordinates in decimal degrees (also when the file had degrees and minutes), and a decimal comma becomes a dot; other values are copied as written in the file, without conversion.
+• Text starting with =, +, - or @ gets a leading apostrophe, so that a spreadsheet does not treat it as a formula.`,
   'tip.sidecar.does': `Records what the tool found out about the columns: their meaning, unit and where the unit came from.`,
   'tip.sidecar.logic': `• One row per column: the name in the file, the name in the clean CSV, the unit, the source of the unit, and the P01 code when known.
 • It also keeps your declaration of one cruise.
 • Drop it with the files at the next check and that declaration is restored.`,
   'tip.iso19139.does': `Writes a draft ISO 19139 metadata record to load into GeoNetwork.`,
   'tip.iso19139.logic': `• It fills in only what follows from the data: geographic and time extent, variables, the licence the metadata already state, and the title.
-• Fields the data cannot supply (contact, citation date, language, topic category) are not invented: they are marked as missing.
+• Fields the data cannot supply are not invented: contact and citation date are marked as missing, language and topic category are left out.
 • It is a draft to complete in the editor, not a finished record.`,
   'tip.datacite.does': `Writes a draft DataCite record (XML) for the registration of a DOI.`,
   'tip.datacite.logic': `• It fills in only what follows from the data and the metadata: title, extent, variables, licence.
-• Creators, publisher and the DOI are not guessed; they stay as XML comments.
+• The publication year is set to the current year (change it if needed); creators, publisher and the DOI are not guessed and stay as XML comments.
 • It is a draft to complete, not a finished record.`,
   'tip.draft.does': `Gives values computed from the data that you can copy into metadata fields.`,
   'tip.draft.logic': `• The time extent and the four geographic bounds are computed from your data.
@@ -102,7 +101,7 @@ No findings only means that no problems were found in the checked categories.`,
 • The licence and the title come from the metadata, not from the data.
 • The field names match the sections of the GeoNetwork editor.`,
   'tip.geojson.does': `Saves the positions of the rows as GeoJSON points, to open in QGIS or another GIS program.`,
-  'tip.geojson.logic': `• One point per row that has a position; coordinates unchanged, as [longitude, latitude].
+  'tip.geojson.logic': `• One point per row that has a position; coordinates unchanged, as [longitude, latitude]. Rows with an impossible latitude, which the map hides, are in the file.
 • Each point carries its file, line, station, date and the most serious finding on its row.
 • One file for all datasets.`,
 
@@ -123,7 +122,7 @@ No findings only means that no problems were found in the checked categories.`,
 • The OpenAIRE guidelines for data archives ask for the licence when it applies.
 • This alone is not a contradiction: it has a line of its own, asking you to add the licence to the DOI record.`,
   'tip.licenceAttribution.does': `Puts together an attribution text with the licence that you can paste.`,
-  'tip.licenceAttribution.logic': `• It is built only from what the sources state: title, authors, licence, identifier.
+  'tip.licenceAttribution.logic': `• It is built only from what the sources state: title, authors, publisher, year, licence, identifier.
 • When the sources contradict each other or the licence is not recognised, the licence is left out and the page says why.
 • The text is always in English, so that you can paste it as it is; check it against the record first.`,
 
@@ -158,7 +157,7 @@ No findings only means that no problems were found in the checked categories.`,
 • It checks coordinates, dates, units, value ranges and the licence, and states each finding in a plain sentence with the technical detail beside it.
 • It changes nothing in your data: it shows what it found and lists what it does not check.`,
   'tip.indexLicence.does': `Compares what different metadata sources state about the licence of one dataset.`,
-  'tip.indexLicence.logic': `• It reads the metadata of Zenodo, PANGAEA, Dataverse, GeoNetwork and DataCite, not data files.
+  'tip.indexLicence.logic': `• It reads the metadata of Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS and DataCite, not data files.
 • It classifies each statement against the SPDX licence list and looks for contradictions.
 • It builds an attribution text with the licence for you to paste.`,
   'tip.indexCollection.does': `Goes through the metadata of a whole collection and gathers licence problems and empty fields.`,
@@ -174,20 +173,20 @@ const pl: Record<TipKey, string> = {
   'tip.does': `Co robi`,
   'tip.logic': `Logika`,
   'tip.ruleLink': `Szczegóły reguły →`,
-  'tip.roles.feeds': `zasila reguły`,
+  'tip.roles.feeds': `używana w regułach`,
   'tip.encoding.label': `Kodowanie tekstu`,
 
-  'tip.role.ignore': `kolumna nie jest interpretowana i nie wchodzi do żadnego sprawdzenia.`,
+  'tip.role.ignore': `nie jest uwzględniana w żadnym sprawdzeniu ani w czystym CSV.`,
   'tip.role.latitude': `położenie punktu na osi północ–południe.`,
   'tip.role.longitude': `położenie punktu na osi wschód–zachód.`,
   'tip.role.datetime': `data i godzina w jednej kolumnie.`,
   'tip.role.date': `sama data, bez godziny.`,
-  'tip.role.time': `sama godzina, łączona z kolumną daty.`,
+  'tip.role.time': `godzina łączona z datą z kolumny daty; bez kolumny z datą nie jest używana.`,
   'tip.role.depth': `odległość od powierzchni; kierunek dodatni i jednostkę podajesz obok.`,
-  'tip.role.pressure': `ciśnienie wody; trafia do pliku towarzyszącego razem z jednostką.`,
+  'tip.role.pressure': `kolumna jest rozpoznawana, ale żadne sprawdzenie ani plik wyjściowy jej nie używa.`,
   'tip.role.station': `nazwa lub numer stacji; grupuje wiersze z jednego miejsca.`,
-  'tip.role.cruise': `nazwa rejsu; rozdziela rejsy w teście prędkości statku, zamiast zaznaczenia jednego rejsu.`,
-  'tip.role.sampleId': `identyfikator próbki lub rdzenia; pozwala znaleźć tę samą próbkę w dwóch plikach.`,
+  'tip.role.cruise': `w teście prędkości statku rozdziela rejsy i zastępuje zaznaczenie pola o jednym rejsie.`,
+  'tip.role.sampleId': `identyfikator próbki lub rdzenia; gdy w pliku nie ma kolumny ze stacją, pełni jej rolę.`,
   'tip.role.variable': `mierzona wielkość; wymaga nazwy i jednostki, a jednostki narzędzie nigdy nie zgaduje.`,
 
   'tip.dropZone.does': `Wczytuje pliki z Twojego komputera, żeby je sprawdzić.`,
@@ -197,132 +196,131 @@ const pl: Record<TipKey, string> = {
 • Pliki zostają w Twojej przeglądarce, nic nie jest wysyłane.`,
   'tip.linkField.does': `Pobiera rekord z repozytorium po linku lub numerze DOI i sprawdza jego metadane oraz pliki z danymi.`,
   'tip.linkField.logic': `• Rozpoznawane są Zenodo, PANGAEA, GBIF, OBIS, każdy numer DOI (przez DataCite), Dataverse ({dataverse}) i GeoNetwork ({geonetwork}).
-• Pliki są pobierane tylko z serwerów z listy dozwolonych (strona Prywatność); z pozostałych pobierz plik sam i upuść go powyżej.
-• Plik z linku może mieć najwyżej {maxFile}, archiwum z serwera IPT – {maxArchive}.`,
-  'tip.downloadMode.does': `Wybierasz, kto pobiera pliki spod linku: Twoja przeglądarka czy nasz serwer.`,
-  'tip.downloadMode.logic': `• Przeglądarka: pliki idą prosto z serwera danych do Ciebie; część serwerów na to nie pozwala.
-• Serwer Abyssal Claims: pobiera plik za Ciebie z serwerów z listy dozwolonych, najwyżej {maxFile}, i niczego nie zapisuje.
+• Pliki są pobierane tylko z serwerów z listy dozwolonych (strona Prywatność); z pozostałych pobierz plik samodzielnie i upuść go powyżej.
+• Limity rozmiaru: przez serwer plik z linku może mieć najwyżej {maxFile}, archiwum z serwera IPT – {maxArchive}; plik zbioru Dataverse większy niż {maxFile} jest pomijany.`,
+  'tip.downloadMode.does': `Pozwala wybrać, kto pobiera pliki spod linku: Twoja przeglądarka czy nasz serwer.`,
+  'tip.downloadMode.logic': `• Przeglądarka: pliki trafiają prosto z serwera danych do Ciebie; część serwerów na to nie pozwala.
+• Serwer Abyssal Claims: pobiera plik za Ciebie z serwerów z listy dozwolonych (najwyżej {maxFile}, archiwa z serwera IPT – {maxArchive}) i niczego nie zapisuje.
 • Pliki, które tu upuścisz, nie opuszczają Twojego komputera w żadnym z trybów.`,
 
   'tip.layout.does': `Pokazuje, jak narzędzie zrozumiało budowę pliku, i pozwala ją poprawić.`,
   'tip.layout.logic': `• Jedna tabela: jeden wiersz to jedna próbka.
-• Format długi: jeden wiersz to jeden pomiar; narzędzie zamienia go na jeden wiersz na próbkę.
+• Format długi: jeden wiersz to jeden pomiar; narzędzie przekształca taką tabelę na jeden wiersz na próbkę.
 • Dwa arkusze: pomiary są łączone z pozycjami i datami przez kolumnę klucza.
 • Układu, którego nie da się odczytać, narzędzie nie zgaduje: zgłasza go i dalej sprawdza pozostałe tabele.`,
-  'tip.roles.does': `Mówi narzędziu, czym jest każda kolumna; od tego zależy, które sprawdzenia ją obejmą.`,
+  'tip.roles.does': `Tu określasz, co zawiera każda kolumna; od tego zależy, które sprawdzenia ją obejmą.`,
   'tip.roles.logic': `Narzędzie nigdy nie zgaduje jednostki: kolumna bez podanej jednostki pozostaje bez jednostki.
 {roles}`,
-  'tip.encoding.does': `Pokazuje, w jakim kodowaniu znaków odczytano plik; od tego zależy, czy polskie litery i inne znaki specjalne wyjdą poprawnie.`,
+  'tip.encoding.does': `Pokazuje, w jakim kodowaniu znaków odczytano plik; od tego zależy, czy polskie litery i inne znaki specjalne wyświetlą się poprawnie.`,
   'tip.encoding.logic': `• Najpierw sprawdzane jest UTF-8 (z BOM lub bez).
-• Jeśli plik nie jest poprawnym UTF-8, narzędzie zgaduje starsze kodowanie (windows-1250 lub ISO-8859-2) i zgłasza, że to zrobiło.
+• Jeśli plik nie jest poprawnym UTF-8, narzędzie próbuje odgadnąć starsze kodowanie (windows-1250 lub ISO-8859-2) i informuje o tym.
 • Jeśli znaki wyglądają źle, zapisz plik jako UTF-8 i wczytaj go jeszcze raz.`,
-  'tip.singleCruise.does': `Włącza test, czy statek mógł dopłynąć między kolejnymi stacjami.`,
-  'tip.singleCruise.logic': `• ostrzeżenie, gdy statek musiałby płynąć szybciej niż {extreme} – w obie strony od stacji ({extremeSrc})
-• uwaga, gdy szybciej niż {unusual} ({unusualSrc})
+  'tip.singleCruise.does': `Włącza test, czy statek mógł w zapisanym czasie przepłynąć z jednej stacji do następnej.`,
+  'tip.singleCruise.logic': `• ostrzeżenie, gdy statek musiałby płynąć szybciej niż {extreme}, zarówno na odcinku do stacji, jak i od niej ({extremeSrc})
+• uwaga, gdy prędkość przekracza {unusual} ({unusualSrc})
 • stacje bliższe niż {minSeparation} liczą się jako jedno miejsce i są pomijane
-• sama data, bez godziny, oznacza najdłuższy możliwy odstęp`,
+• gdy podano samą datę, przyjmowany jest najdłuższy możliwy odstęp`,
 
-  'tip.severities.does': `Wyjaśnia trzy poziomy zastrzeżeń w raporcie i to, co każdy z nich znaczy przed publikacją danych.`,
-  'tip.severities.logic': `• Błąd: dane są sprzeczne, niemożliwe albo nieczytelne (np. szerokość poza zakresem, brak licencji); popraw to przed publikacją.
-• Ostrzeżenie: zwykle okazuje się pomyłką; sprawdź i popraw albo bądź gotów to uzasadnić.
+  'tip.severities.does': `Wyjaśnia trzy poziomy zastrzeżeń w raporcie i to, co każdy z nich oznacza dla publikacji danych.`,
+  'tip.severities.logic': `• Błąd: dane są sprzeczne, niemożliwe albo nieczytelne (np. szerokość geograficzna poza zakresem, brak licencji); popraw to przed publikacją.
+• Ostrzeżenie: zwykle wskazuje na błąd w danych; sprawdź i popraw albo przygotuj uzasadnienie.
 • Uwaga: informacja do rozważenia; często nie wymaga zmiany.
 Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono problemów.`,
-  'tip.notChecked.does': `Wymienia, czego narzędzie nie sprawdziło w tym przebiegu.`,
+  'tip.notChecked.does': `Wymienia, czego narzędzie nie sprawdziło w tym sprawdzeniu.`,
   'tip.notChecked.logic': `• Lista jest pokazywana zawsze, także gdy nic nie znaleziono.
-• Część pozycji zależy od Twoich wyborów: np. prędkość statku nie jest sprawdzana, dopóki nie zaznaczysz jednego rejsu albo nie wskażesz kolumny z rejsem.
+• Część pozycji zależy od Twoich wyborów: np. prędkość statku nie jest sprawdzana, dopóki nie potwierdzisz, że dane pochodzą z jednego rejsu, albo nie wskażesz kolumny z rejsem.
 • Brak zastrzeżeń w raporcie nic nie mówi o pozycjach z tej listy.`,
   'tip.mapLegend.does': `Tłumaczy kolory punktów na mapie podglądu.`,
   'tip.mapLegend.logic': `• Punkt ma kolor najpoważniejszego zastrzeżenia dotyczącego jego wiersza (błąd, ostrzeżenie, uwaga).
-• Punkt bez zastrzeżeń ma kolor „brak uwag do wiersza”.
+• Punkt bez zastrzeżeń ma kolor „brak zastrzeżeń do wiersza”.
 • Zastrzeżenia dotyczące całego zbioru, a nie wiersza, nie zmieniają kolorów.
 • Wierszy bez pozycji nie ma na mapie.`,
 
-  'tip.cleanCsv.does': `Zapisuje tabelę z Twoich danych w jednym, jednolitym układzie CSV.`,
-  'tip.cleanCsv.logic': `• Wartości są przepisane dokładnie tak, jak stoją w pliku: nic nie jest przeliczane ani poprawiane.
-• Tabele w formacie długim i połączone arkusze są spłaszczone do jednego wiersza na próbkę.
-• Tekst zaczynający się od =, +, - lub @ dostaje na początku apostrof, żeby arkusz kalkulacyjny nie wykonał go jak formuły.
-• Opis kolumn jest w osobnym pliku towarzyszącym.`,
+  'tip.cleanCsv.does': `Zapisuje Twoje dane w jednym układzie CSV: najpierw stałe kolumny, potem zmienne.`,
+  'tip.cleanCsv.logic': `• Stałe kolumny: stacja, rejs, identyfikator próbki, data, szerokość i długość geograficzna, głębokość; dalej każda mierzona zmienna jako „nazwa [jednostka]”. Pominięte kolumny, kolumna godziny (dołączona do daty) i kolumna ciśnienia nie trafiają do pliku.
+• Data jest zapisana w ISO 8601, współrzędne w stopniach dziesiętnych (także gdy w pliku były stopnie i minuty), a przecinek dziesiętny zamieniony na kropkę; pozostałe wartości są przepisane tak, jak zapisano je w pliku, bez przeliczania.
+• Tekst zaczynający się od =, +, - lub @ dostaje na początku apostrof, żeby arkusz kalkulacyjny nie potraktował go jako formuły.`,
   'tip.sidecar.does': `Zapisuje, co narzędzie ustaliło o kolumnach: ich znaczenie, jednostkę i skąd ją wzięto.`,
   'tip.sidecar.logic': `• Jeden wiersz na kolumnę: nazwa w pliku, nazwa w czystym CSV, jednostka, źródło jednostki i kod P01, jeśli jest znany.
 • Przechowuje też Twoją deklarację jednego rejsu.
 • Upuść go razem z plikami przy następnym sprawdzeniu, a deklaracja zostanie przywrócona.`,
   'tip.iso19139.does': `Tworzy szkic rekordu metadanych ISO 19139 do wczytania w GeoNetwork.`,
   'tip.iso19139.logic': `• Wypełnia tylko to, co wynika z danych: zakres geograficzny i czasowy, zmienne, licencję podaną już w metadanych oraz tytuł.
-• Pól, których z danych nie da się wziąć (kontakt, data cytowania, język, kategoria tematyczna), nie wymyśla: oznacza je jako brakujące.
+• Pól, których z danych nie da się wziąć, nie wymyśla: kontakt i datę cytowania zaznacza jako brakujące, a języka i kategorii tematycznej w szkicu nie ma.
 • To szkic do uzupełnienia w edytorze, a nie gotowy rekord.`,
   'tip.datacite.does': `Tworzy szkic rekordu DataCite (XML) do użycia przy rejestracji numeru DOI.`,
   'tip.datacite.logic': `• Wypełnia tylko to, co wynika z danych i metadanych: tytuł, zakres, zmienne, licencję.
-• Twórców, wydawcy i numeru DOI nie zgaduje; zostają jako komentarze XML.
+• Rok publikacji ustawia na bieżący rok (zmień go, jeśli trzeba); twórców, wydawcy i numeru DOI nie zgaduje – zostają jako komentarze XML.
 • To szkic do uzupełnienia, a nie gotowy rekord.`,
-  'tip.draft.does': `Podaje wartości policzone z danych, które możesz skopiować do pól metadanych.`,
+  'tip.draft.does': `Podaje policzone z danych wartości, które możesz skopiować do pól metadanych.`,
   'tip.draft.logic': `• Zakres czasowy i cztery granice geograficzne są liczone z Twoich danych.
 • Lista zmiennych zawiera jednostki, ale tylko takie, które ktoś podał.
 • Licencja i tytuł pochodzą z metadanych, nie z danych.
 • Nazwy pól odpowiadają sekcjom edytora GeoNetwork.`,
   'tip.geojson.does': `Zapisuje pozycje wierszy jako punkty GeoJSON, do otwarcia w QGIS lub innym programie GIS.`,
-  'tip.geojson.logic': `• Jeden punkt na każdy wiersz, który ma pozycję; współrzędne bez zmian, jako [długość, szerokość].
-• Każdy punkt niesie nazwę pliku, numer wiersza, stację, datę i najpoważniejsze zastrzeżenie dotyczące swojego wiersza.
-• Jeden plik na wszystkie zbiory.`,
+  'tip.geojson.logic': `• Jeden punkt na każdy wiersz, który ma pozycję; współrzędne bez zmian, jako [długość, szerokość]. W pliku są też wiersze z niemożliwą szerokością geograficzną, których mapa nie pokazuje.
+• Każdy punkt ma atrybuty: nazwa pliku, numer wiersza, stacja, data i najpoważniejsze zastrzeżenie dotyczące jego wiersza.
+• Wszystkie zbiory w jednym pliku.`,
 
   'tip.licenceInput.does': `Wskazuje opisy jednego zbioru danych, które mają zostać porównane.`,
   'tip.licenceInput.logic': `• Jedno odwołanie w wierszu: numer DOI, link do Zenodo lub PANGAEA, link do zbioru Dataverse ({dataverse}) albo do rekordu GeoNetwork.
 • Czytane są tylko metadane tych rekordów, nigdy pliki z danymi.
 • Wszystkie wiersze powinny dotyczyć jednego zbioru: to kilka miejsc, w których jest opisany.`,
-  'tip.licenceOneDeposit.does': `Pokazuje, czy źródła podają tę samą licencję, a źródła jednego złożenia liczy raz.`,
-  'tip.licenceOneDeposit.logic': `• Jedno złożenie to rekord w repozytorium razem z jego rekordem DataCite (Zenodo, PANGAEA, Dataverse): opisują ten sam zbiór, więc liczą się jako jedno źródło.
+  'tip.licenceOneDeposit.does': `Pokazuje, czy źródła podają tę samą licencję, a źródła jednego depozytu liczy raz.`,
+  'tip.licenceOneDeposit.logic': `• Jeden depozyt to rekord w repozytorium razem z jego rekordem DataCite (Zenodo, PANGAEA, Dataverse): opisują ten sam zbiór, więc liczą się jako jedno źródło.
 • Porównywane są identyfikatory licencji podane przez źródła, a nie ich teksty prawne.
-• Różne licencje w różnych źródłach to sprzeczność; pusty rekord DataCite obok licencji podanej gdzie indziej nią nie jest.`,
+• Różne licencje w różnych źródłach to sprzeczność; pusty rekord DataCite przy licencji podanej w innym źródle sprzecznością nie jest.`,
   'tip.licenceSpdx.does': `Pokazuje, jak narzędzie odczytało każde stwierdzenie o licencji.`,
   'tip.licenceSpdx.logic': `• Tekst i link każdego stwierdzenia są porównywane z listą licencji SPDX.
-• Wynik to jeden identyfikator SPDX albo „nierozpoznano — sprawdź ręcznie”.
+• Wynik to jeden identyfikator SPDX albo „nie rozpoznano — sprawdź ręcznie”.
 • Narzędzie nie ocenia skutków prawnych licencji i nie czyta jej tekstu.`,
   'tip.licenceDatacite.does': `Zwraca uwagę, że rekord DOI w DataCite nie ma licencji, choć inne źródło ją podaje.`,
   'tip.licenceDatacite.logic': `• DataCite ma pole Rights, ale jest ono opcjonalne, więc wiele rekordów zostaje bez licencji.
 • Wytyczne OpenAIRE dla archiwów danych wymagają podania licencji, gdy ma zastosowanie.
 • Samo to nie jest sprzecznością: strona pokazuje to osobną uwagą, z prośbą o dodanie licencji do rekordu DOI.`,
-  'tip.licenceAttribution.does': `Przygotowuje tekst z podaniem autorstwa i licencji, który możesz wkleić.`,
-  'tip.licenceAttribution.logic': `• Powstaje wyłącznie z tego, co podają źródła: tytuł, autorzy, licencja, identyfikator.
+  'tip.licenceAttribution.does': `Przygotowuje tekst uznania autorstwa z licencją, gotowy do wklejenia.`,
+  'tip.licenceAttribution.logic': `• Powstaje wyłącznie z tego, co podają źródła: tytuł, autorzy, wydawca, rok, licencja, identyfikator.
 • Gdy źródła sobie przeczą albo licencji nie rozpoznano, licencja jest pominięta, a strona mówi dlaczego.
 • Tekst jest zawsze po angielsku, żeby dało się go wkleić bez zmian; najpierw porównaj go z rekordem.`,
 
-  'tip.collectionKind.does': `Wybierasz, skąd narzędzie ma wczytać metadane całej kolekcji.`,
+  'tip.collectionKind.does': `Pozwala wybrać, skąd narzędzie wczyta metadane całej kolekcji.`,
   'tip.collectionKind.logic': `• Lista DOI, repozytorium lub prefiks DOI w DataCite, społeczność Zenodo albo katalog GeoNetwork.
 • Czytane są tylko metadane, nigdy pliki z danymi.
-• Wynik to liczby problemów, kilka przykładów każdego i lista poprawek w pliku CSV; instytucji między sobą się nie porównuje.`,
+• Wynik to liczba przypadków każdego problemu, kilka przykładów każdego i lista poprawek w pliku CSV; instytucje nie są ze sobą porównywane.`,
   'tip.collectionDois.does': `Czyta rekordy DataCite dla wypisanych numerów DOI.`,
   'tip.collectionDois.logic': `• Twoja przeglądarka sprawdza każdy numer DOI w DataCite.
 • Linki w postaci doi.org/… i zapis doi:… są przyjmowane; powtórzony numer DOI jest czytany raz.
 • Wpisz jeden numer w wierszu albo oddziel je spacjami.`,
   'tip.collectionDatacite.does': `Wskazuje repozytorium w DataCite: przez identyfikator klienta albo przez prefiks DOI.`,
   'tip.collectionDatacite.logic': `• Identyfikator klienta obejmuje rekordy jednego repozytorium; prefiks DOI – wszystko, co zarejestrowano pod tym początkiem numeru DOI.
-• Przeglądarka pobiera listę z DataCite stronami.`,
-  'tip.collectionZenodo.does': `Czyta rekordy społeczności Zenodo, podanej nazwą z jej adresu.`,
-  'tip.collectionZenodo.logic': `• Zenodo ogranicza gościowi liczbę rekordów i zapytań, więc duża społeczność jest czytana długo.
+• Przeglądarka pobiera listę z DataCite strona po stronie.`,
+  'tip.collectionZenodo.does': `Czyta rekordy społeczności Zenodo; podaj nazwę tak, jak w adresie społeczności.`,
+  'tip.collectionZenodo.logic': `• Zenodo ogranicza niezalogowanym użytkownikom liczbę rekordów i zapytań, więc duża społeczność jest czytana długo.
 • Społeczność większą niż limit wyszukiwania czyta się w częściach, podzielonych według daty publikacji.`,
-  'tip.collectionCsw.does': `Czyta rekordy z katalogu GeoNetwork z listy.`,
+  'tip.collectionCsw.does': `Czyta rekordy z wybranego katalogu GeoNetwork.`,
   'tip.collectionCsw.logic': `• Dostępne katalogi: {catalogues}.
-• Zapytania idą przez nasz serwer, który przekazuje odpowiedź i niczego nie przechowuje.
+• Zapytania przechodzą przez nasz serwer, który przekazuje odpowiedź i niczego nie przechowuje.
 • Format metadanych wybierasz obok: ISO 19139 albo ISO 19115-3, jeśli katalog obsługuje oba.`,
   'tip.collectionCross.does': `Porównuje licencje z katalogu z licencjami w DataCite.`,
   'tip.collectionCross.logic': `• Dla rekordów, które podają numer DOI, przeglądarka sprawdza ten numer w DataCite i porównuje licencje obu źródeł.
 • Każdy taki rekord to jedno dodatkowe zapytanie, więc odczyt trwa dłużej.`,
-  'tip.collectionRun.does': `Pokazuje, ile potrwa odczyt, zanim go zaczniesz, i pozwala zacząć od próbki.`,
-  'tip.collectionRun.logic': `• Oszacowanie liczy rekordy i zapytania; przy dużych kolekcjach liczba zapytań jest tylko przybliżona.
-• Szybka próbka czyta część kolekcji i w wynikach jest oznaczona jako próbka.
+  'tip.collectionRun.does': `Pokazuje, ile potrwa odczyt, zanim go zaczniesz, i pozwala zacząć od próby.`,
+  'tip.collectionRun.logic': `• Szacunek uwzględnia liczbę rekordów i zapytań; przy dużych kolekcjach liczba zapytań jest tylko przybliżona.
+• W szybkiej próbie odczytywana jest tylko część kolekcji, a wyniki są oznaczone jako próba.
 • Odczyt można wstrzymać i wznowić; jego postęp zostaje w tej przeglądarce.`,
 
   'tip.indexCheck.does': `Sprawdza pliki z danymi albo rekord z repozytorium przed publikacją.`,
   'tip.indexCheck.logic': `• Czyta tabele (CSV, Excel, Darwin Core) albo rekord podany linkiem lub numerem DOI.
 • Sprawdza współrzędne, daty, jednostki, zakresy wartości i licencję; każde zastrzeżenie opisuje prostym zdaniem, a obok podaje szczegóły techniczne.
-• Niczego nie zmienia w Twoich danych: pokazuje, co znalazł, i wymienia to, czego nie sprawdza.`,
+• Niczego nie zmienia w Twoich danych: pokazuje, co znalazło, i wymienia to, czego nie sprawdza.`,
   'tip.indexLicence.does': `Porównuje, co o licencji jednego zbioru danych podają różne źródła metadanych.`,
-  'tip.indexLicence.logic': `• Czyta metadane z Zenodo, PANGAEA, Dataverse, GeoNetwork i DataCite, a nie pliki z danymi.
+  'tip.indexLicence.logic': `• Czyta metadane z Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS i DataCite, a nie pliki z danymi.
 • Każde stwierdzenie klasyfikuje według listy licencji SPDX i szuka sprzeczności.
-• Składa tekst z podaniem licencji, który możesz wkleić.`,
+• Przygotowuje tekst uznania autorstwa z licencją, gotowy do wklejenia.`,
   'tip.indexCollection.does': `Przegląda metadane całej kolekcji i zbiera problemy z licencjami oraz puste pola.`,
   'tip.indexCollection.logic': `• Czyta wyłącznie metadane, nigdy pliki z danymi.
-• Wynik to liczby problemów, przykłady i lista poprawek w pliku CSV.
-• Nie porównuje ani nie szereguje instytucji; szybka próbka jest oznaczona jako próbka.`,
+• Wynik to liczba przypadków każdego problemu, przykłady i lista poprawek w pliku CSV.
+• Instytucje nie są ze sobą porównywane ani szeregowane; szybka próba jest oznaczona jako próba.`,
 };
 
 const de: Record<TipKey, string> = {
@@ -330,20 +328,20 @@ const de: Record<TipKey, string> = {
   'tip.does': `Was es tut`,
   'tip.logic': `Die Logik`,
   'tip.ruleLink': `Regeldetails →`,
-  'tip.roles.feeds': `speist Regeln`,
+  'tip.roles.feeds': `verwendet in Regeln`,
   'tip.encoding.label': `Textkodierung`,
 
-  'tip.role.ignore': `die Spalte wird nicht gedeutet und geht in keine Prüfung ein.`,
+  'tip.role.ignore': `die Spalte geht in keine Prüfung und nicht in die bereinigte CSV ein.`,
   'tip.role.latitude': `die Nord-Süd-Position des Punktes.`,
   'tip.role.longitude': `die Ost-West-Position des Punktes.`,
   'tip.role.datetime': `Datum und Uhrzeit in einer Spalte.`,
   'tip.role.date': `nur das Datum, ohne Uhrzeit.`,
-  'tip.role.time': `nur die Uhrzeit, verbunden mit der Datumsspalte.`,
+  'tip.role.time': `die Uhrzeit, mit dem Datum der Datumsspalte verbunden; ohne Datumsspalte wird sie nicht verwendet.`,
   'tip.role.depth': `Abstand unter der Oberfläche; die positive Richtung und die Einheit geben Sie daneben an.`,
-  'tip.role.pressure': `Wasserdruck; wird mit seiner Einheit in der Begleitdatei festgehalten.`,
+  'tip.role.pressure': `die Spalte wird erkannt, aber keine Prüfung und keine Ausgabedatei verwendet sie.`,
   'tip.role.station': `Name oder Nummer einer Station; fasst die Zeilen eines Ortes zusammen.`,
-  'tip.role.cruise': `Name einer Fahrt; trennt die Fahrten beim Geschwindigkeitstest, statt des Häkchens für eine Fahrt.`,
-  'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; dient dazu, dieselbe Probe in zwei Dateien zu finden.`,
+  'tip.role.cruise': `trennt beim Geschwindigkeitstest die Fahrten und ersetzt das Häkchen für eine Fahrt.`,
+  'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; fehlt eine Stationsspalte, übernimmt sie deren Rolle.`,
   'tip.role.variable': `eine gemessene Größe; braucht einen Namen und eine Einheit, und die Einheit rät das Werkzeug nie.`,
 
   'tip.dropZone.does': `Liest Dateien von Ihrem Rechner ein, damit sie geprüft werden können.`,
@@ -354,10 +352,10 @@ const de: Record<TipKey, string> = {
   'tip.linkField.does': `Holt einen Datensatz aus einem Repositorium über seinen Link oder seine DOI und prüft Metadaten und Datendateien.`,
   'tip.linkField.logic': `• Erkannt werden Zenodo, PANGAEA, GBIF, OBIS, jede DOI (über DataCite), Dataverse ({dataverse}) und GeoNetwork ({geonetwork}).
 • Dateien werden nur von Servern der Erlaubnisliste geladen (siehe Seite Datenschutz); bei anderen Servern laden Sie die Datei selbst herunter und legen sie oben ab.
-• Eine Datei aus einem Link darf höchstens {maxFile} groß sein, ein Archiv von einem IPT-Server höchstens {maxArchive}.`,
+• Größenlimits: Über den Server darf eine Datei aus einem Link höchstens {maxFile} groß sein, ein Archiv von einem IPT-Server höchstens {maxArchive}; eine Datei eines Dataverse-Datensatzes über {maxFile} wird übersprungen.`,
   'tip.downloadMode.does': `Legt fest, wer die Dateien hinter einem Link herunterlädt: Ihr Browser oder unser Server.`,
   'tip.downloadMode.logic': `• Browser: Die Dateien kommen direkt vom Datenserver zu Ihnen; manche Server erlauben das nicht.
-• Abyssal-Claims-Server: lädt die Datei für Sie von Servern der Erlaubnisliste, höchstens {maxFile}, und speichert nichts.
+• Abyssal-Claims-Server: lädt die Datei für Sie von Servern der Erlaubnisliste (höchstens {maxFile}, IPT-Archive höchstens {maxArchive}) und speichert nichts.
 • Abgelegte Dateien verlassen Ihren Rechner in keinem der beiden Modi.`,
 
   'tip.layout.does': `Zeigt, wie das Werkzeug den Aufbau der Datei verstanden hat, und lässt Sie ihn korrigieren.`,
@@ -393,22 +391,21 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Befunde zum ganzen Datensatz statt zu einer Zeile ändern die Farben nicht.
 • Zeilen ohne Position erscheinen nicht auf der Karte.`,
 
-  'tip.cleanCsv.does': `Speichert die Tabelle Ihrer Daten in einem einheitlichen CSV-Layout.`,
-  'tip.cleanCsv.logic': `• Werte werden genau so übernommen, wie sie in der Datei stehen: Nichts wird umgerechnet oder korrigiert.
-• Tabellen im Langformat und verknüpfte Blätter werden auf eine Zeile pro Probe abgeflacht.
-• Text, der mit =, +, - oder @ beginnt, erhält ein Apostroph davor, damit eine Tabellenkalkulation ihn nicht als Formel ausführt.
-• Die Beschreibung der Spalten steht in der separaten Begleitdatei.`,
+  'tip.cleanCsv.does': `Speichert Ihre Daten in einem CSV-Layout: feste Spalten zuerst, dann die Variablen.`,
+  'tip.cleanCsv.logic': `• Feste Spalten: Station, Fahrt, Proben-ID, Datum, Breite und Länge, Tiefe; danach jede gemessene Variable als „Name [Einheit]“. Ignorierte Spalten, die Uhrzeitspalte (ins Datum eingerechnet) und die Druckspalte werden nicht geschrieben.
+• Das Datum steht im Format ISO 8601, Koordinaten in Dezimalgrad (auch wenn die Datei Grad und Minuten hatte), ein Dezimalkomma wird zum Punkt; übrige Werte werden so übernommen, wie sie in der Datei stehen, ohne Umrechnung.
+• Text, der mit =, +, - oder @ beginnt, erhält ein Apostroph davor, damit eine Tabellenkalkulation ihn nicht als Formel behandelt.`,
   'tip.sidecar.does': `Hält fest, was das Werkzeug über die Spalten herausgefunden hat: Bedeutung, Einheit und woher die Einheit stammt.`,
   'tip.sidecar.logic': `• Eine Zeile pro Spalte: Name in der Datei, Name in der bereinigten CSV, Einheit, Herkunft der Einheit und P01-Code, falls bekannt.
 • Sie bewahrt auch Ihre Angabe „eine Fahrt“ auf.
 • Legen Sie sie bei der nächsten Prüfung mit den Dateien ab, und die Angabe wird wiederhergestellt.`,
   'tip.iso19139.does': `Schreibt einen Entwurf eines ISO-19139-Metadatensatzes zum Einlesen in GeoNetwork.`,
   'tip.iso19139.logic': `• Eingetragen wird nur, was sich aus den Daten ergibt: räumliche und zeitliche Ausdehnung, Variablen, die in den Metadaten bereits genannte Lizenz und der Titel.
-• Felder, die die Daten nicht liefern können (Kontakt, Zitierdatum, Sprache, Themenkategorie), werden nicht erfunden, sondern als fehlend markiert.
+• Felder, die die Daten nicht liefern können, werden nicht erfunden: Kontakt und Zitierdatum sind als fehlend markiert, Sprache und Themenkategorie fehlen.
 • Es ist ein Entwurf zum Vervollständigen im Editor, kein fertiger Datensatz.`,
   'tip.datacite.does': `Schreibt einen Entwurf eines DataCite-Datensatzes (XML) für die Registrierung einer DOI.`,
   'tip.datacite.logic': `• Eingetragen wird nur, was sich aus Daten und Metadaten ergibt: Titel, Ausdehnung, Variablen, Lizenz.
-• Autoren, Herausgeber und die DOI werden nicht geraten; sie bleiben als XML-Kommentare stehen.
+• Das Publikationsjahr wird auf das laufende Jahr gesetzt (bei Bedarf ändern); Autoren, Herausgeber und die DOI werden nicht geraten und bleiben als XML-Kommentare stehen.
 • Es ist ein Entwurf zum Vervollständigen, kein fertiger Datensatz.`,
   'tip.draft.does': `Liefert aus den Daten berechnete Werte, die Sie in Metadatenfelder kopieren können.`,
   'tip.draft.logic': `• Die zeitliche Ausdehnung und die vier geografischen Grenzen werden aus Ihren Daten berechnet.
@@ -416,7 +413,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Lizenz und Titel stammen aus den Metadaten, nicht aus den Daten.
 • Die Feldnamen entsprechen den Abschnitten des GeoNetwork-Editors.`,
   'tip.geojson.does': `Speichert die Positionen der Zeilen als GeoJSON-Punkte, zum Öffnen in QGIS oder einem anderen GIS-Programm.`,
-  'tip.geojson.logic': `• Ein Punkt pro Zeile mit Position; Koordinaten unverändert, als [Länge, Breite].
+  'tip.geojson.logic': `• Ein Punkt pro Zeile mit Position; Koordinaten unverändert, als [Länge, Breite]. Zeilen mit unmöglicher Breite, die die Karte ausblendet, stehen in der Datei.
 • Jeder Punkt trägt Datei, Zeile, Station, Datum und den schwersten Befund seiner Zeile.
 • Eine Datei für alle Datensätze.`,
 
@@ -437,7 +434,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Die OpenAIRE-Richtlinien für Datenarchive verlangen die Lizenz, wenn sie zutrifft.
 • Das allein ist kein Widerspruch: Es hat eine eigene Zeile, die bittet, die Lizenz im DOI-Datensatz zu ergänzen.`,
   'tip.licenceAttribution.does': `Stellt eine Quellenangabe mit der Lizenz zusammen, die Sie einfügen können.`,
-  'tip.licenceAttribution.logic': `• Sie entsteht nur aus dem, was die Quellen nennen: Titel, Autoren, Lizenz, Kennung.
+  'tip.licenceAttribution.logic': `• Sie entsteht nur aus dem, was die Quellen nennen: Titel, Autoren, Herausgeber, Jahr, Lizenz, Kennung.
 • Widersprechen sich die Quellen oder ist die Lizenz nicht erkannt, fehlt die Lizenz, und die Seite sagt warum.
 • Der Text ist immer auf Englisch, damit Sie ihn unverändert einfügen können; prüfen Sie ihn zuerst am Datensatz.`,
 
@@ -472,7 +469,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Es prüft Koordinaten, Daten, Einheiten, Wertebereiche und die Lizenz und nennt jeden Befund in einem einfachen Satz, daneben die technischen Einzelheiten.
 • Es ändert nichts an Ihren Daten: Es zeigt, was es gefunden hat, und nennt, was es nicht prüft.`,
   'tip.indexLicence.does': `Vergleicht, was verschiedene Metadatenquellen über die Lizenz eines Datensatzes angeben.`,
-  'tip.indexLicence.logic': `• Es liest die Metadaten von Zenodo, PANGAEA, Dataverse, GeoNetwork und DataCite, nicht die Datendateien.
+  'tip.indexLicence.logic': `• Es liest die Metadaten von Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS und DataCite, nicht die Datendateien.
 • Es ordnet jede Angabe der SPDX-Lizenzliste zu und sucht Widersprüche.
 • Es stellt eine Quellenangabe mit der Lizenz zum Einfügen zusammen.`,
   'tip.indexCollection.does': `Geht die Metadaten einer ganzen Sammlung durch und sammelt Lizenzprobleme und leere Felder.`,
@@ -486,20 +483,20 @@ const fr: Record<TipKey, string> = {
   'tip.does': `Ce que ça fait`,
   'tip.logic': `La logique`,
   'tip.ruleLink': `Détails de la règle →`,
-  'tip.roles.feeds': `alimente les règles`,
+  'tip.roles.feeds': `utilisée par les règles`,
   'tip.encoding.label': `Encodage du texte`,
 
-  'tip.role.ignore': `la colonne n'est pas interprétée et n'entre dans aucune vérification.`,
+  'tip.role.ignore': `la colonne n'entre dans aucune vérification ni dans le CSV nettoyé.`,
   'tip.role.latitude': `la position nord–sud du point.`,
   'tip.role.longitude': `la position est–ouest du point.`,
   'tip.role.datetime': `la date et l'heure dans une même colonne.`,
   'tip.role.date': `la date seule, sans heure.`,
-  'tip.role.time': `l'heure seule, associée à la colonne de date.`,
+  'tip.role.time': `l'heure, associée à la date de la colonne de date ; sans colonne de date, elle n'est pas utilisée.`,
   'tip.role.depth': `la distance sous la surface ; vous indiquez à côté le sens positif et l'unité.`,
-  'tip.role.pressure': `la pression de l'eau ; conservée avec son unité dans le fichier d'accompagnement.`,
+  'tip.role.pressure': `la colonne est reconnue, mais aucune vérification ni aucun fichier de sortie ne l'utilise.`,
   'tip.role.station': `le nom ou le numéro d'une station ; regroupe les lignes d'un même lieu.`,
-  'tip.role.cruise': `le nom d'une campagne ; sépare les campagnes dans le test de vitesse, à la place de la case d'une seule campagne.`,
-  'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; sert à retrouver le même échantillon dans deux fichiers.`,
+  'tip.role.cruise': `dans le test de vitesse, sépare les campagnes et remplace la case d'une seule campagne.`,
+  'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; sans colonne de station, il en tient lieu.`,
   'tip.role.variable': `une grandeur mesurée ; demande un nom et une unité, et l'outil ne devine jamais l'unité.`,
 
   'tip.dropZone.does': `Lit des fichiers de votre ordinateur pour les vérifier.`,
@@ -510,10 +507,10 @@ const fr: Record<TipKey, string> = {
   'tip.linkField.does': `Récupère une notice dans un dépôt à partir de son lien ou de son DOI, et vérifie ses métadonnées et ses fichiers de données.`,
   'tip.linkField.logic': `• Sont reconnus : Zenodo, PANGAEA, GBIF, OBIS, tout DOI (via DataCite), Dataverse ({dataverse}) et GeoNetwork ({geonetwork}).
 • Les fichiers ne sont téléchargés que depuis les serveurs de la liste autorisée (voir la page Confidentialité) ; pour les autres, téléchargez le fichier vous-même et déposez-le ci-dessus.
-• Un fichier issu d'un lien ne dépasse pas {maxFile}, une archive d'un serveur IPT {maxArchive}.`,
+• Limites de taille : via le serveur, un fichier issu d'un lien ne dépasse pas {maxFile} et une archive d'un serveur IPT {maxArchive} ; un fichier d'un jeu de données Dataverse au-delà de {maxFile} est ignoré.`,
   'tip.downloadMode.does': `Choisit qui télécharge les fichiers derrière un lien : votre navigateur ou notre serveur.`,
   'tip.downloadMode.logic': `• Navigateur : les fichiers vont directement du serveur de données à vous ; certains serveurs ne l'autorisent pas.
-• Serveur Abyssal Claims : télécharge le fichier pour vous depuis les serveurs de la liste autorisée, {maxFile} au plus, et ne conserve rien.
+• Serveur Abyssal Claims : télécharge le fichier pour vous depuis les serveurs de la liste autorisée ({maxFile} au plus, archives IPT {maxArchive} au plus) et ne conserve rien.
 • Les fichiers déposés ici ne quittent jamais votre ordinateur, quel que soit le mode.`,
 
   'tip.layout.does': `Montre comment l'outil a compris la structure du fichier et vous permet de la corriger.`,
@@ -549,22 +546,21 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Les constats portant sur tout le jeu de données plutôt que sur une ligne ne changent pas les couleurs.
 • Les lignes sans position ne figurent pas sur la carte.`,
 
-  'tip.cleanCsv.does': `Enregistre le tableau de vos données dans une disposition CSV uniforme.`,
-  'tip.cleanCsv.logic': `• Les valeurs sont recopiées telles qu'elles sont écrites dans le fichier : rien n'est converti ni corrigé.
-• Les tableaux au format long et les feuilles reliées sont aplatis en une ligne par échantillon.
-• Un texte qui commence par =, +, - ou @ reçoit une apostrophe devant, pour qu'un tableur ne l'exécute pas comme une formule.
-• La description des colonnes se trouve dans le fichier d'accompagnement séparé.`,
+  'tip.cleanCsv.does': `Enregistre vos données dans une seule disposition CSV : colonnes fixes d'abord, puis les variables.`,
+  'tip.cleanCsv.logic': `• Colonnes fixes : station, campagne, identifiant d'échantillon, date, latitude et longitude, profondeur ; puis chaque variable mesurée sous la forme « nom [unité] ». Les colonnes ignorées, la colonne d'heure (fusionnée dans la date) et la colonne de pression ne sont pas écrites.
+• La date est écrite en ISO 8601, les coordonnées en degrés décimaux (même si le fichier avait des degrés et minutes), et une virgule décimale devient un point ; les autres valeurs sont recopiées telles qu'elles sont écrites dans le fichier, sans conversion.
+• Un texte commençant par =, +, - ou @ reçoit une apostrophe devant, pour qu'un tableur ne le traite pas comme une formule.`,
   'tip.sidecar.does': `Consigne ce que l'outil a établi sur les colonnes : leur sens, leur unité et l'origine de l'unité.`,
   'tip.sidecar.logic': `• Une ligne par colonne : le nom dans le fichier, le nom dans le CSV nettoyé, l'unité, l'origine de l'unité et le code P01 s'il est connu.
 • Il conserve aussi votre déclaration d'une seule campagne.
 • Déposez-le avec les fichiers à la vérification suivante et la déclaration est rétablie.`,
   'tip.iso19139.does': `Écrit un brouillon de notice de métadonnées ISO 19139 à charger dans GeoNetwork.`,
   'tip.iso19139.logic': `• Il ne remplit que ce qui découle des données : l'étendue géographique et temporelle, les variables, la licence déjà indiquée dans les métadonnées et le titre.
-• Les champs que les données ne peuvent pas fournir (contact, date de citation, langue, catégorie thématique) ne sont pas inventés : ils sont marqués comme manquants.
+• Les champs que les données ne peuvent pas fournir ne sont pas inventés : le contact et la date de citation sont marqués comme manquants, la langue et la catégorie thématique sont omises.
 • C'est un brouillon à compléter dans l'éditeur, pas une notice terminée.`,
   'tip.datacite.does': `Écrit un brouillon de notice DataCite (XML) pour l'enregistrement d'un DOI.`,
   'tip.datacite.logic': `• Il ne remplit que ce qui découle des données et des métadonnées : titre, étendue, variables, licence.
-• Les auteurs, l'éditeur et le DOI ne sont pas devinés ; ils restent sous forme de commentaires XML.
+• L'année de publication est fixée à l'année en cours (à modifier si besoin) ; les auteurs, l'éditeur et le DOI ne sont pas devinés et restent sous forme de commentaires XML.
 • C'est un brouillon à compléter, pas une notice terminée.`,
   'tip.draft.does': `Donne des valeurs calculées à partir des données, que vous pouvez copier dans des champs de métadonnées.`,
   'tip.draft.logic': `• L'étendue temporelle et les quatre limites géographiques sont calculées à partir de vos données.
@@ -572,7 +568,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • La licence et le titre viennent des métadonnées, pas des données.
 • Les noms des champs correspondent aux sections de l'éditeur GeoNetwork.`,
   'tip.geojson.does': `Enregistre les positions des lignes sous forme de points GeoJSON, à ouvrir dans QGIS ou un autre logiciel SIG.`,
-  'tip.geojson.logic': `• Un point par ligne qui a une position ; coordonnées inchangées, sous la forme [longitude, latitude].
+  'tip.geojson.logic': `• Un point par ligne qui a une position ; coordonnées inchangées, sous la forme [longitude, latitude]. Les lignes à latitude impossible, que la carte masque, figurent dans le fichier.
 • Chaque point porte son fichier, sa ligne, sa station, sa date et le constat le plus grave de sa ligne.
 • Un seul fichier pour tous les jeux de données.`,
 
@@ -593,7 +589,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Les lignes directrices d'OpenAIRE pour les archives de données demandent la licence quand elle s'applique.
 • Cela ne constitue pas à soi seul une contradiction : la ligne a sa propre remarque, qui demande d'ajouter la licence à la notice du DOI.`,
   'tip.licenceAttribution.does': `Compose un texte d'attribution avec la licence, que vous pouvez coller.`,
-  'tip.licenceAttribution.logic': `• Il est construit uniquement à partir de ce que disent les sources : titre, auteurs, licence, identifiant.
+  'tip.licenceAttribution.logic': `• Il est construit uniquement à partir de ce que disent les sources : titre, auteurs, éditeur, année, licence, identifiant.
 • Quand les sources se contredisent ou que la licence n'est pas reconnue, la licence est omise et la page dit pourquoi.
 • Le texte est toujours en anglais, pour que vous puissiez le coller tel quel ; comparez-le d'abord à la notice.`,
 
@@ -628,7 +624,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Il vérifie les coordonnées, les dates, les unités, les plages de valeurs et la licence, et énonce chaque constat en une phrase simple, avec le détail technique à côté.
 • Il ne modifie rien dans vos données : il montre ce qu'il a trouvé et énumère ce qu'il ne vérifie pas.`,
   'tip.indexLicence.does': `Compare ce que différentes sources de métadonnées indiquent sur la licence d'un jeu de données.`,
-  'tip.indexLicence.logic': `• Il lit les métadonnées de Zenodo, PANGAEA, Dataverse, GeoNetwork et DataCite, pas les fichiers de données.
+  'tip.indexLicence.logic': `• Il lit les métadonnées de Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS et DataCite, pas les fichiers de données.
 • Il classe chaque mention selon la liste de licences SPDX et cherche les contradictions.
 • Il compose un texte d'attribution avec la licence, à coller.`,
   'tip.indexCollection.does': `Parcourt les métadonnées d'une collection entière et rassemble les problèmes de licence et les champs vides.`,

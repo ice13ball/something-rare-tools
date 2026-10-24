@@ -41,7 +41,7 @@ function Host({ onSubmit = () => {} }: { onSubmit?: () => void }): React.ReactEl
       <label>
         <input type="checkbox" />
         <span>Declare</span>
-        <InfoTip id="singleCruise" />
+        <InfoTip id="layout" />
       </label>
       <input type="text" aria-label="after" />
     </form>
@@ -53,43 +53,43 @@ describe('InfoTip: name and content', () => {
     for (const lang of LANGS) {
       cleanup();
       setLang(lang);
-      render(<InfoTip id="singleCruise" />);
+      render(<InfoTip id="layout" />);
       const b = screen.getByRole('button') as HTMLButtonElement;
       expect(b.tagName).toBe('BUTTON');
       expect(b.type).toBe('button');
-      expect(b.getAttribute('aria-label'), lang).toBe(translate(lang, 'tip.aria', { label: translate(lang, 'confirm.singleCruise') }));
+      expect(b.getAttribute('aria-label'), lang).toBe(translate(lang, 'tip.aria', { label: translate(lang, 'layout.title') }));
       expect(b.getAttribute('aria-label')).not.toContain('{');
     }
     setLang('pl');
     cleanup();
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     expect(screen.getByRole('button').getAttribute('aria-label')).toMatch(/^Wyjaśnienie: /);
   });
 
   it('puts the content into an aria-live region when it opens (empty before), in two parts, with the rule link', () => {
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     expect(live().textContent).toBe('');
     expect(live().getAttribute('aria-atomic')).toBe('true');
     fireEvent.click(tipButton());
     const text = live().textContent ?? '';
     expect(text).toContain('What it does');
     expect(text).toContain('The logic');
-    expect(text).toContain(translate('en', 'tip.singleCruise.does'));
-    expect(screen.getByRole('link', { name: 'Rule details →' }).getAttribute('href')).toMatch(/docs\/rules\.md#ROW-SHIP-SPEED$/);
+    expect(text).toContain(translate('en', 'tip.layout.does'));
+    expect(screen.getByRole('link', { name: 'Rule details →' }).getAttribute('href')).toMatch(/docs\/rules\.md#IN-LAYOUT-UNSUPPORTED$/);
     const link = screen.getByRole('link', { name: 'Rule details →' });
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
   });
 
   it('the icon letter is drawn by CSS and is not part of the text of the page', () => {
-    const { container } = render(<InfoTip id="singleCruise" />);
+    const { container } = render(<InfoTip id="layout" />);
     expect(container.textContent).toBe('');
   });
 });
 
 describe('InfoTip: opening', () => {
   it('a click opens it, a second click closes it', () => {
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     fireEvent.click(tipButton());
     expect(isOpen()).toBe(true);
     fireEvent.click(tipButton());
@@ -98,7 +98,7 @@ describe('InfoTip: opening', () => {
   });
 
   it('keyboard focus opens it, Esc closes it and the focus is back on the icon (also from the link inside)', () => {
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     act(() => tipButton().focus());
     expect(isOpen()).toBe(true);
     const link = screen.getByRole('link', { name: 'Rule details →' });
@@ -110,7 +110,7 @@ describe('InfoTip: opening', () => {
   });
 
   it('a mouse press focuses the button without opening twice: the click decides', () => {
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     fireEvent.mouseDown(tipButton());
     act(() => tipButton().focus());
     expect(isOpen()).toBe(false);
@@ -120,7 +120,7 @@ describe('InfoTip: opening', () => {
 
   it('hover opens it after a short delay, and leaving closes it again', () => {
     vi.useFakeTimers();
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     const wrap = document.querySelector('.infotip') as HTMLElement;
     fireEvent.mouseEnter(wrap);
     act(() => void vi.advanceTimersByTime(HOVER_DELAY_MS - 1));
@@ -133,7 +133,7 @@ describe('InfoTip: opening', () => {
 
   it('a pointer that only passes by opens nothing; a click after hovering keeps it open when the pointer leaves', () => {
     vi.useFakeTimers();
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     const wrap = document.querySelector('.infotip') as HTMLElement;
     fireEvent.mouseEnter(wrap);
     act(() => void vi.advanceTimersByTime(100));
@@ -152,7 +152,7 @@ describe('InfoTip: opening', () => {
   it('a tap (no hover media) opens it at once, with no delay', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
     vi.useFakeTimers();
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     const wrap = document.querySelector('.infotip') as HTMLElement;
     fireEvent.mouseEnter(wrap); // the emulated mouse events of a tap
     act(() => void vi.advanceTimersByTime(1000));
@@ -167,7 +167,7 @@ describe('InfoTip: closing', () => {
   it('closes on a press outside, but not on a press inside the bubble', () => {
     render(
       <div>
-        <InfoTip id="singleCruise" />
+        <InfoTip id="layout" />
         <p data-testid="elsewhere">elsewhere</p>
       </div>,
     );
@@ -206,20 +206,40 @@ describe('InfoTip: closing', () => {
 });
 
 describe('InfoTip: no trap, no side effects', () => {
-  it('the link comes after the icon in the tab order and the next control after the link: Tab reaches it and moves on', () => {
+  it('the bubble is drawn in a portal, so Tab is steered by hand: icon -> its link -> on to what follows the icon; Shift+Tab back to the icon; no trap', () => {
     render(<Host />);
-    fireEvent.click(tipButton());
-    const focusables = [...document.querySelectorAll<HTMLElement>('input, button, a[href], [tabindex]')].filter((e) => e.tabIndex >= 0);
-    const names = focusables.map((e) => e.tagName + ':' + (e.getAttribute('aria-label') ?? e.textContent));
-    const iconAt = names.findIndex((n) => n.startsWith('BUTTON:Explanation'));
-    const rest = names.slice(iconAt + 1);
-    const next = rest.findIndex((n) => !n.startsWith('A:'));
-    expect(next).toBeGreaterThan(0); // the sources and the rule link, in the bubble, in reading order
-    expect(rest[next - 1]).toBe('A:Rule details →');
-    expect(rest[next]).toBe('INPUT:after');
-    // the bubble takes a click but is not a tab stop, and nothing sets a positive tabindex
-    expect(document.querySelector('.infotip-bubble')?.getAttribute('tabindex')).toBe('-1');
+    const after = screen.getByLabelText('after');
+    act(() => tipButton().focus());
+    expect(isOpen()).toBe(true);
+    const bubble = document.querySelector('.infotip-bubble') as HTMLElement;
+    expect(bubble.parentElement).toBe(document.body);
+    expect(bubble.getAttribute('tabindex')).toBe('-1');
     expect(document.querySelectorAll('[tabindex]:not([tabindex="-1"]):not([tabindex="0"])').length).toBe(0);
+    const link = screen.getByRole('link', { name: 'Rule details →' });
+
+    // Tab on the icon goes into the bubble
+    expect(fireEvent.keyDown(tipButton(), { key: 'Tab' })).toBe(false); // default prevented: we move the focus
+    expect(document.activeElement).toBe(link);
+    // Shift+Tab on the first link goes back to the icon
+    expect(fireEvent.keyDown(link, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(tipButton());
+    expect(isOpen()).toBe(true);
+    // Tab on the last link: the icon takes the focus and the browser's own Tab goes on from it (the event is not cancelled)
+    act(() => link.focus());
+    expect(fireEvent.keyDown(link, { key: 'Tab' })).toBe(true);
+    expect(document.activeElement).toBe(tipButton());
+    // the focus then leaves for the next control: the tip closes
+    fireEvent.blur(tipButton(), { relatedTarget: after });
+    expect(isOpen()).toBe(false);
+    // Shift+Tab on the icon is the browser's own: nothing is intercepted
+    act(() => tipButton().focus());
+    expect(fireEvent.keyDown(tipButton(), { key: 'Tab', shiftKey: true })).toBe(true);
+  });
+
+  it('a tip with no link inside lets Tab pass', () => {
+    render(<InfoTip id="cleanCsv" />);
+    act(() => tipButton().focus());
+    expect(fireEvent.keyDown(tipButton(), { key: 'Tab' })).toBe(true);
   });
 
   it('a click on the icon neither toggles the checkbox it sits beside nor submits the form', () => {
@@ -250,7 +270,7 @@ describe('InfoTip: no trap, no side effects', () => {
     const outer = vi.fn();
     render(
       <div onClick={outer}>
-        <InfoTip id="singleCruise" />
+        <InfoTip id="layout" />
       </div>,
     );
     fireEvent.click(tipButton());
@@ -260,20 +280,55 @@ describe('InfoTip: no trap, no side effects', () => {
 
 describe('InfoTip: stays in the viewport and off its icon', () => {
   const rect = (r: Partial<DOMRect>): DOMRect => ({ x: 0, y: 0, width: 24, height: 24, top: 0, left: 0, right: 0, bottom: 0, toJSON: () => ({}), ...r }) as DOMRect;
-
-  it('on a 360 px phone an icon at the right edge gets a bubble shifted left, inside the margins', () => {
-    vi.stubGlobal('innerWidth', 360);
-    vi.stubGlobal('innerHeight', 740);
+  const anchor = (r: Partial<DOMRect>): void => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      return this.classList.contains('infotip') ? rect({ left: 330, right: 354, top: 100, bottom: 124 }) : rect({});
+      return this.classList.contains('infotip') ? rect(r) : rect({});
     });
-    render(<InfoTip id="singleCruise" />);
+  };
+
+  it('is drawn on <body> with position: fixed, so no scroll container of the page can clip it, and it is above the cookie banner', () => {
+    render(
+      <div className="table-scroll" style={{ overflow: 'auto' }}>
+        <InfoTip id="layout" />
+      </div>,
+    );
     fireEvent.click(tipButton());
     const bubble = document.querySelector('.infotip-bubble') as HTMLElement;
-    const dx = Number.parseFloat(bubble.style.getPropertyValue('--tip-dx'));
-    // the bubble is min(352, 360 - 16) = 344 wide: its left edge lands on the 8 px margin
-    expect(330 + dx).toBe(8);
-    expect(330 + dx + 344).toBeLessThanOrEqual(360 - 8);
+    expect(bubble.parentElement).toBe(document.body);
+    expect(bubble.closest('.table-scroll')).toBeNull();
+    const css = readFileSync(join(__dirname, '..', '..', 'src', 'app', 'styles.css'), 'utf8');
+    const rule = css.slice(css.indexOf('.infotip-bubble {'), css.indexOf('}', css.indexOf('.infotip-bubble {')));
+    expect(rule).toContain('position: fixed');
+    const z = Number(/z-index: (\d+)/.exec(rule)?.[1]);
+    const banner = css.slice(css.indexOf('.cookie-banner'), css.indexOf('}', css.indexOf('.cookie-banner')));
+    expect(z).toBeGreaterThan(Number(/z-index: (\d+)/.exec(banner)?.[1] ?? 0));
+  });
+
+  it('on a 360 px phone an icon at the right edge gets a bubble placed inside the margins, from the real width of the bubble', () => {
+    vi.stubGlobal('innerWidth', 360);
+    vi.stubGlobal('innerHeight', 740);
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(344);
+    anchor({ left: 330, right: 354, top: 100, bottom: 124 });
+    render(<InfoTip id="layout" />);
+    fireEvent.click(tipButton());
+    const bubble = document.querySelector('.infotip-bubble') as HTMLElement;
+    expect(bubble.style.left).toBe('8px');
+    expect(bubble.style.maxWidth).toBe('344px');
+    expect(bubble.style.top).toBe('130px'); // below the icon, 6 px clear of it
+    vi.unstubAllGlobals();
+  });
+
+  it('a bubble wider than the viewport allows (large default font, classic scrollbar) is capped to the width that is really there', () => {
+    vi.stubGlobal('innerWidth', 360);
+    vi.stubGlobal('innerHeight', 740);
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(345);
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(344);
+    anchor({ left: 300, right: 324, top: 100, bottom: 124 });
+    render(<InfoTip id="layout" />);
+    fireEvent.click(tipButton());
+    const bubble = document.querySelector('.infotip-bubble') as HTMLElement;
+    expect(bubble.style.maxWidth).toBe('329px');
+    expect(Number.parseFloat(bubble.style.left) + 329).toBeLessThanOrEqual(345 - 8);
     vi.unstubAllGlobals();
   });
 
@@ -281,17 +336,36 @@ describe('InfoTip: stays in the viewport and off its icon', () => {
     vi.stubGlobal('innerWidth', 360);
     vi.stubGlobal('innerHeight', 740);
     vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200);
-    let bottom = 150;
+    let r: Partial<DOMRect> = { left: 20, right: 44, top: 126, bottom: 150 };
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      return this.classList.contains('infotip') ? rect({ left: 20, right: 44, top: bottom - 24, bottom }) : rect({});
+      return this.classList.contains('infotip') ? rect(r) : rect({});
     });
-    render(<InfoTip id="singleCruise" />);
+    render(<InfoTip id="layout" />);
     fireEvent.click(tipButton());
     expect(document.querySelector('.infotip-bubble')?.getAttribute('data-side')).toBe('below');
     fireEvent.click(tipButton());
-    bottom = 710;
+    r = { left: 20, right: 44, top: 686, bottom: 710 };
     fireEvent.click(tipButton());
-    expect(document.querySelector('.infotip-bubble')?.getAttribute('data-side')).toBe('above');
+    const bubble = document.querySelector('.infotip-bubble') as HTMLElement;
+    expect(bubble.getAttribute('data-side')).toBe('above');
+    expect(Number.parseFloat(bubble.style.top) + 200).toBeLessThanOrEqual(686 - 6);
+    vi.unstubAllGlobals();
+  });
+
+  it('is placed again when the page scrolls', () => {
+    vi.stubGlobal('innerWidth', 360);
+    vi.stubGlobal('innerHeight', 740);
+    let top = 100;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('infotip') ? rect({ left: 20, right: 44, top, bottom: top + 24 }) : rect({});
+    });
+    render(<InfoTip id="layout" />);
+    fireEvent.click(tipButton());
+    const bubble = document.querySelector('.infotip-bubble') as HTMLElement;
+    expect(bubble.style.top).toBe('130px');
+    top = 60;
+    act(() => void window.dispatchEvent(new Event('scroll')));
+    expect(bubble.style.top).toBe('90px');
     vi.unstubAllGlobals();
   });
 
@@ -302,5 +376,36 @@ describe('InfoTip: stays in the viewport and off its icon', () => {
     const block = css.slice(css.indexOf('@media (prefers-reduced-motion: no-preference)', css.indexOf('infotip')));
     expect(block.indexOf('animation: infotip-in')).toBeGreaterThan(-1);
     expect(block.indexOf('animation: infotip-in')).toBeLessThan(block.indexOf('\n}\n\n/* where the icon sits'));
+  });
+});
+
+describe('InfoTip: focus opens it, and the keyboard click that follows does not close it', () => {
+  it('Tab (focus) then Enter (a click), however long the pause: the tip stays open; the next Enter closes it', () => {
+    vi.useFakeTimers();
+    render(<InfoTip id="layout" />);
+    act(() => tipButton().focus());
+    expect(isOpen()).toBe(true);
+    act(() => void vi.advanceTimersByTime(5000));
+    fireEvent.keyDown(tipButton(), { key: 'Enter' });
+    fireEvent.click(tipButton());
+    expect(isOpen()).toBe(true);
+    fireEvent.click(tipButton());
+    expect(isOpen()).toBe(false);
+  });
+
+  it('a screen reader that calls focus() and then click() gets an open tip too', () => {
+    render(<InfoTip id="layout" />);
+    act(() => {
+      tipButton().focus();
+      tipButton().click();
+    });
+    expect(isOpen()).toBe(true);
+  });
+
+  it('a mouse click on a tip the keyboard opened closes it (a click with a position is a decision)', () => {
+    render(<InfoTip id="layout" />);
+    act(() => tipButton().focus());
+    fireEvent.click(tipButton(), { detail: 1 });
+    expect(isOpen()).toBe(false);
   });
 });
