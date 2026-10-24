@@ -262,6 +262,9 @@ export function isKnownColumnName(label: string): boolean {
 /* ---------- main ---------- */
 
 const NEGATIVE_UP = 'negative values: depth is positive up';
+const DEPTH_NOT_STATED = 'the header does not say whether depth is counted down or up';
+/** Words of a depth header that state the direction: "Depth below sea level", "Depth (m, positive down)", "mbsl", "m BSF". */
+const DEPTH_DIRECTION_WORDS = /\b(?:below|beneath|under|above|positive|negative|downwards?|upwards?|down|up|bsl|bsf|mbsl|mbsf|mbgl|bgl|msl|amsl|asl|agl)\b/i;
 
 function depthPositive(rows: readonly RawRow[], col: number, decimalComma: boolean, elevation: boolean): 'down' | 'up' | 'unknown' {
   if (elevation) return 'up';
@@ -477,9 +480,17 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
             e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
             break;
           }
-          const positive = depthPositive(rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
-          e.proposal.role = unit === undefined ? { kind: 'depth', positive } : { kind: 'depth', positive, unit };
+          let positive = depthPositive(rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
           if (positive === 'up' && !c.elevation) e.proposal.reason += `; ${NEGATIVE_UP}`;
+          // "down" is EVIDENCE when the header says it (below, positive down, bsl ...) or a vocabulary does (NERC P01 states
+          // "depth below ..."). With neither, it is only the default for a column named "depth": the proposal stays "not stated",
+          // low-confidence, and ROW-DEPTH-SIGN asks for the convention (docs/research/qc-sources.md, "Depth direction").
+          if (positive === 'down' && !DEPTH_DIRECTION_WORDS.test(e.proposal.header) && !c.reason.startsWith('NERC P01')) {
+            positive = 'unknown';
+            e.proposal.confidence = 'low';
+            e.proposal.reason += `; ${DEPTH_NOT_STATED}`;
+          }
+          e.proposal.role = unit === undefined ? { kind: 'depth', positive } : { kind: 'depth', positive, unit };
           break;
         }
       }
