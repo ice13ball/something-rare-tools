@@ -279,8 +279,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.licenceDatacite.does': `Zwraca uwagę, że rekord DOI w DataCite nie ma licencji, choć inne źródło ją podaje.`,
   'tip.licenceDatacite.logic': `• DataCite ma pole Rights, ale jest ono opcjonalne, więc wiele rekordów zostaje bez licencji.
 • Wytyczne OpenAIRE dla archiwów danych wymagają podania licencji, gdy ma zastosowanie.
-• Samo to nie jest sprzecznością: ma osobną linijkę, w której prosimy o dodanie licencji do rekordu DOI.`,
-  'tip.licenceAttribution.does': `Składa tekst z podaniem autorstwa i licencji, który możesz wkleić.`,
+• Samo to nie jest sprzecznością: strona pokazuje to osobną uwagą, z prośbą o dodanie licencji do rekordu DOI.`,
+  'tip.licenceAttribution.does': `Przygotowuje tekst z podaniem autorstwa i licencji, który możesz wkleić.`,
   'tip.licenceAttribution.logic': `• Powstaje wyłącznie z tego, co podają źródła: tytuł, autorzy, licencja, identyfikator.
 • Gdy źródła sobie przeczą albo licencji nie rozpoznano, licencja jest pominięta, a strona mówi dlaczego.
 • Tekst jest zawsze po angielsku, żeby dało się go wkleić bez zmian; najpierw porównaj go z rekordem.`,
