@@ -167,6 +167,8 @@ const DEFS = {
   indexCheck: { label: 'index.card.title' },
   indexLicence: { label: 'index.licence.title' },
   indexCollection: { label: 'index.collection.title' },
+  // /convert (hidden until its reveal)
+  convertIntro: { label: 'convert.title' },
 } satisfies Record<string, TipDef>;
 
 export type TipId = keyof typeof DEFS;

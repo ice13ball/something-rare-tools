@@ -59,10 +59,15 @@ export function isAllowedHost(url: string): boolean {
 
 const https = (hosts: readonly string[]): string => hosts.map((h) => 'https://' + h).join(' ');
 
-export function buildCsp(): string {
+/**
+ * The Content-Security-Policy. `extraConnect` (host names, no scheme) are added to connect-src for ONE page only: a default call
+ * returns today's policy byte for byte. Never put such a host into DATA_HOSTS, which also feeds the fetch proxy.
+ */
+export function buildCsp(extraConnect: readonly string[] = []): string {
+  const extra = extraConnect.length > 0 ? ' ' + https(extraConnect) : '';
   return [
     "default-src 'self'",
-    `connect-src 'self' ${https(DATA_HOSTS)} ${https(GA_HOSTS)} ${https(MAP_HOSTS)}`,
+    `connect-src 'self' ${https(DATA_HOSTS)} ${https(GA_HOSTS)} ${https(MAP_HOSTS)}${extra}`,
     "worker-src 'self' blob:",
     `img-src 'self' data: blob: ${https(MAP_HOSTS)} ${https(GA_HOSTS)}`,
     "script-src 'self' https://www.googletagmanager.com",

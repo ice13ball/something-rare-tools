@@ -5,12 +5,17 @@ import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import { SITE } from './config/site';
 
-/** The robots meta tag goes into the built pages only while the site is noindex; the HTML sources carry none. */
+/**
+ * The robots meta tag goes into the built pages only while the site is noindex; the HTML sources carry none, except a hidden page
+ * (convert/index.html), which carries its own and keeps it whatever the flag says (server/headers.ts HIDDEN_PATHS).
+ */
 export function robotsMeta(noindex: boolean): Plugin {
   return {
     name: 'robots-meta',
-    transformIndexHtml: () =>
-      noindex ? [{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' }, injectTo: 'head-prepend' }] : [],
+    transformIndexHtml: (html) =>
+      noindex && !/<meta\s+name="robots"/i.test(html)
+        ? [{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' }, injectTo: 'head-prepend' }]
+        : [],
   };
 }
 
@@ -25,6 +30,7 @@ export default defineConfig({
         licence: resolve(__dirname, 'licence/index.html'),
         collection: resolve(__dirname, 'collection/index.html'),
         privacy: resolve(__dirname, 'privacy/index.html'),
+        convert: resolve(__dirname, 'convert/index.html'),
       },
     },
   },

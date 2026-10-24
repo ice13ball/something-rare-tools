@@ -13,6 +13,7 @@ import { initLang, setLang } from '../../src/app/i18n';
 import { InputPanel } from '../../src/app/components/InputPanel';
 import { CheckPage } from '../../src/app/pages/CheckPage';
 import { CollectionPage } from '../../src/app/pages/CollectionPage';
+import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { IndexPage } from '../../src/app/pages/IndexPage';
 import { LicencePage } from '../../src/app/pages/LicencePage';
 import { TIPS, TIP_IDS, type TipId } from '../../src/app/tips';
@@ -158,6 +159,19 @@ describe('/collection', () => {
     expectTips(['collectionCsw', 'collectionCross']);
     // the fields keep their names
     expect(screen.getByRole('combobox', { name: UI.en['collection.csw.label'] })).toBeTruthy();
+  });
+});
+
+describe('/convert (hidden shell)', () => {
+  it('the intro carries its ⓘ, in every language, beside the text and not inside a heading', () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      render(<ConvertPage />);
+      expectTips(['convertIntro'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip').length).toBe(0);
+      expect(document.querySelectorAll('.infotip').length).toBe(1);
+    }
   });
 });
 

@@ -5,3 +5,4 @@ node_modules
 coverage
 *.local
 .DS_Store
+/test/convert-private/
