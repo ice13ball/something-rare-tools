@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
+import { formatLines } from '../report';
 import { makeFinding, threshold } from '../rules/registry';
 import type { DataRow, Dataset, Finding, ParsedDate } from '../types';
 import { decimalsOfNumber } from './crossfile';
@@ -106,6 +107,8 @@ interface Run {
   first: Ev;
   last: Ev;
   end: Win;
+  /** the member whose end is `end` (the time a hop leaves from); = last unless an earlier interval ends later */
+  endEv: Ev;
   events: Ev[];
 }
 
@@ -149,8 +152,11 @@ function runsOf(events: Ev[]): Run[] {
     if (run && km(run.first.lat, run.first.lon, e.lat, e.lon) < SHIP_SPEED_MIN_SEPARATION_KM) {
       run.events.push(e);
       run.last = e;
-      if (e.end.lo > run.end.lo) run.end = e.end;
-    } else runs.push({ first: e, last: e, end: e.end, events: [e] });
+      if (e.end.lo > run.end.lo) {
+        run.end = e.end;
+        run.endEv = e;
+      }
+    } else runs.push({ first: e, last: e, end: e.end, endEv: e, events: [e] });
   }
   return runs;
 }
@@ -210,21 +216,51 @@ const bucketOf = (r: DataRow): string => `${r.file}\u0000${r.sheet}`;
 
 const runRows = (run: Run): DataRow[] => run.events.flatMap((e) => e.rows);
 
-/** Line number of a run within one file and sheet; a run that has no row there is named with the file it is in. */
-function lineRef(run: Run, bucket: string): string {
-  const rows = runRows(run);
-  const here = rows.filter((r) => bucketOf(r) === bucket);
+/** Line number of ONE event within one file and sheet (its first row there); an event with no row there is named with its file. */
+function eventRef(e: Ev, bucket: string): string {
+  const here = e.rows.filter((r) => bucketOf(r) === bucket);
   if (here.length > 0) return String(Math.min(...here.map((r) => r.line)));
-  const r = rows[0];
-  return `${r.file}:${r.line}`;
+  return `${e.rows[0].file}:${e.rows[0].line}`;
+}
+
+/**
+ * The label of a place in a case: the event a hop arrives at (first) and the one it leaves from (last: its position; endEv: its time,
+ * the same event except when an earlier interval of the place ends later). Every number of a hop can be traced to the lines it names.
+ */
+function placeLabel(run: Run, bucket: string, arrive: boolean, leave: boolean): string {
+  const into = eventRef(run.first, bucket);
+  const outOf = run.endEv === run.last ? eventRef(run.last, bucket) : `${eventRef(run.last, bucket)}/${eventRef(run.endEv, bucket)}`;
+  if (arrive && !leave) return into;
+  if (leave && !arrive) return outOf;
+  return into === outOf ? into : `${into}…${outOf}`;
+}
+
+/** The rows of a place, event by event ("+" joins events less than SHIP_SPEED_MIN_SEPARATION_KM apart); undefined for a one-row place. */
+function placeRows(run: Run, bucket: string): string | undefined {
+  const rows = runRows(run);
+  if (rows.length < 2) return undefined;
+  return run.events
+    .map((e) => {
+      const here = e.rows.filter((r) => bucketOf(r) === bucket).map((r) => r.line);
+      const there = e.rows.filter((r) => bucketOf(r) !== bucket).map((r) => `${r.file}:${r.line}`);
+      return [formatLines(here), ...there.slice(0, 3), ...(there.length > 3 ? [`…+${there.length - 3}`] : [])].filter((x) => x !== '').join(', ');
+    })
+    .join(' + ');
 }
 
 const num = (v: number): string => String(v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
 const hoursText = (v: number): string => (v < 0.1 ? v.toFixed(2) : num(v)); // "0.02 h": events stamped within the same minute stay visible
 const hopText = (h: Hop): string => `${num(h.km)} km, ${hoursText(h.hours)} h, ≥${Math.floor(h.kn)} kn`;
 
-function caseText(item: Item, bucket: string): string {
-  return `${item.chain.map((r) => lineRef(r, bucket)).join('→')}: ${item.hops.map(hopText).join('; ')}`;
+function caseText(item: Item, bucket: string): { text: string; places: boolean; split: boolean } {
+  const n = item.chain.length;
+  const labels = item.chain.map((r, i) => placeLabel(r, bucket, i > 0, i < n - 1));
+  const legend = item.chain.flatMap((r, i) => {
+    const rows = placeRows(r, bucket);
+    return rows ? [`${labels[i]}: ${rows}`] : [];
+  });
+  const text = `${labels.join('→')}: ${item.hops.map(hopText).join('; ')}${legend.length > 0 ? ` [${legend.join('; ')}]` : ''}`;
+  return { text, places: legend.length > 0, split: labels.some((l) => l.includes('/')) };
 }
 
 function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
@@ -248,10 +284,12 @@ function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
     }
     for (const [k, b] of buckets) {
       const shown = b.items.slice(0, MAX_CASES).map((i) => caseText(i, k));
-      const cases = shown.join(' | ') + (b.items.length > shown.length ? ` | …+${b.items.length - shown.length}` : '');
+      const cases = shown.map((c) => c.text).join(' | ') + (b.items.length > shown.length ? ` | …+${b.items.length - shown.length}` : '');
       const params: Record<string, string | number> = { count: b.items.length, cases };
       if (declaredGroup && b.items.some((i) => i.group === DECLARED)) params.declared = 'yes';
       if (b.items.some((i) => i.mixed)) params.mixed = 'yes';
+      if (shown.some((c) => c.places)) params.places = 'yes';
+      if (shown.some((c) => c.split)) params.split = 'yes';
       if (rule === 'ROW-SHIP-SPEED-UNUSUAL') {
         const extreme = threshold('ROW-SHIP-SPEED', 'speed.extreme');
         if (b.items.some((i) => i.hops.some((h) => h.kn > extreme))) params.impossible = 'yes';
