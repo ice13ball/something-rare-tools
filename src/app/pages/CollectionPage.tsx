@@ -16,6 +16,7 @@ import { Layout } from '../components/Layout';
 import { ReportView } from '../components/ReportView';
 import { downloadBlob } from '../download';
 import { t, useLang } from '../i18n';
+import { useLeaveWarning } from '../leaveWarning';
 import { loadInputs } from '../loadInput';
 
 type Kind = 'dois' | 'datacite' | 'zenodo' | 'csw';
@@ -423,6 +424,9 @@ export function CollectionPage({ engine: engineProp, createCheckEngine = newChec
       if (!(e instanceof DOMException && e.name === 'AbortError')) setCsvError(messageOf(e).includes('csv-damaged') ? t('collection.notice.csv-damaged') : t('collection.csv.failed', { message: messageOf(e) }));
     }
   };
+
+  // Only an active run: it checkpoints, but the visitor would otherwise stop it unknowingly. Idle, paused and finished runs do not warn.
+  useLeaveWarning(progress !== null && isRunning(progress));
 
   const showProgress = progress !== null && progress.status !== 'idle';
   const c = progress?.counts;

@@ -6,10 +6,10 @@ import { DATA_HOSTS, MAP_PRIVACY_URL } from '../../../config/hosts';
 import { IPT_HOSTS } from '../../../config/ipt';
 import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
-import { t, useLang } from '../i18n';
+import { atlasHref, t, useLang } from '../i18n';
 
 export function PrivacyPage(): React.ReactElement {
-  useLang();
+  const { lang } = useLang();
   return (
     <Layout titleKey="privacy.title">
       <h1>{t('privacy.title')}</h1>
@@ -75,6 +75,11 @@ export function PrivacyPage(): React.ReactElement {
         <h2>{t('privacy.analytics.h')}</h2>
         <p>{t('privacy.analytics.p1')}</p>
         <p>{t('privacy.analytics.p2')}</p>
+        <p>{t('privacy.consent.p')}</p>
+      </section>
+      <section>
+        <h2>{t('privacy.counter.h')}</h2>
+        <p>{t('privacy.counter.p')}</p>
       </section>
       <section>
         <h2>{t('privacy.legal.h')}</h2>
@@ -86,7 +91,10 @@ export function PrivacyPage(): React.ReactElement {
           {t('privacy.contact.p')}: <a href={'mailto:' + SITE.contactEmail}>{SITE.contactEmail}</a>
         </p>
         <p>
-          {t('privacy.contact.more')}: <a href={SITE.atlasUrl}>{SITE.atlasUrl.replace('https://', '')}</a>
+          {t('privacy.contact.more')}: <a href={atlasHref(SITE.atlasUrl, lang)}>{SITE.atlasUrl.replace('https://', '')}</a>
+        </p>
+        <p>
+          {t('privacy.atlas.policy')}: <a href={atlasHref(SITE.atlasPrivacyUrl, lang)}>{SITE.atlasPrivacyUrl.replace('https://', '')}</a>
         </p>
       </section>
     </Layout>

@@ -33,9 +33,10 @@ describe('UI strings', () => {
   });
 
   it('keeps the brand name and the mandated sentences', () => {
-    expect(UI.en.brand).toBe('Abyssal Claims Tools');
+    expect(UI.en.brand).toBe('Abyssal Claims');
+    expect([UI.en['nav.tools'], UI.pl['nav.tools'], UI.de['nav.tools'], UI.fr['nav.tools']]).toEqual(['Tools', 'Narzędzia', 'Werkzeuge', 'Outils']);
     expect(UI.en['report.noProblems']).toBe('No problems found in the checked categories.');
-    expect(UI.en['nav.atlas']).toBe('Abyssal Claims — deep-sea atlas');
+    for (const l of ['en', 'pl', 'de', 'fr'] as const) expect(UI[l]['nav.atlas']).toBe('Atlas');
   });
 
   it('translate fills params and falls back to English, then to the key', () => {

@@ -10,8 +10,8 @@
     <meta name="description" content="Paste a DOI or a link to a Zenodo, PANGAEA or GeoNetwork record. See the licence each metadata source states, how each statement is classified, and where the sources contradict each other. Only metadata is read, never the data files." />
     <link rel="canonical" href="https://tools.something-rare.com/licence" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Abyssal Claims Tools" />
-    <meta property="og:title" content="Licence check: compare a dataset's licence across metadata sources — Abyssal Claims Tools" />
+    <meta property="og:site_name" content="Abyssal Claims" />
+    <meta property="og:title" content="Licence check: compare a dataset's licence across metadata sources — Abyssal Claims" />
     <meta property="og:description" content="Paste a DOI or a link to a Zenodo, PANGAEA or GeoNetwork record. See the licence each metadata source states, how each statement is classified, and where the sources contradict each other. Only metadata is read, never the data files." />
     <meta property="og:url" content="https://tools.something-rare.com/licence" />
     <meta property="og:image" content="https://tools.something-rare.com/og.png" />
@@ -23,7 +23,7 @@
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "Abyssal Claims Tools — Licence check",
+  "name": "Abyssal Claims — Tools: Licence check",
   "url": "https://tools.something-rare.com/licence",
   "description": "Paste a DOI or a link to a Zenodo, PANGAEA or GeoNetwork record. See the licence each metadata source states, how each statement is classified, and where the sources contradict each other. Only metadata is read, never the data files.",
   "applicationCategory": "UtilitiesApplication",
@@ -50,7 +50,8 @@
 }
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Licence check: compare a dataset's licence across metadata sources — Abyssal Claims Tools</title>
+    <link rel="preload" href="/fonts/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <title>Licence check: compare a dataset's licence across metadata sources — Abyssal Claims</title>
     <!-- Google Consent Mode v2 default (all denied), set BEFORE any gtag config.
          Kept as an external same-origin file: the CSP allows no inline scripts.
          No gtag.js and no gtag('config') here: analytics loads only after consent. -->
@@ -59,7 +60,7 @@
   <body>
     <div id="root">
       <header class="site-header">
-        <a class="brand" href="/">Abyssal Claims Tools</a>
+        <a class="brand" href="/">Abyssal Claims <span class="brand-part">Tools</span></a>
         <nav aria-label="Main"><a href="/check">Data check</a> <a href="/licence" aria-current="page">Licence check</a> <a href="/collection">Collection review</a> <a class="nav-external" href="https://something-rare.com">Atlas</a></nav>
       </header>
       <main id="main" class="container">
@@ -75,7 +76,7 @@
         </ul>
         <p>Reading happens in your own browser or, if you choose, through our server, which keeps nothing. See the <a href="/privacy">privacy page</a>.</p>
       </main>
-      <footer class="site-footer"><a href="https://something-rare.com">Abyssal Claims — deep-sea atlas</a> <a href="/privacy">Privacy</a> <a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a> <a href="https://doi.org/10.5281/zenodo.19745884" lang="en">Based on Abyssal Claims — © 2026 Michal Mazurowski</a></footer>
+      <footer class="site-footer"><a href="https://something-rare.com">Atlas</a> <a href="/privacy">Privacy</a> <a href="https://github.com/ice13ball/something-rare-tools">Source code (AGPL-3.0-or-later)</a> <a href="https://doi.org/10.5281/zenodo.19745884" lang="en">Based on Abyssal Claims — © 2026 Michal Mazurowski</a></footer>
     </div>
     <noscript><p>This tool needs JavaScript to compare licences; the description above works without it.</p></noscript>
     <script type="module" src="/src/app/entries/licence.tsx"></script>

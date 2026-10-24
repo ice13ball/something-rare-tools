@@ -170,10 +170,16 @@ describe('CheckPage', () => {
 describe('pages', () => {
   it('IndexPage: one card to /check, atlas link, privacy link, language switcher, cookie banner', () => {
     render(<IndexPage />);
-    expect(screen.getAllByText('Abyssal Claims Tools').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Abyssal Claims', { exact: false }).length).toBeGreaterThan(0);
+    expect(document.querySelector('.brand-part')?.textContent).toBe('Tools');
+    expect(document.querySelector('h1')?.textContent).toBe('Abyssal Claims — Tools');
     const card = screen.getByRole('link', { name: /Open data check/ });
     expect(card.getAttribute('href')).toBe('/check');
-    for (const a of screen.getAllByRole('link', { name: 'Abyssal Claims — deep-sea atlas' })) expect(a.getAttribute('href')).toBe('https://something-rare.com');
+    // the atlas link is named "Atlas", opens in the same tab and carries the current language
+    for (const a of screen.getAllByRole('link', { name: 'Atlas' })) {
+      expect(a.getAttribute('href')).toBe('https://something-rare.com/?lang=en');
+      expect(a.getAttribute('target')).toBeNull();
+    }
     expect(screen.getAllByRole('link', { name: 'Privacy' })[0].getAttribute('href')).toBe('/privacy');
     expect(screen.getByRole('combobox')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy();
@@ -234,7 +240,13 @@ describe('pages', () => {
     for (const h of IPT_HOSTS) expect(within(ipt).getByText(h)).toBeTruthy();
     expect(within(ipt).getAllByRole('listitem')).toHaveLength(IPT_HOSTS.length);
     expect(document.body.textContent).toContain('api.gbif.org for GBIF, api.obis.org for OBIS');
-    expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'https://something-rare.com')).toBe(true);
+    expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'https://something-rare.com/?lang=en')).toBe(true);
+    expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'https://something-rare.com/privacy?lang=en')).toBe(true);
+    // one controller, the shared consent cookie, the atlas counter
+    expect(document.body.textContent).toContain('controller of personal data for both');
+    expect(document.body.textContent).toContain('ac_consent');
+    expect(document.body.textContent).toContain('something-rare.com so that the Atlas and the Tools both read it');
+    expect(document.body.textContent).toContain('Visit counter of the Atlas');
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === 'mailto:m.mazurowski@ai-wall.com')).toBe(true);
   });
 
@@ -278,19 +290,22 @@ describe('pages', () => {
 });
 
 describe('CookieBanner', () => {
+  beforeEach(() => {
+    document.cookie = 'ac_consent=; Path=/; Max-Age=0';
+  });
   it('is shown without a decision; Decline stores denied and hides it', () => {
     render(<CookieBanner />);
     fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
-    expect(localStorage.getItem('consent')).toBe('denied');
+    expect(document.cookie).toContain('ac_consent=denied');
     expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
   });
   it('Accept stores granted', () => {
     render(<CookieBanner />);
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    expect(localStorage.getItem('consent')).toBe('granted');
+    expect(document.cookie).toContain('ac_consent=granted');
   });
   it('stays hidden once a decision exists', () => {
-    localStorage.setItem('consent', 'denied');
+    document.cookie = 'ac_consent=denied; Path=/';
     render(<CookieBanner />);
     expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
   });

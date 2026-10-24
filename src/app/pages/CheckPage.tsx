@@ -17,6 +17,7 @@ import { ReportView } from '../components/ReportView';
 import { SingleCruise } from '../components/SingleCruise';
 import type { downloadText } from '../download';
 import { t, useLang } from '../i18n';
+import { useLeaveWarning } from '../leaveWarning';
 import { classifyInput } from '../inputType';
 import { loadInputs, UnknownLinkError, type LoadLine } from '../loadInput';
 import { DEFAULT_MODE, type CheckInput, type DownloadMode } from '../types';
@@ -65,6 +66,9 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
   const analytics = useRef<{ inputType: ReturnType<typeof classifyInput>; mode: DownloadMode } | null>(null);
 
   const busy = phase === 'loading' || phase === 'checking';
+  // Work that leaving would lose: files chosen on the input step, or a confirm / checking / report step. Never an empty page.
+  const [filesChosen, setFilesChosen] = useState(0);
+  useLeaveWarning(filesChosen > 0 || phase === 'confirm' || phase === 'checking' || phase === 'report');
 
   const finish = async (files: ParseResult['files'], lay: Record<string, LayoutPlan>, maps: Record<string, SheetMapping[]>, declared: boolean): Promise<void> => {
     setPhase('checking');
@@ -150,7 +154,7 @@ export function CheckPage({ engine: engineProp, fetcherFor = defaultFetcher, map
     <Layout titleKey="check.docTitle">
       <h1>{t('check.title')}</h1>
       <p className="lead">{t('check.intro')}</p>
-      <InputPanel mode={mode} onSubmit={(i) => void submit(i)} disabled={busy} modeSwitch={<ModeSwitch value={mode} onChange={setMode} />} />
+      <InputPanel mode={mode} onFilesChange={setFilesChosen} onSubmit={(i) => void submit(i)} disabled={busy} modeSwitch={<ModeSwitch value={mode} onChange={setMode} />} />
 
       {problem?.kind === 'unknownLink' && (
         <p className="error-text" role="alert">

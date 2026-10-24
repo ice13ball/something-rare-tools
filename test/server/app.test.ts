@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -110,8 +110,76 @@ describe('static routes', () => {
     // the AGPL source link and the section 7(b) attribution notice are reachable from every page, the 404 included
     expect(res.text).toContain('href="https://github.com/ice13ball/something-rare-tools"');
     expect(res.text).toContain('<a href="https://doi.org/10.5281/zenodo.19745884">Based on Abyssal Claims — © 2026 Michal Mazurowski</a>');
-    expect(res.text).not.toContain('<script');
+    // no inline script (the CSP forbids it): the only script is the static same-origin file
+    expect(res.text).not.toMatch(/<script(?![^>]*\ssrc="\/not-found\.js")/);
+    expect(res.text).toContain('<script src="/not-found.js" defer></script>');
     expectCommonHeaders(res);
+  });
+
+  describe('the 404 page: dark site layout, four languages, links to the tools home and the Atlas', () => {
+    const visible = (html: string): string[] => [...html.matchAll(/<div class="nf" lang="(\w+)"([^>]*)>/g)].filter((m) => !m[2]!.includes('hidden')).map((m) => m[1]!);
+
+    it('status 404, no-store, Vary: Accept-Language, dark base style, favicon, brand and the two part names', async () => {
+      const res = await request(app).get('/nope');
+      expect(res.status).toBe(404);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['vary']).toBe('Accept-Language');
+      expect(res.text).toContain('background:#0a0e14');
+      expect(res.text).toContain('href="/favicon.svg"');
+      expect(res.text).toContain('Abyssal Claims <span class="brand-part">Tools</span>');
+      expect(res.text).toContain('<title>Page not found — Abyssal Claims</title>');
+      expect(res.text).not.toContain('target=');
+    });
+
+    it('the language: ?lang= first, then Accept-Language by quality, else English; an unknown value is ignored', async () => {
+      expect(visible((await request(app).get('/nope')).text)).toEqual(['en']);
+      expect(visible((await request(app).get('/nope').set('Accept-Language', 'de-DE,de;q=0.9,en;q=0.5')).text)).toEqual(['de']);
+      expect(visible((await request(app).get('/nope').set('Accept-Language', 'xx,en;q=0.4,fr;q=0.8')).text)).toEqual(['fr']);
+      expect(visible((await request(app).get('/nope?lang=pl').set('Accept-Language', 'de')).text)).toEqual(['pl']);
+      expect(visible((await request(app).get('/nope?lang=xx').set('Accept-Language', 'de')).text)).toEqual(['de']);
+      const pl = (await request(app).get('/nope?lang=pl')).text;
+      expect(pl).toContain('<html lang="pl">');
+      expect(pl).toContain('<title>Nie znaleziono strony — Abyssal Claims</title>');
+    });
+
+    it('links to the tools home and to the Atlas with the language of its block, in the same tab', async () => {
+      const html = (await request(app).get('/nope')).text;
+      for (const [lang, tools] of [['pl', 'Narzędzia'], ['en', 'Tools'], ['de', 'Werkzeuge'], ['fr', 'Outils']] as const) {
+        const block = html.slice(html.indexOf(`<div class="nf" lang="${lang}"`), html.indexOf('</div>', html.indexOf(`<div class="nf" lang="${lang}"`)));
+        expect(block, lang).toContain(`<a href="/">${tools}</a>`);
+        expect(block, lang).toContain(`<a href="https://something-rare.com/?lang=${lang}">Atlas</a>`);
+        expect(block, lang).toContain('href="https://github.com/ice13ball/something-rare-tools"');
+      }
+    });
+
+    it('wears the built stylesheet when the home page names one, and only a same-origin /assets one', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'dist-css-'));
+      cpSync(DIST, dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'index.html'),
+        '<html><head><link rel="stylesheet" crossorigin href="/assets/index-abc123.css"><link rel="stylesheet" href="https://evil.example/x.css"></head><body>fixture-page-index</body></html>',
+      );
+      const html = (await request(make({ distDir: dir }).app).get('/nope')).text;
+      expect(html).toContain('<link rel="stylesheet" crossorigin href="/assets/index-abc123.css" />');
+      expect(html).not.toContain('evil.example');
+    });
+
+    it('serves /not-found.js and /fonts/* from dist when present, never directory listings or traversal', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'dist-fonts-'));
+      cpSync(DIST, dir, { recursive: true });
+      mkdirSync(join(dir, 'fonts'));
+      writeFileSync(join(dir, 'fonts', 'barlow-latin-400-normal.woff2'), 'wOF2');
+      writeFileSync(join(dir, 'not-found.js'), '/* x */');
+      const a = make({ distDir: dir }).app;
+      const font = await request(a).get('/fonts/barlow-latin-400-normal.woff2');
+      expect(font.status).toBe(200);
+      expect(font.headers['content-type']).toMatch(/font\/woff2/);
+      expectCommonHeaders(font);
+      expect((await request(a).get('/not-found.js')).status).toBe(200);
+      expect((await request(a).get('/fonts/')).status).toBe(404);
+      expect((await request(a).get('/fonts/%2e%2e/secret.txt')).status).toBe(404);
+      expect((await request(app).get('/fonts/barlow-latin-400-normal.woff2')).status).toBe(404);
+    });
   });
 
   it('404 for anything not listed: /check/anything, /index.html, /Check, /privacy/x, unlisted files in dist, /check//', async () => {

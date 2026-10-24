@@ -42,7 +42,7 @@ describe('LicencePage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Licence check' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'What this checks' })).toBeTruthy();
     expect(screen.queryByTestId('licence-result')).toBeNull();
-    expect(document.title).toBe("Licence check: compare a dataset's licence across metadata sources — Abyssal Claims Tools");
+    expect(document.title).toBe("Licence check: compare a dataset's licence across metadata sources — Abyssal Claims");
   });
 
   it('offers the same browser / server choice as /check, browser first', () => {

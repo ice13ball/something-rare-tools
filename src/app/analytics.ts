@@ -16,7 +16,9 @@ declare global {
   }
 }
 
-const CONSENT_KEY = 'consent';
+/** The pre-ecosystem key: its value is moved into the shared cookie once, then the key is deleted. */
+const LEGACY_KEY = 'consent';
+const COOKIE = SITE.consentCookie;
 const SCRIPT_SRC = `https://www.googletagmanager.com/gtag/js?id=${SITE.gaId}`;
 
 export type ConsentState = 'granted' | 'denied';
@@ -35,21 +37,84 @@ const MODES: readonly string[] = ['browser', 'server'];
 const EVENTS: readonly string[] = ['check_started', 'check_finished'];
 const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info'] as const;
 
-export function getStoredConsent(): ConsentState | null {
+const isState = (v: unknown): v is ConsentState => v === 'granted' || v === 'denied';
+
+/** something-rare.com and its subdomains share the cookie; any other host (localhost, a preview on *.run.app, a test) gets a host-only one. */
+export function cookieDomainFor(hostname: string): string | undefined {
+  const h = hostname.toLowerCase();
+  return h === COOKIE.domain || h.endsWith('.' + COOKIE.domain) ? COOKIE.domain : undefined;
+}
+
+function cookieAttributes(maxAge: number): string {
+  const domain = cookieDomainFor(location.hostname);
+  return `; Path=/; Max-Age=${maxAge}; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}${domain ? '; Domain=' + domain : ''}`;
+}
+
+function readCookie(): ConsentState | null {
   try {
-    const v = localStorage.getItem(CONSENT_KEY);
-    if (v === 'granted' || v === 'denied') return v;
+    for (const part of document.cookie.split(';')) {
+      const i = part.indexOf('=');
+      if (i > 0 && part.slice(0, i).trim() === COOKIE.name) {
+        const v = part.slice(i + 1).trim();
+        return isState(v) ? v : null;
+      }
+    }
   } catch {
-    /* storage unavailable: no decision */
+    /* cookies unavailable */
   }
   return null;
 }
 
-function store(v: ConsentState): void {
+/** When cookies are blocked the decision still lasts for this page. */
+let remembered: ConsentState | null = null;
+
+function writeCookie(v: ConsentState): void {
   try {
-    localStorage.setItem(CONSENT_KEY, v);
+    document.cookie = `${COOKIE.name}=${v}${cookieAttributes(COOKIE.maxAge)}`;
   } catch {
-    /* the decision then lasts for this page only */
+    /* cookies unavailable */
+  }
+  remembered = readCookie() === v ? null : v; // memory only when the browser refused the cookie
+}
+
+/** The decision, cookie first. Without a cookie, the old localStorage key is migrated into it and deleted. */
+export function getStoredConsent(): ConsentState | null {
+  const c = readCookie();
+  if (c) return c;
+  let legacy: string | null = null;
+  try {
+    legacy = localStorage.getItem(LEGACY_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  if (isState(legacy)) {
+    writeCookie(legacy);
+    try {
+      localStorage.removeItem(LEGACY_KEY);
+    } catch {
+      /* nothing more to do */
+    }
+    return legacy;
+  }
+  return remembered;
+}
+
+const store = writeCookie;
+
+/** On Decline: the Google cookies of an earlier Accept go too (expired on this host and on the shared domain). */
+function clearGoogleCookies(): void {
+  try {
+    const names = document.cookie
+      .split(';')
+      .map((p) => p.split('=')[0]!.trim())
+      .filter((n) => n === '_ga' || n === '_gid' || n.startsWith('_ga_') || n.startsWith('_gat'));
+    const domain = cookieDomainFor(location.hostname);
+    for (const n of names) {
+      document.cookie = `${n}=; Path=/; Max-Age=0`;
+      if (domain) document.cookie = `${n}=; Path=/; Max-Age=0; Domain=${domain}`;
+    }
+  } catch {
+    /* cookies unavailable */
   }
 }
 
@@ -97,6 +162,7 @@ export function grantConsent(): void {
 export function denyConsent(): void {
   store('denied');
   ensureGtag()('consent', 'update', { analytics_storage: 'denied' });
+  clearGoogleCookies();
 }
 
 /** No-op without stored consent. Sends only allowed enum strings and finite counts. */
