@@ -456,3 +456,245 @@ Several collected dates merge to the earliest start and latest end; an open end 
 
 Known limit (left as is): the legacy Zenodo JSON carries only point locations; boxes and polygons exist only in free text there. A Zenodo record with a box and no collected dates still gets META-NO-EXTENT.
 Free-text collected dates ("2023-04 to 2023-05") and EDTF qualifiers ("2020?", "2020~") give no temporal extent (never a wrong one); only ISO-like ends (YYYY, YYYY-MM, YYYY-MM-DD, optional time) or ".." are read.
+
+---------------------------------------------------------------------------
+
+## Converter (/convert) — stage 0 spike, 25.10.2026: spreadsheet -> Darwin Core Archive (Event core + Occurrence + eMoF + EML) for an OBIS node (researched 2026-10-25)
+
+Scope: facts needed to build the browser-only converter. Not rule thresholds. Every item below was opened or run in this session.
+"Verified = yes" means I read the quote in the opened document or ran the command and saw the output. Anything else is marked UNVERIFIED.
+Helper scripts and raw listings (not part of the repo): `spike/sq.py` (NVS SPARQL search), `spike/openall.py` + `opened.txt`/`opened2.txt` (every URI below opened, 74 fetches, all HTTP 200), `spike/build.py`, `spike/selfcheck.py`.
+
+How concepts were found: SPARQL on `https://vocab.nerc.ac.uk/sparql/sparql` (prefLabel regex over `http://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/`), then each URI opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/` (HTML, HTTP 200) and as `...?_profile=nvs&_mediatype=application/ld+json` (read `skos:prefLabel`, `owl:deprecated`, `skos:definition`). In the NVS data `owl:deprecated` is the literal string "false" / "true".
+
+---------------------------------------------------------------------------
+
+### Item 1. NERC vocabularies for eMoF
+
+#### 1a. What the OBIS Manual says (opened 2026-10-25)
+- https://manual.obis.org/format_emof.html - eMoF "strongly recommended" over MeasurementOrFact for Event core. Columns suggested: eventID, occurrenceID, measurementType, measurementValue, measurementUnit, measurementTypeID, measurementValueID, measurementUnitID, measurementRemarks. Quote: "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms." sampleSizeValue / sampleSizeUnit / samplingEffort / samplingProtocol "can be documented as separate measurements on different rows"; the sampleSizeUnit goes to measurementUnit.
+- https://manual.obis.org/vocabulary.html - the rules:
+  - measurementUnitID: P06 ("BODC-approved data storage units"); examples Metres ULAA, Days UTAA, Percent UPCT, mg/L UMGL.
+  - measurementValueID: "for measurementValues that are non-numerical (e.g. sampling related, sex or life stage designation)"; "NOT used for standardizing numeric measurements". Collections: Sex S10, Lifestage S11, Sampling instruments L22 (SeaVoX Device Catalogue), Instrument categories L05, Vessels C17, Habitats C35 (EUNIS L3), Behaviour = ICES, not NERC. Also allowed: DOI or OBP handle of a protocol document.
+  - measurementTypeID: "P01 codes are required for the measurementTypeID field when using NERC vocabulary"; "all P01 codes should be generalized ... do not select species-specific codes. Instead, only choose codes for 'biological entities specified elsewhere'".
+  - Q01 "has been deprecated and the terms have been remapped to P01 codes". Sampling examples given: DSPSSP01 sub-sampling protocol, LENTRACK, MTHHGHT1, NMSPINST name of sampling instrument, AZDRZZ01 sample duration.
+  - "You should not use any deprecated concepts for any measurement ID."
+  - New terms: request via https://github.com/nvs-vocabs/OBISVocabs/issues (or vocab.services@bodc.ac.uk).
+  - Manual typo seen: the Height example URL is printed as `.../MTHHGHT1/0` (stray "0"); the real URI is `.../MTHHGHT1/` (opened, HTTP 200).
+- Manual inconsistency to design around: format_event.html says sex/lifestage terms "will be included in extendedMeasurementOrFact table not the Event Core or Occurrence extension"; format_occurrence.html says measurements "can remain in the Occurrence table as long as they can be mapped to the appropriate DwC term (e.g. DwC:Occurrence:sex)". Both layouts are therefore accepted; the eMoF layout is the stated preference.
+
+#### 1b. GENERIC concepts (safe to propose automatically)
+All rows: HTTP 200 on `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/`, `owl:deprecated` = false, verified yes. Base URI for every row: `http://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/` (http + trailing slash; this is the form BioCheck's reference tables use, see Item 2).
+
+measurementTypeID (P01):
+
+| need | code | preferred label | OBIS manual says |
+|---|---|---|---|
+| raw count per sample | P01/OCOUNT01 | Count of biological entity specified elsewhere | not named in the manual; BioCheck treats it as a "no unit/value ID needed" type (Item 2) |
+| density per m3 (water) | P01/SDBIOL01 | Abundance of biological entity specified elsewhere per unit volume of the water body | not named (generic rule only); BioCheck treats it as a biological quantity |
+| density per m2 (bed, benthos) | P01/SDBIOL02 | Abundance of biological entity specified elsewhere per unit area of the bed | not named |
+| density per m2 (water body, e.g. surface) | P01/ABIOLA01 | Abundance of biological entity specified elsewhere per unit area of the water body | not named; not in BioCheck's quantity list (UNVERIFIED effect) |
+| wet-weight biomass per m3 | P01/SDBIOL04 | Wet weight biomass of biological entity specified elsewhere per unit volume of the water body | not named |
+| wet-weight biomass per m2 (bed) | P01/SDBIOL05 | Wet weight biomass of biological entity specified elsewhere per unit area of the bed | not named |
+| dry-weight biomass per m3 | P01/SDBIOL09 | Dry weight biomass of biological entity specified elsewhere per unit volume of the water body | not named |
+| dry-weight biomass per m2 (bed) | P01/SDBIOL08 | Dry weight biomass of biological entity specified elsewhere per unit area of the bed | not named |
+| AFDW biomass per m3 / per m2 (bed) | P01/SDBIOL07 / SDBIOL03 | Ash-free dry weight biomass of ... per unit volume of the water body / per unit area of the bed | not named |
+| wet / dry weight in the assayed sample (not per volume) | P01/OWETBM01, P01/ODRYBM01 | Wet / Dry weight biomass (in assayed sample) of biological entity specified elsewhere | not named |
+| sampled water volume | P01/VOLWBSMP | Volume of sample from the water body | not named; in BioCheck "sampling descriptors" list |
+| sampled area (grab / corer, bed) | P01/AREABEDS | Area of sample {sampled area} from the bed | not named; in BioCheck list |
+| sampled sediment volume | P01/VOLSEDSM | Volume of sample from the sediment | not named; in BioCheck list |
+| sampling device name | P01/NMSPINST | Name of sampling instrument | named in manual (vocabulary.html) |
+| mesh size | P01/MSHSIZE1 | Mesh size of sample collector | not named; in BioCheck list |
+| life stage | P01/LSTAGE01 | Development stage of biological entity specified elsewhere | not named; value from S11 |
+| sex | P01/ENTSEX01 | Sex of biological entity specified elsewhere | not named; value from S10 |
+| collector mouth area / diameter | P01/MTHAREA1, P01/DSAMPA01 | Area of sample collector (aperture) {mouth area}; Diameter of sample collector (aperture) | MTHHGHT1 (height) named in manual; same family |
+| sub-sampling fraction | P01/SSAMPC01 | Sub-sampling coefficient | not named; BioCheck "no unit/value ID needed" |
+| sample duration / track length / sub-sampling protocol | P01/AZDRZZ01, LENTRACK, DSPSSP01 | Sample duration; Length of sampling track; Description of sub-sampling protocol | all three named in manual |
+
+measurementUnitID (P06). Note the units the user listed:
+
+| unit | code | preferred label | notes |
+|---|---|---|---|
+| #/m3 | P06/UPMM | Number per cubic metre | verified |
+| #/m2 | P06/UPMS | Number per square metre | verified |
+| g/m2 | P06/UGMS | Grams per square metre | verified |
+| g/m3 | P06/UGMC | Grams per cubic metre | verified |
+| mg/m3 | P06/UMMC | Milligrams per cubic metre | verified |
+| mg/m2 | P06/UMMS | Milligrams per square metre | verified |
+| m3 | P06/MCUB | Cubic metres | verified |
+| m2 | P06/UMSQ | Square metres | verified |
+| um | P06/UMIC | Micrometres (microns) | verified |
+| mm | P06/UXMM | Millimetres | definition read: "Unit of length which is one thousandth of a metre" |
+| m | P06/ULAA | Metres | named in manual |
+| dimensionless | P06/UUUU | Dimensionless | definition: "A quantity with the dimension of 1" |
+
+TRAP: P06/UCNT is labelled "Counts" but its definition is "A proprietary unit for RDI ADCP instruments, which is proportional to decibels (dB) and used to measure echo intensity". Never map a plain count to UCNT. For OCOUNT01 BioCheck does not require a unit ID (Item 2); whether OBIS wants UUUU there is UNVERIFIED (manual silent).
+
+measurementValueID (non-numeric values):
+
+| need | concept | preferred label | notes |
+|---|---|---|---|
+| sex | S10/S102, S103, S104, S105 | female, male, not specified, indeterminate | all verified; S10 also holds S106 female+indeterminate, S107 hermaphrodite, S108 male+female (listed by SPARQL, not opened) |
+| life stage, generic | S11/S1116, S1127, S1128, S1122, S1130, S115, S1131, S1152 | adult, juvenile, larva, egg, nauplius, copepodite, not specified, indeterminate | verified; S11 has ~170 entries incl. copepodite C1..C5 (S111.., S1112 = copepodite C5), nauplius N1..N6 (S1140.. ) - S1115 "N1-6" is DEPRECATED (true), so always filter on `owl:deprecated` |
+| device category | L05/22, 24, 50, 51 | plankton nets, benthos samplers, sediment grabs, unconsolidated sediment corers | verified; L05 71, 72 (scallop dredges) are deprecated |
+
+#### 1c. METHOD-SPECIFIC / device-specific concepts (propose only after the user confirms the method)
+| concept | code | label | verified |
+|---|---|---|---|
+| Bongo net (generic) | L22/NETT0176 | Bongo net | yes, dep=false |
+| WP-2 net | L22/TOOL0979 | WP-2 net | yes |
+| WP-2 standard net (UNESCO 1968) | L22/NETT0168 | WP-2 standard net as described by UNESCO Working Party 2 (1968) | yes |
+| Multinet | L22/NETT0187 only | Hydro-Bios MultiNet Mammoth | yes. SPARQL regex `multinet|multi.?net|Hydro-?Bios` found NO generic "MultiNet" and no Midi/Maxi variant. Fallback: L05/22 plankton nets, or free text + NMSPINST |
+| Van Veen grab | L22/TOOL0653 | Van Veen grab | yes |
+| Box corer | L22/TOOL1177 | Unspecified box corer | yes (several named box corers exist, e.g. TOOL1469 Reineck) |
+| Volume filtered, by flowmeter / by geometry and distance | P01/VOLFFMXX, VOLFDGDT, (VOLFFMDT, VOLFMCXX) | Volume of sample (filtered) from the water body by flow meter / ... by computation from sampling device geometry and estimated distance travelled | VOLFFMXX, VOLFDGDT opened; the others seen in SPARQL |
+| Density per m3 in a given size fraction, etc. | many | e.g. USPBIOSV (per unit volume of the sediment), WWBIOL01/02, ADBIOL01/02 (per unit length / time) | seen in SPARQL; WWBIOL01 opened via SPARQL listing only |
+| Mesh of sieve used for sorting | P01/MSHSIZE2, MSHSIZE3 | Mesh size of sampling processor (lower / upper sieve) | MSHSIZE2 opened |
+
+Species-specific P01 codes exist in huge numbers (e.g. "Abundance of Chaetoceros ... by optical microscopy"); the manual forbids them, so a converter must never propose them.
+
+Caveats:
+- BioCheck still lists deprecated P01 SDBIOL10 in its quantity list (`files/workingEnvironment.R`); in NVS SDBIOL10 is deprecated (opened, true, replaced by PCOV7736). Deprecated codes are flagged by BioCheck ("This measurementTypeID is deprecated"), so the converter must resolve `owl:deprecated` at proposal time and at export time.
+- Q01 codes: deprecated, remapped to P01 (manual). BioCheck's `BODCeffort` still accepts the string "Q01" and `Q0100002` (instrument) - legacy.
+
+---------------------------------------------------------------------------
+
+### Item 2. BioCheck (LifeWatch / EMODnet Biology QC tool)
+
+Web app: https://rshiny.lifewatch.be/BioCheck/ (opened; Shiny page, tabs "Data overview", "Issues found", "Issues on map", "Invalid Event/Occurrence/eMoF Records", "OBIS Event Hierarchy tree", "About"; takes an IPT URL or an uploaded zipped DwC-A; says it checks "the EMODnet Biology Data Quality Criteria"). The About tab is rendered by the Shiny server and I did not read it.
+Source: https://github.com/EMODnet/EMODnetBiocheck (R package; README says the Shiny app is built from it), cloned at commit 701e6e7 (2026-10-08). It imports `obistools` (`github::iobis/obistools`, cloned at 9df1c36, 2024-03-14) and reads archives with `finch::dwca_read`. UNVERIFIED: that the deployed Shiny app runs exactly this commit.
+Check list as documented: README.md "Integrity Checks" / "Format Checks" tables (lines 62-120). Severity below is from the code: `level =` in R/checkdataset.R or obistools.
+
+#### 2a. Checks and severity (code lines are R/checkdataset.R unless stated)
+| check | severity | where |
+|---|---|---|
+| eventID and parentEventID columns must BOTH exist; duplicate eventID; parentEventID without a matching eventID | error | obistools R/check_eventids.R:12-52, called at checkdataset.R:343 |
+| extension eventID not in core (Occurrence, eMoF) | error | obistools check_eventids.R:64-76; checkdataset.R:346, 350 |
+| eMoF occurrenceID not in Occurrence | error | checkdataset.R:355, 385 |
+| eMoF eventID differs from the eventID of its occurrence | error | checkdataset.R:364 |
+| duplicate occurrenceID in Occurrence | error | checkdataset.R:398 |
+| Event: datasetName and institutionCode columns missing ("Required field X is missing") | error | checkdataset.R:799-807 |
+| required fields on leaf events (after inheritance): eventDate, decimalLongitude, decimalLatitude, scientificName, scientificNameID, occurrenceStatus, basisOfRecord - missing column or empty value | error | obistools check_fields.R:13-37; applied to `ev_flat` = flattened events that are not parents, checkdataset.R:816-817 |
+| recommended minimumDepthInMeters / maximumDepthInMeters missing or empty | warning | obistools check_fields.R:15, 47-70 |
+| eventDate not ISO 8601 (single date, or interval "a/b"; regex allows `T`, seconds, `Z` or +hh:mm; end may be shorter than start) | error | obistools check_eventdate.R:1-65; checkdataset.R:1370 |
+| lat/lon not numeric, both 0 | error | checkdataset.R:1004-1011, 1055 |
+| coordinates on land (3000 m buffer) | warning | obistools check_onland.R:55-57; checkdataset.R:1044 |
+| depth deeper than GEBCO + 150 m margin, negative offshore | warning; min > max depth = error | obistools check_depth.R:29-34, 122; checkdataset.R:1048 |
+| occurrenceStatus not in {present, absent} | error | checkdataset.R:1266 |
+| no occurrence with occurrenceStatus "present" | warning | checkdataset.R:1275 |
+| basisOfRecord not in PreservedSpecimen, FossilSpecimen, LivingSpecimen, HumanObservation, MachineObservation, MaterialSample, Occurrence | error | checkdataset.R:1297 |
+| scientificNameID does not resolve to a WoRMS LSID | warning | checkdataset.R:1645 |
+| potential duplicate occurrence (field combination) | warning | checkdataset.R:1526 |
+| marine taxon on land | warning | checkdataset.R:1584, 1615 |
+| datasetName differs from IPT title / has several values | warning | checkdataset.R:1319-1349 |
+| eMoF: NULL measurementValue; exact duplicate rows; same measurementType(ID) twice on the same occurrence or event | error | checkdataset.R:601, 648-696 |
+| eMoF: biological quantity (P01 in BioCheck's quantity list) = 0 on a "present" or status-empty occurrence | error; other value 0 on present = warning | checkdataset.R:611, 626 |
+| eMoF: type/unit/value ID not resolving to NVS terms, or deprecated; missing measurementTypeID | reported in mof_issues (no `level` column) | checkdataset.R:536-600; README "Format Checks" |
+| eMoF: no sampling instrument type (NMSPINST / Q0100002); no sampling descriptor/effort type | warning | checkdataset.R:556, 563 |
+
+#### 2b. Specific questions
+- Parent events without coordinates or date: ALLOWED. Required-field checks run on `flatten_event()` leaves (obistools flatten.R:7-69: a child inherits every Event-core field from its parent when empty), and `filter(!eventID %in% Event$parentEventID)` drops parents (checkdataset.R:816-817). The "eventDate NA does not seem to be a valid date" message is filtered out for parents (checkdataset.R:1372, 1391). A parent that HAS a malformed date still errors. OBIS manual agrees: format_event.html (inheritance) and common_formatissues.html ("the eventDate for the parent events does not need to be provided - only the dates for the actual samples are required"). But the manual also warns GBIF does not inherit: populate coordinates in children. Verified yes.
+- coordinateUncertaintyInMeters: NOT required by BioCheck. Only checked "numeric" (checkdataset.R:1016-1021). It appears in a commented-out older required list (lines 62-63). OBIS manual lists it as optional ("Other terms you should consider adding").
+- parentEventID resolution: error, see 2a. The column must exist even for flat data (check_eventids returns "Field parentEventID is missing" otherwise; check_eventids.R:12-20).
+- eventType: not validated. It is only read for the summary table (checkdataset.R:204-205, uses `eventType`, falling back to old `type`). OBIS manual: "At this time, there is no Darwin Core event type term" (common_formatissues.html), example values cruise / station / sample.
+- occurrenceStatus absent: an empty value is an error ("Empty value for required field", check_fields.R:27-37), although eMoF logic treats NA as present (checkdataset.R:611). An absent COLUMN is an error too. Valid values present / absent only.
+- basisOfRecord: allowed list in 2a; HumanObservation passes.
+- duplicate occurrenceIDs: error (checkdataset.R:398).
+- Reading the archive: `finch::dwca_read` (importiptdata.R:36). The EML file is found through the `metadata` attribute of `<archive>` in meta.xml (finch R/dwca.R:127-134); BioCheck itself only uses EML title and temporalCoverage (importiptdata.R:44-56). eMoF `eventID` is taken from the extension's coreid (`eMoF$eventID <- eMoF$id`, importiptdata.R:127), so the eMoF table needs coreid = eventID.
+- EML version: BioCheck does NOT validate EML; it only parses it with `EML::read_eml` via finch (DESCRIPTION: EML >= 2.0.0). Whether that parser accepts the 2.2.0 namespace: UNVERIFIED (no R available here; I did not run it).
+- BioCheck reference tables (snapshot files/BODCparameters_20260101.csv, BODCunits_20260101.csv, BODCvalues_20251101.csv) store URIs as `http://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/`. The join is an exact string match (checkdataset.R:565-600), so `https://` or a missing trailing slash would show as "does not resolve" (inference from the join code; not tested live). I checked every ID used in the synthetic archive against these CSVs (`selfcheck.py`): all found, none deprecated.
+- BioCheck "no unit/value ID needed" and "sampling descriptor" lists (files/workingEnvironment.R:17-37): nomofvalues = OCOUNT01, SSAMPC01; effort = Q01, AREABEDS, VOLWBSMP, LENTRACK, AZDRZZ01, VOLFFMXX, SZCLBIO1, MSHSIZE1/2/3, DSAMPA01, MTHAREA1, MTHHGHT1, MTHWDTH1, DSPSSP01, VOLXXXXX, VOLFFMDT, VOLFDGDT, VOLFMCXX, VOLSEDSM, VOLSPOPC, WASPXX01, ...; instrument = NMSPINST, Q0100002.
+
+---------------------------------------------------------------------------
+
+### Item 3. EML 2.2.0 vs 2.1.1
+
+Facts (all verified yes):
+- gbif/ipt latest release `ipt-3.3.7`, published 2026-10-16 (GitHub API `repos/gbif/ipt/releases`, 30 releases read).
+- docs/en/modules/ROOT/pages/releases.adoc:223 (cloned commit f7fcd19, 2026-10-16): "3.1.0 - October 2024 ... This major release introduces support for EML 2.2.0."
+- The IPT WRITES 2.2.0: its EML library `org.gbif:gbif-metadata-profile-eml:3.0` (IPT pom.xml:46, 357-358; jar from repository.gbif.org, unzipped) contains `templates/eml-ipt.ftl` whose root is `<eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0" ... xsi:schemaLocation="https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd">`. Older templates (1.0..1.2, namespace `eml://ecoinformatics.org/eml-2.1.1`) remain in the jar.
+- The IPT ACCEPTS both on upload: ResourceManagerImpl.java:510-531 maps namespace `eml://ecoinformatics.org/eml-2.1.1` -> GBIF profile 1.2 and `https://eml.ecoinformatics.org/eml-2.2.0` -> profile 1.3, anything else throws "Unsupported EML version or unrecognized namespace".
+- GBIF schema repository https://rs.gbif.org/schema/eml-gbif-profile/ lists 1.0 .. 1.3 (1.3 last modified 2024-08-27); `1.3/eml.xsd` has targetNamespace `https://eml.ecoinformatics.org/eml-2.2.0`.
+- OBIS Manual https://manual.obis.org/eml.html: "OBIS uses the GBIF EML profile (version 1.1)"; minimum "Title, Citation, Contact and Abstract"; licences: CC-0 preferred, CC-BY accepted, CC-BY-NC least preferred. Profile 1.1 is two generations behind the IPT, so the manual text is stale documentation rather than a requirement; I found no OBIS statement rejecting 2.2.0.
+- BioCheck: no EML validation (Item 2).
+- UNVERIFIED: which IPT version a given OBIS node runs (a node on IPT < 3.1.0 would reject 2.2.0 by the logic above); whether the OBIS harvester reads 2.2.0 from every node. I did not contact any node.
+
+Recommendation: write EML 2.2.0 with GBIF profile 1.3 as default, because it is what the current IPT (3.3.7) writes and validates, and a hand-made 2.1.1 file is the "legacy" path in the IPT code. Offer a "legacy EML 2.1.1 / profile 1.1" switch (namespace `eml://ecoinformatics.org/eml-2.1.1`, schemaLocation `http://rs.gbif.org/schema/eml-gbif-profile/1.1/eml.xsd`) for nodes on an old IPT, and tell the user to ask the node which IPT version it runs. CC-BY-4.0 is expressed as `<intellectualRights><para>... <ulink url="http://creativecommons.org/licenses/by/4.0/legalcode"><citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle></ulink>`; the IPT's supported-licence set contains exactly that URL (Constants.java:~138-145). I validated the synthetic eml.xml against the local copy of `rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd` (`xmllint --schema`: "validates").
+
+---------------------------------------------------------------------------
+
+### Item 4. WoRMS REST
+
+Spec: the Swagger page https://www.marinespecies.org/rest/ loads `https://www.marinespecies.org/rest/api-docs/openapi.yaml` (found in the page's swagger_ui JS; downloaded 81 KB, HTTP 200). Verified yes for all lines below.
+- `AphiaRecordsByMatchNames` (openapi.yaml:512-): description ends "Limited to 50 names at once for performance reasons". Params: `scientificnames[]` (required, array), `authorships[]`, `marine_only` (default true), `extant_only` (default true), `match_authority`.
+  Ran: 50 repeated names -> HTTP 200 (47 801 bytes); 51 -> HTTP 400 `"scientificnames must not exceed 50 element(s)."`. So the limit is enforced server-side at 50.
+- `AphiaRecordsByNames` (exact): "Limited to 500 names at once" (openapi.yaml:667).
+- Rate limits: none documented. grep of openapi.yaml for rate/throttl/limit/requests found only "Limit to marine/extant" parameter text, and the page https://www.marinespecies.org/aphia.php?p=webservice (opened) states none. Unwritten limits: UNVERIFIED. Responses carry `cache-control: no-store`, so the client must cache results itself.
+- CORS. Command run: `curl -s -D - -o /dev/null -H 'Origin: https://tools.something-rare.com' 'https://www.marinespecies.org/rest/AphiaRecordsByMatchNames?scientificnames[]=Calanus%20finmarchicus&marine_only=false'`
+  Output headers: `HTTP/2 200`, `content-type: application/json`, `access-control-allow-origin: *`, `access-control-allow-headers: X-Requested-With, Content-Type, Accept, Origin, Authorization`, `access-control-allow-methods: GET, POST, OPTIONS`. Also an OPTIONS preflight with `Access-Control-Request-Headers: content-type` returned 200 with the same three headers. So a browser can call it directly; keep to GET (long GET URLs with 50 names are ~2 KB, fine).
+- Response (first record): AphiaID 104464, `lsid` field present. Run result for names used later (marine_only=false):
+
+| name | AphiaID | status | rank | lsid |
+|---|---|---|---|---|
+| Calanus finmarchicus | 104464 | accepted | Species | urn:lsid:marinespecies.org:taxname:104464 |
+| Oithona similis | 106656 | accepted | Species | urn:lsid:marinespecies.org:taxname:106656 |
+| Pseudocalanus | 104165 | accepted | Genus | urn:lsid:marinespecies.org:taxname:104165 |
+| Acartia longiremis | 104257 | "alternative representation" | Species | urn:lsid:marinespecies.org:taxname:104257 |
+| Limecola balthica | 880017 | unaccepted | Species | urn:lsid:marinespecies.org:taxname:880017 |
+| Amphiura filiformis | 125080 | accepted | Species | urn:lsid:marinespecies.org:taxname:125080 |
+
+  Converter consequence: the response carries `status` and `valid_AphiaID`; unaccepted and "alternative representation" hits need a user decision. OBIS manual says scientificName must hold "the originally documented" name and scientificNameID the WoRMS LSID (common_formatissues.html, verified); whether OBIS wants the unaccepted or the valid LSID is UNVERIFIED. OBIS "does not parse LSIDs from other sources" (same page).
+
+---------------------------------------------------------------------------
+
+### Item 5. NVS (CORS and formats)
+
+Commands run (Python urllib / curl equivalent, `Origin: https://tools.something-rare.com`), 2026-10-25:
+
+| request | status | content-type | Access-Control-Allow-Origin | other |
+|---|---|---|---|---|
+| GET `https://vocab.nerc.ac.uk/sparql/sparql?query=SELECT%20*%20WHERE%7B%3Fs%20%3Fp%20%3Fo%7D%20LIMIT%201` | 200 | application/sparql-results+json; charset=utf-8 | `*` | `Access-Control-Allow-Credentials: true`; server Apache/Fuseki; `Cache-Control: must-revalidate,no-cache,no-store`; body is valid SPARQL JSON, 1 binding |
+| OPTIONS same URL (preflight, `Access-Control-Request-Headers: content-type`) | 200 | - | `*` | Allow-Methods `GET,POST,DELETE,PUT,HEAD,OPTIONS,PATCH`; Allow-Headers `Accept,Origin,X-Requested-With,Content-Type,Last-Modified,Authorization`; Max-Age 1800 |
+| GET `https://vocab.nerc.ac.uk/collection/P01/current/SDBIOL01/?_profile=nvs&_mediatype=application/ld+json` | 200 | application/ld+json | `*` | server uvicorn; content-length 3335 |
+| OPTIONS same concept URL | 405 | - | `*` | no Allow-Methods header |
+
+Consequence: the SPARQL endpoint and the concept pages can be called from the browser with a plain GET (no custom headers, so no preflight). A POST with `Content-Type: application/x-www-form-urlencoded` is also a "simple" request; JSON POSTs would preflight. The concept endpoint answers a preflight with 405, so do not send non-safelisted headers to it. Whole-collection download (P01 ~50 000 concepts, BioCheck's CSV is 20 MB) is not suited to the browser; use SPARQL search per query, or ship a small pre-built generic list (Item 1b) plus live search.
+SPARQL gotcha seen: `skos:inScheme <.../collection/P01/current/>` returned nothing; filtering `str(?c)` with regex `^http://vocab.nerc.ac.uk/collection/P01/current/[^/]+/$` works (and excludes versioned `/<CODE>/<n>/` URIs, which the endpoint also returns). `owl:deprecated` comes back as "true"/"false" literals.
+UNVERIFIED: rate limits of NVS (none documented that I found; I did not search for a policy page).
+
+---------------------------------------------------------------------------
+
+### Item 6. Synthetic Event-core DwC-A (built, not uploaded)
+
+Path: `spike/archive/` and `spike/synthetic-event-core.zip` (files at the zip root: meta.xml, eml.xml, event.txt, occurrence.txt, extendedmeasurementorfact.txt). All values invented except taxon names, WoRMS LSIDs and NVS URIs. Generator: `spike/build.py`; offline self-check mimicking the BioCheck rules in Item 2: `spike/selfcheck.py` -> 20 PASS, "ALL OK". That self-check is MY re-implementation, not BioCheck; the user will run the real BioCheck.
+
+Design choices and their evidence:
+- Event: 1 cruise (`SYN2023_CRUISE01`, 2023-06-14/2023-06-16) -> 2 stations -> 3 samples; eventType text cruise / station / sample (manual example). Cruise position DERIVED: stations at (55.50 N, 2.50 E) and (55.90 N, 3.10 E); bounding-box midpoint 55.7000 N, 2.8000 E; coordinateUncertaintyInMeters = 29151 = haversine distance from the midpoint to the farthest box corner (29 150.6 m), rounded up. The haversine HALF-DIAGONAL is 29 119.4 m (script output), 31 m smaller than the corner distance on a sphere, so a circle of the half-diagonal would not quite contain the corners; the OBIS definition is "the radius of the smallest circle around the given position containing the whole location" (darwin_core.html), so use the corner distance. georeferenceRemarks says it is derived. Stations and samples carry their own coordinates (100 m uncertainty) because GBIF does not inherit from parents (format_event.html). geodeticDatum = EPSG:4326 as the manual requires.
+- Samples have minimumDepthInMeters / maximumDepthInMeters (0-50, 0-25, 0-50) because BioCheck warns when they are missing on leaf events. Bathymetry at the two stations was NOT checked: BioCheck warns if depth > GEBCO + 150 m, and warns if a point is on land; I expect neither in the central North Sea but this is UNVERIFIED.
+- Event also has datasetName and institutionCode columns (BioCheck error if absent) and an empty parentEventID value for the cruise.
+- Occurrence: 6 records; WoRMS LSIDs from the REST run in Item 4 (Calanus finmarchicus 104464, Oithona similis 106656, Pseudocalanus genus 104165). "Pseudocalanus sp." is written as scientificName "Pseudocalanus" + taxonRank genus + scientificNameID of the genus + identificationQualifier "sp." + verbatimIdentification "Pseudocalanus sp." The manual's rule (darwin_core.html: scientificName = lowest accurate rank, qualifier in identificationQualifier) is verified; that "sp." itself belongs in identificationQualifier is my convention (the manual's examples show cf., aff., ?), UNVERIFIED. One absent record (SYN2023-S2-O5, Oithona similis, occurrenceStatus absent, organismQuantity 0, organismQuantityType "individuals"); the other organismQuantity cells are empty because OBIS "recommends to add measurements to eMoF".
+- basisOfRecord = HumanObservation. OBIS manual (darwin_core.html): "HumanObservation (e.g bird sighting, benthic sample but specimens were discarded after counting)"; PreservedSpecimen would additionally require institutionCode, collectionCode and catalogNumber; MaterialSample is "physical sample was taken, and may have been preserved or destroyed". A converter should ask which applies and default to HumanObservation only when no collection is declared.
+- eMoF (21 rows): per sample event NMSPINST (value + L22 valueID), VOLWBSMP (m3, MCUB), MSHSIZE1 (um, UMIC); per present occurrence OCOUNT01 (no unit) and SDBIOL01 (UPMM) with density = count / volume (e.g. 246 / 12.3 = 20.0); for the absent record SDBIOL01 = 0; one LSTAGE01 row with S11/S1112. Absent zero is not flagged by BioCheck because the 0-check only fires for present/empty status (checkdataset.R:611, 626).
+- meta.xml: core `http://rs.tdwg.org/dwc/terms/Event` with `<id index="0"/>`; extension `.../terms/Occurrence` with `<coreid index="1"/>` (its eventID column is index 1, occurrenceID index 0); extension `http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact` with `<coreid index="0"/>`. From the extension definition https://rs.gbif.org/extension/obis/extended_measurement_or_fact_2023-08-28.xml (opened): `measurementTypeID`, `measurementValueID`, `measurementUnitID` live in the OBIS namespace `http://rs.iobis.org/obis/terms/`, the other measurement terms and occurrenceID in the dwc namespace, and the extension has no eventID property (the link is the coreid). `<archive ... metadata="eml.xml">` is required for BioCheck's reader (Item 2).
+- eml.xml: EML 2.2.0 / GBIF profile 1.3 (Item 3), CC-BY-4.0 via `ulink`. Validation: `xmllint --noout archive/meta.xml archive/eml.xml` -> no output (well-formed); `xmllint --noout --schema eml.xsd archive/eml.xml` against the downloaded 1.3 schemas (xml.xsd made local) -> "validates". Text files were checked by selfcheck.py only (tab counts, ID joins, vocabulary resolution against BioCheck's CSV tables).
+
+---------------------------------------------------------------------------
+
+### Open risks (for the converter design)
+1. UNVERIFIED that the live BioCheck Shiny app equals GitHub master; run the zip through it and compare with Item 2.
+2. UNVERIFIED which EML version the target OBIS node's IPT/harvester accepts; the OBIS manual still names profile 1.1.
+3. UNVERIFIED that `EML::read_eml` (inside BioCheck) parses EML 2.2.0; if BioCheck fails on the zip, try the 2.1.1 switch before blaming the data.
+4. Station positions not checked against land or GEBCO.
+5. NVS is a third party: a few `owl:deprecated` flips (e.g. SDBIOL10, S1115) show the list changes; resolve at runtime and cache with a date.
+6. Deliberate gaps: no real-data validation, no benthos example in the archive (SDBIOL02 / AREABEDS / Van Veen / box corer concepts are verified in Item 1 but not exercised in Item 6), no sex rows (S10 verified only).
+
+#### Live BioCheck run of the synthetic archive (25.10.2026, rare-tool main thread)
+
+`synthetic-event-core.zip` (invented values; 1 cruise, 2 stations, 3 samples, 6 occurrences including 1 absence, 21 eMoF rows; EML 2.2.0) uploaded by hand through "File → Upload DwC archive" at https://rshiny.lifewatch.be/BioCheck/, tree option "no":
+
+- **Issues found:** "No general issues detected in this dataset". The tabs Invalid Event / Occurrence / eMoF Records are empty.
+- **Data overview:** event types read from `eventType` as text (cruise 1, station 2, sample 3). basisOfRecord HumanObservation, 5 present and 1 absent. The temporal cover was read from the EML (2023-06-14 to 2023-06-16), so BioCheck parses EML 2.2.0. Every P01/P06/L22/S11 URI resolved to its label.
+- **The derived cruise position is accepted:** the midpoint of the stations' bounding box, with `coordinateUncertaintyInMeters`, raises no issue.
+- **Unit note:** BioCheck lists the standard unit of SDBIOL01 as "Number per millilitre" next to our "Number per cubic metre". This is shown, not flagged. The converter writes the unit the user gave, with its P06, and does not convert it.
+- **Tool fault:** with "Add event hierarchy tree? yes", the same archive produced only "argument is of length zero" (a BioCheck R error). With "no" it loads normally. Use "no" in acceptance runs, or note the fault.
+- The About tab confirms the app is built on EMODnet/EMODnetBiocheck + iobis/obistools, the code read above.
