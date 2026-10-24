@@ -376,3 +376,32 @@ describe('review round 1', () => {
     expect(single('Länge 0', 20)).toBe('variable');
   });
 });
+
+describe('review round 2', () => {
+  it('pressure in PL/DE/FR is sea pressure only for the bare noun, a water or instrument qualifier, or a sea-pressure unit', () => {
+    for (const h of [
+      'Ciśnienie powietrza [hPa]', 'Ciśnienie barometryczne', 'Pression barométrique', 'Ciśnienie pary wodnej', 'Pression de vapeur',
+      'Ciśnienie na poziomie morza [hPa]', 'Pression au niveau de la mer', "Pression de l'air [hPa]", 'Druck (Luft) [hPa]',
+      'Ciśnienie CO2 [µatm]', 'Druck CO2', 'Ciśnienie [hPa]', 'Druck [mbar]', 'Pression [atm]', 'Ciśnienie [mmHg]', 'Druck [Torr]', 'Wasserdruck [hPa]',
+      'Pression partielle CO2', 'ciśnienie parcjalne CO2', 'Partialdruck CO2', 'Luftdruck', 'Ciśnienie atmosferyczne',
+    ]) expect(single(h, 1013), h).toBe('variable');
+    for (const h of ['Ciśnienie [dbar]', 'Ciśnienie', 'Druck [dbar]', 'Wasserdruck', 'Pression (dbar)', 'Ciśnienie hydrostatyczne', 'Druck CTD', 'Pression', 'Druck', 'Pression hydrostatique', "Pression de l'eau", 'Ciśnienie wody', 'Ciśnienie [bar]']) {
+      expect(single(h, 12), h).toBe('pressure');
+    }
+  });
+
+  it('English pressure names are exactly as on main', () => {
+    for (const h of ['Pressure [dbar]', 'PRES', 'Sea pressure', 'CTD pressure', 'Pressure', 'Press', 'Prs']) {
+      expect(single(h, 12), h).toBe(h.toLowerCase().includes('pressure') && /^(sea|ctd)/i.test(h) ? 'variable' : 'pressure');
+    }
+    for (const h of ['Air pressure', 'Atmospheric pressure [hPa]', 'Partial pressure CO2']) expect(single(h, 1013), h).toBe('variable');
+  });
+
+  it('"DL" (a detection limit) is not a longitude, "dł." still is', () => {
+    const p = run(['Latitude', 'DL'], [[54.37, 0.12], [54.41, 0.31]]);
+    expect(p.map((x) => x.role.kind)).toEqual(['latitude', 'variable']);
+    const q = run(['Szerokość', 'Dł.'], [[54.37, 18.62], [54.41, 18.7]]);
+    expect(q.map((x) => x.role.kind)).toEqual(['latitude', 'longitude']);
+    expect(single('dl', 12.5)).toBe('variable');
+  });
+});
