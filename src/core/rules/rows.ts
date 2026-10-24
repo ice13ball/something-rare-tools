@@ -537,7 +537,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Das Datum in der Spalte „{field}“ (Zeilen {lines}, z. B. {value}) liegt nach dem heutigen Tag; bei einem Zeitraum zählt sein Ende. Ein Ereignis in der Zukunft kann noch nicht stattgefunden haben: Prüfen Sie Jahr, Monat und Tag.`,
       fr: `La date de la colonne « {field} » (lignes {lines}, par ex. {value}) est postérieure à aujourd'hui ; pour un intervalle, sa fin compte. Un événement futur n'a pas pu avoir lieu : vérifiez l'année, le mois et le jour.`,
     },
-    technical: `{file}:{lines} field {field} value '{value}': the date, or the end of the interval, is later than today (UTC calendar day; a date equal to today is not in the future; a year or month counts by its first day; a time without a zone is read as UTC). obis-qc DATE_IN_FUTURE.`,
+    technical: `{file}:{lines} field {field} value '{value}': the date, or the end of the interval, is later than today (UTC; a value counts as future only when it can have begun nowhere yet, so a date within a day of today, as read in the latest time zone UTC+14, is not; a year or month counts by its first day). obis-qc DATE_IN_FUTURE.`,
   },
   {
     id: 'ROW-INVISIBLE-CHAR',

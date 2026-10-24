@@ -3,7 +3,7 @@
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
 import { makeFinding, threshold } from '../rules/registry';
-import { utcDayOf } from '../values/dates';
+import { earliestUtcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
 
 /*
@@ -448,16 +448,46 @@ function depthSign(ds: Dataset, out: Finding[]): void {
 
 /* ---------- ROW-NO-COORD ---------- */
 
+const hasPosition = (r: DataRow): boolean => r.lat !== undefined && r.lon !== undefined;
+const dateBlank = (r: DataRow): boolean => r.datetime === undefined && (r.dateRaw === undefined || r.dateRaw === null || String(r.dateRaw).trim() === '');
+
 /*
  * A row with a blank latitude or longitude cell, in a sheet where other rows have both (obis-qc NO_COORD). The dataset builder sets
- * `posBlank` only on a row that holds something besides the position (so blank trailing rows are not rows here), that is not a
- * summary row ("Total", "Mean"), and, in a Darwin Core event hierarchy, that neither is the parent of another event nor has an
- * ancestor with a position (OBIS gives a child event the position of its parent). Text in a coordinate cell is ROW-NON-NUMERIC and
- * never counts as blank. A sheet in which no row has a position says nothing.
+ * `posBlank` only on a row that holds something besides the position (so blank trailing rows are not rows here), that is not a summary
+ * row ("Total", "Mean"), and, in a Darwin Core event hierarchy, that neither is the parent of another event nor has an ancestor with a
+ * position (OBIS gives a child event the position of its parent). Text in a coordinate cell is ROW-NON-NUMERIC and never counts as blank.
+ * A sheet in which no row has a position says nothing.
+ *
+ * Station blocks: a sheet that writes the position once per station (or once per date, with no station column) and leaves it blank
+ * on the continuation rows is not missing positions. A row with BOTH cells blank is therefore not reported when (a) its station (without a
+ * station column: its date) has a position on some other row of the sheet, or (b) its station and date are blank too and it follows, within
+ * the block, a positioned row (or another such continuation). A row with only one coordinate blank is always reported: that is a gap, not a block.
  */
 function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
-  if (!rows.some((r) => r.lat !== undefined && r.lon !== undefined)) return;
-  const bad = rows.filter((r) => r.posBlank !== undefined && (r.lat === undefined || r.lon === undefined));
+  if (!rows.some(hasPosition)) return;
+  const byStation = rows.some((r) => r.station !== undefined);
+  const keyOf = (r: DataRow): string | undefined => (byStation ? r.station : r.datetime?.iso.slice(0, 10) ?? (dateBlank(r) ? undefined : String(r.dateRaw).trim()));
+  const positioned = new Set<string>();
+  for (const r of rows) {
+    const k = hasPosition(r) ? keyOf(r) : undefined;
+    if (k !== undefined) positioned.add(k);
+  }
+  const bad: DataRow[] = [];
+  let follows = false; // the previous row of the block is positioned, or a continuation of a positioned one
+  for (const r of rows) {
+    if (hasPosition(r)) {
+      follows = true;
+      continue;
+    }
+    if (r.posBlank === undefined) continue;
+    if (r.posBlank === 'both') {
+      const k = keyOf(r);
+      if (k !== undefined && positioned.has(k)) continue;
+      if (r.station === undefined && dateBlank(r) && follows) continue;
+      follows = false;
+    }
+    bad.push(r);
+  }
   if (bad.length === 0) return;
   out.push(makeFinding('ROW-NO-COORD', { file: ds.file, sheet, lines: bad.map((r) => r.line), params: { count: bad.length } }));
 }
@@ -465,6 +495,7 @@ function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): v
 /* ---------- ROW-DEPTH-MIN-MAX, ROW-DEPTH-RANGE ---------- */
 
 const METRE = /^(m|meters?|metres?)$/i;
+const NON_METRE_HEADER = /(^|[^a-z])(ft|feet|foot|fathoms?|cm|mm|km)([^a-z]|$)/i;
 
 /** The depth role of a sheet's mapping (convention and unit), when the dataset carries one. */
 function depthRole(ds: Dataset, sheet: string): { positive: 'down' | 'up' | 'unknown'; unit?: string } {
@@ -502,6 +533,8 @@ function depthRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[])
   }
   const role = depthRole(ds, sheet);
   if (role.unit !== undefined && !METRE.test(role.unit)) return;
+  // a depth in feet, fathoms, cm, mm or km written in the header only ("Depth (ft)", "depth_ft") is not metres: the bounds do not apply
+  if (NON_METRE_HEADER.test(headerOf(ds, sheet, 'depth') ?? '')) return;
   const sign = role.positive === 'up' ? -1 : 1;
   const bad = rows.filter((r) => r.depth !== undefined && outside(sign * r.depth));
   if (bad.length > 0) out.push(makeFinding('ROW-DEPTH-RANGE', { file: ds.file, sheet, lines: bad.map((r) => r.line), field: headerOf(ds, sheet, 'depth') ?? 'depth', value: String(bad[0].depth) }));
@@ -514,13 +547,14 @@ const dateHeader = (ds: Dataset, sheet: string): string | undefined => headerOf(
 
 /*
  * A date, or the END of an interval, later than today (obis-qc DATE_IN_FUTURE compares the calendar day of the end with today's date).
- * `today` is a UTC calendar day (YYYY-MM-DD) handed in by the caller, so the result never depends on the clock of the test. The value is
- * reduced to its UTC calendar day (utcDayOf): a zone given in the value is applied, a time without a zone is read as UTC (the choice
- * speed.ts makes too), a year or month counts by its first day, so the current year is not in the future. A date equal to today is not.
+ * `today` is a UTC calendar day (YYYY-MM-DD) handed in by the caller, so the result never depends on the clock of the test. A value is in
+ * the future only when it can have begun nowhere yet: earliestUtcDayOf takes a date-only value (a year or month by its first day) to its
+ * start in the latest zone, UTC+14, a time without a zone as possibly that zone's wall clock, and a time with a zone as the instant it is.
+ * So a user east of UTC is never told that his own today is in the future; a date a day after today in UTC is not reported, two days are.
  * A YY-MM-DD date is left to ROW-DATE-YYMMDD, which already names the century it guessed.
  */
 function futureRows(rows: DataRow[], today: string): DataRow[] {
-  return rows.filter((r) => r.datetime !== undefined && r.datetime.ambiguity === undefined && utcDayOf(r.datetime.end ?? r.datetime) > today);
+  return rows.filter((r) => r.datetime !== undefined && r.datetime.ambiguity === undefined && earliestUtcDayOf(r.datetime.end ?? r.datetime) > today);
 }
 
 function dateFuture(ds: Dataset, sheet: string, future: DataRow[], out: Finding[]): void {

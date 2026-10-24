@@ -10,7 +10,7 @@ import { dwcTableOf } from '../../src/core/checks/dwc';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import type { Finding, MetadataRecord, ParsedFile } from '../../src/core/types';
 import { makeZip, metaXml, nodeInflate } from '../helpers/zipfile';
-import { textFile } from '../helpers/files';
+import { textFile, xlsxFile } from '../helpers/files';
 
 const NBSP = String.fromCharCode(0xa0);
 const ZWSP = String.fromCharCode(0x200b);
@@ -73,6 +73,57 @@ describe('what is Darwin Core input', () => {
     const f = await parseDwca('a.zip', zip, nodeInflate);
     expect(f.dwca).toEqual({ core: 'Occurrence', partial: false });
     expect(DWC_IDS(check(f))).toContain('DWC-TERM-MISSING');
+  });
+});
+
+describe('Darwin Core detection is case-sensitive; event-side tables; flattened sheets; workbooks', () => {
+  it('a plain biology export with ScientificName, Kingdom, LifeStage, Count in other spelling is not Darwin Core; the exact spelling is', () => {
+    const plain = run('bio.csv', 'Station,Date,Latitude,Longitude,Depth,ScientificName,Kingdom,LifeStage,Count\nS1,2020-05-01,60.5,5.25,10,Abra alba,Animalia,adult,3\nS2,2020-05-02,60.6,5.26,20,Mya arenaria,Animalia,adult,1\n');
+    expect(DWC_IDS(plain)).toEqual([]);
+    const lower = run('bio.csv', 'station,date,latitude,longitude,depth,scientificname,kingdom,lifestage,count\nS1,2020-05-01,60.5,5.25,10,Abra alba,Animalia,adult,3\nS2,2020-05-02,60.6,5.26,20,Mya arenaria,Animalia,adult,1\n');
+    expect(DWC_IDS(lower)).toEqual([]);
+    const exact = run('bio.csv', 'station,eventDate,decimalLatitude,decimalLongitude,depth,scientificName,kingdom,lifeStage,count\nS1,2020-05-01,60.5,5.25,10,Abra alba,Animalia,adult,3\nS2,2020-05-02,60.6,5.26,20,Mya arenaria,Animalia,adult,1\n');
+    expect(DWC_IDS(exact)).toContain('DWC-TERM-MISSING');
+  });
+
+  it('an occurrence table that carries eventIDs is not told to add eventDate or a position (they live in the event table); without eventIDs it is', () => {
+    const occ2 = (idCol: string, rows: string[]) => `${['occurrenceID', idCol, 'scientificName', 'occurrenceStatus', 'basisOfRecord'].filter(Boolean).join(',')}\n${rows.join('\n')}\n`;
+    const withEvent = run('occurrence.csv', occ2('eventID', ['o1,e1,Abra alba,present,HumanObservation', 'o2,e1,Mya arenaria,present,HumanObservation']));
+    expect(only(withEvent, 'DWC-TERM-MISSING')).toEqual([]);
+    expect(only(withEvent, 'DWC-RECOMMENDED').map((x) => x.params.terms)).toEqual(['scientificNameID']);
+    const without = run('occurrence.csv', occ2('', ['o1,Abra alba,present,HumanObservation', 'o2,Mya arenaria,present,HumanObservation']));
+    expect(only(without, 'DWC-TERM-MISSING')[0].params.terms).toBe('eventDate, decimalLatitude, decimalLongitude');
+  });
+
+  const EV = 'eventID,eventDate,decimalLatitude,decimalLongitude,parentEventID,temperature';
+  it('a flattened sheet repeats its eventID per depth level: no error; one eventID used for different events is one', () => {
+    const flat = run('flat.csv', [EV, 'e1,2020-05-01,60.5,5.25,,7.1', 'e1,2020-05-01,60.5,5.25,,6.9', 'e2,2020-05-02,60.6,5.26,,7.0'].join('\n') + '\n');
+    expect(only(flat, 'DWC-EVENTID-DUPLICATE')).toEqual([]);
+    const clash = only(run('flat.csv', [EV, 'e1,2020-05-01,60.5,5.25,,7.1', 'e1,2020-05-09,60.5,5.25,,6.9', 'e1,2020-05-01,61.5,5.25,,6.8', 'e2,2020-05-02,60.6,5.26,,7.0'].join('\n') + '\n'), 'DWC-EVENTID-DUPLICATE');
+    expect(clash).toHaveLength(1);
+    expect(clash[0]).toMatchObject({ lines: [2, 3, 4], value: 'e1', params: { count: 1 } });
+  });
+
+  it('inside a Darwin Core Archive Event core a repeated eventID stays strict, even when the rows agree', async () => {
+    const meta = metaXml({ rowType: 'http://rs.tdwg.org/dwc/terms/Event', location: 'event.txt', fields: { 0: 'eventID', 1: 'eventDate', 2: 'decimalLatitude', 3: 'decimalLongitude' } });
+    const data = ['eventID\teventDate\tdecimalLatitude\tdecimalLongitude', 'a\t2020-05-01\t60.5\t5.25', 'a\t2020-05-01\t60.5\t5.25', 'b\t2020-05-02\t60.6\t5.26'].join('\n') + '\n';
+    const f = check(await parseDwca('e.zip', makeZip([{ name: 'meta.xml', data: meta }, { name: 'event.txt', data }]), nodeInflate));
+    expect(only(f, 'DWC-EVENTID-DUPLICATE').map((x) => x.lines)).toEqual([[2, 3]]);
+  });
+
+  it('a three-sheet OBIS workbook (event, occurrence, emof): every sheet is judged, not only the one built as data', () => {
+    const file = xlsxFile('obis.xlsx', {
+      event: [['eventID', 'parentEventID', 'eventDate', 'decimalLatitude', 'decimalLongitude'], ['e1', null, '2020-05-01', 60.5, 5.25], ['e1', null, '2020-05-02', 60.6, 5.26], ['e2', 'zz', '2020-05-03', 60.7, 5.27]],
+      occurrence: [['occurrenceID', 'eventID', 'scientificName', 'occurrenceStatus', 'basisOfRecord'], ['o1', 'e1', 'Abra alba', 'present', 'Seen'], ['o1', 'e1', 'Mya arenaria', 'present', 'HumanObservation']],
+      emof: [['eventID', 'measurementType', 'measurementValue', 'measurementUnit'], ['e1', 'temperature', 7.1, 'C'], ['e2', 'temperature', 7.2, 'C']],
+    });
+    const f = check(file);
+    const bySheet = (id: string) => only(f, id).map((x) => x.sheet);
+    expect(bySheet('DWC-EVENTID-DUPLICATE')).toEqual(['event']);
+    expect(bySheet('DWC-PARENT-DANGLING')).toEqual(['event']);
+    expect(bySheet('DWC-OCCURRENCEID-DUPLICATE')).toEqual(['occurrence']);
+    expect(bySheet('DWC-VOCAB-VALUE')).toEqual(['occurrence']);
+    expect(ids(f).filter((i) => i === 'DWC-TERM-MISSING')).toEqual([]);
   });
 });
 
@@ -283,6 +334,36 @@ describe('ROW-NO-COORD', () => {
     const f = only(run('s.csv', sheet('S1,2020-05-01,60.5,5.25,7.1', 'Chesapeake Bay to Middle Atlantic,,,,', 'S2,,,,7.2', 'S3,2020-05-03,60.7,5.27,7.3')), 'ROW-NO-COORD');
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual([4]);
+  });
+
+  const blocks = (...rows: string[]): string => ['Station,Date,Latitude,Longitude,Depth,Temperature,Salinity', ...rows].join('\n') + '\n';
+
+  it('a position written once per station block, continuation rows blank in station, date and position, is not missing positions', () => {
+    const f = run('blocks.csv', blocks('S1,2020-05-01,60.5,5.25,5,7.1,34.2', ',,,,10,6.9,34.3', ',,,,20,6.5,34.4', 'S2,2020-05-02,60.6,5.26,5,7.0,34.1', ',,,,10,6.8,34.2'));
+    expect(only(f, 'ROW-NO-COORD')).toEqual([]);
+  });
+
+  it('a position written once per station, the station name repeated on every row, is not missing positions; another station without any is', () => {
+    const f = only(run('blocks.csv', blocks('S1,2020-05-01,60.5,5.25,5,7.1,34.2', 'S1,2020-05-01,,,10,6.9,34.3', 'S1,2020-05-01,,,20,6.5,34.4', 'S2,2020-05-02,60.6,5.26,5,7.0,34.1', 'S3,2020-05-03,,,5,7.0,34.1')), 'ROW-NO-COORD');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([6]);
+  });
+
+  it('without a station column the date is the key in the same way', () => {
+    const f = run('d.csv', 'Date,Latitude,Longitude,Depth,Temperature\n2020-05-01,60.5,5.25,5,7.1\n2020-05-01,,,10,6.9\n,,,20,6.5\n2020-05-09,,,5,7.0\n');
+    expect(only(f, 'ROW-NO-COORD').map((x) => x.lines)).toEqual([[5]]);
+  });
+
+  it('a continuation row that does not follow a positioned row of its block is reported (a blank-key row after a stray row), and a half position never is a block', () => {
+    const f = only(run('blocks.csv', blocks('S1,2020-05-01,60.5,5.25,5,7.1,34.2', 'S2,2020-05-02,,,5,7.0,34.1', ',,,,10,6.8,34.2', 'S1,2020-05-03,60.5,,5,7.0,34.1')), 'ROW-NO-COORD');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([3, 4, 5]);
+  });
+
+  it('is not reported when the other coordinate holds an NA variant: ROW-NA-VARIANT says it', () => {
+    const f = run('s.csv', sheet('S1,2020-05-01,60.5,5.25,7.1', 'S2,2020-05-02,,NANA,7.2'));
+    expect(only(f, 'ROW-NO-COORD')).toEqual([]);
+    expect(only(f, 'ROW-NA-VARIANT').length).toBeGreaterThan(0);
   });
 
   it('says nothing when no row has a position (a sheet without coordinates)', () => {

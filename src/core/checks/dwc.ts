@@ -11,7 +11,7 @@ import type { Finding, ParsedFile, RawCell, RawSheet } from '../types';
  * checkRawTable() for every table it reads, so the findings travel with the other builder findings.
  *
  * What counts as Darwin Core input (dwcTableOf): a Darwin Core Archive (the file says so itself), or a table whose header names at
- * least DWC_MIN_TERMS different terms from DWC_TERMS AND at least one record-kind term (DWC_KIND_TERMS). DWC_TERMS holds only terms
+ * least DWC_MIN_TERMS different terms from DWC_NAMES, spelled exactly as Darwin Core spells them (case counts), AND at least one record-kind term. DWC_TERMS holds only terms
  * that are not ordinary words: "depth", "date", "station", "year", "locality", "id" and the like do not count, so a CTD or chemistry
  * sheet is never Darwin Core, however its columns are named. Everything below that needs Darwin Core runs only on such a table.
  *
@@ -21,19 +21,25 @@ import type { Finding, ParsedFile, RawCell, RawSheet } from '../types';
 
 /* ---------- what is Darwin Core input ---------- */
 
-/** Terms that are not ordinary words (lower case), the evidence that a header is Darwin Core. */
-const DWC_TERMS = new Set([
-  'occurrenceid', 'eventid', 'parenteventid', 'scientificname', 'scientificnameid', 'taxonid', 'taxonrank', 'kingdom',
-  'basisofrecord', 'occurrencestatus', 'eventdate', 'decimallatitude', 'decimallongitude', 'minimumdepthinmeters',
-  'maximumdepthinmeters', 'coordinateuncertaintyinmeters', 'geodeticdatum', 'individualcount', 'organismquantity',
-  'organismquantitytype', 'samplesizevalue', 'samplesizeunit', 'samplingprotocol', 'locationid', 'datasetid', 'datasetname',
-  'institutioncode', 'collectioncode', 'catalognumber', 'recordedby', 'identificationqualifier', 'verbatimlocality',
-  'verbatimeventdate', 'vernacularname', 'countrycode', 'stateprovince', 'waterbody', 'footprintwkt', 'eventremarks',
-  'occurrenceremarks', 'identificationremarks', 'acceptednameusage', 'originalnameusage', 'nameaccordingto',
-  'materialsampleid', 'organismid', 'preparations', 'lifestage', 'recordnumber', 'fieldnumber',
-]);
+/** Terms that are not ordinary words, in the spelling Darwin Core gives them: the evidence that a header is Darwin Core. */
+const DWC_NAMES = [
+  'occurrenceID', 'eventID', 'parentEventID', 'scientificName', 'scientificNameID', 'taxonID', 'taxonRank', 'kingdom',
+  'basisOfRecord', 'occurrenceStatus', 'eventDate', 'decimalLatitude', 'decimalLongitude', 'minimumDepthInMeters',
+  'maximumDepthInMeters', 'coordinateUncertaintyInMeters', 'geodeticDatum', 'individualCount', 'organismQuantity',
+  'organismQuantityType', 'sampleSizeValue', 'sampleSizeUnit', 'samplingProtocol', 'locationID', 'datasetID', 'datasetName',
+  'institutionCode', 'collectionCode', 'catalogNumber', 'recordedBy', 'identificationQualifier', 'verbatimLocality',
+  'verbatimEventDate', 'vernacularName', 'countryCode', 'stateProvince', 'waterBody', 'footprintWKT', 'eventRemarks',
+  'occurrenceRemarks', 'identificationRemarks', 'acceptedNameUsage', 'originalNameUsage', 'nameAccordingTo',
+  'materialSampleID', 'organismID', 'preparations', 'lifeStage', 'recordNumber', 'fieldNumber',
+] as const;
+/** The same, lower case (the column lookup of the structure checks ignores case once the table is Darwin Core). */
+const DWC_TERMS = new Set<string>(DWC_NAMES.map((n) => n.toLowerCase()));
+/** Detection is case-sensitive: a plain biology export with "ScientificName", "Kingdom" and "LifeStage" columns is not Darwin Core, "scientificName" is. */
+const DWC_EXACT = new Set<string>(DWC_NAMES);
 /** Terms that say the table holds biological records or events (a measurement sheet in Darwin Core dress is not checked). */
-const DWC_KIND_TERMS = new Set(['occurrenceid', 'eventid', 'parenteventid', 'scientificname', 'scientificnameid', 'taxonid', 'basisofrecord', 'occurrencestatus']);
+const DWC_KIND_EXACT = new Set<string>(['occurrenceID', 'eventID', 'parentEventID', 'scientificName', 'scientificNameID', 'taxonID', 'basisOfRecord', 'occurrenceStatus']);
+/** A header as the term it names, case kept: the dwc: prefix, the namespace URI and a trailing <Type> removed. */
+const bareTerm = (h: string): string => h.trim().replace(/<[A-Za-z0-9]+>$/, '').replace(/^https?:\/\/rs\.tdwg\.org\/dwc\/(?:terms|iri)\/(?:[a-z]+\/)?/i, '').replace(/^dwc:/i, '');
 /** Distinct DWC_TERMS a header must name. */
 export const DWC_MIN_TERMS = 3;
 /** The occurrence-side terms: a table with one of them is an Occurrence table, even with an eventID column. */
@@ -60,12 +66,9 @@ function termColumns(sheet: RawSheet): Map<string, number> {
 export function dwcTableOf(file: ParsedFile, sheet: RawSheet): DwcTable | undefined {
   const terms = termColumns(sheet);
   if (file.dwca) return { core: file.dwca.core, archive: true };
-  let distinct = 0;
-  let kind = false;
-  for (const t of terms.keys()) {
-    if (DWC_TERMS.has(t)) distinct++;
-    if (DWC_KIND_TERMS.has(t)) kind = true;
-  }
+  const exact = new Set(sheet.header.map(bareTerm).filter((t) => DWC_EXACT.has(t)));
+  const distinct = exact.size;
+  const kind = [...exact].some((t) => DWC_KIND_EXACT.has(t));
   if (distinct < DWC_MIN_TERMS || !kind) return undefined;
   const occurrence = OCCURRENCE_TERMS.some((t) => terms.has(t));
   return { core: !occurrence && (terms.has('eventid') || terms.has('parenteventid')) ? 'Event' : 'Occurrence', archive: false };
@@ -102,7 +105,10 @@ function structure(file: ParsedFile, sheet: RawSheet, t: DwcTable, terms: Map<st
 
   const missing: string[] = [];
   if (idIndex === undefined) missing.push(t.core === 'Event' ? 'eventID' : 'occurrenceID or eventID');
-  const required = [...REQUIRED_COMMON, ...(t.core === 'Occurrence' ? REQUIRED_OCCURRENCE : [])];
+  // an occurrence table that carries eventIDs is the occurrence side of an event table pair: date, position and depth live in the event table
+  const eventIdCol = terms.get('eventid');
+  const eventSide = t.core === 'Occurrence' && eventIdCol !== undefined && !empty(eventIdCol);
+  const required = [...(eventSide ? [] : REQUIRED_COMMON), ...(t.core === 'Occurrence' ? REQUIRED_OCCURRENCE : [])];
   for (const [name, key] of required) if (!terms.has(key)) missing.push(name);
   if (missing.length > 0) out.push(makeFinding('DWC-TERM-MISSING', { file: file.fileName, sheet: sheet.name, params: { core: t.core, terms: missing.join(', ') } }));
 
@@ -116,12 +122,14 @@ function structure(file: ParsedFile, sheet: RawSheet, t: DwcTable, terms: Map<st
   emptyCheck(idIndex, false);
   // a position blank in some rows is ROW-NO-COORD; a date blank in some rows is ROW-DATE-MISSING, and none at all in the data or the
   // metadata is META-NO-DATES (noDateSaid): only what those leave unsaid is reported here, a column empty in every row
-  emptyCheck(terms.get('eventdate'), true, noDateSaid);
-  for (const [, key] of REQUIRED_COMMON.slice(1)) emptyCheck(terms.get(key), true);
+  if (!eventSide) {
+    emptyCheck(terms.get('eventdate'), true, noDateSaid);
+    for (const [, key] of REQUIRED_COMMON.slice(1)) emptyCheck(terms.get(key), true);
+  }
   if (t.core === 'Occurrence') for (const [, key] of REQUIRED_OCCURRENCE) emptyCheck(terms.get(key), false);
 
   // recommended: the column is missing, or empty in every row
-  const recommended = [...(t.core === 'Occurrence' ? [['scientificNameID', 'scientificnameid'] as [string, string]] : []), ...RECOMMENDED_DEPTH];
+  const recommended = [...(t.core === 'Occurrence' ? [['scientificNameID', 'scientificnameid'] as [string, string]] : []), ...(eventSide ? [] : RECOMMENDED_DEPTH)];
   const lacking = recommended.filter(([, key]) => {
     const i = terms.get(key);
     return i === undefined || (rows > 0 && empty(i));
@@ -156,15 +164,26 @@ function vocabulary(file: ParsedFile, sheet: RawSheet, index: number, allowed: r
 
 /* ---------- eventID, parentEventID, occurrenceID ---------- */
 
-/** Rows of every id that appears more than once, in line order, and how many ids repeat; undefined when none does. */
-function repeated(ids: { line: number; v: string }[]): { lines: number[]; example: string; count: number } | undefined {
+/**
+ * Rows of every id that appears more than once, and how many ids repeat; undefined when none does. With `disagreeing`, only an id whose
+ * rows differ in their `sig` counts: a flattened table repeats its eventID on every depth level, which is not an error.
+ */
+function repeated(ids: { line: number; v: string; sig?: string }[], disagreeing = false): { lines: number[]; example: string; count: number } | undefined {
   const seen = new Map<string, number[]>();
-  for (const { line, v } of ids) {
+  const sigs = new Map<string, Set<string>>();
+  for (const { line, v, sig } of ids) {
     if (v === '') continue;
     const list = seen.get(v);
     if (list) list.push(line);
     else seen.set(v, [line]);
+    if (disagreeing) {
+      const set = sigs.get(v);
+      if (set) set.add(sig ?? '');
+      else sigs.set(v, new Set([sig ?? '']));
+    }
   }
+  // only the ids whose rows say different things stay (one identifier used for different events)
+  if (disagreeing) for (const [v, set] of sigs) if (set.size < 2) seen.delete(v);
   let count = 0;
   let example: string | undefined;
   let first = Infinity;
@@ -214,7 +233,14 @@ function identifiers(file: ParsedFile, sheet: RawSheet, t: DwcTable, terms: Map<
   const e = terms.get('eventid') ?? (idCol >= 0 ? idCol : undefined);
   if (e === undefined) return;
   const events = column(sheet, e);
-  const dup = repeated(events);
+  // a Darwin Core Archive Event core is strict (one row per event). Elsewhere (a flattened sheet repeats the eventID per depth level)
+  // a repeat is an error only when the rows disagree on the date or the position: one identifier used for different events
+  let sigged = events;
+  if (!t.archive) {
+    const cols = ['eventdate', 'decimallatitude', 'decimallongitude'].map((k) => terms.get(k)).filter((i): i is number => i !== undefined);
+    sigged = events.map((x, k) => ({ ...x, sig: cols.map((c) => text(sheet.rows[k].cells[c])).join('|') }));
+  }
+  const dup = repeated(sigged, !t.archive);
   if (dup) out.push(makeFinding('DWC-EVENTID-DUPLICATE', { ...base, lines: dup.lines, field: sheet.header[e], value: dup.example, params: { count: dup.count } }));
   const p = terms.get('parenteventid');
   if (p === undefined || file.dwca?.partial) return; // the parents may be in the rows that were not read
