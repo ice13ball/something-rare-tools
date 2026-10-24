@@ -169,10 +169,10 @@ describe('proposeColumns: names', () => {
 
   it('depth: header unit and sign convention come from the header and the values', () => {
     const p = props(['Depth_m', 'Depth water [m]', 'Depth [cm]'], [['1', '2', '3']]);
-    expect(p[0].role).toEqual({ kind: 'depth', positive: 'down', unit: 'm' });
+    expect(p[0].role).toEqual({ kind: 'depth', positive: 'unknown', unit: 'm' });
     // only one depth column is used
     expect(p[1].role.kind).toBe('ignore');
-    expect(props(['Depth [cm]'], [['0.5'], ['1.5']])[0].role).toEqual({ kind: 'depth', positive: 'down', unit: 'cm' });
+    expect(props(['Depth [cm]'], [['0.5'], ['1.5']])[0].role).toEqual({ kind: 'depth', positive: 'unknown', unit: 'cm' });
   });
 
   it('negative depth values mean positive up; elevation is positive up; no values is unknown; no unit stays no unit', () => {

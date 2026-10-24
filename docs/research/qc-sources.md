@@ -411,3 +411,41 @@ Source of the design: `AI-Wall/handoff/HANDOFF-SR-TOOLS-KONTROLE-OBIS.md` and th
 
 **Measured (24.10.2026; real data, never in the repository)**
 - IO PAN files, PANGAEA 965985, POC after the fix, both Zenodo workbooks, fjord positions: no new finding. PANGAEA 964012: one ROW-NO-COORD, line 35059, a real gap (latitude 42.76, longitude cell empty). ChEssBase (as a table and as a Darwin Core Archive): no new Darwin Core finding (its eventDate column is empty in all 3 715 rows, which META-NO-DATES already reports); Axial Seamount is now the warning ROW-STATION-SPREAD-FAR. The four ship-speed files are 7-column extracts of OBIS records (no occurrenceStatus, basisOfRecord): DWC-TERM-MISSING (occurrenceStatus, basisOfRecord) and DWC-RECOMMENDED (scientificNameID), as the rule says for a table in that shape; they carry eventIDs, so eventDate, position and depth are not asked of them. Per-file list: `kontrole-obis-golden.md` in the job folder.
+
+## Depth direction (2026-10-24): ROW-DEPTH-SIGN and the depth proposal
+
+Stated choice, not a published threshold. Before: the proposal set `positive` from the values alone ("down" unless a value was negative), so a
+dataset reached `depthPositive = 'unknown'` only when the user picked "not stated" by hand, and ROW-DEPTH-SIGN almost never fired.
+
+Decision. The direction of a depth column is **kept** when there is evidence, and is **a default** (not stated, low-confidence proposal, the note fires) when there is none:
+
+| Evidence | Direction | Kept |
+|---|---|---|
+| header says elevation / altitude | up | yes (the word states it) |
+| header words that state a direction: below, beneath, under, above, positive, negative, down(wards), up(wards), BSL, BSF, mbsl, mbsf, mbgl, bgl, msl, amsl, asl, agl | down (or up by the values) | yes |
+| NERC P01 depth code in the header (the vocabulary defines "relative to water surface") | down | yes |
+| Darwin Core minimumDepthInMeters / maximumDepthInMeters (the term is defined as metres below the surface) | down | yes |
+| at least one negative value | up (as before: a sign pattern the column cannot have under "positive down") | yes |
+| header only says "depth" (any unit) and every value is >= 0 | not stated | **no: default**. Role `depth`, `positive: 'unknown'`, `confidence: 'low'`, reason "the header does not say whether depth is counted down or up"; ROW-DEPTH-SIGN fires |
+
+Why. "Depth" by itself is almost always counted downwards in oceanography, but that is a convention the data owner has not written down, and the check exists
+exactly for the reader who must not guess (a `-` sign flips every comparison, see crossfile.ts). A positive-only column is consistent with both conventions. Downstream nothing
+changes for the default: `crossfile` treats "unknown" like "down" and the clean CSV writes a note only for "up". The user can still set "downwards" in the mapping, and then no note is raised.
+Not used: the metadata record (recognition reads one sheet, no record), and the unit (a metre says nothing about direction). Not added: "height" as an elevation word ("wave height", "height above seafloor" are not elevations).
+
+## Oxygen outside µmol/kg (2026-10-24): CHEM-RANGE
+
+The cited oxygen range (Argo DOXY, item 1b) is per kilogram. Oxygen in mL/L, mg/L or µmol/L is not converted: a per-volume value needs the density of the water (temperature,
+salinity, pressure) to become per-mass, and the tool does not guess it. The report names that in "what this tool does not check" (`notChecked.oxygenUnit`) whenever an oxygen column
+with values has a unit other than µmol/kg. A column with no unit at all is ROW-UNIT-MISSING's, and is not repeated in that note.
+
+## Coverage of Zenodo and DataCite records (2026-10-24): bbox and temporalExtent
+
+Read only what states where and when the DATA were collected: Zenodo `metadata.locations` (legacy list of `{lat, lon, place}` and InvenioRDM `{features:[{geometry}]}` GeoJSON, any geometry
+type, its positions) and `metadata.dates` of type `collected`; DataCite `geoLocations` (point, box, polygon as the box of its vertices; `inPolygonPoint` is a point inside, not a vertex) and `dates`
+of dateType `Collected` (and `Coverage`, which this reader accepts in case a record or a newer schema version uses it; I am not certain the DataCite schema defines it). DataCite 4.x dateType
+values: Accepted, Available, Copyrighted, Collected, Created, Issued, Submitted, Updated, Valid, Withdrawn, Other. Only Collected means coverage; Valid is the validity of the resource (not the
+period the data cover) and the others describe the record. Zenodo `publication_date` and the created / issued / available / valid dates are never used. A place name without coordinates
+and the repository address are not locations. Shapes off the globe (|lat| > 90, |lon| > 180, south > north) are dropped; a single box may cross the antimeridian (west > east) and is kept;
+several shapes with a crossing box, or longitudes spread over more than half the globe, become all longitudes (a superset, never a narrower wrong box).
+Several collected dates merge to the earliest start and latest end; an open end stays open.

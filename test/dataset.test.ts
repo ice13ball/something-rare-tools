@@ -27,7 +27,7 @@ describe('buildDataset: wide', () => {
     expect(dataset.rows.map((r) => r.line)).toEqual([2, 3, 4, 5]);
     expect(dataset.rows[0]).toMatchObject({ file: 'layout-wide.csv', station: 'ST1', lat: 76.5, lon: 15.1, latDecimals: 1, lonDecimals: 1, depth: 2.5, dateRaw: '2021-07-25' });
     expect(dataset.rows[0].datetime).toMatchObject({ iso: '2021-07-25T10:07Z', tz: 'utc', precision: 'minute' });
-    expect(dataset.depthPositive).toBe('down');
+    expect(dataset.depthPositive).toBe('unknown');
   });
 
   it('variables carry canonical key, unit and where the unit came from', () => {
@@ -180,7 +180,7 @@ describe('buildDataset: depth sign', () => {
     const up = textFile('u.csv', 'Station,Lat,Lon,Depth [cm],DIC_umol_kg\nST1,70,10,-2.5,2100\nST1,70,10,-8.5,2110\n');
     expect(build(up).dataset.depthPositive).toBe('up');
     expect(build(up).dataset.rows[0].depth).toBe(-2.5); // the sign is never flipped
-    const down = textFile('d.csv', 'Station,Lat,Lon,Depth [cm],DIC_umol_kg\nST1,70,10,2.5,2100\n');
+    const down = textFile('d.csv', 'Station,Lat,Lon,Depth below surface [cm],DIC_umol_kg\nST1,70,10,2.5,2100\n');
     expect(build(down).dataset.depthPositive).toBe('down');
     const elev = textFile('e.csv', 'Station,Lat,Lon,Elevation [m a.s.l.],DIC_umol_kg\nST1,70,10,120,2100\n');
     expect(build(elev).dataset.depthPositive).toBe('up');
@@ -328,7 +328,7 @@ describe('buildDataset: several tables, units from metadata, unsupported layouts
       ['ds:Water', 'w.xlsx (Water)', 2],
       ['ds:Pore', 'w.xlsx (Pore)', 2],
     ]);
-    expect(r.datasets[1].mappings[0].columns[3].role).toEqual({ kind: 'depth', positive: 'down', unit: 'cm' });
+    expect(r.datasets[1].mappings[0].columns[3].role).toEqual({ kind: 'depth', positive: 'unknown', unit: 'cm' });
   });
 
   it('buildDataset over several tables namespaces the variable keys by sheet', () => {

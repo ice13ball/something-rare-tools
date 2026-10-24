@@ -77,12 +77,12 @@ describe('browserFetcher', () => {
 
   it('refuses a followed redirect that ended on a host outside the allowlist', async () => {
     const f = browserFetcher(asFetch(vi.fn(async () => reply('x', { status: 200 }, 'https://evil.example.net/a'))));
-    await expect(f.get('https://doi.org/10.1/x')).rejects.toMatchObject({ name: 'HostNotAllowedError', host: 'evil.example.net' });
+    await expect(f.get('https://geo.iopan.pl/10.1/x')).rejects.toMatchObject({ name: 'HostNotAllowedError', host: 'evil.example.net' });
   });
 
   it('accepts a redirect between two allowlisted hosts', async () => {
     const f = browserFetcher(asFetch(vi.fn(async () => reply('x', { status: 200 }, 'https://doi.pangaea.de/10.1594/PANGAEA.1?format=textfile'))));
-    const r = await f.get('https://doi.org/10.1594/PANGAEA.1');
+    const r = await f.get('https://geo.iopan.pl/10.1594/PANGAEA.1');
     expect(r.finalUrl).toBe('https://doi.pangaea.de/10.1594/PANGAEA.1?format=textfile');
   });
 });
