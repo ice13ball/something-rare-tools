@@ -978,6 +978,11 @@ select.input-short {
   word-break: normal;
 }
 
+/* the meaning select stays readable on a phone; the table scrolls sideways (.table-scroll) instead of squeezing it */
+.mapping-table .role-cell select {
+  min-width: 10rem;
+}
+
 .mapping-table thead th {
   color: var(--muted);
   font-weight: 600;
