@@ -460,13 +460,20 @@ const dateBlank = (r: DataRow): boolean => r.datetime === undefined && (r.dateRa
  *
  * Station blocks: a sheet that writes the position once per station (or once per date, with no station column) and leaves it blank
  * on the continuation rows is not missing positions. A row with BOTH cells blank is therefore not reported when (a) its station (without a
- * station column: its date) has a position on some other row of the sheet, or (b) its station and date are blank too and it follows, within
- * the block, a positioned row (or another such continuation). A row with only one coordinate blank is always reported: that is a gap, not a block.
+ * station column: its date; with a cruise column the cruise is part of the key) has a position on some other row of the sheet, or (b) its
+ * station (without a station column: its date) is blank and it follows, within the block, a positioned row (or another such continuation),
+ * whatever its date or time cell holds (a CTD file stamps every row). A row with only one coordinate blank is always reported: that is a gap, not a block.
  */
 function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
   if (!rows.some(hasPosition)) return;
   const byStation = rows.some((r) => r.station !== undefined);
-  const keyOf = (r: DataRow): string | undefined => (byStation ? r.station : r.datetime?.iso.slice(0, 10) ?? (dateBlank(r) ? undefined : String(r.dateRaw).trim()));
+  const byCruise = rows.some((r) => r.cruise !== undefined);
+  const base = (r: DataRow): string | undefined => (byStation ? r.station : r.datetime?.iso.slice(0, 10) ?? (dateBlank(r) ? undefined : String(r.dateRaw).trim()));
+  // the same station name in another cruise is another station
+  const keyOf = (r: DataRow): string | undefined => {
+    const k = base(r);
+    return k === undefined || !byCruise ? k : `${r.cruise ?? ''}|${k}`;
+  };
   const positioned = new Set<string>();
   for (const r of rows) {
     const k = hasPosition(r) ? keyOf(r) : undefined;
@@ -483,7 +490,8 @@ function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): v
     if (r.posBlank === 'both') {
       const k = keyOf(r);
       if (k !== undefined && positioned.has(k)) continue;
-      if (r.station === undefined && dateBlank(r) && follows) continue;
+      // a continuation row leaves its key blank (the station; without a station column the date) and follows a positioned row: whatever the other cells hold
+      if ((byStation ? r.station === undefined : dateBlank(r)) && follows) continue;
       follows = false;
     }
     bad.push(r);

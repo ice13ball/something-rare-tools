@@ -104,6 +104,13 @@ describe('Darwin Core detection is case-sensitive; event-side tables; flattened 
     expect(clash[0]).toMatchObject({ lines: [2, 3, 4], value: 'e1', params: { count: 1 } });
   });
 
+  it('the disagreement is judged on values: 60.5 and 60.50, and one date written two ways, agree', () => {
+    const same = run('flat.csv', [EV, 'e1,2020-05-01,60.5,5.25,,7.1', 'e1,2020-05-01,60.50,5.250,,6.9', 'e1,01.05.2020,60.5,5.25,,6.8'].join('\n') + '\n');
+    expect(only(same, 'DWC-EVENTID-DUPLICATE')).toEqual([]);
+    const diff = run('flat.csv', [EV, 'e1,2020-05-01,60.5,5.25,,7.1', 'e1,2020-05-01,60.51,5.25,,6.9'].join('\n') + '\n');
+    expect(only(diff, 'DWC-EVENTID-DUPLICATE')).toHaveLength(1);
+  });
+
   it('inside a Darwin Core Archive Event core a repeated eventID stays strict, even when the rows agree', async () => {
     const meta = metaXml({ rowType: 'http://rs.tdwg.org/dwc/terms/Event', location: 'event.txt', fields: { 0: 'eventID', 1: 'eventDate', 2: 'decimalLatitude', 3: 'decimalLongitude' } });
     const data = ['eventID\teventDate\tdecimalLatitude\tdecimalLongitude', 'a\t2020-05-01\t60.5\t5.25', 'a\t2020-05-01\t60.5\t5.25', 'b\t2020-05-02\t60.6\t5.26'].join('\n') + '\n';
@@ -347,6 +354,18 @@ describe('ROW-NO-COORD', () => {
     const f = only(run('blocks.csv', blocks('S1,2020-05-01,60.5,5.25,5,7.1,34.2', 'S1,2020-05-01,,,10,6.9,34.3', 'S1,2020-05-01,,,20,6.5,34.4', 'S2,2020-05-02,60.6,5.26,5,7.0,34.1', 'S3,2020-05-03,,,5,7.0,34.1')), 'ROW-NO-COORD');
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual([6]);
+  });
+
+  it('a timestamp on every row does not make a continuation row a missing position; a whole block without a position is still reported', () => {
+    const ok = run('ctd.csv', blocks('K1,2020-05-01T10:00,76.5,15.2,5,7.1,34.2', ',2020-05-01T10:00,,,10,6.9,34.3', ',2020-05-01T10:01,,,20,6.5,34.4', 'K2,2020-05-02T08:00,76.6,15.3,5,7.0,34.1', ',2020-05-02T08:01,,,10,6.8,34.2'));
+    expect(only(ok, 'ROW-NO-COORD')).toEqual([]);
+    const lost = only(run('ctd.csv', blocks('K1,2020-05-01T10:00,76.5,15.2,5,7.1,34.2', 'K9,2020-05-02T08:00,,,5,7.0,34.1', 'K9,2020-05-02T08:01,,,10,6.8,34.2')), 'ROW-NO-COORD');
+    expect(lost.map((x) => x.lines)).toEqual([[3, 4]]);
+  });
+
+  it('with a cruise column the same station name in another cruise does not vouch for a row', () => {
+    const f = only(run('c.csv', 'Cruise,Station,Date,Latitude,Longitude,Depth\nA,K1,2020-05-01,76.5,15.2,5\nA,K1,2020-05-01,,,10\nB,K1,2021-06-01,,,5\n'), 'ROW-NO-COORD');
+    expect(f.map((x) => x.lines)).toEqual([[4]]);
   });
 
   it('without a station column the date is the key in the same way', () => {

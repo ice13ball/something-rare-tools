@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { dwcTermOf } from '../recognize/columns';
+import { parseDate } from '../values/dates';
 import { makeFinding } from '../rules/registry';
 import type { Finding, ParsedFile, RawCell, RawSheet } from '../types';
 
@@ -219,6 +220,18 @@ function loopIds(parentOf: Map<string, string>): Set<string> {
   return onLoop;
 }
 
+/** A date by its parsed value (an interval by both ends), a coordinate as a number (60.5 and 60.50 agree), anything unreadable as its text. */
+function signature(term: string, cell: RawCell | undefined): string {
+  const t = text(cell);
+  if (t === '') return '';
+  if (term === 'eventdate') {
+    const d = parseDate(t, { date1904: false, dateFormatted: false });
+    return 'error' in d ? t : `${d.iso}/${d.end?.iso ?? ''}`;
+  }
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) ? String(n) : t;
+}
+
 function identifiers(file: ParsedFile, sheet: RawSheet, t: DwcTable, terms: Map<string, number>, out: Finding[]): void {
   const idCol = t.archive ? sheet.header.findIndex((h) => h.trim().toLowerCase() === 'id') : -1;
   const base = { file: file.fileName, sheet: sheet.name };
@@ -237,8 +250,8 @@ function identifiers(file: ParsedFile, sheet: RawSheet, t: DwcTable, terms: Map<
   // a repeat is an error only when the rows disagree on the date or the position: one identifier used for different events
   let sigged = events;
   if (!t.archive) {
-    const cols = ['eventdate', 'decimallatitude', 'decimallongitude'].map((k) => terms.get(k)).filter((i): i is number => i !== undefined);
-    sigged = events.map((x, k) => ({ ...x, sig: cols.map((c) => text(sheet.rows[k].cells[c])).join('|') }));
+    const cols = ['eventdate', 'decimallatitude', 'decimallongitude'].map((k) => ({ k, i: terms.get(k) })).filter((c): c is { k: string; i: number } => c.i !== undefined);
+    sigged = events.map((x, k) => ({ ...x, sig: cols.map((c) => signature(c.k, sheet.rows[k].cells[c.i])).join('|') }));
   }
   const dup = repeated(sigged, !t.archive);
   if (dup) out.push(makeFinding('DWC-EVENTID-DUPLICATE', { ...base, lines: dup.lines, field: sheet.header[e], value: dup.example, params: { count: dup.count } }));
