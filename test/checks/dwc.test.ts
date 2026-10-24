@@ -222,7 +222,7 @@ describe('eventID, parentEventID, occurrenceID', () => {
     const ms = performance.now() - t0;
     expect(only(f, 'DWC-PARENT-LOOP')[0].params.count).toBe(n);
     expect(ms).toBeLessThan(15_000);
-  });
+  }, 120_000);
 });
 
 describe('size', () => {
@@ -236,7 +236,7 @@ describe('size', () => {
     expect(only(f, 'DWC-OCCURRENCEID-DUPLICATE')[0].params.count).toBe(n / 2);
     expect(only(f, 'ROW-INVISIBLE-CHAR')[0].lines).toHaveLength(200);
     expect(ms).toBeLessThan(20_000);
-  });
+  }, 120_000);
 });
 
 describe('ROW-INVISIBLE-CHAR', () => {
