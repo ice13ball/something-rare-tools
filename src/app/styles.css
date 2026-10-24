@@ -1148,9 +1148,10 @@ code.multiline {
 }
 
 .infotip-bubble {
-  position: absolute;
-  z-index: 30;
-  left: var(--tip-dx, 0);
+  position: fixed; /* drawn in a portal on <body>, placed from the icon's rectangle: no overflow or stacking context of the page reaches it */
+  z-index: 60; /* above the cookie banner (50) */
+  left: 0;
+  top: 0;
   width: min(22rem, calc(100vw - 1rem));
   max-height: min(26rem, 70vh);
   overflow: auto;
@@ -1169,14 +1170,6 @@ code.multiline {
 
 .infotip-bubble:focus {
   outline: none;
-}
-
-.infotip-bubble[data-side='below'] {
-  top: calc(100% + 6px);
-}
-
-.infotip-bubble[data-side='above'] {
-  bottom: calc(100% + 6px);
 }
 
 /* keeps the pointer inside the tip while it crosses the gap between the icon and the bubble */

@@ -5,9 +5,7 @@ import { CATALOGUES } from '../../config/catalogues';
 import { DATAVERSE_INSTALLATIONS, LINKED_FILE_MAX_BYTES } from '../../config/dataverse';
 import { DATA_HOSTS } from '../../config/hosts';
 import { IPT_MAX_BYTES } from '../../config/ipt';
-import { SHIP_SPEED_MIN_SEPARATION_KM } from '../core/checks/constants';
 import type { UiKey } from '../core/i18n/ui';
-import { getRule } from '../core/rules/registry';
 import type { Lang } from '../core/types';
 import { t } from './i18n';
 import { ROLE_KINDS, roleLabelKey, type RoleKind } from './mappingModel';
@@ -32,6 +30,11 @@ export interface TipDef {
   rule?: string;
   /** Every rule whose threshold or source the tip prints: checked to exist, and its numbers to appear. */
   backedBy?: readonly string[];
+  /**
+   * Values that need the rule definitions (thresholds, citations): loaded from ./tipRules when the tip is first opened, so that a page
+   * whose tips need no rule data does not carry it (the index page, for one).
+   */
+  lazy?: () => Promise<TipValues>;
 }
 
 /* ---------- value sources ---------- */
@@ -45,32 +48,7 @@ const UNITS: Record<string, Record<Lang, string>> = {
 };
 
 export const formatNumber = (n: number, lang: Lang): string => new Intl.NumberFormat(lang).format(n);
-const withUnit = (n: number, unit: string, lang: Lang): string => `${formatNumber(n, lang)} ${UNITS[unit]?.[lang] ?? unit}`;
-
-function thresholdOf(ruleId: string, name: string) {
-  const th = getRule(ruleId).thresholds?.find((x) => x.name === name);
-  if (!th) throw new Error(`Rule ${ruleId} has no threshold "${name}"`);
-  return th;
-}
-
-/** "40 knots": value and unit of a rule's threshold. */
-const thresholdText = (ruleId: string, name: string) => (lang: Lang) => {
-  const th = thresholdOf(ruleId, name);
-  return withUnit(th.value, th.unit, lang);
-};
-
-/** The short name of a threshold's source, linked: "Met Office marine-qc" (the citation label up to its first comma or bracket). */
-export const shortSource = (label: string): string => label.split(/[,(]/)[0].trim();
-const thresholdSource = (ruleId: string, name: string) => () => {
-  const c = thresholdOf(ruleId, name).citation;
-  return c.url.startsWith('https://') ? (
-    <a href={c.url} target="_blank" rel="noopener noreferrer">
-      {shortSource(c.label)}
-    </a>
-  ) : (
-    shortSource(c.label)
-  );
-};
+export const withUnit = (n: number, unit: string, lang: Lang): string => `${formatNumber(n, lang)} ${UNITS[unit]?.[lang] ?? unit}`;
 
 /** The Dataverse installations the tool reads, as "RepOD (repod.icm.edu.pl)": from config/dataverse.ts. */
 const dataverseList = (): string => DATAVERSE_INSTALLATIONS.map((i) => `${i.name} (${i.host})`).join(', ');
@@ -82,22 +60,35 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
 /* ---------- which rules a column role feeds ---------- */
 
 /**
- * The rules that read a column of each role. A hand-kept list: test/app/infotip-sources.test.ts checks that every id exists, and that
- * a role listed for a rule is really one the rule's own text names.
+ * The rules that read a column of each role, checked against the code (file:line as of the commit that wrote this):
+ *   latitude / longitude  rows.ts positionRules 61-95 (range, zero, equal), noCoord 467, onLand 317; dataset.ts 247 (degrees+minutes);
+ *                         speed.ts (ship speed); crossfile.ts 548 (position conflict, with a station)
+ *   date / datetime       one slot in dataset.ts specsOf (`when`): dataset.ts 304 (unparseable), rows.ts dateMissing 351, yearOutlier 401,
+ *                         dateFuture 568; speed.ts; crossfile.ts 278 (date conflict, with a station)
+ *   time                  dataset.ts 311 and 319 only, and only beside a date column (it is combined with it)
+ *   depth                 rows.ts depthSign 442, depthRules 515; crossfile.ts 92 (duplicate samples match on depth)
+ *   station               rows.ts stationMoved 244, noCoord 467; crossfile.ts 90-97 (duplicate samples), 278, 307 (alias), 366-548
+ *   cruise                speed.ts (groups by cruise), rows.ts noCoord 470, chemistry.ts 140
+ *   sampleId              no rule of its own: dataset.ts 454 makes it the station when the file has no station column
+ *   pressure              dropped by specsOf (dataset.ts default branch): no rule and no output reads it
+ *   variable              rows.ts unitMissing 435; dataset.ts 164 (non-numeric); chemistry.ts; crossfile.ts 233 (unit conflict);
+ *                         metadata.ts 136 (variable named in the abstract)
+ * test/app/infotip-sources.test.tsx checks that every id exists in the registry; the lists themselves are checked by reading, as above.
  */
+const WHEN_RULES = ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-MISSING', 'ROW-YEAR-OUTLIER', 'ROW-DATE-FUTURE', 'ROW-SHIP-SPEED', 'XF-DATE-CONFLICT'] as const;
 export const ROLE_FEEDS: Record<RoleKind, readonly string[]> = {
   ignore: [],
-  latitude: ['ROW-LAT-RANGE', 'ROW-ON-LAND', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED'],
-  longitude: ['ROW-LON-RANGE', 'ROW-ON-LAND', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED'],
-  datetime: ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-FUTURE', 'ROW-SHIP-SPEED', 'XF-DATE-CONFLICT'],
-  date: ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-MISSING', 'ROW-YEAR-OUTLIER', 'ROW-SHIP-SPEED'],
-  time: ['ROW-TZ-UNKNOWN', 'ROW-SHIP-SPEED'],
-  depth: ['ROW-DEPTH-SIGN', 'ROW-DEPTH-RANGE', 'ROW-DEPTH-MIN-MAX'],
-  pressure: ['CHEM-RANGE'],
-  station: ['ROW-STATION-MOVED', 'ROW-STATION-SPREAD', 'XF-STATION-ALIAS'],
-  cruise: ['ROW-SHIP-SPEED'],
-  sampleId: ['XF-DUPLICATE-SAMPLES'],
-  variable: ['ROW-UNIT-MISSING', 'ROW-NON-NUMERIC', 'CHEM-RANGE', 'CHEM-UNIT-PAIR', 'XF-UNIT-CONFLICT', 'META-VARIABLE-MISSING'],
+  latitude: ['ROW-LAT-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT'],
+  longitude: ['ROW-LON-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT'],
+  datetime: WHEN_RULES,
+  date: WHEN_RULES,
+  time: ['ROW-DATE-UNPARSEABLE', 'ROW-TZ-UNKNOWN'],
+  depth: ['ROW-DEPTH-SIGN', 'ROW-DEPTH-RANGE', 'XF-DUPLICATE-SAMPLES'],
+  pressure: [],
+  station: ['ROW-STATION-MOVED', 'ROW-STATION-SPREAD', 'ROW-NO-COORD', 'XF-STATION-ALIAS', 'XF-DUPLICATE-SAMPLES', 'XF-DATE-CONFLICT', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
+  cruise: ['ROW-SHIP-SPEED', 'ROW-NO-COORD', 'CHEM-DIC-GT-TA'],
+  sampleId: [],
+  variable: ['ROW-UNIT-MISSING', 'ROW-NON-NUMERIC', 'CHEM-RANGE', 'CHEM-UNIT-PAIR', 'CHEM-DIC-GT-TA', 'XF-UNIT-CONFLICT', 'META-VARIABLE-MISSING'],
 };
 
 const rolesList = (): React.ReactNode => (
@@ -134,7 +125,7 @@ const DEFS = {
       maxArchive: megabytes(IPT_MAX_BYTES),
     },
   },
-  downloadMode: { label: 'mode.legend', values: { maxFile: megabytes(LINKED_FILE_MAX_BYTES) } },
+  downloadMode: { label: 'mode.legend', values: { maxFile: megabytes(LINKED_FILE_MAX_BYTES), maxArchive: megabytes(IPT_MAX_BYTES) } },
   // /check — confirm step
   layout: { label: 'layout.title', rule: 'IN-LAYOUT-UNSUPPORTED' },
   roles: { label: 'mapping.role', values: { roles: rolesList } },
@@ -143,13 +134,7 @@ const DEFS = {
     label: 'confirm.singleCruise',
     rule: 'ROW-SHIP-SPEED',
     backedBy: SHIP_RULES,
-    values: {
-      extreme: thresholdText('ROW-SHIP-SPEED', 'speed.extreme'),
-      extremeSrc: thresholdSource('ROW-SHIP-SPEED', 'speed.extreme'),
-      unusual: thresholdText('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual'),
-      unusualSrc: thresholdSource('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual'),
-      minSeparation: (lang: Lang) => withUnit(SHIP_SPEED_MIN_SEPARATION_KM, 'km', lang),
-    },
+    lazy: () => import('./tipRules').then((m) => m.SHIP_SPEED_VALUES),
   },
   // /check — report
   severities: { label: 'report.title' },
@@ -186,11 +171,14 @@ export type TipId = keyof typeof DEFS;
 export const TIPS: Record<TipId, TipDef> = DEFS;
 export const TIP_IDS = Object.keys(DEFS) as TipId[];
 
-/** Replaces {name} in a tip text with the value of that name; a name with no value stays as written (a test makes that a failure). */
-export function fillValues(text: string, values: TipValues, lang: Lang): React.ReactNode[] {
+/**
+ * Replaces {name} in a tip text with the value of that name; a name with no value stays as written (a test makes that a failure), or shows
+ * an ellipsis while the values of a lazy tip are still being loaded.
+ */
+export function fillValues(text: string, values: TipValues, lang: Lang, pending = false): React.ReactNode[] {
   return text.split(/\{(\w+)\}/).map((part, i) => {
     if (i % 2 === 0) return part;
     const v = values[part];
-    return <React.Fragment key={i}>{v ? v(lang) : `{${part}}`}</React.Fragment>;
+    return <React.Fragment key={i}>{v ? v(lang) : pending ? '…' : `{${part}}`}</React.Fragment>;
   });
 }

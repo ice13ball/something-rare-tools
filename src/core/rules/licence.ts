@@ -82,7 +82,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     citations: [CITE.dataciteTitle, CITE.dataciteUri, CITE.ccNameAndLink],
     params: ['text', 'uri', 'textLicence', 'uriLicence'],
     plain: {
-      pl: `Tekst licencji („{text}”) i odnośnik wskazują różne licencje, odnośnika nie da się rozpoznać albo tekst nie wymienia tej licencji i mówi coś innego. Z tekstu: {textLicence}; z odnośnika: {uriLicence} („—” = nierozpoznano). Sprawdź ręcznie i podaj jedną licencję z jej odnośnikiem.`,
+      pl: `Tekst licencji („{text}”) i odnośnik wskazują różne licencje, odnośnika nie da się rozpoznać albo tekst nie wymienia tej licencji i mówi coś innego. Z tekstu: {textLicence}; z odnośnika: {uriLicence} („—” = nie rozpoznano). Sprawdź ręcznie i podaj jedną licencję z jej odnośnikiem.`,
       en: `The licence text ("{text}") and its link point to different licences, the link is not recognised, or the text does not name this licence and says something else. From the text: {textLicence}; from the link: {uriLicence} ("—" = not recognised). Check by hand and state one licence with its own link.`,
       de: `Lizenztext („{text}“) und Link nennen unterschiedliche Lizenzen, der Link ist nicht erkennbar, oder der Text nennt diese Lizenz nicht und sagt etwas anderes. Aus dem Text: {textLicence}; aus dem Link: {uriLicence} („—“ = nicht erkannt). Von Hand prüfen und eine Lizenz mit eigenem Link angeben.`,
       fr: `Le texte de la licence (« {text} ») et son lien désignent des licences différentes, le lien n'est pas reconnu, ou le texte ne nomme pas cette licence et dit autre chose. Texte : {textLicence} ; lien : {uriLicence} (« — » = non reconnu). Vérifiez à la main et indiquez une seule licence avec son lien.`,
