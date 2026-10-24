@@ -263,9 +263,12 @@ export function isKnownColumnName(label: string): boolean {
 
 const NEGATIVE_UP = 'negative values: depth is positive up';
 const DEPTH_NOT_STATED = 'the header does not say whether depth is counted down or up';
-/** Words of a depth header that state the direction: "Depth below sea level", "Depth (m, positive down)", "mbsl", "m BSF". */
-const DEPTH_DIRECTION_WORDS = /\b(?:below|beneath|under|above|positive|negative|downwards?|upwards?|down|up|bsl|bsf|mbsl|mbsf|mbgl|bgl|msl|amsl|asl|agl)\b/i;
+/** Words of a depth header that state the direction: "Depth below sea level", "Depth positive down", "mbsl", "m BSF". */
+const DEPTH_DOWN_WORDS = /\b(?:below|beneath|under|down|downwards?|bsl|bsf|mbsl|mbsf|mbgl|bgl)\b/i;
+/** A header that is a depth word: by definition the vertical distance BELOW the surface (CF standard name `depth`, see qc-sources.md). */
+const DEPTH_WORD = /\bdepth\b/i;
 
+/** A negative value means "up" (as before). Values of both signs are NOT left undecided: crossfile matches depths across files with this sign (golden: porewater3m has 296 negative and 15 positive values). */
 function depthPositive(rows: readonly RawRow[], col: number, decimalComma: boolean, elevation: boolean): 'down' | 'up' | 'unknown' {
   if (elevation) return 'up';
   let seen = false;
@@ -480,15 +483,19 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
             e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
             break;
           }
-          let positive = depthPositive(rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
-          if (positive === 'up' && !c.elevation) e.proposal.reason += `; ${NEGATIVE_UP}`;
-          // "down" is EVIDENCE when the header says it (below, positive down, bsl ...) or a vocabulary does (NERC P01 states
-          // "depth below ..."). With neither, it is only the default for a column named "depth": the proposal stays "not stated",
-          // low-confidence, and ROW-DEPTH-SIGN asks for the convention (docs/research/qc-sources.md, "Depth direction").
-          if (positive === 'down' && !DEPTH_DIRECTION_WORDS.test(e.proposal.header) && !c.reason.startsWith('NERC P01')) {
-            positive = 'unknown';
-            e.proposal.confidence = 'low';
-            e.proposal.reason += `; ${DEPTH_NOT_STATED}`;
+          const sign = depthPositive(rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
+          let positive: 'down' | 'up' | 'unknown';
+          const header = e.proposal.header.replace(/_/g, ' ');
+          {
+            positive = sign;
+            if (positive === 'up' && !c.elevation) e.proposal.reason += `; ${NEGATIVE_UP}`;
+            // A depth word with non-negative values IS the downward convention (the definition of depth). A header that is not a depth
+            // word, states no direction and is not a P01 depth code (a column that only values or the user made depth) is a default.
+            if (positive === 'down' && !DEPTH_WORD.test(header) && !DEPTH_DOWN_WORDS.test(header) && !c.reason.startsWith('NERC P01')) {
+              positive = 'unknown';
+              e.proposal.confidence = 'low';
+              e.proposal.reason += `; ${DEPTH_NOT_STATED}`;
+            }
           }
           e.proposal.role = unit === undefined ? { kind: 'depth', positive } : { kind: 'depth', positive, unit };
           break;

@@ -19,16 +19,9 @@ const noteFires = (header: string, values: string[]) => {
   return runChecks({ datasets: [dataset], records: [], parseFindings: [] }, { land: null }).findings.some((x) => x.ruleId === 'ROW-DEPTH-SIGN');
 };
 
-describe('depth direction: evidence is kept, a pure default is low-confidence and the note fires', () => {
-  it('a bare "Depth [m]" with positive values: not stated, low-confidence, note fires', () => {
-    const p = depthProposal('Depth [m]', ['5', '10']);
-    expect(p.role).toEqual({ kind: 'depth', positive: 'unknown', unit: 'm' });
-    expect(p.confidence).toBe('low');
-    expect(noteFires('Depth [m]', ['5', '10'])).toBe(true);
-  });
-
-  it('headers that state the direction keep "down" and no note', () => {
-    for (const h of ['Depth below sea level [m]', 'Depth positive down [m]', 'Depth [m BSL]', 'Depth below surface [m]']) {
+describe('depth direction: a depth word is evidence of "down"; only an undecided column is a default', () => {
+  it('a depth word with non-negative values keeps "down", high confidence, no note', () => {
+    for (const h of ['Depth', 'Depth [m]', 'Depth_m', 'Water depth', 'Depth water [m]', 'Depth below sea level [m]', 'Depth positive down [m]', 'Depth [m BSL]']) {
       const p = depthProposal(h, ['5', '10']);
       expect(p.role, h).toMatchObject({ kind: 'depth', positive: 'down' });
       expect(p.confidence, h).toBe('high');
@@ -36,14 +29,24 @@ describe('depth direction: evidence is kept, a pure default is low-confidence an
     }
   });
 
-  it('negative values and elevation words are evidence for "up"; Darwin Core depth is down by its definition', () => {
+  it('values of both signs keep "up" as before (crossfile matches depths with this sign), no note', () => {
+    expect(depthProposal('Depth [m]', ['5', '-2', '10']).role).toMatchObject({ positive: 'up' });
+    expect(noteFires('Depth [m]', ['5', '-2', '10'])).toBe(false);
+  });
+
+  it('an undecided direction (the mapping editor starts a hand-mapped depth column at "not stated") fires the note', () => {
+    const f = file('Station,Latitude,Longitude,z\nS1,70,10,5\nS1,70,10,6\n');
+    const layout = proposeLayout(f);
+    const mappings = proposeMappings(f, layout).map((m) => ({ ...m, columns: m.columns.map((c) => (c.header === 'z' ? { ...c, role: { kind: 'depth' as const, positive: 'unknown' as const } } : c)) }));
+    const { dataset } = buildDataset(f, layout, mappings, [], 'x');
+    expect(runChecks({ datasets: [dataset], records: [], parseFindings: [] }, { land: null }).findings.some((x) => x.ruleId === 'ROW-DEPTH-SIGN')).toBe(true);
+  });
+
+  it('negative values only and elevation words are evidence for "up"; Darwin Core depth and a P01 depth code are down', () => {
     expect(depthProposal('Depth [m]', ['-5', '-10']).role).toMatchObject({ positive: 'up' });
     expect(noteFires('Depth [m]', ['-5', '-10'])).toBe(false);
     expect(depthProposal('Elevation [m]', ['5']).role).toMatchObject({ positive: 'up' });
     expect(depthProposal('minimumDepthInMeters', ['5']).role).toMatchObject({ positive: 'down' });
-  });
-
-  it('a NERC P01 depth code states the direction (its vocabulary meaning)', () => {
     expect(depthProposal('ADEPZZ01', ['5', '10']).role).toMatchObject({ positive: 'down' });
   });
 });
