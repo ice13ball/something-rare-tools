@@ -79,6 +79,15 @@ describe('the shared cookie', () => {
     expect(getStoredConsent()).toBe('granted');
   });
 
+  it('with cookies disabled the old key is NOT deleted (it stays the only record), and the decision still holds for the page', () => {
+    localStorage.setItem('consent', 'denied');
+    const set = vi.spyOn(document, 'cookie', 'set').mockImplementation(() => undefined);
+    expect(getStoredConsent()).toBe('denied');
+    expect(localStorage.getItem('consent')).toBe('denied');
+    set.mockRestore();
+    grantConsent(); // a working write resets the in-memory fallback for the next test
+  });
+
   it('a legacy value that is neither granted nor denied is ignored', () => {
     localStorage.setItem('consent', 'nonsense');
     expect(getStoredConsent()).toBeNull();
@@ -139,6 +148,25 @@ describe('nothing from Google before Accept', () => {
     document.head.querySelectorAll('script').forEach((s) => s.remove());
     expect(initConsent()).toBe('denied');
     expect(injected).toEqual([]);
+  });
+
+  it('Decline after Accept sets ga-disable-<id>, so gtag.js sends no further hit; Accept clears it', () => {
+    const id = 'ga-disable-G-S5HR4WT0ZG';
+    const w = window as unknown as Record<string, unknown>;
+    const beacon = vi.fn(() => true);
+    Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true });
+    grantConsent();
+    expect(w[id]).toBe(false);
+    denyConsent();
+    expect(w[id]).toBe(true);
+    // the flag is set before the consent update, so nothing can slip out between the two
+    const entries = win.dataLayer.map((e) => Array.from(e as ArrayLike<unknown>));
+    expect(entries.some((e) => e[0] === 'consent' && (e[2] as { analytics_storage?: string }).analytics_storage === 'denied')).toBe(true);
+    track('check_started', { input_type: 'file', mode: 'browser' });
+    expect(beacon).not.toHaveBeenCalled();
+    expect(fetched).toEqual([]);
+    grantConsent();
+    expect(w[id]).toBe(false);
   });
 
   it('Decline after Accept stops events and removes the Google cookies', () => {

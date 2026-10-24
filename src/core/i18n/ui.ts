@@ -1337,7 +1337,7 @@ https://zenodo.org/records/…`,
   'notChecked.oxygenUnit': `Ob die Sauerstoffwerte im Bereich des offenen Ozeans liegen: in dieser Einheit nicht geprüft. Der belegte Bereich gilt je Kilogramm Wasser, und eine Sauerstoffspalte hat eine andere Einheit; die Umrechnung braucht Angaben, die das Werkzeug nicht errät (die Dichte des Wassers oder Temperatur und Salzgehalt). Geben Sie Sauerstoff je Kilogramm an, damit er geprüft wird.`,
 
   'cookie.label': `Cookie-Hinweis`,
-  'cookie.text': `Mit Ihrer Einwilligung nutzen wir Google Analytics, um die Besuche und die Nutzung von Atlas und Werkzeugen von Abyssal Claims zu zählen. Eine Entscheidung gilt für beide. Wir senden nie den Inhalt Ihrer Dateien oder der eingefügten Links.`,
+  'cookie.text': `Mit Ihrer Einwilligung nutzen wir Google Analytics, um die Besuche und die Nutzung von Atlas und Werkzeugen von Abyssal Claims zu zählen. Eine Entscheidung gilt für beide. Wir senden weder den Inhalt Ihrer Dateien noch die von Ihnen eingefügten Links.`,
   'cookie.accept': `Akzeptieren`,
   'cookie.decline': `Ablehnen`,
 

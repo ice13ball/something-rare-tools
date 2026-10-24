@@ -25,10 +25,10 @@ export function detectLang(stored: string | null, browserLanguages: readonly str
   return 'en';
 }
 
-/** Pure: the language named by a `lang` query parameter if it is one of ours (the last one wins if repeated), else null. */
+/** Pure: the language named by a `lang` query parameter if it is one of ours (case-insensitive, the last one wins if repeated), else null. */
 export function langFromSearch(search: string): Lang | null {
   const values = new URLSearchParams(search).getAll('lang');
-  const v = values.length > 0 ? values[values.length - 1] : null;
+  const v = values.length > 0 ? values[values.length - 1]!.toLowerCase() : null;
   return isLang(v) ? v : null;
 }
 

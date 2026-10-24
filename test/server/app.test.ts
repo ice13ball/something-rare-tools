@@ -137,6 +137,7 @@ describe('static routes', () => {
       expect(visible((await request(app).get('/nope').set('Accept-Language', 'xx,en;q=0.4,fr;q=0.8')).text)).toEqual(['fr']);
       expect(visible((await request(app).get('/nope?lang=pl').set('Accept-Language', 'de')).text)).toEqual(['pl']);
       expect(visible((await request(app).get('/nope?lang=xx').set('Accept-Language', 'de')).text)).toEqual(['de']);
+      expect(visible((await request(app).get('/nope?lang=FR')).text)).toEqual(['fr']);
       const pl = (await request(app).get('/nope?lang=pl')).text;
       expect(pl).toContain('<html lang="pl">');
       expect(pl).toContain('<title>Nie znaleziono strony — Abyssal Claims</title>');

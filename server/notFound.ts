@@ -34,7 +34,8 @@ const isLang = (v: unknown): v is NotFoundLang => typeof v === 'string' && (NOT_
 
 /** ?lang= (a supported value), else the best supported Accept-Language entry, else English. */
 export function pickLang(queryLang: unknown, acceptLanguage: string | undefined): NotFoundLang {
-  if (isLang(queryLang)) return queryLang;
+  const q = typeof queryLang === 'string' ? queryLang.toLowerCase() : queryLang;
+  if (isLang(q)) return q;
   const ranked: { lang: NotFoundLang; q: number; i: number }[] = [];
   (acceptLanguage ?? '')
     .slice(0, 500)

@@ -27,8 +27,10 @@ afterEach(() => {
 describe('?lang= on arrival', () => {
   it('langFromSearch accepts pl, en, de, fr only', () => {
     expect(langFromSearch('?lang=de')).toBe('de');
+    expect(langFromSearch('?lang=PL')).toBe('pl');
+    expect(langFromSearch('?lang=Fr')).toBe('fr');
     expect(langFromSearch('?a=1&lang=fr&b=2')).toBe('fr');
-    for (const bad of ['?lang=xx', '?lang=', '?lang=DE', '?language=de', '', '?lang=de%00']) expect(langFromSearch(bad), bad).toBeNull();
+    for (const bad of ['?lang=xx', '?lang=', '?language=de', '', '?lang=de%00']) expect(langFromSearch(bad), bad).toBeNull();
   });
 
   it('searchWithoutLang drops only lang and keeps every other parameter as written', () => {
@@ -45,6 +47,13 @@ describe('?lang= on arrival', () => {
     expect(localStorage.getItem('lang')).toBe('de');
     expect(document.documentElement.lang).toBe('de');
     expect(location.pathname + location.search + location.hash).toBe('/check?doi=10.1234%2Fabc&x=1#frag');
+  });
+
+  it('an upper-case value is accepted and still stripped', () => {
+    setUrl('/?lang=PL&a=1');
+    expect(initLang()).toBe('pl');
+    expect(localStorage.getItem('lang')).toBe('pl');
+    expect(location.search).toBe('?a=1');
   });
 
   it('a clean address stays clean when ?lang= was the only parameter', () => {
@@ -107,6 +116,10 @@ describe('the shared banner text', () => {
     expect([UI.pl['cookie.decline'], UI.pl['cookie.accept']]).toEqual(['Odrzucam', 'Akceptuję']);
     expect([UI.en['cookie.decline'], UI.en['cookie.accept']]).toEqual(['Decline', 'Accept']);
     expect(UI.pl['nav.privacy']).toBe('Prywatność');
+  });
+
+  it('the German sentence is grammatical: weder ... noch', () => {
+    expect(UI.de['cookie.text']).toContain('Wir senden weder den Inhalt Ihrer Dateien noch die von Ihnen eingefügten Links.');
   });
 
   it('is rendered with both buttons and the privacy link', () => {

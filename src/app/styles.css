@@ -969,6 +969,15 @@ select.input-short {
   border-bottom: 1px solid var(--border);
 }
 
+.mapping-table tbody th {
+  min-width: 8rem; /* a column name is not broken mid-word; a longer one scrolls the table sideways (.table-scroll) */
+}
+
+.mapping-table th code {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .mapping-table thead th {
   color: var(--muted);
   font-weight: 600;

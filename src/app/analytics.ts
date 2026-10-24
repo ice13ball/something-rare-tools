@@ -89,10 +89,13 @@ export function getStoredConsent(): ConsentState | null {
   }
   if (isState(legacy)) {
     writeCookie(legacy);
-    try {
-      localStorage.removeItem(LEGACY_KEY);
-    } catch {
-      /* nothing more to do */
+    // The old key goes only once the cookie really holds the decision; if cookies are blocked it stays as the only record.
+    if (readCookie() === legacy) {
+      try {
+        localStorage.removeItem(LEGACY_KEY);
+      } catch {
+        /* nothing more to do */
+      }
     }
     return legacy;
   }
@@ -108,10 +111,13 @@ function clearGoogleCookies(): void {
       .split(';')
       .map((p) => p.split('=')[0]!.trim())
       .filter((n) => n === '_ga' || n === '_gid' || n.startsWith('_ga_') || n.startsWith('_gat'));
-    const domain = cookieDomainFor(location.hostname);
+    // gtag.js sets _ga on the registrable parent domain, which is not always something-rare.com (a *.run.app preview): try every
+    // parent suffix of the host. Expiring a cookie that does not exist is harmless.
+    const labels = location.hostname.split('.');
+    const domains = labels.length > 1 ? labels.map((_, i) => labels.slice(i).join('.')).slice(0, -1) : [];
     for (const n of names) {
       document.cookie = `${n}=; Path=/; Max-Age=0`;
-      if (domain) document.cookie = `${n}=; Path=/; Max-Age=0; Domain=${domain}`;
+      for (const d of domains) document.cookie = `${n}=; Path=/; Max-Age=0; Domain=${d}`;
     }
   } catch {
     /* cookies unavailable */
@@ -154,13 +160,19 @@ export function initConsent(): ConsentState | null {
   return stored;
 }
 
+/** gtag.js honours window['ga-disable-<id>'] = true by sending nothing at all, which consent mode alone does not guarantee. */
+const disableKey = `ga-disable-${SITE.gaId}`;
+const setDisabled = (v: boolean): void => void ((window as unknown as Record<string, unknown>)[disableKey] = v);
+
 export function grantConsent(): void {
   store('granted');
+  setDisabled(false);
   activate();
 }
 
 export function denyConsent(): void {
   store('denied');
+  setDisabled(true);
   ensureGtag()('consent', 'update', { analytics_storage: 'denied' });
   clearGoogleCookies();
 }
