@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { decodeReasons, reasonsText } from './recognize/layoutReasons';
 import { getRule } from './rules/registry';
 import type { Finding, Lang, Report, Severity } from './types';
 
@@ -117,6 +118,9 @@ export function renderPlain(f: Finding, lang: Lang): string {
   }
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
+  // The layout reason is the English phrase in `reason`; the codes in `reasons` are rendered in the reader's language.
+  const reasons = f.ruleId === 'IN-LAYOUT-UNSUPPORTED' ? decodeReasons(f.params.reasons) : undefined;
+  if (reasons) f = { ...f, params: { ...f.params, reason: reasonsText(reasons, lang) } };
   let base = fill(texts[lang] || texts.en, f);
   if (rule.plainOtherRest && f.params.otherRest) base = `${base} ${fill(rule.plainOtherRest[lang] || rule.plainOtherRest.en, f)}`;
   for (const extra of rule.plainIf ?? []) {

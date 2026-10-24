@@ -4,6 +4,7 @@ import type { ColumnProposal, LayoutPlan, ParsedFile, RawRow, RawSheet, SheetMap
 import { parseNumber } from '../values/numbers';
 import { isBlankCell, isKnownColumnName, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from './columns';
 import type { ProposeContext } from './columns';
+import { reasonsText, type LayoutReason, type LayoutReasonCode } from './layoutReasons';
 import { canonicalFromKey, headerKey, normaliseUnit } from './vocab';
 
 /*
@@ -24,7 +25,7 @@ interface SheetInfo {
   sheet: RawSheet;
   proposals: ColumnProposal[];
   long?: TablePlan['long'];
-  unsupported?: string;
+  unsupported?: LayoutReasonCode;
   hasPosition: boolean;
   nVars: number;
   isData: boolean;
@@ -41,7 +42,7 @@ function sampleOf(rows: readonly RawRow[], max: number): RawRow[] {
 
 /* ---------- layouts the tool cannot read ---------- */
 
-function transposedReason(sheet: RawSheet, decimalComma: boolean): string | undefined {
+function transposedReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
   if (sheet.header.length < 3 || sheet.rows.length < 2) return undefined;
   const labels = new Set<string>();
   for (const r of sheet.rows) {
@@ -61,13 +62,13 @@ function transposedReason(sheet: RawSheet, decimalComma: boolean): string | unde
     }
   }
   if (filled === 0 || numeric * 2 < filled) return undefined;
-  return 'data is transposed (variables in rows, samples in columns)';
+  return 'transposed';
 }
 
-function headerRowsReason(sheet: RawSheet, decimalComma: boolean): string | undefined {
+function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
   const cols = sheet.header.length;
   if (cols >= 3 && sheet.header.filter((h) => h.trim() === '').length * 2 > cols) {
-    return 'header spans several rows (more than half of the header cells are empty)';
+    return 'header-empty';
   }
   if (sheet.rows.length >= 2) {
     const first = sheet.rows[0];
@@ -84,7 +85,7 @@ function headerRowsReason(sheet: RawSheet, decimalComma: boolean): string | unde
       }
       if (ok > 0 && ok >= bad) unitCells++;
     }
-    if (unitCells >= 2) return 'header spans several rows (the first data row holds units)';
+    if (unitCells >= 2) return 'header-units';
   }
   return undefined;
 }
@@ -220,10 +221,10 @@ function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandi
  * read is described in plain words in `unsupported` (and the tables it could still read, if any, stay in `tables`).
  */
 export function proposeLayout(file: ParsedFile): LayoutPlan {
-  if (file.sheets.length === 0) return { tables: [], joins: [], unsupported: 'the file contains no table' };
+  if (file.sheets.length === 0) return { tables: [], joins: [], unsupported: reasonsText([{ code: 'no-table' }], 'en'), unsupportedReasons: [{ code: 'no-table' }] };
   const infos = file.sheets.map((s) => analyse(file, s));
   const several = file.sheets.length > 1;
-  const reasons = infos.filter((i) => i.unsupported).map((i) => (several ? `sheet "${i.sheet.name}": ${i.unsupported}` : i.unsupported!));
+  const reasons: LayoutReason[] = infos.filter((i) => i.unsupported).map((i) => (several ? { code: i.unsupported!, sheet: i.sheet.name } : { code: i.unsupported! }));
 
   const data = infos.filter((i) => i.isData);
   const coordSheets = data.filter((i) => i.hasPosition);
@@ -242,9 +243,13 @@ export function proposeLayout(file: ParsedFile): LayoutPlan {
     .map((i) => (i.long ? { sheet: i.sheet.name, long: i.long } : { sheet: i.sheet.name }));
 
   const plan: LayoutPlan = { tables, joins };
-  if (reasons.length > 0) plan.unsupported = reasons.join('; ');
-  else if (tables.length === 0) {
-    plan.unsupported = infos.every((i) => i.sheet.rows.length === 0) ? 'the table has no data rows' : 'no sheet with coordinates or measurements was found';
+  if (reasons.length === 0 && tables.length === 0) {
+    reasons.push({ code: infos.every((i) => i.sheet.rows.length === 0) ? 'no-rows' : 'no-data-sheet' });
+  }
+  if (reasons.length > 0) {
+    // `unsupported` is the English phrase (technical line, tests); `unsupportedReasons` is what every language renders from.
+    plan.unsupported = reasonsText(reasons, 'en');
+    plan.unsupportedReasons = reasons;
   }
   return plan;
 }

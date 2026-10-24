@@ -353,7 +353,7 @@ describe('buildDataset: several tables, units from metadata, unsupported layouts
     const layout = proposeLayout(t);
     const r = buildDataset(t, layout, [], [], 'x');
     expect(r.dataset.rows).toEqual([]);
-    expect(r.findings).toEqual([expect.objectContaining({ ruleId: 'IN-LAYOUT-UNSUPPORTED', severity: 'error', file: 't.csv', params: { reason: expect.stringContaining('transposed') } })]);
+    expect(r.findings).toEqual([expect.objectContaining({ ruleId: 'IN-LAYOUT-UNSUPPORTED', severity: 'error', file: 't.csv', params: { reason: expect.stringContaining('transposed'), reasons: expect.stringContaining('transposed') } })]);
   });
 
   it('a missing mapping falls back to the proposals', () => {
