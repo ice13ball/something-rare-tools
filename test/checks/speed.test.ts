@@ -74,7 +74,7 @@ describe('ship speed: the six cases of the spec', () => {
     expect(findings[0].severity).toBe('info');
     // one side (52 kn) is above the extreme limit: the text says so, and does not advise ignoring the note
     expect(findings[0].params.impossible).toBe('yes');
-    expect(renderPlain(findings[0], 'pl')).toContain('czego statek nie przepłynie');
+    expect(renderPlain(findings[0], 'pl')).toContain('z taką prędkością żaden statek nie płynie');
     expect(renderPlain(findings[0], 'pl')).not.toContain('pomiń tę uwagę');
   });
 

@@ -18,7 +18,6 @@ const SHIP_MIXED = {
   },
 } as const;
 
-/** Sentence added when the group came from the tick (not from a cruise column): the likely cause of a false alarm is mixed ships. */
 /** ROW-SHIP-SPEED-UNUSUAL: every hop below the extreme limit, so the ship may really have sailed that fast. */
 const SHIP_MAY_BE_REAL = {
   param: 'mayBeReal',
@@ -34,13 +33,14 @@ const SHIP_MAY_BE_REAL = {
 const SHIP_IMPOSSIBLE_HOP = {
   param: 'impossible',
   plain: {
-    pl: `Co najmniej jeden z tych odcinków wymaga ponad {threshold.speed.extreme} węzłów, czego statek nie przepłynie: pozycja albo data lub godzina tego zdarzenia jest prawdopodobnie błędna.`,
-    en: `At least one of these hops needs more than {threshold.speed.extreme} knots, which no ship sails: the position or the date or time of this event is probably wrong.`,
-    de: `Mindestens eine dieser Strecken erfordert mehr als {threshold.speed.extreme} Knoten, was kein Schiff fährt: Position oder Datum bzw. Uhrzeit dieses Ereignisses sind wahrscheinlich falsch.`,
-    fr: `Au moins un de ces trajets exige plus de {threshold.speed.extreme} nœuds, ce qu'aucun navire ne fait : la position ou la date ou l'heure de cet événement est probablement fausse.`,
+    pl: `Co najmniej jeden z tych odcinków wymaga ponad {threshold.speed.extreme} węzłów, a z taką prędkością żaden statek nie płynie: pozycja albo data lub godzina tego zdarzenia jest prawdopodobnie błędna.`,
+    en: `At least one of these hops needs more than {threshold.speed.extreme} knots, and no ship sails that fast: the position or the date or time of this event is probably wrong.`,
+    de: `Mindestens eine dieser Strecken erfordert mehr als {threshold.speed.extreme} Knoten, so schnell fährt kein Schiff: Position oder Datum bzw. Uhrzeit dieses Ereignisses sind wahrscheinlich falsch.`,
+    fr: `Au moins un de ces trajets exige plus de {threshold.speed.extreme} nœuds, et aucun navire ne va aussi vite : la position ou la date ou l'heure de cet événement est probablement fausse.`,
   },
 } as const;
 
+/** Sentence added when the group came from the tick (not from a cruise column): the likely cause of a false alarm is mixed ships. */
 const SHIP_DECLARED = {
   param: 'declared',
   plain: {
