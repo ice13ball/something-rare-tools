@@ -47,6 +47,8 @@ export function cleanUnitText(s: string): string {
     .trim()
     .toLowerCase()
     .replace(/[µμ]/g, 'u')
+    .replace(/[\u2212\u2012-\u2015]/g, '-') // minus sign (NFKC of the superscript minus), dashes
+    .replace(/[·⋅•]/g, ' ') // middle dot: µmol·kg⁻¹
     .replace(/[_.]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

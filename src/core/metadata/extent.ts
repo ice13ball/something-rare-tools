@@ -51,47 +51,70 @@ export function boxOfPoints(points: { lon?: number; lat?: number }[]): Bbox | un
 }
 
 /**
- * DataCite dateType values that mean the period the DATA cover. "Collected" is the schema's coverage type
- * (DataCite 4.x dateType: Accepted, Available, Copyrighted, Collected, Created, Issued, Submitted, Updated,
- * Valid, Withdrawn, Other). "Coverage" is accepted too in case a record or a newer schema version uses it (not
- * certain it exists in the schema; accepting it is harmless). Created, Issued, Available, Submitted, Updated,
- * Accepted, Copyrighted and Withdrawn describe the record, and Valid its validity, not the data: never used.
+ * DataCite dateType values that mean the period the DATA cover. "Collected" is the coverage type of schema 4.0 to 4.5 (dateType: Accepted,
+ * Available, Copyrighted, Collected, Created, Issued, Submitted, Updated, Valid, Withdrawn, Other). "Coverage" was added in schema 4.6 and is
+ * accepted too. Created, Issued, Available, Submitted, Updated, Accepted, Copyrighted and Withdrawn describe the record, and Valid its
+ * validity, not the data: never used.
  */
 export const COVERAGE_DATE_TYPES = /^(?:collected|coverage)$/i;
 
 const OPEN = /^(?:\.\.|open|unknown)$/i;
-const clean = (s: string | undefined): string | undefined => {
-  const t = s?.trim();
-  return t && !OPEN.test(t) ? t : undefined;
-};
+/** YYYY, YYYY-MM, YYYY-MM-DD, optionally with a time. Free text ("2023-04 to 2023-05") and EDTF qualifiers ("2020?", "2020~") are not. */
+const ISO_LIKE = /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?)?)?$/;
 
-/** One coverage date: "a/b" interval (either side may be open), a single date, or start and end given apart. */
+/** One end of an interval: undefined for open, null when it is not an ISO-like date (the whole date is then unusable), else the text. */
+function endOf(s: string | undefined): string | undefined | null {
+  const t = s?.trim();
+  if (!t || OPEN.test(t)) return undefined;
+  return ISO_LIKE.test(t) ? t : null;
+}
+
+function interval(a: string | undefined, b: string | undefined): Extent | undefined {
+  const start = endOf(a);
+  const end = endOf(b);
+  // never a wrong extent: one end that is not a date means no extent from this date at all
+  if (start === null || end === null || (start === undefined && end === undefined)) return undefined;
+  return { start, end };
+}
+
+/** One coverage date: "a/b" interval (either side may be open), a single date, or start and end given apart. Only ISO-like dates count. */
 export function extentOfDate(d: { date?: string; start?: string; end?: string }): Extent | undefined {
-  if (d.start !== undefined || d.end !== undefined) {
-    const start = clean(d.start);
-    const end = clean(d.end);
-    return start || end ? { start, end } : undefined;
-  }
+  if (d.start !== undefined || d.end !== undefined) return interval(d.start, d.end);
   const raw = d.date?.trim();
   if (!raw) return undefined;
   if (raw.includes('/')) {
-    const [a, b] = raw.split('/');
-    const start = clean(a);
-    const end = clean(b);
-    return start || end ? { start, end } : undefined;
+    const parts = raw.split('/');
+    return parts.length === 2 ? interval(parts[0], parts[1]) : undefined;
   }
-  const one = clean(raw);
+  const one = endOf(raw);
   return one ? { start: one, end: one } : undefined;
 }
 
-/** Several coverage dates (campaigns): earliest start to latest end; an open end stays open. Strings are kept as written. */
+/** Last / first day a (possibly partial) ISO date covers; the time of day is ignored, as compareIso does. */
+function lastDay(s: string): string {
+  const d = s.slice(0, 10);
+  if (d.length === 4) return `${d}-12-31`;
+  if (d.length === 7) return `${d}-31`;
+  return d;
+}
+function firstDayOf(s: string): string {
+  const d = s.slice(0, 10);
+  if (d.length === 4) return `${d}-01-01`;
+  if (d.length === 7) return `${d}-01`;
+  return d;
+}
+
+/**
+ * Several coverage dates (campaigns): the earliest start to the latest end, compared by the days each end covers (a bare "2020" ends on
+ * 2020-12-31, so it is wider than "2020-06"); the winner is kept as written. An open end stays open.
+ */
 export function unionExtents(list: (Extent | undefined)[]): Extent | undefined {
   const ex = list.filter((e): e is Extent => !!e);
   if (ex.length === 0) return undefined;
   if (ex.length === 1) return ex[0];
   const starts = ex.map((e) => e.start);
   const ends = ex.map((e) => e.end);
-  const start = starts.some((s) => s === undefined) ? undefined : (starts as string[]).reduce((a, b) => (b < a ? b : a));
-  const end = ends.some((e) => e === undefined) ? undefined : (ends as string[]).reduce((a, b) => (b > a ? b : a));
+  const start = starts.some((x) => x === undefined) ? undefined : (starts as string[]).reduce((a, b) => (firstDayOf(b) < firstDayOf(a) ? b : a));
+  const end = ends.some((x) => x === undefined) ? undefined : (ends as string[]).reduce((a, b) => (lastDay(b) > lastDay(a) ? b : a));
   return start || end ? { start, end } : undefined;
 }
