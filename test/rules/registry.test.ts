@@ -150,7 +150,9 @@ describe('messages', () => {
           const t = extra.plain[lang];
           expect(t.trim().length, `${r.id} plainIf ${extra.param} ${lang}`).toBeGreaterThan(20);
           expect(t.length, `${r.id} plainIf ${extra.param} ${lang} too long`).toBeLessThanOrEqual(200);
-          for (const p of placeholders(t)) expect(p === extra.param || GENERIC.has(p) || new Set(RULE_PARAMS[r.id]).has(p), `${r.id} plainIf uses {${p}}`).toBe(true);
+          // a threshold the rule itself declares may be named too ({threshold.speed.extreme}), as in the main text
+          const own = (p: string): boolean => p.startsWith('threshold.') && (r.thresholds ?? []).some((x) => `threshold.${x.name}` === p);
+          for (const p of placeholders(t)) expect(p === extra.param || GENERIC.has(p) || new Set(RULE_PARAMS[r.id]).has(p) || own(p), `${r.id} plainIf uses {${p}}`).toBe(true);
         }
       }
     });
