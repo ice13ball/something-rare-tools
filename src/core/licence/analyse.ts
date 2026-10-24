@@ -76,6 +76,11 @@ export interface LicenceAnalysis {
   /** 'single-source' = nothing to compare (fewer than 2 groups state a licence we recognise). */
   comparison: 'compared' | 'single-source';
   contradictions: Contradiction[];
+  /**
+   * DataCite was read and states no licence while another source states one, or while a source could not be read (licence '—', where []).
+   * Not a contradiction: shown on its own line on /licence; /check reports it as LIC-DATACITE-EMPTY.
+   */
+  dataciteSilent?: Extract<Contradiction, { kind: 'datacite-empty' }> & { where: string[] };
   /** No source states a licence and none was unreadable: the licence is missing. */
   missing: boolean;
   /** At least one source could not be read; absence of a licence then says nothing. */
@@ -260,7 +265,12 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
 
   // DataCite read but silent while another source states a licence, or while the main record could not be read (then licence = '—').
   const empty = sources.find((s) => s.source === 'datacite' && s.state === 'missing');
-  if (empty && (statements.length > 0 || hasUnreadable)) contradictions.push({ kind: 'datacite-empty', licence: statements.length > 0 ? shownOf(statements[0]) : '—' });
+  // Not a contradiction (Michal, 24.10.2026): silence contradicts nothing. It is reported on its own line (dataciteSilent), and /check
+  // keeps it as LIC-DATACITE-EMPTY.
+  const dataciteSilent: LicenceAnalysis['dataciteSilent'] =
+    empty && (statements.length > 0 || hasUnreadable)
+      ? { kind: 'datacite-empty', licence: statements.length > 0 ? shownOf(statements[0]) : '—', where: [...new Set(sources.filter((s) => s.statements.length > 0).map((s) => s.label))] }
+      : undefined;
 
   // Dual licensing is only what the publisher repeated on purpose (rightsList / rights entries). Different licences in different
   // fields of one source are a contradiction inside it, as they always were.
@@ -293,6 +303,7 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     recognisedGroups,
     comparison: recognisedGroups >= 2 ? 'compared' : 'single-source',
     contradictions,
+    ...(dataciteSilent ? { dataciteSilent } : {}),
     maybeSameDeposit:
       groups.filter(
         (g) => g.licences.length > 0 && g.sources.every((s) => s.source === 'datacite' && !!s.record && !!zenodoId(s.record.doi ?? '')),
