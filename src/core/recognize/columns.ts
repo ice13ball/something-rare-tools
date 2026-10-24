@@ -166,7 +166,9 @@ function bareCoordinate(key: string, unitText: string | undefined, cleanHeader: 
   let axis: 'latitude' | 'longitude';
   let tail: string | undefined;
   const lat = LAT_BARE.exec(key);
-  const lon = lat ? null : LON_BARE.exec(key);
+  let lon = lat ? null : LON_BARE.exec(key);
+  // 'DL' / 'dl' is a detection limit (or a decilitre) far more often than 'długość': the abbreviation counts only with its 'ł'
+  if (lon && lon[1] === 'dl' && !/[łŁ]/.test(cleanHeader)) lon = null;
   if (lat) {
     axis = 'latitude';
     tail = lat[2];
@@ -396,11 +398,33 @@ function dwcColumn(header: string, dwcSheet: boolean): { cand: Cand } | { ignore
   return undefined;
 }
 
-// Partial and atmospheric pressure are not the pressure of the water column (English 'Partial pressure CO2' and 'Atmospheric pressure'
-// are not read as pressure either, because the noun comes second); the Polish and French nouns come first, so they are named here.
-const NOT_SEA_PRESSURE = /\b(partielle|parcjalne|czastkowe|atmospherique|atmosferyczne|partial|atmospheric)\b/;
-const isPressureName = (key: string): boolean =>
-  /^(pressure|pres|press|prs)(\s|$)/.test(key) || (/^(cisnienie|druck|pression)(\s|$)/.test(key) && !NOT_SEA_PRESSURE.test(key));
+// Polish, German and French nouns for pressure: 'ciśnienie', 'Druck', 'pression'. The English names stay as they were
+// (^pressure, pres, press, prs). The noun alone, with a water or instrument qualifier, or with a sea-pressure unit is the pressure of
+// the water column; air, barometric, vapour, partial and gas pressures, sea-level air pressure and every other qualifier are not.
+const OTHER_PRESSURE_NOUN = /^(cisnienie|druck|pression)(?:\s(.*))?$/;
+const PRESSURE_COMPOUND = /^(wasser|meer|meeres|ctd|sonden)druck(\s|$)/;
+const NOT_SEA_WORDS = /\b(partielle|parcjalne|czastkowe|partial\w*|atmospher\w*|atmosfer\w*|powietrz\w*|luft\w*|barometr\w*|pary|para|vapeur|dampf|air|niveau|poziomie|meeresspiegel|co2|gas\w*|gaz\w*)\b/;
+const SEA_QUALIFIER = /\b(hydrostatyczn\w*|wody|morsk\w*|wasser|meer|meeres|hydrostatisch\w*|hydrostatique\w*|eau|mer|ctd|sondy|sonde|sonden)\b/;
+const NOT_SEA_UNIT = /^(hpa|mbar|mb|uatm|atm|mmhg|torr)$/;
+const SEA_UNIT = /^(dbar|decibars?|db|bar|kpa|mpa|pa)$/;
+const unitToken = (t: string): string => t.toLowerCase().replace(/[µμ]/g, 'u').replace(/\s+/g, '');
+
+function isPressureName(key: string, unitText?: string): boolean {
+  if (/^(pressure|pres|press|prs)(\s|$)/.test(key)) return true;
+  const unit = unitText === undefined ? undefined : unitToken(unitText);
+  if (PRESSURE_COMPOUND.test(key)) return unit === undefined || !NOT_SEA_UNIT.test(unit);
+  const m = OTHER_PRESSURE_NOUN.exec(key);
+  if (!m) return false;
+  const words = m[2] === undefined || m[2] === '' ? [] : m[2].split(' ');
+  // a unit glued on as the last word ("cisnienie hpa") counts as the unit when the header gave none
+  const u = unit ?? (words.length > 0 && (NOT_SEA_UNIT.test(words[words.length - 1]) || SEA_UNIT.test(words[words.length - 1])) ? words[words.length - 1] : undefined);
+  const rest = words.filter((w) => w !== u).join(' ');
+  if (u !== undefined && NOT_SEA_UNIT.test(u)) return false;
+  if (rest === '') return true; // the noun alone
+  if (NOT_SEA_WORDS.test(rest)) return false;
+  if (SEA_QUALIFIER.test(rest)) return true;
+  return u !== undefined && SEA_UNIT.test(u);
+}
 
 /** Does a text cell read like the name of a standard column (latitude, depth, DIC, ...)? Used to spot transposed tables. */
 export function isKnownColumnName(label: string): boolean {
@@ -577,7 +601,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     let cand = dwc ? dwc.cand : (nameCandidate(key, { unitText: hu.unitText, cleanHeader }) ?? bareCands.get(index));
     if (cand?.guard && !guardPasses(cand.guard, sheet, rows, index, ctx)) cand = undefined; // an ambiguous name the values do not back
     let candidate: Cand | undefined = cand;
-    let pressure = isPressureName(key);
+    let pressure = isPressureName(key, hu.unitText);
     let variableKey: string | undefined;
     let unit = hu.unit;
     let unitSource: 'header' | 'p01' | undefined = hu.unit === undefined ? undefined : 'header';
