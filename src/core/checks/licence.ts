@@ -100,6 +100,7 @@ export function checkLicence(
     );
   }
 
+  if (a.dataciteSilent) out.push(contradictionFinding(a.dataciteSilent, file));
   for (const c of a.contradictions) {
     // Once per record, as before: the first disagreeing pair.
     if (c.kind === 'mismatch' && out.some((f) => f.ruleId === 'LIC-MISMATCH')) continue;

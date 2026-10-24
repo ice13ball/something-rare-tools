@@ -39,8 +39,8 @@ export function buildAttribution(a: LicenceAnalysis): Attribution {
   const statements = a.sources.flatMap((s) => s.statements);
   const ids = [...new Set(statements.flatMap((s) => (s.classification.kind === 'spdx' ? [s.classification.id] : [])))];
   let omitted: LicenceOmitted | undefined;
-  // DataCite saying nothing is not a contrary statement: the licence another record of the deposit states is still the licence.
-  if (a.contradictions.some((c) => c.kind !== 'datacite-empty')) omitted = 'contradiction';
+  // DataCite saying nothing is not a contrary statement (it is not among the contradictions): the licence another record states stays.
+  if (a.contradictions.length > 0) omitted = 'contradiction';
   // Nothing recognised while a source could not be read: the licence could not be looked up, which is not "no source states one".
   else if (ids.length === 0) omitted = a.hasUnreadable ? 'unreadable' : 'none';
   else if (ids.length > 1) omitted = 'several';

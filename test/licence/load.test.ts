@@ -82,7 +82,8 @@ describe('buildAttribution', () => {
     const c = { doi: '10.5281/zenodo.9', title: 'Z' };
     const f = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
     const a = analyseLicences((await loadLicenceReferences(['https://zenodo.org/records/9'], f)).records);
-    expect(a.contradictions.map((x) => x.kind)).toEqual(['datacite-empty']);
+    expect(a.contradictions).toEqual([]);
+    expect(a.dataciteSilent?.licence).toBe('CC-BY-4.0');
     const attr = buildAttribution(a);
     expect(attr.omitted).toBeUndefined();
     expect(attr.text).toContain('Licence: Creative Commons Attribution 4.0 International');
@@ -95,7 +96,8 @@ describe('buildAttribution', () => {
     expect(load.failures.map((x) => [x.source, x.finding?.ruleId])).toEqual([[undefined, 'IN-HOST-NOT-ALLOWED']]);
     const a = analyseLicences(load.records, { failures: [], inaccessible: true });
     expect(a.missing).toBe(false);
-    expect(a.contradictions).toEqual([{ kind: 'datacite-empty', licence: '—' }]);
+    expect(a.contradictions).toEqual([]);
+    expect(a.dataciteSilent).toEqual({ kind: 'datacite-empty', licence: '—', where: [] });
     expect(buildAttribution(a).omitted).toBe('unreadable');
   });
 

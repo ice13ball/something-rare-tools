@@ -198,6 +198,34 @@ function ContradictionItem({ c, lang }: { c: Contradiction; lang: Lang }): React
   );
 }
 
+/**
+ * DataCite read and silent, next to a licence stated elsewhere (or next to a source that could not be read): not a contradiction, a line
+ * of its own (Michal, 24.10.2026). Its sources are those of LIC-DATACITE-EMPTY (OpenAIRE: Rights mandatory when applicable).
+ */
+function DataciteSilent({ s }: { s: NonNullable<LicenceAnalysis['dataciteSilent']> }): React.ReactElement {
+  useLang();
+  const sources = sourcesOf('LIC-DATACITE-EMPTY');
+  return (
+    <div className="notice" data-testid="licence-datacite-silent">
+      <p>
+        <strong>{t('licence.summary.dataciteSilent')}</strong>{' '}
+        {s.where.length > 0 ? t('licence.summary.dataciteSilent.where', { where: s.where.join(', '), licence: s.licence }) : t('licence.summary.dataciteSilent.unread')}{' '}
+        {t('licence.summary.dataciteSilent.openaire')}
+      </p>
+      {sources.length > 0 && (
+        <details>
+          <summary>{t('report.sources')}</summary>
+          <ul className="sources">
+            {sources.map((x) => (
+              <SourceLink key={x.key} s={x} compact />
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function Summary({ r }: { r: Result }): React.ReactElement {
   const { lang } = useLang();
   const a = r.analysis;
@@ -225,7 +253,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
         <p>
           <strong>
             {a.statedGroups === 0
-              ? t('licence.summary.nostated')
+              ? t(a.hasUnreadable ? 'licence.summary.nostatedUnread' : 'licence.summary.nostated')
               : a.recognisedGroups === 0
                 ? t('licence.summary.uncompared')
                 : a.statedGroups > a.recognisedGroups
@@ -234,6 +262,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
           </strong>
         </p>
       )}
+      {a.dataciteSilent && <DataciteSilent s={a.dataciteSilent} />}
       {a.hasUnreadable && <p className="notice">{t('licence.summary.unreadable')}</p>}
       {unrecognised && <p className="notice">{t('licence.summary.unrecognised')}</p>}
       {held && (

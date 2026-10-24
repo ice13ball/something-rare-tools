@@ -71,6 +71,44 @@ describe('LicencePage', () => {
     expect(held).not.toMatch(FORBIDDEN);
   });
 
+  it('an empty DataCite record next to a licence stated elsewhere is not a contradiction: a line of its own, and the attribution keeps the licence', async () => {
+    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
+    const fetcher = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    const result = await run(fetcher, ['https://zenodo.org/records/9']);
+    const text = result.textContent ?? '';
+    expect(text).not.toContain('Contradictions found');
+    const silent = screen.getByTestId('licence-datacite-silent').textContent ?? '';
+    expect(silent).toContain('DataCite states no licence.');
+    expect(silent).toContain('It is stated by Zenodo 9: CC-BY-4.0.');
+    expect(silent).toContain('OpenAIRE');
+    expect(screen.getByTestId('attribution').textContent).toContain('Licence: Creative Commons Attribution 4.0 International');
+  });
+
+  it('the same in Polish: „DataCite nie podaje licencji”', async () => {
+    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
+    const fetcher = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    await run(fetcher, ['https://zenodo.org/records/9'], 'pl');
+    expect(screen.getByTestId('licence-datacite-silent').textContent).toContain('DataCite nie podaje licencji.');
+    expect(screen.getByTestId('licence-result').textContent).not.toContain('Znalezione sprzeczności');
+  });
+
+  it('DataCite silent and the repository not read (host not allowed): no softening — the host failure, "no source that could be read", "no licence was found anywhere"', async () => {
+    const c = { doi: '10.60894/ABC', title: 'R', url: 'https://rds.icm.edu.pl/citation?persistentId=doi:10.60894/ABC' };
+    const result = await run(new MapFetcher({ [DC + c.doi]: dataciteJson(c, []) }), [c.doi]);
+    const text = result.textContent ?? '';
+    expect(text).toContain('rds.icm.edu.pl');
+    expect(text).toContain('No source that could be read states a licence');
+    expect(text).toContain('At least one source could not be read');
+    expect(screen.getByTestId('licence-datacite-silent').textContent).toContain('no licence was found anywhere');
+    expect(text).not.toContain('Contradictions found');
+  });
+
+  it('a real contradiction (text and link of one statement disagree) still counts', async () => {
+    const { refs, fetcher } = caseB();
+    const text = (await run(fetcher, refs)).textContent ?? '';
+    expect(text).toContain('Contradictions found: 1');
+  });
+
   it('sources agree: ISO and DataCite are two sources, no contradiction', async () => {
     const { refs, fetcher } = caseA();
     const result = await run(fetcher, refs);

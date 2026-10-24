@@ -66,7 +66,10 @@ describe('source groups', () => {
     const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('datacite', [])]);
     expect(a.statedGroups).toBe(1);
     expect(a.groups.find((g) => g.sources[0].source === 'datacite')?.state).toBe('missing');
-    expect(kinds(a)).toEqual(['datacite-empty']);
+    // DataCite silence is not a contradiction (Michal, 24.10.2026): its own line, with the source that does state the licence
+    expect(kinds(a)).toEqual([]);
+    expect(a.dataciteSilent).toMatchObject({ kind: 'datacite-empty', licence: 'CC-BY-4.0' });
+    expect(a.dataciteSilent?.where).toHaveLength(1);
   });
 });
 
