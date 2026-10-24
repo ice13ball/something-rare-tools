@@ -99,7 +99,7 @@ describe('ordinary headers are not read as Darwin Core', () => {
   it('Latitude, lat, Depth [m], Station, date map as before', () => {
     const p = props(['Latitude', 'lat', 'Depth [m]', 'Station', 'date'], [['1', '1', '5', 'S1', '2008-01-01']]);
     expect(p.map((x) => x.role.kind)).toEqual(['latitude', 'ignore', 'depth', 'station', 'date']);
-    expect(of(p, 'Depth [m]').role).toEqual({ kind: 'depth', positive: 'unknown', unit: 'm' });
+    expect(of(p, 'Depth [m]').role).toEqual({ kind: 'depth', positive: 'down', unit: 'm' });
   });
   it('year, month, day, id, locality in a non-DwC sheet keep their old handling', () => {
     const p = props(['year', 'month', 'day', 'id', 'locality', 'temp'], [['2008', '5', '1', 'a', 'Bay', '4.5']]);

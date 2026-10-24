@@ -414,24 +414,26 @@ Source of the design: `AI-Wall/handoff/HANDOFF-SR-TOOLS-KONTROLE-OBIS.md` and th
 
 ## Depth direction (2026-10-24): ROW-DEPTH-SIGN and the depth proposal
 
-Stated choice, not a published threshold. Before: the proposal set `positive` from the values alone ("down" unless a value was negative), so a
-dataset reached `depthPositive = 'unknown'` only when the user picked "not stated" by hand, and ROW-DEPTH-SIGN almost never fired.
+Stated choice, not a published threshold. Revised the same day (Michal / coordinator): a first version made every bare "Depth [m]" "not stated" and fired the note on 5 of 11 good golden files; that was noise.
 
-Decision. The direction of a depth column is **kept** when there is evidence, and is **a default** (not stated, low-confidence proposal, the note fires) when there is none:
+Decision. A header that is a depth word ("depth", "Depth [m]", "depth_m", "water depth", PANGAEA "Depth water [m]") IS evidence of the downward convention: by definition depth is the vertical distance
+below the surface. CF Standard Name Table, standard_name `depth`: "Depth is the vertical distance below the surface" (positive down; quoted from memory, I am not certain of the exact wording; the "height" /
+"altitude" names are the upward ones). So the proposal keeps `down`, high confidence, as before.
 
-| Evidence | Direction | Kept |
+| Evidence | Direction | Note |
 |---|---|---|
-| header says elevation / altitude | up | yes (the word states it) |
-| header words that state a direction: below, beneath, under, above, positive, negative, down(wards), up(wards), BSL, BSF, mbsl, mbsf, mbgl, bgl, msl, amsl, asl, agl | down (or up by the values) | yes |
-| NERC P01 depth code in the header (the vocabulary defines "relative to water surface") | down | yes |
-| Darwin Core minimumDepthInMeters / maximumDepthInMeters (the term is defined as metres below the surface) | down | yes |
-| at least one negative value | up (as before: a sign pattern the column cannot have under "positive down") | yes |
-| header only says "depth" (any unit) and every value is >= 0 | not stated | **no: default**. Role `depth`, `positive: 'unknown'`, `confidence: 'low'`, reason "the header does not say whether depth is counted down or up"; ROW-DEPTH-SIGN fires |
+| depth word in the header, values >= 0 | down | no |
+| header says elevation / altitude | up | no |
+| header direction words: below, beneath, under, down(wards), BSL, BSF, mbsl, mbsf, mbgl, bgl / above, up(wards), amsl, asl, agl | down / up | no (and they decide when the values have both signs) |
+| NERC P01 depth code; Darwin Core minimum/maximumDepthInMeters (defined as metres below the surface) | down | no |
+| negative values only | up | no |
+| the column is depth but the header is not a depth word, states no direction and is no P01 depth code | **not stated**, low-confidence | fires |
 
-Why. "Depth" by itself is almost always counted downwards in oceanography, but that is a convention the data owner has not written down, and the check exists
-exactly for the reader who must not guess (a `-` sign flips every comparison, see crossfile.ts). A positive-only column is consistent with both conventions. Downstream nothing
-changes for the default: `crossfile` treats "unknown" like "down" and the clean CSV writes a note only for "up". The user can still set "downwards" in the mapping, and then no note is raised.
-Not used: the metadata record (recognition reads one sheet, no record), and the unit (a metre says nothing about direction). Not added: "height" as an elevation word ("wave height", "height above seafloor" are not elevations).
+Mixed signs (checked, NOT changed): any negative value still means `up`. Leaving a column with both signs undecided was tried and reverted: `crossfile` matches depths across files with this
+sign, and in the golden set porewater3m has 296 negative and 15 positive depth values, so "not stated" turned its XF-DATE-CONFLICT with the anions file (positive depths) into a miss. ROW-DEPTH-SIGN
+therefore does not fire for mixed signs, and cannot double-report with ROW-DEPTH-RANGE (which is about values outside the physical range). The last row is reached in practice only through the user's own
+mapping (the mapping editor already starts a hand-mapped depth column at "not stated"); it is kept as a guard. The default changes nothing downstream: `crossfile` treats "unknown" like "down" and the
+clean CSV writes a note only for "up". Not used: the metadata record (recognition reads one sheet), the unit. Not added: "height" as an elevation word ("wave height", "height above seafloor").
 
 ## Oxygen outside µmol/kg (2026-10-24): CHEM-RANGE
 
