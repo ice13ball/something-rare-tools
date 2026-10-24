@@ -269,7 +269,12 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
   // keeps it as LIC-DATACITE-EMPTY.
   const dataciteSilent: LicenceAnalysis['dataciteSilent'] =
     empty && (statements.length > 0 || hasUnreadable)
-      ? { kind: 'datacite-empty', licence: statements.length > 0 ? shownOf(statements[0]) : '—', where: [...new Set(sources.filter((s) => s.statements.length > 0).map((s) => s.label))] }
+      ? {
+          kind: 'datacite-empty',
+          licence: statements.length > 0 ? shownOf(statements[0]) : '—',
+          // each source with ITS OWN licence(s): Zenodo CC-BY and PANGAEA CC0 are never shown as one licence
+          where: sources.filter((s) => s.statements.length > 0).map((s) => `${s.label}: ${[...new Set(s.statements.map(shownOf))].join(', ')}`),
+        }
       : undefined;
 
   // Dual licensing is only what the publisher repeated on purpose (rightsList / rights entries). Different licences in different
