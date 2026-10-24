@@ -60,7 +60,7 @@ const en = {
 • If characters look wrong, save the file as UTF-8 and load it again.`,
   'tip.singleCruise.does': `Switches on a test of whether the ship could have sailed between consecutive stations.`,
   'tip.singleCruise.logic': `• warning when the ship would have to sail faster than {extreme}, on both sides of a station ({extremeSrc})
-• note when faster than {unusual} ({unusualSrc})
+• note when faster than {unusual} on both sides of a station ({unusualSrc})
 • stations closer than {minSeparation} count as one place and are skipped
 • a date without a time means the longest possible gap`,
 
@@ -217,7 +217,7 @@ const pl: Record<TipKey, string> = {
 • Jeśli znaki wyglądają źle, zapisz plik jako UTF-8 i wczytaj go jeszcze raz.`,
   'tip.singleCruise.does': `Włącza test, czy statek mógł w zapisanym czasie przepłynąć z jednej stacji do następnej.`,
   'tip.singleCruise.logic': `• ostrzeżenie, gdy statek musiałby płynąć szybciej niż {extreme}, zarówno na odcinku do stacji, jak i od niej ({extremeSrc})
-• uwaga, gdy prędkość przekracza {unusual} ({unusualSrc})
+• uwaga, gdy prędkość przekracza {unusual} na obu odcinkach ({unusualSrc})
 • stacje bliższe niż {minSeparation} liczą się jako jedno miejsce i są pomijane
 • gdy podano samą datę, przyjmowany jest najdłuższy możliwy odstęp`,
 
@@ -372,7 +372,7 @@ const de: Record<TipKey, string> = {
 • Sehen Zeichen falsch aus, speichern Sie die Datei als UTF-8 und laden Sie sie erneut.`,
   'tip.singleCruise.does': `Schaltet eine Prüfung ein, ob das Schiff zwischen aufeinanderfolgenden Stationen hätte fahren können.`,
   'tip.singleCruise.logic': `• Warnung, wenn das Schiff auf beiden Seiten einer Station schneller als {extreme} fahren müsste ({extremeSrc})
-• Hinweis bei mehr als {unusual} ({unusualSrc})
+• Hinweis bei mehr als {unusual} auf beiden Seiten einer Station ({unusualSrc})
 • Stationen näher als {minSeparation} gelten als ein Ort und werden übersprungen
 • Ein Datum ohne Uhrzeit bedeutet den längstmöglichen Abstand`,
 
@@ -527,7 +527,7 @@ const fr: Record<TipKey, string> = {
 • Si des caractères semblent faux, enregistrez le fichier en UTF-8 et rechargez-le.`,
   'tip.singleCruise.does': `Active un test : le navire a-t-il pu naviguer entre des stations consécutives ?`,
   'tip.singleCruise.logic': `• avertissement si le navire devrait filer à plus de {extreme} des deux côtés d'une station ({extremeSrc})
-• remarque au-delà de {unusual} ({unusualSrc})
+• remarque au-delà de {unusual} des deux côtés d'une station ({unusualSrc})
 • les stations plus proches que {minSeparation} comptent pour un seul lieu et sont ignorées
 • une date sans heure compte pour l'écart le plus long possible`,
 

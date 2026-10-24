@@ -3,6 +3,7 @@
 // DataCite parsers: REST JSON (`data.attributes`, `attributes` or bare attributes) and kernel-3/4 XML.
 import type { LicenceStatement, MetadataRecord } from '../types';
 import { buildStatement } from './licence';
+import { boxOfPoints, COVERAGE_DATE_TYPES, extentOfDate, unionBoxes, unionExtents, type Bbox } from './extent';
 import { attr, child, children, descendants, num, parseXml, text } from './xml';
 
 type Obj = Record<string, unknown>;
@@ -39,37 +40,45 @@ interface Box { west?: number; east?: number; south?: number; north?: number }
 interface Point { lon?: number; lat?: number }
 
 /**
- * Union of every complete box and point. A single box is returned as is (it may legitimately cross the
- * antimeridian, west > east); several shapes are merged with plain min/max. Incomplete shapes are ignored.
+ * Union of every shape: boxes, points and polygons (a polygon is the box of its vertices). Incomplete shapes and
+ * shapes off the globe are ignored; a single box may cross the antimeridian (west > east) and is kept as is;
+ * several shapes are merged by unionBoxes (see extent.ts for the antimeridian rule).
  */
-function bboxOf(boxes: Box[], points: Point[]): MetadataRecord['bbox'] {
-  const shapes: { west: number; east: number; south: number; north: number }[] = [];
+function bboxOf(boxes: Box[], points: Point[], polygons: Point[][]): MetadataRecord['bbox'] {
+  const shapes: Bbox[] = [];
   for (const b of boxes) {
     if (b.west !== undefined && b.east !== undefined && b.south !== undefined && b.north !== undefined) {
       shapes.push({ west: b.west, east: b.east, south: b.south, north: b.north });
     }
   }
   for (const p of points) {
-    if (p.lon !== undefined && p.lat !== undefined) shapes.push({ west: p.lon, east: p.lon, south: p.lat, north: p.lat });
+    const one = boxOfPoints([p]);
+    if (one) shapes.push(one);
   }
-  if (shapes.length === 0) return undefined;
-  if (shapes.length === 1) return shapes[0];
-  return {
-    west: Math.min(...shapes.map((s) => s.west)),
-    east: Math.max(...shapes.map((s) => s.east)),
-    south: Math.min(...shapes.map((s) => s.south)),
-    north: Math.max(...shapes.map((s) => s.north)),
-  };
+  for (const poly of polygons) {
+    const one = boxOfPoints(poly);
+    if (one) shapes.push(one);
+  }
+  return unionBoxes(shapes);
 }
 
-/** A Collected date: an interval "a/b" ("a/" is open-ended) or a single date. Original strings are kept. */
+/** Coverage dates only (Collected, Coverage): see COVERAGE_DATE_TYPES. Several are merged, earliest start to latest end. */
 function collectedExtent(dates: { date?: string; type?: string }[]): MetadataRecord['temporalExtent'] {
-  const d = dates.find((x) => x.type === 'Collected' && x.date);
-  if (!d?.date) return undefined;
-  const [a, b] = d.date.split('/');
-  const start = a?.trim() || undefined;
-  if (d.date.includes('/')) return { start, end: b?.trim() || undefined };
-  return { start, end: start };
+  return unionExtents(dates.filter((x) => x.date && COVERAGE_DATE_TYPES.test(x.type ?? '')).map((x) => extentOfDate({ date: x.date })));
+}
+
+const pointOf = (p: Obj): Point => ({ lon: num(p.pointLongitude), lat: num(p.pointLatitude) });
+
+/** geoLocationPolygon in REST JSON: [{ polygonPoint: {...} }, ..., { inPolygonPoint: {...} }] (or one object holding polygonPoint list). inPolygonPoint is a point inside, not a vertex. */
+function polygonOf(raw: unknown): Point[] {
+  const items = Array.isArray(raw) ? raw : isObj(raw) ? [raw] : [];
+  const out: Point[] = [];
+  for (const it of items) {
+    if (!isObj(it)) continue;
+    const pp = it.polygonPoint;
+    for (const v of Array.isArray(pp) ? pp : [pp]) if (isObj(v)) out.push(pointOf(v));
+  }
+  return out;
 }
 
 export function parseDataciteJson(json: unknown, label: string): MetadataRecord {
@@ -109,14 +118,17 @@ export function parseDataciteJson(json: unknown, label: string): MetadataRecord 
 
   const boxes: Box[] = [];
   const points: Point[] = [];
+  const polygons: Point[][] = [];
   for (const g of Array.isArray(a.geoLocations) ? a.geoLocations : []) {
     if (!isObj(g)) continue;
     const b = g.geoLocationBox;
     if (isObj(b)) boxes.push({ west: num(b.westBoundLongitude), east: num(b.eastBoundLongitude), south: num(b.southBoundLatitude), north: num(b.northBoundLatitude) });
     const p = g.geoLocationPoint;
-    if (isObj(p)) points.push({ lon: num(p.pointLongitude), lat: num(p.pointLatitude) });
+    if (isObj(p)) points.push(pointOf(p));
+    const poly = polygonOf(g.geoLocationPolygon);
+    if (poly.length > 0) polygons.push(poly);
   }
-  rec.bbox = bboxOf(boxes, points);
+  rec.bbox = bboxOf(boxes, points, polygons);
   return rec;
 }
 
@@ -162,6 +174,7 @@ export function parseDataciteXml(xml: string, label: string): MetadataRecord {
 
   const boxes: Box[] = [];
   const points: Point[] = [];
+  const polygons: Point[][] = [];
   for (const g of descendants(root, ns, 'geoLocation')) {
     for (const b of children(g, ns, 'geoLocationBox')) {
       const v = (n: string) => num(text(child(b, ns, n)));
@@ -170,7 +183,11 @@ export function parseDataciteXml(xml: string, label: string): MetadataRecord {
     for (const p of children(g, ns, 'geoLocationPoint')) {
       points.push({ lon: num(text(child(p, ns, 'pointLongitude'))), lat: num(text(child(p, ns, 'pointLatitude'))) });
     }
+    for (const poly of children(g, ns, 'geoLocationPolygon')) {
+      const verts = children(poly, ns, 'polygonPoint').map((v) => ({ lon: num(text(child(v, ns, 'pointLongitude'))), lat: num(text(child(v, ns, 'pointLatitude'))) }));
+      if (verts.length > 0) polygons.push(verts);
+    }
   }
-  rec.bbox = bboxOf(boxes, points);
+  rec.bbox = bboxOf(boxes, points, polygons);
   return rec;
 }
