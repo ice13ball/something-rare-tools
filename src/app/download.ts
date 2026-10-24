@@ -16,7 +16,7 @@ export function safeFileName(name: string): string {
 
 /** File name stem of a dataset label ("book.xlsx (Sheet 1)" -> "book_Sheet_1"): the data extension is dropped. */
 export function fileBase(label: string): string {
-  return safeFileName(label.replace(/\.(csv|tsv|txt|tab|xlsx|xls)(?=\s|\)|$)/gi, ''));
+  return safeFileName(label.replace(/\.(csv|tsv|txt|tab|xlsx|xls|ods)(?=\s|\)|$)/gi, ''));
 }
 
 export interface DownloadDeps {

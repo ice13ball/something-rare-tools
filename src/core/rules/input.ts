@@ -45,7 +45,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       de: `Dieser Eintrag enthält keine Datendatei, nur andere Dateien (z. B. PDFs). Fügen Sie die Tabelle als CSV oder Excel hinzu oder ziehen Sie Ihre eigene Datei hierher.`,
       fr: `Cette notice ne contient aucun fichier de données, seulement d'autres fichiers (par ex. des PDF). Ajoutez le tableau en CSV ou Excel, ou déposez votre propre fichier ici.`,
     },
-    technical: `{file}: no data file (csv, tsv, txt, tab, xlsx, xls) among the record files: {files}.`,
+    technical: `{file}: no data file (csv, tsv, txt, tab, xlsx, xls, ods) among the record files: {files}.`,
   },
   {
     id: 'IN-RECORD-INACCESSIBLE',
