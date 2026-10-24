@@ -290,3 +290,89 @@ describe('English headers keep their roles', () => {
     expect(single('Bottom depth', 20)).not.toBe('depth');
   });
 });
+
+describe('review round 1', () => {
+  const body: Cell[][] = [[54.5, 18.5, 20, 10], [54.6, 18.7, 70, 35], [54.4, 18.4, 33, 22]];
+  const noReason = (p: ColumnProposal[], h: string): void => {
+    expect(p.find((x) => x.header === h)!.reason, h).not.toMatch(/another column/);
+  };
+
+  it('a bare word next to a real coordinate pair is a plain variable, never ignored (English and PL/DE pairs)', () => {
+    for (const hs of [
+      ['Latitude', 'Longitude', 'Długość', 'Szerokość'],
+      ['Szerokość geograficzna', 'Długość geograficzna', 'Długość', 'Szerokość'],
+      ['Breite [°N]', 'Länge [°E]', 'Länge', 'Breite'],
+      ['Breitengrad', 'Längengrad', 'Länge', 'Breite'],
+    ]) {
+      const p = run(hs, body);
+      expect(p.map((x) => x.role.kind), hs.join()).toEqual(['latitude', 'longitude', 'variable', 'variable']);
+      noReason(p, hs[2]);
+      noReason(p, hs[3]);
+    }
+  });
+
+  it('noun-first partial and atmospheric pressure are not sea pressure, like English on main', () => {
+    for (const h of ['Pression partielle CO2', 'pression partielle de CO2', 'ciśnienie parcjalne CO2', 'Partialdruck CO2', 'Luftdruck [hPa]', 'Ciśnienie atmosferyczne [hPa]', 'pression atmosphérique [hPa]', 'Atmospheric pressure [hPa]', 'Partial pressure CO2']) {
+      expect(single(h, 1013), h).toBe('variable');
+    }
+    for (const h of ['Pression [dbar]', 'Ciśnienie', 'Druck', 'Pressure']) expect(single(h, 12), h).toBe('pressure');
+  });
+
+  it('"Datum" with text (a geodetic datum) is not a date; with dates it is, at high confidence', () => {
+    expect(single('Datum', 'WGS84')).not.toBe('date');
+    expect(single('Datum', 'ETRS89')).not.toBe('date');
+    const p = run(['Datum', 'x'], [['2020-05-12', 1], ['2020-05-13', 2]]);
+    expect(p[0].role.kind).toBe('date');
+    expect(p[0].confidence).toBe('high');
+  });
+
+  it('body-size pairs of integers with no coordinates elsewhere stay variables; a decimal pair is a low-confidence position', () => {
+    const ints: Cell[][] = [['Pomatoschistus', 45, 12, 3], ['Gobius', 70, 35, 9], ['Zosterisessor', 20, 10, 2]];
+    for (const [a, b] of [['Długość', 'Szerokość'], ['Länge', 'Breite'], ['dł.', 'szer.']]) {
+      expect(run(['Gatunek', a, b, 'Masa'], ints).map((x) => x.role.kind), a).toEqual(['ignore', 'variable', 'variable', 'variable']);
+    }
+    const dec = run(['Szerokość', 'Długość'], [[54.37, 18.62], [54.41, 18.7]]);
+    expect(dec.map((x) => x.role.kind)).toEqual(['latitude', 'longitude']);
+    expect(dec[0].confidence).toBe('low');
+    // one integer-only column is enough to keep the pair out
+    expect(run(['Szerokość', 'Długość'], [[54.37, 18], [54.41, 19]]).map((x) => x.role.kind)).toEqual(['variable', 'variable']);
+  });
+
+  it('the decimal guard does not touch bare words backed by degrees or a hemisphere letter', () => {
+    for (const [h, k] of [['Szerokość [°N]', 'latitude'], ['Länge [°E]', 'longitude'], ['Breite N', 'latitude'], ['Länge O', 'longitude']] as const) {
+      const p = run([h, 'x'], [[54, 1], [55, 2]]);
+      expect(p[0].role.kind, h).toBe(k);
+      expect(p[0].confidence, h).toBe('high');
+    }
+  });
+
+  it('"Probe ID" / "Probe" / probe_id are low confidence; unambiguous German forms stay high', () => {
+    for (const h of ['Probe ID', 'probe_id', 'Probe-ID', 'Probe']) {
+      const p = run([h, 'T'], [['P-1', 4.5], ['P-2', 4.6]]);
+      expect(p[0].role.kind, h).toBe('sampleId');
+      expect(p[0].confidence, h).toBe('low');
+    }
+    for (const h of ['Probennummer', 'Proben-ID', 'Probe Nr.', 'Probenbezeichnung']) {
+      const p = run([h, 'T'], [['P-1', 4.5], ['P-2', 4.6]]);
+      expect(p[0].role.kind, h).toBe('sampleId');
+      expect(p[0].confidence, h).toBe('high');
+    }
+  });
+
+  it('the unit is read from before the from/to word: "Tiefe [m] von", and "Głębokość próbki od" keeps the range note', () => {
+    const p = run(['Tiefe [m] von', 'Tiefe [m] bis'], [[1, 5], [5, 10]]);
+    expect(p[0].role).toMatchObject({ kind: 'depth', unit: 'm', positive: 'down' });
+    expect(p[1].reason).toContain('other end of a depth range');
+    const q = run(['Głębokość próbki od', 'Głębokość próbki do'], [[1, 5], [5, 10]]);
+    expect(q[0].role.kind).toBe('depth');
+    expect(q[1].reason).toContain('other end of a depth range');
+    expect(run(['Głębokość (m) od', 'x'], [[1, 5], [5, 10]])[0].role).toMatchObject({ kind: 'depth', unit: 'm' });
+  });
+
+  it('the real PL/DE/FR coordinate headers stay safe', () => {
+    for (const [h, k] of [['Szer. geogr. [°N]', 'latitude'], ['Dł. geogr. [°E]', 'longitude'], ['Länge [°O]', 'longitude'], ['Breite N', 'latitude'], ['latitude nord', 'latitude'], ['Länge O', 'longitude']] as const) {
+      expect(single(h, 20), h).toBe(k);
+    }
+    expect(single('Länge 0', 20)).toBe('variable');
+  });
+});

@@ -105,12 +105,24 @@ const COVERED_BY: Record<string, readonly string[]> = {
  */
 const MODIFIED_BY = /^(?:-?[a-z](?![a-z]))?[\s-]+(?:fluorescence|fluorometer|fluorimeter|evolution|maximum|sensors?|probes?|optodes?|electrodes?|analy[sz]ers?)\b/i;
 
+/**
+ * Polish and French put the modifier BEFORE the term: "czujnik tlenu", "fluorescencja chlorofilu", "capteur d'oxygène",
+ * "fluorescence de la chlorophylle". The last words before a match (folded text) decide, like MODIFIED_BY does after it.
+ */
+const MODIFIER_BEFORE = new RegExp(
+  '(?:(?:czujnik\\w*|sond\\w*|fluorescencj\\w*|ewolucj\\w*|analizator\\w*|elektrod\\w*|optod\\w*|capteurs?|analyseurs?)' +
+    "|(?:fluorescence|electrodes?|optodes?|evolution|analyseurs?)(?=[\\s'’]+(?:de|du|des|d)\\b))" +
+    "(?:[\\s'’-]+(?:de|du|des|la|le|l|d|do|dla)(?![A-Za-z0-9]))*[\\s'’-]*$",
+  'i',
+);
+
 /** Whole-word match, blind to diacritics: the term and the text are both folded ('zasolenie' = 'zasolenie', 'température' = 'temperature'). */
 function mentions(abstractText: string, term: string): boolean {
   const abstract = foldDiacritics(abstractText);
   const re = new RegExp(termRegex(foldDiacritics(term)).source, termRegex(foldDiacritics(term)).flags + 'g');
   for (const m of abstract.matchAll(re)) {
-    if (!MODIFIED_BY.test(abstract.slice(m.index + m[0].length, m.index + m[0].length + 40))) return true;
+    const before = abstract.slice(Math.max(0, m.index - 40), m.index);
+    if (!MODIFIED_BY.test(abstract.slice(m.index + m[0].length, m.index + m[0].length + 40)) && !MODIFIER_BEFORE.test(before)) return true;
   }
   return false;
 }
