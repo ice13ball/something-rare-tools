@@ -164,6 +164,11 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.indexCollection.logic': `• It reads only metadata, never data files.
 • The result is counts per problem, examples and a fix list as a CSV file.
 • It does not compare or rank institutions; a quick sample is labelled as a sample.`,
+
+  'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet. It cannot be used yet.`,
+  'tip.convertIntro.logic': `• The page is hidden for now: it is not in the menu or on the index page, and search engines are asked to skip it.
+• Nothing is processed yet; a file dropped here would not be read.
+• Two optional lookups are planned: taxon names in WoRMS and terms in the NERC vocabulary. Both will be off by default, and nothing is sent to either service until you press its button.`,
 } as const;
 
 export type TipKey = keyof typeof en;
@@ -321,6 +326,11 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.indexCollection.logic': `• Czyta wyłącznie metadane, nigdy pliki z danymi.
 • Wynik to liczba przypadków każdego problemu, przykłady i lista poprawek w pliku CSV.
 • Instytucje nie są ze sobą porównywane ani szeregowane; szybka próba jest oznaczona jako próba.`,
+
+  'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza. Na razie nie można z niego korzystać.`,
+  'tip.convertIntro.logic': `• Strona jest na razie ukryta: nie ma jej w menu ani na stronie głównej, a wyszukiwarki są proszone, by ją pominąć.
+• Nic nie jest jeszcze przetwarzane; plik wrzucony tutaj nie zostałby odczytany.
+• Planowane są dwa opcjonalne wyszukiwania: nazw taksonów w WoRMS i terminów ze słownika NERC. Oba będą domyślnie wyłączone, a do żadnej z tych usług nic nie zostanie wysłane, dopóki nie naciśniesz jej przycisku.`,
 };
 
 const de: Record<TipKey, string> = {
@@ -476,6 +486,11 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.indexCollection.logic': `• Es liest nur Metadaten, nie Datendateien.
 • Das Ergebnis sind Zahlen je Problem, Beispiele und eine Korrekturliste als CSV-Datei.
 • Es vergleicht und reiht keine Institutionen; eine schnelle Stichprobe ist als Stichprobe gekennzeichnet.`,
+
+  'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Er ist noch nicht nutzbar.`,
+  'tip.convertIntro.logic': `• Die Seite ist vorerst verborgen: Sie steht weder im Menü noch auf der Startseite, und Suchmaschinen werden gebeten, sie zu überspringen.
+• Es wird noch nichts verarbeitet; eine hier abgelegte Datei würde nicht gelesen.
+• Geplant sind zwei optionale Abfragen: von Taxonnamen in WoRMS und von Begriffen im NERC-Vokabular. Beide sind standardmäßig aus, und an keinen der beiden Dienste wird etwas gesendet, bis Sie dessen Schaltfläche drücken.`,
 };
 
 const fr: Record<TipKey, string> = {
@@ -631,6 +646,11 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.indexCollection.logic': `• Il ne lit que des métadonnées, jamais des fichiers de données.
 • Le résultat : des comptes par problème, des exemples et une liste de corrections en fichier CSV.
 • Il ne compare ni ne classe les institutions ; un échantillon rapide est signalé comme échantillon.`,
+
+  'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. Il n'est pas encore utilisable.`,
+  'tip.convertIntro.logic': `• La page est masquée pour l'instant : elle ne figure ni dans le menu ni sur la page d'accueil, et les moteurs de recherche sont priés de l'ignorer.
+• Rien n'est encore traité ; un fichier déposé ici ne serait pas lu.
+• Deux recherches facultatives sont prévues : des noms de taxons dans WoRMS et des termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien n'est envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
 };
 
 export const TIP_TEXTS: Record<'en' | 'pl' | 'de' | 'fr', Record<TipKey, string>> = { en, pl, de, fr };

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { CSW_HOSTS } from '../config/catalogues';
 import { IPT_HOSTS, REGISTRY_HOSTS } from '../config/ipt';
 import { DATA_HOSTS, GA_HOSTS, MAP_HOSTS, MAP_PRIVACY_URL, buildCsp, isAllowedHost } from '../config/hosts';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SITE } from '../config/site';
@@ -131,9 +132,30 @@ describe('robots meta in the build', () => {
       expect(readFileSync(join(__dirname, '..', f), 'utf8'), f).not.toMatch(/name="robots"/);
     }
   });
+  it('the hidden page carries its own, and the plugin does not add a second one', () => {
+    const src = readFileSync(join(__dirname, '..', 'convert/index.html'), 'utf8');
+    expect(src.match(/name="robots"/g)).toHaveLength(1);
+    const withHtml = (noindex: boolean, html: string) => (robotsMeta(noindex).transformIndexHtml as (h: string) => unknown[])(html);
+    expect(withHtml(true, src)).toEqual([]);
+    expect(withHtml(true, '<head></head>')).toHaveLength(1);
+  });
   it('the Vite plugin injects it only while noindex', () => {
     expect(inject(true)).toEqual([{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' }, injectTo: 'head-prepend' }]);
     expect(inject(false)).toEqual([]);
+  });
+});
+
+describe('.gitignore', () => {
+  it('keeps the private converter test data out of the repository', () => {
+    const lines = readFileSync(join(__dirname, '..', '.gitignore'), 'utf8').split('\n').map((l) => l.trim());
+    expect(lines).toContain('/test/convert-private/');
+    // and git agrees: a file in that folder is ignored (check-ignore exits 0), one next to it is not (exit 1)
+    const cwd = join(__dirname, '..');
+    if (spawnSync('git', ['rev-parse', '--git-dir'], { cwd }).status !== 0) return; // not a checkout (a source tarball): the line above is the check
+    const ignored = (path: string): number => spawnSync('git', ['check-ignore', '-q', path], { cwd }).status ?? -1;
+    expect(ignored('test/convert-private/sheet.xlsx')).toBe(0);
+    expect(ignored('test/convert-private/deep/dir/x.csv')).toBe(0);
+    expect(ignored('test/convert/sheet.xlsx')).toBe(1);
   });
 });
 

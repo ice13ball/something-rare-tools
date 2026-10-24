@@ -21,6 +21,8 @@ export interface AppOptions {
   upstream?: Upstream;
   /** Defaults to SITE.noindex. */
   noindex?: boolean;
+  /** Extra connect-src hosts per page path (default: PAGE_CONNECT_HOSTS of headers.ts). For tests of the per-path policy. */
+  pageConnect?: Readonly<Record<string, readonly string[]>>;
   /** One JSON line per proxied request. Default: stdout. */
   log?: (line: string) => void;
   maxBytes?: number;
@@ -125,6 +127,8 @@ export function createApp(opts: AppOptions): Express {
     licence: Buffer.from(prepareHtml(readRequired(dist, join('licence', 'index.html')).toString('utf8'), noindex)),
     collection: Buffer.from(prepareHtml(readRequired(dist, join('collection', 'index.html')).toString('utf8'), noindex)),
     privacy: Buffer.from(prepareHtml(readRequired(dist, join('privacy', 'index.html')).toString('utf8'), noindex)),
+    // Hidden page: its robots meta stays whatever the site flag says (headers.ts HIDDEN_PATHS), so it is prepared with `true`.
+    convert: Buffer.from(prepareHtml(readRequired(dist, join('convert', 'index.html')).toString('utf8'), true)),
   };
   const consentJs = readOptional(dist, 'consent-default.js');
   const notFoundJs = readOptional(dist, 'not-found.js');
@@ -142,17 +146,17 @@ export function createApp(opts: AppOptions): Express {
   app.set('strict routing', true);
   // `trust proxy` is intentionally left unset: only the rate limiter reads X-Forwarded-For, by design.
 
-  app.use(securityHeaders({ noindex }));
+  app.use(securityHeaders({ noindex, pageConnect: opts.pageConnect }));
 
   const sendHtml = (page: Buffer) => (_req: Request, res: Response): void => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.end(page);
   };
-  const pageOf: Record<string, Buffer> = { '/': pages.home, '/check': pages.check, '/licence': pages.licence, '/collection': pages.collection, '/privacy': pages.privacy };
+  const pageOf: Record<string, Buffer> = { '/': pages.home, '/check': pages.check, '/licence': pages.licence, '/collection': pages.collection, '/privacy': pages.privacy, '/convert': pages.convert };
   for (const path of Object.keys(pageOf)) app.get(path, sendHtml(pageOf[path]));
   // One canonical URL per page: the slash variants answer 301 to the slash-less one (fixed targets, nothing from the request).
-  for (const path of ['/check', '/licence', '/collection', '/privacy']) app.get(path + '/', (_req, res) => void res.redirect(301, path));
+  for (const path of ['/check', '/licence', '/collection', '/privacy', '/convert']) app.get(path + '/', (_req, res) => void res.redirect(301, path));
 
   app.get('/robots.txt', (_req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
