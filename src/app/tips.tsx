@@ -61,15 +61,17 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
 
 /**
  * The rules that read a column of each role, checked against the code (file:line as of the commit that wrote this):
- *   latitude / longitude  rows.ts positionRules 61-95 (range, zero, equal), noCoord 467, onLand 317; dataset.ts 247 (degrees+minutes);
- *                         speed.ts (ship speed); crossfile.ts 548 (position conflict, with a station)
+ *   latitude / longitude  rows.ts positionRules 61-95 (range, zero, equal), noCoord 467, onLand 317, stationMoved 244 (spread, with a station);
+ *                         dataset.ts 247 (degrees+minutes), 163-164 (non-numeric cell, via reportBadNumber in the coordinate reader);
+ *                         speed.ts (ship speed); crossfile.ts 499 (position swap) and 548 (position conflict), both with a station
  *   date / datetime       one slot in dataset.ts specsOf (`when`): dataset.ts 304 (unparseable), rows.ts dateMissing 351, yearOutlier 401,
  *                         dateFuture 568; speed.ts; crossfile.ts 278 (date conflict, with a station)
  *   time                  dataset.ts 311 and 319 only, and only beside a date column (it is combined with it)
  *   depth                 rows.ts depthSign 442, depthRules 515; crossfile.ts 92 (duplicate samples match on depth)
- *   station               rows.ts stationMoved 244, noCoord 467; crossfile.ts 90-97 (duplicate samples), 278, 307 (alias), 366-548
- *   cruise                speed.ts (groups by cruise), rows.ts noCoord 470, chemistry.ts 140
- *   sampleId              no rule of its own: dataset.ts 454 makes it the station when the file has no station column
+ *   station               dwc.ts 345 (invisible character); rows.ts stationMoved 244, noCoord 467; crossfile.ts 90-97 (duplicate samples), 278, 307 (alias), 366-548
+ *   cruise                dwc.ts 345 (invisible character); speed.ts (groups by cruise), rows.ts noCoord 470, chemistry.ts 140
+ *   sampleId              dwc.ts 345 (invisible character in an id column, via dataset.ts 649); it stands in for the station ONLY when sheets are
+ *                         joined: dataset.ts withLookup returns before the stand-in line (454) without a join, so a single table gives no station
  *   pressure              dropped by specsOf (dataset.ts default branch): no rule and no output reads it
  *   variable              rows.ts unitMissing 435; dataset.ts 164 (non-numeric); chemistry.ts; crossfile.ts 233 (unit conflict);
  *                         metadata.ts 136 (variable named in the abstract)
@@ -78,16 +80,16 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
 const WHEN_RULES = ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-MISSING', 'ROW-YEAR-OUTLIER', 'ROW-DATE-FUTURE', 'ROW-SHIP-SPEED', 'XF-DATE-CONFLICT'] as const;
 export const ROLE_FEEDS: Record<RoleKind, readonly string[]> = {
   ignore: [],
-  latitude: ['ROW-LAT-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT'],
-  longitude: ['ROW-LON-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT'],
+  latitude: ['ROW-LAT-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
+  longitude: ['ROW-LON-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
   datetime: WHEN_RULES,
   date: WHEN_RULES,
   time: ['ROW-DATE-UNPARSEABLE', 'ROW-TZ-UNKNOWN'],
   depth: ['ROW-DEPTH-SIGN', 'ROW-DEPTH-RANGE', 'XF-DUPLICATE-SAMPLES'],
   pressure: [],
-  station: ['ROW-STATION-MOVED', 'ROW-STATION-SPREAD', 'ROW-NO-COORD', 'XF-STATION-ALIAS', 'XF-DUPLICATE-SAMPLES', 'XF-DATE-CONFLICT', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
-  cruise: ['ROW-SHIP-SPEED', 'ROW-NO-COORD', 'CHEM-DIC-GT-TA'],
-  sampleId: [],
+  station: ['ROW-INVISIBLE-CHAR', 'ROW-STATION-MOVED', 'ROW-STATION-SPREAD', 'ROW-NO-COORD', 'XF-STATION-ALIAS', 'XF-DUPLICATE-SAMPLES', 'XF-DATE-CONFLICT', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
+  cruise: ['ROW-INVISIBLE-CHAR', 'ROW-SHIP-SPEED', 'ROW-NO-COORD', 'CHEM-DIC-GT-TA'],
+  sampleId: ['ROW-INVISIBLE-CHAR'],
   variable: ['ROW-UNIT-MISSING', 'ROW-NON-NUMERIC', 'CHEM-RANGE', 'CHEM-UNIT-PAIR', 'CHEM-DIC-GT-TA', 'XF-UNIT-CONFLICT', 'META-VARIABLE-MISSING'],
 };
 

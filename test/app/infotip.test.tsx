@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HOVER_DELAY_MS, InfoTip } from '../../src/app/components/InfoTip';
+import { HOVER_DELAY_MS, HOVER_LEAVE_MS, InfoTip } from '../../src/app/components/InfoTip';
 import { SingleCruise } from '../../src/app/components/SingleCruise';
 import { initLang, setLang } from '../../src/app/i18n';
 import { translate } from '../../src/core/i18n/ui';
@@ -128,6 +128,29 @@ describe('InfoTip: opening', () => {
     act(() => void vi.advanceTimersByTime(1));
     expect(isOpen()).toBe(true);
     fireEvent.mouseLeave(wrap);
+    act(() => void vi.advanceTimersByTime(HOVER_LEAVE_MS));
+    expect(isOpen()).toBe(false);
+  });
+
+  it('crossing the gap to the bubble does not close a hover-opened tip; entering the bubble cancels the pending close, leaving it closes after the delay', () => {
+    vi.useFakeTimers();
+    render(<InfoTip id="layout" />);
+    const wrap = document.querySelector('.infotip') as HTMLElement;
+    fireEvent.mouseEnter(wrap);
+    act(() => void vi.advanceTimersByTime(HOVER_DELAY_MS));
+    expect(isOpen()).toBe(true);
+    // off the icon, in the gap: nothing happens yet
+    fireEvent.mouseLeave(wrap);
+    act(() => void vi.advanceTimersByTime(HOVER_LEAVE_MS - 1));
+    expect(isOpen()).toBe(true);
+    // onto the bubble (a React child of the tip, drawn in a portal): the close is cancelled
+    fireEvent.mouseEnter(document.querySelector('.infotip-bubble') as HTMLElement);
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(isOpen()).toBe(true);
+    // off the bubble: it closes after the delay, not at once
+    fireEvent.mouseLeave(wrap);
+    expect(isOpen()).toBe(true);
+    act(() => void vi.advanceTimersByTime(HOVER_LEAVE_MS));
     expect(isOpen()).toBe(false);
   });
 
@@ -160,6 +183,50 @@ describe('InfoTip: opening', () => {
     fireEvent.click(tipButton());
     expect(isOpen()).toBe(true);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('InfoTip: one at a time', () => {
+  const two = (): { a: HTMLButtonElement; b: HTMLButtonElement } => {
+    render(
+      <div>
+        <InfoTip id="layout" />
+        <InfoTip id="cleanCsv" />
+      </div>,
+    );
+    const [a, b] = screen.getAllByRole('button', { name: NAME }) as HTMLButtonElement[];
+    return { a, b };
+  };
+  const open = (el: HTMLElement): boolean => el.getAttribute('aria-expanded') === 'true';
+
+  it('opening a tip by click closes the one that was open', () => {
+    const { a, b } = two();
+    fireEvent.click(a);
+    expect(open(a)).toBe(true);
+    fireEvent.click(b);
+    expect(open(b)).toBe(true);
+    expect(open(a)).toBe(false);
+    expect(document.querySelectorAll('.infotip-bubble').length).toBe(1);
+  });
+
+  it('by keyboard focus too', () => {
+    const { a, b } = two();
+    act(() => a.focus());
+    expect(open(a)).toBe(true);
+    act(() => b.focus());
+    expect(open(b)).toBe(true);
+    expect(open(a)).toBe(false);
+  });
+
+  it('and by hover, even over a tip that was pinned open', () => {
+    vi.useFakeTimers();
+    const { a, b } = two();
+    fireEvent.click(a);
+    expect(open(a)).toBe(true);
+    fireEvent.mouseEnter(b.closest('.infotip') as HTMLElement);
+    act(() => void vi.advanceTimersByTime(HOVER_DELAY_MS));
+    expect(open(b)).toBe(true);
+    expect(open(a)).toBe(false);
   });
 });
 
