@@ -118,8 +118,8 @@ describe('the shared banner text', () => {
     expect(UI.pl['nav.privacy']).toBe('Prywatność');
   });
 
-  it('the German sentence is grammatical: weder ... noch', () => {
-    expect(UI.de['cookie.text']).toContain('Wir senden weder den Inhalt Ihrer Dateien noch die von Ihnen eingefügten Links.');
+  it('the German sentence uses the decided wording', () => {
+    expect(UI.de['cookie.text']).toContain('Wir senden niemals den Inhalt Ihrer Dateien oder die von Ihnen eingefügten Links.');
   });
 
   it('is rendered with both buttons and the privacy link', () => {
