@@ -422,12 +422,14 @@ below the surface. CF Standard Name Table, standard_name `depth`: "Depth is the 
 
 | Evidence | Direction | Note |
 |---|---|---|
-| depth word in the header, values >= 0 | down | no |
+| depth word in the header, no negative value | down | no |
+| any negative value (also with "below" or "positive down" in the header, and with values of both signs) | up | no |
 | header says elevation / altitude | up | no |
-| header direction words: below, beneath, under, down(wards), BSL, BSF, mbsl, mbsf, mbgl, bgl / above, up(wards), amsl, asl, agl | down / up | no (and they decide when the values have both signs) |
 | NERC P01 depth code; Darwin Core minimum/maximumDepthInMeters (defined as metres below the surface) | down | no |
-| negative values only | up | no |
-| the column is depth but the header is not a depth word, states no direction and is no P01 depth code | **not stated**, low-confidence | fires |
+| header is not a depth word, but has a down word (below, beneath, under, down(wards), BSL, BSF, mbsl, mbsf, mbgl, bgl), no negative value | down | no (the down words only keep a non-depth-word header from being a default; there are no "up" words in the code, and no direction word overrides the values) |
+| header is not a depth word, no down word, not P01, no negative value | **not stated**, low-confidence | fires |
+
+The "not stated" row is, in practice, reached only by hand-mapped columns (the mapping editor starts them at "not stated"); a name-recognised depth column always has a depth word, elevation, a P01 code or a Darwin Core term.
 
 Mixed signs (checked, NOT changed): any negative value still means `up`. Leaving a column with both signs undecided was tried and reverted: `crossfile` matches depths across files with this
 sign, and in the golden set porewater3m has 296 negative and 15 positive depth values, so "not stated" turned its XF-DATE-CONFLICT with the anions file (positive depths) into a miss. ROW-DEPTH-SIGN
@@ -445,9 +447,12 @@ with values has a unit other than µmol/kg. A column with no unit at all is ROW-
 
 Read only what states where and when the DATA were collected: Zenodo `metadata.locations` (legacy list of `{lat, lon, place}` and InvenioRDM `{features:[{geometry}]}` GeoJSON, any geometry
 type, its positions) and `metadata.dates` of type `collected`; DataCite `geoLocations` (point, box, polygon as the box of its vertices; `inPolygonPoint` is a point inside, not a vertex) and `dates`
-of dateType `Collected` (and `Coverage`, which this reader accepts in case a record or a newer schema version uses it; I am not certain the DataCite schema defines it). DataCite 4.x dateType
+of dateType `Collected` (and `Coverage`, a dateType added in DataCite schema 4.6, not in 4.5). DataCite 4.0-4.5 dateType
 values: Accepted, Available, Copyrighted, Collected, Created, Issued, Submitted, Updated, Valid, Withdrawn, Other. Only Collected means coverage; Valid is the validity of the resource (not the
 period the data cover) and the others describe the record. Zenodo `publication_date` and the created / issued / available / valid dates are never used. A place name without coordinates
 and the repository address are not locations. Shapes off the globe (|lat| > 90, |lon| > 180, south > north) are dropped; a single box may cross the antimeridian (west > east) and is kept;
 several shapes with a crossing box, or longitudes spread over more than half the globe, become all longitudes (a superset, never a narrower wrong box).
 Several collected dates merge to the earliest start and latest end; an open end stays open.
+
+Known limit (left as is): the legacy Zenodo JSON carries only point locations; boxes and polygons exist only in free text there. A Zenodo record with a box and no collected dates still gets META-NO-EXTENT.
+Free-text collected dates ("2023-04 to 2023-05") and EDTF qualifiers ("2020?", "2020~") give no temporal extent (never a wrong one); only ISO-like ends (YYYY, YYYY-MM, YYYY-MM-DD, optional time) or ".." are read.
