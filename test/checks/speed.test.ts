@@ -322,6 +322,19 @@ describe('ship speed: how events, time and neighbours are treated', () => {
     expect(renderPlain(f[0], 'pl')).toContain('Zapis „a/b”');
   });
 
+  it('a fixed station with hundreds of events: the square-bracket listing stays short, every row stays in the finding', () => {
+    // 300 casts at one place 10 minutes apart, then a station 500 km away 1 h later and back on track: one bad hop out of the place
+    const station: Spec[] = Array.from({ length: 300 }, (_, i) => ({ lat: 70 + (i % 2) * 0.001, lon: 15.5, latDecimals: 3, lonDecimals: 2, datetime: iso(T0 + i * 600_000) }));
+    const after: Spec[] = [
+      { lat: 74.5, lon: 15.5, latDecimals: 2, lonDecimals: 2, datetime: iso(T0 + 300 * 600_000 + 3_600_000) },
+      { lat: 70.5, lon: 15.5, latDecimals: 2, lonDecimals: 2, datetime: iso(T0 + 300 * 600_000 + 7 * 3_600_000) },
+    ];
+    const f = checkShipSpeed([makeDataset([...station, ...after])], { singleCruise: true }).findings;
+    expect(f.length).toBeGreaterThan(0);
+    for (const x of f) expect(String(x.params.cases).length).toBeLessThan(400);
+    expect(f.map((x) => String(x.params.cases)).join(' ')).toContain('…+296');
+  });
+
   it('a one-row-per-event track has no square-bracket listing (58/78 case unchanged)', () => {
     const rows = track(12);
     rows[8] = { ...rows[8], lat: 58 };
