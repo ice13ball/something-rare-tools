@@ -29,7 +29,7 @@ const en = {
   'tip.role.pressure': `the column is recognised, but no check or output file uses it.`,
   'tip.role.station': `the name or number of a station; groups the rows taken at one place.`,
   'tip.role.cruise': `in the ship-speed test, separates cruises and replaces the one-cruise tick.`,
-  'tip.role.sampleId': `the id of a sample or core; when the file has no station column, it stands in for the station.`,
+  'tip.role.sampleId': `the id of a sample or core; when sheets are joined, it stands in for the station.`,
   'tip.role.variable': `a measured quantity; needs a name and a unit, and the tool never guesses the unit.`,
 
   'tip.dropZone.does': `Reads files from your computer so that they can be checked.`,
@@ -186,7 +186,7 @@ const pl: Record<TipKey, string> = {
   'tip.role.pressure': `kolumna jest rozpoznawana, ale żadne sprawdzenie ani plik wyjściowy jej nie używa.`,
   'tip.role.station': `nazwa lub numer stacji; grupuje wiersze z jednego miejsca.`,
   'tip.role.cruise': `w teście prędkości statku rozdziela rejsy i zastępuje zaznaczenie pola o jednym rejsie.`,
-  'tip.role.sampleId': `identyfikator próbki lub rdzenia; gdy w pliku nie ma kolumny ze stacją, pełni jej rolę.`,
+  'tip.role.sampleId': `identyfikator próbki lub rdzenia; przy połączonych arkuszach zastępuje stację.`,
   'tip.role.variable': `mierzona wielkość; wymaga nazwy i jednostki, a jednostki narzędzie nigdy nie zgaduje.`,
 
   'tip.dropZone.does': `Wczytuje pliki z Twojego komputera, żeby je sprawdzić.`,
@@ -341,7 +341,7 @@ const de: Record<TipKey, string> = {
   'tip.role.pressure': `die Spalte wird erkannt, aber keine Prüfung und keine Ausgabedatei verwendet sie.`,
   'tip.role.station': `Name oder Nummer einer Station; fasst die Zeilen eines Ortes zusammen.`,
   'tip.role.cruise': `trennt beim Geschwindigkeitstest die Fahrten und ersetzt das Häkchen für eine Fahrt.`,
-  'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; fehlt eine Stationsspalte, übernimmt sie deren Rolle.`,
+  'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; bei verknüpften Blättern vertritt sie die Station.`,
   'tip.role.variable': `eine gemessene Größe; braucht einen Namen und eine Einheit, und die Einheit rät das Werkzeug nie.`,
 
   'tip.dropZone.does': `Liest Dateien von Ihrem Rechner ein, damit sie geprüft werden können.`,
@@ -496,7 +496,7 @@ const fr: Record<TipKey, string> = {
   'tip.role.pressure': `la colonne est reconnue, mais aucune vérification ni aucun fichier de sortie ne l'utilise.`,
   'tip.role.station': `le nom ou le numéro d'une station ; regroupe les lignes d'un même lieu.`,
   'tip.role.cruise': `dans le test de vitesse, sépare les campagnes et remplace la case d'une seule campagne.`,
-  'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; sans colonne de station, il en tient lieu.`,
+  'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; quand des feuilles sont reliées, il tient lieu de station.`,
   'tip.role.variable': `une grandeur mesurée ; demande un nom et une unité, et l'outil ne devine jamais l'unité.`,
 
   'tip.dropZone.does': `Lit des fichiers de votre ordinateur pour les vérifier.`,

@@ -11,6 +11,12 @@ import { TIPS, fillValues, type TipId, type TipValues } from '../tips';
 /** How long the pointer must rest on the icon before a hover opens it (a click, a tap or the keyboard open it at once). */
 export const HOVER_DELAY_MS = 300;
 
+/** How long the pointer may be off both the icon and the bubble (crossing the gap between them) before a hover-opened tip closes. */
+export const HOVER_LEAVE_MS = 200;
+
+/** The one tip that is open: opening another closes it. */
+let openTip: (() => void) | null = null;
+
 const EDGE = 8; // px kept free between the bubble and the edge of the viewport
 const GAP = 6; // px between the icon and the bubble
 
@@ -83,6 +89,7 @@ export function InfoTip({ id }: { id: TipId }): React.ReactElement {
   const byPointer = useRef(false); // the focus on the button comes from a pointer press, whose click will decide
   const openedByFocus = useRef(false); // opened by keyboard focus and not yet confirmed by a keyboard click: that first click keeps it open
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const bubbleId = useId();
 
   const clearTimer = (): void => {
@@ -92,12 +99,30 @@ export function InfoTip({ id }: { id: TipId }): React.ReactElement {
   const close = useCallback((): void => {
     if (timer.current !== undefined) clearTimeout(timer.current);
     timer.current = undefined;
+    if (leaveTimer.current !== undefined) clearTimeout(leaveTimer.current);
+    leaveTimer.current = undefined;
     pinned.current = false;
     openedByFocus.current = false;
     setOpen(false);
     setPlace(null);
   }, []);
-  useEffect(() => clearTimer, []);
+  useEffect(
+    () => () => {
+      clearTimer();
+      if (leaveTimer.current !== undefined) clearTimeout(leaveTimer.current);
+    },
+    [],
+  );
+
+  // only one tip is open at a time: opening this one (by click, focus or hover) closes the one that was open
+  useEffect(() => {
+    if (!open) return;
+    if (openTip && openTip !== close) openTip();
+    openTip = close;
+    return () => {
+      if (openTip === close) openTip = null;
+    };
+  }, [open, close]);
 
   // the values that need rule data are loaded when the tip is first opened, so no page carries the rule definitions for its tips
   useEffect(() => {
@@ -231,6 +256,8 @@ export function InfoTip({ id }: { id: TipId }): React.ReactElement {
       className="infotip"
       data-tip={id}
       onMouseEnter={() => {
+        if (leaveTimer.current !== undefined) clearTimeout(leaveTimer.current);
+        leaveTimer.current = undefined;
         if (open || !canHover()) return;
         clearTimer();
         timer.current = setTimeout(() => {
@@ -240,7 +267,12 @@ export function InfoTip({ id }: { id: TipId }): React.ReactElement {
       }}
       onMouseLeave={() => {
         clearTimer();
-        if (!pinned.current) close();
+        if (pinned.current || !open) return;
+        // a short delay, so the pointer can cross the gap to the bubble; entering the bubble (part of this component) cancels it
+        leaveTimer.current = setTimeout(() => {
+          leaveTimer.current = undefined;
+          if (!pinned.current) close();
+        }, HOVER_LEAVE_MS);
       }}
       onBlur={(e) => {
         byPointer.current = false;
