@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { makeFinding } from '../rules/registry';
-import { CANONICAL_VARIABLES, headerKey } from '../recognize/vocab';
+import { CANONICAL_VARIABLES, foldDiacritics, headerKey } from '../recognize/vocab';
 import type { DataRow, Dataset, Finding, MetadataRecord, MetadataSource } from '../types';
 
 /** Which record answers for extents when several give one: ISO first, then DataCite, then PANGAEA; never a union. */
@@ -89,9 +89,9 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * case-sensitively, because their lower-case forms are ordinary words; longer terms ignore case.
  */
 function termRegex(term: string): RegExp {
-  return new RegExp(`(?<![A-Za-z0-9])${escapeRe(term)}(?![A-Za-z0-9])`, term.length <= 4 ? '' : 'i');
+  // Acronyms (DIC, POC, pH, SiO2) keep their case; every other term ignores it ('Tlen' opens a Polish sentence).
+  return new RegExp(`(?<![A-Za-z0-9])${escapeRe(term)}(?![A-Za-z0-9])`, term.length <= 4 && term !== term.toLowerCase() ? '' : 'i');
 }
-
 /** Canonical variables that also satisfy a canonical found in the abstract. */
 const COVERED_BY: Record<string, readonly string[]> = {
   nitrate: ['nitrate+nitrite'],
@@ -105,8 +105,10 @@ const COVERED_BY: Record<string, readonly string[]> = {
  */
 const MODIFIED_BY = /^(?:-?[a-z](?![a-z]))?[\s-]+(?:fluorescence|fluorometer|fluorimeter|evolution|maximum|sensors?|probes?|optodes?|electrodes?|analy[sz]ers?)\b/i;
 
-function mentions(abstract: string, term: string): boolean {
-  const re = new RegExp(termRegex(term).source, termRegex(term).flags + 'g');
+/** Whole-word match, blind to diacritics: the term and the text are both folded ('zasolenie' = 'zasolenie', 'température' = 'temperature'). */
+function mentions(abstractText: string, term: string): boolean {
+  const abstract = foldDiacritics(abstractText);
+  const re = new RegExp(termRegex(foldDiacritics(term)).source, termRegex(foldDiacritics(term)).flags + 'g');
   for (const m of abstract.matchAll(re)) {
     if (!MODIFIED_BY.test(abstract.slice(m.index + m[0].length, m.index + m[0].length + 40))) return true;
   }

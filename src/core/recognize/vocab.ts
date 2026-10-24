@@ -223,54 +223,63 @@ export interface CanonicalVariable {
   abstractTerms: Record<Lang, string[]>;
 }
 
-const cv = (key: string, headerPatterns: RegExp[], en: string[] = []): CanonicalVariable => ({
+const cv = (key: string, headerPatterns: RegExp[], en: string[] = [], other: Partial<Record<'pl' | 'de' | 'fr', string[]>> = {}): CanonicalVariable => ({
   key,
   headerPatterns,
-  abstractTerms: { pl: [], en, de: [], fr: [] },
+  abstractTerms: { pl: other.pl ?? [], en, de: other.de ?? [], fr: other.fr ?? [] },
 });
 
-/** Lower-case ASCII key of a column name: 'PO₄³⁻' -> 'po43', 'NO2-_plus_NO3-' -> 'no2 plus no3', 'Date/Time' -> 'date time'. */
+/** Letters that do not decompose under NFKD ('ł' of 'długość', 'ß', 'ø', 'æ', 'œ', 'đ'): written as the ASCII letters people use without them. */
+const NON_DECOMPOSING: Record<string, string> = { ł: 'l', ß: 'ss', ø: 'o', æ: 'ae', œ: 'oe', đ: 'd' };
+
+/** Strips diacritics, case kept: 'Głębokość' -> 'Glebokosc', 'Größe' -> 'Grosse'. */
+export function foldDiacritics(text: string): string {
+  return text
+    .replace(/[łŁßøØæÆœŒđĐ]/g, (c) => NON_DECOMPOSING[c.toLowerCase()] ?? c)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+/** Lower-case ASCII key of a column name: 'PO₄³⁻' -> 'po43', 'NO2-_plus_NO3-' -> 'no2 plus no3', 'Date/Time' -> 'date time', 'Długość' -> 'dlugosc'. */
 export function headerKey(name: string): string {
-  return name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+  return foldDiacritics(name.normalize('NFKD'))
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
 
 export const CANONICAL_VARIABLES: readonly CanonicalVariable[] = [
-  cv('DIC', [/^dic$/, /^tco2$/, /^total (dissolved )?inorganic carbon/, /^dissolved inorganic carbon/], ['dissolved inorganic carbon', 'total dissolved inorganic carbon', 'total inorganic carbon', 'DIC']),
-  cv('TA', [/^ta$/, /^at$/, /^talk$/, /^alk$/, /^total alkalinity/, /^alkalinity/], ['total alkalinity', 'alkalinity']),
-  cv('DOC', [/^doc$/, /^dissolved organic carbon/], ['dissolved organic carbon', 'DOC']),
-  cv('salinity', [/^s$/, /^sal$/, /^salinity/, /^practical salinity/, /^psal/], ['salinity']),
-  cv('temperature', [/^t$/, /^temp$/, /^tmp$/, /^sst$/, /^temperature/, /^water temperature/], ['temperature']),
-  cv('oxygen', [/^o2$/, /^do$/, /^oxygen/, /^dissolved oxygen/, /^doxy/], ['oxygen', 'dissolved oxygen']),
+  cv('DIC', [/^dic$/, /^tco2$/, /^total (dissolved )?inorganic carbon/, /^dissolved inorganic carbon/], ['dissolved inorganic carbon', 'total dissolved inorganic carbon', 'total inorganic carbon', 'DIC'], { pl: ['rozpuszczony węgiel nieorganiczny', 'rozpuszczonego węgla nieorganicznego'], de: ['gelöster anorganischer Kohlenstoff'], fr: ['carbone inorganique dissous'] }),
+  cv('TA', [/^ta$/, /^at$/, /^talk$/, /^alk$/, /^total alkalinity/, /^alkalinity/], ['total alkalinity', 'alkalinity'], { pl: ['alkaliczność', 'alkaliczności', 'zasadowość węglanowa'], de: ['Alkalinität', 'Gesamtalkalinität'], fr: ['alcalinité', 'alcalinité totale'] }),
+  cv('DOC', [/^doc$/, /^dissolved organic carbon/], ['dissolved organic carbon', 'DOC'], { pl: ['rozpuszczony węgiel organiczny', 'rozpuszczonego węgla organicznego'], de: ['gelöster organischer Kohlenstoff'], fr: ['carbone organique dissous'] }),
+  cv('salinity', [/^s$/, /^sal$/, /^salinity/, /^practical salinity/, /^psal/], ['salinity'], { pl: ['zasolenie', 'zasolenia', 'zasoleniu', 'zasoleniem', 'saliność'], de: ['Salzgehalt', 'Salinität'], fr: ['salinité'] }),
+  cv('temperature', [/^t$/, /^temp$/, /^tmp$/, /^sst$/, /^temperature/, /^water temperature/], ['temperature'], { pl: ['temperatura', 'temperatury', 'temperaturze', 'temperaturą'], de: ['Temperatur', 'Wassertemperatur'], fr: ['température'] }),
+  cv('oxygen', [/^o2$/, /^do$/, /^oxygen/, /^dissolved oxygen/, /^doxy/], ['oxygen', 'dissolved oxygen'], { pl: ['tlen', 'tlenu', 'tlenem', 'tlenie', 'rozpuszczony tlen', 'rozpuszczonego tlenu'], de: ['Sauerstoff', 'gelöster Sauerstoff'], fr: ['oxygène', 'oxygène dissous'] }),
   cv('pH', [/^ph( |$)/], ['pH']),
   cv('nitrate+nitrite', [/^no2( plus| and)? no3$/, /^no3( plus| and)? no2$/, /^nox$/, /^nitrate (plus|and) nitrite/, /^nitrite (plus|and) nitrate/]),
-  cv('nitrate', [/^no3$/, /^nitrate/], ['nitrate']),
-  cv('nitrite', [/^no2$/, /^nitrite/], ['nitrite']),
-  cv('ammonium', [/^nh4$/, /^nh3$/, /^ammonium/, /^ammonia/], ['ammonium']),
-  cv('phosphate', [/^po4/, /^hpo4/, /^phosphate/, /^srp$/], ['phosphate', 'orthophosphate']),
-  cv('silicate', [/^si$/, /^dsi$/, /^sio2$/, /^sio4$/, /^sio44$/, /^silicate/, /^silica/, /^reactive silicate/], ['silicate', 'silica', 'dissolved silica', 'Si(OH)4', 'SiO2']),
-  cv('chlorophyll', [/^chl( |$)/, /^chla$/, /^chlorophyll/], ['chlorophyll']),
-  cv('POC', [/^poc$/, /^particulate organic carbon/], ['particulate organic carbon', 'POC']),
-  cv('PON', [/^pon$/, /^particulate organic nitrogen/], ['particulate organic nitrogen', 'PON']),
-  cv('DIN', [/^din$/], ['dissolved inorganic nitrogen']),
-  cv('DON', [/^don$/], ['dissolved organic nitrogen']),
-  cv('TN', [/^tn$/], ['total nitrogen']),
-  cv('TDN', [/^tdn$/], ['total dissolved nitrogen']),
-  cv('DOP', [/^dop$/], ['dissolved organic phosphorus']),
-  cv('TDP', [/^tdp$/], ['total dissolved phosphorus']),
-  cv('TSS', [/^tss$/], ['total suspended solids']),
-  cv('pCO2', [/^pco2/], ['pCO2', 'partial pressure of carbon dioxide']),
-  cv('density', [/^density/, /^sigma/, /^rho$/], ['density']),
-  cv('chloride', [/^cl$/, /^chloride/], ['chloride']),
-  cv('sodium', [/^na$/, /^sodium/], ['sodium']),
-  cv('potassium', [/^k$/, /^potassium/], ['potassium']),
-  cv('calcium', [/^ca2?$/, /^calcium/], ['calcium']),
-  cv('magnesium', [/^mg2?$/, /^magnesium/], ['magnesium']),
-  cv('sulphate', [/^so4/, /^sulph?ate/], ['sulphate', 'sulfate']),
+  cv('nitrate', [/^no3$/, /^nitrate/], ['nitrate'], { pl: ['azotany', 'azotanów', 'azotan'], de: ['Nitrat', 'Nitrate'], fr: ['nitrates'] }),
+  cv('nitrite', [/^no2$/, /^nitrite/], ['nitrite'], { pl: ['azotyny', 'azotynów', 'azotyn'], de: ['Nitrit', 'Nitrite'], fr: ['nitrites'] }),
+  cv('ammonium', [/^nh4$/, /^nh3$/, /^ammonium/, /^ammonia/], ['ammonium'], { pl: ['amon', 'amonu', 'amoniak', 'amoniaku'], de: ['Ammoniak'], fr: ['ammoniac'] }),
+  cv('phosphate', [/^po4/, /^hpo4/, /^phosphate/, /^srp$/], ['phosphate', 'orthophosphate'], { pl: ['fosforany', 'fosforanów', 'fosforan'], de: ['Phosphat', 'Phosphate'], fr: ['phosphates'] }),
+  cv('silicate', [/^si$/, /^dsi$/, /^sio2$/, /^sio4$/, /^sio44$/, /^silicate/, /^silica/, /^reactive silicate/], ['silicate', 'silica', 'dissolved silica', 'Si(OH)4', 'SiO2'], { pl: ['krzemiany', 'krzemianów', 'krzemian', 'krzemionka', 'krzemionki'], de: ['Silikat', 'Silikate', 'Kieselsäure'], fr: ['silicates', 'silice'] }),
+  cv('chlorophyll', [/^chl( |$)/, /^chla$/, /^chlorophyll/], ['chlorophyll'], { pl: ['chlorofil', 'chlorofilu'], de: ['Chlorophyll'], fr: ['chlorophylle'] }),
+  cv('POC', [/^poc$/, /^particulate organic carbon/], ['particulate organic carbon', 'POC'], { pl: ['cząsteczkowy węgiel organiczny'], de: ['partikulärer organischer Kohlenstoff'], fr: ['carbone organique particulaire'] }),
+  cv('PON', [/^pon$/, /^particulate organic nitrogen/], ['particulate organic nitrogen', 'PON'], { pl: ['cząsteczkowy azot organiczny'], de: ['partikulärer organischer Stickstoff'], fr: ['azote organique particulaire'] }),
+  cv('DIN', [/^din$/], ['dissolved inorganic nitrogen'], { pl: ['rozpuszczony azot nieorganiczny'], de: ['gelöster anorganischer Stickstoff'], fr: ['azote inorganique dissous'] }),
+  cv('DON', [/^don$/], ['dissolved organic nitrogen'], { pl: ['rozpuszczony azot organiczny'], de: ['gelöster organischer Stickstoff'], fr: ['azote organique dissous'] }),
+  cv('TN', [/^tn$/], ['total nitrogen'], { pl: ['azot całkowity'], de: ['Gesamtstickstoff'], fr: ['azote total'] }),
+  cv('TDN', [/^tdn$/], ['total dissolved nitrogen'], { pl: ['całkowity azot rozpuszczony'], de: ['gesamter gelöster Stickstoff'], fr: ['azote dissous total'] }),
+  cv('DOP', [/^dop$/], ['dissolved organic phosphorus'], { pl: ['rozpuszczony fosfor organiczny'], de: ['gelöster organischer Phosphor'], fr: ['phosphore organique dissous'] }),
+  cv('TDP', [/^tdp$/], ['total dissolved phosphorus'], { pl: ['całkowity fosfor rozpuszczony'], de: ['gesamter gelöster Phosphor'], fr: ['phosphore dissous total'] }),
+  cv('TSS', [/^tss$/], ['total suspended solids'], { pl: ['zawiesina ogólna'], de: ['gesamte suspendierte Stoffe'], fr: ['matières en suspension'] }),
+  cv('pCO2', [/^pco2/], ['pCO2', 'partial pressure of carbon dioxide'], { pl: ['ciśnienie parcjalne dwutlenku węgla'], de: ['Partialdruck von Kohlendioxid'], fr: ['pression partielle de dioxyde de carbone'] }),
+  cv('density', [/^density/, /^sigma/, /^rho$/], ['density'], { pl: ['gęstość', 'gęstości'], de: ['Dichte'], fr: ['densité', 'masse volumique'] }),
+  cv('chloride', [/^cl$/, /^chloride/], ['chloride'], { pl: ['chlorki', 'chlorków'], de: ['Chlorid'], fr: ['chlorure', 'chlorures'] }),
+  cv('sodium', [/^na$/, /^sodium/], ['sodium'], { pl: ['sodu'], de: ['Natrium'] }),
+  cv('potassium', [/^k$/, /^potassium/], ['potassium'], { pl: ['potas', 'potasu'], de: ['Kalium'] }),
+  cv('calcium', [/^ca2?$/, /^calcium/], ['calcium'], { pl: ['wapń', 'wapnia'], de: ['Calcium', 'Kalzium'] }),
+  cv('magnesium', [/^mg2?$/, /^magnesium/], ['magnesium'], { pl: ['magnez', 'magnezu'], de: ['Magnesium'], fr: ['magnésium'] }),
+  cv('sulphate', [/^so4/, /^sulph?ate/], ['sulphate', 'sulfate'], { pl: ['siarczany', 'siarczanów', 'siarczan'], de: ['Sulfat', 'Sulfate'], fr: ['sulfates'] }),
 ];
 
 const CANONICAL_KEYS: ReadonlySet<string> = new Set(CANONICAL_VARIABLES.map((c) => c.key));
