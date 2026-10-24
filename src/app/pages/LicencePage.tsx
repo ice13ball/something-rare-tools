@@ -65,6 +65,7 @@ function reasonOf(f: LoadFailure): string {
   if (f.finding && f.source === 'datacite' && Number(p.status) === 404) return t('licence.reason.notDatacite', { host: String(p.host ?? '') });
   if (f.finding) return t('licence.reason.http', { host: String(p.host ?? ''), status: String(p.status ?? '') });
   if (f.reason === 'unrecognised') return t('licence.reason.unrecognised');
+  if (f.reason === 'not-read') return t('licence.reason.notRead');
   return t('licence.reason.unexpected', { message: f.message ?? '' });
 }
 

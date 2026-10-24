@@ -107,7 +107,7 @@ No findings only means that no problems were found in the checked categories.`,
 
   'tip.licenceInput.does': `Names the descriptions of one dataset that are to be compared.`,
   'tip.licenceInput.logic': `• One reference per line: a DOI, a Zenodo or PANGAEA link, a Dataverse dataset link ({dataverse}) or a GeoNetwork record link.
-• Only the metadata of those records is read, never the data files.
+• Only the metadata of those records is read, never the data files. A GBIF or OBIS link is not read for licences: use the dataset DOI.
 • All lines should be about one dataset: several places where it is described.`,
   'tip.licenceOneDeposit.does': `Shows whether the sources state the same licence, and counts the sources of one deposit once.`,
   'tip.licenceOneDeposit.logic': `• One deposit is a record in a repository together with its DataCite record (Zenodo, PANGAEA, Dataverse): they describe the same dataset, so they count as one source.
@@ -157,7 +157,7 @@ No findings only means that no problems were found in the checked categories.`,
 • It checks coordinates, dates, units, value ranges and the licence, and states each finding in a plain sentence with the technical detail beside it.
 • It changes nothing in your data: it shows what it found and lists what it does not check.`,
   'tip.indexLicence.does': `Compares what different metadata sources state about the licence of one dataset.`,
-  'tip.indexLicence.logic': `• It reads the metadata of Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS and DataCite, not data files.
+  'tip.indexLicence.logic': `• It reads the metadata of Zenodo, PANGAEA, Dataverse, GeoNetwork and DataCite, not data files (a GBIF or OBIS dataset only through its DOI).
 • It classifies each statement against the SPDX licence list and looks for contradictions.
 • It builds an attribution text with the licence for you to paste.`,
   'tip.indexCollection.does': `Goes through the metadata of a whole collection and gathers licence problems and empty fields.`,
@@ -264,7 +264,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 
   'tip.licenceInput.does': `Wskazuje opisy jednego zbioru danych, które mają zostać porównane.`,
   'tip.licenceInput.logic': `• Jedno odwołanie w wierszu: numer DOI, link do Zenodo lub PANGAEA, link do zbioru Dataverse ({dataverse}) albo do rekordu GeoNetwork.
-• Czytane są tylko metadane tych rekordów, nigdy pliki z danymi.
+• Czytane są tylko metadane tych rekordów, nigdy pliki z danymi. Link do GBIF lub OBIS nie jest czytany pod kątem licencji: użyj numeru DOI zbioru.
 • Wszystkie wiersze powinny dotyczyć jednego zbioru: to kilka miejsc, w których jest opisany.`,
   'tip.licenceOneDeposit.does': `Pokazuje, czy źródła podają tę samą licencję, a źródła jednego depozytu liczy raz.`,
   'tip.licenceOneDeposit.logic': `• Jeden depozyt to rekord w repozytorium razem z jego rekordem DataCite (Zenodo, PANGAEA, Dataverse): opisują ten sam zbiór, więc liczą się jako jedno źródło.
@@ -314,7 +314,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Sprawdza współrzędne, daty, jednostki, zakresy wartości i licencję; każde zastrzeżenie opisuje prostym zdaniem, a obok podaje szczegóły techniczne.
 • Niczego nie zmienia w Twoich danych: pokazuje, co znalazło, i wymienia to, czego nie sprawdza.`,
   'tip.indexLicence.does': `Porównuje, co o licencji jednego zbioru danych podają różne źródła metadanych.`,
-  'tip.indexLicence.logic': `• Czyta metadane z Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS i DataCite, a nie pliki z danymi.
+  'tip.indexLicence.logic': `• Czyta metadane z Zenodo, PANGAEA, Dataverse, GeoNetwork i DataCite, a nie pliki z danymi (zbiór z GBIF lub OBIS tylko przez jego DOI).
 • Każde stwierdzenie klasyfikuje według listy licencji SPDX i szuka sprzeczności.
 • Przygotowuje tekst uznania autorstwa z licencją, gotowy do wklejenia.`,
   'tip.indexCollection.does': `Przegląda metadane całej kolekcji i zbiera problemy z licencjami oraz puste pola.`,
@@ -419,7 +419,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 
   'tip.licenceInput.does': `Benennt die Beschreibungen eines Datensatzes, die verglichen werden sollen.`,
   'tip.licenceInput.logic': `• Eine Angabe pro Zeile: eine DOI, ein Zenodo- oder PANGAEA-Link, ein Dataverse-Datensatzlink ({dataverse}) oder ein GeoNetwork-Datensatzlink.
-• Gelesen werden nur die Metadaten dieser Datensätze, nie die Datendateien.
+• Gelesen werden nur die Metadaten dieser Datensätze, nie die Datendateien. Ein GBIF- oder OBIS-Link wird nicht auf Lizenzen gelesen: nehmen Sie die DOI des Datensatzes.
 • Alle Zeilen sollten zu einem Datensatz gehören: mehrere Orte, an denen er beschrieben ist.`,
   'tip.licenceOneDeposit.does': `Zeigt, ob die Quellen dieselbe Lizenz nennen, und zählt die Quellen einer Hinterlegung einmal.`,
   'tip.licenceOneDeposit.logic': `• Eine Hinterlegung ist ein Datensatz im Repositorium samt seinem DataCite-Datensatz (Zenodo, PANGAEA, Dataverse): Sie beschreiben denselben Datensatz und zählen daher als eine Quelle.
@@ -469,7 +469,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Es prüft Koordinaten, Daten, Einheiten, Wertebereiche und die Lizenz und nennt jeden Befund in einem einfachen Satz, daneben die technischen Einzelheiten.
 • Es ändert nichts an Ihren Daten: Es zeigt, was es gefunden hat, und nennt, was es nicht prüft.`,
   'tip.indexLicence.does': `Vergleicht, was verschiedene Metadatenquellen über die Lizenz eines Datensatzes angeben.`,
-  'tip.indexLicence.logic': `• Es liest die Metadaten von Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS und DataCite, nicht die Datendateien.
+  'tip.indexLicence.logic': `• Es liest die Metadaten von Zenodo, PANGAEA, Dataverse, GeoNetwork und DataCite, nicht die Datendateien (ein GBIF- oder OBIS-Datensatz nur über seine DOI).
 • Es ordnet jede Angabe der SPDX-Lizenzliste zu und sucht Widersprüche.
 • Es stellt eine Quellenangabe mit der Lizenz zum Einfügen zusammen.`,
   'tip.indexCollection.does': `Geht die Metadaten einer ganzen Sammlung durch und sammelt Lizenzprobleme und leere Felder.`,
@@ -574,7 +574,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 
   'tip.licenceInput.does': `Désigne les descriptions d'un même jeu de données à comparer.`,
   'tip.licenceInput.logic': `• Une référence par ligne : un DOI, un lien Zenodo ou PANGAEA, un lien de jeu de données Dataverse ({dataverse}) ou un lien de notice GeoNetwork.
-• Seules les métadonnées de ces notices sont lues, jamais les fichiers de données.
+• Seules les métadonnées de ces notices sont lues, jamais les fichiers de données. Un lien GBIF ou OBIS n'est pas lu pour les licences : utilisez le DOI du jeu de données.
 • Toutes les lignes doivent concerner un seul jeu de données : plusieurs endroits où il est décrit.`,
   'tip.licenceOneDeposit.does': `Montre si les sources indiquent la même licence, et compte une seule fois les sources d'un même dépôt.`,
   'tip.licenceOneDeposit.logic': `• Un dépôt, c'est une notice d'un dépôt de données avec sa notice DataCite (Zenodo, PANGAEA, Dataverse) : elles décrivent le même jeu de données et comptent donc pour une seule source.
@@ -624,7 +624,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Il vérifie les coordonnées, les dates, les unités, les plages de valeurs et la licence, et énonce chaque constat en une phrase simple, avec le détail technique à côté.
 • Il ne modifie rien dans vos données : il montre ce qu'il a trouvé et énumère ce qu'il ne vérifie pas.`,
   'tip.indexLicence.does': `Compare ce que différentes sources de métadonnées indiquent sur la licence d'un jeu de données.`,
-  'tip.indexLicence.logic': `• Il lit les métadonnées de Zenodo, PANGAEA, Dataverse, GeoNetwork, GBIF, OBIS et DataCite, pas les fichiers de données.
+  'tip.indexLicence.logic': `• Il lit les métadonnées de Zenodo, PANGAEA, Dataverse, GeoNetwork et DataCite, pas les fichiers de données (un jeu GBIF ou OBIS seulement par son DOI).
 • Il classe chaque mention selon la liste de licences SPDX et cherche les contradictions.
 • Il compose un texte d'attribution avec la licence, à coller.`,
   'tip.indexCollection.does': `Parcourt les métadonnées d'une collection entière et rassemble les problèmes de licence et les champs vides.`,

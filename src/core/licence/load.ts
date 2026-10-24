@@ -18,7 +18,7 @@ export interface LoadFailure {
   /** The load finding (host and status only), rendered in the visitor's language. */
   finding?: Finding;
   /** No finding: the text is not a reference we know, or something unexpected happened (message). */
-  reason?: 'unrecognised' | 'unexpected';
+  reason?: 'unrecognised' | 'unexpected' | 'not-read';
   message?: string;
 }
 
@@ -85,6 +85,10 @@ export async function loadLicenceReferences(
     const resolved = resolveInput(ref);
     if (resolved.kind === 'unknown') {
       failures.push({ ref, reason: 'unrecognised' });
+    } else if (resolved.kind === 'gbif' || resolved.kind === 'obis') {
+      // A recognised link whose licence this page does not read. An unread source, never "no source states a licence":
+      // nothing is fetched, the page says so, and the licence stays out of the attribution.
+      failures.push({ ref, reason: 'not-read' });
     } else {
       try {
         const loaded = await loadRecord(resolved, fetcher, { pangaea: loadPangaeaMetainfo });
