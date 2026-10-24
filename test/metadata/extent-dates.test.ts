@@ -37,3 +37,9 @@ describe('unit notation with a middle dot and superscripts', () => {
     expect(normaliseUnit('mmol·kg−1')).toBe('mmol/kg');
   });
 });
+
+describe('a coverage date that cannot be read', () => {
+  it('next to a readable one gives no temporal extent, never a too narrow one', () => {
+    expect(unionExtents([extentOfDate({ date: '2019-05/2019-06' }), extentOfDate({ date: 'summer 2020' })])).toBeUndefined();
+  });
+});

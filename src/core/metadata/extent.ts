@@ -109,6 +109,9 @@ function firstDayOf(s: string): string {
  * 2020-12-31, so it is wider than "2020-06"); the winner is kept as written. An open end stays open.
  */
 export function unionExtents(list: (Extent | undefined)[]): Extent | undefined {
+  // A coverage date that could not be read ("summer 2020") may lie outside the readable ones: the union of the rest would be too
+  // narrow and put correct rows outside it, so no temporal extent at all (absence is reported as such, never a wrong period).
+  if (list.some((e) => e === undefined)) return undefined;
   const ex = list.filter((e): e is Extent => !!e);
   if (ex.length === 0) return undefined;
   if (ex.length === 1) return ex[0];
