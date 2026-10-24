@@ -60,6 +60,10 @@ export function unitFromHeader(h: string): HeaderUnit {
     return { name: trimName(name), unit: normaliseUnit(t) ?? t, unitText: t };
   };
 
+  // 'Tiefe [m] von', 'Głębokość (m) od': the unit sits before the from/to word of a depth range
+  const bounded = /^(.*\S)\s*[[(]([^[\]()]+)[\])]\s+(od|do|von|bis|ab|de|à)$/i.exec(s);
+  if (bounded && trimName(bounded[1]) !== '' && (s.includes('[') || looksLikeUnit(bounded[2]))) return done(`${bounded[1]} ${bounded[3]}`, bounded[2]);
+
   let m = /^(.*\S)\s*\[([^[\]]+)\]$/.exec(s);
   if (m && trimName(m[1]) !== '') return done(m[1], m[2]);
 
@@ -247,9 +251,9 @@ function nameCandidateOther(key: string, hdr?: NameHeader): Cand | undefined {
   if (/^(data (i )?(godzina|czas)|datum (und )?(uhrzeit|zeit)|zeitstempel|date (et )?(heure|temps)|horodatage)( |$)/.test(key)) {
     return { slot: 'when', tier: 0, kind: 'datetime', reason: 'name says date and time' };
   }
-  // date. 'data' (also Latin, Italian, English "data") and 'datum' (also a geodetic datum) need values that fit.
+  // date. 'data' (also Latin, Italian, English "data") and 'datum' (also a geodetic datum: WGS84) need date values.
   if (key === 'data') return { slot: 'when', tier: 0, kind: 'date', reason: 'name says date', guard: 'date-values' };
-  if (key === 'datum') return { slot: 'when', tier: 0, kind: 'date', reason: 'name says date', guard: 'not-plain-numbers' };
+  if (key === 'datum') return { slot: 'when', tier: 0, kind: 'date', reason: 'name says date', guard: 'date-values' };
   if (
     /^data (poboru|pomiaru|pobrania|probkowania|obserwacji|zbioru|rozpoczecia|startu|badan)( utc)?$/.test(key) ||
     /^(probenahme|mess|beobachtungs|entnahme|start)datum( utc)?$|^datum (der )?(probenahme|messung|beobachtung|entnahme|beginn|start)( utc)?$/.test(key) ||
@@ -298,10 +302,11 @@ function nameCandidateOther(key: string, hdr?: NameHeader): Cand | undefined {
   if (/^(probka|(nr|numer|id|kod|nazwa|oznaczenie|identyfikator) probki|probka (nr|numer|id|kod|nazwa)|rdzen|(nr|numer|id|kod|nazwa) rdzenia|rdzen (nr|numer|id|kod|nazwa))$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', reason: 'name says sample or core identifier' };
   }
-  if (/^(probe (nr|nummer|id|name|kennung|bezeichnung)|proben ?(nr|nummer|id|name|kennung|bezeichnung)|kern( nr| nummer| id| name)?|kernnummer|bohrkern( nr| nummer| id| name)?)$/.test(key)) {
+  if (/^(probe (nr|nummer|name|kennung|bezeichnung)|proben ?(nr|nummer|id|name|kennung|bezeichnung)|kern( nr| nummer| id| name)?|kernnummer|bohrkern( nr| nummer| id| name)?)$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', reason: 'name says sample or core identifier' };
   }
-  if (key === 'probe') return { slot: 'sampleId', tier: 3, kind: 'sampleId', reason: 'name says sample (German "Probe" can also be a test)' };
+  // 'Probe' and 'Probe ID' are also a test or an instrument (English probe): low confidence
+  if (key === 'probe' || key === 'probe id') return { slot: 'sampleId', tier: 3, kind: 'sampleId', reason: 'name says sample ("Probe" can also be a test or an instrument)' };
   if (/^(echantillon( id| no| numero| nom| code)?|(id|code|nom|numero|n) (de |d )?(l )?echantillon|identifiant( echantillon)?|carotte( id| no| numero| nom| code)?|(id|code|nom|numero|n) (de |d )?(la )?carotte)$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', reason: 'name says sample or core identifier' };
   }
@@ -311,8 +316,9 @@ function nameCandidateOther(key: string, hdr?: NameHeader): Cand | undefined {
 /** A depth column named in Polish, German or French. The start of a range ranks before its end, so the first bound wins the one depth slot. */
 function depthName(rest: string | undefined, word: string, from: RegExp, to: RegExp): Cand {
   const base: Cand = { slot: 'depth', tier: rest === undefined ? 0 : 1, kind: 'depth', reason: 'name says depth' };
-  if (rest !== undefined && from.test(rest)) return { ...base, tier: 1, bound: 'from', reason: `name says depth (${word} ${rest}: start of a depth range)` };
-  if (rest !== undefined && to.test(rest)) return { ...base, tier: 1.5, bound: 'to', reason: `name says depth (${word} ${rest}: end of a depth range)` };
+  const last = rest?.split(' ').pop();
+  if (rest !== undefined && last !== undefined && from.test(last)) return { ...base, tier: 1, bound: 'from', reason: `name says depth (${word} ${rest}: start of a depth range)` };
+  if (rest !== undefined && last !== undefined && to.test(last)) return { ...base, tier: 1.5, bound: 'to', reason: `name says depth (${word} ${rest}: end of a depth range)` };
   return base;
 }
 
@@ -390,7 +396,11 @@ function dwcColumn(header: string, dwcSheet: boolean): { cand: Cand } | { ignore
   return undefined;
 }
 
-const isPressureName = (key: string): boolean => /^(pressure|pres|press|prs|cisnienie|druck|pression)(\s|$)/.test(key);
+// Partial and atmospheric pressure are not the pressure of the water column (English 'Partial pressure CO2' and 'Atmospheric pressure'
+// are not read as pressure either, because the noun comes second); the Polish and French nouns come first, so they are named here.
+const NOT_SEA_PRESSURE = /\b(partielle|parcjalne|czastkowe|atmospherique|atmosferyczne|partial|atmospheric)\b/;
+const isPressureName = (key: string): boolean =>
+  /^(pressure|pres|press|prs)(\s|$)/.test(key) || (/^(cisnienie|druck|pression)(\s|$)/.test(key) && !NOT_SEA_PRESSURE.test(key));
 
 /** Does a text cell read like the name of a standard column (latitude, depth, DIC, ...)? Used to spot transposed tables. */
 export function isKnownColumnName(label: string): boolean {
@@ -479,14 +489,17 @@ function guardPasses(guard: NonNullable<Cand['guard']>, sheet: RawSheet, rows: r
 function valuesFitAxis(rows: readonly RawRow[], col: number, axis: 'latitude' | 'longitude', decimalComma: boolean): boolean {
   const limit = axis === 'latitude' ? 90 : 180;
   let ok = 0;
+  let fractional = 0;
   for (const r of rows) {
     const c = r.cells[col] ?? null;
     if (isBlank(c)) continue;
     const p = parseNumber(c, decimalComma);
     if (p.status !== 'ok' || Math.abs(p.value) > limit) return false;
     ok++;
+    if (!Number.isInteger(p.value)) fractional++;
   }
-  return ok > 0;
+  // Integer-only columns are sizes, counts or codes far more often than positions: at least one value must have a fractional part.
+  return ok > 0 && fractional > 0;
 }
 
 /**
@@ -514,6 +527,8 @@ function bareCoordinates(sheet: RawSheet, rows: readonly RawRow[], ctx: ProposeC
   });
   const out = new Map<number, Cand>();
   for (const f of fits) {
+    // a proper column already holds this axis: the bare word is something else (a length, a width) and stays a plain column
+    if (named.has(f.axis)) continue;
     const other = f.axis === 'latitude' ? 'longitude' : 'latitude';
     if (!named.has(other) && !fits.some((g) => g.axis === other)) continue;
     out.set(f.index, {

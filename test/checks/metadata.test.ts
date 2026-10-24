@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { checkMetadataVsData } from '../../src/core/checks/metadata';
 import type { Dataset, Finding, MetadataRecord } from '../../src/core/types';
+import { unitFromHeader } from '../../src/core/recognize/columns';
+import { canonicalFromKey, headerKey } from '../../src/core/recognize/vocab';
 import { makeDataset, makeRecord } from '../helpers/build';
 
 const only = (f: Finding[], id: string) => f.filter((x) => x.ruleId === id);
@@ -215,5 +217,31 @@ describe('META-NO-DATES', () => {
 
   it('a dataset without rows is not reported', () => {
     expect(only(checkMetadataVsData(makeDataset([])), 'META-NO-DATES')).toEqual([]);
+  });
+});
+
+describe('META-VARIABLE-MISSING: modifier before the term, and plurals', () => {
+  const d = makeDataset([{}], [{ key: 'q', header: 'q', canonical: 'salinity' }]);
+  const missing = (text: string): (string | undefined)[] =>
+    only(checkMetadataVsData(withMeta(d, makeRecord('iso19139', { abstract: text }))), 'META-VARIABLE-MISSING').map((x) => x.value);
+
+  it('Polish and French modifiers that stand before the term are not a promised column', () => {
+    for (const t of [
+      'Zapis z czujnika tlenu.', 'Pomiar czujnikiem tlenu w profilu.', 'Dane z capteur d’oxygène.', "Un capteur d'oxygène a été utilisé.",
+      'Fluorescencja chlorofilu wskazywała maksimum.', 'Z fluorescencji chlorofilu.', 'La fluorescence de la chlorophylle a été mesurée.',
+    ]) expect(missing(t), t).toEqual([]);
+    expect(missing('Zmierzono tlen i chlorofil.')).toEqual(expect.arrayContaining(['tlen', 'chlorofil']));
+    expect(missing('Nous avons mesuré l’oxygène dissous.')).toEqual(expect.arrayContaining(['oxygène dissous']));
+  });
+
+  it('plural nitrates in the abstract is satisfied by an NO3 or Nitrate column (data side agrees)', () => {
+    const r = makeRecord('iso19139', { abstract: 'Nutrients (nitrates, phosphates and silicates) were measured.' });
+    const have = (header: string) => makeDataset([{}], [{ key: header, header, canonical: canonicalFromKey(headerKey(unitFromHeader(header).name)) }]);
+    expect(canonicalFromKey('no3')).toBe('nitrate');
+    for (const h of ['NO3 [µmol/l]', 'Nitrate']) {
+      const f = only(checkMetadataVsData(withMeta(have(h), r)), 'META-VARIABLE-MISSING').map((x) => x.params.term);
+      expect(f, h).not.toContain('nitrates');
+    }
+    expect(only(checkMetadataVsData(withMeta(makeDataset([{}], [{ key: 'q', header: 'q', canonical: 'salinity' }]), r)), 'META-VARIABLE-MISSING').map((x) => x.params.term)).toContain('nitrates');
   });
 });
