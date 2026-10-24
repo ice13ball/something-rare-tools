@@ -22,7 +22,7 @@ import type { RuleSpec } from './spec';
  *   IN-FILES-NOT-READ       files    files of a linked dataset in a format the tool does not read (zip, NetCDF, ...), documents and images left out: the names
  *   IN-DATAVERSE-FILES      host, version   which version of a Dataverse dataset was read; optional none = 'yes' when no data file is read; optional original / converted (names) say in which form its converted tables were read; value = the same in English
  *   IN-FILE-UNREADABLE      files    no input file could be read at all (a damaged workbook, ...): the names, comma-separated
- *   IN-LAYOUT-UNSUPPORTED   reason   plain description from LayoutPlan.unsupported
+ *   IN-LAYOUT-UNSUPPORTED   reason, reasons   English phrase from LayoutPlan.unsupported; JSON of LayoutPlan.unsupportedReasons (codes, rendered per language by renderPlain)
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
  *   IN-DATE1904             (none)

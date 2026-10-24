@@ -21,6 +21,7 @@ import { checkRawTable } from './checks/dwc';
 import { makeFinding } from './rules/registry';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { splitLayout } from './recognize/layout';
+import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { parseCoordinate } from './values/coords';
 import { combineDateTime, detectDayMonthOrder, parseDate, parseTimeOfDay } from './values/dates';
@@ -597,6 +598,13 @@ export interface BuildOptions {
   label?: string;
 }
 
+/** `reason` is the English phrase (technical line); `reasons` the codes every language renders from (report.ts). */
+function layoutUnsupportedFinding(file: string, layout: LayoutPlan): Finding {
+  const params: Record<string, string> = { reason: layout.unsupported ?? '' };
+  if (layout.unsupportedReasons) params.reasons = encodeReasons(layout.unsupportedReasons);
+  return makeFinding('IN-LAYOUT-UNSUPPORTED', { file, params });
+}
+
 /**
  * Applies a confirmed mapping to a file and builds the Dataset the checks read.
  *
@@ -622,7 +630,7 @@ export function buildDataset(
 ): { dataset: Dataset; findings: Finding[] } {
   const collector = new Collector(file.fileName);
   const findings: Finding[] = [];
-  if (layout.unsupported) findings.push(makeFinding('IN-LAYOUT-UNSUPPORTED', { file: file.fileName, params: { reason: layout.unsupported } }));
+  if (layout.unsupported) findings.push(layoutUnsupportedFinding(file.fileName, layout));
 
   const namespace = layout.tables.length > 1;
   const rows: DataRow[] = [];
@@ -680,7 +688,7 @@ export function buildDatasets(
   id: string,
 ): { datasets: Dataset[]; findings: Finding[] } {
   const findings: Finding[] = [];
-  if (layout.unsupported) findings.push(makeFinding('IN-LAYOUT-UNSUPPORTED', { file: file.fileName, params: { reason: layout.unsupported } }));
+  if (layout.unsupported) findings.push(layoutUnsupportedFinding(file.fileName, layout));
   const groups = splitLayout(layout);
   // a sheet that is not built as a table (no position, no measurement, or another sheet of the workbook is the data): a Darwin Core sheet is still judged
   // (a workbook of an OBIS template has event, occurrence and emof sheets: the layout builds one of them as data, the Darwin Core

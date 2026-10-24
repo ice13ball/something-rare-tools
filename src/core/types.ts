@@ -99,7 +99,9 @@ export interface TablePlan { sheet: string; long?: { parameterCol: number; unitC
 export interface LayoutPlan {
   tables: TablePlan[];
   joins: { left: string; right: string; leftKey: number; rightKey: number }[];   // sheet names + column indices
-  unsupported?: string;         // plain description of a layout the tool cannot handle
+  unsupported?: string;         // plain English description of a layout the tool cannot handle (technical line, tests)
+  /** The same reasons as language-neutral codes; every language renders from these (recognize/layoutReasons.ts). */
+  unsupportedReasons?: { code: 'transposed' | 'header-empty' | 'header-units' | 'no-table' | 'no-rows' | 'no-data-sheet'; sheet?: string }[];
 }
 
 /* ---------- dataset ---------- */

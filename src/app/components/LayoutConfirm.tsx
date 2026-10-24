@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { LayoutPlan } from '../../core/types';
 import type { SheetSummary } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
+import { reasonsText } from '../../core/recognize/layoutReasons';
 import { describeLayout, setJoinKey, setLongColumn } from '../layoutModel';
 import { HeadingTip } from './InfoTip';
 
@@ -35,7 +36,7 @@ function ColumnSelect({ label, header, value, allowNone, onPick }: { label: stri
  * The final "Confirm and check" button of the page is the confirmation: nothing is checked before it.
  */
 export function LayoutConfirm({ plan, sheets, onChange }: LayoutConfirmProps): React.ReactElement {
-  useLang();
+  const { lang } = useLang();
   const [open, setOpen] = useState(false);
   const lines = describeLayout(plan, sheets);
   const headerOf = (name: string): string[] => sheets.find((s) => s.name === name)?.header ?? [];
@@ -52,7 +53,7 @@ export function LayoutConfirm({ plan, sheets, onChange }: LayoutConfirmProps): R
       ))}
       {plan.unsupported !== undefined && (
         <p className="notice" role="note">
-          {t('layout.unsupported', { reason: plan.unsupported })}
+          {t('layout.unsupported', { reason: plan.unsupportedReasons ? reasonsText(plan.unsupportedReasons, lang) : plan.unsupported })}
         </p>
       )}
       {editable && (
