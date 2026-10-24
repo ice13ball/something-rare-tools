@@ -23,6 +23,8 @@ export interface ParsedFile {
   encoding: string;             // 'utf-8' | 'utf-8-bom' | 'windows-1250' | 'iso-8859-2'
   embeddedMetadata?: MetadataRecord;   // PANGAEA header, or the record itself for kind 'metadata'
   findings: Finding[];          // parse-level findings (ragged rows, encoding fallback, …)
+  /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
+  dwca?: { core: 'Occurrence' | 'Event'; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
 }
 
 /* ---------- metadata ---------- */
@@ -117,6 +119,10 @@ export interface DataRow {
   lat?: number; lon?: number; latDecimals?: number; lonDecimals?: number;
   datetime?: ParsedDate; dateRaw?: RawCell;
   depth?: number; depthDecimals?: number; station?: string; cruise?: string; sampleId?: string;
+  /** Darwin Core minimumDepthInMeters / maximumDepthInMeters of the row, read from their own columns (`depth` keeps only one of them). */
+  depthMin?: number; depthMax?: number;
+  /** The latitude and/or longitude CELL is blank (not text, not a number) on a row that holds something else; set only where a position column exists. */
+  posBlank?: 'lat' | 'lon' | 'both';
   values: Record<string, NumericCell>;                   // key = Variable.key
 }
 export interface Dataset {

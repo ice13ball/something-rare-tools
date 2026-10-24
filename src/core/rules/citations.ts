@@ -91,6 +91,59 @@ const ISO_CODELISTS = {
   url: 'https://standards.iso.org/iso/19139/resources/gmxCodelists.xml',
 };
 
+const OBIS_QC_LOCATION = {
+  label: 'OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obis-qc/blob/master/obisqc/location.py',
+};
+const OBIS_QC_TIME = {
+  label: 'OBIS obis-qc (Python), obisqc/time.py, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obis-qc/blob/master/obisqc/time.py',
+};
+const OBIS_QC_FIELDS = {
+  label: 'OBIS obis-qc (Python), obisqc/fields.py and obisqc/util/vocabularies.py, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obis-qc/blob/master/obisqc/fields.py',
+};
+const OBIS_QC_ABSENCE = {
+  label: 'OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py',
+};
+const GBIF_BOR = {
+  label: 'GBIF Darwin Core Basis of Record Vocabulary, issued 2022-02-02 (the list obis-qc reads at run time)',
+  url: 'https://rs.gbif.org/vocabulary/dwc/basis_of_record_2022-02-02.xml',
+};
+const OBISTOOLS_FIELDS = {
+  label: 'OBIS obistools (R), R/check_fields.R, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obistools/blob/master/R/check_fields.R',
+};
+const OBISTOOLS_EVENTIDS = {
+  label: 'OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obistools/blob/master/R/check_eventids.R',
+};
+const OBISTOOLS_DEPTH = {
+  label: 'OBIS obistools (R), R/check_depth.R, master (read 2026-10-24)',
+  url: 'https://github.com/iobis/obistools/blob/master/R/check_depth.R',
+};
+const OBIS_MANUAL_FORMAT = {
+  label: 'OBIS Manual, "Common format issues" (iobis/manual common_formatissues.md; manual.obis.org)',
+  url: 'https://manual.obis.org/common_formatissues.html',
+};
+const OBIS_MANUAL_QC = {
+  label: 'OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)',
+  url: 'https://manual.obis.org/common_qc.html',
+};
+const BIOCHECK = {
+  label: 'EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)',
+  url: 'https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md',
+};
+const NOAA_DEPTH = {
+  label: 'NOAA National Ocean Service, "How deep is the ocean?" (last updated 2026-09-23)',
+  url: 'https://oceanservice.noaa.gov/facts/oceandepth.html',
+};
+const GBIF_ISSUES = {
+  label: 'GBIF API, enumeration of OccurrenceIssue (read 2026-10-24)',
+  url: 'https://api.gbif.org/v1/enumeration/basic/OccurrenceIssue',
+};
+
 const cite = (base: { label: string; url: string }, locator: string): Citation => ({ ...base, locator });
 const th = (name: string, value: number, unit: string, citation: Citation): Threshold => ({ name, value, unit, citation });
 
@@ -144,6 +197,27 @@ export const CITE = {
   ccDualChoice: cite(CC_FAQ, 'separate agreements: "A reuser may then choose which set of terms to comply with."'),
   ccModified: cite(CC_FAQ, 'Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"'),
   ccCopyright: cite(CC_FAQ, 'How do CC licenses operate?: "CC licenses are operative only when applied to material in which a copyright exists, and even then only when a particular use would otherwise not be permitted by copyright."'),
+  // OBIS and Darwin Core checks (read 2026-10-24; docs/research/qc-sources.md, section "OBIS / Darwin Core basic checks")
+  obisZeroCoord: cite(OBIS_QC_LOCATION, 'check_record: "if record.get_interpreted("decimalLongitude") == 0 and record.get_interpreted("decimalLatitude") == 0: record.set_flag(Flag.ZERO_COORD); record.dropped = True"'),
+  biocheckZeroCoord: cite(BIOCHECK, 'Integrity checks: "decimalLatitude and decimalLongitude are both 0" ... "It is theoretically possible that a sampling event happens at 0-0 coordinates, however it is very common to inadvertedly add 0-0 when the actual coordinates are missing. Therefore, 0-0 coordinates should always be double checked."'),
+  obisNoCoord: cite(OBIS_QC_LOCATION, 'check_record: "if record.get_interpreted("decimalLongitude") is None or record.get_interpreted("decimalLatitude") is None: record.set_flag(Flag.NO_COORD); record.dropped = True"'),
+  obisDepthRange: cite(OBIS_QC_LOCATION, 'check_record: misc.check_float(record.get("minimumDepthInMeters"), [-100000, 11000]) (the same call for maximumDepthInMeters; in_range = valid_range[0] <= value <= valid_range[1], out of range sets Flag.DEPTH_OUT_OF_RANGE)'),
+  obisDepthMinMax: cite(OBIS_QC_LOCATION, 'check_record: "if record.get_interpreted("minimumDepthInMeters") > record.get_interpreted("maximumDepthInMeters"): record.set_flag(Flag.MIN_DEPTH_EXCEEDS_MAX)"'),
+  obistoolsDepthMinMax: cite(OBISTOOLS_DEPTH, 'check_depth, details: "minimum depth greater than maximum depth" (error); code: minGTmax <- !is.na(maxd) & !is.na(mind) & mind > maxd'),
+  noaaDeepest: cite(NOAA_DEPTH, '"Challenger Deep is approximately 10,935 meters (35,876 feet) deep." (the deepest part of the ocean)'),
+  obisDateFuture: cite(OBIS_QC_TIME, 'check_record: "if ms_end > date_to_millis(datetime.date.today()): # date in the future record.set_flag(Flag.DATE_IN_FUTURE)"'),
+  obisBasisOfRecord: cite(OBIS_QC_FIELDS, 'fields.py check_record: "if not record.get("basisOfRecord").lower() in [value.lower() for value in vocabs["dwc:basisOfRecord"]]: record.set_invalid("basisOfRecord")"; util/vocabularies.py reads the identifiers of rs.gbif.org/vocabulary/dwc/basis_of_record_2022-02-02.xml'),
+  gbifBasisOfRecord: cite(GBIF_BOR, 'the eight concept identifiers: PreservedSpecimen, FossilSpecimen, LivingSpecimen, HumanObservation, MachineObservation, MaterialSample, Occurrence, MaterialCitation'),
+  biocheckBasisOfRecord: cite(BIOCHECK, 'Format checks: "basisOfRecord does not seem to contain a valid term such as: "PreservedSpecimen", "FossilSpecimen", "LivingSpecimen", "HumanObservation", "MachineObservation", "MaterialSample", "Occurrence""'),
+  obisOccurrenceStatus: cite(OBIS_QC_ABSENCE, 'absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")'),
+  obistoolsRequired: cite(OBISTOOLS_FIELDS, 'check_fields: required <- c("eventDate", "decimalLongitude", "decimalLatitude", "scientificName", "scientificNameID", "occurrenceStatus", "basisOfRecord"); "Missing or empty required fields are reported as errors"'),
+  obistoolsRecommended: cite(OBISTOOLS_FIELDS, 'check_fields: recommended <- c("minimumDepthInMeters", "maximumDepthInMeters"); "missing or empty recommended fields are reported as warnings"'),
+  obisManualRequired: cite(OBIS_MANUAL_FORMAT, '"Missing required fields": "one (or more) of the eight required terms for OBIS"; "occurrenceID or eventID"; "scientificNameID (strongly recommended)"'),
+  obistoolsEventIds: cite(OBISTOOLS_EVENTIDS, 'check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")'),
+  biocheckParentEvent: cite(BIOCHECK, 'Integrity checks: "if the parentEventID field is populated, it must be populated with an existing eventID from the eventID field. Adding to the parentEventID field something different than an existing eventID is incoherent."'),
+  gbifParentLineage: cite(GBIF_ISSUES, 'OccurrenceIssue value PARENT_EVENT_INFINITE_LINEAGE (a loop in the eventID / parentEventID hierarchy)'),
+  biocheckOccurrenceId: cite(BIOCHECK, 'Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."'),
+  obisHiddenChars: cite(OBIS_MANUAL_QC, '"Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"'),
   ccNameAndLink: cite(CC_ATTRIBUTION, 'section on licence attribution: "We recommend that you name and provide a link to the license, e.g., CC BY 4.0 ( http://creativecommons.org/licenses/by/4.0 ) for a work licensed under CC BY 4.0."'),
 };
 

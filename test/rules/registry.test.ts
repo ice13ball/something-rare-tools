@@ -60,6 +60,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-NA-VARIANT': ['warning', 'B'],
   'ROW-STATION-MOVED': ['warning', 'B'],
   'ROW-STATION-SPREAD': ['info', 'B'],
+  'ROW-STATION-SPREAD-FAR': ['warning', 'B'],
   'ROW-ON-LAND': ['warning', 'B'],
   'ROW-ON-LAND-NEAR': ['info', 'B'],
   'ROW-SHIP-SPEED': ['warning', 'B'],
@@ -73,6 +74,20 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-UNIT-MISSING': ['warning', 'B'],
   'ROW-DEPTH-SIGN': ['info', 'B'],
   'ROW-DM-COORDS': ['info', 'B'],
+  'ROW-ZERO-COORD': ['error', 'B'],
+  'ROW-NO-COORD': ['warning', 'B'],
+  'ROW-DEPTH-MIN-MAX': ['error', 'B'],
+  'ROW-DEPTH-RANGE': ['warning', 'B'],
+  'ROW-DATE-FUTURE': ['warning', 'B'],
+  'ROW-INVISIBLE-CHAR': ['warning', 'B'],
+  'DWC-TERM-MISSING': ['error', 'B'],
+  'DWC-TERM-EMPTY': ['error', 'B'],
+  'DWC-RECOMMENDED': ['warning', 'B'],
+  'DWC-VOCAB-VALUE': ['warning', 'B'],
+  'DWC-EVENTID-DUPLICATE': ['error', 'B'],
+  'DWC-PARENT-DANGLING': ['error', 'B'],
+  'DWC-PARENT-LOOP': ['error', 'B'],
+  'DWC-OCCURRENCEID-DUPLICATE': ['error', 'B'],
   'XF-DUPLICATE-SAMPLES': ['info', 'C'],
   'XF-DATE-CONFLICT': ['warning', 'C'],
   'XF-STATION-ALIAS': ['info', 'C'],
@@ -90,7 +105,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(75);
+    expect(ids.length).toBe(90);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -187,7 +202,7 @@ describe('messages', () => {
 describe('thresholds and citations', () => {
   it('only the rules named in the decisions carry numeric thresholds', () => {
     const withTh = RULES.filter((r) => (r.thresholds?.length ?? 0) > 0).map((r) => r.id).sort();
-    expect(withTh).toEqual(['CHEM-RANGE', 'CHEM-UNIT-PAIR', 'ROW-LAT-RANGE', 'ROW-LON-RANGE', 'ROW-SHIP-SPEED', 'ROW-SHIP-SPEED-PAIR', 'ROW-SHIP-SPEED-UNUSUAL']);
+    expect(withTh).toEqual(['CHEM-RANGE', 'CHEM-UNIT-PAIR', 'ROW-DEPTH-RANGE', 'ROW-LAT-RANGE', 'ROW-LON-RANGE', 'ROW-SHIP-SPEED', 'ROW-SHIP-SPEED-PAIR', 'ROW-SHIP-SPEED-UNUSUAL']);
   });
 
   it('every threshold has a finite value, a unit and an https citation with label and locator', () => {
@@ -263,6 +278,39 @@ describe('thresholds and citations', () => {
       expect(t.unit).toBe('g/mol');
       expect(t.citation.url).toBe('https://ciaaw.org/abridged-atomic-weights.htm');
     }
+  });
+
+  it('ROW-DEPTH-RANGE holds exactly the obis-qc bounds (-100000 and 11000 m, inclusive), each cited to obis-qc location.py, and cites the deepest point', () => {
+    expect(threshold('ROW-DEPTH-RANGE', 'depth.min')).toBe(-100000);
+    expect(threshold('ROW-DEPTH-RANGE', 'depth.max')).toBe(11000);
+    for (const t of getRule('ROW-DEPTH-RANGE').thresholds ?? []) {
+      expect(t.unit).toBe('m');
+      expect(t.citation.url).toBe('https://github.com/iobis/obis-qc/blob/master/obisqc/location.py');
+      expect(t.citation.locator).toContain('[-100000, 11000]');
+    }
+    const noaa = getRule('ROW-DEPTH-RANGE').citations?.find((c) => c.url === 'https://oceanservice.noaa.gov/facts/oceandepth.html');
+    expect(noaa?.locator).toContain('10,935 meters');
+  });
+
+  it('every OBIS and Darwin Core rule names its source in the technical text and carries a citation', () => {
+    const named: Record<string, RegExp> = {
+      'ROW-ZERO-COORD': /obis-qc ZERO_COORD/, 'ROW-NO-COORD': /obis-qc NO_COORD/, 'ROW-DEPTH-MIN-MAX': /MIN_DEPTH_EXCEEDS_MAX/,
+      'ROW-DEPTH-RANGE': /DEPTH_OUT_OF_RANGE/, 'ROW-DATE-FUTURE': /DATE_IN_FUTURE/, 'ROW-INVISIBLE-CHAR': /OBIS Manual/,
+      'DWC-TERM-MISSING': /obistools check_fields/, 'DWC-TERM-EMPTY': /obistools check_fields/, 'DWC-RECOMMENDED': /obistools check_fields/,
+      'DWC-VOCAB-VALUE': /obis-qc/, 'DWC-EVENTID-DUPLICATE': /obistools check_eventids/, 'DWC-PARENT-DANGLING': /obistools check_eventids/,
+      'DWC-PARENT-LOOP': /PARENT_EVENT_INFINITE_LINEAGE/, 'DWC-OCCURRENCEID-DUPLICATE': /Biocheck/,
+    };
+    for (const [id, re] of Object.entries(named)) {
+      expect(getRule(id).technical, id).toMatch(re);
+      expect(getRule(id).citations?.length, id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('the stand-alone 1000 km warning is a rule of its own next to the 10 km note, and the note no longer has the far sentence', () => {
+    expect(getRule('ROW-STATION-SPREAD-FAR').severity).toBe('warning');
+    expect(getRule('ROW-STATION-SPREAD').severity).toBe('info');
+    expect(getRule('ROW-STATION-SPREAD').plainIf).toBeUndefined();
+    expect(RULE_PARAMS['ROW-STATION-SPREAD-FAR']).toEqual(RULE_PARAMS['ROW-STATION-SPREAD']);
   });
 
   it('rules with a scientific basis but no number carry citations', () => {

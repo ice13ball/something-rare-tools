@@ -157,7 +157,9 @@ describe('ROW-STATION-MOVED: sign pattern', () => {
     expect(only(checkRows(near), 'ROW-STATION-MOVED')[0]?.params.signLon).toBe('yes');
     const far = dataset([...rows(2, 1, { lat: 32.0, lon: -118.4, station: 'BASIN' }), ...rows(4, 2, { lat: 33.2, lon: 118.5, station: 'BASIN' })]); // ~134 km
     expect(only(checkRows(far), 'ROW-STATION-MOVED')).toEqual([]);
-    expect(only(checkRows(far), 'ROW-STATION-SPREAD')).toHaveLength(1);
+    // as written the positions are on opposite sides of the globe: far above 1000 km, a warning
+    expect(only(checkRows(far), 'ROW-STATION-SPREAD-FAR')).toHaveLength(1);
+    expect(only(checkRows(far), 'ROW-STATION-SPREAD')).toEqual([]);
   });
 
   it('is silent for two nearby positions on both sides of the prime meridian (a sign, but no distance to explain)', () => {
@@ -177,13 +179,21 @@ describe('ROW-STATION-SPREAD', () => {
     expect(renderPlain(f[0], 'pl')).toContain('nawet o 171 km');
   });
 
-  it('adds that one position is almost certainly wrong beyond 1000 km, and leaves lat = lon positions to ROW-LAT-EQ-LON', () => {
+  it('is a warning of its own beyond 1000 km (one position is almost certainly wrong), the note below it, and leaves lat = lon positions to ROW-LAT-EQ-LON', () => {
     const far = dataset([...rows(2, 3, { lat: -41.025, lon: -129.56, station: 'SEAMOUNT' }), ...rows(6, 2, { lat: 45.93, lon: -129.98, station: 'SEAMOUNT' })]);
-    const f = only(checkRows(far), 'ROW-STATION-SPREAD')[0];
-    expect(f.params.far).toBe('yes');
+    const f = only(checkRows(far), 'ROW-STATION-SPREAD-FAR')[0];
+    expect(f.severity).toBe('warning');
+    expect(f.params.km).toBeGreaterThan(9000);
+    expect(f.params.far).toBeUndefined();
+    expect(only(checkRows(far), 'ROW-STATION-SPREAD')).toEqual([]);
     expect(renderPlain(f, 'en')).toContain('almost certainly a wrong position');
+    // 10 to 1000 km stays the note
+    const mid = dataset([...rows(2, 3, { lat: 50.3, lon: 10.2, station: 'AREA' }), ...rows(6, 2, { lat: 52.9, lon: 10.9, station: 'AREA' })]);
+    expect(only(checkRows(mid), 'ROW-STATION-SPREAD')[0]?.severity).toBe('info');
+    expect(only(checkRows(mid), 'ROW-STATION-SPREAD-FAR')).toEqual([]);
     const eq = dataset([...rows(2, 3, { lat: 76.9975, lon: 16.5047, station: 'SGD5' }), ...rows(6, 1, { lat: 76.989444, lon: 76.989444, station: 'SGD5' })]);
     expect(only(checkRows(eq), 'ROW-STATION-SPREAD')).toEqual([]);
+    expect(only(checkRows(eq), 'ROW-STATION-SPREAD-FAR')).toEqual([]);
   });
 
   it('never samples away a single far outlier on a long track', () => {

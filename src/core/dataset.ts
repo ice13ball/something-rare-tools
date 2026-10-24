@@ -17,6 +17,7 @@ import type {
   TablePlan,
   Variable,
 } from './types';
+import { checkRawTable } from './checks/dwc';
 import { makeFinding } from './rules/registry';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { splitLayout } from './recognize/layout';
@@ -150,8 +151,12 @@ interface Meta {
   station?: string;
   cruise?: string;
   sampleId?: string;
+  depthMin?: number;
+  depthMax?: number;
+  posBlank?: 'lat' | 'lon' | 'both';
 }
-const META_FIELDS: (keyof Meta)[] = ['lat', 'lon', 'latDecimals', 'lonDecimals', 'datetime', 'dateRaw', 'depth', 'depthDecimals', 'station', 'cruise', 'sampleId'];
+// posBlank is not copied from a lookup row: it describes this row's own cells
+const META_FIELDS: (keyof Meta)[] = ['lat', 'lon', 'latDecimals', 'lonDecimals', 'datetime', 'dateRaw', 'depth', 'depthDecimals', 'station', 'cruise', 'sampleId', 'depthMin', 'depthMax'];
 
 function reportBadNumber(c: Collector, sheet: string, field: string, line: number, raw: RawCell, decimalComma: boolean): void {
   const p = parseNumber(raw, decimalComma);
@@ -193,6 +198,35 @@ function composeYmd(row: RawRow, cols: { year: number; month?: number; day?: num
   return { iso: `${yy}-${p2(mo)}-${p2(d)}`, year: y, precision: 'day', tz: 'unknown' };
 }
 
+/** Header columns of the Darwin Core minimum and maximum depth, wherever the mapping put the single depth slot: min > max needs both. */
+function dwcDepthCols(sheet: RawSheet): { min?: Spec; max?: Spec } {
+  const find = (term: string): Spec | undefined => {
+    const i = sheet.header.findIndex((h) => dwcTermOf(h) === term);
+    return i < 0 ? undefined : { index: i, header: sheet.header[i] };
+  };
+  const min = find('minimumdepthinmeters');
+  const max = find('maximumdepthinmeters');
+  return { ...(min ? { min } : {}), ...(max ? { max } : {}) };
+}
+
+/** A label that makes a row a summary line ("Total", "Mean ± SD" is not matched: only the bare label), not a record without a position. */
+const SUMMARY_LABEL = /^(totals?|grand total|sub-?total|sum|mean|average|avg|median|min(imum)?|max(imum)?|st(an)?d(ard)?\.? ?dev(iation)?|stdev|sd|count)[:.]?$/i;
+
+/**
+ * A row without a position is only a record without one when it holds more than a label: at least two cells besides the position have
+ * a value (a section heading or an event name on a line of its own has one) and it is not a summary line.
+ */
+function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
+  let filled = 0;
+  for (let i = 0; i < row.cells.length; i++) {
+    const c = row.cells[i];
+    if (skip.includes(i) || isBlankCell(c)) continue;
+    if (typeof c === 'string' && SUMMARY_LABEL.test(c.trim())) return false;
+    filled++;
+  }
+  return filled >= 2;
+}
+
 function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector): (row: RawRow) => Meta {
   const dc = file.decimalComma;
   const dateCache = new Map<string, ParsedDate | DateError>();
@@ -203,6 +237,7 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
   // Darwin Core: where eventDate is empty, the same row's year / month / day columns give the date
   const dwcParts = specs.when && dwcTermOf(specs.when.header) === 'eventdate' ? dwcDateParts(sheet) : undefined;
   const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
+  const dwcDepth = dwcDepthCols(sheet);
 
   const coordinate = (row: RawRow, spec: Spec, axis: 'lat' | 'lon'): { value: number; decimals: number } | undefined => {
     const cell = row.cells[spec.index] ?? null;
@@ -222,6 +257,12 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
 
   return (row: RawRow): Meta => {
     const m: Meta = {};
+    if (specs.lat && specs.lon) {
+      // a blank (not unreadable) coordinate cell on a row that holds something else: ROW-NO-COORD decides whether other rows have a position
+      const latBlank = isBlankCell(row.cells[specs.lat.index] ?? null);
+      const lonBlank = isBlankCell(row.cells[specs.lon.index] ?? null);
+      if ((latBlank || lonBlank) && holdsRecord(row, [specs.lat.index, specs.lon.index])) m.posBlank = latBlank && lonBlank ? 'both' : latBlank ? 'lat' : 'lon';
+    }
     if (specs.lat) {
       const r = coordinate(row, specs.lat, 'lat');
       if (r) {
@@ -289,6 +330,15 @@ function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collecto
         }
         else reportBadNumber(c, sheet.name, specs.depth.header, row.line, cell, dc);
       }
+    }
+    // Darwin Core depth range: each bound from its own column; text in the one the depth slot did not take is reported here
+    for (const [key, spec] of [['depthMin', dwcDepth.min], ['depthMax', dwcDepth.max]] as const) {
+      if (!spec) continue;
+      const cell = row.cells[spec.index] ?? null;
+      if (isBlankCell(cell)) continue;
+      const p = parseNumber(cell, dc);
+      if (p.status === 'ok') m[key] = p.value;
+      else if (spec.index !== specs.depth?.index) reportBadNumber(c, sheet.name, spec.header, row.line, cell, dc);
     }
     const station = specs.station ? str(row.cells[specs.station.index] ?? null) : undefined;
     const cruise = specs.cruise ? str(row.cells[specs.cruise.index] ?? null) : undefined;
@@ -397,9 +447,64 @@ function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
       if (base[f] === undefined && lm[f] !== undefined) (base as Record<string, unknown>)[f] = lm[f];
     }
   }
+  if (base.posBlank !== undefined && base.lat !== undefined && base.lon !== undefined) delete base.posBlank;
   // positions come from a table of cores / sites: when the data carries no station column the core id names the site
   if (base.station === undefined && base.sampleId !== undefined) base.station = base.sampleId;
   return base;
+}
+
+/*
+ * Darwin Core event hierarchy: an event without a position is not missing one when OBIS gives it the position of its parent, which is
+ * the structure of an event core (cruise > station > sample). A row without a position is therefore left out of ROW-NO-COORD when it is
+ * the parent of another event, or when an ancestor has a position. One pass to find the parents, then each row walks up at most to the
+ * first positioned ancestor; the walk is memoised per event id, so the whole is linear.
+ */
+function clearInheritedPositions(sheet: RawSheet, rows: DataRow[]): void {
+  const col = (term: string): number => sheet.header.findIndex((h) => dwcTermOf(h) === term);
+  const e = col('eventid');
+  const p = col('parenteventid');
+  if (e < 0 || p < 0 || rows.length !== sheet.rows.length) return;
+  const idOf = (i: number): string => str(sheet.rows[i].cells[e] ?? null) ?? '';
+  const parentOf = (i: number): string => str(sheet.rows[i].cells[p] ?? null) ?? '';
+  const positioned = new Map<string, boolean>(); // event id -> the event, or an ancestor, has a position
+  const index = new Map<string, number>();
+  const parents = new Set<string>();
+  rows.forEach((_, i) => {
+    const id = idOf(i);
+    if (id !== '' && !index.has(id)) index.set(id, i);
+    const par = parentOf(i);
+    if (par !== '') parents.add(par);
+  });
+  const inherits = (start: string): boolean => {
+    const path: string[] = [];
+    const seen = new Set<string>();
+    let at: string | undefined = start;
+    let result = false;
+    while (at !== undefined && at !== '' && !seen.has(at)) {
+      const known = positioned.get(at);
+      if (known !== undefined) {
+        result = known;
+        break;
+      }
+      seen.add(at);
+      path.push(at);
+      const i = index.get(at);
+      if (i === undefined) break;
+      if (rows[i].lat !== undefined && rows[i].lon !== undefined) {
+        result = true;
+        break;
+      }
+      at = parentOf(i) || undefined;
+    }
+    for (const id of path) positioned.set(id, result);
+    return result;
+  };
+  rows.forEach((r, i) => {
+    if (r.posBlank === undefined) return;
+    const id = idOf(i);
+    const parent = parentOf(i);
+    if ((id !== '' && parents.has(id)) || (parent !== '' && inherits(parent))) delete r.posBlank;
+  });
 }
 
 function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector): Built {
@@ -419,6 +524,7 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
     for (const { v, key } of cols) row.values[key] = numericCell(r.cells[v.index] ?? null, r.line, v.header, sheet.name, dc, c);
     rows.push(row);
   }
+  clearInheritedPositions(sheet, rows);
   return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [] };
 }
 
@@ -536,6 +642,9 @@ export function buildDataset(
       ? buildLong(file, sheet, table.long, specs, lookup, namespace, collector)
       : buildWide(file, sheet, specs, lookup, namespace, collector);
     for (const r of built.rows) rows.push(r);
+    // META-NO-DATES (checks/metadata.ts) fires when neither a row nor a metadata record has a date: the empty-eventDate finding leaves that case to it
+    const noDateSaid = !built.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== '')) && !metadata.some((m) => m.temporalExtent && (m.temporalExtent.start || m.temporalExtent.end));
+    findings.push(...checkRawTable(file, sheet, [specs.station, specs.cruise, specs.sampleId].filter((x): x is Spec => x !== undefined).map((x) => x.index), { noDateSaid }));
     variables.push(...built.variables);
     positives.push(...built.positives);
   }
@@ -571,6 +680,8 @@ export function buildDatasets(
   const findings: Finding[] = [];
   if (layout.unsupported) findings.push(makeFinding('IN-LAYOUT-UNSUPPORTED', { file: file.fileName, params: { reason: layout.unsupported } }));
   const groups = splitLayout(layout);
+  // no table could be built (no position, no measurement): a Darwin Core table is still judged, because it is exactly then that it lacks terms
+  if (groups.length === 0) for (const sheet of file.sheets) findings.push(...checkRawTable(file, sheet, []));
   const datasets: Dataset[] = [];
   for (const g of groups) {
     const sheet = g.tables[0].sheet;

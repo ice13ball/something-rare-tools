@@ -3,6 +3,7 @@
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
 import { makeFinding, threshold } from '../rules/registry';
+import { utcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
 
 /*
@@ -86,7 +87,10 @@ function positionRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding
     );
   }
 
-  const same = rows.filter((r) => r.lat !== undefined && r.lon !== undefined && r.lat === r.lon);
+  // (0, 0) is also latitude = longitude; it is reported once, as ROW-ZERO-COORD, the more specific finding
+  const zero = rows.filter((r) => r.lat === 0 && r.lon === 0);
+  if (zero.length > 0) out.push(makeFinding('ROW-ZERO-COORD', { file: ds.file, sheet, lines: zero.map((r) => r.line) }));
+  const same = rows.filter((r) => r.lat !== undefined && r.lon !== undefined && r.lat === r.lon && r.lat !== 0);
   if (same.length > 0) {
     out.push(makeFinding('ROW-LAT-EQ-LON', { file: ds.file, sheet, lines: same.map((r) => r.line), value: fmt(same[0].lat!, same[0].latDecimals) }));
   }
@@ -215,7 +219,8 @@ const firstLine = (p: Pos): number => Math.min(...p.rows.map((r) => r.line));
  * not a warning: transects, cruises and named areas legitimately span more. Names that say they are general or unknown
  * are skipped, and so are positions with latitude = longitude (ROW-LAT-EQ-LON reports those). At most MAX_SPREAD_POSITIONS
  * positions are compared (an even sample plus the extremes), so a long track stays cheap; the distance may then be a little
- * short of the true widest, never longer. Beyond FAR_KM the text adds that one position is almost certainly wrong.
+ * short of the true widest, never longer. Beyond FAR_KM (1000 km, also a stated choice) one position is almost certainly wrong: that is the
+ * warning ROW-STATION-SPREAD-FAR instead of the note.
  */
 const SPREAD_KM = 10;
 const FAR_KM = 1000;
@@ -273,8 +278,7 @@ function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[
       const shown = real.slice(0, MAX_DATES + 2);
       const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
       const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
-      if (spread > FAR_KM) params.far = 'yes';
-      out.push(makeFinding('ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
+      out.push(makeFinding(spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
       continue;
     }
     const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
@@ -442,11 +446,103 @@ function depthSign(ds: Dataset, out: Finding[]): void {
   out.push(makeFinding('ROW-DEPTH-SIGN', { file: ds.file, params: { header } }));
 }
 
+/* ---------- ROW-NO-COORD ---------- */
+
+/*
+ * A row with a blank latitude or longitude cell, in a sheet where other rows have both (obis-qc NO_COORD). The dataset builder sets
+ * `posBlank` only on a row that holds something besides the position (so blank trailing rows are not rows here), that is not a
+ * summary row ("Total", "Mean"), and, in a Darwin Core event hierarchy, that neither is the parent of another event nor has an
+ * ancestor with a position (OBIS gives a child event the position of its parent). Text in a coordinate cell is ROW-NON-NUMERIC and
+ * never counts as blank. A sheet in which no row has a position says nothing.
+ */
+function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
+  if (!rows.some((r) => r.lat !== undefined && r.lon !== undefined)) return;
+  const bad = rows.filter((r) => r.posBlank !== undefined && (r.lat === undefined || r.lon === undefined));
+  if (bad.length === 0) return;
+  out.push(makeFinding('ROW-NO-COORD', { file: ds.file, sheet, lines: bad.map((r) => r.line), params: { count: bad.length } }));
+}
+
+/* ---------- ROW-DEPTH-MIN-MAX, ROW-DEPTH-RANGE ---------- */
+
+const METRE = /^(m|meters?|metres?)$/i;
+
+/** The depth role of a sheet's mapping (convention and unit), when the dataset carries one. */
+function depthRole(ds: Dataset, sheet: string): { positive: 'down' | 'up' | 'unknown'; unit?: string } {
+  const m = ds.mappings.find((x) => x.sheet === sheet) ?? (ds.mappings.length === 1 ? ds.mappings[0] : undefined);
+  for (const c of m?.columns ?? []) if (c.role.kind === 'depth') return { positive: c.role.positive, ...(c.role.unit === undefined ? {} : { unit: c.role.unit }) };
+  return { positive: ds.depthPositive };
+}
+
+function depthRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
+  const lo = threshold('ROW-DEPTH-RANGE', 'depth.min');
+  const hi = threshold('ROW-DEPTH-RANGE', 'depth.max');
+  const outside = (v: number): boolean => v < lo || v > hi;
+
+  // minimum greater than maximum: only where the row has both Darwin Core depth columns
+  const swapped = rows.filter((r) => r.depthMin !== undefined && r.depthMax !== undefined && r.depthMin > r.depthMax);
+  if (swapped.length > 0) {
+    const f = swapped[0];
+    out.push(makeFinding('ROW-DEPTH-MIN-MAX', { file: ds.file, sheet, lines: swapped.map((r) => r.line), value: `${f.depthMin} > ${f.depthMax}` }));
+  }
+
+  // out of range: the bounds are metres, positive down. A column with an upward convention (elevation, negative values) is judged
+  // after its sign is turned, so a negative value of a declared upward convention is never an error; a column in another unit is not judged
+  const range = (field: string, pick: (r: DataRow) => number | undefined): void => {
+    const bad = rows.filter((r) => {
+      const v = pick(r);
+      return v !== undefined && outside(v);
+    });
+    if (bad.length > 0) out.push(makeFinding('ROW-DEPTH-RANGE', { file: ds.file, sheet, lines: bad.map((r) => r.line), field, value: String(pick(bad[0])) }));
+  };
+  const hasDwc = rows.some((r) => r.depthMin !== undefined || r.depthMax !== undefined);
+  if (hasDwc) {
+    range('minimumDepthInMeters', (r) => r.depthMin);
+    range('maximumDepthInMeters', (r) => r.depthMax);
+    return;
+  }
+  const role = depthRole(ds, sheet);
+  if (role.unit !== undefined && !METRE.test(role.unit)) return;
+  const sign = role.positive === 'up' ? -1 : 1;
+  const bad = rows.filter((r) => r.depth !== undefined && outside(sign * r.depth));
+  if (bad.length > 0) out.push(makeFinding('ROW-DEPTH-RANGE', { file: ds.file, sheet, lines: bad.map((r) => r.line), field: headerOf(ds, sheet, 'depth') ?? 'depth', value: String(bad[0].depth) }));
+}
+
+/* ---------- ROW-DATE-FUTURE ---------- */
+
+/** Header of the date column of the sheet (a date, or a date and time). */
+const dateHeader = (ds: Dataset, sheet: string): string | undefined => headerOf(ds, sheet, 'datetime') ?? headerOf(ds, sheet, 'date');
+
+/*
+ * A date, or the END of an interval, later than today (obis-qc DATE_IN_FUTURE compares the calendar day of the end with today's date).
+ * `today` is a UTC calendar day (YYYY-MM-DD) handed in by the caller, so the result never depends on the clock of the test. The value is
+ * reduced to its UTC calendar day (utcDayOf): a zone given in the value is applied, a time without a zone is read as UTC (the choice
+ * speed.ts makes too), a year or month counts by its first day, so the current year is not in the future. A date equal to today is not.
+ * A YY-MM-DD date is left to ROW-DATE-YYMMDD, which already names the century it guessed.
+ */
+function futureRows(rows: DataRow[], today: string): DataRow[] {
+  return rows.filter((r) => r.datetime !== undefined && r.datetime.ambiguity === undefined && utcDayOf(r.datetime.end ?? r.datetime) > today);
+}
+
+function dateFuture(ds: Dataset, sheet: string, future: DataRow[], out: Finding[]): void {
+  if (future.length === 0) return;
+  const field = dateHeader(ds, sheet);
+  const f = future[0];
+  out.push(
+    makeFinding('ROW-DATE-FUTURE', {
+      file: ds.file, sheet, lines: future.map((r) => r.line),
+      ...(field !== undefined ? { field } : {}),
+      value: String(f.dateRaw ?? f.datetime!.iso).trim(),
+    }),
+  );
+}
+
 /* ---------- public ---------- */
 
 export interface RowContext {
   /** The land/sea grid; without it ROW-ON-LAND does not run (the report then says so, see runChecks). */
   land?: LandMask;
+  /** Today as a UTC calendar day, YYYY-MM-DD. Without it ROW-DATE-FUTURE does not run: the checks never read the clock themselves. */
+  today?: string;
 }
 
 /** Category B — row checks. */
@@ -455,10 +551,16 @@ export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
   const declared = declaredYears(ds);
   for (const [sheet, rows] of bySheet(ds.rows)) {
     positionRules(ds, sheet, rows, out);
+    noCoord(ds, sheet, rows, out);
     stationMoved(ds, sheet, rows, out);
     if (ctx.land) onLand(ds, sheet, rows, ctx.land, out);
+    depthRules(ds, sheet, rows, out);
     dateMissing(ds, sheet, rows, out);
-    yearOutlier(ds, sheet, rows, declared, out);
+    // a date in the future is also outside the declared years; one finding for it, the more specific one
+    const future = ctx.today === undefined ? [] : futureRows(rows, ctx.today);
+    dateFuture(ds, sheet, future, out);
+    const futureSet = new Set(future);
+    yearOutlier(ds, sheet, futureSet.size === 0 ? rows : rows.filter((r) => !futureSet.has(r)), declared, out);
   }
   unitMissing(ds, out);
   depthSign(ds, out);
