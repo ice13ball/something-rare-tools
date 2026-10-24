@@ -97,7 +97,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): RawSheet | undefined {
 }
 
 /**
- * Reads .xlsx and legacy .xls. Row numbers are Excel row numbers (taken from the cell address), columns stay
+ * Reads .xlsx, legacy .xls and OpenDocument .ods (all through SheetJS). Row numbers are Excel row numbers (taken from the cell address), columns stay
  * aligned to column A, a row may be longer than the header when cells sit to its right (never trimmed or
  * realigned; no finding is raised for that). Throws ParseError when the workbook cannot be read.
  */
