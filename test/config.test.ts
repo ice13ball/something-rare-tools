@@ -40,8 +40,17 @@ describe('host lists', () => {
     expect(new Set(all).size).toBe(all.length);
   });
   it('DATA_HOSTS holds the hosts the plan names', () => {
-    for (const h of ['opendap.iopan.pl', 'geo.iopan.pl', 'geonetwork.iopan.pl', 'zenodo.org', 'doi.pangaea.de', 'api.datacite.org', 'data.crosscite.org', 'doi.org']) {
+    for (const h of ['opendap.iopan.pl', 'geo.iopan.pl', 'geonetwork.iopan.pl', 'zenodo.org', 'doi.pangaea.de', 'api.datacite.org']) {
       expect(DATA_HOSTS).toContain(h);
+    }
+  });
+});
+
+describe('hosts nothing fetches', () => {
+  it('doi.org and data.crosscite.org are neither proxied nor in the CSP (least privilege; DOIs go through api.datacite.org)', () => {
+    for (const h of ['doi.org', 'dx.doi.org', 'data.crosscite.org']) {
+      expect(DATA_HOSTS).not.toContain(h);
+      expect(buildCsp()).not.toContain(`https://${h}`);
     }
   });
 });

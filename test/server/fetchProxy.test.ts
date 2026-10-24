@@ -174,10 +174,10 @@ describe('proxyFetch — redirects', () => {
   }
 
   it('follows an allowlisted redirect (relative Location resolved against the current URL)', async () => {
-    const { up, hops } = redirecting({ 'https://doi.org/10.1/x': 'https://zenodo.org/records/1', 'https://zenodo.org/records/1': '/api/records/1' });
-    const r = await proxyFetch('https://doi.org/10.1/x', undefined, deps(up));
+    const { up, hops } = redirecting({ 'https://geo.iopan.pl/10.1/x': 'https://zenodo.org/records/1', 'https://zenodo.org/records/1': '/api/records/1' });
+    const r = await proxyFetch('https://geo.iopan.pl/10.1/x', undefined, deps(up));
     expect(await drain(r.body)).toBe('done');
-    expect(hops).toEqual(['https://doi.org/10.1/x', 'https://zenodo.org/records/1', 'https://zenodo.org/api/records/1']);
+    expect(hops).toEqual(['https://geo.iopan.pl/10.1/x', 'https://zenodo.org/records/1', 'https://zenodo.org/api/records/1']);
   });
 
   for (const code of [301, 302, 303, 307, 308]) {
@@ -217,8 +217,8 @@ describe('proxyFetch — redirects', () => {
     }
   });
   it('re-resolves and re-checks every hop: an allowlisted redirect target resolving privately is refused', async () => {
-    const resolver = async (host: string): Promise<string[]> => (host === 'doi.org' ? ['127.0.0.1'] : PUBLIC);
-    const up: Upstream = async () => resp(302, '', { location: 'https://doi.org/x' });
+    const resolver = async (host: string): Promise<string[]> => (host === 'geo.iopan.pl' ? ['127.0.0.1'] : PUBLIC);
+    const up: Upstream = async () => resp(302, '', { location: 'https://geo.iopan.pl/x' });
     const e = await rejection(proxyFetch('https://zenodo.org/a', undefined, deps(up, { resolver })));
     expect(e.status).toBe(422);
   });

@@ -14,8 +14,8 @@ export const DATA_HOSTS: readonly string[] = [
   'zenodo.org',
   'doi.pangaea.de',
   'api.datacite.org',
-  'data.crosscite.org',
-  'doi.org',
+  // doi.org and data.crosscite.org are NOT here (24.10.2026): no code fetches them. A pasted doi.org link is turned into a DOI and looked up at
+  // api.datacite.org; a doi.org distribution link of a record is never downloaded (sources/geonetwork.ts dataLink).
   // Dataverse installations read through their API (config/dataverse.ts)
   ...DATAVERSE_HOSTS,
   // GBIF and OBIS registries, then the static list of servers their archives may come from (config/ipt.ts)
