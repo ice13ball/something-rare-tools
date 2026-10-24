@@ -156,6 +156,28 @@ describe('META-VARIABLE-MISSING', () => {
     expect(only(checkMetadataVsData(withMeta(d, r2)), 'META-VARIABLE-MISSING').map((x) => x.value)).toEqual(['chlorophyll']);
   });
 
+  it('reads Polish, German and French variable names in the description, whole words, with or without diacritics', () => {
+    const d = makeDataset([{}], [{ key: 'q', header: 'q', canonical: 'salinity' }]);
+    const missing = (text: string): (string | undefined)[] =>
+      only(checkMetadataVsData(withMeta(d, makeRecord('iso19139', { abstract: text }))), 'META-VARIABLE-MISSING').map((x) => x.value);
+    expect(missing('Zbiór zawiera temperaturę, zasolenie i tlen rozpuszczony.')).toEqual(['temperature', 'tlen']);
+    expect(missing('Pomiary temperatury i zawartości tlenu w wodzie.')).toEqual(expect.arrayContaining(['temperatury', 'tlenu']));
+    expect(missing('Tlen rozpuszczony i TEMPERATURA wody.')).toEqual(expect.arrayContaining(['tlen', 'temperatura']));
+    expect(missing('Der Datensatz enthält Temperatur und Salzgehalt sowie Sauerstoff.')).toEqual(expect.arrayContaining(['Temperatur', 'Sauerstoff']));
+    expect(missing('Les données comprennent la température, la salinité et l’oxygène dissous.')).toEqual(expect.arrayContaining(['temperature', 'oxygène dissous']));
+    expect(missing('Les donnees comprennent la temperature et l oxygene.')).toEqual(expect.arrayContaining(['temperature', 'oxygène']));
+    // the salinity column is there: its Polish, German and French names are not reported
+    expect(missing('Zasolenie, Salzgehalt, salinité.')).toEqual([]);
+    // never inside another word
+    expect(missing('Utlenianie, Untemperatur, Sauerstoffe nicht, hypotemperatura.')).toEqual([]);
+  });
+
+  it('a Polish, German or French header that holds the variable name satisfies the description', () => {
+    const d = makeDataset([{}], [{ key: 'q', header: 'q', canonical: 'salinity' }, { key: 'x', header: 'Temperatura [°C]' }, { key: 'y', header: 'Sauerstoff [µmol/l]' }]);
+    const f = only(checkMetadataVsData(withMeta(d, makeRecord('iso19139', { abstract: 'Temperatura i zasolenie; Sauerstoff.' }))), 'META-VARIABLE-MISSING');
+    expect(f).toEqual([]);
+  });
+
   it('is skipped for one sheet of a workbook and for a record with several data files', () => {
     const vars = [{ key: 'q', header: 'q', canonical: 'salinity' }];
     const sheet = makeDataset([{}], vars, { label: 'book.xlsx (Sheet2)', file: 'book.xlsx' });
