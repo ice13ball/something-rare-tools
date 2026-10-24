@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
 import { DEFAULT_MODE, type DownloadMode } from '../types';
+import { InfoTip } from './InfoTip';
 
 export interface ModeSwitchProps {
   /** Controlled value. When omitted the component keeps its own state, starting at 'browser'. */
@@ -61,7 +62,10 @@ export function ModeSwitch({ value, onChange, texts }: ModeSwitchProps): React.R
         {option('browser', t(k.browserLabel), t(k.browserText))}
         {option('server', t(k.serverLabel), t(k.serverText))}
       </div>
-      <p className="muted mode-note">{t(k.note)}</p>
+      <p className="muted mode-note">
+        {t(k.note)}
+        <InfoTip id="downloadMode" />
+      </p>
     </fieldset>
   );
 }

@@ -6,6 +6,7 @@ import type { DatasetSummary, Engine, ExportKind } from '../../worker/protocol';
 import { downloadText, fileBase } from '../download';
 import { draftSections } from '../draftModel';
 import { t, useLang } from '../i18n';
+import { HeadingTip, InfoTip } from './InfoTip';
 
 export interface DownloadsProps {
   datasets: DatasetSummary[];
@@ -85,7 +86,9 @@ function DraftPanel({ datasetId, engine, write }: { datasetId: string; engine: P
   const sections = draftSections(draft, lang);
   return (
     <div className="draft-panel">
-      <h4>{t('downloads.draft')}</h4>
+      <HeadingTip tip="draft">
+        <h4>{t('downloads.draft')}</h4>
+      </HeadingTip>
       <p className="muted">{t('downloads.draft.hint')}</p>
       {sections.length === 0 && <p className="muted">{t('downloads.none')}</p>}
       {sections.map((s) => (
@@ -145,18 +148,30 @@ export function Downloads({ datasets, engine, download = downloadText, writeClip
             <h3>{t('downloads.dataset', { label: d.label })}</h3>
             <p className="muted">{t('downloads.rows', { rows: d.rowCount })}</p>
             <div className="download-buttons">
-              <button type="button" className="button secondary" onClick={() => void run('cleanCsv', [d.id], base)}>
-                {t('downloads.cleanCsv')}
-              </button>
-              <button type="button" className="button secondary" onClick={() => void run('sidecar', [d.id], base)}>
-                {t('downloads.sidecar')}
-              </button>
-              <button type="button" className="button secondary" onClick={() => void run('iso19139', [d.id], base)}>
-                {t('downloads.iso')}
-              </button>
-              <button type="button" className="button secondary" onClick={() => void run('datacite', [d.id], base)}>
-                {t('downloads.datacite')}
-              </button>
+              <span className="download-item">
+                <button type="button" className="button secondary" onClick={() => void run('cleanCsv', [d.id], base)}>
+                  {t('downloads.cleanCsv')}
+                </button>
+                <InfoTip id="cleanCsv" />
+              </span>
+              <span className="download-item">
+                <button type="button" className="button secondary" onClick={() => void run('sidecar', [d.id], base)}>
+                  {t('downloads.sidecar')}
+                </button>
+                <InfoTip id="sidecar" />
+              </span>
+              <span className="download-item">
+                <button type="button" className="button secondary" onClick={() => void run('iso19139', [d.id], base)}>
+                  {t('downloads.iso')}
+                </button>
+                <InfoTip id="iso19139" />
+              </span>
+              <span className="download-item">
+                <button type="button" className="button secondary" onClick={() => void run('datacite', [d.id], base)}>
+                  {t('downloads.datacite')}
+                </button>
+                <InfoTip id="datacite" />
+              </span>
             </div>
             <DraftPanel datasetId={d.id} engine={engine} write={writeClipboard} />
           </article>
@@ -164,13 +179,16 @@ export function Downloads({ datasets, engine, download = downloadText, writeClip
       })}
       {withPoints.length > 0 && (
         <div className="download-buttons">
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => void run('geojson', datasets.map((d) => d.id), datasets.length === 1 ? fileBase(datasets[0].label) : 'datasets')}
-          >
-            {t('downloads.geojson')}
-          </button>
+          <span className="download-item">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => void run('geojson', datasets.map((d) => d.id), datasets.length === 1 ? fileBase(datasets[0].label) : 'datasets')}
+            >
+              {t('downloads.geojson')}
+            </button>
+            <InfoTip id="geojson" />
+          </span>
         </div>
       )}
     </section>

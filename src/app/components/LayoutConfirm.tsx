@@ -5,6 +5,7 @@ import type { LayoutPlan } from '../../core/types';
 import type { SheetSummary } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { describeLayout, setJoinKey, setLongColumn } from '../layoutModel';
+import { HeadingTip } from './InfoTip';
 
 export interface LayoutConfirmProps {
   plan: LayoutPlan;
@@ -41,7 +42,9 @@ export function LayoutConfirm({ plan, sheets, onChange }: LayoutConfirmProps): R
   const editable = plan.joins.length > 0 || plan.tables.some((x) => x.long);
   return (
     <section className="layout-confirm" aria-label={t('layout.title')}>
-      <h4>{t('layout.title')}</h4>
+      <HeadingTip tip="layout">
+        <h4>{t('layout.title')}</h4>
+      </HeadingTip>
       {lines.map((l, i) => (
         <p key={i} className="layout-line">
           {t(l.key, l.params)}

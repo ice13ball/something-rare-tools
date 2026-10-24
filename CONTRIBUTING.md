@@ -38,6 +38,36 @@ text of the finding rather than a paraphrase.
   is referred to by its identifier, not copied in.
 - **No threshold without a source.** Every number a rule compares against is cited, or stated
   in the rule text as the tool's own choice (`docs/research/qc-sources.md`).
+- **No new tool and no new user decision without its ⓘ.** See "Explanations" below.
+
+## Explanations: the ⓘ next to every decision
+
+Every tool page, and every choice a visitor makes or result they may not understand, carries an
+ⓘ explanation (`src/app/components/InfoTip.tsx`). **A review fails without it.** Concretely:
+
+- **Every new tool** (a new page) ships with its ⓘ on the index page tool list and on each of
+  its inputs, options, results and downloads that are not obvious from their label.
+- **Every new user decision** (a checkbox, a radio group, a dropdown, a field that changes what
+  is checked) ships with its ⓘ in the same change.
+- **Content in two parts**, each one to three short sentences or bullets: *Co robi / What it
+  does* (what the element changes for the user) and *Logika / The logic* (the rule it applies).
+  Plain words for a scientist, in all four languages (pl, en, de, fr). The texts live in
+  `src/core/i18n/tips-text.ts` as `tip.<id>.does` and `tip.<id>.logic`.
+- **Numbers, units and sources are never typed into a tip.** The text holds a `{placeholder}`;
+  its entry in `src/app/tips.tsx` fills it from the rule definition (`getRule(...).thresholds`
+  and the citation), from a constant of `src/core/checks/` or from a `config/` file.
+  `test/app/infotip-sources.test.tsx` fails on a digit typed into a tip and on a number that
+  differs from its rule. A rule's details are linked as `docs/rules.md#<RULE-ID>`.
+- **Register the tip and place it.** Add the id to `TIPS` in `src/app/tips.tsx`, put the
+  component where the decision is (beside the label or heading, never inside a `<label>` or a
+  heading element, so names stay clean), and add the id to the page's list in
+  `test/app/infotip-placement.test.tsx`. That test also fails on a registered tip that stands
+  nowhere.
+- **Do not replace visible help with a tip.** Declaration help, warnings and "what it checks /
+  does not check" stay on the page; the tip adds the logic.
+- **No icon on every label.** If unsure whether a place needs one, leave it out and ask in the
+  review.
+- **Analytics:** a tip is never an analytics event and never carries its text anywhere.
 
 ## Security
 

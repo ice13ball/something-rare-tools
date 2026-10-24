@@ -4,6 +4,7 @@
 import { formatLines } from '../report';
 import { makeFinding, threshold } from '../rules/registry';
 import type { DataRow, Dataset, Finding, ParsedDate } from '../types';
+import { SHIP_SPEED_MIN_SEPARATION_KM } from './constants';
 import { decimalsOfNumber } from './crossfile';
 import { km, writtenDecimals } from './rows';
 
@@ -23,16 +24,8 @@ import { km, writtenDecimals } from './rows';
 /** Groups with fewer events than this are not judged (a track needs a before and an after). */
 const MIN_EVENTS = 3;
 
-/**
- * Minimum separation, km: two consecutive events closer than this are one place (parallel casts, a mothership and its boats,
- * two casts on one station, the same station written in two files with slightly different positions), not a hop to be timed.
- * A stated choice, not a published threshold (docs/research/qc-sources.md): 10 km is the tool's own "same station" size
- * (ROW-STATION-SPREAD uses the same number, far above a ship's drift during a cast), so the two rules agree on what one
- * place is. IOOS QARTOD's 20 km is a displacement limit (RANGEMAX), not a separation, and a larger value would hide pairs
- * with short gaps (below about 16 minutes at 40 knots) for no gain on the pairs that matter. Rounding of the written
- * coordinates is NOT absorbed here but deducted from each distance (see allowance).
- */
-export const SHIP_SPEED_MIN_SEPARATION_KM = 10;
+export { SHIP_SPEED_MIN_SEPARATION_KM };
+
 
 const MAX_CASES = 5;
 const KM_PER_NM = 1.852;
