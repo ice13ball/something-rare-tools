@@ -15,5 +15,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src", "config", "test", "scripts/golden-diff.ts", "vitest.golden-diff.config.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "config", "test", "scripts/golden-diff.ts", "scripts/golden-diff-guard.ts", "vitest.golden-diff.config.ts", "vite.config.ts", "vitest.config.ts"]
 }
