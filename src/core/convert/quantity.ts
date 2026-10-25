@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { parseNumber } from '../values/numbers';
 import { P01, P06, type NercTerm } from './vocab';
 
 /*
@@ -119,7 +118,7 @@ export interface ResolvedQuantity {
   unitWithoutP06?: string;
   effort?: ResolvedEffort;
   /** A typed sample size that is not a number above zero: CONV-EFFORT-INVALID, and no effort is written. */
-  effortInvalid?: string;
+  effortInvalid?: { text: string; reason: EffortReason };
 }
 
 export type QuantityResolution = { ok: true; quantity: ResolvedQuantity } | { ok: false; missing: string[] };
@@ -130,7 +129,23 @@ const biomassType = (basis: BiomassBasis, per: EffortDimension, medium: 'water' 
   return basis === 'wet' ? P01.wetPerAreaBed : basis === 'dry' ? P01.dryPerAreaBed : P01.afdwPerAreaBed;
 };
 
-function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined, decimalComma: boolean): { effort?: ResolvedEffort; missing: string[]; invalid?: string } {
+export type EffortReason = 'not-a-number' | 'not-positive' | 'ambiguous';
+
+/**
+ * A sample size TYPED in the page (not read from the file, so not tied to the sheet's decimal mark): a point or a comma is the decimal mark, at most
+ * one of them. A number with both ("1.234,5", "1,234.5") or with several is ambiguous (thousands separator) and refused; "1,234" is read as 1.234.
+ */
+export function parseTypedNumber(text: string): { ok: true; value: number; text: string } | { ok: false; reason: EffortReason } {
+  const t = text.trim();
+  const negative = t.startsWith('-');
+  const body = t.replace(/^[+-]/, '');
+  if (!/^(\d+[.,]?\d*|[.,]\d+)$/.test(body)) return { ok: false, reason: /\d/.test(body) && (body.match(/[.,]/g) ?? []).length > 1 && /^[\d.,]+$/.test(body) ? 'ambiguous' : 'not-a-number' };
+  const value = Number(body.replace(',', '.'));
+  if (negative || !(value > 0)) return { ok: false, reason: 'not-positive' };
+  return { ok: true, value, text: body.replace(',', '.') };
+}
+
+function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined): { effort?: ResolvedEffort; missing: string[]; invalid?: { text: string; reason: EffortReason } } {
   const unit = (e.unit ?? columnUnit ?? '').trim();
   const known = unit === '' ? {} : parseEffortUnit(unit);
   const dimension = e.dimension ?? known.dimension;
@@ -138,15 +153,15 @@ function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined, dec
   if (unit === '') missing.push('effort unit');
   if (dimension === undefined && unit !== '') missing.push('effort volume or area');
   let constant: { value: number; text: string } | undefined;
-  let invalid: string | undefined;
+  let invalid: { text: string; reason: EffortReason } | undefined;
   if (e.source === 'constant') {
     const text = e.value === undefined ? '' : String(e.value).trim();
     if (text === '') missing.push('effort value');
     else {
-      // read with the sheet's own decimal setting, written with a dot; not a number, or not above zero, is CONV-EFFORT-INVALID (not "missing")
-      const p = parseNumber(text, decimalComma);
-      if (p.status === 'ok' && p.value > 0) constant = { value: p.value, text: decimalComma ? text.replace(',', '.') : text };
-      else invalid = text;
+      // typed by the user: a point or a comma, written with a point; anything else is CONV-EFFORT-VALUE-INVALID (not "missing")
+      const p = parseTypedNumber(text);
+      if (p.ok) constant = { value: p.value, text: p.text };
+      else invalid = { text, reason: p.reason };
     }
   }
   if (missing.length > 0 || dimension === undefined) return { missing, ...(invalid === undefined ? {} : { invalid }) };
@@ -191,7 +206,7 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
     }
   }
   if (decl.effort) {
-    const r = resolveEffort(decl.effort, opts.columnEffortUnit, opts.decimalComma === true);
+    const r = resolveEffort(decl.effort, opts.columnEffortUnit);
     missing.push(...r.missing);
     if (r.effort) out.effort = r.effort;
     if (r.invalid !== undefined) out.effortInvalid = r.invalid;

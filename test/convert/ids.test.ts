@@ -179,13 +179,27 @@ describe('Q1: the one-time sample code proposal', () => {
     expect(p.csv.endsWith('\n')).toBe(true);
   });
 
-  it('guards only a cell that starts with = or @ (or a tab / CR); a plus, a minus and a presence mark are ordinary values', () => {
-    const f = fileOf(['=Station', 'Lat'], [['=cmd|x', 1], ['@sum', 2], ['+', 3], ['-5', 4], ['\tx', 5]]);
+  it('guards with the full guard every cell, header and code that starts like a formula; plain numbers, missing marks and + x X - alone stay', () => {
+    const cells = ['+cmd', '-2+3', '=SUM(A1)', '@S1', '＝1+1', '＋1', '－1', '＠S', '\tx', ' =1'];
+    const f = fileOf(['=Station', 'Lat'], [...cells.map((c, i) => [c, i] as Cell[]), ['+', 1], ['x', 2], ['X', 3], ['-', 4], ['NA', 5], ['-1.5', 6], ['+3', 7], ['  -4 ', 8]]);
     const m = { sheet: 'S', columns: [{ index: 0, header: '=Station', role: { kind: 'station' as const } }] };
     const p = proposeSampleCodes(f, f.sheets[0], m)!;
-    expect(p.csv.split('\n')).toEqual(["'=Station,Lat,sample_code", "'=cmd|x,1,'=cmd|x-1", "'@sum,2,'@sum-1", '+,3,+-1', '-5,4,-5-1', "'\tx,5,x-1", '']);
-    expect(guardText('=cmd|x')).toBe("'=cmd|x");
-    expect(p.codes).toEqual(['=cmd|x-1', '@sum-1', '+-1', '-5-1', 'x-1']);
+    const lines = p.csv.split('\n');
+    expect(lines[0]).toBe("'=Station,Lat,sample_code");
+    cells.forEach((c, i) => expect(lines[i + 1].startsWith(guardText(c) + ','), c).toBe(true));
+    for (const c of cells) expect(guardText(c).startsWith("'"), c).toBe(true);
+    expect(lines.slice(cells.length + 1, cells.length + 9).map((l) => l.split(',')[0])).toEqual(['+', 'x', 'X', '-', 'NA', '-1.5', '+3', '  -4 ']);
+    // the code is guarded like a cell: a code made from "+cmd" starts like a formula
+    expect(lines[1].endsWith(",'+cmd-1")).toBe(true);
+    expect(p.codes[0]).toBe('+cmd-1');
+  });
+
+  it('with a decimal comma a number such as -1,5 stays, and the same text on a dot sheet is guarded', () => {
+    const dec = fileOf(['Station', 'Depth'], [['A', '-1,5'], ['B', '+3'], ['C', '=1,5']], 'S', { decimalComma: true });
+    const lines = proposeSampleCodes(dec, dec.sheets[0], { sheet: 'S', columns: [{ index: 0, header: 'Station', role: { kind: 'station' } }] })!.csv.split('\n');
+    expect(lines.slice(1, 4).map((l) => l.split(';').slice(0, 2).join(';'))).toEqual(['A;-1,5', 'B;+3', "C;'=1,5"]);
+    const dot = fileOf(['Station', 'Depth'], [['A', '-1,5']]);
+    expect(proposeSampleCodes(dot, dot.sheets[0], { sheet: 'S', columns: [{ index: 0, header: 'Station', role: { kind: 'station' } }] })!.csv.split('\n')[1]).toBe('A,"\'-1,5",A-1');
   });
 
   it('names the new column so it cannot clash with an existing header', () => {

@@ -30,7 +30,8 @@ import type { RuleSpec } from './spec';
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
  *   CONV-UNIT-NO-P06           unit             unit = the unit as declared
  *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states
- *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows
+ *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
+ *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous
  *   CONV-NO-TAXON              shape            shape = wide | long
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
  */
@@ -242,6 +243,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}:{lines} field {field}: {count} effort cell(s) are empty, zero or not a number (example "{value}"); sampleSizeValue needs a positive number.`,
   },
   {
+    id: 'CONV-EFFORT-VALUE-INVALID',
+    category: 'B',
+    severity: 'error',
+    params: ['reason'],
+    plain: {
+      pl: `Wpisana wielkość próby „{value}” jest nieprawidłowa: {reason}. Wpisz liczbę większą od zera, z kropką lub przecinkiem jako znakiem dziesiętnym.`,
+      en: `The sample size you typed, "{value}", cannot be used: {reason}. Type a number above zero, with a point or a comma as the decimal mark.`,
+      de: `Die eingegebene Probengröße „{value}“ ist unbrauchbar: {reason}. Geben Sie eine Zahl über null ein, mit Punkt oder Komma als Dezimalzeichen.`,
+      fr: `La taille d'échantillon saisie « {value} » est inutilisable : {reason}. Saisissez un nombre supérieur à zéro, avec un point ou une virgule comme séparateur décimal.`,
+    },
+    technical: `{file}, {sheet}: the typed sample size "{value}" is not accepted ({reason}); it must be a number above zero with at most one decimal mark (point or comma). No effort is written.`,
+  },
+  {
     id: 'CONV-NO-TAXON',
     category: 'B',
     severity: 'error',
@@ -306,6 +320,18 @@ const MISSING_WORDS: Record<string, Record<Lang, string>> = {
   'effort column': { en: 'a column marked as sample size', pl: 'kolumna oznaczona jako wielkość próby', de: 'eine als Probengröße markierte Spalte', fr: "une colonne marquée comme taille d'échantillon" },
 };
 
+/** Why a typed sample size is refused, in words (CONV-EFFORT-VALUE-INVALID carries a code in `reason`). */
+const REASON_WORDS: Record<string, Record<Lang, string>> = {
+  'not-a-number': { en: 'it is not a number', pl: 'to nie jest liczba', de: 'es ist keine Zahl', fr: "ce n'est pas un nombre" },
+  'not-positive': { en: 'it is zero or negative', pl: 'to zero albo liczba ujemna', de: 'es ist null oder negativ', fr: "c'est zéro ou négatif" },
+  ambiguous: {
+    en: 'a thousands separator together with a decimal mark is ambiguous',
+    pl: 'separator tysięcy razem ze znakiem dziesiętnym jest niejednoznaczny',
+    de: 'ein Tausendertrennzeichen zusammen mit einem Dezimalzeichen ist mehrdeutig',
+    fr: 'un séparateur de milliers avec un séparateur décimal est ambigu',
+  },
+};
+
 function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
   // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
@@ -320,6 +346,7 @@ function fill(template: string, f: Finding, lang?: Lang): string {
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
+  if (f.ruleId === 'CONV-EFFORT-VALUE-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
     const words = f.params.missing.split(', ').map((m) => MISSING_WORDS[m]?.[lang] ?? m);
     f = { ...f, params: { ...f.params, missing: words.join('; ') } };

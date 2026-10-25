@@ -124,3 +124,48 @@ describe('a leftover that is not a plausible Latin name is put to the user (M5)'
     expect(r.occurrences[0]).toMatchObject({ scientificName: 'Microcalanus', identificationQualifier: 'sp.', verbatimIdentification: 'Microcalanus pusillus/pygmaeus' });
   });
 });
+
+describe('sex markers (round 3)', () => {
+  it.each([
+    ['Calanus finmarchicus C5 f.', 'female'],
+    ['Calanus finmarchicus C5 fem', 'female'],
+    ['Calanus finmarchicus C5 fem.', 'female'],
+    ['Calanus finmarchicus C5 female', 'female'],
+    ['Calanus finmarchicus C5 ♀', 'female'],
+    ['Calanus finmarchicus C5 m.', 'male'],
+    ['Calanus finmarchicus C5 male', 'male'],
+    ['Calanus finmarchicus C5 ♂', 'male'],
+    ['Calanus finmarchicus, f.', 'female'],
+    ['Calanus finmarchicus, male', 'male'],
+    ['Acartia ? ♀', 'female'],
+  ] as const)('%s reads as the sex %s and leaves a clean name', (text, sex) => {
+    const sp = splitTaxon(text);
+    expect(sp.sex).toBe(sex);
+    expect(sp.scientificName).toBe(text.startsWith('Acartia') ? 'Acartia' : 'Calanus finmarchicus');
+    expect(distinctSplits([text])[0].doubt).toBeUndefined();
+  });
+
+  it('after a plain epithet a marker stays in the name and the split is put to the user', () => {
+    for (const t of ['Metridia longa f.', 'Metridia longa fem', 'Metridia longa female', 'Metridia longa male', 'Metridia longa ♀', 'Metridia longa ♂', 'Metridia longa m.']) {
+      const sp = splitTaxon(t);
+      expect(sp.sex, t).toBeUndefined();
+      expect(sp.scientificName, t).toBe(t);
+      const e = distinctSplits([t])[0];
+      expect(e.needsDecision, t).toBe(true);
+      expect(e.doubt, t).toBe('sex-marker');
+    }
+  });
+
+  it('an f. before an epithet is a forma: the name keeps it, with no sex and no doubt', () => {
+    const sp = splitTaxon('Aglantha digitale f. rosea');
+    expect(sp).toEqual({ verbatimIdentification: 'Aglantha digitale f. rosea', scientificName: 'Aglantha digitale f. rosea' });
+    expect(distinctSplits(['Aglantha digitale f. rosea'])[0]).toMatchObject({ needsDecision: false });
+    expect(nameDoubt('Aglantha digitale f. rosea')).toBeUndefined();
+  });
+
+  it('a "?" glued to the name still gives the qualifier and the sex: "Acartia? f"', () => {
+    expect(splitTaxon('Acartia? f')).toEqual({ verbatimIdentification: 'Acartia? f', scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
+    expect(splitTaxon('Acartia? m.')).toMatchObject({ scientificName: 'Acartia', identificationQualifier: '?', sex: 'male' });
+    expect(splitTaxon('Acartia ? f')).toMatchObject({ scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
+  });
+});

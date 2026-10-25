@@ -173,15 +173,15 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertTaxa.does': `Confirms which of the proposed columns are taxa.`,
   'tip.convertTaxa.logic': `• In a wide sheet the tool proposes every numeric column it has no other meaning for, at low confidence, as a taxon whose header is the name.
 • A proposed column is converted only after you confirm it; an unconfirmed one is left out and the summary says how many.
-• Measured variables such as temperature stay variables, and a column called total, sum or similar is never proposed.
+• Measured variables such as temperature stay variables. A column whose header starts with total, sum, suma, razem, summe, gesamt, somme or Σ, or holds total, suma, razem or gesamt as a separate word, is never proposed; you can still mark it by hand.
 • A column you give the meaning "taxon (the header is the name)" yourself is yours and needs no confirmation.`,
   'tip.convertDepthBound.does': `Says which end of a depth range a depth column is.`,
   'tip.convertDepthBound.logic': `• A sample taken between two depths has a top column (the shallower end) and a bottom column (the deeper end).
 • With a single depth column, the top and the bottom depth are the same.
 • A depth is read as metres and is never converted; a unit other than metres blocks the conversion.`,
   'tip.convertEffortValue.does': `The sample size, when it is the same for all samples.`,
-  'tip.convertEffortValue.logic': `• Type it with a decimal point, or with a comma if your sheet uses decimal commas; it is written with a point.
-• It must be a number above zero; anything else blocks the conversion.
+  'tip.convertEffortValue.logic': `• Type it with a point or a comma as the decimal mark; both are accepted whatever your sheet uses, and it is written with a point.
+• A number that has a thousands separator as well as a decimal mark is refused as ambiguous, and so is anything that is not a number above zero; the conversion is then blocked.
 • For a different size in each sample, mark a column of the sheet instead.`,
   'tip.convertEffortUnit.does': `The unit of the sample size.`,
   'tip.convertEffortUnit.logic': `• It is written as you give it and never converted.
@@ -255,13 +255,13 @@ No findings only means that no problems were found in the checked categories.`,
 • The ID of a station still begins with the cruise code.
 • Nothing is flattened unless you tick it.`,
   'tip.convertSplits.does': `Confirms how a name with a qualifier, a stage or a sex is divided, or a doubtful name.`,
-  'tip.convertSplits.logic': `• Qualifiers ({qualifiers}) go to the identification qualifier, the stages ({stages}) to the life stage, and an f or m after a comma, or straight after a stage or a question mark, to the sex.
-• A name that is left with a digit, a slash, a question mark, a stage range, a single letter or more than three words is shown with the reason, for you to correct.
+  'tip.convertSplits.logic': `• Qualifiers ({qualifiers}) go to the identification qualifier, the stages ({stages}) to the life stage, and a sex marker (f, m, fem, female, male, ♀, ♂, with or without a dot) after a comma, or straight after a stage or a question mark, to the sex. An f. before an epithet is a forma and stays in the name.
+• A name that is left with a digit, a slash, a question mark, a stage range, a single letter, a sex marker at the end or more than three words is shown with the reason, for you to correct.
 • The exact text is always kept as verbatimIdentification. You can edit the name, qualifier, stage and sex before approving.
 • A split is only a proposal until you approve it, and an unapproved split blocks the conversion. A plain name needs no decision.`,
   'tip.convertCodes.does': `Proposes sample codes once, for a sheet that has none.`,
   'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet.
-• You get your own sheet back as a CSV file with one new column. Cells are copied as text, except cells that start with = or @, which get an apostrophe so that a spreadsheet does not run them; dates of an xlsx file are written as ISO dates.
+• You get your own sheet back as a CSV file with one new column. Cells are copied as text. A cell, a header or a code that starts with = + - or @ (also in their full-width forms) or with a tab gets an apostrophe so that a spreadsheet does not run it; plain numbers, missing-data marks such as NA and the marks + x - on their own are left as they are. Dates of an xlsx file are written as ISO dates and times of day as hours and minutes.
 • Check it and upload that file again: only a code in your own uploaded sheet becomes an ID.
 • The converter never applies or renews codes by itself.`,
   'tip.convertTree.does': `Shows the event tree the archive would have.`,
@@ -434,15 +434,15 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertTaxa.does': `Potwierdza, które z zaproponowanych kolumn to taksony.`,
   'tip.convertTaxa.logic': `• W arkuszu szerokim narzędzie proponuje jako takson, którego nagłówek jest nazwą, każdą kolumnę liczbową bez innego znaczenia, z niską pewnością.
 • Zaproponowana kolumna jest przekształcana dopiero po Twoim potwierdzeniu; niepotwierdzona jest pomijana, a podsumowanie podaje, ile ich jest.
-• Mierzone wielkości, takie jak temperatura, zostają zmiennymi, a kolumna o nazwie suma, razem lub podobnej nigdy nie jest proponowana.
+• Mierzone wielkości, takie jak temperatura, zostają zmiennymi. Kolumna, której nagłówek zaczyna się od słów total, sum, suma, razem, summe, gesamt, somme lub od znaku Σ albo zawiera jako osobne słowo total, suma, razem lub gesamt, nigdy nie jest proponowana; nadal możesz ją oznaczyć ręcznie.
 • Kolumna, której sam nadasz znaczenie „takson (nagłówek to nazwa)”, jest Twoją decyzją i nie wymaga potwierdzenia.`,
   'tip.convertDepthBound.does': `Mówi, który koniec zakresu głębokości przedstawia kolumna głębokości.`,
   'tip.convertDepthBound.logic': `• Próbka pobrana między dwiema głębokościami ma kolumnę górną (płytszy koniec) i dolną (głębszy koniec).
 • Przy jednej kolumnie głębokości głębokość górna i dolna są takie same.
 • Głębokość jest odczytywana jako metry i nigdy nie jest przeliczana; inna jednostka niż metry blokuje przekształcenie.`,
   'tip.convertEffortValue.does': `Wielkość próby, gdy jest taka sama dla wszystkich próbek.`,
-  'tip.convertEffortValue.logic': `• Wpisz z kropką dziesiętną albo z przecinkiem, jeśli arkusz używa przecinków dziesiętnych; zapisywana jest z kropką.
-• Musi być liczbą większą od zera; wszystko inne blokuje przekształcenie.
+  'tip.convertEffortValue.logic': `• Wpisz z kropką lub przecinkiem jako znakiem dziesiętnym; oba są przyjmowane niezależnie od tego, czego używa arkusz, a zapisywana jest z kropką.
+• Liczba z separatorem tysięcy i znakiem dziesiętnym jednocześnie jest odrzucana jako niejednoznaczna, tak samo jak wszystko, co nie jest liczbą większą od zera; przekształcenie jest wtedy zablokowane.
 • Dla innej wielkości w każdej próbce oznacz zamiast tego kolumnę arkusza.`,
   'tip.convertEffortUnit.does': `Jednostka wielkości próby.`,
   'tip.convertEffortUnit.logic': `• Jest zapisywana tak, jak ją podasz, i nigdy nie jest przeliczana.
@@ -516,13 +516,13 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Identyfikator stacji nadal zaczyna się od kodu rejsu.
 • Nic nie jest spłaszczane, dopóki tego nie zaznaczysz.`,
   'tip.convertSplits.does': `Potwierdza, jak podzielono nazwę z dopiskiem, stadium lub płcią albo nazwę budzącą wątpliwości.`,
-  'tip.convertSplits.logic': `• Dopiski ({qualifiers}) trafiają do dopisku przy oznaczeniu, stadia ({stages}) do stadium rozwojowego, a f lub m po przecinku albo zaraz po stadium lub znaku zapytania do płci.
-• Nazwa, w której zostaje cyfra, ukośnik, znak zapytania, zakres stadiów, pojedyncza litera lub więcej niż trzy słowa, jest pokazana z powodem, abyś ją poprawił.
+  'tip.convertSplits.logic': `• Dopiski ({qualifiers}) trafiają do dopisku przy oznaczeniu, stadia ({stages}) do stadium rozwojowego, a oznaczenie płci (f, m, fem, female, male, ♀, ♂, z kropką lub bez) po przecinku albo zaraz po stadium lub znaku zapytania do płci. Zapis f. przed epitetem to forma i zostaje w nazwie.
+• Nazwa, w której zostaje cyfra, ukośnik, znak zapytania, zakres stadiów, pojedyncza litera, oznaczenie płci na końcu lub więcej niż trzy słowa, jest pokazana z powodem, abyś ją poprawił.
 • Dokładny tekst zawsze zostaje jako verbatimIdentification. Przed zatwierdzeniem możesz poprawić nazwę, dopisek, stadium i płeć.
 • Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie. Zwykła nazwa nie wymaga decyzji.`,
   'tip.convertCodes.does': `Proponuje kody próbek jednorazowo, dla arkusza, który ich nie ma.`,
   'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza.
-• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst, z wyjątkiem komórek zaczynających się od = lub @, które dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; daty z pliku xlsx są zapisywane jako daty ISO.
+• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst. Komórka, nagłówek lub kod zaczynające się od = + - lub @ (także w formie pełnej szerokości) albo od tabulatora dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; zwykłe liczby, oznaczenia braku danych, takie jak NA, oraz same znaki + x - zostają bez zmian. Daty z pliku xlsx są zapisywane jako daty ISO, a godziny jako godziny i minuty.
 • Sprawdź go i wgraj ten plik ponownie: identyfikatorem staje się tylko kod z Twojego wgranego arkusza.
 • Konwerter nigdy sam nie stosuje ani nie odnawia kodów.`,
   'tip.convertTree.does': `Pokazuje drzewo zdarzeń, jakie miałoby archiwum.`,
@@ -693,15 +693,15 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertTaxa.does': `Bestätigt, welche der vorgeschlagenen Spalten Taxa sind.`,
   'tip.convertTaxa.logic': `• In einem breiten Blatt schlägt das Werkzeug jede Zahlenspalte ohne andere Bedeutung mit niedriger Sicherheit als Taxon vor, dessen Kopf der Name ist.
 • Eine vorgeschlagene Spalte wird erst nach Ihrer Bestätigung umgewandelt; eine unbestätigte wird ausgelassen, und die Zusammenfassung nennt ihre Zahl.
-• Gemessene Größen wie die Temperatur bleiben Variablen, und eine Spalte namens Summe, Gesamt oder ähnlich wird nie vorgeschlagen.
+• Gemessene Größen wie die Temperatur bleiben Variablen. Eine Spalte, deren Kopf mit total, sum, suma, razem, summe, gesamt, somme oder Σ beginnt oder total, suma, razem oder gesamt als eigenes Wort enthält, wird nie vorgeschlagen; Sie können sie weiterhin von Hand markieren.
 • Eine Spalte, der Sie selbst die Bedeutung „Taxon (der Spaltenkopf ist der Name)“ geben, ist Ihre Entscheidung und braucht keine Bestätigung.`,
   'tip.convertDepthBound.does': `Sagt, welches Ende eines Tiefenbereichs eine Tiefenspalte ist.`,
   'tip.convertDepthBound.logic': `• Eine Probe zwischen zwei Tiefen hat eine obere Spalte (das flachere Ende) und eine untere Spalte (das tiefere Ende).
 • Bei nur einer Tiefenspalte sind obere und untere Tiefe gleich.
 • Eine Tiefe wird als Meter gelesen und nie umgerechnet; eine andere Einheit als Meter blockiert die Umwandlung.`,
   'tip.convertEffortValue.does': `Die Probengröße, wenn sie für alle Proben gleich ist.`,
-  'tip.convertEffortValue.logic': `• Geben Sie sie mit Dezimalpunkt ein, oder mit Komma, wenn Ihr Blatt Dezimalkommas verwendet; geschrieben wird sie mit Punkt.
-• Sie muss eine Zahl über null sein; alles andere blockiert die Umwandlung.
+  'tip.convertEffortValue.logic': `• Geben Sie sie mit Punkt oder Komma als Dezimalzeichen ein; beides wird angenommen, was Ihr Blatt auch verwendet, und geschrieben wird sie mit Punkt.
+• Eine Zahl mit Tausendertrennzeichen und Dezimalzeichen zugleich wird als mehrdeutig abgelehnt, ebenso alles, was keine Zahl über null ist; die Umwandlung ist dann blockiert.
 • Für eine andere Größe in jeder Probe markieren Sie stattdessen eine Spalte des Blatts.`,
   'tip.convertEffortUnit.does': `Die Einheit der Probengröße.`,
   'tip.convertEffortUnit.logic': `• Sie wird so geschrieben, wie Sie sie angeben, und nie umgerechnet.
@@ -775,13 +775,13 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Die Kennung einer Station beginnt weiterhin mit dem Fahrtcode.
 • Nichts wird abgeflacht, solange Sie es nicht ankreuzen.`,
   'tip.convertSplits.does': `Bestätigt, wie ein Name mit Zusatz, Stadium oder Geschlecht oder ein zweifelhafter Name aufgeteilt wird.`,
-  'tip.convertSplits.logic': `• Zusätze ({qualifiers}) gehen in den Bestimmungszusatz, die Stadien ({stages}) in das Entwicklungsstadium und ein f oder m nach einem Komma oder direkt nach einem Stadium oder Fragezeichen in das Geschlecht.
-• Ein Name, in dem eine Ziffer, ein Schrägstrich, ein Fragezeichen, ein Stadienbereich, ein einzelner Buchstabe oder mehr als drei Wörter bleiben, wird mit dem Grund gezeigt, damit Sie ihn korrigieren.
+  'tip.convertSplits.logic': `• Zusätze ({qualifiers}) gehen in den Bestimmungszusatz, die Stadien ({stages}) in das Entwicklungsstadium und eine Geschlechtsangabe (f, m, fem, female, male, ♀, ♂, mit oder ohne Punkt) nach einem Komma oder direkt nach einem Stadium oder Fragezeichen in das Geschlecht. Ein f. vor einem Epitheton ist eine Forma und bleibt im Namen.
+• Ein Name, in dem eine Ziffer, ein Schrägstrich, ein Fragezeichen, ein Stadienbereich, ein einzelner Buchstabe, eine Geschlechtsangabe am Ende oder mehr als drei Wörter bleiben, wird mit dem Grund gezeigt, damit Sie ihn korrigieren.
 • Der genaue Text bleibt immer als verbatimIdentification erhalten. Name, Zusatz, Stadium und Geschlecht können Sie vor der Bestätigung bearbeiten.
 • Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung. Ein einfacher Name braucht keine Entscheidung.`,
   'tip.convertCodes.does': `Schlägt einmalig Probencodes vor, für ein Blatt, das keine hat.`,
   'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts.
-• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert, außer Zellen, die mit = oder @ beginnen: Sie erhalten ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; Daten einer xlsx-Datei werden als ISO-Daten geschrieben.
+• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert. Eine Zelle, eine Überschrift oder ein Code, die mit = + - oder @ (auch in der Vollbreitform) oder mit einem Tabulator beginnen, erhalten ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; einfache Zahlen, Kennzeichen für fehlende Werte wie NA und die Zeichen + x - allein bleiben unverändert. Daten einer xlsx-Datei werden als ISO-Daten geschrieben, Uhrzeiten als Stunden und Minuten.
 • Prüfen Sie es und laden Sie diese Datei erneut hoch: Nur ein Code in Ihrem eigenen hochgeladenen Blatt wird zur Kennung.
 • Der Konverter wendet Codes nie von selbst an und erneuert sie nie.`,
   'tip.convertTree.does': `Zeigt den Ereignisbaum, den das Archiv hätte.`,
@@ -952,15 +952,15 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertTaxa.does': `Confirme lesquelles des colonnes proposées sont des taxons.`,
   'tip.convertTaxa.logic': `• Dans une feuille large, l'outil propose comme taxon dont l'en-tête est le nom chaque colonne numérique sans autre sens, avec une faible confiance.
 • Une colonne proposée n'est convertie qu'après votre confirmation ; une colonne non confirmée est écartée et le résumé en donne le nombre.
-• Les grandeurs mesurées comme la température restent des variables, et une colonne nommée total, somme ou semblable n'est jamais proposée.
+• Les grandeurs mesurées comme la température restent des variables. Une colonne dont l'en-tête commence par total, sum, suma, razem, summe, gesamt, somme ou Σ, ou contient total, suma, razem ou gesamt comme mot séparé, n'est jamais proposée ; vous pouvez toujours la marquer à la main.
 • Une colonne à laquelle vous donnez vous-même le sens « taxon (l'en-tête est le nom) » est votre décision et n'a pas besoin de confirmation.`,
   'tip.convertDepthBound.does': `Dit quelle extrémité d'une plage de profondeur une colonne de profondeur représente.`,
   'tip.convertDepthBound.logic': `• Un échantillon pris entre deux profondeurs a une colonne du haut (l'extrémité la moins profonde) et une colonne du bas (la plus profonde).
 • Avec une seule colonne de profondeur, la profondeur du haut et celle du bas sont identiques.
 • Une profondeur est lue en mètres et n'est jamais convertie ; une unité autre que le mètre bloque la conversion.`,
   'tip.convertEffortValue.does': `La taille d'échantillon, quand elle est la même pour tous les échantillons.`,
-  'tip.convertEffortValue.logic': `• Saisissez-la avec un point décimal, ou avec une virgule si votre feuille utilise des virgules décimales ; elle est écrite avec un point.
-• Ce doit être un nombre supérieur à zéro ; toute autre chose bloque la conversion.
+  'tip.convertEffortValue.logic': `• Saisissez-la avec un point ou une virgule comme séparateur décimal ; les deux sont acceptés, quel que soit l'usage de votre feuille, et elle est écrite avec un point.
+• Un nombre avec un séparateur de milliers et un séparateur décimal à la fois est refusé comme ambigu, comme tout ce qui n'est pas un nombre supérieur à zéro ; la conversion est alors bloquée.
 • Pour une taille différente dans chaque échantillon, marquez plutôt une colonne de la feuille.`,
   'tip.convertEffortUnit.does': `L'unité de la taille d'échantillon.`,
   'tip.convertEffortUnit.logic': `• Elle est écrite telle que vous la donnez et n'est jamais convertie.
@@ -1034,13 +1034,13 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • L'identifiant d'une station commence toujours par le code de campagne.
 • Rien n'est aplati sans que vous le cochiez.`,
   'tip.convertSplits.does': `Valide la façon dont un nom avec mention, stade ou sexe, ou un nom douteux, est divisé.`,
-  'tip.convertSplits.logic': `• Les mentions ({qualifiers}) vont dans la mention d'identification, les stades ({stages}) dans le stade de développement, et un f ou m après une virgule, ou juste après un stade ou un point d'interrogation, dans le sexe.
-• Un nom qui garde un chiffre, une barre oblique, un point d'interrogation, une plage de stades, une lettre isolée ou plus de trois mots est montré avec la raison, pour que vous le corrigiez.
+  'tip.convertSplits.logic': `• Les mentions ({qualifiers}) vont dans la mention d'identification, les stades ({stages}) dans le stade de développement, et une indication de sexe (f, m, fem, female, male, ♀, ♂, avec ou sans point) après une virgule, ou juste après un stade ou un point d'interrogation, dans le sexe. Un f. devant un épithète est une forma et reste dans le nom.
+• Un nom qui garde un chiffre, une barre oblique, un point d'interrogation, une plage de stades, une lettre isolée, une indication de sexe à la fin ou plus de trois mots est montré avec la raison, pour que vous le corrigiez.
 • Le texte exact est toujours gardé comme verbatimIdentification. Vous pouvez modifier le nom, la mention, le stade et le sexe avant de valider.
 • Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion. Un nom simple ne demande aucune décision.`,
   'tip.convertCodes.does': `Propose une seule fois des codes d'échantillon, pour une feuille qui n'en a pas.`,
   'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille.
-• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte, sauf celles qui commencent par = ou @, qui reçoivent une apostrophe pour qu'un tableur ne les exécute pas ; les dates d'un fichier xlsx sont écrites en dates ISO.
+• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte. Une cellule, un en-tête ou un code qui commence par = + - ou @ (aussi en forme pleine chasse) ou par une tabulation reçoit une apostrophe pour qu'un tableur ne l'exécute pas ; les nombres simples, les marques de donnée manquante comme NA et les signes + x - seuls restent tels quels. Les dates d'un fichier xlsx sont écrites en dates ISO et les heures en heures et minutes.
 • Vérifiez-la et rechargez ce fichier : seul un code de votre propre feuille chargée devient un identifiant.
 • Le convertisseur n'applique ni ne renouvelle jamais les codes de lui-même.`,
   'tip.convertTree.does': `Montre l'arbre des événements que l'archive aurait.`,

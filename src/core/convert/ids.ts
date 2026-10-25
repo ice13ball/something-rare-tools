@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ParsedFile, RawCell, RawSheet, SheetMapping } from '../types';
-import { excelSerialToDate } from '../values/dates';
+import { guardText } from '../output/csv';
+import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
+import { parseNumber } from '../values/numbers';
 
 /*
  * Identifiers of the converter.
@@ -43,22 +45,36 @@ export interface SampleCodeProposal {
 
 const cleanCode = (s: string): string => s.trim().replace(/[\t\r\n]+/g, ' ');
 
-/**
- * Spreadsheet formula guard for the proposal CSV: ONLY a cell that starts with = or @ (also after spaces or tabs, or in full-width form), or with a
- * tab or CR, gets a leading apostrophe. Never + or -: a presence mark "+" and a negative number are ordinary values, and the converter's reader does
- * not strip an apostrophe, so guarding them would change the data on the way back.
- */
-export const guardFormula = (s: string): string => (/^(?:[\t\r]|[ \t]*[=@\uFF1D\uFF20])/.test(s) ? `'${s}` : s);
+/** A presence mark written alone: an ordinary value of a species column, never a formula. */
+const PRESENCE_MARKS = new Set(['+', 'x', 'X', '-']);
 
 /**
- * One cell as text for the proposal CSV. A text cell is copied UNCHANGED (a decimal comma stays a comma: the file keeps its delimiter, so it is
- * read as it was). An xlsx number is written with a dot; an xlsx date or date-time cell (a date-formatted column) is written as ISO 8601 text with the
- * workbook's own date system, never as a serial number.
+ * The spreadsheet formula guard of the proposal CSV: the repo's own guard (output/csv.ts guardText: a leading = + - @ or their full-width forms,
+ * after spaces or tabs, and a leading tab or CR) on EVERY text cell, header and code, with three exemptions: a value that is a plain number (read with
+ * the sheet's decimal setting: "-1,5", "+3"), a missing-data token (NA, -, n.d. ...) and a presence mark alone (+ x X -). The converter's reader does
+ * not strip an apostrophe, so a guarded cell comes back with it.
  */
-function cellText(raw: RawCell | undefined, dateColumn: boolean, date1904: boolean): string {
+export function guardCell(text: string, decimalComma: boolean): string {
+  if (PRESENCE_MARKS.has(text)) return text;
+  const p = parseNumber(text, decimalComma);
+  if (p.status === 'ok' || p.status === 'missing') return text;
+  return guardText(text);
+}
+
+/**
+ * One cell as text for the proposal CSV. A text cell is copied UNCHANGED (a decimal comma stays a comma: the file keeps its delimiter, so it is read
+ * as it was) apart from the guard. An xlsx number is written with a dot. A date or date-time cell (a date-formatted column) is written as ISO 8601
+ * text with the workbook's own date system; a TIME-ONLY cell (a time-only number format) is written as HH:MM or HH:MM:SS, as the converter reads
+ * a time of day. A time-only value outside [0,1) (a duration such as 36:00 in [h]:mm) has no time of day: it is written as the number it is, which
+ * the converter cannot read either way, so the finding on it is the same before and after. Never a serial number for a date or a time.
+ */
+function cellText(raw: RawCell | undefined, kind: 'plain' | 'date' | 'time', date1904: boolean, decimalComma: boolean): string {
   if (raw === null || raw === undefined) return '';
   if (typeof raw === 'number') {
-    if (dateColumn) {
+    if (kind === 'time') {
+      const t = parseTimeOfDay(raw);
+      if (!('error' in t)) return t.text;
+    } else if (kind === 'date') {
       try {
         return excelSerialToDate(raw, date1904).iso;
       } catch {
@@ -67,7 +83,7 @@ function cellText(raw: RawCell | undefined, dateColumn: boolean, date1904: boole
     }
     return String(raw);
   }
-  return guardFormula(raw);
+  return guardCell(raw, decimalComma);
 }
 
 /**
@@ -97,13 +113,14 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
   let header = 'sample_code';
   for (let i = 2; taken.has(header.toLowerCase()); i++) header = `sample_code_${i}`;
   const width = sheet.header.length;
-  const delimiter = file.decimalComma ? ';' : ',';
+  const dc = file.decimalComma;
+  const delimiter = dc ? ';' : ',';
   const field = (v: string): string => (v.includes(delimiter) || /["\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const line = (fields: readonly string[]): string => fields.map(field).join(delimiter);
   const date1904 = file.date1904 === true;
   const lines = [
-    line([...sheet.header.map((h) => guardFormula(h)), header]),
-    ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], sheet.dateFormatted?.[k] === true, date1904)), guardFormula(codes[i])])),
+    line([...sheet.header.map((h) => guardCell(h, dc)), header]),
+    ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], sheet.timeFormatted?.[k] === true ? 'time' : sheet.dateFormatted?.[k] === true ? 'date' : 'plain', date1904, dc)), guardCell(codes[i], dc)])),
   ];
   return { header, codes, csv: lines.join('\n') + '\n' };
 }

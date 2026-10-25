@@ -9,6 +9,7 @@ import { parseEffortUnit, parseRateUnit, resolveQuantity } from '../../src/core/
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
 import { P01, P06, VERIFIED_CODES } from '../../src/core/convert/vocab';
 import type { Finding } from '../../src/core/types';
+import { renderConvertPlain } from '../../src/core/rules/convert';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
@@ -190,25 +191,42 @@ describe('a typed sample size (M3)', () => {
   const run2 = (value: string, decimalComma: boolean) =>
     convert({ sheets: [sheetInput(fileOf(header, [['A', 'S', 3]], 'S', { decimalComma }), { quantity: { kind: 'count', effort: { source: 'constant', value, unit: 'm3' } } })] });
 
-  it('is read with the decimal setting of the sheet and written with a dot', () => {
-    const r = run2('12,5', true);
-    expect(r.blocking).toEqual([]);
-    expect(r.events.find((e) => e.id === 'A')).toMatchObject({ sampleSizeValue: '12.5', sampleSizeUnit: 'm3' });
-    expect(r.measurements.find((m) => m.role === 'effort')?.measurementValue).toBe('12.5');
-    const dot = run2('12.5', false);
-    expect(dot.events.find((e) => e.id === 'A')?.sampleSizeValue).toBe('12.5');
+  it('accepts a point or a comma as the decimal mark whatever the sheet uses (it is typed, not read from the file), and writes a point', () => {
+    for (const [v, comma] of [['12,5', true], ['12,5', false], ['12.5', false], ['12.5', true]] as const) {
+      const r = run2(v, comma);
+      expect(r.blocking, `${v} ${comma}`).toEqual([]);
+      expect(r.events.find((e) => e.id === 'A')).toMatchObject({ sampleSizeValue: '12.5', sampleSizeUnit: 'm3' });
+      expect(r.measurements.find((m) => m.role === 'effort')?.measurementValue).toBe('12.5');
+    }
+    expect(run2('1,234', false).events.find((e) => e.id === 'A')?.sampleSizeValue).toBe('1.234');
+    expect(run2('+3', false).events.find((e) => e.id === 'A')?.sampleSizeValue).toBe('3');
   });
 
-  it('a non-number, a zero, a negative or a comma on a dot sheet is CONV-EFFORT-INVALID and no effort is written', () => {
-    for (const [v, comma] of [['abc', false], ['0', false], ['-3', false], ['12,5', false], ['12.5', true], ['1,2,3', true]] as const) {
-      const r = run2(v, comma);
-      const f = find(r.blocking, 'CONV-EFFORT-INVALID');
-      expect(f, `${v} ${comma}`).toHaveLength(1);
-      expect(f[0].value).toBe(v);
+  it('refuses a non-number, zero, a negative and anything with a thousands separator, with its own rule and reason', () => {
+    const cases: [string, string][] = [['abc', 'not-a-number'], ['0', 'not-positive'], ['-3', 'not-positive'], ['1.234,5', 'ambiguous'], ['1,234.5', 'ambiguous'], ['1,2,3', 'ambiguous'], ['12.5.', 'ambiguous']];
+    for (const [v, reason] of cases) {
+      const r = run2(v, false);
+      const f = find(r.blocking, 'CONV-EFFORT-VALUE-INVALID');
+      expect(f, v).toHaveLength(1);
+      expect(f[0]).toMatchObject({ value: v, params: { reason } });
       expect(r.measurements.filter((m) => m.role === 'effort')).toEqual([]);
       expect(find(r.findings, 'CONV-QUANTITY-UNDECLARED')).toEqual([]);
+      expect(find(r.findings, 'CONV-EFFORT-INVALID')).toEqual([]);
     }
-    // nothing typed is still "missing", not "invalid"
     expect(find(run2('', false).blocking, 'CONV-QUANTITY-UNDECLARED')[0].params.missing).toBe('effort value');
+  });
+
+  it('the text names the typed value and why, in words, in every language, with no "column" and no English in the others', () => {
+    const f = find(run2('1.234,5', false).blocking, 'CONV-EFFORT-VALUE-INVALID')[0];
+    const text = (l: 'en' | 'pl' | 'de' | 'fr') => renderConvertPlain(f, l);
+    expect(text('en')).toBe('The sample size you typed, "1.234,5", cannot be used: a thousands separator together with a decimal mark is ambiguous. Type a number above zero, with a point or a comma as the decimal mark.');
+    expect(text('pl')).toContain('„1.234,5” jest nieprawidłowa: separator tysięcy razem ze znakiem dziesiętnym jest niejednoznaczny');
+    expect(text('de')).toContain('ein Tausendertrennzeichen zusammen mit einem Dezimalzeichen ist mehrdeutig');
+    expect(text('fr')).toContain('un séparateur de milliers avec un séparateur décimal est ambigu');
+    for (const l of ['pl', 'de', 'fr'] as const) {
+      expect(text(l), l).not.toMatch(/column|lines|\bnumber\b|\bsample size\b|wierszach|Zeilen|lignes/i);
+      expect(text(l), l).not.toMatch(/\{|\}/);
+    }
+    for (const reason of ['not-a-number', 'not-positive']) for (const l of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain({ ...f, params: { reason } }, l)).not.toContain(reason);
   });
 });

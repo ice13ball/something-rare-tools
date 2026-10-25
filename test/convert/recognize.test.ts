@@ -158,9 +158,12 @@ describe('candidates (M1, L4)', () => {
     expect(roleOf(p, h).kind).not.toBe('taxon');
     expect(roleOf(p, 'Calanus finmarchicus')).toEqual({ kind: 'taxon', header: true });
   });
-  it('a header that merely contains the word (Total Bay copepods) is still a candidate', () => {
-    const p = props([...header, 'Total Bay copepods'], [[...base, 4], [...base, 5]]);
-    expect(roleOf(p, 'Total Bay copepods')).toEqual({ kind: 'taxon', header: true });
+  it.each(['Total copepods', 'Total abundance [ind/m3]', 'Razem Copepoda', 'Abundance, total', 'Suma gatunków', 'Gesamt Copepoda', 'Σ copepods', 'Summe Calanus'])('"%s" is a summary header: never proposed as a taxon', (h) => {
+    const p = props([...header, h], [[...base, 4], [...base, 5]]);
+    expect(roleOf(p, h).kind).not.toBe('taxon');
+  });
+  it('a real-looking genus that only starts with the letters (Totalia sp., Summa) is still proposed, and the user can mark a summary column by hand', () => {
+    for (const h of ['Totalia sp.', 'Sumatra copepod', 'Razemia']) expect(roleOf(props([...header, h], [[...base, 4], [...base, 5]]), h), h).toEqual({ kind: 'taxon', header: true });
   });
   it('a presence-mark column with NA cells is still a taxon candidate, a real text column is not', () => {
     const p = props([...header, 'Calanus finmarchicus'], [[...base, '+'], [...base, 'NA'], [...base, 'x'], [...base, null], [...base, 'NANA']]);

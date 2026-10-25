@@ -106,18 +106,32 @@ describe('/check is untouched by stage 1b', () => {
 
 describe('what the tips say is what the code does', () => {
   const UIT = UI;
-  it('the code proposal tip: cells are copied as text, only = and @ get an apostrophe, xlsx dates are ISO; and "not touched" is gone', () => {
+  it('the code proposal tip says exactly which cells get an apostrophe, headers and codes included, and that "not touched" is gone', () => {
     const en = UIT.en['tip.convertCodes.logic'];
     expect(en).toContain('Cells are copied as text');
-    expect(en).toContain('start with = or @');
+    expect(en).toContain('A cell, a header or a code that starts with = + - or @');
+    expect(en).toContain('full-width');
     expect(en).toContain('apostrophe');
+    expect(en).toContain('plain numbers, missing-data marks such as NA and the marks + x - on their own are left as they are');
     expect(en).toContain('ISO dates');
+    expect(en).toContain('times of day as hours and minutes');
     for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
       const text = UIT[lang]['tip.convertCodes.logic'];
       expect(text, lang).not.toMatch(/not touched|nie są zmieniane|unberührt|ne sont pas modifiées/);
-      expect(text, lang).toMatch(/= (or|lub|oder|ou) @|= (lub|oder|ou) @/);
+      expect(text, lang).toContain('= + - ');
+      expect(text, lang).toContain('NA');
       expect(text, lang).toContain('ISO');
     }
+  });
+  it('the candidates tip states the summary-header rule exactly as the code has it', () => {
+    const en = UIT.en['tip.convertTaxa.logic'];
+    expect(en).toContain('starts with total, sum, suma, razem, summe, gesamt, somme or Σ');
+    expect(en).toContain('holds total, suma, razem or gesamt as a separate word');
+    expect(UIT.pl['tip.convertTaxa.logic']).toContain('total, sum, suma, razem, summe, gesamt, somme lub od znaku Σ');
+  });
+  it('the typed sample size tip says both marks are accepted and a thousands separator is refused', () => {
+    expect(UIT.en['tip.convertEffortValue.logic']).toContain('a point or a comma as the decimal mark; both are accepted whatever your sheet uses');
+    expect(UIT.en['tip.convertEffortValue.logic']).toContain('thousands separator');
   });
   it('the medium tip says there is no default; the shape tip names the exceptions; the candidates tip says confirmation is needed', () => {
     expect(UIT.en['tip.convertQuantityMedium.logic']).toContain('no default');

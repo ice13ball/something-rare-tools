@@ -47,10 +47,16 @@ function stageToken(tok: string): string | undefined {
   return undefined;
 }
 
-/** Sex after a comma ("Metridia longa, f"), or straight after a stage or "?": a bare f or m after a plain epithet is never read as one. */
+/**
+ * A sex marker: f, m, fem, female, male, with or without a final dot, and the symbols. It reads as the sex after a comma, or straight after a stage or a
+ * "?"; after a plain epithet it is left in the name, which the plausibility check then puts to the user ("Metridia longa f."). A "f." inside a name,
+ * before an epithet, is a forma ("Aglantha digitale f. rosea") and is never read here.
+ */
 function sexToken(tok: string): 'female' | 'male' | undefined {
-  const t = tok.toLowerCase();
-  return t === 'f' ? 'female' : t === 'm' ? 'male' : undefined;
+  const t = tok.toLowerCase().replace(/\.$/, '');
+  if (t === 'f' || t === 'fem' || t === 'female' || t === '♀') return 'female';
+  if (t === 'm' || t === 'male' || t === '♂') return 'male';
+  return undefined;
 }
 
 const QUALIFIER_WORDS = new Set(['cf.', 'cf', 'aff.', 'aff']);
@@ -80,10 +86,11 @@ export function splitTaxon(text: string): TaxonSplit {
   const words = rest.split(/\s+/).filter(HAS_DETAIL);
   // 1b. a bare f / m reads as the sex only straight after a stage or a "?" ("Calanus finmarchicus C5 f", "Acartia ? f"); after a plain epithet it is
   // part of the name ("Metridia longa f"), which the plausibility check below then puts to the user
-  if (sex === undefined && words.length > 2) {
+  if (sex === undefined && words.length > 1) {
     const sx = sexToken(words[words.length - 1]);
     const before = words[words.length - 2];
-    if (sx !== undefined && (stageToken(before) !== undefined || before === '?' || before.endsWith('?'))) {
+    const afterStageOrQuestion = (stageToken(before) !== undefined && words.length > 2) || (before === '?' && words.length > 2) || (before.length > 1 && before.endsWith('?'));
+    if (sx !== undefined && afterStageOrQuestion) {
       sex = sx;
       words.pop();
     }
@@ -130,9 +137,9 @@ export function splitTaxon(text: string): TaxonSplit {
 
 /**
  * Is what is left of the name plausibly a Latin name? A reason code when it is not (the user is asked, whatever the split did):
- * digits, a slash, a "?", a stage range such as CVI-CV, a one-letter word, or more than three words.
+ * digits, a slash, a "?", a stage range such as CVI-CV, a one-letter word, a sex marker at the end, or more than three words.
  */
-export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'long';
+export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long';
 export function nameDoubt(name: string): NameDoubt | undefined {
   if (/\d/.test(name)) return 'digits';
   if (name.includes('/')) return 'slash';
@@ -140,7 +147,10 @@ export function nameDoubt(name: string): NameDoubt | undefined {
   const words = name.split(/\s+/).filter((w) => w !== '');
   if (words.some((w) => /^c?[ivx]+-c?[ivx]+$/i.test(w))) return 'stage-range';
   if (words.some((w) => /^[A-Za-z]$/.test(w))) return 'single-letter';
-  if (words.length > 3) return 'long';
+  // a sex marker left at the END of the name (a "f." before an epithet is a forma and stays)
+  if (words.length > 1 && sexToken(words[words.length - 1]) !== undefined) return 'sex-marker';
+  // a rank marker (f., var., subsp.) is not a word of the name: "Aglantha digitale f. rosea" is three
+  if (words.filter((w) => !/^(f|var|subsp|ssp|forma)\.$/i.test(w)).length > 3) return 'long';
   return undefined;
 }
 

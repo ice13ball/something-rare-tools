@@ -250,7 +250,7 @@ export function convert(input: ConvertInput): ConvertResult {
       findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
       quantity = undefined;
     } else {
-      if (quantity.effortInvalid !== undefined) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { ...base, field: 'sample size', value: quantity.effortInvalid, params: { count: 1 } }));
+      if (quantity.effortInvalid !== undefined) findings.push(makeConvertFinding('CONV-EFFORT-VALUE-INVALID', { ...base, value: quantity.effortInvalid.text, params: { reason: quantity.effortInvalid.reason } }));
       if (quantity.noTypeFor !== undefined) findings.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: quantity.noTypeFor } }));
       if (quantity.unitWithoutP06 !== undefined) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.unitWithoutP06 } }));
       if (quantity.effort && !quantity.effort.unitId) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.effort.unit } }));
