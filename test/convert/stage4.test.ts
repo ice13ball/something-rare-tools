@@ -75,16 +75,16 @@ describe('the EML citation identifier', () => {
 
 describe('the companion file', () => {
   it('writes worms=yes only when the box was ticked, and reads it back as a setting (a pre-tick)', () => {
-    expect(writeConvertSidecar({ worms: true })).toContain('(setting),worms=yes');
+    expect(writeConvertSidecar({ worms: true, nvs: false })).toContain('(setting),worms=yes');
     expect(writeConvertSidecar({ fullList: true })).not.toContain('worms');
     expect(writeConvertSidecar({})).not.toContain('worms');
-    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ worms: true })))).toEqual({ fullList: false, prefixStation: false, worms: true });
-    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ fullList: true, prefixStation: true, worms: true })))).toEqual({ fullList: true, prefixStation: true, worms: true });
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ worms: true, nvs: false })))).toEqual({ fullList: false, prefixStation: false, worms: true, nvs: false });
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ fullList: true, prefixStation: true, worms: true, nvs: false })))).toEqual({ fullList: true, prefixStation: true, worms: true, nvs: false });
     expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ fullList: true })))?.worms).toBe(false);
   });
 
   it('holds no name: the file of a ticked run is the header and the setting rows only', () => {
-    const text = writeConvertSidecar({ fullList: true, worms: true });
+    const text = writeConvertSidecar({ fullList: true, worms: true, nvs: false });
     expect(text.trim().split('\n').length).toBe(3);
     expect(text).not.toMatch(/Calanus|urn:lsid|AphiaID/);
   });

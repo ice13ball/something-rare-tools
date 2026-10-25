@@ -19,13 +19,26 @@ describe('the converter sidecar', () => {
     const both = writeConvertSidecar({ fullList: true, prefixStation: true });
     expect(both).toContain('(setting),fullList=yes,,,');
     expect(both).toContain('(setting),stationPrefix=yes,,,');
-    expect(readConvertSettings(textFile('c.sidecar.csv', both))).toEqual({ fullList: true, prefixStation: true, worms: false });
-    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({})))).toEqual({ fullList: false, prefixStation: false, worms: false });
+    expect(readConvertSettings(textFile('c.sidecar.csv', both))).toEqual({ fullList: true, prefixStation: true, worms: false, nvs: false });
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({})))).toEqual({ fullList: false, prefixStation: false, worms: false, nvs: false });
+  });
+
+  it('nvs=yes is written only when the box was ticked, read back as a PRE-TICK, and the file holds no word, code, label or identifier', () => {
+    expect(writeConvertSidecar({ nvs: true })).toBe('original_column,output_column,unit,unit_source,p01\n(setting),nvs=yes,,,\n');
+    expect(writeConvertSidecar({ fullList: true })).not.toContain('nvs');
+    expect(writeConvertSidecar({})).not.toContain('nvs');
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ nvs: true })))).toEqual({ fullList: false, prefixStation: false, worms: false, nvs: true });
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ fullList: true, prefixStation: true, worms: true, nvs: true })))).toEqual({ fullList: true, prefixStation: true, worms: true, nvs: true });
+    const text = writeConvertSidecar({ fullList: true, worms: true, nvs: true });
+    expect(text.trim().split('\n').length).toBe(4);
+    expect(text).not.toMatch(/TEMPPR01|vocab\.nerc|temperature|urn:lsid/);
+    // /check reads the file as a sidecar and nothing more
+    expect(readMappingFile(textFile('c.sidecar.csv', writeConvertSidecar({ nvs: true })))).toEqual({ singleCruise: false });
   });
 
   it('an unknown setting or value is ignored; a file with another header is not a sidecar', () => {
     const odd = writeConvertSidecar({}) + '(setting),somethingElse=yes,,,\n(setting),fullList=maybe,,,\n';
-    expect(readConvertSettings(textFile('odd.csv', odd))).toEqual({ fullList: false, prefixStation: false, worms: false });
+    expect(readConvertSettings(textFile('odd.csv', odd))).toEqual({ fullList: false, prefixStation: false, worms: false, nvs: false });
     expect(readConvertSettings(textFile('data.csv', DATA))).toBeUndefined();
   });
 

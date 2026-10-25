@@ -123,7 +123,7 @@ describe('on real conversions', () => {
     const ids = validateDataset(bad, [], { today: '2026-10-25' }).map((x) => x.ruleId);
     for (const id of ['CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY']) expect(ids, id).toContain(id);
     expect(ids.filter((x) => x === 'CONV-EMOF-ORPHAN')).toHaveLength(2);
-    const done = toDataset({ events: [], occurrences: [], measurements: [] }, META, { fullList: false, prefixStation: false, worms: false });
+    const done = toDataset({ events: [], occurrences: [], measurements: [] }, META, { fullList: false, prefixStation: false, worms: false, nvs: false });
     expect(validateDataset(done).map((x) => x.ruleId)).toEqual([]);
   });
 });

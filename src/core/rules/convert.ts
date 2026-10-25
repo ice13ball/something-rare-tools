@@ -24,7 +24,7 @@ import type { RuleSpec } from './spec';
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
- *   CONV-TAXON-SAME-EVENT      count, columns   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many
+ *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
  *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
@@ -182,14 +182,14 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAXON-SAME-EVENT',
     category: 'B',
     severity: 'warning',
-    params: ['count', 'columns'],
+    params: ['count', 'columns', 'names'],
     plain: {
-      pl: `Ten sam takson „{value}” (to samo stadium i dopisek) występuje {count} {+count:raz|razy|razy} w jednej próbce: {columns}. Każdy zapis zostaje osobno, nic nie jest sumowane. Sprawdź, czy to nie powinien być jeden zapis.`,
-      en: `The same taxon "{value}" (same stage and qualifier) appears {count} {+count:time|times} in one sample: {columns}. Each stays a separate record and nothing is summed. Check whether it should be one record.`,
-      de: `Dasselbe Taxon „{value}“ (gleiches Stadium und gleicher Zusatz) kommt {count}-mal in einer Probe vor: {columns}. Jeder Eintrag bleibt getrennt, nichts wird summiert. Prüfen Sie, ob es ein Eintrag sein sollte.`,
-      fr: `Le même taxon « {value} » (même stade et même mention) apparaît {count} fois dans un échantillon : {columns}. Chaque enregistrement reste séparé et rien n'est additionné. Vérifiez s'il ne devrait y en avoir qu'un.`,
+      pl: `Ten sam takson „{value}” (ta sama nazwa albo ten sam identyfikator z WoRMS, to samo stadium i dopisek) występuje {count} {+count:raz|razy|razy} w jednej próbce: {columns}. W arkuszu zapisano go jako: {names}. Każdy zapis zostaje osobno, nic nie jest sumowane. Sprawdź, czy to nie powinien być jeden zapis.`,
+      en: `The same taxon "{value}" (the same name or the same WoRMS identifier, the same stage and qualifier) appears {count} {+count:time|times} in one sample: {columns}. Your sheet writes it as: {names}. Each stays a separate record and nothing is summed. Check whether it should be one record.`,
+      de: `Dasselbe Taxon „{value}“ (derselbe Name oder dieselbe WoRMS-Kennung, gleiches Stadium und gleicher Zusatz) kommt {count}-mal in einer Probe vor: {columns}. Ihr Blatt schreibt es als: {names}. Jeder Eintrag bleibt getrennt, nichts wird summiert. Prüfen Sie, ob es ein Eintrag sein sollte.`,
+      fr: `Le même taxon « {value} » (le même nom ou le même identifiant WoRMS, même stade et même mention) apparaît {count} fois dans un échantillon : {columns}. Votre feuille l'écrit : {names}. Chaque enregistrement reste séparé et rien n'est additionné. Vérifiez s'il ne devrait y en avoir qu'un.`,
     },
-    technical: `{file}, {sheet}: {count} columns or rows give the same (eventID, scientificName, lifeStage, identificationQualifier): {value} in {columns}. No values are summed; each keeps its own occurrenceID.`,
+    technical: `{file}, {sheet}: {count} columns or rows give the same taxon in one event: the same (eventID, scientificNameID, lifeStage, identificationQualifier), or the same scientificName when there is no ID: {value} in {columns}; written in the sheet as {names}. Judged after the WoRMS lookup, so two spellings that resolved to one AphiaID are caught. No values are summed; each keeps its own occurrenceID.`,
   },
   {
     id: 'CONV-ZERO-SKIPPED',
@@ -211,10 +211,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['what', 'count'],
     plain: {
-      pl: `Wiersze próbki „{value}” (wiersze {lines}) mają różne wartości daty, pozycji, głębokości lub wielkości próby. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
-      en: `The rows of sample "{value}" (lines {lines}) differ in date, position, depth or sample size. A sample is one event, so these values must be the same in all its rows.`,
-      de: `Die Zeilen der Probe „{value}“ (Zeilen {lines}) unterscheiden sich in Datum, Position, Tiefe oder Probengröße. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein.`,
-      fr: `Les lignes de l'échantillon « {value} » (lignes {lines}) diffèrent par la date, la position, la profondeur ou la taille. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes.`,
+      pl: `Wiersze próbki „{value}” (wiersze {lines}) mają różne wartości daty, pozycji, głębokości, wielkości próby lub zmierzonej wielkości. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
+      en: `The rows of sample "{value}" (lines {lines}) differ in date, position, depth, sample size or a measured value. A sample is one event, so these values must be the same in all its rows.`,
+      de: `Die Zeilen der Probe „{value}“ (Zeilen {lines}) unterscheiden sich in Datum, Position, Tiefe, Probengröße oder einem Messwert. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein.`,
+      fr: `Les lignes de l'échantillon « {value} » (lignes {lines}) diffèrent par la date, la position, la profondeur, la taille ou une valeur mesurée. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes.`,
     },
     technical: `{file}, {sheet}:{lines}: rows of sample "{value}" differ in {what} ({count} sample(s) affected). The first row is not silently preferred.`,
   },
@@ -224,12 +224,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['what'],
     plain: {
-      pl: `Dla tej wielkości nie ma sprawdzonego pojęcia w słowniku NERC, więc measurementTypeID zostanie pusty. OBIS wymaga takiego pojęcia; trzeba je dobrać ręcznie przed publikacją.`,
-      en: `There is no verified NERC concept for this quantity, so measurementTypeID stays empty. OBIS requires one; it has to be chosen by hand before publishing.`,
-      de: `Für diese Größe gibt es keinen geprüften NERC-Begriff, daher bleibt measurementTypeID leer. OBIS verlangt einen; er muss vor der Veröffentlichung von Hand gewählt werden.`,
-      fr: `Il n'existe pas de concept NERC vérifié pour cette grandeur : measurementTypeID reste vide. OBIS en exige un ; il faut le choisir à la main avant la publication.`,
+      pl: `Dla {what} nie ma potwierdzonego pojęcia NERC, więc measurementTypeID zostanie pusty. OBIS wymaga takiego pojęcia. Dla zmierzonej wielkości potwierdź albo wybierz pojęcie w tabeli pod kolumnami (możesz też użyć opcjonalnego wyszukiwania w NVS); w innych przypadkach trzeba je dobrać ręcznie przed publikacją.`,
+      en: `There is no confirmed NERC concept for {what}, so measurementTypeID stays empty. OBIS requires one. For a measured variable, confirm or choose one in the table below the columns (you can also use the optional NVS search); in other cases it has to be chosen by hand before publishing.`,
+      de: `Für {what} gibt es keinen bestätigten NERC-Begriff, daher bleibt measurementTypeID leer. OBIS verlangt einen. Bei einer Messgröße bestätigen oder wählen Sie einen in der Tabelle unter den Spalten (Sie können auch die optionale NVS-Suche nutzen); in anderen Fällen muss er vor der Veröffentlichung von Hand gewählt werden.`,
+      fr: `Il n'existe pas de concept NERC confirmé pour {what} : measurementTypeID reste vide. OBIS en exige un. Pour une grandeur mesurée, confirmez ou choisissez-en un dans le tableau sous les colonnes (vous pouvez aussi utiliser la recherche NVS facultative) ; dans les autres cas, il faut le choisir à la main avant la publication.`,
     },
-    technical: `{file}, {sheet}: no verified NERC P01 concept for {what}; measurementTypeID left empty (OBIS: controlled vocabulary terms are required for measurementTypeID).`,
+    technical: `{file}, {sheet}: no confirmed NERC P01 concept for {what}; measurementTypeID left empty (OBIS: controlled vocabulary terms are required for measurementTypeID). For a measured-variable column an identifier is written only when the user confirmed it for that column (a verified generic concept proposed by the converter, a verified method-specific one the user chose, or a result of the user's own NVS search); nothing is guessed.`,
     citations: [NERC_MANUAL],
   },
   {
@@ -238,12 +238,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['unit'],
     plain: {
-      pl: `Jednostki „{unit}” nie ma wśród sprawdzonych jednostek NERC (P06), więc measurementUnitID zostanie pusty. Jednostka nie jest przeliczana; wpisana zostaje tak, jak ją podano.`,
-      en: `The unit "{unit}" is not among the verified NERC units (P06), so measurementUnitID stays empty. The unit is not converted; it is written as given.`,
-      de: `Die Einheit „{unit}“ gehört nicht zu den geprüften NERC-Einheiten (P06), daher bleibt measurementUnitID leer. Die Einheit wird nicht umgerechnet, sondern wie angegeben geschrieben.`,
-      fr: `L'unité « {unit} » ne figure pas parmi les unités NERC vérifiées (P06) : measurementUnitID reste vide. L'unité n'est pas convertie ; elle est écrite telle que donnée.`,
+      pl: `Dla jednostki „{unit}” nie ma potwierdzonego pojęcia NERC (P06), więc measurementUnitID zostanie pusty. Jednostka nie jest przeliczana; wpisana zostaje tak, jak ją podano. Dla kolumny ze zmierzoną wielkością możesz potwierdzić albo wybrać jednostkę w tabeli pod kolumnami.`,
+      en: `There is no confirmed NERC concept (P06) for the unit "{unit}", so measurementUnitID stays empty. The unit is not converted; it is written as given. For a measured-variable column you can confirm or choose a unit in the table below the columns.`,
+      de: `Für die Einheit „{unit}“ gibt es keinen bestätigten NERC-Begriff (P06), daher bleibt measurementUnitID leer. Die Einheit wird nicht umgerechnet, sondern wie angegeben geschrieben. Bei einer Messgröße-Spalte können Sie in der Tabelle unter den Spalten eine Einheit bestätigen oder wählen.`,
+      fr: `Il n'existe pas de concept NERC confirmé (P06) pour l'unité « {unit} » : measurementUnitID reste vide. L'unité n'est pas convertie ; elle est écrite telle que donnée. Pour une colonne de grandeur mesurée, vous pouvez confirmer ou choisir une unité dans le tableau sous les colonnes.`,
     },
-    technical: `{file}, {sheet}: unit "{unit}" has no verified P06 concept; measurementUnit is written as declared, measurementUnitID is empty, no conversion is made.`,
+    technical: `{file}, {sheet}: unit "{unit}" has no confirmed P06 concept; measurementUnit is written as declared, measurementUnitID is empty, no conversion is made. For a measured-variable column an identifier is written only when the user confirmed it for that column.`,
     citations: [NERC_MANUAL],
   },
   {
@@ -408,12 +408,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'columns'],
     plain: {
-      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego przy tym ustawieniu arkusza nie zapisuje się w archiwum (na przykład zmierzona wielkość, ciśnienie albo stadium w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
-      en: `{count} {+count:column has|columns have} a meaning that is not written to the archive as the sheet is set up (for example a measured variable, a pressure, or a life stage in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
-      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die bei dieser Einstellung des Blatts nicht ins Archiv geschrieben wird (zum Beispiel Messgröße, Druck oder Stadium in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
-      fr: `{count} {+count:colonne a|colonnes ont} un sens qui n'est pas écrit dans l'archive avec ce réglage de la feuille (par exemple grandeur mesurée, pression ou stade dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego przy tym ustawieniu arkusza nie zapisuje się w archiwum (na przykład ciśnienie albo stadium w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
+      en: `{count} {+count:column has|columns have} a meaning that is not written to the archive as the sheet is set up (for example a pressure, or a life stage in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die bei dieser Einstellung des Blatts nicht ins Archiv geschrieben wird (zum Beispiel Druck oder Stadium in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
+      fr: `{count} {+count:colonne a|colonnes ont} un sens qui n'est pas écrit dans l'archive avec ce réglage de la feuille (par exemple pression ou stade dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a measured variable or a pressure, a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column. Nothing from them is written. The warning has to be accepted before the export.`,
+    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure (a measured variable is written as an eMoF row on the sample event), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column. Nothing from them is written. The warning has to be accepted before the export.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',
@@ -635,6 +635,21 @@ const KIND_WORDS: Record<string, Record<Lang, string>> = {
   occurrence: { en: 'an occurrence', pl: 'wystąpienie', de: 'ein Vorkommen', fr: 'une occurrence' },
 };
 
+/**
+ * CONV-NERC-UNKNOWN names what has no confirmed concept: the quantity of a sheet (a density or a biomass per area of the water column, written by the core in English as
+ * `<what> per area of the water column`) or the measured variables the user's own columns name (their text, kept as written). The first is put into the reader's language.
+ */
+const QUANTITY_WORDS: Record<string, Record<Lang, string>> = {
+  density: { en: 'density per area of the water column', pl: 'zagęszczenia na powierzchnię słupa wody', de: 'Dichte pro Fläche der Wassersäule', fr: 'la densité par surface de la colonne d\'eau' },
+  wet: { en: 'wet biomass per area of the water column', pl: 'biomasy mokrej na powierzchnię słupa wody', de: 'Nassbiomasse pro Fläche der Wassersäule', fr: 'la biomasse humide par surface de la colonne d\'eau' },
+  dry: { en: 'dry biomass per area of the water column', pl: 'biomasy suchej na powierzchnię słupa wody', de: 'Trockenbiomasse pro Fläche der Wassersäule', fr: 'la biomasse sèche par surface de la colonne d\'eau' },
+  afdw: { en: 'ash-free dry biomass per area of the water column', pl: 'biomasy suchej bez popiołu na powierzchnię słupa wody', de: 'aschefreie Trockenbiomasse pro Fläche der Wassersäule', fr: 'la biomasse sèche sans cendres par surface de la colonne d\'eau' },
+};
+const quantityWhat = (what: string, lang: Lang): string => {
+  const m = /^(density|wet biomass|dry biomass|afdw biomass) per area of the water column$/.exec(what);
+  return m ? QUANTITY_WORDS[m[1].split(' ')[0]][lang] : what;
+};
+
 function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
   // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
@@ -667,6 +682,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-EML-MISSING' && typeof f.params.fields === 'string') {
     f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
   }
+  if (f.ruleId === 'CONV-NERC-UNKNOWN' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: shortList(quantityWhat(f.params.what, lang)) } };
   if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
   return fill(rule.plain[lang] || rule.plain.en, f, lang);
 }

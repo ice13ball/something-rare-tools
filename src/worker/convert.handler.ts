@@ -70,7 +70,7 @@ export function createConvertHandler(): ConvertHandler {
     files = new Map();
     seq = 0;
     licenceSource = { ids: [], disagree: false };
-    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false, worms: false }, prefill: {}, prefillInfo: null };
+    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false, worms: false, nvs: false }, prefill: {}, prefillInfo: null };
     const records: MetadataRecord[] = [];
     const parsedAll: ParsedFile[] = [];
     for (const f of req.files as InputFile[]) {
@@ -102,6 +102,7 @@ export function createConvertHandler(): ConvertHandler {
         settings.fullList ||= s.fullList;
         settings.prefixStation ||= s.prefixStation;
         settings.worms ||= s.worms;
+        settings.nvs ||= s.nvs;
         continue;
       }
       if (!isTable(parsed)) {
@@ -150,6 +151,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.cruise !== undefined && s.cruise.trim() !== '' ? { cruise: s.cruise.trim() } : {}),
       ...(s.device ? { device: s.device } : {}),
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
+      ...(s.nerc ? { nerc: s.nerc } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
     const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
@@ -157,7 +159,7 @@ export function createConvertHandler(): ConvertHandler {
   }
 
   const today = (): string => new Date().toISOString().slice(0, 10);
-  const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true, worms: body.worms !== undefined });
+  const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true, worms: body.worms !== undefined, nvs: body.sheets.some((s) => Object.values(s.nerc ?? {}).some((d) => d?.type?.source === 'nvs' || d?.unit?.source === 'nvs')) });
 
   function run(body: ConvertRequestBody): ConvertView {
     const { splits, r } = compute(body);
