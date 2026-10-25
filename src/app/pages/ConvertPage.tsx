@@ -21,7 +21,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -292,7 +292,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     }
   };
 
-  const candidates = useMemo(() => (parsed ? candidatesOf(parsed, mappings) : []), [parsed, mappings]);
+  const candidates = useMemo(() => (parsed ? candidatesOf(parsed, mappings, choices) : []), [parsed, mappings, choices]);
   const unconfirmed = candidates.filter((c) => confirmed[c.key] !== true);
   const toApprove = (view?.splits ?? []).filter((s) => s.needsDecision);
   // "approve all shown" takes only the names without a doubt; a doubted one needs its own action on its row
@@ -328,7 +328,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const allAccepted = judged.acceptRules.every(isAccepted) && unconfirmedAccepted;
   const nothingToWrite = view !== null && (view.tree.events === 0 || view.stats.occurrences === 0);
   const canExport = view !== null && !working && !exporting && judged.blocking.length === 0 && metaFindings.length === 0 && allAccepted && !nothingToWrite;
-  const shapes = useMemo(() => Object.entries(choices).filter(([, c]) => c.use).map(([, c]) => c.shape), [choices]);
+  // the shape of the sheets that have one: a profile sheet has none (it is not wide or long)
+  const shapes = useMemo(() => Object.entries(choices).filter(([, c]) => c.use && !c.profile).map(([, c]) => c.shape), [choices]);
 
   // GA4, after consent only (analytics.ts drops everything else): when the user presses Export while something blocks it. Never on a first view. A count only (what blocks plus the kinds of warning not yet accepted).
   const pressExport = (): void => {
@@ -355,7 +356,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         input_type: 'file',
         mode: 'browser',
         shape: shapeOf(shapes),
-        profile: 'none',
+        // whether at least one profile level went into the archive (the count of the conversion that was exported); never a name
+        profile: (view?.tree.levels ?? 0) > 0 ? 'used' : 'none',
         meta_source: parsed.metadataFiles.length > 0 ? 'file' : 'none',
         // whether at least one WoRMS ID was actually written to the archive (the count of the conversion that was exported); never a name or an ID
         worms: (view?.worms.applied ?? 0) > 0 ? 'used' : 'none',
@@ -468,7 +470,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
   const abortNvs = (): void => nvsAbort.current?.abort();
 
-  const downloadCompanion = (): void => download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn }), 'convert-companion.csv', 'text/csv');
+  const downloadCompanion = (): void => {
+    // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
+    const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [] };
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(profile.profileSheets.length > 0 ? profile : {}) }), 'convert-companion.csv', 'text/csv');
+  };
 
   return (
     <Layout titleKey="convert.title">
@@ -594,6 +600,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     sheet={m.sheet}
                     hasCruiseColumn={m.columns.some((c) => c.role.kind === 'cruise')}
                     hasEffortColumn={m.columns.some((c) => c.role.kind === 'effort')}
+                    suggestedProfile={f.suggestedProfiles[m.sheet] === true}
+                    hasCodeColumn={m.columns.some((c) => c.role.kind === 'sampleId')}
+                    hasPressureColumn={m.columns.some((c) => c.role.kind === 'pressure')}
                     choice={choice}
                     onChange={(c) => setChoices((prev) => ({ ...prev, [key]: c }))}
                   />
@@ -790,6 +799,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             {view && view.tree.events > 0 ? (
               <>
                 <p>{t('convert.tree.counts', { cruises: view.tree.cruises, stations: view.tree.stations, samples: view.tree.samples })}</p>
+                {view.tree.levels > 0 && <p>{t('convert.tree.levels', { levels: view.tree.levels })}</p>}
+                {view.profile.sheets > 0 && (
+                  <>
+                    <p className="muted">{t('convert.tree.profile', { matched: view.profile.stationsMatched, unmatched: view.profile.stationsUnmatched })}</p>
+                    {view.profile.stationsUnmatched > 0 && (
+                      <p className="muted">{t('convert.tree.profileNames', { names: `${view.profile.unmatched.join(', ')}${view.profile.stationsUnmatched > view.profile.unmatched.length ? ', …' : ''}` })}</p>
+                    )}
+                  </>
+                )}
                 {(view.tree.derivedDates > 0 || view.tree.derivedPositions > 0 || view.tree.derivedDepths > 0) && (
                   <p className="muted">{t('convert.tree.derived', { dates: view.tree.derivedDates, positions: view.tree.derivedPositions, depths: view.tree.derivedDepths })}</p>
                 )}
@@ -798,7 +816,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 {view.cruiseText.length > 0 && <p>{t('convert.tree.cruiseText', { codes: view.cruiseText.join(', ') })}</p>}
                 <h3>{t('convert.tree.examples')}</h3>
                 <ul className="convert-nodes">
-                  {(['cruise', 'station', 'sample'] as const).flatMap((level) =>
+                  {(['cruise', 'station', 'sample', 'level'] as const).flatMap((level) =>
                     view.examples[level].map((e) => (
                       <li key={`${level}:${e.id}`} data-level={level}>
                         <strong>{t(`convert.type.${level}` as UiKey)}</strong> <code>{e.id}</code>

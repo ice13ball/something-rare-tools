@@ -26,8 +26,8 @@ export type InputType = 'file' | 'zenodo' | 'geonetwork' | 'doi' | 'pangaea' | '
 export type TrackEvent = 'check_started' | 'check_finished' | 'convert_started' | 'convert_blocked' | 'convert_exported';
 /** What a converter export reports about the sheets: wide, long or a mix. Never a name. */
 export type ConvertShapeParam = 'wide' | 'long' | 'mixed';
-/** Whether a CTD / profile file went into the archive (a later stage; `none` until then). */
-export type ConvertProfileParam = 'none' | 'ctd';
+/** convert_exported: whether at least one profile level (a row of a profile / environment file) went into the archive (`used`) or not (`none`). A flag only: never a name, a station or a count of rows. */
+export type ConvertProfileParam = 'none' | 'used';
 /** convert_exported: whether a metadata file was dropped with the data (`file`) or not (`none`). Never a title, a name or an e-mail address. */
 export type ConvertMetaSourceParam = 'none' | 'file';
 /** convert_exported: whether the WoRMS opt-in was used and at least one confirmed ID went into the archive (`used`) or not (`none`). Never a name or an ID. */
@@ -56,7 +56,7 @@ const INPUT_TYPES: readonly string[] = ['file', 'zenodo', 'geonetwork', 'doi', '
 const MODES: readonly string[] = ['browser', 'server'];
 const EVENTS: readonly string[] = ['check_started', 'check_finished', 'convert_started', 'convert_blocked', 'convert_exported'];
 const SHAPES: readonly string[] = ['wide', 'long', 'mixed'];
-const PROFILES: readonly string[] = ['none', 'ctd'];
+const PROFILES: readonly string[] = ['none', 'used'];
 const META_SOURCES: readonly string[] = ['none', 'file'];
 const WORMS_PARAMS: readonly string[] = ['none', 'used'];
 const NVS_PARAMS: readonly string[] = ['none', 'used'];

@@ -40,6 +40,10 @@ export interface SheetChoice {
   deviceText: string;
   /** The mesh size in micrometres as typed; empty = none. */
   mesh: string;
+  /** Stage 6: the user marked this sheet "profile / environment of this cruise". Never set by the tool itself (a suggestion is only offered); a companion file of the drop can pre-tick it. */
+  profile: boolean;
+  /** Stage 6: the user's approval of level IDs made of the station and the depth as written, for a profile sheet with no code column. Starts unticked; a companion file can pre-tick it. */
+  profileDepthIds: boolean;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -175,10 +179,12 @@ export interface TaxonCandidate {
  * The columns the overlay PROPOSED as taxa at low confidence (a numeric column with a name it does not know) and that still have that role. They
  * are converted only once confirmed. A column the user gave the role to by hand is not in this list: it is their decision.
  */
-export function candidatesOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>): TaxonCandidate[] {
+export function candidatesOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>, choices?: Record<string, SheetChoice>): TaxonCandidate[] {
   const out: TaxonCandidate[] = [];
   for (const f of parsed.files) {
     for (const m of mappings[f.fileId] ?? f.mappings) {
+      // the columns of a PROFILE sheet are not species: the core reports each one of them that has a taxon meaning as not written (CONV-COLUMN-NOT-EXPORTED), and the user may give it another meaning
+      if (choices?.[sheetKey(f.fileId, m.sheet)]?.profile === true) continue;
       for (const c of m.columns) {
         const proposed = (f.proposals[m.sheet] ?? []).find((p) => p.index === c.index);
         if (proposed && proposed.confidence === 'low' && proposed.role.kind === 'taxon' && proposed.role.header === true && c.role.kind === 'taxon' && c.role.header === true) {
@@ -197,29 +203,62 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
     for (const m0 of s.mappings[f.fileId] ?? f.mappings) {
       const c = s.choices[sheetKey(f.fileId, m0.sheet)];
       if (!c || !c.use) continue;
-      // a proposed taxon column that is not confirmed is left out: its role becomes "ignore" for the conversion
+      // a proposed taxon column that is not confirmed is left out: its role becomes "ignore" for the conversion. On a PROFILE sheet it keeps its role instead (there is no
+      // confirmation of species there), so that the conversion says that the column is not written (CONV-COLUMN-NOT-EXPORTED) and nothing is dropped without a word.
       const m: SheetMapping = {
         ...m0,
         columns: m0.columns.map((col) => {
+          if (c.profile) return col;
           const proposed = (f.proposals[m0.sheet] ?? []).find((p) => p.index === col.index);
           const candidate = proposed && proposed.confidence === 'low' && proposed.role.kind === 'taxon' && proposed.role.header === true && col.role.kind === 'taxon' && col.role.header === true;
           return candidate && s.confirmed[candidateKey(f.fileId, m0.sheet, col.index)] !== true ? { ...col, role: { kind: 'ignore' as const } } : col;
         }),
       };
+      const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
+      if (c.profile) {
+        // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, profile: c.profileDepthIds ? { depthIds: true } : {}, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        continue;
+      }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
 }
 
-/** The initial choices: every sheet used, the shape the overlay suggests (wide when it cannot tell), nothing declared. */
+/**
+ * The initial choices: every sheet used, the shape the overlay suggests (wide when it cannot tell), nothing declared. The profile mark and the approval of depth-based level
+ * IDs start OFF; only a companion file of THIS drop that names the sheet pre-ticks them (the approval only on a sheet that is marked), and the suggestion of the overlay
+ * never does.
+ */
 export function initialChoices(parsed: ConvertParseResult): Record<string, SheetChoice> {
   const out: Record<string, SheetChoice> = {};
-  for (const f of parsed.files) for (const sh of f.sheets) out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '' };
+  const marked = new Set(parsed.settings.profileSheets ?? []);
+  const approved = new Set(parsed.settings.profileDepthIds ?? []);
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const profile = marked.has(sh.name);
+      out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name) };
+    }
+  }
   return out;
+}
+
+/** The names of the sheets in use that are marked as profile files, and of those among them whose depth-based level IDs were approved: what the companion file keeps (nothing but names). */
+export function profileSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { profileSheets: string[]; profileDepthIds: string[] } {
+  const profileSheets: string[] = [];
+  const profileDepthIds: string[] = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (!c || !c.use || !c.profile) continue;
+      if (!profileSheets.includes(sh.name)) profileSheets.push(sh.name);
+      if (c.profileDepthIds && !profileDepthIds.includes(sh.name)) profileDepthIds.push(sh.name);
+    }
+  }
+  return { profileSheets, profileDepthIds };
 }
 
 /** A finding in words: the converter's own rules from their registry, the data-check rules (a date that cannot be read) from theirs. */
