@@ -57,16 +57,16 @@ export function readPick(collection: 'P01' | 'P06', x: unknown): NercPick | unde
   if (r.deprecated !== false) return undefined; // deprecated, or not stated: not written
   // a pick that says it came from the converter's own list must BE on that list (the verified, non-deprecated concepts): the page cannot vouch for anything else
   if (r.source === 'suggested' && !VARIABLE_VERIFIED_CODES.includes(`${collection}/${r.id.split('/')[6]}`)) return undefined;
-  const label = r.source === 'nvs' && typeof r.label === 'string' && r.label.length <= 600 ? r.label : undefined;
+  // only the first characters are kept: a label is read for its dimension phrase alone, and a long one is cut, not dropped
+  const label = r.source === 'nvs' && typeof r.label === 'string' ? r.label.slice(0, 2000) : undefined;
   return { id: r.id, source: r.source, deprecated: false, ...(label === undefined ? {} : { label }) };
 }
 
-/** The label of a confirmed P01 pick: that of the verified list when the pick is from it, else what the page passed for the NVS result; undefined when none. */
+/** The label of a confirmed P01 pick: ALWAYS the verified list's when the code is on it, whatever the pick says it is (the page cannot relabel a verified code); else, for a real NVS result, what the page passed. */
 export function pickLabel(pick: NercPick): string | undefined {
-  if (pick.source === 'nvs') return pick.label;
   const code = pick.id.split('/')[6];
   for (const list of Object.values(VARIABLE_CONCEPTS)) for (const c of list) if (c.term.code === code) return c.term.label;
-  return undefined;
+  return pick.source === 'nvs' ? pick.label : undefined;
 }
 
 /** True when the label of a confirmed concept states a dimension (per unit mass or volume) that the column's unit contradicts. Neither side stating one is no mismatch. */
@@ -108,11 +108,12 @@ const proposable = (c: VariableConcept, per: PerDimension | undefined): boolean 
 export function suggestType(variable: string, unit: string | undefined): TypeSuggestion {
   const known = conceptVariable(variable);
   const list = known !== undefined && own(VARIABLE_CONCEPTS, known) ? VARIABLE_CONCEPTS[known] : [];
-  // a unit with no alias that is plainly per mass (µg/g, mg/kg) still says "not per volume of the water body"; a volume unit with no alias stays unverified (mL/L)
-  const per = unit === undefined ? undefined : (unitConcept(unit)?.per ?? (unitDimension(unit) === 'mass' ? 'mass' : undefined));
+  const per = unit === undefined ? undefined : unitConcept(unit)?.per;
+  // the dimension of a unit with no verified alias (µg/g, mg/kg) only HIDES the per-volume concepts; it never makes a concept proposable
+  const shown = per ?? (unit !== undefined && unitDimension(unit) === 'mass' ? 'mass' : undefined);
   const candidates = list.filter((c) => proposable(c, per));
   const proposed = candidates.length === 1 ? candidates[0] : undefined;
-  return { ...(proposed ? { proposed: proposed.term } : {}), offered: list.filter((c) => fits(c, per) && c !== proposed).map((c) => c.term) };
+  return { ...(proposed ? { proposed: proposed.term } : {}), offered: list.filter((c) => fits(c, shown) && c !== proposed).map((c) => c.term) };
 }
 
 /** The verified P06 concept for a unit text, to propose. A unit spelled any other way has none. */

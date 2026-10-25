@@ -201,7 +201,7 @@ export function foldUnit(text: string): string {
   return text
     .toLowerCase()
     .replace(/[µμ]/g, 'u')
-    .replace(/³/g, '3')
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (c) => String('⁰¹²³⁴⁵⁶⁷⁸⁹'.indexOf(c)))
     .replace(/[−–⁻]/g, '-')
     .replace(/[\s.·*_^]/g, '')
     .replace(/(l|kg)-1$/, '/$1')
@@ -214,7 +214,8 @@ export function foldUnit(text: string): string {
  * that is plainly per mass, and for CONV-NERC-UNIT-MISMATCH.
  */
 export function unitDimension(text: string): PerDimension | undefined {
-  const k = foldUnit(text);
+  // a trailing dry / wet weight marker ("µg/g DW") says what the mass is, not the dimension
+  const k = foldUnit(text.replace(/[\s_-]*(?:dw|ww)\.?\s*$/i, ''));
   if (k === '') return undefined;
   const alias = VARIABLE_UNITS.find((u) => u.aliases.includes(k))?.per;
   if (alias !== undefined) return alias;
@@ -303,4 +304,11 @@ function stripUnit(name: string): string {
 export function conceptVariable(name: string): string | undefined {
   if (Object.prototype.hasOwnProperty.call(VARIABLE_CONCEPTS, name)) return name;
   return VARIABLE_SYNONYMS.get(nameKey(stripUnit(name)));
+}
+
+/** True for a count or abundance unit (ind/m3, ind. m-3, #/m3, n/L, cells/L): the column counts organisms, whatever its name says. */
+export function isAbundanceUnit(text: string | undefined): boolean {
+  if (text === undefined) return false;
+  const k = text.toLowerCase().replace(/[\s.·*_^]/g, '');
+  return /^(?:ind|indiv|individuals|org|organisms|cells?|osobniki|os)(?:\/|per|[a-z]{0,3}[-−⁻]?[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]|$)/.test(k) || /^(?:#|n|no)(?:\/|per)/.test(k);
 }
