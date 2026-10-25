@@ -75,6 +75,16 @@ describe('track: the converter events', () => {
     expect(entries()).toHaveLength(1);
   });
 
+  it('meta_source is the enum none / file; a title, a name or an e-mail address in its place is dropped', () => {
+    grantConsent();
+    win.dataLayer = [];
+    track('convert_exported', { input_type: 'file', mode: 'browser', meta_source: 'file' });
+    track('convert_exported', { input_type: 'file', mode: 'browser', meta_source: 'none' });
+    track('convert_exported', { input_type: 'file', mode: 'browser', meta_source: 'ada@example.org' } as never);
+    expect(entries().map((e) => (e[2] as Record<string, unknown>).meta_source)).toEqual(['file', 'none', undefined]);
+    expect(JSON.stringify(entries())).not.toMatch(/ada@/);
+  });
+
   it('push nothing without consent', () => {
     denyConsent();
     win.dataLayer = [];

@@ -126,6 +126,15 @@ export function parseIso19139(xml: string | Document, label: string): MetadataRe
     rec.version = textAndUri(child(cit ?? idEl, NS.gmd, 'edition')).text;
     rec.abstract = textAndUri(child(idEl, NS.gmd, 'abstract')).text;
     attribution(cit, rec);
+    const contacts: NonNullable<MetadataRecord['contacts']> = [];
+    for (const poc of children(idEl, NS.gmd, 'pointOfContact')) {
+      for (const p of children(poc, NS.gmd, 'CI_ResponsibleParty')) {
+        const name = textAndUri(child(p, NS.gmd, 'individualName')).text ?? textAndUri(child(p, NS.gmd, 'organisationName')).text;
+        const email = text(child(path(p, NS.gmd, 'contactInfo', 'CI_Contact', 'address', 'CI_Address', 'electronicMailAddress') ?? p, NS.gco, 'CharacterString'));
+        if (name || email) contacts.push({ ...(name ? { name } : {}), ...(email ? { email } : {}) });
+      }
+    }
+    if (contacts.length > 0) rec.contacts = contacts;
 
     for (const rc of children(idEl, NS.gmd, 'resourceConstraints')) {
       for (const c of elementChildren(rc)) {

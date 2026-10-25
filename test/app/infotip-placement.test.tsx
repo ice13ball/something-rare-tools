@@ -26,6 +26,7 @@ import { createDirectCollectionEngine } from '../../src/worker/collection.client
 import { dataciteMock, runnerDeps, virtualClock } from '../collection/helpers';
 import { DC, dataciteJson, zenodoJson, ZEN } from '../helpers/licenceFixtures';
 import { MapFetcher } from '../sources/mapFetcher';
+import * as meta from '../convert/metaFixtures';
 
 const wideCsv = readFileSync(join(__dirname, '..', 'fixtures', 'layout-wide.csv'), 'utf-8');
 const seen = new Set<TipId>();
@@ -205,7 +206,7 @@ describe('/convert (hidden)', () => {
     await screen.findByRole('heading', { name: UI.en['convert.codes.title'] });
     expectTips(['convertSplits', 'convertCodes']);
     // the description of the dataset (every field), the export and the companion file
-    expectTips(['convertMetaTitle', 'convertMetaAbstract', 'convertMetaCreators', 'convertMetaContact', 'convertMetaInstitution', 'convertMetaDatasetName', 'convertMetaMethods', 'convertLicence', 'convertBasis', 'convertExport', 'convertCompanion']);
+    expectTips(['convertMetaTitle', 'convertMetaAbstract', 'convertMetaCreators', 'convertMetaContact', 'convertMetaInstitution', 'convertMetaDatasetName', 'convertMetaMethods', 'convertMetaCitation', 'convertLicence', 'convertBasis', 'convertExport', 'convertCompanion']);
     // none of them inside a label or a heading element (names stay clean)
     expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
     // the bubble of the roles tip lists the converter roles, and sits on the body, outside the scrolling table
@@ -214,6 +215,35 @@ describe('/convert (hidden)', () => {
     expect(bubble.parentElement).toBe(document.body);
     for (const k of ['role.taxonHeader', 'role.quantity', 'role.effort', 'role.occurrenceId', 'role.lifeStage', 'role.qualifier'] as const) expect(bubble.textContent).toContain(UI.en[k]);
     fireEvent.click(document.querySelector('[data-tip="convertRoles"] button') as HTMLElement);
+  });
+});
+
+describe('/convert: the metadata files of stage 3', () => {
+  const NAME = (n: number): string => ['', 'a.xml', 'b.json'][n];
+  async function withFiles(...extra: { name: string; text: string }[]): Promise<void> {
+    cleanup();
+    const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+    chooseFiles(container, [{ name: 'w1.csv', text: NO_CODE_CSV }, ...extra]);
+    fireEvent.click(screen.getByRole('button', { name: UI.en['convert.read'] }));
+    await screen.findByRole('heading', { name: UI.en['convert.columns.title'] });
+  }
+
+  it('the file listing, the source hint, the choice between differing values, the coverage and the contradictory licence each carry their ⓘ', async () => {
+    await withFiles(
+      { name: NAME(1), text: meta.dataciteXml({ licence: 'CC-BY-4.0', collected: '2019-06-01/2019-06-30' }) },
+      { name: NAME(2), text: meta.zenodoJson({ title: 'Another invented title', licence: 'CC0-1.0', doi: '10.0000/synthetic.convert.2' }) },
+    );
+    expectTips(['convertMetaFiles', 'convertMetaSource', 'convertMetaChoice', 'convertMetaCoverage', 'convertLicenceContradictory']);
+    expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+  });
+
+  it('the three other licence cases each carry their ⓘ', async () => {
+    await withFiles({ name: NAME(1), text: meta.dataciteXml({ licence: 'CC-BY-4.0' }) });
+    expectTips(['convertLicenceTaken']);
+    await withFiles({ name: NAME(1), text: meta.dataciteXml({ licence: 'CC-BY-3.0' }) });
+    expectTips(['convertLicenceOther']);
+    await withFiles({ name: NAME(1), text: meta.dataciteXml() });
+    expectTips(['convertLicenceMissing']);
   });
 });
 

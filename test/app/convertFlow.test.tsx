@@ -10,6 +10,7 @@ import { initLang, setLang } from '../../src/app/i18n';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { UI } from '../../src/core/i18n/ui';
 import { createDirectConvertEngine } from '../../src/worker/convert.handler';
+import { dataciteXml } from '../convert/metaFixtures';
 import { COLLISION_CSV, L1_CSV, L2_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV, W2_CSV, chooseFiles } from './convertHelpers';
 
 const T = UI.en;
@@ -238,7 +239,9 @@ describe('no network and no storage', () => {
     const lsRemove = vi.spyOn(Storage.prototype, 'removeItem');
     const lsClear = vi.spyOn(Storage.prototype, 'clear');
     try {
-      await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'run.sidecar.csv', text: SIDECAR_CSV }]);
+      // a metadata file is dropped too: its licence and fields are read in the worker, from the file's bytes only (stage 3)
+      await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'run.sidecar.csv', text: SIDECAR_CSV }, { name: 'bay.datacite.xml', text: dataciteXml({ licence: 'CC-BY-4.0', contacts: ['Example, Anna'] }) }]);
+      expect((screen.getByLabelText(T['convert.meta.f.title']) as HTMLInputElement).value).toBe('Synthetic zooplankton counts, Test Bay 2019');
       pick(T['convert.quantity.kind'], 'count');
       fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
       fireEvent.click(screen.getByLabelText(T['convert.flatten.station']));
