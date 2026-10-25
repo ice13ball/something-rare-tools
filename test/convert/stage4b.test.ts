@@ -127,6 +127,16 @@ describe('a name with a sheet ID on any row', () => {
     expect(two.findings.some((x) => x.ruleId === 'CONV-NAMEID-CONFLICT')).toBe(true);
   });
 
+  it('an approved, EDITED split does not keep the plain proposed name out of the lookup: its sheet ID belongs to the edited name only', () => {
+    const rows = [row('a', 'Calanus finmarchicus CV', 111), row('b', 'Calanus finmarchicus', null)];
+    const r = convert({
+      sheets: [sheetInput(fileOf(HEADER, rows, 'S'), { quantity: { kind: 'count' }, shape: 'long' })],
+      approvedSplits: { 'Calanus finmarchicus CV': { verbatimIdentification: 'Calanus finmarchicus CV', scientificName: 'Calanus finmarchicus s.l.', lifeStage: 'C5' } },
+    });
+    expect(r.nameLookup.names).toEqual(['Calanus finmarchicus']);
+    expect(r.findings.some((x) => x.ruleId === 'CONV-NAMEID-CONFLICT' || x.ruleId === 'CONV-NAMEID-INCOMPLETE')).toBe(false);
+  });
+
   it('the archive of the repro has one ID per name, never two', async () => {
     const header = W1_HEADER;
     const out = await exportSheet(header, W1_ROWS, { quantity: { kind: 'count' }, worms: lookupOf({ 'Calanus finmarchicus': rec('Calanus finmarchicus') }, {}) });
