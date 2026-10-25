@@ -18,16 +18,16 @@ interface Texts {
   goTo: string;
   tools: string;
   toolsHome: string;
-  nav: [string, string, string];
+  nav: [string, string, string, string];
   privacy: string;
   source: string;
 }
 
 const TEXTS: Record<NotFoundLang, Texts> = {
-  pl: { title: 'Nie znaleziono strony', message: 'Nie znaleziono strony', goTo: 'Przejdź do', tools: 'Narzędzia', toolsHome: 'Narzędzia', nav: ['Sprawdzanie danych', 'Sprawdzanie licencji', 'Przegląd kolekcji'], privacy: 'Prywatność', source: 'Kod źródłowy (AGPL-3.0-or-later)' },
-  en: { title: 'Page not found', message: 'Page not found', goTo: 'Go to', tools: 'Tools', toolsHome: 'Tools', nav: ['Data check', 'Licence check', 'Collection review'], privacy: 'Privacy', source: 'Source code (AGPL-3.0-or-later)' },
-  de: { title: 'Seite nicht gefunden', message: 'Seite nicht gefunden', goTo: 'Weiter zu', tools: 'Werkzeuge', toolsHome: 'Werkzeuge', nav: ['Datenprüfung', 'Lizenzprüfung', 'Sammlungsprüfung'], privacy: 'Datenschutz', source: 'Quellcode (AGPL-3.0-or-later)' },
-  fr: { title: 'Page introuvable', message: 'Page introuvable', goTo: 'Aller vers', tools: 'Outils', toolsHome: 'Outils', nav: ['Vérification des données', 'Vérification de licence', 'Revue de collection'], privacy: 'Confidentialité', source: 'Code source (AGPL-3.0-or-later)' },
+  pl: { title: 'Nie znaleziono strony', message: 'Nie znaleziono strony', goTo: 'Przejdź do', tools: 'Narzędzia', toolsHome: 'Narzędzia', nav: ['Sprawdzanie danych', 'Sprawdzanie licencji', 'Przegląd kolekcji', 'Konwerter do Darwin Core'], privacy: 'Prywatność', source: 'Kod źródłowy (AGPL-3.0-or-later)' },
+  en: { title: 'Page not found', message: 'Page not found', goTo: 'Go to', tools: 'Tools', toolsHome: 'Tools', nav: ['Data check', 'Licence check', 'Collection review', 'Darwin Core converter'], privacy: 'Privacy', source: 'Source code (AGPL-3.0-or-later)' },
+  de: { title: 'Seite nicht gefunden', message: 'Seite nicht gefunden', goTo: 'Weiter zu', tools: 'Werkzeuge', toolsHome: 'Werkzeuge', nav: ['Datenprüfung', 'Lizenzprüfung', 'Sammlungsprüfung', 'Darwin-Core-Konverter'], privacy: 'Datenschutz', source: 'Quellcode (AGPL-3.0-or-later)' },
+  fr: { title: 'Page introuvable', message: 'Page introuvable', goTo: 'Aller vers', tools: 'Outils', toolsHome: 'Outils', nav: ['Vérification des données', 'Vérification de licence', 'Revue de collection', 'Convertisseur Darwin Core'], privacy: 'Confidentialité', source: 'Code source (AGPL-3.0-or-later)' },
 };
 
 const isLang = (v: unknown): v is NotFoundLang => typeof v === 'string' && (NOT_FOUND_LANGS as readonly string[]).includes(v);
@@ -67,7 +67,7 @@ function block(lang: NotFoundLang, visible: boolean): string {
   return `    <div class="nf" lang="${lang}" data-title="${esc(t.title)} — ${esc(SITE.brand)}"${visible ? '' : ' hidden'}>
       <header class="site-header">
         <a class="brand" href="/">${esc(SITE.brand)} <span class="brand-part">${esc(t.tools)}</span></a>
-        <nav aria-label="Main"><a href="/check">${esc(t.nav[0])}</a> <a href="/licence">${esc(t.nav[1])}</a> <a href="/collection">${esc(t.nav[2])}</a> <a class="nav-external" href="${atlas}">Atlas</a></nav>
+        <nav aria-label="Main"><a href="/check">${esc(t.nav[0])}</a> <a href="/licence">${esc(t.nav[1])}</a> <a href="/collection">${esc(t.nav[2])}</a> <a href="/convert">${esc(t.nav[3])}</a> <a class="nav-external" href="${atlas}">Atlas</a></nav>
       </header>
       <main class="container">
         <h1>404</h1>

@@ -6,6 +6,7 @@ import { HeadingTip } from '../components/InfoTip';
 import { Layout } from '../components/Layout';
 import { atlasHref, t, useLang } from '../i18n';
 import collectionImage from '../images/menu/collection-review.webp';
+import convertImage from '../images/menu/convert.webp';
 import dataImage from '../images/menu/data-check.webp';
 import licenceImage from '../images/menu/licence-check.webp';
 
@@ -14,6 +15,7 @@ const TOOLS = [
   ['/check', 'index.card', dataImage, 'indexCheck'],
   ['/licence', 'index.licence', licenceImage, 'indexLicence'],
   ['/collection', 'index.collection', collectionImage, 'indexCollection'],
+  ['/convert', 'index.convert', convertImage, 'indexConvert'],
 ] as const;
 
 export function IndexPage(): React.ReactElement {

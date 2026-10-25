@@ -676,7 +676,7 @@ describe('home and privacy pages', () => {
     expect(screen.getByRole('link', { name: 'Open collection review' }).getAttribute('href')).toBe('/collection');
   });
 
-  it('the header links all three tools under the home-tile names and marks this page; the footer does not link the tool', () => {
+  it('the header links all four tools under the home-tile names and marks this page; the footer does not link the tool', () => {
     window.history.pushState({}, '', '/collection');
     render(<CollectionPage engine={fakeEngine().engine} />);
     const links = [...document.querySelectorAll('header nav a')].map((a) => [a.getAttribute('href'), a.textContent, a.getAttribute('aria-current')]);
@@ -684,6 +684,7 @@ describe('home and privacy pages', () => {
       ['/check', 'Data check', null],
       ['/licence', 'Licence check', null],
       ['/collection', 'Collection review', 'page'],
+      ['/convert', 'Darwin Core converter', null],
       ['https://something-rare.com/?lang=en', 'Atlas', null],
     ]);
     expect(document.querySelector('footer a[href="/collection"]')).toBeNull();

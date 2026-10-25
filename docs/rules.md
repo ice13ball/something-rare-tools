@@ -101,3 +101,49 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CHEM-UNIT-PAIR | warning | C | molarMass.C = 12.011 g/mol<br>molarMass.N = 14.007 g/mol<br>molarMass.P = 30.974 g/mol<br>molarMass.Si = 28.085 g/mol | [CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "6 C carbon 12.011 ± 0.002"<br>[CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "7 N nitrogen 14.007 ± 0.001"<br>[CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "15 P phosphorus 30.974 ± 0.001"<br>[CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "14 Si silicon 28.085 ± 0.001"<a id="CHEM-UNIT-PAIR"></a> |
 | CHEM-DIC-GT-TA | warning | C | — | [TEOS-10 Manual, IOC Manuals and Guides 56](https://www.teos-10.org/pubs/TEOS-10_Manual.pdf), Appendix A.4, printed pp.80-81 (Standard Seawater: TA 2300 and DIC 2080 µmol/kg at SP = 35)<br>[Dickson, Sabine & Christian (2007), Guide to Best Practices for Ocean CO2 Measurements, PICES Special Publication 3](https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Handbook_2007/Guide_all_in_one.pdf), SOP 2 section 1, PDF p.39 (oceanic DIC 1800–2300 µmol/kg)<br>[Dickson, Sabine & Christian (2007), Guide to Best Practices for Ocean CO2 Measurements, PICES Special Publication 3](https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Handbook_2007/Guide_all_in_one.pdf), SOP 3a section 1, PDF p.53 (oceanic TA 2000–2500 µmol/kg)<a id="CHEM-DIC-GT-TA"></a> |
 | CHEM-RANGE | warning | C | temperature.min = -2.5 °C<br>temperature.max = 40 °C<br>salinity.min = 2 psu<br>salinity.max = 41 psu<br>pressure.min = -5 dbar<br>oxygen.min = -5 µmol/kg<br>oxygen.max = 600 µmol/kg<br>pH.min = 6.5 pH units<br>pH.max = 9 pH units | [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 6 "Global range test", p.12<br>[Argo Quality Control Manual for Dissolved Oxygen Concentration, v2.2 (15 Oct 2025)](https://archimer.ifremer.fr/doc/00354/46542/123086.pdf), section 2.2.1, Test 6 "Global range test", p.9<br>[GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Table 2.1 "Global Impossible Parameter Values" (row pH, unit listed as none), PDF p.64<a id="CHEM-RANGE"></a> |
+| CONV-SPLIT-UNDECIDED | error | B | — | —<a id="CONV-SPLIT-UNDECIDED"></a> |
+| CONV-QUANTITY-UNDECLARED | error | B | — | —<a id="CONV-QUANTITY-UNDECLARED"></a> |
+| CONV-COUNT-NOT-INTEGER | error | B | — | —<a id="CONV-COUNT-NOT-INTEGER"></a> |
+| CONV-NEGATIVE-QUANTITY | error | B | — | —<a id="CONV-NEGATIVE-QUANTITY"></a> |
+| CONV-SAMPLE-CODE-MISSING | error | B | — | —<a id="CONV-SAMPLE-CODE-MISSING"></a> |
+| CONV-ID-DUPLICATE | error | B | — | [OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_eventids.R), check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")<br>[EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."<a id="CONV-ID-DUPLICATE"></a> |
+| CONV-TAB-IN-VALUE | error | B | — | [OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)](https://manual.obis.org/common_qc.html), "Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"<a id="CONV-TAB-IN-VALUE"></a> |
+| CONV-TEXT-IN-TAXON-CELL | warning | B | — | —<a id="CONV-TEXT-IN-TAXON-CELL"></a> |
+| CONV-TAXON-SAME-EVENT | warning | B | — | —<a id="CONV-TAXON-SAME-EVENT"></a> |
+| CONV-NA-SKIPPED | info | B | — | —<a id="CONV-NA-SKIPPED"></a> |
+| CONV-ZERO-SKIPPED | info | B | — | [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")<a id="CONV-ZERO-SKIPPED"></a> |
+| CONV-SAMPLE-CONFLICT | error | B | — | —<a id="CONV-SAMPLE-CONFLICT"></a> |
+| CONV-NERC-UNKNOWN | warning | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-NERC-UNKNOWN"></a> |
+| CONV-NERC-UNIT-MISMATCH | warning | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-NERC-UNIT-MISMATCH"></a> |
+| CONV-UNIT-NO-P06 | warning | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-UNIT-NO-P06"></a> |
+| CONV-DEPTH-UNIT | error | B | — | —<a id="CONV-DEPTH-UNIT"></a> |
+| CONV-EFFORT-INVALID | error | B | — | —<a id="CONV-EFFORT-INVALID"></a> |
+| CONV-EFFORT-VALUE-INVALID | error | B | — | —<a id="CONV-EFFORT-VALUE-INVALID"></a> |
+| CONV-NO-TAXON | error | B | — | —<a id="CONV-NO-TAXON"></a> |
+| CONV-SUMMARY-ROW-SKIPPED | info | B | — | —<a id="CONV-SUMMARY-ROW-SKIPPED"></a> |
+| CONV-EML-MISSING | error | B | — | —<a id="CONV-EML-MISSING"></a> |
+| CONV-LICENCE-UNSET | error | B | — | —<a id="CONV-LICENCE-UNSET"></a> |
+| CONV-BASIS-UNSET | error | B | — | —<a id="CONV-BASIS-UNSET"></a> |
+| CONV-EMOF-ORPHAN | error | B | — | —<a id="CONV-EMOF-ORPHAN"></a> |
+| CONV-EMOF-EVENT-MISMATCH | error | B | — | —<a id="CONV-EMOF-EVENT-MISMATCH"></a> |
+| CONV-EMOF-VALUE-EMPTY | error | B | — | —<a id="CONV-EMOF-VALUE-EMPTY"></a> |
+| CONV-EMOF-TYPE-EMPTY | error | B | — | —<a id="CONV-EMOF-TYPE-EMPTY"></a> |
+| CONV-COLUMN-NOT-EXPORTED | warning | B | — | —<a id="CONV-COLUMN-NOT-EXPORTED"></a> |
+| CONV-NAMEID-MISSING | warning | B | — | —<a id="CONV-NAMEID-MISSING"></a> |
+| CONV-WORMS-UNDECIDED | error | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-UNDECIDED"></a> |
+| CONV-WORMS-NO-MATCH | warning | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-NO-MATCH"></a> |
+| CONV-WORMS-NOT-MARINE | warning | B | — | —<a id="CONV-WORMS-NOT-MARINE"></a> |
+| CONV-NAMEID-INCOMPLETE | warning | B | — | —<a id="CONV-NAMEID-INCOMPLETE"></a> |
+| CONV-NAMEID-CONFLICT | warning | B | — | —<a id="CONV-NAMEID-CONFLICT"></a> |
+| CONV-NO-SAMPLING-DESCRIPTOR | warning | B | — | [EMODnet Biocheck (R), R/checkdataset.R lines 562-566 and data/BODCeffort (master 701e6e7, 2026-10-08)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/R/checkdataset.R), if (sum(grepl(paste(BODCeffort, collapse="\|"), unique(eMoF$measurementTypeID))) == 0) -> level "warning", field "measurementType", message "No sampling descriptors/effort present"<a id="CONV-NO-SAMPLING-DESCRIPTOR"></a> |
+| CONV-DEVICE-MISSING | warning | B | — | —<a id="CONV-DEVICE-MISSING"></a> |
+| CONV-MESH-INVALID | error | B | — | —<a id="CONV-MESH-INVALID"></a> |
+| CONV-NAMEID-APHIA-LIKE | warning | B | — | —<a id="CONV-NAMEID-APHIA-LIKE"></a> |
+| CONV-LICENCE-DIFFERS | warning | B | — | —<a id="CONV-LICENCE-DIFFERS"></a> |
+| CONV-PROFILE-STATION-UNMATCHED | warning | B | — | —<a id="CONV-PROFILE-STATION-UNMATCHED"></a> |
+| CONV-PROFILE-STATION-FAR | warning | B | — | —<a id="CONV-PROFILE-STATION-FAR"></a> |
+| CONV-PROFILE-STATION-CAST-MATCHED | info | B | — | —<a id="CONV-PROFILE-STATION-CAST-MATCHED"></a> |
+| CONV-PANGAEA-NAMES-FALLBACK | info | B | — | —<a id="CONV-PANGAEA-NAMES-FALLBACK"></a> |
+| CONV-PROFILE-LEVEL-INCOMPLETE | error | B | — | —<a id="CONV-PROFILE-LEVEL-INCOMPLETE"></a> |
+| CONV-PROFILE-PRESSURE-NO-UNIT | warning | B | — | —<a id="CONV-PROFILE-PRESSURE-NO-UNIT"></a> |
+| CONV-PROFILE-NO-STATION | error | B | — | —<a id="CONV-PROFILE-NO-STATION"></a> |

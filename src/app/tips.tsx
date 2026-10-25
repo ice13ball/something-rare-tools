@@ -190,7 +190,8 @@ const DEFS = {
   indexCheck: { label: 'index.card.title' },
   indexLicence: { label: 'index.licence.title' },
   indexCollection: { label: 'index.collection.title' },
-  // /convert (hidden until its reveal)
+  indexConvert: { label: 'index.convert.title' },
+  // /convert
   convertIntro: { label: 'convert.title' },
   convertRoles: { label: 'mapping.role', values: { roles: convertRolesList } },
   convertPivot: { label: 'convert.pivot.title', values: { maxPairs: () => String(MAX_PAIRS) } },
