@@ -3,7 +3,7 @@
 import { dwcTermOf, proposeColumns, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
-import { conceptVariable } from './vocab';
+import { conceptVariable, isAbundanceUnit } from './vocab';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 
@@ -288,7 +288,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     // a sum or total column that the shared proposer took for a measured variable (and that is not a standard variable): it adds up other columns,
     // so converting it would count the same individuals twice. It starts as ignored, with its reason; the user can still give it another meaning,
     // and then it is their decision. A column of presence marks keeps the shared role (ignore); the page says why it is not a taxon candidate.
-    if (summaryHeader && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && conceptVariable(p.role.variable) === undefined && p.role.p01 === undefined) {
+    if (summaryHeader && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
       p.role = { kind: 'ignore' };
       p.confidence = 'low';
       why(p, 'summary-total');
@@ -306,7 +306,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       continue;
     }
     // wide sheet: a numeric column named like nothing we know is a taxon candidate; confirmed in bulk
-    if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && conceptVariable(p.role.variable) === undefined && p.role.p01 === undefined) {
+    if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
       p.role = { kind: 'taxon', header: true };
       p.confidence = 'low';
       why(p, 'taxon-numeric');

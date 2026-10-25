@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { policyOf } from '../../src/core/convert/policy';
 import { pickLabel, suggestType, unitContradictsConcept } from '../../src/core/convert/nerc';
 import type { NercDecisions } from '../../src/core/convert/nerc';
-import { VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, conceptVariable, labelDimension, nercUri, unitDimension } from '../../src/core/convert/vocab';
+import { VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, conceptVariable, foldUnit, isAbundanceUnit, labelDimension, nercUri, unitDimension } from '../../src/core/convert/vocab';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import { LANGS } from '../../src/core/types';
 import { exportSheet, objects, readBack } from './exportHelpers';
@@ -345,5 +345,61 @@ describe('CONV-NERC-UNKNOWN says the NVS search works with English words', () =>
       for (const w of ['temperature', 'salinity', 'chlorophyll']) expect(text, `${lang} ${w}`).toContain(w);
       expect(text.length, lang).toBeLessThanOrEqual(340); // the rendered text holds the quotation marks of the name; the registry text itself is limited to 330 by rules.test.ts
     }
+  });
+});
+
+describe('review fixes', () => {
+  it('M1: a per-mass unit with no verified alias never makes a water-body oxygen concept PROPOSED (offered at most), in English and in Polish', () => {
+    for (const name of ['oxygen', 'tlen', 'Tlen [µg/g]', 'tlen rozpuszczony', 'Sauerstoff', 'oxygène']) {
+      for (const unit of ['µg/g', 'ng/g', 'mg/kg', 'mmol/kg', 'ug g-1', 'µg g⁻¹', 'mg kg⁻¹', 'µg/g DW']) {
+        const s = suggestType(name, unit);
+        expect(s.proposed, `${name} ${unit}`).toBeUndefined();
+        expect(codes(s.offered), `${name} ${unit}`).toEqual(['DOXMZZXX']); // the per-volume concept is hidden
+      }
+    }
+    // the verified per-mass alias still proposes, as before
+    expect(suggestType('tlen', 'µmol/kg').proposed?.code).toBe('DOXMZZXX');
+    expect(suggestType('oxygen', 'µmol/L').proposed?.code).toBe('DOXYZZXX');
+    // a nutrient and chlorophyll per unit mass: nothing proposed, nothing per volume offered
+    expect(suggestType('azotany', 'mg/kg')).toEqual({ offered: [] });
+    expect(suggestType('chlorofil', 'ng/g')).toEqual({ offered: [] });
+  });
+
+  it('L1: the page cannot relabel a verified code by calling it an NVS result; a code that is not on the verified list keeps the page label', async () => {
+    const pm = ix('Tlen [µmol/kg]');
+    // DOXYZZXX is per unit volume: on µmol/kg it warns, whatever label the page sends with source nvs
+    const e = await run({ [String(pm)]: { type: pick('P01', 'DOXYZZXX', 'nvs', 'Temperature of the water body') } });
+    expect(mismatches(e).map((f) => f.params.code)).toEqual(['DOXYZZXX']);
+    // NTRAZZXX is per unit volume: on µmol/L a page label "per unit mass" gives no false warning
+    const e2 = await run({ [String(ix('Azotany [µmol/L]'))]: { type: pick('P01', 'NTRAZZXX', 'nvs', 'Concentration of nitrate per unit mass of the water body') } });
+    expect(mismatches(e2)).toEqual([]);
+    expect(pickLabel(pick('P01', 'NTRAZZXX', 'nvs', 'x per unit mass'))).toMatch(/per unit volume/);
+    expect(pickLabel(pick('P01', 'SCLAFLT3', 'nvs', 'x per unit dry weight'))).toBe('x per unit dry weight');
+  });
+
+  it('L2: superscript digits and minus, and a dry / wet weight marker', () => {
+    for (const u of ['µg g⁻¹', 'mg kg⁻¹', 'µg·g⁻¹', 'µg/g DW', 'µg/g dw', 'mg/kg WW', 'ng g-1 dw', 'µg g⁻¹ DW']) expect(unitDimension(u), u).toBe('mass');
+    for (const u of ['µg L⁻¹', 'mg m⁻³', 'µg/L', 'mg/m³']) expect(unitDimension(u), u).toBe('volume');
+    expect(foldUnit('µg L⁻¹')).toBe('ug/l');
+    expect(foldUnit('mg m⁻³')).toBe('mg/m3');
+  });
+
+  it('L3: a very long NVS label is cut, not dropped: the dimension phrase in it still raises the warning', async () => {
+    const col = String(ix('Chlorofil a [mg/m3]'));
+    const long = `Concentration of x per unit dry weight of sediment ${'filler '.repeat(400)}`;
+    expect(long.length).toBeGreaterThan(2000);
+    const e = await run({ [col]: { type: pick('P01', 'SCLAFLT3', 'nvs', long) } });
+    expect(mismatches(e).length).toBe(1);
+  });
+
+  it('L4: with an abundance unit the synonym exemption does not apply: the column is a taxon candidate again', () => {
+    const file = fileOf([...W1_HEADER, 'Temperatura [ind/m3]', 'Tlen [ind/m3]', 'Temperatura [°C]', 'Tlen [µmol/L]'], [[...W1_ROWS[0], 4, 5, 7.2, 310]]);
+    const roles = Object.fromEntries(mappingOf(file).columns.map((c) => [c.header, c.role]));
+    expect(roles['Temperatura [ind/m3]']).toMatchObject({ kind: 'taxon', header: true });
+    expect(roles['Tlen [ind/m3]']).toMatchObject({ kind: 'taxon', header: true });
+    expect(roles['Temperatura [°C]']).toMatchObject({ kind: 'variable' });
+    expect(roles['Tlen [µmol/L]']).toMatchObject({ kind: 'variable' });
+    for (const u of ['ind/m3', 'ind./m3', 'ind m-3', 'ind·m⁻³', '#/m3', 'n/L', 'cells/L', 'cells L-1', 'ind']) expect(isAbundanceUnit(u), u).toBe(true);
+    for (const u of ['°C', 'µmol/L', 'nmol/L', 'nmol L-1', 'mg/m3', 'PSU', '', undefined]) expect(isAbundanceUnit(u), String(u)).toBe(false);
   });
 });

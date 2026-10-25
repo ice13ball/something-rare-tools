@@ -404,12 +404,12 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertNerc.does': `Shows the measured-variable columns of your sheets and lets you confirm, for each one, which NERC concept and unit identify it.`,
   'tip.convertNerc.logic': `• Each such column becomes one measurement on every sample event: measurementType is the variable's name, measurementValue the number as in the sheet, measurementUnit the unit as shown in the unit field of the column in the table above (the tool proposes it from the header and you can edit it), not necessarily as typed in the header. Text, empty and NA cells make none.
 • measurementTypeID (a P01 concept) and measurementUnitID (a P06 unit) are written only for the choice you make here for that column. Nothing is chosen for you.
-• A variable without a chosen concept gets a warning to accept (CONV-NERC-UNKNOWN); a unit without a chosen unit concept gets another (CONV-UNIT-NO-P06).
+• A variable without a chosen concept gets a warning to accept (CONV-NERC-UNKNOWN); a unit without a chosen unit concept gets another (CONV-UNIT-NO-P06); a chosen concept whose label contradicts the column's unit gets a third (CONV-NERC-UNIT-MISMATCH).
 • A unit is never converted. A pressure column is not written.`,
   'tip.convertNercChoice.does': `Where you choose the concept and the unit for a column, or leave it without an ID.`,
   'tip.convertNercChoice.logic': `• "No ID" is where every column starts. A suggestion is only shown in the list; it counts when you choose it, or when you press the button that confirms the suggestions.
 • Suggested: a generic concept that names the quantity and no method, checked in the NERC vocabulary (it is current, not deprecated). Offered: a concept that names a method, a phase or a narrower quantity; it is never suggested, and you choose it only if it is what you measured.
-• Oxygen depends on the unit: {oxygen}. The suggestion follows the dimension of the unit (per volume or per mass); with another unit nothing is suggested.
+• Oxygen depends on the unit: {oxygen}. A concept defined per volume or per mass is suggested only when the dimension of the unit is known from the verified unit list; with any other unit it is only offered.
 • Only a P01 concept (the quantity) or a P06 unit can be written, and a deprecated one never can.
 • A choice belongs to the column, its variable and its unit: if you change the unit or the meaning of the column, the choice is dropped and has to be made again.`,
   'tip.convertNvsOptIn.does': `Lets you search the NERC vocabulary server (NVS) for a concept or a unit that the lists do not offer. It is off, and sends nothing, until you press the search button of a column.`,
@@ -825,12 +825,12 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertNerc.does': `Pokazuje kolumny ze zmierzonymi wielkościami z Twoich arkuszy i pozwala potwierdzić dla każdej, jakie pojęcie i jednostka NERC ją określają.`,
   'tip.convertNerc.logic': `• Każda taka kolumna staje się jednym pomiarem przy każdym zdarzeniu próbki: measurementType to nazwa wielkości, measurementValue liczba taka jak w arkuszu, measurementUnit jednostka tak, jak pokazuje ją pole jednostki kolumny w tabeli powyżej (narzędzie proponuje ją z nagłówka, a Ty możesz ją zmienić), niekoniecznie tak, jak wpisano w nagłówku. Komórki z tekstem, puste i NA nie tworzą pomiaru.
 • measurementTypeID (pojęcie P01) i measurementUnitID (jednostka P06) są zapisywane tylko dla wyboru, który tu zrobisz dla danej kolumny. Nic nie jest wybierane za Ciebie.
-• Wielkość bez wybranego pojęcia dostaje ostrzeżenie do zaakceptowania (CONV-NERC-UNKNOWN); jednostka bez wybranego pojęcia jednostki dostaje kolejne (CONV-UNIT-NO-P06).
+• Wielkość bez wybranego pojęcia dostaje ostrzeżenie do zaakceptowania (CONV-NERC-UNKNOWN); jednostka bez wybranego pojęcia jednostki dostaje kolejne (CONV-UNIT-NO-P06); wybrane pojęcie, którego opis przeczy jednostce kolumny, dostaje trzecie (CONV-NERC-UNIT-MISMATCH).
 • Jednostka nigdy nie jest przeliczana. Kolumna z ciśnieniem nie jest zapisywana.`,
   'tip.convertNercChoice.does': `Tu wybierasz pojęcie i jednostkę dla kolumny albo zostawiasz ją bez identyfikatora.`,
   'tip.convertNercChoice.logic': `• „Bez identyfikatora” to punkt wyjścia każdej kolumny. Podpowiedź jest tylko pokazana na liście; liczy się, gdy ją wybierzesz albo naciśniesz przycisk potwierdzający podpowiedzi.
 • Podpowiedź: pojęcie ogólne, które nazywa wielkość, a nie metodę, sprawdzone w słowniku NERC (jest aktualne, nie przestarzałe). Do wyboru: pojęcie, które wskazuje metodę, fazę albo węższą wielkość; nigdy nie jest podpowiadane i wybierasz je tylko wtedy, gdy to jest to, co zmierzono.
-• Tlen zależy od jednostki: {oxygen}. Podpowiedź wynika z wymiaru jednostki (na objętość albo na masę); przy innej jednostce nic nie jest podpowiadane.
+• Tlen zależy od jednostki: {oxygen}. Pojęcie określone na objętość albo na masę jest podpowiadane tylko wtedy, gdy wymiar jednostki wynika ze zweryfikowanej listy jednostek; przy każdej innej jednostce jest tylko oferowane.
 • Zapisać można tylko pojęcie P01 (wielkość) albo jednostkę P06, a przestarzałego nigdy.
 • Wybór należy do kolumny, jej wielkości i jednostki: jeśli zmienisz jednostkę albo znaczenie kolumny, wybór zostaje odrzucony i trzeba go zrobić od nowa.`,
   'tip.convertNvsOptIn.does': `Pozwala szukać w serwerze słownika NERC (NVS) pojęcia lub jednostki, których nie ma na listach. Jest wyłączone i niczego nie wysyła, dopóki nie naciśniesz przycisku wyszukiwania przy kolumnie.`,
@@ -1244,12 +1244,12 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertNerc.does': `Zeigt die Messgrößen-Spalten Ihrer Blätter und lässt Sie für jede bestätigen, welcher NERC-Begriff und welche Einheit sie bezeichnen.`,
   'tip.convertNerc.logic': `• Jede solche Spalte wird zu einer Messung bei jedem Probenereignis: measurementType ist der Name der Größe, measurementValue die Zahl wie im Blatt, measurementUnit die Einheit, wie sie das Einheitenfeld der Spalte in der Tabelle oben zeigt (das Werkzeug schlägt sie aus der Überschrift vor, und Sie können sie ändern), nicht unbedingt so, wie sie in der Überschrift steht. Text-, leere und NA-Zellen ergeben keine.
 • measurementTypeID (ein P01-Begriff) und measurementUnitID (eine P06-Einheit) werden nur für die Wahl geschrieben, die Sie hier für diese Spalte treffen. Nichts wird für Sie gewählt.
-• Eine Größe ohne gewählten Begriff erhält eine Warnung zum Akzeptieren (CONV-NERC-UNKNOWN); eine Einheit ohne gewählten Einheitenbegriff erhält eine weitere (CONV-UNIT-NO-P06).
+• Eine Größe ohne gewählten Begriff erhält eine Warnung zum Akzeptieren (CONV-NERC-UNKNOWN); eine Einheit ohne gewählten Einheitenbegriff erhält eine weitere (CONV-UNIT-NO-P06); ein gewählter Begriff, dessen Bezeichnung der Einheit der Spalte widerspricht, erhält eine dritte (CONV-NERC-UNIT-MISMATCH).
 • Eine Einheit wird nie umgerechnet. Eine Druckspalte wird nicht geschrieben.`,
   'tip.convertNercChoice.does': `Hier wählen Sie Begriff und Einheit für eine Spalte oder lassen sie ohne Kennung.`,
   'tip.convertNercChoice.logic': `• „Ohne Kennung“ ist der Ausgangspunkt jeder Spalte. Ein Vorschlag wird nur in der Liste gezeigt; er zählt, wenn Sie ihn wählen oder die Taste drücken, die die Vorschläge bestätigt.
 • Vorschlag: ein allgemeiner Begriff, der die Größe und keine Methode nennt, im NERC-Vokabular geprüft (er ist aktuell, nicht veraltet). Zur Auswahl: ein Begriff, der eine Methode, eine Phase oder eine engere Größe nennt; er wird nie vorgeschlagen, und Sie wählen ihn nur, wenn er das ist, was Sie gemessen haben.
-• Sauerstoff hängt von der Einheit ab: {oxygen}. Der Vorschlag folgt der Dimension der Einheit (pro Volumen oder pro Masse); bei einer anderen Einheit wird nichts vorgeschlagen.
+• Sauerstoff hängt von der Einheit ab: {oxygen}. Ein auf Volumen oder Masse bezogener Begriff wird nur vorgeschlagen, wenn die Dimension der Einheit aus der geprüften Einheitenliste bekannt ist; bei jeder anderen Einheit wird er nur angeboten.
 • Nur ein P01-Begriff (die Größe) oder eine P06-Einheit kann geschrieben werden, ein veralteter nie.
 • Eine Wahl gehört zur Spalte, ihrer Größe und ihrer Einheit: Ändern Sie die Einheit oder die Bedeutung der Spalte, wird die Wahl verworfen und muss neu getroffen werden.`,
   'tip.convertNvsOptIn.does': `Lässt Sie im NERC-Vokabularserver (NVS) nach einem Begriff oder einer Einheit suchen, die die Listen nicht bieten. Es ist aus und sendet nichts, bis Sie die Such-Taste einer Spalte drücken.`,
@@ -1663,12 +1663,12 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertNerc.does': `Montre les colonnes de grandeurs mesurées de vos feuilles et vous laisse confirmer, pour chacune, quel concept et quelle unité NERC la désignent.`,
   'tip.convertNerc.logic': `• Chaque colonne de ce type devient une mesure sur chaque événement d'échantillon : measurementType est le nom de la grandeur, measurementValue le nombre comme dans la feuille, measurementUnit l'unité telle que la montre le champ d'unité de la colonne dans le tableau ci-dessus (l'outil la propose à partir de l'en-tête et vous pouvez la modifier), pas forcément telle qu'écrite dans l'en-tête. Les cellules de texte, vides et NA n'en produisent pas.
 • measurementTypeID (un concept P01) et measurementUnitID (une unité P06) ne sont écrits que pour le choix que vous faites ici pour cette colonne. Rien n'est choisi à votre place.
-• Une grandeur sans concept choisi reçoit un avertissement à accepter (CONV-NERC-UNKNOWN) ; une unité sans concept d'unité choisi en reçoit un autre (CONV-UNIT-NO-P06).
+• Une grandeur sans concept choisi reçoit un avertissement à accepter (CONV-NERC-UNKNOWN) ; une unité sans concept d'unité choisi en reçoit un autre (CONV-UNIT-NO-P06) ; un concept choisi dont le libellé contredit l'unité de la colonne en reçoit un troisième (CONV-NERC-UNIT-MISMATCH).
 • Une unité n'est jamais convertie. Une colonne de pression n'est pas écrite.`,
   'tip.convertNercChoice.does': `C'est ici que vous choisissez le concept et l'unité d'une colonne, ou que vous la laissez sans identifiant.`,
   'tip.convertNercChoice.logic': `• « Sans identifiant » est le point de départ de chaque colonne. Une suggestion est seulement montrée dans la liste ; elle compte lorsque vous la choisissez, ou lorsque vous appuyez sur le bouton qui confirme les suggestions.
 • Suggestion : un concept général qui nomme la grandeur et aucune méthode, vérifié dans le vocabulaire NERC (il est en vigueur, non obsolète). Au choix : un concept qui indique une méthode, une phase ou une grandeur plus étroite ; il n'est jamais suggéré, et vous ne le choisissez que si c'est ce que vous avez mesuré.
-• L'oxygène dépend de l'unité : {oxygen}. La suggestion suit la dimension de l'unité (par volume ou par masse) ; avec une autre unité, rien n'est suggéré.
+• L'oxygène dépend de l'unité : {oxygen}. Un concept rapporté au volume ou à la masse n'est suggéré que si la dimension de l'unité est connue par la liste d'unités vérifiées ; avec toute autre unité, il est seulement proposé dans la liste.
 • Seul un concept P01 (la grandeur) ou une unité P06 peut être écrit, et jamais un concept obsolète.
 • Un choix appartient à la colonne, à sa grandeur et à son unité : si vous changez l'unité ou le sens de la colonne, le choix est abandonné et doit être refait.`,
   'tip.convertNvsOptIn.does': `Vous permet de chercher dans le serveur de vocabulaire NERC (NVS) un concept ou une unité que les listes ne proposent pas. C'est désactivé et rien n'est envoyé tant que vous n'appuyez pas sur le bouton de recherche d'une colonne.`,
