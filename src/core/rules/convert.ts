@@ -2,18 +2,16 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals } from '../i18n/plural';
-import { formatLines } from '../report';
+import { formatLines } from '../lines';
 import { CITE } from './citations';
 import type { RuleSpec } from './spec';
 
 /*
  * Rules of the converter (/convert, src/core/convert), category 'B', raised only by src/core/convert.
  *
- * ⚠️ A SEPARATE REGISTRY, on purpose. These rules are NOT in registry.ts SPECS, so they are in no public listing: docs/rules.md (generated
- * from RULES), the rule links of /check, the tip rule data (src/app/tipRules.tsx), ROLE_FEEDS and the "exactly 90 rules" table test do
- * not know them, and `getRule()` / `makeFinding()` / `renderPlain()` of /check throw on a CONV id. The converter page is hidden until its
- * reveal; adding these ids to RULES would put the converter's wording on public pages before then. At the reveal the list can be merged into
- * registry.ts (one line) and docs/rules.md regenerated. Use makeConvertFinding / renderConvertPlain / renderConvertTechnical below.
+ * These rules are part of the public registry (registry.ts SPECS, so docs/rules.md lists them), and /check never raises one: nothing under
+ * src/core/checks raises a CONV id. The converter renders its findings with makeConvertFinding / renderConvertPlain / renderConvertTechnical
+ * below, not with renderPlain of /check, because its texts carry the plural tokens ({+count:...}, {+lineCount:...}) and the profile variants.
  *
  * Declared params per rule (file, sheet, lines, field, value are generic):
  *   CONV-SPLIT-UNDECIDED       count            value = an example name; count = names whose split is not approved

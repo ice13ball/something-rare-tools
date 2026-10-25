@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-// The hidden /convert page (stage 0): headers, the per-path CSP hook, and the guarantee that nothing else changed.
+// The public /convert page (revealed): headers, the per-path CSP, and the guarantee that no other page changed.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { buildCsp, DATA_HOSTS, isAllowedHost } from '../../config/hosts.js';
 import { createApp } from '../../server/index.js';
-import { HIDDEN_PATHS, PAGE_CONNECT_HOSTS, prepareHtml } from '../../server/headers.js';
+import { PAGE_CONNECT_HOSTS, prepareHtml } from '../../server/headers.js';
 
 const DIST = join(__dirname, '..', 'fixtures', 'dist');
 const make = (over: Partial<Parameters<typeof createApp>[0]> = {}) => createApp({ distDir: DIST, log: () => {}, ...over });
@@ -67,28 +67,31 @@ describe('every page keeps its exact policy', () => {
   }
 });
 
-describe('/convert is hidden', () => {
-  it('is registered as hidden, with WoRMS and NVS as its only extra connect hosts (stage 5)', () => {
-    expect(HIDDEN_PATHS).toEqual(['/convert']);
+describe('/convert is a public page with its own policy', () => {
+  it('has WoRMS and NVS as its only extra connect hosts, and there is no list of hidden pages any more', async () => {
     expect(PAGE_CONNECT_HOSTS).toEqual({ '/convert': ['www.marinespecies.org', 'vocab.nerc.ac.uk'] });
+    const headers = await import('../../server/headers.js');
+    expect(Object.keys(headers)).not.toContain('HIDDEN_PATHS');
   });
 
-  it('answers with noindex in the header and the robots meta in the HTML, with the site flag on or off', async () => {
-    for (const noindex of [true, false]) {
-      const res = await request(make({ noindex })).get('/convert');
-      expect(res.status).toBe(200);
-      expect(res.text).toContain('fixture-page-convert');
-      expect(res.headers['x-robots-tag'], String(noindex)).toBe('noindex, nofollow');
-      expect(res.text, String(noindex)).toMatch(/<meta name="robots" content="noindex, nofollow" \/>/);
-      expect(res.headers['content-type']).toMatch(/^text\/html/);
-    }
+  it('is announced like every other page: no robots header and no robots meta with the site flag off; both, like every page, with the flag on', async () => {
+    const off = await request(make({ noindex: false })).get('/convert');
+    expect(off.status).toBe(200);
+    expect(off.text).toContain('fixture-page-convert');
+    expect(off.headers['x-robots-tag']).toBeUndefined();
+    expect(off.text).not.toMatch(/name="robots"/);
+    expect(off.headers['content-type']).toMatch(/^text\/html/);
+    const on = await request(make({ noindex: true })).get('/convert');
+    expect(on.headers['x-robots-tag']).toBe('noindex, nofollow');
+    expect(on.text).toMatch(/<meta name="robots" content="noindex,nofollow" \/>/);
   });
 
-  it('/convert/ answers 301 to /convert, with the same noindex header and policy', async () => {
+  it('/convert/ answers 301 to /convert, with the page\'s own policy and no robots header', async () => {
     const res = await request(make({ noindex: false })).get('/convert/');
     expect(res.status).toBe(301);
     expect(res.headers.location).toBe('/convert');
-    expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+    expect(res.headers['x-robots-tag']).toBeUndefined();
+    expect(res.headers['content-security-policy']).toBe(CONVERT_CSP);
   });
 
   it('pins the exact policy of /convert (stage 4): the connect-src literal and the rest of the baseline', () => {
@@ -117,10 +120,10 @@ describe('/convert is hidden', () => {
     for (const h of ['x-content-type-options', 'referrer-policy', 'strict-transport-security', 'permissions-policy']) expect(a.headers[h], h).toBe(b.headers[h]);
   });
 
-  it('is not in the sitemap and not in robots.txt (no Disallow line either)', async () => {
+  it('is in the sitemap, and robots.txt stays open (no Disallow line, no mention)', async () => {
     const app = make({ noindex: false });
     const sitemap = await request(app).get('/sitemap.xml');
-    expect(sitemap.text).not.toMatch(/convert/);
+    expect(sitemap.text).toContain('<loc>https://tools.something-rare.com/convert</loc>');
     const robots = await request(app).get('/robots.txt');
     expect(robots.text).not.toMatch(/convert/i);
     expect(robots.text).not.toMatch(/disallow/i);
@@ -154,9 +157,11 @@ describe('prepareHtml', () => {
     expect(prepareHtml(html, false)).not.toMatch(/robots/);
     expect(prepareHtml(html, true)).toBe(html);
   });
-  it('the real source of the hidden page carries the tag, and the other sources carry none', () => {
+  it('no page source carries a robots tag, /convert included (the build adds it only while the site is noindex)', () => {
     const root = join(__dirname, '..', '..');
-    expect(readFileSync(join(root, 'convert', 'index.html'), 'utf8')).toMatch(/<meta name="robots" content="noindex, nofollow" \/>/);
-    expect(prepareHtml(readFileSync(join(root, 'convert', 'index.html'), 'utf8'), true)).toMatch(/name="robots"/);
+    for (const p of ['index.html', 'check', 'licence', 'collection', 'convert', 'privacy']) {
+      const file = p.endsWith('.html') ? p : join(p, 'index.html');
+      expect(readFileSync(join(root, file), 'utf8'), file).not.toMatch(/name="robots"/);
+    }
   });
 });

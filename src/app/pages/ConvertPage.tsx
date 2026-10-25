@@ -77,7 +77,7 @@ function nodeLine(e: EventRec): string {
 
 /**
  * /convert: drop files, check the columns, decide the shape and what the numbers mean, approve taxon splits, see the event tree, describe the dataset,
- * read the summary, accept the warnings and export the Darwin Core Archive (stage 2). The page is hidden (in no menu, index card or sitemap). Files are
+ * read the summary, accept the warnings and export the Darwin Core Archive (stage 2). Files are
  * read and the archive is built in the browser by the convert worker; nothing is stored, and nothing is sent anywhere unless the user ticks the WoRMS opt-in AND presses its lookup button (stage 4: only the taxon names, src/app/optins/worms.ts). All state lives here and starts
  * empty for each upload; only a companion file dropped with the data can pre-tick the full-species-list and the station-prefix choices, and (stage 3)
  * dropped metadata files fill empty fields of the description. The export button works only when nothing blocks, the description is complete and every
@@ -545,7 +545,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
 
   return (
-    <Layout titleKey="convert.title">
+    <Layout titleKey="convert.docTitle">
       <h1>{t('convert.title')}</h1>
       <div className="with-tip">
         <p className="lead">{t('convert.intro')}</p>

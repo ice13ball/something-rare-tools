@@ -13,11 +13,12 @@ export interface LayoutProps {
   children: React.ReactNode;
 }
 
-/** All three tools, with the same names as the home tiles; the current page is marked. */
+/** All the tools, with the same names as the home tiles; the current page is marked. */
 const NAV_TOOLS = [
   ['/check', 'index.card.title'],
   ['/licence', 'index.licence.title'],
   ['/collection', 'index.collection.title'],
+  ['/convert', 'index.convert.title'],
 ] as const;
 
 /** Brand header, main area, footer (privacy link, cookie settings, language switcher) and the cookie banner. */

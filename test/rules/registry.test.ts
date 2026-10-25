@@ -5,6 +5,7 @@ import { LANGS } from '../../src/core/types';
 import type { Severity } from '../../src/core/types';
 import { RULES, RULE_PARAMS, GENERIC_PARAMS, getRule, makeFinding, threshold } from '../../src/core/rules/registry';
 import { RULES as RULES_FROM_INDEX } from '../../src/core/rules';
+import { CONVERT_RULES } from '../../src/core/rules/convert';
 
 const EXPECTED: Record<string, [Severity, string]> = {
   'IN-NO-DATA-FILE': ['error', 'input'],
@@ -105,11 +106,19 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(90);
-    expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
-    for (const r of RULES) {
+    // the 90 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
+    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(90);
+    expect(ids.length).toBe(90 + CONVERT_RULES.length);
+    expect([...ids.filter((id) => !id.startsWith('CONV-'))].sort()).toEqual(Object.keys(EXPECTED).sort());
+    for (const r of RULES.filter((x) => !x.id.startsWith('CONV-'))) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
     }
+    for (const c of CONVERT_RULES) expect(RULES.find((r) => r.id === c.id)?.severity, c.id).toBe(c.severity);
+  });
+
+  it('CONV-* rules are the converter\'s and nothing under checks raises one', () => {
+    expect(CONVERT_RULES.length).toBe(46);
+    expect(RULES.filter((r) => r.id.startsWith('CONV-')).map((r) => r.id)).toEqual(CONVERT_RULES.map((r) => r.id));
   });
 
   it('index re-exports the same registry', () => {
