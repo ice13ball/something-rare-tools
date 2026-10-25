@@ -16,12 +16,15 @@
  *            - `file:<folder>/<path>` for every data file found up to two levels down (not under metadata/): per sheet, the layout
  *                                     the app proposes and the column proposals (index, header, role, confidence, reason).
  *          GOLDEN_DIFF_REPO   the checkout whose code is dumped (default: the repository this script is in). To compare a branch
- *                             with production, dump twice, once per checkout, e.g. a detached worktree of the base commit placed
- *                             inside the repository's own tree (so that it finds node_modules):
+ *                             with production, dump twice, once per checkout, e.g. a detached worktree of the base commit next to
+ *                             this one (it finds node_modules by walking up; a worktree elsewhere needs a node_modules link):
  *                               git worktree add --detach ../base-<commit> <commit>
  *                               GOLDEN_DIFF_MODE=dump GOLDEN_DIFF_OUT=/tmp/before.json GOLDEN_DIFF_REPO=../base-<commit> \
  *                                 npx vitest run --config vitest.golden-diff.config.ts
- *          GOLDEN_DIR         the golden directory (default /Users/ice13ball/data/sprawdzarka-golden).
+ *          GOLDEN_ROOT        the folder that HOLDS the dated golden folders (default /Users/ice13ball/data/sprawdzarka-golden).
+ *                             Not GOLDEN_DIR: the test suite and deploy.sh give that name to ONE dated folder, which would dump
+ *                             nothing. With GOLDEN_DIR set and GOLDEN_ROOT not, the run fails and says so. A dump or a compare
+ *                             with 0 entries fails; a passing run prints "golden-diff: N entries" (add --reporter=verbose to be sure).
  *          GOLDEN_DIFF_OUT    required, and must lie OUTSIDE the repository (the golden data are private: a dump holds values from
  *                             them); GOLDEN_DIFF_ALLOW_IN_REPO=1 overrides the refusal, and the file must still never be committed.
  * compare  Prints every difference between two dumps (key, path, before, after; the first 40 per key, all with GOLDEN_DIFF_ALL=1)
@@ -31,20 +34,20 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { expect, it } from 'vitest';
+import { assertEntries, goldenRoot, isInsideRepo } from './golden-diff-guard';
 
 const SELF_REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_GOLDEN = '/Users/ice13ball/data/sprawdzarka-golden';
 const MAX_PER_KEY = 40;
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
 /* ---------- dump ---------- */
 
-async function dump(out: string, repo: string, goldenDir: string): Promise<void> {
+async function dump(out: string, repo: string, goldenDir: string): Promise<number> {
   const load = <T>(rel: string): Promise<T> => import(pathToFileURL(join(repo, rel)).href) as Promise<T>;
   const { runChecks } = await load<typeof import('../src/core/checks/run')>('src/core/checks/run.ts');
   const { decodeLandMask } = await load<typeof import('../src/core/geo/land')>('src/core/geo/land.ts');
@@ -112,9 +115,12 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<void>
       }
     }
   }
+  const count = Object.keys(result).length;
+  assertEntries(count, `the dump of ${goldenDir}`);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(result, null, 1));
-  console.log(`dumped ${Object.keys(result).length} entries from ${goldenDir} (code of ${repo}) to ${out}`);
+  process.stdout.write(`golden-diff: ${count} entries dumped from ${goldenDir} (code of ${repo}) to ${out}\n`);
+  return count;
 }
 
 /* ---------- compare ---------- */
@@ -142,12 +148,15 @@ function compare(beforePath: string, afterPath: string, all: boolean): number {
   const sha = (b: Buffer): string => createHash('sha256').update(b).digest('hex').slice(0, 16);
   console.log(`before ${beforePath}  sha256 ${sha(rawA)}  ${rawA.length} bytes`);
   console.log(`after  ${afterPath}  sha256 ${sha(rawB)}  ${rawB.length} bytes`);
+  const A = JSON.parse(rawA.toString('utf8')) as Record<string, Json>;
+  const B = JSON.parse(rawB.toString('utf8')) as Record<string, Json>;
+  process.stdout.write(`golden-diff: ${Object.keys(A).length} entries before, ${Object.keys(B).length} entries after\n`);
+  assertEntries(Object.keys(A).length, `the before dump ${beforePath}`);
+  assertEntries(Object.keys(B).length, `the after dump ${afterPath}`);
   if (rawA.equals(rawB)) {
     console.log('BYTE-IDENTICAL: no difference in any proposal, layout or finding.');
     return 0;
   }
-  const A = JSON.parse(rawA.toString('utf8')) as Record<string, Json>;
-  const B = JSON.parse(rawB.toString('utf8')) as Record<string, Json>;
   let total = 0;
   for (const key of [...new Set([...Object.keys(A), ...Object.keys(B)])].sort()) {
     if (!(key in A)) { console.log(`+ ${key}: only in after`); total++; continue; }
@@ -177,14 +186,12 @@ const need = (name: string): string => {
 it.runIf(MODE === 'dump')('dump', async () => {
   const repo = resolve(env.GOLDEN_DIFF_REPO || SELF_REPO);
   const out = resolve(need('GOLDEN_DIFF_OUT'));
-  const golden = resolve(env.GOLDEN_DIR || DEFAULT_GOLDEN);
-  for (const r of new Set([repo, SELF_REPO])) {
-    if ((out + sep).startsWith(r + sep) && env.GOLDEN_DIFF_ALLOW_IN_REPO !== '1') {
-      throw new Error(`refusing to write ${out} inside the repository ${r}: a dump holds values of the private golden set. Choose a path outside it (e.g. /tmp), or set GOLDEN_DIFF_ALLOW_IN_REPO=1.`);
-    }
+  const golden = goldenRoot(env);
+  if (isInsideRepo(out, [repo, SELF_REPO]) && env.GOLDEN_DIFF_ALLOW_IN_REPO !== '1') {
+    throw new Error(`refusing to write ${out} inside a repository (${repo}): a dump holds values of the private golden set. Choose a path outside it (e.g. /tmp), or set GOLDEN_DIFF_ALLOW_IN_REPO=1.`);
   }
-  if (!existsSync(golden) || !statSync(golden).isDirectory()) throw new Error(`the golden directory ${golden} does not exist (set GOLDEN_DIR)`);
-  await dump(out, repo, golden);
+  const count = await dump(out, repo, golden);
+  expect(count, `golden-diff: ${count} entries dumped`).toBeGreaterThan(0);
 }, 600_000);
 
 it.runIf(MODE === 'compare')('compare', () => {
