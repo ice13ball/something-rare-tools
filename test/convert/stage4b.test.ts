@@ -108,6 +108,25 @@ describe('a name with a sheet ID on any row', () => {
     expect(idsOf(approved, 'Calanus finmarchicus')).toEqual([LSID(111), undefined]);
   });
 
+  it('an approved split with an EDITED name: the row is written under the edited name with its sheet ID, and that name is not sent for its other rows', () => {
+    const rows = [row('a', 'Calanus finmarchicus CV', 111), row('b', 'Calanus finmarchicus s.l.', null), row('c', 'Oithona similis', null)];
+    const r = convert({
+      sheets: [sheetInput(fileOf(HEADER, rows, 'S'), { quantity: { kind: 'count' }, shape: 'long' })],
+      approvedSplits: { 'Calanus finmarchicus CV': { verbatimIdentification: 'Calanus finmarchicus CV', scientificName: 'Calanus finmarchicus s.l.', lifeStage: 'C5' } },
+      worms: lookupOf({ 'Calanus finmarchicus s.l.': rec('Calanus finmarchicus'), 'Calanus finmarchicus': rec('Calanus finmarchicus') }, {}),
+    });
+    expect(r.nameLookup.names).toEqual(['Oithona similis']);
+    expect(idsOf(r, 'Calanus finmarchicus s.l.')).toEqual([LSID(111), undefined]);
+    expect(r.nameLookup.withSheetId).toBe(1);
+    expect(r.findings.some((x) => x.ruleId === 'CONV-NAMEID-INCOMPLETE')).toBe(true);
+    // two different IDs under the proposed name and the edited one are one conflict
+    const two = convert({
+      sheets: [sheetInput(fileOf(HEADER, [row('a', 'Calanus finmarchicus CV', 111), row('b', 'Calanus finmarchicus s.l.', 222)], 'S'), { quantity: { kind: 'count' }, shape: 'long' })],
+      approvedSplits: { 'Calanus finmarchicus CV': { verbatimIdentification: 'Calanus finmarchicus CV', scientificName: 'Calanus finmarchicus s.l.', lifeStage: 'C5' } },
+    });
+    expect(two.findings.some((x) => x.ruleId === 'CONV-NAMEID-CONFLICT')).toBe(true);
+  });
+
   it('the archive of the repro has one ID per name, never two', async () => {
     const header = W1_HEADER;
     const out = await exportSheet(header, W1_ROWS, { quantity: { kind: 'count' }, worms: lookupOf({ 'Calanus finmarchicus': rec('Calanus finmarchicus') }, {}) });
