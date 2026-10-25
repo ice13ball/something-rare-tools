@@ -4,12 +4,6 @@ import type { RequestHandler } from 'express';
 import { buildCsp } from '../config/hosts.js';
 
 /**
- * Pages that are served but not announced: always noindex (header and meta), whatever the site flag says. They are in no sitemap, menu,
- * index card, footer or robots.txt (a Disallow line would reveal them).
- */
-export const HIDDEN_PATHS: readonly string[] = ['/convert'];
-
-/**
  * Hosts a page may reach beyond the global policy, by page path (host names, no scheme). They go into that page's response only,
  * never into DATA_HOSTS (which also feeds the fetch proxy), and never routed through the server proxy. Stage 4 of /convert: the WoRMS lookup (the opt-in of
  * src/app/optins/worms.ts, off by default, sent only when the user presses its button). Stage 5: the NVS lookup (the opt-in of src/app/optins/nvs.ts, same rules).
@@ -36,7 +30,7 @@ export function securityHeaders(opts: { noindex: boolean; pageConnect?: Readonly
     const page = withoutSlash(req.path);
     res.setHeader('Content-Security-Policy', pageCsp.get(page) ?? csp);
     // The fetch proxy answers with third-party data: never indexed, whatever the site flag says.
-    if (opts.noindex || req.path === '/api' || req.path.startsWith('/api/') || HIDDEN_PATHS.includes(page)) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    if (opts.noindex || req.path === '/api' || req.path.startsWith('/api/')) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Strict-Transport-Security', 'max-age=31536000');
@@ -50,7 +44,6 @@ const ROBOTS_META = /[ \t]*<meta\s+name="robots"\s+content="noindex,\s*nofollow"
 
 /**
  * Served HTML must agree with the header: when noindex is off, any meta tag left in the build goes.
- * A hidden page (HIDDEN_PATHS) is served with `true`, so that its own tag stays whatever the site flag says.
  */
 export function prepareHtml(html: string, noindex: boolean): string {
   return noindex ? html : html.replace(ROBOTS_META, '');
