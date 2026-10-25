@@ -150,6 +150,10 @@ function nameClaim(key: string, unit: string | undefined): Claim | undefined {
 const why = (p: ColumnProposal, code: OverlayReason): void => {
   p.reason = OVERLAY_REASONS[code];
   p.reasonCode = code;
+  // the shared proposer's values, lead and notes belong to its own code: none of them may stay on an overlay reason
+  delete p.reasonParams;
+  delete p.reasonLead;
+  delete p.reasonNotes;
 };
 
 /**

@@ -424,6 +424,13 @@ describe('Polish "próba" (a sample) as a sample id, like "próbka"', () => {
     expect(single('Kod próby', 'ABC-1')).toBe('sampleId');
   });
 
+  it('"próba" takes the same trailing and leading words as "próbka", and no more', () => {
+    for (const w of ['nr', 'numer', 'id', 'kod', 'nazwa']) for (const h of [`Próbka ${w}`, `Próba ${w}`]) expect(single(h, 'ABC-1'), h).toBe('sampleId');
+    for (const h of ['Próba nr', 'Próba (nr)', 'Próba_nr', 'Próba ID', 'Nazwa próby', 'Proba_id', 'próba [kod]']) expect(single(h, 'ABC-1'), h).toBe('sampleId');
+    // "próbka" does not take these, so neither does "próba"
+    for (const h of ['Próbka oznaczenie', 'Próba oznaczenie', 'Próba identyfikator', 'Próba kontrolna nr', 'Próba nr 2']) expect(single(h, 'ABC-1'), h).not.toBe('sampleId');
+  });
+
   it('a header that only contains "próba" in another phrase is not a sample id', () => {
     const NEGATIVE: [string, Cell][] = [
       ['objętość próby', 12.5],
