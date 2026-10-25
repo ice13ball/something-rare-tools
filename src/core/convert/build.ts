@@ -12,7 +12,7 @@ import type { SampleSite, TreeOptions } from './events';
 import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
-import { pickLabel, readDecision, unitContradictsConcept } from './nerc';
+import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept } from './nerc';
 import type { NercDecisions, NercPick } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
@@ -612,7 +612,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
       ctx.measurements.push({
         target: { kind: 'event', id },
         role: 'variable',
-        measurementType: st.v.name,
+        measurementType: measurementTypeText(st.type, st.v.name),
         ...(st.type ? { measurementTypeId: st.type.id } : {}),
         measurementValue: written,
         ...(st.v.unit === undefined ? {} : { measurementUnit: st.v.unit }),
@@ -961,7 +961,7 @@ export function convert(input: ConvertInput): ConvertResult {
         measurements.push({
           target: { kind: 'event', id: eventId },
           role: 'variable',
-          measurementType: v.name,
+          measurementType: measurementTypeText(st.type, v.name),
           ...(st.type ? { measurementTypeId: st.type.id } : {}),
           measurementValue: written,
           ...(v.unit === undefined ? {} : { measurementUnit: v.unit }),

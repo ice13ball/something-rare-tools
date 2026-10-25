@@ -128,3 +128,44 @@ describe('not in any public listing before the reveal', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the word before a line range agrees with the number of lines', () => {
+  const withLines = CONVERT_RULES.filter((r) => LANGS.some((l) => r.plain[l].includes('{lines}')));
+  const render = (id: string, lang: (typeof LANGS)[number], lines: number[]): string => {
+    const params: Record<string, string | number> = {};
+    for (const p of CONVERT_RULE_PARAMS[id] ?? []) params[p] = p === 'count' ? lines.length : 'X';
+    return renderConvertPlain(makeConvertFinding(id, { file: 'f.csv', sheet: 'S', field: 'F', value: 'V', lines, params }), lang);
+  };
+  const ONE = { en: /\bline 7\b/, pl: /\bwiersz(u)? 7\b/, de: /\bZeile 7\b/, fr: /\bligne 7\b/ } as const;
+  const MANY = { en: /\blines 7–9\b/, pl: /\bwiersz(e|ach|y) 7–9\b/, de: /\bZeilen 7–9\b/, fr: /\blignes 7–9\b/ } as const;
+  const FIVE = { pl: /\b(wierszy|wierszach) 7–11\b/ } as const;
+
+  it('covers every rule that names lines', () => {
+    expect(withLines.length).toBeGreaterThanOrEqual(10);
+  });
+
+  for (const r of withLines) {
+    for (const lang of LANGS) {
+      if (!r.plain[lang].includes('{lines}')) continue;
+      it(`${r.id} ${lang}: singular for one line, plural for several`, () => {
+        expect(render(r.id, lang, [7]), 'one line').toMatch(ONE[lang]);
+        expect(render(r.id, lang, [7, 8, 9]), 'three lines').toMatch(MANY[lang]);
+        if (lang === 'pl') expect(render(r.id, lang, [7, 8, 9, 10, 11]), 'five lines').toMatch(FIVE.pl);
+        for (const lines of [[7], [7, 8, 9]]) expect(render(r.id, lang, lines)).not.toMatch(/\{|\}/);
+      });
+    }
+  }
+
+  it('Polish: wiersz / wiersze / wierszy by the number, never "wiersze 7"', () => {
+    const text = (lines: number[]) => render('CONV-SAMPLE-CONFLICT', 'pl', lines);
+    expect(text([7])).toContain('(wiersz 7)');
+    expect(text([7, 8])).toContain('(wiersze 7–8)');
+    expect(text([7, 9, 12, 14, 16])).toContain('(wierszy 7, 9, 12, 14, 16)');
+    expect(text([7])).not.toContain('wiersze 7');
+  });
+
+  it('the profile-sheet label says "rzuty sondy CTD", in every text that names the casts', () => {
+    for (const f of ['src/core/i18n/ui.ts', 'src/core/i18n/tips-text.ts', 'src/core/rules/convert.ts']) expect(read(f), f).not.toContain('zarzut');
+    expect(read('src/core/i18n/ui.ts')).toContain('(rzuty sondy CTD, dane z butelek');
+  });
+});

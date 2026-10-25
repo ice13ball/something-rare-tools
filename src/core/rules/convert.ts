@@ -112,10 +112,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `W kolumnie „{field}” liczebność ma części dziesiętne w wierszach {lines} (razem: {count}), np. {value}. Liczba osobników musi być całkowita. Zadeklaruj zagęszczenie albo popraw wartości.`,
-      en: `Column "{field}" is declared as a count but has decimals in lines {lines} ({count} in all), e.g. {value}. A number of individuals must be whole. Declare a density instead, or correct the values.`,
-      de: `Die Spalte „{field}“ gilt als Anzahl, hat aber in den Zeilen {lines} Dezimalstellen (insgesamt {count}), z. B. {value}. Eine Individuenzahl muss ganz sein. Geben Sie stattdessen eine Dichte an oder korrigieren Sie die Werte.`,
-      fr: `La colonne « {field} » est déclarée comme effectif mais a des décimales aux lignes {lines} ({count} au total), p. ex. {value}. Un nombre d'individus doit être entier. Déclarez plutôt une densité ou corrigez les valeurs.`,
+      pl: `W kolumnie „{field}” liczebność ma części dziesiętne {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. {value}. Liczba osobników musi być całkowita. Zadeklaruj zagęszczenie albo popraw wartości.`,
+      en: `Column "{field}" is declared as a count but has decimals in {+lineCount:line|lines} {lines} ({count} in all), e.g. {value}. A number of individuals must be whole. Declare a density instead, or correct the values.`,
+      de: `Die Spalte „{field}“ gilt als Anzahl, hat aber in {+lineCount:der Zeile|den Zeilen} {lines} Dezimalstellen (insgesamt {count}), z. B. {value}. Eine Individuenzahl muss ganz sein. Geben Sie stattdessen eine Dichte an oder korrigieren Sie die Werte.`,
+      fr: `La colonne « {field} » est déclarée comme effectif mais a des décimales {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. {value}. Un nombre d'individus doit être entier. Déclarez plutôt une densité ou corrigez les valeurs.`,
     },
     technical: `{file}:{lines} field {field}: {count} value(s) of a declared count are not integers (example {value}); individualCount must be a whole number. Those cells were not converted.`,
   },
@@ -125,10 +125,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `W kolumnie „{field}” są wartości ujemne w wierszach {lines} (razem: {count}), np. {value}. Liczebność, zagęszczenie, biomasa i wielkość próby nie mogą być ujemne.`,
-      en: `Column "{field}" has negative values in lines {lines} ({count} in all), e.g. {value}. A count, density, biomass or sample size cannot be negative.`,
-      de: `Die Spalte „{field}“ hat negative Werte in den Zeilen {lines} (insgesamt {count}), z. B. {value}. Anzahl, Dichte, Biomasse und Probengröße können nicht negativ sein.`,
-      fr: `La colonne « {field} » contient des valeurs négatives aux lignes {lines} ({count} au total), p. ex. {value}. Un effectif, une densité, une biomasse ou une taille d'échantillon ne peut pas être négatif.`,
+      pl: `W kolumnie „{field}” są wartości ujemne {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. {value}. Liczebność, zagęszczenie, biomasa i wielkość próby nie mogą być ujemne.`,
+      en: `Column "{field}" has negative values in {+lineCount:line|lines} {lines} ({count} in all), e.g. {value}. A count, density, biomass or sample size cannot be negative.`,
+      de: `Die Spalte „{field}“ hat negative Werte in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}), z. B. {value}. Anzahl, Dichte, Biomasse und Probengröße können nicht negativ sein.`,
+      fr: `La colonne « {field} » contient des valeurs négatives {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. {value}. Un effectif, une densité, une biomasse ou une taille d'échantillon ne peut pas être négatif.`,
     },
     technical: `{file}:{lines} field {field}: {count} negative value(s) in a quantity or effort column (example {value}). Those cells were not converted.`,
   },
@@ -138,10 +138,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'column'],
     plain: {
-      pl: `Brakuje kodu próbki w wierszach {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie. Możesz pobrać arkusz z proponowanymi kodami, sprawdzić je i wgrać ponownie.`,
-      en: `The sample code is missing in lines {lines} ({count} in all). The code becomes the identifier in the archive, so it has to come from you. You can download the sheet with proposed codes, check them and upload it again.`,
-      de: `Der Probencode fehlt in den Zeilen {lines} (insgesamt {count}). Der Code wird zur Kennung im Archiv und muss daher von Ihnen kommen. Sie können das Blatt mit vorgeschlagenen Codes herunterladen, prüfen und erneut hochladen.`,
-      fr: `Le code d'échantillon manque aux lignes {lines} ({count} au total). Le code devient l'identifiant dans l'archive : il doit donc venir de vous. Vous pouvez télécharger la feuille avec des codes proposés, les vérifier et la recharger.`,
+      pl: `Brakuje kodu próbki {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie. Możesz pobrać arkusz z proponowanymi kodami, sprawdzić je i wgrać ponownie.`,
+      en: `The sample code is missing in {+lineCount:line|lines} {lines} ({count} in all). The code becomes the identifier in the archive, so it has to come from you. You can download the sheet with proposed codes, check them and upload it again.`,
+      de: `Der Probencode fehlt in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Der Code wird zur Kennung im Archiv und muss daher von Ihnen kommen. Sie können das Blatt mit vorgeschlagenen Codes herunterladen, prüfen und erneut hochladen.`,
+      fr: `Le code d'échantillon manque {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le code devient l'identifiant dans l'archive : il doit donc venir de vous. Vous pouvez télécharger la feuille avec des codes proposés, les vérifier et la recharger.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) have no sample code (column: {column}). The eventID of a sample is the user's own code and is never derived from depth or row order. A one-time proposal (proposeSampleCodes) returns the sheet with a new code column.`,
   },
@@ -151,10 +151,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['kind', 'count', 'hint'],
     plain: {
-      pl: `Ten sam identyfikator powstaje więcej niż raz, np. „{value}”, w wierszach {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: zmień powtórzony kod lub nagłówek albo, gdy kody powtarzają się między stacjami, zaznacz poprzedzanie kodem stacji.`,
-      en: `The same identifier is produced more than once, e.g. "{value}", in lines {lines} ({count} repeated). Identifiers must be unique: change the repeated code or header or, when codes repeat between stations, tick the station prefix.`,
-      de: `Dieselbe Kennung entsteht mehrfach, z. B. „{value}“, in den Zeilen {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: ändern Sie den wiederholten Code oder Kopf oder, wenn Codes zwischen Stationen wiederkehren, wählen Sie das Stationspräfix.`,
-      fr: `Le même identifiant est produit plusieurs fois, p. ex. « {value} », aux lignes {lines} (répétés : {count}). Les identifiants doivent être uniques : changez le code ou l'en-tête répété ou, si des codes se répètent entre stations, cochez le préfixe de station.`,
+      pl: `Ten sam identyfikator powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: zmień powtórzony kod lub nagłówek albo, gdy kody powtarzają się między stacjami, zaznacz poprzedzanie kodem stacji.`,
+      en: `The same identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique: change the repeated code or header or, when codes repeat between stations, tick the station prefix.`,
+      de: `Dieselbe Kennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: ändern Sie den wiederholten Code oder Kopf oder, wenn Codes zwischen Stationen wiederkehren, wählen Sie das Stationspräfix.`,
+      fr: `Le même identifiant est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : changez le code ou l'en-tête répété ou, si des codes se répètent entre stations, cochez le préfixe de station.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". {hint}`,
     citations: [CITE.obistoolsEventIds, CITE.biocheckOccurrenceId],
@@ -165,10 +165,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `W kolumnie „{field}” wartość ma tabulator albo podział wiersza w wierszach {lines} (razem: {count}), np. „{value}”. Pliki archiwum są rozdzielane tabulatorami, więc taka wartość je rozbije. Usuń znak w arkuszu.`,
-      en: `Column "{field}" has a tab or a line break inside a value in lines {lines} ({count} in all), e.g. "{value}". The archive files are tab-separated, so such a value would break them. Remove the character in the sheet.`,
-      de: `Die Spalte „{field}“ enthält in den Zeilen {lines} einen Tabulator oder Zeilenumbruch im Wert (insgesamt {count}), z. B. „{value}“. Die Archivdateien sind tabulatorgetrennt, ein solcher Wert würde sie zerstören. Entfernen Sie das Zeichen im Blatt.`,
-      fr: `La colonne « {field} » contient une tabulation ou un saut de ligne dans une valeur aux lignes {lines} ({count} au total), p. ex. « {value} ». Les fichiers de l'archive sont séparés par des tabulations : une telle valeur les casserait. Supprimez le caractère dans la feuille.`,
+      pl: `W kolumnie „{field}” wartość ma tabulator albo podział wiersza {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}”. Pliki archiwum są rozdzielane tabulatorami, więc taka wartość je rozbije. Usuń znak w arkuszu.`,
+      en: `Column "{field}" has a tab or a line break inside a value in {+lineCount:line|lines} {lines} ({count} in all), e.g. "{value}". The archive files are tab-separated, so such a value would break them. Remove the character in the sheet.`,
+      de: `Die Spalte „{field}“ enthält in {+lineCount:der Zeile|den Zeilen} {lines} einen Tabulator oder Zeilenumbruch im Wert (insgesamt {count}), z. B. „{value}“. Die Archivdateien sind tabulatorgetrennt, ein solcher Wert würde sie zerstören. Entfernen Sie das Zeichen im Blatt.`,
+      fr: `La colonne « {field} » contient une tabulation ou un saut de ligne dans une valeur {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. « {value} ». Les fichiers de l'archive sont séparés par des tabulations : une telle valeur les casserait. Supprimez le caractère dans la feuille.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} value(s) contain a tab or line break (example "{value}", shown with a space). The text files of the archive are tab-separated with one record per line.`,
     citations: [CITE.obisHiddenChars],
@@ -179,10 +179,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `W kolumnie „{field}” zamiast liczby jest tekst ({value}) w wierszach {lines} (razem: {count}). Zapisano obecność taksonu bez ilości, a tekst trafił do uwag. Jeśli to nie znaczy „obecny”, popraw arkusz.`,
-      en: `Column "{field}" has text instead of a number ({value}) in lines {lines} ({count} in all). The taxon is recorded as present without a quantity and the text is kept in the remarks. If it does not mean "present", correct the sheet.`,
-      de: `Die Spalte „{field}“ enthält statt einer Zahl Text ({value}) in den Zeilen {lines} (insgesamt {count}). Das Taxon ist als anwesend ohne Menge erfasst, der Text steht in den Bemerkungen. Bedeutet er nicht „anwesend“, korrigieren Sie das Blatt.`,
-      fr: `La colonne « {field} » contient du texte au lieu d'un nombre ({value}) aux lignes {lines} ({count} au total). Le taxon est noté présent sans quantité et le texte est gardé dans les remarques. S'il ne signifie pas « présent », corrigez la feuille.`,
+      pl: `W kolumnie „{field}” zamiast liczby jest tekst ({value}) {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Zapisano obecność taksonu bez ilości, a tekst trafił do uwag. Jeśli to nie znaczy „obecny”, popraw arkusz.`,
+      en: `Column "{field}" has text instead of a number ({value}) in {+lineCount:line|lines} {lines} ({count} in all). The taxon is recorded as present without a quantity and the text is kept in the remarks. If it does not mean "present", correct the sheet.`,
+      de: `Die Spalte „{field}“ enthält statt einer Zahl Text ({value}) in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Das Taxon ist als anwesend ohne Menge erfasst, der Text steht in den Bemerkungen. Bedeutet er nicht „anwesend“, korrigieren Sie das Blatt.`,
+      fr: `La colonne « {field} » contient du texte au lieu d'un nombre ({value}) {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le taxon est noté présent sans quantité et le texte est gardé dans les remarques. S'il ne signifie pas « présent », corrigez la feuille.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} non-numeric cell(s) in a taxon or quantity column ({value}). Each becomes an occurrence with occurrenceStatus present, no quantity, and the text in occurrenceRemarks.`,
   },
@@ -219,10 +219,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['what', 'count'],
     plain: {
-      pl: `Wiersze próbki „{value}” (wiersze {lines}) mają różne wartości daty, pozycji, głębokości, wielkości próby lub zmierzonej wielkości. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
-      en: `The rows of sample "{value}" (lines {lines}) differ in date, position, depth, sample size or a measured value. A sample is one event, so these values must be the same in all its rows.`,
-      de: `Die Zeilen der Probe „{value}“ (Zeilen {lines}) unterscheiden sich in Datum, Position, Tiefe, Probengröße oder einem Messwert. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein.`,
-      fr: `Les lignes de l'échantillon « {value} » (lignes {lines}) diffèrent par la date, la position, la profondeur, la taille ou une valeur mesurée. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes.`,
+      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) mają różne wartości daty, pozycji, głębokości, wielkości próby lub zmierzonej wielkości. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
+      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in date, position, depth, sample size or a measured value. A sample is one event, so these values must be the same in all its rows.`,
+      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in Datum, Position, Tiefe, Probengröße oder einem Messwert. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein.`,
+      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par la date, la position, la profondeur, la taille ou une valeur mesurée. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes.`,
     },
     technical: `{file}, {sheet}:{lines}: rows of sample "{value}" differ in {what} ({count} sample(s) affected). The first row is not silently preferred.`,
   },
@@ -287,10 +287,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `W kolumnie „{field}” (wielkość próby) nie ma dodatniej liczby w wierszach {lines} (razem: {count}), np. „{value}”. Bez niej nie da się zapisać wielkości próby.`,
-      en: `Column "{field}" (sample size) has no positive number in lines {lines} ({count} in all), e.g. "{value}". The sample size cannot be written without one.`,
-      de: `Die Spalte „{field}“ (Probengröße) enthält in den Zeilen {lines} keine positive Zahl (insgesamt {count}), z. B. „{value}“. Ohne sie lässt sich die Probengröße nicht schreiben.`,
-      fr: `La colonne « {field} » (taille d'échantillon) n'a pas de nombre positif aux lignes {lines} ({count} au total), p. ex. « {value} ». Sans lui, la taille d'échantillon ne peut pas être écrite.`,
+      pl: `W kolumnie „{field}” (wielkość próby) nie ma dodatniej liczby {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}”. Bez niej nie da się zapisać wielkości próby.`,
+      en: `Column "{field}" (sample size) has no positive number in {+lineCount:line|lines} {lines} ({count} in all), e.g. "{value}". The sample size cannot be written without one.`,
+      de: `Die Spalte „{field}“ (Probengröße) enthält in {+lineCount:der Zeile|den Zeilen} {lines} keine positive Zahl (insgesamt {count}), z. B. „{value}“. Ohne sie lässt sich die Probengröße nicht schreiben.`,
+      fr: `La colonne « {field} » (taille d'échantillon) n'a pas de nombre positif {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. « {value} ». Sans lui, la taille d'échantillon ne peut pas être écrite.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} effort cell(s) are empty, zero or not a number (example "{value}"); sampleSizeValue needs a positive number.`,
   },
@@ -602,10 +602,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'what'],
     plain: {
-      pl: `{count} {+count:poziom profilu nie ma|poziomy profilu nie mają|poziomów profilu nie ma} {what}, a stacja też jej nie ma (wiersze {lines}). OBIS i BioCheck wymagają daty i pozycji przy każdym zdarzeniu bez dzieci. Dodaj kolumnę z datą lub pozycją albo dodaj tę stację do arkuszy biologicznych.`,
-      en: `{count} profile {+count:level has|levels have} no {what}, and neither has its station (lines {lines}). OBIS and BioCheck need a date and a position for every event without children. Add a date or position column to the sheet, or add this station to the biology sheets.`,
-      de: `{count} {+count:Profilebene hat|Profilebenen haben} keine Angabe zu {what}, und ihre Station auch nicht (Zeilen {lines}). OBIS und BioCheck verlangen Datum und Position bei jedem Ereignis ohne Kinder. Fügen Sie dem Blatt eine Datums- oder Positionsspalte hinzu oder diese Station den Biologie-Blättern.`,
-      fr: `{count} {+count:niveau de profil n'a|niveaux de profil n'ont} pas de {what}, et leur station non plus (lignes {lines}). OBIS et BioCheck exigent une date et une position pour chaque événement sans enfants. Ajoutez une colonne de date ou de position à la feuille, ou ajoutez cette station aux feuilles de biologie.`,
+      pl: `{count} {+count:poziom profilu nie ma|poziomy profilu nie mają|poziomów profilu nie ma} {what}, a stacja też jej nie ma ({+lineCount:wiersz|wiersze|wierszy} {lines}). OBIS i BioCheck wymagają daty i pozycji przy każdym zdarzeniu bez dzieci. Dodaj kolumnę z datą lub pozycją albo dodaj tę stację do arkuszy biologicznych.`,
+      en: `{count} profile {+count:level has|levels have} no {what}, and neither has its station ({+lineCount:line|lines} {lines}). OBIS and BioCheck need a date and a position for every event without children. Add a date or position column to the sheet, or add this station to the biology sheets.`,
+      de: `{count} {+count:Profilebene hat|Profilebenen haben} keine Angabe zu {what}, und ihre Station auch nicht ({+lineCount:Zeile|Zeilen} {lines}). OBIS und BioCheck verlangen Datum und Position bei jedem Ereignis ohne Kinder. Fügen Sie dem Blatt eine Datums- oder Positionsspalte hinzu oder diese Station den Biologie-Blättern.`,
+      fr: `{count} {+count:niveau de profil n'a|niveaux de profil n'ont} pas de {what}, et leur station non plus ({+lineCount:ligne|lignes} {lines}). OBIS et BioCheck exigent une date et une position pour chaque événement sans enfants. Ajoutez une colonne de date ou de position à la feuille, ou cette station aux feuilles de biologie.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} profile level(s) have no {what} of their own and their parent event (the station) has none to give. With the station level flattened away the parent is the cruise, and a level never takes them from it. BioCheck requires eventDate, decimalLatitude and decimalLongitude on every event without children, after a child has taken what its parent gives (obistools flatten_event, check_fields). A level never takes them from further up (the whole cruise's range for one cast), and nothing is copied from another station.`,
   },
@@ -628,10 +628,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'column'],
     plain: {
-      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} stacji (wiersze {lines}). Poziom profilu trafia pod swoją stację, więc każdy wiersz musi ją mieć. Wskaż kolumnę stacji albo uzupełnij puste komórki.`,
-      en: `{count} profile {+count:row has|rows have} no station (lines {lines}). A profile level is placed under its station, so every row needs one. Map the station column, or fill in the empty cells.`,
-      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keine Station (Zeilen {lines}). Eine Profilebene wird unter ihre Station gehängt, daher braucht jede Zeile eine. Ordnen Sie die Stationsspalte zu oder füllen Sie die leeren Zellen.`,
-      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de station (lignes {lines}). Un niveau de profil est placé sous sa station : chaque ligne doit en avoir une. Indiquez la colonne de station ou remplissez les cellules vides.`,
+      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} stacji ({+lineCount:wiersz|wiersze|wierszy} {lines}). Poziom profilu trafia pod swoją stację, więc każdy wiersz musi ją mieć. Wskaż kolumnę stacji albo uzupełnij puste komórki.`,
+      en: `{count} profile {+count:row has|rows have} no station ({+lineCount:line|lines} {lines}). A profile level is placed under its station, so every row needs one. Map the station column, or fill in the empty cells.`,
+      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keine Station ({+lineCount:Zeile|Zeilen} {lines}). Eine Profilebene wird unter ihre Station gehängt, daher braucht jede Zeile eine. Ordnen Sie die Stationsspalte zu oder füllen Sie die leeren Zellen.`,
+      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de station ({+lineCount:ligne|lignes} {lines}). Un niveau de profil est placé sous sa station : chaque ligne doit en avoir une. Indiquez la colonne de station ou remplissez les cellules vides.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} profile row(s) hold data but no station text (station column: {column}). A level event needs its station as its parent, so these rows were not converted.`,
   },
@@ -746,28 +746,28 @@ const quantityWhat = (what: string, lang: Lang): string => {
 export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, string>; technical: string }>> = {
   'CONV-SAMPLE-CODE-MISSING': {
     plain: {
-      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} kodu poziomu (wiersze {lines}). Identyfikator poziomu pochodzi od Ciebie: wskaż jako kod próbki kolumnę z kodem unikalnym w obrębie stacji (numer butelki, skanu lub Niskina) albo zaznacz zgodę na stację i głębokość zapisaną w arkuszu (w każdym wierszu potrzebna głębokość albo ciśnienie w decybarach).`,
-      en: `{count} profile {+count:row has|rows have} no level code (lines {lines}). The level's identifier comes from you: map a column with a code that is unique within the station (bottle, scan or Niskin number) as the sample code, or tick the approval for the station and the depth as written (every row needs a depth, or a pressure in decibars).`,
-      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keinen Ebenencode (Zeilen {lines}). Die Kennung der Ebene kommt von Ihnen: ordnen Sie eine Spalte mit je Station eindeutigem Code (Flaschen-, Scan- oder Niskin-Nummer) als Probencode zu, oder stimmen Sie Station und Tiefe wie geschrieben zu (jede Zeile braucht eine Tiefe oder einen Druck in Dezibar).`,
-      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de code de niveau (lignes {lines}). L'identifiant du niveau vient de vous : indiquez comme code d'échantillon une colonne à code unique par station (numéro de bouteille, de scan ou de Niskin), ou cochez l'accord pour la station et la profondeur telle qu'écrite (chaque ligne a besoin d'une profondeur ou d'une pression en décibars).`,
+      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} kodu poziomu ({+lineCount:wiersz|wiersze|wierszy} {lines}). Identyfikator poziomu pochodzi od Ciebie: wskaż jako kod próbki kolumnę z kodem unikalnym w obrębie stacji (numer butelki, skanu lub Niskina) albo zaznacz zgodę na stację i głębokość zapisaną w arkuszu (w każdym wierszu potrzebna głębokość albo ciśnienie w decybarach).`,
+      en: `{count} profile {+count:row has|rows have} no level code ({+lineCount:line|lines} {lines}). The level's identifier comes from you: map a column with a code that is unique within the station (bottle, scan or Niskin number) as the sample code, or tick the approval for the station and the depth as written (every row needs a depth, or a pressure in decibars).`,
+      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keinen Ebenencode ({+lineCount:Zeile|Zeilen} {lines}). Die Kennung der Ebene kommt von Ihnen: ordnen Sie eine Spalte mit je Station eindeutigem Code (Flaschen-, Scan- oder Niskin-Nummer) als Probencode zu, oder stimmen Sie Station und Tiefe wie geschrieben zu (jede Zeile braucht eine Tiefe oder einen Druck in Dezibar).`,
+      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de code de niveau ({+lineCount:ligne|lignes} {lines}). L'identifiant du niveau vient de vous : indiquez comme code d'échantillon une colonne à code unique par station (numéro de bouteille, de scan ou de Niskin), ou cochez l'accord pour la station et la profondeur telle qu'écrite (chaque ligne a besoin d'une profondeur ou d'une pression en décibars).`,
     },
     technical: `{file}, {sheet}:{lines}: {count} profile row(s) have no level code (code column: {column}). The eventID of a level is its station's eventID and the user's own code or, only with the user's approval for this sheet, per row the depth as written when it reads as a number, else the pressure as written with the suffix dbar (only for a pressure column in decibars); a row with neither is not given an ID, and an ID is never derived from the order of the rows. These rows were not converted.`,
   },
   'CONV-ID-DUPLICATE': {
     plain: {
-      pl: `Ten sam identyfikator poziomu powstaje więcej niż raz, np. „{value}”, w wierszach {lines} (utworzony z: {used}). Dwa wiersze jednej stacji mają ten sam kod, tę samą głębokość lub to samo ciśnienie (tak robią powtórzone zarzuty sondy); głębokość i ciśnienie nigdy się nie zgadzają, kod i głębokość mogą. Dodaj kolumnę z kodem unikalnym w obrębie stacji, np. numer zarzutu i butelki razem, i wskaż ją jako kod próbki.`,
-      en: `The same level identifier is produced more than once, e.g. "{value}", in lines {lines} (made of: {used}). Two rows of one station have the same code, depth or pressure (repeated casts do this); a depth and a pressure never match, a code and a depth can. Add a column with a code unique within the station, e.g. cast and bottle together, and mark it as the sample code.`,
-      de: `Dieselbe Ebenenkennung entsteht mehrfach, z. B. „{value}“, in den Zeilen {lines} (gebildet aus: {used}). Zwei Zeilen einer Station haben denselben Code, dieselbe Tiefe oder denselben Druck (wiederholte Einsätze tun das); Tiefe und Druck stimmen nie überein, ein Code und eine Tiefe können es. Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu, z. B. Einsatz und Flasche zusammen, und ordnen Sie sie als Probencode zu.`,
-      fr: `Le même identifiant de niveau est produit plusieurs fois, p. ex. « {value} », aux lignes {lines} (formé de : {used}). Deux lignes d'une même station ont le même code, la même profondeur ou la même pression (des déploiements répétés font cela) ; une profondeur et une pression ne coïncident jamais, un code et une profondeur le peuvent. Ajoutez une colonne à code unique par station, par exemple déploiement et bouteille ensemble, et indiquez-la comme code d'échantillon.`,
+      pl: `Ten sam identyfikator poziomu powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (utworzony z: {used}). Dwa wiersze jednej stacji mają ten sam kod, tę samą głębokość lub to samo ciśnienie (tak robią powtórzone rzuty sondy); głębokość i ciśnienie nigdy się nie zgadzają, kod i głębokość mogą. Dodaj kolumnę z kodem unikalnym w obrębie stacji, np. numer rzutu i butelki razem, i wskaż ją jako kod próbki.`,
+      en: `The same level identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} (made of: {used}). Two rows of one station have the same code, depth or pressure (repeated casts do this); a depth and a pressure never match, a code and a depth can. Add a column with a code unique within the station, e.g. cast and bottle together, and mark it as the sample code.`,
+      de: `Dieselbe Ebenenkennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (gebildet aus: {used}). Zwei Zeilen einer Station haben denselben Code, dieselbe Tiefe oder denselben Druck (wiederholte Einsätze tun das); Tiefe und Druck stimmen nie überein, ein Code und eine Tiefe können es. Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu, z. B. Einsatz und Flasche zusammen, und ordnen Sie sie als Probencode zu.`,
+      fr: `Le même identifiant de niveau est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (formé de : {used}). Deux lignes d'une même station ont le même code, la même profondeur ou la même pression (des déploiements répétés font cela) ; une profondeur et une pression ne coïncident jamais, un code et une profondeur le peuvent. Ajoutez une colonne à code unique par station, par exemple déploiement et bouteille ensemble, et indiquez-la comme code d'échantillon.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
   'CONV-ID-DUPLICATE:other': {
     plain: {
-      pl: `Identyfikator poziomu „{value}” w wierszach {lines} jest też identyfikatorem innego zdarzenia (utworzony z: {used}). Identyfikatory muszą być unikalne: zmień kod wierszy profilu albo kody próbek.`,
-      en: `The level identifier "{value}" in lines {lines} is also the identifier of another event (made of: {used}). Identifiers must be unique: change the code of the profile rows, or the sample codes.`,
-      de: `Die Ebenenkennung „{value}“ in den Zeilen {lines} ist zugleich die Kennung eines anderen Ereignisses (gebildet aus: {used}). Kennungen müssen eindeutig sein: Ändern Sie den Code der Profilzeilen oder die Probencodes.`,
-      fr: `L'identifiant de niveau « {value} » aux lignes {lines} est aussi l'identifiant d'un autre événement (formé de : {used}). Les identifiants doivent être uniques : changez le code des lignes de profil ou les codes d'échantillon.`,
+      pl: `Identyfikator poziomu „{value}” {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest też identyfikatorem innego zdarzenia (utworzony z: {used}). Identyfikatory muszą być unikalne: zmień kod wierszy profilu albo kody próbek.`,
+      en: `The level identifier "{value}" in {+lineCount:line|lines} {lines} is also the identifier of another event (made of: {used}). Identifiers must be unique: change the code of the profile rows, or the sample codes.`,
+      de: `Die Ebenenkennung „{value}“ in {+lineCount:der Zeile|den Zeilen} {lines} ist zugleich die Kennung eines anderen Ereignisses (gebildet aus: {used}). Kennungen müssen eindeutig sein: Ändern Sie den Code der Profilzeilen oder die Probencodes.`,
+      fr: `L'identifiant de niveau « {value} » {+lineCount:à la ligne|aux lignes} {lines} est aussi l'identifiant d'un autre événement (formé de : {used}). Les identifiants doivent être uniques : changez le code des lignes de profil ou les codes d'échantillon.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
@@ -799,7 +799,14 @@ function stationList(text: string): string {
 function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
   // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
-  const text = lang === undefined ? template : applyPlurals(lang, template, (name) => (Object.prototype.hasOwnProperty.call(f.params, name) ? Number(f.params[name]) : undefined));
+  // {+lineCount:...} depends on how many distinct lines the finding names ("wiersz 7", but "wiersze 7–9")
+  const lineCount = f.lines && f.lines.length > 0 ? new Set(f.lines).size : undefined;
+  const text =
+    lang === undefined
+      ? template
+      : applyPlurals(lang, template, (name) =>
+          Object.prototype.hasOwnProperty.call(f.params, name) ? Number(f.params[name]) : name === 'lineCount' ? lineCount : undefined,
+        );
   return text.replace(/\{([A-Za-z_][\w.]*)\}/g, (whole, name: string) => {
     if (Object.prototype.hasOwnProperty.call(f.params, name)) return String(f.params[name]);
     if (Object.prototype.hasOwnProperty.call(generic, name)) return generic[name];

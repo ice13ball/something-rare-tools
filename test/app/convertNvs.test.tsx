@@ -546,12 +546,13 @@ describe('what is written, and GA4', () => {
 
   it('the archive carries an identifier only for what was confirmed: the suggested temperature and its unit; the oxygen with its searched concept and no unit ID; and GA4 says nvs: used, never a word or a code', async () => {
     const { rows, ga } = await exportRun(true);
-    const of = (type: string) => rows.filter((r) => r.measurementType === type);
-    expect(of('temperature').length).toBe(2);
-    for (const r of of('temperature')) expect([r.measurementTypeID, r.measurementUnitID, r.measurementUnit, r.occurrenceID]).toEqual([uri('P01', 'TEMPPR01'), uri('P06', 'UPAA'), '°C', '']);
-    expect(of('oxygen').map((r) => [r.eventID, r.measurementValue, r.measurementTypeID, r.measurementUnitID, r.measurementUnit])).toEqual([
-      ['E1', '310', uri('P01', 'ZZTESTC1'), '', 'µmol/L'],
-      ['E2', '295', uri('P01', 'ZZTESTC1'), '', 'µmol/L'],
+    const of = (id: string) => rows.filter((r) => r.measurementTypeID === id);
+    // a confirmed concept: its English label is the measurementType (the verified list's, or the one the NVS search returned)
+    expect(of(uri('P01', 'TEMPPR01')).length).toBe(2);
+    for (const r of of(uri('P01', 'TEMPPR01'))) expect([r.measurementType, r.measurementTypeID, r.measurementUnitID, r.measurementUnit, r.occurrenceID]).toEqual(['Temperature of the water body', uri('P01', 'TEMPPR01'), uri('P06', 'UPAA'), '°C', '']);
+    expect(of(uri('P01', 'ZZTESTC1')).map((r) => [r.eventID, r.measurementValue, r.measurementType, r.measurementUnitID, r.measurementUnit])).toEqual([
+      ['E1', '310', 'Invented current concept of the water body for the tests', '', 'µmol/L'],
+      ['E2', '295', 'Invented current concept of the water body for the tests', '', 'µmol/L'],
     ]);
     const exported = (ga as unknown[][]).map((e) => e[2] as { params?: Record<string, unknown> }).filter(Boolean);
     const params = exported.find((e) => e.params === undefined || true);
@@ -564,7 +565,10 @@ describe('what is written, and GA4', () => {
 
   it('without a search the identifiers are the suggestions the user confirmed and GA4 says nvs: none', async () => {
     const { rows, ga } = await exportRun(false);
-    expect(rows.filter((r) => r.measurementType === 'oxygen').every((r) => r.measurementTypeID === '' && r.measurementUnitID === '')).toBe(true);
+    // no concept confirmed for the oxygen: the row keeps the variable name and has no ID
+    const oxygen = rows.filter((r) => r.measurementType === 'oxygen');
+    expect(oxygen.length).toBe(2);
+    expect(oxygen.every((r) => r.measurementTypeID === '' && r.measurementUnitID === '')).toBe(true);
     expect(JSON.stringify(ga)).toContain('"nvs":"none"');
     denyConsent();
   });

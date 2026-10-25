@@ -123,3 +123,19 @@ export function suggestUnit(unit: string | undefined): NercTerm | undefined {
 
 /** A suggested pick: the id of a verified term, marked as coming from the converter's own list. The page makes one only when the user confirms it. */
 export const suggestedPick = (term: NercTerm): NercPick => ({ id: term.uri, source: 'suggested', deprecated: false });
+
+/** The longest label written as a measurementType: a cut label would be a wrong one, so a longer one is not used (the variable's own name stands instead). */
+const MAX_TYPE_LABEL = 500;
+
+/**
+ * The measurementType of a measured-variable row: the English preferred label of the concept the user confirmed for the column (the verified list's label, or the
+ * label the NVS search returned), else `name`, the variable's own name as before. A label the file cannot hold (a tab, a line break or another control character,
+ * empty, or very long) is not used. The identifier is written separately (measurementTypeID).
+ */
+export function measurementTypeText(pick: NercPick | undefined, name: string): string {
+  if (pick === undefined) return name;
+  const label = pickLabel(pick)?.trim();
+  // eslint-disable-next-line no-control-regex
+  if (label === undefined || label === '' || label.length > MAX_TYPE_LABEL || /[\u0000-\u001f\u007f]/.test(label)) return name;
+  return label;
+}

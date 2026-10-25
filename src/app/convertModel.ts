@@ -141,6 +141,12 @@ export function nercColumnsOf(parsed: ConvertParseResult, mappings: Record<strin
   return out;
 }
 
+/** The concept's own preferred label: the stored one is the label as the lists show it, "CODE: label" (ConvertNerc `short`), and only the part after the code is the label. */
+export function preferredLabel(p: Pick<StoredPick, 'id' | 'label'>): string {
+  const prefix = `${p.id.split('/')[6] ?? ''}: `;
+  return prefix.length > 2 && p.label.startsWith(prefix) ? p.label.slice(prefix.length) : p.label;
+}
+
 /** The decisions of one sheet for the worker: the picks that still belong to their column (same variable and unit), by column index. */
 export function nercDecisionsOf(columns: readonly NercColumn[], picks: NercPicks, fileId: string, sheet: string): NercDecisions | undefined {
   const out: Record<string, NercColumnDecision> = {};
@@ -148,8 +154,8 @@ export function nercDecisionsOf(columns: readonly NercColumn[], picks: NercPicks
     if (c.fileId !== fileId || c.sheet !== sheet || !Object.prototype.hasOwnProperty.call(picks, c.key)) continue;
     const p = picks[c.key];
     const d: NercColumnDecision = {};
-    // the label of an NVS result goes along only so that the worker can say CONV-NERC-UNIT-MISMATCH; it is never written (a verified concept's label the worker knows)
-    if (p.type && p.type.ctx === typeContext(c)) d.type = { id: p.type.id, source: p.type.source, deprecated: p.type.deprecated, ...(p.type.source === 'nvs' ? { label: p.type.label } : {}) };
+    // the preferred label of an NVS result goes along: the worker writes it as the measurementType of the column and reads it for CONV-NERC-UNIT-MISMATCH (a verified concept's label the worker knows)
+    if (p.type && p.type.ctx === typeContext(c)) d.type = { id: p.type.id, source: p.type.source, deprecated: p.type.deprecated, ...(p.type.source === 'nvs' ? { label: preferredLabel(p.type) } : {}) };
     if (p.unit && c.unit !== undefined && p.unit.ctx === unitContext(c)) d.unit = { id: p.unit.id, source: p.unit.source, deprecated: p.unit.deprecated };
     if (d.type || d.unit) out[String(c.index)] = d;
   }
