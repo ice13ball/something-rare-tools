@@ -50,6 +50,39 @@ describe('track', () => {
   });
 });
 
+describe('track: the converter events', () => {
+  it('carry only the enums and counts: shape and profile are enums, counts are numbers, anything else is dropped', () => {
+    grantConsent();
+    win.dataLayer = [];
+    track('convert_exported', { input_type: 'file', mode: 'browser', shape: 'wide', profile: 'none', n_events: 6.4, n_occurrences: 7, n_measurements: 9 });
+    track('convert_blocked', { input_type: 'file', mode: 'browser', n_errors: 3 });
+    track('convert_started', { input_type: 'file', mode: 'browser' });
+    expect(entries()).toEqual([
+      ['event', 'convert_exported', { input_type: 'file', mode: 'browser', shape: 'wide', profile: 'none', n_events: 6, n_occurrences: 7, n_measurements: 9 }],
+      ['event', 'convert_blocked', { input_type: 'file', mode: 'browser', n_errors: 3 }],
+      ['event', 'convert_started', { input_type: 'file', mode: 'browser' }],
+    ]);
+  });
+
+  it('drops a shape or profile outside the enums, a name, a file name and a value, even forced past the types; and an unknown event', () => {
+    grantConsent();
+    win.dataLayer = [];
+    track('convert_exported', { input_type: 'file', mode: 'browser', shape: 'Calanus finmarchicus', profile: 'my.csv', n_events: 'six', dataset: 'Secret title', file: 'w1.csv' } as never);
+    track('convert_secret' as never, { input_type: 'file', mode: 'browser' });
+    const [e] = entries();
+    expect(Object.keys(e[2] as object).sort()).toEqual(['input_type', 'mode']);
+    expect(JSON.stringify(entries())).not.toMatch(/Calanus|my\.csv|Secret|w1\.csv/);
+    expect(entries()).toHaveLength(1);
+  });
+
+  it('push nothing without consent', () => {
+    denyConsent();
+    win.dataLayer = [];
+    track('convert_exported', { input_type: 'file', mode: 'browser', shape: 'wide' });
+    expect(win.dataLayer).toEqual([]);
+  });
+});
+
 describe('consent', () => {
   it('grant: stores the decision, updates consent first, loads gtag.js once, then configures with an explicit page_location', () => {
     grantConsent();

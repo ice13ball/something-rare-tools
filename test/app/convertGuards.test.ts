@@ -18,8 +18,11 @@ const rel = (p: string): string => p.replace(ROOT + '/', '');
 describe('no lookup host yet', () => {
   const srcFiles = walk(join(ROOT, 'src'), (f) => /\.(ts|tsx|css|html)$/.test(f));
 
-  it('src/ never names marinespecies.org (the WoRMS lookup comes in a later stage, off by default)', () => {
-    expect(srcFiles.filter((f) => /marinespecies\.org/i.test(readFileSync(f, 'utf8'))).map(rel)).toEqual([]);
+  // the identifier prefix of a WoRMS taxon (urn:lsid:marinespecies.org:taxname:<AphiaID>) is written for a user's AphiaID column: it is a name, never an address
+  const withoutLsid = (text: string): string => text.replace(/urn:lsid:marinespecies\.org:taxname:/g, 'urn:lsid:WORMS:taxname:');
+  it('src/ never names marinespecies.org as an address (the WoRMS lookup comes in a later stage, off by default); only the urn:lsid identifier prefix is written', () => {
+    expect(srcFiles.filter((f) => /marinespecies\.org/i.test(withoutLsid(readFileSync(f, 'utf8')))).map(rel)).toEqual([]);
+    expect(srcFiles.filter((f) => readFileSync(f, 'utf8').includes('urn:lsid:marinespecies.org:taxname:')).map(rel)).toEqual(['src/core/convert/build.ts', 'src/core/rules/convert.ts']);
   });
 
   it('src/ names vocab.nerc.ac.uk only as the base of identifier URIs (the converter writes them, /check reads them from headers), never as an address to call', () => {
@@ -35,7 +38,7 @@ describe('no lookup host yet', () => {
   it('the converter page and its worker call no network or storage API at all', () => {
     const files = [
       ...walk(join(ROOT, 'src/core/convert'), (f) => f.endsWith('.ts')),
-      ...['src/app/pages/ConvertPage.tsx', 'src/app/components/ConvertSheetForm.tsx', 'src/app/convertModel.ts', 'src/worker/convert.worker.ts', 'src/worker/convert.handler.ts', 'src/worker/convert.client.ts', 'src/worker/convert.engine.ts', 'src/worker/convert.protocol.ts'].map((f) => join(ROOT, f)),
+      ...['src/app/pages/ConvertPage.tsx', 'src/app/components/ConvertSheetForm.tsx', 'src/app/components/ConvertMetadataForm.tsx', 'src/app/convertModel.ts', 'src/worker/convert.worker.ts', 'src/worker/convert.handler.ts', 'src/worker/convert.client.ts', 'src/worker/convert.engine.ts', 'src/worker/convert.protocol.ts'].map((f) => join(ROOT, f)),
     ];
     for (const f of files) {
       const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -53,7 +56,7 @@ describe('no lookup host yet', () => {
     expect(worker.length).toBeGreaterThan(0);
     for (const f of [...names, ...worker]) {
       const text = readFileSync(f, 'utf8');
-      expect(text, rel(f)).not.toMatch(/marinespecies\.org/i);
+      expect(withoutLsid(text), rel(f)).not.toMatch(/marinespecies\.org/i);
       for (const m of text.matchAll(/.{0,12}vocab\.nerc\.ac\.uk.{0,12}/g)) expect(m[0], `${rel(f)}: ${m[0]}`).toMatch(/https?:\/\/vocab\.nerc\.ac\.uk\/collection\//);
     }
   });

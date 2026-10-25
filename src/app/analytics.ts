@@ -23,19 +23,32 @@ const SCRIPT_SRC = `https://www.googletagmanager.com/gtag/js?id=${SITE.gaId}`;
 
 export type ConsentState = 'granted' | 'denied';
 export type InputType = 'file' | 'zenodo' | 'geonetwork' | 'doi' | 'pangaea' | 'mixed';
-export type TrackEvent = 'check_started' | 'check_finished';
+export type TrackEvent = 'check_started' | 'check_finished' | 'convert_started' | 'convert_blocked' | 'convert_exported';
+/** What a converter export reports about the sheets: wide, long or a mix. Never a name. */
+export type ConvertShapeParam = 'wide' | 'long' | 'mixed';
+/** Whether a CTD / profile file went into the archive (a later stage; `none` until then). */
+export type ConvertProfileParam = 'none' | 'ctd';
 export interface TrackParams {
   input_type: InputType;
   mode: DownloadMode;
   n_errors?: number;
   n_warnings?: number;
   n_info?: number;
+  /** convert_exported: the shape of the converted sheets and the profile flag */
+  shape?: ConvertShapeParam;
+  profile?: ConvertProfileParam;
+  /** convert_exported: how many events, occurrences and measurement rows the archive has */
+  n_events?: number;
+  n_occurrences?: number;
+  n_measurements?: number;
 }
 
 const INPUT_TYPES: readonly string[] = ['file', 'zenodo', 'geonetwork', 'doi', 'pangaea', 'mixed'];
 const MODES: readonly string[] = ['browser', 'server'];
-const EVENTS: readonly string[] = ['check_started', 'check_finished'];
-const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info'] as const;
+const EVENTS: readonly string[] = ['check_started', 'check_finished', 'convert_started', 'convert_blocked', 'convert_exported'];
+const SHAPES: readonly string[] = ['wide', 'long', 'mixed'];
+const PROFILES: readonly string[] = ['none', 'ctd'];
+const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info', 'n_events', 'n_occurrences', 'n_measurements'] as const;
 
 const isState = (v: unknown): v is ConsentState => v === 'granted' || v === 'denied';
 
@@ -185,6 +198,8 @@ export function track(event: TrackEvent, params: TrackParams): void {
   const clean: Record<string, string | number> = {};
   if (typeof p.input_type === 'string' && INPUT_TYPES.includes(p.input_type)) clean.input_type = p.input_type;
   if (typeof p.mode === 'string' && MODES.includes(p.mode)) clean.mode = p.mode;
+  if (typeof p.shape === 'string' && SHAPES.includes(p.shape)) clean.shape = p.shape;
+  if (typeof p.profile === 'string' && PROFILES.includes(p.profile)) clean.profile = p.profile;
   for (const k of COUNT_KEYS) {
     const v = p[k];
     if (typeof v === 'number' && Number.isFinite(v)) clean[k] = Math.max(0, Math.round(v));

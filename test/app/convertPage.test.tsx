@@ -39,9 +39,9 @@ describe('ConvertPage', () => {
 
   it('the four languages differ and every key is written with its diacritics', () => {
     expect(UI.pl['convert.intro']).toContain('węzła');
-    expect(UI.pl['convert.status.text']).toMatch(/podglądzie/);
-    expect(UI.de['convert.status.text']).toContain('Vorschau');
-    expect(UI.fr['convert.status.title']).toBe("Étape d'aperçu");
+    expect(UI.pl['convert.status.text']).toMatch(/ukryta/);
+    expect(UI.de['convert.status.text']).toContain('verborgen');
+    expect(UI.fr['convert.status.title']).toBe('Version de test');
     for (const k of ['convert.title', 'convert.intro', 'convert.status.title', 'convert.status.text'] as const) {
       expect(new Set(LANGS.map((l) => UI[l][k])).size, k).toBe(LANGS.length);
     }
@@ -64,7 +64,8 @@ describe('ConvertPage', () => {
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/hidden/);
     expect(text).toMatch(/read and previewed in your browser; nothing is sent anywhere/);
-    expect(text).toMatch(/There is no export yet/);
+    expect(text).toMatch(/built in your browser and downloaded from it/);
+    expect(text).not.toMatch(/no export yet/);
     expect(text).toMatch(/WoRMS/);
     expect(text).toMatch(/NERC/);
     expect(text).toMatch(/off by default/);

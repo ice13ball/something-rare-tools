@@ -6,6 +6,7 @@ import type { ConvertShape } from '../../core/convert';
 import type { UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
 import type { QuantityForm, SheetChoice } from '../convertModel';
+import { DEVICES } from '../../core/convert/vocab';
 import { FieldLabel, InfoTip } from './InfoTip';
 
 export interface ConvertSheetFormProps {
@@ -167,6 +168,37 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                 {t('convert.effort.columnMissing')}
               </p>
             )}
+          </div>
+
+          <div className="convert-group">
+            <div className="convert-fields">
+              <div className="field">
+                <FieldLabel htmlFor={`${id}-device`} tip="convertDevice">
+                  {t('convert.device.label')}
+                </FieldLabel>
+                <select id={`${id}-device`} value={choice.device} onChange={(e) => onChange({ ...choice, device: e.target.value })}>
+                  <option value="">{t('convert.device.none')}</option>
+                  {Object.entries(DEVICES).map(([key, d]) => (
+                    <option key={key} value={key}>
+                      {d.label}
+                    </option>
+                  ))}
+                  <option value="other">{t('convert.device.other')}</option>
+                </select>
+              </div>
+              {choice.device === 'other' && (
+                <div className="field">
+                  <label htmlFor={`${id}-devicetext`}>{t('convert.device.text')}</label>
+                  <input id={`${id}-devicetext`} type="text" value={choice.deviceText} autoComplete="off" spellCheck={false} onChange={(e) => onChange({ ...choice, deviceText: e.target.value })} />
+                </div>
+              )}
+              <div className="field">
+                <FieldLabel htmlFor={`${id}-mesh`} tip="convertMesh">
+                  {t('convert.mesh.label')}
+                </FieldLabel>
+                <input id={`${id}-mesh`} type="text" inputMode="decimal" value={choice.mesh} autoComplete="off" spellCheck={false} onChange={(e) => onChange({ ...choice, mesh: e.target.value })} />
+              </div>
+            </div>
           </div>
 
           {!hasCruiseColumn && (

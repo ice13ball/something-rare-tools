@@ -103,6 +103,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
                         proposed={proposal?.role ?? { kind: 'ignore' }}
                         cleanHeader={proposal?.cleanHeader ?? col.header}
                         reason={low && proposal ? reasonText(proposal) : undefined}
+                        reasonTip={low && proposal?.reasonCode === 'summary-total' ? 'convertSummaryColumn' : undefined}
                         onRole={(r) => onChange(mappingWith(mapping, col.index, r))}
                       />
                     )}
@@ -124,11 +125,13 @@ interface RoleCellProps {
   proposed: ColumnRole;
   cleanHeader: string;
   reason?: string;
+  /** An ⓘ that explains the reason (the converter's "sum or total column"). */
+  reasonTip?: TipId;
   roleKinds: readonly RoleChoice[];
   onRole: (role: ColumnRole) => void;
 }
 
-function RoleCell({ label, role, proposed, cleanHeader, reason, roleKinds, onRole }: RoleCellProps): React.ReactElement {
+function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleKinds, onRole }: RoleCellProps): React.ReactElement {
   const unit = roleUnit(role) ?? '';
   const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort';
   const converter = roleKinds !== ROLE_KINDS;
@@ -149,6 +152,7 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, roleKinds, onRol
       {reason !== undefined && (
         <p className="low-note">
           <strong>{t('mapping.low')}.</strong> <span className="muted">{reason}</span>
+          {reasonTip !== undefined && <InfoTip id={reasonTip} />}
         </p>
       )}
       {role.kind === 'variable' && (

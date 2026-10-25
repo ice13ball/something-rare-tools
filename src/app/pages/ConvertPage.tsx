@@ -2,17 +2,22 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
+import { judge, metadataFindings, writeConvertSidecar } from '../../core/convert';
+import { EMPTY_METADATA, applyPrefill } from '../../core/convert/metadata';
+import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { UiKey } from '../../core/i18n/ui';
 import type { Finding, SheetMapping } from '../../core/types';
+import { track } from '../analytics';
 import { getConvertEngine } from '../../worker/convert.client';
-import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView } from '../../worker/convert.protocol';
+import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
+import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
 import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, plainOf, requestOf, sheetKey, codesFileName, type SheetChoice } from '../convertModel';
-import { downloadText } from '../download';
+import { candidatesOf, candidateKey, initialChoices, plainOf, requestOf, sheetKey, codesFileName, tableMetadataOf, type SheetChoice } from '../convertModel';
+import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
 import { CONVERT_ROLE_CHOICES } from '../mappingModel';
@@ -23,6 +28,8 @@ export interface ConvertPageProps {
   /** The worker client. Default: the page's module worker, created on first use. Tests pass a direct engine. */
   engine?: ConvertEngine;
   download?: typeof downloadText;
+  /** Offers the archive (a Blob) as a download. Tests pass a spy. */
+  downloadFile?: typeof downloadBlob;
 }
 
 type Phase = 'input' | 'reading' | 'work';
@@ -34,6 +41,18 @@ async function toInputFiles(files: File[]): Promise<InputFile[]> {
 }
 
 const splitText = (s: TaxonSplit): string => s.scientificName;
+
+/**
+ * What a tick of "I accept" holds for: the findings of one rule as they are now. A tick is kept per rule id together with this fingerprint, so a rule whose
+ * findings change after the tick (a new mapping, another sheet) is no longer accepted and has to be ticked again.
+ */
+const fingerprint = (findings: readonly Finding[]): string => JSON.stringify(findings.map((f) => [f.file, f.sheet, f.field, f.value, f.lines, f.params]));
+
+/** The shape a GA4 event reports: wide, long or mixed. Never a name. */
+const shapeOf = (shapes: readonly ('wide' | 'long')[]): 'wide' | 'long' | 'mixed' => (shapes.every((x) => x === 'wide') ? 'wide' : shapes.every((x) => x === 'long') ? 'long' : 'mixed');
+
+/** The key of the "unconfirmed taxon columns" acceptance, which is the page's own (it is no rule). */
+const UNCONFIRMED_KEY = 'unconfirmed-taxon-columns';
 const sexText = (sex: 'female' | 'male'): string => t(`convert.sex.${sex}` as UiKey);
 
 function nodeLine(e: EventRec): string {
@@ -47,12 +66,14 @@ function nodeLine(e: EventRec): string {
 }
 
 /**
- * /convert, stage 1b: drop files, check the columns, decide the shape and what the numbers mean, approve taxon splits, see the event tree and a
- * summary. There is NO export yet, and the page is hidden (in no menu, index card or sitemap). Files are read in the browser by the convert worker;
- * nothing is sent anywhere and nothing is stored. All state lives here and starts empty for each upload; only a companion file dropped with the
- * data can pre-tick the full-species-list and the station-prefix choices.
+ * /convert: drop files, check the columns, decide the shape and what the numbers mean, approve taxon splits, see the event tree, describe the dataset,
+ * read the summary, accept the warnings and export the Darwin Core Archive (stage 2). The page is hidden (in no menu, index card or sitemap). Files are
+ * read and the archive is built in the browser by the convert worker; nothing is sent anywhere and nothing is stored. All state lives here and starts
+ * empty for each upload; only a companion file dropped with the data can pre-tick the full-species-list and the station-prefix choices, and (stage 3)
+ * dropped metadata files fill empty fields of the description. The export button works only when nothing blocks, the description is complete and every
+ * warning rule is accepted; the worker checks all of that again before it writes anything.
  */
-export function ConvertPage({ engine: engineProp, download = downloadText }: ConvertPageProps): React.ReactElement {
+export function ConvertPage({ engine: engineProp, download = downloadText, downloadFile = downloadBlob }: ConvertPageProps): React.ReactElement {
   useLang();
   const engine = useMemo(() => engineProp ?? getConvertEngine(), [engineProp]);
   const [phase, setPhase] = useState<Phase>('input');
@@ -73,11 +94,20 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
   const [working, setWorking] = useState(false);
   const [codesDone, setCodesDone] = useState<Record<string, string | null>>({});
   const [filesChosen, setFilesChosen] = useState(0);
+  const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
+  // rule id -> the fingerprint of its findings when the user ticked it (nothing is stored beyond this page state)
+  const [accepted, setAccepted] = useState<Record<string, string>>({});
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<(Pick<ExportResult, 'fileName' | 'counts' | 'deflated'>) | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const token = useRef(0);
   const files = parsed?.files ?? [];
 
   // Work that leaving would lose: files chosen, or a conversion in view. Never an empty page.
   useLeaveWarning(filesChosen > 0 || phase !== 'input');
+
+  // the part of the description that shows in the tables: a change of these three reruns the conversion, typing anywhere else does not
+  const tableMeta = useMemo(() => tableMetadataOf(meta), [meta.title, meta.datasetName, meta.institutionCode, meta.basisOfRecord]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (input: CheckInput): Promise<void> => {
     setProblem(null);
@@ -90,10 +120,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     setConvertError(null);
     setFlattenStation(false);
     setFlattenCruise(false);
+    setAccepted({});
+    setExported(null);
+    setExportError(null);
+    track('convert_started', { input_type: 'file', mode: 'browser' });
     setPhase('reading');
     try {
       const p = await engine.parse(await toInputFiles(input.files));
       setParsed(p);
+      // the description starts empty, plus whatever the dropped metadata files said (an empty field only; the user edits everything)
+      setMeta(applyPrefill(EMPTY_METADATA, p.prefill));
       setMappings(Object.fromEntries(p.files.map((f) => [f.fileId, f.mappings])));
       setChoices(initialChoices(p));
       // the ticks start from a companion file of THIS drop, and from nothing else
@@ -112,6 +148,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     setParsed(null);
     setView(null);
     setProblem(null);
+    setAccepted({});
+    setExported(null);
+    setExportError(null);
+    setMeta(EMPTY_METADATA);
     setPhase('input');
   };
 
@@ -120,9 +160,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     if (phase !== 'work' || !parsed) return undefined;
     const mine = ++token.current;
     setWorking(true);
+    // a ticked warning holds only until a decision changes: every change of what is converted clears every tick
+    setAccepted({});
     const timer = setTimeout(() => {
       engine
-        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed }))
+        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta }))
         .then(
           (v) => {
             if (token.current !== mine) return;
@@ -138,7 +180,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
         });
     }, 120);
     return () => clearTimeout(timer);
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed]);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta]);
 
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
@@ -181,10 +223,62 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     return { verbatimIdentification: s.verbatim, scientificName: name, ...(q ? { identificationQualifier: q } : {}), ...(st ? { lifeStage: st } : {}), ...(d.sex ? { sex: d.sex } : {}) };
   };
   const setDraft = (s: (typeof toApprove)[number], patch: Partial<TaxonSplit>): void => setDrafts((prev) => ({ ...prev, [s.verbatim]: { ...draftOf(s), ...patch } }));
-  const blocking = (view?.findings ?? []).filter((f) => f.severity === 'error');
-  const warnings = (view?.findings ?? []).filter((f) => f.severity === 'warning');
-  const infos = (view?.findings ?? []).filter((f) => f.severity === 'info');
+  // what each finding does to the export (core/convert/policy.ts): blocks, needs an acceptance, or is only shown
+  const judged = useMemo(() => judge(view?.findings ?? []), [view]);
+  const metaFindings = useMemo(() => metadataFindings(meta), [meta]);
+  const blocking = judged.blocking;
+  const infos = judged.showOnly;
   const showPrefix = prefixStation || view?.codeCollision === true;
+
+  // warning rules to accept: one tick per rule, valid only for the findings it was given for; plus the page's own "unconfirmed taxon columns"
+  const prints = useMemo(() => Object.fromEntries(judged.acceptRules.map((r) => [r, fingerprint(judged.toAccept.filter((f) => f.ruleId === r))])), [judged]);
+  const isAccepted = (rule: string): boolean => accepted[rule] !== undefined && accepted[rule] === prints[rule];
+  // the identity of the columns left out (not their number): another set of columns is another acceptance
+  const unconfirmedPrint = unconfirmed.map((c) => c.key).sort().join('|');
+  const unconfirmedAccepted = unconfirmed.length === 0 || accepted[UNCONFIRMED_KEY] === unconfirmedPrint;
+  const allAccepted = judged.acceptRules.every(isAccepted) && unconfirmedAccepted;
+  const nothingToWrite = view !== null && (view.tree.events === 0 || view.stats.occurrences === 0);
+  const canExport = view !== null && !working && !exporting && judged.blocking.length === 0 && metaFindings.length === 0 && allAccepted && !nothingToWrite;
+  const shapes = useMemo(() => Object.entries(choices).filter(([, c]) => c.use).map(([, c]) => c.shape), [choices]);
+
+  // GA4, after consent only (analytics.ts drops everything else): when the user presses Export while something blocks it. Never on a first view. A count only (what blocks plus the kinds of warning not yet accepted).
+  const pressExport = (): void => {
+    if (exporting || working || !parsed) return;
+    if (!canExport) {
+      track('convert_blocked', { input_type: 'file', mode: 'browser', n_errors: judged.blocking.length + metaFindings.length + judged.acceptRules.filter((r) => !isAccepted(r)).length + (unconfirmedAccepted ? 0 : 1) });
+      return;
+    }
+    void doExport();
+  };
+
+  const doExport = async (): Promise<void> => {
+    if (!parsed || !canExport) return;
+    setExporting(true);
+    setExportError(null);
+    setExported(null);
+    try {
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed });
+      const acceptedRules = judged.acceptRules.filter(isAccepted);
+      const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+      downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
+      setExported({ fileName: res.fileName, counts: res.counts, deflated: res.deflated });
+      track('convert_exported', {
+        input_type: 'file',
+        mode: 'browser',
+        shape: shapeOf(shapes),
+        profile: 'none',
+        n_events: res.counts.events,
+        n_occurrences: res.counts.occurrences,
+        n_measurements: res.counts.measurements,
+      });
+    } catch (e) {
+      setExportError(messageOf(e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const downloadCompanion = (): void => download(writeConvertSidecar({ fullList, prefixStation }), 'convert-companion.csv', 'text/csv');
 
   return (
     <Layout titleKey="convert.title">
@@ -490,26 +584,104 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
             </div>
           </section>
 
+          <section className="convert-meta" aria-labelledby="convert-meta-title">
+            <h2 id="convert-meta-title">{t('convert.meta.title')}</h2>
+            <p>{t('convert.meta.intro')}</p>
+            <ConvertMetadataForm value={meta} onChange={setMeta} />
+            <FindingList titleKey="convert.summary.blocking" findings={metaFindings} kind="error" />
+          </section>
+
           <section className="convert-summary" aria-labelledby="convert-summary-title" aria-busy={working}>
             <h2 id="convert-summary-title">{t('convert.summary.title')}</h2>
             {working && !view && <p className="muted">{t('convert.working')}</p>}
             {view && (
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
+                <p className="muted">{t('convert.summary.noLand')}</p>
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
                   </p>
                 )}
                 <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" />
-                <FindingList titleKey="convert.summary.warnings" findings={warnings} kind="warning" />
+                {(judged.acceptRules.length > 0 || unconfirmed.length > 0) && (
+                  <div className="convert-accept">
+                    <HeadingTip tip="convertAccept">
+                      <h3>{t('convert.accept.title')}</h3>
+                    </HeadingTip>
+                    <p>{t('convert.accept.intro')}</p>
+                    {judged.acceptRules.map((rule) => {
+                      const group = judged.toAccept.filter((f) => f.ruleId === rule);
+                      return (
+                        <div key={rule} className="convert-findings" data-kind="warning" data-rule-group={rule}>
+                          <label className="inline-choice">
+                            <input
+                              type="checkbox"
+                              checked={isAccepted(rule)}
+                              onChange={(e) => setAccepted((prev) => (e.target.checked ? { ...prev, [rule]: prints[rule] } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== rule))))}
+                            />
+                            <span>{t('convert.accept.rule', { n: group.length, rule })}</span>
+                          </label>
+                          <FindingItems findings={group} />
+                        </div>
+                      );
+                    })}
+                    {unconfirmed.length > 0 && (
+                      <div className="convert-findings" data-kind="warning" data-rule-group={UNCONFIRMED_KEY}>
+                        <label className="inline-choice">
+                          <input
+                            type="checkbox"
+                            checked={unconfirmedAccepted}
+                            onChange={(e) => setAccepted((prev) => (e.target.checked ? { ...prev, [UNCONFIRMED_KEY]: unconfirmedPrint } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== UNCONFIRMED_KEY))))}
+                          />
+                          <span>{t('convert.accept.unconfirmed', { n: unconfirmed.length })}</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <FindingList titleKey="convert.summary.info" findings={infos} kind="info" />
                 <p role="status" className={view.ok ? 'notice' : 'notice notice-blocked'}>
                   {view.ok ? t('convert.summary.none') : t('convert.summary.blocked')}
                 </p>
               </>
             )}
-            <p className="muted">{t('convert.summary.noExport')}</p>
+            <div className="convert-export">
+              <HeadingTip tip="convertExport">
+                <h3>{t('convert.export.title')}</h3>
+              </HeadingTip>
+              <p className="muted">{t('convert.export.files')}</p>
+              {nothingToWrite && <p className="notice">{t('convert.export.empty')}</p>}
+              <div className="confirm-actions">
+                <button type="button" className="button" aria-disabled={!canExport} onClick={pressExport}>
+                  {t('convert.export.button')}
+                </button>
+              </div>
+              {view !== null && !canExport && !exporting && !working && (
+                <p className="muted" role="note">
+                  {t('convert.export.blocked')}
+                </p>
+              )}
+              {exporting && <p role="status">{t('convert.export.working')}</p>}
+              {exported && (
+                <p role="status">
+                  {t('convert.export.done', { name: exported.fileName, events: exported.counts.events, occurrences: exported.counts.occurrences, measurements: exported.counts.measurements })}
+                </p>
+              )}
+              {exported && !exported.deflated && <p className="muted">{t('convert.export.stored')}</p>}
+              {exportError !== null && (
+                <p className="error-text" role="alert">
+                  {t('convert.error', { message: exportError })}
+                </p>
+              )}
+              <div className="choice-line">
+                <button type="button" className="button" onClick={downloadCompanion}>
+                  {t('convert.companion.button')}
+                </button>
+                <InfoTip id="convertCompanion" />
+              </div>
+              <p className="muted">{t('convert.companion.help')}</p>
+            </div>
             <div className="confirm-actions">
               <button type="button" className="link-button" onClick={reset}>
                 {t('convert.restart')}
@@ -522,20 +694,26 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
   );
 }
 
-function FindingList({ titleKey, findings, kind }: { titleKey: 'convert.summary.blocking' | 'convert.summary.warnings' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity'] }): React.ReactElement | null {
+function FindingItems({ findings }: { findings: Finding[] }): React.ReactElement {
   const { lang } = useLang();
+  return (
+    <ul>
+      {findings.map((f, i) => (
+        <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
+          {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
+          {plainOf(f, lang)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function FindingList({ titleKey, findings, kind }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity'] }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <ul>
-        {findings.map((f, i) => (
-          <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
-            {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
-            {plainOf(f, lang)}
-          </li>
-        ))}
-      </ul>
+      <FindingItems findings={findings} />
     </div>
   );
 }
