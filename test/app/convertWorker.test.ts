@@ -34,9 +34,9 @@ describe('parse', () => {
     const e = createDirectConvertEngine();
     const r = await e.parse([file('w1.csv', W1_CSV), file('run.sidecar.csv', SIDECAR_CSV)]);
     expect(r.mappingFiles).toEqual(['run.sidecar.csv']);
-    expect(r.settings).toEqual({ fullList: true, prefixStation: true });
+    expect(r.settings).toEqual({ fullList: true, prefixStation: true, worms: false });
     expect(r.files.map((f) => f.fileName)).toEqual(['w1.csv']);
-    expect((await e.parse([file('w1.csv', W1_CSV)])).settings).toEqual({ fullList: false, prefixStation: false });
+    expect((await e.parse([file('w1.csv', W1_CSV)])).settings).toEqual({ fullList: false, prefixStation: false, worms: false });
   });
 
   it('reports a file that holds no table without throwing', async () => {

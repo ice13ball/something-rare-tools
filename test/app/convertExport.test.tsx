@@ -318,7 +318,7 @@ describe('GA4: only after consent, only enums and counts', () => {
     expect(e[0].params).toEqual({ input_type: 'file', mode: 'browser' });
     expect(Object.keys(e[1].params).sort()).toEqual(['input_type', 'mode', 'n_errors']);
     expect(e[1].params.n_errors).toBeGreaterThan(0);
-    expect(e[2].params).toEqual({ input_type: 'file', mode: 'browser', shape: 'wide', profile: 'none', meta_source: 'none', n_events: 6, n_occurrences: 7, n_measurements: 9 });
+    expect(e[2].params).toEqual({ input_type: 'file', mode: 'browser', shape: 'wide', profile: 'none', meta_source: 'none', worms: 'none', n_events: 6, n_occurrences: 7, n_measurements: 9 });
     expect(JSON.stringify(win.dataLayer)).not.toMatch(/w1\.csv|Calanus|Synthetic counts|ada@|INVENTED|CR1|S1-a/);
   });
 

@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapLib } from '../../src/app/components/MapPreview';
 import { initLang, setLang } from '../../src/app/i18n';
 import { InputPanel } from '../../src/app/components/InputPanel';
@@ -27,6 +27,7 @@ import { dataciteMock, runnerDeps, virtualClock } from '../collection/helpers';
 import { DC, dataciteJson, zenodoJson, ZEN } from '../helpers/licenceFixtures';
 import { MapFetcher } from '../sources/mapFetcher';
 import * as meta from '../convert/metaFixtures';
+import { wormsMock } from '../helpers/wormsFixtures';
 
 const wideCsv = readFileSync(join(__dirname, '..', 'fixtures', 'layout-wide.csv'), 'utf-8');
 const seen = new Set<TipId>();
@@ -191,7 +192,7 @@ describe('/convert (hidden)', () => {
     // the proposed taxon columns have their own control and tip; they are confirmed before anything is converted
     expectTips(['convertTaxa', 'convertDepthBound']);
     fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
-    expectTips(['convertRoles', 'convertSheetUse', 'convertShape', 'convertQuantityKind', 'convertEffort', 'convertCruise', 'convertFullList', 'convertStationPrefix', 'convertFlattenStation', 'convertFlattenCruise', 'convertTree', 'convertDevice', 'convertMesh']);
+    expectTips(['convertRoles', 'convertSheetUse', 'convertShape', 'convertQuantityKind', 'convertEffort', 'convertCruise', 'convertFullList', 'convertStationPrefix', 'convertFlattenStation', 'convertFlattenCruise', 'convertTree', 'convertDevice', 'convertMesh', 'convertWormsOptIn', 'convertWormsPrivacy']);
     // the role column header of /convert has its own tip, and /check's is not on this page
     expect(document.querySelector('[data-tip="roles"]')).toBeNull();
     // the quantity fields that depend on the kind
@@ -270,6 +271,27 @@ describe('/convert: the acceptance of warnings and the sum column', () => {
     await screen.findByRole('heading', { name: UI.en['convert.accept.title'] });
     expectTips(['convertAccept']);
     expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+  });
+});
+
+describe('/convert: the WoRMS result table', () => {
+  it('after a lookup the result table and the decision carry their own ⓘ, in every language', async () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      vi.stubGlobal('fetch', wormsMock().fetch);
+      const csv = 'occurrenceID,eventID,scientificName,individualCount,decimalLatitude,decimalLongitude,eventDate\no1,E1,Calanus finmarchicus,5,54.1,7.9,2022-05-05\no2,E1,Oithona,3,54.1,7.9,2022-05-05\n';
+      const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+      chooseFiles(container, [{ name: 'l.csv', text: csv }]);
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
+      await screen.findByRole('heading', { name: UI[lang]['convert.worms.title'] });
+      fireEvent.click(screen.getByRole('checkbox', { name: UI[lang]['convert.worms.optin'] }));
+      fireEvent.click(await screen.findByRole('button', { name: translate(lang, 'convert.worms.lookup', { n: 2 }) }));
+      await screen.findByRole('table');
+      expectTips(['convertWormsOptIn', 'convertWormsPrivacy', 'convertWormsTable', 'convertWormsChoice'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+      vi.unstubAllGlobals();
+    }
   });
 });
 

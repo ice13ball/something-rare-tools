@@ -44,6 +44,12 @@ import type { RuleSpec } from './spec';
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
  *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
+ *   CONV-NAMEID-INCOMPLETE     count, names     value = an example name; the sheet gives a taxon ID for some rows of the name and not for others (the name is not looked up)
+ *   CONV-NAMEID-CONFLICT       count, names     value = an example name; the sheet gives the name more than one taxon ID
+ *   CONV-WORMS-UNDECIDED       count, names     value = an example name; count = names whose WoRMS result the user has not chosen yet
+ *   CONV-WORMS-NO-MATCH        count, names     value = an example name; count = names WoRMS has no record for (no ID is written)
+ *   CONV-WORMS-NOT-MARINE      count, names     value = an example name; count = confirmed names that WoRMS marks as freshwater or terrestrial only
+ *   CONV-NO-SAMPLING-DESCRIPTOR (none)          no eMoF row of the archive is a sampling descriptor / effort term of BioCheck's BODCeffort list
  *   CONV-DEVICE-MISSING        (none)           the sheet has no sampling device
  *   CONV-LICENCE-DIFFERS       chosen, source   the licence chosen differs from the recognised licence of the dropped metadata files
  *   CONV-MESH-INVALID          reason           value = the typed mesh size; reason = not-a-number | not-positive | ambiguous | thousands
@@ -52,6 +58,17 @@ const NERC_MANUAL = {
   label: 'OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)',
   url: 'https://manual.obis.org/format_emof.html',
   locator: '"For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."',
+};
+
+const OBIS_NAME_MATCH = {
+  label: 'OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)',
+  url: 'https://manual.obis.org/name_matching.html',
+  locator: '"WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"',
+};
+const BIOCHECK_EFFORT = {
+  label: 'EMODnet Biocheck (R), R/checkdataset.R lines 562-566 and data/BODCeffort (master 701e6e7, 2026-10-08)',
+  url: 'https://github.com/EMODnet/EMODnetBiocheck/blob/master/R/checkdataset.R',
+  locator: 'if (sum(grepl(paste(BODCeffort, collapse="|"), unique(eMoF$measurementTypeID))) == 0) -> level "warning", field "measurementType", message "No sampling descriptors/effort present"',
 };
 
 export const CONVERT_RULES: readonly RuleSpec[] = [
@@ -404,12 +421,93 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wystąpienie nie ma|wystąpienia nie mają|wystąpień nie ma} scientificNameID. BioCheck i kontrole OBIS zgłaszają archiwum bez niego jako błąd. W arkuszu szerokim identyfikatory dojdą z późniejszym wyszukiwaniem w WoRMS; arkusz długi może wskazać kolumnę z nimi (AphiaID lub scientificNameID).`,
-      en: `{count} {+count:occurrence has|occurrences have} no scientificNameID. BioCheck and the OBIS checks report an archive without it as an error. In a wide sheet the IDs come with the later WoRMS lookup; a long sheet can mark a column holding them (an AphiaID or scientificNameID column).`,
-      de: `{count} {+count:Vorkommen hat|Vorkommen haben} keine scientificNameID. BioCheck und die OBIS-Prüfungen melden ein Archiv ohne sie als Fehler. In einem breiten Blatt kommen die Kennungen mit der späteren WoRMS-Abfrage; ein langes Blatt kann eine Spalte mit ihnen markieren (AphiaID oder scientificNameID).`,
-      fr: `{count} {+count:occurrence n'a|occurrences n'ont} pas de scientificNameID. BioCheck et les contrôles d'OBIS signalent une archive sans lui comme une erreur. Dans une feuille large, les identifiants viendront de la recherche WoRMS ultérieure ; une feuille longue peut marquer leur colonne (AphiaID ou scientificNameID).`,
+      pl: `{count} {+count:wystąpienie nie ma|wystąpienia nie mają|wystąpień nie ma} scientificNameID; BioCheck i OBIS zgłaszają to jako błąd. W arkuszu szerokim identyfikatory dają teraz nazwy sprawdzone w WoRMS (opcja na tej stronie, domyślnie wyłączona); arkusz długi może wskazać kolumnę z nimi. Potwierdzone nazwy nie są liczone.`,
+      en: `{count} {+count:occurrence has|occurrences have} no scientificNameID, and BioCheck and OBIS report that as an error. In a wide sheet the IDs now come from the WoRMS lookup (an option on this page, off by default); a long sheet can mark a column holding them. Names with a confirmed ID are not counted.`,
+      de: `{count} {+count:Vorkommen hat|Vorkommen haben} keine scientificNameID; BioCheck und OBIS melden das als Fehler. In einem breiten Blatt liefert jetzt die WoRMS-Abfrage die Kennungen (Option auf dieser Seite, standardmäßig aus); ein langes Blatt kann eine Spalte damit markieren. Bestätigte Namen zählen nicht.`,
+      fr: `{count} {+count:occurrence n'a|occurrences n'ont} pas de scientificNameID ; BioCheck et OBIS le signalent comme une erreur. Dans une feuille large, la recherche WoRMS fournit les identifiants (option de cette page, désactivée par défaut) ; une feuille longue peut marquer une colonne. Les noms confirmés ne sont pas comptés.`,
     },
-    technical: `{file}: {count} occurrence(s) have no scientificNameID. BioCheck lists scientificNameID among the required fields of a leaf event (docs/research/qc-sources.md, Item 2). This stage writes one only from a column the user marked (a scientificNameID column as given, a WoRMS AphiaID column as urn:lsid:marinespecies.org:taxname:<id>); nothing is looked up or guessed.`,
+    technical: `{file}: {count} occurrence(s) have no scientificNameID. BioCheck lists scientificNameID among the required fields of a leaf event (docs/research/qc-sources.md, Item 2). It is written only from a column the user marked (a scientificNameID column as given, a WoRMS AphiaID column as urn:lsid:marinespecies.org:taxname:<id>) or from a WoRMS result the user pressed the lookup button for and confirmed (an exact single match, or the result the user chose); nothing is guessed.`,
+  },
+  {
+    id: 'CONV-WORMS-UNDECIDED',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'names'],
+    plain: {
+      pl: `{count} {+count:nazwa z wyszukiwania w WoRMS czeka|nazwy z wyszukiwania w WoRMS czekają|nazw z wyszukiwania w WoRMS czeka} na Twój wybór: {names}. Dla każdej wybierz jeden z wyników albo „bez identyfikatora”; nic niepewnego nie jest przyjmowane automatycznie.`,
+      en: `{count} {+count:name|names} from the WoRMS lookup {+count:is|are} waiting for your choice: {names}. For each one, choose one of the results or "no ID"; nothing uncertain is accepted automatically.`,
+      de: `{count} {+count:Name aus der WoRMS-Abfrage wartet|Namen aus der WoRMS-Abfrage warten} auf Ihre Wahl: {names}. Wählen Sie für jeden eines der Ergebnisse oder „ohne Kennung“; nichts Unsicheres wird automatisch übernommen.`,
+      fr: `{count} {+count:nom de la recherche WoRMS attend|noms de la recherche WoRMS attendent} votre choix : {names}. Pour chacun, choisissez l'un des résultats ou « sans identifiant » ; rien d'incertain n'est accepté automatiquement.`,
+    },
+    technical: `{count} name(s) looked up in WoRMS have a result that is not a single exact match (a phonetic or near match, a genus-only match, several results, or a deleted record) and the user has not chosen one of the results or "no ID" yet (first: "{value}"). Only exactly one result with match_type exact is automatic. The export is blocked until every such name is decided. Names: {names}.`,
+    citations: [OBIS_NAME_MATCH],
+  },
+  {
+    id: 'CONV-WORMS-NO-MATCH',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'names'],
+    plain: {
+      pl: `WoRMS nie ma wyniku dla {count} {+count:nazwy|nazw|nazw}: {names}. Ich scientificNameID zostaje puste; OBIS i BioCheck zgłaszają to jako brak. Sprawdź pisownię albo napisz do WoRMS, jeśli takson jest nowy.`,
+      en: `WoRMS has no result for {count} {+count:name|names}: {names}. Their scientificNameID stays empty; OBIS and BioCheck report that as missing. Check the spelling, or write to WoRMS if the taxon is new.`,
+      de: `WoRMS hat für {count} {+count:Namen|Namen} kein Ergebnis: {names}. Ihre scientificNameID bleibt leer; OBIS und BioCheck melden das als fehlend. Prüfen Sie die Schreibweise oder schreiben Sie an WoRMS, wenn das Taxon neu ist.`,
+      fr: `WoRMS n'a aucun résultat pour {count} {+count:nom|noms} : {names}. Leur scientificNameID reste vide ; OBIS et BioCheck le signalent comme manquant. Vérifiez l'orthographe, ou écrivez à WoRMS si le taxon est nouveau.`,
+    },
+    technical: `{count} name(s) came back from AphiaRecordsByMatchNames with no record (an empty array for the name, or HTTP 204 for a whole batch), e.g. "{value}". scientificNameID is left empty for them. The OBIS Manual asks to contact WoRMS for a taxon that is not registered. Names: {names}.`,
+    citations: [OBIS_NAME_MATCH],
+  },
+  {
+    id: 'CONV-WORMS-NOT-MARINE',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'names'],
+    plain: {
+      pl: `WoRMS oznacza {count} {+count:potwierdzoną nazwę|potwierdzone nazwy|potwierdzonych nazw} jako słodkowodne lub lądowe, nie morskie ani słonawowodne: {names}. Sprawdź, czy to na pewno właściwe taksony; identyfikator jest zapisywany tak, jak go potwierdzono.`,
+      en: `WoRMS marks {count} confirmed {+count:name|names} as freshwater or terrestrial only, not marine or brackish: {names}. Check that these are the right taxa; the ID is written as confirmed.`,
+      de: `WoRMS kennzeichnet {count} bestätigte {+count:Namen|Namen} nur als Süßwasser oder terrestrisch, nicht als marin oder brackig: {names}. Prüfen Sie, ob das die richtigen Taxa sind; die Kennung wird wie bestätigt geschrieben.`,
+      fr: `WoRMS marque {count} {+count:nom confirmé|noms confirmés} comme d'eau douce ou terrestre seulement, ni marin ni saumâtre : {names}. Vérifiez qu'il s'agit bien des bons taxons ; l'identifiant est écrit tel que confirmé.`,
+    },
+    technical: `{count} confirmed name(s) have a WoRMS record with isMarine and isBrackish not set and isFreshwater or isTerrestrial set, e.g. "{value}". The ID is written as confirmed; a record with no habitat flag at all is unknown, not "not marine". Names: {names}.`,
+  },
+  {
+    id: 'CONV-NAMEID-INCOMPLETE',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'names'],
+    plain: {
+      pl: `Arkusz podaje identyfikator taksonu dla części wierszy {count} {+count:nazwy|nazw|nazw}, ale nie dla innych: {names}. Wiersze bez niego zostają bez identyfikatora, a nazwa nie jest wyszukiwana w WoRMS. Uzupełnij arkusz albo zaakceptuj to.`,
+      en: `The sheet gives a taxon ID for some rows of {count} {+count:name|names} but not for others: {names}. The rows without one stay without an ID, and the name is not looked up in WoRMS. Complete the sheet, or accept this.`,
+      de: `Das Blatt nennt für einige Zeilen von {count} {+count:Name|Namen} eine Taxon-Kennung, für andere nicht: {names}. Die Zeilen ohne Kennung bleiben ohne, und der Name wird nicht in WoRMS abgefragt. Ergänzen Sie das Blatt oder akzeptieren Sie das.`,
+      fr: `La feuille donne un identifiant de taxon pour certaines lignes de {count} {+count:nom|noms}, mais pas pour d'autres : {names}. Les lignes sans identifiant en restent sans, et le nom n'est pas recherché dans WoRMS. Complétez la feuille ou acceptez-le.`,
+    },
+    technical: `{count} name(s) have a taxon ID from the sheet on some rows and none on others (first "{value}"): {names}. Rows with an ID keep it; the others get no ID. A name with a sheet ID on any row is never sent to WoRMS and never given a WoRMS ID.`,
+  },
+  {
+    id: 'CONV-NAMEID-CONFLICT',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'names'],
+    plain: {
+      pl: `Arkusz podaje więcej niż jeden identyfikator taksonu dla {count} {+count:nazwy|nazw|nazw}: {names}. Każdy wiersz zachowuje swój identyfikator. Sprawdź, czy to różne taksony o tej samej nazwie; jeśli nie, popraw arkusz. Zaakceptuj to, aby eksportować bez zmian.`,
+      en: `The sheet gives {count} {+count:name|names} more than one taxon ID: {names}. Each row keeps the ID it has. Check that these are different taxa that share a name; if not, correct the sheet. Accept this to export as it is.`,
+      de: `Das Blatt nennt für {count} {+count:Name|Namen} mehr als eine Taxon-Kennung: {names}. Jede Zeile behält ihre Kennung. Prüfen Sie, ob es verschiedene Taxa mit demselben Namen sind; sonst korrigieren Sie das Blatt. Akzeptieren Sie das, um unverändert zu exportieren.`,
+      fr: `La feuille donne plus d'un identifiant de taxon pour {count} {+count:nom|noms} : {names}. Chaque ligne garde son identifiant. Vérifiez qu'il s'agit de taxons différents portant le même nom ; sinon corrigez la feuille. Acceptez-le pour exporter tel quel.`,
+    },
+    technical: `{count} name(s) have more than one distinct scientificNameID in the sheet (first "{value}"): {names}. Nothing is changed: each row keeps its own ID (two taxa can share a name, e.g. homonyms), and the warning has to be accepted.`,
+  },
+  {
+    id: 'CONV-NO-SAMPLING-DESCRIPTOR',
+    category: 'B',
+    severity: 'warning',
+    params: [],
+    plain: {
+      pl: `W tabeli pomiarów archiwum nie ma żadnego opisu próbkowania ani wysiłku (wielkości próby lub oczka sieci). BioCheck zgłosi „No sampling descriptors/effort present”. Podaj wielkość próby lub oczko sieci, jeśli je znasz, albo zaakceptuj ostrzeżenie.`,
+      en: `The archive's measurement table has no sampling descriptor or effort (a sample size or a mesh size). BioCheck will report "No sampling descriptors/effort present". Give the sample size or the mesh size if you know it, or accept the warning.`,
+      de: `Die Messwerttabelle des Archivs enthält keine Angabe zur Probenahme oder zum Aufwand (Probengröße oder Maschenweite). BioCheck meldet „No sampling descriptors/effort present“. Geben Sie die Probengröße oder die Maschenweite an, wenn Sie sie kennen, oder akzeptieren Sie die Warnung.`,
+      fr: `La table de mesures de l'archive ne contient aucun descripteur d'échantillonnage ni effort (taille d'échantillon ou vide de maille). BioCheck signalera « No sampling descriptors/effort present ». Indiquez la taille d'échantillon ou le vide de maille si vous le connaissez, ou acceptez l'avertissement.`,
+    },
+    technical: `The archive writes an extendedmeasurementorfact.txt and no row of it has a measurementTypeID containing a code of BioCheck's BODCeffort list (R/checkdataset.R, grepl over BODCeffort; the list holds VOLWBSMP, AREABEDS and MSHSIZE1, which this tool writes for a sample size and a mesh size, among 26 others). BioCheck runs this check only when the archive has an eMoF table (R/checkdataset.R, inside the block that starts at line 457 (if exists eMoF)), so it is raised only then.`,
+    citations: [BIOCHECK_EFFORT],
   },
   {
     id: 'CONV-DEVICE-MISSING',
@@ -549,8 +647,18 @@ function fill(template: string, f: Finding, lang?: Lang): string {
 }
 
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
+/** The lists of names or columns are kept whole in the finding (so that the acceptance of a warning stands for the whole set); the text shows the first few. */
+const SHOWN_ITEMS = 6;
+function shortList(text: string): string {
+  const items = text.split(', ');
+  return items.length <= SHOWN_ITEMS ? text : `${items.slice(0, SHOWN_ITEMS).join(', ')}, …`;
+}
+
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
+  if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
+    f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
+  }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
     const words = f.params.missing.split(', ').map((m) => MISSING_WORDS[m]?.[lang] ?? m);

@@ -7,6 +7,7 @@ import type { ApprovedSplits } from '../core/convert';
 import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertPrefill } from '../core/convert/prefill';
 import type { ConvertSettings } from '../core/convert/settings';
+import type { WormsLookup } from '../core/convert/worms';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -54,6 +55,8 @@ export interface ConvertRequestBody {
   sheets: ConvertSheetRequest[];
   options: ConvertOptions;
   approvedSplits: ApprovedSplits;
+  /** What the WoRMS opt-in found and the user decided, by scientificName (stage 4). Absent = no lookup. Plain data; the worker never fetches. */
+  worms?: WormsLookup;
   /**
    * The description of the dataset. The conversion view needs only the three fields that appear in the tables (datasetName, institutionCode,
    * basisOfRecord); the page passes the rest empty so that typing a title does not rerun the conversion. Absent = all empty.
@@ -88,6 +91,11 @@ export interface ConvertView {
   tree: TreeSummary;
   splits: SplitEntry[];
   cruiseText: string[];
+  /**
+   * The names a WoRMS lookup would send (the distinct scientificName values after the approved splits, of the occurrences that have no ID from the sheet)
+   * and how many distinct names are left out because the sheet already gives them an ID. Names only.
+   */
+  worms: { names: string[]; withSheetId: number; applied: number };
   /** The first few events of each level, for the preview. */
   examples: { cruise: EventRec[]; station: EventRec[]; sample: EventRec[] };
   /** At least one sample code repeats between stations / rows: the station prefix toggle is worth showing. */

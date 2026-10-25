@@ -15,14 +15,18 @@ const walk = (dir: string, accept: (f: string) => boolean): string[] =>
   });
 const rel = (p: string): string => p.replace(ROOT + '/', '');
 
-describe('no lookup host yet', () => {
+describe('the only lookup host is WoRMS, called from one module, from a button', () => {
   const srcFiles = walk(join(ROOT, 'src'), (f) => /\.(ts|tsx|css|html)$/.test(f));
 
-  // the identifier prefix of a WoRMS taxon (urn:lsid:marinespecies.org:taxname:<AphiaID>) is written for a user's AphiaID column: it is a name, never an address
+  // the identifier prefix of a WoRMS taxon (urn:lsid:marinespecies.org:taxname:<AphiaID>) is written into the archive: it is a name, never an address
   const withoutLsid = (text: string): string => text.replace(/urn:lsid:marinespecies\.org:taxname:/g, 'urn:lsid:WORMS:taxname:');
-  it('src/ never names marinespecies.org as an address (the WoRMS lookup comes in a later stage, off by default); only the urn:lsid identifier prefix is written', () => {
-    expect(srcFiles.filter((f) => /marinespecies\.org/i.test(withoutLsid(readFileSync(f, 'utf8')))).map(rel)).toEqual([]);
-    expect(srcFiles.filter((f) => readFileSync(f, 'utf8').includes('urn:lsid:marinespecies.org:taxname:')).map(rel)).toEqual(['src/core/convert/build.ts', 'src/core/rules/convert.ts']);
+  it('src/ names marinespecies.org as an address in exactly one module (the opt-in); the privacy copy names the host as text; the urn:lsid prefix is only a name', () => {
+    const named = srcFiles.filter((f) => /marinespecies\.org/i.test(withoutLsid(readFileSync(f, 'utf8')))).map(rel);
+    // the module that calls it, and the two files of ⓘ / privacy copy that tell the reader which host it is (bare host name, no scheme)
+    expect(named).toEqual(['src/app/optins/worms.ts', 'src/core/i18n/tips-text.ts', 'src/core/i18n/ui.ts']);
+    // an address (with its scheme) stands in the network module and nowhere else
+    expect(srcFiles.filter((f) => /https?:\/\/(www\.)?marinespecies\.org/i.test(withoutLsid(readFileSync(f, 'utf8')))).map(rel)).toEqual(['src/app/optins/worms.ts']);
+    expect(srcFiles.filter((f) => readFileSync(f, 'utf8').includes('urn:lsid:marinespecies.org:taxname:')).map(rel)).toEqual(['src/core/convert/build.ts', 'src/core/convert/worms.ts', 'src/core/rules/convert.ts']);
   });
 
   it('src/ names vocab.nerc.ac.uk only as the base of identifier URIs (the converter writes them, /check reads them from headers), never as an address to call', () => {
@@ -35,18 +39,30 @@ describe('no lookup host yet', () => {
     expect(vocab).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource/);
   });
 
-  it('the converter page and its worker call no network or storage API at all', () => {
+  it('the converter page, its components and its worker call no network or storage API at all (the WoRMS module is the one exception, and it uses no storage either)', () => {
     const files = [
       ...walk(join(ROOT, 'src/core/convert'), (f) => f.endsWith('.ts')),
-      ...['src/app/pages/ConvertPage.tsx', 'src/app/components/ConvertSheetForm.tsx', 'src/app/components/ConvertMetadataForm.tsx', 'src/app/convertModel.ts', 'src/worker/convert.worker.ts', 'src/worker/convert.handler.ts', 'src/worker/convert.client.ts', 'src/worker/convert.engine.ts', 'src/worker/convert.protocol.ts'].map((f) => join(ROOT, f)),
+      ...['src/app/pages/ConvertPage.tsx', 'src/app/components/ConvertSheetForm.tsx', 'src/app/components/ConvertMetadataForm.tsx', 'src/app/components/ConvertWorms.tsx', 'src/app/convertModel.ts', 'src/worker/convert.worker.ts', 'src/worker/convert.handler.ts', 'src/worker/convert.client.ts', 'src/worker/convert.engine.ts', 'src/worker/convert.protocol.ts'].map((f) => join(ROOT, f)),
     ];
     for (const f of files) {
       const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       expect(code, rel(f)).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|localStorage|sessionStorage|indexedDB|document\.cookie|navigator\.storage/);
     }
+    const worms = readFileSync(join(ROOT, 'src/app/optins/worms.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(worms).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|localStorage|sessionStorage|indexedDB|document\.cookie|navigator\.storage/);
+    // no cookie, no Referer: the request says so
+    expect(worms).toContain("credentials: 'omit'");
+    expect(worms).toContain("referrerPolicy: 'no-referrer'");
   });
 
-  it('the built /convert page and its assets (when dist/ exists) name neither service as an address (an identifier URI prefix of /check or of the converter is not one)', () => {
+  it('no page of the site, and no source of /convert, carries a preconnect, dns-prefetch, prefetch, preload or prerender link to WoRMS (a link tag is a request on page load)', () => {
+    const pages = ['index.html', 'convert/index.html', 'check/index.html', 'collection/index.html', 'licence/index.html', 'privacy/index.html'].filter((f) => existsSync(join(ROOT, f)));
+    expect(pages).toContain('convert/index.html');
+    for (const f of pages) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/marinespecies/i);
+    for (const f of srcFiles.filter((x) => /\.(tsx|html)$/.test(x))) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/rel=["'](preconnect|dns-prefetch|prefetch|preload|prerender)["']/i);
+  });
+
+  it('the built /convert page and its assets (when dist/ exists): the page HTML names no host of WoRMS, the worker bundle holds no address of it, and the address stands in the page bundle only', () => {
     const html = join(ROOT, 'dist/convert/index.html');
     if (!existsSync(html)) return; // dist/ is made by `npm run build`, which the gate runs after the tests
     const assets = walk(join(ROOT, 'dist/assets'), (f) => /\.(js|css)$/.test(f));
@@ -54,10 +70,21 @@ describe('no lookup host yet', () => {
     // the worker is its own asset, referenced from the page's script
     const worker = assets.filter((f) => /convert\.worker/i.test(f));
     expect(worker.length).toBeGreaterThan(0);
+    expect(readFileSync(html, 'utf8')).not.toMatch(/marinespecies/i);
+    for (const f of worker) expect(withoutLsid(readFileSync(f, 'utf8')), rel(f)).not.toMatch(/https?:\/\/(www\.)?marinespecies\.org/i);
+    const withAddress = names.filter((f) => f !== html && /https?:\/\/www\.marinespecies\.org\/rest\/AphiaRecordsByMatchNames/.test(readFileSync(f, 'utf8')));
+    expect(withAddress.length).toBe(1);
     for (const f of [...names, ...worker]) {
       const text = readFileSync(f, 'utf8');
-      expect(withoutLsid(text), rel(f)).not.toMatch(/marinespecies\.org/i);
       for (const m of text.matchAll(/.{0,12}vocab\.nerc\.ac\.uk.{0,12}/g)) expect(m[0], `${rel(f)}: ${m[0]}`).toMatch(/https?:\/\/vocab\.nerc\.ac\.uk\/collection\//);
+    }
+    // no other page of the site carries the WoRMS address
+    for (const other of ['dist/index.html', 'dist/check/index.html', 'dist/collection/index.html', 'dist/licence/index.html', 'dist/privacy/index.html'].filter((f) => existsSync(join(ROOT, f)))) {
+      const h = readFileSync(join(ROOT, other), 'utf8');
+      for (const m of h.matchAll(/\/assets\/([\w.-]+\.js)/g)) {
+        const f = join(ROOT, 'dist/assets', m[1]);
+        if (existsSync(f)) expect(readFileSync(f, 'utf8'), `${other} -> ${m[1]}`).not.toMatch(/AphiaRecordsByMatchNames/);
+      }
     }
   });
 });

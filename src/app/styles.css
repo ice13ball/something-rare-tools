@@ -1562,3 +1562,30 @@ code.multiline {
 .convert-choice-value {
   white-space: pre-wrap;
 }
+
+/* the WoRMS opt-in (stage 4): the privacy copy next to the tick, the names list, and the result table, which scrolls inside .table-scroll */
+.convert-worms-privacy ul {
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.convert-worms-list {
+  max-height: 12rem;
+  overflow-y: auto;
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.convert-worms-table tbody {
+  border-bottom: 1px solid var(--border);
+}
+
+.convert-worms-table tbody tr[data-match='choose'] td:last-child,
+.convert-worms-table tbody[data-match='choose'] td:last-child {
+  box-shadow: inset 3px 0 0 var(--warning, var(--info));
+}
+
+.convert-worms-table .convert-input {
+  max-width: 100%;
+  min-width: 0;
+}

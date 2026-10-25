@@ -70,7 +70,7 @@ export function createConvertHandler(): ConvertHandler {
     files = new Map();
     seq = 0;
     licenceSource = { ids: [], disagree: false };
-    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {}, prefillInfo: null };
+    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false, worms: false }, prefill: {}, prefillInfo: null };
     const records: MetadataRecord[] = [];
     const parsedAll: ParsedFile[] = [];
     for (const f of req.files as InputFile[]) {
@@ -101,6 +101,7 @@ export function createConvertHandler(): ConvertHandler {
         result.mappingFiles.push(parsed.fileName);
         settings.fullList ||= s.fullList;
         settings.prefixStation ||= s.prefixStation;
+        settings.worms ||= s.worms;
         continue;
       }
       if (!isTable(parsed)) {
@@ -151,12 +152,12 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
-    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits });
+    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
     return { sheets, splits, r };
   }
 
   const today = (): string => new Date().toISOString().slice(0, 10);
-  const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true });
+  const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true, worms: body.worms !== undefined });
 
   function run(body: ConvertRequestBody): ConvertView {
     const { splits, r } = compute(body);
@@ -174,6 +175,7 @@ export function createConvertHandler(): ConvertHandler {
       tree: r.tree,
       splits,
       cruiseText: r.cruiseText,
+      worms: r.nameLookup,
       examples: { cruise: by('cruise'), station: by('station'), sample: by('sample') },
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),

@@ -167,9 +167,9 @@ No findings only means that no problems were found in the checked categories.`,
 
   'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet. The page is still a hidden test version.`,
   'tip.convertIntro.logic': `• The page is hidden for now: it is not in the menu or on the index page, and search engines are asked to skip it.
-• Your files are read and previewed in your browser; nothing is sent anywhere.
+• Your files are read and previewed in your browser; nothing of them is sent anywhere.
 • The archive is built in your browser and downloaded from it; nothing is uploaded and nothing is stored.
-• Two optional lookups are planned: taxon names in WoRMS and terms in the NERC vocabulary. Both will be off by default, and nothing will be sent to either service until you press its button.`,
+• One optional lookup is here: the taxon names you choose to look up go to WoRMS, and only after you press its button; it is off by default. A second one, for terms in the NERC vocabulary, is still planned and will work the same way.`,
   'tip.convertTaxa.does': `Confirms which of the proposed columns are taxa.`,
   'tip.convertTaxa.logic': `• In a wide sheet the tool proposes every numeric column it has no other meaning for, at low confidence, as a taxon whose header is the name.
 • A proposed column is converted only after you confirm it; an unconfirmed one is left out and the summary says how many.
@@ -316,11 +316,11 @@ No findings only means that no problems were found in the checked categories.`,
 • The zip holds the description (EML {eml}), the event, occurrence and measurement tables and meta.xml. The text files are UTF-8, tab-separated, one record per line.
 • A position or a depth that comes from one plain number cell is copied as written: a decimal comma becomes a point, a leading plus sign and leading zeros before the integer part are dropped, a missing integer part becomes a zero and a bare trailing point is dropped; every digit after the point is kept. A position given in degrees and minutes is written as decimal degrees with the precision of the source, and a depth column marked positive upwards is written with its sign reversed. The position of a cruise or a station worked out from its samples is rounded to {derived} decimals with trailing zeros dropped, and its uncertainty to whole metres, rounded up. A count is written as a whole number (a decimal part that is zero is dropped). Densities, biomasses and sample sizes are copied as written, with the decimal comma turned into a point. Nothing is rescaled.
 • The file is named after the dataset name. Nothing is uploaded and nothing is stored.`,
-  'tip.convertCompanion.does': `Saves your two choices about the species list and the sample codes for the next run.`,
-  'tip.convertCompanion.logic': `• It is a small CSV file in the format of the companion file of the checker, with one row for "full species list" and one for "station prefix", each only when it is ticked.
-• Drop it together with your data next time and the two choices start ticked. Nothing is remembered in the browser, so this file is the only memory.
+  'tip.convertCompanion.does': `Saves your choices about the species list, the sample codes and the WoRMS option for the next run.`,
+  'tip.convertCompanion.logic': `• It is a small CSV file in the format of the companion file of the checker, with one row for "full species list", one for "station prefix" and one for "WoRMS lookup", each only when it is ticked.
+• Drop it together with your data next time and the choices start ticked. A ticked WoRMS option still sends nothing until you press its lookup button. Nothing is remembered in the browser, so this file is the only memory.
 • It holds no data, names or values from your sheet.`,
-  'tip.role.taxonId': `the ID of the taxon of that record, written to scientificNameID as given (a column named AphiaID, the whole-number ID of WoRMS, is written as the urn:lsid of the taxon). Only for a sheet with one record per row; nothing is looked up.`,
+  'tip.role.taxonId': `the ID of the taxon of that record, written to scientificNameID as given (a column named AphiaID, the whole-number ID of WoRMS, is written as the urn:lsid of the taxon). Only for a sheet with one record per row; these IDs are never looked up or changed, and a name that has one on any row is left out of the optional WoRMS lookup.`,
   'tip.convertDevice.does': `Names the device the samples were taken with.`,
   'tip.convertDevice.logic': `• Choose one of the devices that have a verified concept in the NERC vocabulary (named nets, a grab, a corer, and four device categories), or type your own name. It is written as a measurement on every sample event: the name of the sampling instrument ({instrument}) with the device as its value; a chosen device carries its vocabulary address, a typed name carries none.
 • The list holds only what was checked; a device that is not in it is typed. Nothing is guessed from your column names.
@@ -380,6 +380,26 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertArchiveDesc.logic': `• An eml.xml (an EML document) or a meta.xml (the archive's column map) is recognised from its content, not from its name.
 • It is never read as a data sheet and its values are not used: the description of your dataset comes from metadata files (ISO, DataCite, Zenodo) or from the form.
 • No request is sent; the file is only listed.`,
+  'tip.convertWormsOptIn.does': `Lets you match the species names of your sheet to WoRMS, the register of marine species, to fill scientificNameID. It is off, and sends nothing, until you press the lookup button.`,
+  'tip.convertWormsOptIn.logic': `• Off at every upload. A companion file can only tick the box; ticking sends nothing.
+• The button sends only the distinct scientific names, without qualifier, stage or sex, in calls of at most {batch} names, one after the other.
+• A name that has a taxon ID from your sheet on any row is not sent, and none of its rows gets a WoRMS ID; a warning says so when only some rows have one.
+• The ID written is {lsid} of the record that matches the name as you wrote it. scientificName is never changed.`,
+  'tip.convertWormsPrivacy.does': `Says exactly what leaves your computer if you use the lookup, and to whom.`,
+  'tip.convertWormsPrivacy.logic': `• Only taxon names are sent: nothing else from your files or from what you typed.
+• They go straight from your browser to www.marinespecies.org, the WoRMS web service operated by VLIZ. They do not pass through the server of this site.
+• The service sees your IP address, as any website does.
+• A species name can reveal an unpublished finding, such as which species were found in your data.
+• Nothing is sent until you press the lookup button.`,
+  'tip.convertWormsTable.does': `Shows what WoRMS answered for each name, so you can see, before anything is written, which ID each name would get.`,
+  'tip.convertWormsTable.logic': `• Match type: exact means the name is spelled the same in WoRMS; phonetic and near mean a similar but different spelling; genus only means that only the genus matched.
+• Status: an unaccepted name is a synonym, and its valid name is shown.
+• Habitat lists the marine, brackish, freshwater and terrestrial flags WoRMS holds. A name that is only freshwater or terrestrial gets a warning to accept before the export.
+• A name with no result gets no ID and a warning to accept before the export.`,
+  'tip.convertWormsChoice.does': `Where you decide which WoRMS result becomes the ID of a name, or that it gets none.`,
+  'tip.convertWormsChoice.logic': `• Only a single result whose match type is exact is taken automatically. You can still choose no ID for it.
+• For a phonetic, near or genus-only result, or when there are several results, nothing is pre-selected: you choose one result or no ID, and a name left undecided blocks the export.
+• The ID of the result you choose is written as it stands, even when that name is unaccepted: the OBIS Manual asks for the identifier of the name as written in scientificName, and OBIS resolves it to the accepted name. scientificName stays as you wrote it.`,
 } as const;
 
 export type TipKey = keyof typeof en;
@@ -540,9 +560,9 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 
   'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza. Strona jest nadal ukrytą wersją testową.`,
   'tip.convertIntro.logic': `• Strona jest na razie ukryta: nie ma jej w menu ani na stronie głównej, a wyszukiwarki są proszone, by ją pominąć.
-• Twoje pliki są odczytywane i pokazywane w podglądzie w Twojej przeglądarce; nic nie jest nigdzie wysyłane.
-• Archiwum jest budowane w Twojej przeglądarce i stąd pobierane; nic nie jest wysyłane i nic nie jest zapisywane.
-• Planowane są dwa opcjonalne wyszukiwania: nazw taksonów w WoRMS i terminów ze słownika NERC. Oba będą domyślnie wyłączone, a do żadnej z tych usług nic nie zostanie wysłane, dopóki nie naciśniesz jej przycisku.`,
+• Twoje pliki są odczytywane i pokazywane w podglądzie w Twojej przeglądarce; nic z nich nie jest nigdzie wysyłane.
+• Archiwum jest budowane w Twojej przeglądarce i stąd pobierane; nic nie jest wysyłane na serwer i nic nie jest zapisywane.
+• Jedno opcjonalne wyszukiwanie już jest: nazwy taksonów, które zechcesz sprawdzić, trafiają do WoRMS, i to dopiero po naciśnięciu jego przycisku; jest domyślnie wyłączone. Drugie, dla terminów ze słownika NERC, jest dopiero planowane i będzie działać tak samo.`,
   'tip.convertTaxa.does': `Potwierdza, które z zaproponowanych kolumn to taksony.`,
   'tip.convertTaxa.logic': `• W arkuszu szerokim narzędzie proponuje jako takson, którego nagłówek jest nazwą, każdą kolumnę liczbową bez innego znaczenia, z niską pewnością.
 • Zaproponowana kolumna jest przekształcana dopiero po Twoim potwierdzeniu; niepotwierdzona jest pomijana, a podsumowanie podaje, ile ich jest.
@@ -689,11 +709,11 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Zip zawiera opis (EML {eml}), tabele zdarzeń, wystąpień i pomiarów oraz meta.xml. Pliki tekstowe są w UTF-8, rozdzielane tabulatorami, jeden rekord w wierszu.
 • Pozycja lub głębokość z jednej zwykłej komórki liczbowej jest kopiowana tak, jak jest zapisana: przecinek dziesiętny staje się kropką, początkowy plus i zera przed częścią całkowitą są odrzucane, brakująca część całkowita staje się zerem, a samotna kropka na końcu jest odrzucana; każda cyfra po kropce zostaje. Pozycja podana w stopniach i minutach jest zapisywana jako stopnie dziesiętne z dokładnością źródła, a kolumna głębokości oznaczona jako dodatnia w górę jest zapisywana z odwróconym znakiem. Pozycja rejsu lub stacji obliczona z ich próbek jest zaokrąglana do {derived} miejsc po przecinku z obciętymi końcowymi zerami, a jej niepewność do pełnych metrów w górę. Liczebność jest zapisywana jako liczba całkowita (zerowa część dziesiętna jest odrzucana). Zagęszczenia, biomasy i wielkości prób są kopiowane tak, jak są zapisane, z przecinkiem dziesiętnym zamienionym na kropkę. Nic nie jest przeskalowywane.
 • Plik nosi nazwę zbioru. Nic nie jest wysyłane i nic nie jest zapisywane.`,
-  'tip.convertCompanion.does': `Zapisuje Twoje dwa wybory dotyczące listy gatunków i kodów próbek na następny raz.`,
-  'tip.convertCompanion.logic': `• To mały plik CSV w formacie pliku towarzyszącego sprawdzarki, z wierszem „pełna lista gatunków” i wierszem „przedrostek stacji”, każdy tylko gdy jest zaznaczony.
-• Wgraj go następnym razem razem z danymi, a oba wybory zaczną jako zaznaczone. Przeglądarka niczego nie pamięta, więc ten plik jest jedyną pamięcią.
+  'tip.convertCompanion.does': `Zapisuje Twoje wybory dotyczące listy gatunków, kodów próbek i opcji WoRMS na następny raz.`,
+  'tip.convertCompanion.logic': `• To mały plik CSV w formacie pliku towarzyszącego sprawdzarki, z wierszem „pełna lista gatunków”, wierszem „przedrostek stacji” i wierszem „wyszukiwanie w WoRMS”, każdy tylko gdy jest zaznaczony.
+• Wgraj go następnym razem razem z danymi, a wybory zaczną jako zaznaczone. Zaznaczona opcja WoRMS nadal niczego nie wysyła, dopóki nie naciśniesz jej przycisku wyszukiwania. Przeglądarka niczego nie pamięta, więc ten plik jest jedyną pamięcią.
 • Nie zawiera żadnych danych, nazw ani wartości z Twojego arkusza.`,
-  'tip.role.taxonId': `identyfikator taksonu tego rekordu, zapisywany do scientificNameID bez zmian (kolumna AphiaID, czyli liczbowy identyfikator WoRMS, jest zapisywana jako urn:lsid taksonu). Tylko dla arkusza z jednym rekordem w wierszu; nic nie jest wyszukiwane.`,
+  'tip.role.taxonId': `identyfikator taksonu tego rekordu, zapisywany do scientificNameID bez zmian (kolumna AphiaID, czyli liczbowy identyfikator WoRMS, jest zapisywana jako urn:lsid taksonu). Tylko dla arkusza z jednym rekordem w wierszu; te identyfikatory nigdy nie są wyszukiwane ani zmieniane, a nazwa, która ma taki w którymkolwiek wierszu, jest pomijana w opcjonalnym wyszukiwaniu w WoRMS.`,
   'tip.convertDevice.does': `Podaje narzędzie, którym pobrano próbki.`,
   'tip.convertDevice.logic': `• Wybierz jedno z narzędzi, które mają sprawdzone pojęcie w słowniku NERC (nazwane sieci, chwytak, próbnik rdzeniowy i cztery kategorie narzędzi), albo wpisz własną nazwę. Jest zapisywane jako pomiar przy każdym zdarzeniu próbki: nazwa narzędzia próbkowania ({instrument}) z narzędziem jako wartością; wybrane narzędzie ma adres w słowniku, wpisana nazwa go nie ma.
 • Lista zawiera tylko to, co sprawdzono; narzędzie, którego na niej nie ma, się wpisuje. Nic nie jest zgadywane z nazw kolumn.
@@ -753,6 +773,26 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertArchiveDesc.logic': `• Plik eml.xml (dokument EML) lub meta.xml (mapa kolumn archiwum) jest rozpoznawany po zawartości, nie po nazwie.
 • Nigdy nie jest odczytywany jako arkusz z danymi, a jego wartości nie są używane: opis zbioru pochodzi z plików z metadanymi (ISO, DataCite, Zenodo) albo z formularza.
 • Nie jest wysyłane żadne żądanie; plik jest tylko wymieniony.`,
+  'tip.convertWormsOptIn.does': `Pozwala dopasować nazwy gatunków z arkusza do WoRMS, rejestru gatunków morskich, aby wypełnić scientificNameID. Jest wyłączone i niczego nie wysyła, dopóki nie naciśniesz przycisku wyszukiwania.`,
+  'tip.convertWormsOptIn.logic': `• Wyłączone przy każdym wgraniu. Plik towarzyszący może tylko zaznaczyć pole; zaznaczenie niczego nie wysyła.
+• Przycisk wysyła wyłącznie różne nazwy naukowe, bez dopisku, stadium i płci, w wywołaniach po najwyżej {batch} nazw, jedno po drugim.
+• Nazwa, która ma identyfikator taksonu z arkusza w którymkolwiek wierszu, nie jest wysyłana i żaden jej wiersz nie dostaje identyfikatora z WoRMS; ostrzeżenie mówi o tym, gdy tylko część wierszy go ma.
+• Zapisywany jest identyfikator {lsid} rekordu, który pasuje do nazwy tak, jak ją zapisano. scientificName nigdy nie jest zmieniana.`,
+  'tip.convertWormsPrivacy.does': `Mówi dokładnie, co opuszcza Twój komputer, jeśli użyjesz wyszukiwania, i do kogo trafia.`,
+  'tip.convertWormsPrivacy.logic': `• Wysyłane są tylko nazwy taksonów: nic więcej z Twoich plików ani z tego, co wpisano.
+• Idą prosto z Twojej przeglądarki do www.marinespecies.org, usługi internetowej WoRMS prowadzonej przez VLIZ. Nie przechodzą przez serwer tej strony.
+• Usługa widzi Twój adres IP, jak każda strona.
+• Nazwa gatunku może ujawnić niepublikowane wyniki, na przykład jakie gatunki znaleziono w Twoich danych.
+• Nic nie jest wysyłane, dopóki nie naciśniesz przycisku wyszukiwania.`,
+  'tip.convertWormsTable.does': `Pokazuje, co WoRMS odpowiedział dla każdej nazwy, abyś przed zapisaniem czegokolwiek widział, jaki identyfikator dostanie każda nazwa.`,
+  'tip.convertWormsTable.logic': `• Rodzaj dopasowania: dokładne znaczy, że nazwa jest w WoRMS zapisana tak samo; fonetyczne i zbliżone to podobna, ale inna pisownia; tylko rodzaj znaczy, że dopasował się wyłącznie rodzaj.
+• Status: nazwa niezaakceptowana to synonim, a jej nazwa ważna jest pokazana.
+• Środowisko wymienia znaczniki morskie, słonawowodne, słodkowodne i lądowe, które ma WoRMS. Nazwa wyłącznie słodkowodna lub lądowa dostaje ostrzeżenie do zaakceptowania przed eksportem.
+• Nazwa bez wyniku nie dostaje identyfikatora i dostaje ostrzeżenie do zaakceptowania przed eksportem.`,
+  'tip.convertWormsChoice.does': `Tu decydujesz, który wynik z WoRMS stanie się identyfikatorem nazwy, albo że nazwa nie dostanie żadnego.`,
+  'tip.convertWormsChoice.logic': `• Automatycznie przyjmowany jest tylko pojedynczy wynik z dopasowaniem dokładnym. Nadal możesz wybrać dla niego brak identyfikatora.
+• Przy wyniku fonetycznym, zbliżonym lub tylko na poziomie rodzaju, albo gdy wyników jest kilka, nic nie jest wstępnie wybrane: wybierasz jeden wynik albo brak identyfikatora, a nazwa bez decyzji blokuje eksport.
+• Identyfikator wybranego wyniku jest zapisywany tak, jak jest, nawet gdy ta nazwa jest niezaakceptowana: podręcznik OBIS każe podać identyfikator nazwy zapisanej w scientificName, a OBIS sam przekłada go na nazwę zaakceptowaną. scientificName zostaje taka, jak ją zapisano.`,
 };
 
 const de: Record<TipKey, string> = {
@@ -911,9 +951,9 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 
   'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Die Seite ist noch eine verborgene Testversion.`,
   'tip.convertIntro.logic': `• Die Seite ist vorerst verborgen: Sie steht weder im Menü noch auf der Startseite, und Suchmaschinen werden gebeten, sie zu überspringen.
-• Ihre Dateien werden in Ihrem Browser gelesen und als Vorschau gezeigt; nichts wird irgendwohin gesendet.
+• Ihre Dateien werden in Ihrem Browser gelesen und als Vorschau gezeigt; nichts davon wird irgendwohin gesendet.
 • Das Archiv wird in Ihrem Browser erstellt und von dort heruntergeladen; nichts wird hochgeladen und nichts gespeichert.
-• Zwei optionale Abfragen sind geplant: Taxonnamen in WoRMS und Begriffe im NERC-Vokabular. Beide sind standardmäßig aus, und an keinen der beiden Dienste wird etwas gesendet, bevor Sie dessen Schaltfläche drücken.`,
+• Eine optionale Abfrage gibt es schon: Die Taxonnamen, die Sie abfragen möchten, gehen an WoRMS, und zwar erst, nachdem Sie deren Taste gedrückt haben; sie ist standardmäßig aus. Eine zweite, für Begriffe im NERC-Vokabular, ist noch geplant und wird genauso funktionieren.`,
   'tip.convertTaxa.does': `Bestätigt, welche der vorgeschlagenen Spalten Taxa sind.`,
   'tip.convertTaxa.logic': `• In einem breiten Blatt schlägt das Werkzeug jede Zahlenspalte ohne andere Bedeutung mit niedriger Sicherheit als Taxon vor, dessen Kopf der Name ist.
 • Eine vorgeschlagene Spalte wird erst nach Ihrer Bestätigung umgewandelt; eine unbestätigte wird ausgelassen, und die Zusammenfassung nennt ihre Zahl.
@@ -1060,11 +1100,11 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Die Zip-Datei enthält die Beschreibung (EML {eml}), die Tabellen für Ereignisse, Vorkommen und Messungen sowie meta.xml. Die Textdateien sind UTF-8, tabulatorgetrennt, ein Datensatz pro Zeile.
 • Eine Position oder Tiefe aus einer einfachen Zahlenzelle wird so kopiert, wie sie steht: Ein Dezimalkomma wird zum Punkt, ein führendes Plus und führende Nullen vor dem ganzzahligen Teil entfallen, ein fehlender ganzzahliger Teil wird zur Null, ein einzelner Punkt am Ende entfällt; jede Ziffer nach dem Punkt bleibt. Eine Position in Grad und Minuten wird als Dezimalgrad mit der Genauigkeit der Quelle geschrieben, und eine Tiefenspalte, die als nach oben positiv markiert ist, wird mit umgekehrtem Vorzeichen geschrieben. Die aus den Proben errechnete Position einer Fahrt oder Station wird auf {derived} Dezimalstellen gerundet, mit abgeschnittenen Endnullen, und ihre Unsicherheit auf ganze Meter aufgerundet. Eine Anzahl wird als ganze Zahl geschrieben (ein Dezimalteil von null entfällt). Dichten, Biomassen und Probengrößen werden wie geschrieben kopiert, ein Dezimalkomma wird zum Punkt. Nichts wird umskaliert.
 • Die Datei ist nach dem Datensatznamen benannt. Nichts wird hochgeladen und nichts gespeichert.`,
-  'tip.convertCompanion.does': `Hält Ihre zwei Entscheidungen zur Artenliste und zu den Probencodes für den nächsten Durchgang fest.`,
-  'tip.convertCompanion.logic': `• Es ist eine kleine CSV-Datei im Format der Begleitdatei des Prüfwerkzeugs, mit einer Zeile für „vollständige Artenliste“ und einer für „Stationspräfix“, jeweils nur wenn angehakt.
-• Legen Sie sie beim nächsten Mal zusammen mit Ihren Daten ab, und die beiden Entscheidungen beginnen angehakt. Der Browser merkt sich nichts, diese Datei ist also das einzige Gedächtnis.
+  'tip.convertCompanion.does': `Hält Ihre Entscheidungen zur Artenliste, zu den Probencodes und zur WoRMS-Option für den nächsten Durchgang fest.`,
+  'tip.convertCompanion.logic': `• Es ist eine kleine CSV-Datei im Format der Begleitdatei des Prüfwerkzeugs, mit einer Zeile für „vollständige Artenliste“, einer für „Stationspräfix“ und einer für „WoRMS-Abfrage“, jeweils nur wenn angehakt.
+• Legen Sie sie beim nächsten Mal zusammen mit Ihren Daten ab, und die Entscheidungen sind schon angehakt. Eine angehakte WoRMS-Option sendet trotzdem nichts, bis Sie ihre Abfrage-Taste drücken. Im Browser wird nichts gemerkt, diese Datei ist also das einzige Gedächtnis.
 • Sie enthält keine Daten, Namen oder Werte aus Ihrem Blatt.`,
-  'tip.role.taxonId': `die Kennung des Taxons dieses Datensatzes, unverändert in scientificNameID geschrieben (eine Spalte AphiaID, die ganzzahlige WoRMS-Kennung, wird als urn:lsid des Taxons geschrieben). Nur für ein Blatt mit einem Datensatz pro Zeile; nichts wird nachgeschlagen.`,
+  'tip.role.taxonId': `die Kennung des Taxons dieses Datensatzes, unverändert in scientificNameID geschrieben (eine Spalte AphiaID, die ganzzahlige WoRMS-Kennung, wird als urn:lsid des Taxons geschrieben). Nur für ein Blatt mit einem Datensatz pro Zeile; diese Kennungen werden nie nachgeschlagen oder geändert, und ein Name, der in irgendeiner Zeile eine hat, bleibt bei der optionalen WoRMS-Abfrage außen vor.`,
   'tip.convertDevice.does': `Nennt das Gerät, mit dem die Proben genommen wurden.`,
   'tip.convertDevice.logic': `• Wählen Sie eines der Geräte mit geprüftem Begriff im NERC-Vokabular (benannte Netze, ein Greifer, ein Stechrohr und vier Gerätekategorien) oder geben Sie einen eigenen Namen ein. Es wird als Messung bei jedem Probenereignis geschrieben: der Name des Probenahmegeräts ({instrument}) mit dem Gerät als Wert; ein gewähltes Gerät trägt seine Vokabularadresse, ein eingegebener Name keine.
 • Die Liste enthält nur Geprüftes; ein Gerät, das nicht darin steht, wird eingegeben. Nichts wird aus Ihren Spaltennamen erraten.
@@ -1124,6 +1164,26 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertArchiveDesc.logic': `• Eine eml.xml (ein EML-Dokument) oder eine meta.xml (die Spaltenzuordnung des Archivs) wird am Inhalt erkannt, nicht am Namen.
 • Sie wird nie als Datenblatt gelesen, und ihre Werte werden nicht verwendet: Die Beschreibung Ihres Datensatzes stammt aus Metadatendateien (ISO, DataCite, Zenodo) oder aus dem Formular.
 • Es wird keine Anfrage gesendet; die Datei wird nur aufgeführt.`,
+  'tip.convertWormsOptIn.does': `Lässt Sie die Artnamen Ihres Blatts mit WoRMS, dem Register der Meeresarten, abgleichen, um scientificNameID zu füllen. Es ist aus und sendet nichts, bis Sie die Abfrage-Taste drücken.`,
+  'tip.convertWormsOptIn.logic': `• Bei jedem Hochladen aus. Eine Begleitdatei kann das Kästchen nur ankreuzen; das Ankreuzen sendet nichts.
+• Die Taste sendet nur die verschiedenen wissenschaftlichen Namen, ohne Zusatz, Stadium oder Geschlecht, in Aufrufen von höchstens {batch} Namen, einer nach dem anderen.
+• Ein Name, der in irgendeiner Zeile eine Taxon-Kennung aus Ihrem Blatt hat, wird nicht gesendet, und keine seiner Zeilen erhält eine WoRMS-Kennung; eine Warnung sagt das, wenn nur einige Zeilen eine haben.
+• Geschrieben wird {lsid} des Eintrags, der zum Namen passt, wie Sie ihn geschrieben haben. scientificName wird nie geändert.`,
+  'tip.convertWormsPrivacy.does': `Sagt genau, was Ihren Rechner verlässt, wenn Sie die Abfrage benutzen, und an wen es geht.`,
+  'tip.convertWormsPrivacy.logic': `• Nur Taxonnamen werden gesendet: nichts sonst aus Ihren Dateien oder von dem, was Sie eingetippt haben.
+• Sie gehen direkt von Ihrem Browser an www.marinespecies.org, den vom VLIZ betriebenen Webdienst von WoRMS. Sie laufen nicht über den Server dieser Seite.
+• Der Dienst sieht Ihre IP-Adresse, wie jede Website.
+• Ein Artname kann einen unveröffentlichten Befund verraten, etwa welche Arten in Ihren Daten gefunden wurden.
+• Nichts wird gesendet, bevor Sie die Abfrage-Taste drücken.`,
+  'tip.convertWormsTable.does': `Zeigt, was WoRMS für jeden Namen geantwortet hat, damit Sie vor dem Schreiben sehen, welche Kennung jeder Name bekäme.`,
+  'tip.convertWormsTable.logic': `• Treffertyp: exakt heißt, der Name ist in WoRMS genauso geschrieben; phonetisch und nah heißen, eine ähnliche, aber andere Schreibweise; nur Gattung heißt, nur die Gattung passt.
+• Status: Ein nicht akzeptierter Name ist ein Synonym, sein gültiger Name wird gezeigt.
+• Lebensraum nennt die Kennzeichen marin, brackig, Süßwasser und terrestrisch, die WoRMS führt. Ein Name, der nur Süßwasser oder terrestrisch ist, erhält eine Warnung, die vor dem Export zu akzeptieren ist.
+• Ein Name ohne Ergebnis erhält keine Kennung und eine Warnung, die vor dem Export zu akzeptieren ist.`,
+  'tip.convertWormsChoice.does': `Hier entscheiden Sie, welches WoRMS-Ergebnis die Kennung eines Namens wird, oder dass er keine bekommt.`,
+  'tip.convertWormsChoice.logic': `• Nur ein einzelnes Ergebnis mit exaktem Treffertyp wird automatisch übernommen. Sie können für es trotzdem „ohne Kennung“ wählen.
+• Bei einem phonetischen, nahen oder nur auf Gattung bezogenen Ergebnis, oder wenn es mehrere Ergebnisse gibt, ist nichts vorgewählt: Sie wählen ein Ergebnis oder „ohne Kennung“, und ein offen gelassener Name blockiert den Export.
+• Die Kennung des gewählten Ergebnisses wird so geschrieben, wie sie ist, auch wenn dieser Name nicht akzeptiert ist: Das OBIS-Handbuch verlangt die Kennung des in scientificName geschriebenen Namens, und OBIS löst sie zum akzeptierten Namen auf. scientificName bleibt, wie Sie es geschrieben haben.`,
 };
 
 const fr: Record<TipKey, string> = {
@@ -1282,9 +1342,9 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 
   'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. La page est encore une version de test masquée.`,
   'tip.convertIntro.logic': `• La page est masquée pour l'instant : elle ne figure ni dans le menu ni sur la page d'accueil, et les moteurs de recherche sont priés de l'ignorer.
-• Vos fichiers sont lus et prévisualisés dans votre navigateur ; rien n'est envoyé nulle part.
-• L'archive est construite dans votre navigateur et téléchargée depuis lui ; rien n'est envoyé et rien n'est enregistré.
-• Deux recherches facultatives sont prévues : les noms de taxons dans WoRMS et les termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien ne sera envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
+• Vos fichiers sont lus et prévisualisés dans votre navigateur ; rien d'eux n'est envoyé nulle part.
+• L'archive est construite dans votre navigateur et téléchargée depuis lui ; rien n'est envoyé vers un serveur et rien n'est enregistré.
+• Une recherche facultative existe déjà : les noms de taxons que vous choisissez de rechercher vont à WoRMS, et seulement après avoir appuyé sur son bouton ; elle est désactivée par défaut. Une seconde, pour les termes du vocabulaire NERC, est encore prévue et fonctionnera de la même façon.`,
   'tip.convertTaxa.does': `Confirme lesquelles des colonnes proposées sont des taxons.`,
   'tip.convertTaxa.logic': `• Dans une feuille large, l'outil propose comme taxon dont l'en-tête est le nom chaque colonne numérique sans autre sens, avec une faible confiance.
 • Une colonne proposée n'est convertie qu'après votre confirmation ; une colonne non confirmée est écartée et le résumé en donne le nombre.
@@ -1431,11 +1491,11 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Le zip contient la description (EML {eml}), les tables d'événements, d'occurrences et de mesures et meta.xml. Les fichiers texte sont en UTF-8, séparés par des tabulations, un enregistrement par ligne.
 • Une position ou une profondeur issue d'une seule cellule numérique simple est copiée telle qu'écrite : une virgule décimale devient un point, un plus initial et les zéros avant la partie entière sont supprimés, une partie entière absente devient un zéro, un point final isolé est supprimé ; chaque chiffre après le point est conservé. Une position en degrés et minutes est écrite en degrés décimaux avec la précision de la source, et une colonne de profondeur marquée positive vers le haut est écrite avec son signe inversé. La position d'une campagne ou d'une station calculée à partir de ses échantillons est arrondie à {derived} décimales, zéros finaux supprimés, et son incertitude au mètre entier supérieur. Un effectif est écrit comme un nombre entier (une partie décimale nulle est supprimée). Les densités, biomasses et tailles d'échantillon sont copiées telles qu'écrites, la virgule décimale devenant un point. Rien n'est mis à l'échelle.
 • Le fichier porte le nom du jeu de données. Rien n'est envoyé et rien n'est enregistré.`,
-  'tip.convertCompanion.does': `Garde vos deux choix sur la liste d'espèces et les codes d'échantillon pour la prochaine fois.`,
-  'tip.convertCompanion.logic': `• C'est un petit fichier CSV au format du fichier compagnon du vérificateur, avec une ligne « liste d'espèces complète » et une ligne « préfixe de station », chacune seulement si elle est cochée.
-• Déposez-le la prochaine fois avec vos données et les deux choix commenceront cochés. Le navigateur ne retient rien : ce fichier est la seule mémoire.
-• Il ne contient aucune donnée, aucun nom ni aucune valeur de votre feuille.`,
-  'tip.role.taxonId': `l'identifiant du taxon de cet enregistrement, écrit tel quel dans scientificNameID (une colonne AphiaID, l'identifiant numérique de WoRMS, est écrite comme l'urn:lsid du taxon). Seulement pour une feuille à un enregistrement par ligne ; rien n'est recherché.`,
+  'tip.convertCompanion.does': `Garde vos choix sur la liste d'espèces, les codes d'échantillon et l'option WoRMS pour la prochaine fois.`,
+  'tip.convertCompanion.logic': `• C'est un petit fichier CSV au format du fichier compagnon du vérificateur, avec une ligne « liste d'espèces complète », une ligne « préfixe de station » et une ligne « recherche WoRMS », chacune seulement si elle est cochée.
+• Déposez-le la fois suivante avec vos données et les choix démarrent cochés. Une option WoRMS cochée n'envoie toujours rien tant que vous n'appuyez pas sur son bouton de recherche. Rien n'est retenu dans le navigateur : ce fichier est donc la seule mémoire.
+• Il ne contient ni données, ni noms, ni valeurs de votre feuille.`,
+  'tip.role.taxonId': `l'identifiant du taxon de cet enregistrement, écrit tel quel dans scientificNameID (une colonne AphiaID, l'identifiant numérique de WoRMS, est écrite comme l'urn:lsid du taxon). Seulement pour une feuille à un enregistrement par ligne ; ces identifiants ne sont jamais recherchés ni modifiés, et un nom qui en a un sur une ligne quelconque est écarté de la recherche WoRMS facultative.`,
   'tip.convertDevice.does': `Nomme l'engin avec lequel les échantillons ont été pris.`,
   'tip.convertDevice.logic': `• Choisissez l'un des engins qui ont un concept vérifié dans le vocabulaire NERC (filets nommés, une benne, un carottier et quatre catégories d'engins), ou saisissez votre propre nom. Il est écrit comme une mesure sur chaque événement d'échantillon : le nom de l'instrument d'échantillonnage ({instrument}) avec l'engin comme valeur ; un engin choisi porte son adresse de vocabulaire, un nom saisi n'en porte pas.
 • La liste ne contient que ce qui a été vérifié ; un engin qui n'y figure pas se saisit. Rien n'est deviné d'après vos noms de colonnes.
@@ -1495,6 +1555,26 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertArchiveDesc.logic': `• Un eml.xml (un document EML) ou un meta.xml (la correspondance des colonnes de l'archive) est reconnu d'après son contenu, pas d'après son nom.
 • Il n'est jamais lu comme une feuille de données et ses valeurs ne sont pas utilisées : la description de votre jeu de données vient des fichiers de métadonnées (ISO, DataCite, Zenodo) ou du formulaire.
 • Aucune requête n'est envoyée ; le fichier est seulement listé.`,
+  'tip.convertWormsOptIn.does': `Vous permet de faire correspondre les noms d'espèces de votre feuille à WoRMS, le registre des espèces marines, pour remplir scientificNameID. C'est désactivé et rien n'est envoyé tant que vous n'appuyez pas sur le bouton de recherche.`,
+  'tip.convertWormsOptIn.logic': `• Désactivé à chaque dépôt. Un fichier compagnon peut seulement cocher la case ; cocher n'envoie rien.
+• Le bouton envoie uniquement les noms scientifiques distincts, sans mention, stade ni sexe, par appels d'au plus {batch} noms, l'un après l'autre.
+• Un nom qui a un identifiant de taxon venant de votre feuille sur une ligne quelconque n'est pas envoyé, et aucune de ses lignes ne reçoit d'identifiant WoRMS ; un avertissement le dit quand seules certaines lignes en ont un.
+• L'identifiant écrit est {lsid} de l'entrée qui correspond au nom tel que vous l'avez écrit. scientificName n'est jamais modifié.`,
+  'tip.convertWormsPrivacy.does': `Dit exactement ce qui quitte votre ordinateur si vous utilisez la recherche, et à qui cela va.`,
+  'tip.convertWormsPrivacy.logic': `• Seuls les noms de taxons sont envoyés : rien d'autre de vos fichiers ni de ce que vous avez saisi.
+• Ils vont directement de votre navigateur à www.marinespecies.org, le service web de WoRMS exploité par le VLIZ. Ils ne passent pas par le serveur de ce site.
+• Le service voit votre adresse IP, comme tout site web.
+• Un nom d'espèce peut révéler un résultat non publié, par exemple quelles espèces figurent dans vos données.
+• Rien n'est envoyé tant que vous n'appuyez pas sur le bouton de recherche.`,
+  'tip.convertWormsTable.does': `Montre ce que WoRMS a répondu pour chaque nom, afin que vous voyiez, avant toute écriture, quel identifiant chaque nom recevrait.`,
+  'tip.convertWormsTable.logic': `• Type de correspondance : exacte veut dire que le nom s'écrit pareil dans WoRMS ; phonétique et proche veulent dire une graphie voisine mais différente ; genre seulement veut dire que seul le genre correspond.
+• Statut : un nom non accepté est un synonyme, et son nom valide est montré.
+• Habitat énumère les indicateurs marin, saumâtre, eau douce et terrestre que détient WoRMS. Un nom seulement d'eau douce ou terrestre reçoit un avertissement à accepter avant l'export.
+• Un nom sans résultat ne reçoit aucun identifiant et un avertissement à accepter avant l'export.`,
+  'tip.convertWormsChoice.does': `C'est ici que vous décidez quel résultat de WoRMS devient l'identifiant d'un nom, ou qu'il n'en reçoit aucun.`,
+  'tip.convertWormsChoice.logic': `• Seul un résultat unique de type de correspondance exacte est retenu automatiquement. Vous pouvez quand même choisir « sans identifiant » pour lui.
+• Pour un résultat phonétique, proche ou limité au genre, ou lorsqu'il y a plusieurs résultats, rien n'est présélectionné : vous choisissez un résultat ou « sans identifiant », et un nom laissé sans décision bloque l'export.
+• L'identifiant du résultat choisi est écrit tel quel, même si ce nom n'est pas accepté : le manuel d'OBIS demande l'identifiant du nom tel qu'écrit dans scientificName, et OBIS le résout vers le nom accepté. scientificName reste tel que vous l'avez écrit.`,
 };
 
 export const TIP_TEXTS: Record<'en' | 'pl' | 'de' | 'fr', Record<TipKey, string>> = { en, pl, de, fr };

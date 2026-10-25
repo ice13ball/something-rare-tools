@@ -76,3 +76,18 @@ export type DeviceKey = keyof typeof DEVICES;
 
 /** Every concept above as `<collection>/<code>`, for the test that pins this list to the spike. */
 export const VERIFIED_CODES: readonly string[] = [...Object.values(P01), ...Object.values(P06), ...Object.values(DEVICES)].map((t) => `${t.uri.split('/')[4]}/${t.code}`).sort();
+
+/**
+ * The P01 codes of BioCheck's BODCeffort list: the "sampling descriptors and effort" it looks for in measurementTypeID (EMODnet/EMODnetBiocheck, R/checkdataset.R
+ * lines 562-566: `sum(grepl(paste(BODCeffort, collapse="|"), unique(eMoF$measurementTypeID))) == 0` gives the warning "No sampling descriptors/effort present";
+ * the 29 codes are the content of data/BODCeffort.rda at master 701e6e7, 2026-10-08, read 2026-10-25). The test is a substring match, as grepl is. The three
+ * codes this converter writes for sample size and mesh size (P01.volumeSampled VOLWBSMP, P01.areaSampled AREABEDS, P01.meshSize MSHSIZE1) are on the list.
+ */
+export const BIOCHECK_EFFORT_CODES: readonly string[] = [
+  'AREABEDS', 'VOLWBSMP', 'LENTRACK', 'AZDRZZ01', 'VOLFFMXX', 'SZCLBIO1', 'PRSZSPLW', 'MSHSIZE2', 'DSSPXTMT', 'DSSPPRMT', 'DSAMPA01', 'MTHHGHT1',
+  'MTHAREA1', 'MTHWDTH1', 'DSSPMT01', 'MSHSIZE1', 'NMSPPF01', 'DSPSSP01', 'PRSZSPUP', 'MSHSIZE3', 'WASPXX01', 'COREWDTH', 'VOLXXXXX', 'VOLFFMDT',
+  'VOLFDGDT', 'VOLFMCXX', 'VOLSEDSM', 'VOLSPOPC', 'M91BA36A',
+];
+
+/** True when a measurementTypeID is a sampling descriptor or effort term in BioCheck's sense (a substring match of any BODCeffort code). */
+export const isEffortTypeId = (typeId: string): boolean => BIOCHECK_EFFORT_CODES.some((c) => typeId.includes(c));

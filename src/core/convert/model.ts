@@ -71,7 +71,7 @@ export interface OccRec {
   /** Darwin Core sex, from a ", f" / ", m" suffix of the taxon text. */
   sex?: 'female' | 'male';
   occurrenceStatus: OccurrenceStatus;
-  /** The taxon's scientificNameID: the user's column as given, or the urn:lsid of an AphiaID column. Never looked up. */
+  /** The taxon's scientificNameID: the user's column as given, the urn:lsid of an AphiaID column, or the confirmed result of the WoRMS opt-in (stage 4). */
   scientificNameId?: string;
   /** count only: a whole number (0 for an absence). */
   individualCount?: number;
@@ -145,6 +145,11 @@ export interface ConvertResult {
   tree: TreeSummary;
   /** Distinct taxon names and how each splits. */
   splits: SplitEntry[];
+  /**
+   * The WoRMS opt-in's input (stage 4): the distinct scientificName values, after the approved splits, of the occurrences that have no scientificNameID from
+   * the sheet: the names a lookup would send, and nothing else. `withSheetId` = distinct names left out because the sheet gives them an ID on at least one row; `applied` = occurrences that got a WoRMS ID from the lookup.
+   */
+  nameLookup: { names: string[]; withSheetId: number; applied: number };
   /** Cruise codes whose level was flattened away: they belong in the dataset text (title / abstract). */
   cruiseText: string[];
   stats: ConvertStats;
@@ -166,7 +171,6 @@ export interface Identification {
   verbatim: string;
   scientificName: string;
   qualifier?: string;
-  /** Not written by this stage (the WoRMS lookup is a later stage). */
   scientificNameId?: string;
   lifeStage?: string;
   sex?: 'female' | 'male';

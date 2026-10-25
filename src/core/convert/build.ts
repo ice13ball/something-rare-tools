@@ -17,6 +17,8 @@ import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06 } from './vocab';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
+import { wormsEntry, wormsLsid } from './worms';
+import type { WormsLookup } from './worms';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -61,6 +63,11 @@ export interface ConvertInput {
   options?: ConvertOptions;
   /** The user's decisions on taxon splits: verbatim text -> the split accepted. Absent = undecided (blocks when the split changes the name). */
   approvedSplits?: ApprovedSplits;
+  /**
+   * What the WoRMS opt-in found, by scientificName (stage 4, core/convert/worms.ts). Absent = no lookup: nothing is written and nothing is raised. A name that
+   * already has a scientificNameID from the sheet is never looked up and never overwritten.
+   */
+  worms?: WormsLookup;
 }
 
 /* ---------- reading one sheet ---------- */
@@ -700,7 +707,7 @@ export function convert(input: ConvertInput): ConvertResult {
     // every column the user gave a meaning that this conversion does not read, in this configuration, is said and has to be accepted: nothing is dropped silently
     const unexported = unreadColumns(sin, cols, specs);
     if (unexported.length > 0) {
-      findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.slice(0, 6).join(', ') + (unexported.length > 6 ? ', …' : '') } }));
+      findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
     }
     // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
@@ -770,9 +777,67 @@ export function convert(input: ConvertInput): ConvertResult {
         sheet: g.sheet,
         value: g.name,
         lines: g.lines,
-        params: { count: g.ids.size, columns: g.refs.slice(0, 6).join(', ') + (g.refs.length > 6 ? ', …' : '') },
+        params: { count: g.ids.size, columns: g.refs.join(', ') },
       }),
     );
+  }
+
+  /* ---- the WoRMS opt-in (stage 4): which names would be sent, and what the lookup that was made says ---- */
+  const undecidedVerbatim = new Set(undecided.map((u) => u.verbatim));
+  // per scientificName: how many rows have a taxon ID from the sheet, how many have none, and which IDs the sheet gives. A name whose split is not approved
+  // yet is not final: it is neither sent nor looked at.
+  const perName = new Map<string, { withId: number; without: number; ids: Set<string> }>();
+  for (const o of occurrences) {
+    if (undecidedVerbatim.has(o.verbatimIdentification)) continue;
+    let n = perName.get(o.scientificName);
+    if (!n) perName.set(o.scientificName, (n = { withId: 0, without: 0, ids: new Set() }));
+    if (o.scientificNameId !== undefined) {
+      n.withId++;
+      n.ids.add(o.scientificNameId);
+    } else n.without++;
+  }
+  // a name that has a sheet ID on ANY row is never sent and gets no WoRMS ID on its other rows: only a name with no sheet ID on any row is looked up
+  const toLookUp = new Set<string>();
+  const incomplete: string[] = [];
+  const conflicting: string[] = [];
+  let withSheetId = 0;
+  for (const [name, n] of perName) {
+    if (n.withId > 0) {
+      withSheetId++;
+      if (n.without > 0) incomplete.push(name);
+      if (n.ids.size > 1) conflicting.push(name);
+    } else if (n.without > 0) toLookUp.add(name);
+  }
+  const whereName = { file: input.sheets[0]?.file.fileName ?? '', sheet: input.sheets[0]?.sheet ?? '' };
+  // the names go whole into the params (the text shows the first few, the acceptance tick is for the whole set)
+  const wholeList = (names: string[]): string => names.join(', ');
+  if (incomplete.length > 0) findings.push(makeConvertFinding('CONV-NAMEID-INCOMPLETE', { ...whereName, value: incomplete[0], params: { count: incomplete.length, names: wholeList(incomplete) } }));
+  if (conflicting.length > 0) findings.push(makeConvertFinding('CONV-NAMEID-CONFLICT', { ...whereName, value: conflicting[0], params: { count: conflicting.length, names: wholeList(conflicting) } }));
+  const nameLookup = { names: [...toLookUp], withSheetId, applied: 0 };
+  if (input.worms !== undefined) {
+    const undecidedNames: string[] = [];
+    const noMatch: string[] = [];
+    const notMarine: string[] = [];
+    for (const name of toLookUp) {
+      const e = wormsEntry(input.worms, name);
+      if (!e) continue;
+      // an entry that is not a positive whole AphiaID is no ID: the name stays undecided (and blocks) instead of writing something else
+      if (e.state === 'undecided' || (e.state === 'id' && !(Number.isSafeInteger(e.aphiaId) && e.aphiaId >= 1))) undecidedNames.push(name);
+      else if (e.state === 'none' && e.reason === 'no-match') noMatch.push(name);
+      else if (e.state === 'id' && e.notMarine) notMarine.push(name);
+    }
+    // the ID goes to every occurrence of a looked-up name; scientificName itself is never touched
+    for (const o of occurrences) {
+      if (o.scientificNameId !== undefined || !toLookUp.has(o.scientificName) || undecidedVerbatim.has(o.verbatimIdentification)) continue;
+      const e = wormsEntry(input.worms, o.scientificName);
+      if (e?.state === 'id' && Number.isSafeInteger(e.aphiaId) && e.aphiaId >= 1) {
+        o.scientificNameId = wormsLsid(e.aphiaId);
+        nameLookup.applied++;
+      }
+    }
+    if (undecidedNames.length > 0) findings.push(makeConvertFinding('CONV-WORMS-UNDECIDED', { ...whereName, value: undecidedNames[0], params: { count: undecidedNames.length, names: wholeList(undecidedNames) } }));
+    if (noMatch.length > 0) findings.push(makeConvertFinding('CONV-WORMS-NO-MATCH', { ...whereName, value: noMatch[0], params: { count: noMatch.length, names: wholeList(noMatch) } }));
+    if (notMarine.length > 0) findings.push(makeConvertFinding('CONV-WORMS-NOT-MARINE', { ...whereName, value: notMarine[0], params: { count: notMarine.length, names: wholeList(notMarine) } }));
   }
 
   const blocking = findings.filter((f) => f.severity === 'error');
@@ -785,6 +850,7 @@ export function convert(input: ConvertInput): ConvertResult {
     measurements,
     tree: tree.summary,
     splits,
+    nameLookup,
     cruiseText: tree.cruiseText,
     stats: { samples: samples.size, occurrences: occurrences.length, present: stats.present, absent: stats.absent, zerosSkipped: stats.zerosSkipped, textCells: stats.textCells, measurements: measurements.length },
   };
