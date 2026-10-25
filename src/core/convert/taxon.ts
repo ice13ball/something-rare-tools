@@ -7,6 +7,7 @@
  *   "Calanus cf. glacialis"      -> scientificName "Calanus glacialis", identificationQualifier "cf."
  *   "Augaptilus glacialis, c2"   -> scientificName "Augaptilus glacialis", lifeStage "C2"
  *   "Oithona similis CIV"        -> scientificName "Oithona similis", lifeStage "C4"
+ *   "Metridia longa, f"          -> scientificName "Metridia longa", sex "female"
  *
  * verbatimIdentification is ALWAYS the exact text (ends trimmed): nothing is lost and the user can check the split.
  * Qualifier convention (OBIS Manual, "Low confidence taxonomic identification" in the Darwin Core page: the lowest accurate name goes
@@ -22,6 +23,8 @@ export interface TaxonSplit {
   scientificName: string;
   identificationQualifier?: string;
   lifeStage?: string;
+  /** Darwin Core `sex` (female / male; NERC S10 later), read only from a ", f" / ", m" suffix. */
+  sex?: 'female' | 'male';
 }
 
 const COPEPODITE_ROMAN: Record<string, string> = { i: 'C1', ii: 'C2', iii: 'C3', iv: 'C4', v: 'C5', vi: 'C6' };
@@ -41,7 +44,7 @@ function stageToken(tok: string): string | undefined {
 }
 
 /** Sex after a comma only ("Metridia longa, f"): a bare f or m inside a name is never read as one. */
-function sexToken(tok: string): string | undefined {
+function sexToken(tok: string): 'female' | 'male' | undefined {
   const t = tok.toLowerCase();
   return t === 'f' ? 'female' : t === 'm' ? 'male' : undefined;
 }
@@ -55,14 +58,17 @@ export function splitTaxon(text: string): TaxonSplit {
   const verbatim = text.trim();
   let rest = verbatim;
   let lifeStage: string | undefined;
+  let sex: 'female' | 'male' | undefined;
   const qualifiers: string[] = [];
 
   // 1. a comma suffix: ", c2" or ", f" (the only place f / m are read)
   const comma = /^(.*\S)\s*,\s*(\S+)$/.exec(rest);
   if (comma) {
-    const stage = stageToken(comma[2]) ?? sexToken(comma[2]);
-    if (stage !== undefined) {
+    const stage = stageToken(comma[2]);
+    const sx = stage === undefined ? sexToken(comma[2]) : undefined;
+    if (stage !== undefined || sx !== undefined) {
       lifeStage = stage;
+      sex = sx;
       rest = comma[1];
     }
   }
@@ -104,11 +110,12 @@ export function splitTaxon(text: string): TaxonSplit {
   const split: TaxonSplit = { verbatimIdentification: verbatim, scientificName: name };
   if (qualifiers.length > 0) split.identificationQualifier = qualifiers.join(' ');
   if (lifeStage !== undefined) split.lifeStage = lifeStage;
+  if (sex !== undefined) split.sex = sex;
   return split;
 }
 
 /** Did the split take something out of the name (a qualifier or a stage)? Only those need the user's approval. */
-export const splitChanged = (s: TaxonSplit): boolean => s.identificationQualifier !== undefined || s.lifeStage !== undefined;
+export const splitChanged = (s: TaxonSplit): boolean => s.identificationQualifier !== undefined || s.lifeStage !== undefined || s.sex !== undefined;
 
 /** One distinct name of an upload and how it splits; `approved` is the user's decision when there is one. */
 export interface SplitEntry {

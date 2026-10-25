@@ -130,6 +130,28 @@ describe('a missing sample code', () => {
   });
 });
 
+describe('summary rows are matched conservatively', () => {
+  it('a station really named "Total Bay" (or a sample "Total-1") is NOT skipped', () => {
+    const r = convert({ sheets: [wide([['CR', 'Total Bay', 'a', 1, 2, '2020-01-01', 4, 5], ['CR', 'Total Bay', 'Total-1', 1, 2, '2020-01-01', 6, 7]])] });
+    expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.id)).toEqual(['a', 'Total-1']);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')).toEqual([]);
+  });
+
+  it('only the exact words, as the whole sample or station cell, in any case; every skipped row is reported', () => {
+    const rows: Cell[][] = [['CR', 'S1', 'a', 1, 2, '2020-01-01', 4, 5]];
+    for (const w of ['Total', 'SUMA', 'razem', 'Summe', 'Gesamt', 'Somme']) rows.push(['CR', '', w, null, null, null, 1, 1]);
+    rows.push(['CR', 'Summe', 'x', null, null, null, 1, 1]);
+    rows.push(['CR', 'Mean', 'mean', null, null, null, 1, 1]);
+    const r = convert({ sheets: [wide(rows)] });
+    const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
+    expect(s).toHaveLength(1);
+    expect(s[0].lines).toEqual([3, 4, 5, 6, 7, 8, 9]);
+    expect(s[0].params.count).toBe(7);
+    // "Mean" / "mean" are no longer treated as summaries: they stay samples
+    expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.id)).toEqual(['a', 'mean']);
+  });
+});
+
 describe('Q1: the one-time sample code proposal', () => {
   const header = ['Station', 'Latitude', 'Longitude', 'Calanus finmarchicus'];
   const rows: Cell[][] = [['S1', 1, 2, 4], ['S1', 1, 2, 5], ['S2', 3, 4, 6], [' S1 ', 1, 2, 7], [null, null, null, null]];

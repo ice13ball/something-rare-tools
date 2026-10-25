@@ -33,10 +33,13 @@ describe('splitTaxon', () => {
     expect(splitTaxon('Calanus hyperboreus adult')).toMatchObject({ scientificName: 'Calanus hyperboreus', lifeStage: 'adult' });
   });
 
-  it('reads a stage after a comma, and f / m ONLY as a suffix after a comma', () => {
+  it('reads a stage after a comma, and f / m (sex) ONLY as a suffix after a comma', () => {
     expect(splitTaxon('Augaptilus glacialis, c2')).toEqual({ verbatimIdentification: 'Augaptilus glacialis, c2', scientificName: 'Augaptilus glacialis', lifeStage: 'C2' });
-    expect(splitTaxon('Metridia longa, f')).toMatchObject({ scientificName: 'Metridia longa', lifeStage: 'female' });
-    expect(splitTaxon('Metridia longa, m')).toMatchObject({ lifeStage: 'male' });
+    expect(splitTaxon('Metridia longa, f')).toEqual({ verbatimIdentification: 'Metridia longa, f', scientificName: 'Metridia longa', sex: 'female' });
+    expect(splitTaxon('Metridia longa, m')).toMatchObject({ sex: 'male' });
+    expect(splitTaxon('Metridia longa, f').lifeStage).toBeUndefined();
+    expect(splitChanged(splitTaxon('Metridia longa, f'))).toBe(true);
+    expect(splitTaxon('Metridia longa, c6')).toMatchObject({ lifeStage: 'C6' });
     // a bare f or m, or one without the comma, is part of the name
     expect(splitTaxon('Metridia longa f')).toEqual({ verbatimIdentification: 'Metridia longa f', scientificName: 'Metridia longa f' });
     expect(splitTaxon('Species m')).toMatchObject({ scientificName: 'Species m' });

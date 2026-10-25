@@ -271,3 +271,16 @@ describe('L2: long without an occurrenceID, with a lifeStage column', () => {
     expect(res.occurrences[0]).toMatchObject({ id: 'A1:Calanus finmarchicus c2:C3', scientificName: 'Calanus finmarchicus', lifeStage: 'C3' });
   });
 });
+
+describe('sex from a ", f" / ", m" suffix', () => {
+  it('goes to the sex term, not to lifeStage, and needs the same approval as any split', () => {
+    const f = fileOf(['Sample', 'Station', 'Metridia longa, f', 'Metridia longa, m'], [['a', 'S', 2, 3]]);
+    const s = [sheetInput(f, { quantity: { kind: 'count' } })];
+    expect(ids(convert({ sheets: s }).blocking)).toEqual(['CONV-SPLIT-UNDECIDED']);
+    const r = convert({ sheets: s, approvedSplits: approveAll({ sheets: s }) });
+    expect(r.blocking).toEqual([]);
+    expect(r.occurrences.map((o) => [o.scientificName, o.sex, o.lifeStage])).toEqual([['Metridia longa', 'female', undefined], ['Metridia longa', 'male', undefined]]);
+    // different sex is a different taxon record in one sample: no same-event warning
+    expect(find(r.findings, 'CONV-TAXON-SAME-EVENT')).toEqual([]);
+  });
+});

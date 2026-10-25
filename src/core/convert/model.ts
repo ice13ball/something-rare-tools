@@ -61,6 +61,8 @@ export interface OccRec {
   scientificName: string;
   identificationQualifier?: string;
   lifeStage?: string;
+  /** Darwin Core sex, from a ", f" / ", m" suffix of the taxon text. */
+  sex?: 'female' | 'male';
   occurrenceStatus: OccurrenceStatus;
   /** count only: a whole number (0 for an absence). */
   individualCount?: number;

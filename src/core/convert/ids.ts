@@ -23,8 +23,8 @@ export const hasTabOrNewline = (s: string): boolean => TAB_OR_NEWLINE.test(s);
 /** The text of such a value shown in a finding: the characters become a space. */
 export const shownText = (s: string): string => s.replace(/[\t\r\n]+/g, ' ');
 
-/** A label that makes a row a summary line ("Total", "Mean"), as in dataset.ts: not a sample. */
-export const SUMMARY_LABEL = /^(totals?|grand total|sub-?total|sum|mean|average|avg|median|min(imum)?|max(imum)?|st(an)?d(ard)?\.? ?dev(iation)?|stdev|sd|count)[:.]?$/i;
+/** The whole sample or station cell is exactly one of these words (any case): the row is a summary line, not a sample. "Total Bay" is a station and does not match. */
+export const SUMMARY_LABEL = /^(total|suma|razem|summe|gesamt|somme)$/i;
 
 export const stationPrefixedId = (stationEventId: string, code: string): string => `${stationEventId}:${code}`;
 export const occurrenceIdWide = (sampleEventId: string, header: string): string => `${sampleEventId}:${header}`;
