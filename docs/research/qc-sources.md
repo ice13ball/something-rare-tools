@@ -463,7 +463,7 @@ Free-text collected dates ("2023-04 to 2023-05") and EDTF qualifiers ("2020?", "
 
 Scope: facts needed to build the browser-only converter. Not rule thresholds. Every item below was opened or run in this session.
 "Verified = yes" means I read the quote in the opened document or ran the command and saw the output. Anything else is marked UNVERIFIED.
-Helper scripts and raw listings (not part of the repo): `spike/sq.py` (NVS SPARQL search), `spike/openall.py` + `opened.txt`/`opened2.txt` (every URI below opened, 74 fetches, all HTTP 200), `spike/build.py`, `spike/selfcheck.py`.
+Helper scripts and raw listings (an NVS SPARQL search, a script that opened every URI below: 74 fetches, all HTTP 200, and the archive builder and self-check of Item 6) were kept outside the repository.
 
 How concepts were found: SPARQL on `https://vocab.nerc.ac.uk/sparql/sparql` (prefLabel regex over `http://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/`), then each URI opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/` (HTML, HTTP 200) and as `...?_profile=nvs&_mediatype=application/ld+json` (read `skos:prefLabel`, `owl:deprecated`, `skos:definition`). In the NVS data `owl:deprecated` is the literal string "false" / "true".
 
@@ -511,7 +511,7 @@ measurementTypeID (P01):
 | sub-sampling fraction | P01/SSAMPC01 | Sub-sampling coefficient | not named; BioCheck "no unit/value ID needed" |
 | sample duration / track length / sub-sampling protocol | P01/AZDRZZ01, LENTRACK, DSPSSP01 | Sample duration; Length of sampling track; Description of sub-sampling protocol | all three named in manual |
 
-measurementUnitID (P06). Note the units the user listed:
+measurementUnitID (P06). The units used in the examples above:
 
 | unit | code | preferred label | notes |
 |---|---|---|---|
@@ -666,7 +666,7 @@ UNVERIFIED: rate limits of NVS (none documented that I found; I did not search f
 
 ### Item 6. Synthetic Event-core DwC-A (built, not uploaded)
 
-Path: `spike/archive/` and `spike/synthetic-event-core.zip` (files at the zip root: meta.xml, eml.xml, event.txt, occurrence.txt, extendedmeasurementorfact.txt). All values invented except taxon names, WoRMS LSIDs and NVS URIs. Generator: `spike/build.py`; offline self-check mimicking the BioCheck rules in Item 2: `spike/selfcheck.py` -> 20 PASS, "ALL OK". That self-check is MY re-implementation, not BioCheck; the user will run the real BioCheck.
+Archive (kept outside the repository; files at the zip root: meta.xml, eml.xml, event.txt, occurrence.txt, extendedmeasurementorfact.txt). All values invented except taxon names, WoRMS LSIDs and NVS URIs. An offline self-check mimicking the BioCheck rules in Item 2 gave 20 PASS, "ALL OK". That self-check is a re-implementation, not BioCheck; the real BioCheck run is the last section below.
 
 Design choices and their evidence:
 - Event: 1 cruise (`SYN2023_CRUISE01`, 2023-06-14/2023-06-16) -> 2 stations -> 3 samples; eventType text cruise / station / sample (manual example). Cruise position DERIVED: stations at (55.50 N, 2.50 E) and (55.90 N, 3.10 E); bounding-box midpoint 55.7000 N, 2.8000 E; coordinateUncertaintyInMeters = 29151 = haversine distance from the midpoint to the farthest box corner (29 150.6 m), rounded up. The haversine HALF-DIAGONAL is 29 119.4 m (script output), 31 m smaller than the corner distance on a sphere, so a circle of the half-diagonal would not quite contain the corners; the OBIS definition is "the radius of the smallest circle around the given position containing the whole location" (darwin_core.html), so use the corner distance. georeferenceRemarks says it is derived. Stations and samples carry their own coordinates (100 m uncertainty) because GBIF does not inherit from parents (format_event.html). geodeticDatum = EPSG:4326 as the manual requires.
@@ -681,14 +681,14 @@ Design choices and their evidence:
 ---------------------------------------------------------------------------
 
 ### Open risks (for the converter design)
-1. UNVERIFIED that the live BioCheck Shiny app equals GitHub master; run the zip through it and compare with Item 2.
+1. RESOLVED in the live BioCheck run below (the zip was run through the app: no issues, behaviour consistent with Item 2, and the About tab names the code read there). Strictly, equality of the deployed app with GitHub master is not proven, only consistent.
 2. UNVERIFIED which EML version the target OBIS node's IPT/harvester accepts; the OBIS manual still names profile 1.1.
-3. UNVERIFIED that `EML::read_eml` (inside BioCheck) parses EML 2.2.0; if BioCheck fails on the zip, try the 2.1.1 switch before blaming the data.
-4. Station positions not checked against land or GEBCO.
+3. RESOLVED in the live BioCheck run below: the temporal cover was read from the EML 2.2.0, so BioCheck parses it.
+4. Station positions not checked against land or GEBCO; the live run below does not cover it. UNVERIFIED.
 5. NVS is a third party: a few `owl:deprecated` flips (e.g. SDBIOL10, S1115) show the list changes; resolve at runtime and cache with a date.
 6. Deliberate gaps: no real-data validation, no benthos example in the archive (SDBIOL02 / AREABEDS / Van Veen / box corer concepts are verified in Item 1 but not exercised in Item 6), no sex rows (S10 verified only).
 
-#### Live BioCheck run of the synthetic archive (25.10.2026, rare-tool main thread)
+#### Live BioCheck run of the synthetic archive (25.10.2026, run by hand)
 
 `synthetic-event-core.zip` (invented values; 1 cruise, 2 stations, 3 samples, 6 occurrences including 1 absence, 21 eMoF rows; EML 2.2.0) uploaded by hand through "File → Upload DwC archive" at https://rshiny.lifewatch.be/BioCheck/, tree option "no":
 
