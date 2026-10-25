@@ -128,15 +128,16 @@ describe('robots meta in the build', () => {
   const inject = (noindex: boolean) => (robotsMeta(noindex).transformIndexHtml as () => unknown[])();
 
   it('the HTML sources carry none: the flag alone decides', () => {
-    for (const f of ['index.html', 'check/index.html', 'licence/index.html', 'collection/index.html', 'privacy/index.html']) {
+    for (const f of ['index.html', 'check/index.html', 'licence/index.html', 'collection/index.html', 'convert/index.html', 'privacy/index.html']) {
       expect(readFileSync(join(__dirname, '..', f), 'utf8'), f).not.toMatch(/name="robots"/);
     }
   });
-  it('the hidden page carries its own, and the plugin does not add a second one', () => {
+  it('/convert carries none either: the plugin adds one while the site is noindex, like to every page, and none otherwise', () => {
     const src = readFileSync(join(__dirname, '..', 'convert/index.html'), 'utf8');
-    expect(src.match(/name="robots"/g)).toHaveLength(1);
+    expect(src.match(/name="robots"/g)).toBeNull();
     const withHtml = (noindex: boolean, html: string) => (robotsMeta(noindex).transformIndexHtml as (h: string) => unknown[])(html);
-    expect(withHtml(true, src)).toEqual([]);
+    expect(withHtml(true, src)).toHaveLength(1);
+    expect(withHtml(false, src)).toEqual([]);
     expect(withHtml(true, '<head></head>')).toHaveLength(1);
   });
   it('the Vite plugin injects it only while noindex', () => {

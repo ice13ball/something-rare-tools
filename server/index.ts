@@ -96,7 +96,7 @@ function sendProxyError(res: Response, e: ProxyError): void {
 /** The canonical pages; <lastmod> is the build date (mtime of dist/index.html, read once at startup). */
 function buildSitemap(built: Date): string {
   const lastmod = built.toISOString().slice(0, 10);
-  const urls = ['/', '/check', '/licence', '/collection', '/privacy']
+  const urls = ['/', '/check', '/licence', '/collection', '/convert', '/privacy']
     .map((p) => `  <url>\n    <loc>${SITE.origin}${p}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>\n`)
     .join('');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>\n`;
@@ -127,8 +127,7 @@ export function createApp(opts: AppOptions): Express {
     licence: Buffer.from(prepareHtml(readRequired(dist, join('licence', 'index.html')).toString('utf8'), noindex)),
     collection: Buffer.from(prepareHtml(readRequired(dist, join('collection', 'index.html')).toString('utf8'), noindex)),
     privacy: Buffer.from(prepareHtml(readRequired(dist, join('privacy', 'index.html')).toString('utf8'), noindex)),
-    // Hidden page: its robots meta stays whatever the site flag says (headers.ts HIDDEN_PATHS), so it is prepared with `true`.
-    convert: Buffer.from(prepareHtml(readRequired(dist, join('convert', 'index.html')).toString('utf8'), true)),
+    convert: Buffer.from(prepareHtml(readRequired(dist, join('convert', 'index.html')).toString('utf8'), noindex)),
   };
   const consentJs = readOptional(dist, 'consent-default.js');
   const notFoundJs = readOptional(dist, 'not-found.js');

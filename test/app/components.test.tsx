@@ -188,9 +188,10 @@ describe('pages', () => {
   it('IndexPage: one tile per tool, each a single link named by its full action, and the header marks the current page', () => {
     render(<IndexPage />);
     const tiles = document.querySelectorAll('li.tool');
-    expect(tiles.length).toBe(3);
+    expect(tiles.length).toBe(4);
     for (const tile of tiles) expect(tile.querySelectorAll('a').length).toBe(1);
     expect(screen.getByRole('link', { name: 'Open licence check' }).getAttribute('href')).toBe('/licence');
+    expect(screen.getByRole('link', { name: 'Open Darwin Core converter' }).getAttribute('href')).toBe('/convert');
     expect(document.querySelector('header a[aria-current]')).toBeNull();
     cleanup();
     window.history.pushState({}, '', '/check');

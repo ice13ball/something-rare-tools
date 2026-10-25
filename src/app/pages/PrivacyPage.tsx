@@ -60,6 +60,14 @@ export function PrivacyPage(): React.ReactElement {
         <p>{t('privacy.collection.p2')}</p>
       </section>
       <section>
+        <h2>{t('privacy.convert.h')}</h2>
+        <p>{t('privacy.convert.p1')}</p>
+        <p>{t('privacy.convert.p2')}</p>
+        <p>{t('privacy.convert.worms')}</p>
+        <p>{t('privacy.convert.nvs')}</p>
+        <p>{t('privacy.convert.p3')}</p>
+      </section>
+      <section>
         <h2>{t('privacy.logs.h')}</h2>
         <p>{t('privacy.logs.p1')}</p>
         <p>{t('privacy.logs.p2')}</p>
@@ -75,6 +83,7 @@ export function PrivacyPage(): React.ReactElement {
         <h2>{t('privacy.analytics.h')}</h2>
         <p>{t('privacy.analytics.p1')}</p>
         <p>{t('privacy.analytics.p2')}</p>
+        <p>{t('privacy.analytics.p3')}</p>
         <p>{t('privacy.consent.p')}</p>
       </section>
       <section>
