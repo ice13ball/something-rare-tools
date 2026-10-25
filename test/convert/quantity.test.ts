@@ -198,12 +198,15 @@ describe('a typed sample size (M3)', () => {
       expect(r.events.find((e) => e.id === 'A')).toMatchObject({ sampleSizeValue: '12.5', sampleSizeUnit: 'm3' });
       expect(r.measurements.find((m) => m.role === 'effort')?.measurementValue).toBe('12.5');
     }
-    expect(run2('1,234', false).events.find((e) => e.id === 'A')?.sampleSizeValue).toBe('1.234');
+    // starting with a zero it cannot be a thousands separator; four digits before, or other than three after, are not that form
+    for (const [v, w] of [['0,125', '0.125'], ['0.125', '0.125'], ['12,34', '12.34'], ['1,2345', '1.2345'], ['1234,5', '1234.5'], ['1234,567', '1234.567'], ['12', '12']]) {
+      expect(run2(v, false).events.find((e) => e.id === 'A')?.sampleSizeValue, v).toBe(w);
+    }
     expect(run2('+3', false).events.find((e) => e.id === 'A')?.sampleSizeValue).toBe('3');
   });
 
   it('refuses a non-number, zero, a negative and anything with a thousands separator, with its own rule and reason', () => {
-    const cases: [string, string][] = [['abc', 'not-a-number'], ['0', 'not-positive'], ['-3', 'not-positive'], ['1.234,5', 'ambiguous'], ['1,234.5', 'ambiguous'], ['1,2,3', 'ambiguous'], ['12.5.', 'ambiguous']];
+    const cases: [string, string][] = [['abc', 'not-a-number'], ['0', 'not-positive'], ['-3', 'not-positive'], ['1.234,5', 'ambiguous'], ['1,234.5', 'ambiguous'], ['1,234,567', 'ambiguous'], ['1.2.3', 'ambiguous'], ['1,2,3', 'ambiguous'], ['12.5.', 'ambiguous'], ['1,234', 'thousands'], ['1.234', 'thousands'], ['12.345', 'thousands'], ['123,456', 'thousands']];
     for (const [v, reason] of cases) {
       const r = run2(v, false);
       const f = find(r.blocking, 'CONV-EFFORT-VALUE-INVALID');
@@ -219,10 +222,15 @@ describe('a typed sample size (M3)', () => {
   it('the text names the typed value and why, in words, in every language, with no "column" and no English in the others', () => {
     const f = find(run2('1.234,5', false).blocking, 'CONV-EFFORT-VALUE-INVALID')[0];
     const text = (l: 'en' | 'pl' | 'de' | 'fr') => renderConvertPlain(f, l);
-    expect(text('en')).toBe('The sample size you typed, "1.234,5", cannot be used: a thousands separator together with a decimal mark is ambiguous. Type a number above zero, with a point or a comma as the decimal mark.');
-    expect(text('pl')).toContain('„1.234,5” jest nieprawidłowa: separator tysięcy razem ze znakiem dziesiętnym jest niejednoznaczny');
-    expect(text('de')).toContain('ein Tausendertrennzeichen zusammen mit einem Dezimalzeichen ist mehrdeutig');
-    expect(text('fr')).toContain('un séparateur de milliers avec un séparateur décimal est ambigu');
+    expect(text('en')).toBe('The sample size you typed, "1.234,5", cannot be used: it has more than one point or comma, so it cannot be read safely. Type a number above zero, with a point or a comma as the decimal mark.');
+    expect(text('pl')).toContain('„1.234,5” jest nieprawidłowa: ma więcej niż jedną kropkę lub przecinek');
+    expect(text('de')).toContain('es hat mehr als einen Punkt oder ein Komma');
+    expect(text('fr')).toContain("il a plus d'un point ou d'une virgule");
+    const t = find(run2('1,234', false).blocking, 'CONV-EFFORT-VALUE-INVALID')[0];
+    expect(renderConvertPlain(t, 'en')).toContain('it could be a thousands separator: write it without one, or with more or fewer decimals');
+    expect(renderConvertPlain(t, 'pl')).toContain('może to być separator tysięcy');
+    expect(renderConvertPlain(t, 'de')).toContain('es könnte ein Tausendertrennzeichen sein');
+    expect(renderConvertPlain(t, 'fr')).toContain("il pourrait s'agir d'un séparateur de milliers");
     for (const l of ['pl', 'de', 'fr'] as const) {
       expect(text(l), l).not.toMatch(/column|lines|\bnumber\b|\bsample size\b|wierszach|Zeilen|lignes/i);
       expect(text(l), l).not.toMatch(/\{|\}/);

@@ -181,7 +181,8 @@ No findings only means that no problems were found in the checked categories.`,
 • A depth is read as metres and is never converted; a unit other than metres blocks the conversion.`,
   'tip.convertEffortValue.does': `The sample size, when it is the same for all samples.`,
   'tip.convertEffortValue.logic': `• Type it with a point or a comma as the decimal mark; both are accepted whatever your sheet uses, and it is written with a point.
-• A number that has a thousands separator as well as a decimal mark is refused as ambiguous, and so is anything that is not a number above zero; the conversion is then blocked.
+• Refused as ambiguous: a number with more than one point or comma, and a number of one to three digits, one separator and exactly three digits after it, because it could be a thousands separator; write it without one, or with more or fewer decimals. A number that starts with a zero cannot be one and is accepted.
+• Anything that is not a number above zero is refused too, and the conversion is then blocked.
 • For a different size in each sample, mark a column of the sheet instead.`,
   'tip.convertEffortUnit.does': `The unit of the sample size.`,
   'tip.convertEffortUnit.logic': `• It is written as you give it and never converted.
@@ -260,8 +261,8 @@ No findings only means that no problems were found in the checked categories.`,
 • The exact text is always kept as verbatimIdentification. You can edit the name, qualifier, stage and sex before approving.
 • A split is only a proposal until you approve it, and an unapproved split blocks the conversion. A plain name needs no decision.`,
   'tip.convertCodes.does': `Proposes sample codes once, for a sheet that has none.`,
-  'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet.
-• You get your own sheet back as a CSV file with one new column. Cells are copied as text. A cell, a header or a code that starts with = + - or @ (also in their full-width forms) or with a tab gets an apostrophe so that a spreadsheet does not run it; plain numbers, missing-data marks such as NA and the marks + x - on their own are left as they are. Dates of an xlsx file are written as ISO dates and times of day as hours and minutes.
+  'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet. If the station text would make a code that starts like a formula (with = + - or @), the code is S and the number of the row instead, so that it needs no apostrophe and is the same on the page and in the file.
+• You get your own sheet back as a CSV file with one new column. Cells are copied as text. A cell or a header that starts with = + - or @ (also in their full-width forms) or with a tab gets an apostrophe so that a spreadsheet does not run it; plain numbers, missing-data marks such as NA and the marks + x - on their own, spaces around them included, are left as they are. Dates of an xlsx file are written as ISO dates and times of day as hours and minutes.
 • Check it and upload that file again: only a code in your own uploaded sheet becomes an ID.
 • The converter never applies or renews codes by itself.`,
   'tip.convertTree.does': `Shows the event tree the archive would have.`,
@@ -442,7 +443,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Głębokość jest odczytywana jako metry i nigdy nie jest przeliczana; inna jednostka niż metry blokuje przekształcenie.`,
   'tip.convertEffortValue.does': `Wielkość próby, gdy jest taka sama dla wszystkich próbek.`,
   'tip.convertEffortValue.logic': `• Wpisz z kropką lub przecinkiem jako znakiem dziesiętnym; oba są przyjmowane niezależnie od tego, czego używa arkusz, a zapisywana jest z kropką.
-• Liczba z separatorem tysięcy i znakiem dziesiętnym jednocześnie jest odrzucana jako niejednoznaczna, tak samo jak wszystko, co nie jest liczbą większą od zera; przekształcenie jest wtedy zablokowane.
+• Jako niejednoznaczne odrzucane są: liczba z więcej niż jedną kropką lub przecinkiem oraz liczba z jedną do trzech cyfr, jednym separatorem i dokładnie trzema cyframi po nim, bo może to być separator tysięcy; zapisz ją bez niego albo z większą lub mniejszą liczbą miejsc po przecinku. Liczba zaczynająca się od zera nie może nim być i jest przyjmowana.
+• Odrzucane jest też wszystko, co nie jest liczbą większą od zera, a przekształcenie jest wtedy zablokowane.
 • Dla innej wielkości w każdej próbce oznacz zamiast tego kolumnę arkusza.`,
   'tip.convertEffortUnit.does': `Jednostka wielkości próby.`,
   'tip.convertEffortUnit.logic': `• Jest zapisywana tak, jak ją podasz, i nigdy nie jest przeliczana.
@@ -521,8 +523,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Dokładny tekst zawsze zostaje jako verbatimIdentification. Przed zatwierdzeniem możesz poprawić nazwę, dopisek, stadium i płeć.
 • Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie. Zwykła nazwa nie wymaga decyzji.`,
   'tip.convertCodes.does': `Proponuje kody próbek jednorazowo, dla arkusza, który ich nie ma.`,
-  'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza.
-• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst. Komórka, nagłówek lub kod zaczynające się od = + - lub @ (także w formie pełnej szerokości) albo od tabulatora dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; zwykłe liczby, oznaczenia braku danych, takie jak NA, oraz same znaki + x - zostają bez zmian. Daty z pliku xlsx są zapisywane jako daty ISO, a godziny jako godziny i minuty.
+  'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza. Jeśli z tekstu stacji powstałby kod zaczynający się jak formuła (od = + - lub @), kodem jest zamiast tego S i numer wiersza, aby nie potrzebował apostrofu i był taki sam na stronie i w pliku.
+• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst. Komórka lub nagłówek zaczynające się od = + - lub @ (także w formie pełnej szerokości) albo od tabulatora dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; zwykłe liczby, oznaczenia braku danych, takie jak NA, oraz same znaki + x -, także ze spacjami wokół, zostają bez zmian. Daty z pliku xlsx są zapisywane jako daty ISO, a godziny jako godziny i minuty.
 • Sprawdź go i wgraj ten plik ponownie: identyfikatorem staje się tylko kod z Twojego wgranego arkusza.
 • Konwerter nigdy sam nie stosuje ani nie odnawia kodów.`,
   'tip.convertTree.does': `Pokazuje drzewo zdarzeń, jakie miałoby archiwum.`,
@@ -701,7 +703,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Eine Tiefe wird als Meter gelesen und nie umgerechnet; eine andere Einheit als Meter blockiert die Umwandlung.`,
   'tip.convertEffortValue.does': `Die Probengröße, wenn sie für alle Proben gleich ist.`,
   'tip.convertEffortValue.logic': `• Geben Sie sie mit Punkt oder Komma als Dezimalzeichen ein; beides wird angenommen, was Ihr Blatt auch verwendet, und geschrieben wird sie mit Punkt.
-• Eine Zahl mit Tausendertrennzeichen und Dezimalzeichen zugleich wird als mehrdeutig abgelehnt, ebenso alles, was keine Zahl über null ist; die Umwandlung ist dann blockiert.
+• Als mehrdeutig abgelehnt werden: eine Zahl mit mehr als einem Punkt oder Komma sowie eine Zahl mit einer bis drei Ziffern, einem Trennzeichen und genau drei Ziffern danach, weil es ein Tausendertrennzeichen sein könnte; schreiben Sie sie ohne eines oder mit mehr oder weniger Dezimalstellen. Eine Zahl, die mit einer Null beginnt, kann keines sein und wird angenommen.
+• Abgelehnt wird auch alles, was keine Zahl über null ist, und die Umwandlung ist dann blockiert.
 • Für eine andere Größe in jeder Probe markieren Sie stattdessen eine Spalte des Blatts.`,
   'tip.convertEffortUnit.does': `Die Einheit der Probengröße.`,
   'tip.convertEffortUnit.logic': `• Sie wird so geschrieben, wie Sie sie angeben, und nie umgerechnet.
@@ -780,8 +783,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Der genaue Text bleibt immer als verbatimIdentification erhalten. Name, Zusatz, Stadium und Geschlecht können Sie vor der Bestätigung bearbeiten.
 • Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung. Ein einfacher Name braucht keine Entscheidung.`,
   'tip.convertCodes.does': `Schlägt einmalig Probencodes vor, für ein Blatt, das keine hat.`,
-  'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts.
-• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert. Eine Zelle, eine Überschrift oder ein Code, die mit = + - oder @ (auch in der Vollbreitform) oder mit einem Tabulator beginnen, erhalten ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; einfache Zahlen, Kennzeichen für fehlende Werte wie NA und die Zeichen + x - allein bleiben unverändert. Daten einer xlsx-Datei werden als ISO-Daten geschrieben, Uhrzeiten als Stunden und Minuten.
+  'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts. Würde der Stationstext einen Code ergeben, der wie eine Formel beginnt (mit = + - oder @), ist der Code stattdessen S und die Zeilennummer, damit er kein Apostroph braucht und auf der Seite und in der Datei gleich ist.
+• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert. Eine Zelle oder eine Überschrift, die mit = + - oder @ (auch in der Vollbreitform) oder mit einem Tabulator beginnt, erhält ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; einfache Zahlen, Kennzeichen für fehlende Werte wie NA und die Zeichen + x - allein, auch mit Leerzeichen darum, bleiben unverändert. Daten einer xlsx-Datei werden als ISO-Daten geschrieben, Uhrzeiten als Stunden und Minuten.
 • Prüfen Sie es und laden Sie diese Datei erneut hoch: Nur ein Code in Ihrem eigenen hochgeladenen Blatt wird zur Kennung.
 • Der Konverter wendet Codes nie von selbst an und erneuert sie nie.`,
   'tip.convertTree.does': `Zeigt den Ereignisbaum, den das Archiv hätte.`,
@@ -960,7 +963,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Une profondeur est lue en mètres et n'est jamais convertie ; une unité autre que le mètre bloque la conversion.`,
   'tip.convertEffortValue.does': `La taille d'échantillon, quand elle est la même pour tous les échantillons.`,
   'tip.convertEffortValue.logic': `• Saisissez-la avec un point ou une virgule comme séparateur décimal ; les deux sont acceptés, quel que soit l'usage de votre feuille, et elle est écrite avec un point.
-• Un nombre avec un séparateur de milliers et un séparateur décimal à la fois est refusé comme ambigu, comme tout ce qui n'est pas un nombre supérieur à zéro ; la conversion est alors bloquée.
+• Refusés comme ambigus : un nombre avec plus d'un point ou d'une virgule, et un nombre de un à trois chiffres, un séparateur et exactement trois chiffres après lui, car il pourrait s'agir d'un séparateur de milliers ; écrivez-le sans séparateur, ou avec plus ou moins de décimales. Un nombre qui commence par un zéro ne peut pas en être un et est accepté.
+• Tout ce qui n'est pas un nombre supérieur à zéro est refusé aussi, et la conversion est alors bloquée.
 • Pour une taille différente dans chaque échantillon, marquez plutôt une colonne de la feuille.`,
   'tip.convertEffortUnit.does': `L'unité de la taille d'échantillon.`,
   'tip.convertEffortUnit.logic': `• Elle est écrite telle que vous la donnez et n'est jamais convertie.
@@ -1039,8 +1043,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Le texte exact est toujours gardé comme verbatimIdentification. Vous pouvez modifier le nom, la mention, le stade et le sexe avant de valider.
 • Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion. Un nom simple ne demande aucune décision.`,
   'tip.convertCodes.does': `Propose une seule fois des codes d'échantillon, pour une feuille qui n'en a pas.`,
-  'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille.
-• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte. Une cellule, un en-tête ou un code qui commence par = + - ou @ (aussi en forme pleine chasse) ou par une tabulation reçoit une apostrophe pour qu'un tableur ne l'exécute pas ; les nombres simples, les marques de donnée manquante comme NA et les signes + x - seuls restent tels quels. Les dates d'un fichier xlsx sont écrites en dates ISO et les heures en heures et minutes.
+  'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille. Si le texte de la station donnait un code qui commence comme une formule (par = + - ou @), le code est à la place S et le numéro de la ligne, pour qu'il n'ait pas besoin d'apostrophe et soit le même sur la page et dans le fichier.
+• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte. Une cellule ou un en-tête qui commence par = + - ou @ (aussi en forme pleine chasse) ou par une tabulation reçoit une apostrophe pour qu'un tableur ne l'exécute pas ; les nombres simples, les marques de donnée manquante comme NA et les signes + x - seuls, espaces autour compris, restent tels quels. Les dates d'un fichier xlsx sont écrites en dates ISO et les heures en heures et minutes.
 • Vérifiez-la et rechargez ce fichier : seul un code de votre propre feuille chargée devient un identifiant.
 • Le convertisseur n'applique ni ne renouvelle jamais les codes de lui-même.`,
   'tip.convertTree.does': `Montre l'arbre des événements que l'archive aurait.`,
