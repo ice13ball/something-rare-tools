@@ -91,7 +91,7 @@ export interface OccRec {
 export interface MofIntent {
   target: { kind: 'event' | 'occurrence'; id: string };
   /** What it is: the quantity of an occurrence (count, density, biomass) or the effort of a sample. */
-  role: 'count' | 'density' | 'biomass' | 'effort' | 'device' | 'mesh';
+  role: 'count' | 'density' | 'biomass' | 'effort' | 'device' | 'mesh' | 'variable';
   /** measurementType: the preferred label of the concept; empty when no verified concept exists. */
   measurementType: string;
   measurementTypeId?: string;
@@ -130,6 +130,11 @@ export interface ConvertStats {
   zerosSkipped: number;
   textCells: number;
   measurements: number;
+  /**
+   * Measured-variable columns (stage 5): `columns` written as eMoF rows, and how many of them got a confirmed measurementTypeID (`typeIds`) and measurementUnitID
+   * (`unitIds`); `nvsIds` of those identifiers came from the user's NVS search. Counts only: never a name, a word or a label.
+   */
+  nerc: { columns: number; typeIds: number; unitIds: number; nvsIds: number };
 }
 
 export interface ConvertResult {

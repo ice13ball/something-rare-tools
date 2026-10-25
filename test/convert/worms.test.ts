@@ -45,7 +45,8 @@ describe('what an answer means', () => {
     expect(r[0].match_type).toBe('near_1');
     expect(classifyMatches(r)).toMatchObject({ kind: 'choose', why: 'not-exact' });
     expect(entryOf(r)).toEqual({ state: 'undecided' });
-    expect(entryOf(r, 104464)).toEqual({ state: 'id', aphiaId: 104464, notMarine: false });
+    // the user chose a result that is not an exact match: the record's own name replaces scientificName (stage 5, A1)
+    expect(entryOf(r, 104464)).toEqual({ state: 'id', aphiaId: 104464, notMarine: false, scientificName: 'Calanus finmarchicus' });
     expect(entryOf(r, 'none')).toEqual({ state: 'none', reason: 'user' });
     // a choice that was not offered is no choice
     expect(entryOf(r, 999)).toEqual({ state: 'undecided' });

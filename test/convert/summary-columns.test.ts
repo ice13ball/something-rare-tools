@@ -74,13 +74,16 @@ describe('it never reaches the archive unless the user chooses a meaning for it'
     expect(e.result.occurrences.map((o) => o.individualCount).reduce((a, b) => (a ?? 0) + (b ?? 0), 0)).toBe(26);
   });
 
-  it('with a meaning the user chose by hand it is their decision: as a species column it is converted; as a measured variable the page says it is not written', async () => {
+  it('with a meaning the user chose by hand it is their decision: as a species column it is converted; as a measured variable it is an eMoF row on the sample (stage 5), and not named as unwritten', async () => {
     const taxon = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Suma: { kind: 'taxon', header: true } } });
     expect(taxon.result.occurrences.some((o) => o.verbatimIdentification === 'Suma')).toBe(true);
     const variable = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Suma: { kind: 'variable', variable: 'suma', unit: 'ind' } } });
     expect(variable.result.occurrences.some((o) => o.verbatimIdentification === 'Suma')).toBe(false);
-    const said = variable.findings.find((f) => f.ruleId === 'CONV-COLUMN-NOT-EXPORTED');
-    expect(said).toMatchObject({ severity: 'warning', params: { count: 1, columns: 'Suma' } });
-    for (const f of variable.files) expect(new TextDecoder().decode(f.data), f.name).not.toMatch(/Suma/);
+    expect(variable.findings.some((f) => f.ruleId === 'CONV-COLUMN-NOT-EXPORTED')).toBe(false);
+    const rowsOfSuma = variable.result.measurements.filter((m) => m.role === 'variable');
+    expect(rowsOfSuma.length).toBeGreaterThan(0);
+    for (const m of rowsOfSuma) expect(m).toMatchObject({ measurementType: 'suma', measurementUnit: 'ind', target: { kind: 'event' } });
+    // as an occurrence it is never written
+    expect(variable.result.occurrences.map((o) => o.verbatimIdentification)).not.toContain('Suma');
   });
 });

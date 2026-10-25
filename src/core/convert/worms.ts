@@ -15,7 +15,15 @@
  * OBIS Manual, "Darwin Core" page, section "Taxonomy and identification" (https://manual.obis.org/darwin_core.html, read 2026-10-25): "The LSID used for
  * scientificNameID should correspond to the name provided to the scientificName field, even if it is not the currently accepted scientific name. OBIS will
  * use this identifier to pull the taxonomic information from the World Register of Marine Species (WoRMS) into OBIS and attach it to your dataset. This
- * information includes: ... The accepted name in case of invalid names or synonyms". So the valid_AphiaID is never written, and scientificName is never replaced.
+ * information includes: ... The accepted name in case of invalid names or synonyms". So the valid_AphiaID is never written.
+ *
+ * Which scientificName is written (stage 5, part A1). An exact match, a synonym included, keeps scientificName as written: "scientificName should always contain the
+ * originally recorded full scientific name, even if the name is currently a synonym" (Darwin Core page, same section). A result the USER CHOSE among non-exact ones
+ * (near, phonetic, genus, several results) writes the chosen record's own `scientificname`, because the LSID has to "correspond to the name provided to the
+ * scientificName field" (so "Calnaus finmarchicus" must not travel with the LSID of Calanus finmarchicus) and "Match Taxonomic Names" (manual.obis.org/name_matching.html,
+ * read 2026-10-25) says of a name that is changed to the matched one: "verbatimIdentification must be populated with the scientific name as it was originally
+ * documented"; the Darwin Core page adds that verbatimIdentification records the identification "as it appeared in the original record, unaltered, with ...
+ * misspellings". verbatimIdentification keeps the sheet's text; the occurrenceID is built from the sheet's text and never changes.
  */
 
 /** The most names one AphiaRecordsByMatchNames call takes (51 names answer HTTP 400). */
@@ -147,11 +155,12 @@ export const isUnaccepted = (r: WormsRecord): boolean => r.status === 'unaccepte
 
 /**
  * What the conversion knows about one name after the lookup (the key of a WormsLookup is the scientificName as it stands after the approved splits).
- *   id         a confirmed AphiaID: written as urn:lsid:marinespecies.org:taxname:<id>; notMarine = only freshwater or terrestrial
+ *   id         a confirmed AphiaID: written as urn:lsid:marinespecies.org:taxname:<id>; notMarine = only freshwater or terrestrial;
+ *              scientificName = the chosen record's name, set ONLY when the user chose a result whose match_type is not exact (it replaces scientificName)
  *   none       no ID is written: the service found nothing (`no-match`), or the user chose "no ID" (`user`)
  *   undecided  the user has to choose first: blocks the export (CONV-WORMS-UNDECIDED)
  */
-export type WormsEntry = { state: 'id'; aphiaId: number; notMarine: boolean } | { state: 'none'; reason: 'no-match' | 'user' } | { state: 'undecided' };
+export type WormsEntry = { state: 'id'; aphiaId: number; notMarine: boolean; scientificName?: string } | { state: 'none'; reason: 'no-match' | 'user' } | { state: 'undecided' };
 export type WormsLookup = Readonly<Record<string, WormsEntry>>;
 
 /** The user's choice for a name: an AphiaID among the candidates, or 'none' for "no ID". Absent = not chosen. */
@@ -167,8 +176,18 @@ export function entryOf(records: readonly WormsRecord[], choice?: WormsChoice): 
   if (m.kind === 'auto') return choice === 'none' ? { state: 'none', reason: 'user' } : { state: 'id', aphiaId: m.record.AphiaID, notMarine: isNotMarine(m.record) };
   if (choice === 'none') return { state: 'none', reason: 'user' };
   const picked = typeof choice === 'number' ? m.candidates.find((c) => c.AphiaID === choice) : undefined;
-  return picked ? { state: 'id', aphiaId: picked.AphiaID, notMarine: isNotMarine(picked) } : { state: 'undecided' };
+  if (!picked) return { state: 'undecided' };
+  return { state: 'id', aphiaId: picked.AphiaID, notMarine: isNotMarine(picked), ...(writesOwnName(picked) ? { scientificName: picked.scientificname.trim() } : {}) };
 }
+
+/** The name a chosen record is written under, when that is not the sheet's: only a record that is not an exact match of the name sent (and that has a name to write). */
+export const writesOwnName = (r: WormsRecord): boolean => r.match_type !== 'exact' && r.scientificname.trim() !== '';
+
+/**
+ * A scientificName that came with a WoRMS entry is text that will be written into a tab-separated file: it must be a non-empty line of text. The worker applies this to
+ * what the page sends (it does not trust the page): an entry that fails is treated as undecided.
+ */
+export const isWritableName = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v === v.trim() && v.length <= 300 && !/[\t\r\n\u0000-\u001f]/.test(v);
 
 /** The lookup the conversion takes: an entry per name that has a result; `choices` are the user's decisions by name. */
 export function lookupOf(results: Readonly<Record<string, readonly WormsRecord[]>>, choices: Readonly<Record<string, WormsChoice>>): Record<string, WormsEntry> {

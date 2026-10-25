@@ -6,6 +6,7 @@ import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, QuantityDecl
 import type { ApprovedSplits } from '../core/convert';
 import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertPrefill } from '../core/convert/prefill';
+import type { NercDecisions } from '../core/convert/nerc';
 import type { ConvertSettings } from '../core/convert/settings';
 import type { WormsLookup } from '../core/convert/worms';
 import type { Finding, SheetMapping } from '../core/types';
@@ -49,6 +50,8 @@ export interface ConvertSheetRequest {
   /** The sampling device of the sheet's samples (a verified one or the user's own text) and the mesh size in micrometres as typed. */
   device?: SamplingDevice;
   meshUm?: string;
+  /** The NERC identifiers the user confirmed for the sheet's measured-variable columns, by column index (stage 5). The worker checks every pick (core/convert/nerc.ts). */
+  nerc?: NercDecisions;
 }
 
 export interface ConvertRequestBody {

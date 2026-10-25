@@ -91,3 +91,127 @@ export const BIOCHECK_EFFORT_CODES: readonly string[] = [
 
 /** True when a measurementTypeID is a sampling descriptor or effort term in BioCheck's sense (a substring match of any BODCeffort code). */
 export const isEffortTypeId = (typeId: string): boolean => BIOCHECK_EFFORT_CODES.some((c) => typeId.includes(c));
+
+/* ---------- measured variables (stage 5): suggested NERC concepts for the eMoF rows of variable columns ---------- */
+
+/*
+ * Concepts a measured-variable column (temperature, salinity, oxygen, nutrients, the carbonate system) may be given, and the units that go with them. They live
+ * HERE, in the converter's own vocabulary, and NOT in /check's UNIT_VOCAB or P01_HINTS (src/core/recognize/vocab.ts): extending those would change /check's findings
+ * (ROW-UNIT-MISSING, CHEM-UNIT-PAIR, XF-UNIT-CONFLICT and the bare P01 codes it recognises in headers).
+ *
+ * Every code below was opened on 2026-10-25 as http://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/ (the JSON-LD profile of the concept page): HTTP 200,
+ * owl:deprecated = false (docs/research/qc-sources.md, "Converter (/convert) - stage 5 verification"). Nothing here is ever written on its own: a suggestion is
+ * written only after the user confirms it for that column (src/core/convert/nerc.ts).
+ *
+ *   generic  a concept that names the quantity and no method, so it may be PROPOSED (shown as the suggestion, never pre-selected): the user still confirms it
+ *   method   a concept that names a method, a phase or a narrower quantity (acidification and a gas analyser, potentiometry, colorimetric autoanalysis, a CTD, a
+ *            particulate fraction, chlorophyll-a): only OFFERED in the list, never proposed (plan trap T12)
+ *
+ * `per` is the dimension of the unit the concept is defined for ("per unit volume of the water body" or "per unit mass"). Oxygen has one concept for each
+ * (DOXYZZXX, DOXMZZXX): the proposal is picked by the unit's dimension, and with a unit of neither dimension nothing is proposed. A concept whose `per` disagrees with
+ * the unit's is not even offered (its label would describe another quantity).
+ */
+export type PerDimension = 'volume' | 'mass';
+
+export interface VariableConcept {
+  term: NercTerm;
+  kind: 'generic' | 'method';
+  per?: PerDimension;
+}
+
+const vc = (code: string, label: string, kind: VariableConcept['kind'], per?: PerDimension): VariableConcept => ({ term: p01(code, label), kind, ...(per === undefined ? {} : { per }) });
+
+/** By the canonical variable name of /check's recogniser (the converter reads it from the column's role; the table itself is the converter's own). */
+export const VARIABLE_CONCEPTS: Readonly<Record<string, readonly VariableConcept[]>> = {
+  temperature: [
+    vc('TEMPPR01', 'Temperature of the water body', 'generic'),
+    vc('TEMPP901', 'Temperature (ITS-90) of the water body', 'method'),
+    vc('TEMPST01', 'Temperature of the water body by CTD or STD', 'method'),
+  ],
+  salinity: [
+    vc('PSLTZZ01', 'Practical salinity of the water body', 'generic'),
+    vc('PSALST01', 'Practical salinity of the water body by CTD and computation using UNESCO 1983 algorithm', 'method'),
+    vc('PSALMV01', 'Practical salinity of the water body by moving vessel profiler (MVP) and computation using UNESCO 1983 algorithm', 'method'),
+  ],
+  oxygen: [
+    vc('DOXYZZXX', 'Concentration of oxygen {O2 CAS 7782-44-7} per unit volume of the water body [dissolved plus reactive particulate phase]', 'generic', 'volume'),
+    vc('DOXMZZXX', 'Concentration of oxygen {O2 CAS 7782-44-7} per unit mass of the water body [dissolved plus reactive particulate phase]', 'generic', 'mass'),
+  ],
+  pH: [vc('PHXXZZXX', 'pH (unspecified scale) of the water body', 'generic'), vc('PHXXSP02', 'pH (total scale) {pH[T]} of the water body by spectrophotometry', 'method')],
+  nitrate: [vc('NTRAZZXX', 'Concentration of nitrate {NO3- CAS 14797-55-8} per unit volume of the water body [unknown phase]', 'generic', 'volume')],
+  nitrite: [vc('NTRIZZXX', 'Concentration of nitrite {NO2- CAS 14797-65-0} per unit volume of the water body [unknown phase]', 'generic', 'volume')],
+  'nitrate+nitrite': [vc('NTRZZZXX', 'Concentration of nitrate+nitrite {NO3+NO2} per unit volume of the water body [unknown phase]', 'generic', 'volume')],
+  ammonium: [vc('AMONZZXX', 'Concentration of ammonium {NH4+ CAS 14798-03-9} per unit volume of the water body [unknown phase]', 'generic', 'volume')],
+  phosphate: [
+    vc('PHOSZZXX', 'Concentration of phosphate {PO43- CAS 14265-44-2} per unit volume of the water body [unknown phase]', 'generic', 'volume'),
+    vc('PHOSKGD5', 'Concentration of phosphate {PO43- CAS 14265-44-2} per unit mass of the water body [dissolved plus reactive particulate <0.2um phase] by filtration and colorimetric autoanalysis', 'method', 'mass'),
+  ],
+  silicate: [
+    vc('SLCAZZXX', 'Concentration of silicate {SiO44- CAS 17181-37-2} per unit volume of the water body [unknown phase]', 'generic', 'volume'),
+    vc('SLCAKGD5', 'Concentration of silicate {SiO44- CAS 17181-37-2} per unit mass of the water body [dissolved plus reactive particulate <0.2um phase] by filtration and colorimetric autoanalysis', 'method', 'mass'),
+  ],
+  chlorophyll: [vc('CPHLZZXX', 'Concentration of chlorophyll-a {chl-a CAS 479-61-8} per unit volume of the water body [particulate >unknown phase]', 'method', 'volume')],
+  DIC: [
+    vc('TCO2ZZXX', 'Concentration of total inorganic carbon {TCO2 CAS 7440-44-0} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume'),
+    vc('TCO2KG02', 'Concentration of total inorganic carbon {TCO2 CAS 7440-44-0} per unit mass of the water body [dissolved plus reactive particulate phase] by acidification and CO2 quantification by gas analyser', 'method', 'mass'),
+  ],
+  TA: [vc('ALKYZZXX', 'Total alkalinity per unit volume of the water body', 'method', 'volume'), vc('ALKYPOTK', 'Total alkalinity per unit mass of the water body by potentiometry', 'method', 'mass')],
+  pCO2: [vc('PCO2EG01', 'Partial pressure of carbon dioxide {CO2 CAS 124-38-9} {pCO2} in the water body by equilibration with air, drying and infra-red gas analysis', 'method')],
+  POC: [vc('CORGCAP1', 'Concentration of organic carbon {organic_C CAS 7440-44-0} {POC} per unit volume of the water body [particulate >GF/F phase] by filtration, acidification and elemental analysis', 'method', 'volume')],
+  PON: [vc('NTOTCAP1', 'Concentration of total nitrogen {total_N} {PON} per unit volume of the water body [particulate >GF/F phase] by filtration, acidification and elemental analysis', 'method', 'volume')],
+  d15N: [vc('D15NEAM1', 'Enrichment of nitrogen-15 in total nitrogen {15N_in_total_N CAS 14390-96-6} {delta(15)N} in the water body [particulate >GF/F phase] by filtration, acidification, combustion and mass spectrometry', 'method')],
+};
+
+/** A P06 unit of a measured variable: its concept, its dimension, and the spellings of the unit in a sheet that mean exactly it. */
+export interface VariableUnit {
+  term: NercTerm;
+  per?: PerDimension;
+  /** Already folded the way `foldUnit` writes a unit (lower case, no spaces, mu -> u, per-forms with a slash). */
+  aliases: readonly string[];
+}
+const vu = (term: NercTerm, aliases: string[], per?: PerDimension): VariableUnit => ({ term, aliases, ...(per === undefined ? {} : { per }) });
+
+/*
+ * 'ppt' is NOT an alias of parts per thousand (it also means parts per trillion), and a bare 'c' is not degrees Celsius (/check allows both: this converter does not
+ * guess). A unit spelled any other way gets no suggestion: the user picks one, or searches NVS, or leaves it without an ID (CONV-UNIT-NO-P06).
+ */
+export const VARIABLE_UNITS: readonly VariableUnit[] = [
+  vu(p06('UPOX', 'Micromoles per litre'), ['umol/l', 'micromol/l', 'umoles/l', 'micromoles/l'], 'volume'),
+  vu(p06('KGUM', 'Micromoles per kilogram'), ['umol/kg', 'micromol/kg', 'umoles/kg', 'micromoles/kg'], 'mass'),
+  vu(p06('UMGL', 'Milligrams per litre'), ['mg/l'], 'volume'),
+  vu(p06('UPNM', 'Nanomoles per litre'), ['nmol/l'], 'volume'),
+  vu(p06('MMPL', 'Millimoles per litre'), ['mmol/l'], 'volume'),
+  vu(p06('UGPL', 'Micrograms per litre'), ['ug/l'], 'volume'),
+  vu(P06.mgPerM3, ['mg/m3'], 'volume'),
+  vu(P06.gPerM3, ['g/m3'], 'volume'),
+  vu(p06('UPAA', 'Degrees Celsius'), ['°c', 'ºc', '˚c', 'degc', 'degreec', 'degreesc', 'celsius', 'degreecelsius', 'degreescelsius']),
+  vu(p06('UUUU', 'Dimensionless'), ['dimensionless', 'unitless']),
+  vu(p06('PSUX', 'Practical salinity units'), ['psu']),
+  vu(p06('UUPH', 'pH units'), ['phunits', 'phunit']),
+  vu(p06('UATM', 'Microatmospheres'), ['uatm', 'microatm', 'microatmosphere', 'microatmospheres']),
+  vu(p06('UPPT', 'Parts per thousand'), ['‰', 'permil', 'permille', 'permill', 'partsperthousand']),
+  vu(p06('ULAA', 'Metres'), ['m', 'metre', 'metres', 'meter', 'meters']),
+];
+
+/** The unit text folded for the alias table: lower case, mu signs as u, no spaces or dots, "l-1" / "kg-1" / "m-3" as "/l" / "/kg" / "/m3", superscripts as digits. */
+export function foldUnit(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[µμ]/g, 'u')
+    .replace(/³/g, '3')
+    .replace(/[−–⁻]/g, '-')
+    .replace(/[\s.·*_^]/g, '')
+    .replace(/(l|kg)-1$/, '/$1')
+    .replace(/m-3$/, '/m3');
+}
+
+/** The verified P06 concept a unit text names, or undefined. */
+export function unitConcept(text: string): VariableUnit | undefined {
+  const k = foldUnit(text);
+  return k === '' ? undefined : VARIABLE_UNITS.find((u) => u.aliases.includes(k));
+}
+
+/** Every concept of this section as `<collection>/<code>`: the list the test pins to the stage 5 section of docs/research/qc-sources.md. */
+export const VARIABLE_VERIFIED_CODES: readonly string[] = [
+  ...new Set([...Object.values(VARIABLE_CONCEPTS).flat().map((c) => `P01/${c.term.code}`), ...VARIABLE_UNITS.map((u) => `P06/${u.term.code}`)]),
+].sort();

@@ -3,6 +3,7 @@
 // The convert worker: its handler (parse, convert, proposeCodes), the page-side client over a fake worker, and that /check's worker files are the
 // ones of production.
 import { describe, expect, it } from 'vitest';
+import { writeConvertSidecar } from '../../src/core/convert/settings';
 import { createConvertWorkerClient, type ConvertWorkerLike } from '../../src/worker/convert.client';
 import { createConvertHandler, createDirectConvertEngine } from '../../src/worker/convert.handler';
 import type { ConvertRequestBody, ConvertWireRequest } from '../../src/worker/convert.protocol';
@@ -34,9 +35,9 @@ describe('parse', () => {
     const e = createDirectConvertEngine();
     const r = await e.parse([file('w1.csv', W1_CSV), file('run.sidecar.csv', SIDECAR_CSV)]);
     expect(r.mappingFiles).toEqual(['run.sidecar.csv']);
-    expect(r.settings).toEqual({ fullList: true, prefixStation: true, worms: false });
+    expect(r.settings).toEqual({ fullList: true, prefixStation: true, worms: false, nvs: false });
     expect(r.files.map((f) => f.fileName)).toEqual(['w1.csv']);
-    expect((await e.parse([file('w1.csv', W1_CSV)])).settings).toEqual({ fullList: false, prefixStation: false, worms: false });
+    expect((await e.parse([file('w1.csv', W1_CSV)])).settings).toEqual({ fullList: false, prefixStation: false, worms: false, nvs: false });
   });
 
   it('reports a file that holds no table without throwing', async () => {
@@ -65,6 +66,30 @@ describe('convert', () => {
     expect(v.examples.cruise.map((x) => x.id)).toEqual(['CR1']);
     expect(v.examples.sample.map((x) => x.id)).toEqual(['S1-a', 'S1-b', 'S2-a']);
     expect(JSON.stringify(v)).not.toContain('S1-a:Calanus');
+  });
+
+  it('the companion file of the drop pre-ticks the NVS option; nothing is remembered between drops', async () => {
+    const e = createDirectConvertEngine();
+    const r = await e.parse([file('w1.csv', W1_CSV), file('run.sidecar.csv', writeConvertSidecar({ nvs: true }))]);
+    expect(r.settings.nvs).toBe(true);
+    expect((await e.parse([file('w1.csv', W1_CSV)])).settings.nvs).toBe(false);
+  });
+
+  it('the worker checks the NERC picks of the request itself: a valid one is written, a deprecated, foreign or malformed one is not, and the view counts only what was written', async () => {
+    const e = createDirectConvertEngine();
+    const csv = 'Sample,Latitude,Longitude,Date,Calanus finmarchicus,Temperature [°C]\nA1,55.5,2.5,2023-06-14,4,7.1\n';
+    const p = await e.parse([file('t.csv', csv)]);
+    const f = p.files[0];
+    const col = f.mappings[0].columns.findIndex((c) => c.header === 'Temperature [°C]');
+    const run = (pick: unknown) => e.convert(body(f.fileId, f.sheets[0].name, f.mappings[0], { quantity: { kind: 'count' }, nerc: { [col]: { type: pick } } as never }));
+    const good = await run({ id: 'http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/', source: 'suggested', deprecated: false });
+    expect(good.stats.nerc).toEqual({ columns: 1, typeIds: 1, unitIds: 0, nvsIds: 0 });
+    expect(good.findings.some((x) => x.ruleId === 'CONV-NERC-UNKNOWN')).toBe(false);
+    for (const bad of [{ id: 'http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/', source: 'nvs', deprecated: true }, { id: 'Temperature of the water body', source: 'nvs', deprecated: false }, { id: 'http://evil.example/x/', source: 'nvs', deprecated: false }, 'x', null]) {
+      const v = await run(bad);
+      expect(v.stats.nerc.typeIds, JSON.stringify(bad)).toBe(0);
+      expect(v.findings.some((x) => x.ruleId === 'CONV-NERC-UNKNOWN'), JSON.stringify(bad)).toBe(true);
+    }
   });
 
   it('a sheet that is left out is not converted at all; an unknown file id is an error, not a crash', async () => {

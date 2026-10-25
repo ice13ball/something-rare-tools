@@ -11,13 +11,15 @@ import { buildEventTree, eventDateText, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import type { ConvertResult, EventRec, MofIntent, OccRec, SourceRef } from './model';
+import { readDecision } from './nerc';
+import type { NercDecisions } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06 } from './vocab';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
-import { wormsEntry, wormsLsid } from './worms';
+import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 
 /*
@@ -45,6 +47,11 @@ export interface ConvertSheetInput {
   device?: SamplingDevice;
   /** The mesh size in micrometres, as typed. Optional. */
   meshUm?: string;
+  /**
+   * The NERC identifiers the user confirmed for the sheet's measured-variable columns, by column index (stage 5). Absent or unconfirmed: no identifier is written for
+   * that column (CONV-NERC-UNKNOWN, CONV-UNIT-NO-P06). Each pick is checked here (src/core/convert/nerc.ts readDecision); nothing else is believed.
+   */
+  nerc?: NercDecisions;
 }
 
 export type SamplingDevice = { kind: 'known'; key: keyof typeof DEVICES } | { kind: 'other'; text: string };
@@ -86,10 +93,12 @@ interface Cols {
   depthMin?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   depthMax?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   depthPlain?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
+  /** Measured-variable columns with a name: each becomes one eMoF row per sample event (stage 5). `name` is the variable as the column's role gives it, `unit` as given. */
+  variables: (Spec & { name: string; unit?: string })[];
 }
 
 function colsOf(mapping: SheetMapping): Cols {
-  const c: Cols = { taxonHeaders: [] };
+  const c: Cols = { taxonHeaders: [], variables: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
     const r = m.role;
@@ -122,6 +131,12 @@ function colsOf(mapping: SheetMapping): Cols {
       case 'effort':
         c.effort ??= { ...spec, ...(r.unit === undefined ? {} : { unit: r.unit }) };
         break;
+      case 'variable': {
+        const name = r.variable.trim();
+        const unit = r.unit?.trim();
+        if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }) });
+        break;
+      }
       case 'depth': {
         const d = { ...spec, positive: r.positive, ...(r.unit === undefined ? {} : { unit: r.unit }) };
         if (r.bound === 'min') c.depthMin ??= d;
@@ -182,6 +197,8 @@ interface SampleAcc {
   effortWritten: boolean;
   /** the sampling device and mesh size measurements of this sample were written */
   deviceWritten: boolean;
+  /** the measured-variable columns of this sample that were written, by column index, with the text written (a long sheet repeats the sample on every row of it) */
+  varValues: Map<number, string>;
 }
 
 /** Where a repeated ID stands: every file and sheet it occurs in, with its own lines (a duplicate across files is reported at each place). */
@@ -201,7 +218,8 @@ const sameNumber = (a: number | undefined, b: number | undefined): boolean => a 
  *   every shape   latitude, longitude, the date (or datetime) and the time, the station, cruise and sample code: the FIRST column of each (a second one is not read)
  *   wide          the taxon header columns
  *   long          the taxon cell, the quantity, the life stage, the qualifier, the occurrenceID and the taxon ID: the first of each
- *   both          the depth columns that the depth reader uses; the effort column only when the sheet's sample size is set to "a column"
+ *   both          the depth columns that the depth reader uses; the measured-variable columns (stage 5: they are written as eMoF rows on the sample event; a pressure column is not);
+ *                 the effort column only when the sheet's sample size is set to "a column"
  * quantityType is read for information only and written nowhere, so it is never in the set.
  */
 function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
@@ -210,6 +228,7 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   for (const s of [specs.lat, specs.lon, specs.when, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
   if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
+  for (const v of cols.variables) use(v);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
     use(cols.depthMax);
@@ -251,6 +270,9 @@ export function sourceNumberText(raw: RawCell | undefined, decimalComma: boolean
   return Number(signed) === value ? signed : undefined;
 }
 
+/** A WoRMS entry the page sent that may be written: a positive whole AphiaID and, when it carries a name, a name that is one line of text (the worker does not trust the page). */
+const validEntry = (e: { aphiaId: number; scientificName?: string }): boolean => Number.isSafeInteger(e.aphiaId) && e.aphiaId >= 1 && (e.scientificName === undefined || isWritableName(e.scientificName));
+
 /** The taxon names of every sheet, as the page lists them for approval (distinct, first-seen order). */
 export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'>): SplitEntry[] {
   const names: string[] = [];
@@ -282,8 +304,11 @@ export function convert(input: ConvertInput): ConvertResult {
   const dups = new Map<string, Places>(); // repeated eventIDs
   const firstOcc = new Map<string, { file: string; sheet: string; line: number }>();
   const repeatedOcc = new Map<string, Places>(); // repeated occurrenceIDs
-  const sameEvent = new Map<string, { file: string; sheet: string; name: string; refs: string[]; ids: Set<string>; lines: number[] }>();
+  // where each occurrence stands, for the findings about one taxon written twice in a sample: the column (wide) or the line (long)
+  const refOf = new Map<OccRec, string>();
   const stats = { zerosSkipped: 0, textCells: 0, present: 0, absent: 0 };
+  // measured variables: the columns written, and the identifiers that were written for them (never a name or a label)
+  const nercStats = { columns: 0, typeIds: 0, unitIds: 0, nvsIds: 0 };
   let sheetKeyN = 0;
 
   const splits = listSplits(input);
@@ -370,6 +395,15 @@ export function convert(input: ConvertInput): ConvertResult {
       if (p.ok) mesh = p.text;
       else findings.push(makeConvertFinding('CONV-MESH-INVALID', { ...base, value: sin.meshUm.trim(), params: { reason: p.reason } }));
     }
+
+    // the measured-variable columns (stage 5): the identifiers the user confirmed for each, checked here (not believed because the page sent them). A unit identifier
+    // counts only for a column that has a unit text. What is written into the file is checked for tabs and line breaks like every other text.
+    const varState = cols.variables.map((v) => {
+      const d = readDecision(sin.nerc, v.index);
+      checkText(v.header, sheet.headerLine, v.name);
+      checkText(v.header, sheet.headerLine, v.unit);
+      return { v, type: d.type, unit: v.unit === undefined ? undefined : d.unit, written: false };
+    });
 
     const depthOf = (row: RawRow): { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string } => {
       const read = (d: NonNullable<Cols['depthMin']>): { v: number; decimals: number; text?: string } | undefined => {
@@ -508,6 +542,7 @@ export function convert(input: ConvertInput): ConvertResult {
           source,
           effortWritten: false,
           deviceWritten: false,
+          varValues: new Map(),
           ...(stationText === undefined ? {} : { station: stationText }),
           ...(dateText === undefined ? {} : { dateText }),
           ...(effort === undefined ? {} : { effortText: effort }),
@@ -552,6 +587,42 @@ export function convert(input: ConvertInput): ConvertResult {
           measurementUnit: e.unit,
           ...(e.unitId ? { measurementUnitId: e.unitId.uri } : {}),
           source,
+        });
+      }
+
+      // the measured variables of this row's sample: one eMoF row per column and sample event, on the SAMPLE event (eventID set, no occurrenceID). A text cell, an
+      // empty cell and an NA write nothing (text and NA variants are reported like any number cell); a unit is written as given, never converted.
+      for (const st of varState) {
+        const v = st.v;
+        const cell = row.cells[v.index] ?? null;
+        const p = parseNumber(cell, dc);
+        if (p.status === 'missing') continue;
+        if (p.status === 'na-variant') {
+          collector.add('ROW-NA-VARIANT', sheet.name, v.header, row.line, p.token);
+          continue;
+        }
+        if (p.status === 'non-numeric') {
+          collector.add('ROW-NON-NUMERIC', sheet.name, v.header, row.line, p.token);
+          continue;
+        }
+        const written = valueText(cell, dc);
+        const before = acc.varValues.get(v.index);
+        if (before !== undefined) {
+          // a long sheet repeats the sample on every row: the same value is the same measurement, another value is two values for one sample
+          if (before !== written) acc.conflicts.add('measured value');
+          continue;
+        }
+        acc.varValues.set(v.index, written);
+        st.written = true;
+        measurements.push({
+          target: { kind: 'event', id: eventId },
+          role: 'variable',
+          measurementType: v.name,
+          ...(st.type ? { measurementTypeId: st.type.id } : {}),
+          measurementValue: written,
+          ...(v.unit === undefined ? {} : { measurementUnit: v.unit }),
+          ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
+          source: { ...source, column: v.header },
         });
       }
 
@@ -678,17 +749,27 @@ export function convert(input: ConvertInput): ConvertResult {
           }
           addPlace(d, fileName, sheet.name, row.line);
         } else firstOcc.set(id, { file: fileName, sheet: sheet.name, line: row.line });
-        // the same taxon more than once in one sample (different IDs)
-        const gk = JSON.stringify([eventId, sp.scientificName, lifeStage ?? '', qualifier ?? '', sp.sex ?? '']);
-        const g = sameEvent.get(gk);
-        const ref = sin.shape === 'wide' ? cell.column : `line ${row.line}`;
-        if (g) {
-          g.refs.push(ref);
-          g.ids.add(id);
-          g.lines.push(row.line);
-        } else sameEvent.set(gk, { file: fileName, sheet: sheet.name, name: sp.scientificName, refs: [ref], ids: new Set([id]), lines: [row.line] });
+        refOf.set(occ, sin.shape === 'wide' ? cell.column : `line ${row.line}`);
       }
     }
+
+    // the variables written on this sheet: those without a confirmed identifier are said (warnings to accept), and the identifiers that were written are counted
+    const noType: string[] = [];
+    const noUnit: string[] = [];
+    for (const st of varState) {
+      if (!st.written) continue;
+      nercStats.columns++;
+      if (st.type) {
+        nercStats.typeIds++;
+        if (st.type.source === 'nvs') nercStats.nvsIds++;
+      } else if (!noType.includes(st.v.name)) noType.push(st.v.name);
+      if (st.unit) {
+        nercStats.unitIds++;
+        if (st.unit.source === 'nvs') nercStats.nvsIds++;
+      } else if (st.v.unit !== undefined && !noUnit.includes(st.v.unit)) noUnit.push(st.v.unit);
+    }
+    if (noType.length > 0) findings.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: noType.join(', ') } }));
+    for (const unit of noUnit) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit } }));
 
     // sample-level conflicts of long sheets
     for (const a of samples.values()) {
@@ -773,19 +854,6 @@ export function convert(input: ConvertInput): ConvertResult {
       );
     }
   }
-  for (const g of sameEvent.values()) {
-    // the same ID twice is an ID duplicate (CONV-ID-DUPLICATE), not "the same taxon in two columns": only distinct IDs count here
-    if (g.ids.size < 2) continue;
-    findings.push(
-      makeConvertFinding('CONV-TAXON-SAME-EVENT', {
-        file: g.file,
-        sheet: g.sheet,
-        value: g.name,
-        lines: g.lines,
-        params: { count: g.ids.size, columns: g.refs.join(', ') },
-      }),
-    );
-  }
 
   /* ---- the WoRMS opt-in (stage 4): which names would be sent, and what the lookup that was made says ---- */
   const undecidedVerbatim = new Set(undecided.map((u) => u.verbatim));
@@ -849,23 +917,57 @@ export function convert(input: ConvertInput): ConvertResult {
     for (const name of toLookUp) {
       const e = wormsEntry(input.worms, name);
       if (!e) continue;
-      // an entry that is not a positive whole AphiaID is no ID: the name stays undecided (and blocks) instead of writing something else
-      if (e.state === 'undecided' || (e.state === 'id' && !(Number.isSafeInteger(e.aphiaId) && e.aphiaId >= 1))) undecidedNames.push(name);
+      // an entry that is not a positive whole AphiaID, or whose own name is not a line of text, is no ID: the name stays undecided (and blocks) instead of writing something else
+      if (e.state === 'undecided' || (e.state === 'id' && !validEntry(e))) undecidedNames.push(name);
       else if (e.state === 'none' && e.reason === 'no-match') noMatch.push(name);
       else if (e.state === 'id' && e.notMarine) notMarine.push(name);
     }
-    // the ID goes to every occurrence of a looked-up name; scientificName itself is never touched
+    // The ID goes to every occurrence of a looked-up name. scientificName is replaced ONLY when the user chose a result that is not an exact match (the entry carries
+    // the chosen record's name): then the written name is the one the LSID belongs to, and verbatimIdentification still holds the sheet's text. The occurrenceID was
+    // built from the sheet's text above and does not change. Each occurrence is looked at once, under the name it had before this loop.
     for (const o of occurrences) {
       if (o.scientificNameId !== undefined || !toLookUp.has(o.scientificName) || undecidedVerbatim.has(o.verbatimIdentification)) continue;
       const e = wormsEntry(input.worms, o.scientificName);
-      if (e?.state === 'id' && Number.isSafeInteger(e.aphiaId) && e.aphiaId >= 1) {
+      if (e?.state === 'id' && validEntry(e)) {
         o.scientificNameId = wormsLsid(e.aphiaId);
+        if (e.scientificName !== undefined) o.scientificName = e.scientificName;
         nameLookup.applied++;
       }
     }
     if (undecidedNames.length > 0) findings.push(makeConvertFinding('CONV-WORMS-UNDECIDED', { ...whereName, value: undecidedNames[0], params: { count: undecidedNames.length, names: wholeList(undecidedNames) } }));
     if (noMatch.length > 0) findings.push(makeConvertFinding('CONV-WORMS-NO-MATCH', { ...whereName, value: noMatch[0], params: { count: noMatch.length, names: wholeList(noMatch) } }));
     if (notMarine.length > 0) findings.push(makeConvertFinding('CONV-WORMS-NOT-MARINE', { ...whereName, value: notMarine[0], params: { count: notMarine.length, names: wholeList(notMarine) } }));
+  }
+
+  /*
+   * The same taxon more than once in one sample, judged AFTER the lookup, so that two names of the sheet that came to the same taxon are caught: the key is the
+   * scientificNameID when there is one (two spellings that resolve to the same AphiaID, "Calanus finmarchicus" and a typo the user resolved to it, share it), else the
+   * written name. One rule for both cases (CONV-TAXON-SAME-EVENT); it names the sheet's own spellings, and nothing is ever summed. Only distinct occurrenceIDs
+   * count here: the same ID twice is CONV-ID-DUPLICATE.
+   */
+  const sameTaxon = new Map<string, { file: string; sheet: string; name: string; refs: string[]; ids: Set<string>; lines: number[]; verbatim: string[] }>();
+  for (const o of occurrences) {
+    const key = JSON.stringify([o.eventId, o.scientificNameId !== undefined ? `id:${o.scientificNameId}` : `name:${o.scientificName}`, o.lifeStage ?? '', o.identificationQualifier ?? '', o.sex ?? '']);
+    const g = sameTaxon.get(key);
+    const ref = refOf.get(o) ?? `line ${o.source.line}`;
+    if (g) {
+      g.refs.push(ref);
+      g.ids.add(o.id);
+      g.lines.push(o.source.line);
+      if (!g.verbatim.includes(o.verbatimIdentification)) g.verbatim.push(o.verbatimIdentification);
+    } else sameTaxon.set(key, { file: o.source.file, sheet: o.source.sheet, name: o.scientificName, refs: [ref], ids: new Set([o.id]), lines: [o.source.line], verbatim: [o.verbatimIdentification] });
+  }
+  for (const g of sameTaxon.values()) {
+    if (g.ids.size < 2) continue;
+    findings.push(
+      makeConvertFinding('CONV-TAXON-SAME-EVENT', {
+        file: g.file,
+        sheet: g.sheet,
+        value: g.name,
+        lines: g.lines,
+        params: { count: g.ids.size, columns: g.refs.join(', '), names: g.verbatim.join(', ') },
+      }),
+    );
   }
 
   const blocking = findings.filter((f) => f.severity === 'error');
@@ -880,7 +982,7 @@ export function convert(input: ConvertInput): ConvertResult {
     splits,
     nameLookup,
     cruiseText: tree.cruiseText,
-    stats: { samples: samples.size, occurrences: occurrences.length, present: stats.present, absent: stats.absent, zerosSkipped: stats.zerosSkipped, textCells: stats.textCells, measurements: measurements.length },
+    stats: { samples: samples.size, occurrences: occurrences.length, present: stats.present, absent: stats.absent, zerosSkipped: stats.zerosSkipped, textCells: stats.textCells, measurements: measurements.length, nerc: nercStats },
   };
 }
 

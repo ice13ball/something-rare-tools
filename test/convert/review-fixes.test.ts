@@ -74,13 +74,14 @@ describe('scientificNameID', () => {
 });
 
 describe('columns that are not written must be accepted', () => {
-  it('a measured variable column is on the accept list, with its header named', async () => {
-    const header = ['Sample', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Temperature [°C]'];
-    const e = await exportSheet(header, [['A1', 55.5, 2.5, '2023-06-14', 4, 7.1]], { quantity: { kind: 'count' } });
+  it('a pressure column is on the accept list, with its header named; a measured variable is not (stage 5 writes it as an eMoF row)', async () => {
+    const header = ['Sample', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Pressure [dbar]', 'Temperature [°C]'];
+    const e = await exportSheet(header, [['A1', 55.5, 2.5, '2023-06-14', 4, 5.1, 7.1]], { quantity: { kind: 'count' } });
     const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-NOT-EXPORTED')!;
-    expect(f.params.columns).toBe('Temperature [°C]');
+    expect(f.params.columns).toBe('Pressure [dbar]');
     expect(judge(e.findings).acceptRules).toContain('CONV-COLUMN-NOT-EXPORTED');
     expect(judge(e.findings).blocking).toEqual([]);
+    expect(e.result.measurements.some((m) => m.role === 'variable' && m.measurementType === 'temperature')).toBe(true);
   });
 });
 

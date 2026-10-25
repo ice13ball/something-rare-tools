@@ -104,7 +104,8 @@ describe('every role on both shapes: written, or named in CONV-COLUMN-NOT-EXPORT
       expect(await named(shape, 'effort', { kind: 'count' }), `${shape} effort, none`).toBe(true);
       expect(await named(shape, 'effort', { kind: 'count', effort: { source: 'constant', value: '10', unit: 'm3' } }), `${shape} effort, typed`).toBe(true);
       expect(await named(shape, 'effort', { kind: 'count', effort: { source: 'column', unit: 'm3', dimension: 'volume' } }), `${shape} effort, column`).toBe(false);
-      for (const n of ['variable', 'pressure', 'latitude', 'longitude', 'date', 'station', 'cruise', 'sampleId']) expect(await named(shape, n, { kind: 'count' }), `${shape} ${n}`).toBe(n === 'variable' || n === 'pressure' || ['latitude', 'longitude', 'date', 'station', 'sampleId'].includes(n));
+      for (const n of ['variable', 'pressure', 'latitude', 'longitude', 'date', 'station', 'cruise', 'sampleId']) // a measured variable is written as an eMoF row since stage 5, so it is no longer named; a pressure column still is not written
+      expect(await named(shape, n, { kind: 'count' }), `${shape} ${n}`).toBe(n === 'pressure' || ['latitude', 'longitude', 'date', 'station', 'sampleId'].includes(n));
     }
   });
 });
