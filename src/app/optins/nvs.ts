@@ -10,7 +10,7 @@
  *   - only the typed word goes out: the argument is the text the user typed and a collection (P01 or P06); the URL is built from the escaped word and fixed text, nothing else
  *     (src/core/convert/nvs.ts nvsQuery); no data, value, column header or file name reaches this module at all;
  *   - one request at a time, no automatic retry, with an AbortController that really aborts. A failed SPARQL search falls back to ONE more request, and only when the typed
- *     text is exactly a concept code (TEMPPR01): the concept page of that code. It is the user's own search, repeated by address; it is never repeated for any other text;
+ *     text is exactly a concept code, in capital letters as typed (TEMPPR01, UPAA): the concept page of that code. It is the user's own search, repeated by address; it is never repeated for any other text;
  *   - no cookie, no storage: `credentials: 'omit'`, `cache: 'no-store'`, `redirect: 'error'` (a redirect would send the word elsewhere), and nothing here touches
  *     localStorage, sessionStorage, IndexedDB or document.cookie;
  *   - the request carries no Referer (`referrerPolicy: 'no-referrer'`): the service learns the word and the IP address, not which page it came from.
@@ -79,6 +79,15 @@ async function get(url: string, headers: Record<string, string> | undefined, sig
  * AND the text is exactly a concept code, the concept page of that code is asked for once; any other failure is reported and the user may press the button again.
  */
 export async function searchNvs(typed: string, collection: NvsCollection, opts: NvsSearchOptions): Promise<NvsRun> {
+  // it always resolves: whatever goes wrong (a text that cannot be encoded, a fetch that throws at once) is a failure of the run, never an exception for the page
+  try {
+    return await search(typed, collection, opts);
+  } catch (e) {
+    return opts.signal.aborted || isAbort(e) ? { concepts: [], via: 'search', aborted: true } : { concepts: [], via: 'search', failure: { kind: 'format' }, aborted: false };
+  }
+}
+
+async function search(typed: string, collection: NvsCollection, opts: NvsSearchOptions): Promise<NvsRun> {
   const url = nvsSearchUrl(typed, collection);
   if (url === undefined || opts.signal.aborted) return { concepts: [], via: 'search', aborted: opts.signal.aborted };
   const first = await get(url, { Accept: 'application/sparql-results+json' }, opts.signal);

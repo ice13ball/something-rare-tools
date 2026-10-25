@@ -645,9 +645,16 @@ const QUANTITY_WORDS: Record<string, Record<Lang, string>> = {
   dry: { en: 'dry biomass per area of the water column', pl: 'biomasy suchej na powierzchnię słupa wody', de: 'Trockenbiomasse pro Fläche der Wassersäule', fr: 'la biomasse sèche par surface de la colonne d\'eau' },
   afdw: { en: 'ash-free dry biomass per area of the water column', pl: 'biomasy suchej bez popiołu na powierzchnię słupa wody', de: 'aschefreie Trockenbiomasse pro Fläche der Wassersäule', fr: 'la biomasse sèche sans cendres par surface de la colonne d\'eau' },
 };
+const QUOTES: Record<Lang, [string, string]> = { en: ['"', '"'], pl: ['„', '”'], de: ['„', '“'], fr: ['« ', ' »'] };
+/** The quantity of a sheet in the reader's language, or the names of variable columns (their own text, often English words) each in the quotation marks of the language, so they read as names. */
 const quantityWhat = (what: string, lang: Lang): string => {
   const m = /^(density|wet biomass|dry biomass|afdw biomass) per area of the water column$/.exec(what);
-  return m ? QUANTITY_WORDS[m[1].split(' ')[0]][lang] : what;
+  if (m) return QUANTITY_WORDS[m[1].split(' ')[0]][lang];
+  const [open, close] = QUOTES[lang];
+  return what
+    .split(', ')
+    .map((n) => `${open}${n}${close}`)
+    .join(', ');
 };
 
 function fill(template: string, f: Finding, lang?: Lang): string {

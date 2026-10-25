@@ -115,7 +115,16 @@ describe('B2: an identifier is written only for what the user confirmed, per col
       expect(m.measurementTypeId).toBeUndefined();
       expect(m.measurementUnitId).toBeUndefined();
     }
-    for (const lang of LANGS) expect(renderConvertPlain(unknown[0], lang), lang).toContain('temperature, salinity, oxygen');
+    // the names are the user's own text (often English words): each stands in the quotation marks of the language, so that they read as names
+    const marks = { en: ['"', '"'], pl: ['„', '”'], de: ['„', '“'], fr: ['« ', ' »'] } as const;
+    for (const lang of LANGS) {
+      const [o, c] = marks[lang];
+      expect(renderConvertPlain(unknown[0], lang), lang).toContain(`${o}temperature${c}, ${o}salinity${c}, ${o}oxygen${c}`);
+    }
+    // the quantity of a sheet is put into the language instead (no quotes, no English)
+    const quantity = { ruleId: 'CONV-NERC-UNKNOWN', severity: 'warning' as const, params: { what: 'density per area of the water column' } };
+    expect(renderConvertPlain(quantity, 'pl')).toContain('zagęszczenia na powierzchnię słupa wody');
+    expect(renderConvertPlain(quantity, 'pl')).not.toMatch(/density|water column/);
   });
 
   it('a confirmed type and unit are written for THAT column only; the others stay without an ID and keep their warning', async () => {

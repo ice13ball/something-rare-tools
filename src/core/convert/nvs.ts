@@ -28,12 +28,18 @@ export const NVS_MAX_WORDS = 4;
  * NVS_MAX_CHARS characters and NVS_MAX_WORDS words. Empty after that: nothing is searched (the button stays inactive, no request is made).
  */
 export function searchWords(typed: string): string[] {
-  const clean = typed
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  const clean = Array.from(
+    typed
+      // a lone surrogate is not text (encodeURIComponent throws on it): it is a space like a control character
+      .replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, ' ')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+    // cut by CODE POINTS, never inside a surrogate pair (a cut of 80 UTF-16 units could split an emoji into a lone half)
     .slice(0, NVS_MAX_CHARS)
+    .join('')
     .trim();
   return clean === '' ? [] : clean.split(' ').slice(0, NVS_MAX_WORDS);
 }
@@ -151,10 +157,12 @@ export function readSparqlAnswer(body: unknown, collection: NvsCollection): NvsC
 
 /* ---------- the fallback: one concept by its code ---------- */
 
-/** The code of a typed text when it is exactly one concept code of the collection (upper-case letters and digits: eight for P01, four for P06), else undefined. */
+/**
+ * The code of a typed text when it IS one, exactly as typed: upper-case letters and digits only, eight for P01 (TEMPPR01) and four for P06 (UPAA), with nothing around
+ * them. "invented", "temp" or "upaa" are words, not codes, and never start the fallback request. Else undefined.
+ */
 export function typedCode(typed: string, collection: NvsCollection): string | undefined {
-  const t = typed.trim().toUpperCase();
-  return conceptUri(collection, t) === undefined ? undefined : t;
+  return /^[A-Z0-9]+$/.test(typed) && conceptUri(collection, typed) !== undefined ? typed : undefined;
 }
 
 /**

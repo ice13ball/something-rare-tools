@@ -180,13 +180,43 @@ describe('reading an answer', () => {
 describe('typed code and the concept page address', () => {
   it('a typed text is a code only when it is exactly eight (P01) or four (P06) letters and digits; the address is built from nothing else', () => {
     expect(typedCode('TEMPPR01', 'P01')).toBe('TEMPPR01');
-    expect(typedCode(' temppr01 ', 'P01')).toBe('TEMPPR01');
     expect(typedCode('UPAA', 'P06')).toBe('UPAA');
-    for (const t of ['temperature', 'TEMPPR0', 'TEMPPR011', 'TEMP PR01', 'TEMPPR01/', '../TEMPPR01', 'TEMPPR01?x=1', '']) expect(typedCode(t, 'P01'), t).toBeUndefined();
+    // exactly as typed, upper case only: a word of the right length is not a code ("invented" has eight letters, "temp" and "upaa" have four)
+    for (const t of ['temppr01', ' temppr01 ', ' TEMPPR01', 'TEMPPR01 ', 'Temppr01', 'invented', 'temperature', 'TEMPPR0', 'TEMPPR011', 'TEMP PR01', 'TEMPPR01/', '../TEMPPR01', 'TEMPPR01?x=1', '']) expect(typedCode(t, 'P01'), JSON.stringify(t)).toBeUndefined();
+    for (const t of ['upaa', 'temp', 'Upaa', ' UPAA', 'UPAA ']) expect(typedCode(t, 'P06'), JSON.stringify(t)).toBeUndefined();
+    expect(typedCode('INVENTED', 'P01')).toBe('INVENTED'); // eight capitals have the shape of a code: that is a code as typed
     expect(typedCode('UPAA', 'P01')).toBeUndefined();
     expect(nvsConceptUrl('TEMPPR01', 'P01')).toBe('https://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/?_profile=nvs&_mediatype=application/ld+json');
     expect(nvsConceptUrl('../x', 'P01')).toBeUndefined();
     expect(nvsConceptUrl('UPAA', 'P01')).toBeUndefined();
+  });
+});
+
+describe('a text that cannot be encoded never locks the search', () => {
+  it('the cut is by code points: 79 letters and an emoji keep the emoji whole, and the request can be built', () => {
+    const typed = `${'a'.repeat(79)}😀`;
+    const words = searchWords(typed);
+    expect(words.join('')).toBe(typed);
+    expect(() => encodeURIComponent(nvsQuery(typed, 'P01') as string)).not.toThrow();
+    expect(() => encodeURIComponent(nvsQuery(`${'a'.repeat(80)}😀`, 'P01') as string)).not.toThrow();
+    expect(searchWords(`${'a'.repeat(80)}😀`).join('')).toBe('a'.repeat(80));
+    expect([...searchWords('😀'.repeat(100)).join('')].length).toBe(NVS_MAX_CHARS);
+  });
+
+  it('a lone surrogate typed by the user is a space; searchNvs resolves with an answer, never an exception, whatever the text', async () => {
+    expect(searchWords('a\ud83dz')).toEqual(['a', 'z']);
+    expect(searchWords('\ude00')).toEqual([]);
+    const m = nvsMock();
+    vi.stubGlobal('fetch', m.fetch);
+    for (const t of ['\ud83d', `${'a'.repeat(79)}😀`, 'x\ude00y', '😀']) {
+      const run = await searchNvs(t, 'P01', { signal: signal() });
+      expect(run.failure, JSON.stringify(t)).toBeUndefined();
+    }
+    // a fetch that throws synchronously, and one that rejects with something odd: still an answer
+    vi.stubGlobal('fetch', () => { throw new Error('boom'); });
+    const run = await searchNvs('temperature', 'P01', { signal: signal() });
+    expect(run.failure).toBeTruthy();
+    expect(run.aborted).toBe(false);
   });
 });
 
@@ -280,7 +310,7 @@ describe('the request', () => {
   it('the fallback: when the search fails and the text is exactly a code, the concept page of that code is asked for once, with no header at all', async () => {
     const m = nvsMock({ failFrom: 1, onlySparql: true });
     vi.stubGlobal('fetch', m.fetch);
-    const run = await searchNvs('temppr01', 'P01', { signal: signal() });
+    const run = await searchNvs('TEMPPR01', 'P01', { signal: signal() });
     expect(run.via).toBe('code');
     expect(run.failure).toBeUndefined();
     expect(run.concepts.map((c) => [c.code, c.deprecated, c.label])).toEqual([['TEMPPR01', false, 'Temperature of the water body']]);
@@ -308,6 +338,20 @@ describe('the request', () => {
     const m3 = nvsMock({ failFrom: 1, onlySparql: true });
     vi.stubGlobal('fetch', m3.fetch);
     expect((await searchNvs('ZZZZZZZZ', 'P01', { signal: signal() })).failure).toEqual({ kind: 'http', status: 404 });
+  });
+
+  it('a word is never taken for a code: "invented", "temp" and "upaa" get no second request when the search fails, in either collection', async () => {
+    for (const [text, coll] of [['invented', 'P01'], ['temp', 'P06'], ['upaa', 'P06'], ['temppr01', 'P01'], [' TEMPPR01', 'P01']] as const) {
+      const m = nvsMock({ failFrom: 1 });
+      vi.stubGlobal('fetch', m.fetch);
+      const run = await searchNvs(text, coll, { signal: signal() });
+      expect(run.failure?.kind, text).toBe('network');
+      expect(m.calls.length, text).toBe(1);
+    }
+    const m = nvsMock({ failFrom: 1, onlySparql: true });
+    vi.stubGlobal('fetch', m.fetch);
+    expect((await searchNvs('UPAA', 'P06', { signal: signal() })).concepts.map((c) => c.code)).toEqual(['UPAA']);
+    expect(m.calls.length).toBe(2);
   });
 
   it('a deprecated concept found by code is returned flagged, never as a normal one', async () => {

@@ -159,6 +159,7 @@ export function createConvertHandler(): ConvertHandler {
   }
 
   const today = (): string => new Date().toISOString().slice(0, 10);
+  /** What the companion keeps. `worms`: a lookup was made. `nvs`: an identifier chosen from an NVS search is in the request (the worker never sees the box itself; the page writes `nvs=yes` into the file from the box). */
   const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true, worms: body.worms !== undefined, nvs: body.sheets.some((s) => Object.values(s.nerc ?? {}).some((d) => d?.type?.source === 'nvs' || d?.unit?.source === 'nvs')) });
 
   function run(body: ConvertRequestBody): ConvertView {

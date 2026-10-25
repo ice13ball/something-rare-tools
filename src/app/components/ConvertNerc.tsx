@@ -150,7 +150,11 @@ export function ConvertNerc(p: ConvertNercProps): React.ReactElement | null {
             <p className="convert-nerc-head">
               <code>{col.header}</code>
               {multiSheet && <span className="muted"> ({col.sheet})</span>}
-              <span className="muted"> — {col.unit === undefined ? t('convert.nerc.col.whatNoUnit', { variable: col.variable }) : t('convert.nerc.col.what', { variable: col.variable, unit: col.unit })}</span>
+              <span className="muted">
+                {' — '}
+                {/* the variable and the unit are names taken from the column (often English words): in code font, so that they read as names in every language */}
+                <code>{col.variable}</code>, {col.unit === undefined ? t('convert.nerc.col.noUnit') : <>{t('convert.nerc.col.unit')} <code>{col.unit}</code></>}
+              </span>
             </p>
             <div className="convert-fields">
               <PickList p={p} col={col} kind="type" />
@@ -187,6 +191,8 @@ function PickList({ p, col, kind }: { p: ConvertNercProps; col: NercColumn; kind
       </optgroup>
     );
   };
+  // a choice that was confirmed for another variable or unit text is not in force any more: the page says so instead of dropping it without a word
+  const dropped = current === undefined && has(p.picks, col.key) && p.picks[col.key][kind] !== undefined;
   return (
     <div className="field">
       <label htmlFor={id}>{t(kind === 'type' ? 'convert.nerc.type.label' : 'convert.nerc.unit.label')}</label>
@@ -209,6 +215,7 @@ function PickList({ p, col, kind }: { p: ConvertNercProps; col: NercColumn; kind
         {group('offered', 'convert.nerc.group.offered')}
         {group('nvs', 'convert.nerc.group.nvs')}
       </select>
+      {dropped && <p className="muted convert-nerc-dropped" role="status">{t('convert.nerc.dropped')}</p>}
     </div>
   );
 }
