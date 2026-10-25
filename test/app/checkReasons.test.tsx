@@ -10,7 +10,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MappingEditor } from '../../src/app/components/MappingEditor';
 import { initLang, setLang } from '../../src/app/i18n';
-import { OVERLAY_REASONS } from '../../src/core/convert/recognize';
+import { OVERLAY_REASONS, proposeConvertColumns } from '../../src/core/convert/recognize';
 import { UI, type UiKey } from '../../src/core/i18n/ui';
 import { proposeColumns } from '../../src/core/recognize/columns';
 import { CHECK_REASONS, reasonEnglish, type ReasonCode } from '../../src/core/recognize/reasons';
@@ -196,5 +196,25 @@ describe('/check shows the reason in the reader language', () => {
     expect(show('pl', plain)).toBe('numeric column with an unrecognised name');
     const overlay: ColumnProposal = { ...plain, reasonCode: 'taxon-numeric', reasonLead: 'lead-empty', reasonNotes: ['note-negative-up'], reasonParams: { name: 'zzz' } };
     expect(show('pl', overlay)).toBe(UI.pl['convert.reason.taxon-numeric']);
+  });
+});
+
+describe('the converter overlay', () => {
+  it('leaves no value, lead or note of a shared reason on a proposal whose reason it replaced', () => {
+    const sheets = [
+      rawSheet(['Sample', 'eventID', 'Species', 'Count', 'Date', 'Data poboru'], [[null, 'e1', 'Calanus', 3, null, '2020-05-12'], [null, 'e2', 'Calanus', 4, null, '2020-05-13']]),
+      rawSheet(['Station', 'Calanus finmarchicus', 'Total copepods', 'Depth top', 'Depth bottom'], [['S', '+', 4, -1, -5], ['T', 'NA', 5, -2, -6]]),
+    ];
+    let overlay = 0;
+    for (const sheet of sheets) {
+      for (const p of proposeConvertColumns(sheet, CTX)) {
+        if (p.reasonCode === undefined || p.reasonCode in CHECK_REASONS) continue;
+        overlay++;
+        expect(p.reasonParams, p.header).toBeUndefined();
+        expect(p.reasonLead, p.header).toBeUndefined();
+        expect(p.reasonNotes, p.header).toBeUndefined();
+      }
+    }
+    expect(overlay).toBeGreaterThan(0);
   });
 });

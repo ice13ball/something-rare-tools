@@ -305,7 +305,7 @@ function nameCandidateOther(key: string, hdr?: NameHeader): Cand | undefined {
   // sample or core id. Polish 'próba' (also 'próbka') only as the bare word or 'nr / numer / kod / oznaczenie / ID / identyfikator próby': 'objętość próby',
   // 'masa próby', 'data próby', 'typ próby', 'próba kontrolna', 'liczba prób' are not ids, and 'głębokość próby' is read as depth first.
   // German 'Probe' is a sample or a test: a bare 'Probe' stays a low-confidence proposal.
-  if (/^(probka|(nr|numer|id|kod|nazwa|oznaczenie|identyfikator) probki|probka (nr|numer|id|kod|nazwa)|proba|(nr|numer|kod|oznaczenie|id|identyfikator) proby|rdzen|(nr|numer|id|kod|nazwa) rdzenia|rdzen (nr|numer|id|kod|nazwa))$/.test(key)) {
+  if (/^(probka|(nr|numer|id|kod|nazwa|oznaczenie|identyfikator) probki|probka (nr|numer|id|kod|nazwa)|proba|proba (nr|numer|id|kod|nazwa)|(nr|numer|id|kod|nazwa|oznaczenie|identyfikator) proby|rdzen|(nr|numer|id|kod|nazwa) rdzenia|rdzen (nr|numer|id|kod|nazwa))$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', why: why('name-sample') };
   }
   if (/^(probe (nr|nummer|name|kennung|bezeichnung)|proben ?(nr|nummer|id|name|kennung|bezeichnung)|kern( nr| nummer| id| name)?|kernnummer|bohrkern( nr| nummer| id| name)?)$/.test(key)) {
