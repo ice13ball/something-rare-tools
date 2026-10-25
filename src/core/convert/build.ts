@@ -1,0 +1,634 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { Collector, metaParser, specsOf } from '../dataset';
+import type { Spec } from '../dataset';
+import { isBlankCell } from '../recognize/columns';
+import { valueText } from '../output/csv';
+import { makeConvertFinding } from '../rules/convert';
+import type { Finding, ParsedFile, RawRow, RawSheet, SheetMapping } from '../types';
+import { parseNumber } from '../values/numbers';
+import { buildEventTree, eventDateText, stationEventId } from './events';
+import type { SampleSite, TreeOptions } from './events';
+import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
+import type { ConvertResult, EventRec, MofIntent, OccRec, SourceRef } from './model';
+import { resolveQuantity } from './quantity';
+import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
+import type { ConvertShape } from './recognize';
+import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
+import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
+
+/*
+ * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
+ *
+ * One call to `convert()` takes every sheet of the upload (so IDs are checked across the whole archive), the user's decisions (the quantity
+ * declaration per sheet, the full-species-list flag, the station prefix toggle, the approved taxon splits, the flattened levels) and returns
+ * EventRec / OccRec / MofIntent records plus findings. A result with blocking findings still carries what could be built, so the page can show
+ * the preview next to the list of what has to be fixed; `ok` says whether the records may go to the writer (stage 2).
+ */
+
+export interface ConvertSheetInput {
+  file: ParsedFile;
+  /** The sheet's name inside `file`. */
+  sheet: string;
+  /** The confirmed roles of the sheet (types.ts ColumnRole, with the converter's roles). */
+  mapping: SheetMapping;
+  /** wide: the HEADERS of the taxon columns are taxa; long: a taxon column and a quantity column. */
+  shape: ConvertShape;
+  /** What the numbers mean (kind, unit, basis, sample size). Missing or incomplete blocks (CONV-QUANTITY-UNDECLARED). */
+  quantity?: QuantityDeclaration;
+  /** The cruise code when the sheet has no cruise column (it also fills a cruise cell left empty). */
+  cruise?: string;
+}
+
+export interface ConvertOptions {
+  /** "This is a full species list" (one tick per upload, kept only in the companion file): a 0 is an absence. */
+  fullList?: boolean;
+  /** Prefix a sample's eventID with its station's eventID, for sample codes that repeat between stations. */
+  prefixStation?: boolean;
+  /** Drop the station and/or cruise level. */
+  flatten?: TreeOptions['flatten'];
+}
+
+export interface ConvertInput {
+  sheets: readonly ConvertSheetInput[];
+  options?: ConvertOptions;
+  /** The user's decisions on taxon splits: verbatim text -> the split accepted. Absent = undecided (blocks when the split changes the name). */
+  approvedSplits?: ApprovedSplits;
+}
+
+/* ---------- reading one sheet ---------- */
+
+interface Cols {
+  sampleId?: Spec;
+  taxonHeaders: Spec[];
+  taxonCell?: Spec;
+  quantity?: Spec;
+  quantityType?: Spec;
+  lifeStage?: Spec;
+  qualifier?: Spec;
+  occurrenceId?: Spec;
+  effort?: Spec & { unit?: string };
+  depthMin?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
+  depthMax?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
+  depthPlain?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
+}
+
+function colsOf(mapping: SheetMapping): Cols {
+  const c: Cols = { taxonHeaders: [] };
+  for (const m of mapping.columns) {
+    const spec = { index: m.index, header: m.header };
+    const r = m.role;
+    switch (r.kind) {
+      case 'sampleId':
+        c.sampleId ??= spec;
+        break;
+      case 'taxon':
+        if (r.header === true) c.taxonHeaders.push(spec);
+        else c.taxonCell ??= spec;
+        break;
+      case 'quantity':
+        c.quantity ??= spec;
+        break;
+      case 'quantityType':
+        c.quantityType ??= spec;
+        break;
+      case 'lifeStage':
+        c.lifeStage ??= spec;
+        break;
+      case 'qualifier':
+        c.qualifier ??= spec;
+        break;
+      case 'occurrenceId':
+        c.occurrenceId ??= spec;
+        break;
+      case 'effort':
+        c.effort ??= { ...spec, ...(r.unit === undefined ? {} : { unit: r.unit }) };
+        break;
+      case 'depth': {
+        const d = { ...spec, positive: r.positive, ...(r.unit === undefined ? {} : { unit: r.unit }) };
+        if (r.bound === 'min') c.depthMin ??= d;
+        else if (r.bound === 'max') c.depthMax ??= d;
+        else c.depthPlain ??= d;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return c;
+}
+
+const METRES = /^(m|meters?|metres?)$/i;
+
+const text = (raw: unknown): string | undefined => {
+  if (raw === null || raw === undefined) return undefined;
+  const t = String(raw).trim();
+  return t === '' ? undefined : t;
+};
+
+/** Lines and an example per (sheet, field): the shape of every "these rows" finding. */
+class Lines {
+  private readonly map = new Map<string, { lines: Set<number>; examples: string[]; sheet: string; file: string; field: string }>();
+  add(file: string, sheet: string, field: string, line: number, example?: string): void {
+    const key = `${file}\u0000${sheet}\u0000${field}`;
+    let e = this.map.get(key);
+    if (!e) this.map.set(key, (e = { lines: new Set(), examples: [], sheet, file, field }));
+    e.lines.add(line);
+    if (example !== undefined && e.examples.length < 5 && !e.examples.includes(example)) e.examples.push(example);
+  }
+  entries(): { file: string; sheet: string; field: string; lines: number[]; examples: string[] }[] {
+    return [...this.map.values()].map((e) => ({ file: e.file, sheet: e.sheet, field: e.field, lines: [...e.lines].sort((a, b) => a - b), examples: e.examples }));
+  }
+  get size(): number {
+    return this.map.size;
+  }
+}
+
+interface SampleAcc {
+  site: SampleSite;
+  sheetKey: string;
+  shape: ConvertShape;
+  lines: number[];
+  /** the station text of the first row, to tell a repeated code of another station from a conflict */
+  station?: string;
+  dateText?: string;
+  effortText?: string;
+  conflicts: Set<string>;
+  source: SourceRef;
+  /** the sample's effort MoF was written */
+  effortWritten: boolean;
+}
+
+interface DupAcc {
+  id: string;
+  file: string;
+  sheet: string;
+  lines: Set<number>;
+}
+
+const sameNumber = (a: number | undefined, b: number | undefined): boolean => a === b;
+
+/** The taxon names of every sheet, as the page lists them for approval (distinct, first-seen order). */
+export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'>): SplitEntry[] {
+  const names: string[] = [];
+  for (const s of input.sheets) {
+    const sheet = s.file.sheets.find((x) => x.name === s.sheet);
+    if (!sheet) continue;
+    const cols = colsOf(s.mapping);
+    if (s.shape === 'wide') {
+      for (const c of cols.taxonHeaders) names.push(c.header.trim());
+    } else if (cols.taxonCell) {
+      for (const row of sheet.rows) {
+        const t = text(row.cells[cols.taxonCell.index]);
+        if (t !== undefined) names.push(t);
+      }
+    }
+  }
+  return distinctSplits(names, input.approvedSplits);
+}
+
+/* ---------- the conversion ---------- */
+
+export function convert(input: ConvertInput): ConvertResult {
+  const opts = input.options ?? {};
+  const fullList = opts.fullList === true;
+  const findings: Finding[] = [];
+  const occurrences: OccRec[] = [];
+  const measurements: MofIntent[] = [];
+  const samples = new Map<string, SampleAcc>();
+  const dups = new Map<string, DupAcc>();
+  const occIds = new Map<string, { file: string; sheet: string; lines: number[]; fields: string[] }>();
+  const sameEvent = new Map<string, { file: string; sheet: string; name: string; refs: string[]; ids: Set<string>; lines: number[] }>();
+  const stats = { zerosSkipped: 0, textCells: 0, present: 0, absent: 0 };
+  let sheetKeyN = 0;
+
+  const splits = listSplits(input);
+  const undecided = splits.filter((s) => s.needsDecision && !s.approved);
+  if (undecided.length > 0) {
+    const first = input.sheets[0];
+    findings.push(
+      makeConvertFinding('CONV-SPLIT-UNDECIDED', {
+        file: first?.file.fileName ?? '',
+        sheet: first?.sheet ?? '',
+        value: undecided[0].verbatim,
+        params: { count: undecided.length },
+      }),
+    );
+  }
+  const splitOf = (verbatim: string): TaxonSplit => approvedSplit(input.approvedSplits, verbatim) ?? splitTaxon(verbatim);
+
+  for (const sin of input.sheets) {
+    const file = sin.file;
+    const sheet: RawSheet | undefined = file.sheets.find((x) => x.name === sin.sheet);
+    if (!sheet) continue;
+    const fileName = file.fileName;
+    const sheetKey = `${fileName}\u0000${sheet.name}\u0000${sheetKeyN++}`;
+    const dc = file.decimalComma;
+    const cols = colsOf(sin.mapping);
+    const collector = new Collector(fileName);
+    const specs = specsOf(sin.mapping);
+    const parse = metaParser(file, sheet, specs, collector);
+    const base = { file: fileName, sheet: sheet.name };
+
+    const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
+    if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
+
+    // quantity declaration
+    const resolution = resolveQuantity(sin.quantity, { decimalComma: dc, ...(cols.effort?.unit === undefined ? {} : { columnEffortUnit: cols.effort.unit }) });
+    let quantity: ResolvedQuantity | undefined;
+    let missing: string[] = resolution.ok ? [] : [...resolution.missing];
+    if (resolution.ok) quantity = resolution.quantity;
+    if (sin.quantity?.effort?.source === 'column' && cols.effort === undefined) {
+      missing = [...missing, 'effort column'];
+      quantity = undefined;
+    }
+    if (!quantity || missing.length > 0) {
+      if (missing.length === 0) missing = ['kind'];
+      findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
+      quantity = undefined;
+    } else {
+      if (quantity.noTypeFor !== undefined) findings.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: quantity.noTypeFor } }));
+      if (quantity.unitWithoutP06 !== undefined) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.unitWithoutP06 } }));
+      if (quantity.effort && !quantity.effort.unitId) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.effort.unit } }));
+    }
+    const kind = quantity?.kind;
+
+    // depth columns: units must be metres
+    for (const d of [cols.depthMin, cols.depthMax, cols.depthPlain]) {
+      if (d?.unit !== undefined && !METRES.test(d.unit.trim())) findings.push(makeConvertFinding('CONV-DEPTH-UNIT', { ...base, field: d.header, params: { unit: d.unit } }));
+    }
+
+    const tabs = new Lines();
+    const noCode = new Lines();
+    const texts = new Lines();
+    const negatives = new Lines();
+    const notInteger = new Lines();
+    const effortBad = new Lines();
+    const summaries = new Lines();
+    let zeros = 0;
+    const checkText = (field: string, line: number, value: string | undefined): void => {
+      if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
+    };
+    // a header with a tab or line break (wide taxon headers)
+    for (const c of cols.taxonHeaders) checkText(c.header, sheet.headerLine, c.header.trim());
+
+    const depthOf = (row: RawRow): { min?: number; max?: number; decimals?: number } => {
+      const read = (d: NonNullable<Cols['depthMin']>): { v: number; decimals: number } | undefined => {
+        const cell = row.cells[d.index] ?? null;
+        if (isBlankCell(cell)) return undefined;
+        const p = parseNumber(cell, dc);
+        if (p.status === 'ok') return { v: d.positive === 'up' ? (p.value === 0 ? 0 : -p.value) : p.value, decimals: p.decimals };
+        if (p.status === 'non-numeric') collector.add('ROW-NON-NUMERIC', sheet.name, d.header, row.line, p.token);
+        else if (p.status === 'na-variant') collector.add('ROW-NA-VARIANT', sheet.name, d.header, row.line, p.token);
+        return undefined;
+      };
+      if (cols.depthMin && cols.depthMax) {
+        const lo = read(cols.depthMin);
+        const hi = read(cols.depthMax);
+        const decimals = Math.max(lo?.decimals ?? 0, hi?.decimals ?? 0);
+        return { ...(lo ? { min: lo.v } : {}), ...(hi ? { max: hi.v } : {}), ...(lo || hi ? { decimals } : {}) };
+      }
+      // one depth column (even one called a bound): min = max
+      const only = cols.depthPlain ?? cols.depthMin ?? cols.depthMax;
+      const one = only ? read(only) : undefined;
+      return one ? { min: one.v, max: one.v, decimals: one.decimals } : {};
+    };
+
+    const effortOf = (row: RawRow): string | undefined => {
+      const e = quantity?.effort;
+      if (!e) return undefined;
+      if (e.constant) return e.constant.text;
+      const eff = cols.effort;
+      if (!eff) return undefined;
+      const raw = row.cells[eff.index] ?? null;
+      const p = parseNumber(raw, dc);
+      if (p.status === 'ok') {
+        if (p.value < 0) {
+          negatives.add(fileName, sheet.name, eff.header, row.line, String(raw).trim());
+          return undefined;
+        }
+        if (p.value === 0) {
+          effortBad.add(fileName, sheet.name, eff.header, row.line, '0');
+          return undefined;
+        }
+        return valueText(raw, dc);
+      }
+      effortBad.add(fileName, sheet.name, eff.header, row.line, text(raw) ?? '(empty)');
+      return undefined;
+    };
+
+    for (const row of sheet.rows) {
+      const m = parse(row);
+      const code = m.sampleId;
+      const stationText = m.station;
+      const label = code ?? stationText;
+      const wideHasValue = cols.taxonHeaders.some((c) => !isBlankCell(row.cells[c.index] ?? null));
+      const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
+      // long: a row is a record when it has a taxon and a value (an empty value is "no record"); wide: a row with any species cell or a sample code
+      const longHasValue = cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
+      const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && longHasValue;
+      if (label !== undefined && SUMMARY_LABEL.test(label)) {
+        summaries.add(fileName, sheet.name, 'sample', row.line, label);
+        continue;
+      }
+      if (!relevant) continue;
+      if (code === undefined) {
+        noCode.add(fileName, sheet.name, cols.sampleId?.header ?? '', row.line);
+        continue;
+      }
+      const cruiseText = m.cruise ?? sin.cruise?.trim();
+      const cruise = cruiseText === '' ? undefined : cruiseText;
+      if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
+      if (specs.station && stationText !== undefined) checkText(specs.station.header, row.line, stationText);
+      if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
+
+      const stationId = stationText === undefined ? undefined : stationEventId(cruise, stationText);
+      const eventId = opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code;
+      const depth = depthOf(row);
+      const effort = effortOf(row);
+      const date = m.datetime;
+      const dateText = date === undefined ? undefined : eventDateText(date);
+      const source: SourceRef = { file: fileName, sheet: sheet.name, line: row.line };
+
+      const earlier = samples.get(eventId);
+      let acc: SampleAcc;
+      if (earlier) {
+        const mergeable = sin.shape === 'long' && earlier.shape === 'long' && earlier.sheetKey === sheetKey && earlier.station === stationText;
+        if (!mergeable) {
+          // the same eventID from another row of a wide sheet, another sheet, or another station (long): never merged
+          let d = dups.get(`event\u0000${eventId}`);
+          if (!d) dups.set(`event\u0000${eventId}`, (d = { id: eventId, file: fileName, sheet: sheet.name, lines: new Set(earlier.sheetKey === sheetKey ? earlier.lines : []) }));
+          d.lines.add(row.line);
+          continue;
+        }
+        acc = earlier;
+        acc.lines.push(row.line);
+        const differs = (what: string): void => void acc.conflicts.add(what);
+        if (acc.dateText !== dateText) differs('date');
+        if (!sameNumber(acc.site.lat, m.lat) || !sameNumber(acc.site.lon, m.lon)) differs('position');
+        if (!sameNumber(acc.site.depthMin, depth.min) || !sameNumber(acc.site.depthMax, depth.max)) differs('depth');
+        if (acc.effortText !== effort) differs('sample size');
+      } else {
+        const site: SampleSite = { id: eventId, code, source };
+        if (stationText !== undefined) site.stationCode = stationText;
+        if (cruise !== undefined) site.cruiseCode = cruise;
+        if (date) site.date = date;
+        if (m.lat !== undefined && m.lon !== undefined) {
+          site.lat = m.lat;
+          site.lon = m.lon;
+          if (m.latDecimals !== undefined) site.latDecimals = m.latDecimals;
+          if (m.lonDecimals !== undefined) site.lonDecimals = m.lonDecimals;
+        }
+        if (depth.min !== undefined) site.depthMin = depth.min;
+        if (depth.max !== undefined) site.depthMax = depth.max;
+        if (depth.decimals !== undefined) site.depthDecimals = depth.decimals;
+        if (effort !== undefined && quantity?.effort) {
+          site.sampleSizeValue = effort;
+          site.sampleSizeUnit = quantity.effort.unit;
+        }
+        acc = {
+          site,
+          sheetKey,
+          shape: sin.shape,
+          lines: [row.line],
+          conflicts: new Set(),
+          source,
+          effortWritten: false,
+          ...(stationText === undefined ? {} : { station: stationText }),
+          ...(dateText === undefined ? {} : { dateText }),
+          ...(effort === undefined ? {} : { effortText: effort }),
+        };
+        samples.set(eventId, acc);
+      }
+      if (acc.site.sampleSizeValue !== undefined && !acc.effortWritten && quantity?.effort) {
+        acc.effortWritten = true;
+        const e = quantity.effort;
+        measurements.push({
+          target: { kind: 'event', id: eventId },
+          role: 'effort',
+          measurementType: e.type.label,
+          measurementTypeId: e.type.uri,
+          measurementValue: acc.site.sampleSizeValue,
+          measurementUnit: e.unit,
+          ...(e.unitId ? { measurementUnitId: e.unitId.uri } : {}),
+          source,
+        });
+      }
+
+      /* ---- the occurrences of this row ---- */
+      const cells: { verbatim: string; raw: unknown; column: string; userId?: string; lifeStageCol?: string; qualifierCol?: string }[] = [];
+      if (sin.shape === 'wide') {
+        for (const c of cols.taxonHeaders) cells.push({ verbatim: c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim() });
+      } else if (cols.taxonCell && cols.quantity && taxonCellText !== undefined) {
+        const lifeStageCol = cols.lifeStage ? text(row.cells[cols.lifeStage.index]) : undefined;
+        const qualifierCol = cols.qualifier ? text(row.cells[cols.qualifier.index]) : undefined;
+        const userId = cols.occurrenceId ? text(row.cells[cols.occurrenceId.index]) : undefined;
+        if (cols.taxonCell) checkText(cols.taxonCell.header, row.line, taxonCellText);
+        if (cols.lifeStage) checkText(cols.lifeStage.header, row.line, lifeStageCol);
+        if (cols.qualifier) checkText(cols.qualifier.header, row.line, qualifierCol);
+        if (cols.occurrenceId) checkText(cols.occurrenceId.header, row.line, userId);
+        cells.push({
+          verbatim: taxonCellText,
+          raw: row.cells[cols.quantity.index] ?? null,
+          column: cols.taxonCell.header,
+          ...(userId === undefined ? {} : { userId }),
+          ...(lifeStageCol === undefined ? {} : { lifeStageCol }),
+          ...(qualifierCol === undefined ? {} : { qualifierCol }),
+        });
+      }
+      for (const cell of cells) {
+        const raw = cell.raw as string | number | null;
+        const p = parseNumber(raw, dc);
+        const field = sin.shape === 'wide' ? cell.column : (cols.quantity?.header ?? cell.column);
+        let status: 'present' | 'absent' = 'present';
+        let value: number | undefined;
+        let remarks: string | undefined;
+        if (p.status === 'missing') continue;
+        if (p.status === 'na-variant') {
+          collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
+          continue;
+        }
+        if (p.status === 'non-numeric') {
+          texts.add(fileName, sheet.name, field, row.line, p.token);
+          checkText(field, row.line, p.token);
+          remarks = p.token;
+          stats.textCells++;
+        } else {
+          value = p.value;
+          if (value < 0) {
+            negatives.add(fileName, sheet.name, field, row.line, String(raw).trim());
+            continue;
+          }
+          if (value === 0) {
+            if (!fullList) {
+              zeros++;
+              continue;
+            }
+            status = 'absent';
+          } else if (kind === 'count' && !Number.isInteger(value)) {
+            notInteger.add(fileName, sheet.name, field, row.line, String(raw).trim());
+            continue;
+          }
+        }
+        const sp = splitOf(cell.verbatim);
+        const lifeStage = cell.lifeStageCol ?? sp.lifeStage;
+        const qualifier = cell.qualifierCol ?? sp.identificationQualifier;
+        const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
+        const occSource: SourceRef = { ...source, column: cell.column };
+        const occ: OccRec = {
+          id,
+          eventId,
+          verbatimIdentification: cell.verbatim,
+          scientificName: sp.scientificName,
+          occurrenceStatus: status,
+          source: occSource,
+          ...(qualifier === undefined ? {} : { identificationQualifier: qualifier }),
+          ...(lifeStage === undefined ? {} : { lifeStage }),
+          ...(remarks === undefined ? {} : { occurrenceRemarks: remarks }),
+        };
+        if (cols.quantityType && sin.shape === 'long') {
+          const qt = text(row.cells[cols.quantityType.index]);
+          if (qt !== undefined) occ.sourceQuantityType = qt;
+        }
+        if (value !== undefined) occ.quantityText = valueText(raw, dc);
+        if (kind === 'count' && value !== undefined) {
+          occ.individualCount = value;
+          if (status === 'present') {
+            occ.organismQuantity = value;
+            occ.organismQuantityType = 'individuals';
+          }
+        }
+        // measurements: absent records have none; a text cell has no number
+        if (status === 'present' && value !== undefined && quantity) {
+          const t = quantity.type;
+          measurements.push({
+            target: { kind: 'occurrence', id },
+            role: quantity.kind,
+            measurementType: t?.label ?? '',
+            ...(t ? { measurementTypeId: t.uri } : {}),
+            measurementValue: quantity.kind === 'count' ? String(value) : valueText(raw, dc),
+            ...(quantity.kind === 'count' ? {} : { measurementUnit: quantity.unit ?? '' }),
+            ...(quantity.unitId ? { measurementUnitId: quantity.unitId.uri } : {}),
+            source: occSource,
+          });
+        }
+        occurrences.push(occ);
+        if (status === 'present') stats.present++;
+        else stats.absent++;
+
+        // identifiers: one occurrenceID once, whoever repeats it
+        const seen = occIds.get(id);
+        if (seen) {
+          seen.lines.push(row.line);
+          if (!seen.fields.includes(cell.column)) seen.fields.push(cell.column);
+        } else occIds.set(id, { file: fileName, sheet: sheet.name, lines: [row.line], fields: [cell.column] });
+        // the same taxon more than once in one sample (different IDs)
+        const gk = JSON.stringify([eventId, sp.scientificName, lifeStage ?? '', qualifier ?? '']);
+        const g = sameEvent.get(gk);
+        const ref = sin.shape === 'wide' ? cell.column : `line ${row.line}`;
+        if (g) {
+          g.refs.push(ref);
+          g.ids.add(id);
+          g.lines.push(row.line);
+        } else sameEvent.set(gk, { file: fileName, sheet: sheet.name, name: sp.scientificName, refs: [ref], ids: new Set([id]), lines: [row.line] });
+      }
+    }
+
+    // sample-level conflicts of long sheets
+    for (const a of samples.values()) {
+      if (a.sheetKey !== sheetKey || a.conflicts.size === 0) continue;
+      findings.push(makeConvertFinding('CONV-SAMPLE-CONFLICT', { ...base, value: a.site.code, lines: a.lines, params: { what: [...a.conflicts].join(', '), count: 1 } }));
+    }
+    if (noCode.size > 0) {
+      for (const e of noCode.entries()) findings.push(makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));
+    }
+    for (const e of tabs.entries()) findings.push(makeConvertFinding('CONV-TAB-IN-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const e of texts.entries()) findings.push(makeConvertFinding('CONV-TEXT-IN-TAXON-CELL', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+    for (const e of negatives.entries()) findings.push(makeConvertFinding('CONV-NEGATIVE-QUANTITY', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const e of notInteger.entries()) findings.push(makeConvertFinding('CONV-COUNT-NOT-INTEGER', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const e of effortBad.entries()) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const e of summaries.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+    if (zeros > 0) {
+      stats.zerosSkipped += zeros;
+      findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: zeros } }));
+    }
+    findings.push(...collector.findings());
+  }
+
+  /* ---- identifiers across the whole archive ---- */
+  const tree = buildEventTree(
+    [...samples.values()].map((a) => a.site),
+    opts.flatten ? { flatten: opts.flatten } : {},
+  );
+  const events: EventRec[] = tree.events;
+  // a sample code equal to a station or cruise eventID is the same eventID twice
+  const kindOf = new Map<string, number>();
+  for (const e of events) kindOf.set(e.id, (kindOf.get(e.id) ?? 0) + 1);
+  for (const [id, n] of kindOf) {
+    if (n < 2) continue;
+    const a = samples.get(id);
+    const key = `event\u0000${id}`;
+    if (!dups.has(key)) dups.set(key, { id, file: a?.source.file ?? '', sheet: a?.source.sheet ?? '', lines: new Set(a?.lines ?? []) });
+  }
+  for (const d of dups.values()) {
+    findings.push(
+      makeConvertFinding('CONV-ID-DUPLICATE', {
+        file: d.file,
+        sheet: d.sheet,
+        value: d.id,
+        lines: [...d.lines],
+        params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.' },
+      }),
+    );
+  }
+  const repeated = [...occIds].filter(([, o]) => o.lines.length > 1);
+  if (repeated.length > 0) {
+    const byWhere = new Map<string, { file: string; sheet: string; ids: string[]; lines: number[] }>();
+    for (const [id, o] of repeated) {
+      const k = `${o.file}\u0000${o.sheet}`;
+      const w = byWhere.get(k) ?? { file: o.file, sheet: o.sheet, ids: [], lines: [] };
+      w.ids.push(id);
+      w.lines.push(...o.lines);
+      byWhere.set(k, w);
+    }
+    for (const w of byWhere.values()) {
+      findings.push(
+        makeConvertFinding('CONV-ID-DUPLICATE', {
+          file: w.file,
+          sheet: w.sheet,
+          value: w.ids[0],
+          lines: w.lines,
+          params: { kind: 'occurrence', count: w.ids.length, hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.' },
+        }),
+      );
+    }
+  }
+  for (const g of sameEvent.values()) {
+    // the same ID twice is an ID duplicate (CONV-ID-DUPLICATE), not "the same taxon in two columns": only distinct IDs count here
+    if (g.ids.size < 2) continue;
+    findings.push(
+      makeConvertFinding('CONV-TAXON-SAME-EVENT', {
+        file: g.file,
+        sheet: g.sheet,
+        value: g.name,
+        lines: g.lines,
+        params: { count: g.ids.size, columns: g.refs.slice(0, 6).join(', ') + (g.refs.length > 6 ? ', …' : '') },
+      }),
+    );
+  }
+
+  const blocking = findings.filter((f) => f.severity === 'error');
+  return {
+    ok: blocking.length === 0,
+    findings,
+    blocking,
+    events,
+    occurrences,
+    measurements,
+    tree: tree.summary,
+    splits,
+    cruiseText: tree.cruiseText,
+    stats: { samples: samples.size, occurrences: occurrences.length, present: stats.present, absent: stats.absent, zerosSkipped: stats.zerosSkipped, textCells: stats.textCells, measurements: measurements.length },
+  };
+}
+
