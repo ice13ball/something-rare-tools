@@ -43,6 +43,7 @@ import type { RuleSpec } from './spec';
  *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
+ *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
  *   CONV-DEVICE-MISSING        (none)           the sheet has no sampling device
  *   CONV-MESH-INVALID          reason           value = the typed mesh size; reason = not-a-number | not-positive | ambiguous | thousands
  */
@@ -389,12 +390,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'columns'],
     plain: {
-      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego ta wersja nie zapisuje (zmierzona wielkość, ciśnienie albo identyfikator taksonu w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
-      en: `{count} {+count:column has|columns have} a meaning this version does not write (measured variable, pressure, or a taxon ID in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
-      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die diese Version nicht schreibt (Messgröße, Druck oder Taxon-Kennung in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
-      fr: `{count} {+count:colonne a|colonnes ont} un sens que cette version n'écrit pas (grandeur mesurée, pression ou identifiant de taxon dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego przy tym ustawieniu arkusza nie zapisuje się w archiwum (na przykład zmierzona wielkość, ciśnienie albo stadium w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
+      en: `{count} {+count:column has|columns have} a meaning that is not written to the archive as the sheet is set up (for example a measured variable, a pressure, or a life stage in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die bei dieser Einstellung des Blatts nicht ins Archiv geschrieben wird (zum Beispiel Messgröße, Druck oder Stadium in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
+      fr: `{count} {+count:colonne a|colonnes ont} un sens qui n'est pas écrit dans l'archive avec ce réglage de la feuille (par exemple grandeur mesurée, pression ou stade dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) with the role variable, pressure, or taxon ID in a wide sheet are not converted in this version ({columns}); measurements of the environment to eMoF come in a later stage. Nothing from them is written. The warning has to be accepted before the export.`,
+    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a measured variable or a pressure, a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column. Nothing from them is written. The warning has to be accepted before the export.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',
@@ -402,10 +403,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wystąpienie nie ma|wystąpienia nie mają|wystąpień nie ma} scientificNameID. BioCheck i kontrole OBIS zgłaszają archiwum bez niego jako błąd. Wyszukiwanie w WoRMS pojawi się później; do tego czasu oznacz kolumnę, która już ma identyfikatory (AphiaID z WoRMS albo scientificNameID).`,
-      en: `{count} {+count:occurrence has|occurrences have} no scientificNameID. BioCheck and the OBIS checks report an archive without it as an error. The WoRMS lookup comes in a later stage; until then, mark a column that holds the IDs (a WoRMS AphiaID or a scientificNameID column).`,
-      de: `{count} {+count:Vorkommen hat|Vorkommen haben} keine scientificNameID. BioCheck und die OBIS-Prüfungen melden ein Archiv ohne sie als Fehler. Die WoRMS-Abfrage folgt später; bis dahin markieren Sie eine Spalte, die die Kennungen schon enthält (WoRMS-AphiaID oder scientificNameID).`,
-      fr: `{count} {+count:occurrence n'a|occurrences n'ont} pas de scientificNameID. BioCheck et les contrôles d'OBIS signalent comme erreur une archive qui en est dépourvue. La recherche dans WoRMS viendra plus tard ; d'ici là, marquez une colonne qui contient déjà les identifiants (AphiaID de WoRMS ou scientificNameID).`,
+      pl: `{count} {+count:wystąpienie nie ma|wystąpienia nie mają|wystąpień nie ma} scientificNameID. BioCheck i kontrole OBIS zgłaszają archiwum bez niego jako błąd. W arkuszu szerokim identyfikatory dojdą z późniejszym wyszukiwaniem w WoRMS; arkusz długi może wskazać kolumnę z nimi (AphiaID lub scientificNameID).`,
+      en: `{count} {+count:occurrence has|occurrences have} no scientificNameID. BioCheck and the OBIS checks report an archive without it as an error. In a wide sheet the IDs come with the later WoRMS lookup; a long sheet can mark a column holding them (an AphiaID or scientificNameID column).`,
+      de: `{count} {+count:Vorkommen hat|Vorkommen haben} keine scientificNameID. BioCheck und die OBIS-Prüfungen melden ein Archiv ohne sie als Fehler. In einem breiten Blatt kommen die Kennungen mit der späteren WoRMS-Abfrage; ein langes Blatt kann eine Spalte mit ihnen markieren (AphiaID oder scientificNameID).`,
+      fr: `{count} {+count:occurrence n'a|occurrences n'ont} pas de scientificNameID. BioCheck et les contrôles d'OBIS signalent une archive sans lui comme une erreur. Dans une feuille large, les identifiants viendront de la recherche WoRMS ultérieure ; une feuille longue peut marquer leur colonne (AphiaID ou scientificNameID).`,
     },
     technical: `{file}: {count} occurrence(s) have no scientificNameID. BioCheck lists scientificNameID among the required fields of a leaf event (docs/research/qc-sources.md, Item 2). This stage writes one only from a column the user marked (a scientificNameID column as given, a WoRMS AphiaID column as urn:lsid:marinespecies.org:taxname:<id>); nothing is looked up or guessed.`,
   },
@@ -434,6 +435,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La taille de maille « {value} » est inutilisable : {reason}. Saisissez la taille en micromètres comme un nombre simple, ou laissez le champ vide.`,
     },
     technical: `{file}, {sheet}: the typed mesh size "{value}" is refused ({reason}). It is written as MSHSIZE1 with the unit um (P06 UMIC) only when it is a plain number above zero.`,
+  },
+  {
+    id: 'CONV-NAMEID-APHIA-LIKE',
+    category: 'B',
+    severity: 'warning',
+    params: ['column'],
+    plain: {
+      pl: `Kolumna „{column}” ma same liczby całkowite i została ręcznie oznaczona jako identyfikator taksonu, ale jej nagłówek nie brzmi AphiaID. Wyglądają na AphiaID z WoRMS; są zapisywane bez zmian. Zmień nagłówek na AphiaID, aby zapisać je jako LSID z WoRMS.`,
+      en: `Column "{column}" holds only whole numbers and was marked as the taxon ID by hand, but its header is not AphiaID. They look like WoRMS AphiaIDs; they are written as they are. Rename the header to AphiaID to have them written as WoRMS LSIDs.`,
+      de: `Die Spalte „{column}“ enthält nur ganze Zahlen und wurde von Hand als Taxon-Kennung markiert, ihr Kopf lautet aber nicht AphiaID. Es sieht nach WoRMS-AphiaIDs aus; sie werden unverändert geschrieben. Benennen Sie den Kopf in AphiaID um, damit sie als WoRMS-LSIDs geschrieben werden.`,
+      fr: `La colonne « {column} » ne contient que des nombres entiers et a été marquée à la main comme identifiant de taxon, mais son en-tête n'est pas AphiaID. Ils ressemblent à des AphiaID de WoRMS ; ils sont écrits tels quels. Renommez l'en-tête en AphiaID pour qu'ils soient écrits comme LSID de WoRMS.`,
+    },
+    technical: `{file}, {sheet}: column {column} was given the taxon ID role by hand; every filled cell is a positive whole number but the header is none of AphiaID, aphia_id, Aphia ID, so the values are written to scientificNameID as given, not as the urn:lsid of a WoRMS taxon.`,
   },
 ];
 

@@ -79,12 +79,10 @@ interface Cols {
   depthMin?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   depthMax?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   depthPlain?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
-  /** Headers of columns the user gave a meaning this stage does not write (a measured variable, a pressure): said, never dropped silently. */
-  unexported: string[];
 }
 
 function colsOf(mapping: SheetMapping): Cols {
-  const c: Cols = { taxonHeaders: [], unexported: [] };
+  const c: Cols = { taxonHeaders: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
     const r = m.role;
@@ -116,10 +114,6 @@ function colsOf(mapping: SheetMapping): Cols {
         break;
       case 'effort':
         c.effort ??= { ...spec, ...(r.unit === undefined ? {} : { unit: r.unit }) };
-        break;
-      case 'variable':
-      case 'pressure':
-        c.unexported.push(m.header.trim());
         break;
       case 'depth': {
         const d = { ...spec, positive: r.positive, ...(r.unit === undefined ? {} : { unit: r.unit }) };
@@ -190,17 +184,59 @@ function addPlace(places: Places, file: string, sheet: string, line: number): vo
 const sameNumber = (a: number | undefined, b: number | undefined): boolean => a === b;
 
 /**
- * The text of a number cell to write, when the value came from this ONE cell and nothing was done to it but turning a decimal comma into a point: a plain
- * decimal number (an optional sign, digits, an optional point and digits; no exponent, no thousands mark). Undefined otherwise (degrees and minutes, a
- * flipped depth sign, a number written another way): the caller then writes the parsed value with the precision the reader counted.
+ * The columns of the mapping that have a role other than ignore and that nothing of this conversion reads (headers, in column order). It is computed from
+ * what the conversion reads, not from a list of roles, so a role added later is reported until it is read:
+ *   every shape   latitude, longitude, the date (or datetime) and the time, the station, cruise and sample code: the FIRST column of each (a second one is not read)
+ *   wide          the taxon header columns
+ *   long          the taxon cell, the quantity, the life stage, the qualifier, the occurrenceID and the taxon ID: the first of each
+ *   both          the depth columns that the depth reader uses; the effort column only when the sheet's sample size is set to "a column"
+ * quantityType is read for information only and written nowhere, so it is never in the set.
+ */
+function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
+  const used = new Set<number>();
+  const use = (s: { index: number } | undefined): void => void (s && used.add(s.index));
+  for (const s of [specs.lat, specs.lon, specs.when, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
+  if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
+  else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
+  if (cols.depthMin && cols.depthMax) {
+    use(cols.depthMin);
+    use(cols.depthMax);
+  } else use(cols.depthPlain ?? cols.depthMin ?? cols.depthMax);
+  if (sin.quantity?.effort?.source === 'column') use(cols.effort);
+  return sin.mapping.columns.filter((c) => c.role.kind !== 'ignore' && !used.has(c.index)).map((c) => c.header.trim());
+}
+
+/** Every filled cell of the column is a positive whole number, and there is at least one. */
+function looksLikeAphiaIds(sheet: RawSheet, index: number): boolean {
+  let n = 0;
+  for (const row of sheet.rows) {
+    const t = text(row.cells[index]);
+    if (t === undefined) continue;
+    if (!/^[1-9]\d*$/.test(t)) return false;
+    n++;
+  }
+  return n > 0;
+}
+
+/**
+ * The text of a number cell to write, when the value came from this ONE cell: a plain decimal number (an optional sign, digits, an optional point and digits;
+ * no exponent, no thousands mark), with the decimal comma turned into a point and nothing else tidied but this: a leading plus sign is dropped, leading zeros
+ * before the integer part are dropped (007.5 is 7.5; 0.5 stays), a missing integer part is a 0 (.5 is 0.5) and a bare trailing point is dropped (5. is 5).
+ * Every digit after the point is kept (54.10 stays 54.10). Undefined otherwise (degrees and minutes, a flipped depth sign, a number written another way):
+ * the caller then writes the parsed value with the precision the reader counted.
  */
 export function sourceNumberText(raw: RawCell | undefined, decimalComma: boolean, value: number | undefined): string | undefined {
   if (value === undefined || raw === null || raw === undefined) return undefined;
   if (typeof raw === 'number') return raw === value && !/e/i.test(String(raw)) ? String(raw) : undefined;
   const t = raw.trim();
   const out = decimalComma ? t.replace(',', '.') : t;
-  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(out)) return undefined;
-  return Number(out) === value ? out : undefined;
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(out)) return undefined;
+  const negative = out.startsWith('-');
+  const [intPart, fraction = ''] = out.replace(/^[+-]/, '').split('.');
+  const whole = intPart.replace(/^0+(?=\d)/, '') || '0';
+  const tidy = `${whole}${fraction === '' ? '' : `.${fraction}`}`;
+  const signed = negative && Number(tidy) !== 0 ? `-${tidy}` : tidy;
+  return Number(signed) === value ? signed : undefined;
 }
 
 /** The taxon names of every sheet, as the page lists them for approval (distinct, first-seen order). */
@@ -661,10 +697,14 @@ export function convert(input: ConvertInput): ConvertResult {
       findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: zeros } }));
     }
     if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));
-    // a taxon ID column of a WIDE sheet has no taxon to belong to (the taxa are the columns): it is said, not dropped silently
-    if (sin.shape === 'wide' && cols.taxonId) cols.unexported.push(cols.taxonId.header.trim());
-    if (cols.unexported.length > 0) {
-      findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: cols.unexported.length, columns: cols.unexported.slice(0, 6).join(', ') + (cols.unexported.length > 6 ? ', …' : '') } }));
+    // every column the user gave a meaning that this conversion does not read, in this configuration, is said and has to be accepted: nothing is dropped silently
+    const unexported = unreadColumns(sin, cols, specs);
+    if (unexported.length > 0) {
+      findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.slice(0, 6).join(', ') + (unexported.length > 6 ? ', …' : '') } }));
+    }
+    // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said
+    if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
+      findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: cols.taxonId.header.trim() } }));
     }
     findings.push(...collector.findings());
   }

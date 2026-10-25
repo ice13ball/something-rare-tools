@@ -139,11 +139,20 @@ describe('numbers are copied from the source text', () => {
     expect(sourceNumberText('55.50', false, 55.5)).toBe('55.50');
     expect(sourceNumberText('55,50', true, 55.5)).toBe('55.50');
     expect(sourceNumberText(' 100 ', false, 100)).toBe('100');
-    expect(sourceNumberText('+5.5', false, 5.5)).toBe('+5.5');
+    // minimal tidying: a leading plus, leading zeros before the integer part, a missing integer part, a bare trailing point; every decimal digit stays
+    expect(sourceNumberText('+5.5', false, 5.5)).toBe('5.5');
+    expect(sourceNumberText('007.5', false, 7.5)).toBe('7.5');
+    expect(sourceNumberText('0.5', false, 0.5)).toBe('0.5');
+    expect(sourceNumberText('00.50', false, 0.5)).toBe('0.50');
+    expect(sourceNumberText('000', false, 0)).toBe('0');
+    expect(sourceNumberText('.5', false, 0.5)).toBe('0.5');
+    expect(sourceNumberText('5.', false, 5)).toBe('5');
+    expect(sourceNumberText('-007,50', true, -7.5)).toBe('-7.50');
+    expect(sourceNumberText('-0.0', false, 0)).toBe('0.0');
+    expect(sourceNumberText('54.10', false, 54.1)).toBe('54.10');
     expect(sourceNumberText(100, false, 100)).toBe('100');
     expect(sourceNumberText('55,50', false, 55.5)).toBeUndefined();
     expect(sourceNumberText('1e3', false, 1000)).toBeUndefined();
-    expect(sourceNumberText('5.', false, 5)).toBeUndefined();
     expect(sourceNumberText('-10', false, 10)).toBeUndefined(); // a sign that was flipped is not the source
     expect(sourceNumberText('55°30′N', false, 55.5)).toBeUndefined(); // degrees and minutes: written as decimal degrees
     expect(sourceNumberText(null, false, 1)).toBeUndefined();
@@ -155,7 +164,7 @@ describe('numbers are copied from the source text', () => {
     const e = await exportSheet(header, [['A1', '55.50', '100', '2023-06-14', '0', '10.00', 4], ['A2', '+55.5', '2.250', '2023-06-15', '5', '10.0', 4]], { quantity: { kind: 'count' } });
     const ev = objects((await readBack(e.zip)).tables['event.txt']);
     expect(ev.find((x) => x.eventID === 'A1')).toMatchObject({ decimalLatitude: '55.50', decimalLongitude: '100', minimumDepthInMeters: '0', maximumDepthInMeters: '10.00' });
-    expect(ev.find((x) => x.eventID === 'A2')).toMatchObject({ decimalLatitude: '+55.5', decimalLongitude: '2.250', minimumDepthInMeters: '5', maximumDepthInMeters: '10.0' });
+    expect(ev.find((x) => x.eventID === 'A2')).toMatchObject({ decimalLatitude: '55.5', decimalLongitude: '2.250', minimumDepthInMeters: '5', maximumDepthInMeters: '10.0' });
   });
 
   it('a count is written as a whole number: a cell 5.0 is written 5', async () => {

@@ -160,8 +160,6 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     if (phase !== 'work' || !parsed) return undefined;
     const mine = ++token.current;
     setWorking(true);
-    // a ticked warning holds only until a decision changes: every change of what is converted clears every tick
-    setAccepted({});
     const timer = setTimeout(() => {
       engine
         .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta }))
@@ -653,15 +651,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <p className="muted">{t('convert.export.files')}</p>
               {nothingToWrite && <p className="notice">{t('convert.export.empty')}</p>}
               <div className="confirm-actions">
-                <button type="button" className="button" aria-disabled={!canExport} onClick={pressExport}>
+                <button type="button" className="button" aria-disabled={!canExport} aria-describedby="convert-export-note" onClick={pressExport}>
                   {t('convert.export.button')}
                 </button>
               </div>
-              {view !== null && !canExport && !exporting && !working && (
-                <p className="muted" role="note">
-                  {t('convert.export.blocked')}
-                </p>
-              )}
+              <p id="convert-export-note" className="muted" role="note" aria-live="polite">
+                {view !== null && !canExport && !exporting && !working ? t('convert.export.blocked') : ''}
+              </p>
               {exporting && <p role="status">{t('convert.export.working')}</p>}
               {exported && (
                 <p role="status">

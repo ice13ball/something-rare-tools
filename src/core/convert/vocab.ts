@@ -56,7 +56,7 @@ export const P06 = {
 } as const;
 
 /**
- * Sampling devices for measurementValueID of NMSPINST (docs/research/qc-sources.md, Item 1b and 1c, opened 2026-10-25, owl:deprecated false): the five
+ * Sampling devices for measurementValueID of NMSPINST (docs/research/qc-sources.md, Item 1b and 1c, opened 2026-10-25, owl:deprecated false): the six
  * named devices of the spike (L22) and the four device categories (L05). The value written is the label. Any other device is typed by the user and written
  * without a valueID.
  */
