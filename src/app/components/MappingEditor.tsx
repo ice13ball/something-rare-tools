@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useId } from 'react';
-import type { UiKey } from '../../core/i18n/ui';
+import { UI, type UiKey } from '../../core/i18n/ui';
 import { CANONICAL_VARIABLES } from '../../core/recognize/vocab';
 import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types';
 import { MAX_SAMPLES } from '../../worker/protocol';
@@ -23,6 +23,20 @@ export interface MappingEditorProps {
   /** The ⓘ of the role column header. Default: the /check one. */
   rolesTip?: TipId;
   onChange: (mapping: SheetMapping) => void;
+}
+
+const checkKey = (code: string): UiKey => `check.reason.${code}` as UiKey;
+
+/**
+ * The reason of a low-confidence proposal in the reader's language. A code of the shared proposer (`check.reason.<code>`) is filled
+ * from `reasonParams`, with its lead and notes joined by "; "; a converter overlay code (`convert.reason.<code>`) replaces all of that;
+ * a proposal without a code shows its English reason.
+ */
+function reasonText(p: ColumnProposal): string | undefined {
+  if (p.reasonCode === undefined) return p.reason;
+  if (!(checkKey(p.reasonCode) in UI.en)) return t(`convert.reason.${p.reasonCode}` as UiKey);
+  const parts = [...(p.reasonLead === undefined ? [] : [p.reasonLead]), p.reasonCode, ...(p.reasonNotes ?? [])];
+  return parts.map((c) => t(checkKey(c), p.reasonCode === c ? p.reasonParams : undefined)).join('; ');
 }
 
 const DATALIST_ID = 'canonical-variables';
@@ -88,7 +102,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
                         roleKinds={roleKinds}
                         proposed={proposal?.role ?? { kind: 'ignore' }}
                         cleanHeader={proposal?.cleanHeader ?? col.header}
-                        reason={low ? (proposal?.reasonCode === undefined ? proposal?.reason : t(`convert.reason.${proposal.reasonCode}` as UiKey)) : undefined}
+                        reason={low && proposal ? reasonText(proposal) : undefined}
                         onRole={(r) => onChange(mappingWith(mapping, col.index, r))}
                       />
                     )}
