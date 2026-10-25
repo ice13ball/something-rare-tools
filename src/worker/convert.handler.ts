@@ -6,8 +6,8 @@
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
 import { licenceDiffersFindings } from '../core/convert/validate';
-import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
-import type { ConvertSheetInput } from '../core/convert';
+import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
+import type { ConvertSheetInput, EventRec } from '../core/convert';
 import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
@@ -48,7 +48,7 @@ function samplesOf(sheet: ParsedFile['sheets'][number]): string[][] {
 /** The converter reads each sheet as one table: the layout is "these sheets, no joins" (nothing of /check's long or joined layouts applies). */
 const layoutOf = (file: ParsedFile): LayoutPlan => ({ tables: file.sheets.map((s) => ({ sheet: s.name })), joins: [] });
 
-const EXAMPLES = { cruise: 3, station: 4, sample: 6 } as const;
+const EXAMPLES = { cruise: 3, station: 4, sample: 6, level: 4 } as const;
 
 export interface ConvertHandler {
   handle(req: ConvertRequest): unknown;
@@ -103,6 +103,9 @@ export function createConvertHandler(): ConvertHandler {
         settings.prefixStation ||= s.prefixStation;
         settings.worms ||= s.worms;
         settings.nvs ||= s.nvs;
+        // profile marks of the companion file(s), by sheet name: pre-ticks only (the page ticks the boxes; nothing else follows from them)
+        for (const n of s.profileSheets ?? []) if (!(settings.profileSheets ??= []).includes(n)) settings.profileSheets.push(n);
+        for (const n of s.profileDepthIds ?? []) if (!(settings.profileDepthIds ??= []).includes(n)) settings.profileDepthIds.push(n);
         continue;
       }
       if (!isTable(parsed)) {
@@ -114,12 +117,14 @@ export function createConvertHandler(): ConvertHandler {
       const proposals: Record<string, ColumnProposal[]> = Object.create(null) as Record<string, ColumnProposal[]>;
       const mappings: SheetMapping[] = [];
       const shapes: ConvertFileSummary['suggestedShapes'] = Object.create(null) as ConvertFileSummary['suggestedShapes'];
+      const profiles: ConvertFileSummary['suggestedProfiles'] = Object.create(null) as ConvertFileSummary['suggestedProfiles'];
       for (const sheet of parsed.sheets) {
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
         proposals[sheet.name] = p;
         const m = toMapping(sheet, p);
         mappings.push(m);
         shapes[sheet.name] = suggestConvertShape(m.columns);
+        profiles[sheet.name] = suggestConvertProfile(m.columns);
       }
       result.files.push({
         fileId,
@@ -132,6 +137,7 @@ export function createConvertHandler(): ConvertHandler {
         proposals,
         samples: Object.fromEntries(parsed.sheets.map((s) => [s.name, samplesOf(s)])),
         suggestedShapes: shapes,
+        suggestedProfiles: profiles,
       });
     }
     result.prefillInfo = buildPrefill(records) ?? null;
@@ -152,6 +158,8 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.device ? { device: s.device } : {}),
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
+      // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
+      ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true } } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
     const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
@@ -160,7 +168,18 @@ export function createConvertHandler(): ConvertHandler {
 
   const today = (): string => new Date().toISOString().slice(0, 10);
   /** What the companion keeps. `worms`: a lookup was made. `nvs`: an identifier chosen from an NVS search is in the request (the worker never sees the box itself; the page writes `nvs=yes` into the file from the box). */
-  const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true, worms: body.worms !== undefined, nvs: body.sheets.some((s) => Object.values(s.nerc ?? {}).some((d) => d?.type?.source === 'nvs' || d?.unit?.source === 'nvs')) });
+  const decisionsOf = (body: ConvertRequestBody): ConvertSettings => {
+    const profileSheets = [...new Set(body.sheets.filter((s) => s.profile !== undefined).map((s) => s.sheet))];
+    const profileDepthIds = [...new Set(body.sheets.filter((s) => s.profile?.depthIds === true).map((s) => s.sheet))];
+    return {
+      fullList: body.options.fullList === true,
+      prefixStation: body.options.prefixStation === true,
+      worms: body.worms !== undefined,
+      nvs: body.sheets.some((s) => Object.values(s.nerc ?? {}).some((d) => d?.type?.source === 'nvs' || d?.unit?.source === 'nvs')),
+      ...(profileSheets.length > 0 ? { profileSheets } : {}),
+      ...(profileDepthIds.length > 0 ? { profileDepthIds } : {}),
+    };
+  };
 
   function run(body: ConvertRequestBody): ConvertView {
     const { splits, r } = compute(body);
@@ -168,9 +187,20 @@ export function createConvertHandler(): ConvertHandler {
     // the checks of the output tables (the description of the dataset is judged by the page: it changes with every keystroke)
     const findings = [...r.findings, ...validateTables(dataset, r.findings, { today: today() })];
     const codesMissing = r.findings
-      .filter((f) => f.ruleId === 'CONV-SAMPLE-CODE-MISSING')
+      // the one-time code proposal is for a biology sheet's samples; a profile sheet's missing level codes have their own way out (a code column, or the approval)
+      .filter((f) => f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile !== 'yes')
       .flatMap((f) => body.sheets.filter((s) => s.sheet === f.sheet && held(s.fileId).parsed.fileName === f.file).map((s) => ({ fileId: s.fileId, sheet: s.sheet })));
-    const by = (t: 'cruise' | 'station' | 'sample') => r.events.filter((e) => e.eventType === t).slice(0, EXAMPLES[t]);
+    const TYPE = { cruise: 'cruise', station: 'station', sample: 'sample', level: 'profile level' } as const;
+    // the first few of each level, taken without sorting or filtering the whole list twice over (a profile can be tens of thousands of events)
+    const by = (t: keyof typeof TYPE): EventRec[] => {
+      const out: EventRec[] = [];
+      for (const e of r.events) {
+        if (e.eventType !== TYPE[t]) continue;
+        out.push(e);
+        if (out.length >= EXAMPLES[t]) break;
+      }
+      return out;
+    };
     return {
       ok: judge(findings).blocking.length === 0,
       findings,
@@ -179,7 +209,8 @@ export function createConvertHandler(): ConvertHandler {
       splits,
       cruiseText: r.cruiseText,
       worms: r.nameLookup,
-      examples: { cruise: by('cruise'), station: by('station'), sample: by('sample') },
+      examples: { cruise: by('cruise'), station: by('station'), sample: by('sample'), level: by('level') },
+      profile: r.profile,
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
     };

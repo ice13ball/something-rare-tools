@@ -244,12 +244,12 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertStationPrefix.does': `Makes sample IDs unique when the same sample code is used at several stations.`,
   'tip.convertStationPrefix.logic': `• Off: the ID of a sample is your sample code.
 • On: the ID is the station ID, a colon and your code.
-• An ID is never made from depth, from row order or from a taxon name lookup.
+• The ID of a sample is never made from depth, from row order or from a taxon name lookup (the ID of a profile level uses the depth as written only when you approve that for its sheet).
 • The choice appears when codes repeat, or when a companion file ticked it.`,
   'tip.convertFlattenStation.does': `Leaves the station level out of the tree.`,
-  'tip.convertFlattenStation.logic': `• The station code is kept as the locality of each sample, and the samples hang directly under the cruise.
+  'tip.convertFlattenStation.logic': `• The station code is kept as the locality of each sample and of each profile level, and they hang directly under the cruise.
 • No ID changes.
-• The date, position and depth of the cruise are then worked out from the samples.
+• The date, position and depth of the cruise are then worked out from the samples and the profile levels.
 • Nothing is flattened unless you tick it.`,
   'tip.convertFlattenCruise.does': `Leaves the cruise level out of the tree.`,
   'tip.convertFlattenCruise.logic': `• The cruise code goes to the dataset text instead, and the stations stand at the top of the tree.
@@ -331,6 +331,7 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertTree.does': `Shows the event tree the archive would have.`,
   'tip.convertTree.logic': `• Cruise, station and sample come from your columns, and the type is written as text.
 • The date of a cruise or station is the span of its samples; its position is the middle of the box around its samples, with an uncertainty that covers them all, in whole metres rounded up; its depth runs from the shallowest top to the deepest bottom.
+• A row of a profile sheet is a level event under its station, and the date, position and depth range of the station cover its levels too.
 • Only a few examples are shown, not every event.`,
   'tip.convertMetaFiles.does': `Lists the files you added that describe the dataset instead of holding data.`,
   'tip.convertMetaFiles.logic': `• A file is a metadata file when its content is an ISO 19139 or ISO 19115-3 record (XML), a DataCite record (XML or JSON) or a Zenodo record (JSON). The kind is recognised from its content, not from its name.
@@ -401,11 +402,35 @@ No findings only means that no problems were found in the checked categories.`,
 • For a phonetic, near or genus-only result, or when there are several results, nothing is pre-selected: you choose one result or no ID, and a name left undecided blocks the export.
 • The ID of the result you choose is written as it stands, even when that name is unaccepted: the OBIS Manual asks for the identifier of the name as written in scientificName, and OBIS resolves it to the accepted name. So an exact match, a synonym included, keeps scientificName as you wrote it.
 • A result you choose that is not an exact match (a typo, a phonetic or genus-only result) makes scientificName the name of that record, because the identifier has to belong to the name in scientificName (OBIS Manual, Darwin Core and Match Taxonomic Names). Your own spelling stays in verbatimIdentification, and the occurrenceID, which comes from your sheet, does not change. The table says, for each result, how scientificName would be written.`,
+  'tip.convertProfile.does': `Says that this sheet holds profiles or environmental measurements of the cruise (CTD casts, bottle data), not biology.`,
+  'tip.convertProfile.logic': `• Every row becomes an event of its own under its station. Its type is written as the text profile level, and its minimum and maximum depth are the depth of the row.
+• The measured variables and the pressure of the row become measurements of that event, never of a biology sample.
+• The date, time and position of a row are used when the sheet has them; otherwise the level takes them from its station.
+• The date, position and depth range of a station are worked out from its levels as well as its samples.
+• Species and quantity columns of the sheet are not read, and the conversion names each such column.
+• The tool may suggest this mark; it is never set without your tick. The companion file keeps it by sheet name and only ticks the box again when you drop it with a sheet of the same name.`,
+  'tip.convertProfileDepthIds.does': `Lets the tool make the ID of each profile level from the station and the depth, for a sheet without a code column.`,
+  'tip.convertProfileDepthIds.logic': `• The ID is the station's eventID, a colon and the depth exactly as written in the sheet (the pressure as written when the sheet has no depth column). A row with no readable depth or pressure is blocked.
+• It is used only when you tick this and the sheet has no code column. With a code column the ID is the station's eventID, a colon and that code.
+• Two rows of a station at the same depth (repeated casts) make the same ID and block the export. Add a column with a code that is unique within the station and mark it as the sample code.
+• An ID is never made from the order of the rows.
+• The companion file keeps your tick by sheet name and only ticks the box again; you can untick it.`,
+  'tip.convertProfileStations.does': `Explains how the stations of a profile sheet are matched to the stations of the biology sheets.`,
+  'tip.convertProfileStations.logic': `• The match is exact: the station text with the spaces at both ends removed, and the cruise when there is one. Upper and lower case, spelling and zeros in front all count.
+• Nothing is matched approximately.
+• A station with no match becomes a station event of its own, and a warning that names it has to be accepted before the export.
+• The levels of a matched station become its children, so its date, position and depth range cover them too.`,
+  'tip.convertProfilePressure.does': `Explains how a pressure column is written.`,
+  'tip.convertProfilePressure.logic': `• The pressure of each level is written as a measurement with the concept {pressureConcept}. Its unit gets {unitConcept} only when the unit is decibars; any other unit stays as you wrote it, with a warning to accept, and a column without a unit is written without one.
+• When the sheet has a depth column too, the depth is used for the level and the pressure is written as well.
+• When it has none, the depth stays empty: the tool does not turn a pressure into a depth (no conversion by the UNESCO formula in this version).
+• A pressure column of a sheet that is not a profile sheet is not written.`,
+  'tip.role.pressureConvert': `in a profile sheet it is written as a measurement of each level; in any other sheet it is recognised but not written.`,
   'tip.convertNerc.does': `Shows the measured-variable columns of your sheets and lets you confirm, for each one, which NERC concept and unit identify it.`,
-  'tip.convertNerc.logic': `• Each such column becomes one measurement on every sample event: measurementType is the variable's name, measurementValue the number as in the sheet, measurementUnit the unit as shown in the unit field of the column in the table above (the tool proposes it from the header and you can edit it), not necessarily as typed in the header. Text, empty and NA cells make none.
+  'tip.convertNerc.logic': `• Each such column becomes one measurement on every sample event (on every level event for a profile sheet): measurementType is the variable's name, measurementValue the number as in the sheet, measurementUnit the unit as shown in the unit field of the column in the table above (the tool proposes it from the header and you can edit it), not necessarily as typed in the header. Text, empty and NA cells make none.
 • measurementTypeID (a P01 concept) and measurementUnitID (a P06 unit) are written only for the choice you make here for that column. Nothing is chosen for you.
 • A variable without a chosen concept gets a warning to accept (CONV-NERC-UNKNOWN); a unit without a chosen unit concept gets another (CONV-UNIT-NO-P06); a chosen concept whose label contradicts the column's unit gets a third (CONV-NERC-UNIT-MISMATCH).
-• A unit is never converted. A pressure column is not written.`,
+• A unit is never converted. A pressure column is written only in a profile sheet, with its own fixed concept, and is not listed here.`,
   'tip.convertNercChoice.does': `Where you choose the concept and the unit for a column, or leave it without an ID.`,
   'tip.convertNercChoice.logic': `• "No ID" is where every column starts. A suggestion is only shown in the list; it counts when you choose it, or when you press the button that confirms the suggestions.
 • Suggested: a generic concept that names the quantity and no method, checked in the NERC vocabulary (it is current, not deprecated). Offered: a concept that names a method, a phase or a narrower quantity; it is never suggested, and you choose it only if it is what you measured.
@@ -665,12 +690,12 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertStationPrefix.does': `Czyni identyfikatory próbek unikalnymi, gdy ten sam kod próbki występuje na kilku stacjach.`,
   'tip.convertStationPrefix.logic': `• Wyłączone: identyfikatorem próbki jest Twój kod próbki.
 • Włączone: identyfikator to identyfikator stacji, dwukropek i Twój kod.
-• Identyfikator nigdy nie powstaje z głębokości, kolejności wierszy ani z wyszukiwania nazwy taksonu.
+• Identyfikator próbki nigdy nie powstaje z głębokości, kolejności wierszy ani z wyszukiwania nazwy taksonu (identyfikator poziomu profilu używa głębokości zapisanej w arkuszu tylko po Twojej zgodzie dla tego arkusza).
 • Wybór pojawia się, gdy kody się powtarzają albo zaznaczył go plik towarzyszący.`,
   'tip.convertFlattenStation.does': `Pomija poziom stacji w drzewie.`,
-  'tip.convertFlattenStation.logic': `• Kod stacji zostaje jako miejsce (locality) każdej próbki, a próbki wiszą bezpośrednio pod rejsem.
+  'tip.convertFlattenStation.logic': `• Kod stacji zostaje jako miejsce (locality) każdej próbki i każdego poziomu profilu, a one wiszą bezpośrednio pod rejsem.
 • Żaden identyfikator się nie zmienia.
-• Data, pozycja i głębokość rejsu są wtedy wyliczane z próbek.
+• Data, pozycja i głębokość rejsu są wtedy wyliczane z próbek i poziomów profilu.
 • Nic nie jest spłaszczane, dopóki tego nie zaznaczysz.`,
   'tip.convertFlattenCruise.does': `Pomija poziom rejsu w drzewie.`,
   'tip.convertFlattenCruise.logic': `• Kod rejsu trafia zamiast tego do tekstu zbioru danych, a stacje stoją na szczycie drzewa.
@@ -752,6 +777,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertTree.does': `Pokazuje drzewo zdarzeń, jakie miałoby archiwum.`,
   'tip.convertTree.logic': `• Rejs, stacja i próbka pochodzą z Twoich kolumn, a typ zapisuje się jako tekst.
 • Data rejsu lub stacji to przedział jej próbek; pozycja to środek ramki wokół jej próbek, z niepewnością obejmującą je wszystkie, w pełnych metrach zaokrąglonych w górę; głębokość biegnie od najpłytszej góry do najgłębszego dołu.
+• Wiersz arkusza profilowego to zdarzenie poziomu pod swoją stacją, a data, pozycja i zakres głębokości stacji obejmują także jej poziomy.
 • Pokazano tylko kilka przykładów, nie każde zdarzenie.`,
   'tip.convertMetaFiles.does': `Wymienia dodane pliki, które opisują zbiór danych, zamiast zawierać dane.`,
   'tip.convertMetaFiles.logic': `• Plik jest plikiem z metadanymi, gdy jego zawartość to rekord ISO 19139 lub ISO 19115-3 (XML), rekord DataCite (XML lub JSON) albo rekord Zenodo (JSON). Rodzaj jest rozpoznawany po zawartości, nie po nazwie.
@@ -822,11 +848,35 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Przy wyniku fonetycznym, zbliżonym lub tylko na poziomie rodzaju, albo gdy wyników jest kilka, nic nie jest wstępnie wybrane: wybierasz jeden wynik albo brak identyfikatora, a nazwa bez decyzji blokuje eksport.
 • Identyfikator wybranego wyniku jest zapisywany tak, jak jest, nawet gdy ta nazwa jest niezaakceptowana: podręcznik OBIS każe podać identyfikator nazwy zapisanej w scientificName, a OBIS sam przekłada go na nazwę zaakceptowaną. Dlatego dokładne dopasowanie, także synonimu, zostawia scientificName tak, jak ją zapisano.
 • Wybrany przez Ciebie wynik, który nie jest dokładnym dopasowaniem (literówka, wynik fonetyczny lub tylko na poziomie rodzaju), sprawia, że scientificName staje się nazwą tego rekordu, bo identyfikator musi należeć do nazwy z scientificName (podręcznik OBIS: Darwin Core oraz Match Taxonomic Names). Twoja pisownia zostaje w verbatimIdentification, a occurrenceID, który powstaje z Twojego arkusza, się nie zmienia. Tabela mówi przy każdym wyniku, jak zapisano by scientificName.`,
+  'tip.convertProfile.does': `Mówi, że ten arkusz zawiera profile lub pomiary środowiskowe z rejsu (zarzuty sondy CTD, dane z butelek), a nie biologię.`,
+  'tip.convertProfile.logic': `• Każdy wiersz staje się osobnym zdarzeniem pod swoją stacją. Jego typ zapisuje się jako tekst po angielsku (profile level), a głębokość minimalna i maksymalna to głębokość wiersza.
+• Zmierzone wielkości i ciśnienie z wiersza stają się pomiarami tego zdarzenia, nigdy próbki biologicznej.
+• Data, godzina i pozycja wiersza są używane, gdy arkusz je ma; w przeciwnym razie poziom bierze je ze swojej stacji.
+• Data, pozycja i zakres głębokości stacji są wyliczane z jej poziomów, a także z jej próbek.
+• Kolumny gatunków i liczebności tego arkusza nie są czytane, a przekształcenie wymienia każdą taką kolumnę.
+• Narzędzie może zaproponować to oznaczenie; nigdy nie ustawia go bez Twojego zaznaczenia. Plik towarzyszący zapamiętuje je według nazwy arkusza i tylko ponownie zaznacza pole, gdy wgrasz go z arkuszem o tej samej nazwie.`,
+  'tip.convertProfileDepthIds.does': `Pozwala narzędziu utworzyć identyfikator każdego poziomu profilu ze stacji i głębokości, dla arkusza bez kolumny z kodem.`,
+  'tip.convertProfileDepthIds.logic': `• Identyfikator to eventID stacji, dwukropek i głębokość dokładnie tak, jak jest zapisana w arkuszu (ciśnienie tak, jak jest zapisane, gdy arkusz nie ma kolumny z głębokością). Wiersz bez czytelnej głębokości lub ciśnienia jest blokowany.
+• Jest używany tylko wtedy, gdy to zaznaczysz, a arkusz nie ma kolumny z kodem. Przy kolumnie z kodem identyfikator to eventID stacji, dwukropek i ten kod.
+• Dwa wiersze stacji na tej samej głębokości (powtórzone zarzuty) dają ten sam identyfikator i blokują eksport. Dodaj kolumnę z kodem unikalnym w obrębie stacji i wskaż ją jako kod próbki.
+• Identyfikator nigdy nie powstaje z kolejności wierszy.
+• Plik towarzyszący zapamiętuje Twoje zaznaczenie według nazwy arkusza i tylko ponownie zaznacza pole; możesz je odznaczyć.`,
+  'tip.convertProfileStations.does': `Wyjaśnia, jak stacje arkusza profilowego są dopasowywane do stacji z arkuszy biologicznych.`,
+  'tip.convertProfileStations.logic': `• Dopasowanie jest dokładne: tekst stacji bez spacji na obu końcach oraz rejs, jeśli jest. Liczy się wielkość liter, pisownia i zera na początku.
+• Nic nie jest dopasowywane w przybliżeniu.
+• Stacja bez dopasowania staje się osobnym zdarzeniem stacji, a ostrzeżenie, które ją wymienia, trzeba zaakceptować przed eksportem.
+• Poziomy dopasowanej stacji stają się jej dziećmi, więc jej data, pozycja i zakres głębokości obejmują także je.`,
+  'tip.convertProfilePressure.does': `Wyjaśnia, jak zapisywana jest kolumna z ciśnieniem.`,
+  'tip.convertProfilePressure.logic': `• Ciśnienie każdego poziomu jest zapisywane jako pomiar z pojęciem {pressureConcept}. Jednostka dostaje {unitConcept} tylko wtedy, gdy jest to decybar; każda inna jednostka zostaje taka, jak ją wpisano, z ostrzeżeniem do zaakceptowania, a kolumna bez jednostki jest zapisywana bez niej.
+• Gdy arkusz ma też kolumnę z głębokością, głębokość jest używana dla poziomu, a ciśnienie jest zapisywane dodatkowo.
+• Gdy jej nie ma, głębokość zostaje pusta: narzędzie nie przelicza ciśnienia na głębokość (w tej wersji bez przeliczenia wzorem UNESCO).
+• Kolumna z ciśnieniem w arkuszu, który nie jest arkuszem profilowym, nie jest zapisywana.`,
+  'tip.role.pressureConvert': `w arkuszu profilowym jest zapisywana jako pomiar każdego poziomu; w każdym innym arkuszu jest rozpoznawana, ale nie zapisywana.`,
   'tip.convertNerc.does': `Pokazuje kolumny ze zmierzonymi wielkościami z Twoich arkuszy i pozwala potwierdzić dla każdej, jakie pojęcie i jednostka NERC ją określają.`,
-  'tip.convertNerc.logic': `• Każda taka kolumna staje się jednym pomiarem przy każdym zdarzeniu próbki: measurementType to nazwa wielkości, measurementValue liczba taka jak w arkuszu, measurementUnit jednostka tak, jak pokazuje ją pole jednostki kolumny w tabeli powyżej (narzędzie proponuje ją z nagłówka, a Ty możesz ją zmienić), niekoniecznie tak, jak wpisano w nagłówku. Komórki z tekstem, puste i NA nie tworzą pomiaru.
+  'tip.convertNerc.logic': `• Każda taka kolumna staje się jednym pomiarem przy każdym zdarzeniu próbki (w arkuszu profilowym przy każdym zdarzeniu poziomu): measurementType to nazwa wielkości, measurementValue liczba taka jak w arkuszu, measurementUnit jednostka tak, jak pokazuje ją pole jednostki kolumny w tabeli powyżej (narzędzie proponuje ją z nagłówka, a Ty możesz ją zmienić), niekoniecznie tak, jak wpisano w nagłówku. Komórki z tekstem, puste i NA nie tworzą pomiaru.
 • measurementTypeID (pojęcie P01) i measurementUnitID (jednostka P06) są zapisywane tylko dla wyboru, który tu zrobisz dla danej kolumny. Nic nie jest wybierane za Ciebie.
 • Wielkość bez wybranego pojęcia dostaje ostrzeżenie do zaakceptowania (CONV-NERC-UNKNOWN); jednostka bez wybranego pojęcia jednostki dostaje kolejne (CONV-UNIT-NO-P06); wybrane pojęcie, którego opis przeczy jednostce kolumny, dostaje trzecie (CONV-NERC-UNIT-MISMATCH).
-• Jednostka nigdy nie jest przeliczana. Kolumna z ciśnieniem nie jest zapisywana.`,
+• Jednostka nigdy nie jest przeliczana. Kolumna z ciśnieniem jest zapisywana tylko w arkuszu profilowym, z własnym stałym pojęciem, i nie jest tu wymieniona.`,
   'tip.convertNercChoice.does': `Tu wybierasz pojęcie i jednostkę dla kolumny albo zostawiasz ją bez identyfikatora.`,
   'tip.convertNercChoice.logic': `• „Bez identyfikatora” to punkt wyjścia każdej kolumny. Podpowiedź jest tylko pokazana na liście; liczy się, gdy ją wybierzesz albo naciśniesz przycisk potwierdzający podpowiedzi.
 • Podpowiedź: pojęcie ogólne, które nazywa wielkość, a nie metodę, sprawdzone w słowniku NERC (jest aktualne, nie przestarzałe). Do wyboru: pojęcie, które wskazuje metodę, fazę albo węższą wielkość; nigdy nie jest podpowiadane i wybierasz je tylko wtedy, gdy to jest to, co zmierzono.
@@ -1084,12 +1134,12 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertStationPrefix.does': `Macht Proben-Kennungen eindeutig, wenn derselbe Probencode an mehreren Stationen vorkommt.`,
   'tip.convertStationPrefix.logic': `• Aus: Die Kennung einer Probe ist Ihr Probencode.
 • An: Die Kennung ist die Stations-Kennung, ein Doppelpunkt und Ihr Code.
-• Eine Kennung entsteht nie aus Tiefe, Zeilenreihenfolge oder einer Abfrage von Taxonnamen.
+• Die Kennung einer Probe entsteht nie aus Tiefe, Zeilenreihenfolge oder einer Abfrage von Taxonnamen (die Kennung einer Profilebene nutzt die Tiefe wie geschrieben nur mit Ihrer Zustimmung für ihr Blatt).
 • Die Wahl erscheint, wenn sich Codes wiederholen oder eine Begleitdatei sie angekreuzt hat.`,
   'tip.convertFlattenStation.does': `Lässt die Stationsebene im Baum weg.`,
-  'tip.convertFlattenStation.logic': `• Der Stationscode bleibt als Fundort jeder Probe erhalten, und die Proben hängen direkt unter der Fahrt.
+  'tip.convertFlattenStation.logic': `• Der Stationscode bleibt als Fundort jeder Probe und jeder Profilebene erhalten, und sie hängen direkt unter der Fahrt.
 • Keine Kennung ändert sich.
-• Datum, Position und Tiefe der Fahrt werden dann aus den Proben berechnet.
+• Datum, Position und Tiefe der Fahrt werden dann aus den Proben und den Profilebenen berechnet.
 • Nichts wird abgeflacht, solange Sie es nicht ankreuzen.`,
   'tip.convertFlattenCruise.does': `Lässt die Fahrtebene im Baum weg.`,
   'tip.convertFlattenCruise.logic': `• Der Fahrtcode geht stattdessen in den Datensatztext, und die Stationen stehen an der Spitze des Baums.
@@ -1171,6 +1221,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertTree.does': `Zeigt den Ereignisbaum, den das Archiv hätte.`,
   'tip.convertTree.logic': `• Fahrt, Station und Probe stammen aus Ihren Spalten, und der Typ wird als Text geschrieben.
 • Das Datum einer Fahrt oder Station ist die Spanne ihrer Proben; ihre Position ist die Mitte des Kastens um ihre Proben, mit einer Unsicherheit, die alle abdeckt, in ganzen Metern aufgerundet; ihre Tiefe reicht von der flachsten Oberkante bis zur tiefsten Unterkante.
+• Eine Zeile eines Profilblatts ist ein Ebenenereignis unter ihrer Station, und Datum, Position und Tiefenbereich der Station decken auch ihre Ebenen ab.
 • Nur einige Beispiele werden gezeigt, nicht jedes Ereignis.`,
   'tip.convertMetaFiles.does': `Nennt die hinzugefügten Dateien, die den Datensatz beschreiben, statt Daten zu enthalten.`,
   'tip.convertMetaFiles.logic': `• Eine Datei ist eine Metadatendatei, wenn ihr Inhalt ein Datensatz nach ISO 19139 oder ISO 19115-3 (XML), ein DataCite-Datensatz (XML oder JSON) oder ein Zenodo-Datensatz (JSON) ist. Die Art wird am Inhalt erkannt, nicht am Namen.
@@ -1241,11 +1292,35 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Bei einem phonetischen, nahen oder nur auf Gattung bezogenen Ergebnis, oder wenn es mehrere Ergebnisse gibt, ist nichts vorgewählt: Sie wählen ein Ergebnis oder „ohne Kennung“, und ein offen gelassener Name blockiert den Export.
 • Die Kennung des gewählten Ergebnisses wird so geschrieben, wie sie ist, auch wenn dieser Name nicht akzeptiert ist: Das OBIS-Handbuch verlangt die Kennung des in scientificName geschriebenen Namens, und OBIS löst sie zum akzeptierten Namen auf. Ein exakter Treffer, auch ein Synonym, lässt scientificName daher so, wie Sie es geschrieben haben.
 • Ein von Ihnen gewähltes Ergebnis, das kein exakter Treffer ist (ein Tippfehler, ein phonetisches oder nur auf Gattung bezogenes Ergebnis), macht scientificName zum Namen dieses Eintrags, weil die Kennung zum Namen in scientificName gehören muss (OBIS-Handbuch, Darwin Core und Match Taxonomic Names). Ihre Schreibweise bleibt in verbatimIdentification, und die occurrenceID, die aus Ihrem Blatt stammt, ändert sich nicht. Die Tabelle sagt bei jedem Ergebnis, wie scientificName geschrieben würde.`,
+  'tip.convertProfile.does': `Sagt, dass dieses Blatt Profile oder Umweltmessungen der Fahrt enthält (CTD-Einsätze, Flaschendaten), keine Biologie.`,
+  'tip.convertProfile.logic': `• Jede Zeile wird zu einem eigenen Ereignis unter ihrer Station. Sein Typ wird als englischer Text geschrieben (profile level), und seine minimale und maximale Tiefe sind die Tiefe der Zeile.
+• Die gemessenen Größen und der Druck der Zeile werden zu Messungen dieses Ereignisses, nie einer biologischen Probe.
+• Datum, Uhrzeit und Position einer Zeile werden verwendet, wenn das Blatt sie hat; sonst übernimmt die Ebene sie von ihrer Station.
+• Datum, Position und Tiefenbereich einer Station werden aus ihren Ebenen und aus ihren Proben berechnet.
+• Arten- und Mengenspalten des Blatts werden nicht gelesen, und die Umwandlung nennt jede solche Spalte.
+• Das Werkzeug kann diese Markierung vorschlagen; sie wird nie ohne Ihr Häkchen gesetzt. Die Begleitdatei merkt sie sich nach dem Blattnamen und setzt das Häkchen nur wieder, wenn Sie sie mit einem Blatt desselben Namens ablegen.`,
+  'tip.convertProfileDepthIds.does': `Lässt das Werkzeug die Kennung jeder Profilebene aus Station und Tiefe bilden, für ein Blatt ohne Codespalte.`,
+  'tip.convertProfileDepthIds.logic': `• Die Kennung ist die eventID der Station, ein Doppelpunkt und die Tiefe genau so, wie sie im Blatt steht (der Druck wie geschrieben, wenn das Blatt keine Tiefenspalte hat). Eine Zeile ohne lesbare Tiefe oder lesbaren Druck wird blockiert.
+• Sie wird nur verwendet, wenn Sie das ankreuzen und das Blatt keine Codespalte hat. Mit Codespalte ist die Kennung die eventID der Station, ein Doppelpunkt und dieser Code.
+• Zwei Zeilen einer Station in derselben Tiefe (wiederholte Einsätze) ergeben dieselbe Kennung und blockieren den Export. Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu und ordnen Sie sie als Probencode zu.
+• Eine Kennung entsteht nie aus der Reihenfolge der Zeilen.
+• Die Begleitdatei merkt sich Ihr Häkchen nach dem Blattnamen und setzt nur das Kästchen wieder; Sie können es abwählen.`,
+  'tip.convertProfileStations.does': `Erklärt, wie die Stationen eines Profilblatts den Stationen der Biologie-Blätter zugeordnet werden.`,
+  'tip.convertProfileStations.logic': `• Die Zuordnung ist genau: der Stationstext ohne Leerzeichen an beiden Enden und die Fahrt, falls vorhanden. Groß- und Kleinschreibung, Schreibweise und führende Nullen zählen.
+• Nichts wird ungefähr zugeordnet.
+• Eine Station ohne Entsprechung wird zu einem eigenen Stationsereignis, und eine Warnung, die sie nennt, muss vor dem Export akzeptiert werden.
+• Die Ebenen einer zugeordneten Station werden ihre Kinder, daher decken Datum, Position und Tiefenbereich der Station auch sie ab.`,
+  'tip.convertProfilePressure.does': `Erklärt, wie eine Druckspalte geschrieben wird.`,
+  'tip.convertProfilePressure.logic': `• Der Druck jeder Ebene wird als Messung mit dem Konzept {pressureConcept} geschrieben. Seine Einheit erhält {unitConcept} nur, wenn die Einheit Dezibar ist; jede andere Einheit bleibt, wie Sie sie geschrieben haben, mit einer Warnung zum Akzeptieren, und eine Spalte ohne Einheit wird ohne Einheit geschrieben.
+• Hat das Blatt auch eine Tiefenspalte, wird die Tiefe für die Ebene verwendet und der Druck zusätzlich geschrieben.
+• Hat es keine, bleibt die Tiefe leer: Das Werkzeug rechnet keinen Druck in eine Tiefe um (in dieser Version keine Umrechnung nach der UNESCO-Formel).
+• Eine Druckspalte eines Blatts, das kein Profilblatt ist, wird nicht geschrieben.`,
+  'tip.role.pressureConvert': `in einem Profilblatt wird sie als Messung jeder Ebene geschrieben; in jedem anderen Blatt wird sie erkannt, aber nicht geschrieben.`,
   'tip.convertNerc.does': `Zeigt die Messgrößen-Spalten Ihrer Blätter und lässt Sie für jede bestätigen, welcher NERC-Begriff und welche Einheit sie bezeichnen.`,
-  'tip.convertNerc.logic': `• Jede solche Spalte wird zu einer Messung bei jedem Probenereignis: measurementType ist der Name der Größe, measurementValue die Zahl wie im Blatt, measurementUnit die Einheit, wie sie das Einheitenfeld der Spalte in der Tabelle oben zeigt (das Werkzeug schlägt sie aus der Überschrift vor, und Sie können sie ändern), nicht unbedingt so, wie sie in der Überschrift steht. Text-, leere und NA-Zellen ergeben keine.
+  'tip.convertNerc.logic': `• Jede solche Spalte wird zu einer Messung bei jedem Probenereignis (in einem Profilblatt bei jedem Ebenenereignis): measurementType ist der Name der Größe, measurementValue die Zahl wie im Blatt, measurementUnit die Einheit, wie sie das Einheitenfeld der Spalte in der Tabelle oben zeigt (das Werkzeug schlägt sie aus der Überschrift vor, und Sie können sie ändern), nicht unbedingt so, wie sie in der Überschrift steht. Text-, leere und NA-Zellen ergeben keine.
 • measurementTypeID (ein P01-Begriff) und measurementUnitID (eine P06-Einheit) werden nur für die Wahl geschrieben, die Sie hier für diese Spalte treffen. Nichts wird für Sie gewählt.
 • Eine Größe ohne gewählten Begriff erhält eine Warnung zum Akzeptieren (CONV-NERC-UNKNOWN); eine Einheit ohne gewählten Einheitenbegriff erhält eine weitere (CONV-UNIT-NO-P06); ein gewählter Begriff, dessen Bezeichnung der Einheit der Spalte widerspricht, erhält eine dritte (CONV-NERC-UNIT-MISMATCH).
-• Eine Einheit wird nie umgerechnet. Eine Druckspalte wird nicht geschrieben.`,
+• Eine Einheit wird nie umgerechnet. Eine Druckspalte wird nur in einem Profilblatt geschrieben, mit eigenem festem Konzept, und hier nicht aufgeführt.`,
   'tip.convertNercChoice.does': `Hier wählen Sie Begriff und Einheit für eine Spalte oder lassen sie ohne Kennung.`,
   'tip.convertNercChoice.logic': `• „Ohne Kennung“ ist der Ausgangspunkt jeder Spalte. Ein Vorschlag wird nur in der Liste gezeigt; er zählt, wenn Sie ihn wählen oder die Taste drücken, die die Vorschläge bestätigt.
 • Vorschlag: ein allgemeiner Begriff, der die Größe und keine Methode nennt, im NERC-Vokabular geprüft (er ist aktuell, nicht veraltet). Zur Auswahl: ein Begriff, der eine Methode, eine Phase oder eine engere Größe nennt; er wird nie vorgeschlagen, und Sie wählen ihn nur, wenn er das ist, was Sie gemessen haben.
@@ -1503,12 +1578,12 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertStationPrefix.does': `Rend uniques les identifiants d'échantillon lorsque le même code est utilisé à plusieurs stations.`,
   'tip.convertStationPrefix.logic': `• Désactivé : l'identifiant d'un échantillon est votre code d'échantillon.
 • Activé : l'identifiant est l'identifiant de la station, deux-points et votre code.
-• Un identifiant n'est jamais fabriqué à partir de la profondeur, de l'ordre des lignes ni d'une recherche de nom de taxon.
+• L'identifiant d'un échantillon n'est jamais fabriqué à partir de la profondeur, de l'ordre des lignes ni d'une recherche de nom de taxon (celui d'un niveau de profil n'utilise la profondeur telle qu'écrite qu'avec votre accord pour sa feuille).
 • Le choix apparaît quand des codes se répètent ou quand un fichier d'accompagnement l'a coché.`,
   'tip.convertFlattenStation.does': `Retire le niveau station de l'arbre.`,
-  'tip.convertFlattenStation.logic': `• Le code de station est gardé comme localité de chaque échantillon, et les échantillons dépendent directement de la campagne.
+  'tip.convertFlattenStation.logic': `• Le code de station est gardé comme localité de chaque échantillon et de chaque niveau de profil, et ils dépendent directement de la campagne.
 • Aucun identifiant ne change.
-• La date, la position et la profondeur de la campagne sont alors calculées à partir des échantillons.
+• La date, la position et la profondeur de la campagne sont alors calculées à partir des échantillons et des niveaux de profil.
 • Rien n'est aplati sans que vous le cochiez.`,
   'tip.convertFlattenCruise.does': `Retire le niveau campagne de l'arbre.`,
   'tip.convertFlattenCruise.logic': `• Le code de campagne passe plutôt au texte du jeu de données, et les stations sont au sommet de l'arbre.
@@ -1590,6 +1665,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertTree.does': `Montre l'arbre des événements que l'archive aurait.`,
   'tip.convertTree.logic': `• Campagne, station et échantillon viennent de vos colonnes, et le type est écrit en texte.
 • La date d'une campagne ou d'une station est l'intervalle de ses échantillons ; sa position est le milieu du cadre autour de ses échantillons, avec une incertitude qui les couvre tous, en mètres entiers arrondis au supérieur ; sa profondeur va du haut le moins profond au bas le plus profond.
+• Une ligne d'une feuille de profils est un événement de niveau sous sa station, et la date, la position et l'intervalle de profondeur de la station couvrent aussi ses niveaux.
 • Seuls quelques exemples sont montrés, pas chaque événement.`,
   'tip.convertMetaFiles.does': `Liste les fichiers ajoutés qui décrivent le jeu de données au lieu de contenir des données.`,
   'tip.convertMetaFiles.logic': `• Un fichier est un fichier de métadonnées quand son contenu est une fiche ISO 19139 ou ISO 19115-3 (XML), une fiche DataCite (XML ou JSON) ou une fiche Zenodo (JSON). Le type est reconnu d'après le contenu, pas d'après le nom.
@@ -1660,11 +1736,35 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Pour un résultat phonétique, proche ou limité au genre, ou lorsqu'il y a plusieurs résultats, rien n'est présélectionné : vous choisissez un résultat ou « sans identifiant », et un nom laissé sans décision bloque l'export.
 • L'identifiant du résultat choisi est écrit tel quel, même si ce nom n'est pas accepté : le manuel d'OBIS demande l'identifiant du nom tel qu'écrit dans scientificName, et OBIS le résout vers le nom accepté. Une correspondance exacte, synonyme compris, laisse donc scientificName tel que vous l'avez écrit.
 • Un résultat que vous choisissez et qui n'est pas une correspondance exacte (une faute de frappe, un résultat phonétique ou limité au genre) fait de scientificName le nom de cette entrée, car l'identifiant doit appartenir au nom de scientificName (manuel d'OBIS, Darwin Core et Match Taxonomic Names). Votre graphie reste dans verbatimIdentification, et l'occurrenceID, issu de votre feuille, ne change pas. Le tableau dit, pour chaque résultat, comment scientificName serait écrit.`,
+  'tip.convertProfile.does': `Indique que cette feuille contient des profils ou des mesures d'environnement de la campagne (déploiements CTD, données de bouteilles), pas de la biologie.`,
+  'tip.convertProfile.logic': `• Chaque ligne devient un événement à part sous sa station. Son type est écrit en texte anglais (profile level), et ses profondeurs minimale et maximale sont la profondeur de la ligne.
+• Les grandeurs mesurées et la pression de la ligne deviennent des mesures de cet événement, jamais d'un échantillon biologique.
+• La date, l'heure et la position d'une ligne sont utilisées quand la feuille les a ; sinon le niveau les prend à sa station.
+• La date, la position et l'intervalle de profondeur d'une station sont calculés à partir de ses niveaux comme de ses échantillons.
+• Les colonnes d'espèces et de quantités de la feuille ne sont pas lues, et la conversion nomme chacune d'elles.
+• L'outil peut suggérer ce marquage ; il n'est jamais posé sans votre coche. Le fichier compagnon le garde par nom de feuille et ne recoche la case que si vous le déposez avec une feuille du même nom.`,
+  'tip.convertProfileDepthIds.does': `Permet à l'outil de former l'identifiant de chaque niveau de profil avec la station et la profondeur, pour une feuille sans colonne de code.`,
+  'tip.convertProfileDepthIds.logic': `• L'identifiant est l'eventID de la station, deux-points et la profondeur exactement comme écrite dans la feuille (la pression telle qu'écrite si la feuille n'a pas de colonne de profondeur). Une ligne sans profondeur ni pression lisible est bloquée.
+• Il n'est utilisé que si vous cochez cette case et que la feuille n'a pas de colonne de code. Avec une colonne de code, l'identifiant est l'eventID de la station, deux-points et ce code.
+• Deux lignes d'une station à la même profondeur (déploiements répétés) donnent le même identifiant et bloquent l'export. Ajoutez une colonne à code unique par station et indiquez-la comme code d'échantillon.
+• Un identifiant n'est jamais formé d'après l'ordre des lignes.
+• Le fichier compagnon garde votre coche par nom de feuille et ne recoche que la case ; vous pouvez la décocher.`,
+  'tip.convertProfileStations.does': `Explique comment les stations d'une feuille de profils sont appariées aux stations des feuilles de biologie.`,
+  'tip.convertProfileStations.logic': `• L'appariement est exact : le texte de la station sans les espaces aux deux bouts, et la campagne s'il y en a une. Majuscules et minuscules, orthographe et zéros initiaux comptent.
+• Rien n'est apparié approximativement.
+• Une station sans correspondance devient un événement de station à part, et un avertissement qui la nomme doit être accepté avant l'export.
+• Les niveaux d'une station appariée deviennent ses enfants : sa date, sa position et son intervalle de profondeur les couvrent aussi.`,
+  'tip.convertProfilePressure.does': `Explique comment une colonne de pression est écrite.`,
+  'tip.convertProfilePressure.logic': `• La pression de chaque niveau est écrite comme une mesure avec le concept {pressureConcept}. Son unité reçoit {unitConcept} seulement si l'unité est le décibar ; toute autre unité reste telle que vous l'avez écrite, avec un avertissement à accepter, et une colonne sans unité est écrite sans unité.
+• Si la feuille a aussi une colonne de profondeur, la profondeur sert pour le niveau et la pression est écrite en plus.
+• Si elle n'en a pas, la profondeur reste vide : l'outil ne convertit pas une pression en profondeur (pas de conversion par la formule de l'UNESCO dans cette version).
+• Une colonne de pression d'une feuille qui n'est pas une feuille de profils n'est pas écrite.`,
+  'tip.role.pressureConvert': `dans une feuille de profils, elle est écrite comme une mesure de chaque niveau ; dans toute autre feuille, elle est reconnue mais pas écrite.`,
   'tip.convertNerc.does': `Montre les colonnes de grandeurs mesurées de vos feuilles et vous laisse confirmer, pour chacune, quel concept et quelle unité NERC la désignent.`,
-  'tip.convertNerc.logic': `• Chaque colonne de ce type devient une mesure sur chaque événement d'échantillon : measurementType est le nom de la grandeur, measurementValue le nombre comme dans la feuille, measurementUnit l'unité telle que la montre le champ d'unité de la colonne dans le tableau ci-dessus (l'outil la propose à partir de l'en-tête et vous pouvez la modifier), pas forcément telle qu'écrite dans l'en-tête. Les cellules de texte, vides et NA n'en produisent pas.
+  'tip.convertNerc.logic': `• Chaque colonne de ce type devient une mesure sur chaque événement d'échantillon (dans une feuille de profils, sur chaque événement de niveau) : measurementType est le nom de la grandeur, measurementValue le nombre comme dans la feuille, measurementUnit l'unité telle que la montre le champ d'unité de la colonne dans le tableau ci-dessus (l'outil la propose à partir de l'en-tête et vous pouvez la modifier), pas forcément telle qu'écrite dans l'en-tête. Les cellules de texte, vides et NA n'en produisent pas.
 • measurementTypeID (un concept P01) et measurementUnitID (une unité P06) ne sont écrits que pour le choix que vous faites ici pour cette colonne. Rien n'est choisi à votre place.
 • Une grandeur sans concept choisi reçoit un avertissement à accepter (CONV-NERC-UNKNOWN) ; une unité sans concept d'unité choisi en reçoit un autre (CONV-UNIT-NO-P06) ; un concept choisi dont le libellé contredit l'unité de la colonne en reçoit un troisième (CONV-NERC-UNIT-MISMATCH).
-• Une unité n'est jamais convertie. Une colonne de pression n'est pas écrite.`,
+• Une unité n'est jamais convertie. Une colonne de pression n'est écrite que dans une feuille de profils, avec son propre concept fixe, et n'est pas listée ici.`,
   'tip.convertNercChoice.does': `C'est ici que vous choisissez le concept et l'unité d'une colonne, ou que vous la laissez sans identifiant.`,
   'tip.convertNercChoice.logic': `• « Sans identifiant » est le point de départ de chaque colonne. Une suggestion est seulement montrée dans la liste ; elle compte lorsque vous la choisissez, ou lorsque vous appuyez sur le bouton qui confirme les suggestions.
 • Suggestion : un concept général qui nomme la grandeur et aucune méthode, vérifié dans le vocabulaire NERC (il est en vigueur, non obsolète). Au choix : un concept qui indique une méthode, une phase ou une grandeur plus étroite ; il n'est jamais suggéré, et vous ne le choisissez que si c'est ce que vous avez mesuré.

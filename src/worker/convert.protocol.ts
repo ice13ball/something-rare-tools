@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Messages between the /convert page and the convert worker. Plain structured-clonable data only. The parsed files and the full records
 // (events, occurrences, measurements: possibly hundreds of thousands) stay in the worker; the page gets light summaries.
-import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, QuantityDeclaration, SamplingDevice, SplitEntry, TreeSummary } from '../core/convert';
+import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, ProfileDeclaration, ProfileSummary, QuantityDeclaration, SamplingDevice, SplitEntry, TreeSummary } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertPrefill } from '../core/convert/prefill';
@@ -16,6 +16,11 @@ import type { FileProblem, FileSummary, InputFile } from './protocol';
 export interface ConvertFileSummary extends FileSummary {
   /** by sheet name: the shape the overlay suggests (undefined when it cannot tell) */
   suggestedShapes: Record<string, ConvertShape | undefined>;
+  /**
+   * by sheet name: the sheet LOOKS like a profile / environment file of a cruise (a low-confidence suggestion, core/convert/recognize.ts suggestConvertProfile). Never applied
+   * by itself: the page offers a button, and the user ticks the mark.
+   */
+  suggestedProfiles: Record<string, boolean>;
 }
 
 export interface ConvertParseResult {
@@ -52,6 +57,8 @@ export interface ConvertSheetRequest {
   meshUm?: string;
   /** The NERC identifiers the user confirmed for the sheet's measured-variable columns, by column index (stage 5). The worker checks every pick (core/convert/nerc.ts). */
   nerc?: NercDecisions;
+  /** Stage 6: the sheet is a profile / environment file. Present = marked by the user; `depthIds` = the user's explicit approval of level IDs made of the station and the depth as written. */
+  profile?: ProfileDeclaration;
 }
 
 export interface ConvertRequestBody {
@@ -100,7 +107,9 @@ export interface ConvertView {
    */
   worms: { names: string[]; withSheetId: number; applied: number };
   /** The first few events of each level, for the preview. */
-  examples: { cruise: EventRec[]; station: EventRec[]; sample: EventRec[] };
+  examples: { cruise: EventRec[]; station: EventRec[]; sample: EventRec[]; level: EventRec[] };
+  /** What the profile files did (stage 6): level and station counts, the stations that matched no biology station. Counts and names, never the levels. */
+  profile: ProfileSummary;
   /** At least one sample code repeats between stations / rows: the station prefix toggle is worth showing. */
   codeCollision: boolean;
   /** Some sheet has rows without a sample code: the code proposal is worth showing. */

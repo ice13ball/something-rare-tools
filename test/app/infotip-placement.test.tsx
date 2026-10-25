@@ -216,6 +216,9 @@ describe('/convert (hidden)', () => {
     const bubble = document.querySelector('[data-tip-bubble="convertRoles"]') as HTMLElement;
     expect(bubble.parentElement).toBe(document.body);
     for (const k of ['role.taxonHeader', 'role.quantity', 'role.effort', 'role.occurrenceId', 'role.lifeStage', 'role.qualifier'] as const) expect(bubble.textContent).toContain(UI.en[k]);
+    // the pressure line is the converter's own (a profile sheet writes it), not the /check sentence that says no output file uses it
+    expect(bubble.textContent).toContain(UI.en['tip.role.pressureConvert']);
+    expect(bubble.textContent).not.toContain(UI.en['tip.role.pressure']);
     fireEvent.click(document.querySelector('[data-tip="convertRoles"] button') as HTMLElement);
   });
 });
@@ -316,6 +319,33 @@ describe('/convert: the NERC section and the NVS search', () => {
       expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('/convert: the profile / environment file (stage 6)', () => {
+  it('the mark, the approval of the level IDs, the station matching and the pressure each carry their own ⓘ, in every language', async () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      const ctd = 'Cruise,Station,Latitude,Longitude,Date,Depth [m],Temperature [°C],Pressure [dbar]\nCR1,S1,55.5,2.5,2023-06-14,0,11.2,0.5\n';
+      const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+      chooseFiles(container, [{ name: 'ctd.csv', text: ctd }]);
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
+      await screen.findByRole('heading', { name: UI[lang]['convert.columns.title'] });
+      // the mark is offered to every sheet; the suggestion is a note with a button, not a decision made for the user
+      expectTips(['convertProfile'], lang);
+      expect(document.querySelector('[data-tip="convertProfileDepthIds"]')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.sheet.profile.mark'] }));
+      expectTips(['convertProfile', 'convertProfileDepthIds', 'convertProfileStations', 'convertProfilePressure'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+    }
+  });
+
+  it('the roles tip says what a pressure column does here, in the converter\'s own words, not /check\'s', () => {
+    cleanup();
+    setLang('en');
+    expect(UI.en['tip.role.pressureConvert']).toContain('profile sheet');
+    expect(UI.en['tip.role.pressure']).toContain('no check or output file uses it');
   });
 });
 

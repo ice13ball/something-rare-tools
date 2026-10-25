@@ -11,7 +11,7 @@ import { t } from './i18n';
 import { DERIVED_DECIMALS } from '../core/convert/events';
 import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '../core/convert/metadata';
 import { NVS_LIMIT } from '../core/convert/nvs';
-import { P01, P06, VARIABLE_CONCEPTS } from '../core/convert/vocab';
+import { P01, P06, PRESSURE, VARIABLE_CONCEPTS } from '../core/convert/vocab';
 import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
 import { WORMS_BATCH_MAX, wormsLsid } from '../core/convert/worms';
@@ -123,7 +123,7 @@ const convertRolesList = (): React.ReactNode => (
   <span className="infotip-list" role="list">
     {CONVERT_ROLE_CHOICES.map((k) => (
       <span key={k} className="infotip-item" role="listitem">
-        <strong>{t(roleChoiceLabelKey(k))}</strong> — {t(`tip.role.${k}` as UiKey)}
+        <strong>{t(roleChoiceLabelKey(k))}</strong> — {t((k === 'pressure' ? 'tip.role.pressureConvert' : `tip.role.${k}`) as UiKey)}
       </span>
     ))}
   </span>
@@ -192,6 +192,10 @@ const DEFS = {
   convertRoles: { label: 'mapping.role', values: { roles: convertRolesList } },
   convertSheetUse: { label: 'convert.sheet.use' },
   convertShape: { label: 'convert.sheet.shape' },
+  convertProfile: { label: 'convert.sheet.profile' },
+  convertProfileDepthIds: { label: 'convert.sheet.profile.depthIds' },
+  convertProfileStations: { label: 'convert.sheet.profile.stations.title' },
+  convertProfilePressure: { label: 'convert.sheet.profile.pressure.title', values: { pressureConcept: codes(PRESSURE.type), unitConcept: codes(PRESSURE.unit) } },
   convertQuantityKind: { label: 'convert.quantity.kind', values: { countConcept: codes(P01.count) } },
   convertQuantityUnit: { label: 'convert.quantity.unit', values: { units: codes(P06.perM3, P06.perM2, P06.gPerM3, P06.gPerM2, P06.mgPerM3, P06.mgPerM2) } },
   convertQuantityBasis: {
