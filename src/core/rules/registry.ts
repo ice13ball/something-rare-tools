@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding, RuleDef } from '../types';
 import { CHEMISTRY_RULES } from './chemistry';
+import { CONVERT_RULES } from './convert';
 import { CROSSFILE_RULES } from './crossfile';
 import { DWC_RULES } from './dwc';
 import { INPUT_RULES } from './input';
@@ -22,6 +23,7 @@ const SPECS: readonly RuleSpec[] = [
   ...DWC_RULES,
   ...CROSSFILE_RULES,
   ...CHEMISTRY_RULES,
+  ...CONVERT_RULES,
 ];
 
 /** All rules, in category-file order. */

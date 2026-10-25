@@ -67,7 +67,8 @@ describe('the only lookup hosts are WoRMS and NVS, each called from its own modu
   it('no page of the site, and no source of /convert, carries a preconnect, dns-prefetch, prefetch, preload or prerender link to WoRMS (a link tag is a request on page load)', () => {
     const pages = ['index.html', 'convert/index.html', 'check/index.html', 'collection/index.html', 'licence/index.html', 'privacy/index.html'].filter((f) => existsSync(join(ROOT, f)));
     expect(pages).toContain('convert/index.html');
-    for (const f of pages) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/marinespecies|vocab\.nerc/i);
+    // the privacy page names the two hosts as bare text (what is sent, and to whom); no page holds an address of them, a link or a tag that would load one
+    for (const f of pages) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(f === 'privacy/index.html' ? /(https?:)?\/\/(www\.)?(marinespecies|vocab\.nerc)/i : /marinespecies|vocab\.nerc/i);
     for (const f of srcFiles.filter((x) => /\.(tsx|html)$/.test(x))) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/rel=["'](preconnect|dns-prefetch|prefetch|preload|prerender)["']/i);
   });
 
@@ -90,12 +91,12 @@ describe('the only lookup hosts are WoRMS and NVS, each called from its own modu
     expect(readFileSync(html, 'utf8')).not.toMatch(/vocab\.nerc/i);
     expect(names.filter((f) => f !== html && /https:\/\/vocab\.nerc\.ac\.uk\/sparql\/sparql/.test(readFileSync(f, 'utf8'))).length).toBe(1);
     for (const f of worker) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/sparql\/sparql/);
-    // no other page of the site carries the WoRMS address
+    // no other page of the site carries the address of a lookup (the rule text of the registry, which every page bundle holds, only names the method)
     for (const other of ['dist/index.html', 'dist/check/index.html', 'dist/collection/index.html', 'dist/licence/index.html', 'dist/privacy/index.html'].filter((f) => existsSync(join(ROOT, f)))) {
       const h = readFileSync(join(ROOT, other), 'utf8');
       for (const m of h.matchAll(/\/assets\/([\w.-]+\.js)/g)) {
         const f = join(ROOT, 'dist/assets', m[1]);
-        if (existsSync(f)) expect(readFileSync(f, 'utf8'), `${other} -> ${m[1]}`).not.toMatch(/AphiaRecordsByMatchNames|sparql\/sparql/);
+        if (existsSync(f)) expect(readFileSync(f, 'utf8'), `${other} -> ${m[1]}`).not.toMatch(/marinespecies\.org\/rest|vocab\.nerc\.ac\.uk\/sparql|\/rest\/AphiaRecordsByMatchNames|sparql\/sparql/);
       }
     }
   });

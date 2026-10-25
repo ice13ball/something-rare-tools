@@ -82,7 +82,7 @@ describe('static routes', () => {
     }
   });
 
-  it('/sitemap.xml lists the five pages, /licence and /collection among them', async () => {
+  it('/sitemap.xml lists the six pages, /licence, /collection and /convert among them', async () => {
     const res = await request(app).get('/sitemap.xml');
     expect(res.status).toBe(200);
     expect([...res.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])).toEqual([
@@ -90,6 +90,7 @@ describe('static routes', () => {
       'https://tools.something-rare.com/check',
       'https://tools.something-rare.com/licence',
       'https://tools.something-rare.com/collection',
+      'https://tools.something-rare.com/convert',
       'https://tools.something-rare.com/privacy',
     ]);
   });

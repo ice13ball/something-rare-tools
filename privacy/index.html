@@ -33,7 +33,7 @@
     <div id="root">
       <header class="site-header">
         <a class="brand" href="/">Abyssal Claims <span class="brand-part">Tools</span></a>
-        <nav aria-label="Main"><a href="/check">Data check</a> <a href="/licence">Licence check</a> <a href="/collection">Collection review</a> <a class="nav-external" href="https://something-rare.com">Atlas</a></nav>
+        <nav aria-label="Main"><a href="/check">Data check</a> <a href="/licence">Licence check</a> <a href="/collection">Collection review</a> <a href="/convert">Darwin Core converter</a> <a class="nav-external" href="https://something-rare.com">Atlas</a></nav>
       </header>
       <main id="main" class="container">
         <h1>Privacy</h1>
@@ -99,6 +99,14 @@
           <p>The progress of a run and the parts of the fix list are stored only in your browser (IndexedDB), never on our server, until you delete them with “Delete all saved progress” on the collection page or discard the run. Apart from the catalogue requests, nothing about a collection run is sent to our server.</p>
         </section>
         <section>
+          <h2>Darwin Core converter</h2>
+          <p>The converter reads your files in your own browser. They are never uploaded: the archive is built in your browser and downloaded from it, and nothing about it is stored on our server or in your browser. The only things that can leave your browser are what the two optional lookups send, to WoRMS and to NVS, described below.</p>
+          <p>Two optional lookups exist, in WoRMS and in NVS. Both are off at every upload; a companion file can tick a box, but ticking sends nothing. Nothing leaves your computer until you press the button of that lookup.</p>
+          <p>WoRMS lookup: only the taxon names (the scientific name without qualifier, stage or sex) are sent, directly from your browser to www.marinespecies.org (WoRMS, the World Register of Marine Species, operated by VLIZ, the Flanders Marine Institute), not through our server.</p>
+          <p>NVS search: only the word you type for a measured variable or a unit is sent, directly from your browser to vocab.nerc.ac.uk (the NERC Vocabulary Server, operated by the British Oceanographic Data Centre at the National Oceanography Centre), not through our server.</p>
+          <p>In both cases the service sees your IP address and the address of this site, as any website you open does, and its own privacy policy applies. Taxon names and search words can reveal unpublished findings (which species were found, what was measured): if that matters, do not use the lookup.</p>
+        </section>
+        <section>
           <h2>Hosting logs</h2>
           <p>This site runs on Google Cloud Run (region europe-west1). Like any web host, the platform keeps a standard log of every request to this site: the IP address, the time, the requested address, the browser (user agent) and the referring page. In server mode the requested address is the tool's own download address; the link you asked for is not in it. These logs are deleted automatically after 30 days.</p>
           <p>They are used for security, to prevent abuse and for aggregated usage statistics, including which network (for example a university network) requests come from. No profiles of individuals are built from them, and they are not passed on to anyone else or sold.</p>
@@ -112,6 +120,7 @@
           <h2>Analytics</h2>
           <p>Google Analytics 4 is used only if you accept it in the cookie notice. Until then nothing is sent to Google and no analytics cookies are set. The Atlas and the Tools use the same Google Analytics property.</p>
           <p>Events carry only counts (how many errors, warnings and notes), the type of input (file, Zenodo, GeoNetwork, DOI, PANGAEA or mixed) and the download mode. They never contain file names, DOIs, links or values from your data. You can change your choice at any time with “Cookie settings” in the footer.</p>
+          <p>The Darwin Core converter sends three events of its own: that a conversion was started; that it is blocked, with the number of errors; and that an archive was exported, with the shape of the sheets (wide, long or mixed), whether a profile file, a metadata file, a WoRMS lookup or an NVS search was used (yes or no), and how many events, occurrences and measurement rows the archive has. They never contain taxon names, file names, search words, identifiers or values.</p>
           <p>One choice for both services: your answer is stored in a single cookie, ac_consent (value granted or denied), set for the domain something-rare.com so that the Atlas and the Tools both read it. It lasts 180 days and is used for nothing else. If you have already answered in either service, you are not asked again; “Cookie settings” in the footer changes the answer for both.</p>
         </section>
         <section>
