@@ -11,9 +11,10 @@ export const HIDDEN_PATHS: readonly string[] = ['/convert'];
 
 /**
  * Hosts a page may reach beyond the global policy, by page path (host names, no scheme). They go into that page's response only,
- * never into DATA_HOSTS (which also feeds the fetch proxy). Stage 0 of /convert: none yet, the hook only exists.
+ * never into DATA_HOSTS (which also feeds the fetch proxy), and never routed through the server proxy. Stage 4 of /convert: the WoRMS lookup (the opt-in of
+ * src/app/optins/worms.ts, off by default, sent only when the user presses its button). Stage 5 adds the NVS host for its own opt-in.
  */
-export const PAGE_CONNECT_HOSTS: Readonly<Record<string, readonly string[]>> = { '/convert': [] };
+export const PAGE_CONNECT_HOSTS: Readonly<Record<string, readonly string[]>> = { '/convert': ['www.marinespecies.org'] };
 
 /**
  * Pages whose connect-src leaves out the data hosts and the map hosts: they take no links and show no map. The converter reads dropped files only
