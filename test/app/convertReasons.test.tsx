@@ -55,6 +55,7 @@ describe('the reason table', () => {
       [W1_HEADER, W1_ROWS],
       [L1_HEADER, L1_ROWS],
       [['Station', 'Calanus finmarchicus', 'Total copepods', 'Comments'], [['S', '+', 4, 'x'], ['T', 'NA', 5, 'y']]],
+      [['Station', 'Calanus finmarchicus', 'Total copepods'], [['S', '+', '+'], ['T', 'NA', 'x']]],
       [['Sample', 'eventID', 'Species', 'Count', 'organismQuantity', 'Depth top', 'Depth bottom', 'Stage', 'Volume', 'Area'], [['a', 'e', 'Calanus', 3, 3, 0, 10, 'C2', 5, 1]]],
     ];
     const seen = new Set<string>();
@@ -66,7 +67,7 @@ describe('the reason table', () => {
         seen.add(p.reasonCode);
       }
     }
-    expect([...seen].sort()).toEqual(expect.arrayContaining(['taxon-numeric', 'taxon-marks', 'summary-header', 'dwc-occurrenceid', 'name-taxon', 'depth-min-name', 'name-effort-volume']));
+    expect([...seen].sort()).toEqual(expect.arrayContaining(['taxon-numeric', 'taxon-marks', 'summary-header', 'summary-total', 'dwc-occurrenceid', 'name-taxon', 'depth-min-name', 'name-effort-volume']));
   });
 });
 
@@ -76,6 +77,7 @@ describe('the mapping table shows the reason in the reader language', () => {
     const sheets: [string[], Cell[][]][] = [
       [W1_HEADER, W1_ROWS],
       [['Station', 'Calanus finmarchicus', 'Total copepods'], [['S', '+', 4], ['T', 'NA', 5]]],
+      [['Station', 'Calanus finmarchicus', 'Total copepods'], [['S', '+', '+'], ['T', 'NA', 'x']]],
       [['occurrenceID', 'eventID', 'scientificName', 'individualCount', 'organismQuantity'], [['o', 'e', 'Calanus', 3, 3]]],
       [['Sample', 'eventID', 'Species', 'Count'], [['a', 'e', 'Calanus', 3]]],
     ];
@@ -89,7 +91,7 @@ describe('the mapping table shows the reason in the reader language', () => {
 
   it('pl, de and fr show the translated reason of every low-confidence overlay proposal, never the English text', () => {
     const cases = lowProposals();
-    expect(new Set(cases.map((c) => c.p.reasonCode))).toEqual(new Set(['taxon-numeric', 'taxon-marks', 'summary-header', 'quantity-other', 'eventid-used']));
+    expect(new Set(cases.map((c) => c.p.reasonCode))).toEqual(new Set(['taxon-numeric', 'taxon-marks', 'summary-header', 'summary-total', 'quantity-other', 'eventid-used']));
     for (const lang of ['pl', 'de', 'fr', 'en'] as const) {
       for (const { p } of cases) {
         cleanup();

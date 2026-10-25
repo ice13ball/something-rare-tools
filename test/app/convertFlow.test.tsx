@@ -63,7 +63,7 @@ describe('W1: wide counts with a full species list', () => {
     expect(summary().textContent).toContain('6 events');
     expect(summary().textContent).toContain('9 measurement rows');
     expect(summary().textContent).not.toContain('cell with a zero was left out');
-    expect(summary().textContent).toContain(T['convert.summary.noExport']);
+    expect(summary().textContent).toContain(T['convert.export.title']);
   });
 
   it('shows the event tree with its counts and examples, and flattening is the user choice', async () => {
@@ -313,7 +313,7 @@ describe('proposed taxon columns are converted only after confirmation (M1)', ()
 });
 
 describe('splits are editable, and doubtful names are put to the user (M5)', () => {
-  const csv = 'Sample,Station,Microcalanus pusillus/pygmaeus,Calanus finmarchicus C5 f\na,S,3,4\n';
+  const csv = 'Sample,Station,Latitude,Longitude,Date,Microcalanus pusillus/pygmaeus,Calanus finmarchicus C5 f\na,S,55,3,2020-01-01,3,4\n';
   it('shows the reason, lets the user correct every field, and approving saves the edited split', async () => {
     await load([{ name: 'edit.csv', text: csv }]);
     pick(T['convert.quantity.kind'], 'count');

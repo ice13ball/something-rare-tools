@@ -302,7 +302,8 @@ code {
   font-size: 0.9rem;
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true'] {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -324,6 +325,7 @@ input[type='checkbox'] {
 }
 
 input[type='text'],
+input[type='email'],
 select {
   width: 100%;
   background: var(--surface);
@@ -1431,6 +1433,7 @@ code.multiline {
 
 .convert-fields select,
 .convert-fields input[type='text'],
+.convert-fields input[type='email'],
 .convert-sheet .field input[type='text'] {
   box-sizing: border-box;
   width: 100%;

@@ -190,7 +190,7 @@ describe('/convert (hidden)', () => {
     // the proposed taxon columns have their own control and tip; they are confirmed before anything is converted
     expectTips(['convertTaxa', 'convertDepthBound']);
     fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
-    expectTips(['convertRoles', 'convertSheetUse', 'convertShape', 'convertQuantityKind', 'convertEffort', 'convertCruise', 'convertFullList', 'convertStationPrefix', 'convertFlattenStation', 'convertFlattenCruise', 'convertTree']);
+    expectTips(['convertRoles', 'convertSheetUse', 'convertShape', 'convertQuantityKind', 'convertEffort', 'convertCruise', 'convertFullList', 'convertStationPrefix', 'convertFlattenStation', 'convertFlattenCruise', 'convertTree', 'convertDevice', 'convertMesh']);
     // the role column header of /convert has its own tip, and /check's is not on this page
     expect(document.querySelector('[data-tip="roles"]')).toBeNull();
     // the quantity fields that depend on the kind
@@ -204,6 +204,8 @@ describe('/convert (hidden)', () => {
     await screen.findByRole('heading', { name: UI.en['convert.splits.title'] });
     await screen.findByRole('heading', { name: UI.en['convert.codes.title'] });
     expectTips(['convertSplits', 'convertCodes']);
+    // the description of the dataset (every field), the export and the companion file
+    expectTips(['convertMetaTitle', 'convertMetaAbstract', 'convertMetaCreators', 'convertMetaContact', 'convertMetaInstitution', 'convertMetaDatasetName', 'convertMetaMethods', 'convertLicence', 'convertBasis', 'convertExport', 'convertCompanion']);
     // none of them inside a label or a heading element (names stay clean)
     expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
     // the bubble of the roles tip lists the converter roles, and sits on the body, outside the scrolling table
@@ -212,6 +214,24 @@ describe('/convert (hidden)', () => {
     expect(bubble.parentElement).toBe(document.body);
     for (const k of ['role.taxonHeader', 'role.quantity', 'role.effort', 'role.occurrenceId', 'role.lifeStage', 'role.qualifier'] as const) expect(bubble.textContent).toContain(UI.en[k]);
     fireEvent.click(document.querySelector('[data-tip="convertRoles"] button') as HTMLElement);
+  });
+});
+
+describe('/convert: the acceptance of warnings and the sum column', () => {
+  it('a converted sheet with a warning shows the acceptance with its ⓘ, and a sum column shows the ⓘ of its reason', async () => {
+    const csv = 'Station,Sample,Latitude,Longitude,Date,Calanus finmarchicus,Suma\nS,a,55,3,2020-01-01,4,4\n';
+    const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+    chooseFiles(container, [{ name: 'suma.csv', text: csv }]);
+    fireEvent.click(screen.getByRole('button', { name: UI.en['convert.read'] }));
+    await screen.findByRole('heading', { name: UI.en['convert.columns.title'] });
+    // "Suma" starts as ignored, with its reason and its ⓘ
+    expect((screen.getByLabelText('Suma: Meaning') as HTMLSelectElement).value).toBe('ignore');
+    expectTips(['convertSummaryColumn']);
+    fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
+    fireEvent.change(screen.getByLabelText(UI.en['convert.quantity.kind']), { target: { value: 'count' } });
+    await screen.findByRole('heading', { name: UI.en['convert.accept.title'] });
+    expectTips(['convertAccept']);
+    expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
   });
 });
 
