@@ -804,10 +804,13 @@ export function convert(input: ConvertInput): ConvertResult {
       if (verbatim === undefined || idText === undefined) continue;
       const id = sheetNameId(cols.taxonId, idText);
       if (id === undefined) continue;
-      const name = splitOf(verbatim).scientificName;
-      let ids = sheetIds.get(name);
-      if (!ids) sheetIds.set(name, (ids = new Set()));
-      ids.add(id);
+      // under the name the split proposes AND under the name of the approved split (which the user may have edited): the row is written under the latter
+      const names = new Set([splitTaxon(verbatim).scientificName, splitOf(verbatim).scientificName]);
+      for (const name of names) {
+        let ids = sheetIds.get(name);
+        if (!ids) sheetIds.set(name, (ids = new Set()));
+        ids.add(id);
+      }
     }
   }
   // per scientificName: how many written rows have a taxon ID from the sheet and how many have none. A name whose split is not approved yet is not final:
@@ -827,7 +830,8 @@ export function convert(input: ConvertInput): ConvertResult {
   let withSheetId = 0;
   for (const [name, n] of perName) {
     const ids = sheetIds.get(name);
-    if (ids) {
+    // (a written row with a sheet ID counts as well: belt and braces for any way a row is named differently from the pre-pass)
+    if (ids !== undefined || n.withId > 0) {
       withSheetId++;
       if (n.without > 0) incomplete.push(name);
     } else if (n.without > 0) toLookUp.add(name);
