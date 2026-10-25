@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React from 'react';
+import React, { useId } from 'react';
 import { CANONICAL_VARIABLES } from '../../core/recognize/vocab';
 import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types';
 import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
-import { InfoTip } from './InfoTip';
+import { FieldLabel, InfoTip } from './InfoTip';
 import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
 import type { TipId } from '../tips';
 
@@ -117,6 +117,7 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, roleKinds, onRol
   const unit = roleUnit(role) ?? '';
   const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort';
   const converter = roleKinds !== ROLE_KINDS;
+  const boundId = useId();
   return (
     <div className="role-cell">
       <select
@@ -152,14 +153,16 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, roleKinds, onRol
         </label>
       )}
       {converter && role.kind === 'depth' && (
-        <label className="inline-field">
-          <span>{t('mapping.bound')}</span>
-          <select value={role.bound ?? ''} onChange={(e) => onRole(setBound(role, e.target.value === '' ? undefined : (e.target.value as 'min' | 'max')))}>
+        <div className="inline-field">
+          <FieldLabel htmlFor={boundId} tip="convertDepthBound">
+            {t('mapping.bound')}
+          </FieldLabel>
+          <select id={boundId} value={role.bound ?? ''} onChange={(e) => onRole(setBound(role, e.target.value === '' ? undefined : (e.target.value as 'min' | 'max')))}>
             <option value="">{t('mapping.bound.none')}</option>
             <option value="min">{t('mapping.bound.min')}</option>
             <option value="max">{t('mapping.bound.max')}</option>
           </select>
-        </label>
+        </div>
       )}
       {hasUnit && (
         <label className="inline-field">

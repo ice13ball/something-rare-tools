@@ -187,6 +187,9 @@ describe('/convert (hidden)', () => {
     await screen.findByRole('heading', { name: UI.en['convert.columns.title'] });
     // the cruise field is offered for a sheet without a cruise column
     fireEvent.change(screen.getByLabelText('Cruise: Meaning'), { target: { value: 'ignore' } });
+    // the proposed taxon columns have their own control and tip; they are confirmed before anything is converted
+    expectTips(['convertTaxa', 'convertDepthBound']);
+    fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
     expectTips(['convertRoles', 'convertSheetUse', 'convertShape', 'convertQuantityKind', 'convertEffort', 'convertCruise', 'convertFullList', 'convertStationPrefix', 'convertFlattenStation', 'convertFlattenCruise', 'convertTree']);
     // the role column header of /convert has its own tip, and /check's is not on this page
     expect(document.querySelector('[data-tip="roles"]')).toBeNull();
@@ -194,6 +197,9 @@ describe('/convert (hidden)', () => {
     fireEvent.change(screen.getByLabelText(UI.en['convert.quantity.kind']), { target: { value: 'biomass' } });
     fireEvent.change(screen.getByLabelText(UI.en['convert.quantity.unit']), { target: { value: 'g/m2' } });
     expectTips(['convertQuantityUnit', 'convertQuantityBasis', 'convertQuantityPer', 'convertQuantityMedium']);
+    // a typed sample size: value, unit and dimension each have their own
+    fireEvent.change(screen.getByLabelText(UI.en['convert.effort.title']), { target: { value: 'constant' } });
+    expectTips(['convertEffortValue', 'convertEffortUnit', 'convertEffortDimension']);
     // the splits and the codes appear with what the data need
     await screen.findByRole('heading', { name: UI.en['convert.splits.title'] });
     await screen.findByRole('heading', { name: UI.en['convert.codes.title'] });

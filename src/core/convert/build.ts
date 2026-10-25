@@ -159,11 +159,13 @@ interface SampleAcc {
   effortWritten: boolean;
 }
 
-interface DupAcc {
-  id: string;
-  file: string;
-  sheet: string;
-  lines: Set<number>;
+/** Where a repeated ID stands: every file and sheet it occurs in, with its own lines (a duplicate across files is reported at each place). */
+type Places = Map<string, { file: string; sheet: string; lines: Set<number> }>;
+function addPlace(places: Places, file: string, sheet: string, line: number): void {
+  const k = `${file}\u0000${sheet}`;
+  let p = places.get(k);
+  if (!p) places.set(k, (p = { file, sheet, lines: new Set() }));
+  p.lines.add(line);
 }
 
 const sameNumber = (a: number | undefined, b: number | undefined): boolean => a === b;
@@ -196,8 +198,9 @@ export function convert(input: ConvertInput): ConvertResult {
   const occurrences: OccRec[] = [];
   const measurements: MofIntent[] = [];
   const samples = new Map<string, SampleAcc>();
-  const dups = new Map<string, DupAcc>();
-  const occIds = new Map<string, { file: string; sheet: string; lines: number[]; fields: string[] }>();
+  const dups = new Map<string, Places>(); // repeated eventIDs
+  const firstOcc = new Map<string, { file: string; sheet: string; line: number }>();
+  const repeatedOcc = new Map<string, Places>(); // repeated occurrenceIDs
   const sameEvent = new Map<string, { file: string; sheet: string; name: string; refs: string[]; ids: Set<string>; lines: number[] }>();
   const stats = { zerosSkipped: 0, textCells: 0, present: 0, absent: 0 };
   let sheetKeyN = 0;
@@ -247,6 +250,7 @@ export function convert(input: ConvertInput): ConvertResult {
       findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
       quantity = undefined;
     } else {
+      if (quantity.effortInvalid !== undefined) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { ...base, field: 'sample size', value: quantity.effortInvalid, params: { count: 1 } }));
       if (quantity.noTypeFor !== undefined) findings.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: quantity.noTypeFor } }));
       if (quantity.unitWithoutP06 !== undefined) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.unitWithoutP06 } }));
       if (quantity.effort && !quantity.effort.unitId) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.effort.unit } }));
@@ -357,9 +361,12 @@ export function convert(input: ConvertInput): ConvertResult {
         const mergeable = sin.shape === 'long' && earlier.shape === 'long' && earlier.sheetKey === sheetKey && earlier.station === stationText;
         if (!mergeable) {
           // the same eventID from another row of a wide sheet, another sheet, or another station (long): never merged
-          let d = dups.get(`event\u0000${eventId}`);
-          if (!d) dups.set(`event\u0000${eventId}`, (d = { id: eventId, file: fileName, sheet: sheet.name, lines: new Set(earlier.sheetKey === sheetKey ? earlier.lines : []) }));
-          d.lines.add(row.line);
+          let d = dups.get(eventId);
+          if (!d) {
+            dups.set(eventId, (d = new Map()));
+            for (const l of earlier.lines) addPlace(d, earlier.source.file, earlier.source.sheet, l);
+          }
+          addPlace(d, fileName, sheet.name, row.line);
           continue;
         }
         acc = earlier;
@@ -519,11 +526,15 @@ export function convert(input: ConvertInput): ConvertResult {
         else stats.absent++;
 
         // identifiers: one occurrenceID once, whoever repeats it
-        const seen = occIds.get(id);
-        if (seen) {
-          seen.lines.push(row.line);
-          if (!seen.fields.includes(cell.column)) seen.fields.push(cell.column);
-        } else occIds.set(id, { file: fileName, sheet: sheet.name, lines: [row.line], fields: [cell.column] });
+        const first = firstOcc.get(id);
+        if (first) {
+          let d = repeatedOcc.get(id);
+          if (!d) {
+            repeatedOcc.set(id, (d = new Map()));
+            addPlace(d, first.file, first.sheet, first.line);
+          }
+          addPlace(d, fileName, sheet.name, row.line);
+        } else firstOcc.set(id, { file: fileName, sheet: sheet.name, line: row.line });
         // the same taxon more than once in one sample (different IDs)
         const gk = JSON.stringify([eventId, sp.scientificName, lifeStage ?? '', qualifier ?? '', sp.sex ?? '']);
         const g = sameEvent.get(gk);
@@ -567,31 +578,35 @@ export function convert(input: ConvertInput): ConvertResult {
   const kindOf = new Map<string, number>();
   for (const e of events) kindOf.set(e.id, (kindOf.get(e.id) ?? 0) + 1);
   for (const [id, n] of kindOf) {
-    if (n < 2) continue;
+    if (n < 2 || dups.has(id)) continue;
     const a = samples.get(id);
-    const key = `event\u0000${id}`;
-    if (!dups.has(key)) dups.set(key, { id, file: a?.source.file ?? '', sheet: a?.source.sheet ?? '', lines: new Set(a?.lines ?? []) });
+    const d: Places = new Map();
+    if (a) for (const l of a.lines) addPlace(d, a.source.file, a.source.sheet, l);
+    dups.set(id, d);
   }
-  for (const d of dups.values()) {
-    findings.push(
-      makeConvertFinding('CONV-ID-DUPLICATE', {
-        file: d.file,
-        sheet: d.sheet,
-        value: d.id,
-        lines: [...d.lines],
-        params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.' },
-      }),
-    );
+  for (const [id, places] of dups) {
+    for (const w of places.values()) {
+      findings.push(
+        makeConvertFinding('CONV-ID-DUPLICATE', {
+          file: w.file,
+          sheet: w.sheet,
+          value: id,
+          lines: [...w.lines],
+          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.' },
+        }),
+      );
+    }
   }
-  const repeated = [...occIds].filter(([, o]) => o.lines.length > 1);
-  if (repeated.length > 0) {
+  if (repeatedOcc.size > 0) {
+    // one finding per file and sheet: the repeated IDs that stand there and the lines of each, whichever file the other copy is in
     const byWhere = new Map<string, { file: string; sheet: string; ids: string[]; lines: number[] }>();
-    for (const [id, o] of repeated) {
-      const k = `${o.file}\u0000${o.sheet}`;
-      const w = byWhere.get(k) ?? { file: o.file, sheet: o.sheet, ids: [], lines: [] };
-      w.ids.push(id);
-      w.lines.push(...o.lines);
-      byWhere.set(k, w);
+    for (const [id, places] of repeatedOcc) {
+      for (const [k, p] of places) {
+        let w = byWhere.get(k);
+        if (!w) byWhere.set(k, (w = { file: p.file, sheet: p.sheet, ids: [], lines: [] }));
+        w.ids.push(id);
+        for (const l of p.lines) w.lines.push(l);
+      }
     }
     for (const w of byWhere.values()) {
       findings.push(

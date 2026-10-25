@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { UI } from '../../src/core/i18n/ui';
 
 const ROOT = join(__dirname, '..', '..');
 const walk = (dir: string, accept: (f: string) => boolean): string[] =>
@@ -100,5 +101,33 @@ describe('/check is untouched by stage 1b', () => {
   };
   it('the /check worker, protocol, client, engine and page are byte-for-byte the ones of production', () => {
     for (const [f, sha] of Object.entries(PINNED)) expect(createHash('sha256').update(readFileSync(join(ROOT, f))).digest('hex'), f).toBe(sha);
+  });
+});
+
+describe('what the tips say is what the code does', () => {
+  const UIT = UI;
+  it('the code proposal tip: cells are copied as text, only = and @ get an apostrophe, xlsx dates are ISO; and "not touched" is gone', () => {
+    const en = UIT.en['tip.convertCodes.logic'];
+    expect(en).toContain('Cells are copied as text');
+    expect(en).toContain('start with = or @');
+    expect(en).toContain('apostrophe');
+    expect(en).toContain('ISO dates');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const text = UIT[lang]['tip.convertCodes.logic'];
+      expect(text, lang).not.toMatch(/not touched|nie są zmieniane|unberührt|ne sont pas modifiées/);
+      expect(text, lang).toMatch(/= (or|lub|oder|ou) @|= (lub|oder|ou) @/);
+      expect(text, lang).toContain('ISO');
+    }
+  });
+  it('the medium tip says there is no default; the shape tip names the exceptions; the candidates tip says confirmation is needed', () => {
+    expect(UIT.en['tip.convertQuantityMedium.logic']).toContain('no default');
+    expect(UIT.en['tip.convertQuantityMedium.logic']).toContain('no concept and a warning');
+    expect(UIT.en['tip.convertShape.logic']).toContain('zeros that are skipped and NA cells');
+    expect(UIT.en['tip.convertTaxa.logic']).toContain('only after you confirm it');
+  });
+  it('Polish does not call a locality a town, and the options heading is the agreed one', () => {
+    for (const k of Object.keys(UIT.pl)) expect(UIT.pl[k as keyof (typeof UIT)['pl']], k).not.toMatch(/miejscowo/i);
+    expect(UIT.pl['convert.options.title']).toBe('Ustawienia dla wszystkich plików');
+    expect(UIT.pl['convert.flatten.station']).toContain('miejsce (locality)');
   });
 });

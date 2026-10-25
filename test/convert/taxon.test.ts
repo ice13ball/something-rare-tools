@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
-import { distinctSplits, splitChanged, splitTaxon } from '../../src/core/convert/taxon';
+import { convert } from '../../src/core/convert/build';
+import { distinctSplits, nameDoubt, splitChanged, splitTaxon } from '../../src/core/convert/taxon';
+import { fileOf, sheetInput } from './helpers';
 
 describe('splitTaxon', () => {
   it('leaves a plain name alone, and keeps the exact text', () => {
@@ -77,5 +79,48 @@ describe('distinctSplits', () => {
     expect(list[0].approved).toBe(true);
     expect(list[0].split).toEqual({ verbatimIdentification: 'Pseudocalanus sp.', scientificName: 'Pseudocalanus', identificationQualifier: 'spp.' });
     expect(list[0].proposed.identificationQualifier).toBe('sp.');
+  });
+});
+
+describe('a leftover that is not a plausible Latin name is put to the user (M5)', () => {
+  it('reads a bare f / m as the sex only straight after a stage or a "?"', () => {
+    expect(splitTaxon('Calanus finmarchicus C5 f')).toEqual({ verbatimIdentification: 'Calanus finmarchicus C5 f', scientificName: 'Calanus finmarchicus', lifeStage: 'C5', sex: 'female' });
+    expect(splitTaxon('Acartia ? f')).toEqual({ verbatimIdentification: 'Acartia ? f', scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
+    expect(splitTaxon('Acartia longiremis ? m')).toMatchObject({ scientificName: 'Acartia longiremis', identificationQualifier: '?', sex: 'male' });
+  });
+
+  const doubt = (t: string) => distinctSplits([t])[0];
+  it.each([
+    ['Metridia longa f', 'single-letter'],
+    ['Calanus hyperboreus CVI-CV', 'stage-range'],
+    ['Microcalanus pusillus/pygmaeus', 'slash'],
+    ['Oithona sp. 1', 'digits'],
+    ['Calanus finmarchicus (Gunnerus, 1770)', 'digits'],
+    ['Alpha beta gamma delta', 'long'],
+  ] as const)('%s needs a decision: %s', (text, reason) => {
+    const e = doubt(text);
+    expect(e.needsDecision).toBe(true);
+    expect(e.doubt).toBe(reason);
+    expect(e.approved).toBe(false);
+  });
+
+  it('a plain Latin name, a genus with a qualifier or a stage has no doubt about the name', () => {
+    for (const t of ['Calanus finmarchicus', 'Calanus finmarchicus c2', 'Pseudocalanus sp.', 'Calanus cf. glacialis', 'Acartia ? f', 'Augaptilus glacialis, c2']) expect(doubt(t).doubt, t).toBeUndefined();
+    expect(doubt('Calanus finmarchicus').needsDecision).toBe(false);
+  });
+
+  it('nameDoubt names the reason in a fixed order', () => {
+    expect(nameDoubt('A b')).toBe('single-letter');
+    expect(nameDoubt('Calanus')).toBeUndefined();
+    expect(nameDoubt('Mytilus x edulis')).toBe('single-letter');
+  });
+
+  it('an edited approval is used as given by convert, doubt or not', () => {
+    const f = fileOf(['Sample', 'Station', 'Microcalanus pusillus/pygmaeus'], [['a', 'S', 3]]);
+    const s = [sheetInput(f, { quantity: { kind: 'count' } })];
+    expect(convert({ sheets: s }).blocking.map((x) => x.ruleId)).toEqual(['CONV-SPLIT-UNDECIDED']);
+    const r = convert({ sheets: s, approvedSplits: { 'Microcalanus pusillus/pygmaeus': { verbatimIdentification: 'x', scientificName: 'Microcalanus', identificationQualifier: 'sp.' } } });
+    expect(r.blocking).toEqual([]);
+    expect(r.occurrences[0]).toMatchObject({ scientificName: 'Microcalanus', identificationQualifier: 'sp.', verbatimIdentification: 'Microcalanus pusillus/pygmaeus' });
   });
 });

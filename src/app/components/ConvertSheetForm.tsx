@@ -112,7 +112,8 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                         {t('convert.quantity.medium')}
                       </FieldLabel>
                       <select id={`${id}-medium`} value={q.medium} onChange={(e) => setQ({ medium: e.target.value as QuantityForm['medium'] })}>
-                        <option value="">{t('convert.medium.bed')}</option>
+                        <option value="">{t('convert.medium.none')}</option>
+                        <option value="bed">{t('convert.medium.bed')}</option>
                         <option value="water">{t('convert.medium.water')}</option>
                       </select>
                     </div>
@@ -133,25 +134,31 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                 </select>
               </div>
               {q.effort === 'constant' && (
-                <label className="inline-field">
-                  <span>{t('convert.effort.value')}</span>
-                  <input type="text" inputMode="decimal" value={q.effortValue} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ effortValue: e.target.value })} />
-                </label>
+                <div className="field">
+                  <FieldLabel htmlFor={`${id}-evalue`} tip="convertEffortValue">
+                    {t('convert.effort.value')}
+                  </FieldLabel>
+                  <input id={`${id}-evalue`} type="text" inputMode="decimal" value={q.effortValue} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ effortValue: e.target.value })} />
+                </div>
               )}
               {q.effort !== 'none' && (
                 <>
-                  <label className="inline-field">
-                    <span>{t('convert.effort.unit')}</span>
-                    <input type="text" value={q.effortUnit} placeholder="m3" autoComplete="off" spellCheck={false} onChange={(e) => setQ({ effortUnit: e.target.value })} />
-                  </label>
-                  <label className="inline-field">
-                    <span>{t('convert.effort.dimension')}</span>
-                    <select value={q.effortDimension} onChange={(e) => setQ({ effortDimension: e.target.value as QuantityForm['effortDimension'] })}>
+                  <div className="field">
+                    <FieldLabel htmlFor={`${id}-eunit`} tip="convertEffortUnit">
+                      {t('convert.effort.unit')}
+                    </FieldLabel>
+                    <input id={`${id}-eunit`} type="text" value={q.effortUnit} placeholder="m3" autoComplete="off" spellCheck={false} onChange={(e) => setQ({ effortUnit: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <FieldLabel htmlFor={`${id}-edim`} tip="convertEffortDimension">
+                      {t('convert.effort.dimension')}
+                    </FieldLabel>
+                    <select id={`${id}-edim`} value={q.effortDimension} onChange={(e) => setQ({ effortDimension: e.target.value as QuantityForm['effortDimension'] })}>
                       <option value="">{t('convert.per.auto')}</option>
                       <option value="volume">{t('convert.per.volume')}</option>
                       <option value="area">{t('convert.per.area')}</option>
                     </select>
-                  </label>
+                  </div>
                 </>
               )}
             </div>

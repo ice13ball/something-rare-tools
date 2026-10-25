@@ -61,15 +61,56 @@ export interface ConvertState {
   choices: Record<string, SheetChoice>;
   options: ConvertOptions;
   approved: ApprovedSplits;
+  /** candidate taxon columns the user confirmed, by candidateKey */
+  confirmed: Record<string, boolean>;
+}
+
+export const candidateKey = (fileId: string, sheet: string, index: number): string => `${fileId}\u0000${sheet}\u0000${index}`;
+
+export interface TaxonCandidate {
+  key: string;
+  fileId: string;
+  fileName: string;
+  sheet: string;
+  index: number;
+  header: string;
+}
+
+/**
+ * The columns the overlay PROPOSED as taxa at low confidence (a numeric column with a name it does not know) and that still have that role. They
+ * are converted only once confirmed. A column the user gave the role to by hand is not in this list: it is their decision.
+ */
+export function candidatesOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>): TaxonCandidate[] {
+  const out: TaxonCandidate[] = [];
+  for (const f of parsed.files) {
+    for (const m of mappings[f.fileId] ?? f.mappings) {
+      for (const c of m.columns) {
+        const proposed = (f.proposals[m.sheet] ?? []).find((p) => p.index === c.index);
+        if (proposed && proposed.confidence === 'low' && proposed.role.kind === 'taxon' && proposed.role.header === true && c.role.kind === 'taxon' && c.role.header === true) {
+          out.push({ key: candidateKey(f.fileId, m.sheet, c.index), fileId: f.fileId, fileName: f.fileName, sheet: m.sheet, index: c.index, header: c.header.trim() });
+        }
+      }
+    }
+  }
+  return out;
 }
 
 /** The request for the worker: the sheets the user kept, with their confirmed roles, shape and declaration. */
 export function requestOf(s: ConvertState): ConvertRequestBody {
   const sheets: ConvertRequestBody['sheets'] = [];
   for (const f of s.parsed.files) {
-    for (const m of s.mappings[f.fileId] ?? f.mappings) {
-      const c = s.choices[sheetKey(f.fileId, m.sheet)];
+    for (const m0 of s.mappings[f.fileId] ?? f.mappings) {
+      const c = s.choices[sheetKey(f.fileId, m0.sheet)];
       if (!c || !c.use) continue;
+      // a proposed taxon column that is not confirmed is left out: its role becomes "ignore" for the conversion
+      const m: SheetMapping = {
+        ...m0,
+        columns: m0.columns.map((col) => {
+          const proposed = (f.proposals[m0.sheet] ?? []).find((p) => p.index === col.index);
+          const candidate = proposed && proposed.confidence === 'low' && proposed.role.kind === 'taxon' && proposed.role.header === true && col.role.kind === 'taxon' && col.role.header === true;
+          return candidate && s.confirmed[candidateKey(f.fileId, m0.sheet, col.index)] !== true ? { ...col, role: { kind: 'ignore' as const } } : col;
+        }),
+      };
       const q = declarationOf(c.quantity);
       sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
     }

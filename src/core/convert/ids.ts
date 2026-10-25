@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { csvField, guardText } from '../output/csv';
 import type { ParsedFile, RawCell, RawSheet, SheetMapping } from '../types';
-import { parseNumber } from '../values/numbers';
+import { excelSerialToDate } from '../values/dates';
 
 /*
  * Identifiers of the converter.
@@ -44,21 +43,41 @@ export interface SampleCodeProposal {
 
 const cleanCode = (s: string): string => s.trim().replace(/[\t\r\n]+/g, ' ');
 
-/** One cell as CSV text, from its own text: numbers and missing tokens as they are, other text through the formula guard of the clean CSV (output/csv.ts). */
-function cellText(raw: RawCell | undefined, decimalComma: boolean): string {
+/**
+ * Spreadsheet formula guard for the proposal CSV: ONLY a cell that starts with = or @ (also after spaces or tabs, or in full-width form), or with a
+ * tab or CR, gets a leading apostrophe. Never + or -: a presence mark "+" and a negative number are ordinary values, and the converter's reader does
+ * not strip an apostrophe, so guarding them would change the data on the way back.
+ */
+export const guardFormula = (s: string): string => (/^(?:[\t\r]|[ \t]*[=@\uFF1D\uFF20])/.test(s) ? `'${s}` : s);
+
+/**
+ * One cell as text for the proposal CSV. A text cell is copied UNCHANGED (a decimal comma stays a comma: the file keeps its delimiter, so it is
+ * read as it was). An xlsx number is written with a dot; an xlsx date or date-time cell (a date-formatted column) is written as ISO 8601 text with the
+ * workbook's own date system, never as a serial number.
+ */
+function cellText(raw: RawCell | undefined, dateColumn: boolean, date1904: boolean): string {
   if (raw === null || raw === undefined) return '';
-  if (typeof raw === 'number') return String(raw);
-  const p = parseNumber(raw, decimalComma);
-  return p.status === 'ok' || p.status === 'missing' ? raw : guardText(raw);
+  if (typeof raw === 'number') {
+    if (dateColumn) {
+      try {
+        return excelSerialToDate(raw, date1904).iso;
+      } catch {
+        /* an impossible serial is written as the number it is */
+      }
+    }
+    return String(raw);
+  }
+  return guardFormula(raw);
 }
 
 /**
  * Q1: a sheet WITHOUT a sample code gets codes proposed ONCE, deterministically: `<station>-<n>`, n counting the rows of that station in sheet
  * order from 1 (`sample-<n>` for rows with no station), unique across the sheet. Returns the sheet as CSV with a new last column of codes; the
- * user checks it and uploads that file; the ID then comes from the user's own sheet. Returns undefined when the mapping already has a sample code
- * column: the converter does not overwrite or fill the user's codes.
+ * user checks it and uploads that file; the ID then comes from the user's own code. The cells are copied as text (see cellText), the delimiter is
+ * ';' for a decimal-comma source and ',' otherwise, so the file is read back exactly as the sheet was. Returns undefined when the mapping already has
+ * a sample code column: the converter does not overwrite or fill the user's codes.
  */
-export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'>, sheet: RawSheet, mapping: SheetMapping): SampleCodeProposal | undefined {
+export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { date1904?: boolean }, sheet: RawSheet, mapping: SheetMapping): SampleCodeProposal | undefined {
   if (mapping.columns.some((c) => c.role.kind === 'sampleId')) return undefined;
   const stationCol = mapping.columns.find((c) => c.role.kind === 'station')?.index;
   const used = new Set<string>();
@@ -78,10 +97,13 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'>, sheet
   let header = 'sample_code';
   for (let i = 2; taken.has(header.toLowerCase()); i++) header = `sample_code_${i}`;
   const width = sheet.header.length;
-  const line = (fields: readonly string[]): string => fields.map(csvField).join(',');
+  const delimiter = file.decimalComma ? ';' : ',';
+  const field = (v: string): string => (v.includes(delimiter) || /["\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const line = (fields: readonly string[]): string => fields.map(field).join(delimiter);
+  const date1904 = file.date1904 === true;
   const lines = [
-    line([...sheet.header.map((h) => guardText(h)), header]),
-    ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], file.decimalComma)), guardText(codes[i])])),
+    line([...sheet.header.map((h) => guardFormula(h)), header]),
+    ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], sheet.dateFormatted?.[k] === true, date1904)), guardFormula(codes[i])])),
   ];
   return { header, codes, csv: lines.join('\n') + '\n' };
 }

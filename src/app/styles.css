@@ -1491,3 +1491,31 @@ code.multiline {
   margin-top: 1.5rem;
   min-width: 0;
 }
+
+.convert-taxa {
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+
+.convert-candidates {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.convert-table .convert-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 8rem;
+  max-width: 100%;
+}
+
+.convert-doubt {
+  display: block;
+  margin-top: 0.25rem;
+  font-weight: 400;
+  color: var(--warning);
+}

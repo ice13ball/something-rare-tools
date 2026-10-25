@@ -60,10 +60,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['missing'],
     plain: {
-      pl: `Nie wiadomo, co oznaczają liczby w tym arkuszu. Wskaż, czy to liczebność (sztuki), zagęszczenie czy biomasa, z jednostką, a jeśli znasz wielkość próby (objętość lub powierzchnię), podaj ją w całości.`,
-      en: `It is not known what the numbers in this sheet mean. Say whether they are counts, densities or biomass, with the unit, and if you give the sample size (a volume or an area), give all of it.`,
-      de: `Es ist unklar, was die Zahlen in diesem Blatt bedeuten. Geben Sie an, ob es Anzahlen, Dichten oder Biomasse sind, mit Einheit; nennen Sie die Probengröße (Volumen oder Fläche), dann vollständig.`,
-      fr: `On ne sait pas ce que signifient les nombres de cette feuille. Indiquez s'il s'agit d'effectifs, de densités ou de biomasse, avec l'unité ; si vous donnez la taille d'échantillon (volume ou surface), donnez-la en entier.`,
+      pl: `Nie wiadomo, co oznaczają liczby w tym arkuszu. Wskaż, czy to liczebność (sztuki), zagęszczenie czy biomasa, z jednostką, a jeśli znasz wielkość próby (objętość lub powierzchnię), podaj ją w całości. Brakuje: {missing}.`,
+      en: `It is not known what the numbers in this sheet mean. Say whether they are counts, densities or biomass, with the unit, and if you give the sample size (a volume or an area), give all of it. Missing: {missing}.`,
+      de: `Es ist unklar, was die Zahlen in diesem Blatt bedeuten. Geben Sie an, ob es Anzahlen, Dichten oder Biomasse sind, mit Einheit; nennen Sie die Probengröße (Volumen oder Fläche), dann vollständig. Es fehlt: {missing}.`,
+      fr: `On ne sait pas ce que signifient les nombres de cette feuille. Indiquez s'il s'agit d'effectifs, de densités ou de biomasse, avec l'unité ; si vous donnez la taille d'échantillon (volume ou surface), donnez-la en entier. Il manque : {missing}.`,
     },
     technical: `{file}, {sheet}: the quantity declaration of the sheet is missing or incomplete (missing: {missing}). A count needs only its kind; a density needs the unit; a biomass needs the unit and the basis (wet, dry or ash-free dry weight); an effort needs its value or column, its unit and whether it is a volume or an area.`,
   },
@@ -293,6 +293,19 @@ export function makeConvertFinding(ruleId: string, f: Omit<Finding, 'ruleId' | '
   return finding;
 }
 
+/** What a declaration lacks, in words (CONV-QUANTITY-UNDECLARED carries codes in `missing`; the plain text names them in the reader's language). */
+const MISSING_WORDS: Record<string, Record<Lang, string>> = {
+  kind: { en: 'the kind of number', pl: 'rodzaj liczby', de: 'die Art der Zahl', fr: 'la nature du nombre' },
+  unit: { en: 'the unit', pl: 'jednostka', de: 'die Einheit', fr: "l'unité" },
+  basis: { en: 'the kind of weight', pl: 'rodzaj masy', de: 'die Art des Gewichts', fr: 'le type de masse' },
+  'per volume or per area': { en: 'per volume or per area', pl: 'na objętość czy na powierzchnię', de: 'je Volumen oder je Fläche', fr: 'par volume ou par surface' },
+  medium: { en: 'water column or bed', pl: 'słup wody czy dno', de: 'Wassersäule oder Boden', fr: "colonne d'eau ou fond" },
+  'effort unit': { en: 'the unit of the sample size', pl: 'jednostka wielkości próby', de: 'die Einheit der Probengröße', fr: "l'unité de la taille d'échantillon" },
+  'effort value': { en: 'the value of the sample size', pl: 'wartość wielkości próby', de: 'der Wert der Probengröße', fr: "la valeur de la taille d'échantillon" },
+  'effort volume or area': { en: 'whether the sample size is a volume or an area', pl: 'czy wielkość próby to objętość, czy powierzchnia', de: 'ob die Probengröße ein Volumen oder eine Fläche ist', fr: "si la taille d'échantillon est un volume ou une surface" },
+  'effort column': { en: 'a column marked as sample size', pl: 'kolumna oznaczona jako wielkość próby', de: 'eine als Probengröße markierte Spalte', fr: "une colonne marquée comme taille d'échantillon" },
+};
+
 function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
   // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
@@ -307,6 +320,10 @@ function fill(template: string, f: Finding, lang?: Lang): string {
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
+  if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
+    const words = f.params.missing.split(', ').map((m) => MISSING_WORDS[m]?.[lang] ?? m);
+    f = { ...f, params: { ...f.params, missing: words.join('; ') } };
+  }
   return fill(rule.plain[lang] || rule.plain.en, f, lang);
 }
 

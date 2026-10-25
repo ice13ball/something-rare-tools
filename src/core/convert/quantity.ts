@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { parseNumber } from '../values/numbers';
 import { P01, P06, type NercTerm } from './vocab';
 
 /*
@@ -36,7 +37,7 @@ export interface QuantityDeclaration {
   basis?: BiomassBasis;
   /** density / biomass: per volume or per area; optional when the unit says it. */
   per?: EffortDimension;
-  /** density / biomass per area: the water column ('water') or the bed ('bed', the default for an area). Only a bed has a verified concept. */
+  /** density / biomass per area: the water column ('water') or the bed ('bed'). REQUIRED for an area (no default); only a bed has a verified concept. */
   medium?: 'water' | 'bed';
   effort?: EffortDeclaration;
 }
@@ -117,6 +118,8 @@ export interface ResolvedQuantity {
   /** The unit is declared but has no verified P06 concept (CONV-UNIT-NO-P06). */
   unitWithoutP06?: string;
   effort?: ResolvedEffort;
+  /** A typed sample size that is not a number above zero: CONV-EFFORT-INVALID, and no effort is written. */
+  effortInvalid?: string;
 }
 
 export type QuantityResolution = { ok: true; quantity: ResolvedQuantity } | { ok: false; missing: string[] };
@@ -127,7 +130,7 @@ const biomassType = (basis: BiomassBasis, per: EffortDimension, medium: 'water' 
   return basis === 'wet' ? P01.wetPerAreaBed : basis === 'dry' ? P01.dryPerAreaBed : P01.afdwPerAreaBed;
 };
 
-function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined, decimalComma: boolean): { effort?: ResolvedEffort; missing: string[] } {
+function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined, decimalComma: boolean): { effort?: ResolvedEffort; missing: string[]; invalid?: string } {
   const unit = (e.unit ?? columnUnit ?? '').trim();
   const known = unit === '' ? {} : parseEffortUnit(unit);
   const dimension = e.dimension ?? known.dimension;
@@ -135,13 +138,19 @@ function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined, dec
   if (unit === '') missing.push('effort unit');
   if (dimension === undefined && unit !== '') missing.push('effort volume or area');
   let constant: { value: number; text: string } | undefined;
+  let invalid: string | undefined;
   if (e.source === 'constant') {
     const text = e.value === undefined ? '' : String(e.value).trim();
-    const value = text === '' ? NaN : Number(decimalComma ? text.replace(',', '.') : text);
-    if (!Number.isFinite(value) || value <= 0) missing.push('effort value');
-    else constant = { value, text };
+    if (text === '') missing.push('effort value');
+    else {
+      // read with the sheet's own decimal setting, written with a dot; not a number, or not above zero, is CONV-EFFORT-INVALID (not "missing")
+      const p = parseNumber(text, decimalComma);
+      if (p.status === 'ok' && p.value > 0) constant = { value: p.value, text: decimalComma ? text.replace(',', '.') : text };
+      else invalid = text;
+    }
   }
-  if (missing.length > 0 || dimension === undefined) return { missing };
+  if (missing.length > 0 || dimension === undefined) return { missing, ...(invalid === undefined ? {} : { invalid }) };
+  if (invalid !== undefined) return { missing, invalid };
   const type = dimension === 'volume' ? P01.volumeSampled : P01.areaSampled;
   return {
     effort: { source: e.source, ...(constant ? { constant } : {}), unit, dimension, type, ...(known.p06 && known.dimension === dimension ? { unitId: known.p06 } : {}) },
@@ -171,8 +180,10 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
     if (unit !== '') out.unit = unit;
     if (parsed?.p06 && (decl.per === undefined || decl.per === parsed.per)) out.unitId = parsed.p06;
     else if (unit !== '') out.unitWithoutP06 = unit;
-    if (per !== undefined) {
-      const medium = decl.medium ?? (per === 'area' ? 'bed' : 'water');
+    // per area there is NO default: the bed and the water column have different concepts, so the user says which
+    if (per === 'area' && decl.medium === undefined) missing.push('medium');
+    if (per !== undefined && !(per === 'area' && decl.medium === undefined)) {
+      const medium = decl.medium ?? 'water';
       const type =
         decl.kind === 'density' ? (per === 'volume' ? P01.densityVolume : medium === 'bed' ? P01.densityAreaBed : undefined) : decl.basis === undefined ? undefined : biomassType(decl.basis, per, medium);
       if (type) out.type = type;
@@ -183,6 +194,7 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
     const r = resolveEffort(decl.effort, opts.columnEffortUnit, opts.decimalComma === true);
     missing.push(...r.missing);
     if (r.effort) out.effort = r.effort;
+    if (r.invalid !== undefined) out.effortInvalid = r.invalid;
   }
   if (missing.length > 0) return { ok: false, missing };
   return { ok: true, quantity: out };

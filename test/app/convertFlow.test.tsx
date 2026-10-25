@@ -21,11 +21,14 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-async function load(files: { name: string; text: string }[], download = vi.fn(), lang: 'en' | 'pl' | 'de' | 'fr' = 'en') {
+async function load(files: { name: string; text: string }[], download = vi.fn(), lang: 'en' | 'pl' | 'de' | 'fr' = 'en', confirmTaxa = true) {
   const view = render(<ConvertPage engine={createDirectConvertEngine()} download={download} />);
   chooseFiles(view.container, files);
   fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
   await screen.findByRole('heading', { name: UI[lang]['convert.columns.title'] });
+  // the overlay's proposed taxon columns are converted only after the user confirms them
+  const confirm = screen.queryByRole('button', { name: new RegExp(UI[lang]['convert.taxa.confirmAll'].replace(/\{n\}.*$/, '').replace(/[()]/g, '')) });
+  if (confirmTaxa && confirm) fireEvent.click(confirm);
   return { ...view, download };
 }
 
@@ -271,5 +274,115 @@ describe('the four languages', () => {
       expect(text, lang).not.toMatch(/\{[A-Za-z]+\}/);
       expect(text, lang).not.toMatch(/convert\.[a-z]+\.[a-zA-Z.]+/);
     }
+  });
+});
+
+describe('proposed taxon columns are converted only after confirmation (M1)', () => {
+  it('lists them with their own control; nothing from an unconfirmed column is converted, and the summary says so', async () => {
+    await load([{ name: 'w1.csv', text: W1_CSV }], vi.fn(), 'en', false);
+    const section = (await screen.findByRole('heading', { name: '3 columns proposed as taxa' })).closest('section') as HTMLElement;
+    expect(within(section).getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([false, false, false]);
+    pick(T['convert.quantity.kind'], 'count');
+    await settled('3 proposed taxon columns are not confirmed, so they are not converted.');
+    expect(summary().textContent).toContain('No taxon columns, or no quantity column, are marked');
+    expect(summary().textContent).toContain('0 occurrences');
+    // one column confirmed: only it is converted, and the note counts the rest
+    fireEvent.click(within(section).getByLabelText('Confirm as a taxon: Calanus finmarchicus'));
+    await settled('2 proposed taxon columns are not confirmed');
+    await settled('2 occurrences (2 present');
+    // all confirmed, then one unticked again
+    fireEvent.click(within(section).getByRole('button', { name: /Confirm all shown \(2\)/ }));
+    await settled('7 occurrences (6 present, 1 absent)'.slice(0, 0) + 'occurrences (');
+    expect(summary().textContent).not.toContain('are not confirmed');
+    fireEvent.click(within(section).getByLabelText('Confirm as a taxon: Oithona similis'));
+    await settled('1 proposed taxon column is not confirmed, so it is not converted.');
+  });
+
+  it('a column the user gives the taxon meaning to by hand needs no confirmation', async () => {
+    await load([{ name: 'w1.csv', text: W1_CSV }], vi.fn(), 'en', false);
+    fireEvent.change(screen.getByLabelText('Calanus finmarchicus: Meaning'), { target: { value: 'ignore' } });
+    await screen.findByRole('heading', { name: '2 columns proposed as taxa' });
+    fireEvent.change(screen.getByLabelText('Calanus finmarchicus: Meaning'), { target: { value: 'taxonHeader' } });
+    // it is a taxon again, by the user's own choice: listed as before, but already confirmed
+    const section = (await screen.findByRole('heading', { name: '3 columns proposed as taxa' })).closest('section') as HTMLElement;
+    expect(within(section).getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([true, false, false]);
+    pick(T['convert.quantity.kind'], 'count');
+    await settled('2 proposed taxon columns are not confirmed');
+    await settled('2 occurrences (2 present');
+  });
+});
+
+describe('splits are editable, and doubtful names are put to the user (M5)', () => {
+  const csv = 'Sample,Station,Microcalanus pusillus/pygmaeus,Calanus finmarchicus C5 f\na,S,3,4\n';
+  it('shows the reason, lets the user correct every field, and approving saves the edited split', async () => {
+    await load([{ name: 'edit.csv', text: csv }]);
+    pick(T['convert.quantity.kind'], 'count');
+    const section = (await screen.findByRole('heading', { name: T['convert.splits.title'] })).closest('section') as HTMLElement;
+    expect(section.textContent).toContain('Check the name: it contains a slash (two names?)');
+    // the second proposal is complete: name, stage and sex are prefilled
+    const name2 = within(section).getByLabelText('Scientific name: Calanus finmarchicus C5 f') as HTMLInputElement;
+    expect(name2.value).toBe('Calanus finmarchicus');
+    expect((within(section).getByLabelText('Life stage: Calanus finmarchicus C5 f') as HTMLInputElement).value).toBe('C5');
+    expect((within(section).getByLabelText('Sex: Calanus finmarchicus C5 f') as HTMLSelectElement).value).toBe('female');
+    // an empty name cannot be approved
+    const name1 = within(section).getByLabelText('Scientific name: Microcalanus pusillus/pygmaeus') as HTMLInputElement;
+    fireEvent.change(name1, { target: { value: '' } });
+    expect((within(section).getByRole('button', { name: 'Approve: Microcalanus pusillus/pygmaeus' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(name1, { target: { value: 'Microcalanus' } });
+    fireEvent.change(within(section).getByLabelText('Qualifier: Microcalanus pusillus/pygmaeus'), { target: { value: 'sp.' } });
+    fireEvent.click(within(section).getByRole('button', { name: 'Approve: Microcalanus pusillus/pygmaeus' }));
+    await waitFor(() => expect((within(section).getByLabelText('Scientific name: Microcalanus pusillus/pygmaeus') as HTMLInputElement).disabled).toBe(true));
+    fireEvent.click(within(section).getByRole('button', { name: 'Approve: Calanus finmarchicus C5 f' }));
+    await settled(T['convert.summary.none']);
+    // the edited split is what was used: 2 occurrences, and the approved row is locked until withdrawn
+    expect(summary().textContent).toContain('2 occurrences');
+    fireEvent.click(within(section).getByRole('button', { name: `${T['convert.splits.withdraw']}: Microcalanus pusillus/pygmaeus` }));
+    await settled(T['convert.summary.blocked']);
+    expect((within(section).getByLabelText('Scientific name: Microcalanus pusillus/pygmaeus') as HTMLInputElement).value).toBe('Microcalanus');
+  });
+});
+
+describe('per area needs a choice of medium (M2) and the page names what is missing (L2)', () => {
+  it('the medium select starts on "— choose —"; undeclared names the medium until it is chosen', async () => {
+    await load([{ name: 'w1.csv', text: W1_CSV }]);
+    pick(T['convert.quantity.kind'], 'density');
+    fireEvent.change(screen.getByLabelText(T['convert.quantity.unit']), { target: { value: '#/m2' } });
+    const medium = (await screen.findByLabelText(T['convert.quantity.medium'])) as HTMLSelectElement;
+    expect(medium.value).toBe('');
+    expect([...medium.options].map((o) => o.textContent)).toEqual(['— choose —', 'Bed (sediment)', 'Water column']);
+    await settled('Missing: water column or bed');
+    fireEvent.change(medium, { target: { value: 'water' } });
+    await settled('no verified NERC concept');
+    expect(summary().textContent).not.toContain('Missing: water column or bed');
+  });
+
+  it('names what is missing, in plain words, in every language', async () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      cleanup();
+      setLang(lang);
+      await load([{ name: 'w1.csv', text: W1_CSV }], vi.fn(), lang);
+      fireEvent.change(screen.getByLabelText(UI[lang]['convert.quantity.kind']), { target: { value: 'biomass' } });
+      const words = { en: 'Missing: the unit; the kind of weight', pl: 'Brakuje: jednostka; rodzaj masy', de: 'Es fehlt: die Einheit; die Art des Gewichts', fr: "Il manque : l'unité; le type de masse" }[lang];
+      await waitFor(() => expect(screen.getByRole('region', { name: UI[lang]['convert.summary.title'] }).textContent).toContain(words));
+    }
+  });
+});
+
+describe('a converter error is cleared by a later success (L7)', () => {
+  it('shows the error of a failed conversion and removes it when the next one succeeds', async () => {
+    const real = createDirectConvertEngine();
+    let fail = false;
+    const engine = { ...real, convert: (b: Parameters<typeof real.convert>[0]) => (fail ? Promise.reject(new Error('boom')) : real.convert(b)) };
+    const view = render(<ConvertPage engine={engine} />);
+    chooseFiles(view.container, [{ name: 'w1.csv', text: W1_CSV }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    fail = true;
+    pick(T['convert.quantity.kind'], 'count');
+    await screen.findByText('The converter stopped: boom');
+    fail = false;
+    pick(T['convert.quantity.kind'], 'density');
+    await waitFor(() => expect(screen.queryByText('The converter stopped: boom')).toBeNull());
+    await settled(T['convert.summary.blocked']);
   });
 });
