@@ -9,7 +9,8 @@ import { licenceDiffersFindings } from '../core/convert/validate';
 import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput } from '../core/convert';
 import { EMPTY_METADATA } from '../core/convert/metadata';
-import { buildPrefill, prefillValues } from '../core/convert/prefill';
+import { buildPrefill, licenceSourceOf, prefillValues } from '../core/convert/prefill';
+import type { LicenceSource } from '../core/convert/prefill';
 import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
 import { readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
@@ -56,6 +57,8 @@ export interface ConvertHandler {
 export function createConvertHandler(): ConvertHandler {
   let seq = 0;
   let files = new Map<string, Held>();
+  // what the dropped metadata files state about the licence, from THIS session's own parse: CONV-LICENCE-DIFFERS at export is judged from it, never from what the page sends
+  let licenceSource: LicenceSource = { ids: [], disagree: false };
 
   const held = (fileId: string): Held => {
     const h = files.get(fileId);
@@ -66,6 +69,7 @@ export function createConvertHandler(): ConvertHandler {
   function parse(req: Extract<ConvertRequest, { type: 'parse' }>): ConvertParseResult {
     files = new Map();
     seq = 0;
+    licenceSource = { ids: [], disagree: false };
     const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {}, prefillInfo: null };
     const records: MetadataRecord[] = [];
     const parsedAll: ParsedFile[] = [];
@@ -130,6 +134,7 @@ export function createConvertHandler(): ConvertHandler {
     }
     result.prefillInfo = buildPrefill(records) ?? null;
     result.prefill = prefillValues(result.prefillInfo ?? undefined);
+    licenceSource = licenceSourceOf(result.prefillInfo);
     return result;
   }
 
@@ -182,7 +187,7 @@ export function createConvertHandler(): ConvertHandler {
   async function exportArchive(req: ExportBody): Promise<ExportResult> {
     const { r } = compute(req.body);
     const dataset = toDataset(r, req.metadata, decisionsOf(req.body));
-    const findings = [...r.findings, ...validateDataset(dataset, r.findings, { today: today() }), ...licenceDiffersFindings(req.metadata.licence, req.sourceLicences ?? [])];
+    const findings = [...r.findings, ...validateDataset(dataset, r.findings, { today: today() }), ...licenceDiffersFindings(req.metadata.licence, licenceSource)];
     const j = judge(findings);
     if (j.blocking.length > 0) throw new Error(`Export refused: ${j.blocking.length} finding(s) block it (${[...new Set(j.blocking.map((f) => f.ruleId))].join(', ')}). Nothing was written.`);
     const open = j.acceptRules.filter((id) => !req.accepted.includes(id));
@@ -214,6 +219,7 @@ export function createConvertHandler(): ConvertHandler {
         case 'reset':
           files = new Map();
           seq = 0;
+          licenceSource = { ids: [], disagree: false };
           return null;
         case 'parse':
           return parse(req);

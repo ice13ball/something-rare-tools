@@ -67,8 +67,6 @@ export interface ExportBody {
   metadata: DatasetMetadata;
   /** Rule ids of the warnings the user accepted in this run. */
   accepted: string[];
-  /** The licence ids the dropped metadata files state and recognise (core/convert/prefill.ts recognisedLicenceIds): the worker raises CONV-LICENCE-DIFFERS from them. */
-  sourceLicences: string[];
   /** UTC timestamp of the export, for pubDate and dateStamp of the EML (the core reads no clock). */
   generated: string;
 }

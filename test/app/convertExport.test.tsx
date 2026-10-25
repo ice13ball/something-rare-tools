@@ -244,8 +244,8 @@ describe('the download', () => {
     const sheet = f.sheets[0].name;
     const mapping = { ...f.mappings[0], columns: f.mappings[0].columns };
     const body = { sheets: [{ fileId: f.fileId, sheet, mapping, shape: 'wide' as const, quantity: { kind: 'count' as const, effort: { source: 'column' as const } } }], options: { fullList: true }, approvedSplits: { 'Pseudocalanus sp.': { verbatimIdentification: 'Pseudocalanus sp.', scientificName: 'Pseudocalanus', identificationQualifier: 'sp.' } } };
-    const meta = { title: 'T', abstract: 'A', creators: 'A B', contactName: 'A B', contactEmail: 'a@b.org', institutionCode: 'X', datasetName: '', licence: 'CC0-1.0' as const, basisOfRecord: 'HumanObservation' as const, methods: '', citation: '' };
-    const run = (m: typeof meta, accepted: string[], b = body) => Promise.resolve(h.handle({ type: 'export', export: { body: b, metadata: m, accepted, generated: '2026-10-25T12:00:00Z', sourceLicences: [] } }));
+    const meta = { title: 'T', abstract: 'A', creators: 'A B', contactName: 'A B', contactEmail: 'a@b.org', institutionCode: 'X', datasetName: '', licence: 'CC0-1.0' as const, basisOfRecord: 'HumanObservation' as const, methods: '', citation: '', organisations: '' };
+    const run = (m: typeof meta, accepted: string[], b = body) => Promise.resolve(h.handle({ type: 'export', export: { body: b, metadata: m, accepted, generated: '2026-10-25T12:00:00Z' } }));
     const ACCEPT = ['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'];
     await expect(run(meta, [])).rejects.toThrow(/CONV-DEVICE-MISSING, CONV-NAMEID-MISSING not accepted|CONV-NAMEID-MISSING, CONV-DEVICE-MISSING not accepted/);
     await expect(run(meta, ['CONV-NAMEID-MISSING'])).rejects.toThrow(/CONV-DEVICE-MISSING not accepted/);

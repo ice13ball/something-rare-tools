@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { bulkApprovable, judge, licenceDiffersFindings, metadataFindings, recognisedLicenceIds, writeConvertSidecar } from '../../core/convert';
+import { bulkApprovable, judge, licenceDiffersFindings, licenceSourceOf, metadataFindings, writeConvertSidecar } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { UiKey } from '../../core/i18n/ui';
@@ -234,8 +234,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const setDraft = (s: (typeof toApprove)[number], patch: Partial<TaxonSplit>): void => setDrafts((prev) => ({ ...prev, [s.verbatim]: { ...draftOf(s), ...patch } }));
   // what each finding does to the export (core/convert/policy.ts): blocks, needs an acceptance, or is only shown
   // CONV-LICENCE-DIFFERS: the licence chosen is not the one the dropped metadata state; raised here (the worker raises it again from the same two values at export)
-  const sourceLicences = useMemo(() => recognisedLicenceIds(parsed?.prefillInfo), [parsed]);
-  const licenceDiffers = useMemo(() => licenceDiffersFindings(meta.licence, sourceLicences), [meta.licence, sourceLicences]);
+  const licenceSource = useMemo(() => licenceSourceOf(parsed?.prefillInfo), [parsed]);
+  const licenceDiffers = useMemo(() => licenceDiffersFindings(meta.licence, licenceSource), [meta.licence, licenceSource]);
   const judged = useMemo(() => judge([...(view?.findings ?? []), ...licenceDiffers]), [view, licenceDiffers]);
   const metaFindings = useMemo(() => metadataFindings(meta), [meta]);
   const blocking = judged.blocking;
@@ -271,7 +271,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     try {
       const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed });
       const acceptedRules = judged.acceptRules.filter(isAccepted);
-      const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, sourceLicences, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+      const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
       downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
       setExported({ fileName: res.fileName, counts: res.counts, deflated: res.deflated });
       track('convert_exported', {

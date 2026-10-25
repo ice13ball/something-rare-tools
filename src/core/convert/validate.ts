@@ -53,13 +53,16 @@ export function metadataFindings(m: DatasetMetadata): Finding[] {
 }
 
 /**
- * CONV-LICENCE-DIFFERS: the licence chosen is not one of the licences the dropped metadata files state (`sourceIds`, core/convert/prefill.ts
- * recognisedLicenceIds). An archive must not carry a licence different from its source without the user acknowledging it. Nothing when no file states a
- * recognised licence, or when no licence is chosen (CONV-LICENCE-UNSET says that).
+ * CONV-LICENCE-DIFFERS: the licence chosen differs from what the dropped metadata files state (`source`, core/convert/prefill.ts licenceSourceOf: every
+ * recognised id, in every case). It fires when the chosen licence is not among the recognised ids, and also, when the files DISAGREE with each other, whenever
+ * the choice differs from what at least one file says (choosing one of two contradicting licences still departs from the other file). An archive must not
+ * carry a licence different from its source without the user acknowledging it. Nothing when no file states a recognised licence, or when no licence is
+ * chosen (CONV-LICENCE-UNSET says that).
  */
-export function licenceDiffersFindings(chosen: string, sourceIds: readonly string[]): Finding[] {
-  if (chosen === '' || sourceIds.length === 0 || sourceIds.includes(chosen)) return [];
-  return [makeConvertFinding('CONV-LICENCE-DIFFERS', { file: 'eml.xml', params: { chosen, source: sourceIds.join(', ') } })];
+export function licenceDiffersFindings(chosen: string, source: { ids: readonly string[]; disagree: boolean }): Finding[] {
+  if (chosen === '' || source.ids.length === 0) return [];
+  if (source.ids.includes(chosen) && !(source.disagree && source.ids.some((id) => id !== chosen))) return [];
+  return [makeConvertFinding('CONV-LICENCE-DIFFERS', { file: 'eml.xml', params: { chosen, source: source.ids.join(', ') } })];
 }
 
 /** The Event table through the Event checks of /check. */

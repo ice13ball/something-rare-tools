@@ -137,8 +137,8 @@ const para = (text: string, pad: string): string =>
 
 const bound = (n: number): string => String(Math.round(n * 1e6) / 1e6);
 
-function personXml(tag: string, line: string, email: string | undefined, pad: string): string {
-  const n = partyOf(line);
+function personXml(tag: string, line: string, email: string | undefined, pad: string, organisations: string): string {
+  const n = partyOf(line, organisations);
   return [
     `${pad}<${tag}>`,
     n.kind === 'organisation'
@@ -156,7 +156,7 @@ function personXml(tag: string, line: string, email: string | undefined, pad: st
 function citationOf(m: DatasetMetadata, year: string): string {
   if (m.citation.trim() !== '') return m.citation.trim().replace(/\s+/g, ' ');
   const names = creatorLines(m).map((l) => {
-    const n = partyOf(l);
+    const n = partyOf(l, m.organisations);
     if (n.kind === 'organisation') return n.name;
     return n.givenName === undefined ? n.surName : `${n.surName}, ${n.givenName}`;
   });
@@ -217,8 +217,8 @@ export function buildEml(ds: Pick<ConvertedDataset, 'events' | 'occurrences' | '
     `         packageId="${escapeXml(slug)}/v1.0" system="http://gbif.org" scope="system" xml:lang="en">`,
     '  <dataset>',
     `    <title xml:lang="en">${escapeXml(m.title.trim())}</title>`,
-    ...creators.map((c) => personXml('creator', c, undefined, '    ')),
-    personXml('metadataProvider', contactLine, email, '    '),
+    ...creators.map((c) => personXml('creator', c, undefined, '    ', m.organisations)),
+    personXml('metadataProvider', contactLine, email, '    ', m.organisations),
     `    <pubDate>${pubDate}</pubDate>`,
     '    <language>en</language>',
     '    <abstract>',
@@ -233,7 +233,7 @@ export function buildEml(ds: Pick<ConvertedDataset, 'events' | 'occurrences' | '
     `      <para>${escapeXml(lic.before)}<ulink url="${escapeXml(lic.url)}"><citetitle>${escapeXml(lic.title)}</citetitle></ulink>${escapeXml(lic.after)}</para>`,
     '    </intellectualRights>',
     ...(coverage.length > 0 ? ['    <coverage>', ...coverage, '    </coverage>'] : []),
-    personXml('contact', contactLine, email, '    '),
+    personXml('contact', contactLine, email, '    ', m.organisations),
     ...(m.methods.trim() === '' ? [] : ['    <methods>', '      <methodStep>', '        <description>', para(m.methods, '          '), '        </description>', '      </methodStep>', '    </methods>']),
     '  </dataset>',
     '  <additionalMetadata>',

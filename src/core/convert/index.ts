@@ -45,5 +45,5 @@ export { ACCEPT_RULES, BLOCK_CONV_RULES, BLOCK_INPUT_RULES, BLOCK_OUTPUT_RULES, 
 export type { Judged, Policy } from './policy';
 export { licenceDiffersFindings, metadataFindings, validateDataset, validateTables } from './validate';
 export { CONVERT_RULES, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../rules/convert';
-export { buildPrefill, cleanText, licenceCaseOf, recognisedLicenceIds, metadataKindName, prefillValues, PREFILL_KEYS } from './prefill';
+export { buildPrefill, cleanText, licenceCaseOf, licenceSourceOf, recognisedLicenceIds, metadataKindName, prefillValues, PREFILL_KEYS } from './prefill';
 export type { Candidate, ConvertPrefill, CoverageSaid, LicenceCase, LicenceSaid, MetadataFileInfo, PrefillKey, SourceRef as PrefillSourceRef } from './prefill';
