@@ -27,6 +27,10 @@ export interface TaxonSplit {
   sex?: 'female' | 'male';
 }
 
+/** What the split reads, for the page's explanation (the tip is filled from these, never typed). */
+export const QUALIFIER_TOKENS = ['cf.', 'aff.', 'sp.', 'spp.', '?'] as const;
+export const STAGE_TOKENS = ['c1–c6', 'CI–CVI', 'nauplius', 'juv', 'larva', 'adult'] as const;
+
 const COPEPODITE_ROMAN: Record<string, string> = { i: 'C1', ii: 'C2', iii: 'C3', iv: 'C4', v: 'C5', vi: 'C6' };
 
 /** A stage token (the whole token, any case), or undefined. Fixed list: c1-c6, CI-CVI, nauplius, juv, larva, adult. */

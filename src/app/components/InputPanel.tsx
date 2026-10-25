@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useId, useState } from 'react';
+import type { UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
 import { ACCEPTED_EXTENSIONS, type CheckInput, type DownloadMode } from '../types';
@@ -13,6 +14,10 @@ export interface InputPanelProps {
   onFilesChange?: (count: number) => void;
   /** Rendered right after the link field: the download mode only matters for links, dropped files never leave the computer. */
   modeSwitch?: React.ReactNode;
+  /** false: no link field (the converter reads dropped files only). Default true. */
+  withLink?: boolean;
+  /** The label of the submit button. Default: /check's. */
+  submitKey?: UiKey;
 }
 
 function accepted(f: File): boolean {
@@ -26,7 +31,7 @@ const sameFile = (a: File, b: File): boolean => a.name === b.name && a.size === 
  * Drop zone + link/DOI field + Check button. Files and the link stay in component state and go to
  * onSubmit; they are never written to the URL (the form never navigates: submit is always prevented).
  */
-export function InputPanel({ mode, onSubmit, disabled, onFilesChange, modeSwitch }: InputPanelProps): React.ReactElement {
+export function InputPanel({ mode, onSubmit, disabled, onFilesChange, modeSwitch, withLink = true, submitKey = 'input.submit' }: InputPanelProps): React.ReactElement {
   useLang();
   const [files, setFiles] = useState<File[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
@@ -108,12 +113,14 @@ export function InputPanel({ mode, onSubmit, disabled, onFilesChange, modeSwitch
           </ul>
         </div>
       )}
-      <div className="field">
-        <FieldLabel htmlFor={linkId} tip="linkField">
-          {t('input.link.label')}
-        </FieldLabel>
-        <input id={linkId} type="text" value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('input.link.placeholder')} autoComplete="off" spellCheck={false} />
-      </div>
+      {withLink && (
+        <div className="field">
+          <FieldLabel htmlFor={linkId} tip="linkField">
+            {t('input.link.label')}
+          </FieldLabel>
+          <input id={linkId} type="text" value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('input.link.placeholder')} autoComplete="off" spellCheck={false} />
+        </div>
+      )}
       {modeSwitch}
       {empty && (
         <p className="error-text" role="alert">
@@ -121,7 +128,7 @@ export function InputPanel({ mode, onSubmit, disabled, onFilesChange, modeSwitch
         </p>
       )}
       <button type="submit" className="button" disabled={disabled}>
-        {t('input.submit')}
+        {t(submitKey)}
       </button>
     </form>
   );

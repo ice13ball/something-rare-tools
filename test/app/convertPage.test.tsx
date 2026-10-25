@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // @vitest-environment jsdom
-// /convert stage 0: a hidden shell in four languages, and nothing that announces it (menu, index, footer, imports of its graphic).
+// /convert: a hidden page in four languages (stage 1b: files are read and previewed, no export), and nothing that announces it (menu, index, footer, imports of its graphic).
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,7 +23,7 @@ afterEach(cleanup);
 const TITLES = { pl: 'Konwerter do Darwin Core', en: 'Darwin Core converter', de: 'Darwin-Core-Konverter', fr: 'Convertisseur Darwin Core' } as const;
 
 describe('ConvertPage', () => {
-  it('shows the title, the intro and the in-preparation notice in every language, all from the i18n tables', () => {
+  it('shows the title, the intro and the preview-stage notice in every language, all from the i18n tables', () => {
     for (const lang of LANGS) {
       cleanup();
       setLang(lang);
@@ -39,27 +39,32 @@ describe('ConvertPage', () => {
 
   it('the four languages differ and every key is written with its diacritics', () => {
     expect(UI.pl['convert.intro']).toContain('węzła');
-    expect(UI.pl['convert.status.text']).toMatch(/przygotowaniu/);
-    expect(UI.de['convert.status.text']).toContain('nutzbar');
-    expect(UI.fr['convert.status.title']).toBe('En préparation');
+    expect(UI.pl['convert.status.text']).toMatch(/podglądzie/);
+    expect(UI.de['convert.status.text']).toContain('Vorschau');
+    expect(UI.fr['convert.status.title']).toBe("Étape d'aperçu");
     for (const k of ['convert.title', 'convert.intro', 'convert.status.title', 'convert.status.text'] as const) {
       expect(new Set(LANGS.map((l) => UI[l][k])).size, k).toBe(LANGS.length);
     }
   });
 
-  it('has no drop zone, no file input and no form yet', () => {
+  it('has a drop zone and a file input for files read in the browser, and no link field and no download mode', () => {
     render(<ConvertPage />);
-    expect(document.querySelector('input, form, [data-tip="dropZone"]')).toBeNull();
+    expect(document.querySelector('[data-tip="dropZone"]')).toBeTruthy();
+    expect(document.querySelector('input[type="file"]')).toBeTruthy();
+    expect(document.querySelector('input[type="text"], [data-tip="linkField"], [data-tip="downloadMode"]')).toBeNull();
+    // nothing else is on the page before files are read
+    expect(document.querySelectorAll('.convert-sheet, .convert-summary, .convert-options').length).toBe(0);
   });
 
   it('the ⓘ opens with "What it does" and "The logic", and states the facts that hold today', async () => {
     render(<ConvertPage />);
-    fireEvent.click(screen.getByRole('button', { name: /Explanation/ }));
+    fireEvent.click(document.querySelector('[data-tip="convertIntro"] button') as HTMLElement);
     await waitFor(() => expect(screen.getByText(UI.en['tip.does'])).toBeTruthy());
     expect(screen.getByText(UI.en['tip.logic'])).toBeTruthy();
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/hidden/);
-    expect(text).toMatch(/Nothing is processed yet/);
+    expect(text).toMatch(/read and previewed in your browser; nothing is sent anywhere/);
+    expect(text).toMatch(/There is no export yet/);
     expect(text).toMatch(/WoRMS/);
     expect(text).toMatch(/NERC/);
     expect(text).toMatch(/off by default/);

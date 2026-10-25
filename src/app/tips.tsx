@@ -8,7 +8,9 @@ import { IPT_MAX_BYTES } from '../../config/ipt';
 import type { UiKey } from '../core/i18n/ui';
 import type { Lang } from '../core/types';
 import { t } from './i18n';
-import { ROLE_KINDS, roleLabelKey, type RoleKind } from './mappingModel';
+import { P01, P06 } from '../core/convert/vocab';
+import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
+import { CONVERT_ROLE_CHOICES, ROLE_KINDS, roleChoiceLabelKey, roleLabelKey, type RoleKind } from './mappingModel';
 import { ACCEPTED_EXTENSIONS } from './types';
 
 /*
@@ -111,6 +113,19 @@ const rolesList = (): React.ReactNode => (
   </span>
 );
 
+/** The column meanings of /convert: the shared ones with their /check sentence, the converter's own with theirs. No rule feeds: no /check rule reads a converter role. */
+const convertRolesList = (): React.ReactNode => (
+  <span className="infotip-list" role="list">
+    {CONVERT_ROLE_CHOICES.map((k) => (
+      <span key={k} className="infotip-item" role="listitem">
+        <strong>{t(roleChoiceLabelKey(k))}</strong> — {t(`tip.role.${k}` as UiKey)}
+      </span>
+    ))}
+  </span>
+);
+
+const codes = (...terms: { code: string }[]): (() => string) => () => terms.map((x) => x.code).join(', ');
+
 /* ---------- the registry ---------- */
 
 const SHIP_RULES = ['ROW-SHIP-SPEED', 'ROW-SHIP-SPEED-UNUSUAL'] as const;
@@ -169,6 +184,26 @@ const DEFS = {
   indexCollection: { label: 'index.collection.title' },
   // /convert (hidden until its reveal)
   convertIntro: { label: 'convert.title' },
+  convertRoles: { label: 'mapping.role', values: { roles: convertRolesList } },
+  convertSheetUse: { label: 'convert.sheet.use' },
+  convertShape: { label: 'convert.sheet.shape' },
+  convertQuantityKind: { label: 'convert.quantity.kind', values: { countConcept: codes(P01.count) } },
+  convertQuantityUnit: { label: 'convert.quantity.unit', values: { units: codes(P06.perM3, P06.perM2, P06.gPerM3, P06.gPerM2, P06.mgPerM3, P06.mgPerM2) } },
+  convertQuantityBasis: {
+    label: 'convert.quantity.basis',
+    values: { concepts: codes(P01.wetPerVolume, P01.wetPerAreaBed, P01.dryPerVolume, P01.dryPerAreaBed, P01.afdwPerVolume, P01.afdwPerAreaBed) },
+  },
+  convertQuantityPer: { label: 'convert.quantity.per', values: { volumeConcept: codes(P01.densityVolume), areaConcept: codes(P01.densityAreaBed) } },
+  convertQuantityMedium: { label: 'convert.quantity.medium' },
+  convertEffort: { label: 'convert.effort.title', values: { volumeConcept: codes(P01.volumeSampled), areaConcept: codes(P01.areaSampled) } },
+  convertCruise: { label: 'convert.cruise.label' },
+  convertFullList: { label: 'convert.fullList' },
+  convertStationPrefix: { label: 'convert.prefix' },
+  convertFlattenStation: { label: 'convert.flatten.station' },
+  convertFlattenCruise: { label: 'convert.flatten.cruise' },
+  convertSplits: { label: 'convert.splits.title', values: { qualifiers: () => QUALIFIER_TOKENS.join(' '), stages: () => STAGE_TOKENS.join(', ') } },
+  convertCodes: { label: 'convert.codes.title' },
+  convertTree: { label: 'convert.tree.title' },
 } satisfies Record<string, TipDef>;
 
 export type TipId = keyof typeof DEFS;

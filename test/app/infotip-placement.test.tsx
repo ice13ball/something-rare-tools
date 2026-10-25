@@ -20,6 +20,8 @@ import { TIPS, TIP_IDS, type TipId } from '../../src/app/tips';
 import { UI, translate, type UiKey } from '../../src/core/i18n/ui';
 import { LANGS } from '../../src/core/types';
 import { createDirectEngine } from '../../src/worker/handler';
+import { createDirectConvertEngine } from '../../src/worker/convert.handler';
+import { NO_CODE_CSV, SIDECAR_CSV, chooseFiles } from './convertHelpers';
 import { createDirectCollectionEngine } from '../../src/worker/collection.client';
 import { dataciteMock, runnerDeps, virtualClock } from '../collection/helpers';
 import { DC, dataciteJson, zenodoJson, ZEN } from '../helpers/licenceFixtures';
@@ -162,16 +164,48 @@ describe('/collection', () => {
   });
 });
 
-describe('/convert (hidden shell)', () => {
-  it('the intro carries its ⓘ, in every language, beside the text and not inside a heading', () => {
+describe('/convert (hidden)', () => {
+  it('the intro and the drop zone carry their ⓘ, in every language, beside the text and not inside a heading', () => {
     for (const lang of LANGS) {
       cleanup();
       setLang(lang);
-      render(<ConvertPage />);
-      expectTips(['convertIntro'], lang);
-      expect(document.querySelectorAll('h1 .infotip, h2 .infotip').length).toBe(0);
-      expect(document.querySelectorAll('.infotip').length).toBe(1);
+      render(<ConvertPage engine={createDirectConvertEngine()} />);
+      expectTips(['convertIntro', 'dropZone'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+      expect(document.querySelectorAll('.infotip').length).toBe(2);
     }
+  });
+
+  it('every decision of the flow carries its ⓘ: roles, sheet, shape, each quantity field, cruise, full list, station prefix, flatten, splits, codes, tree', async () => {
+    const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+    // a sheet with a missing sample code (the code step) and a companion file that ticks the station prefix
+    chooseFiles(container, [
+      { name: 'no-code.csv', text: NO_CODE_CSV },
+      { name: 'run.sidecar.csv', text: SIDECAR_CSV },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: UI.en['convert.read'] }));
+    await screen.findByRole('heading', { name: UI.en['convert.columns.title'] });
+    // the cruise field is offered for a sheet without a cruise column
+    fireEvent.change(screen.getByLabelText('Cruise: Meaning'), { target: { value: 'ignore' } });
+    expectTips(['convertRoles', 'convertSheetUse', 'convertShape', 'convertQuantityKind', 'convertEffort', 'convertCruise', 'convertFullList', 'convertStationPrefix', 'convertFlattenStation', 'convertFlattenCruise', 'convertTree']);
+    // the role column header of /convert has its own tip, and /check's is not on this page
+    expect(document.querySelector('[data-tip="roles"]')).toBeNull();
+    // the quantity fields that depend on the kind
+    fireEvent.change(screen.getByLabelText(UI.en['convert.quantity.kind']), { target: { value: 'biomass' } });
+    fireEvent.change(screen.getByLabelText(UI.en['convert.quantity.unit']), { target: { value: 'g/m2' } });
+    expectTips(['convertQuantityUnit', 'convertQuantityBasis', 'convertQuantityPer', 'convertQuantityMedium']);
+    // the splits and the codes appear with what the data need
+    await screen.findByRole('heading', { name: UI.en['convert.splits.title'] });
+    await screen.findByRole('heading', { name: UI.en['convert.codes.title'] });
+    expectTips(['convertSplits', 'convertCodes']);
+    // none of them inside a label or a heading element (names stay clean)
+    expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+    // the bubble of the roles tip lists the converter roles, and sits on the body, outside the scrolling table
+    fireEvent.click(document.querySelector('[data-tip="convertRoles"] button') as HTMLElement);
+    const bubble = document.querySelector('[data-tip-bubble="convertRoles"]') as HTMLElement;
+    expect(bubble.parentElement).toBe(document.body);
+    for (const k of ['role.taxonHeader', 'role.quantity', 'role.effort', 'role.occurrenceId', 'role.lifeStage', 'role.qualifier'] as const) expect(bubble.textContent).toContain(UI.en[k]);
+    fireEvent.click(document.querySelector('[data-tip="convertRoles"] button') as HTMLElement);
   });
 });
 
