@@ -9,6 +9,7 @@ import { proposeSampleCodes } from '../../src/core/convert/ids';
 import { proposeConvertMapping, suggestConvertShape } from '../../src/core/convert/recognize';
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
 import type { ColumnRole, ParsedFile, SheetMapping } from '../../src/core/types';
+import { isTimeOnlyFormat } from '../../src/core/parse/xlsx';
 import { dateCell, textFile, xlsxFile } from '../helpers/files';
 import { L1_HEADER, L1_ROWS, L2_HEADER, L2_ROWS, W1_HEADER, W1_ROWS, W2_HEADER, W2_ROWS, type Cell } from './helpers';
 
@@ -129,4 +130,59 @@ describe('xlsx sources', () => {
       expect(a.events.find((e) => e.eventType === 'sample' && e.eventDate?.includes('T'))).toBeDefined();
     });
   }
+});
+
+describe('xlsx time-only cells (round 3)', () => {
+  const header = ['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Calanus finmarchicus', 'Oithona similis'];
+  const timeCell = (v: number, z: string) => ({ t: 'n', v, z }) as const;
+  const rows = () => [
+    ['S1', 55.5, 2.5, dateCell(45000), timeCell(0.5, 'hh:mm'), 10, 4],
+    ['S1', 55.5, 2.5, dateCell(45000), timeCell(0.5 + 30 / 86400, 'h:mm:ss'), 7, 3],
+    ['S2', 55.9, 3.1, dateCell(45002), timeCell(0.25, '[h]:mm'), 0, 2],
+  ];
+  const c: Case = { name: 'xlsx time', header, rows: [], quantity: { kind: 'density', unit: '#/m3' } };
+
+  for (const date1904 of [false, true]) {
+    it(`a Date column and a Time column come back with the same eventDate (${date1904 ? '1904' : '1900'} date system): time of day as HH:MM or HH:MM:SS, no 1899 or 1904 date, no unparseable-date finding`, () => {
+      const original = xlsxFile('src.xlsx', { 'src.xlsx': [header, ...rows()] }, date1904 ? { Workbook: { WBProps: { date1904: true } } } : undefined);
+      expect(original.sheets[0].timeFormatted?.[4]).toBe(true);
+      expect(original.sheets[0].timeFormatted?.[3]).toBe(false);
+      const { a, b, csv } = roundTrip(original, c);
+      same(a, b);
+      const lines = csv.trim().split('\n').map((l) => l.split(','));
+      expect(lines.slice(1).map((l) => l[4])).toEqual(['12:00', '12:00:30', '06:00']);
+      expect(csv).not.toMatch(/1899|1904-01-01/);
+      // the time reached the event date, and nothing was reported as unparseable
+      expect(a.events.filter((e) => e.eventType === 'sample').map((e) => (e.eventDate ?? '').slice(10))).toEqual(['T12:00', 'T12:00:30', 'T06:00']);
+      expect(a.events.filter((e) => e.eventType === 'sample').every((e) => /T\d{2}:\d{2}/.test(e.eventDate ?? ''))).toBe(true);
+      expect(a.findings.filter((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    });
+
+    it(`a [h]:mm duration over 24 h has no time of day: it is written as the number and read the same way before and after (${date1904 ? '1904' : '1900'})`, () => {
+      const dur = [
+        ['S1', 55.5, 2.5, dateCell(45000), timeCell(0.25, '[h]:mm'), 10, 4],
+        ['S2', 55.9, 3.1, dateCell(45002), timeCell(1.5, '[h]:mm'), 7, 3],
+      ];
+      const original = xlsxFile('src.xlsx', { 'src.xlsx': [header, ...dur] }, date1904 ? { Workbook: { WBProps: { date1904: true } } } : undefined);
+      const { a, b, csv } = roundTrip(original, c);
+      same(a, b);
+      expect(csv.trim().split('\n').map((l) => l.split(',')[4]).slice(1)).toEqual(['06:00', '1.5']);
+      const bad = a.findings.filter((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE');
+      expect(bad).toHaveLength(1);
+      expect(bad[0].value).toBe('1.5');
+    });
+  }
+
+  it('the number format decides, not the value: 0.5 in a date format is a date, 0.5 in a time format is a time', () => {
+    for (const [date1904, day] of [[false, '1899-12-30'], [true, '1904-01-01']] as const) {
+      const wb = xlsxFile('src.xlsx', { 'src.xlsx': [['Station', 'Date', 'Time'], ['S1', dateCell(0.5), timeCell(0.5, 'hh:mm')]] }, date1904 ? { Workbook: { WBProps: { date1904: true } } } : undefined);
+      const p = proposeSampleCodes(wb, wb.sheets[0], { sheet: 'src.xlsx', columns: [] })!;
+      expect(p.csv.split('\n')[1]).toBe(`S1,${day}T12:00,12:00,sample-1`);
+    }
+  });
+});
+
+describe('isTimeOnlyFormat', () => {
+  it.each(['hh:mm', 'h:mm', '[h]:mm', '[hh]:mm:ss', 'h:mm:ss', 'h:mm AM/PM', 'mm:ss', 'mm:ss.0', '[$-409]h:mm:ss AM/PM', 'hh:mm "UTC"'])('%s is a time of day', (z) => expect(isTimeOnlyFormat(z)).toBe(true));
+  it.each(['yyyy-mm-dd', 'yyyy-mm-dd hh:mm', 'dd/mm/yyyy', 'd-mmm-yy', 'mmm', 'yyyy', 'dd.mm.yyyy h:mm'])('%s is not time-only', (z) => expect(isTimeOnlyFormat(z)).toBe(false));
 });

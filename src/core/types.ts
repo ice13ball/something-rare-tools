@@ -13,6 +13,7 @@ export interface RawSheet {
   headerLine: number;           // 1-based physical line/row of the header
   rows: RawRow[];               // data rows only, physical line numbers
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
+  timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
 }
 export interface ParsedFile {
   fileName: string;

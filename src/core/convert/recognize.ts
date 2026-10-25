@@ -30,8 +30,16 @@ const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zag
 const EFFORT_VOLUME = /^(volume filtered|volume sampled|sampled volume|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
 const EFFORT_AREA = /^(area|area sampled|sampled area|powierzchnia|flache|surface|surface echantillonnee)$/;
 
-// a summary column is never a species: the whole header (case-insensitive, after the unit is stripped) is one of these
-const SUMMARY_HEADER = /^(total|suma|razem|summe|gesamt|somme|sum|σ)$/i;
+// a summary column is never proposed as a species: its header (after the key folding: case, diacritics, punctuation) STARTS with one of these words,
+// or holds total / suma / razem / gesamt as a separate word ("Total copepods", "Abundance, total", "Razem Copepoda"). "Totalia sp." is a genus and stays.
+const SUMMARY_FIRST = new Set(['total', 'suma', 'razem', 'summe', 'gesamt', 'somme', 'sum']);
+const SUMMARY_ANYWHERE = new Set(['total', 'suma', 'razem', 'gesamt']);
+function isSummaryHeader(rawName: string): boolean {
+  const name = rawName.trim();
+  if (/^[σΣ]/.test(name)) return true;
+  const words = headerKey(name).split(' ').filter((w) => w !== '');
+  return words.length > 0 && (SUMMARY_FIRST.has(words[0]) || words.some((w) => SUMMARY_ANYWHERE.has(w)));
+}
 // "Stage" and its translations: the life stage of the record (a long sheet)
 const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
 
@@ -186,7 +194,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     }
     // wide sheet: a column of presence marks (+, x) next to counts is a species column too; the shared proposer read it as text
     const headerName = unitFromHeader(p.header).name.trim();
-    const summaryHeader = SUMMARY_HEADER.test(headerName) || SUMMARY_HEADER.test(headerKey(headerName));
+    const summaryHeader = isSummaryHeader(headerName);
     if (!summaryHeader && !hasLongTaxon && p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) {
       p.role = { kind: 'taxon', header: true };
       p.confidence = 'low';

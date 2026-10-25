@@ -75,6 +75,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): RawSheet | undefined {
   const rows: RawRow[] = [];
   const numeric = new Array<number>(width).fill(0);
   const dated = new Array<number>(width).fill(0);
+  const timed = new Array<number>(width).fill(0);
   for (const r of rowsAsc) {
     if (r <= headerRow) continue;
     const cells = grid.get(r)!;
@@ -87,13 +88,27 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): RawSheet | undefined {
       out[c] = v;
       if (typeof v === 'number' && c < width) {
         numeric[c]++;
-        if (typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z)) dated[c]++;
+        if (typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z)) {
+          dated[c]++;
+          if (isTimeOnlyFormat(cell.z)) timed[c]++;
+        }
       }
     }
     rows.push({ line: r + 1, cells: out, fieldCount: out.length });
   }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
-  return { name, header, headerLine: headerRow + 1, rows, dateFormatted };
+  // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one
+  const timeFormatted = header.map((_, c) => dateFormatted[c] && timed[c] * 2 > dated[c]);
+  return { name, header, headerLine: headerRow + 1, rows, dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
+}
+
+/** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */
+export function isTimeOnlyFormat(z: string): boolean {
+  const f = z
+    .replace(/"[^"]*"/g, '')
+    .replace(/\\./g, '')
+    .replace(/\[([^\]]*)\]/g, (_m, inner: string) => (/^(h+|m+|s+)$/i.test(inner) ? inner : ''));
+  return /[hs]/i.test(f) && !/[dy]/i.test(f);
 }
 
 /**
