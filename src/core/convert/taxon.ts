@@ -200,3 +200,13 @@ export function distinctSplits(names: readonly string[], approved?: ApprovedSpli
     return { verbatim, proposed, split: decided ?? proposed, needsDecision, ...(doubt === undefined ? {} : { doubt }), approved: decided !== undefined, uses };
   });
 }
+
+/**
+ * What "approve all shown" may approve: the splits that need a decision, are not approved yet and carry NO doubt (a qualifier, a stage or a sex taken
+ * out of a plain name). A split with a doubt (a single letter, a digit, a slash, a stage range, ...) is returned in `skipped`: it needs its own action
+ * (edit it and approve it, or approve it as it is), because a doubtful leftover such as "Acartia longiremis f" must never reach occurrence.txt unseen.
+ */
+export function bulkApprovable(entries: readonly SplitEntry[]): { approve: SplitEntry[]; skipped: SplitEntry[] } {
+  const open = entries.filter((s) => s.needsDecision && !s.approved);
+  return { approve: open.filter((s) => s.doubt === undefined), skipped: open.filter((s) => s.doubt !== undefined) };
+}

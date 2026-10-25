@@ -259,7 +259,8 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertSplits.logic': `• Qualifiers ({qualifiers}) go to the identification qualifier, the stages ({stages}) to the life stage, and a sex marker (f, m, fem, female, male, ♀, ♂, with or without a dot) after a comma, or straight after a stage or a question mark, to the sex. An f. before an epithet is a forma and stays in the name.
 • A name that is left with a digit, a slash, a question mark, a stage range, a single letter, a sex marker at the end or more than three words is shown with the reason, for you to correct.
 • The exact text is always kept as verbatimIdentification. You can edit the name, qualifier, stage and sex before approving.
-• A split is only a proposal until you approve it, and an unapproved split blocks the conversion. A plain name needs no decision.`,
+• A split is only a proposal until you approve it, and an unapproved split blocks the conversion. A plain name needs no decision.
+• The button for all shown approves only the splits without a doubt. A split with a doubt is approved on its own row, after you edit it or with "Approve as it is"; the button says how many it skipped.`,
   'tip.convertCodes.does': `Proposes sample codes once, for a sheet that has none.`,
   'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet. If the station text would make a code that starts like a formula (with = + - or @), the code is S and the number of the row instead, so that it needs no apostrophe and is the same on the page and in the file.
 • You get your own sheet back as a CSV file with one new column. Cells are copied as text. A cell or a header that starts with = + - or @ (also in their full-width forms) or with a tab gets an apostrophe so that a spreadsheet does not run it; plain numbers, missing-data marks such as NA and the marks + x - on their own, spaces around them included, are left as they are. Dates of an xlsx file are written as ISO dates and times of day as hours and minutes.
@@ -275,7 +276,7 @@ No findings only means that no problems were found in the checked categories.`,
 • The OBIS data policy asks for a detailed description including the method of collection; this tool only checks that something is written.
 • An empty abstract blocks the export.`,
   'tip.convertMetaCreators.does': `Lists the people or groups who made the dataset.`,
-  'tip.convertMetaCreators.logic': `• One per line, as "Given Family" or "Family, Given". Without a comma the last word is taken as the family name. A semicolon also separates two names.
+  'tip.convertMetaCreators.logic': `• One per line, as "Given Family" or "Family, Given". With a comma the name is taken as written: what stands before the comma is the family name. Without a comma the last word is the family name, together with any lowercase particle just before it ({particles}), so "Maria de la Cruz" has the family name "de la Cruz". A semicolon also separates two names.
 • They become the creators of the description and the authors in the citation text it carries. The tool never looks anyone up.
 • At least one is needed.`,
   'tip.convertMetaContact.does': `Says whom a reader should write to about the dataset.`,
@@ -583,7 +584,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertSplits.logic': `• Dopiski ({qualifiers}) trafiają do dopisku przy oznaczeniu, stadia ({stages}) do stadium rozwojowego, a oznaczenie płci (f, m, fem, female, male, ♀, ♂, z kropką lub bez) po przecinku albo zaraz po stadium lub znaku zapytania do płci. Zapis f. przed epitetem to forma i zostaje w nazwie.
 • Nazwa, w której zostaje cyfra, ukośnik, znak zapytania, zakres stadiów, pojedyncza litera, oznaczenie płci na końcu lub więcej niż trzy słowa, jest pokazana z powodem, abyś ją poprawił.
 • Dokładny tekst zawsze zostaje jako verbatimIdentification. Przed zatwierdzeniem możesz poprawić nazwę, dopisek, stadium i płeć.
-• Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie. Zwykła nazwa nie wymaga decyzji.`,
+• Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie. Zwykła nazwa nie wymaga decyzji.
+• Przycisk dla wszystkich pokazanych zatwierdza tylko podziały bez wątpliwości. Podział z wątpliwością zatwierdzasz w jego wierszu, po poprawieniu albo przyciskiem „Zatwierdź bez zmian”; przycisk podaje, ile pominął.`,
   'tip.convertCodes.does': `Proponuje kody próbek jednorazowo, dla arkusza, który ich nie ma.`,
   'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza. Jeśli z tekstu stacji powstałby kod zaczynający się jak formuła (od = + - lub @), kodem jest zamiast tego S i numer wiersza, aby nie potrzebował apostrofu i był taki sam na stronie i w pliku.
 • Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst. Komórka lub nagłówek zaczynające się od = + - lub @ (także w formie pełnej szerokości) albo od tabulatora dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; zwykłe liczby, oznaczenia braku danych, takie jak NA, oraz same znaki + x -, także ze spacjami wokół, zostają bez zmian. Daty z pliku xlsx są zapisywane jako daty ISO, a godziny jako godziny i minuty.
@@ -599,7 +601,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Polityka danych OBIS wymaga szczegółowego opisu, także metody zbioru; to narzędzie sprawdza tylko, czy coś napisano.
 • Puste streszczenie blokuje eksport.`,
   'tip.convertMetaCreators.does': `Wymienia osoby lub grupy, które stworzyły zbiór danych.`,
-  'tip.convertMetaCreators.logic': `• Po jednym w wierszu, jako „Imię Nazwisko” albo „Nazwisko, Imię”. Bez przecinka ostatnie słowo jest nazwiskiem. Średnik też oddziela dwa nazwiska.
+  'tip.convertMetaCreators.logic': `• Po jednym w wierszu, jako „Imię Nazwisko” albo „Nazwisko, Imię”. Z przecinkiem nazwa jest przyjmowana tak, jak zapisano: to, co stoi przed przecinkiem, jest nazwiskiem. Bez przecinka nazwiskiem jest ostatnie słowo razem z małą literą partykułą tuż przed nim ({particles}), więc „Maria de la Cruz” ma nazwisko „de la Cruz”. Średnik też oddziela dwa nazwiska.
 • Stają się autorami w opisie i w tekście cytowania, który on zawiera. Narzędzie nikogo nie wyszukuje.
 • Potrzebny jest co najmniej jeden.`,
   'tip.convertMetaContact.does': `Mówi, do kogo czytelnik ma pisać w sprawie zbioru danych.`,
@@ -905,7 +907,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertSplits.logic': `• Zusätze ({qualifiers}) gehen in den Bestimmungszusatz, die Stadien ({stages}) in das Entwicklungsstadium und eine Geschlechtsangabe (f, m, fem, female, male, ♀, ♂, mit oder ohne Punkt) nach einem Komma oder direkt nach einem Stadium oder Fragezeichen in das Geschlecht. Ein f. vor einem Epitheton ist eine Forma und bleibt im Namen.
 • Ein Name, in dem eine Ziffer, ein Schrägstrich, ein Fragezeichen, ein Stadienbereich, ein einzelner Buchstabe, eine Geschlechtsangabe am Ende oder mehr als drei Wörter bleiben, wird mit dem Grund gezeigt, damit Sie ihn korrigieren.
 • Der genaue Text bleibt immer als verbatimIdentification erhalten. Name, Zusatz, Stadium und Geschlecht können Sie vor der Bestätigung bearbeiten.
-• Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung. Ein einfacher Name braucht keine Entscheidung.`,
+• Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung. Ein einfacher Name braucht keine Entscheidung.
+• Die Schaltfläche für alle gezeigten bestätigt nur Aufteilungen ohne Zweifel. Eine Aufteilung mit Zweifel bestätigen Sie in ihrer eigenen Zeile, nach dem Ändern oder mit „So bestätigen“; die Schaltfläche nennt, wie viele sie übersprungen hat.`,
   'tip.convertCodes.does': `Schlägt einmalig Probencodes vor, für ein Blatt, das keine hat.`,
   'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts. Würde der Stationstext einen Code ergeben, der wie eine Formel beginnt (mit = + - oder @), ist der Code stattdessen S und die Zeilennummer, damit er kein Apostroph braucht und auf der Seite und in der Datei gleich ist.
 • Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert. Eine Zelle oder eine Überschrift, die mit = + - oder @ (auch in der Vollbreitform) oder mit einem Tabulator beginnt, erhält ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; einfache Zahlen, Kennzeichen für fehlende Werte wie NA und die Zeichen + x - allein, auch mit Leerzeichen darum, bleiben unverändert. Daten einer xlsx-Datei werden als ISO-Daten geschrieben, Uhrzeiten als Stunden und Minuten.
@@ -921,7 +924,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Die OBIS-Datenpolitik verlangt eine ausführliche Beschreibung einschließlich der Erhebungsmethode; dieses Werkzeug prüft nur, dass etwas geschrieben ist.
 • Eine leere Zusammenfassung blockiert den Export.`,
   'tip.convertMetaCreators.does': `Nennt die Personen oder Gruppen, die den Datensatz erstellt haben.`,
-  'tip.convertMetaCreators.logic': `• Einer pro Zeile, als „Vorname Familienname“ oder „Familienname, Vorname“. Ohne Komma gilt das letzte Wort als Familienname. Auch ein Semikolon trennt zwei Namen.
+  'tip.convertMetaCreators.logic': `• Einer pro Zeile, als „Vorname Familienname“ oder „Familienname, Vorname“. Mit Komma gilt der Name wie geschrieben: Was vor dem Komma steht, ist der Familienname. Ohne Komma ist das letzte Wort der Familienname, zusammen mit kleingeschriebenen Namenspartikeln direkt davor ({particles}); „Maria de la Cruz“ hat also den Familiennamen „de la Cruz“. Auch ein Semikolon trennt zwei Namen.
 • Sie werden zu den Autoren der Beschreibung und des darin enthaltenen Zitiertexts. Das Werkzeug sucht niemanden nach.
 • Mindestens einer ist nötig.`,
   'tip.convertMetaContact.does': `Sagt, an wen ein Leser zum Datensatz schreiben soll.`,
@@ -1227,7 +1230,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertSplits.logic': `• Les mentions ({qualifiers}) vont dans la mention d'identification, les stades ({stages}) dans le stade de développement, et une indication de sexe (f, m, fem, female, male, ♀, ♂, avec ou sans point) après une virgule, ou juste après un stade ou un point d'interrogation, dans le sexe. Un f. devant un épithète est une forma et reste dans le nom.
 • Un nom qui garde un chiffre, une barre oblique, un point d'interrogation, une plage de stades, une lettre isolée, une indication de sexe à la fin ou plus de trois mots est montré avec la raison, pour que vous le corrigiez.
 • Le texte exact est toujours gardé comme verbatimIdentification. Vous pouvez modifier le nom, la mention, le stade et le sexe avant de valider.
-• Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion. Un nom simple ne demande aucune décision.`,
+• Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion. Un nom simple ne demande aucune décision.
+• Le bouton pour tous ceux affichés ne valide que les divisions sans doute. Une division douteuse se valide sur sa propre ligne, après correction ou avec « Valider tel quel » ; le bouton indique combien il en a ignoré.`,
   'tip.convertCodes.does': `Propose une seule fois des codes d'échantillon, pour une feuille qui n'en a pas.`,
   'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille. Si le texte de la station donnait un code qui commence comme une formule (par = + - ou @), le code est à la place S et le numéro de la ligne, pour qu'il n'ait pas besoin d'apostrophe et soit le même sur la page et dans le fichier.
 • Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte. Une cellule ou un en-tête qui commence par = + - ou @ (aussi en forme pleine chasse) ou par une tabulation reçoit une apostrophe pour qu'un tableur ne l'exécute pas ; les nombres simples, les marques de donnée manquante comme NA et les signes + x - seuls, espaces autour compris, restent tels quels. Les dates d'un fichier xlsx sont écrites en dates ISO et les heures en heures et minutes.
@@ -1243,7 +1247,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • La politique de données d'OBIS demande une description détaillée, méthode de collecte comprise ; cet outil vérifie seulement que quelque chose est écrit.
 • Un résumé vide bloque l'export.`,
   'tip.convertMetaCreators.does': `Liste les personnes ou groupes qui ont produit le jeu de données.`,
-  'tip.convertMetaCreators.logic': `• Un par ligne, sous la forme « Prénom Nom » ou « Nom, Prénom ». Sans virgule, le dernier mot est le nom de famille. Un point-virgule sépare aussi deux noms.
+  'tip.convertMetaCreators.logic': `• Un par ligne, sous la forme « Prénom Nom » ou « Nom, Prénom ». Avec une virgule, le nom est pris tel qu'il est écrit : ce qui précède la virgule est le nom de famille. Sans virgule, le dernier mot est le nom de famille, avec les particules en minuscules juste avant lui ({particles}) ; « Maria de la Cruz » a donc pour nom de famille « de la Cruz ». Un point-virgule sépare aussi deux noms.
 • Ils deviennent les auteurs de la description et du texte de citation qu'elle contient. L'outil ne cherche personne.
 • Il en faut au moins un.`,
   'tip.convertMetaContact.does': `Dit à qui le lecteur doit écrire au sujet du jeu de données.`,

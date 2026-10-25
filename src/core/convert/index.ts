@@ -28,7 +28,7 @@ export { proposeConvertColumns, proposeConvertMapping, suggestConvertShape } fro
 export type { ConvertShape } from './recognize';
 export { FULL_LIST_SETTING, STATION_PREFIX_SETTING, readConvertSettings, writeConvertSidecar } from './settings';
 export type { ConvertSettings } from './settings';
-export { QUALIFIER_TOKENS, STAGE_TOKENS, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
+export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
 export { DEVICES, P01, P06, VERIFIED_CODES, nercUri } from './vocab';
 export type { DeviceKey } from './vocab';

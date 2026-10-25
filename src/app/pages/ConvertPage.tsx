@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { judge, metadataFindings, writeConvertSidecar } from '../../core/convert';
+import { bulkApprovable, judge, metadataFindings, writeConvertSidecar } from '../../core/convert';
 import { EMPTY_METADATA, applyPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { UiKey } from '../../core/i18n/ui';
@@ -211,6 +211,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const candidates = useMemo(() => (parsed ? candidatesOf(parsed, mappings) : []), [parsed, mappings]);
   const unconfirmed = candidates.filter((c) => confirmed[c.key] !== true);
   const toApprove = (view?.splits ?? []).filter((s) => s.needsDecision);
+  // "approve all shown" takes only the names without a doubt; a doubted one needs its own action on its row
+  const bulk = bulkApprovable(toApprove);
   const draftOf = (s: (typeof toApprove)[number]): TaxonSplit => drafts[s.verbatim] ?? s.split;
   const finalSplit = (s: (typeof toApprove)[number]): TaxonSplit | null => {
     const d = draftOf(s);
@@ -220,6 +222,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const st = d.lifeStage?.trim();
     return { verbatimIdentification: s.verbatim, scientificName: name, ...(q ? { identificationQualifier: q } : {}), ...(st ? { lifeStage: st } : {}), ...(d.sex ? { sex: d.sex } : {}) };
   };
+  // a doubted split taken exactly as proposed is approved "as it is"; once the user has edited it, it is simply approved
+  const asIs = (s: (typeof toApprove)[number]): boolean => s.doubt !== undefined && drafts[s.verbatim] === undefined;
   const setDraft = (s: (typeof toApprove)[number], patch: Partial<TaxonSplit>): void => setDrafts((prev) => ({ ...prev, [s.verbatim]: { ...draftOf(s), ...patch } }));
   // what each finding does to the export (core/convert/policy.ts): blocks, needs an acceptance, or is only shown
   const judged = useMemo(() => judge(view?.findings ?? []), [view]);
@@ -420,23 +424,22 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 <h2 id="convert-splits-title">{t('convert.splits.title')}</h2>
               </HeadingTip>
               <p>{t('convert.splits.intro')}</p>
-              {toApprove.some((s) => !s.approved) && (
+              {bulk.approve.length > 0 && (
                 <button type="button" className="button" onClick={() =>
                     setApproved((prev) => ({
                       ...prev,
                       ...Object.fromEntries(
-                        toApprove
-                          .filter((s) => !s.approved)
-                          .flatMap((s) => {
-                            const f = finalSplit(s);
-                            return f ? [[s.verbatim, f] as const] : [];
-                          }),
+                        bulk.approve.flatMap((s) => {
+                          const f = finalSplit(s);
+                          return f ? [[s.verbatim, f] as const] : [];
+                        }),
                       ),
                     }))
                   }>
-                  {t('convert.splits.approveAll', { n: toApprove.filter((s) => !s.approved).length })}
+                  {bulk.skipped.length > 0 ? t('convert.splits.approveAllSkip', { n: bulk.approve.length, skipped: bulk.skipped.length }) : t('convert.splits.approveAll', { n: bulk.approve.length })}
                 </button>
               )}
+              {bulk.approve.length === 0 && bulk.skipped.length > 0 && <p className="muted">{t('convert.splits.allDoubted')}</p>}
               <div className="table-scroll">
                 <table className="convert-table">
                   <thead>
@@ -495,14 +498,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                               <button
                                 type="button"
                                 className="button"
-                                aria-label={`${t('convert.splits.approve')}: ${s.verbatim}`}
+                                aria-label={`${t(asIs(s) ? 'convert.splits.approveAsIs' : 'convert.splits.approve')}: ${s.verbatim}`}
                                 disabled={finalSplit(s) === null}
                                 onClick={() => {
                                   const f = finalSplit(s);
                                   if (f) setApproved((prev) => ({ ...prev, [s.verbatim]: f }));
                                 }}
                               >
-                                {t('convert.splits.approve')}
+                                {t(asIs(s) ? 'convert.splits.approveAsIs' : 'convert.splits.approve')}
                               </button>
                             )}
                             <span className="visually-hidden"> {s.approved ? t('convert.splits.approved') : t('convert.splits.undecided')}</span>

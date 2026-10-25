@@ -29,6 +29,11 @@ export type ConvertShape = 'wide' | 'long';
 const TAXON_NAME = /^(species|taxon|taxa|gatunek|takson|art|espece)( name| nom| name)?$/;
 // the unambiguous quantity words may carry a tail ("abundance ind"); the short ones only stand alone
 const QUANTITY_STANDALONE = /^(count|counts|anzahl|nombre|comptage)$/;
+// whole-header phrases of two or more words (an optional unit in brackets is cut off before the match): "Liczba osobników", "Liczba os.", "Anzahl Individuen",
+// "Nombre d'individus" are counts, "Individuendichte" a density. "Liczba prób", "Anzahl Proben", "Nombre d'échantillons", "Liczba gatunków", "Anzahl Arten" count
+// something else (samples, species) and match nothing here.
+const QUANTITY_PHRASE_COUNT = /^(liczba osobnikow|liczba os|anzahl individuen|nombre d individus)$/;
+const QUANTITY_PHRASE_DENSITY = /^(individuendichte)$/;
 const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zageszczenie|liczebnosc|biomass|biomasa|biomasse)( .*)?$/;
 const EFFORT_VOLUME = /^(volume filtered|volume sampled|sampled volume|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
 const EFFORT_AREA = /^(area|area sampled|sampled area|powierzchnia|flache|surface|surface echantillonnee)$/;
@@ -157,13 +162,24 @@ function dwcClaim(term: string): Claim | undefined {
   }
 }
 
+/** A quantity name (a count, an abundance, a density, a biomass) in PL / EN / DE / FR; `key` is a folded headerKey. */
+function quantityClaim(key: string): Claim | undefined {
+  if (QUANTITY_STANDALONE.test(key) || QUANTITY_PHRASE_COUNT.test(key)) return { role: { kind: 'quantity' }, confidence: 'high', code: 'name-count' };
+  if (QUANTITY_PHRASE_DENSITY.test(key)) return { role: { kind: 'quantity' }, confidence: 'high', code: 'name-abundance' };
+  const q = QUANTITY_WORD.exec(key);
+  if (q) return { role: { kind: 'quantity' }, confidence: q[2] === undefined ? 'high' : 'low', code: 'name-abundance' };
+  return undefined;
+}
+
+/** The name without a trailing bracket group of any text ("Liczba osobników (ind.)"): the shared unit reader cuts only what it knows as a unit. */
+const withoutBrackets = (name: string): string => name.replace(/\s*[[(][^[\]()]*[\])]\s*$/, '');
+
 /** The converter's own names (taxon, quantity, effort) in PL / EN / DE / FR; `key` is a headerKey. */
 function nameClaim(key: string, unit: string | undefined): Claim | undefined {
   if (STAGE_NAME.test(key)) return { role: { kind: 'lifeStage' }, confidence: 'high', code: 'name-stage' };
   if (TAXON_NAME.test(key)) return { role: { kind: 'taxon' }, confidence: 'high', code: 'name-taxon' };
-  if (QUANTITY_STANDALONE.test(key)) return { role: { kind: 'quantity' }, confidence: 'high', code: 'name-count' };
-  const q = QUANTITY_WORD.exec(key);
-  if (q) return { role: { kind: 'quantity' }, confidence: q[2] === undefined ? 'high' : 'low', code: 'name-abundance' };
+  const quantity = quantityClaim(key);
+  if (quantity) return quantity;
   const effort = (code: OverlayReason): Claim => ({ role: unit === undefined ? { kind: 'effort' } : { kind: 'effort', unit }, confidence: 'high', code });
   if (EFFORT_VOLUME.test(key)) return effort('name-effort-volume');
   if (EFFORT_AREA.test(key)) return effort('name-effort-area');
@@ -217,7 +233,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const bound = depthBoundOfName(foldDiacritics(key));
       if (bound !== undefined) bounds.set(p.index, bound);
       else {
-        const named = nameClaim(foldDiacritics(key), hu.unit);
+        const named = nameClaim(foldDiacritics(key), hu.unit) ?? quantityClaim(foldDiacritics(headerKey(withoutBrackets(hu.name))));
         if (named) claims.set(p.index, named);
       }
     }
