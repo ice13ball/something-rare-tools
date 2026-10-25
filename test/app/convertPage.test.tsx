@@ -63,7 +63,8 @@ describe('ConvertPage', () => {
     expect(screen.getByText(UI.en['tip.logic'])).toBeTruthy();
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/hidden/);
-    expect(text).toMatch(/read and previewed in your browser; nothing of them is sent anywhere/);
+    expect(text).toMatch(/read and previewed in your browser and stay there\. The only thing that can leave it is the list of taxon names of the WoRMS lookup below, and only when you press its button/);
+    expect(text).not.toMatch(/nothing of them is sent anywhere/);
     expect(text).toMatch(/built in your browser and downloaded from it/);
     expect(text).not.toMatch(/no export yet/);
     // WoRMS is here (stage 4), after its button and off by default; the NERC lookup is still planned

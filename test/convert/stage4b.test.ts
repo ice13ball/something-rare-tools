@@ -10,7 +10,7 @@ import { judge, policyOf } from '../../src/core/convert/policy';
 import { lookupOf, readWormsRecord } from '../../src/core/convert/worms';
 import type { WormsLookup, WormsRecord } from '../../src/core/convert/worms';
 import { CONVERT_RULES, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
-import { UI } from '../../src/core/i18n/ui';
+import { UI, translate } from '../../src/core/i18n/ui';
 import { TIP_TEXTS } from '../../src/core/i18n/tips-text';
 import { LANGS } from '../../src/core/types';
 import { RECORDED } from '../helpers/wormsFixtures';
@@ -20,7 +20,7 @@ import type { Cell } from './helpers';
 
 const rec = (name: string): WormsRecord[] => (RECORDED[name] as unknown[]).map((r) => readWormsRecord(r) as WormsRecord);
 const HEADER = ['Station', 'Sample', 'Latitude', 'Longitude', 'Date', 'scientificName', 'AphiaID', 'Count'];
-const row = (sample: string, name: string, id: Cell): Cell[] => ['S1', sample, 55, 3, '2020-01-01', name, id, 4];
+const row = (sample: string, name: string, id: Cell, count: Cell = 4): Cell[] => ['S1', sample, 55, 3, '2020-01-01', name, id, count];
 const LSID = (id: number): string => `urn:lsid:marinespecies.org:taxname:${id}`;
 const run = (rows: Cell[][], worms?: WormsLookup) => convert({ sheets: [sheetInput(fileOf(HEADER, rows, 'S'), { quantity: { kind: 'count' }, shape: 'long' })], ...(worms ? { worms } : {}) });
 const idsOf = (r: ReturnType<typeof run>, name: string): (string | undefined)[] => r.occurrences.filter((o) => o.scientificName === name).map((o) => o.scientificNameId);
@@ -71,6 +71,41 @@ describe('a name with a sheet ID on any row', () => {
     expect(policyOf(f!)).toBe('accept');
     expect(r.findings.some((x) => x.ruleId === 'CONV-NAMEID-INCOMPLETE')).toBe(false);
     for (const lang of LANGS) expect(renderConvertPlain(f!, lang)).toContain('Calanus finmarchicus');
+  });
+
+  it('a sheet ID on a row with a count of zero counts too (the row is left out unless the list is declared full): the name is not sent and the other row gets no WoRMS ID', () => {
+    const r = run([row('a', 'Calanus finmarchicus', 111, 0), row('b', 'Calanus finmarchicus', null, 5)], worms());
+    expect(r.occurrences.length).toBe(1); // the zero row was skipped
+    expect(r.nameLookup.names).toEqual([]);
+    expect(r.nameLookup.withSheetId).toBe(1);
+    expect(idsOf(r, 'Calanus finmarchicus')).toEqual([undefined]);
+    expect(r.nameLookup.applied).toBe(0);
+    expect(r.findings.some((x) => x.ruleId === 'CONV-NAMEID-INCOMPLETE')).toBe(true);
+    // and with the list declared full the zero row is written, with its ID, and the result is the same
+    const full = convert({ sheets: [sheetInput(fileOf(HEADER, [row('a', 'Calanus finmarchicus', 111, 0), row('b', 'Calanus finmarchicus', null, 5)], 'S'), { quantity: { kind: 'count' }, shape: 'long' })], options: { fullList: true }, worms: worms() });
+    expect(full.nameLookup.names).toEqual([]);
+    expect(idsOf(full, 'Calanus finmarchicus')).toEqual([LSID(111), undefined]);
+  });
+
+  it('a conflict is seen across skipped rows too', () => {
+    const r = run([row('a', 'Calanus finmarchicus', 111, 0), row('b', 'Calanus finmarchicus', 222, 5)]);
+    expect(r.findings.some((x) => x.ruleId === 'CONV-NAMEID-CONFLICT')).toBe(true);
+  });
+
+  it('a sheet ID on a row whose split is not approved yet keeps the plain name from being sent ("Calanus finmarchicus CV" has the ID; the proposed split names it Calanus finmarchicus)', () => {
+    const rows = [row('a', 'Calanus finmarchicus CV', 111), row('b', 'Calanus finmarchicus', null), row('c', 'Oithona similis', null)];
+    const undecided = run(rows, worms());
+    expect(undecided.findings.some((x) => x.ruleId === 'CONV-SPLIT-UNDECIDED')).toBe(true);
+    expect(undecided.nameLookup.names).toEqual(['Oithona similis']);
+    expect(idsOf(undecided, 'Calanus finmarchicus')).toEqual([LSID(111), undefined]); // the plain row gets nothing from WoRMS
+    // once the split is approved the answer is the same: the name has a sheet ID on one row
+    const approved = convert({
+      sheets: [sheetInput(fileOf(HEADER, rows, 'S'), { quantity: { kind: 'count' }, shape: 'long' })],
+      approvedSplits: { 'Calanus finmarchicus CV': { verbatimIdentification: 'Calanus finmarchicus CV', scientificName: 'Calanus finmarchicus', lifeStage: 'C5' } },
+      worms: worms(),
+    });
+    expect(approved.nameLookup.names).toEqual(['Oithona similis']);
+    expect(idsOf(approved, 'Calanus finmarchicus')).toEqual([LSID(111), undefined]);
   });
 
   it('the archive of the repro has one ID per name, never two', async () => {
@@ -147,6 +182,10 @@ describe('the DOI of the citation', () => {
     expect(doiOfCitation('Cited as 10.5281/zenodo.123456.')).toBe('10.5281/zenodo.123456');
     expect(doiOfCitation('Cited as (10.5281/zenodo.123456)')).toBe('10.5281/zenodo.123456');
   });
+  it('accepts http and https, with or without www. and dx.', () => {
+    for (const prefix of ['https://doi.org/', 'http://doi.org/', 'https://www.doi.org/', 'http://www.doi.org/', 'https://dx.doi.org/', 'http://dx.doi.org/']) expect(doiOfCitation(`A (2020). T. ${prefix}10.1594/PANGAEA.839758`), prefix).toBe('10.1594/PANGAEA.839758');
+    expect(doiOfCitation('A (2020). T. https://www.example.org/10.1594/PANGAEA.839758')).toBeUndefined();
+  });
   it('keeps the characters a DOI may hold: < > ( ) ; : /', () => {
     expect(doiOfCitation('Smith (1998). https://doi.org/10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-O.')).toBe('10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-O');
     expect(doiOfCitation('Smith. https://doi.org/10.1000/a/b;c:d_e')).toBe('10.1000/a/b;c:d_e');
@@ -166,15 +205,61 @@ describe('the DOI of the citation', () => {
 });
 
 describe('the copy says what is sent', () => {
-  it('no text of /convert claims that nothing is sent anywhere without naming the WoRMS lookup', () => {
-    const claim = /Nothing is sent anywhere|nothing is sent anywhere|Nic nie jest nigdzie wysyłane|nic nie jest nigdzie wysyłane|Nichts wird irgendwohin gesendet|nichts wird irgendwohin gesendet|Rien n'est envoyé nulle part|rien n'est envoyé nulle part/;
+  /*
+   * Any claim that nothing leaves the browser or nothing is sent, in the four languages. A string of /convert that makes one must name WoRMS (it is then
+   * about the exception) unless it is exempted BY KEY below. The patterns are loose on purpose: a new sentence of the same kind is caught.
+   */
+  const CLAIMS: Record<(typeof LANGS)[number], RegExp[]> = {
+    en: [/\bnothing\b[^.;]{0,50}\b(sent|send|uploaded|transmitted|leaves? your|leaving your)\b/i, /\bnever\b[^.;]{0,40}\b(sends?|sent|leaves?|uploads?|transmits?)\b/i, /\bno (request|data|network)\b/i, /\bnot (sent|uploaded|transmitted)\b/i, /\bleaves? your (browser|computer)\b/i],
+    pl: [/\bnic\b[^.;]{0,50}(wysyłan|wysyła|przesyłan|opuszcza|opuszczać)/i, /\bnigdy\b[^.;]{0,40}(wysyła|wysyłan|opuszcza|przesyła)/i, /nigdzie[^.;]{0,30}wysy|wysyła[^.;]{0,30}nigdzie/i, /żadn[eay][^.;]{0,15}(żądani|danych)|nie jest (wysyłan|przesyłan)|nie opuszcza/i],
+    de: [/\bnichts\b[^.;]{0,50}(gesendet|sendet|hochgeladen|übertragen|verlässt|verlassen)/i, /\bnie(mals)?\b[^.;]{0,40}(sendet|gesendet|verlässt|hochgeladen|überträgt)/i, /(irgend|nirgend)wohin[^.;]{0,30}(gesendet|sendet)|sendet[^.;]{0,30}(irgend|nirgend)wohin/i, /keine (Anfrage|Daten)|nicht (gesendet|hochgeladen|übertragen)/i],
+    fr: [/\brien\b[^.;]{0,50}(envoy|téléversé|transmis|quitt\w*\s+(votre|le|l'))/i, /\bjamais\b[^.;]{0,40}(envoie|envoy|quitte|téléverse|transmet)/i, /nulle part/i, /aucune (requête|donnée)|n'est pas (envoy|téléversé|transmis)/i],
+  };
+  /** Said about the FORM FIELDS (typed text and e-mail addresses: true, they are never sent), or about the lookup itself (the section of the opt-in and its tips). */
+  const EXEMPT_KEYS = new Set([
+    'convert.meta.intro', // typed text of the description form
+    'tip.convertMetaContact.logic', // the e-mail address of the contact
+    'tip.convertMetaFiles.logic', // no link or DOI of a metadata file is followed (no request for a record)
+    'tip.convertArchiveDesc.logic', // an eml.xml / meta.xml dropped with the data is only listed
+  ]);
+  const EXEMPT_PREFIXES = ['convert.worms.', 'tip.convertWorms'];
+  const claimsNothingSent = (lang: (typeof LANGS)[number], text: string): boolean => CLAIMS[lang].some((p) => p.test(text));
+
+  it('the patterns catch the claims they are meant to, in every language (so a rewrite of convert.meta.intro to say nothing leaves the browser fails the test below)', () => {
+    const sentences: Record<(typeof LANGS)[number], string[]> = {
+      en: ['Nothing ever leaves your browser; nothing is sent to any server.', 'Nothing is sent anywhere.', 'This page never sends it anywhere.', 'No request is sent.', 'Your data is not uploaded.'],
+      pl: ['Nic nigdy nie opuszcza Twojej przeglądarki; nic nie jest wysyłane na żaden serwer.', 'Nic nie jest nigdzie wysyłane.', 'Ta strona nigdy go nigdzie nie wysyła.', 'Nie jest wysyłane żadne żądanie.'],
+      de: ['Nichts verlässt jemals Ihren Browser; nichts wird an einen Server gesendet.', 'Nichts wird irgendwohin gesendet.', 'Diese Seite sendet sie nirgendwohin.', 'Es wird keine Anfrage gesendet.'],
+      fr: ["Rien ne quitte jamais votre navigateur ; rien n'est envoyé à un serveur.", "Rien n'est envoyé nulle part.", "Cette page ne l'envoie nulle part.", "Aucune requête n'est envoyée."],
+    };
+    for (const lang of LANGS) for (const t of sentences[lang]) expect(claimsNothingSent(lang, t), `${lang}: ${t}`).toBe(true);
+    for (const lang of LANGS) for (const t of ['Your files stay in your browser.', 'Pliki zostają w Twojej przeglądarce.', 'Ihre Dateien bleiben in Ihrem Browser.', 'Vos fichiers restent dans votre navigateur.']) expect(claimsNothingSent(lang, t), t).toBe(false);
+  });
+
+  it('every text of /convert that says nothing leaves the browser or nothing is sent names WoRMS, unless it is exempted by key (the form fields, the lookup section)', () => {
+    const seen: string[] = [];
     for (const lang of LANGS) {
       const all: Record<string, string> = { ...UI[lang], ...TIP_TEXTS[lang] };
       for (const [k, text] of Object.entries(all)) {
-        if (!/convert|tip\.role/.test(k) || !claim.test(text)) continue;
+        if (!/convert|tip\.role/.test(k) || !claimsNothingSent(lang, text)) continue;
+        if (EXEMPT_KEYS.has(k) || EXEMPT_PREFIXES.some((p) => k.startsWith(p))) continue;
+        seen.push(`${lang} ${k}`);
         expect(text, `${lang} ${k}`).toMatch(/WoRMS/);
       }
     }
+    // not vacuous: the status text and the intro tip make such a claim, and name WoRMS
+    expect(seen).toContain('en convert.status.text');
+    expect(seen).toContain('pl tip.convertIntro.logic');
+  });
+
+  it('the exempt keys are the ones that are true: typed text and e-mail addresses are never sent, and a file description is only listed', () => {
+    for (const lang of LANGS) {
+      expect(UI[lang]['convert.meta.intro']).not.toMatch(/WoRMS/);
+      expect(claimsNothingSent(lang, UI[lang]['convert.meta.intro'])).toBe(true); // it is a claim: that is why it is exempted by key, on purpose
+    }
+    // a mutated meta.intro that claims more than the form fields (everything stays in the browser) is not what the exemption covers: it must be rewritten, not exempted
+    expect(UI.en['convert.meta.intro']).toContain('Nothing you type is stored or sent anywhere');
+    expect(UI.en['convert.meta.intro']).not.toMatch(/Nothing ever leaves your browser/);
   });
 
   it('the status text and the intro tip of every language name the WoRMS lookup as the one exception, and the NERC lookup stays planned', () => {
@@ -198,5 +283,16 @@ describe('the copy says what is sent', () => {
     expect(t(1)).toContain('dokładne dopasowanie przyjęte');
     expect(t(2)).toContain('dokładne dopasowania przyjęte');
     expect(t(5)).toContain('dokładnych dopasowań przyjętych');
+  });
+});
+
+describe('the summary of the results takes the plural of its counts', () => {
+  it('French and German: "1 exacts" never appears, and each number has its right form', () => {
+    expect(translate('fr', 'convert.worms.summary', { exact: 1, choose: 1, none: 1 })).toBe('Résultats : 1 correspondance exacte retenue automatiquement, 1 nom à choisir par vous, 1 nom sans correspondance.');
+    expect(translate('fr', 'convert.worms.summary', { exact: 3, choose: 2, none: 0 })).toBe('Résultats : 3 correspondances exactes retenues automatiquement, 2 noms à choisir par vous, 0 nom sans correspondance.');
+    expect(translate('fr', 'convert.worms.summary', { exact: 1, choose: 1, none: 1 })).not.toMatch(/exacts/);
+    expect(translate('de', 'convert.worms.summary', { exact: 1, choose: 1, none: 1 })).toBe('Ergebnisse: 1 exakter Treffer automatisch übernommen, 1 Name zur Auswahl durch Sie, 1 Name ohne Treffer.');
+    expect(translate('de', 'convert.worms.summary', { exact: 3, choose: 2, none: 5 })).toBe('Ergebnisse: 3 exakte Treffer automatisch übernommen, 2 Namen zur Auswahl durch Sie, 5 Namen ohne Treffer.');
+    expect(translate('pl', 'convert.worms.summary', { exact: 2, choose: 5, none: 1 })).toContain('2 dokładne dopasowania przyjęte');
   });
 });
