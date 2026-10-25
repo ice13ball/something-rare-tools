@@ -170,6 +170,25 @@ No findings only means that no problems were found in the checked categories.`,
 • Your files are read and previewed in your browser; nothing is sent anywhere.
 • There is no export yet.
 • Two optional lookups are planned: taxon names in WoRMS and terms in the NERC vocabulary. Both will be off by default, and nothing will be sent to either service until you press its button.`,
+  'tip.convertTaxa.does': `Confirms which of the proposed columns are taxa.`,
+  'tip.convertTaxa.logic': `• In a wide sheet the tool proposes every numeric column it has no other meaning for, at low confidence, as a taxon whose header is the name.
+• A proposed column is converted only after you confirm it; an unconfirmed one is left out and the summary says how many.
+• Measured variables such as temperature stay variables, and a column called total, sum or similar is never proposed.
+• A column you give the meaning "taxon (the header is the name)" yourself is yours and needs no confirmation.`,
+  'tip.convertDepthBound.does': `Says which end of a depth range a depth column is.`,
+  'tip.convertDepthBound.logic': `• A sample taken between two depths has a top column (the shallower end) and a bottom column (the deeper end).
+• With a single depth column, the top and the bottom depth are the same.
+• A depth is read as metres and is never converted; a unit other than metres blocks the conversion.`,
+  'tip.convertEffortValue.does': `The sample size, when it is the same for all samples.`,
+  'tip.convertEffortValue.logic': `• Type it with a decimal point, or with a comma if your sheet uses decimal commas; it is written with a point.
+• It must be a number above zero; anything else blocks the conversion.
+• For a different size in each sample, mark a column of the sheet instead.`,
+  'tip.convertEffortUnit.does': `The unit of the sample size.`,
+  'tip.convertEffortUnit.logic': `• It is written as you give it and never converted.
+• A concept for the unit is added only for {units}; any other unit gets a warning and no concept.`,
+  'tip.convertEffortDimension.does': `Says whether the sample size is a volume or an area.`,
+  'tip.convertEffortDimension.logic': `• It is normally read from the unit (cubic metres, litres, square metres); choose it only when the unit does not say.
+• A volume has the concept {volumeConcept}, an area {areaConcept}.`,
   'tip.role.taxon': `a column of taxon names, one per row (a long sheet); the number goes in the quantity column.`,
   'tip.role.taxonHeader': `a column of a wide sheet whose header is the taxon name and whose cells are the quantities. Proposed ones are only candidates: confirm them all.`,
   'tip.role.quantity': `the number for the taxon on that row (a long sheet).`,
@@ -186,8 +205,8 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertSheetUse.logic': `• A sheet you untick is left out completely: nothing from it is converted, counted or checked.
 • Every sheet starts ticked.`,
   'tip.convertShape.does': `Says how the sheet is laid out: one column per species, or one row per species and sample.`,
-  'tip.convertShape.logic': `• Wide: the header of each taxon column is a taxon name, and every filled cell is one record of that taxon in that row's sample.
-• Long: every row with a taxon and a value is one record.
+  'tip.convertShape.logic': `• Wide: the header of each taxon column is a taxon name, and every filled cell of it is one record of that taxon in that row's sample, except zeros that are skipped and NA cells, which make none.
+• Long: every row with a taxon and a value is one record, with the same exceptions.
 • The tool suggests the shape from the meanings of the columns; the choice is yours.`,
   'tip.convertQuantityKind.does': `Says what the numbers in the species cells are.`,
   'tip.convertQuantityKind.logic': `• A count is a number of individuals and must be whole; it is written as individualCount, and as a count measurement ({countConcept}).
@@ -206,8 +225,8 @@ No findings only means that no problems were found in the checked categories.`,
 • A density per volume of water has the concept {volumeConcept}; per area of the bed, {areaConcept}.
 • The unit never decides this alone against what you chose.`,
   'tip.convertQuantityMedium.does': `For numbers per area: the water column or the bed.`,
-  'tip.convertQuantityMedium.logic': `• Only a number per area of the bed has a checked concept.
-• A number per area of the water column gets no concept and a warning; one has to be chosen by hand before publishing.`,
+  'tip.convertQuantityMedium.logic': `• For a number per area there is no default: you choose the water column or the bed.
+• Only a number per area of the bed has a checked concept; a number per area of the water column gets no concept and a warning, and one has to be chosen by hand before publishing.`,
   'tip.convertEffort.does': `The volume or area that was sampled, when you know it.`,
   'tip.convertEffort.logic': `• Give one value for all samples, or mark a column of the sheet.
 • It is written on each sample as sampleSizeValue and sampleSizeUnit, and as a measurement: {volumeConcept} for a volume, {areaConcept} for an area.
@@ -235,14 +254,14 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertFlattenCruise.logic': `• The cruise code goes to the dataset text instead, and the stations stand at the top of the tree.
 • The ID of a station still begins with the cruise code.
 • Nothing is flattened unless you tick it.`,
-  'tip.convertSplits.does': `Confirms how a name with a qualifier, a stage or a sex is divided.`,
-  'tip.convertSplits.logic': `• Qualifiers ({qualifiers}) go to the identification qualifier, the stages ({stages}) to the life stage, and an f or m after a comma to the sex.
-• The exact text is always kept as verbatimIdentification.
-• A split is only a proposal until you approve it, and an unapproved split blocks the conversion.
-• A plain name needs no decision.`,
+  'tip.convertSplits.does': `Confirms how a name with a qualifier, a stage or a sex is divided, or a doubtful name.`,
+  'tip.convertSplits.logic': `• Qualifiers ({qualifiers}) go to the identification qualifier, the stages ({stages}) to the life stage, and an f or m after a comma, or straight after a stage or a question mark, to the sex.
+• A name that is left with a digit, a slash, a question mark, a stage range, a single letter or more than three words is shown with the reason, for you to correct.
+• The exact text is always kept as verbatimIdentification. You can edit the name, qualifier, stage and sex before approving.
+• A split is only a proposal until you approve it, and an unapproved split blocks the conversion. A plain name needs no decision.`,
   'tip.convertCodes.does': `Proposes sample codes once, for a sheet that has none.`,
   'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet.
-• You get your own sheet back as a CSV file with one new column; your cells are not touched.
+• You get your own sheet back as a CSV file with one new column. Cells are copied as text, except cells that start with = or @, which get an apostrophe so that a spreadsheet does not run them; dates of an xlsx file are written as ISO dates.
 • Check it and upload that file again: only a code in your own uploaded sheet becomes an ID.
 • The converter never applies or renews codes by itself.`,
   'tip.convertTree.does': `Shows the event tree the archive would have.`,
@@ -412,6 +431,25 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Twoje pliki są odczytywane i pokazywane w podglądzie w Twojej przeglądarce; nic nie jest nigdzie wysyłane.
 • Eksportu jeszcze nie ma.
 • Planowane są dwa opcjonalne wyszukiwania: nazw taksonów w WoRMS i terminów ze słownika NERC. Oba będą domyślnie wyłączone, a do żadnej z tych usług nic nie zostanie wysłane, dopóki nie naciśniesz jej przycisku.`,
+  'tip.convertTaxa.does': `Potwierdza, które z zaproponowanych kolumn to taksony.`,
+  'tip.convertTaxa.logic': `• W arkuszu szerokim narzędzie proponuje jako takson, którego nagłówek jest nazwą, każdą kolumnę liczbową bez innego znaczenia, z niską pewnością.
+• Zaproponowana kolumna jest przekształcana dopiero po Twoim potwierdzeniu; niepotwierdzona jest pomijana, a podsumowanie podaje, ile ich jest.
+• Mierzone wielkości, takie jak temperatura, zostają zmiennymi, a kolumna o nazwie suma, razem lub podobnej nigdy nie jest proponowana.
+• Kolumna, której sam nadasz znaczenie „takson (nagłówek to nazwa)”, jest Twoją decyzją i nie wymaga potwierdzenia.`,
+  'tip.convertDepthBound.does': `Mówi, który koniec zakresu głębokości przedstawia kolumna głębokości.`,
+  'tip.convertDepthBound.logic': `• Próbka pobrana między dwiema głębokościami ma kolumnę górną (płytszy koniec) i dolną (głębszy koniec).
+• Przy jednej kolumnie głębokości głębokość górna i dolna są takie same.
+• Głębokość jest odczytywana jako metry i nigdy nie jest przeliczana; inna jednostka niż metry blokuje przekształcenie.`,
+  'tip.convertEffortValue.does': `Wielkość próby, gdy jest taka sama dla wszystkich próbek.`,
+  'tip.convertEffortValue.logic': `• Wpisz z kropką dziesiętną albo z przecinkiem, jeśli arkusz używa przecinków dziesiętnych; zapisywana jest z kropką.
+• Musi być liczbą większą od zera; wszystko inne blokuje przekształcenie.
+• Dla innej wielkości w każdej próbce oznacz zamiast tego kolumnę arkusza.`,
+  'tip.convertEffortUnit.does': `Jednostka wielkości próby.`,
+  'tip.convertEffortUnit.logic': `• Jest zapisywana tak, jak ją podasz, i nigdy nie jest przeliczana.
+• Pojęcie dla jednostki jest dodawane tylko dla {units}; każda inna jednostka dostaje ostrzeżenie i nie dostaje pojęcia.`,
+  'tip.convertEffortDimension.does': `Mówi, czy wielkość próby to objętość, czy powierzchnia.`,
+  'tip.convertEffortDimension.logic': `• Zwykle jest odczytywane z jednostki (metry sześcienne, litry, metry kwadratowe); wybierz je tylko wtedy, gdy jednostka tego nie mówi.
+• Objętość ma pojęcie {volumeConcept}, powierzchnia {areaConcept}.`,
   'tip.role.taxon': `kolumna z nazwami taksonów, jedna na wiersz (arkusz długi); liczba trafia do kolumny ilości.`,
   'tip.role.taxonHeader': `kolumna arkusza szerokiego, której nagłówek jest nazwą taksonu, a komórki to ilości. Proponowane kolumny to tylko kandydaci: potwierdź je wszystkie.`,
   'tip.role.quantity': `liczba dla taksonu w danym wierszu (arkusz długi).`,
@@ -428,8 +466,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertSheetUse.logic': `• Odznaczony arkusz jest całkowicie pomijany: nic z niego nie jest przekształcane, liczone ani sprawdzane.
 • Każdy arkusz na początku jest zaznaczony.`,
   'tip.convertShape.does': `Mówi, jak ułożony jest arkusz: jedna kolumna na gatunek albo jeden wiersz na gatunek i próbkę.`,
-  'tip.convertShape.logic': `• Szeroki: nagłówek każdej kolumny taksonu to nazwa taksonu, a każda wypełniona komórka to jeden rekord tego taksonu w próbce z tego wiersza.
-• Długi: każdy wiersz z taksonem i wartością to jeden rekord.
+  'tip.convertShape.logic': `• Szeroki: nagłówek każdej kolumny taksonu to nazwa taksonu, a każda jej wypełniona komórka to jeden rekord tego taksonu w próbce z tego wiersza, z wyjątkiem pomijanych zer i komórek NA, które nie tworzą rekordu.
+• Długi: każdy wiersz z taksonem i wartością to jeden rekord, z tymi samymi wyjątkami.
 • Narzędzie sugeruje układ na podstawie znaczeń kolumn; wybór należy do Ciebie.`,
   'tip.convertQuantityKind.does': `Mówi, czym są liczby w komórkach gatunków.`,
   'tip.convertQuantityKind.logic': `• Liczebność to liczba osobników i musi być całkowita; zapisuje się ją jako individualCount oraz jako pomiar liczebności ({countConcept}).
@@ -448,8 +486,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Zagęszczenie na objętość wody ma pojęcie {volumeConcept}, na powierzchnię dna {areaConcept}.
 • Jednostka nigdy nie rozstrzyga tego sama wbrew Twojemu wyborowi.`,
   'tip.convertQuantityMedium.does': `Dla liczb na powierzchnię: słup wody albo dno.`,
-  'tip.convertQuantityMedium.logic': `• Tylko liczba na powierzchnię dna ma sprawdzone pojęcie.
-• Liczba na powierzchnię słupa wody nie dostaje pojęcia, tylko ostrzeżenie; trzeba je dobrać ręcznie przed publikacją.`,
+  'tip.convertQuantityMedium.logic': `• Dla liczby na powierzchnię nie ma ustawienia domyślnego: wybierasz słup wody albo dno.
+• Tylko liczba na powierzchnię dna ma sprawdzone pojęcie; liczba na powierzchnię słupa wody nie dostaje pojęcia, tylko ostrzeżenie, i trzeba je dobrać ręcznie przed publikacją.`,
   'tip.convertEffort.does': `Objętość lub powierzchnia, którą pobrano, jeśli ją znasz.`,
   'tip.convertEffort.logic': `• Podaj jedną wartość dla wszystkich próbek albo oznacz kolumnę arkusza.
 • Zapisuje się ją przy każdej próbce jako sampleSizeValue i sampleSizeUnit oraz jako pomiar: {volumeConcept} dla objętości, {areaConcept} dla powierzchni.
@@ -469,7 +507,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Identyfikator nigdy nie powstaje z głębokości, kolejności wierszy ani z wyszukiwania nazwy taksonu.
 • Wybór pojawia się, gdy kody się powtarzają albo zaznaczył go plik towarzyszący.`,
   'tip.convertFlattenStation.does': `Pomija poziom stacji w drzewie.`,
-  'tip.convertFlattenStation.logic': `• Kod stacji zostaje jako miejscowość każdej próbki, a próbki wiszą bezpośrednio pod rejsem.
+  'tip.convertFlattenStation.logic': `• Kod stacji zostaje jako miejsce (locality) każdej próbki, a próbki wiszą bezpośrednio pod rejsem.
 • Żaden identyfikator się nie zmienia.
 • Data, pozycja i głębokość rejsu są wtedy wyliczane z próbek.
 • Nic nie jest spłaszczane, dopóki tego nie zaznaczysz.`,
@@ -477,14 +515,14 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertFlattenCruise.logic': `• Kod rejsu trafia zamiast tego do tekstu zbioru danych, a stacje stoją na szczycie drzewa.
 • Identyfikator stacji nadal zaczyna się od kodu rejsu.
 • Nic nie jest spłaszczane, dopóki tego nie zaznaczysz.`,
-  'tip.convertSplits.does': `Potwierdza, jak podzielono nazwę z dopiskiem, stadium lub płcią.`,
-  'tip.convertSplits.logic': `• Dopiski ({qualifiers}) trafiają do dopisku przy oznaczeniu, stadia ({stages}) do stadium rozwojowego, a f lub m po przecinku do płci.
-• Dokładny tekst zawsze zostaje jako verbatimIdentification.
-• Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie.
-• Zwykła nazwa nie wymaga decyzji.`,
+  'tip.convertSplits.does': `Potwierdza, jak podzielono nazwę z dopiskiem, stadium lub płcią albo nazwę budzącą wątpliwości.`,
+  'tip.convertSplits.logic': `• Dopiski ({qualifiers}) trafiają do dopisku przy oznaczeniu, stadia ({stages}) do stadium rozwojowego, a f lub m po przecinku albo zaraz po stadium lub znaku zapytania do płci.
+• Nazwa, w której zostaje cyfra, ukośnik, znak zapytania, zakres stadiów, pojedyncza litera lub więcej niż trzy słowa, jest pokazana z powodem, abyś ją poprawił.
+• Dokładny tekst zawsze zostaje jako verbatimIdentification. Przed zatwierdzeniem możesz poprawić nazwę, dopisek, stadium i płeć.
+• Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie. Zwykła nazwa nie wymaga decyzji.`,
   'tip.convertCodes.does': `Proponuje kody próbek jednorazowo, dla arkusza, który ich nie ma.`,
   'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza.
-• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną; Twoje komórki nie są zmieniane.
+• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst, z wyjątkiem komórek zaczynających się od = lub @, które dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; daty z pliku xlsx są zapisywane jako daty ISO.
 • Sprawdź go i wgraj ten plik ponownie: identyfikatorem staje się tylko kod z Twojego wgranego arkusza.
 • Konwerter nigdy sam nie stosuje ani nie odnawia kodów.`,
   'tip.convertTree.does': `Pokazuje drzewo zdarzeń, jakie miałoby archiwum.`,
@@ -652,6 +690,25 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Ihre Dateien werden in Ihrem Browser gelesen und als Vorschau gezeigt; nichts wird irgendwohin gesendet.
 • Einen Export gibt es noch nicht.
 • Zwei optionale Abfragen sind geplant: Taxonnamen in WoRMS und Begriffe im NERC-Vokabular. Beide sind standardmäßig aus, und an keinen der beiden Dienste wird etwas gesendet, bevor Sie dessen Schaltfläche drücken.`,
+  'tip.convertTaxa.does': `Bestätigt, welche der vorgeschlagenen Spalten Taxa sind.`,
+  'tip.convertTaxa.logic': `• In einem breiten Blatt schlägt das Werkzeug jede Zahlenspalte ohne andere Bedeutung mit niedriger Sicherheit als Taxon vor, dessen Kopf der Name ist.
+• Eine vorgeschlagene Spalte wird erst nach Ihrer Bestätigung umgewandelt; eine unbestätigte wird ausgelassen, und die Zusammenfassung nennt ihre Zahl.
+• Gemessene Größen wie die Temperatur bleiben Variablen, und eine Spalte namens Summe, Gesamt oder ähnlich wird nie vorgeschlagen.
+• Eine Spalte, der Sie selbst die Bedeutung „Taxon (der Spaltenkopf ist der Name)“ geben, ist Ihre Entscheidung und braucht keine Bestätigung.`,
+  'tip.convertDepthBound.does': `Sagt, welches Ende eines Tiefenbereichs eine Tiefenspalte ist.`,
+  'tip.convertDepthBound.logic': `• Eine Probe zwischen zwei Tiefen hat eine obere Spalte (das flachere Ende) und eine untere Spalte (das tiefere Ende).
+• Bei nur einer Tiefenspalte sind obere und untere Tiefe gleich.
+• Eine Tiefe wird als Meter gelesen und nie umgerechnet; eine andere Einheit als Meter blockiert die Umwandlung.`,
+  'tip.convertEffortValue.does': `Die Probengröße, wenn sie für alle Proben gleich ist.`,
+  'tip.convertEffortValue.logic': `• Geben Sie sie mit Dezimalpunkt ein, oder mit Komma, wenn Ihr Blatt Dezimalkommas verwendet; geschrieben wird sie mit Punkt.
+• Sie muss eine Zahl über null sein; alles andere blockiert die Umwandlung.
+• Für eine andere Größe in jeder Probe markieren Sie stattdessen eine Spalte des Blatts.`,
+  'tip.convertEffortUnit.does': `Die Einheit der Probengröße.`,
+  'tip.convertEffortUnit.logic': `• Sie wird so geschrieben, wie Sie sie angeben, und nie umgerechnet.
+• Ein Begriff für die Einheit wird nur für {units} ergänzt; jede andere Einheit erhält eine Warnung und keinen Begriff.`,
+  'tip.convertEffortDimension.does': `Sagt, ob die Probengröße ein Volumen oder eine Fläche ist.`,
+  'tip.convertEffortDimension.logic': `• Es wird normalerweise aus der Einheit gelesen (Kubikmeter, Liter, Quadratmeter); wählen Sie es nur, wenn die Einheit es nicht sagt.
+• Ein Volumen hat den Begriff {volumeConcept}, eine Fläche {areaConcept}.`,
   'tip.role.taxon': `eine Spalte mit Taxonnamen, einer je Zeile (langes Blatt); die Zahl steht in der Mengenspalte.`,
   'tip.role.taxonHeader': `eine Spalte eines breiten Blatts, deren Kopf der Taxonname ist und deren Zellen die Mengen sind. Vorgeschlagene sind nur Kandidaten: Bestätigen Sie alle.`,
   'tip.role.quantity': `die Zahl für das Taxon in dieser Zeile (langes Blatt).`,
@@ -668,8 +725,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertSheetUse.logic': `• Ein abgewähltes Blatt wird vollständig ausgelassen: Nichts daraus wird umgewandelt, gezählt oder geprüft.
 • Jedes Blatt beginnt angekreuzt.`,
   'tip.convertShape.does': `Sagt, wie das Blatt aufgebaut ist: eine Spalte je Art oder eine Zeile je Art und Probe.`,
-  'tip.convertShape.logic': `• Breit: Der Kopf jeder Taxon-Spalte ist ein Taxonname, und jede gefüllte Zelle ist ein Datensatz dieses Taxons in der Probe der Zeile.
-• Lang: Jede Zeile mit Taxon und Wert ist ein Datensatz.
+  'tip.convertShape.logic': `• Breit: Der Kopf jeder Taxon-Spalte ist ein Taxonname, und jede gefüllte Zelle darin ist ein Datensatz dieses Taxons in der Probe der Zeile, außer ausgelassenen Nullen und NA-Zellen, die keinen ergeben.
+• Lang: Jede Zeile mit Taxon und Wert ist ein Datensatz, mit denselben Ausnahmen.
 • Das Werkzeug schlägt den Aufbau aus den Bedeutungen der Spalten vor; die Wahl liegt bei Ihnen.`,
   'tip.convertQuantityKind.does': `Sagt, was die Zahlen in den Artenzellen sind.`,
   'tip.convertQuantityKind.logic': `• Eine Anzahl ist eine Individuenzahl und muss ganz sein; sie wird als individualCount und als Anzahl-Messung ({countConcept}) geschrieben.
@@ -688,8 +745,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Eine Dichte je Wasservolumen hat den Begriff {volumeConcept}, je Bodenfläche {areaConcept}.
 • Die Einheit entscheidet das nie allein gegen Ihre Wahl.`,
   'tip.convertQuantityMedium.does': `Für Zahlen je Fläche: die Wassersäule oder der Boden.`,
-  'tip.convertQuantityMedium.logic': `• Nur eine Zahl je Bodenfläche hat einen geprüften Begriff.
-• Eine Zahl je Fläche der Wassersäule erhält keinen Begriff und eine Warnung; er muss vor der Veröffentlichung von Hand gewählt werden.`,
+  'tip.convertQuantityMedium.logic': `• Für eine Zahl je Fläche gibt es keine Voreinstellung: Sie wählen die Wassersäule oder den Boden.
+• Nur eine Zahl je Bodenfläche hat einen geprüften Begriff; eine Zahl je Fläche der Wassersäule erhält keinen Begriff und eine Warnung, und er muss vor der Veröffentlichung von Hand gewählt werden.`,
   'tip.convertEffort.does': `Das beprobte Volumen oder die beprobte Fläche, wenn Sie es kennen.`,
   'tip.convertEffort.logic': `• Geben Sie einen Wert für alle Proben an oder markieren Sie eine Spalte des Blatts.
 • Er wird bei jeder Probe als sampleSizeValue und sampleSizeUnit und als Messung geschrieben: {volumeConcept} für ein Volumen, {areaConcept} für eine Fläche.
@@ -717,14 +774,14 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertFlattenCruise.logic': `• Der Fahrtcode geht stattdessen in den Datensatztext, und die Stationen stehen an der Spitze des Baums.
 • Die Kennung einer Station beginnt weiterhin mit dem Fahrtcode.
 • Nichts wird abgeflacht, solange Sie es nicht ankreuzen.`,
-  'tip.convertSplits.does': `Bestätigt, wie ein Name mit Zusatz, Stadium oder Geschlecht aufgeteilt wird.`,
-  'tip.convertSplits.logic': `• Zusätze ({qualifiers}) gehen in den Bestimmungszusatz, die Stadien ({stages}) in das Entwicklungsstadium und ein f oder m nach einem Komma in das Geschlecht.
-• Der genaue Text bleibt immer als verbatimIdentification erhalten.
-• Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung.
-• Ein einfacher Name braucht keine Entscheidung.`,
+  'tip.convertSplits.does': `Bestätigt, wie ein Name mit Zusatz, Stadium oder Geschlecht oder ein zweifelhafter Name aufgeteilt wird.`,
+  'tip.convertSplits.logic': `• Zusätze ({qualifiers}) gehen in den Bestimmungszusatz, die Stadien ({stages}) in das Entwicklungsstadium und ein f oder m nach einem Komma oder direkt nach einem Stadium oder Fragezeichen in das Geschlecht.
+• Ein Name, in dem eine Ziffer, ein Schrägstrich, ein Fragezeichen, ein Stadienbereich, ein einzelner Buchstabe oder mehr als drei Wörter bleiben, wird mit dem Grund gezeigt, damit Sie ihn korrigieren.
+• Der genaue Text bleibt immer als verbatimIdentification erhalten. Name, Zusatz, Stadium und Geschlecht können Sie vor der Bestätigung bearbeiten.
+• Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung. Ein einfacher Name braucht keine Entscheidung.`,
   'tip.convertCodes.does': `Schlägt einmalig Probencodes vor, für ein Blatt, das keine hat.`,
   'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts.
-• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück; Ihre Zellen bleiben unberührt.
+• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert, außer Zellen, die mit = oder @ beginnen: Sie erhalten ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; Daten einer xlsx-Datei werden als ISO-Daten geschrieben.
 • Prüfen Sie es und laden Sie diese Datei erneut hoch: Nur ein Code in Ihrem eigenen hochgeladenen Blatt wird zur Kennung.
 • Der Konverter wendet Codes nie von selbst an und erneuert sie nie.`,
   'tip.convertTree.does': `Zeigt den Ereignisbaum, den das Archiv hätte.`,
@@ -892,6 +949,25 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Vos fichiers sont lus et prévisualisés dans votre navigateur ; rien n'est envoyé nulle part.
 • L'export n'existe pas encore.
 • Deux recherches facultatives sont prévues : les noms de taxons dans WoRMS et les termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien ne sera envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
+  'tip.convertTaxa.does': `Confirme lesquelles des colonnes proposées sont des taxons.`,
+  'tip.convertTaxa.logic': `• Dans une feuille large, l'outil propose comme taxon dont l'en-tête est le nom chaque colonne numérique sans autre sens, avec une faible confiance.
+• Une colonne proposée n'est convertie qu'après votre confirmation ; une colonne non confirmée est écartée et le résumé en donne le nombre.
+• Les grandeurs mesurées comme la température restent des variables, et une colonne nommée total, somme ou semblable n'est jamais proposée.
+• Une colonne à laquelle vous donnez vous-même le sens « taxon (l'en-tête est le nom) » est votre décision et n'a pas besoin de confirmation.`,
+  'tip.convertDepthBound.does': `Dit quelle extrémité d'une plage de profondeur une colonne de profondeur représente.`,
+  'tip.convertDepthBound.logic': `• Un échantillon pris entre deux profondeurs a une colonne du haut (l'extrémité la moins profonde) et une colonne du bas (la plus profonde).
+• Avec une seule colonne de profondeur, la profondeur du haut et celle du bas sont identiques.
+• Une profondeur est lue en mètres et n'est jamais convertie ; une unité autre que le mètre bloque la conversion.`,
+  'tip.convertEffortValue.does': `La taille d'échantillon, quand elle est la même pour tous les échantillons.`,
+  'tip.convertEffortValue.logic': `• Saisissez-la avec un point décimal, ou avec une virgule si votre feuille utilise des virgules décimales ; elle est écrite avec un point.
+• Ce doit être un nombre supérieur à zéro ; toute autre chose bloque la conversion.
+• Pour une taille différente dans chaque échantillon, marquez plutôt une colonne de la feuille.`,
+  'tip.convertEffortUnit.does': `L'unité de la taille d'échantillon.`,
+  'tip.convertEffortUnit.logic': `• Elle est écrite telle que vous la donnez et n'est jamais convertie.
+• Un concept pour l'unité n'est ajouté que pour {units} ; toute autre unité reçoit un avertissement et pas de concept.`,
+  'tip.convertEffortDimension.does': `Dit si la taille d'échantillon est un volume ou une surface.`,
+  'tip.convertEffortDimension.logic': `• Il est normalement lu dans l'unité (mètres cubes, litres, mètres carrés) ; ne le choisissez que si l'unité ne le dit pas.
+• Un volume a le concept {volumeConcept}, une surface {areaConcept}.`,
   'tip.role.taxon': `une colonne de noms de taxons, un par ligne (feuille longue) ; le nombre est dans la colonne de quantité.`,
   'tip.role.taxonHeader': `une colonne d'une feuille large dont l'en-tête est le nom du taxon et dont les cellules sont les quantités. Celles proposées ne sont que des candidates : confirmez-les toutes.`,
   'tip.role.quantity': `le nombre pour le taxon de cette ligne (feuille longue).`,
@@ -908,8 +984,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertSheetUse.logic': `• Une feuille décochée est entièrement écartée : rien n'en est converti, compté ni contrôlé.
 • Chaque feuille commence cochée.`,
   'tip.convertShape.does': `Dit comment la feuille est disposée : une colonne par espèce, ou une ligne par espèce et échantillon.`,
-  'tip.convertShape.logic': `• Large : l'en-tête de chaque colonne de taxon est un nom de taxon, et chaque cellule remplie est un enregistrement de ce taxon dans l'échantillon de la ligne.
-• Long : chaque ligne avec un taxon et une valeur est un enregistrement.
+  'tip.convertShape.logic': `• Large : l'en-tête de chaque colonne de taxon est un nom de taxon, et chaque cellule remplie de cette colonne est un enregistrement de ce taxon dans l'échantillon de la ligne, sauf les zéros ignorés et les cellules NA, qui n'en font aucun.
+• Long : chaque ligne avec un taxon et une valeur est un enregistrement, avec les mêmes exceptions.
 • L'outil suggère la disposition d'après le sens des colonnes ; le choix vous appartient.`,
   'tip.convertQuantityKind.does': `Dit ce que sont les nombres des cellules d'espèces.`,
   'tip.convertQuantityKind.logic': `• Un effectif est un nombre d'individus et doit être entier ; il est écrit comme individualCount et comme mesure d'effectif ({countConcept}).
@@ -928,8 +1004,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Une densité par volume d'eau a le concept {volumeConcept}, par surface du fond {areaConcept}.
 • L'unité ne tranche jamais seule contre votre choix.`,
   'tip.convertQuantityMedium.does': `Pour des nombres par surface : la colonne d'eau ou le fond.`,
-  'tip.convertQuantityMedium.logic': `• Seul un nombre par surface du fond a un concept vérifié.
-• Un nombre par surface de la colonne d'eau n'a pas de concept, seulement un avertissement ; il faut en choisir un à la main avant la publication.`,
+  'tip.convertQuantityMedium.logic': `• Pour un nombre par surface il n'y a pas de valeur par défaut : vous choisissez la colonne d'eau ou le fond.
+• Seul un nombre par surface du fond a un concept vérifié ; un nombre par surface de la colonne d'eau n'a pas de concept, seulement un avertissement, et il faut en choisir un à la main avant la publication.`,
   'tip.convertEffort.does': `Le volume ou la surface prélevé, si vous le connaissez.`,
   'tip.convertEffort.logic': `• Donnez une valeur pour tous les échantillons, ou marquez une colonne de la feuille.
 • Elle est écrite pour chaque échantillon comme sampleSizeValue et sampleSizeUnit, et comme mesure : {volumeConcept} pour un volume, {areaConcept} pour une surface.
@@ -957,14 +1033,14 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertFlattenCruise.logic': `• Le code de campagne passe plutôt au texte du jeu de données, et les stations sont au sommet de l'arbre.
 • L'identifiant d'une station commence toujours par le code de campagne.
 • Rien n'est aplati sans que vous le cochiez.`,
-  'tip.convertSplits.does': `Valide la façon dont un nom avec mention, stade ou sexe est divisé.`,
-  'tip.convertSplits.logic': `• Les mentions ({qualifiers}) vont dans la mention d'identification, les stades ({stages}) dans le stade de développement, et un f ou m après une virgule dans le sexe.
-• Le texte exact est toujours gardé comme verbatimIdentification.
-• Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion.
-• Un nom simple ne demande aucune décision.`,
+  'tip.convertSplits.does': `Valide la façon dont un nom avec mention, stade ou sexe, ou un nom douteux, est divisé.`,
+  'tip.convertSplits.logic': `• Les mentions ({qualifiers}) vont dans la mention d'identification, les stades ({stages}) dans le stade de développement, et un f ou m après une virgule, ou juste après un stade ou un point d'interrogation, dans le sexe.
+• Un nom qui garde un chiffre, une barre oblique, un point d'interrogation, une plage de stades, une lettre isolée ou plus de trois mots est montré avec la raison, pour que vous le corrigiez.
+• Le texte exact est toujours gardé comme verbatimIdentification. Vous pouvez modifier le nom, la mention, le stade et le sexe avant de valider.
+• Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion. Un nom simple ne demande aucune décision.`,
   'tip.convertCodes.does': `Propose une seule fois des codes d'échantillon, pour une feuille qui n'en a pas.`,
   'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille.
-• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne ; vos cellules ne sont pas modifiées.
+• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte, sauf celles qui commencent par = ou @, qui reçoivent une apostrophe pour qu'un tableur ne les exécute pas ; les dates d'un fichier xlsx sont écrites en dates ISO.
 • Vérifiez-la et rechargez ce fichier : seul un code de votre propre feuille chargée devient un identifiant.
 • Le convertisseur n'applique ni ne renouvelle jamais les codes de lui-même.`,
   'tip.convertTree.does': `Montre l'arbre des événements que l'archive aurait.`,

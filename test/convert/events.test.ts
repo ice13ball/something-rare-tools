@@ -156,3 +156,22 @@ describe('event tree', () => {
     expect(summarizeTree(t.events).events).toBe(6);
   });
 });
+
+describe('very large parents (L1)', () => {
+  it('150 000 samples under one station and one cruise: no throw (no spread over the array), linear time, right derived values', () => {
+    const n = 150_000;
+    const many: SampleSite[] = [];
+    for (let i = 0; i < n; i++) many.push(site({ id: `s${i}`, cruiseCode: 'C', stationCode: 'ST', date: makeDate('2023-06-14'), lat: 50 + (i % 1000) / 1000, lon: 5 + (i % 777) / 1000, depthMin: i % 50, depthMax: (i % 50) + 5 }));
+    const t0 = Date.now();
+    const t = buildEventTree(many);
+    const ms = Date.now() - t0;
+    expect(t.events).toHaveLength(n + 2);
+    const st = byId(t.events, 'C:ST');
+    expect([st.depthMin, st.depthMax]).toEqual([0, 54]);
+    expect(st.coordinateUncertaintyInMeters).toBeGreaterThan(0);
+    expect(t.summary.samples).toBe(n);
+    expect(ms).toBeLessThan(5000);
+    const flat = buildEventTree(many, { flatten: { station: true } });
+    expect(flat.events).toHaveLength(n + 1);
+  });
+});

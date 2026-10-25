@@ -172,8 +172,14 @@ interface Point {
 
 function deriveCentre(points: readonly Point[]): { lat: number; lon: number; uncertainty?: number } | undefined {
   if (points.length === 0) return undefined;
-  const lats = points.map((p) => p.lat);
-  const lat = round6((Math.min(...lats) + Math.max(...lats)) / 2);
+  // loops, not Math.min(...array): a parent can have hundreds of thousands of children
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  for (const p of points) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+  }
+  const lat = round6((minLat + maxLat) / 2);
   const lon = round6(centreLongitude(points.map((p) => p.lon)));
   let far = 0;
   for (const p of points) far = Math.max(far, greatCircleM(lat, lon, p.lat, p.lon) + p.u);
@@ -209,14 +215,22 @@ function derive(node: Node): void {
     if (centre.uncertainty !== undefined) rec.coordinateUncertaintyInMeters = centre.uncertainty;
     rec.derived.position = true;
   }
-  const mins = kids.flatMap((k) => (k.rec.depthMin === undefined ? [] : [k.rec.depthMin]));
-  const maxs = kids.flatMap((k) => (k.rec.depthMax === undefined ? [] : [k.rec.depthMax]));
-  if (mins.length > 0) rec.depthMin = Math.min(...mins);
-  if (maxs.length > 0) rec.depthMax = Math.max(...maxs);
-  if (mins.length > 0 || maxs.length > 0) {
+  let minD: number | undefined;
+  let maxD: number | undefined;
+  let dec: number | undefined;
+  for (const k of kids) {
+    const lo = k.rec.depthMin;
+    const hi = k.rec.depthMax;
+    if (lo !== undefined && (minD === undefined || lo < minD)) minD = lo;
+    if (hi !== undefined && (maxD === undefined || hi > maxD)) maxD = hi;
+    const d = k.rec.depthDecimals;
+    if (d !== undefined && (dec === undefined || d > dec)) dec = d;
+  }
+  if (minD !== undefined) rec.depthMin = minD;
+  if (maxD !== undefined) rec.depthMax = maxD;
+  if (minD !== undefined || maxD !== undefined) {
     rec.derived.depth = true;
-    const dec = kids.flatMap((k) => (k.rec.depthDecimals === undefined ? [] : [k.rec.depthDecimals]));
-    if (dec.length > 0) rec.depthDecimals = Math.max(...dec);
+    if (dec !== undefined) rec.depthDecimals = dec;
   }
 }
 
@@ -231,6 +245,7 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
   const stations = new Map<string, Node>();
   const leaves = new Map<string, Node>();
   const cruiseText: string[] = [];
+  const cruiseSeen = new Set<string>();
 
   const cruiseNode = (code: string): Node => {
     let n = cruises.get(code);
@@ -275,7 +290,10 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
 
     // the parent chain: cruise -> station -> sample, minus the flattened levels
     const cruise = s.cruiseCode === undefined ? undefined : cruiseNode(s.cruiseCode);
-    if (cruise && flattenCruise && !cruiseText.includes(cruise.rec.code)) cruiseText.push(cruise.rec.code);
+    if (cruise && flattenCruise && !cruiseSeen.has(cruise.rec.code)) {
+      cruiseSeen.add(cruise.rec.code);
+      cruiseText.push(cruise.rec.code);
+    }
     const station = s.stationCode === undefined ? undefined : stationNode(s.cruiseCode, s.stationCode);
     if (station) {
       if (cruise && !flattenCruise) station.rec.parentId = cruise.rec.id;
@@ -283,7 +301,7 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
         rec.locality = station.rec.code;
         if (cruise && !flattenCruise) {
           rec.parentId = cruise.rec.id;
-          if (!cruise.children.includes(node)) cruise.children.push(node);
+          cruise.children.push(node); // each sample is visited once (a repeated id was skipped above)
         }
       } else {
         rec.parentId = station.rec.id;
@@ -314,7 +332,11 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
 /** Counts for the preview: events per level, roots, what was derived, samples that have no position of their own. */
 export function summarizeTree(events: readonly EventRec[], flattened: { station: boolean; cruise: boolean } = { station: false, cruise: false }): TreeSummary {
   const by = (t: EventRec['eventType']): number => events.filter((e) => e.eventType === t).length;
-  const uncertainties = events.flatMap((e) => (e.derived.position && e.coordinateUncertaintyInMeters !== undefined ? [e.coordinateUncertaintyInMeters] : []));
+  let maxUncertainty: number | undefined;
+  for (const e of events) {
+    const u = e.derived.position ? e.coordinateUncertaintyInMeters : undefined;
+    if (u !== undefined && (maxUncertainty === undefined || u > maxUncertainty)) maxUncertainty = u;
+  }
   return {
     events: events.length,
     cruises: by('cruise'),
@@ -326,6 +348,6 @@ export function summarizeTree(events: readonly EventRec[], flattened: { station:
     derivedPositions: events.filter((e) => e.derived.position).length,
     derivedDepths: events.filter((e) => e.derived.depth).length,
     samplesWithoutPosition: events.filter((e) => e.eventType === 'sample' && (e.lat === undefined || e.lon === undefined)).length,
-    ...(uncertainties.length > 0 ? { maxUncertaintyM: Math.max(...uncertainties) } : {}),
+    ...(maxUncertainty === undefined ? {} : { maxUncertaintyM: maxUncertainty }),
   };
 }

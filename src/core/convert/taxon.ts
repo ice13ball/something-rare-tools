@@ -47,7 +47,7 @@ function stageToken(tok: string): string | undefined {
   return undefined;
 }
 
-/** Sex after a comma only ("Metridia longa, f"): a bare f or m inside a name is never read as one. */
+/** Sex after a comma ("Metridia longa, f"), or straight after a stage or "?": a bare f or m after a plain epithet is never read as one. */
 function sexToken(tok: string): 'female' | 'male' | undefined {
   const t = tok.toLowerCase();
   return t === 'f' ? 'female' : t === 'm' ? 'male' : undefined;
@@ -78,6 +78,16 @@ export function splitTaxon(text: string): TaxonSplit {
   }
 
   const words = rest.split(/\s+/).filter(HAS_DETAIL);
+  // 1b. a bare f / m reads as the sex only straight after a stage or a "?" ("Calanus finmarchicus C5 f", "Acartia ? f"); after a plain epithet it is
+  // part of the name ("Metridia longa f"), which the plausibility check below then puts to the user
+  if (sex === undefined && words.length > 2) {
+    const sx = sexToken(words[words.length - 1]);
+    const before = words[words.length - 2];
+    if (sx !== undefined && (stageToken(before) !== undefined || before === '?' || before.endsWith('?'))) {
+      sex = sx;
+      words.pop();
+    }
+  }
   // 2. a trailing stage without a comma ("Oithona similis CIV"); the name keeps at least one word
   if (lifeStage === undefined && words.length > 1) {
     const stage = stageToken(words[words.length - 1]);
@@ -118,6 +128,22 @@ export function splitTaxon(text: string): TaxonSplit {
   return split;
 }
 
+/**
+ * Is what is left of the name plausibly a Latin name? A reason code when it is not (the user is asked, whatever the split did):
+ * digits, a slash, a "?", a stage range such as CVI-CV, a one-letter word, or more than three words.
+ */
+export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'long';
+export function nameDoubt(name: string): NameDoubt | undefined {
+  if (/\d/.test(name)) return 'digits';
+  if (name.includes('/')) return 'slash';
+  if (name.includes('?')) return 'question';
+  const words = name.split(/\s+/).filter((w) => w !== '');
+  if (words.some((w) => /^c?[ivx]+-c?[ivx]+$/i.test(w))) return 'stage-range';
+  if (words.some((w) => /^[A-Za-z]$/.test(w))) return 'single-letter';
+  if (words.length > 3) return 'long';
+  return undefined;
+}
+
 /** Did the split take something out of the name (a qualifier or a stage)? Only those need the user's approval. */
 export const splitChanged = (s: TaxonSplit): boolean => s.identificationQualifier !== undefined || s.lifeStage !== undefined || s.sex !== undefined;
 
@@ -129,8 +155,10 @@ export interface SplitEntry {
   proposed: TaxonSplit;
   /** What will be used: the approved split, else the proposal. */
   split: TaxonSplit;
-  /** The proposal took a qualifier or a stage out of the name: the user must approve it. */
+  /** The proposal took a qualifier, a stage or a sex out of the name, or what is left is not plausibly a Latin name: the user must approve it. */
   needsDecision: boolean;
+  /** Why the leftover name is doubtful (set with needsDecision when that is the reason). */
+  doubt?: NameDoubt;
   /** An approved split exists for this text. */
   approved: boolean;
   /** How many columns (wide) or rows (long) carry this text. */
@@ -157,7 +185,8 @@ export function distinctSplits(names: readonly string[], approved?: ApprovedSpli
   return [...counts].map(([verbatim, uses]) => {
     const proposed = splitTaxon(verbatim);
     const decided = approvedSplit(approved, verbatim);
-    const needsDecision = splitChanged(proposed);
-    return { verbatim, proposed, split: decided ?? proposed, needsDecision, approved: decided !== undefined, uses };
+    const doubt = nameDoubt(proposed.scientificName);
+    const needsDecision = splitChanged(proposed) || doubt !== undefined;
+    return { verbatim, proposed, split: decided ?? proposed, needsDecision, ...(doubt === undefined ? {} : { doubt }), approved: decided !== undefined, uses };
   });
 }

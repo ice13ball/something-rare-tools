@@ -179,14 +179,13 @@ describe('Q1: the one-time sample code proposal', () => {
     expect(p.csv.endsWith('\n')).toBe(true);
   });
 
-  it('protects text that starts like a formula, in a cell, in a header and in the new code, as the clean CSV does', () => {
-    const f = fileOf(['=Station', 'Lat'], [['=cmd|x', 1], ['+1+1', 2]]);
+  it('guards only a cell that starts with = or @ (or a tab / CR); a plus, a minus and a presence mark are ordinary values', () => {
+    const f = fileOf(['=Station', 'Lat'], [['=cmd|x', 1], ['@sum', 2], ['+', 3], ['-5', 4], ['\tx', 5]]);
     const m = { sheet: 'S', columns: [{ index: 0, header: '=Station', role: { kind: 'station' as const } }] };
     const p = proposeSampleCodes(f, f.sheets[0], m)!;
-    expect(p.csv.split('\n')).toEqual(["'=Station,Lat,sample_code", "'=cmd|x,1,'=cmd|x-1", "'+1+1,2,'+1+1-1", '']);
+    expect(p.csv.split('\n')).toEqual(["'=Station,Lat,sample_code", "'=cmd|x,1,'=cmd|x-1", "'@sum,2,'@sum-1", '+,3,+-1', '-5,4,-5-1', "'\tx,5,x-1", '']);
     expect(guardText('=cmd|x')).toBe("'=cmd|x");
-    // the codes themselves are returned raw
-    expect(p.codes).toEqual(['=cmd|x-1', '+1+1-1']);
+    expect(p.codes).toEqual(['=cmd|x-1', '@sum-1', '+-1', '-5-1', 'x-1']);
   });
 
   it('names the new column so it cannot clash with an existing header', () => {
@@ -212,5 +211,38 @@ describe('Q1: the one-time sample code proposal', () => {
     const r = convert({ sheets: [input] });
     expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.id)).toEqual(['S1-1', 'S1-2', 'S2-1', 'S1-3']);
     expect(r.occurrences.map((o) => o.id)).toEqual(['S1-1:Calanus finmarchicus', 'S1-2:Calanus finmarchicus', 'S2-1:Calanus finmarchicus', 'S1-3:Calanus finmarchicus']);
+  });
+});
+
+describe('duplicates across files are reported at every place (M4)', () => {
+  it('an eventID repeated in two files: one finding per file, each with its own sheet and lines', () => {
+    const a = wide([['CR', 'S1', 'same', 1, 2, '2020-01-01', 4, 5], ['CR', 'S1', 'ok-a', 1, 2, '2020-01-01', 4, 5]], {}, HEADER);
+    const b = wide([['CR', 'S1', 'ok-b', 1, 2, '2020-01-01', 6, 7], ['CR', 'S1', 'x', 1, 2, '2020-01-01', 6, 7], ['CR', 'S1', 'same', 1, 2, '2020-01-01', 6, 7]], {}, HEADER);
+    a.file = { ...a.file, fileName: 'first.csv' };
+    b.file = { ...b.file, fileName: 'second.csv' };
+    const d = find(convert({ sheets: [a, b] }).blocking, 'CONV-ID-DUPLICATE').filter((f) => f.params.kind === 'event');
+    expect(d.map((f) => [f.file, f.sheet, f.value, f.lines])).toEqual([
+      ['first.csv', 'S', 'same', [2]],
+      ['second.csv', 'S', 'same', [4]],
+    ]);
+  });
+
+  it('an occurrenceID repeated in two files is reported in both, with the lines of each', () => {
+    const header = ['occurrenceID', 'eventID', 'scientificName', 'individualCount'];
+    const mk = (name: string, rows: Cell[][]) => sheetInput(fileOf(header, rows, 'S', { fileName: name }), { quantity: { kind: 'count' } });
+    const r = convert({ sheets: [mk('one.csv', [['o1', 'e1', 'Calanus finmarchicus', 1], ['o2', 'e1', 'Oithona similis', 2]]), mk('two.csv', [['o3', 'e2', 'Calanus finmarchicus', 3], ['o2', 'e2', 'Oithona similis', 4]])] });
+    const d = find(r.blocking, 'CONV-ID-DUPLICATE').filter((f) => f.params.kind === 'occurrence');
+    expect(d.map((f) => [f.file, f.value, f.lines])).toEqual([
+      ['one.csv', 'o2', [3]],
+      ['two.csv', 'o2', [3]],
+    ]);
+  });
+
+  it('with several repeated IDs in one sheet, one finding lists the count and every line', () => {
+    const header = ['occurrenceID', 'eventID', 'scientificName', 'individualCount'];
+    const s = sheetInput(fileOf(header, [['o1', 'e1', 'Calanus finmarchicus', 1], ['o1', 'e1', 'Oithona similis', 2], ['o2', 'e1', 'Acartia longiremis', 3], ['o2', 'e1', 'Metridia longa', 4]]), { quantity: { kind: 'count' } });
+    const d = find(convert({ sheets: [s] }).blocking, 'CONV-ID-DUPLICATE');
+    expect(d).toHaveLength(1);
+    expect(d[0]).toMatchObject({ lines: [2, 3, 4, 5], params: { count: 2 } });
   });
 });

@@ -202,6 +202,11 @@ const DEFS = {
   convertFlattenStation: { label: 'convert.flatten.station' },
   convertFlattenCruise: { label: 'convert.flatten.cruise' },
   convertSplits: { label: 'convert.splits.title', values: { qualifiers: () => QUALIFIER_TOKENS.join(' '), stages: () => STAGE_TOKENS.join(', ') } },
+  convertTaxa: { label: 'convert.taxa.label' },
+  convertDepthBound: { label: 'mapping.bound' },
+  convertEffortValue: { label: 'convert.effort.value' },
+  convertEffortUnit: { label: 'convert.effort.unit', values: { units: codes(P06.m3, P06.m2) } },
+  convertEffortDimension: { label: 'convert.effort.dimension', values: { volumeConcept: codes(P01.volumeSampled), areaConcept: codes(P01.areaSampled) } },
   convertCodes: { label: 'convert.codes.title' },
   convertTree: { label: 'convert.tree.title' },
 } satisfies Record<string, TipDef>;

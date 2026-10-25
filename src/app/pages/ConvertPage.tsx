@@ -11,7 +11,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { initialChoices, plainOf, requestOf, sheetKey, codesFileName, type SheetChoice } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, plainOf, requestOf, sheetKey, codesFileName, type SheetChoice } from '../convertModel';
 import { downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -65,6 +65,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
   const [flattenStation, setFlattenStation] = useState(false);
   const [flattenCruise, setFlattenCruise] = useState(false);
   const [approved, setApproved] = useState<Record<string, TaxonSplit>>({});
+  // what the user typed into a split before approving it; confirmed taxon candidates by candidateKey
+  const [drafts, setDrafts] = useState<Record<string, TaxonSplit>>({});
+  const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
+  const [convertError, setConvertError] = useState<string | null>(null);
   const [view, setView] = useState<ConvertView | null>(null);
   const [working, setWorking] = useState(false);
   const [codesDone, setCodesDone] = useState<Record<string, string | null>>({});
@@ -81,6 +85,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     setView(null);
     setCodesDone({});
     setApproved({});
+    setDrafts({});
+    setConfirmed({});
+    setConvertError(null);
     setFlattenStation(false);
     setFlattenCruise(false);
     setPhase('reading');
@@ -115,13 +122,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     setWorking(true);
     const timer = setTimeout(() => {
       engine
-        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved }))
+        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed }))
         .then(
           (v) => {
-            if (token.current === mine) setView(v);
+            if (token.current !== mine) return;
+            setView(v);
+            setConvertError(null); // a later conversion that succeeds clears an earlier error
           },
           (e: unknown) => {
-            if (token.current === mine) setProblem(messageOf(e));
+            if (token.current === mine) setConvertError(messageOf(e));
           },
         )
         .finally(() => {
@@ -129,10 +138,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
         });
     }, 120);
     return () => clearTimeout(timer);
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved]);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed]);
 
-  const changeMapping = (fileId: string, mapping: SheetMapping): void =>
+  const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
+  const changeMapping = (fileId: string, mapping: SheetMapping): void => {
+    // a column the user turns into a taxon by hand is their own decision: no confirmation is asked for it
+    const before = (mappings[fileId] ?? []).find((m) => m.sheet === mapping.sheet);
+    const nowTaxa = mapping.columns.filter((c) => isTaxonHeader(c.role) && !isTaxonHeader(before?.columns.find((b) => b.index === c.index)?.role));
+    if (nowTaxa.length > 0) setConfirmed((prev) => ({ ...prev, ...Object.fromEntries(nowTaxa.map((c) => [candidateKey(fileId, mapping.sheet, c.index), true])) }));
     setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === mapping.sheet ? mapping : m)) }));
+  };
 
   const proposeCodes = async (fileId: string, sheet: string): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
@@ -153,7 +168,19 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
     }
   };
 
+  const candidates = useMemo(() => (parsed ? candidatesOf(parsed, mappings) : []), [parsed, mappings]);
+  const unconfirmed = candidates.filter((c) => confirmed[c.key] !== true);
   const toApprove = (view?.splits ?? []).filter((s) => s.needsDecision);
+  const draftOf = (s: (typeof toApprove)[number]): TaxonSplit => drafts[s.verbatim] ?? s.split;
+  const finalSplit = (s: (typeof toApprove)[number]): TaxonSplit | null => {
+    const d = draftOf(s);
+    const name = d.scientificName.trim();
+    if (name === '') return null;
+    const q = d.identificationQualifier?.trim();
+    const st = d.lifeStage?.trim();
+    return { verbatimIdentification: s.verbatim, scientificName: name, ...(q ? { identificationQualifier: q } : {}), ...(st ? { lifeStage: st } : {}), ...(d.sex ? { sex: d.sex } : {}) };
+  };
+  const setDraft = (s: (typeof toApprove)[number], patch: Partial<TaxonSplit>): void => setDrafts((prev) => ({ ...prev, [s.verbatim]: { ...draftOf(s), ...patch } }));
   const blocking = (view?.findings ?? []).filter((f) => f.severity === 'error');
   const warnings = (view?.findings ?? []).filter((f) => f.severity === 'warning');
   const infos = (view?.findings ?? []).filter((f) => f.severity === 'info');
@@ -173,9 +200,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
 
       <InputPanel mode="browser" withLink={false} submitKey="convert.read" disabled={phase === 'reading'} onFilesChange={setFilesChosen} onSubmit={(i) => void submit(i)} />
 
-      {problem !== null && (
+      {(problem ?? convertError) !== null && (
         <p className="error-text" role="alert">
-          {t('convert.error', { message: problem })}
+          {t('convert.error', { message: (problem ?? convertError) as string })}
         </p>
       )}
       {phase === 'reading' && (
@@ -218,6 +245,33 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
               />
             ))}
           </section>
+
+          {candidates.length > 0 && (
+            <section className="convert-taxa" aria-labelledby="convert-taxa-title">
+              <HeadingTip tip="convertTaxa">
+                <h2 id="convert-taxa-title">{t('convert.taxa.title', { n: candidates.length })}</h2>
+              </HeadingTip>
+              <p>{t('convert.taxa.intro')}</p>
+              {unconfirmed.length > 0 && (
+                <button type="button" className="button" onClick={() => setConfirmed((prev) => ({ ...prev, ...Object.fromEntries(candidates.map((c) => [c.key, true])) }))}>
+                  {t('convert.taxa.confirmAll', { n: unconfirmed.length })}
+                </button>
+              )}
+              <ul className="convert-candidates">
+                {candidates.map((c) => (
+                  <li key={c.key}>
+                    <label className="inline-choice">
+                      <input type="checkbox" checked={confirmed[c.key] === true} aria-label={t('convert.taxa.confirm', { header: c.header })} onChange={(e) => setConfirmed((prev) => ({ ...prev, [c.key]: e.target.checked }))} />
+                      <span>
+                        <code>{c.header}</code>
+                        {candidates.some((o) => o.sheet !== c.sheet || o.fileId !== c.fileId) && <span className="muted"> ({c.sheet})</span>}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section className="convert-sheets" aria-label={t('convert.quantity.title')}>
             {files.flatMap((f) =>
@@ -275,7 +329,19 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
               </HeadingTip>
               <p>{t('convert.splits.intro')}</p>
               {toApprove.some((s) => !s.approved) && (
-                <button type="button" className="button" onClick={() => setApproved((prev) => ({ ...prev, ...Object.fromEntries(toApprove.map((s) => [s.verbatim, s.proposed])) }))}>
+                <button type="button" className="button" onClick={() =>
+                    setApproved((prev) => ({
+                      ...prev,
+                      ...Object.fromEntries(
+                        toApprove
+                          .filter((s) => !s.approved)
+                          .flatMap((s) => {
+                            const f = finalSplit(s);
+                            return f ? [[s.verbatim, f] as const] : [];
+                          }),
+                      ),
+                    }))
+                  }>
                   {t('convert.splits.approveAll', { n: toApprove.filter((s) => !s.approved).length })}
                 </button>
               )}
@@ -292,32 +358,66 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
                     </tr>
                   </thead>
                   <tbody>
-                    {toApprove.map((s) => (
-                      <tr key={s.verbatim} data-approved={s.approved ? 'true' : 'false'}>
-                        <th scope="row">
-                          <code>{s.verbatim}</code>
-                          <span className="muted"> {t('convert.splits.uses', { n: s.uses })}</span>
-                        </th>
-                        <td>
-                          <i>{splitText(s.split)}</i>
-                        </td>
-                        <td>{s.split.identificationQualifier ?? ''}</td>
-                        <td>{s.split.lifeStage ?? ''}</td>
-                        <td>{s.split.sex ? sexText(s.split.sex) : ''}</td>
-                        <td>
-                          {s.approved ? (
-                            <button type="button" className="link-button" aria-label={`${t('convert.splits.withdraw')}: ${s.verbatim}`} onClick={() => setApproved((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== s.verbatim)))}>
-                              {t('convert.splits.withdraw')}
-                            </button>
-                          ) : (
-                            <button type="button" className="button" aria-label={`${t('convert.splits.approve')}: ${s.verbatim}`} onClick={() => setApproved((prev) => ({ ...prev, [s.verbatim]: s.proposed }))}>
-                              {t('convert.splits.approve')}
-                            </button>
-                          )}
-                          <span className="visually-hidden"> {s.approved ? t('convert.splits.approved') : t('convert.splits.undecided')}</span>
-                        </td>
-                      </tr>
-                    ))}
+                    {toApprove.map((s) => {
+                      const d = draftOf(s);
+                      const locked = s.approved;
+                      return (
+                        <tr key={s.verbatim} data-approved={s.approved ? 'true' : 'false'}>
+                          <th scope="row">
+                            <code>{s.verbatim}</code>
+                            <span className="muted"> {t('convert.splits.uses', { n: s.uses })}</span>
+                            {s.doubt && !locked && <span className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${s.doubt}` as UiKey) })}</span>}
+                          </th>
+                          <td>
+                            <input type="text" className="convert-input" aria-label={`${t('convert.splits.name')}: ${s.verbatim}`} value={d.scientificName} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { scientificName: e.target.value })} />
+                          </td>
+                          <td>
+                            <input type="text" className="convert-input" aria-label={`${t('convert.splits.qualifier')}: ${s.verbatim}`} value={d.identificationQualifier ?? ''} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { identificationQualifier: e.target.value })} />
+                          </td>
+                          <td>
+                            <input type="text" className="convert-input" aria-label={`${t('convert.splits.stage')}: ${s.verbatim}`} value={d.lifeStage ?? ''} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { lifeStage: e.target.value })} />
+                          </td>
+                          <td>
+                            <select
+                              className="convert-input"
+                              aria-label={`${t('convert.splits.sex')}: ${s.verbatim}`}
+                              value={d.sex ?? ''}
+                              disabled={locked}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const { sex: _drop, ...rest } = draftOf(s);
+                                setDrafts((prev) => ({ ...prev, [s.verbatim]: v === 'female' || v === 'male' ? { ...rest, sex: v } : rest }));
+                              }}
+                            >
+                              <option value="">{t('convert.sex.none')}</option>
+                              <option value="female">{t('convert.sex.female')}</option>
+                              <option value="male">{t('convert.sex.male')}</option>
+                            </select>
+                          </td>
+                          <td>
+                            {s.approved ? (
+                              <button type="button" className="link-button" aria-label={`${t('convert.splits.withdraw')}: ${s.verbatim}`} onClick={() => setApproved((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== s.verbatim)))}>
+                                {t('convert.splits.withdraw')}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="button"
+                                aria-label={`${t('convert.splits.approve')}: ${s.verbatim}`}
+                                disabled={finalSplit(s) === null}
+                                onClick={() => {
+                                  const f = finalSplit(s);
+                                  if (f) setApproved((prev) => ({ ...prev, [s.verbatim]: f }));
+                                }}
+                              >
+                                {t('convert.splits.approve')}
+                              </button>
+                            )}
+                            <span className="visually-hidden"> {s.approved ? t('convert.splits.approved') : t('convert.splits.undecided')}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -396,6 +496,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText }: Con
             {view && (
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
+                {unconfirmed.length > 0 && (
+                  <p className="notice" role="note">
+                    {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
+                  </p>
+                )}
                 <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" />
                 <FindingList titleKey="convert.summary.warnings" findings={warnings} kind="warning" />
                 <FindingList titleKey="convert.summary.info" findings={infos} kind="info" />

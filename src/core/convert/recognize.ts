@@ -30,6 +30,11 @@ const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zag
 const EFFORT_VOLUME = /^(volume filtered|volume sampled|sampled volume|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
 const EFFORT_AREA = /^(area|area sampled|sampled area|powierzchnia|flache|surface|surface echantillonnee)$/;
 
+// a summary column is never a species: the whole header (case-insensitive, after the unit is stripped) is one of these
+const SUMMARY_HEADER = /^(total|suma|razem|summe|gesamt|somme|sum|σ)$/i;
+// "Stage" and its translations: the life stage of the record (a long sheet)
+const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
+
 const DEPTH_WORDS = /^(depth|tiefe|profondeur|glebokosc)(?: (.*))?$/;
 const BOUND_MIN = new Set(['top', 'min', 'minimum', 'from', 'von', 'od', 'de', 'upper', 'start', 'ab']);
 // 'a' is the French "à" after foldDiacritics
@@ -56,8 +61,13 @@ function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolea
   for (const row of sheet.rows.slice(0, 200)) {
     const c = row.cells[index] ?? null;
     if (c === null || String(c).trim() === '') continue;
-    if (typeof c === 'string' && PRESENCE_MARK.test(c.trim())) marks++;
-    else if (parseNumber(c, decimalComma).status !== 'ok') return false;
+    if (typeof c === 'string' && PRESENCE_MARK.test(c.trim())) {
+      marks++;
+      continue;
+    }
+    // NA and its variants are "no record", as everywhere: they do not rule the column out
+    const st = parseNumber(c, decimalComma).status;
+    if (st !== 'ok' && st !== 'missing' && st !== 'na-variant') return false;
   }
   return marks > 0;
 }
@@ -90,6 +100,7 @@ function dwcClaim(term: string): Claim | undefined {
 
 /** The converter's own names (taxon, quantity, effort) in PL / EN / DE / FR; `key` is a headerKey. */
 function nameClaim(key: string, unit: string | undefined): Claim | undefined {
+  if (STAGE_NAME.test(key)) return { role: { kind: 'lifeStage' }, confidence: 'high', reason: 'name says life stage' };
   if (TAXON_NAME.test(key)) return { role: { kind: 'taxon' }, confidence: 'high', reason: 'name says taxon or species' };
   if (QUANTITY_STANDALONE.test(key)) return { role: { kind: 'quantity' }, confidence: 'high', reason: 'name says count' };
   const q = QUANTITY_WORD.exec(key);
@@ -174,14 +185,16 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       continue;
     }
     // wide sheet: a column of presence marks (+, x) next to counts is a species column too; the shared proposer read it as text
-    if (!hasLongTaxon && p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) {
+    const headerName = unitFromHeader(p.header).name.trim();
+    const summaryHeader = SUMMARY_HEADER.test(headerName) || SUMMARY_HEADER.test(headerKey(headerName));
+    if (!summaryHeader && !hasLongTaxon && p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) {
       p.role = { kind: 'taxon', header: true };
       p.confidence = 'low';
       p.reason = 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)';
       continue;
     }
     // wide sheet: a numeric column named like nothing we know is a taxon candidate; confirmed in bulk
-    if (!hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && p.role.p01 === undefined) {
+    if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && p.role.p01 === undefined) {
       p.role = { kind: 'taxon', header: true };
       p.confidence = 'low';
       p.reason = 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)';

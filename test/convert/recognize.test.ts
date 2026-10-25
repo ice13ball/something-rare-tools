@@ -149,3 +149,25 @@ describe('wide sheets: taxon candidates', () => {
     expect(JSON.stringify(proposeColumns(sheet, CTX))).toBe(before);
   });
 });
+
+describe('candidates (M1, L4)', () => {
+  const header = ['Station', 'Latitude', 'Longitude', 'Date'];
+  const base: Cell[] = ['S1', 55, 3, '2020-01-01'];
+  it.each(['Total', 'Suma', 'Razem', 'Summe', 'Gesamt', 'Somme', 'Sum', 'Σ', 'TOTAL', 'total [ind]'])('the header %s is never proposed as a taxon', (h) => {
+    const p = props([...header, 'Calanus finmarchicus', h], [[...base, 4, 9], [...base, 5, 10]]);
+    expect(roleOf(p, h).kind).not.toBe('taxon');
+    expect(roleOf(p, 'Calanus finmarchicus')).toEqual({ kind: 'taxon', header: true });
+  });
+  it('a header that merely contains the word (Total Bay copepods) is still a candidate', () => {
+    const p = props([...header, 'Total Bay copepods'], [[...base, 4], [...base, 5]]);
+    expect(roleOf(p, 'Total Bay copepods')).toEqual({ kind: 'taxon', header: true });
+  });
+  it('a presence-mark column with NA cells is still a taxon candidate, a real text column is not', () => {
+    const p = props([...header, 'Calanus finmarchicus'], [[...base, '+'], [...base, 'NA'], [...base, 'x'], [...base, null], [...base, 'NANA']]);
+    expect(roleOf(p, 'Calanus finmarchicus')).toEqual({ kind: 'taxon', header: true });
+    expect(roleOf(props([...header, 'Comments'], [[...base, '+'], [...base, 'rough sea']]), 'Comments')).toEqual({ kind: 'ignore' });
+  });
+  it.each(['Stage', 'Stadium', 'stadium', 'Stade', 'Life stage', 'Stadium rozwojowe'])('%s is the life stage', (h) => {
+    expect(roleOf(props(['Sample', 'Species', 'Count', h], [['a', 'Calanus', 3, 'C2']]), h)).toEqual({ kind: 'lifeStage' });
+  });
+});

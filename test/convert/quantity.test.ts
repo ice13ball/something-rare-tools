@@ -89,12 +89,12 @@ describe('concepts', () => {
   it('density: per volume is SDBIOL01 with UPMM, per area of the bed SDBIOL02 with UPMS', () => {
     const v = resolveQuantity({ kind: 'density', unit: 'ind m-3' });
     expect(v).toMatchObject({ ok: true, quantity: { type: P01.densityVolume, unitId: P06.perM3 } });
-    const a = resolveQuantity({ kind: 'density', unit: '#/m2' });
+    const a = resolveQuantity({ kind: 'density', unit: '#/m2', medium: 'bed' });
     expect(a).toMatchObject({ ok: true, quantity: { type: P01.densityAreaBed, unitId: P06.perM2 } });
   });
 
   it('biomass: the six SDBIOL concepts by basis and dimension, with the P06 unit', () => {
-    const t = (basis: 'wet' | 'dry' | 'afdw', unit: string) => (resolveQuantity({ kind: 'biomass', basis, unit }) as { ok: true; quantity: { type?: { code: string }; unitId?: { code: string } } }).quantity;
+    const t = (basis: 'wet' | 'dry' | 'afdw', unit: string) => (resolveQuantity({ kind: 'biomass', basis, unit, medium: 'bed' }) as { ok: true; quantity: { type?: { code: string }; unitId?: { code: string } } }).quantity;
     expect([t('wet', 'g/m3').type?.code, t('wet', 'g/m2').type?.code]).toEqual(['SDBIOL04', 'SDBIOL05']);
     expect([t('dry', 'g/m3').type?.code, t('dry', 'mg/m2').type?.code]).toEqual(['SDBIOL09', 'SDBIOL08']);
     expect([t('afdw', 'mg/m3').type?.code, t('afdw', 'g/m2').type?.code]).toEqual(['SDBIOL07', 'SDBIOL03']);
@@ -110,7 +110,7 @@ describe('concepts', () => {
 
   it('effort: VOLWBSMP with MCUB for a volume in m3, AREABEDS with UMSQ for an area in m2', () => {
     const v = resolveQuantity({ kind: 'count', effort: { source: 'constant', value: '12,5', unit: 'm³' } }, { decimalComma: true });
-    expect(v).toMatchObject({ ok: true, quantity: { effort: { type: P01.volumeSampled, unitId: P06.m3, dimension: 'volume', constant: { value: 12.5, text: '12,5' } } } });
+    expect(v).toMatchObject({ ok: true, quantity: { effort: { type: P01.volumeSampled, unitId: P06.m3, dimension: 'volume', constant: { value: 12.5, text: '12.5' } } } });
     const a = resolveQuantity({ kind: 'count', effort: { source: 'constant', value: 0.1, unit: 'm2' } });
     expect(a).toMatchObject({ ok: true, quantity: { effort: { type: P01.areaSampled, unitId: P06.m2, dimension: 'area' } } });
   });
@@ -164,5 +164,51 @@ describe('only the NERC concepts the spike verified are written', () => {
 
   it('SDBIOL10 (deprecated) and Q01 are never written', () => {
     for (const code of VERIFIED_CODES) expect(code).not.toMatch(/SDBIOL10|Q01|UCNT/);
+  });
+});
+
+describe('per area needs an explicit medium (no default)', () => {
+  it('density or biomass per area without the choice is undeclared, naming "medium"; per volume needs none', () => {
+    expect(resolveQuantity({ kind: 'density', unit: '#/m2' })).toEqual({ ok: false, missing: ['medium'] });
+    expect(resolveQuantity({ kind: 'biomass', unit: 'g/m2', basis: 'dry' })).toEqual({ ok: false, missing: ['medium'] });
+    expect(resolveQuantity({ kind: 'density', unit: 'ind/sieve', per: 'area' })).toEqual({ ok: false, missing: ['medium'] });
+    expect(resolveQuantity({ kind: 'density', unit: '#/m3' })).toMatchObject({ ok: true });
+    const r = run([['A', 'S', 3, 4]], { kind: 'density', unit: '#/m2' });
+    expect(find(r.blocking, 'CONV-QUANTITY-UNDECLARED')[0].params.missing).toBe('medium');
+    expect(r.measurements).toEqual([]);
+  });
+
+  it('the bed has its concept; the water column keeps CONV-NERC-UNKNOWN', () => {
+    expect(resolveQuantity({ kind: 'density', unit: '#/m2', medium: 'bed' })).toMatchObject({ ok: true, quantity: { type: P01.densityAreaBed } });
+    const w = resolveQuantity({ kind: 'density', unit: '#/m2', medium: 'water' });
+    expect(w).toMatchObject({ ok: true, quantity: { noTypeFor: expect.stringContaining('water column') } });
+  });
+});
+
+describe('a typed sample size (M3)', () => {
+  const header = ['Sample', 'Station', 'Calanus finmarchicus'];
+  const run2 = (value: string, decimalComma: boolean) =>
+    convert({ sheets: [sheetInput(fileOf(header, [['A', 'S', 3]], 'S', { decimalComma }), { quantity: { kind: 'count', effort: { source: 'constant', value, unit: 'm3' } } })] });
+
+  it('is read with the decimal setting of the sheet and written with a dot', () => {
+    const r = run2('12,5', true);
+    expect(r.blocking).toEqual([]);
+    expect(r.events.find((e) => e.id === 'A')).toMatchObject({ sampleSizeValue: '12.5', sampleSizeUnit: 'm3' });
+    expect(r.measurements.find((m) => m.role === 'effort')?.measurementValue).toBe('12.5');
+    const dot = run2('12.5', false);
+    expect(dot.events.find((e) => e.id === 'A')?.sampleSizeValue).toBe('12.5');
+  });
+
+  it('a non-number, a zero, a negative or a comma on a dot sheet is CONV-EFFORT-INVALID and no effort is written', () => {
+    for (const [v, comma] of [['abc', false], ['0', false], ['-3', false], ['12,5', false], ['12.5', true], ['1,2,3', true]] as const) {
+      const r = run2(v, comma);
+      const f = find(r.blocking, 'CONV-EFFORT-INVALID');
+      expect(f, `${v} ${comma}`).toHaveLength(1);
+      expect(f[0].value).toBe(v);
+      expect(r.measurements.filter((m) => m.role === 'effort')).toEqual([]);
+      expect(find(r.findings, 'CONV-QUANTITY-UNDECLARED')).toEqual([]);
+    }
+    // nothing typed is still "missing", not "invalid"
+    expect(find(run2('', false).blocking, 'CONV-QUANTITY-UNDECLARED')[0].params.missing).toBe('effort value');
   });
 });
