@@ -490,7 +490,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Er ist noch nicht nutzbar.`,
   'tip.convertIntro.logic': `• Die Seite ist vorerst verborgen: Sie steht weder im Menü noch auf der Startseite, und Suchmaschinen werden gebeten, sie zu überspringen.
 • Es wird noch nichts verarbeitet; eine hier abgelegte Datei würde nicht gelesen.
-• Geplant sind zwei optionale Abfragen: von Taxonnamen in WoRMS und von Begriffen im NERC-Vokabular. Beide sind standardmäßig aus, und an keinen der beiden Dienste wird etwas gesendet, bis Sie dessen Schaltfläche drücken.`,
+• Geplant sind zwei optionale Abfragen: von Taxonnamen in WoRMS und von Begriffen im NERC-Vokabular. Beide sollen standardmäßig aus sein, und an keinen der beiden Dienste soll etwas gesendet werden, bis Sie dessen Schaltfläche drücken.`,
 };
 
 const fr: Record<TipKey, string> = {
@@ -650,7 +650,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. Il n'est pas encore utilisable.`,
   'tip.convertIntro.logic': `• La page est masquée pour l'instant : elle ne figure ni dans le menu ni sur la page d'accueil, et les moteurs de recherche sont priés de l'ignorer.
 • Rien n'est encore traité ; un fichier déposé ici ne serait pas lu.
-• Deux recherches facultatives sont prévues : des noms de taxons dans WoRMS et des termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien n'est envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
+• Deux recherches facultatives sont prévues : des noms de taxons dans WoRMS et des termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien ne sera envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
 };
 
 export const TIP_TEXTS: Record<'en' | 'pl' | 'de' | 'fr', Record<TipKey, string>> = { en, pl, de, fr };
