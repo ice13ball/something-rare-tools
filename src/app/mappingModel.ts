@@ -2,9 +2,10 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Pure helpers behind the mapping table: changing the role of a column without ever inventing a unit.
 import type { UiKey } from '../core/i18n/ui';
-import type { ColumnRole, SheetMapping } from '../core/types';
+import type { ColumnRole, ConverterRoleKind, SheetMapping } from '../core/types';
 
-export type RoleKind = ColumnRole['kind'];
+/** The kinds /check offers. The converter-only kinds (types.ts ConverterRole) are not among them: /check never proposes or lists them. */
+export type RoleKind = Exclude<ColumnRole['kind'], ConverterRoleKind>;
 
 /** Order of the role dropdown. */
 export const ROLE_KINDS: readonly RoleKind[] = [

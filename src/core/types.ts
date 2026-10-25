@@ -88,11 +88,23 @@ export interface MetadataRecord {
 export type ColumnRole =
   | { kind: 'latitude' } | { kind: 'longitude' }
   | { kind: 'datetime' } | { kind: 'date' } | { kind: 'time' }
-  | { kind: 'depth'; positive: 'down' | 'up' | 'unknown'; unit?: string }
+  | { kind: 'depth'; positive: 'down' | 'up' | 'unknown'; unit?: string; /** Converter only: which end of a depth range this column is. /check never sets it. */ bound?: 'min' | 'max' }
   | { kind: 'pressure'; unit?: string }
   | { kind: 'station' } | { kind: 'cruise' } | { kind: 'sampleId' }
   | { kind: 'variable'; variable: string; unit?: string; unitSource?: 'header' | 'p01' | 'metadata' | 'user'; p01?: string }
-  | { kind: 'ignore' };
+  | { kind: 'ignore' }
+  | ConverterRole;
+/**
+ * Roles that exist only on /convert (src/core/convert). /check never proposes them (recognize/columns.ts does not know them) and every
+ * /check reader treats them as a column it does not read: dataset.ts specsOf skips them, the clean CSV and the sidecar write nothing for them.
+ * `taxon` with `header: true` is a wide-sheet column whose HEADER is the taxon and whose cells are the quantities.
+ */
+export type ConverterRole =
+  | { kind: 'taxon'; header?: boolean }
+  | { kind: 'quantity' } | { kind: 'quantityType' }
+  | { kind: 'effort'; unit?: string }
+  | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' };
+export type ConverterRoleKind = ConverterRole['kind'];
 export interface ColumnProposal { index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low'; reason: string }
 export interface SheetMapping { sheet: string; columns: { index: number; header: string; role: ColumnRole }[] }
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }

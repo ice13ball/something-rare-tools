@@ -44,7 +44,7 @@ interface Acc {
   params?: Record<string, string | number>;
 }
 
-class Collector {
+export class Collector {
   private readonly accs = new Map<string, Acc>();
   constructor(private readonly file: string) {}
 
@@ -74,11 +74,11 @@ class Collector {
 /* ---------- mapping helpers ---------- */
 
 type VariableRole = Extract<ColumnRole, { kind: 'variable' }>;
-interface Spec {
+export interface Spec {
   index: number;
   header: string;
 }
-interface Specs {
+export interface Specs {
   lat?: Spec;
   lon?: Spec;
   when?: Spec & { kind: 'date' | 'datetime' };
@@ -90,7 +90,8 @@ interface Specs {
   vars: (Spec & { role: VariableRole })[];
 }
 
-function specsOf(mapping: SheetMapping): Specs {
+/** Exported for the converter (src/core/convert), which reads rows exactly as /check does. No logic of its own was added for that. */
+export function specsOf(mapping: SheetMapping): Specs {
   const s: Specs = { vars: [] };
   for (const c of mapping.columns) {
     const r = c.role;
@@ -124,6 +125,15 @@ function specsOf(mapping: SheetMapping): Specs {
       case 'variable':
         s.vars.push({ ...spec, role: r });
         break;
+      // converter-only roles (types.ts ConverterRole): /check never proposes them; a column that has one is not read here, so a
+      // species or quantity column can never raise ROW-UNIT-MISSING or any other variable rule
+      case 'taxon':
+      case 'quantity':
+      case 'quantityType':
+      case 'effort':
+      case 'occurrenceId':
+      case 'lifeStage':
+      case 'qualifier':
       default:
         break;
     }
@@ -140,7 +150,7 @@ const str = (c: RawCell): string | undefined => {
 
 /* ---------- one row's position, date, depth and identifiers ---------- */
 
-interface Meta {
+export interface Meta {
   lat?: number;
   lon?: number;
   latDecimals?: number;
@@ -228,7 +238,7 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
   return filled >= 2;
 }
 
-function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector): (row: RawRow) => Meta {
+export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector): (row: RawRow) => Meta {
   const dc = file.decimalComma;
   const dateCache = new Map<string, ParsedDate | DateError>();
   const whenUtc = specs.when ? UTC_HEADER.test(specs.when.header) : false;
