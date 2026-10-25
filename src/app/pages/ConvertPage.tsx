@@ -804,7 +804,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   <>
                     <p className="muted">{t('convert.tree.profile', { matched: view.profile.stationsMatched, unmatched: view.profile.stationsUnmatched })}</p>
                     {view.profile.stationsUnmatched > 0 && (
-                      <p className="muted">{t('convert.tree.profileNames', { names: `${view.profile.unmatched.join(', ')}${view.profile.stationsUnmatched > view.profile.unmatched.length ? ', …' : ''}` })}</p>
+                      <p className="muted">{t('convert.tree.profileNames', { names: `${view.profile.unmatched.join(', ')}${view.profile.stationsUnmatched > view.profile.unmatched.length ? `, … (+${view.profile.stationsUnmatched - view.profile.unmatched.length})` : ''}` })}</p>
                     )}
                   </>
                 )}

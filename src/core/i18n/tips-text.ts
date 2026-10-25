@@ -405,14 +405,14 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertProfile.does': `Says that this sheet holds profiles or environmental measurements of the cruise (CTD casts, bottle data), not biology.`,
   'tip.convertProfile.logic': `• Every row becomes an event of its own under its station. Its type is written as the text profile level, and its minimum and maximum depth are the depth of the row.
 • The measured variables and the pressure of the row become measurements of that event, never of a biology sample.
-• The date, time and position of a row are used when the sheet has them; otherwise the level takes them from its station.
+• The date, time and position of a row are used when the sheet has them; otherwise the level takes them from its station. With the station level left out, or for a station that has none to give, a level without its own is blocked: it never takes them from the whole cruise.
 • The date, position and depth range of a station are worked out from its levels as well as its samples.
 • Species and quantity columns of the sheet are not read, and the conversion names each such column.
 • The tool may suggest this mark; it is never set without your tick. The companion file keeps it by sheet name and only ticks the box again when you drop it with a sheet of the same name.`,
   'tip.convertProfileDepthIds.does': `Lets the tool make the ID of each profile level from the station and the depth, for a sheet without a code column.`,
-  'tip.convertProfileDepthIds.logic': `• The ID is the station's eventID, a colon and the depth exactly as written in the sheet (the pressure as written when the sheet has no depth column). A row with no readable depth or pressure is blocked.
+  'tip.convertProfileDepthIds.logic': `• The ID is the station's eventID, a colon and the depth as written in the sheet, with a decimal comma turned into a point. A row whose depth cannot be read takes its pressure instead, written the same way with dbar after it, and only when the pressure column is in decibars. A row with neither is blocked.
 • It is used only when you tick this and the sheet has no code column. With a code column the ID is the station's eventID, a colon and that code.
-• Two rows of a station at the same depth (repeated casts) make the same ID and block the export. Add a column with a code that is unique within the station and mark it as the sample code.
+• Two rows of a station at the same depth or the same pressure (the same number written another way counts too; repeated casts do this) make the same ID and block the export. A depth and a pressure never make the same ID. Add a column with a code that is unique within the station and mark it as the sample code.
 • An ID is never made from the order of the rows.
 • The companion file keeps your tick by sheet name and only ticks the box again; you can untick it.`,
   'tip.convertProfileStations.does': `Explains how the stations of a profile sheet are matched to the stations of the biology sheets.`,
@@ -421,7 +421,7 @@ No findings only means that no problems were found in the checked categories.`,
 • A station with no match becomes a station event of its own, and a warning that names it has to be accepted before the export.
 • The levels of a matched station become its children, so its date, position and depth range cover them too.`,
   'tip.convertProfilePressure.does': `Explains how a pressure column is written.`,
-  'tip.convertProfilePressure.logic': `• The pressure of each level is written as a measurement with the concept {pressureConcept}. Its unit gets {unitConcept} only when the unit is decibars; any other unit stays as you wrote it, with a warning to accept, and a column without a unit is written without one.
+  'tip.convertProfilePressure.logic': `• The pressure of each level is written as a measurement with the concept {pressureConcept}. Its unit gets {unitConcept} only when the unit is decibars; any other unit stays as you wrote it, with a warning to accept, and a column without a unit is written without one, also with a warning to accept.
 • When the sheet has a depth column too, the depth is used for the level and the pressure is written as well.
 • When it has none, the depth stays empty: the tool does not turn a pressure into a depth (no conversion by the UNESCO formula in this version).
 • A pressure column of a sheet that is not a profile sheet is not written.`,
@@ -851,14 +851,14 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertProfile.does': `Mówi, że ten arkusz zawiera profile lub pomiary środowiskowe z rejsu (zarzuty sondy CTD, dane z butelek), a nie biologię.`,
   'tip.convertProfile.logic': `• Każdy wiersz staje się osobnym zdarzeniem pod swoją stacją. Jego typ zapisuje się jako tekst po angielsku (profile level), a głębokość minimalna i maksymalna to głębokość wiersza.
 • Zmierzone wielkości i ciśnienie z wiersza stają się pomiarami tego zdarzenia, nigdy próbki biologicznej.
-• Data, godzina i pozycja wiersza są używane, gdy arkusz je ma; w przeciwnym razie poziom bierze je ze swojej stacji.
+• Data, godzina i pozycja wiersza są używane, gdy arkusz je ma; w przeciwnym razie poziom bierze je ze swojej stacji. Gdy poziom stacji pominięto albo stacja nie ma ich do dania, poziom bez własnych jest blokowany: nigdy nie bierze ich z całego rejsu.
 • Data, pozycja i zakres głębokości stacji są wyliczane z jej poziomów, a także z jej próbek.
 • Kolumny gatunków i liczebności tego arkusza nie są czytane, a przekształcenie wymienia każdą taką kolumnę.
 • Narzędzie może zaproponować to oznaczenie; nigdy nie ustawia go bez Twojego zaznaczenia. Plik towarzyszący zapamiętuje je według nazwy arkusza i tylko ponownie zaznacza pole, gdy wgrasz go z arkuszem o tej samej nazwie.`,
   'tip.convertProfileDepthIds.does': `Pozwala narzędziu utworzyć identyfikator każdego poziomu profilu ze stacji i głębokości, dla arkusza bez kolumny z kodem.`,
-  'tip.convertProfileDepthIds.logic': `• Identyfikator to eventID stacji, dwukropek i głębokość dokładnie tak, jak jest zapisana w arkuszu (ciśnienie tak, jak jest zapisane, gdy arkusz nie ma kolumny z głębokością). Wiersz bez czytelnej głębokości lub ciśnienia jest blokowany.
+  'tip.convertProfileDepthIds.logic': `• Identyfikator to eventID stacji, dwukropek i głębokość tak, jak jest zapisana w arkuszu, z przecinkiem dziesiętnym zamienionym na kropkę. Wiersz, którego głębokości nie da się odczytać, bierze zamiast niej ciśnienie, zapisane tak samo z dbar na końcu, i tylko gdy kolumna ciśnienia jest w decybarach. Wiersz bez żadnej z nich jest blokowany.
 • Jest używany tylko wtedy, gdy to zaznaczysz, a arkusz nie ma kolumny z kodem. Przy kolumnie z kodem identyfikator to eventID stacji, dwukropek i ten kod.
-• Dwa wiersze stacji na tej samej głębokości (powtórzone zarzuty) dają ten sam identyfikator i blokują eksport. Dodaj kolumnę z kodem unikalnym w obrębie stacji i wskaż ją jako kod próbki.
+• Dwa wiersze stacji na tej samej głębokości albo przy tym samym ciśnieniu (ta sama liczba zapisana inaczej też się liczy; tak robią powtórzone zarzuty) dają ten sam identyfikator i blokują eksport. Głębokość i ciśnienie nigdy nie dają tego samego identyfikatora. Dodaj kolumnę z kodem unikalnym w obrębie stacji i wskaż ją jako kod próbki.
 • Identyfikator nigdy nie powstaje z kolejności wierszy.
 • Plik towarzyszący zapamiętuje Twoje zaznaczenie według nazwy arkusza i tylko ponownie zaznacza pole; możesz je odznaczyć.`,
   'tip.convertProfileStations.does': `Wyjaśnia, jak stacje arkusza profilowego są dopasowywane do stacji z arkuszy biologicznych.`,
@@ -867,7 +867,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Stacja bez dopasowania staje się osobnym zdarzeniem stacji, a ostrzeżenie, które ją wymienia, trzeba zaakceptować przed eksportem.
 • Poziomy dopasowanej stacji stają się jej dziećmi, więc jej data, pozycja i zakres głębokości obejmują także je.`,
   'tip.convertProfilePressure.does': `Wyjaśnia, jak zapisywana jest kolumna z ciśnieniem.`,
-  'tip.convertProfilePressure.logic': `• Ciśnienie każdego poziomu jest zapisywane jako pomiar z pojęciem {pressureConcept}. Jednostka dostaje {unitConcept} tylko wtedy, gdy jest to decybar; każda inna jednostka zostaje taka, jak ją wpisano, z ostrzeżeniem do zaakceptowania, a kolumna bez jednostki jest zapisywana bez niej.
+  'tip.convertProfilePressure.logic': `• Ciśnienie każdego poziomu jest zapisywane jako pomiar z pojęciem {pressureConcept}. Jednostka dostaje {unitConcept} tylko wtedy, gdy jest to decybar; każda inna jednostka zostaje taka, jak ją wpisano, z ostrzeżeniem do zaakceptowania, a kolumna bez jednostki jest zapisywana bez niej, także z ostrzeżeniem do zaakceptowania.
 • Gdy arkusz ma też kolumnę z głębokością, głębokość jest używana dla poziomu, a ciśnienie jest zapisywane dodatkowo.
 • Gdy jej nie ma, głębokość zostaje pusta: narzędzie nie przelicza ciśnienia na głębokość (w tej wersji bez przeliczenia wzorem UNESCO).
 • Kolumna z ciśnieniem w arkuszu, który nie jest arkuszem profilowym, nie jest zapisywana.`,
@@ -1295,14 +1295,14 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertProfile.does': `Sagt, dass dieses Blatt Profile oder Umweltmessungen der Fahrt enthält (CTD-Einsätze, Flaschendaten), keine Biologie.`,
   'tip.convertProfile.logic': `• Jede Zeile wird zu einem eigenen Ereignis unter ihrer Station. Sein Typ wird als englischer Text geschrieben (profile level), und seine minimale und maximale Tiefe sind die Tiefe der Zeile.
 • Die gemessenen Größen und der Druck der Zeile werden zu Messungen dieses Ereignisses, nie einer biologischen Probe.
-• Datum, Uhrzeit und Position einer Zeile werden verwendet, wenn das Blatt sie hat; sonst übernimmt die Ebene sie von ihrer Station.
+• Datum, Uhrzeit und Position einer Zeile werden verwendet, wenn das Blatt sie hat; sonst übernimmt die Ebene sie von ihrer Station. Ist die Stationsebene weggelassen oder hat die Station nichts zu geben, wird eine Ebene ohne eigene blockiert: Sie übernimmt sie nie von der ganzen Fahrt.
 • Datum, Position und Tiefenbereich einer Station werden aus ihren Ebenen und aus ihren Proben berechnet.
 • Arten- und Mengenspalten des Blatts werden nicht gelesen, und die Umwandlung nennt jede solche Spalte.
 • Das Werkzeug kann diese Markierung vorschlagen; sie wird nie ohne Ihr Häkchen gesetzt. Die Begleitdatei merkt sie sich nach dem Blattnamen und setzt das Häkchen nur wieder, wenn Sie sie mit einem Blatt desselben Namens ablegen.`,
   'tip.convertProfileDepthIds.does': `Lässt das Werkzeug die Kennung jeder Profilebene aus Station und Tiefe bilden, für ein Blatt ohne Codespalte.`,
-  'tip.convertProfileDepthIds.logic': `• Die Kennung ist die eventID der Station, ein Doppelpunkt und die Tiefe genau so, wie sie im Blatt steht (der Druck wie geschrieben, wenn das Blatt keine Tiefenspalte hat). Eine Zeile ohne lesbare Tiefe oder lesbaren Druck wird blockiert.
+  'tip.convertProfileDepthIds.logic': `• Die Kennung ist die eventID der Station, ein Doppelpunkt und die Tiefe so, wie sie im Blatt steht, mit einem Dezimalkomma als Punkt. Eine Zeile, deren Tiefe nicht lesbar ist, nimmt stattdessen ihren Druck, ebenso geschrieben mit dbar dahinter und nur, wenn die Druckspalte in Dezibar ist. Eine Zeile mit keinem von beiden wird blockiert.
 • Sie wird nur verwendet, wenn Sie das ankreuzen und das Blatt keine Codespalte hat. Mit Codespalte ist die Kennung die eventID der Station, ein Doppelpunkt und dieser Code.
-• Zwei Zeilen einer Station in derselben Tiefe (wiederholte Einsätze) ergeben dieselbe Kennung und blockieren den Export. Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu und ordnen Sie sie als Probencode zu.
+• Zwei Zeilen einer Station in derselben Tiefe oder bei demselben Druck (dieselbe Zahl anders geschrieben zählt mit; wiederholte Einsätze tun das) ergeben dieselbe Kennung und blockieren den Export. Tiefe und Druck ergeben nie dieselbe Kennung. Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu und ordnen Sie sie als Probencode zu.
 • Eine Kennung entsteht nie aus der Reihenfolge der Zeilen.
 • Die Begleitdatei merkt sich Ihr Häkchen nach dem Blattnamen und setzt nur das Kästchen wieder; Sie können es abwählen.`,
   'tip.convertProfileStations.does': `Erklärt, wie die Stationen eines Profilblatts den Stationen der Biologie-Blätter zugeordnet werden.`,
@@ -1311,7 +1311,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Eine Station ohne Entsprechung wird zu einem eigenen Stationsereignis, und eine Warnung, die sie nennt, muss vor dem Export akzeptiert werden.
 • Die Ebenen einer zugeordneten Station werden ihre Kinder, daher decken Datum, Position und Tiefenbereich der Station auch sie ab.`,
   'tip.convertProfilePressure.does': `Erklärt, wie eine Druckspalte geschrieben wird.`,
-  'tip.convertProfilePressure.logic': `• Der Druck jeder Ebene wird als Messung mit dem Konzept {pressureConcept} geschrieben. Seine Einheit erhält {unitConcept} nur, wenn die Einheit Dezibar ist; jede andere Einheit bleibt, wie Sie sie geschrieben haben, mit einer Warnung zum Akzeptieren, und eine Spalte ohne Einheit wird ohne Einheit geschrieben.
+  'tip.convertProfilePressure.logic': `• Der Druck jeder Ebene wird als Messung mit dem Konzept {pressureConcept} geschrieben. Seine Einheit erhält {unitConcept} nur, wenn die Einheit Dezibar ist; jede andere Einheit bleibt, wie Sie sie geschrieben haben, mit einer Warnung zum Akzeptieren, und eine Spalte ohne Einheit wird ohne Einheit geschrieben, ebenfalls mit einer Warnung zum Akzeptieren.
 • Hat das Blatt auch eine Tiefenspalte, wird die Tiefe für die Ebene verwendet und der Druck zusätzlich geschrieben.
 • Hat es keine, bleibt die Tiefe leer: Das Werkzeug rechnet keinen Druck in eine Tiefe um (in dieser Version keine Umrechnung nach der UNESCO-Formel).
 • Eine Druckspalte eines Blatts, das kein Profilblatt ist, wird nicht geschrieben.`,
@@ -1739,14 +1739,14 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertProfile.does': `Indique que cette feuille contient des profils ou des mesures d'environnement de la campagne (déploiements CTD, données de bouteilles), pas de la biologie.`,
   'tip.convertProfile.logic': `• Chaque ligne devient un événement à part sous sa station. Son type est écrit en texte anglais (profile level), et ses profondeurs minimale et maximale sont la profondeur de la ligne.
 • Les grandeurs mesurées et la pression de la ligne deviennent des mesures de cet événement, jamais d'un échantillon biologique.
-• La date, l'heure et la position d'une ligne sont utilisées quand la feuille les a ; sinon le niveau les prend à sa station.
+• La date, l'heure et la position d'une ligne sont utilisées quand la feuille les a ; sinon le niveau les prend à sa station. Si le niveau station est omis ou si la station n'a rien à donner, un niveau sans date ni position propres est bloqué : il ne les prend jamais à toute la campagne.
 • La date, la position et l'intervalle de profondeur d'une station sont calculés à partir de ses niveaux comme de ses échantillons.
 • Les colonnes d'espèces et de quantités de la feuille ne sont pas lues, et la conversion nomme chacune d'elles.
 • L'outil peut suggérer ce marquage ; il n'est jamais posé sans votre coche. Le fichier compagnon le garde par nom de feuille et ne recoche la case que si vous le déposez avec une feuille du même nom.`,
   'tip.convertProfileDepthIds.does': `Permet à l'outil de former l'identifiant de chaque niveau de profil avec la station et la profondeur, pour une feuille sans colonne de code.`,
-  'tip.convertProfileDepthIds.logic': `• L'identifiant est l'eventID de la station, deux-points et la profondeur exactement comme écrite dans la feuille (la pression telle qu'écrite si la feuille n'a pas de colonne de profondeur). Une ligne sans profondeur ni pression lisible est bloquée.
+  'tip.convertProfileDepthIds.logic': `• L'identifiant est l'eventID de la station, deux-points et la profondeur telle qu'écrite dans la feuille, avec une virgule décimale changée en point. Une ligne dont la profondeur est illisible prend sa pression à la place, écrite de même avec dbar derrière, et seulement si la colonne de pression est en décibars. Une ligne sans l'une ni l'autre est bloquée.
 • Il n'est utilisé que si vous cochez cette case et que la feuille n'a pas de colonne de code. Avec une colonne de code, l'identifiant est l'eventID de la station, deux-points et ce code.
-• Deux lignes d'une station à la même profondeur (déploiements répétés) donnent le même identifiant et bloquent l'export. Ajoutez une colonne à code unique par station et indiquez-la comme code d'échantillon.
+• Deux lignes d'une station à la même profondeur ou à la même pression (le même nombre écrit autrement compte aussi ; des déploiements répétés font cela) donnent le même identifiant et bloquent l'export. Une profondeur et une pression ne donnent jamais le même identifiant. Ajoutez une colonne à code unique par station et indiquez-la comme code d'échantillon.
 • Un identifiant n'est jamais formé d'après l'ordre des lignes.
 • Le fichier compagnon garde votre coche par nom de feuille et ne recoche que la case ; vous pouvez la décocher.`,
   'tip.convertProfileStations.does': `Explique comment les stations d'une feuille de profils sont appariées aux stations des feuilles de biologie.`,
@@ -1755,7 +1755,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Une station sans correspondance devient un événement de station à part, et un avertissement qui la nomme doit être accepté avant l'export.
 • Les niveaux d'une station appariée deviennent ses enfants : sa date, sa position et son intervalle de profondeur les couvrent aussi.`,
   'tip.convertProfilePressure.does': `Explique comment une colonne de pression est écrite.`,
-  'tip.convertProfilePressure.logic': `• La pression de chaque niveau est écrite comme une mesure avec le concept {pressureConcept}. Son unité reçoit {unitConcept} seulement si l'unité est le décibar ; toute autre unité reste telle que vous l'avez écrite, avec un avertissement à accepter, et une colonne sans unité est écrite sans unité.
+  'tip.convertProfilePressure.logic': `• La pression de chaque niveau est écrite comme une mesure avec le concept {pressureConcept}. Son unité reçoit {unitConcept} seulement si l'unité est le décibar ; toute autre unité reste telle que vous l'avez écrite, avec un avertissement à accepter, et une colonne sans unité est écrite sans unité, aussi avec un avertissement à accepter.
 • Si la feuille a aussi une colonne de profondeur, la profondeur sert pour le niveau et la pression est écrite en plus.
 • Si elle n'en a pas, la profondeur reste vide : l'outil ne convertit pas une pression en profondeur (pas de conversion par la formule de l'UNESCO dans cette version).
 • Une colonne de pression d'une feuille qui n'est pas une feuille de profils n'est pas écrite.`,
