@@ -25,8 +25,8 @@ const BASELINE_CSP =
  */
 const CONVERT_CSP_BARE = BASELINE_CSP.replace(/connect-src [^;]*;/, "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net;");
 
-/** The policy of /convert as served from stage 4 on: the bare one plus the WoRMS REST host (the opt-in lookup), and nothing else. */
-const CONVERT_CSP = CONVERT_CSP_BARE.replace('https://stats.g.doubleclick.net;', 'https://stats.g.doubleclick.net https://www.marinespecies.org;');
+/** The policy of /convert as served from stage 5 on: the bare one plus the WoRMS REST host and the NVS host (the two opt-in lookups), and nothing else. */
+const CONVERT_CSP = CONVERT_CSP_BARE.replace('https://stats.g.doubleclick.net;', 'https://stats.g.doubleclick.net https://www.marinespecies.org https://vocab.nerc.ac.uk;');
 
 describe('buildCsp', () => {
   it('a default call is byte-identical to the policy in production today', () => {
@@ -44,14 +44,16 @@ describe('buildCsp', () => {
   it('{ data: false } cuts connect-src to self, analytics and the extras, and changes nothing else', () => {
     expect(buildCsp([], { data: false })).toBe(CONVERT_CSP_BARE);
     expect(buildCsp([], { data: true })).toBe(BASELINE_CSP);
-    expect(buildCsp(['www.marinespecies.org'], { data: false })).toBe(CONVERT_CSP);
+    expect(buildCsp(['www.marinespecies.org', 'vocab.nerc.ac.uk'], { data: false })).toBe(CONVERT_CSP);
   });
 
   it('the extra hosts never reach DATA_HOSTS (which also feeds the proxy)', () => {
-    buildCsp(['www.marinespecies.org']);
+    buildCsp(['www.marinespecies.org', 'vocab.nerc.ac.uk']);
     expect(DATA_HOSTS).not.toContain('www.marinespecies.org');
+    expect(DATA_HOSTS).not.toContain('vocab.nerc.ac.uk');
     // the fetch proxy answers only for DATA_HOSTS: WoRMS is never routed through the server
     expect(isAllowedHost('https://www.marinespecies.org/rest/AphiaRecordsByMatchNames?scientificnames[]=Calanus')).toBe(false);
+    expect(isAllowedHost('https://vocab.nerc.ac.uk/sparql/sparql?query=x')).toBe(false);
   });
 });
 
@@ -66,9 +68,9 @@ describe('every page keeps its exact policy', () => {
 });
 
 describe('/convert is hidden', () => {
-  it('is registered as hidden, with WoRMS as its only extra connect host (stage 4)', () => {
+  it('is registered as hidden, with WoRMS and NVS as its only extra connect hosts (stage 5)', () => {
     expect(HIDDEN_PATHS).toEqual(['/convert']);
-    expect(PAGE_CONNECT_HOSTS).toEqual({ '/convert': ['www.marinespecies.org'] });
+    expect(PAGE_CONNECT_HOSTS).toEqual({ '/convert': ['www.marinespecies.org', 'vocab.nerc.ac.uk'] });
   });
 
   it('answers with noindex in the header and the robots meta in the HTML, with the site flag on or off', async () => {
@@ -91,16 +93,16 @@ describe('/convert is hidden', () => {
 
   it('pins the exact policy of /convert (stage 4): the connect-src literal and the rest of the baseline', () => {
     expect(CONVERT_CSP).toBe(
-      "default-src 'self'; connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net https://www.marinespecies.org; worker-src 'self' blob:; img-src 'self' data: blob: https://basemaps.cartocdn.com https://tiles.basemaps.cartocdn.com https://tiles-a.basemaps.cartocdn.com https://tiles-b.basemaps.cartocdn.com https://tiles-c.basemaps.cartocdn.com https://tiles-d.basemaps.cartocdn.com https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+      "default-src 'self'; connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net https://www.marinespecies.org https://vocab.nerc.ac.uk; worker-src 'self' blob:; img-src 'self' data: blob: https://basemaps.cartocdn.com https://tiles.basemaps.cartocdn.com https://tiles-a.basemaps.cartocdn.com https://tiles-b.basemaps.cartocdn.com https://tiles-c.basemaps.cartocdn.com https://tiles-d.basemaps.cartocdn.com https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
     );
   });
 
-  it('gets its own exact policy: self, analytics and WoRMS only, no data host and no map host', async () => {
+  it('gets its own exact policy: self, analytics, WoRMS and NVS only, no data host and no map host', async () => {
     for (const p of ['/convert', '/convert/']) {
       const res = await request(make()).get(p);
       expect(res.headers['content-security-policy'], p).toBe(CONVERT_CSP);
     }
-    expect(CONVERT_CSP).toContain("connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net https://www.marinespecies.org;");
+    expect(CONVERT_CSP).toContain("connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net https://www.marinespecies.org https://vocab.nerc.ac.uk;");
     const connect = /connect-src ([^;]*)/.exec(CONVERT_CSP)![1];
     for (const h of DATA_HOSTS) expect(connect, h).not.toContain(h);
     expect(connect).not.toContain('cartocdn');
@@ -134,10 +136,10 @@ describe('/convert is hidden', () => {
     expect((await request(app).get('/api/other')).headers['x-robots-tag']).toBe('noindex, nofollow');
   });
 
-  it('the extended policy applies to /convert only (and WoRMS is in no other path, in DATA_HOSTS or in the proxy allowlist)', async () => {
-    const extended = buildCsp(['www.marinespecies.org'], { data: false });
+  it('the extended policy applies to /convert only (and WoRMS and NVS are in no other path, in DATA_HOSTS or in the proxy allowlist)', async () => {
+    const extended = buildCsp(['www.marinespecies.org', 'vocab.nerc.ac.uk'], { data: false });
     expect(extended).toBe(CONVERT_CSP);
-    const app = createApp({ distDir: DIST, log: () => {}, pageConnect: { '/convert': ['www.marinespecies.org'] } });
+    const app = createApp({ distDir: DIST, log: () => {}, pageConnect: { '/convert': ['www.marinespecies.org', 'vocab.nerc.ac.uk'] } });
     expect((await request(app).get('/convert')).headers['content-security-policy']).toBe(extended);
     expect((await request(app).get('/convert/')).headers['content-security-policy']).toBe(extended);
     for (const p of ['/', '/check', '/licence', '/collection', '/privacy', '/nope']) {
