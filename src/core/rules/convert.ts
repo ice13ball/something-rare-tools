@@ -31,7 +31,7 @@ import type { RuleSpec } from './spec';
  *   CONV-UNIT-NO-P06           unit             unit = the unit as declared
  *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
- *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous
+ *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-NO-TAXON              shape            shape = wide | long
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
  */
@@ -325,10 +325,16 @@ const REASON_WORDS: Record<string, Record<Lang, string>> = {
   'not-a-number': { en: 'it is not a number', pl: 'to nie jest liczba', de: 'es ist keine Zahl', fr: "ce n'est pas un nombre" },
   'not-positive': { en: 'it is zero or negative', pl: 'to zero albo liczba ujemna', de: 'es ist null oder negativ', fr: "c'est zéro ou négatif" },
   ambiguous: {
-    en: 'a thousands separator together with a decimal mark is ambiguous',
-    pl: 'separator tysięcy razem ze znakiem dziesiętnym jest niejednoznaczny',
-    de: 'ein Tausendertrennzeichen zusammen mit einem Dezimalzeichen ist mehrdeutig',
-    fr: 'un séparateur de milliers avec un séparateur décimal est ambigu',
+    en: 'it has more than one point or comma, so it cannot be read safely',
+    pl: 'ma więcej niż jedną kropkę lub przecinek, więc nie da się go bezpiecznie odczytać',
+    de: 'es hat mehr als einen Punkt oder ein Komma und lässt sich nicht sicher lesen',
+    fr: "il a plus d'un point ou d'une virgule et ne peut pas être lu sans risque",
+  },
+  thousands: {
+    en: 'it could be a thousands separator: write it without one, or with more or fewer decimals',
+    pl: 'może to być separator tysięcy: zapisz liczbę bez niego albo z większą lub mniejszą liczbą miejsc po przecinku',
+    de: 'es könnte ein Tausendertrennzeichen sein: schreiben Sie die Zahl ohne eines oder mit mehr oder weniger Dezimalstellen',
+    fr: "il pourrait s'agir d'un séparateur de milliers : écrivez le nombre sans séparateur, ou avec plus ou moins de décimales",
   },
 };
 

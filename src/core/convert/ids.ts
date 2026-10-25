@@ -55,7 +55,8 @@ const PRESENCE_MARKS = new Set(['+', 'x', 'X', '-']);
  * not strip an apostrophe, so a guarded cell comes back with it.
  */
 export function guardCell(text: string, decimalComma: boolean): string {
-  if (PRESENCE_MARKS.has(text)) return text;
+  // spaces around a mark do not matter (the cell is written as it was); a tab or CR in front still gets the guard
+  if (PRESENCE_MARKS.has(text.replace(/^ +| +$/g, ''))) return text;
   const p = parseNumber(text, decimalComma);
   if (p.status === 'ok' || p.status === 'missing') return text;
   return guardText(text);
@@ -88,7 +89,7 @@ function cellText(raw: RawCell | undefined, kind: 'plain' | 'date' | 'time', dat
 
 /**
  * Q1: a sheet WITHOUT a sample code gets codes proposed ONCE, deterministically: `<station>-<n>`, n counting the rows of that station in sheet
- * order from 1 (`sample-<n>` for rows with no station), unique across the sheet. Returns the sheet as CSV with a new last column of codes; the
+ * order from 1 (`sample-<n>` for rows with no station), unique across the sheet; a code that would start like a formula becomes `S<row number>`. Returns the sheet as CSV with a new last column of codes; the
  * user checks it and uploads that file; the ID then comes from the user's own code. The cells are copied as text (see cellText), the delimiter is
  * ';' for a decimal-comma source and ',' otherwise, so the file is read back exactly as the sheet was. Returns undefined when the mapping already has
  * a sample code column: the converter does not overwrite or fill the user's codes.
@@ -98,14 +99,21 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
   const stationCol = mapping.columns.find((c) => c.role.kind === 'station')?.index;
   const used = new Set<string>();
   const perStation = new Map<string, number>();
-  const codes = sheet.rows.map((row) => {
+  const dc = file.decimalComma;
+  const codes = sheet.rows.map((row, i) => {
     if (row.cells.every((c) => c === null || String(c).trim() === '')) return '';
     const station = stationCol === undefined ? '' : cleanCode(String(row.cells[stationCol] ?? ''));
     const stem = station === '' ? 'sample' : station;
     let n = (perStation.get(stem) ?? 0) + 1;
     let code = `${stem}-${n}`;
     while (used.has(code)) code = `${stem}-${++n}`;
-    perStation.set(stem, n);
+    // a code that would start like a formula (a station "-5" or "=x") would need the apostrophe in the file and then differ from the code shown:
+    // such a row gets S<row number> instead, which never needs it, so the codes the page shows are exactly the codes in the file
+    if (guardCell(code, dc) !== code) {
+      let k = 1;
+      code = `S${i + 1}`;
+      while (used.has(code)) code = `S${i + 1}-${++k}`;
+    } else perStation.set(stem, n);
     used.add(code);
     return code;
   });
@@ -113,7 +121,6 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
   let header = 'sample_code';
   for (let i = 2; taken.has(header.toLowerCase()); i++) header = `sample_code_${i}`;
   const width = sheet.header.length;
-  const dc = file.decimalComma;
   const delimiter = dc ? ';' : ',';
   const field = (v: string): string => (v.includes(delimiter) || /["\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const line = (fields: readonly string[]): string => fields.map(field).join(delimiter);

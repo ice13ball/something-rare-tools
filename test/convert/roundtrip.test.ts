@@ -106,6 +106,26 @@ describe('CSV sources', () => {
 });
 
 // the workbook's sheet is named like the file, as a CSV's sheet is: the only name a re-read CSV can have
+describe('presence marks with spaces (round 4)', () => {
+  it('"+ ", " +" and " x" are written as they were, with no apostrophe, and read back the same', () => {
+    const c: Case = {
+      name: 'spaced marks',
+      header: ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Oithona similis'],
+      rows: [['S', 55, 3, '2020-01-01', '+ ', 4], ['S', 55, 3, '2020-01-02', ' +', 5], ['S', 56, 3, '2020-01-03', ' x', 2]],
+      quantity: { kind: 'count' },
+    };
+    const original = textFile('spaced.csv', csvText(c.header, c.rows, false));
+    const { a, b, csv } = roundTrip(original, c);
+    same(a, b);
+    for (const cell of ['+ ', ' +', ' x']) expect(csv).toContain(`,${cell},`);
+    expect(csv).not.toContain("'");
+    expect(a.occurrences.filter((o) => o.occurrenceRemarks === '+' || o.occurrenceRemarks === 'x')).toHaveLength(3);
+    // a real formula next to them is still guarded
+    const f = textFile('f.csv', 'Station,Species\n=1+1,\n');
+    expect(proposeSampleCodes(f, f.sheets[0], { sheet: 'f.csv', columns: [{ index: 0, header: 'Station', role: { kind: 'station' } }] })!.csv).toContain("'=1+1");
+  });
+});
+
 describe('xlsx sources', () => {
   const header = ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Oithona similis'];
   const rows = (): (string | number | null | ReturnType<typeof dateCell>)[][] => [
@@ -184,5 +204,6 @@ describe('xlsx time-only cells (round 3)', () => {
 
 describe('isTimeOnlyFormat', () => {
   it.each(['hh:mm', 'h:mm', '[h]:mm', '[hh]:mm:ss', 'h:mm:ss', 'h:mm AM/PM', 'mm:ss', 'mm:ss.0', '[$-409]h:mm:ss AM/PM', 'hh:mm "UTC"'])('%s is a time of day', (z) => expect(isTimeOnlyFormat(z)).toBe(true));
+  it.each(['mmm h:mm', 'mmmm h:mm', 'mmmmm h:mm', 'ddd h:mm', 'dddd h:mm', 'aaa h:mm', 'aaaa h:mm', 'gg h:mm', 'e h:mm', 'ggge h:mm'])('%s is a date-time, not time-only (month names, weekday and era tokens are date parts)', (z) => expect(isTimeOnlyFormat(z)).toBe(false));
   it.each(['yyyy-mm-dd', 'yyyy-mm-dd hh:mm', 'dd/mm/yyyy', 'd-mmm-yy', 'mmm', 'yyyy', 'dd.mm.yyyy h:mm'])('%s is not time-only', (z) => expect(isTimeOnlyFormat(z)).toBe(false));
 });

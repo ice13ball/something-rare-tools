@@ -129,11 +129,12 @@ const biomassType = (basis: BiomassBasis, per: EffortDimension, medium: 'water' 
   return basis === 'wet' ? P01.wetPerAreaBed : basis === 'dry' ? P01.dryPerAreaBed : P01.afdwPerAreaBed;
 };
 
-export type EffortReason = 'not-a-number' | 'not-positive' | 'ambiguous';
+export type EffortReason = 'not-a-number' | 'not-positive' | 'ambiguous' | 'thousands';
 
 /**
  * A sample size TYPED in the page (not read from the file, so not tied to the sheet's decimal mark): a point or a comma is the decimal mark, at most
- * one of them. A number with both ("1.234,5", "1,234.5") or with several is ambiguous (thousands separator) and refused; "1,234" is read as 1.234.
+ * one of them. Refused as ambiguous: more than one point or comma ("1.234,5", "1,234,567", "1.2.3"), and one to three digits, one separator and exactly
+ * three digits ("1,234", "12.345"), which could be a thousands separator. A number that starts with a zero ("0.125") cannot be one and is accepted.
  */
 export function parseTypedNumber(text: string): { ok: true; value: number; text: string } | { ok: false; reason: EffortReason } {
   const t = text.trim();
@@ -142,6 +143,7 @@ export function parseTypedNumber(text: string): { ok: true; value: number; text:
   if (!/^(\d+[.,]?\d*|[.,]\d+)$/.test(body)) return { ok: false, reason: /\d/.test(body) && (body.match(/[.,]/g) ?? []).length > 1 && /^[\d.,]+$/.test(body) ? 'ambiguous' : 'not-a-number' };
   const value = Number(body.replace(',', '.'));
   if (negative || !(value > 0)) return { ok: false, reason: 'not-positive' };
+  if (/^[1-9]\d{0,2}[.,]\d{3}$/.test(body)) return { ok: false, reason: 'thousands' };
   return { ok: true, value, text: body.replace(',', '.') };
 }
 

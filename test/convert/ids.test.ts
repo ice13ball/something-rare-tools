@@ -189,9 +189,23 @@ describe('Q1: the one-time sample code proposal', () => {
     cells.forEach((c, i) => expect(lines[i + 1].startsWith(guardText(c) + ','), c).toBe(true));
     for (const c of cells) expect(guardText(c).startsWith("'"), c).toBe(true);
     expect(lines.slice(cells.length + 1, cells.length + 9).map((l) => l.split(',')[0])).toEqual(['+', 'x', 'X', '-', 'NA', '-1.5', '+3', '  -4 ']);
-    // the code is guarded like a cell: a code made from "+cmd" starts like a formula
-    expect(lines[1].endsWith(",'+cmd-1")).toBe(true);
-    expect(p.codes[0]).toBe('+cmd-1');
+    // a station that would make a code starting like a formula gets S<row number>: the code on the page is the code in the file, with no apostrophe
+    // (a tab is trimmed from the station first, so that one makes the plain code x-1)
+    const expected = cells.map((c, k) => (c === '\tx' ? 'x-1' : `S${k + 1}`));
+    expect(p.codes.slice(0, cells.length)).toEqual(expected);
+    cells.forEach((_, k) => expect(lines[k + 1].endsWith(`,${expected[k]}`), String(k)).toBe(true));
+    for (const code of p.codes) expect(code.startsWith("'")).toBe(false);
+  });
+
+  it('the codes shown are exactly the codes written, whatever the station: a guarded station gives S<row>, a plain one <station>-<n>', () => {
+    const f = fileOf(['Station', 'Lat'], [['-5', 1], ['ST1', 2], ['-5', 3], ['=x', 4], ['ST1', 5], ['S1', 6], ['5', 7]]);
+    const p = proposeSampleCodes(f, f.sheets[0], { sheet: 'S', columns: [{ index: 0, header: 'Station', role: { kind: 'station' } }] })!;
+    expect(p.codes).toEqual(['S1', 'ST1-1', 'S3', 'S4', 'ST1-2', 'S1-1', '5-1'].map((c, k) => (k === 5 ? 'S1-1' : c)).map((c) => c));
+    const written = p.csv.trim().split('\n').slice(1).map((l) => l.split(',').pop());
+    expect(written).toEqual(p.codes);
+    expect(new Set(p.codes).size).toBe(p.codes.length);
+    // deterministic
+    expect(proposeSampleCodes(f, f.sheets[0], { sheet: 'S', columns: [{ index: 0, header: 'Station', role: { kind: 'station' } }] })!.codes).toEqual(p.codes);
   });
 
   it('with a decimal comma a number such as -1,5 stays, and the same text on a dot sheet is guarded', () => {

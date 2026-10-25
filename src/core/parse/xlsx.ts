@@ -108,7 +108,8 @@ export function isTimeOnlyFormat(z: string): boolean {
     .replace(/"[^"]*"/g, '')
     .replace(/\\./g, '')
     .replace(/\[([^\]]*)\]/g, (_m, inner: string) => (/^(h+|m+|s+)$/i.test(inner) ? inner : ''));
-  return /[hs]/i.test(f) && !/[dy]/i.test(f);
+  // date tokens: d (day, ddd/dddd weekday), y, m three or more (month names), aaa (weekday), gg and e (era / year): the format is then a date-time
+  return /[hs]/i.test(f) && !/[dy]/i.test(f) && !/m{3,}/i.test(f) && !/aaa/i.test(f) && !/gg/i.test(f) && !/e/i.test(f);
 }
 
 /**
