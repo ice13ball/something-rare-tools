@@ -321,14 +321,15 @@ export function convert(input: ConvertInput): ConvertResult {
       const m = parse(row);
       const code = m.sampleId;
       const stationText = m.station;
-      const label = code ?? stationText;
       const wideHasValue = cols.taxonHeaders.some((c) => !isBlankCell(row.cells[c.index] ?? null));
       const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
       // long: a row is a record when it has a taxon and a value (an empty value is "no record"); wide: a row with any species cell or a sample code
       const longHasValue = cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
       const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && longHasValue;
-      if (label !== undefined && SUMMARY_LABEL.test(label)) {
-        summaries.add(fileName, sheet.name, 'sample', row.line, label);
+      // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
+      const summaryLabel = [code, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
+      if (summaryLabel !== undefined) {
+        summaries.add(fileName, sheet.name, 'sample', row.line, summaryLabel);
         continue;
       }
       if (!relevant) continue;
@@ -484,6 +485,7 @@ export function convert(input: ConvertInput): ConvertResult {
           source: occSource,
           ...(qualifier === undefined ? {} : { identificationQualifier: qualifier }),
           ...(lifeStage === undefined ? {} : { lifeStage }),
+          ...(sp.sex === undefined ? {} : { sex: sp.sex }),
           ...(remarks === undefined ? {} : { occurrenceRemarks: remarks }),
         };
         if (cols.quantityType && sin.shape === 'long') {
@@ -523,7 +525,7 @@ export function convert(input: ConvertInput): ConvertResult {
           if (!seen.fields.includes(cell.column)) seen.fields.push(cell.column);
         } else occIds.set(id, { file: fileName, sheet: sheet.name, lines: [row.line], fields: [cell.column] });
         // the same taxon more than once in one sample (different IDs)
-        const gk = JSON.stringify([eventId, sp.scientificName, lifeStage ?? '', qualifier ?? '']);
+        const gk = JSON.stringify([eventId, sp.scientificName, lifeStage ?? '', qualifier ?? '', sp.sex ?? '']);
         const g = sameEvent.get(gk);
         const ref = sin.shape === 'wide' ? cell.column : `line ${row.line}`;
         if (g) {
