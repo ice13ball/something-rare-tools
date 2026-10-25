@@ -18,6 +18,13 @@ import type { EventRec, SourceRef, TreeSummary } from './model';
  *   depth       the minimum of the children's minimum depths and the maximum of their maximum depths
  * eventType is written as the text "cruise" / "station" / "sample" (the OBIS Manual's example values; BioCheck reads it as text).
  *
+ * Profile levels (stage 6): a row of a profile file is a leaf event of its station, eventType "profile level". Levels are children like samples, so the station's
+ * derived date, position, uncertainty and depth range cover its levels as well as its samples (a station that has only levels is derived from the levels alone). A level
+ * that has no position or date of its own leaves them empty and inherits them from the station in OBIS (the OBIS Manual, Event core: "child events will inherit
+ * information from the parent event when the field is left empty"; BioCheck judges the leaves after inheritance, docs/research/qc-sources.md, stage 0, Item 2b). There is
+ * no cast level between a station and its levels: the manual's hierarchy example has three levels (cruise, station, sample), and a cast level would need a cast column the
+ * sheet mapping does not have; repeated casts are told apart by the level's own code.
+ *
  * "Flatten a level": the station level is dropped and each sample's `locality` holds the station code; the cruise level is dropped and the
  * cruise code goes to the dataset text (`cruiseText`). The children are re-parented to the level above. eventIDs never change with
  * flattening (a flattened station still prefixes a sample's ID when the toggle is on), so a flattened and an unflattened archive agree on IDs.
@@ -50,6 +57,8 @@ export interface SampleSite {
   sampleSizeValue?: string;
   sampleSizeUnit?: string;
   source?: SourceRef;
+  /** What the event is: a sample of a biology sheet (default) or a level of a profile file. */
+  eventType?: 'sample' | 'profile level';
 }
 
 export interface TreeOptions {
@@ -275,7 +284,7 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
 
   for (const s of samples) {
     if (leaves.has(s.id)) continue;
-    const rec: EventRec = { id: s.id, eventType: 'sample', code: s.code, derived: { date: false, position: false, depth: false } };
+    const rec: EventRec = { id: s.id, eventType: s.eventType ?? 'sample', code: s.code, derived: { date: false, position: false, depth: false } };
     if (s.date) rec.eventDate = eventDateText(s.date);
     if (s.lat !== undefined && s.lon !== undefined) {
       rec.lat = s.lat;
@@ -354,6 +363,7 @@ export function summarizeTree(events: readonly EventRec[], flattened: { station:
     cruises: by('cruise'),
     stations: by('station'),
     samples: by('sample'),
+    levels: by('profile level'),
     roots: events.filter((e) => e.parentId === undefined).length,
     flattened,
     derivedDates: events.filter((e) => e.derived.date).length,

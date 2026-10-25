@@ -15,12 +15,21 @@ import type { ParsedFile } from '../types';
  *   worms=yes          the WoRMS opt-in was ticked. Read as a PRE-TICK only: it ticks the box and nothing more. Nothing is sent until the user presses the lookup button.
  *   nvs=yes           the NVS opt-in was ticked (stage 5). Read as a PRE-TICK only, like worms=yes: it ticks the box and nothing more. Nothing is sent until the user
  *                     types a search word for a column and presses "Search NVS". The file holds no word, code, label or identifier.
+ *   profile=<sheet>    (stage 6) the sheet of that name was marked "profile / environment of this cruise". Read as a PRE-TICK only: it ticks that box for a sheet of the same
+ *                     name in this drop and changes nothing else; the user can untick it. The value is a sheet name (never a data value).
+ *   profileDepthIds=<sheet>  (stage 6) the user approved level IDs made of the station and the depth as written for that sheet. A PRE-TICK only, and only on a sheet that is
+ *                     marked as a profile: it ticks the approval box on the page, where it can be unticked.
  * An unknown name or value is ignored.
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
 export const STATION_PREFIX_SETTING = 'stationPrefix=yes';
 export const WORMS_SETTING = 'worms=yes';
 export const NVS_SETTING = 'nvs=yes';
+export const PROFILE_SETTING = 'profile=';
+export const PROFILE_DEPTH_IDS_SETTING = 'profileDepthIds=';
+/** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
+export const MAX_SETTING_SHEETS = 100;
+export const MAX_SETTING_NAME = 255;
 
 export interface ConvertSettings {
   fullList: boolean;
@@ -29,7 +38,15 @@ export interface ConvertSettings {
   worms: boolean;
   /** The NVS opt-in was ticked in the run that wrote the file: pre-ticks the box, never sends anything. */
   nvs: boolean;
+  /** Stage 6: the sheets marked as profile files, by sheet name. Only present when there is at least one. A pre-tick only. */
+  profileSheets?: string[];
+  /** Stage 6: the profile sheets whose level IDs of station and depth the user approved, by sheet name. Only present when there is at least one. A pre-tick only. */
+  profileDepthIds?: string[];
 }
+
+const addName = (list: string[], name: string): void => {
+  if (name !== '' && name.length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.includes(name)) list.push(name);
+};
 
 /** The converter's settings of a sidecar file, or undefined when the file is not a sidecar (it is then a data table). */
 export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undefined {
@@ -42,6 +59,8 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v === STATION_PREFIX_SETTING) settings.prefixStation = true;
     else if (v === WORMS_SETTING) settings.worms = true;
     else if (v === NVS_SETTING) settings.nvs = true;
+    else if (v.startsWith(PROFILE_SETTING)) addName((settings.profileSheets ??= []), v.slice(PROFILE_SETTING.length));
+    else if (v.startsWith(PROFILE_DEPTH_IDS_SETTING)) addName((settings.profileDepthIds ??= []), v.slice(PROFILE_DEPTH_IDS_SETTING.length));
   }
   return settings;
 }
@@ -56,6 +75,8 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.prefixStation ? [line([SETTING_ROW, STATION_PREFIX_SETTING, '', '', ''])] : []),
       ...(settings.worms ? [line([SETTING_ROW, WORMS_SETTING, '', '', ''])] : []),
       ...(settings.nvs ? [line([SETTING_ROW, NVS_SETTING, '', '', ''])] : []),
+      ...(settings.profileSheets ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PROFILE_SETTING}${n}`, '', '', ''])),
+      ...(settings.profileDepthIds ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PROFILE_DEPTH_IDS_SETTING}${n}`, '', '', ''])),
     ].join('\n') + '\n'
   );
 }

@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Helpers of the stage 2 tests: a synthetic sheet through the whole export, and the archive read back with the repository's own readers. Every value is invented.
 import { convert, listSplits } from '../../src/core/convert/build';
-import type { ConvertInput, SamplingDevice } from '../../src/core/convert/build';
+import type { ConvertInput, ConvertSheetInput, SamplingDevice } from '../../src/core/convert/build';
 import { archiveFiles } from '../../src/core/convert/dwca';
 import type { ArchiveFile } from '../../src/core/convert/dwca';
 import { buildEml } from '../../src/core/convert/eml';
@@ -85,6 +85,20 @@ export async function exportSheet(header: string[], rows: Cell[][], o: ExportOpt
   const eml = meta.licence === '' ? '' : buildEml(dataset, { generated: GENERATED });
   const files = judge(findings).blocking.length === 0 ? archiveFiles(dataset, eml) : [];
   const zip = files.length === 0 ? new Uint8Array() : await buildZip(files, o.deflate === false ? undefined : nodeDeflate);
+  return { result, dataset, findings, files, eml, zip };
+}
+
+/** Several prepared sheets (a biology sheet and profile sheets, say) through convert, validation and the writers, as the export does it. Splits are approved as proposed. */
+export async function exportSheets(sheets: ConvertSheetInput[], o: { meta?: Partial<DatasetMetadata>; fullList?: boolean; prefixStation?: boolean; flatten?: { station?: boolean; cruise?: boolean } } = {}): Promise<Exported> {
+  const approvedSplits = Object.fromEntries(listSplits({ sheets }).filter((x) => x.needsDecision).map((x) => [x.verbatim, x.proposed]));
+  const input: ConvertInput = { sheets, options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true, ...(o.flatten ? { flatten: o.flatten } : {}) }, approvedSplits };
+  const result = convert(input);
+  const meta: DatasetMetadata = { ...META, ...(o.meta ?? {}) };
+  const dataset = toDataset(result, meta, { fullList: o.fullList === true, prefixStation: o.prefixStation === true, worms: false, nvs: false });
+  const findings = [...result.findings, ...validateDataset(dataset, result.findings, { today: TODAY })];
+  const eml = meta.licence === '' ? '' : buildEml(dataset, { generated: GENERATED });
+  const files = judge(findings).blocking.length === 0 ? archiveFiles(dataset, eml) : [];
+  const zip = files.length === 0 ? new Uint8Array() : await buildZip(files, nodeDeflate);
   return { result, dataset, findings, files, eml, zip };
 }
 

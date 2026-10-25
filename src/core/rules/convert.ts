@@ -54,6 +54,11 @@ import type { RuleSpec } from './spec';
  *   CONV-DEVICE-MISSING        (none)           the sheet has no sampling device
  *   CONV-LICENCE-DIFFERS       chosen, source   the licence chosen differs from the recognised licence of the dropped metadata files
  *   CONV-MESH-INVALID          reason           value = the typed mesh size; reason = not-a-number | not-positive | ambiguous | thousands
+ *   CONV-PROFILE-STATION-UNMATCHED count, names value = the first station; names = the eventIDs of the profile stations that match no station of the biology sheets
+ *   CONV-PROFILE-NO-STATION    count, column    column = the station column ('none' when the sheet has none); lines = the profile rows that hold data and no station
+ *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on every ancestor of it; lines = the profile rows
+ * Stage 6 also gives two rules a second text for a profile file, chosen in renderConvertPlain / renderConvertTechnical (PROFILE_VARIANTS): CONV-SAMPLE-CODE-MISSING when the
+ * finding carries `profile: 'yes'`, and CONV-ID-DUPLICATE when its `kind` is `level`.
  */
 const NERC_MANUAL = {
   label: 'OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)',
@@ -423,12 +428,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'columns'],
     plain: {
-      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego przy tym ustawieniu arkusza nie zapisuje się w archiwum (na przykład ciśnienie albo stadium w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
-      en: `{count} {+count:column has|columns have} a meaning that is not written to the archive as the sheet is set up (for example a pressure, or a life stage in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
-      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die bei dieser Einstellung des Blatts nicht ins Archiv geschrieben wird (zum Beispiel Druck oder Stadium in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
-      fr: `{count} {+count:colonne a|colonnes ont} un sens qui n'est pas écrit dans l'archive avec ce réglage de la feuille (par exemple pression ou stade dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego przy tym ustawieniu arkusza nie zapisuje się w archiwum (na przykład ciśnienie w arkuszu, który nie jest plikiem profilowym, albo stadium w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
+      en: `{count} {+count:column has|columns have} a meaning that is not written to the archive as the sheet is set up (for example a pressure in a sheet that is not a profile file, or a life stage in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die bei dieser Einstellung des Blatts nicht ins Archiv geschrieben wird (zum Beispiel Druck in einem Blatt, das keine Profildatei ist, oder Stadium in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
+      fr: `{count} {+count:colonne a|colonnes ont} un sens qui n'est pas écrit dans l'archive avec ce réglage de la feuille (par exemple pression dans une feuille qui n'est pas un fichier de profils, ou stade dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure (a measured variable is written as an eMoF row on the sample event), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column. Nothing from them is written. The warning has to be accepted before the export.`,
+    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure of a sheet that is not a profile file (a measured variable is written as an eMoF row on the sample event, or on the level event of a profile sheet, where the first pressure column is written as well), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column. Nothing from them is written. The warning has to be accepted before the export.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',
@@ -576,6 +581,45 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     },
     technical: `{file}: the chosen licence {chosen} is not among the licence(s) recognised in the dropped metadata files ({source}). The archive would carry a licence different from its source's, so the user has to acknowledge it.`,
   },
+  {
+    id: 'CONV-PROFILE-STATION-UNMATCHED',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'names'],
+    plain: {
+      pl: `{count} {+count:stacja pliku profilowego nie pasuje|stacje pliku profilowego nie pasują|stacji pliku profilowego nie pasuje} do stacji z arkuszy biologicznych (tekst stacji i rejs, gdy podany, muszą być identyczne): {names}. Każda staje się osobnym zdarzeniem stacji. Zaakceptuj, jeśli nie było tam biologii, albo popraw pisownię.`,
+      en: `{count} profile {+count:station matches|stations match} no station of your biology sheets (the station text, and the cruise when given, must be identical): {names}. {+count:It becomes|Each becomes} a station event of its own. Accept this if no biology was sampled there, or correct the spelling.`,
+      de: `{count} {+count:Station der Profildatei passt|Stationen der Profildatei passen} zu keiner Station der Biologie-Blätter (Stationstext und ggf. Fahrt müssen identisch sein): {names}. Jede wird ein eigenes Stationsereignis. Akzeptieren Sie das, wenn dort keine Biologie beprobt wurde, oder korrigieren Sie die Schreibweise.`,
+      fr: `{count} {+count:station de profil ne correspond|stations de profil ne correspondent} à aucune station des feuilles de biologie (texte de la station et campagne, si donnée, identiques) : {names}. Chacune devient un événement de station à part. Acceptez s'il n'y a pas eu de biologie là, ou corrigez l'orthographe.`,
+    },
+    technical: `{file}, {sheet}: {count} station(s) of the profile sheet match no station of the biology sheets ({names}). The match is exact on the trimmed station text and the cruise when the sheet gives one; nothing is matched approximately. Each of these stations became its own station event, with its levels as children and a date, position and depth range derived from them. The warning has to be accepted before the export.`,
+  },
+  {
+    id: 'CONV-PROFILE-LEVEL-INCOMPLETE',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'what'],
+    plain: {
+      pl: `{count} {+count:poziom profilu nie ma|poziomy profilu nie mają|poziomów profilu nie ma} {what}, a jego stacja też ich nie ma (wiersze {lines}). OBIS i BioCheck wymagają daty i pozycji przy każdym zdarzeniu bez dzieci. Dodaj kolumnę z datą lub pozycją albo dodaj tę stację do arkuszy biologicznych.`,
+      en: `{count} profile {+count:level has|levels have} no {what}, and neither has its station (lines {lines}). OBIS and BioCheck need a date and a position for every event without children. Add a date or position column to the sheet, or add this station to the biology sheets.`,
+      de: `{count} {+count:Profilebene hat|Profilebenen haben} keine Angabe zu {what}, und ihre Station auch nicht (Zeilen {lines}). OBIS und BioCheck verlangen Datum und Position bei jedem Ereignis ohne Kinder. Fügen Sie dem Blatt eine Datums- oder Positionsspalte hinzu oder diese Station den Biologie-Blättern.`,
+      fr: `{count} {+count:niveau de profil n'a|niveaux de profil n'ont} pas de {what}, et leur station non plus (lignes {lines}). OBIS et BioCheck exigent une date et une position pour chaque événement sans enfants. Ajoutez une colonne de date ou de position à la feuille, ou ajoutez cette station aux feuilles de biologie.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} profile level(s) have no {what} of their own and their parent event (the station; the cruise when the station level is flattened) has none to give. BioCheck requires eventDate, decimalLatitude and decimalLongitude on every event without children, after a child has taken what its parent gives (obistools flatten_event, check_fields). A level never takes them from further up (the whole cruise's range for one cast), and nothing is copied from another station.`,
+  },
+  {
+    id: 'CONV-PROFILE-NO-STATION',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'column'],
+    plain: {
+      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} stacji (wiersze {lines}). Poziom profilu trafia pod swoją stację, więc każdy wiersz musi ją mieć. Wskaż kolumnę stacji albo uzupełnij puste komórki.`,
+      en: `{count} profile {+count:row has|rows have} no station (lines {lines}). A profile level is placed under its station, so every row needs one. Map the station column, or fill in the empty cells.`,
+      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keine Station (Zeilen {lines}). Eine Profilebene wird unter ihre Station gehängt, daher braucht jede Zeile eine. Ordnen Sie die Stationsspalte zu oder füllen Sie die leeren Zellen.`,
+      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de station (lignes {lines}). Un niveau de profil est placé sous sa station : chaque ligne doit en avoir une. Indiquez la colonne de station ou remplissez les cellules vides.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} profile row(s) hold data but no station text (station column: {column}). A level event needs its station as its parent, so these rows were not converted.`,
+  },
 ];
 
 /** Declared params per CONV rule id. */
@@ -644,6 +688,13 @@ const EML_WORDS: Record<string, Record<Lang, string>> = {
   'dataset name': { en: 'dataset name', pl: 'nazwa zbioru', de: 'Datensatzname', fr: 'nom du jeu de données' },
 };
 
+/** What a profile level lacks, in words (CONV-PROFILE-LEVEL-INCOMPLETE carries date | position | date and position in `what`). */
+const LEVEL_WHAT_WORDS: Record<string, Record<Lang, string>> = {
+  date: { en: 'date', pl: 'daty', de: 'Datum', fr: 'date' },
+  position: { en: 'position', pl: 'pozycji', de: 'Position', fr: 'position' },
+  'date and position': { en: 'date or position', pl: 'daty lub pozycji', de: 'Datum oder Position', fr: 'date ou position' },
+};
+
 /** Which table an eMoF row points into, in words (CONV-EMOF-ORPHAN carries event | occurrence in `kind`). */
 const KIND_WORDS: Record<string, Record<Lang, string>> = {
   event: { en: 'an event', pl: 'zdarzenie', de: 'ein Ereignis', fr: 'un événement' },
@@ -671,6 +722,35 @@ const quantityWhat = (what: string, lang: Lang): string => {
     .map((n) => `${open}${n}${close}`)
     .join(', ');
 };
+
+/**
+ * The texts of a PROFILE file for two rules whose generic text would mislead there: the generic CONV-SAMPLE-CODE-MISSING offers the download of proposed codes (a one-time
+ * proposal for a biology sheet that is not made for profile levels), and the generic CONV-ID-DUPLICATE talks of sample codes and the station prefix. Chosen by renderConvertPlain
+ * and renderConvertTechnical from the finding's own params; the registry keeps one rule per id.
+ */
+export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, string>; technical: string }>> = {
+  'CONV-SAMPLE-CODE-MISSING': {
+    plain: {
+      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} kodu poziomu (wiersze {lines}). Identyfikator poziomu pochodzi od Ciebie: wskaż jako kod próbki kolumnę z kodem unikalnym w obrębie stacji (numer butelki, skanu lub Niskina) albo zaznacz zgodę na stację i głębokość zapisaną w arkuszu (potrzebna głębokość lub ciśnienie w każdym wierszu).`,
+      en: `{count} profile {+count:row has|rows have} no level code (lines {lines}). The level's identifier comes from you: map a column with a code that is unique within the station (bottle, scan or Niskin number) as the sample code, or tick the approval for the station and the depth as written (every row needs a depth, or a pressure).`,
+      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keinen Ebenencode (Zeilen {lines}). Die Kennung der Ebene kommt von Ihnen: ordnen Sie eine Spalte mit je Station eindeutigem Code (Flaschen-, Scan- oder Niskin-Nummer) als Probencode zu, oder stimmen Sie Station und Tiefe wie geschrieben zu (jede Zeile braucht Tiefe oder Druck).`,
+      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de code de niveau (lignes {lines}). L'identifiant du niveau vient de vous : indiquez comme code d'échantillon une colonne à code unique par station (numéro de bouteille, de scan ou de Niskin), ou cochez l'accord pour la station et la profondeur telle qu'écrite (chaque ligne a besoin d'une profondeur ou d'une pression).`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} profile row(s) have no level code (code column: {column}). The eventID of a level is its station's eventID and the user's own code or, only with the user's approval for this sheet, the depth as written (the pressure as written when the sheet has no depth column); it is never derived from the order of the rows. These rows were not converted.`,
+  },
+  'CONV-ID-DUPLICATE': {
+    plain: {
+      pl: `Ten sam identyfikator poziomu powstaje więcej niż raz, np. „{value}”, w wierszach {lines}. Dwa wiersze jednej stacji mają ten sam kod albo tę samą głębokość, gdy identyfikator składa się z głębokości (tak robią powtórzone zarzuty sondy). Dodaj kolumnę z kodem unikalnym w obrębie stacji, np. numer zarzutu i butelki razem, i wskaż ją jako kod próbki.`,
+      en: `The same level identifier is produced more than once, e.g. "{value}", in lines {lines}. Two rows of one station have the same code, or the same depth when the IDs are made of the depth (repeated casts do this). Add a column with a code that is unique within the station, for example cast and bottle together, and mark it as the sample code.`,
+      de: `Dieselbe Ebenenkennung entsteht mehrfach, z. B. „{value}“, in den Zeilen {lines}. Zwei Zeilen einer Station haben denselben Code oder dieselbe Tiefe, wenn die Kennung aus der Tiefe besteht (wiederholte Einsätze tun das). Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu, z. B. Einsatz und Flasche zusammen, und ordnen Sie sie als Probencode zu.`,
+      fr: `Le même identifiant de niveau est produit plusieurs fois, p. ex. « {value} », aux lignes {lines}. Deux lignes d'une même station ont le même code, ou la même profondeur quand l'identifiant se compose de la profondeur (des déploiements répétés font cela). Ajoutez une colonne à code unique par station, par exemple déploiement et bouteille ensemble, et indiquez-la comme code d'échantillon.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". {hint}`,
+  },
+};
+
+const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined =>
+  (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') || (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') ? PROFILE_VARIANTS[f.ruleId] : undefined;
 
 function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
@@ -705,11 +785,13 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
   }
   if (f.ruleId === 'CONV-NERC-UNKNOWN' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: shortList(quantityWhat(f.params.what, lang)) } };
+  if (f.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: LEVEL_WHAT_WORDS[f.params.what]?.[lang] ?? f.params.what } };
   if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
-  return fill(rule.plain[lang] || rule.plain.en, f, lang);
+  const variant = profileVariant(f);
+  return fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
 }
 
 /** The English technical detail line. */
 export function renderConvertTechnical(f: Finding): string {
-  return fill(getConvertRule(f.ruleId).technical, f);
+  return fill(profileVariant(f)?.technical ?? getConvertRule(f.ruleId).technical, f);
 }

@@ -41,6 +41,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-COUNT-NOT-INTEGER',
   'CONV-NEGATIVE-QUANTITY',
   'CONV-SAMPLE-CODE-MISSING',
+  'CONV-PROFILE-NO-STATION',
+  'CONV-PROFILE-LEVEL-INCOMPLETE',
   'CONV-ID-DUPLICATE',
   'CONV-TAB-IN-VALUE',
   'CONV-EMOF-ORPHAN',
@@ -55,7 +57,7 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-WORMS-UNDECIDED',
 ];
 
-/** Warnings the user must accept (per rule, per run) before exporting. The profile one belongs to a later stage (LATER_STAGE_RULES). */
+/** Warnings the user must accept (per rule, per run) before exporting. */
 export const ACCEPT_RULES: readonly string[] = [
   'ROW-NON-NUMERIC',
   'ROW-INVISIBLE-CHAR',
@@ -83,8 +85,8 @@ export const ACCEPT_RULES: readonly string[] = [
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */
 export const SHOW_ONLY_PREFIXES: readonly string[] = ['CHEM-', 'ROW-SHIP-SPEED', 'ROW-ON-LAND', 'ROW-STATION-', 'XF-', 'META-', 'LIC-'];
 
-/** Rules the plan lists but later stages raise (profile files): in the lists above so the policy is complete, not yet in the registry. Each is registered with its stage. (The WoRMS rules came with stage 4.) */
-export const LATER_STAGE_RULES: readonly string[] = ['CONV-PROFILE-STATION-UNMATCHED'];
+/** Rules the plan lists but a later stage raises: in the lists above so the policy is complete, not yet in the registry. Each is registered with its stage. (The WoRMS rules came with stage 4, the profile rules with stage 6: none is left.) */
+export const LATER_STAGE_RULES: readonly string[] = [];
 
 export type Policy = 'block' | 'accept' | 'show';
 

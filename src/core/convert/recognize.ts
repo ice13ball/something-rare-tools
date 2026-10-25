@@ -326,3 +326,16 @@ export function suggestConvertShape(columns: readonly { role: ColumnRole }[]): C
   if (columns.some((c) => c.role.kind === 'taxon' && c.role.header === true)) return 'wide';
   return undefined;
 }
+
+/**
+ * Stage 6: does this sheet LOOK like a profile / environment file of a cruise (CTD casts, bottle data, environmental stations)? A low-confidence suggestion that the page shows
+ * as a note; it is never set by itself, the user ticks the mark. The sheet has a station, a depth or a pressure, and at least one named measured variable, and no taxon,
+ * quantity or occurrence-ID column (a sheet with those is a biology sheet). A column that only MIGHT be a species (a numeric column with a name the converter does not know)
+ * counts as a taxon column here: a CTD sheet with parameter names it does not know is then simply not suggested, which costs the user one tick.
+ */
+export function suggestConvertProfile(columns: readonly { role: ColumnRole }[]): boolean {
+  const kinds = new Set(columns.map((c) => c.role.kind));
+  if (kinds.has('taxon') || kinds.has('quantity') || kinds.has('occurrenceId') || kinds.has('taxonId')) return false;
+  const hasVariable = columns.some((c) => c.role.kind === 'variable' && c.role.variable.trim() !== '');
+  return kinds.has('station') && (kinds.has('depth') || kinds.has('pressure')) && hasVariable;
+}
