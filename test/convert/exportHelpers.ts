@@ -12,6 +12,7 @@ import { toDataset } from '../../src/core/convert/model';
 import type { ConvertResult, ConvertedDataset } from '../../src/core/convert';
 import { judge } from '../../src/core/convert/policy';
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
+import type { WormsLookup } from '../../src/core/convert/worms';
 import { validateDataset } from '../../src/core/convert/validate';
 import { buildZip } from '../../src/core/convert/zip';
 import { parseDwca } from '../../src/core/parse/dwca';
@@ -64,6 +65,8 @@ export interface ExportOptions {
   meshUm?: string;
   /** The shape the user chose; default: the one the column roles suggest. */
   shape?: 'wide' | 'long';
+  /** The WoRMS opt-in's entries by scientificName (stage 4). */
+  worms?: WormsLookup;
 }
 
 /** A sheet through convert, validation and the writers, as the export does it. */
@@ -71,10 +74,10 @@ export async function exportSheet(header: string[], rows: Cell[][], o: ExportOpt
   const file = fileOf(header, rows, 'S', o.decimalComma ? { decimalComma: true } : {});
   const sheet = sheetInput(file, { quantity: o.quantity, ...(o.edit ? { edit: o.edit } : {}), ...(o.shape ? { shape: o.shape } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }) });
   const approvedSplits = o.approve === false ? {} : Object.fromEntries(listSplits({ sheets: [sheet] }).filter((s) => s.needsDecision).map((s) => [s.verbatim, s.proposed]));
-  const input: ConvertInput = { sheets: [sheet], options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true }, approvedSplits };
+  const input: ConvertInput = { sheets: [sheet], options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true }, approvedSplits, ...(o.worms ? { worms: o.worms } : {}) };
   const result = convert(input);
   const meta: DatasetMetadata = { ...META, ...(o.meta ?? {}) };
-  const dataset = toDataset(result, meta, { fullList: o.fullList === true, prefixStation: o.prefixStation === true });
+  const dataset = toDataset(result, meta, { fullList: o.fullList === true, prefixStation: o.prefixStation === true, worms: o.worms !== undefined });
   const findings = [...result.findings, ...validateDataset(dataset, result.findings, { today: TODAY })];
   const eml = meta.licence === '' ? '' : buildEml(dataset, { generated: GENERATED });
   const files = judge(findings).blocking.length === 0 ? archiveFiles(dataset, eml) : [];

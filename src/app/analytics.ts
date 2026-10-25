@@ -30,6 +30,8 @@ export type ConvertShapeParam = 'wide' | 'long' | 'mixed';
 export type ConvertProfileParam = 'none' | 'ctd';
 /** convert_exported: whether a metadata file was dropped with the data (`file`) or not (`none`). Never a title, a name or an e-mail address. */
 export type ConvertMetaSourceParam = 'none' | 'file';
+/** convert_exported: whether the WoRMS opt-in was used and at least one confirmed ID went into the archive (`used`) or not (`none`). Never a name or an ID. */
+export type ConvertWormsParam = 'none' | 'used';
 export interface TrackParams {
   input_type: InputType;
   mode: DownloadMode;
@@ -40,6 +42,7 @@ export interface TrackParams {
   shape?: ConvertShapeParam;
   profile?: ConvertProfileParam;
   meta_source?: ConvertMetaSourceParam;
+  worms?: ConvertWormsParam;
   /** convert_exported: how many events, occurrences and measurement rows the archive has */
   n_events?: number;
   n_occurrences?: number;
@@ -52,6 +55,7 @@ const EVENTS: readonly string[] = ['check_started', 'check_finished', 'convert_s
 const SHAPES: readonly string[] = ['wide', 'long', 'mixed'];
 const PROFILES: readonly string[] = ['none', 'ctd'];
 const META_SOURCES: readonly string[] = ['none', 'file'];
+const WORMS_PARAMS: readonly string[] = ['none', 'used'];
 const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info', 'n_events', 'n_occurrences', 'n_measurements'] as const;
 
 const isState = (v: unknown): v is ConsentState => v === 'granted' || v === 'denied';
@@ -205,6 +209,7 @@ export function track(event: TrackEvent, params: TrackParams): void {
   if (typeof p.shape === 'string' && SHAPES.includes(p.shape)) clean.shape = p.shape;
   if (typeof p.profile === 'string' && PROFILES.includes(p.profile)) clean.profile = p.profile;
   if (typeof p.meta_source === 'string' && META_SOURCES.includes(p.meta_source)) clean.meta_source = p.meta_source;
+  if (typeof p.worms === 'string' && WORMS_PARAMS.includes(p.worms)) clean.worms = p.worms;
   for (const k of COUNT_KEYS) {
     const v = p[k];
     if (typeof v === 'number' && Number.isFinite(v)) clean[k] = Math.max(0, Math.round(v));

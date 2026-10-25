@@ -63,13 +63,13 @@ describe('ConvertPage', () => {
     expect(screen.getByText(UI.en['tip.logic'])).toBeTruthy();
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/hidden/);
-    expect(text).toMatch(/read and previewed in your browser; nothing is sent anywhere/);
+    expect(text).toMatch(/read and previewed in your browser; nothing of them is sent anywhere/);
     expect(text).toMatch(/built in your browser and downloaded from it/);
     expect(text).not.toMatch(/no export yet/);
-    expect(text).toMatch(/WoRMS/);
-    expect(text).toMatch(/NERC/);
-    expect(text).toMatch(/off by default/);
-    expect(text).toMatch(/until you press its button/);
+    // WoRMS is here (stage 4), after its button and off by default; the NERC lookup is still planned
+    expect(text).toMatch(/One optional lookup is here: the taxon names you choose to look up go to WoRMS, and only after you press its button; it is off by default/);
+    expect(text).toMatch(/second one, for terms in the NERC vocabulary, is still planned/);
+    expect(text).not.toMatch(/Two optional lookups are planned/);
   });
 
   it('is announced nowhere: the header menu and the footer do not link it, nor does the index', () => {

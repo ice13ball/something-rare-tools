@@ -24,7 +24,7 @@ describe('the 3.4 lists, exactly', () => {
     );
   });
   it('to accept, per rule and per run', () => {
-    expect([...ACCEPT_RULES]).toEqual(['ROW-NON-NUMERIC', 'ROW-INVISIBLE-CHAR', 'ROW-DATE-FUTURE', 'ROW-DEPTH-RANGE', 'DWC-RECOMMENDED', 'CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-WORMS-NO-MATCH', 'CONV-WORMS-NOT-MARINE', 'CONV-NERC-UNKNOWN', 'CONV-UNIT-NO-P06', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-NAMEID-MISSING', 'CONV-NAMEID-APHIA-LIKE', 'CONV-DEVICE-MISSING', 'CONV-PROFILE-STATION-UNMATCHED', 'CONV-LICENCE-DIFFERS']);
+    expect([...ACCEPT_RULES]).toEqual(['ROW-NON-NUMERIC', 'ROW-INVISIBLE-CHAR', 'ROW-DATE-FUTURE', 'ROW-DEPTH-RANGE', 'DWC-RECOMMENDED', 'CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-WORMS-NO-MATCH', 'CONV-WORMS-NOT-MARINE', 'CONV-NERC-UNKNOWN', 'CONV-UNIT-NO-P06', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-NAMEID-MISSING', 'CONV-NAMEID-APHIA-LIKE', 'CONV-NAMEID-INCOMPLETE', 'CONV-NAMEID-CONFLICT', 'CONV-DEVICE-MISSING', 'CONV-PROFILE-STATION-UNMATCHED', 'CONV-LICENCE-DIFFERS', 'CONV-NO-SAMPLING-DESCRIPTOR']);
   });
   it('shown only', () => {
     expect([...SHOW_ONLY_PREFIXES]).toEqual(['CHEM-', 'ROW-SHIP-SPEED', 'ROW-ON-LAND', 'ROW-STATION-', 'XF-', 'META-', 'LIC-']);
@@ -123,7 +123,7 @@ describe('on real conversions', () => {
     const ids = validateDataset(bad, [], { today: '2026-10-25' }).map((x) => x.ruleId);
     for (const id of ['CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY']) expect(ids, id).toContain(id);
     expect(ids.filter((x) => x === 'CONV-EMOF-ORPHAN')).toHaveLength(2);
-    const done = toDataset({ events: [], occurrences: [], measurements: [] }, META, { fullList: false, prefixStation: false });
+    const done = toDataset({ events: [], occurrences: [], measurements: [] }, META, { fullList: false, prefixStation: false, worms: false });
     expect(validateDataset(done).map((x) => x.ruleId)).toEqual([]);
   });
 });

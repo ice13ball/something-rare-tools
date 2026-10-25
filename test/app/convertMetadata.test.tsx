@@ -616,7 +616,7 @@ describe('the archive carries the prefilled values and the citation', () => {
     expect(eml).toContain('<electronicMailAddress>anna@example.org</electronicMailAddress>');
     expect(eml).toContain('<ulink url="http://creativecommons.org/licenses/by/4.0/legalcode">');
     // the citation of the file (shared attribution function), without a licence sentence, on one line
-    expect(eml).toContain(`<citation identifier="synthetic-zooplankton-counts-test-bay-2019">Example, Anna; Sample, Boris (2020). ${BASE.title}. Example Marine Laboratory. https://doi.org/10.0000/synthetic.convert.1</citation>`);
+    expect(eml).toContain(`<citation identifier="https://doi.org/10.0000/synthetic.convert.1">Example, Anna; Sample, Boris (2020). ${BASE.title}. Example Marine Laboratory. https://doi.org/10.0000/synthetic.convert.1</citation>`);
     const event = new TextDecoder().decode(await z.read(z.find('event.txt')!, nodeInflate));
     expect(event).toContain(`\t${BASE.title}\tINVENTED\n`);
   });
@@ -723,7 +723,7 @@ describe('GA4: the metadata source is an enum, never a title, a name or an e-mai
     await exportWith([DATA, BAY]);
     const exported = events().find((e) => e.name === 'convert_exported');
     expect(exported?.params.meta_source).toBe('file');
-    expect(Object.keys(exported?.params ?? {}).sort()).toEqual(['input_type', 'meta_source', 'mode', 'n_events', 'n_measurements', 'n_occurrences', 'profile', 'shape']);
+    expect(Object.keys(exported?.params ?? {}).sort()).toEqual(['input_type', 'meta_source', 'mode', 'n_events', 'n_measurements', 'n_occurrences', 'profile', 'shape', 'worms']);
     expect(JSON.stringify(win.dataLayer)).not.toMatch(/Synthetic zooplankton|Example|Boris|bay\.datacite|synthetic\.convert|Marine Laboratory|ada@|INVENTED/);
     cleanup();
     await exportWith([DATA]);

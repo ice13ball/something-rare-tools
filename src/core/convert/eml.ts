@@ -163,6 +163,50 @@ function citationOf(m: DatasetMetadata, year: string): string {
   return `${names.join('; ')} (${year}). ${m.title.trim()}. Dataset.`;
 }
 
+/*
+ * A DOI is 10.<registrant>/<suffix>; the suffix may hold any printable character (DOI Handbook 2.2: "<>;()/:" among them; Crossref's pattern
+ * 10.\d{4,9}/[-._;()/:A-Z0-9]+ covers most, and real suffixes such as 10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-O do use < > ( ) ; :).
+ * A citation is a sentence, so a DOI ends at a space or a quote, and trailing punctuation or an unbalanced closing bracket of the sentence is not part of it.
+ * It is taken only from an address of doi.org or dx.doi.org, from "doi:", or from a bare 10.x/y string that is not inside another address (a path of some
+ * other site that happens to contain 10.1234/x is not a DOI).
+ */
+const DOI_BODY = String.raw`10\.\d{4,9}\/[^\s"']+`;
+const DOI_AFTER_RESOLVER = new RegExp(String.raw`(?:^|[^\w./-])(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)(${DOI_BODY})`, 'i');
+const DOI_BARE = new RegExp(String.raw`(?<![\w./:@=?&#%-])(${DOI_BODY})`, 'i');
+/** Takes the trailing punctuation of the sentence off, and an unbalanced closing bracket (a DOI in "(…)" or "<…>" does not own the bracket). */
+function trimDoi(doi: string): string {
+  let d = doi;
+  for (;;) {
+    const before = d;
+    d = d.replace(/[.,;:!?'"]+$/, '');
+    for (const [open, close] of [['(', ')'], ['[', ']'], ['<', '>'], ['{', '}']] as const) {
+      while (d.endsWith(close) && d.split(close).length > d.split(open).length) d = d.slice(0, -1);
+    }
+    if (d === before) return d;
+  }
+}
+
+/**
+ * The DOI the metadata carries, or undefined. The description of the dataset has no DOI field: the DOI is in the citation (typed, or prefilled from a
+ * dropped metadata file: buildAttribution writes `https://doi.org/<doi>`), so that is where it is read.
+ */
+export function doiOfCitation(citation: string): string | undefined {
+  const m = DOI_AFTER_RESOLVER.exec(citation) ?? DOI_BARE.exec(citation);
+  if (!m) return undefined;
+  const d = trimDoi(m[1]);
+  return /^10\.\d{4,9}\/\S/.test(d) ? d : undefined;
+}
+
+/**
+ * The identifier of additionalMetadata/gbif/citation. GBIF/IPT convention (checked against EML served by IPT installations on 2026-10-25, e.g.
+ * https://ipt.biodiversidad.co/sibm/eml.do?r=coleccionanelidosmhnmc: `<citation identifier="https://doi.org/10.15472/ssc1ui">`): the DOI as a
+ * https://doi.org/ address when the dataset has one. Without a DOI the slug stays, as before.
+ */
+export function citationIdentifier(m: Pick<DatasetMetadata, 'citation'>, slug: string): string {
+  const doi = doiOfCitation(m.citation);
+  return doi === undefined ? slug : `https://doi.org/${doi}`;
+}
+
 /**
  * The EML of a dataset. Throws when the licence is not chosen: nothing is defaulted (validate.ts blocks before this is called).
  */
@@ -241,7 +285,7 @@ export function buildEml(ds: Pick<ConvertedDataset, 'events' | 'occurrences' | '
     '      <gbif>',
     `        <dateStamp>${escapeXml(opts.generated)}</dateStamp>`,
     '        <hierarchyLevel>dataset</hierarchyLevel>',
-    `        <citation identifier="${escapeXml(slug)}">${escapeXml(citationOf(m, pubDate.slice(0, 4)))}</citation>`,
+    `        <citation identifier="${escapeXml(citationIdentifier(m, slug))}">${escapeXml(citationOf(m, pubDate.slice(0, 4)))}</citation>`,
     '      </gbif>',
     '    </metadata>',
     '  </additionalMetadata>',

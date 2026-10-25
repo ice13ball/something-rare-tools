@@ -35,7 +35,7 @@ export const BLOCK_OUTPUT_RULES: readonly string[] = [
 /** Blocking: findings of the INPUT, for a sheet chosen for conversion. */
 export const BLOCK_INPUT_RULES: readonly string[] = ['IN-LAYOUT-UNSUPPORTED', 'IN-FILE-UNREADABLE'];
 
-/** Blocking: the converter's own rules. (CONV-WORMS-UNDECIDED belongs to the WoRMS stage and is listed so the policy is complete.) */
+/** Blocking: the converter's own rules. (CONV-WORMS-UNDECIDED is raised from stage 4 on, after a WoRMS lookup.) */
 export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-QUANTITY-UNDECLARED',
   'CONV-COUNT-NOT-INTEGER',
@@ -55,7 +55,7 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-WORMS-UNDECIDED',
 ];
 
-/** Warnings the user must accept (per rule, per run) before exporting. The WoRMS and profile ones belong to later stages (LATER_STAGE_RULES). */
+/** Warnings the user must accept (per rule, per run) before exporting. The profile one belongs to a later stage (LATER_STAGE_RULES). */
 export const ACCEPT_RULES: readonly string[] = [
   'ROW-NON-NUMERIC',
   'ROW-INVISIBLE-CHAR',
@@ -71,16 +71,19 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-COLUMN-NOT-EXPORTED',
   'CONV-NAMEID-MISSING',
   'CONV-NAMEID-APHIA-LIKE',
+  'CONV-NAMEID-INCOMPLETE',
+  'CONV-NAMEID-CONFLICT',
   'CONV-DEVICE-MISSING',
   'CONV-PROFILE-STATION-UNMATCHED',
   'CONV-LICENCE-DIFFERS',
+  'CONV-NO-SAMPLING-DESCRIPTOR',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */
 export const SHOW_ONLY_PREFIXES: readonly string[] = ['CHEM-', 'ROW-SHIP-SPEED', 'ROW-ON-LAND', 'ROW-STATION-', 'XF-', 'META-', 'LIC-'];
 
-/** Rules the plan lists but later stages raise (WoRMS, profile files): in the lists above so the policy is complete, not yet in the registry. Each is registered with its stage. */
-export const LATER_STAGE_RULES: readonly string[] = ['CONV-WORMS-UNDECIDED', 'CONV-WORMS-NO-MATCH', 'CONV-WORMS-NOT-MARINE', 'CONV-PROFILE-STATION-UNMATCHED'];
+/** Rules the plan lists but later stages raise (profile files): in the lists above so the policy is complete, not yet in the registry. Each is registered with its stage. (The WoRMS rules came with stage 4.) */
+export const LATER_STAGE_RULES: readonly string[] = ['CONV-PROFILE-STATION-UNMATCHED'];
 
 export type Policy = 'block' | 'accept' | 'show';
 

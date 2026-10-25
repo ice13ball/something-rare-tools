@@ -2,7 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { bulkApprovable, judge, licenceDiffersFindings, licenceSourceOf, metadataFindings, writeConvertSidecar } from '../../core/convert';
+import { bulkApprovable, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, writeConvertSidecar } from '../../core/convert';
+import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { UiKey } from '../../core/i18n/ui';
@@ -12,6 +13,8 @@ import { getConvertEngine } from '../../worker/convert.client';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
+import { ConvertWorms } from '../components/ConvertWorms';
+import type { WormsStatus } from '../components/ConvertWorms';
 import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
@@ -21,6 +24,7 @@ import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
 import { CONVERT_ROLE_CHOICES } from '../mappingModel';
+import { lookupWormsNames } from '../optins/worms';
 import type { InputFile } from '../../worker/protocol';
 import type { CheckInput } from '../types';
 
@@ -68,7 +72,7 @@ function nodeLine(e: EventRec): string {
 /**
  * /convert: drop files, check the columns, decide the shape and what the numbers mean, approve taxon splits, see the event tree, describe the dataset,
  * read the summary, accept the warnings and export the Darwin Core Archive (stage 2). The page is hidden (in no menu, index card or sitemap). Files are
- * read and the archive is built in the browser by the convert worker; nothing is sent anywhere and nothing is stored. All state lives here and starts
+ * read and the archive is built in the browser by the convert worker; nothing is stored, and nothing is sent anywhere unless the user ticks the WoRMS opt-in AND presses its lookup button (stage 4: only the taxon names, src/app/optins/worms.ts). All state lives here and starts
  * empty for each upload; only a companion file dropped with the data can pre-tick the full-species-list and the station-prefix choices, and (stage 3)
  * dropped metadata files fill empty fields of the description. The export button works only when nothing blocks, the description is complete and every
  * warning rule is accepted; the worker checks all of that again before it writes anything.
@@ -101,6 +105,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [exported, setExported] = useState<(Pick<ExportResult, 'fileName' | 'counts' | 'deflated'>) | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const token = useRef(0);
+  // The WoRMS opt-in (stage 4). Everything about it starts empty and OFF for each upload; a companion file of the drop can only tick the box. Nothing is sent
+  // until the user presses the lookup button (runWorms): no effect, no timer and no render path calls the network. Page state only: no storage of any kind.
+  const [wormsOn, setWormsOn] = useState(false);
+  const [wormsRecords, setWormsRecords] = useState<Record<string, WormsRecord[]>>({});
+  const [wormsChoices, setWormsChoices] = useState<Record<string, WormsChoice>>({});
+  const [wormsStatus, setWormsStatus] = useState<WormsStatus>({ state: 'idle' });
+  const wormsAbort = useRef<AbortController | null>(null);
+  const wormsRun = useRef(0);
   // the description fields the user typed in, cleared or chose a value for: a new drop never overwrites them (core/convert/metadata.ts refreshPrefill)
   const touched = useRef(new Set<keyof DatasetMetadata>());
   const files = parsed?.files ?? [];
@@ -108,6 +120,18 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     for (const k of Object.keys(next) as (keyof DatasetMetadata)[]) if (next[k] !== meta[k]) touched.current.add(k);
     setMeta(next);
   };
+
+  /** Drops the WoRMS lookup: an unfinished call is aborted, its late answer is ignored, and the results and choices are forgotten. */
+  const clearWorms = (): void => {
+    wormsRun.current += 1;
+    wormsAbort.current?.abort();
+    wormsAbort.current = null;
+    setWormsRecords({});
+    setWormsChoices({});
+    setWormsStatus({ state: 'idle' });
+  };
+  // leaving the page ends a running lookup
+  useEffect(() => () => wormsAbort.current?.abort(), []);
 
   // Work that leaving would lose: files chosen, or a conversion in view. Never an empty page.
   useLeaveWarning(filesChosen > 0 || phase !== 'input');
@@ -129,6 +153,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setAccepted({});
     setExported(null);
     setExportError(null);
+    // a new upload starts with the WoRMS box OFF and nothing looked up (a companion file of THIS drop may tick it below)
+    setWormsOn(false);
+    clearWorms();
     track('convert_started', { input_type: 'file', mode: 'browser' });
     setPhase('reading');
     try {
@@ -141,6 +168,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       // the ticks start from a companion file of THIS drop, and from nothing else
       setFullList(p.settings.fullList);
       setPrefixStation(p.settings.prefixStation);
+      setWormsOn(p.settings.worms); // a pre-tick only: nothing is sent until the user presses the lookup button
       setPhase(p.files.length > 0 ? 'work' : 'input');
     } catch (e) {
       setProblem(messageOf(e));
@@ -159,8 +187,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setExportError(null);
     touched.current.clear();
     setMeta(EMPTY_METADATA);
+    setWormsOn(false);
+    clearWorms();
     setPhase('input');
   };
+
+  // What the lookup found, as the entries the conversion takes (none while the box is off or nothing was looked up)
+  const wormsLookup = useMemo(() => (wormsOn && Object.keys(wormsRecords).length > 0 ? lookupOf(wormsRecords, wormsChoices) : undefined), [wormsOn, wormsRecords, wormsChoices]);
 
   // the conversion follows every decision; a late answer to an earlier request is dropped
   useEffect(() => {
@@ -169,7 +202,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setWorking(true);
     const timer = setTimeout(() => {
       engine
-        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta }))
+        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta, ...(wormsLookup ? { worms: wormsLookup } : {}) }))
         .then(
           (v) => {
             if (token.current !== mine) return;
@@ -185,7 +218,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         });
     }, 120);
     return () => clearTimeout(timer);
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta]);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup]);
 
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
@@ -269,7 +302,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setExportError(null);
     setExported(null);
     try {
-      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed });
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}) });
       const acceptedRules = judged.acceptRules.filter(isAccepted);
       const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
       downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
@@ -280,6 +313,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         shape: shapeOf(shapes),
         profile: 'none',
         meta_source: parsed.metadataFiles.length > 0 ? 'file' : 'none',
+        // whether at least one WoRMS ID was actually written to the archive (the count of the conversion that was exported); never a name or an ID
+        worms: (view?.worms.applied ?? 0) > 0 ? 'used' : 'none',
         n_events: res.counts.events,
         n_occurrences: res.counts.occurrences,
         n_measurements: res.counts.measurements,
@@ -291,7 +326,38 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     }
   };
 
-  const downloadCompanion = (): void => download(writeConvertSidecar({ fullList, prefixStation }), 'convert-companion.csv', 'text/csv');
+  /** Unticking the box is withdrawing: a running call is aborted and what was found is forgotten. */
+  const toggleWorms = (on: boolean): void => {
+    setWormsOn(on);
+    if (!on) clearWorms();
+  };
+  const wormsNames = view?.worms.names ?? [];
+  const wormsPending = wormsNames.filter((n) => !Object.prototype.hasOwnProperty.call(wormsRecords, n));
+  /** The ONE place the lookup starts: the button. Sends the names that have no result yet, in order, in calls of at most 50; completed calls are kept. */
+  const runWorms = async (): Promise<void> => {
+    if (!wormsOn || wormsStatus.state === 'running' || wormsPending.length === 0) return;
+    const names = wormsPending;
+    const mine = ++wormsRun.current;
+    const ac = new AbortController();
+    wormsAbort.current = ac;
+    setWormsStatus({ state: 'running', done: 0, total: names.length });
+    const run = await lookupWormsNames(names, {
+      signal: ac.signal,
+      onProgress: (done, total) => {
+        if (wormsRun.current === mine) setWormsStatus({ state: 'running', done, total });
+      },
+    });
+    if (wormsRun.current !== mine) return; // unticked, a new upload or the page left meanwhile: the late answer is ignored
+    wormsAbort.current = null;
+    const answered = Object.keys(run.results).length;
+    setWormsRecords((prev) => ({ ...prev, ...run.results }));
+    setWormsStatus(run.aborted || run.failure ? { state: 'stopped', done: answered, total: names.length, ...(run.failure ? { failure: run.failure } : {}) } : { state: 'finished', answered });
+  };
+  const abortWorms = (): void => wormsAbort.current?.abort();
+  const chooseWorms = (name: string, choice: WormsChoice | undefined): void =>
+    setWormsChoices((prev) => (choice === undefined ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== name)) : { ...prev, [name]: choice }));
+
+  const downloadCompanion = (): void => download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn }), 'convert-companion.csv', 'text/csv');
 
   return (
     <Layout titleKey="convert.title">
@@ -575,6 +641,20 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               })}
             </section>
           )}
+
+          <ConvertWorms
+            on={wormsOn}
+            onToggle={toggleWorms}
+            names={wormsNames}
+            withSheetId={view?.worms.withSheetId ?? 0}
+            pending={wormsPending.length}
+            records={wormsRecords}
+            choices={wormsChoices}
+            onChoice={chooseWorms}
+            status={wormsStatus}
+            onLookup={() => void runWorms()}
+            onAbort={abortWorms}
+          />
 
           <section className="convert-tree" aria-labelledby="convert-tree-title">
             <HeadingTip tip="convertTree">

@@ -85,6 +85,17 @@ describe('track: the converter events', () => {
     expect(JSON.stringify(entries())).not.toMatch(/ada@/);
   });
 
+  it('worms is the enum none / used; a name or an ID in its place is dropped', () => {
+    grantConsent();
+    win.dataLayer = [];
+    track('convert_exported', { input_type: 'file', mode: 'browser', worms: 'used' });
+    track('convert_exported', { input_type: 'file', mode: 'browser', worms: 'none' });
+    track('convert_exported', { input_type: 'file', mode: 'browser', worms: 'Calanus finmarchicus' } as never);
+    track('convert_exported', { input_type: 'file', mode: 'browser', worms: 'urn:lsid:marinespecies.org:taxname:104464' } as never);
+    expect(entries().map((e) => (e[2] as Record<string, unknown>).worms)).toEqual(['used', 'none', undefined, undefined]);
+    expect(JSON.stringify(entries())).not.toMatch(/Calanus|lsid|104464/);
+  });
+
   it('push nothing without consent', () => {
     denyConsent();
     win.dataLayer = [];

@@ -11,6 +11,7 @@ import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertParseResult, ConvertRequestBody } from '../worker/convert.protocol';
 import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
+import type { WormsLookup } from '../core/convert';
 
 /** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
 export interface QuantityForm {
@@ -79,6 +80,8 @@ export interface ConvertState {
   confirmed: Record<string, boolean>;
   /** Only the part that appears in the tables is sent with a conversion request (tableMetadataOf). */
   metadata?: DatasetMetadata;
+  /** The WoRMS opt-in's results and decisions as entries by name; absent while the box is off or nothing was looked up (stage 4). */
+  worms?: WormsLookup;
 }
 
 /**
@@ -140,7 +143,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
-  return { sheets, options: s.options, approvedSplits: s.approved, ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
+  return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
 }
 
 /** The initial choices: every sheet used, the shape the overlay suggests (wide when it cannot tell), nothing declared. */

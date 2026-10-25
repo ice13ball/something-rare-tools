@@ -10,6 +10,7 @@ import { buildTables } from './dwca';
 import type { ArchiveTables, Table } from './dwca';
 import { hasTabOrNewline, shownText } from './ids';
 import { missingFields } from './metadata';
+import { isEffortTypeId } from './vocab';
 import type { DatasetMetadata } from './metadata';
 import type { ConvertedDataset } from './model';
 
@@ -21,7 +22,7 @@ import type { ConvertedDataset } from './model';
  *                     KONTROLE-OBIS checks (checkRawTable inside buildDatasets) plus the row checks (ROW-ZERO-COORD, ROW-DEPTH-MIN-MAX, ROW-NO-COORD,
  *                     ROW-DATE-FUTURE, ...)
  *   Occurrence table  checkRawTable with `dwca: { core: 'Occurrence' }` (its eventID column marks it as the occurrence side: no date or position demanded)
- *   eMoF + cross      CONV-EMOF-ORPHAN, CONV-EMOF-EVENT-MISMATCH, CONV-EMOF-VALUE-EMPTY, CONV-EMOF-TYPE-EMPTY
+ *   eMoF + cross      CONV-NO-SAMPLING-DESCRIPTOR (BioCheck's BODCeffort list), CONV-EMOF-ORPHAN, CONV-EMOF-EVENT-MISMATCH, CONV-EMOF-VALUE-EMPTY, CONV-EMOF-TYPE-EMPTY
  *   the description   CONV-EML-MISSING, CONV-LICENCE-UNSET, CONV-BASIS-UNSET (metadataFindings: pure and cheap, so the page can run it on every keystroke)
  *
  * What each finding does to the export is policy.ts. Findings of the tables name event.txt / occurrence.txt and their line numbers (line 1 is the header).
@@ -153,6 +154,9 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   out.push(...checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter((f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID')));
   const noId = judged.occurrences.filter((o) => o.identification.scientificNameId === undefined).length;
   if (noId > 0) out.push(makeConvertFinding('CONV-NAMEID-MISSING', { file: tables.occurrence.name, sheet: tables.occurrence.name, params: { count: noId } }));
+  // BioCheck: no measurementTypeID among its BODCeffort codes in the whole eMoF table (R/checkdataset.R 562-566, inside the eMoF block that starts at line 457): a warning, to accept
+  // (BioCheck runs it only when the archive has an eMoF table: `if (exists("eMoF"))`, line 457)
+  if (tables.emof && !judged.measurements.some((m) => m.typeId !== undefined && isEffortTypeId(m.typeId))) out.push(makeConvertFinding('CONV-NO-SAMPLING-DESCRIPTOR', { file: tables.emof.name }));
   if (tables.emof) out.push(...emofFindings(judged, tables.emof));
   if (!stage1.some((f) => f.ruleId === 'CONV-TAB-IN-VALUE')) out.push(...tabFindings(tables));
   return out;

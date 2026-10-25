@@ -13,6 +13,7 @@ import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '..
 import { P01, P06 } from '../core/convert/vocab';
 import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
+import { WORMS_BATCH_MAX, wormsLsid } from '../core/convert/worms';
 import { CONVERT_ROLE_CHOICES, ROLE_KINDS, roleChoiceLabelKey, roleLabelKey, type RoleKind } from './mappingModel';
 import { ACCEPTED_EXTENSIONS } from './types';
 
@@ -238,6 +239,10 @@ const DEFS = {
   convertCompanion: { label: 'convert.companion.button' },
   convertDevice: { label: 'convert.device.label', values: { instrument: codes(P01.instrument) } },
   convertMesh: { label: 'convert.mesh.label', values: { meshConcept: codes(P01.meshSize), unit: codes(P06.um) } },
+  convertWormsOptIn: { label: 'convert.worms.optin', values: { batch: () => String(WORMS_BATCH_MAX), lsid: () => wormsLsid(1).replace(/1$/, '<AphiaID>') } },
+  convertWormsPrivacy: { label: 'convert.worms.privacy.title' },
+  convertWormsTable: { label: 'convert.worms.table.title' },
+  convertWormsChoice: { label: 'convert.worms.choose.label' },
 } satisfies Record<string, TipDef>;
 
 export type TipId = keyof typeof DEFS;

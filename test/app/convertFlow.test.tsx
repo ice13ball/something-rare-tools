@@ -13,6 +13,8 @@ import { createDirectConvertEngine } from '../../src/worker/convert.handler';
 import { dataciteXml } from '../convert/metaFixtures';
 import { COLLISION_CSV, L1_CSV, L2_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV, W2_CSV, chooseFiles } from './convertHelpers';
 
+// every test drives the whole page through a real worker handler in jsdom: the heaviest ones (W1, the four languages, the error test) took 5 s alone and timed out under the load of the full suite
+vi.setConfig({ testTimeout: 30_000 });
 const T = UI.en;
 
 beforeEach(() => {

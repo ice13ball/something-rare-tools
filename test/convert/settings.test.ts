@@ -19,13 +19,13 @@ describe('the converter sidecar', () => {
     const both = writeConvertSidecar({ fullList: true, prefixStation: true });
     expect(both).toContain('(setting),fullList=yes,,,');
     expect(both).toContain('(setting),stationPrefix=yes,,,');
-    expect(readConvertSettings(textFile('c.sidecar.csv', both))).toEqual({ fullList: true, prefixStation: true });
-    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({})))).toEqual({ fullList: false, prefixStation: false });
+    expect(readConvertSettings(textFile('c.sidecar.csv', both))).toEqual({ fullList: true, prefixStation: true, worms: false });
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({})))).toEqual({ fullList: false, prefixStation: false, worms: false });
   });
 
   it('an unknown setting or value is ignored; a file with another header is not a sidecar', () => {
     const odd = writeConvertSidecar({}) + '(setting),somethingElse=yes,,,\n(setting),fullList=maybe,,,\n';
-    expect(readConvertSettings(textFile('odd.csv', odd))).toEqual({ fullList: false, prefixStation: false });
+    expect(readConvertSettings(textFile('odd.csv', odd))).toEqual({ fullList: false, prefixStation: false, worms: false });
     expect(readConvertSettings(textFile('data.csv', DATA))).toBeUndefined();
   });
 
