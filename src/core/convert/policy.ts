@@ -73,6 +73,7 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-NAMEID-APHIA-LIKE',
   'CONV-DEVICE-MISSING',
   'CONV-PROFILE-STATION-UNMATCHED',
+  'CONV-LICENCE-DIFFERS',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */

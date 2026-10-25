@@ -23,3 +23,19 @@ function unguardSheet(s: RawSheet): RawSheet {
 export function readConvertFile(file: ParsedFile): ParsedFile {
   return { ...file, sheets: file.sheets.map(unguardSheet) };
 }
+
+/**
+ * The description files of a Darwin Core archive, recognised by CONTENT: an EML document (root element `eml`) and the archive's meta.xml (root element
+ * `archive` in the DwC text namespace). Dropped on /convert they are not a data sheet and not a metadata record the page reads; the page lists them as such.
+ * Only the first element after the XML declaration, comments and doctype is looked at, in the first 4 KB. /check does not call this.
+ */
+export function archiveDescriptorKind(bytes: Uint8Array): 'eml' | 'meta' | undefined {
+  const head = new TextDecoder('utf-8').decode(bytes.subarray(0, 4096)).replace(/^﻿/, '');
+  const m = /^\s*(?:<\?xml[^>]*\?>\s*|<!--[\s\S]*?-->\s*|<!DOCTYPE[^>]*>\s*)*<\s*(?:([\w.-]+):)?([\w.-]+)([^>]*)>/.exec(head);
+  if (!m) return undefined;
+  const local = m[2];
+  const attrs = m[3];
+  if (local === 'eml' && /ecoinformatics\.org/.test(attrs)) return 'eml';
+  if (local === 'archive' && /rs\.tdwg\.org\/dwc\/text/.test(attrs)) return 'meta';
+  return undefined;
+}

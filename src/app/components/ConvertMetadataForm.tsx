@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React, { useId } from 'react';
-import { BASES_OF_RECORD, LICENCES, isBasis, isLicence } from '../../core/convert/metadata';
+import React, { useId, useState } from 'react';
+import { BASES_OF_RECORD, LICENCES, creatorLines, isBasis, isLicence, partyOf } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
-import type { Candidate, ConvertPrefill, LicenceCase, PrefillKey, SourceRef } from '../../core/convert/prefill';
+import type { Candidate, ConvertPrefill, LicenceCase, LicenceSaid, PrefillKey, SourceRef } from '../../core/convert/prefill';
 import type { UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
@@ -52,23 +52,23 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
     return null;
   };
 
-  /** The choice between values the files disagree on (a field with several candidates). `apply` puts one into the form. */
-  const choice = (key: PrefillKey, current: (c: Candidate) => boolean, apply: (c: Candidate) => Partial<DatasetMetadata>): React.ReactNode => {
-    const cands = prefill?.fields[key] ?? [];
-    if (cands.length < 2) return null;
-    return (
-      <div className="convert-choice" role="group" aria-label={t('convert.meta.src.choose.label')}>
-        <p>
-          {t('convert.meta.src.choose')} <InfoTip id="convertMetaChoice" />
-        </p>
-        <ul>
-          {cands.map((c, i) => {
-            const shown = key === 'contact' ? [c.value, c.email].filter((x) => x !== undefined && x !== '').join(', ') : c.value.replace(/\s+/g, ' ');
-            return (
+  /**
+   * A list of values of the files to pick from. mode 'choose': values of DIFFERENT files that disagree (none is filled in). mode 'differs': one file's value
+   * that differs from what the field holds now (typed or chosen): it stays visible and never replaces the value by itself.
+   */
+  const box = (key: PrefillKey, cands: Candidate[], isCurrent: (c: Candidate) => boolean, apply: (c: Candidate) => Partial<DatasetMetadata>, mode: 'choose' | 'differs'): React.ReactNode => (
+    <div className="convert-choice" role="group" aria-label={t('convert.meta.src.choose.label')} data-mode={mode}>
+      <p>
+        {mode === 'choose' ? t('convert.meta.src.choose') : t('convert.meta.src.differs', { sources: sourcesText(cands[0].sources) })} <InfoTip id="convertMetaChoice" />
+      </p>
+      <ul>
+        {cands.map((c, i) => {
+          const shown = key === 'contact' ? [c.value, c.email].filter((x) => x !== undefined && x !== '').join(', ') : c.value.replace(/\s+/g, ' ');
+          return (
             <li key={i}>
               <span className="convert-choice-value">{key === 'contact' ? shown : shorten(c.value)}</span>
-              <span className="muted"> ({sourcesText(c.sources)}) </span>
-              {current(c) ? (
+              {mode === 'choose' && <span className="muted"> ({sourcesText(c.sources)}) </span>}{' '}
+              {isCurrent(c) ? (
                 <span className="muted">{t('convert.meta.src.used')}</span>
               ) : (
                 <button type="button" className="link-button" aria-label={t('convert.meta.src.useLabel', { value: shorten(shown, 80), sources: sourcesText(c.sources) })} onClick={() => set(apply(c))}>
@@ -76,15 +76,40 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
                 </button>
               )}
             </li>
-            );
-          })}
-        </ul>
-      </div>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
+  /** For a field: the choice between files that disagree, or the value of the one file that differs from what the field holds now. */
+  const choice = (key: PrefillKey, currentValue: string, apply: (c: Candidate) => Partial<DatasetMetadata>): React.ReactNode => {
+    const cands = prefill?.fields[key] ?? [];
+    const isCurrent = (c: Candidate): boolean => norm(c.value) === norm(currentValue);
+    if (cands.length >= 2) return box(key, cands, isCurrent, apply, 'choose');
+    if (cands.length === 1 && currentValue.trim() !== '' && !isCurrent(cands[0])) return box(key, cands, isCurrent, apply, 'differs');
+    return null;
+  };
+
+  /** The contact: a list per file that names several (neutral), the choice between files that each name one and disagree, or the one file's contact that differs. */
+  const contactBlock = (): React.ReactNode => {
+    if (!prefill) return null;
+    const isCurrent = (c: Candidate): boolean => norm(c.value) === norm(value.contactName) && norm(c.email ?? '') === norm(value.contactEmail);
+    const apply = (c: Candidate): Partial<DatasetMetadata> => ({ contactName: c.value, contactEmail: c.email ?? '' });
+    const all = prefill.fields.contact;
+    const holds = value.contactName.trim() !== '' || value.contactEmail.trim() !== '';
+    return (
+      <>
+        {prefill.contactSingles.length >= 2 && box('contact', prefill.contactSingles, isCurrent, apply, 'choose')}
+        {all.length === 1 && holds && !isCurrent(all[0]) && box('contact', all, isCurrent, apply, 'differs')}
+        {prefill.contactLists.map((l) => (
+          <ContactList key={l.file} list={l} isCurrent={(c) => isCurrent(c)} onUse={(c) => set(apply(c))} />
+        ))}
+      </>
     );
   };
 
   const titleNote = note('title', value.title, (c) => c.value);
-  const contactPick = (c: Candidate): Partial<DatasetMetadata> => ({ contactName: c.value, contactEmail: c.email ?? '' });
   const citationNote = note('citation', value.citation, (c) => c.value);
   return (
     <div className="convert-fields convert-meta">
@@ -101,7 +126,7 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
         </FieldLabel>
         <input {...text('title')} />
         {titleNote}
-        {choice('title', (c) => norm(c.value) === norm(value.title), (c) => ({ title: c.value }))}
+        {choice('title', value.title, (c) => ({ title: c.value }))}
       </div>
       <div className="field">
         <FieldLabel htmlFor={`${id}-abstract`} tip="convertMetaAbstract">
@@ -109,7 +134,7 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
         </FieldLabel>
         <textarea id={`${id}-abstract`} rows={4} value={value.abstract} spellCheck={false} onChange={(e) => set({ abstract: e.target.value })} />
         {note('abstract', value.abstract, (c) => c.value)}
-        {choice('abstract', (c) => norm(c.value) === norm(value.abstract), (c) => ({ abstract: c.value }))}
+        {choice('abstract', value.abstract, (c) => ({ abstract: c.value }))}
       </div>
       <div className="field">
         <FieldLabel htmlFor={`${id}-creators`} tip="convertMetaCreators">
@@ -117,8 +142,8 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
         </FieldLabel>
         <textarea id={`${id}-creators`} rows={3} value={value.creators} spellCheck={false} onChange={(e) => set({ creators: e.target.value })} />
         {note('creators', value.creators, (c) => c.value)}
-        {choice('creators', (c) => norm(c.value) === norm(value.creators), (c) => ({ creators: c.value }))}
-        {prefill?.organisationsInCreators === true && <p className="muted convert-meta-note">{t('convert.meta.src.orgs')}</p>}
+        {choice('creators', value.creators, (c) => ({ creators: c.value }))}
+        <Writes lines={creatorLines(value)} />
       </div>
       <div className="field">
         <FieldLabel htmlFor={`${id}-contactName`} tip="convertMetaContact">
@@ -126,17 +151,14 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
         </FieldLabel>
         <input {...text('contactName')} />
         {note('contact', value.contactName, (c) => c.value)}
+        <Writes lines={value.contactName.trim() === '' ? [] : [value.contactName]} />
       </div>
       <div className="field">
         <label htmlFor={`${id}-contactEmail`}>{t('convert.meta.f.contactEmail')}</label>
         <input {...text('contactEmail', 'email')} />
         {note('contact', value.contactEmail, (c) => c.email ?? '')}
       </div>
-      {(prefill?.fields.contact.length ?? 0) > 1 && (
-        <div className="field convert-wide">
-          {choice('contact', (c) => norm(c.value) === norm(value.contactName) && norm(c.email ?? '') === norm(value.contactEmail), contactPick)}
-        </div>
-      )}
+      {prefill && prefill.fields.contact.length > 0 && <div className="field convert-wide">{contactBlock()}</div>}
       <div className="field">
         <FieldLabel htmlFor={`${id}-institutionCode`} tip="convertMetaInstitution">
           {t('convert.meta.f.institution')}
@@ -167,7 +189,7 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
           {t('convert.meta.f.citation.help')}
         </p>
         {citationNote}
-        {choice('citation', (c) => norm(c.value) === norm(value.citation), (c) => ({ citation: c.value }))}
+        {choice('citation', value.citation, (c) => ({ citation: c.value }))}
       </div>
       <div className="field">
         <FieldLabel htmlFor={`${id}-licence`} tip="convertLicence">
@@ -239,6 +261,7 @@ function LicenceNote({ licence, current }: { licence: LicenceCase; current: stri
       return current === licence.id ? (
         <p className="notice convert-licence-note" role="note">
           {t('convert.licence.taken', { licence: licence.id, sources: sourcesText(licence.sources) })} <InfoTip id="convertLicenceTaken" />
+          <Also items={licence.also} />
         </p>
       ) : null;
     case 'other': {
@@ -246,6 +269,7 @@ function LicenceNote({ licence, current }: { licence: LicenceCase; current: stri
       return (
         <p className="notice convert-licence-note" role="note">
           {t('convert.licence.other', { said: licence.said, sources })} <InfoTip id="convertLicenceOther" />
+          <Also items={licence.also} />
         </p>
       );
     }
@@ -270,4 +294,68 @@ function LicenceNote({ licence, current }: { licence: LicenceCase; current: stri
         </p>
       );
   }
+}
+
+/** The non-licence statements beside a licence: a neutral note, never a conflict. */
+function Also({ items }: { items: LicenceSaid[] }): React.ReactElement | null {
+  useLang();
+  if (items.length === 0) return null;
+  return <span className="convert-also"> {t('convert.licence.also', { items: items.map((i) => t('convert.licence.said', { file: i.file, field: i.field, says: i.says })).join('; ') })}</span>;
+}
+
+/** How each creator or contact line will be written: a person (given name and family name) or an organisation. */
+function Writes({ lines }: { lines: string[] }): React.ReactElement | null {
+  useLang();
+  if (lines.length === 0) return null;
+  return (
+    <div className="muted convert-writes">
+      <p>{t('convert.meta.writes.title')}</p>
+      <ul>
+        {lines.map((line, i) => {
+          const p = partyOf(line);
+          const text = p.kind === 'organisation' ? t('convert.meta.writes.org', { line }) : p.givenName === undefined ? t('convert.meta.writes.personSur', { line, surname: p.surName }) : t('convert.meta.writes.person', { line, given: p.givenName, surname: p.surName });
+          return <li key={i}>{text}</li>;
+        })}
+      </ul>
+    </div>
+  );
+}
+
+const LIST_FIRST = 5;
+
+/** The contacts one file lists: not a disagreement, a list. The first five are shown, "show all" the rest; nothing is filled in until one is chosen. */
+function ContactList({ list, isCurrent, onUse }: { list: ConvertPrefill['contactLists'][number]; isCurrent: (c: Candidate) => boolean; onUse: (c: Candidate) => void }): React.ReactElement {
+  useLang();
+  const [all, setAll] = useState(false);
+  const shown = all ? list.items : list.items.slice(0, LIST_FIRST);
+  return (
+    <div className="convert-choice" role="group" aria-label={t('convert.meta.src.list.label')} data-mode="list">
+      <p>
+        {t('convert.meta.src.list', { file: list.file, n: list.items.length })} <InfoTip id="convertMetaList" />
+      </p>
+      <ul>
+        {shown.map((c, i) => {
+          const cand: Candidate = { value: c.name, email: c.email, sources: [{ file: list.file, field: list.field }] };
+          const text = [c.name, c.email].filter((x) => x !== '').join(', ');
+          return (
+            <li key={i}>
+              <span className="convert-choice-value">{text}</span>{' '}
+              {isCurrent(cand) ? (
+                <span className="muted">{t('convert.meta.src.used')}</span>
+              ) : (
+                <button type="button" className="link-button" aria-label={t('convert.meta.src.useLabel', { value: text, sources: `${list.file}, ${list.field}` })} onClick={() => onUse(cand)}>
+                  {t('convert.meta.src.use')}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {list.items.length > LIST_FIRST && (
+        <button type="button" className="link-button" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? t('convert.meta.src.showFewer') : t('convert.meta.src.showAll', { n: list.items.length })}
+        </button>
+      )}
+    </div>
+  );
 }

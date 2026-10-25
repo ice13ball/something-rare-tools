@@ -32,7 +32,7 @@ export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDou
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
 export { DEVICES, P01, P06, VERIFIED_CODES, nercUri } from './vocab';
 export type { DeviceKey } from './vocab';
-export { BASES_OF_RECORD, EMPTY_METADATA, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES, applyPrefill, refreshPrefill, NAME_PARTICLES, creatorLines, datasetNameOf, isBasis, isLicence, missingFields, splitPersonName } from './metadata';
+export { ORGANISATION_WORDS, isOrganisationName, partyOf, BASES_OF_RECORD, EMPTY_METADATA, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES, applyPrefill, refreshPrefill, NAME_PARTICLES, creatorLines, datasetNameOf, isBasis, isLicence, missingFields, splitPersonName } from './metadata';
 export type { BasisOfRecord, DatasetMetadata, LicenceId } from './metadata';
 export { toDataset } from './model';
 export type { ConvertedDataset, Effort, Identification, ModelEvent, ModelMeasurement, ModelOccurrence, Quantity } from './model';
@@ -43,7 +43,7 @@ export { ZipWriteError, buildZip, crc32, streamDeflate } from './zip';
 export type { Deflate } from './zip';
 export { ACCEPT_RULES, BLOCK_CONV_RULES, BLOCK_INPUT_RULES, BLOCK_OUTPUT_RULES, SHOW_ONLY_PREFIXES, exportAllowed, judge, policyOf } from './policy';
 export type { Judged, Policy } from './policy';
-export { metadataFindings, validateDataset, validateTables } from './validate';
+export { licenceDiffersFindings, metadataFindings, validateDataset, validateTables } from './validate';
 export { CONVERT_RULES, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../rules/convert';
-export { buildPrefill, licenceCaseOf, metadataKindName, prefillValues, PREFILL_KEYS } from './prefill';
+export { buildPrefill, cleanText, licenceCaseOf, recognisedLicenceIds, metadataKindName, prefillValues, PREFILL_KEYS } from './prefill';
 export type { Candidate, ConvertPrefill, CoverageSaid, LicenceCase, LicenceSaid, MetadataFileInfo, PrefillKey, SourceRef as PrefillSourceRef } from './prefill';

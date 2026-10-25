@@ -3,7 +3,7 @@
 import { escapeXml } from '../output/draft';
 import { slugOf } from './dwca';
 import type { DatasetMetadata, LicenceId } from './metadata';
-import { EML_VERSION, GBIF_PROFILE_VERSION, creatorLines, datasetNameOf, splitPersonName } from './metadata';
+import { EML_VERSION, GBIF_PROFILE_VERSION, creatorLines, datasetNameOf, partyOf } from './metadata';
 import type { ConvertedDataset } from './model';
 
 /*
@@ -138,10 +138,12 @@ const para = (text: string, pad: string): string =>
 const bound = (n: number): string => String(Math.round(n * 1e6) / 1e6);
 
 function personXml(tag: string, line: string, email: string | undefined, pad: string): string {
-  const n = splitPersonName(line);
+  const n = partyOf(line);
   return [
     `${pad}<${tag}>`,
-    `${pad}  <individualName>${n.givenName === undefined ? '' : `<givenName>${escapeXml(n.givenName)}</givenName>`}<surName>${escapeXml(n.surName)}</surName></individualName>`,
+    n.kind === 'organisation'
+      ? `${pad}  <organizationName>${escapeXml(n.name)}</organizationName>`
+      : `${pad}  <individualName>${n.givenName === undefined ? '' : `<givenName>${escapeXml(n.givenName)}</givenName>`}<surName>${escapeXml(n.surName)}</surName></individualName>`,
     ...(email === undefined ? [] : [`${pad}  <electronicMailAddress>${escapeXml(email)}</electronicMailAddress>`]),
     `${pad}</${tag}>`,
   ].join('\n');
@@ -154,7 +156,8 @@ function personXml(tag: string, line: string, email: string | undefined, pad: st
 function citationOf(m: DatasetMetadata, year: string): string {
   if (m.citation.trim() !== '') return m.citation.trim().replace(/\s+/g, ' ');
   const names = creatorLines(m).map((l) => {
-    const n = splitPersonName(l);
+    const n = partyOf(l);
+    if (n.kind === 'organisation') return n.name;
     return n.givenName === undefined ? n.surName : `${n.surName}, ${n.givenName}`;
   });
   return `${names.join('; ')} (${year}). ${m.title.trim()}. Dataset.`;

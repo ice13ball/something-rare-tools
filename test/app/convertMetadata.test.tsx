@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { grantConsent } from '../../src/app/analytics';
 import { initLang, setLang } from '../../src/app/i18n';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
+import { EMPTY_METADATA } from '../../src/core/convert/metadata';
 import { UI, translate } from '../../src/core/i18n/ui';
 import { openZip } from '../../src/core/parse/zip';
 import { LANGS } from '../../src/core/types';
@@ -167,16 +168,210 @@ describe('files that disagree: a choice, never a silent pick', () => {
     expect(input(T['convert.meta.f.title']).value).toBe('Edited after choosing');
   });
 
-  it('two contacts: one choice fills name and e-mail together', async () => {
-    const two = { name: 'two.datacite.xml', text: dataciteXml({ contacts: ['Example, Anna', 'Sample, Boris'] }) };
+  it('two contacts in ONE file are a neutral list ("lists 2 contacts"), not a disagreement; one choice fills name and e-mail together', async () => {
+    const two = { name: 'two.iso.xml', text: isoXml({ contacts: [{ name: 'Anna Example', email: 'anna@example.org' }, { name: 'Boris Sample', email: 'boris@example.org' }] }) };
     await load([DATA, two]);
     expect(input(T['convert.meta.f.contactName']).value).toBe('');
-    const group = screen.getAllByRole('group', { name: T['convert.meta.src.choose.label'] }).find((g) => g.textContent?.includes('Sample, Boris')) as HTMLElement;
-    fireEvent.click(within(group).getByRole('button', { name: 'Use "Example, Anna" from two.datacite.xml, contributors (ContactPerson)' }));
+    const group = screen.getByRole('group', { name: T['convert.meta.src.list.label'] });
+    expect(group.textContent).toContain('two.iso.xml lists 2 contacts. Choose one:');
+    expect(group.textContent).not.toContain('different values');
+    expect(group.querySelector('[data-tip="convertMetaList"]')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: T['convert.meta.src.choose.label'] })).toBeNull();
+    fireEvent.click(within(group).getByRole('button', { name: 'Use "Boris Sample, boris@example.org" from two.iso.xml, pointOfContact' }));
+    expect(input(T['convert.meta.f.contactName']).value).toBe('Boris Sample');
+    expect(input(T['convert.meta.f.contactEmail']).value).toBe('boris@example.org');
+  });
+
+  it('a DataCite file with two ContactPersons is the same list; a list of seven shows the first five and "Show all 7"', async () => {
+    await load([DATA, { name: 'two.datacite.xml', text: dataciteXml({ contacts: ['Example, Anna', 'Sample, Boris'] }) }]);
+    expect(screen.getByRole('group', { name: T['convert.meta.src.list.label'] }).textContent).toContain('two.datacite.xml lists 2 contacts');
+    cleanup();
+    const seven = Array.from({ length: 7 }, (_, i) => `Person${i + 1}, Test`);
+    await load([DATA, { name: 'seven.datacite.xml', text: dataciteXml({ contacts: seven }) }]);
+    const group = screen.getByRole('group', { name: T['convert.meta.src.list.label'] });
+    expect(within(group).getAllByRole('listitem')).toHaveLength(5);
+    expect(group.textContent).toContain('Person5, Test');
+    expect(group.textContent).not.toContain('Person6, Test');
+    fireEvent.click(within(group).getByRole('button', { name: 'Show all 7' }));
+    expect(within(group).getAllByRole('listitem')).toHaveLength(7);
+    fireEvent.click(within(group).getByRole('button', { name: T['convert.meta.src.showFewer'] }));
+    expect(within(group).getAllByRole('listitem')).toHaveLength(5);
+  });
+
+  it('exactly one contact in a file is prefilled and not asked about', async () => {
+    await load([DATA, { name: 'one.datacite.xml', text: dataciteXml({ contacts: ['Example, Anna'] }) }]);
     expect(input(T['convert.meta.f.contactName']).value).toBe('Example, Anna');
+    expect(screen.queryByRole('group', { name: T['convert.meta.src.list.label'] })).toBeNull();
   });
 });
 
+describe('a value of a file that differs from what the field holds stays visible, and is never applied by itself', () => {
+  it('typing over a prefilled title shows "Your file X says: ..." with "Use this"; using it restores the file value', async () => {
+    await load([DATA, BAY]);
+    typeInto(T['convert.meta.f.title'], 'My own title');
+    const f = field(T['convert.meta.f.title']);
+    const box = within(f).getByRole('group', { name: T['convert.meta.src.choose.label'] });
+    expect(box.getAttribute('data-mode')).toBe('differs');
+    expect(box.textContent).toContain('Your file bay.datacite.xml, titles says:');
+    expect(box.textContent).toContain(BASE.title.slice(0, 40));
+    expect(input(T['convert.meta.f.title']).value).toBe('My own title');
+    fireEvent.click(within(box).getByRole('button', { name: new RegExp(`^Use ".*" from bay.datacite.xml, titles$`) }));
+    expect(input(T['convert.meta.f.title']).value).toBe(BASE.title);
+    expect(within(field(T['convert.meta.f.title'])).queryByRole('group', { name: T['convert.meta.src.choose.label'] })).toBeNull();
+  });
+
+  it('every field: abstract, creators, citation and the contact show their file value when the field differs', async () => {
+    await load([DATA, BAY]);
+    typeInto(T['convert.meta.f.abstract'], 'My abstract');
+    typeInto(T['convert.meta.f.creators'], 'Me Myself');
+    typeInto(T['convert.meta.f.citation'], 'My citation.');
+    typeInto(T['convert.meta.f.contactName'], 'Someone Else');
+    for (const label of [T['convert.meta.f.abstract'], T['convert.meta.f.creators'], T['convert.meta.f.citation']]) {
+      expect(within(field(label)).getByRole('group', { name: T['convert.meta.src.choose.label'] }).getAttribute('data-mode'), label).toBe('differs');
+    }
+    const contact = screen.getAllByRole('group', { name: T['convert.meta.src.choose.label'] }).find((g) => g.textContent?.includes('contributors (ContactPerson)')) as HTMLElement;
+    expect(contact.textContent).toContain('Example, Anna');
+    fireEvent.click(within(contact).getByRole('button', { name: /^Use "Example, Anna" from/ }));
+    expect(input(T['convert.meta.f.contactName']).value).toBe('Example, Anna');
+  });
+
+  it('a value equal to the file value (ignoring capitals and spacing) shows no box', async () => {
+    await load([DATA, BAY]);
+    typeInto(T['convert.meta.f.title'], `  ${BASE.title.toUpperCase()} `);
+    expect(within(field(T['convert.meta.f.title'])).queryByRole('group', { name: T['convert.meta.src.choose.label'] })).toBeNull();
+  });
+
+  it('when the file a choice came from is removed, the remaining files\' values are offered and the current value is kept', async () => {
+    const ZEN: F = { name: 'bay.zenodo.json', text: zenodoJson({ title: 'Another invented title', licence: 'CC-BY-4.0', doi: '10.0000/synthetic.convert.2' }) };
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    await read(view, [DATA, BAY, ZEN]);
+    fireEvent.click(screen.getByRole('button', { name: 'Use "Another invented title" from bay.zenodo.json, metadata.title' }));
+    expect(input(T['convert.meta.f.title']).value).toBe('Another invented title');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove bay.zenodo.json' }));
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await waitFor(() => expect(within(field(T['convert.meta.f.title'])).queryByText(/different values/)).toBeNull());
+    await waitFor(() => expect(within(field(T['convert.meta.f.title'])).getByRole('group', { name: T['convert.meta.src.choose.label'] }).getAttribute('data-mode')).toBe('differs'));
+    expect(input(T['convert.meta.f.title']).value).toBe('Another invented title');
+    expect(field(T['convert.meta.f.title']).textContent).toContain('Your file bay.datacite.xml, titles says:');
+  });
+});
+
+describe('CONV-LICENCE-DIFFERS: a licence other than the one of the source needs an acknowledgement', () => {
+  const group = (): HTMLElement | null => document.querySelector('[data-rule-group="CONV-LICENCE-DIFFERS"]');
+
+  async function ready(files: F[], downloadFile = vi.fn()): Promise<void> {
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={downloadFile} />);
+    await read(view, files);
+    fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
+    pick(T['convert.quantity.kind'], 'count');
+    pick(T['convert.effort.title'], 'column');
+    fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
+    fireEvent.click(screen.getByLabelText(T['convert.fullList']));
+    await settled('7 occurrences (6 present, 1 absent)');
+    if (input(T['convert.meta.f.contactName']).value === '') typeInto(T['convert.meta.f.contactName'], 'Example, Anna');
+    typeInto(T['convert.meta.f.contactEmail'], 'anna@example.org');
+    typeInto(T['convert.meta.f.institution'], 'INVENTED');
+    pick(T['convert.meta.f.basis'], 'HumanObservation');
+    pick(T['convert.device.label'], 'bongo');
+    typeInto(T['convert.mesh.label'], '335');
+    await idle();
+  }
+
+  it('no warning while the licence is the one of the metadata; choosing another raises it, naming both; choosing it back clears it', async () => {
+    await ready([DATA, BAY]);
+    expect(group()).toBeNull();
+    pick(T['convert.meta.f.licence'], 'CC0-1.0');
+    await waitFor(() => expect(group()).toBeTruthy());
+    const text = (group() as HTMLElement).textContent as string;
+    expect(text).toContain('The licence chosen (CC0-1.0) differs from the one your metadata states (CC-BY-4.0). The rights holder decides which licence applies; accept this only if the rights holder has decided it.');
+    pick(T['convert.meta.f.licence'], 'CC-BY-4.0');
+    await waitFor(() => expect(group()).toBeNull());
+  });
+
+  it('for the "other" case too: the metadata say CC-BY-3.0 and the user chooses CC-BY-4.0 -> the warning, until it is accepted', async () => {
+    const downloadFile = vi.fn();
+    await ready([DATA, { name: 'old.datacite.xml', text: dataciteXml({ licence: 'CC-BY-3.0' }) }], downloadFile);
+    pick(T['convert.meta.f.licence'], 'CC-BY-4.0');
+    await waitFor(() => expect(group()).toBeTruthy());
+    expect((group() as HTMLElement).textContent).toContain('(CC-BY-4.0) differs from the one your metadata states (CC-BY-3.0)');
+    // tick every other kind, leave this one: the export stays off
+    await waitFor(() => expect(document.querySelector('.convert-accept')).toBeTruthy());
+    for (const box of document.querySelectorAll<HTMLInputElement>('.convert-accept [data-rule-group] input[type="checkbox"]')) {
+      if (box.closest('[data-rule-group]')?.getAttribute('data-rule-group') !== 'CONV-LICENCE-DIFFERS' && !box.checked) fireEvent.click(box);
+    }
+    const button = screen.getByRole('button', { name: T['convert.export.button'] });
+    await idle();
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(within(group() as HTMLElement).getByRole('checkbox'));
+    await waitFor(() => expect(button.getAttribute('aria-disabled')).toBe('false'));
+    fireEvent.click(button);
+    await waitFor(() => expect(downloadFile).toHaveBeenCalledTimes(1));
+  });
+
+  it('the worker refuses the export without the acknowledgement, from the request alone', async () => {
+    const h = createConvertHandler();
+    const parsed = (await Promise.resolve(h.handle({ type: 'parse', files: [DATA, BAY].map((f) => ({ name: f.name, bytes: new TextEncoder().encode(f.text), source: 'dropped' as const })) }))) as import('../../src/worker/convert.protocol').ConvertParseResult;
+    const f = parsed.files[0];
+    const body = {
+      sheets: [{ fileId: f.fileId, sheet: f.sheets[0].name, mapping: f.mappings[0], shape: 'wide' as const, quantity: { kind: 'count' as const, effort: { source: 'column' as const } } }],
+      options: { fullList: true },
+      approvedSplits: { 'Pseudocalanus sp.': { verbatimIdentification: 'Pseudocalanus sp.', scientificName: 'Pseudocalanus', identificationQualifier: 'sp.' } },
+    };
+    const meta = { ...EMPTY_METADATA, ...(parsed.prefill as object), contactEmail: 'anna@example.org', institutionCode: 'INVENTED', basisOfRecord: 'HumanObservation' as const, licence: 'CC0-1.0' as const };
+    const run = (accepted: string[], sourceLicences: string[]) => Promise.resolve(h.handle({ type: 'export', export: { body, metadata: meta, accepted, sourceLicences, generated: '2026-10-25T12:00:00Z' } }));
+    await expect(run(['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'], ['CC-BY-4.0'])).rejects.toThrow(/CONV-LICENCE-DIFFERS not accepted/);
+    await expect(run(['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING', 'CONV-LICENCE-DIFFERS'], ['CC-BY-4.0'])).resolves.toBeTruthy();
+    await expect(run(['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'], [])).resolves.toBeTruthy();
+  });
+});
+
+describe('creator lines: how each is written, shown in the form', () => {
+  it('lists a person with given name and family name, and an organisation as such', async () => {
+    await load([DATA, BAY]);
+    typeInto(T['convert.meta.f.creators'], 'Maria de la Cruz\nde Vries\nInstytut Oceanologii PAN');
+    const writes = field(T['convert.meta.f.creators']).querySelector('.convert-writes') as HTMLElement;
+    expect(writes.textContent).toContain(T['convert.meta.writes.title']);
+    expect(writes.textContent).toContain('Maria de la Cruz: person, given name Maria, family name de la Cruz');
+    expect(writes.textContent).toContain('de Vries: person, family name de Vries');
+    expect(writes.textContent).toContain('Instytut Oceanologii PAN: organisation');
+  });
+});
+
+describe('archive description files dropped on /convert', () => {
+  it('an eml.xml and a meta.xml are recognised by content, listed apart, and never a data sheet', async () => {
+    const eml = '<?xml version="1.0" encoding="UTF-8"?>\n<eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0" packageId="x/v1.0" system="http://gbif.org" scope="system"><dataset><title>T</title></dataset></eml:eml>\n';
+    const meta = '<archive xmlns="http://rs.tdwg.org/dwc/text/" metadata="eml.xml"><core encoding="UTF-8" rowType="http://rs.tdwg.org/dwc/terms/Event"><files><location>event.txt</location></files><id index="0"/></core></archive>\n';
+    await load([DATA, { name: 'eml.xml', text: eml }, { name: 'meta.xml', text: meta }]);
+    const section = screen.getByRole('heading', { name: T['convert.archdesc.title'] }).closest('section') as HTMLElement;
+    expect(section.textContent).toContain('eml.xml: archive description (EML), not read as data');
+    expect(section.textContent).toContain('meta.xml: archive description (meta.xml), not read as data');
+    expect(section.querySelector('[data-tip="convertArchiveDesc"]')).toBeTruthy();
+    const columns = (screen.getByRole('heading', { name: T['convert.columns.title'] }).closest('section') as HTMLElement).textContent as string;
+    expect(columns).not.toContain('eml.xml');
+    expect(columns).not.toContain('meta.xml');
+    expect(screen.queryByText(/could not be read as a metadata record/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: T['convert.metafiles.title'] })).toBeNull();
+  });
+
+  it('the worker keeps both out of the sheets and out of the prefill, whatever their names', () => {
+    const h = createConvertHandler();
+    const eml = '<eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0"><dataset><title>Hidden title</title></dataset></eml:eml>';
+    const r = h.handle({ type: 'parse', files: [DATA, { name: 'whatever.txt', text: eml }].map((f) => ({ name: f.name, bytes: new TextEncoder().encode(f.text), source: 'dropped' as const })) }) as import('../../src/worker/convert.protocol').ConvertParseResult;
+    expect(r.files.map((f) => f.fileName)).toEqual(['w1.csv']);
+    expect(r.archiveFiles).toEqual([{ fileName: 'whatever.txt', kind: 'eml' }]);
+    expect(r.prefill).toEqual({});
+    expect(r.problems).toEqual([]);
+  });
+});
+
+describe('the German label of the bulk approval', () => {
+  it('"1 gezeigten Namen bestätigen", and the forms for 1, 2 and 5', () => {
+    expect(translate('de', 'convert.splits.approveAll', { n: 1 })).toBe('1 gezeigten Namen bestätigen');
+    expect(translate('de', 'convert.splits.approveAll', { n: 2 })).toBe('2 gezeigten Namen bestätigen');
+    expect(translate('de', 'convert.splits.approveAll', { n: 5 })).toBe('5 gezeigten Namen bestätigen');
+    expect(translate('de', 'convert.splits.approveAllSkip', { n: 1, skipped: 2 })).toBe('1 gezeigten Namen bestätigen (2 mit Zweifel übersprungen)');
+  });
+});
 describe('the licence in each case: a plain note, an ⓘ, and no prefill unless taken', () => {
   const licenceField = (): HTMLElement => field(T['convert.meta.f.licence']);
   const value = (): string => (screen.getByLabelText(T['convert.meta.f.licence']) as HTMLSelectElement).value;

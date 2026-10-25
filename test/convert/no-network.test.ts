@@ -10,6 +10,9 @@ import { describe, expect, it } from 'vitest';
 const ROOT = resolve(__dirname, '..', '..');
 const ENTRIES = ['src/app/entries/convert.tsx', 'src/worker/convert.worker.ts'];
 
+/** A call or reference to fetch: `fetch(`, `fetch (`, and `globalThis.fetch`, `window.fetch`, `self.fetch`, `x["fetch"]`, `.fetch` with any whitespace. */
+const FETCH_CALL = /(?<![\w$])fetch\s*\(|\.\s*fetch(?![\w$])|\[\s*['"`]fetch['"`]\s*\]/;
+
 const SPECIFIER = /(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]|new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url/g;
 
 function resolveFile(from: string, spec: string): string | undefined {
@@ -58,9 +61,15 @@ describe('no link-fetching code is reachable from /convert', () => {
     for (const [f, src] of modules) {
       const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       if (/\/api\/fetch/.test(code)) hits.push(`${rel(f)}: /api/fetch`);
-      for (const word of ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource']) if (code.includes(word)) hits.push(`${rel(f)}: ${word}`);
+      for (const word of ['XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource']) if (code.includes(word)) hits.push(`${rel(f)}: ${word}`);
+      if (FETCH_CALL.test(code)) hits.push(`${rel(f)}: fetch`);
     }
     expect(hits).toEqual([]);
+  });
+
+  it('the fetch guard itself catches the spellings a quick grep misses', () => {
+    for (const sample of ['fetch(u)', 'fetch (u)', 'await fetch\n(u)', 'globalThis.fetch(u)', 'window . fetch', 'self.fetch', 'const f = globalThis["fetch"]', 'x.fetch.bind(y)', "window['fetch']"]) expect(FETCH_CALL.test(sample), sample).toBe(true);
+    for (const sample of ['prefetch()', 'const fetched = 1', 'refetchAll()', 'fetchpart']) expect(FETCH_CALL.test(sample), sample).toBe(false);
   });
 
   it('the page offers no link field (withLink={false}), and the prefill module takes records, not addresses', () => {

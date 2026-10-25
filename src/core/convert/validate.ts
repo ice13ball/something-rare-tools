@@ -52,6 +52,16 @@ export function metadataFindings(m: DatasetMetadata): Finding[] {
   return out;
 }
 
+/**
+ * CONV-LICENCE-DIFFERS: the licence chosen is not one of the licences the dropped metadata files state (`sourceIds`, core/convert/prefill.ts
+ * recognisedLicenceIds). An archive must not carry a licence different from its source without the user acknowledging it. Nothing when no file states a
+ * recognised licence, or when no licence is chosen (CONV-LICENCE-UNSET says that).
+ */
+export function licenceDiffersFindings(chosen: string, sourceIds: readonly string[]): Finding[] {
+  if (chosen === '' || sourceIds.length === 0 || sourceIds.includes(chosen)) return [];
+  return [makeConvertFinding('CONV-LICENCE-DIFFERS', { file: 'eml.xml', params: { chosen, source: sourceIds.join(', ') } })];
+}
+
 /** The Event table through the Event checks of /check. */
 function eventFindings(t: Table, opts: ValidateOptions): Finding[] {
   const file = fileOf(t, 'Event');
