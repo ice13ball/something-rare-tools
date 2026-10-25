@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { decodeReasons, reasonsText } from './recognize/layoutReasons';
+import { formatLines } from './lines';
 import { getRule } from './rules/registry';
 import type { Finding, Lang, Report, Severity } from './types';
+
+export { formatLines };
 
 /** UI message keys for what the tool does not check (shown with every report). */
 export const NOT_CHECKED: readonly string[] = [
@@ -14,28 +17,6 @@ export const NOT_CHECKED: readonly string[] = [
 ];
 
 const SEVERITY_ORDER: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
-
-/** Compact line ranges: [17,18,19,20,21,263,264] -> "17–21, 263–264". Sorted and de-duplicated. */
-export function formatLines(lines: readonly number[] | undefined): string {
-  if (!lines || lines.length === 0) return '';
-  const sorted = [...new Set(lines)].sort((a, b) => a - b);
-  const parts: string[] = [];
-  let start = sorted[0];
-  let prev = sorted[0];
-  const flush = (): void => {
-    parts.push(start === prev ? String(start) : `${start}–${prev}`);
-  };
-  for (const n of sorted.slice(1)) {
-    if (n === prev + 1) {
-      prev = n;
-      continue;
-    }
-    flush();
-    start = prev = n;
-  }
-  flush();
-  return parts.join(', ');
-}
 
 function dedupeKey(f: Finding): string {
   return JSON.stringify([f.ruleId, f.file ?? null, f.sheet ?? null, f.field ?? null, f.value ?? null, [...new Set(f.lines ?? [])].sort((a, b) => a - b)]);

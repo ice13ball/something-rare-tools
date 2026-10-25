@@ -164,9 +164,14 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.indexCollection.logic': `• It reads only metadata, never data files.
 • The result is counts per problem, examples and a fix list as a CSV file.
 • It does not compare or rank institutions; a quick sample is labelled as a sample.`,
+  'tip.indexConvert.does': `Turns a spreadsheet of marine samples into a Darwin Core Archive that you can hand to an OBIS node.`,
+  'tip.indexConvert.logic': `• Your files are read and converted in your browser; they are not uploaded. What you drop goes through the same checks as the data check.
+• It asks you to confirm what it cannot know: which columns are taxa, what the numbers mean, the units and the licence. Nothing is written that you did not confirm.
+• It builds an Event table (cruise, station, sample and profile levels), an Occurrence table, a measurements table (eMoF) and the EML description, and blocks the export while an error is left.
+• Two lookups are optional and off by default: taxon names in WoRMS and a word in the NERC vocabulary server. Each sends only what you choose, and only after you press its button.`,
 
-  'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet. The page is still a hidden test version.`,
-  'tip.convertIntro.logic': `• The page is hidden for now: it is not in the menu or on the index page, and search engines are asked to skip it.
+  'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet.`,
+  'tip.convertIntro.logic': `• The converter is new and may still change. Check the archive with an independent checker before you publish it.
 • Your files are read and previewed in your browser and stay there. The only things that can leave it are the list of taxon names of the WoRMS lookup below and the search words you type for the NVS search, each only when you press its own button.
 • The archive is built in your browser and downloaded from it; nothing is uploaded and nothing is stored.
 • Two optional lookups are here, both off by default: the taxon names you choose to look up go to WoRMS, and only after you press its button; and a word you type for a measured variable or a unit goes to NVS, the NERC vocabulary server, and only after you press its button. A companion file can tick either box, and ticking sends nothing.`,
@@ -616,9 +621,14 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.indexCollection.logic': `• Czyta wyłącznie metadane, nigdy pliki z danymi.
 • Wynik to liczba przypadków każdego problemu, przykłady i lista poprawek w pliku CSV.
 • Instytucje nie są ze sobą porównywane ani szeregowane; szybka próba jest oznaczona jako próba.`,
+  'tip.indexConvert.does': `Zamienia arkusz z próbkami morskimi w archiwum Darwin Core, które możesz przekazać węzłowi OBIS.`,
+  'tip.indexConvert.logic': `• Twoje pliki są odczytywane i przekształcane w Twojej przeglądarce; nie są wysyłane. To, co wgrasz, przechodzi przez te same kontrole co sprawdzanie danych.
+• Prosi o potwierdzenie tego, czego nie może wiedzieć: które kolumny to taksony, co znaczą liczby, jednostki i licencję. Nic nie jest zapisywane bez Twojego potwierdzenia.
+• Buduje tabelę Event (rejs, stacja, próbka i poziomy profilu), tabelę Occurrence, tabelę pomiarów (eMoF) i opis EML, a eksport blokuje, dopóki zostaje błąd.
+• Dwa wyszukiwania są opcjonalne i domyślnie wyłączone: nazwy taksonów w WoRMS oraz słowo w serwerze słownika NERC. Każde wysyła tylko to, co wybierzesz, i dopiero po naciśnięciu swojego przycisku.`,
 
-  'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza. Strona jest nadal ukrytą wersją testową.`,
-  'tip.convertIntro.logic': `• Strona jest na razie ukryta: nie ma jej w menu ani na stronie głównej, a wyszukiwarki są proszone, by ją pominąć.
+  'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza.`,
+  'tip.convertIntro.logic': `• Konwerter jest nowy i może się jeszcze zmieniać. Sprawdź archiwum niezależnym narzędziem, zanim je opublikujesz.
 • Twoje pliki są odczytywane i pokazywane w podglądzie w Twojej przeglądarce i tam zostają. Jedyne, co może ją opuścić, to lista nazw taksonów z wyszukiwania w WoRMS poniżej oraz słowa wpisane dla wyszukiwania w NVS, każde tylko po naciśnięciu własnego przycisku.
 • Archiwum jest budowane w Twojej przeglądarce i stąd pobierane; nic nie jest wysyłane na serwer i nic nie jest zapisywane.
 • Są dwa opcjonalne wyszukiwania, oba domyślnie wyłączone: nazwy taksonów, które zechcesz sprawdzić, trafiają do WoRMS, i to dopiero po naciśnięciu jego przycisku; a słowo wpisane dla zmierzonej wielkości lub jednostki trafia do NVS, serwera słownika NERC, i to dopiero po naciśnięciu jego przycisku. Plik towarzyszący może zaznaczyć każde z pól, a zaznaczenie niczego nie wysyła.`,
@@ -1066,9 +1076,14 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.indexCollection.logic': `• Es liest nur Metadaten, nie Datendateien.
 • Das Ergebnis sind Zahlen je Problem, Beispiele und eine Korrekturliste als CSV-Datei.
 • Es vergleicht und reiht keine Institutionen; eine schnelle Stichprobe ist als Stichprobe gekennzeichnet.`,
+  'tip.indexConvert.does': `Wandelt eine Tabelle mit Meeresproben in ein Darwin-Core-Archiv um, das Sie einem OBIS-Knoten übergeben können.`,
+  'tip.indexConvert.logic': `• Ihre Dateien werden in Ihrem Browser gelesen und umgewandelt; sie werden nicht hochgeladen. Was Sie ablegen, durchläuft dieselben Prüfungen wie die Datenprüfung.
+• Es bittet Sie zu bestätigen, was es nicht wissen kann: welche Spalten Taxa sind, was die Zahlen bedeuten, die Einheiten und die Lizenz. Nichts wird ohne Ihre Bestätigung geschrieben.
+• Es erstellt eine Event-Tabelle (Fahrt, Station, Probe und Profilebenen), eine Occurrence-Tabelle, eine Messtabelle (eMoF) und die EML-Beschreibung und sperrt den Export, solange ein Fehler bleibt.
+• Zwei Abfragen sind optional und standardmäßig aus: Taxonnamen in WoRMS und ein Wort im NERC-Vokabularserver. Jede sendet nur, was Sie wählen, und erst, nachdem Sie ihre Taste gedrückt haben.`,
 
-  'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Die Seite ist noch eine verborgene Testversion.`,
-  'tip.convertIntro.logic': `• Die Seite ist vorerst verborgen: Sie steht weder im Menü noch auf der Startseite, und Suchmaschinen werden gebeten, sie zu überspringen.
+  'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht.`,
+  'tip.convertIntro.logic': `• Der Konverter ist neu und kann sich noch ändern. Prüfen Sie das Archiv mit einem unabhängigen Prüfwerkzeug, bevor Sie es veröffentlichen.
 • Ihre Dateien werden in Ihrem Browser gelesen und als Vorschau gezeigt und bleiben dort. Das Einzige, was ihn verlassen kann, sind die Liste der Taxonnamen der WoRMS-Abfrage weiter unten und die Suchwörter, die Sie für die NVS-Suche eintippen, jeweils nur, wenn Sie die eigene Taste drücken.
 • Das Archiv wird in Ihrem Browser erstellt und von dort heruntergeladen; nichts wird hochgeladen und nichts gespeichert.
 • Es gibt zwei optionale Abfragen, beide standardmäßig aus: Die Taxonnamen, die Sie abfragen möchten, gehen an WoRMS, und zwar erst, nachdem Sie deren Taste gedrückt haben; und ein Wort, das Sie für eine Messgröße oder eine Einheit eintippen, geht an NVS, den Vokabularserver von NERC, und zwar erst, nachdem Sie dessen Taste gedrückt haben. Eine Begleitdatei kann jedes der Kästchen ankreuzen, und das Ankreuzen sendet nichts.`,
@@ -1516,9 +1531,14 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.indexCollection.logic': `• Il ne lit que des métadonnées, jamais des fichiers de données.
 • Le résultat : des comptes par problème, des exemples et une liste de corrections en fichier CSV.
 • Il ne compare ni ne classe les institutions ; un échantillon rapide est signalé comme échantillon.`,
+  'tip.indexConvert.does': `Transforme un tableur d'échantillons marins en archive Darwin Core que vous pouvez remettre à un nœud OBIS.`,
+  'tip.indexConvert.logic': `• Vos fichiers sont lus et convertis dans votre navigateur ; ils ne sont pas envoyés. Ce que vous déposez passe par les mêmes contrôles que la vérification des données.
+• L'outil vous demande de confirmer ce qu'il ne peut pas savoir : quelles colonnes sont des taxons, ce que signifient les nombres, les unités et la licence. Rien n'est écrit sans votre confirmation.
+• Il construit une table Event (campagne, station, échantillon et niveaux de profil), une table Occurrence, une table de mesures (eMoF) et la description EML, et bloque l'export tant qu'une erreur subsiste.
+• Deux recherches sont facultatives et désactivées par défaut : les noms de taxons dans WoRMS et un mot dans le serveur de vocabulaire NERC. Chacune n'envoie que ce que vous choisissez, et seulement après avoir appuyé sur son bouton.`,
 
-  'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. La page est encore une version de test masquée.`,
-  'tip.convertIntro.logic': `• La page est masquée pour l'instant : elle ne figure ni dans le menu ni sur la page d'accueil, et les moteurs de recherche sont priés de l'ignorer.
+  'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur.`,
+  'tip.convertIntro.logic': `• Le convertisseur est nouveau et peut encore changer. Vérifiez l'archive avec un outil de contrôle indépendant avant de la publier.
 • Vos fichiers sont lus et prévisualisés dans votre navigateur et y restent. Les seules choses qui puissent le quitter sont la liste des noms de taxons de la recherche WoRMS plus bas et les mots que vous saisissez pour la recherche NVS, chacune seulement lorsque vous appuyez sur son propre bouton.
 • L'archive est construite dans votre navigateur et téléchargée depuis lui ; rien n'est envoyé vers un serveur et rien n'est enregistré.
 • Deux recherches facultatives existent, toutes deux désactivées par défaut : les noms de taxons que vous choisissez de rechercher vont à WoRMS, et seulement après avoir appuyé sur son bouton ; et un mot que vous saisissez pour une grandeur mesurée ou une unité va à NVS, le serveur de vocabulaire NERC, et seulement après avoir appuyé sur son bouton. Un fichier compagnon peut cocher chacune des cases, et cocher n'envoie rien.`,

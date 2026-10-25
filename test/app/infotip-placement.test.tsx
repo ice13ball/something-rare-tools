@@ -167,7 +167,7 @@ describe('/collection', () => {
   });
 });
 
-describe('/convert (hidden)', () => {
+describe('/convert', () => {
   it('the intro and the drop zone carry their ⓘ, in every language, beside the text and not inside a heading', () => {
     for (const lang of LANGS) {
       cleanup();
@@ -352,8 +352,8 @@ describe('/convert: the profile / environment file (stage 6)', () => {
 describe('the index page', () => {
   it('one ⓘ per tool, beside its name, outside the link', () => {
     render(<IndexPage />);
-    expectTips(['indexCheck', 'indexLicence', 'indexCollection']);
-    expect(document.querySelectorAll('.tool .infotip').length).toBe(3);
+    expectTips(['indexCheck', 'indexLicence', 'indexCollection', 'indexConvert']);
+    expect(document.querySelectorAll('.tool .infotip').length).toBe(4);
     expect(document.querySelectorAll('.tool a .infotip').length).toBe(0);
     expect(screen.getByRole('heading', { name: 'Data check' })).toBeTruthy();
   });
@@ -363,7 +363,7 @@ describe('the index page', () => {
       cleanup();
       setLang(lang);
       render(<IndexPage />);
-      expectTips(['indexCheck', 'indexLicence', 'indexCollection'], lang);
+      expectTips(['indexCheck', 'indexLicence', 'indexCollection', 'indexConvert'], lang);
     }
   });
 });

@@ -6,8 +6,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { SITE } from './config/site';
 
 /**
- * The robots meta tag goes into the built pages only while the site is noindex; the HTML sources carry none, except a hidden page
- * (convert/index.html), which carries its own and keeps it whatever the flag says (server/headers.ts HIDDEN_PATHS).
+ * The robots meta tag goes into the built pages only while the site is noindex; the HTML sources carry none.
  */
 export function robotsMeta(noindex: boolean): Plugin {
   return {

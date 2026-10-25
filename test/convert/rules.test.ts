@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-// The CONV-* rules: registry conventions, and that they stay OUT of every public listing until the reveal.
+// The CONV-* rules: registry conventions, their place in the public registry (since the reveal of /convert), and that /check never raises one.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -81,17 +81,20 @@ describe('registry conventions', () => {
   });
 });
 
-describe('not in any public listing before the reveal', () => {
-  it('the public registry does not know them: RULES still has its 90 rules and getRule / makeFinding throw on a CONV id', () => {
-    expect(RULES.length).toBe(90);
-    expect(RULES.some((r) => r.id.startsWith('CONV-'))).toBe(false);
-    expect(() => getRule('CONV-ID-DUPLICATE')).toThrow(/Unknown rule id/);
-    expect(() => makeFinding('CONV-ID-DUPLICATE', {})).toThrow();
+describe('in the public registry since the reveal, and still out of /check', () => {
+  it('the public registry holds the 90 rules of the checks and every CONV-* rule, once each; getRule and makeFinding know them', () => {
+    expect(RULES.length).toBe(90 + CONVERT_RULES.length);
+    expect(RULES.filter((r) => r.id.startsWith('CONV-')).map((r) => r.id)).toEqual(CONVERT_RULES.map((r) => r.id));
+    expect(getRule('CONV-ID-DUPLICATE').severity).toBe(getConvertRule('CONV-ID-DUPLICATE').severity);
+    expect(makeFinding('CONV-ID-DUPLICATE', {}).severity).toBe('error');
     expect(isConvertRuleId('ROW-LAT-RANGE')).toBe(false);
+    expect(() => getConvertRule('ROW-LAT-RANGE')).toThrow();
   });
 
-  it('docs/rules.md (generated from RULES) lists no CONV-* rule', () => {
-    expect(read('docs', 'rules.md')).not.toContain('CONV-');
+  it('docs/rules.md (generated from RULES) lists every CONV-* rule, with its anchor', () => {
+    const doc = read('docs', 'rules.md');
+    for (const r of CONVERT_RULES) expect(doc, r.id).toContain(`| ${r.id} | ${r.severity} | ${r.category} |`);
+    expect(doc).toContain('<a id="CONV-ID-DUPLICATE"></a>');
   });
 
   it('no /check source names a CONV rule: rules registry, checks, column proposals, the app (tips, rule links, role lists), the worker and the report', () => {
