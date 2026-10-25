@@ -144,7 +144,8 @@ export function nercDecisionsOf(columns: readonly NercColumn[], picks: NercPicks
     if (c.fileId !== fileId || c.sheet !== sheet || !Object.prototype.hasOwnProperty.call(picks, c.key)) continue;
     const p = picks[c.key];
     const d: NercColumnDecision = {};
-    if (p.type && p.type.ctx === typeContext(c)) d.type = { id: p.type.id, source: p.type.source, deprecated: p.type.deprecated };
+    // the label of an NVS result goes along only so that the worker can say CONV-NERC-UNIT-MISMATCH; it is never written (a verified concept's label the worker knows)
+    if (p.type && p.type.ctx === typeContext(c)) d.type = { id: p.type.id, source: p.type.source, deprecated: p.type.deprecated, ...(p.type.source === 'nvs' ? { label: p.type.label } : {}) };
     if (p.unit && c.unit !== undefined && p.unit.ctx === unitContext(c)) d.unit = { id: p.unit.id, source: p.unit.source, deprecated: p.unit.deprecated };
     if (d.type || d.unit) out[String(c.index)] = d;
   }

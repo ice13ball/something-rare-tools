@@ -28,6 +28,7 @@ import type { RuleSpec } from './spec';
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
  *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
+ *   CONV-NERC-UNIT-MISMATCH    column, code, unit  the label of the confirmed concept (code) says per unit mass/volume against the unit of the column
  *   CONV-UNIT-NO-P06           unit             unit = the unit as declared
  *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
@@ -224,12 +225,26 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['what'],
     plain: {
-      pl: `Dla {what} nie ma potwierdzonego pojęcia NERC, więc measurementTypeID zostanie pusty. OBIS wymaga takiego pojęcia. Dla zmierzonej wielkości potwierdź albo wybierz pojęcie w tabeli pod kolumnami (możesz też użyć opcjonalnego wyszukiwania w NVS); w innych przypadkach trzeba je dobrać ręcznie przed publikacją.`,
-      en: `There is no confirmed NERC concept for {what}, so measurementTypeID stays empty. OBIS requires one. For a measured variable, confirm or choose one in the table below the columns (you can also use the optional NVS search); in other cases it has to be chosen by hand before publishing.`,
-      de: `Für {what} gibt es keinen bestätigten NERC-Begriff, daher bleibt measurementTypeID leer. OBIS verlangt einen. Bei einer Messgröße bestätigen oder wählen Sie einen in der Tabelle unter den Spalten (Sie können auch die optionale NVS-Suche nutzen); in anderen Fällen muss er vor der Veröffentlichung von Hand gewählt werden.`,
-      fr: `Il n'existe pas de concept NERC confirmé pour {what} : measurementTypeID reste vide. OBIS en exige un. Pour une grandeur mesurée, confirmez ou choisissez-en un dans le tableau sous les colonnes (vous pouvez aussi utiliser la recherche NVS facultative) ; dans les autres cas, il faut le choisir à la main avant la publication.`,
+      pl: `Dla {what} nie ma potwierdzonego pojęcia NERC, więc measurementTypeID zostanie pusty, a OBIS go wymaga. Potwierdź albo wybierz pojęcie w tabeli pod kolumnami; opcjonalne wyszukiwanie w NVS działa po angielsku, np. „temperature”, „salinity”, „chlorophyll”. W innych przypadkach dobierz je ręcznie przed publikacją.`,
+      en: `There is no confirmed NERC concept for {what}, so measurementTypeID stays empty, and OBIS requires one. Confirm or choose one in the table below the columns; the optional NVS search works with English words, e.g. "temperature", "salinity", "chlorophyll". In other cases choose it by hand before publishing.`,
+      de: `Für {what} gibt es keinen bestätigten NERC-Begriff, daher bleibt measurementTypeID leer, und OBIS verlangt einen. Bestätigen oder wählen Sie ihn in der Tabelle unter den Spalten; die optionale NVS-Suche arbeitet mit englischen Wörtern, z. B. „temperature“, „salinity“, „chlorophyll“. Sonst vor der Veröffentlichung manuell wählen.`,
+      fr: `Il n'existe pas de concept NERC confirmé pour {what} : measurementTypeID reste vide, et OBIS en exige un. Confirmez ou choisissez-en un dans le tableau sous les colonnes ; la recherche NVS facultative fonctionne avec des mots anglais, p. ex. « temperature », « salinity », « chlorophyll ». Sinon, choisissez-le avant publication.`,
     },
     technical: `{file}, {sheet}: no confirmed NERC P01 concept for {what}; measurementTypeID left empty (OBIS: controlled vocabulary terms are required for measurementTypeID). For a measured-variable column an identifier is written only when the user confirmed it for that column (a verified generic concept proposed by the converter, a verified method-specific one the user chose, or a result of the user's own NVS search); nothing is guessed.`,
+    citations: [NERC_MANUAL],
+  },
+  {
+    id: 'CONV-NERC-UNIT-MISMATCH',
+    category: 'B',
+    severity: 'warning',
+    params: ['column', 'code', 'unit'],
+    plain: {
+      pl: `Kolumna „{column}”: pojęcie {code} jest określone na jednostkę masy albo objętości inaczej, niż mówi jednostka „{unit}”. Sprawdź, czy pojęcie i jednostka do siebie pasują. Konwerter niczego nie przelicza ani nie zmienia.`,
+      en: `Column "{column}": the label of concept {code} says per unit mass or per unit volume the other way round from the unit "{unit}". Check that the concept and the unit belong together. The converter converts and changes nothing.`,
+      de: `Spalte „{column}“: Der Begriff {code} ist anders auf Masse oder Volumen bezogen als die Einheit „{unit}“. Prüfen Sie, ob Begriff und Einheit zusammenpassen. Der Konverter rechnet nichts um und ändert nichts.`,
+      fr: `Colonne « {column} » : le concept {code} est rapporté à la masse ou au volume autrement que l'unité « {unit} ». Vérifiez que le concept et l'unité vont ensemble. Le convertisseur ne convertit ni ne change rien.`,
+    },
+    technical: `{file}, {sheet} column {column}: the label of the confirmed P01 concept {code} states a dimension (per unit mass / dry weight / wet weight, or per unit volume) that contradicts the dimension of the unit "{unit}". The pair is the user's choice and is written as confirmed; nothing is converted.`,
     citations: [NERC_MANUAL],
   },
   {
