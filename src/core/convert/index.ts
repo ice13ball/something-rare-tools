@@ -10,28 +10,29 @@
  *   buildEventTree / summarizeTree                                        the cruise > station > sample tree and its preview counts (events.ts)
  *   resolveQuantity                                                       is the quantity declaration complete? what concepts does it give? (quantity.ts)
  *   readConvertSettings / writeConvertSidecar                             the companion file (settings.ts)
+ *   suggestConvertProfile                                                 stage 6: does a sheet look like a profile / environment file? (recognize.ts; the build reads a sheet marked as one: build.ts readProfileSheet)
  *   classifyMatches / entryOf / lookupOf / wormsBatches ...               stage 4: what a WoRMS answer means, the entries a conversion takes (worms.ts; the fetch is app/optins/worms.ts)
  *   renderConvertPlain / renderConvertTechnical                           the text of a CONV finding (rules/convert.ts)
  *   toDataset / buildTables / archiveFiles / buildEml / buildZip           stage 2: the export model, the files of the archive, eml.xml, the zip
  *   validateTables / metadataFindings / policyOf / judge                  stage 2: the checks of the output tables and what each finding does to the export
  */
 export { convert, listSplits } from './build';
-export type { ConvertInput, ConvertOptions, ConvertSheetInput, SamplingDevice } from './build';
+export type { ConvertInput, ConvertOptions, ConvertSheetInput, ProfileDeclaration, SamplingDevice } from './build';
 export { buildEventTree, eventDateText, greatCircleM, stationEventId, summarizeTree } from './events';
 export type { EventTree, SampleSite, TreeOptions } from './events';
 export { proposeSampleCodes } from './ids';
 export { readConvertFile } from './read';
 export type { SampleCodeProposal } from './ids';
-export type { ConvertResult, ConvertStats, EventRec, EventType, MofIntent, OccRec, OccurrenceStatus, SourceRef, TreeSummary } from './model';
+export type { ConvertResult, ConvertStats, EventRec, EventType, MofIntent, OccRec, OccurrenceStatus, ProfileSummary, SourceRef, TreeSummary } from './model';
 export { parseEffortUnit, parseRateUnit, resolveQuantity } from './quantity';
 export type { BiomassBasis, EffortDeclaration, EffortDimension, QuantityDeclaration, QuantityKind, QuantityResolution, ResolvedQuantity } from './quantity';
-export { proposeConvertColumns, proposeConvertMapping, suggestConvertShape } from './recognize';
+export { proposeConvertColumns, proposeConvertMapping, suggestConvertProfile, suggestConvertShape } from './recognize';
 export type { ConvertShape } from './recognize';
-export { FULL_LIST_SETTING, NVS_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, readConvertSettings, writeConvertSidecar } from './settings';
+export { FULL_LIST_SETTING, NVS_SETTING, PROFILE_DEPTH_IDS_SETTING, PROFILE_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, readConvertSettings, writeConvertSidecar } from './settings';
 export type { ConvertSettings } from './settings';
 export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
-export { DEVICES, P01, P06, VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, VERIFIED_CODES, conceptVariable, foldUnit, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
+export { DEVICES, P01, P06, PRESSURE, PRESSURE_VERIFIED_CODES, VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, VERIFIED_CODES, conceptVariable, foldUnit, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 export type { DeviceKey, NercTerm, PerDimension, VariableConcept, VariableUnit } from './vocab';
 export { P01_URI, P06_URI, conceptUri, pickLabel, readDecision, readPick, suggestType, suggestUnit, suggestedPick, unitContradictsConcept } from './nerc';
 export type { NercColumnDecision, NercDecisions, NercPick, NercSource, TypeSuggestion } from './nerc';

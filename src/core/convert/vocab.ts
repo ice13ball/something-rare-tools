@@ -56,6 +56,23 @@ export const P06 = {
 } as const;
 
 /**
+ * The pressure of a profile file (stage 6). Both concepts were opened on 2026-10-25 as
+ * the JSON-LD profile of the concept page, as for every code of this file (docs/research/qc-sources.md, "Converter (/convert) - stage 6 verification"): HTTP 200, no redirect,
+ * owl:deprecated "false". PRESPR01 is a P01 concept for a pressure read by a profiling pressure sensor and corrected to zero at
+ * sea level; UPDB is the P06 unit "Decibars". A pressure column is written with PRESPR01 and, only when its unit is decibars, UPDB. A pressure is never turned into a depth.
+ */
+export const PRESSURE = {
+  type: p01('PRESPR01', 'Pressure (spatial coordinate) exerted by the water body by profiling pressure sensor and correction to read zero at sea level'),
+  unit: p06('UPDB', 'Decibars'),
+} as const;
+
+/** The pressure concepts as `<collection>/<code>`: the list the test pins to the stage 6 section of docs/research/qc-sources.md. */
+export const PRESSURE_VERIFIED_CODES: readonly string[] = [PRESSURE.type, PRESSURE.unit].map((t) => `${t.uri.split('/')[4]}/${t.code}`).sort();
+
+/** True when the unit text of a pressure column says decibars (dbar, db, decibar, decibars; any case, spaces ignored): only then the unit gets its identifier. */
+export const isDecibar = (unit: string | undefined): boolean => unit !== undefined && /^(dbar|db|decibars?)$/.test(unit.toLowerCase().replace(/[\s.]/g, ''));
+
+/**
  * Sampling devices for measurementValueID of NMSPINST (docs/research/qc-sources.md, Item 1b and 1c, opened 2026-10-25, owl:deprecated false): the six
  * named devices of the spike (L22) and the four device categories (L05). The value written is the label. Any other device is typed by the user and written
  * without a valueID.

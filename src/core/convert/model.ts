@@ -11,7 +11,12 @@ import type { NercTerm } from './vocab';
  * extendedmeasurementorfact.txt. Numbers that are written from source text keep that text (`*Text`); parsed values sit next to them.
  */
 
-export type EventType = 'cruise' | 'station' | 'sample';
+/**
+ * The eventType texts. The OBIS Manual has no controlled list ("At this time, there is no Darwin Core event type term", Common data formatting issues, "How to
+ * handle mixed date information") and its example values are cruise, station and sample. A row of a profile file (a CTD scan, a bottle, one depth of a cast) is written
+ * as "profile level": the nature of the event, in the same plain style, not a sample of a biology sheet.
+ */
+export type EventType = 'cruise' | 'station' | 'sample' | 'profile level';
 
 /** Where a record came from, for findings in input terms. */
 export interface SourceRef {
@@ -26,7 +31,7 @@ export interface EventRec {
   /** The eventID. Cruise: the cruise code. Station: `cruise:station` (or the station code without a cruise). Sample: the user's sample code, prefixed with the station eventID when the toggle is on. */
   id: string;
   parentId?: string;
-  /** Written as the text "cruise" / "station" / "sample". */
+  /** Written as the text "cruise" / "station" / "sample" / "profile level". */
   eventType: EventType;
   /** The user's own code at this level (no prefix). */
   code: string;
@@ -91,7 +96,7 @@ export interface OccRec {
 export interface MofIntent {
   target: { kind: 'event' | 'occurrence'; id: string };
   /** What it is: the quantity of an occurrence (count, density, biomass) or the effort of a sample. */
-  role: 'count' | 'density' | 'biomass' | 'effort' | 'device' | 'mesh' | 'variable';
+  role: 'count' | 'density' | 'biomass' | 'effort' | 'device' | 'mesh' | 'variable' | 'pressure';
   /** measurementType: the preferred label of the concept; empty when no verified concept exists. */
   measurementType: string;
   measurementTypeId?: string;
@@ -110,6 +115,8 @@ export interface TreeSummary {
   cruises: number;
   stations: number;
   samples: number;
+  /** Profile levels (stage 6): one event per row of a profile file, under its station. */
+  levels: number;
   /** Events with no parent. */
   roots: number;
   flattened: { station: boolean; cruise: boolean };
@@ -124,6 +131,8 @@ export interface TreeSummary {
 
 export interface ConvertStats {
   samples: number;
+  /** Profile levels written (stage 6). */
+  levels: number;
   occurrences: number;
   present: number;
   absent: number;
@@ -136,6 +145,22 @@ export interface ConvertStats {
    */
   nerc: { columns: number; typeIds: number; unitIds: number; nvsIds: number };
 }
+
+/** What the profile files (stage 6) did, as counts and station names: the page shows this, never the levels themselves. */
+export interface ProfileSummary {
+  /** Profile sheets read. */
+  sheets: number;
+  /** Level events written. */
+  levels: number;
+  /** Distinct stations of the profile sheets that match a station of the biology sheets (exact text, cruise when given). */
+  stationsMatched: number;
+  /** Distinct stations that match none: each became its own station event (CONV-PROFILE-STATION-UNMATCHED). */
+  stationsUnmatched: number;
+  /** The unmatched stations as their eventIDs, in first-seen order, at most `UNMATCHED_SHOWN` (the finding keeps the whole list). */
+  unmatched: string[];
+}
+
+export const UNMATCHED_SHOWN = 12;
 
 export interface ConvertResult {
   /** No blocking finding: the core could hand these records to the writer. A blocked result still carries what could be built, for the preview. */
@@ -158,6 +183,8 @@ export interface ConvertResult {
   /** Cruise codes whose level was flattened away: they belong in the dataset text (title / abstract). */
   cruiseText: string[];
   stats: ConvertStats;
+  /** The profile files (stage 6). */
+  profile: ProfileSummary;
 }
 
 export type { SplitEntry, TaxonSplit, NercTerm };

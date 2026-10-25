@@ -771,3 +771,43 @@ P06 (measurementUnitID), all opened the same way, owl:deprecated "false": UPOX M
 - Deprecated concepts exist in the vocabulary (the OBIS Manual: "You should not use any deprecated concepts for any measurement ID"). The page shows a concept that is not stated current as deprecated and cannot be chosen; the worker refuses a pick with `deprecated` other than literally false.
 - Operator: the NERC Vocabulary Server is run by the British Oceanographic Data Centre (BODC) at the National Oceanography Centre (NOC). UNVERIFIED: rate limits (none found documented).
 - The CSP of /convert alone gained `https://vocab.nerc.ac.uk` in `connect-src` (server/headers.ts PAGE_CONNECT_HOSTS); no other path, DATA_HOSTS or the fetch proxy knows it.
+
+
+## Converter (/convert) — stage 6 verification, 25.10.2026: separate environmental and CTD profile files
+
+What stage 6 added (a sheet marked "profile / environment of this cruise") and what was checked for it. No threshold was added; the two NERC concepts below are the only new identifiers.
+
+### Part 1. PRESPR01 and UPDB (opened 2026-10-25)
+
+Each opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/?_profile=nvs&_mediatype=application/ld+json` (curl, no redirect followed): HTTP 200, `Content-Type: application/ld+json`, no redirect, `owl:deprecated` = "false", `skos:note` = "accepted".
+
+| collection | code | URI written | prefLabel (NVS) | altLabel | notes |
+|---|---|---|---|---|---|
+| P01 (measurementTypeID) | PRESPR01 | `http://vocab.nerc.ac.uk/collection/P01/current/PRESPR01/` | Pressure (spatial coordinate) exerted by the water body by profiling pressure sensor and correction to read zero at sea level | Pres_Z | definition: "The force per unit area exerted by the water column on a mobile sensor located in the water column." Version 2, current. sameAs R03/PRES and OG1/PRES. |
+| P06 (measurementUnitID) | UPDB | `http://vocab.nerc.ac.uk/collection/P06/current/UPDB/` | Decibars | dbar | sameAs qudt.org DeciBAR. Version 2, current. Its definition field on NVS reads "Unavailable". |
+
+- PRESPR01 names a profiling pressure sensor corrected to zero at sea level: it is the right concept for the pressure column of a CTD file and a less exact one for a pressure that came another way. The converter writes it for every pressure column of a profile sheet and offers no other pressure concept; a pressure that is not in decibars gets no unit identifier (a warning, CONV-UNIT-NO-P06) and a pressure without a unit is written without one. UPDB is written only for a unit that reads as decibars (dbar, db, decibar, decibars).
+- The URI form is the one of every code of `src/core/convert/vocab.ts` (http, trailing slash: the form BioCheck's reference tables join on). Both were also listed (UPDB: opened 2026-10-16, Item 7) before; PRESPR01 had not been opened before this stage.
+- No depth is derived from a pressure: the UNESCO formula is not applied in this version (the depth of a pressure-only level stays empty).
+
+### Part 2. eventType of a profile level, and the hierarchy
+
+- OBIS Manual, "Event core" (https://manual.obis.org/format_event.html, read 2026-10-25): `eventType` is one of the terms to "consider adding", with parentEventID and eventRemarks; "Add and fill the parentEventID, eventType, and eventRemarks fields as applicable. Identify the hierarchical event structure in your data, if present, and create new records for parent events".
+- OBIS Manual, "Common data formatting issues", "How to handle mixed date information" (https://manual.obis.org/common_formatissues.html, read 2026-10-25): "We have added a column here for “Event Type” for the sake of example. At this time, there is no Darwin Core event type term, however there is discussion for its creation." Its example values are cruise, station and sample (three levels: the cruise, "the station sites", "the samples themselves").
+- So `eventType` is free text. The stage 1 values stay (cruise, station, sample); a row of a profile file is written as **`profile level`**: the nature of the event in the same plain style, one depth of a profile (a CTD scan or a bottle), which is not a sample of a biology sheet. BioCheck does not validate eventType (it only reads it for its summary table, stage 0, Item 2b).
+- Hierarchy chosen: cruise > station > profile level, with **no cast level** between a station and its levels. The manual's example has three levels and says a hierarchy helps to give each event its own date and duration; a level has its own date and position when the sheet gives them, and the station's extent covers its levels. A cast event would need a cast column, which the sheet mapping has no role for, and would multiply the events (one more per cast); repeated casts at one station are told apart by the level's own code (a code column), and the tool blocks a repeated ID instead of merging the casts (CONV-ID-DUPLICATE, kind level).
+- The extent of a station includes its levels (they are its children): derived date = the earliest start to the latest end of samples and levels; position = the midpoint of the bounding box of both, with an uncertainty that covers all; depth = the shallowest minimum to the deepest maximum (`src/core/convert/events.ts`).
+
+### Part 3. Inheritance and what BioCheck needs on a leaf
+
+- BioCheck checks the required terms (eventDate, decimalLatitude, decimalLongitude) on the leaf events after inheritance (stage 0, Item 2b: obistools `flatten_event` gives a child every Event-core field of its parent that it leaves empty; `check_fields`; checkdataset.R:816-817). The OBIS Manual agrees ("child events will inherit information from the parent event when the field is left empty") and warns that GBIF does not inherit.
+- A level with no position or date of its own therefore inherits from its station. The converter takes that from the PARENT only (the station; the cruise when the station level is flattened): a station that has neither (an unmatched station whose profile sheet has no date or position column) does not lend its levels the whole cruise's range, and the level is blocked in the sheet's terms (CONV-PROFILE-LEVEL-INCOMPLETE). Reason: the row checks of the output tables (ROW-NO-COORD) do not raise for an event without a position that follows a positioned row in a table with no station or date column (the "accepted miss" of the position checks above), so the leaf check is made in the core where the sheet and the line are known.
+
+### Part 4. Station matching and level IDs (plan 2.5, Q1b, 3.4)
+
+- A profile row's station is matched EXACTLY: the trimmed station text and the cruise when there is one (the same `cruise:station` eventID the biology sheets build). Upper and lower case, spelling and leading zeros count; nothing is matched approximately. A profile station that matches no biology station gets its own station event and the warning CONV-PROFILE-STATION-UNMATCHED, which names the eventIDs (to accept before the export, plan 3.4).
+- Level ID: `<station eventID>:<code>` with a code column (the column marked as the sample code); `<station eventID>:<depth as written>` only with the user's explicit approval for that sheet (the pressure as written when the sheet has no depth column); otherwise CONV-SAMPLE-CODE-MISSING (blocking, in the profile text). Never derived from the order of the rows. A repeated ID blocks (CONV-ID-DUPLICATE, kind level, in the profile text).
+
+### Part 5. Size
+
+A profile sheet of 50 stations of 1000 levels (50 000 rows, with depth, pressure and two variables: 150 000 eMoF rows, 50 101 events) was converted, checked (Event table through the same checks as /check, Occurrence, eMoF and cross-table checks) and written (tables, meta.xml, deflated zip of about 1.2 MB) on the development machine in about 0.3 s, 0.6 s and 0.3 s (test/convert/stage6.test.ts; the test bounds each step well above that, to catch a quadratic loop, which would take minutes). The page receives counts and a few examples only (the worker keeps the records).
