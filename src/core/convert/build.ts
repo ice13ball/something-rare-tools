@@ -406,25 +406,61 @@ interface ProfileContext {
   nercStats: { columns: number; typeIds: number; unitIds: number; nvsIds: number };
   /** The stations of the biology sheets, as eventIDs. */
   bioStations: ReadonlySet<string>;
-  /** Level eventID -> where its row is. */
-  levels: Map<string, { file: string; sheet: string; line: number }>;
-  levelDups: Map<string, Places>;
+  /** Level key -> where its row is and what its ID was made of. The key is the ID with a depth or pressure number in its canonical form (10 and 10.0 are one key), so repeated casts are caught whichever way the number was typed. */
+  levels: Map<string, LevelInfo>;
+  /** The same by the written ID (for a collision with a station or cruise ID, which are compared as written). */
+  levelById: Map<string, LevelInfo>;
+  /** Repeated level keys: the ID and every row that makes it, with what each row's ID was made of. */
+  levelDups: Map<string, { id: string; rows: LevelRow[] }>;
+  /** The station level is flattened away: a level then has no station to inherit a date or position from. */
+  flattenStation: boolean;
   sites: SampleSite[];
   /** Station eventIDs of profile rows that match a biology station / that match none (each distinct, first-seen order). */
   matched: Set<string>;
   unmatched: Set<string>;
 }
 
+/** What a level's ID was made of (the user's code column, the depth, the pressure), and for a collision also a sample or a station that has the ID. */
+type LevelVia = 'code' | 'depth' | 'pressure';
+type LevelSource = LevelVia | 'sample' | 'station';
+interface LevelInfo {
+  id: string;
+  via: LevelVia;
+  file: string;
+  sheet: string;
+  line: number;
+}
+interface LevelRow {
+  file: string;
+  sheet: string;
+  line: number;
+  via: LevelSource;
+}
+
+/** A number cell read for a level ID: the text written into the ID and the number it stands for (the key of the duplicate check). */
+interface Vertical {
+  via: 'depth' | 'pressure';
+  text: string;
+  value: number;
+}
+
 /**
- * The vertical coordinate of a profile row exactly as written, for the one ID that is made of it (the user's explicit approval, CONV-SAMPLE-CODE-MISSING otherwise): the cell
- * text of the depth column, else of the pressure column. Only a cell that reads as a number counts: "NA", a word and an empty cell are no coordinate. A number cell of a
- * workbook is written the way it is stored (10, 10.5); a text cell as typed, trimmed (10,5 stays 10,5). Never rounded, never turned into a depth.
+ * The vertical coordinate of a profile row for the ID that is made of it (only with the user's explicit approval; CONV-SAMPLE-CODE-MISSING otherwise), chosen PER ROW: the depth
+ * when its cell reads as a number, else the pressure when its cell reads as a number AND the pressure column is in decibars (the ID says "dbar", so no other unit can stand
+ * there). "NA", a word and an empty cell are no coordinate; a row with neither is not given an ID. The text is the number as the exported numbers are written (a decimal comma
+ * becomes a point, a number cell of a workbook is its shortest exact text, 10.5 stays 10.5 and 10.0 stays 10.0); the key of the duplicate check is the number itself, so 10
+ * and 10.0 are one depth. Never rounded, never turned into a depth from a pressure.
  */
-function verticalText(row: RawRow, spec: Spec | undefined, decimalComma: boolean): string | undefined {
-  if (!spec) return undefined;
-  const raw = row.cells[spec.index] ?? null;
-  if (isBlankCell(raw) || parseNumber(raw, decimalComma).status !== 'ok') return undefined;
-  return typeof raw === 'number' ? String(raw) : String(raw).trim();
+function verticalOf(row: RawRow, cols: Cols, decimalComma: boolean): Vertical | undefined {
+  const read = (spec: Spec | undefined, via: Vertical['via']): Vertical | undefined => {
+    if (!spec) return undefined;
+    const raw = row.cells[spec.index] ?? null;
+    if (isBlankCell(raw)) return undefined;
+    const p = parseNumber(raw, decimalComma);
+    if (p.status !== 'ok') return undefined;
+    return { via, value: p.value, text: sourceNumberText(raw, decimalComma, p.value) ?? String(p.value) };
+  };
+  return read(cols.depthPlain ?? cols.depthMin ?? cols.depthMax, 'depth') ?? (isDecibar(cols.pressure?.unit) ? read(cols.pressure, 'pressure') : undefined);
 }
 
 /**
@@ -469,7 +505,6 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
   const codeColumn = specs.sampleId !== undefined;
   const depthIds = !codeColumn && sin.profile?.depthIds === true;
-  const verticalSpec = cols.depthPlain ?? cols.depthMin ?? cols.depthMax ?? cols.pressure;
   // a row with none of these filled is an empty line, not a level
   const dataColumns = [specs.station, specs.sampleId, cols.depthPlain, cols.depthMin, cols.depthMax, cols.pressure, ...cols.variables].flatMap((c) => (c === undefined ? [] : [c.index]));
   const sheetUnmatched = new Set<string>();
@@ -508,8 +543,10 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     const cruise = cruiseText === '' ? undefined : cruiseText;
     if (specs.station) checkText(specs.station.header, row.line, stationText);
     if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
-    // the level's own code: the code column, or (only with the user's approval, and only without a code column) the depth as written
-    const code = codeColumn ? m.sampleId : depthIds ? verticalText(row, verticalSpec, dc) : undefined;
+    // the level's own code: the code column, or (only with the user's approval, and only without a code column) the depth as written, else the pressure as written with "dbar"
+    const vertical = codeColumn || !depthIds ? undefined : verticalOf(row, cols, dc);
+    const code = codeColumn ? m.sampleId : vertical === undefined ? undefined : vertical.via === 'pressure' ? `${vertical.text}dbar` : vertical.text;
+    const via: LevelVia = codeColumn ? 'code' : (vertical?.via ?? 'depth');
     if (code === undefined) {
       noCode.add(fileName, sheet.name, specs.sampleId?.header ?? '', row.line);
       continue;
@@ -517,22 +554,26 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
     const stationId = stationEventId(cruise, stationText);
     const id = stationPrefixedId(stationId, code);
+    // the key of the duplicate check: a depth or pressure by its number (10 and 10.0 are the same), a code as written; a code "10" and a depth 10 are the same key, as they are the same ID
+    const key = vertical === undefined ? id : stationPrefixedId(stationId, `${vertical.value}${vertical.via === 'pressure' ? 'dbar' : ''}`);
     const source: SourceRef = { file: fileName, sheet: sheet.name, line: row.line };
 
-    // the same ID twice (two rows of one station with the same code or depth: repeated casts), or an ID a sample already has
-    const earlierLevel = ctx.levels.get(id);
-    const earlierSample = ctx.samples.get(id);
+    // the same ID twice (two rows of one station with the same code, depth or pressure: repeated casts), or an ID a sample already has
+    const earlierLevel = ctx.levels.get(key);
+    const earlierSample = ctx.samples.get(key) ?? ctx.samples.get(id);
     if (earlierLevel || earlierSample) {
-      let d = ctx.levelDups.get(id);
+      let d = ctx.levelDups.get(key);
       if (!d) {
-        ctx.levelDups.set(id, (d = new Map()));
-        if (earlierLevel) addPlace(d, earlierLevel.file, earlierLevel.sheet, earlierLevel.line);
-        if (earlierSample) for (const l of earlierSample.lines) addPlace(d, earlierSample.source.file, earlierSample.source.sheet, l);
+        ctx.levelDups.set(key, (d = { id: earlierLevel?.id ?? id, rows: [] }));
+        if (earlierLevel) d.rows.push({ file: earlierLevel.file, sheet: earlierLevel.sheet, line: earlierLevel.line, via: earlierLevel.via });
+        if (earlierSample) for (const l of earlierSample.lines) d.rows.push({ file: earlierSample.source.file, sheet: earlierSample.source.sheet, line: l, via: 'sample' });
       }
-      addPlace(d, fileName, sheet.name, row.line);
+      d.rows.push({ file: fileName, sheet: sheet.name, line: row.line, via });
       continue;
     }
-    ctx.levels.set(id, { file: fileName, sheet: sheet.name, line: row.line });
+    const info: LevelInfo = { id, via, file: fileName, sheet: sheet.name, line: row.line };
+    ctx.levels.set(key, info);
+    ctx.levelById.set(id, info);
 
     // the station match: EXACT, on the trimmed station text and the cruise when there is one
     if (ctx.bioStations.has(stationId)) ctx.matched.add(stationId);
@@ -597,6 +638,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     }
   }
 
+  // a pressure that was written with no unit: said, by column (a unit that is stated but is not decibars is said by CONV-UNIT-NO-P06 below)
+  if (pressureWritten && pressure && pressure.unit === undefined) ctx.findings.push(makeConvertFinding('CONV-PROFILE-PRESSURE-NO-UNIT', { ...base, field: pressure.header, params: { column: pressure.header.trim() } }));
   // the pressure's unit has an identifier only when it is decibars: any other unit is written as given, and said
   ctx.findings.push(...reportVariables(varState, base, pressureWritten && pressure?.unit !== undefined && !isDecibar(pressure.unit) ? [pressure.unit] : [], ctx.nercStats));
   for (const e of noStation.entries()) ctx.findings.push(makeConvertFinding('CONV-PROFILE-NO-STATION', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));
@@ -1096,7 +1139,9 @@ export function convert(input: ConvertInput): ConvertResult {
     nercStats,
     bioStations: new Set([...samples.values()].flatMap((a) => (a.site.stationCode === undefined ? [] : [stationEventId(a.site.cruiseCode, a.site.stationCode)]))),
     levels: new Map(),
+    levelById: new Map(),
     levelDups: new Map(),
+    flattenStation: opts.flatten?.station === true,
     sites: [],
     matched: new Set(),
     unmatched: new Set(),
@@ -1115,8 +1160,10 @@ export function convert(input: ConvertInput): ConvertResult {
   // whole cruise's date range and position for one cast, so such a level is said, not accepted because the cruise above happens to have both.
   if (profile.sites.length > 0) {
     const byId = new Map(events.map((e) => [e.id, e]));
+    // With the station level flattened away there is no station to inherit from: the parent is the cruise, whose date range and midpoint are those of the whole cruise, so a level
+    // with no date or position of its own is said then too (it never takes them from the cruise).
     const has = (e: EventRec, own: (x: EventRec) => boolean): boolean => {
-      const parent = e.parentId === undefined ? undefined : byId.get(e.parentId);
+      const parent = profile.flattenStation || e.parentId === undefined ? undefined : byId.get(e.parentId);
       return own(e) || (parent !== undefined && own(parent));
     };
     const gaps = new Map<string, { file: string; sheet: string; lines: number[]; position: boolean; date: boolean }>();
@@ -1142,22 +1189,43 @@ export function convert(input: ConvertInput): ConvertResult {
   for (const [id, n] of kindOf) {
     if (n < 2 || dups.has(id) || profile.levelDups.has(id)) continue;
     const a = samples.get(id);
-    const lv = profile.levels.get(id);
+    const lv = profile.levelById.get(id);
+    if (lv && !a) {
+      // a level whose ID is the ID of a station or cruise: said at the level's row, in the profile's terms
+      profile.levelDups.set(id, { id, rows: [{ file: lv.file, sheet: lv.sheet, line: lv.line, via: lv.via }, { file: lv.file, sheet: lv.sheet, line: lv.line, via: 'station' }] });
+      continue;
+    }
     const d: Places = new Map();
     if (a) for (const l of a.lines) addPlace(d, a.source.file, a.source.sheet, l);
-    if (lv) addPlace(d, lv.file, lv.sheet, lv.line);
     dups.set(id, d);
   }
-  // a level ID that repeats (two rows of one station with the same code or depth) or equals a sample's: said at every row, in the profile's terms
-  for (const [id, places] of profile.levelDups) {
-    for (const w of places.values()) {
+  // a level ID that repeats (two rows of one station with the same code, depth or pressure) or equals the ID of a sample, station or cruise: said at every sheet that has a row of it,
+  // in the profile's terms. `used` names what each row's ID was made of, in line order; the text and the hint follow the KINDS that really collide (level: profile rows only;
+  // level-other: a sample or a station is among them).
+  for (const d of profile.levelDups.values()) {
+    const byWhere = new Map<string, LevelRow[]>();
+    for (const r of d.rows) {
+      const k = `${r.file}\u0000${r.sheet}`;
+      (byWhere.get(k) ?? byWhere.set(k, []).get(k)!).push(r);
+    }
+    const onlyLevels = d.rows.every((r) => r.via === 'code' || r.via === 'depth' || r.via === 'pressure');
+    for (const rows of byWhere.values()) {
+      const sorted = [...rows].sort((a, b) => a.line - b.line);
+      const used = [...new Set(sorted.map((r) => r.via))];
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
-          file: w.file,
-          sheet: w.sheet,
-          value: id,
-          lines: [...w.lines],
-          params: { kind: 'level', count: 1, hint: 'Two profile rows of one station have the same level code (or the same depth, when the IDs are made of the depth). Add a column with a code that is unique within the station, for example the cast and the bottle or scan together, and mark it as the sample code.' },
+          file: sorted[0].file,
+          sheet: sorted[0].sheet,
+          value: d.id,
+          lines: sorted.map((r) => r.line),
+          params: {
+            kind: onlyLevels ? 'level' : 'level-other',
+            count: 1,
+            used: used.join(', '),
+            hint: onlyLevels
+              ? `Two profile rows of one station give the same level identifier (made of: ${used.join(', ')}). A depth and a pressure never give the same ID (the pressure's ends in "dbar"); a code and a depth can. Add a column with a code that is unique within the station, for example the cast and the bottle or scan together, and mark it as the sample code.`
+              : `A level identifier is also the identifier of another event (made of: ${used.join(', ')}). Change the code of the profile rows, or the codes of the samples or stations that share it.`,
+          },
         }),
       );
     }

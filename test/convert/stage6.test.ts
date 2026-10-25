@@ -70,7 +70,7 @@ describe('C1: a biology sheet and CTD sheets, with matched and unmatched station
     const b = await readBack(x.zip);
     const ev = objects(b.tables['event.txt']);
     const levels = ev.filter((e) => e.eventType === 'profile level');
-    expect(levels.map((e) => e.eventID)).toEqual(['CR1:S1:0', 'CR1:S1:10', 'CR1:S1:25', 'CR1:S2:0', 'CR1:S2:10', 'CR1:S9:0', 'CR1:S9:10', 'CR1:S2:5', 'CR1:S2:15', 'CR1:S8:5', 'CR1:S8:15']);
+    expect(levels.map((e) => e.eventID)).toEqual(['CR1:S1:0', 'CR1:S1:10', 'CR1:S1:25', 'CR1:S2:0', 'CR1:S2:10', 'CR1:S9:0', 'CR1:S9:10', 'CR1:S2:5dbar', 'CR1:S2:15dbar', 'CR1:S8:5dbar', 'CR1:S8:15dbar']);
     expect(levels.map((e) => e.parentEventID)).toEqual(['CR1:S1', 'CR1:S1', 'CR1:S1', 'CR1:S2', 'CR1:S2', 'CR1:S9', 'CR1:S9', 'CR1:S2', 'CR1:S2', 'CR1:S8', 'CR1:S8']);
     // the depth sheet: min = max = the row's depth, as written; the pressure-only sheet: no depth at all
     const byId = new Map(ev.map((e) => [e.eventID, e]));
@@ -79,7 +79,7 @@ describe('C1: a biology sheet and CTD sheets, with matched and unmatched station
       expect(e.minimumDepthInMeters, id).toBe(id.split(':')[2]);
       expect(e.maximumDepthInMeters, id).toBe(id.split(':')[2]);
     }
-    for (const id of ['CR1:S2:5', 'CR1:S2:15', 'CR1:S8:5', 'CR1:S8:15']) {
+    for (const id of ['CR1:S2:5dbar', 'CR1:S2:15dbar', 'CR1:S8:5dbar', 'CR1:S8:15dbar']) {
       expect(byId.get(id)!.minimumDepthInMeters, id).toBe('');
       expect(byId.get(id)!.maximumDepthInMeters, id).toBe('');
     }
@@ -110,10 +110,10 @@ describe('C1: a biology sheet and CTD sheets, with matched and unmatched station
     const emof = objects(b.tables['extendedmeasurementorfact.txt']);
     const p = emof.filter((m) => m.measurementTypeID === PRESSURE.type.uri);
     expect(p.map((m) => [m.eventID, m.measurementValue, m.measurementUnit, m.measurementUnitID])).toEqual([
-      ['CR1:S2:5', '5', 'dbar', PRESSURE.unit.uri],
-      ['CR1:S2:15', '15', 'dbar', PRESSURE.unit.uri],
-      ['CR1:S8:5', '5', 'dbar', PRESSURE.unit.uri],
-      ['CR1:S8:15', '15', 'dbar', PRESSURE.unit.uri],
+      ['CR1:S2:5dbar', '5', 'dbar', PRESSURE.unit.uri],
+      ['CR1:S2:15dbar', '15', 'dbar', PRESSURE.unit.uri],
+      ['CR1:S8:5dbar', '5', 'dbar', PRESSURE.unit.uri],
+      ['CR1:S8:15dbar', '15', 'dbar', PRESSURE.unit.uri],
     ]);
     expect(p[0].measurementType).toBe(PRESSURE.type.label);
     // both columns: the depth is the level's depth and the pressure is an eMoF row as well
@@ -126,15 +126,22 @@ describe('C1: a biology sheet and CTD sheets, with matched and unmatched station
     expect(pm.find((m) => m.measurementTypeID === PRESSURE.type.uri)!.measurementValue).toBe('1.5');
   });
 
-  it('a pressure unit that is not decibars gets no unit identifier and a warning; a pressure with no unit is written with none', () => {
-    const header = ['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Pressure [bar]', 'Temperature [°C]'];
-    const r = run([BIO(), sheetInput(fileOf(header, [CTDP_ROWS[0], CTDP_ROWS[1]], 'P', { fileName: 'p.csv' }), { profile: { depthIds: true } })]);
+  it('a pressure unit that is not decibars gets no unit identifier and a warning; a pressure with no unit is written with none, with a warning that names the column', () => {
+    const header = ['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Pressure [bar]'];
+    const rows: Cell[][] = [['CR1', 'S2', 55.9, 3.1, '2023-06-16', 5, 0.5], ['CR1', 'S2', 55.9, 3.1, '2023-06-16', 15, 1.5]];
+    const r = run([BIO(), sheetInput(fileOf(header, rows, 'P', { fileName: 'p.csv' }), { profile: { depthIds: true } })]);
     const m = r.measurements.filter((x) => x.role === 'pressure');
     expect(m.map((x) => [x.measurementUnit, x.measurementUnitId, x.measurementTypeId])).toEqual([['bar', undefined, PRESSURE.type.uri], ['bar', undefined, PRESSURE.type.uri]]);
     expect(r.findings.find((f) => f.ruleId === 'CONV-UNIT-NO-P06' && f.params.unit === 'bar')).toBeDefined();
-    const none = run([BIO(), sheetInput(fileOf(['Cruise', 'Station', 'Pressure'], [['CR1', 'S2', 5], ['CR1', 'S2', 6]], 'P', { fileName: 'p.csv' }), { profile: { depthIds: true } })]);
+    expect(rules(r)).not.toContain('CONV-PROFILE-PRESSURE-NO-UNIT');
+    const none = run([BIO(), sheetInput(fileOf(['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Pressure'], rows, 'P', { fileName: 'p.csv' }), { profile: { depthIds: true } })]);
     const pn = none.measurements.filter((x) => x.role === 'pressure');
     expect(pn.map((x) => [x.measurementUnit, x.measurementUnitId])).toEqual([[undefined, undefined], [undefined, undefined]]);
+    const f = none.findings.find((x) => x.ruleId === 'CONV-PROFILE-PRESSURE-NO-UNIT')!;
+    expect(f.params).toEqual({ column: 'Pressure' });
+    expect(f.severity).toBe('warning');
+    expect(judge(none.findings).acceptRules).toContain('CONV-PROFILE-PRESSURE-NO-UNIT');
+    for (const lang of LANGS) expect(renderConvertPlain(f, lang)).toContain('Pressure');
   });
 });
 
@@ -247,7 +254,7 @@ describe('level IDs', () => {
     // as written: a decimal comma and a trailing zero are kept
     const header = ['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Temperature [°C]'];
     const text = run([BIO(), sheetInput(fileOf(header, [['CR1', 'S1', '55,5', '2,5', '2023-06-14', '10,50', '11,1'], ['CR1', 'S1', '55,5', '2,5', '2023-06-14', '12', '11']], 'CTD', { fileName: 'ctd.csv', decimalComma: true }), { profile: { depthIds: true } })]);
-    expect(ids(text, 'profile level')).toEqual(['CR1:S1:10,50', 'CR1:S1:12']);
+    expect(ids(text, 'profile level')).toEqual(['CR1:S1:10.50', 'CR1:S1:12']);
   });
 
   it('with a code column the ID is the station eventID, a colon and the code, whether or not the approval is ticked', () => {
@@ -304,8 +311,12 @@ describe('level IDs', () => {
     const header = ['Cruise', 'Station', 'Code', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Temperature [°C]'];
     const rows: Cell[][] = [['CR1', 'S1', 'S1-a', 55.5, 2.5, '2023-06-14', 0, 11]];
     const r = convert({ sheets: [BIO(), sheetInput(fileOf(header, rows, 'CTD', { fileName: 'ctd.csv' }), { profile: {}, edit: { Code: { kind: 'sampleId' } } })], options: { prefixStation: true }, approvedSplits: Object.fromEntries(run([BIO()]).splits.filter((s) => s.needsDecision).map((s) => [s.verbatim, s.proposed])) });
-    const places = r.findings.filter((x) => x.ruleId === 'CONV-ID-DUPLICATE' && x.params.kind === 'level').map((x) => [x.file, x.value]);
-    expect(places).toEqual([['bio.csv', 'CR1:S1:S1-a'], ['ctd.csv', 'CR1:S1:S1-a']]);
+    const places = r.findings.filter((x) => x.ruleId === 'CONV-ID-DUPLICATE' && x.params.kind === 'level-other').map((x) => [x.file, x.value, x.params.used]);
+    expect(places).toEqual([['bio.csv', 'CR1:S1:S1-a', 'sample'], ['ctd.csv', 'CR1:S1:S1-a', 'code']]);
+    // the text of a collision with a sample is not the "two profile rows" text, and does not offer the station prefix
+    const f = r.findings.find((x) => x.file === 'ctd.csv' && x.ruleId === 'CONV-ID-DUPLICATE')!;
+    expect(renderConvertPlain(f, 'en')).not.toContain('Two rows of one station');
+    expect(renderConvertPlain(f, 'en')).not.toContain('prefix');
     expect(ids(r, 'profile level')).toEqual([]);
   });
 });
@@ -483,12 +494,12 @@ describe('the profile texts of two rules', () => {
   it('exist in four languages, stay short, and leave no placeholder behind', () => {
     for (const [id, v] of Object.entries(PROFILE_VARIANTS)) {
       for (const lang of LANGS) {
-        expect(v.plain[lang].length, `${id} ${lang}`).toBeLessThanOrEqual(430);
+        expect(v.plain[lang].length, `${id} ${lang}`).toBeLessThanOrEqual(520);
         expect(v.plain[lang].length, `${id} ${lang}`).toBeGreaterThan(40);
       }
     }
     const missing = makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: 'f.csv', sheet: 'S', lines: [2, 3], params: { count: 2, column: 'none', profile: 'yes' } });
-    const dup = makeConvertFinding('CONV-ID-DUPLICATE', { file: 'f.csv', sheet: 'S', value: 'CR1:S1:10', lines: [2, 4], params: { kind: 'level', count: 1, hint: 'x' } });
+    const dup = makeConvertFinding('CONV-ID-DUPLICATE', { file: 'f.csv', sheet: 'S', value: 'CR1:S1:10', lines: [2, 4], params: { kind: 'level', count: 1, hint: 'x', used: 'depth, pressure' } });
     for (const f of [missing, dup]) {
       for (const lang of LANGS) expect(renderConvertPlain(f, lang), `${f.ruleId} ${lang}`).not.toMatch(/\{[A-Za-z_+]/);
       expect(renderConvertTechnical(f)).not.toMatch(/\{[A-Za-z_]/);
@@ -581,4 +592,122 @@ describe('a long profile file', () => {
     const s1 = r.events.find((e) => e.id === 'CR1:S1')!;
     expect([s1.depthMin, s1.depthMax]).toEqual([0, 1000]);
   }, 120000);
+});
+
+/* ---- review fixes: the formats of the IDs, a row with only a pressure, a flattened station, normalised numbers, texts by kind ---- */
+
+describe('depth and pressure IDs', () => {
+  const H = ['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Pressure [dbar]', 'Temperature [°C]'];
+  const sheet = (rows: Cell[][], extra: Partial<ConvertSheetInput> = {}, header = H, dc = false): ConvertSheetInput =>
+    sheetInput(fileOf(header, rows, 'CTD', { fileName: 'ctd.csv', decimalComma: dc }), { profile: { depthIds: true }, ...extra });
+  const base = (depth: Cell, pressure: Cell, station = 'S2'): Cell[] => ['CR1', station, 55.9, 3.1, '2023-06-16', depth, pressure, 11];
+
+  it('a depth ID is <station>:<depth>, a pressure ID is <station>:<pressure>dbar: 5 m and 5 dbar at one station are two levels, not a collision', () => {
+    const r = run([BIO(), sheet([base(5, null)]), sheetInput(fileOf(CTDP_H, [CTDP_ROWS[0]], 'P', { fileName: 'p.csv' }), { profile: { depthIds: true } })]);
+    expect(ids(r, 'profile level')).toEqual(['CR1:S2:5', 'CR1:S2:5dbar']);
+    expect(rules(r)).not.toContain('CONV-ID-DUPLICATE');
+  });
+
+  it('per row: the depth when it reads as a number, otherwise the pressure (with dbar), and the pressure is an eMoF row either way', () => {
+    const r = run([BIO(), sheet([base(0, 0.2), base(null, 10.1), base('NA', 20.3), base(30, 'x')])]);
+    expect(ids(r, 'profile level')).toEqual(['CR1:S2:0', 'CR1:S2:10.1dbar', 'CR1:S2:20.3dbar', 'CR1:S2:30']);
+    const lvl = r.events.find((e) => e.id === 'CR1:S2:10.1dbar')!;
+    expect([lvl.depthMin, lvl.depthMax]).toEqual([undefined, undefined]);
+    expect(r.measurements.filter((m) => m.role === 'pressure').map((m) => [m.target.id, m.measurementValue])).toEqual([['CR1:S2:0', '0.2'], ['CR1:S2:10.1dbar', '10.1'], ['CR1:S2:20.3dbar', '20.3']]);
+    expect(rules(r)).not.toContain('CONV-SAMPLE-CODE-MISSING');
+  });
+
+  it('a row with neither a readable depth nor a readable pressure is blocked, and a pressure that is not in decibars gives no ID', () => {
+    const none = run([BIO(), sheet([base(0, 0.2), base(null, null), base('NA', 'x')])]);
+    const f = none.findings.find((x) => x.ruleId === 'CONV-SAMPLE-CODE-MISSING')!;
+    expect(f.lines).toEqual([3, 4]);
+    expect(f.params.profile).toBe('yes');
+    expect(ids(none, 'profile level')).toEqual(['CR1:S2:0']);
+    const bar = run([BIO(), sheet([base(null, 0.5)], {}, H.map((h) => (h === 'Pressure [dbar]' ? 'Pressure [bar]' : h)))]);
+    expect(ids(bar, 'profile level')).toEqual([]);
+    expect(rules(bar)).toContain('CONV-SAMPLE-CODE-MISSING');
+    expect(renderConvertPlain(f, 'en')).toContain('pressure in decibars');
+  });
+
+  it('the same number written another way is the same depth: 10 and 10.0, a number cell and a text cell, are caught as repeated casts; the ID text turns a decimal comma into a point', () => {
+    const dup = run([BIO(), sheet([base(10, null), base('10.0', null), base(10, null, 'S1')])]);
+    const f = dup.findings.filter((x) => x.ruleId === 'CONV-ID-DUPLICATE');
+    expect(f.map((x) => [x.value, x.lines, x.params.kind, x.params.used])).toEqual([['CR1:S2:10', [2, 3], 'level', 'depth']]);
+    expect(ids(dup, 'profile level')).toEqual(['CR1:S2:10', 'CR1:S1:10']);
+    const comma = run([BIO(), sheet([['CR1', 'S2', '55,9', '3,1', '2023-06-16', '10,5', null, '11,0'], ['CR1', 'S2', '55,9', '3,1', '2023-06-16', '10,50', null, '11,1']], {}, H, true)]);
+    expect(rules(comma)).toContain('CONV-ID-DUPLICATE');
+    expect(ids(comma, 'profile level')).toEqual(['CR1:S2:10.5']);
+    const num = run([BIO(), sheet([base(10.5, null), base(12.25, null)])]);
+    expect(ids(num, 'profile level')).toEqual(['CR1:S2:10.5', 'CR1:S2:12.25']);
+  });
+
+  it('a code equal to a depth ID is still a collision, and the text names both sources', () => {
+    const header = ['Cruise', 'Station', 'Code', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Temperature [°C]'];
+    const s1 = sheetInput(fileOf(header, [['CR1', 'S2', '10', 55.9, 3.1, '2023-06-16', 3, 11]], 'A', { fileName: 'a.csv' }), { profile: {}, edit: { Code: { kind: 'sampleId' } } });
+    const s2 = sheetInput(fileOf(CTD_H, [['CR1', 'S2', 55.9, 3.1, '2023-06-16', 10, 11, 34]], 'B', { fileName: 'b.csv' }), { profile: { depthIds: true } });
+    const r = run([BIO(), s1, s2]);
+    const f = r.findings.filter((x) => x.ruleId === 'CONV-ID-DUPLICATE');
+    expect(f.map((x) => [x.file, x.params.kind, x.params.used])).toEqual([['a.csv', 'level', 'code'], ['b.csv', 'level', 'depth']]);
+    expect(renderConvertPlain(f[0], 'en')).toContain('made of: code');
+    expect(renderConvertPlain(f[1], 'pl')).toContain('głębokość');
+    // one sheet that holds both rows names both in line order
+    const mixed = run([BIO(), sheetInput(fileOf(['Cruise', 'Station', 'Code', 'Depth [m]', 'Temperature [°C]', 'Latitude', 'Longitude', 'Date'], [['CR1', 'S2', '10', 4, 11, 55.9, 3.1, '2023-06-16']], 'C', { fileName: 'c.csv' }), { profile: {}, edit: { Code: { kind: 'sampleId' } } })]);
+    expect(rules(mixed)).not.toContain('CONV-ID-DUPLICATE');
+  });
+
+  it('a level ID equal to the ID of a station is said in the profile text, without the station prefix advice', () => {
+    const header = ['Cruise', 'Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Depth top [m]', 'Depth bottom [m]', 'Volume filtered [m3]', 'Calanus finmarchicus'];
+    const bio = sheetInput(fileOf(header, [['CR1', 'A:5', 'k1', '2023-06-14', 55.5, 2.5, 0, 50, 12, 4]], 'BIO', { fileName: 'bio.csv' }), { quantity: W1_QUANTITY, device: { kind: 'known', key: 'multinet' } });
+    const ctd = sheetInput(fileOf(CTD_H, [['CR1', 'A', 55.5, 2.5, '2023-06-14', 5, 11, 34]], 'CTD', { fileName: 'ctd.csv' }), { profile: { depthIds: true } });
+    const r = run([bio, ctd]);
+    const f = r.findings.filter((x) => x.ruleId === 'CONV-ID-DUPLICATE');
+    expect(f.map((x) => [x.value, x.params.kind, x.params.used])).toEqual([['CR1:A:5', 'level-other', 'depth, station']]);
+    for (const lang of LANGS) expect(renderConvertPlain(f[0], lang)).not.toMatch(/prefix|prefiks|Präfix|préfixe|poprzedz/i);
+    expect(renderConvertTechnical(f[0])).not.toContain('prefix the station');
+  });
+});
+
+describe('a flattened station level', () => {
+  const NO_POS_H = ['Cruise', 'Station', 'Depth [m]', 'Temperature [°C]'];
+  it('a level without its own date or position is blocked, not given the cruise midpoint and range; with its own it is fine; kept stations still lend theirs', () => {
+    const rows: Cell[][] = [['CR1', 'S1', 0, 11], ['CR1', 'S1', 10, 10.5]];
+    const flat = run([BIO(), CTD({}, rows, NO_POS_H)], { flatten: { station: true } });
+    const f = flat.findings.find((x) => x.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE')!;
+    expect(f.lines).toEqual([2, 3]);
+    expect(f.params.what).toBe('date and position');
+    expect(judge(flat.findings).blocking.map((x) => x.ruleId)).toContain('CONV-PROFILE-LEVEL-INCOMPLETE');
+    expect(renderConvertTechnical(f)).toContain('flattened');
+    // the same rows with the station kept inherit from the matched station
+    const kept = run([BIO(), CTD({}, rows, NO_POS_H)]);
+    expect(kept.findings.some((x) => x.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE')).toBe(false);
+    // levels with their own position and date are fine either way
+    const own = run([BIO(), CTD()], { flatten: { station: true } });
+    expect(own.findings.some((x) => x.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE')).toBe(false);
+  });
+});
+
+describe('texts of the review fixes', () => {
+  it('a long list of unmatched stations shows the first twenty and the count of the rest; the finding keeps the whole list', () => {
+    const names = Array.from({ length: 45 }, (_, i) => `CR1:X${i + 1}`);
+    const f = makeConvertFinding('CONV-PROFILE-STATION-UNMATCHED', { file: 'f.csv', sheet: 'S', value: names[0], params: { count: names.length, names: names.join(', ') } });
+    expect(f.params.names).toBe(names.join(', '));
+    for (const lang of LANGS) {
+      const text = renderConvertPlain(f, lang);
+      expect(text).toContain('CR1:X20');
+      expect(text).not.toContain('CR1:X21');
+      expect(text).toContain('(+25)');
+    }
+    const few = makeConvertFinding('CONV-PROFILE-STATION-UNMATCHED', { file: 'f.csv', sheet: 'S', value: 'a', params: { count: 3, names: 'a, b, c' } });
+    expect(renderConvertPlain(few, 'en')).toContain('a, b, c');
+    expect(renderConvertPlain(few, 'en')).not.toContain('(+');
+  });
+
+  it('Polish CONV-PROFILE-LEVEL-INCOMPLETE agrees with its words ("jej", never "ich" after a singular)', () => {
+    for (const what of ['date', 'position', 'date and position']) {
+      const f = makeConvertFinding('CONV-PROFILE-LEVEL-INCOMPLETE', { sheet: 'S', lines: [2, 3], params: { count: 2, what } });
+      const t = renderConvertPlain(f, 'pl');
+      expect(t).toContain('a stacja też jej nie ma');
+      expect(t).not.toContain(' ich ');
+    }
+  });
 });
