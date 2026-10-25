@@ -138,6 +138,11 @@ function colsOf(mapping: SheetMapping): Cols {
 
 const METRES = /^(m|meters?|metres?)$/i;
 
+/** The scientificNameID a taxon ID column gives for a cell text: an AphiaID column (whole numbers only) as the urn:lsid, any other taxon ID column as given. */
+function sheetNameId(col: Spec & { aphia: boolean }, idText: string): string | undefined {
+  return col.aphia ? (/^[1-9]\d*$/.test(idText) ? `urn:lsid:marinespecies.org:taxname:${idText}` : undefined) : idText;
+}
+
 const text = (raw: unknown): string | undefined => {
   if (raw === null || raw === undefined) return undefined;
   const t = String(raw).trim();
@@ -560,7 +565,7 @@ export function convert(input: ConvertInput): ConvertResult {
         const userId = cols.occurrenceId ? text(row.cells[cols.occurrenceId.index]) : undefined;
         const idText = cols.taxonId ? text(row.cells[cols.taxonId.index]) : undefined;
         // the taxon ID of the sheet, never looked up: an AphiaID column (whole numbers only) as the urn:lsid, any other taxon ID column as given
-        const nameId = idText === undefined || cols.taxonId === undefined ? undefined : cols.taxonId.aphia ? (/^[1-9]\d*$/.test(idText) ? `urn:lsid:marinespecies.org:taxname:${idText}` : undefined) : idText;
+        const nameId = idText === undefined || cols.taxonId === undefined ? undefined : sheetNameId(cols.taxonId, idText);
         if (cols.taxonId) checkText(cols.taxonId.header, row.line, idText);
         if (cols.taxonCell) checkText(cols.taxonCell.header, row.line, taxonCellText);
         if (cols.lifeStage) checkText(cols.lifeStage.header, row.line, lifeStageCol);
@@ -784,30 +789,50 @@ export function convert(input: ConvertInput): ConvertResult {
 
   /* ---- the WoRMS opt-in (stage 4): which names would be sent, and what the lookup that was made says ---- */
   const undecidedVerbatim = new Set(undecided.map((u) => u.verbatim));
-  // per scientificName: how many rows have a taxon ID from the sheet, how many have none, and which IDs the sheet gives. A name whose split is not approved
-  // yet is not final: it is neither sent nor looked at.
-  const perName = new Map<string, { withId: number; without: number; ids: Set<string> }>();
+  // The IDs the sheet gives each name, over ALL rows of every long sheet: a row with a zero count that is left out unless the list is declared full, a row
+  // whose split is not approved yet (its proposed split names it) and any other row the conversion skips all count. "A name with a sheet ID on any row is never
+  // sent" is therefore true of the sheet, not of what was written.
+  const sheetIds = new Map<string, Set<string>>();
+  for (const sin of input.sheets) {
+    const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
+    if (!sheet || sin.shape !== 'long') continue;
+    const cols = colsOf(sin.mapping);
+    if (!cols.taxonCell || !cols.taxonId) continue;
+    for (const row of sheet.rows) {
+      const verbatim = text(row.cells[cols.taxonCell.index]);
+      const idText = text(row.cells[cols.taxonId.index]);
+      if (verbatim === undefined || idText === undefined) continue;
+      const id = sheetNameId(cols.taxonId, idText);
+      if (id === undefined) continue;
+      const name = splitOf(verbatim).scientificName;
+      let ids = sheetIds.get(name);
+      if (!ids) sheetIds.set(name, (ids = new Set()));
+      ids.add(id);
+    }
+  }
+  // per scientificName: how many written rows have a taxon ID from the sheet and how many have none. A name whose split is not approved yet is not final:
+  // its rows are neither sent nor looked at (but its IDs are in sheetIds above, under the proposed name).
+  const perName = new Map<string, { withId: number; without: number }>();
   for (const o of occurrences) {
     if (undecidedVerbatim.has(o.verbatimIdentification)) continue;
     let n = perName.get(o.scientificName);
-    if (!n) perName.set(o.scientificName, (n = { withId: 0, without: 0, ids: new Set() }));
-    if (o.scientificNameId !== undefined) {
-      n.withId++;
-      n.ids.add(o.scientificNameId);
-    } else n.without++;
+    if (!n) perName.set(o.scientificName, (n = { withId: 0, without: 0 }));
+    if (o.scientificNameId !== undefined) n.withId++;
+    else n.without++;
   }
-  // a name that has a sheet ID on ANY row is never sent and gets no WoRMS ID on its other rows: only a name with no sheet ID on any row is looked up
+  // a name that has a sheet ID on ANY row is never sent and gets no WoRMS ID on its other rows: only a name with no sheet ID anywhere is looked up
   const toLookUp = new Set<string>();
   const incomplete: string[] = [];
   const conflicting: string[] = [];
   let withSheetId = 0;
   for (const [name, n] of perName) {
-    if (n.withId > 0) {
+    const ids = sheetIds.get(name);
+    if (ids) {
       withSheetId++;
       if (n.without > 0) incomplete.push(name);
-      if (n.ids.size > 1) conflicting.push(name);
     } else if (n.without > 0) toLookUp.add(name);
   }
+  for (const [name, ids] of sheetIds) if (ids.size > 1 && perName.has(name)) conflicting.push(name);
   const whereName = { file: input.sheets[0]?.file.fileName ?? '', sheet: input.sheets[0]?.sheet ?? '' };
   // the names go whole into the params (the text shows the first few, the acceptance tick is for the whole set)
   const wholeList = (names: string[]): string => names.join(', ');

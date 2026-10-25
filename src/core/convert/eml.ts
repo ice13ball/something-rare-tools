@@ -167,11 +167,11 @@ function citationOf(m: DatasetMetadata, year: string): string {
  * A DOI is 10.<registrant>/<suffix>; the suffix may hold any printable character (DOI Handbook 2.2: "<>;()/:" among them; Crossref's pattern
  * 10.\d{4,9}/[-._;()/:A-Z0-9]+ covers most, and real suffixes such as 10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-O do use < > ( ) ; :).
  * A citation is a sentence, so a DOI ends at a space or a quote, and trailing punctuation or an unbalanced closing bracket of the sentence is not part of it.
- * It is taken only from an address of doi.org or dx.doi.org, from "doi:", or from a bare 10.x/y string that is not inside another address (a path of some
+ * It is taken only from an address of doi.org (http or https, with or without www.) or dx.doi.org, from "doi:", or from a bare 10.x/y string that is not inside another address (a path of some
  * other site that happens to contain 10.1234/x is not a DOI).
  */
 const DOI_BODY = String.raw`10\.\d{4,9}\/[^\s"']+`;
-const DOI_AFTER_RESOLVER = new RegExp(String.raw`(?:^|[^\w./-])(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)(${DOI_BODY})`, 'i');
+const DOI_AFTER_RESOLVER = new RegExp(String.raw`(?:^|[^\w./-])(?:https?:\/\/(?:www\.|dx\.)?doi\.org\/|doi:\s*)(${DOI_BODY})`, 'i');
 const DOI_BARE = new RegExp(String.raw`(?<![\w./:@=?&#%-])(${DOI_BODY})`, 'i');
 /** Takes the trailing punctuation of the sentence off, and an unbalanced closing bracket (a DOI in "(…)" or "<…>" does not own the bracket). */
 function trimDoi(doi: string): string {
