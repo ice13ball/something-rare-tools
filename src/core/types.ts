@@ -106,7 +106,13 @@ export type ConverterRole =
   | { kind: 'effort'; unit?: string }
   | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' };
 export type ConverterRoleKind = ConverterRole['kind'];
-export interface ColumnProposal { index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low'; reason: string }
+export interface ColumnProposal {
+  index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low';
+  /** The English wording of why (technical line, tests). */
+  reason: string;
+  /** Set by the converter overlay only (convert/recognize.ts OVERLAY_REASONS): the page shows `convert.reason.<code>` in the reader's language. /check never sets it. */
+  reasonCode?: string;
+}
 export interface SheetMapping { sheet: string; columns: { index: number; header: string; role: ColumnRole }[] }
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }
 export interface LayoutPlan {

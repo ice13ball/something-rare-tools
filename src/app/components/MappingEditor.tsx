@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useId } from 'react';
+import type { UiKey } from '../../core/i18n/ui';
 import { CANONICAL_VARIABLES } from '../../core/recognize/vocab';
 import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types';
 import { MAX_SAMPLES } from '../../worker/protocol';
@@ -87,7 +88,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
                         roleKinds={roleKinds}
                         proposed={proposal?.role ?? { kind: 'ignore' }}
                         cleanHeader={proposal?.cleanHeader ?? col.header}
-                        reason={low ? proposal?.reason : undefined}
+                        reason={low ? (proposal?.reasonCode === undefined ? proposal?.reason : t(`convert.reason.${proposal.reasonCode}` as UiKey)) : undefined}
                         onRole={(r) => onChange(mappingWith(mapping, col.index, r))}
                       />
                     )}
