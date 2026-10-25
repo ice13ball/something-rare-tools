@@ -6,7 +6,8 @@ import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types'
 import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { InfoTip } from './InfoTip';
-import { ROLE_KINDS, changeRole, mappingWith, roleLabelKey, roleUnit, setPositive, setUnit, setVariableName, type RoleKind } from '../mappingModel';
+import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
+import type { TipId } from '../tips';
 
 export interface MappingEditorProps {
   sheet: string;
@@ -16,6 +17,10 @@ export interface MappingEditorProps {
   mapping: SheetMapping;
   /** Columns the table layout reads itself (long format: parameter, unit, value): shown, not editable. */
   layoutColumns?: ReadonlySet<number>;
+  /** The entries of the role dropdown. Default: the roles /check offers. /convert passes its own list (the converter roles included). */
+  roleKinds?: readonly RoleChoice[];
+  /** The ⓘ of the role column header. Default: the /check one. */
+  rolesTip?: TipId;
   onChange: (mapping: SheetMapping) => void;
 }
 
@@ -27,7 +32,7 @@ const CANONICAL_KEYS: readonly string[] = CANONICAL_VARIABLES.map((c) => c.key);
  * highlighted), and for a measured variable its name and unit. The unit box starts from the proposal only: a column with no
  * stated unit stays empty. ⛔ Never fills in a unit nobody stated.
  */
-export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumns, onChange }: MappingEditorProps): React.ReactElement {
+export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumns, roleKinds = ROLE_KINDS, rolesTip = 'roles', onChange }: MappingEditorProps): React.ReactElement {
   useLang();
   return (
     <section className="mapping-editor" aria-label={t('mapping.title', { sheet })}>
@@ -45,7 +50,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
               <th scope="col">{t('mapping.samples')}</th>
               <th scope="col" aria-label={t('mapping.role')}>
                 {t('mapping.role')}
-                <InfoTip id="roles" />
+                <InfoTip id={rolesTip} />
               </th>
             </tr>
           </thead>
@@ -79,6 +84,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
                       <RoleCell
                         label={label}
                         role={col.role}
+                        roleKinds={roleKinds}
                         proposed={proposal?.role ?? { kind: 'ignore' }}
                         cleanHeader={proposal?.cleanHeader ?? col.header}
                         reason={low ? proposal?.reason : undefined}
@@ -103,22 +109,24 @@ interface RoleCellProps {
   proposed: ColumnRole;
   cleanHeader: string;
   reason?: string;
+  roleKinds: readonly RoleChoice[];
   onRole: (role: ColumnRole) => void;
 }
 
-function RoleCell({ label, role, proposed, cleanHeader, reason, onRole }: RoleCellProps): React.ReactElement {
+function RoleCell({ label, role, proposed, cleanHeader, reason, roleKinds, onRole }: RoleCellProps): React.ReactElement {
   const unit = roleUnit(role) ?? '';
-  const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure';
+  const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort';
+  const converter = roleKinds !== ROLE_KINDS;
   return (
     <div className="role-cell">
       <select
         aria-label={`${label}: ${t('mapping.role')}`}
-        value={role.kind}
-        onChange={(e) => onRole(changeRole(role, proposed, e.target.value as RoleKind, cleanHeader))}
+        value={roleChoiceOf(role)}
+        onChange={(e) => onRole(roleFromChoice(role, proposed, e.target.value as RoleChoice, cleanHeader))}
       >
-        {ROLE_KINDS.map((k) => (
+        {roleKinds.map((k) => (
           <option key={k} value={k}>
-            {t(roleLabelKey(k))}
+            {t(roleChoiceLabelKey(k))}
           </option>
         ))}
       </select>
@@ -140,6 +148,16 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, onRole }: RoleCe
             <option value="down">{t('mapping.positive.down')}</option>
             <option value="up">{t('mapping.positive.up')}</option>
             <option value="unknown">{t('mapping.positive.unknown')}</option>
+          </select>
+        </label>
+      )}
+      {converter && role.kind === 'depth' && (
+        <label className="inline-field">
+          <span>{t('mapping.bound')}</span>
+          <select value={role.bound ?? ''} onChange={(e) => onRole(setBound(role, e.target.value === '' ? undefined : (e.target.value as 'min' | 'max')))}>
+            <option value="">{t('mapping.bound.none')}</option>
+            <option value="min">{t('mapping.bound.min')}</option>
+            <option value="max">{t('mapping.bound.max')}</option>
           </select>
         </label>
       )}

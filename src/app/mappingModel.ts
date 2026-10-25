@@ -26,10 +26,59 @@ export const ROLE_KINDS: readonly RoleKind[] = [
 export const roleLabelKey = (kind: RoleKind): UiKey => `role.${kind}` as UiKey;
 
 /**
+ * An entry of the role dropdown. /check offers the RoleKind list; /convert offers CONVERT_ROLE_CHOICES: the same kinds plus the converter roles, and
+ * 'taxonHeader' for a wide sheet's species column (role taxon with header: true), which is a choice of its own so the user sees what it means.
+ */
+export type RoleChoice = RoleKind | ConverterRoleKind | 'taxonHeader';
+
+/** Order of the role dropdown on /convert. */
+export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
+  'ignore',
+  'sampleId',
+  'station',
+  'cruise',
+  'date',
+  'datetime',
+  'time',
+  'latitude',
+  'longitude',
+  'depth',
+  'pressure',
+  'taxon',
+  'taxonHeader',
+  'quantity',
+  'quantityType',
+  'effort',
+  'occurrenceId',
+  'lifeStage',
+  'qualifier',
+  'variable',
+];
+
+export const roleChoiceLabelKey = (c: RoleChoice): UiKey => `role.${c}` as UiKey;
+
+/** The dropdown entry that stands for a role. */
+export const roleChoiceOf = (role: ColumnRole): RoleChoice => (role.kind === 'taxon' && role.header === true ? 'taxonHeader' : role.kind);
+
+/** The role after the user picked `choice`. Every /check kind goes through changeRole, so its behaviour is the one it always had. */
+export function roleFromChoice(current: ColumnRole, proposed: ColumnRole, choice: RoleChoice, cleanHeader: string): ColumnRole {
+  if (choice === 'taxonHeader') return proposed.kind === 'taxon' && proposed.header === true ? proposed : { kind: 'taxon', header: true };
+  if (choice === 'taxon') return proposed.kind === 'taxon' && proposed.header !== true ? proposed : { kind: 'taxon' };
+  return changeRole(current, proposed, choice, cleanHeader);
+}
+
+/** Converter only: which end of a depth range a depth column is (undefined removes it). */
+export function setBound(role: ColumnRole, bound: 'min' | 'max' | undefined): ColumnRole {
+  if (role.kind !== 'depth') return role;
+  const { bound: _b, ...rest } = role;
+  return bound === undefined ? rest : { ...rest, bound };
+}
+
+/**
  * The role after the user picked `kind` in the dropdown. Going back to the kind the tool proposed restores the
  * proposal as it was (unit and all); any other kind starts bare: no unit, depth direction unknown.
  */
-export function changeRole(_current: ColumnRole, proposed: ColumnRole, kind: RoleKind, cleanHeader: string): ColumnRole {
+export function changeRole(_current: ColumnRole, proposed: ColumnRole, kind: RoleKind | ConverterRoleKind, cleanHeader: string): ColumnRole {
   if (proposed.kind === kind) return proposed;
   switch (kind) {
     case 'depth':
@@ -38,13 +87,15 @@ export function changeRole(_current: ColumnRole, proposed: ColumnRole, kind: Rol
       return { kind: 'variable', variable: cleanHeader };
     case 'pressure':
       return { kind: 'pressure' };
+    case 'taxon':
+      return { kind: 'taxon' };
     default:
       return { kind } as ColumnRole;
   }
 }
 
 export function roleUnit(role: ColumnRole): string | undefined {
-  return role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' ? role.unit : undefined;
+  return role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort' ? role.unit : undefined;
 }
 
 /** A unit typed by the user (trimmed). Empty removes it. Roles without a unit are returned unchanged. */
@@ -58,7 +109,7 @@ export function setUnit(role: ColumnRole, text: string): ColumnRole {
     const { unit: _u, ...rest } = role;
     return unit === '' ? rest : { ...rest, unit };
   }
-  if (role.kind === 'pressure') {
+  if (role.kind === 'pressure' || role.kind === 'effort') {
     const { unit: _u, ...rest } = role;
     return unit === '' ? rest : { ...rest, unit };
   }

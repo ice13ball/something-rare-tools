@@ -167,8 +167,88 @@ No findings only means that no problems were found in the checked categories.`,
 
   'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet. It cannot be used yet.`,
   'tip.convertIntro.logic': `• The page is hidden for now: it is not in the menu or on the index page, and search engines are asked to skip it.
-• Nothing is processed yet; a file dropped here would not be read.
-• Two optional lookups are planned: taxon names in WoRMS and terms in the NERC vocabulary. Both will be off by default, and nothing is sent to either service until you press its button.`,
+• Your files are read and previewed in your browser; nothing is sent anywhere.
+• There is no export yet.
+• Two optional lookups are planned: taxon names in WoRMS and terms in the NERC vocabulary. Both will be off by default, and nothing will be sent to either service until you press its button.`,
+  'tip.role.taxon': `a column of taxon names, one per row (a long sheet); the number goes in the quantity column.`,
+  'tip.role.taxonHeader': `a column of a wide sheet whose header is the taxon name and whose cells are the quantities. Proposed ones are only candidates: confirm them all.`,
+  'tip.role.quantity': `the number for the taxon on that row (a long sheet).`,
+  'tip.role.quantityType': `a column that says what the quantity is; it is kept for your information and does not replace your declaration.`,
+  'tip.role.effort': `the volume or area sampled for that sample; its unit goes in the unit box.`,
+  'tip.role.occurrenceId': `your own identifier of the record, used exactly as you wrote it.`,
+  'tip.role.lifeStage': `the life stage of that record; it wins over a stage found in the name.`,
+  'tip.role.qualifier': `the identification qualifier of that record (cf., sp., ?); it wins over one found in the name.`,
+  'tip.convertRoles.does': `Lists every meaning a column can have in the converter, including the ones that exist only here.`,
+  'tip.convertRoles.logic': `{roles}
+• The meanings only say how a cell is read; the converter changes none of your values.
+• Coordinates, dates, depth, station, cruise and sample names are recognised by the same rules as in the data check.`,
+  'tip.convertSheetUse.does': `Chooses whether this sheet is converted.`,
+  'tip.convertSheetUse.logic': `• A sheet you untick is left out completely: nothing from it is converted, counted or checked.
+• Every sheet starts ticked.`,
+  'tip.convertShape.does': `Says how the sheet is laid out: one column per species, or one row per species and sample.`,
+  'tip.convertShape.logic': `• Wide: the header of each taxon column is a taxon name, and every filled cell is one record of that taxon in that row's sample.
+• Long: every row with a taxon and a value is one record.
+• The tool suggests the shape from the meanings of the columns; the choice is yours.`,
+  'tip.convertQuantityKind.does': `Says what the numbers in the species cells are.`,
+  'tip.convertQuantityKind.logic': `• A count is a number of individuals and must be whole; it is written as individualCount, and as a count measurement ({countConcept}).
+• A density or a biomass is written as a measurement with its unit, never as individualCount.
+• Without this choice the conversion is blocked.
+• Nothing is converted or rescaled.`,
+  'tip.convertQuantityUnit.does': `The unit the numbers are written in.`,
+  'tip.convertQuantityUnit.logic': `• It is written as you give it and never converted.
+• A concept for the unit is added only for the units the tool has checked: {units}.
+• Any other unit gets no concept and a warning, and the unit text stays as you wrote it.`,
+  'tip.convertQuantityBasis.does': `For a biomass: wet weight, dry weight or ash-free dry weight.`,
+  'tip.convertQuantityBasis.logic': `• Each kind of weight has its own concept: {concepts}.
+• Without it the biomass cannot be described, and the conversion is blocked.`,
+  'tip.convertQuantityPer.does': `Says whether the numbers are per volume or per area.`,
+  'tip.convertQuantityPer.logic': `• It is normally read from the unit; choose it only when the unit does not say.
+• A density per volume of water has the concept {volumeConcept}; per area of the bed, {areaConcept}.
+• The unit never decides this alone against what you chose.`,
+  'tip.convertQuantityMedium.does': `For numbers per area: the water column or the bed.`,
+  'tip.convertQuantityMedium.logic': `• Only a number per area of the bed has a checked concept.
+• A number per area of the water column gets no concept and a warning; one has to be chosen by hand before publishing.`,
+  'tip.convertEffort.does': `The volume or area that was sampled, when you know it.`,
+  'tip.convertEffort.logic': `• Give one value for all samples, or mark a column of the sheet.
+• It is written on each sample as sampleSizeValue and sampleSizeUnit, and as a measurement: {volumeConcept} for a volume, {areaConcept} for an area.
+• A zero, a negative or a missing value blocks the conversion.`,
+  'tip.convertCruise.does': `The cruise code, for a sheet that has no cruise column.`,
+  'tip.convertCruise.logic': `• It becomes the cruise event at the top of the tree.
+• The ID of a station is the cruise code, a colon and the station code.
+• Left empty, the stations have no cruise above them.`,
+  'tip.convertFullList.does': `Says whether every species of the list was looked for in every sample.`,
+  'tip.convertFullList.logic': `• Ticked: a zero becomes an absence (occurrenceStatus absent), with an individualCount of zero only for counts and no measurement.
+• Not ticked: zeros are left out and their number is shown as information.
+• An empty cell or NA is never a record.
+• Nothing in the browser remembers the tick; a companion file dropped with the data can set it.`,
+  'tip.convertStationPrefix.does': `Makes sample IDs unique when the same sample code is used at several stations.`,
+  'tip.convertStationPrefix.logic': `• Off: the ID of a sample is your sample code.
+• On: the ID is the station ID, a colon and your code.
+• An ID is never made from depth, from row order or from a taxon name lookup.
+• The choice appears when codes repeat, or when a companion file ticked it.`,
+  'tip.convertFlattenStation.does': `Leaves the station level out of the tree.`,
+  'tip.convertFlattenStation.logic': `• The station code is kept as the locality of each sample, and the samples hang directly under the cruise.
+• No ID changes.
+• The date, position and depth of the cruise are then worked out from the samples.
+• Nothing is flattened unless you tick it.`,
+  'tip.convertFlattenCruise.does': `Leaves the cruise level out of the tree.`,
+  'tip.convertFlattenCruise.logic': `• The cruise code goes to the dataset text instead, and the stations stand at the top of the tree.
+• The ID of a station still begins with the cruise code.
+• Nothing is flattened unless you tick it.`,
+  'tip.convertSplits.does': `Confirms how a name with a qualifier, a stage or a sex is divided.`,
+  'tip.convertSplits.logic': `• Qualifiers ({qualifiers}) go to the identification qualifier, the stages ({stages}) to the life stage, and an f or m after a comma to the sex.
+• The exact text is always kept as verbatimIdentification.
+• A split is only a proposal until you approve it, and an unapproved split blocks the conversion.
+• A plain name needs no decision.`,
+  'tip.convertCodes.does': `Proposes sample codes once, for a sheet that has none.`,
+  'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet.
+• You get your own sheet back as a CSV file with one new column; your cells are not touched.
+• Check it and upload that file again: only a code in your own uploaded sheet becomes an ID.
+• The converter never applies or renews codes by itself.`,
+  'tip.convertTree.does': `Shows the event tree the archive would have.`,
+  'tip.convertTree.logic': `• Cruise, station and sample come from your columns, and the type is written as text.
+• The date of a cruise or station is the span of its samples; its position is the middle of the box around its samples, with an uncertainty that covers them all, in whole metres rounded up; its depth runs from the shallowest top to the deepest bottom.
+• Only a few examples are shown, not every event.`,
 } as const;
 
 export type TipKey = keyof typeof en;
@@ -329,8 +409,88 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 
   'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza. Na razie nie można z niego korzystać.`,
   'tip.convertIntro.logic': `• Strona jest na razie ukryta: nie ma jej w menu ani na stronie głównej, a wyszukiwarki są proszone, by ją pominąć.
-• Nic nie jest jeszcze przetwarzane; plik wrzucony tutaj nie zostałby odczytany.
+• Twoje pliki są odczytywane i pokazywane w podglądzie w Twojej przeglądarce; nic nie jest nigdzie wysyłane.
+• Eksportu jeszcze nie ma.
 • Planowane są dwa opcjonalne wyszukiwania: nazw taksonów w WoRMS i terminów ze słownika NERC. Oba będą domyślnie wyłączone, a do żadnej z tych usług nic nie zostanie wysłane, dopóki nie naciśniesz jej przycisku.`,
+  'tip.role.taxon': `kolumna z nazwami taksonów, jedna na wiersz (arkusz długi); liczba trafia do kolumny ilości.`,
+  'tip.role.taxonHeader': `kolumna arkusza szerokiego, której nagłówek jest nazwą taksonu, a komórki to ilości. Proponowane kolumny to tylko kandydaci: potwierdź je wszystkie.`,
+  'tip.role.quantity': `liczba dla taksonu w danym wierszu (arkusz długi).`,
+  'tip.role.quantityType': `kolumna mówiąca, czym jest ilość; zostaje dla Twojej informacji i nie zastępuje Twojej deklaracji.`,
+  'tip.role.effort': `objętość lub powierzchnia pobrana dla danej próbki; jednostkę wpisz w polu jednostki.`,
+  'tip.role.occurrenceId': `Twój własny identyfikator rekordu, użyty dokładnie tak, jak go zapisałeś.`,
+  'tip.role.lifeStage': `stadium rozwojowe danego rekordu; ma pierwszeństwo przed stadium znalezionym w nazwie.`,
+  'tip.role.qualifier': `dopisek przy oznaczeniu tego rekordu (cf., sp., ?); ma pierwszeństwo przed dopiskiem znalezionym w nazwie.`,
+  'tip.convertRoles.does': `Wymienia każde znaczenie, jakie kolumna może mieć w konwerterze, także te, które istnieją tylko tutaj.`,
+  'tip.convertRoles.logic': `{roles}
+• Znaczenia mówią tylko, jak odczytać komórkę; konwerter nie zmienia żadnej Twojej wartości.
+• Współrzędne, daty, głębokość oraz nazwy stacji, rejsu i próbki rozpoznają te same reguły co w sprawdzaniu danych.`,
+  'tip.convertSheetUse.does': `Wybiera, czy ten arkusz jest przekształcany.`,
+  'tip.convertSheetUse.logic': `• Odznaczony arkusz jest całkowicie pomijany: nic z niego nie jest przekształcane, liczone ani sprawdzane.
+• Każdy arkusz na początku jest zaznaczony.`,
+  'tip.convertShape.does': `Mówi, jak ułożony jest arkusz: jedna kolumna na gatunek albo jeden wiersz na gatunek i próbkę.`,
+  'tip.convertShape.logic': `• Szeroki: nagłówek każdej kolumny taksonu to nazwa taksonu, a każda wypełniona komórka to jeden rekord tego taksonu w próbce z tego wiersza.
+• Długi: każdy wiersz z taksonem i wartością to jeden rekord.
+• Narzędzie sugeruje układ na podstawie znaczeń kolumn; wybór należy do Ciebie.`,
+  'tip.convertQuantityKind.does': `Mówi, czym są liczby w komórkach gatunków.`,
+  'tip.convertQuantityKind.logic': `• Liczebność to liczba osobników i musi być całkowita; zapisuje się ją jako individualCount oraz jako pomiar liczebności ({countConcept}).
+• Zagęszczenie lub biomasa zapisuje się jako pomiar z jednostką, nigdy jako individualCount.
+• Bez tego wyboru przekształcenie jest zablokowane.
+• Nic nie jest przeliczane ani przeskalowywane.`,
+  'tip.convertQuantityUnit.does': `Jednostka, w której zapisano liczby.`,
+  'tip.convertQuantityUnit.logic': `• Jest zapisywana tak, jak ją podasz, i nigdy nie jest przeliczana.
+• Pojęcie dla jednostki jest dodawane tylko dla jednostek, które narzędzie sprawdziło: {units}.
+• Każda inna jednostka nie dostaje pojęcia, tylko ostrzeżenie, a tekst jednostki zostaje taki, jak go wpisałeś.`,
+  'tip.convertQuantityBasis.does': `Dla biomasy: masa mokra, sucha albo sucha masa bez popiołu.`,
+  'tip.convertQuantityBasis.logic': `• Każdy rodzaj masy ma własne pojęcie: {concepts}.
+• Bez tego nie da się opisać biomasy, a przekształcenie jest zablokowane.`,
+  'tip.convertQuantityPer.does': `Mówi, czy liczby dotyczą objętości, czy powierzchni.`,
+  'tip.convertQuantityPer.logic': `• Zwykle jest odczytywane z jednostki; wybierz je tylko wtedy, gdy jednostka tego nie mówi.
+• Zagęszczenie na objętość wody ma pojęcie {volumeConcept}, na powierzchnię dna {areaConcept}.
+• Jednostka nigdy nie rozstrzyga tego sama wbrew Twojemu wyborowi.`,
+  'tip.convertQuantityMedium.does': `Dla liczb na powierzchnię: słup wody albo dno.`,
+  'tip.convertQuantityMedium.logic': `• Tylko liczba na powierzchnię dna ma sprawdzone pojęcie.
+• Liczba na powierzchnię słupa wody nie dostaje pojęcia, tylko ostrzeżenie; trzeba je dobrać ręcznie przed publikacją.`,
+  'tip.convertEffort.does': `Objętość lub powierzchnia, którą pobrano, jeśli ją znasz.`,
+  'tip.convertEffort.logic': `• Podaj jedną wartość dla wszystkich próbek albo oznacz kolumnę arkusza.
+• Zapisuje się ją przy każdej próbce jako sampleSizeValue i sampleSizeUnit oraz jako pomiar: {volumeConcept} dla objętości, {areaConcept} dla powierzchni.
+• Zero, wartość ujemna lub brak blokuje przekształcenie.`,
+  'tip.convertCruise.does': `Kod rejsu dla arkusza, który nie ma kolumny z rejsem.`,
+  'tip.convertCruise.logic': `• Staje się zdarzeniem rejsu na szczycie drzewa.
+• Identyfikator stacji to kod rejsu, dwukropek i kod stacji.
+• Pozostawiony pusty, stacje nie mają nad sobą rejsu.`,
+  'tip.convertFullList.does': `Mówi, czy w każdej próbce szukano każdego gatunku z listy.`,
+  'tip.convertFullList.logic': `• Zaznaczone: zero staje się nieobecnością (occurrenceStatus absent), z individualCount równym zero tylko dla liczebności i bez pomiaru.
+• Niezaznaczone: zera są pomijane, a ich liczba jest pokazana jako informacja.
+• Pusta komórka lub NA nigdy nie jest rekordem.
+• Przeglądarka niczego nie zapamiętuje; zaznaczenie może ustawić plik towarzyszący wrzucony razem z danymi.`,
+  'tip.convertStationPrefix.does': `Czyni identyfikatory próbek unikalnymi, gdy ten sam kod próbki występuje na kilku stacjach.`,
+  'tip.convertStationPrefix.logic': `• Wyłączone: identyfikatorem próbki jest Twój kod próbki.
+• Włączone: identyfikator to identyfikator stacji, dwukropek i Twój kod.
+• Identyfikator nigdy nie powstaje z głębokości, kolejności wierszy ani z wyszukiwania nazwy taksonu.
+• Wybór pojawia się, gdy kody się powtarzają albo zaznaczył go plik towarzyszący.`,
+  'tip.convertFlattenStation.does': `Pomija poziom stacji w drzewie.`,
+  'tip.convertFlattenStation.logic': `• Kod stacji zostaje jako miejscowość każdej próbki, a próbki wiszą bezpośrednio pod rejsem.
+• Żaden identyfikator się nie zmienia.
+• Data, pozycja i głębokość rejsu są wtedy wyliczane z próbek.
+• Nic nie jest spłaszczane, dopóki tego nie zaznaczysz.`,
+  'tip.convertFlattenCruise.does': `Pomija poziom rejsu w drzewie.`,
+  'tip.convertFlattenCruise.logic': `• Kod rejsu trafia zamiast tego do tekstu zbioru danych, a stacje stoją na szczycie drzewa.
+• Identyfikator stacji nadal zaczyna się od kodu rejsu.
+• Nic nie jest spłaszczane, dopóki tego nie zaznaczysz.`,
+  'tip.convertSplits.does': `Potwierdza, jak podzielono nazwę z dopiskiem, stadium lub płcią.`,
+  'tip.convertSplits.logic': `• Dopiski ({qualifiers}) trafiają do dopisku przy oznaczeniu, stadia ({stages}) do stadium rozwojowego, a f lub m po przecinku do płci.
+• Dokładny tekst zawsze zostaje jako verbatimIdentification.
+• Podział jest tylko propozycją, dopóki go nie zatwierdzisz, a niezatwierdzony podział blokuje przekształcenie.
+• Zwykła nazwa nie wymaga decyzji.`,
+  'tip.convertCodes.does': `Proponuje kody próbek jednorazowo, dla arkusza, który ich nie ma.`,
+  'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza.
+• Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną; Twoje komórki nie są zmieniane.
+• Sprawdź go i wgraj ten plik ponownie: identyfikatorem staje się tylko kod z Twojego wgranego arkusza.
+• Konwerter nigdy sam nie stosuje ani nie odnawia kodów.`,
+  'tip.convertTree.does': `Pokazuje drzewo zdarzeń, jakie miałoby archiwum.`,
+  'tip.convertTree.logic': `• Rejs, stacja i próbka pochodzą z Twoich kolumn, a typ zapisuje się jako tekst.
+• Data rejsu lub stacji to przedział jej próbek; pozycja to środek ramki wokół jej próbek, z niepewnością obejmującą je wszystkie, w pełnych metrach zaokrąglonych w górę; głębokość biegnie od najpłytszej góry do najgłębszego dołu.
+• Pokazano tylko kilka przykładów, nie każde zdarzenie.`,
 };
 
 const de: Record<TipKey, string> = {
@@ -489,8 +649,88 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 
   'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Er ist noch nicht nutzbar.`,
   'tip.convertIntro.logic': `• Die Seite ist vorerst verborgen: Sie steht weder im Menü noch auf der Startseite, und Suchmaschinen werden gebeten, sie zu überspringen.
-• Es wird noch nichts verarbeitet; eine hier abgelegte Datei würde nicht gelesen.
-• Geplant sind zwei optionale Abfragen: von Taxonnamen in WoRMS und von Begriffen im NERC-Vokabular. Beide sollen standardmäßig aus sein, und an keinen der beiden Dienste soll etwas gesendet werden, bis Sie dessen Schaltfläche drücken.`,
+• Ihre Dateien werden in Ihrem Browser gelesen und als Vorschau gezeigt; nichts wird irgendwohin gesendet.
+• Einen Export gibt es noch nicht.
+• Zwei optionale Abfragen sind geplant: Taxonnamen in WoRMS und Begriffe im NERC-Vokabular. Beide sind standardmäßig aus, und an keinen der beiden Dienste wird etwas gesendet, bevor Sie dessen Schaltfläche drücken.`,
+  'tip.role.taxon': `eine Spalte mit Taxonnamen, einer je Zeile (langes Blatt); die Zahl steht in der Mengenspalte.`,
+  'tip.role.taxonHeader': `eine Spalte eines breiten Blatts, deren Kopf der Taxonname ist und deren Zellen die Mengen sind. Vorgeschlagene sind nur Kandidaten: Bestätigen Sie alle.`,
+  'tip.role.quantity': `die Zahl für das Taxon in dieser Zeile (langes Blatt).`,
+  'tip.role.quantityType': `eine Spalte, die sagt, was die Menge ist; sie bleibt zur Information erhalten und ersetzt Ihre Angabe nicht.`,
+  'tip.role.effort': `das beprobte Volumen oder die beprobte Fläche der Probe; die Einheit gehört in das Einheitenfeld.`,
+  'tip.role.occurrenceId': `Ihre eigene Kennung des Datensatzes, genau so verwendet, wie Sie sie geschrieben haben.`,
+  'tip.role.lifeStage': `das Entwicklungsstadium dieses Datensatzes; es hat Vorrang vor einem im Namen gefundenen Stadium.`,
+  'tip.role.qualifier': `der Bestimmungszusatz dieses Datensatzes (cf., sp., ?); er hat Vorrang vor einem im Namen gefundenen Zusatz.`,
+  'tip.convertRoles.does': `Listet jede Bedeutung auf, die eine Spalte im Konverter haben kann, auch die, die es nur hier gibt.`,
+  'tip.convertRoles.logic': `{roles}
+• Die Bedeutungen sagen nur, wie eine Zelle gelesen wird; der Konverter ändert keinen Ihrer Werte.
+• Koordinaten, Daten, Tiefe sowie Namen von Station, Fahrt und Probe werden nach denselben Regeln erkannt wie in der Datenprüfung.`,
+  'tip.convertSheetUse.does': `Legt fest, ob dieses Blatt umgewandelt wird.`,
+  'tip.convertSheetUse.logic': `• Ein abgewähltes Blatt wird vollständig ausgelassen: Nichts daraus wird umgewandelt, gezählt oder geprüft.
+• Jedes Blatt beginnt angekreuzt.`,
+  'tip.convertShape.does': `Sagt, wie das Blatt aufgebaut ist: eine Spalte je Art oder eine Zeile je Art und Probe.`,
+  'tip.convertShape.logic': `• Breit: Der Kopf jeder Taxon-Spalte ist ein Taxonname, und jede gefüllte Zelle ist ein Datensatz dieses Taxons in der Probe der Zeile.
+• Lang: Jede Zeile mit Taxon und Wert ist ein Datensatz.
+• Das Werkzeug schlägt den Aufbau aus den Bedeutungen der Spalten vor; die Wahl liegt bei Ihnen.`,
+  'tip.convertQuantityKind.does': `Sagt, was die Zahlen in den Artenzellen sind.`,
+  'tip.convertQuantityKind.logic': `• Eine Anzahl ist eine Individuenzahl und muss ganz sein; sie wird als individualCount und als Anzahl-Messung ({countConcept}) geschrieben.
+• Eine Dichte oder Biomasse wird als Messung mit Einheit geschrieben, nie als individualCount.
+• Ohne diese Wahl ist die Umwandlung blockiert.
+• Nichts wird umgerechnet oder skaliert.`,
+  'tip.convertQuantityUnit.does': `Die Einheit, in der die Zahlen geschrieben sind.`,
+  'tip.convertQuantityUnit.logic': `• Sie wird so geschrieben, wie Sie sie angeben, und nie umgerechnet.
+• Ein Begriff für die Einheit wird nur für die Einheiten ergänzt, die das Werkzeug geprüft hat: {units}.
+• Jede andere Einheit erhält keinen Begriff, nur eine Warnung, und der Einheitentext bleibt, wie Sie ihn schrieben.`,
+  'tip.convertQuantityBasis.does': `Für eine Biomasse: Nassgewicht, Trockengewicht oder aschefreies Trockengewicht.`,
+  'tip.convertQuantityBasis.logic': `• Jede Gewichtsart hat einen eigenen Begriff: {concepts}.
+• Ohne sie lässt sich die Biomasse nicht beschreiben, und die Umwandlung ist blockiert.`,
+  'tip.convertQuantityPer.does': `Sagt, ob sich die Zahlen auf ein Volumen oder eine Fläche beziehen.`,
+  'tip.convertQuantityPer.logic': `• Es wird normalerweise aus der Einheit gelesen; wählen Sie es nur, wenn die Einheit es nicht sagt.
+• Eine Dichte je Wasservolumen hat den Begriff {volumeConcept}, je Bodenfläche {areaConcept}.
+• Die Einheit entscheidet das nie allein gegen Ihre Wahl.`,
+  'tip.convertQuantityMedium.does': `Für Zahlen je Fläche: die Wassersäule oder der Boden.`,
+  'tip.convertQuantityMedium.logic': `• Nur eine Zahl je Bodenfläche hat einen geprüften Begriff.
+• Eine Zahl je Fläche der Wassersäule erhält keinen Begriff und eine Warnung; er muss vor der Veröffentlichung von Hand gewählt werden.`,
+  'tip.convertEffort.does': `Das beprobte Volumen oder die beprobte Fläche, wenn Sie es kennen.`,
+  'tip.convertEffort.logic': `• Geben Sie einen Wert für alle Proben an oder markieren Sie eine Spalte des Blatts.
+• Er wird bei jeder Probe als sampleSizeValue und sampleSizeUnit und als Messung geschrieben: {volumeConcept} für ein Volumen, {areaConcept} für eine Fläche.
+• Eine Null, ein negativer oder ein fehlender Wert blockiert die Umwandlung.`,
+  'tip.convertCruise.does': `Der Fahrtcode für ein Blatt ohne Fahrt-Spalte.`,
+  'tip.convertCruise.logic': `• Er wird zum Fahrt-Ereignis an der Spitze des Baums.
+• Die Kennung einer Station ist der Fahrtcode, ein Doppelpunkt und der Stationscode.
+• Bleibt er leer, haben die Stationen keine Fahrt über sich.`,
+  'tip.convertFullList.does': `Sagt, ob in jeder Probe nach jeder Art der Liste gesucht wurde.`,
+  'tip.convertFullList.logic': `• Angekreuzt: Eine Null wird zur Abwesenheit (occurrenceStatus absent), mit individualCount null nur bei Anzahlen und ohne Messung.
+• Nicht angekreuzt: Nullen werden ausgelassen, ihre Zahl wird als Information gezeigt.
+• Eine leere Zelle oder NA ist nie ein Datensatz.
+• Der Browser merkt sich das Häkchen nicht; eine mit den Daten abgelegte Begleitdatei kann es setzen.`,
+  'tip.convertStationPrefix.does': `Macht Proben-Kennungen eindeutig, wenn derselbe Probencode an mehreren Stationen vorkommt.`,
+  'tip.convertStationPrefix.logic': `• Aus: Die Kennung einer Probe ist Ihr Probencode.
+• An: Die Kennung ist die Stations-Kennung, ein Doppelpunkt und Ihr Code.
+• Eine Kennung entsteht nie aus Tiefe, Zeilenreihenfolge oder einer Abfrage von Taxonnamen.
+• Die Wahl erscheint, wenn sich Codes wiederholen oder eine Begleitdatei sie angekreuzt hat.`,
+  'tip.convertFlattenStation.does': `Lässt die Stationsebene im Baum weg.`,
+  'tip.convertFlattenStation.logic': `• Der Stationscode bleibt als Fundort jeder Probe erhalten, und die Proben hängen direkt unter der Fahrt.
+• Keine Kennung ändert sich.
+• Datum, Position und Tiefe der Fahrt werden dann aus den Proben berechnet.
+• Nichts wird abgeflacht, solange Sie es nicht ankreuzen.`,
+  'tip.convertFlattenCruise.does': `Lässt die Fahrtebene im Baum weg.`,
+  'tip.convertFlattenCruise.logic': `• Der Fahrtcode geht stattdessen in den Datensatztext, und die Stationen stehen an der Spitze des Baums.
+• Die Kennung einer Station beginnt weiterhin mit dem Fahrtcode.
+• Nichts wird abgeflacht, solange Sie es nicht ankreuzen.`,
+  'tip.convertSplits.does': `Bestätigt, wie ein Name mit Zusatz, Stadium oder Geschlecht aufgeteilt wird.`,
+  'tip.convertSplits.logic': `• Zusätze ({qualifiers}) gehen in den Bestimmungszusatz, die Stadien ({stages}) in das Entwicklungsstadium und ein f oder m nach einem Komma in das Geschlecht.
+• Der genaue Text bleibt immer als verbatimIdentification erhalten.
+• Eine Aufteilung ist nur ein Vorschlag, bis Sie sie bestätigen, und eine unbestätigte Aufteilung blockiert die Umwandlung.
+• Ein einfacher Name braucht keine Entscheidung.`,
+  'tip.convertCodes.does': `Schlägt einmalig Probencodes vor, für ein Blatt, das keine hat.`,
+  'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts.
+• Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück; Ihre Zellen bleiben unberührt.
+• Prüfen Sie es und laden Sie diese Datei erneut hoch: Nur ein Code in Ihrem eigenen hochgeladenen Blatt wird zur Kennung.
+• Der Konverter wendet Codes nie von selbst an und erneuert sie nie.`,
+  'tip.convertTree.does': `Zeigt den Ereignisbaum, den das Archiv hätte.`,
+  'tip.convertTree.logic': `• Fahrt, Station und Probe stammen aus Ihren Spalten, und der Typ wird als Text geschrieben.
+• Das Datum einer Fahrt oder Station ist die Spanne ihrer Proben; ihre Position ist die Mitte des Kastens um ihre Proben, mit einer Unsicherheit, die alle abdeckt, in ganzen Metern aufgerundet; ihre Tiefe reicht von der flachsten Oberkante bis zur tiefsten Unterkante.
+• Nur einige Beispiele werden gezeigt, nicht jedes Ereignis.`,
 };
 
 const fr: Record<TipKey, string> = {
@@ -649,8 +889,88 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 
   'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. Il n'est pas encore utilisable.`,
   'tip.convertIntro.logic': `• La page est masquée pour l'instant : elle ne figure ni dans le menu ni sur la page d'accueil, et les moteurs de recherche sont priés de l'ignorer.
-• Rien n'est encore traité ; un fichier déposé ici ne serait pas lu.
-• Deux recherches facultatives sont prévues : des noms de taxons dans WoRMS et des termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien ne sera envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
+• Vos fichiers sont lus et prévisualisés dans votre navigateur ; rien n'est envoyé nulle part.
+• L'export n'existe pas encore.
+• Deux recherches facultatives sont prévues : les noms de taxons dans WoRMS et les termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien ne sera envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
+  'tip.role.taxon': `une colonne de noms de taxons, un par ligne (feuille longue) ; le nombre est dans la colonne de quantité.`,
+  'tip.role.taxonHeader': `une colonne d'une feuille large dont l'en-tête est le nom du taxon et dont les cellules sont les quantités. Celles proposées ne sont que des candidates : confirmez-les toutes.`,
+  'tip.role.quantity': `le nombre pour le taxon de cette ligne (feuille longue).`,
+  'tip.role.quantityType': `une colonne qui dit ce qu'est la quantité ; elle est gardée pour information et ne remplace pas votre déclaration.`,
+  'tip.role.effort': `le volume ou la surface prélevé pour cet échantillon ; son unité se saisit dans la case d'unité.`,
+  'tip.role.occurrenceId': `votre propre identifiant de l'enregistrement, utilisé exactement tel que vous l'avez écrit.`,
+  'tip.role.lifeStage': `le stade de développement de cet enregistrement ; il l'emporte sur un stade trouvé dans le nom.`,
+  'tip.role.qualifier': `la mention d'identification de cet enregistrement (cf., sp., ?) ; elle l'emporte sur une mention trouvée dans le nom.`,
+  'tip.convertRoles.does': `Énumère chaque sens qu'une colonne peut avoir dans le convertisseur, y compris ceux qui n'existent qu'ici.`,
+  'tip.convertRoles.logic': `{roles}
+• Les sens disent seulement comment lire une cellule ; le convertisseur ne modifie aucune de vos valeurs.
+• Coordonnées, dates, profondeur et noms de station, de campagne et d'échantillon sont reconnus par les mêmes règles que dans le contrôle des données.`,
+  'tip.convertSheetUse.does': `Choisit si cette feuille est convertie.`,
+  'tip.convertSheetUse.logic': `• Une feuille décochée est entièrement écartée : rien n'en est converti, compté ni contrôlé.
+• Chaque feuille commence cochée.`,
+  'tip.convertShape.does': `Dit comment la feuille est disposée : une colonne par espèce, ou une ligne par espèce et échantillon.`,
+  'tip.convertShape.logic': `• Large : l'en-tête de chaque colonne de taxon est un nom de taxon, et chaque cellule remplie est un enregistrement de ce taxon dans l'échantillon de la ligne.
+• Long : chaque ligne avec un taxon et une valeur est un enregistrement.
+• L'outil suggère la disposition d'après le sens des colonnes ; le choix vous appartient.`,
+  'tip.convertQuantityKind.does': `Dit ce que sont les nombres des cellules d'espèces.`,
+  'tip.convertQuantityKind.logic': `• Un effectif est un nombre d'individus et doit être entier ; il est écrit comme individualCount et comme mesure d'effectif ({countConcept}).
+• Une densité ou une biomasse est écrite comme mesure avec son unité, jamais comme individualCount.
+• Sans ce choix, la conversion est bloquée.
+• Rien n'est converti ni remis à l'échelle.`,
+  'tip.convertQuantityUnit.does': `L'unité dans laquelle les nombres sont écrits.`,
+  'tip.convertQuantityUnit.logic': `• Elle est écrite telle que vous la donnez et n'est jamais convertie.
+• Un concept pour l'unité n'est ajouté que pour les unités que l'outil a vérifiées : {units}.
+• Toute autre unité n'a pas de concept, seulement un avertissement, et le texte de l'unité reste tel que vous l'avez écrit.`,
+  'tip.convertQuantityBasis.does': `Pour une biomasse : masse humide, masse sèche ou masse sèche sans cendres.`,
+  'tip.convertQuantityBasis.logic': `• Chaque type de masse a son propre concept : {concepts}.
+• Sans lui, la biomasse ne peut pas être décrite et la conversion est bloquée.`,
+  'tip.convertQuantityPer.does': `Dit si les nombres se rapportent à un volume ou à une surface.`,
+  'tip.convertQuantityPer.logic': `• Il est normalement lu dans l'unité ; ne le choisissez que si l'unité ne le dit pas.
+• Une densité par volume d'eau a le concept {volumeConcept}, par surface du fond {areaConcept}.
+• L'unité ne tranche jamais seule contre votre choix.`,
+  'tip.convertQuantityMedium.does': `Pour des nombres par surface : la colonne d'eau ou le fond.`,
+  'tip.convertQuantityMedium.logic': `• Seul un nombre par surface du fond a un concept vérifié.
+• Un nombre par surface de la colonne d'eau n'a pas de concept, seulement un avertissement ; il faut en choisir un à la main avant la publication.`,
+  'tip.convertEffort.does': `Le volume ou la surface prélevé, si vous le connaissez.`,
+  'tip.convertEffort.logic': `• Donnez une valeur pour tous les échantillons, ou marquez une colonne de la feuille.
+• Elle est écrite pour chaque échantillon comme sampleSizeValue et sampleSizeUnit, et comme mesure : {volumeConcept} pour un volume, {areaConcept} pour une surface.
+• Un zéro, une valeur négative ou manquante bloque la conversion.`,
+  'tip.convertCruise.does': `Le code de la campagne, pour une feuille sans colonne de campagne.`,
+  'tip.convertCruise.logic': `• Il devient l'événement de campagne au sommet de l'arbre.
+• L'identifiant d'une station est le code de campagne, deux-points et le code de station.
+• Laissé vide, les stations n'ont pas de campagne au-dessus d'elles.`,
+  'tip.convertFullList.does': `Dit si chaque espèce de la liste a été recherchée dans chaque échantillon.`,
+  'tip.convertFullList.logic': `• Cochée : un zéro devient une absence (occurrenceStatus absent), avec un individualCount de zéro seulement pour les effectifs et sans mesure.
+• Non cochée : les zéros sont ignorés et leur nombre est donné à titre d'information.
+• Une cellule vide ou NA n'est jamais un enregistrement.
+• Le navigateur ne retient pas la case ; un fichier d'accompagnement déposé avec les données peut la cocher.`,
+  'tip.convertStationPrefix.does': `Rend uniques les identifiants d'échantillon lorsque le même code est utilisé à plusieurs stations.`,
+  'tip.convertStationPrefix.logic': `• Désactivé : l'identifiant d'un échantillon est votre code d'échantillon.
+• Activé : l'identifiant est l'identifiant de la station, deux-points et votre code.
+• Un identifiant n'est jamais fabriqué à partir de la profondeur, de l'ordre des lignes ni d'une recherche de nom de taxon.
+• Le choix apparaît quand des codes se répètent ou quand un fichier d'accompagnement l'a coché.`,
+  'tip.convertFlattenStation.does': `Retire le niveau station de l'arbre.`,
+  'tip.convertFlattenStation.logic': `• Le code de station est gardé comme localité de chaque échantillon, et les échantillons dépendent directement de la campagne.
+• Aucun identifiant ne change.
+• La date, la position et la profondeur de la campagne sont alors calculées à partir des échantillons.
+• Rien n'est aplati sans que vous le cochiez.`,
+  'tip.convertFlattenCruise.does': `Retire le niveau campagne de l'arbre.`,
+  'tip.convertFlattenCruise.logic': `• Le code de campagne passe plutôt au texte du jeu de données, et les stations sont au sommet de l'arbre.
+• L'identifiant d'une station commence toujours par le code de campagne.
+• Rien n'est aplati sans que vous le cochiez.`,
+  'tip.convertSplits.does': `Valide la façon dont un nom avec mention, stade ou sexe est divisé.`,
+  'tip.convertSplits.logic': `• Les mentions ({qualifiers}) vont dans la mention d'identification, les stades ({stages}) dans le stade de développement, et un f ou m après une virgule dans le sexe.
+• Le texte exact est toujours gardé comme verbatimIdentification.
+• Une division n'est qu'une proposition tant que vous ne l'avez pas validée, et une division non validée bloque la conversion.
+• Un nom simple ne demande aucune décision.`,
+  'tip.convertCodes.does': `Propose une seule fois des codes d'échantillon, pour une feuille qui n'en a pas.`,
+  'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille.
+• Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne ; vos cellules ne sont pas modifiées.
+• Vérifiez-la et rechargez ce fichier : seul un code de votre propre feuille chargée devient un identifiant.
+• Le convertisseur n'applique ni ne renouvelle jamais les codes de lui-même.`,
+  'tip.convertTree.does': `Montre l'arbre des événements que l'archive aurait.`,
+  'tip.convertTree.logic': `• Campagne, station et échantillon viennent de vos colonnes, et le type est écrit en texte.
+• La date d'une campagne ou d'une station est l'intervalle de ses échantillons ; sa position est le milieu du cadre autour de ses échantillons, avec une incertitude qui les couvre tous, en mètres entiers arrondis au supérieur ; sa profondeur va du haut le moins profond au bas le plus profond.
+• Seuls quelques exemples sont montrés, pas chaque événement.`,
 };
 
 export const TIP_TEXTS: Record<'en' | 'pl' | 'de' | 'fr', Record<TipKey, string>> = { en, pl, de, fr };

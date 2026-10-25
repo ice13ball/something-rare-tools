@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+// Pure helpers behind the /convert page: the quantity form as the core's declaration, the request for the worker, and the text of a finding.
+import type { BiomassBasis, ConvertShape, QuantityDeclaration, QuantityKind } from '../core/convert';
+import { isConvertRuleId, renderConvertPlain } from '../core/convert';
+import { renderPlain } from '../core/report';
+import type { Finding, Lang, SheetMapping } from '../core/types';
+import type { ConvertParseResult, ConvertRequestBody } from '../worker/convert.protocol';
+import type { ConvertOptions } from '../core/convert';
+import type { ApprovedSplits } from '../core/convert';
+
+/** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
+export interface QuantityForm {
+  kind: '' | QuantityKind;
+  unit: string;
+  basis: '' | BiomassBasis;
+  per: '' | 'volume' | 'area';
+  medium: '' | 'water' | 'bed';
+  effort: 'none' | 'constant' | 'column';
+  effortValue: string;
+  effortUnit: string;
+  effortDimension: '' | 'volume' | 'area';
+}
+
+export const EMPTY_QUANTITY: QuantityForm = { kind: '', unit: '', basis: '', per: '', medium: '', effort: 'none', effortValue: '', effortUnit: '', effortDimension: '' };
+
+/** Everything the user decides about one sheet. */
+export interface SheetChoice {
+  use: boolean;
+  shape: ConvertShape;
+  quantity: QuantityForm;
+  cruise: string;
+}
+
+/**
+ * The form as the core's declaration. No kind chosen = no declaration at all, which the core reports as CONV-QUANTITY-UNDECLARED: nothing is
+ * guessed. Only what the user filled in is passed on; the core says what is still missing.
+ */
+export function declarationOf(f: QuantityForm): QuantityDeclaration | undefined {
+  if (f.kind === '') return undefined;
+  const d: QuantityDeclaration = { kind: f.kind };
+  if (f.kind !== 'count') {
+    if (f.unit.trim() !== '') d.unit = f.unit.trim();
+    if (f.kind === 'biomass' && f.basis !== '') d.basis = f.basis;
+    if (f.per !== '') d.per = f.per;
+    if (f.medium !== '') d.medium = f.medium;
+  }
+  if (f.effort === 'constant') {
+    d.effort = { source: 'constant', value: f.effortValue, ...(f.effortUnit.trim() === '' ? {} : { unit: f.effortUnit.trim() }), ...(f.effortDimension === '' ? {} : { dimension: f.effortDimension }) };
+  } else if (f.effort === 'column') {
+    d.effort = { source: 'column', ...(f.effortUnit.trim() === '' ? {} : { unit: f.effortUnit.trim() }), ...(f.effortDimension === '' ? {} : { dimension: f.effortDimension }) };
+  }
+  return d;
+}
+
+export const sheetKey = (fileId: string, sheet: string): string => `${fileId}\u0000${sheet}`;
+
+export interface ConvertState {
+  parsed: ConvertParseResult;
+  mappings: Record<string, SheetMapping[]>;
+  choices: Record<string, SheetChoice>;
+  options: ConvertOptions;
+  approved: ApprovedSplits;
+}
+
+/** The request for the worker: the sheets the user kept, with their confirmed roles, shape and declaration. */
+export function requestOf(s: ConvertState): ConvertRequestBody {
+  const sheets: ConvertRequestBody['sheets'] = [];
+  for (const f of s.parsed.files) {
+    for (const m of s.mappings[f.fileId] ?? f.mappings) {
+      const c = s.choices[sheetKey(f.fileId, m.sheet)];
+      if (!c || !c.use) continue;
+      const q = declarationOf(c.quantity);
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+    }
+  }
+  return { sheets, options: s.options, approvedSplits: s.approved };
+}
+
+/** The initial choices: every sheet used, the shape the overlay suggests (wide when it cannot tell), nothing declared. */
+export function initialChoices(parsed: ConvertParseResult): Record<string, SheetChoice> {
+  const out: Record<string, SheetChoice> = {};
+  for (const f of parsed.files) for (const sh of f.sheets) out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '' };
+  return out;
+}
+
+/** A finding in words: the converter's own rules from their registry, the data-check rules (a date that cannot be read) from theirs. */
+export function plainOf(f: Finding, lang: Lang): string {
+  return isConvertRuleId(f.ruleId) ? renderConvertPlain(f, lang) : renderPlain(f, lang);
+}
+
+/** The file name of the sheet with proposed codes: "<name>-with-codes.csv" (a sheet name is added for a workbook). */
+export function codesFileName(fileName: string, sheet: string, sheetCount: number): string {
+  const stem = fileName.replace(/\.[A-Za-z0-9]+$/, '');
+  return `${stem}${sheetCount > 1 ? `-${sheet}` : ''}-with-codes.csv`;
+}
