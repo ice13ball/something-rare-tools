@@ -6,8 +6,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { preferredLabel } from '../../src/app/convertModel';
 import { judge, policyOf } from '../../src/core/convert/policy';
-import { P01_URI, P06_URI, conceptUri, readDecision, readPick, suggestType, suggestUnit, suggestedPick } from '../../src/core/convert/nerc';
+import { P01_URI, P06_URI, conceptUri, measurementTypeText, readDecision, readPick, suggestType, suggestUnit, suggestedPick } from '../../src/core/convert/nerc';
 import type { NercDecisions } from '../../src/core/convert/nerc';
 import { P06, VARIABLE_CONCEPTS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, foldUnit, nercUri, unitConcept } from '../../src/core/convert/vocab';
 import { renderConvertPlain } from '../../src/core/rules/convert';
@@ -26,6 +27,10 @@ const ROWS: Cell[][] = [
 const ix = (name: string): number => HEADER.indexOf(name);
 const uri = (c: 'P01' | 'P06', code: string): string => nercUri(c, code);
 const pick = (c: 'P01' | 'P06', code: string, source: 'suggested' | 'nvs' = 'suggested') => ({ id: uri(c, code), source, deprecated: false as const });
+
+const TEMP_LABEL = 'Temperature of the water body';
+const OXY_LABEL = 'Concentration of oxygen {O2 CAS 7782-44-7} per unit volume of the water body [dissolved plus reactive particulate phase]';
+const CHL_LABEL = 'Concentration of chlorophyll-a {chl-a CAS 479-61-8} per unit volume of the water body [particulate >unknown phase]';
 
 const run = (nerc?: NercDecisions, extra: Partial<ExportOptions> = {}) => exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true, device: { kind: 'known', key: 'bongo' }, ...(nerc ? { nerc } : {}), ...extra });
 const emof = async (e: Awaited<ReturnType<typeof run>>) => objects((await readBack(e.zip)).tables['extendedmeasurementorfact.txt']);
@@ -130,17 +135,19 @@ describe('B2: an identifier is written only for what the user confirmed, per col
   it('a confirmed type and unit are written for THAT column only; the others stay without an ID and keep their warning', async () => {
     const nerc: NercDecisions = { [String(ix('Temperature [°C]'))]: { type: pick('P01', 'TEMPPR01'), unit: pick('P06', 'UPAA') } };
     const e = await run(nerc);
-    const rows = (await emof(e)).filter((m) => ['temperature', 'salinity', 'oxygen'].includes(m.measurementType));
+    const rows = (await emof(e)).filter((m) => ['temperature', TEMP_LABEL, 'salinity', 'oxygen'].includes(m.measurementType));
+    expect(rows.length).toBe(6);
     for (const m of rows) {
-      if (m.measurementType === 'temperature') expect([m.measurementTypeID, m.measurementUnitID]).toEqual([uri('P01', 'TEMPPR01'), uri('P06', 'UPAA')]);
-      else expect([m.measurementTypeID, m.measurementUnitID]).toEqual(['', '']);
+      if (m.measurementTypeID === uri('P01', 'TEMPPR01')) expect([m.measurementType, m.measurementUnitID]).toEqual([TEMP_LABEL, uri('P06', 'UPAA')]);
+      else expect([m.measurementTypeID, m.measurementUnitID]).toEqual(['', '']); // an unconfirmed column keeps the variable name
     }
+    expect(rows.filter((m) => m.measurementType === 'temperature')).toEqual([]);
     expect(e.findings.find((f) => f.ruleId === 'CONV-NERC-UNKNOWN')?.params.what).toBe('salinity, oxygen');
     expect(e.findings.filter((f) => f.ruleId === 'CONV-UNIT-NO-P06').map((f) => f.params.unit)).toEqual(['PSU', 'µmol/L']);
     expect(e.result.stats.nerc).toEqual({ columns: 3, typeIds: 1, unitIds: 1, nvsIds: 0 });
   });
 
-  it('confirming every column removes both warnings, and the measurementType is still the variable name, not the concept label', async () => {
+  it('confirming every column removes both warnings, and the measurementType is the English label of the confirmed concept (not the variable name)', async () => {
     const nerc: NercDecisions = {
       [String(ix('Temperature [°C]'))]: { type: pick('P01', 'TEMPPR01'), unit: pick('P06', 'UPAA') },
       [String(ix('Salinity [PSU]'))]: { type: pick('P01', 'PSLTZZ01'), unit: pick('P06', 'PSUX') },
@@ -148,7 +155,11 @@ describe('B2: an identifier is written only for what the user confirmed, per col
     };
     const e = await run(nerc);
     expect(e.findings.some((f) => f.ruleId === 'CONV-NERC-UNKNOWN' || f.ruleId === 'CONV-UNIT-NO-P06')).toBe(false);
-    expect((await emof(e)).filter((m) => m.measurementType === 'oxygen').map((m) => m.measurementTypeID)).toEqual([uri('P01', 'DOXYZZXX'), uri('P01', 'DOXYZZXX')]);
+    const rows = await emof(e);
+    expect(rows.filter((m) => m.measurementTypeID === uri('P01', 'DOXYZZXX')).map((m) => m.measurementType)).toEqual([OXY_LABEL, OXY_LABEL]);
+    expect(rows.filter((m) => m.measurementTypeID === uri('P01', 'TEMPPR01')).every((m) => m.measurementType === TEMP_LABEL)).toBe(true);
+    expect(rows.filter((m) => m.measurementTypeID === uri('P01', 'PSLTZZ01')).every((m) => m.measurementType === 'Practical salinity of the water body')).toBe(true);
+    expect(rows.some((m) => ['temperature', 'salinity', 'oxygen'].includes(m.measurementType))).toBe(false);
     expect(e.result.stats.nerc).toEqual({ columns: 3, typeIds: 3, unitIds: 3, nvsIds: 1 });
   });
 
@@ -193,7 +204,8 @@ describe('B2: an identifier is written only for what the user confirmed, per col
       nerc: { 5: { type: pick('P01', 'CPHLZZXX', 'nvs'), unit: pick('P06', 'UGPL', 'nvs') } },
     });
     const m = e.result.measurements.find((x) => x.role === 'variable');
-    expect(m).toMatchObject({ measurementType: 'chlorophyll', measurementTypeId: uri('P01', 'CPHLZZXX') });
+    // CPHLZZXX is on the verified list, so its label is the list's, whatever the pick says
+    expect(m).toMatchObject({ measurementType: CHL_LABEL, measurementTypeId: uri('P01', 'CPHLZZXX') });
     expect(m?.measurementUnitId).toBeUndefined();
     expect(m?.measurementUnit).toBeUndefined();
     // a variable with no unit is not a CONV-UNIT-NO-P06 (there is no unit to identify)
@@ -312,5 +324,42 @@ describe('T11: /check\'s vocabulary is untouched', () => {
   it('src/core/recognize/vocab.ts (UNIT_VOCAB, P01_HINTS, the canonical variables) is byte-for-byte the one of production (96994b5)', () => {
     const sha = createHash('sha256').update(readFileSync(join(__dirname, '..', '..', 'src', 'core', 'recognize', 'vocab.ts'))).digest('hex');
     expect(sha).toBe('47c5f0cde262778fb624703489a688645f30702b6725e459fc846089f62a6f1d');
+  });
+});
+
+describe('measurementType of a variable row: the English label of a confirmed concept, the variable name otherwise', () => {
+  const X_HEADER = ['Sample', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'X [umol/l]'];
+  const X_ROWS: Cell[][] = [['A', 55, 2, '2023-06-14', 4, 1.5]];
+  const runX = (nerc?: NercDecisions) => exportSheet(X_HEADER, X_ROWS, { quantity: { kind: 'count' }, edit: { 'X [umol/l]': { kind: 'variable', variable: 'chlorophyll' } }, ...(nerc ? { nerc } : {}) });
+  const typeOf = (e: Awaited<ReturnType<typeof runX>>) => e.result.measurements.find((x) => x.role === 'variable')?.measurementType;
+
+  it('a concept from the NVS search writes the label the search returned; an unconfirmed column keeps its name', async () => {
+    expect(typeOf(await runX())).toBe('chlorophyll');
+    expect(typeOf(await runX({ 5: { type: { ...pick('P01', 'ZZTESTC1', 'nvs'), label: 'An invented test concept' } } }))).toBe('An invented test concept');
+  });
+
+  it('an NVS pick with no label, with an unusable one (tab, line break, empty, very long), or a unit-only pick keeps the variable name', async () => {
+    for (const label of [undefined, '', '   ', 'two\twords', 'two\nlines', 'x'.repeat(501)]) {
+      expect(typeOf(await runX({ 5: { type: { ...pick('P01', 'ZZTESTC1', 'nvs'), ...(label === undefined ? {} : { label }) } } })), JSON.stringify(label)).toBe('chlorophyll');
+    }
+    expect(typeOf(await runX({ 5: { unit: pick('P06', 'UPOX') } }))).toBe('chlorophyll');
+  });
+
+  it('a verified code always carries the verified label, whatever the pick says', () => {
+    expect(measurementTypeText({ ...pick('P01', 'TEMPPR01', 'nvs'), label: 'Something else' }, 'temperature')).toBe(TEMP_LABEL);
+    expect(measurementTypeText(undefined, 'temperature')).toBe('temperature');
+    expect(measurementTypeText({ ...pick('P01', 'ZZTESTC1', 'nvs'), label: '  Padded label ' }, 'x')).toBe('Padded label');
+  });
+
+  it('the page sends the concept\'s preferred label, not the "CODE: label" text of its lists', () => {
+    expect(preferredLabel({ id: uri('P01', 'ZZTESTC1'), label: 'ZZTESTC1: An invented test concept' })).toBe('An invented test concept');
+    expect(preferredLabel({ id: uri('P01', 'ZZTESTC1'), label: 'An invented test concept' })).toBe('An invented test concept');
+    expect(preferredLabel({ id: uri('P01', 'ZZTESTC1'), label: 'ZZTESTC1: ' })).toBe('');
+  });
+
+  it('the label and the measurementTypeID are written together in the archive', async () => {
+    const e = await runX({ 5: { type: { ...pick('P01', 'ZZTESTC1', 'nvs'), label: 'An invented test concept' } } });
+    const rows = (await emof(e)).filter((m) => m.measurementTypeID === uri('P01', 'ZZTESTC1'));
+    expect(rows.map((m) => m.measurementType)).toEqual(['An invented test concept']);
   });
 });

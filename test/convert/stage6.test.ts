@@ -410,7 +410,7 @@ describe('measurements', () => {
     const temp = mapping.columns.find((c) => c.header === 'Temperature [°C]')!.index;
     const nerc = { [String(temp)]: { type: { id: 'http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/', source: 'suggested' as const, deprecated: false }, unit: { id: 'http://vocab.nerc.ac.uk/collection/P06/current/UPAA/', source: 'suggested' as const, deprecated: false } } };
     const r = run([BIO(), CTD({ nerc })]);
-    const t = r.measurements.filter((m) => m.role === 'variable' && m.measurementType === 'temperature');
+    const t = r.measurements.filter((m) => m.role === 'variable' && m.measurementType === 'Temperature of the water body');
     expect(t.every((m) => m.measurementTypeId === 'http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/' && m.measurementUnitId === 'http://vocab.nerc.ac.uk/collection/P06/current/UPAA/')).toBe(true);
     expect(t).toHaveLength(7);
     const unknown = r.findings.find((f) => f.ruleId === 'CONV-NERC-UNKNOWN' && f.sheet === 'CTD')!;
