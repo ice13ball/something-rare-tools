@@ -28,6 +28,8 @@ export type TrackEvent = 'check_started' | 'check_finished' | 'convert_started' 
 export type ConvertShapeParam = 'wide' | 'long' | 'mixed';
 /** Whether a CTD / profile file went into the archive (a later stage; `none` until then). */
 export type ConvertProfileParam = 'none' | 'ctd';
+/** convert_exported: whether a metadata file was dropped with the data (`file`) or not (`none`). Never a title, a name or an e-mail address. */
+export type ConvertMetaSourceParam = 'none' | 'file';
 export interface TrackParams {
   input_type: InputType;
   mode: DownloadMode;
@@ -37,6 +39,7 @@ export interface TrackParams {
   /** convert_exported: the shape of the converted sheets and the profile flag */
   shape?: ConvertShapeParam;
   profile?: ConvertProfileParam;
+  meta_source?: ConvertMetaSourceParam;
   /** convert_exported: how many events, occurrences and measurement rows the archive has */
   n_events?: number;
   n_occurrences?: number;
@@ -48,6 +51,7 @@ const MODES: readonly string[] = ['browser', 'server'];
 const EVENTS: readonly string[] = ['check_started', 'check_finished', 'convert_started', 'convert_blocked', 'convert_exported'];
 const SHAPES: readonly string[] = ['wide', 'long', 'mixed'];
 const PROFILES: readonly string[] = ['none', 'ctd'];
+const META_SOURCES: readonly string[] = ['none', 'file'];
 const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info', 'n_events', 'n_occurrences', 'n_measurements'] as const;
 
 const isState = (v: unknown): v is ConsentState => v === 'granted' || v === 'denied';
@@ -200,6 +204,7 @@ export function track(event: TrackEvent, params: TrackParams): void {
   if (typeof p.mode === 'string' && MODES.includes(p.mode)) clean.mode = p.mode;
   if (typeof p.shape === 'string' && SHAPES.includes(p.shape)) clean.shape = p.shape;
   if (typeof p.profile === 'string' && PROFILES.includes(p.profile)) clean.profile = p.profile;
+  if (typeof p.meta_source === 'string' && META_SOURCES.includes(p.meta_source)) clean.meta_source = p.meta_source;
   for (const k of COUNT_KEYS) {
     const v = p[k];
     if (typeof v === 'number' && Number.isFinite(v)) clean[k] = Math.max(0, Math.round(v));

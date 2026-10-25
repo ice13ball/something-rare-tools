@@ -8,12 +8,13 @@
 import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput } from '../core/convert';
 import { EMPTY_METADATA } from '../core/convert/metadata';
+import { buildPrefill, prefillValues } from '../core/convert/prefill';
 import { readConvertFile } from '../core/convert/read';
 import { readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { parseFile } from '../core/parse';
 import { toMapping } from '../core/recognize/columns';
-import type { ColumnProposal, LayoutPlan, ParsedFile, RawCell, SheetMapping } from '../core/types';
+import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
 import { MAX_SAMPLES, type InputFile } from './protocol';
@@ -64,7 +65,8 @@ export function createConvertHandler(): ConvertHandler {
   function parse(req: Extract<ConvertRequest, { type: 'parse' }>): ConvertParseResult {
     files = new Map();
     seq = 0;
-    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {} };
+    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {}, prefillInfo: null };
+    const records: MetadataRecord[] = [];
     const parsedAll: ParsedFile[] = [];
     for (const f of req.files as InputFile[]) {
       try {
@@ -77,7 +79,9 @@ export function createConvertHandler(): ConvertHandler {
     const settings: ConvertSettings = result.settings;
     for (const parsed of parsedAll) {
       if (parsed.kind === 'metadata') {
+        // never a data sheet: its record goes to the description of the dataset (core/convert/prefill.ts), read by the shared metadata parsers
         result.metadataFiles.push(parsed.fileName);
+        if (parsed.embeddedMetadata) records.push(parsed.embeddedMetadata);
         continue;
       }
       // a companion file of an earlier run: not a table; its settings pre-tick the page, for this drop only
@@ -117,6 +121,8 @@ export function createConvertHandler(): ConvertHandler {
         suggestedShapes: shapes,
       });
     }
+    result.prefillInfo = buildPrefill(records) ?? null;
+    result.prefill = prefillValues(result.prefillInfo ?? undefined);
     return result;
   }
 

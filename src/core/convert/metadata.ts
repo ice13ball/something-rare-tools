@@ -42,6 +42,8 @@ export interface DatasetMetadata {
   basisOfRecord: '' | BasisOfRecord;
   /** Optional: how the data were collected (EML methods). */
   methods: string;
+  /** Optional: the citation written into the EML (additionalMetadata/gbif/citation). Empty = built from the creators, the year and the title. */
+  citation: string;
 }
 
 export const EMPTY_METADATA: DatasetMetadata = {
@@ -55,6 +57,7 @@ export const EMPTY_METADATA: DatasetMetadata = {
   licence: '',
   basisOfRecord: '',
   methods: '',
+  citation: '',
 };
 
 export const isLicence = (v: unknown): v is LicenceId => typeof v === 'string' && (LICENCES as readonly string[]).includes(v);
@@ -77,6 +80,21 @@ export function applyPrefill(form: DatasetMetadata, prefill: Partial<DatasetMeta
     } else out[k] = v;
   }
   return out;
+}
+
+/**
+ * The description after a new drop: a field the user touched (typed in, cleared or chose a value for) keeps what it holds; every other field is first emptied
+ * (it may hold a value of the previous drop's metadata files) and then filled from this drop's prefill, empty fields only. What the user typed is never overwritten.
+ */
+export function refreshPrefill(form: DatasetMetadata, touched: ReadonlySet<keyof DatasetMetadata>, prefill: Partial<DatasetMetadata> | undefined): DatasetMetadata {
+  const base: DatasetMetadata = { ...form };
+  const allowed: Partial<DatasetMetadata> = {};
+  for (const k of Object.keys(EMPTY_METADATA) as (keyof DatasetMetadata)[]) {
+    if (touched.has(k)) continue; // typed, cleared or chosen by the user: kept exactly as it is, even when empty
+    base[k] = '';
+    if (prefill?.[k] !== undefined) allowed[k] = prefill[k] as never;
+  }
+  return applyPrefill(base, allowed);
 }
 
 /** The dataset name: the typed one, or the title when none was typed. Trimmed; '' when neither exists. */

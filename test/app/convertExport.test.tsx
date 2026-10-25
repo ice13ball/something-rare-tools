@@ -244,7 +244,7 @@ describe('the download', () => {
     const sheet = f.sheets[0].name;
     const mapping = { ...f.mappings[0], columns: f.mappings[0].columns };
     const body = { sheets: [{ fileId: f.fileId, sheet, mapping, shape: 'wide' as const, quantity: { kind: 'count' as const, effort: { source: 'column' as const } } }], options: { fullList: true }, approvedSplits: { 'Pseudocalanus sp.': { verbatimIdentification: 'Pseudocalanus sp.', scientificName: 'Pseudocalanus', identificationQualifier: 'sp.' } } };
-    const meta = { title: 'T', abstract: 'A', creators: 'A B', contactName: 'A B', contactEmail: 'a@b.org', institutionCode: 'X', datasetName: '', licence: 'CC0-1.0' as const, basisOfRecord: 'HumanObservation' as const, methods: '' };
+    const meta = { title: 'T', abstract: 'A', creators: 'A B', contactName: 'A B', contactEmail: 'a@b.org', institutionCode: 'X', datasetName: '', licence: 'CC0-1.0' as const, basisOfRecord: 'HumanObservation' as const, methods: '', citation: '' };
     const run = (m: typeof meta, accepted: string[], b = body) => Promise.resolve(h.handle({ type: 'export', export: { body: b, metadata: m, accepted, generated: '2026-10-25T12:00:00Z' } }));
     const ACCEPT = ['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'];
     await expect(run(meta, [])).rejects.toThrow(/CONV-DEVICE-MISSING, CONV-NAMEID-MISSING not accepted|CONV-NAMEID-MISSING, CONV-DEVICE-MISSING not accepted/);
@@ -318,7 +318,7 @@ describe('GA4: only after consent, only enums and counts', () => {
     expect(e[0].params).toEqual({ input_type: 'file', mode: 'browser' });
     expect(Object.keys(e[1].params).sort()).toEqual(['input_type', 'mode', 'n_errors']);
     expect(e[1].params.n_errors).toBeGreaterThan(0);
-    expect(e[2].params).toEqual({ input_type: 'file', mode: 'browser', shape: 'wide', profile: 'none', n_events: 6, n_occurrences: 7, n_measurements: 9 });
+    expect(e[2].params).toEqual({ input_type: 'file', mode: 'browser', shape: 'wide', profile: 'none', meta_source: 'none', n_events: 6, n_occurrences: 7, n_measurements: 9 });
     expect(JSON.stringify(win.dataLayer)).not.toMatch(/w1\.csv|Calanus|Synthetic counts|ada@|INVENTED|CR1|S1-a/);
   });
 

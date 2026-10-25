@@ -100,6 +100,8 @@ export function parseDataciteJson(json: unknown, label: string): MetadataRecord 
   if (creators.length > 0) rec.creators = creators;
   const orgs = (Array.isArray(a.creators) ? a.creators : []).filter(isObj).filter((c) => /^organi[sz]ation/i.test(str(c.nameType) ?? '')).map((c) => str(c.name)).filter((n): n is string => !!n);
   if (orgs.length > 0) rec.organisations = orgs;
+  const contactsJson = (Array.isArray(a.contributors) ? a.contributors : []).filter(isObj).filter((c) => /^contactperson$/i.test(str(c.contributorType) ?? '')).map((c) => str(c.name) ?? str([str(c.familyName), str(c.givenName)].filter(Boolean).join(', '))).filter((n): n is string => !!n);
+  if (contactsJson.length > 0) rec.contacts = contactsJson.map((name) => ({ name }));
   rec.publicationYear = yearOf(a.publicationYear);
   rec.publisher = isObj(a.publisher) ? str(a.publisher.name) : str(a.publisher);
   if (isObj(a.types)) rec.resourceType = str(a.types.resourceTypeGeneral) ?? str(a.types.resourceType);
@@ -153,6 +155,11 @@ export function parseDataciteXml(xml: string, label: string): MetadataRecord {
   if (creators.length > 0) rec.creators = creators;
   const orgs = children(one(root, 'creators') ?? root, ns, 'creator').flatMap((c) => { const n = child(c, ns, 'creatorName'); return n && /^organi[sz]ation/i.test(n.getAttribute('nameType') ?? '') ? [text(n)] : []; }).filter((n): n is string => !!n);
   if (orgs.length > 0) rec.organisations = orgs;
+  const contactsXml = children(one(root, 'contributors') ?? root, ns, 'contributor')
+    .filter((c) => /^contactperson$/i.test(c.getAttribute('contributorType') ?? ''))
+    .map((c) => text(child(c, ns, 'contributorName')))
+    .filter((n): n is string => !!n);
+  if (contactsXml.length > 0) rec.contacts = contactsXml.map((name) => ({ name }));
   rec.publicationYear = yearOf(text(one(root, 'publicationYear')));
   rec.publisher = text(one(root, 'publisher'));
   const rt = one(root, 'resourceType');

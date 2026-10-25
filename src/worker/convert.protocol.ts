@@ -5,6 +5,7 @@
 import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, QuantityDeclaration, SamplingDevice, SplitEntry, TreeSummary } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { DatasetMetadata } from '../core/convert/metadata';
+import type { ConvertPrefill } from '../core/convert/prefill';
 import type { ConvertSettings } from '../core/convert/settings';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
@@ -18,7 +19,7 @@ export interface ConvertFileSummary extends FileSummary {
 export interface ConvertParseResult {
   files: ConvertFileSummary[];
   problems: FileProblem[];
-  /** Metadata files: recognised, not used before a later stage. */
+  /** Metadata files (ISO 19139, DataCite, Zenodo): never read as a data sheet; what they say is in `prefillInfo`. */
   metadataFiles: string[];
   /** Files that hold no table (PDF, unknown content). */
   notRead: { fileName: string; kind: string }[];
@@ -27,10 +28,12 @@ export interface ConvertParseResult {
   /** What the companion file(s) of THIS drop say: the page starts the ticks from it and from nothing else. */
   settings: ConvertSettings;
   /**
-   * What the dropped metadata files say about the dataset description (title, creators, licence, ...), to prefill the form (core/convert/metadata.ts
-   * applyPrefill: only empty fields, the user edits everything). Empty in this stage: metadata files are recognised, not yet read (stage 3).
+   * What the dropped metadata files say about the dataset description (title, creators, contact, citation, licence in the "taken" case), to prefill the
+   * form (core/convert/metadata.ts refreshPrefill: only empty, untouched fields; the user edits everything). Only values every file agrees on.
    */
   prefill: Partial<DatasetMetadata>;
+  /** The same metadata, with its sources, the choices where files disagree, the licence case and the coverage they state. Null without a metadata file. */
+  prefillInfo: ConvertPrefill | null;
 }
 
 export interface ConvertSheetRequest {

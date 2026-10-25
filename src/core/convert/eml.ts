@@ -147,8 +147,12 @@ function personXml(tag: string, line: string, email: string | undefined, pad: st
   ].join('\n');
 }
 
-/** "Family, G. & Family2, H. (2026). Title. Dataset." style citation line from the typed creators. */
+/**
+ * The citation written into additionalMetadata/gbif/citation: the typed (or prefilled) one on one line, else "Family, G.; Family2, H. (2026). Title. Dataset."
+ * built from the creators, the title and the year of the export.
+ */
 function citationOf(m: DatasetMetadata, year: string): string {
+  if (m.citation.trim() !== '') return m.citation.trim().replace(/\s+/g, ' ');
   const names = creatorLines(m).map((l) => {
     const n = splitPersonName(l);
     return n.givenName === undefined ? n.surName : `${n.surName}, ${n.givenName}`;

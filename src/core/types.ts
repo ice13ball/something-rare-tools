@@ -80,6 +80,8 @@ export interface MetadataRecord {
   isoProfile?: '19139' | '19115-3';   // source 'iso19139' covers both ISO profiles; this says which one was read
   creators?: string[];          // for the attribution line, in source order
   organisations?: string[];     // the creators the source marks as organisations (DataCite nameType Organizational, Zenodo person_or_org.type organizational)
+  /** Contact persons the record names (ISO pointOfContact, DataCite / Zenodo contributor of type ContactPerson), in source order: the person's name (an organisation's when no person is named) and the e-mail address when the record has one. Read for the /convert form only; no /check rule looks at it. */
+  contacts?: { name?: string; email?: string }[];
   publicationYear?: number;
   publisher?: string;
   parameters?: { name: string; unit?: string }[];      // PANGAEA parameter list

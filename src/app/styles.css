@@ -1529,3 +1529,34 @@ code.multiline {
 .convert-splits .table-scroll {
   position: relative;
 }
+
+/* Stage 3: the description form with values from dropped metadata files. Long file names, field names and values wrap; nothing widens the page. */
+.convert-fields > .field.convert-wide {
+  flex: 1 1 100%;
+}
+
+.convert-meta-note,
+.convert-choice,
+.convert-licence-note,
+.convert-coverage,
+.convert-metafile-list {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.convert-choice ul,
+.convert-coverage ul,
+.convert-licence-note ul,
+.convert-metafile-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.convert-choice li,
+.convert-licence-note li {
+  margin: 0.35rem 0;
+}
+
+.convert-choice-value {
+  white-space: pre-wrap;
+}

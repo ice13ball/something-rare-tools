@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
 import { bulkApprovable, judge, metadataFindings, writeConvertSidecar } from '../../core/convert';
-import { EMPTY_METADATA, applyPrefill } from '../../core/convert/metadata';
+import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { UiKey } from '../../core/i18n/ui';
 import type { Finding, SheetMapping } from '../../core/types';
@@ -101,7 +101,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [exported, setExported] = useState<(Pick<ExportResult, 'fileName' | 'counts' | 'deflated'>) | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const token = useRef(0);
+  // the description fields the user typed in, cleared or chose a value for: a new drop never overwrites them (core/convert/metadata.ts refreshPrefill)
+  const touched = useRef(new Set<keyof DatasetMetadata>());
   const files = parsed?.files ?? [];
+  const changeMeta = (next: DatasetMetadata): void => {
+    for (const k of Object.keys(next) as (keyof DatasetMetadata)[]) if (next[k] !== meta[k]) touched.current.add(k);
+    setMeta(next);
+  };
 
   // Work that leaving would lose: files chosen, or a conversion in view. Never an empty page.
   useLeaveWarning(filesChosen > 0 || phase !== 'input');
@@ -128,8 +134,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     try {
       const p = await engine.parse(await toInputFiles(input.files));
       setParsed(p);
-      // the description starts empty, plus whatever the dropped metadata files said (an empty field only; the user edits everything)
-      setMeta(applyPrefill(EMPTY_METADATA, p.prefill));
+      // the description holds what the user typed, plus what the dropped metadata files said for every other field (the user edits everything)
+      setMeta((m) => refreshPrefill(m, touched.current, p.prefill));
       setMappings(Object.fromEntries(p.files.map((f) => [f.fileId, f.mappings])));
       setChoices(initialChoices(p));
       // the ticks start from a companion file of THIS drop, and from nothing else
@@ -151,6 +157,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setAccepted({});
     setExported(null);
     setExportError(null);
+    touched.current.clear();
     setMeta(EMPTY_METADATA);
     setPhase('input');
   };
@@ -269,6 +276,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         mode: 'browser',
         shape: shapeOf(shapes),
         profile: 'none',
+        meta_source: parsed.metadataFiles.length > 0 ? 'file' : 'none',
         n_events: res.counts.events,
         n_occurrences: res.counts.occurrences,
         n_measurements: res.counts.measurements,
@@ -317,7 +325,19 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           </ul>
         </section>
       )}
-      {parsed && parsed.metadataFiles.length > 0 && <p className="muted">{t('convert.files.metadata', { names: parsed.metadataFiles.join(', ') })}</p>}
+      {parsed && parsed.prefillInfo && (
+        <section className="convert-metafiles" aria-labelledby="convert-metafiles-title">
+          <HeadingTip tip="convertMetaFiles">
+            <h2 id="convert-metafiles-title">{t('convert.metafiles.title')}</h2>
+          </HeadingTip>
+          <p className="muted">{t('convert.metafiles.intro')}</p>
+          <ul className="convert-metafile-list">
+            {parsed.prefillInfo.files.map((f) => (
+              <li key={f.fileName}>{t('convert.metafiles.item', { name: f.fileName, kind: f.kind })}</li>
+            ))}
+          </ul>
+        </section>
+      )}
       {parsed && parsed.mappingFiles.length > 0 && <p className="muted">{t('convert.files.companion', { names: parsed.mappingFiles.join(', ') })}</p>}
       {parsed && parsed.notRead.length > 0 && <p className="muted">{t('confirm.notRead', { names: parsed.notRead.map((n) => n.fileName).join(', ') })}</p>}
       {parsed && parsed.files.length === 0 && phase === 'input' && <p className="notice">{t('convert.noSheets')}</p>}
@@ -588,7 +608,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           <section className="convert-meta" aria-labelledby="convert-meta-title">
             <h2 id="convert-meta-title">{t('convert.meta.title')}</h2>
             <p>{t('convert.meta.intro')}</p>
-            <ConvertMetadataForm value={meta} onChange={setMeta} />
+            <ConvertMetadataForm value={meta} onChange={changeMeta} prefill={parsed.prefillInfo} />
             <FindingList titleKey="convert.summary.blocking" findings={metaFindings} kind="error" />
           </section>
 
