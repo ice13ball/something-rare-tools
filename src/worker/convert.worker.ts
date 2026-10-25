@@ -5,14 +5,21 @@ import { handle } from './convert.handler';
 import type { ConvertWireRequest } from './convert.protocol';
 import type { WireResponse } from './protocol';
 
-const ctx = self as unknown as { onmessage: ((e: MessageEvent<ConvertWireRequest>) => void) | null; postMessage(msg: WireResponse): void };
+const ctx = self as unknown as { onmessage: ((e: MessageEvent<ConvertWireRequest>) => void) | null; postMessage(msg: WireResponse, transfer?: Transferable[]): void };
 
 const fail = (id: number, err: unknown): void => ctx.postMessage({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
 
 ctx.onmessage = (e: MessageEvent<ConvertWireRequest>) => {
   const { id, req } = e.data;
   try {
-    Promise.resolve(handle(req)).then((result) => ctx.postMessage({ id, ok: true, result }), (err: unknown) => fail(id, err));
+    Promise.resolve(handle(req)).then(
+      (result) => {
+        // the archive's bytes move to the page instead of being copied
+        const bytes = (result as { bytes?: unknown } | null)?.bytes;
+        ctx.postMessage({ id, ok: true, result }, bytes instanceof Uint8Array && bytes.buffer instanceof ArrayBuffer ? [bytes.buffer] : []);
+      },
+      (err: unknown) => fail(id, err),
+    );
   } catch (err) {
     fail(id, err);
   }

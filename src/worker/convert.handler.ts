@@ -5,14 +5,16 @@
 // Not composed from createHandler() of worker/handler.ts, on purpose: that handler keeps the parsed files private and builds /check datasets,
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
-import { convert, listSplits, proposeConvertColumns, proposeSampleCodes, suggestConvertShape } from '../core/convert';
+import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput } from '../core/convert';
+import { EMPTY_METADATA } from '../core/convert/metadata';
+import { readConvertFile } from '../core/convert/read';
 import { readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { parseFile } from '../core/parse';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, ParsedFile, RawCell, SheetMapping } from '../core/types';
-import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView } from './convert.protocol';
+import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
 import { MAX_SAMPLES, type InputFile } from './protocol';
 
@@ -62,11 +64,12 @@ export function createConvertHandler(): ConvertHandler {
   function parse(req: Extract<ConvertRequest, { type: 'parse' }>): ConvertParseResult {
     files = new Map();
     seq = 0;
-    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false } };
+    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {} };
     const parsedAll: ParsedFile[] = [];
     for (const f of req.files as InputFile[]) {
       try {
-        parsedAll.push(parseFile(f.name, f.bytes));
+        // the converter's own reading path: the formula guard of its code-proposal CSV comes off every text cell and header (core/convert/read.ts)
+        parsedAll.push(readConvertFile(parseFile(f.name, f.bytes)));
       } catch (e) {
         result.problems.push({ fileName: f.name, message: e instanceof Error ? e.message : String(e) });
       }
@@ -117,7 +120,8 @@ export function createConvertHandler(): ConvertHandler {
     return result;
   }
 
-  function run(body: ConvertRequestBody): ConvertView {
+  /** The conversion of a request: the records and findings of the core, and the model the writers take. */
+  function compute(body: ConvertRequestBody) {
     const sheets: ConvertSheetInput[] = body.sheets.map((s) => ({
       file: held(s.fileId).parsed,
       sheet: s.sheet,
@@ -125,16 +129,29 @@ export function createConvertHandler(): ConvertHandler {
       shape: s.shape,
       ...(s.quantity ? { quantity: s.quantity } : {}),
       ...(s.cruise !== undefined && s.cruise.trim() !== '' ? { cruise: s.cruise.trim() } : {}),
+      ...(s.device ? { device: s.device } : {}),
+      ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
     const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits });
+    return { sheets, splits, r };
+  }
+
+  const today = (): string => new Date().toISOString().slice(0, 10);
+  const decisionsOf = (body: ConvertRequestBody) => ({ fullList: body.options.fullList === true, prefixStation: body.options.prefixStation === true });
+
+  function run(body: ConvertRequestBody): ConvertView {
+    const { splits, r } = compute(body);
+    const dataset = toDataset(r, body.metadata ?? EMPTY_METADATA, decisionsOf(body));
+    // the checks of the output tables (the description of the dataset is judged by the page: it changes with every keystroke)
+    const findings = [...r.findings, ...validateTables(dataset, r.findings, { today: today() })];
     const codesMissing = r.findings
       .filter((f) => f.ruleId === 'CONV-SAMPLE-CODE-MISSING')
       .flatMap((f) => body.sheets.filter((s) => s.sheet === f.sheet && held(s.fileId).parsed.fileName === f.file).map((s) => ({ fileId: s.fileId, sheet: s.sheet })));
     const by = (t: 'cruise' | 'station' | 'sample') => r.events.filter((e) => e.eventType === t).slice(0, EXAMPLES[t]);
     return {
-      ok: r.ok,
-      findings: r.findings,
+      ok: judge(findings).blocking.length === 0,
+      findings,
       stats: r.stats,
       tree: r.tree,
       splits,
@@ -142,6 +159,31 @@ export function createConvertHandler(): ConvertHandler {
       examples: { cruise: by('cruise'), station: by('station'), sample: by('sample') },
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
+    };
+  }
+
+  /**
+   * The export. Everything is checked again here, from the request alone: the page's idea of "nothing blocks and every warning is accepted" is not
+   * trusted. Refuses (throws) with a blocking finding or a warning that was not accepted; nothing is written then.
+   */
+  async function exportArchive(req: ExportBody): Promise<ExportResult> {
+    const { r } = compute(req.body);
+    const dataset = toDataset(r, req.metadata, decisionsOf(req.body));
+    const findings = [...r.findings, ...validateDataset(dataset, r.findings, { today: today() })];
+    const j = judge(findings);
+    if (j.blocking.length > 0) throw new Error(`Export refused: ${j.blocking.length} finding(s) block it (${[...new Set(j.blocking.map((f) => f.ruleId))].join(', ')}). Nothing was written.`);
+    const open = j.acceptRules.filter((id) => !req.accepted.includes(id));
+    if (open.length > 0) throw new Error(`Export refused: ${open.join(', ')} not accepted. Nothing was written.`);
+    if (dataset.events.length === 0 || dataset.occurrences.length === 0) throw new Error('Export refused: there is nothing to write (no event or no occurrence).');
+    const eml = buildEml(dataset, { generated: req.generated });
+    const files = archiveFiles(dataset, eml);
+    const deflate = streamDeflate();
+    const bytes = await buildZip(files, deflate);
+    return {
+      fileName: archiveFileName(dataset),
+      bytes,
+      counts: { events: dataset.events.length, occurrences: dataset.occurrences.length, measurements: dataset.measurements.length },
+      deflated: deflate !== undefined,
     };
   }
 
@@ -166,6 +208,8 @@ export function createConvertHandler(): ConvertHandler {
           return run(req.body);
         case 'proposeCodes':
           return proposeCodes(req);
+        case 'export':
+          return exportArchive(req.export);
       }
     },
   };

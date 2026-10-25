@@ -17,6 +17,9 @@ import { parseNumber } from '../values/numbers';
  *   wide sheets         a numeric column the shared proposer calls a variable but that is not a canonical measured variable becomes a
  *                       LOW-confidence `taxon` with header:true (its HEADER is the taxon): a candidate, to be confirmed in bulk.
  *                       Canonical variables (temperature, salinity, ...) stay variables; they become eMoF later.
+ *   sum / total columns a column whose header reads as a total (Suma, Total, Razem, Summe, Gesamt, Somme, Sum, Σ, the rule isSummaryHeader) that the
+ *                       shared proposer took for a measured variable starts as IGNORED (reason `summary-total`): converting it would count the same
+ *                       individuals twice. It never reaches the archive unless the user chooses a meaning for it.
  *
  * ⚠️ /check never calls this module and never proposes these roles; recognize/columns.ts is untouched (test/convert/check-unchanged.test.ts).
  */
@@ -60,6 +63,21 @@ function depthBoundOfName(key: string): 'min' | 'max' | undefined {
   return undefined;
 }
 
+/** The three spellings of a WoRMS AphiaID header, exactly (no other header is read as one). */
+const APHIA_HEADERS = new Set(['AphiaID', 'aphia_id', 'Aphia ID']);
+
+/** Every filled cell of the column is a positive whole number, and there is at least one. */
+function holdsAphiaIds(sheet: RawSheet, index: number): boolean {
+  let n = 0;
+  for (const row of sheet.rows) {
+    const c = row.cells[index] ?? null;
+    if (c === null || String(c).trim() === '') continue;
+    if (!/^[1-9]\d*$/.test(String(c).trim())) return false;
+    n++;
+  }
+  return n > 0;
+}
+
 // "present" marks in a species column of a wide sheet: + x *
 const PRESENCE_MARK = /^(\+|x|\*)$/i;
 
@@ -90,6 +108,8 @@ export const OVERLAY_REASONS = {
   'dwc-organismquantitytype': 'Darwin Core organismQuantityType',
   'dwc-lifestage': 'Darwin Core lifeStage',
   'dwc-identificationqualifier': 'Darwin Core identificationQualifier',
+  'dwc-scientificnameid': 'Darwin Core scientificNameID (written as given)',
+  'name-aphiaid': 'a WoRMS AphiaID column of whole numbers: written as the urn:lsid of the taxon',
   'name-stage': 'name says life stage',
   'name-taxon': 'name says taxon or species',
   'name-count': 'name says count',
@@ -105,6 +125,7 @@ export const OVERLAY_REASONS = {
   'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
+  'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
 } as const;
 export type OverlayReason = keyof typeof OVERLAY_REASONS;
 
@@ -129,6 +150,8 @@ function dwcClaim(term: string): Claim | undefined {
       return { role: { kind: 'lifeStage' }, confidence: 'high', code: 'dwc-lifestage' };
     case 'identificationqualifier':
       return { role: { kind: 'qualifier' }, confidence: 'high', code: 'dwc-identificationqualifier' };
+    case 'scientificnameid':
+      return { role: { kind: 'taxonId' }, confidence: 'high', code: 'dwc-scientificnameid' };
     default:
       return undefined;
   }
@@ -170,6 +193,10 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const key = headerKey(hu.name);
     const term = dwcTermOf(p.header);
     const dwc = term === undefined ? undefined : dwcClaim(term);
+    if (!dwc && APHIA_HEADERS.has(p.header.trim()) && holdsAphiaIds(sheet, p.index)) {
+      claims.set(p.index, { role: { kind: 'taxonId', aphia: true }, confidence: 'high', code: 'name-aphiaid' });
+      continue;
+    }
     if (dwc) {
       claims.set(p.index, dwc);
       if (term === 'eventid') dwcEventId = p.index;
@@ -232,13 +259,17 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     // wide sheet: a column of presence marks (+, x) next to counts is a species column too; the shared proposer read it as text
     const headerName = unitFromHeader(p.header).name.trim();
     const summaryHeader = isSummaryHeader(headerName);
-    // a summary header that would otherwise have been proposed keeps the shared role; the page says why it is not a taxon candidate
-    if (
-      summaryHeader &&
-      !hasLongTaxon &&
-      ((p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) ||
-        (p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && p.role.p01 === undefined))
-    ) {
+    // a sum or total column that the shared proposer took for a measured variable (and that is not a standard variable): it adds up other columns,
+    // so converting it would count the same individuals twice. It starts as ignored, with its reason; the user can still give it another meaning,
+    // and then it is their decision. A column of presence marks keeps the shared role (ignore); the page says why it is not a taxon candidate.
+    if (summaryHeader && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && p.role.p01 === undefined) {
+      p.role = { kind: 'ignore' };
+      p.confidence = 'low';
+      why(p, 'summary-total');
+      continue;
+    }
+    if (summaryHeader && !hasLongTaxon && p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) {
+      p.confidence = 'low'; // so that the page shows the reason
       why(p, 'summary-header');
       continue;
     }

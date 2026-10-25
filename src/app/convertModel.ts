@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Pure helpers behind the /convert page: the quantity form as the core's declaration, the request for the worker, and the text of a finding.
-import type { BiomassBasis, ConvertShape, QuantityDeclaration, QuantityKind } from '../core/convert';
+import type { BiomassBasis, ConvertShape, QuantityDeclaration, QuantityKind, SamplingDevice } from '../core/convert';
+import { DEVICES } from '../core/convert/vocab';
 import { isConvertRuleId, renderConvertPlain } from '../core/convert';
 import { renderPlain } from '../core/report';
 import type { Finding, Lang, SheetMapping } from '../core/types';
+import { EMPTY_METADATA, datasetNameOf } from '../core/convert/metadata';
+import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertParseResult, ConvertRequestBody } from '../worker/convert.protocol';
 import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
@@ -30,6 +33,17 @@ export interface SheetChoice {
   shape: ConvertShape;
   quantity: QuantityForm;
   cruise: string;
+  /** '' = none given, a key of DEVICES, or 'other' (then `deviceText`). */
+  device: string;
+  deviceText: string;
+  /** The mesh size in micrometres as typed; empty = none. */
+  mesh: string;
+}
+
+/** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
+export function deviceOf(c: Pick<SheetChoice, 'device' | 'deviceText'>): SamplingDevice | undefined {
+  if (c.device === 'other') return c.deviceText.trim() === '' ? undefined : { kind: 'other', text: c.deviceText.trim() };
+  return c.device in DEVICES ? { kind: 'known', key: c.device as keyof typeof DEVICES } : undefined;
 }
 
 /**
@@ -63,6 +77,16 @@ export interface ConvertState {
   approved: ApprovedSplits;
   /** candidate taxon columns the user confirmed, by candidateKey */
   confirmed: Record<string, boolean>;
+  /** Only the part that appears in the tables is sent with a conversion request (tableMetadataOf). */
+  metadata?: DatasetMetadata;
+}
+
+/**
+ * The part of the description that shows in the tables (datasetName, institutionCode, basisOfRecord), everything else empty: the conversion request
+ * carries this and nothing more, so typing a title or an abstract does not rerun the conversion, and a change of these three does.
+ */
+export function tableMetadataOf(m: DatasetMetadata): DatasetMetadata {
+  return { ...EMPTY_METADATA, datasetName: datasetNameOf(m), institutionCode: m.institutionCode.trim(), basisOfRecord: m.basisOfRecord };
 }
 
 export const candidateKey = (fileId: string, sheet: string, index: number): string => `${fileId}\u0000${sheet}\u0000${index}`;
@@ -112,16 +136,17 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
         }),
       };
       const q = declarationOf(c.quantity);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+      const dev = deviceOf(c);
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
-  return { sheets, options: s.options, approvedSplits: s.approved };
+  return { sheets, options: s.options, approvedSplits: s.approved, ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
 }
 
 /** The initial choices: every sheet used, the shape the overlay suggests (wide when it cannot tell), nothing declared. */
 export function initialChoices(parsed: ConvertParseResult): Record<string, SheetChoice> {
   const out: Record<string, SheetChoice> = {};
-  for (const f of parsed.files) for (const sh of f.sheets) out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '' };
+  for (const f of parsed.files) for (const sh of f.sheets) out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '' };
   return out;
 }
 

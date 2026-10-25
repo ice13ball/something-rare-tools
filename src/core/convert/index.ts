@@ -11,12 +11,15 @@
  *   resolveQuantity                                                       is the quantity declaration complete? what concepts does it give? (quantity.ts)
  *   readConvertSettings / writeConvertSidecar                             the companion file (settings.ts)
  *   renderConvertPlain / renderConvertTechnical                           the text of a CONV finding (rules/convert.ts)
+ *   toDataset / buildTables / archiveFiles / buildEml / buildZip           stage 2: the export model, the files of the archive, eml.xml, the zip
+ *   validateTables / metadataFindings / policyOf / judge                  stage 2: the checks of the output tables and what each finding does to the export
  */
 export { convert, listSplits } from './build';
-export type { ConvertInput, ConvertOptions, ConvertSheetInput } from './build';
+export type { ConvertInput, ConvertOptions, ConvertSheetInput, SamplingDevice } from './build';
 export { buildEventTree, eventDateText, greatCircleM, stationEventId, summarizeTree } from './events';
 export type { EventTree, SampleSite, TreeOptions } from './events';
 export { proposeSampleCodes } from './ids';
+export { readConvertFile } from './read';
 export type { SampleCodeProposal } from './ids';
 export type { ConvertResult, ConvertStats, EventRec, EventType, MofIntent, OccRec, OccurrenceStatus, SourceRef, TreeSummary } from './model';
 export { parseEffortUnit, parseRateUnit, resolveQuantity } from './quantity';
@@ -27,5 +30,18 @@ export { FULL_LIST_SETTING, STATION_PREFIX_SETTING, readConvertSettings, writeCo
 export type { ConvertSettings } from './settings';
 export { QUALIFIER_TOKENS, STAGE_TOKENS, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
-export { P01, P06, VERIFIED_CODES, nercUri } from './vocab';
+export { DEVICES, P01, P06, VERIFIED_CODES, nercUri } from './vocab';
+export type { DeviceKey } from './vocab';
+export { BASES_OF_RECORD, EMPTY_METADATA, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES, applyPrefill, creatorLines, datasetNameOf, isBasis, isLicence, missingFields, splitPersonName } from './metadata';
+export type { BasisOfRecord, DatasetMetadata, LicenceId } from './metadata';
+export { toDataset } from './model';
+export type { ConvertedDataset, Effort, Identification, ModelEvent, ModelMeasurement, ModelOccurrence, Quantity } from './model';
+export { archiveFileName, archiveFiles, buildTables, slugOf, writeMetaXml, writeTsv } from './dwca';
+export type { ArchiveFile, ArchiveTables, Table } from './dwca';
+export { LICENCE_ULINK, buildEml, coverageOf } from './eml';
+export { ZipWriteError, buildZip, crc32, streamDeflate } from './zip';
+export type { Deflate } from './zip';
+export { ACCEPT_RULES, BLOCK_CONV_RULES, BLOCK_INPUT_RULES, BLOCK_OUTPUT_RULES, SHOW_ONLY_PREFIXES, exportAllowed, judge, policyOf } from './policy';
+export type { Judged, Policy } from './policy';
+export { metadataFindings, validateDataset, validateTables } from './validate';
 export { CONVERT_RULES, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../rules/convert';

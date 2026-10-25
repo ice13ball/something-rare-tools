@@ -4,6 +4,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { LATER_STAGE_RULES } from '../../src/core/convert/policy';
 import { CONVERT_RULES, CONVERT_RULE_PARAMS, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { RULES, getRule, makeFinding } from '../../src/core/rules/registry';
 import { GENERIC_PARAMS } from '../../src/core/rules/spec';
@@ -18,7 +19,7 @@ describe('registry conventions', () => {
   it('has unique CONV-* ids, category B, and a severity of the three allowed', () => {
     const ids = CONVERT_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(18);
+    expect(ids.length).toBe(29);
     for (const r of CONVERT_RULES) {
       expect(r.id).toMatch(/^CONV-[A-Z]+(-[A-Z0-9]+)*$/);
       expect(r.category).toBe('B');
@@ -29,8 +30,10 @@ describe('registry conventions', () => {
   it('has the severities the plan fixes: blocking ones are errors, the accepted ones warnings, the counts information', () => {
     const sev = (id: string) => getConvertRule(id).severity;
     for (const id of ['CONV-SPLIT-UNDECIDED', 'CONV-QUANTITY-UNDECLARED', 'CONV-COUNT-NOT-INTEGER', 'CONV-NEGATIVE-QUANTITY', 'CONV-SAMPLE-CODE-MISSING', 'CONV-ID-DUPLICATE', 'CONV-TAB-IN-VALUE']) expect(sev(id), id).toBe('error');
-    for (const id of ['CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-NERC-UNKNOWN', 'CONV-UNIT-NO-P06']) expect(sev(id), id).toBe('warning');
+    for (const id of ['CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-NERC-UNKNOWN', 'CONV-UNIT-NO-P06', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING']) expect(sev(id), id).toBe('warning');
+    expect(sev('CONV-MESH-INVALID')).toBe('error');
     expect(sev('CONV-ZERO-SKIPPED')).toBe('info');
+    for (const id of ['CONV-EML-MISSING', 'CONV-LICENCE-UNSET', 'CONV-BASIS-UNSET', 'CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY']) expect(sev(id), id).toBe('error');
   });
 
   for (const r of CONVERT_RULES) {
@@ -72,7 +75,8 @@ describe('registry conventions', () => {
     const dir = join(ROOT, 'src', 'core', 'convert');
     const used = new Set<string>();
     for (const f of readdirSync(dir)) for (const m of readFileSync(join(dir, f), 'utf8').matchAll(/CONV-[A-Z0-9]+(?:-[A-Z0-9]+)*/g)) used.add(m[0]);
-    for (const id of used) expect(isConvertRuleId(id), id).toBe(true);
+    // the policy lists the rules of later stages (WoRMS, profiles) before they exist; every other id must be registered
+    for (const id of used) if (!LATER_STAGE_RULES.includes(id)) expect(isConvertRuleId(id), id).toBe(true);
     for (const r of CONVERT_RULES) expect(used.has(r.id), `${r.id} is never raised`).toBe(true);
   });
 });
