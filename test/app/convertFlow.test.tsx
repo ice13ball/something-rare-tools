@@ -53,7 +53,7 @@ describe('W1: wide counts with a full species list', () => {
     await screen.findByRole('heading', { name: T['convert.splits.title'] });
     expect(summary().textContent).toContain('taxon name carries a qualifier');
     expect(within(screen.getByRole('heading', { name: T['convert.splits.title'] }).closest('section') as HTMLElement).getByText('Pseudocalanus sp.', { selector: 'code' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Approve all shown \(1\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Approve 1 shown / }));
     await settled(T['convert.summary.none']);
     // zeros are left out because the list was not declared full
     expect(summary().textContent).toContain('cell with a zero was left out');
@@ -69,7 +69,7 @@ describe('W1: wide counts with a full species list', () => {
   it('shows the event tree with its counts and examples, and flattening is the user choice', async () => {
     await load([{ name: 'w1.csv', text: W1_CSV }]);
     pick(T['convert.quantity.kind'], 'count');
-    fireEvent.click(await screen.findByRole('button', { name: /Approve all shown/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
     const tree = (): HTMLElement => screen.getByRole('region', { name: T['convert.tree.title'] });
     await waitFor(() => expect(tree().textContent).toContain('1 cruise event, 2 station events, 3 sample events.'));
     expect(tree().textContent).toContain('2023-06-14/2023-06-16');
@@ -97,9 +97,9 @@ describe('W2: wide density with stages and qualifiers', () => {
     for (const text of ['Calanus finmarchicus c2', 'Calanus cf. glacialis', 'Augaptilus glacialis, c2', 'Pseudocalanus sp.']) expect(within(section).getByText(text, { selector: 'code' })).toBeTruthy();
     // one by one: approving a single split leaves the others undecided
     fireEvent.click(screen.getByRole('button', { name: `${T['convert.splits.approve']}: Pseudocalanus sp.` }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Approve all shown \(3\)/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Approve 3 shown / })).toBeTruthy());
     await settled(T['convert.summary.blocked']);
-    fireEvent.click(screen.getByRole('button', { name: /Approve all shown \(3\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Approve 3 shown / }));
     await settled(T['convert.summary.none']);
     expect(summary().textContent).toContain('cell with a zero was left out');
     // a density has measurement rows for the occurrences and the sample size, never individualCount
@@ -135,7 +135,7 @@ describe('the sample code step', () => {
   it('a sheet without codes is blocked; "Propose codes" downloads the user sheet with a new column and applies nothing', async () => {
     const { download } = await load([{ name: 'no-code.csv', text: NO_CODE_CSV }]);
     pick(T['convert.quantity.kind'], 'count');
-    fireEvent.click(await screen.findByRole('button', { name: /Approve all shown/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
     const section = (await screen.findByRole('heading', { name: T['convert.codes.title'] })).closest('section') as HTMLElement;
     expect(section.textContent).toContain('has rows without a sample code');
     expect(section.textContent).toContain('never invents one silently');
@@ -167,7 +167,7 @@ describe('the sample code step', () => {
     await load([{ name: 'with-codes.csv', text: (download.mock.calls[0] as [string])[0] }]);
     fireEvent.change(screen.getByLabelText('sample_code: Meaning'), { target: { value: 'sampleId' } });
     pick(T['convert.quantity.kind'], 'count');
-    fireEvent.click(await screen.findByRole('button', { name: /Approve all shown/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
     await settled(T['convert.summary.none']);
     expect(summary().textContent).toContain('6 occurrences');
   });
@@ -240,7 +240,7 @@ describe('no network and no storage', () => {
     try {
       await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'run.sidecar.csv', text: SIDECAR_CSV }]);
       pick(T['convert.quantity.kind'], 'count');
-      fireEvent.click(await screen.findByRole('button', { name: /Approve all shown/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
       fireEvent.click(screen.getByLabelText(T['convert.flatten.station']));
       await settled(T['convert.summary.none']);
       expect(fetchSpy).not.toHaveBeenCalled();

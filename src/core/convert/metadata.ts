@@ -110,7 +110,18 @@ export function missingFields(m: DatasetMetadata): string[] {
   return out;
 }
 
-/** "Given Family" / "Family, Given" -> the two EML name parts. A single word is the family name. */
+/**
+ * Lowercase words that belong to a family name when they stand just before its last word and the name has no comma ("Ludwig van Beethoven" -> family
+ * name "van Beethoven", "Maria de la Cruz" -> "de la Cruz"). Matched in lowercase only: "Jan Van Berg" keeps "Berg", because a capital letter says
+ * nothing about a particle. The first word is always a given name.
+ */
+export const NAME_PARTICLES = ['de', 'la', 'del', 'della', 'di', 'da', 'du', 'des', 'van', 'von', 'der', 'den', 'ten', 'ter', 'le', 'dos', 'das'] as const;
+const PARTICLES = new Set<string>(NAME_PARTICLES);
+
+/**
+ * "Given Family" / "Family, Given" -> the two EML name parts. With a comma the name is taken as written (before the comma: family name). Without one the
+ * last word is the family name, with the lowercase particles (NAME_PARTICLES) right before it. A single word is the family name.
+ */
 export function splitPersonName(line: string): { givenName?: string; surName: string } {
   const t = line.trim().replace(/\s+/g, ' ');
   const comma = t.indexOf(',');
@@ -119,6 +130,9 @@ export function splitPersonName(line: string): { givenName?: string; surName: st
     const given = t.slice(comma + 1).trim();
     return given === '' ? { surName: sur } : { givenName: given, surName: sur };
   }
-  const i = t.lastIndexOf(' ');
-  return i < 0 ? { surName: t } : { givenName: t.slice(0, i), surName: t.slice(i + 1) };
+  const words = t.split(' ');
+  if (words.length === 1) return { surName: t };
+  let from = words.length - 1;
+  while (from > 1 && PARTICLES.has(words[from - 1])) from--;
+  return { givenName: words.slice(0, from).join(' '), surName: words.slice(from).join(' ') };
 }

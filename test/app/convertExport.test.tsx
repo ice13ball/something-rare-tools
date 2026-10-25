@@ -66,7 +66,7 @@ async function loadW1(files = [{ name: 'w1.csv', text: W1_CSV }]): Promise<Run> 
   fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
   pick(T['convert.quantity.kind'], 'count');
   pick(T['convert.effort.title'], 'column');
-  fireEvent.click(await screen.findByRole('button', { name: /Approve all shown/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
   fireEvent.click(screen.getByLabelText(T['convert.fullList']));
   await settled('7 occurrences (6 present, 1 absent)');
   return { download, downloadFile, engine };
