@@ -60,7 +60,7 @@ describe('the reason table', () => {
     const seen = new Set<string>();
     for (const [h, r] of sheets) {
       for (const p of proposeConvertColumns(rawSheet([...h], r.map((x) => [...x])), CTX)) {
-        if (p.reasonCode === undefined) continue;
+        if (p.reasonCode === undefined || !(p.reasonCode in OVERLAY_REASONS)) continue; // a code of the shared proposer is tested in checkReasons.test.tsx
         expect(CODES, p.reasonCode).toContain(p.reasonCode);
         expect(p.reason).toBe(OVERLAY_REASONS[p.reasonCode as keyof typeof OVERLAY_REASONS]);
         seen.add(p.reasonCode);
@@ -82,7 +82,7 @@ describe('the mapping table shows the reason in the reader language', () => {
     const out: { p: ColumnProposal; sheet: ReturnType<typeof rawSheet> }[] = [];
     for (const [h, r] of sheets) {
       const sheet = rawSheet([...h], r.map((x) => [...x]));
-      for (const p of proposeConvertColumns(sheet, CTX)) if (p.confidence === 'low' && p.reasonCode !== undefined) out.push({ p, sheet });
+      for (const p of proposeConvertColumns(sheet, CTX)) if (p.confidence === 'low' && p.reasonCode !== undefined && p.reasonCode in OVERLAY_REASONS) out.push({ p, sheet });
     }
     return out;
   };

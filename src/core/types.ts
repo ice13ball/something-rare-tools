@@ -110,8 +110,16 @@ export interface ColumnProposal {
   index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low';
   /** The English wording of why (technical line, tests). */
   reason: string;
-  /** Set by the converter overlay only (convert/recognize.ts OVERLAY_REASONS): the page shows `convert.reason.<code>` in the reader's language. /check never sets it. */
+  /**
+   * Stable code of the reason, so the page can say it in the reader's language: a code of recognize/reasons.ts (shared proposer,
+   * `check.reason.<code>`) or of the converter overlay (convert/recognize.ts OVERLAY_REASONS, `convert.reason.<code>`; it replaces the shared one).
+   */
   reasonCode?: string;
+  /** The values the translation of a shared-proposer code puts in its {placeholders} (a column name, a term, a code). */
+  reasonParams?: Record<string, string>;
+  /** Shared-proposer codes written before / after the main reason, joined with "; " (an empty column; a depth direction that is not stated). */
+  reasonLead?: string;
+  reasonNotes?: string[];
 }
 export interface SheetMapping { sheet: string; columns: { index: number; header: string; role: ColumnRole }[] }
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }

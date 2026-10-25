@@ -54,7 +54,9 @@ describe('/check never proposes the converter roles', () => {
   });
 
   it('the proposals over the fixtures are exactly those of the commit in production (fb314bb)', () => {
-    const digest = createHash('sha256').update(JSON.stringify(allProposals())).digest('hex');
+    // the reason codes are new fields of the proposals (reasonCode, reasonParams, reasonLead, reasonNotes); everything else is as in production
+    const withoutCodes = JSON.stringify(allProposals(), (k, v) => (k === 'reasonCode' || k === 'reasonParams' || k === 'reasonLead' || k === 'reasonNotes' ? undefined : v));
+    const digest = createHash('sha256').update(withoutCodes).digest('hex');
     expect(digest).toBe('fd8ef9b2d239860d0e2ea4ad6022093fcd44e39275fdcc3d8ea795519a9ff80a');
   });
 });

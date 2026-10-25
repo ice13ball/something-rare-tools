@@ -405,3 +405,57 @@ describe('review round 2', () => {
     expect(single('dl', 12.5)).toBe('variable');
   });
 });
+
+describe('Polish "próba" (a sample) as a sample id, like "próbka"', () => {
+  const POSITIVE = ['Próba', 'Nr próby', 'Nr. próby', 'Numer próby', 'Kod próby', 'Oznaczenie próby', 'ID próby', 'Id próby', 'Identyfikator próby'];
+  const withoutDiacritics = (h: string): string => h.replace(/ó/g, 'o').replace(/Ó/g, 'O');
+
+  it('every listed header is the sample id, with or without diacritics, in any case, as the "próbka" forms are', () => {
+    for (const h of POSITIVE) {
+      for (const form of [h, withoutDiacritics(h), h.toUpperCase(), h.toLowerCase()]) {
+        const p = run([form, 'Temperatura'], [['P-1', 4.5], ['P-2', 4.6]]);
+        expect(p[0].role.kind, form).toBe('sampleId');
+        expect(p[0].confidence, form).toBe('high');
+        expect(p[0].reasonCode, form).toBe('name-sample');
+      }
+    }
+    // the same as the existing "próbka" form
+    expect(single('Kod próbki', 'ABC-1')).toBe('sampleId');
+    expect(single('Kod próby', 'ABC-1')).toBe('sampleId');
+  });
+
+  it('a header that only contains "próba" in another phrase is not a sample id', () => {
+    const NEGATIVE: [string, Cell][] = [
+      ['objętość próby', 12.5],
+      ['Objętość próby [mL]', 12.5],
+      ['masa próby', 3.2],
+      ['Masa próby [g]', 3.2],
+      ['data próby', '2020-05-12'],
+      ['Data próby', 'ABC-1'],
+      ['typ próby', 'woda'],
+      ['próba kontrolna', 'tak'],
+      ['Próba ślepa', 'tak'],
+      ['liczba prób', 3],
+      ['wielkość próby', 30],
+      ['Wielkosc proby', 30],
+      ['próbność', 'x'],
+      ['nr próby kontrolnej', 'x'],
+      ['proba kontrolna', 'x'],
+    ];
+    for (const [h, v] of NEGATIVE) expect(single(h, v), h).not.toBe('sampleId');
+  });
+
+  it('"głębokość próby" stays a depth, as "głębokość próbki" does; a date or a volume is not turned into an id', () => {
+    expect(single('głębokość próbki', 12)).toBe('depth');
+    expect(single('głębokość próby', 12)).toBe('depth');
+    expect(single('Glebokosc proby [m]', 12)).toBe('depth');
+    expect(single('Objętość próby [mL]', 12.5)).toBe('variable');
+    expect(single('Masa próby [g]', 3.2)).toBe('variable');
+    expect(single('Liczba prób', 4)).toBe('variable');
+  });
+
+  it('with an id column and a depth column in one sheet, each keeps its role', () => {
+    const p = run(['Kod próby', 'Głębokość próby [m]', 'Objętość próby [mL]', 'Typ próby'], [['A-1', 5, 100, 'woda'], ['A-2', 10, 120, 'woda']]);
+    expect(p.map((x) => x.role.kind)).toEqual(['sampleId', 'depth', 'variable', 'ignore']);
+  });
+});
