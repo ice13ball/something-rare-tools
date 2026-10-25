@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding, Lang, RuleDef } from '../types';
+import { applyPlurals } from '../i18n/plural';
 import { formatLines } from '../report';
 import { CITE } from './citations';
 import type { RuleSpec } from './spec';
@@ -46,10 +47,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `{count} nazw taksonów ma dopisek (cf., sp., ?) albo stadium rozwojowe (c2, juv). Zatwierdź każdy podział na nazwę, dopisek i stadium; pierwszy to „{value}”.`,
-      en: `{count} taxon names carry a qualifier (cf., sp., ?) or a life stage (c2, juv). Approve each split into name, qualifier and stage; the first one is "{value}".`,
-      de: `{count} Taxonnamen enthalten einen Zusatz (cf., sp., ?) oder ein Entwicklungsstadium (c2, juv). Bestätigen Sie jede Aufteilung in Name, Zusatz und Stadium; die erste ist „{value}“.`,
-      fr: `{count} noms de taxons portent une mention (cf., sp., ?) ou un stade (c2, juv). Validez chaque découpage en nom, mention et stade ; le premier est « {value} ».`,
+      pl: `{count} {+count:nazwa taksonu ma|nazwy taksonów mają|nazw taksonów ma} dopisek (cf., sp., ?) albo stadium rozwojowe (c2, juv). Zatwierdź każdy podział na nazwę, dopisek i stadium; pierwszy to „{value}”.`,
+      en: `{count} taxon {+count:name carries|names carry} a qualifier (cf., sp., ?) or a life stage (c2, juv). Approve each split into name, qualifier and stage; the first one is "{value}".`,
+      de: `{count} {+count:Taxonname enthält|Taxonnamen enthalten} einen Zusatz (cf., sp., ?) oder ein Entwicklungsstadium (c2, juv). Bestätigen Sie jede Aufteilung in Name, Zusatz und Stadium; die erste ist „{value}“.`,
+      fr: `{count} {+count:nom de taxon porte|noms de taxons portent} une mention (cf., sp., ?) ou un stade (c2, juv). Validez chaque découpage en nom, mention et stade ; le premier est « {value} ».`,
     },
     technical: `{file}, {sheet}: {count} distinct taxon name(s) were split into scientificName, identificationQualifier and lifeStage and the split is not approved yet; example "{value}". verbatimIdentification keeps the exact text. Conversion is blocked until every distinct split is approved.`,
   },
@@ -152,8 +153,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'columns'],
     plain: {
-      pl: `Ten sam takson „{value}” (to samo stadium i dopisek) występuje {count} razy w jednej próbce: {columns}. Każdy zapis zostaje osobno, nic nie jest sumowane. Sprawdź, czy to nie powinien być jeden zapis.`,
-      en: `The same taxon "{value}" (same stage and qualifier) appears {count} times in one sample: {columns}. Each stays a separate record and nothing is summed. Check whether it should be one record.`,
+      pl: `Ten sam takson „{value}” (to samo stadium i dopisek) występuje {count} {+count:raz|razy|razy} w jednej próbce: {columns}. Każdy zapis zostaje osobno, nic nie jest sumowane. Sprawdź, czy to nie powinien być jeden zapis.`,
+      en: `The same taxon "{value}" (same stage and qualifier) appears {count} {+count:time|times} in one sample: {columns}. Each stays a separate record and nothing is summed. Check whether it should be one record.`,
       de: `Dasselbe Taxon „{value}“ (gleiches Stadium und gleicher Zusatz) kommt {count}-mal in einer Probe vor: {columns}. Jeder Eintrag bleibt getrennt, nichts wird summiert. Prüfen Sie, ob es ein Eintrag sein sollte.`,
       fr: `Le même taxon « {value} » (même stade et même mention) apparaît {count} fois dans un échantillon : {columns}. Chaque enregistrement reste séparé et rien n'est additionné. Vérifiez s'il ne devrait y en avoir qu'un.`,
     },
@@ -165,10 +166,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'info',
     params: ['count'],
     plain: {
-      pl: `Pominięto {count} komórek z zerem, bo nie zaznaczono, że lista gatunków jest pełna. Zero oznacza „brak” tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
-      en: `{count} cells with a zero were left out, because the species list was not declared complete. A zero means "absent" only when every species of the list was looked for in the sample.`,
-      de: `{count} Zellen mit einer Null wurden ausgelassen, da die Artenliste nicht als vollständig angegeben wurde. Eine Null bedeutet nur dann „fehlt“, wenn in der Probe nach allen Arten der Liste gesucht wurde.`,
-      fr: `{count} cellules à zéro ont été ignorées, car la liste d'espèces n'a pas été déclarée complète. Un zéro signifie « absent » seulement si toutes les espèces de la liste ont été recherchées dans l'échantillon.`,
+      pl: `Pominięto {count} {+count:komórkę|komórki|komórek} z zerem, bo nie zaznaczono, że lista gatunków jest pełna. Zero oznacza „brak” tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
+      en: `{count} {+count:cell with a zero was|cells with a zero were} left out, because the species list was not declared complete. A zero means "absent" only when every species of the list was looked for in the sample.`,
+      de: `{count} {+count:Zelle mit einer Null wurde|Zellen mit einer Null wurden} ausgelassen, da die Artenliste nicht als vollständig angegeben wurde. Eine Null bedeutet nur dann „fehlt“, wenn in der Probe nach allen Arten der Liste gesucht wurde.`,
+      fr: `{count} {+count:cellule à zéro a été ignorée|cellules à zéro ont été ignorées}, car la liste d'espèces n'a pas été déclarée complète. Un zéro signifie « absent » seulement si toutes les espèces de la liste ont été recherchées dans l'échantillon.`,
     },
     technical: `{file}, {sheet}: {count} zero cell(s) not converted (full species list not ticked). With the tick a zero becomes occurrenceStatus absent (individualCount 0 for counts only); an empty or NA cell never becomes a record.`,
     citations: [CITE.obisOccurrenceStatus],
@@ -259,10 +260,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'info',
     params: ['count'],
     plain: {
-      pl: `Pominięto {count} wierszy podsumowania ({value}) w wierszach {lines}. To nie są próbki, a ich wartości podwoiłyby liczebności.`,
-      en: `{count} summary rows ({value}) in lines {lines} were left out. They are not samples, and their values would double the counts.`,
-      de: `{count} Zusammenfassungszeilen ({value}) in den Zeilen {lines} wurden ausgelassen. Sie sind keine Proben, und ihre Werte würden die Anzahlen verdoppeln.`,
-      fr: `{count} lignes de synthèse ({value}) aux lignes {lines} ont été ignorées. Ce ne sont pas des échantillons et leurs valeurs doubleraient les effectifs.`,
+      pl: `Pominięto {count} {+count:wiersz podsumowania|wiersze podsumowania|wierszy podsumowania} ({value}) w {+count:wierszu|wierszach|wierszach} {lines}. {+count:To nie jest próbka, a jej wartości podwoiłyby|To nie są próbki, a ich wartości podwoiłyby|To nie są próbki, a ich wartości podwoiłyby} liczebności.`,
+      en: `{count} summary {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:was|were} left out. {+count:It is not a sample, and its value would|They are not samples, and their values would} double the counts.`,
+      de: `{count} {+count:Zusammenfassungszeile|Zusammenfassungszeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:wurde|wurden} ausgelassen. {+count:Sie ist keine Probe, und ihre Werte würden|Sie sind keine Proben, und ihre Werte würden} die Anzahlen verdoppeln.`,
+      fr: `{count} {+count:ligne de synthèse|lignes de synthèse} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:a été ignorée|ont été ignorées}. {+count:Ce n'est pas un échantillon et sa valeur doublerait|Ce ne sont pas des échantillons et leurs valeurs doubleraient} les effectifs.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted.`,
   },
@@ -292,9 +293,11 @@ export function makeConvertFinding(ruleId: string, f: Omit<Finding, 'ruleId' | '
   return finding;
 }
 
-function fill(template: string, f: Finding): string {
+function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
-  return template.replace(/\{([A-Za-z_][\w.]*)\}/g, (whole, name: string) => {
+  // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
+  const text = lang === undefined ? template : applyPlurals(lang, template, (name) => (Object.prototype.hasOwnProperty.call(f.params, name) ? Number(f.params[name]) : undefined));
+  return text.replace(/\{([A-Za-z_][\w.]*)\}/g, (whole, name: string) => {
     if (Object.prototype.hasOwnProperty.call(f.params, name)) return String(f.params[name]);
     if (Object.prototype.hasOwnProperty.call(generic, name)) return generic[name];
     return whole;
@@ -304,7 +307,7 @@ function fill(template: string, f: Finding): string {
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
-  return fill(rule.plain[lang] || rule.plain.en, f);
+  return fill(rule.plain[lang] || rule.plain.en, f, lang);
 }
 
 /** The English technical detail line. */

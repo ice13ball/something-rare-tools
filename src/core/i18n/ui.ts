@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Lang } from '../types';
+import { applyPlurals } from './plural';
 import { tipDe, tipEn, tipFr, tipPl } from './tips-text';
 
 /*
@@ -93,7 +94,7 @@ const en = {
   'convert.splits.qualifier': `Qualifier`,
   'convert.splits.stage': `Life stage`,
   'convert.splits.sex': `Sex`,
-  'convert.splits.uses': `Used {n} times`,
+  'convert.splits.uses': `Used {n} {+n:time|times}`,
   'convert.splits.approve': `Approve`,
   'convert.splits.withdraw': `Withdraw approval`,
   'convert.splits.approved': `Approved`,
@@ -107,10 +108,10 @@ const en = {
   'convert.codes.done': `The sheet with proposed codes was downloaded as {name}. The codes are not applied: check them, then upload that file again.`,
   'convert.codes.none': `No codes can be proposed for this sheet: it already has a sample code column.`,
   'convert.tree.title': `Event tree`,
-  'convert.tree.counts': `{cruises} cruise events, {stations} station events, {samples} sample events.`,
-  'convert.tree.derived': `Cruise and station levels are worked out from their samples: {dates} dates, {positions} positions and {depths} depth ranges.`,
+  'convert.tree.counts': `{cruises} cruise {+cruises:event|events}, {stations} station {+stations:event|events}, {samples} sample {+samples:event|events}.`,
+  'convert.tree.derived': `Cruise and station levels are worked out from their samples: {dates} {+dates:date|dates}, {positions} {+positions:position|positions} and {depths} depth {+depths:range|ranges}.`,
   'convert.tree.uncertainty': `The largest uncertainty of a worked-out position is {m} m.`,
-  'convert.tree.noPosition': `{n} samples have no position of their own.`,
+  'convert.tree.noPosition': `{n} {+n:sample has|samples have} no position of their own.`,
   'convert.tree.examples': `Examples`,
   'convert.tree.cruiseText': `Cruise code for the dataset text: {codes}`,
   'convert.tree.empty': `There are no events yet: fix what blocks the conversion first.`,
@@ -125,7 +126,7 @@ const en = {
   'convert.flatten.station': `Drop the station level: the station code moves to the locality of each sample`,
   'convert.flatten.cruise': `Drop the cruise level: the cruise code moves to the dataset text`,
   'convert.summary.title': `Summary`,
-  'convert.summary.counts': `{events} events, {occurrences} occurrences ({present} present, {absent} absent) and {measurements} measurement rows would be written.`,
+  'convert.summary.counts': `{events} {+events:event|events}, {occurrences} {+occurrences:occurrence|occurrences} ({present} present, {absent} absent) and {measurements} measurement {+measurements:row|rows} would be written.`,
   'convert.summary.blocking': `Must be fixed before anything can be exported ({n})`,
   'convert.summary.warnings': `Warnings you can accept ({n})`,
   'convert.summary.info': `For your information ({n})`,
@@ -700,7 +701,7 @@ const pl: Record<UiKey, string> = {
   'convert.splits.qualifier': `Dopisek`,
   'convert.splits.stage': `Stadium`,
   'convert.splits.sex': `Płeć`,
-  'convert.splits.uses': `Użyta {n} razy`,
+  'convert.splits.uses': `Użyta {n} {+n:raz|razy|razy}`,
   'convert.splits.approve': `Zatwierdź`,
   'convert.splits.withdraw': `Cofnij zatwierdzenie`,
   'convert.splits.approved': `Zatwierdzona`,
@@ -1319,10 +1320,10 @@ const de: Record<UiKey, string> = {
   'convert.codes.done': `Das Blatt mit vorgeschlagenen Codes wurde als {name} heruntergeladen. Die Codes sind nicht angewendet: Prüfen Sie sie und laden Sie diese Datei erneut hoch.`,
   'convert.codes.none': `Für dieses Blatt lassen sich keine Codes vorschlagen: Es hat schon eine Probencode-Spalte.`,
   'convert.tree.title': `Ereignisbaum`,
-  'convert.tree.counts': `{cruises} Fahrt-Ereignisse, {stations} Stations-Ereignisse, {samples} Proben-Ereignisse.`,
-  'convert.tree.derived': `Fahrt- und Stationsebene werden aus ihren Proben berechnet: {dates} Daten, {positions} Positionen und {depths} Tiefenbereiche.`,
+  'convert.tree.counts': `{cruises} {+cruises:Fahrt-Ereignis|Fahrt-Ereignisse}, {stations} {+stations:Stations-Ereignis|Stations-Ereignisse}, {samples} {+samples:Proben-Ereignis|Proben-Ereignisse}.`,
+  'convert.tree.derived': `Fahrt- und Stationsebene werden aus ihren Proben berechnet: {dates} {+dates:Datum|Daten}, {positions} {+positions:Position|Positionen} und {depths} {+depths:Tiefenbereich|Tiefenbereiche}.`,
   'convert.tree.uncertainty': `Die größte Unsicherheit einer berechneten Position beträgt {m} m.`,
-  'convert.tree.noPosition': `{n} Proben haben keine eigene Position.`,
+  'convert.tree.noPosition': `{n} {+n:Probe hat|Proben haben} keine eigene Position.`,
   'convert.tree.examples': `Beispiele`,
   'convert.tree.cruiseText': `Fahrtcode für den Datensatztext: {codes}`,
   'convert.tree.empty': `Es gibt noch keine Ereignisse: Beheben Sie zuerst, was die Umwandlung blockiert.`,
@@ -1337,7 +1338,7 @@ const de: Record<UiKey, string> = {
   'convert.flatten.station': `Stationsebene weglassen: Der Stationscode wandert in den Fundort jeder Probe`,
   'convert.flatten.cruise': `Fahrtebene weglassen: Der Fahrtcode wandert in den Datensatztext`,
   'convert.summary.title': `Zusammenfassung`,
-  'convert.summary.counts': `Es würden geschrieben: {events} Ereignisse, {occurrences} Vorkommen ({present} anwesend, {absent} abwesend) und {measurements} Messzeilen.`,
+  'convert.summary.counts': `Es würden geschrieben: {events} {+events:Ereignis|Ereignisse}, {occurrences} {+occurrences:Vorkommen|Vorkommen} ({present} anwesend, {absent} abwesend) und {measurements} {+measurements:Messzeile|Messzeilen}.`,
   'convert.summary.blocking': `Muss behoben werden, bevor etwas exportiert werden kann ({n})`,
   'convert.summary.warnings': `Warnungen, die Sie akzeptieren können ({n})`,
   'convert.summary.info': `Zur Information ({n})`,
@@ -1924,10 +1925,10 @@ const fr: Record<UiKey, string> = {
   'convert.codes.done': `La feuille avec les codes proposés a été téléchargée sous le nom {name}. Les codes ne sont pas appliqués : vérifiez-les, puis rechargez ce fichier.`,
   'convert.codes.none': `Aucun code ne peut être proposé pour cette feuille : elle a déjà une colonne de code d'échantillon.`,
   'convert.tree.title': `Arbre des événements`,
-  'convert.tree.counts': `{cruises} événements de campagne, {stations} de station, {samples} d'échantillon.`,
-  'convert.tree.derived': `Les niveaux campagne et station sont calculés à partir de leurs échantillons : {dates} dates, {positions} positions et {depths} plages de profondeur.`,
+  'convert.tree.counts': `{cruises} {+cruises:événement|événements} de campagne, {stations} {+stations:événement|événements} de station, {samples} {+samples:événement|événements} d'échantillon.`,
+  'convert.tree.derived': `Les niveaux campagne et station sont calculés à partir de leurs échantillons : {dates} {+dates:date|dates}, {positions} {+positions:position|positions} et {depths} {+depths:plage|plages} de profondeur.`,
   'convert.tree.uncertainty': `La plus grande incertitude d'une position calculée est de {m} m.`,
-  'convert.tree.noPosition': `{n} échantillons n'ont pas de position propre.`,
+  'convert.tree.noPosition': `{n} {+n:échantillon n'a|échantillons n'ont} pas de position propre.`,
   'convert.tree.examples': `Exemples`,
   'convert.tree.cruiseText': `Code de campagne pour le texte du jeu de données : {codes}`,
   'convert.tree.empty': `Il n'y a pas encore d'événements : corrigez d'abord ce qui bloque la conversion.`,
@@ -1942,7 +1943,7 @@ const fr: Record<UiKey, string> = {
   'convert.flatten.station': `Supprimer le niveau station : le code de station passe à la localité de chaque échantillon`,
   'convert.flatten.cruise': `Supprimer le niveau campagne : le code de campagne passe au texte du jeu de données`,
   'convert.summary.title': `Résumé`,
-  'convert.summary.counts': `Seraient écrits : {events} événements, {occurrences} occurrences ({present} présentes, {absent} absentes) et {measurements} lignes de mesure.`,
+  'convert.summary.counts': `Seraient écrits : {events} {+events:événement|événements}, {occurrences} {+occurrences:occurrence|occurrences} ({present} présentes, {absent} absentes) et {measurements} {+measurements:ligne|lignes} de mesure.`,
   'convert.summary.blocking': `À corriger avant tout export ({n})`,
   'convert.summary.warnings': `Avertissements que vous pouvez accepter ({n})`,
   'convert.summary.info': `Pour information ({n})`,
@@ -2446,7 +2447,9 @@ export function translate(lang: Lang, key: string, params?: Record<string, strin
   const table: Record<string, string> = UI[lang] ?? UI.en;
   const template = table[key] ?? (UI.en as Record<string, string>)[key] ?? key;
   if (!params) return template;
-  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
+  // plural tokens first ({+count:one|other}, see plural.ts), then the plain placeholders
+  const withPlurals = applyPlurals(lang, template, (name) => (typeof params[name] === 'number' ? (params[name] as number) : Number(params[name])));
+  return withPlurals.replace(/\{(\w+)\}/g, (whole, name: string) =>
     Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : whole,
   );
 }

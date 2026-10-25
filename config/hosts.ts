@@ -61,13 +61,15 @@ const https = (hosts: readonly string[]): string => hosts.map((h) => 'https://' 
 
 /**
  * The Content-Security-Policy. `extraConnect` (host names, no scheme) are added to connect-src for ONE page only: a default call
- * returns today's policy byte for byte. Never put such a host into DATA_HOSTS, which also feeds the fetch proxy.
+ * returns today's policy byte for byte; `{ data: false }` drops the data and map hosts from connect-src. Never put such a host into DATA_HOSTS, which also feeds the fetch proxy.
  */
-export function buildCsp(extraConnect: readonly string[] = []): string {
+export function buildCsp(extraConnect: readonly string[] = [], opts: { data?: boolean } = {}): string {
   const extra = extraConnect.length > 0 ? ' ' + https(extraConnect) : '';
+  // `data: false` is for a page that takes no links and shows no map (/convert): connect-src is 'self', analytics (after consent) and `extra` only
+  const connect = opts.data === false ? `'self' ${https(GA_HOSTS)}${extra}` : `'self' ${https(DATA_HOSTS)} ${https(GA_HOSTS)} ${https(MAP_HOSTS)}${extra}`;
   return [
     "default-src 'self'",
-    `connect-src 'self' ${https(DATA_HOSTS)} ${https(GA_HOSTS)} ${https(MAP_HOSTS)}${extra}`,
+    `connect-src ${connect}`,
     "worker-src 'self' blob:",
     `img-src 'self' data: blob: ${https(MAP_HOSTS)} ${https(GA_HOSTS)}`,
     "script-src 'self' https://www.googletagmanager.com",
