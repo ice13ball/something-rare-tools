@@ -6,7 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_METADATA, refreshPrefill } from '../../src/core/convert/metadata';
 import type { DatasetMetadata } from '../../src/core/convert/metadata';
-import { buildPrefill, licenceCaseOf, prefillValues } from '../../src/core/convert/prefill';
+import { analyseLicences } from '../../src/core/licence/analyse';
+import { buildPrefill, cleanText, licenceCaseOf, prefillValues, recognisedLicenceIds } from '../../src/core/convert/prefill';
+import { licenceDiffersFindings } from '../../src/core/convert/validate';
 import type { ConvertPrefill } from '../../src/core/convert/prefill';
 import { parseFile } from '../../src/core/parse';
 import type { MetadataRecord } from '../../src/core/types';
@@ -23,19 +25,19 @@ const prefillOf = (...files: [string, string][]): ConvertPrefill => buildPrefill
 describe('the licence matrix', () => {
   it('taken (CC0-1.0): one recognised id, no contradiction, accepted by OBIS; its source is the file and the field', () => {
     const p = prefillOf(['bay.datacite.xml', dataciteXml({ licence: 'CC0-1.0' })]);
-    expect(p.licence).toEqual({ kind: 'taken', id: 'CC0-1.0', sources: [{ file: 'bay.datacite.xml', field: 'rightsList[0]' }] });
+    expect(p.licence).toEqual({ kind: 'taken', id: 'CC0-1.0', sources: [{ file: 'bay.datacite.xml', field: 'rightsList[0]' }], also: [] });
     expect(prefillValues(p).licence).toBe('CC0-1.0');
   });
 
   it('taken (CC-BY-4.0): DataCite JSON', () => {
     const p = prefillOf(['bay.datacite.json', dataciteJson({ licence: 'CC-BY-4.0' })]);
-    expect(p.licence).toEqual({ kind: 'taken', id: 'CC-BY-4.0', sources: [{ file: 'bay.datacite.json', field: 'rightsList[0]' }] });
+    expect(p.licence).toEqual({ kind: 'taken', id: 'CC-BY-4.0', sources: [{ file: 'bay.datacite.json', field: 'rightsList[0]' }], also: [] });
     expect(prefillValues(p).licence).toBe('CC-BY-4.0');
   });
 
   it('taken (CC-BY-NC-4.0): Zenodo JSON', () => {
     const p = prefillOf(['bay.zenodo.json', zenodoJson({ licence: 'CC-BY-NC-4.0' })]);
-    expect(p.licence).toEqual({ kind: 'taken', id: 'CC-BY-NC-4.0', sources: [{ file: 'bay.zenodo.json', field: 'license.id' }] });
+    expect(p.licence).toEqual({ kind: 'taken', id: 'CC-BY-NC-4.0', sources: [{ file: 'bay.zenodo.json', field: 'license.id' }], also: [] });
     expect(prefillValues(p).licence).toBe('CC-BY-NC-4.0');
   });
 
@@ -93,14 +95,17 @@ describe('the licence matrix', () => {
     expect(prefillValues(p).licence).toBeUndefined();
   });
 
-  it('several different licences in one file are not one licence either', () => {
+  it('several licences side by side in one record (dual licensing) are no contradiction for /check, so the case is "other", never "contradictory"', () => {
     const rec = recordOf('dc.xml', dataciteXml({ licence: 'CC-BY-4.0' }));
     const second = { ...rec.licences[0], field: 'rightsList[1]', spdx: 'CC0-1.0', text: 'CC0-1.0', uri: undefined, uriSpdx: undefined, textSpdx: 'CC0-1.0' };
-    expect(licenceCaseOf([{ ...rec, licences: [...rec.licences, second] }]).kind).toBe('contradictory');
+    const two = { ...rec, licences: [...rec.licences, second] };
+    expect(analyseLicences([two]).contradictions).toEqual([]);
+    const c = licenceCaseOf([two]);
+    expect(c.kind).toBe('other');
+    if (c.kind === 'other') expect(c.ids.sort()).toEqual(['CC-BY-4.0', 'CC0-1.0']);
   });
 
-  it('the matrix as the shared analysis sees it: the same function /check uses decides contradictions (no parser of its own)', async () => {
-    const { analyseLicences } = await import('../../src/core/licence/analyse');
+  it('the matrix as the shared analysis sees it: the same function /check uses decides contradictions (no parser of its own)', () => {
     const records = [recordOf('dc.xml', CONTRADICTING.datacite), recordOf('zen.json', CONTRADICTING.zenodo)];
     expect(analyseLicences(records).contradictions.length).toBeGreaterThan(0);
   });
@@ -153,9 +158,27 @@ describe('the other fields, each with its source', () => {
     expect(p.fields.creators[1]).toEqual({ value: 'Sample, Boris', sources: [{ file: 'b.json', field: 'metadata.creators' }] });
   });
 
-  it('two contacts in one file are a choice, not a pick', () => {
+  it('two contacts in ONE file are a list to pick from, not a disagreement between files: nothing is prefilled, nothing is called different', () => {
     const p = prefillOf(['a.xml', dataciteXml({ contacts: ['Example, Anna', 'Sample, Boris'] })]);
     expect(p.fields.contact.map((c) => c.value)).toEqual(['Example, Anna', 'Sample, Boris']);
+    expect(p.contactLists).toEqual([{ file: 'a.xml', field: 'contributors (ContactPerson)', items: [{ name: 'Example, Anna', email: '' }, { name: 'Sample, Boris', email: '' }] }]);
+    expect(p.contactSingles).toEqual([]);
+    expect(prefillValues(p).contactName).toBeUndefined();
+  });
+
+  it('an ISO file with two pointOfContact entries is the same: a list, with the e-mail addresses', () => {
+    const p = prefillOf(['iso.xml', isoXml({ contacts: [{ name: 'Anna Example', email: 'anna@example.org' }, { name: 'Boris Sample', email: 'boris@example.org' }] })]);
+    expect(p.contactLists).toHaveLength(1);
+    expect(p.contactLists[0].items).toEqual([{ name: 'Anna Example', email: 'anna@example.org' }, { name: 'Boris Sample', email: 'boris@example.org' }]);
+    expect(prefillValues(p).contactName).toBeUndefined();
+    expect(prefillValues(p).contactEmail).toBeUndefined();
+  });
+
+  it('exactly one contact in a file is prefilled; two files that each name one and differ are a real disagreement (singles)', () => {
+    expect(prefillValues(prefillOf(['a.xml', dataciteXml({ contacts: ['Example, Anna'] })])).contactName).toBe('Example, Anna');
+    const p = prefillOf(['a.xml', dataciteXml({ contacts: ['Example, Anna'] })], ['b.json', zenodoJson({ contacts: ['Sample, Boris'] })]);
+    expect(p.contactSingles.map((c) => c.value)).toEqual(['Example, Anna', 'Sample, Boris']);
+    expect(p.contactLists).toEqual([]);
     expect(prefillValues(p).contactName).toBeUndefined();
   });
 
@@ -167,12 +190,6 @@ describe('the other fields, each with its source', () => {
   it('the coverage the metadata state is kept per file, for information', () => {
     const p = prefillOf(['a.xml', dataciteXml({ collected: '2019-06-01/2019-06-30', box: { west: 3, east: 5, south: 54, north: 56 } })], ['b.json', zenodoJson()]);
     expect(p.coverage).toEqual([{ file: 'a.xml', start: '2019-06-01', end: '2019-06-30', bbox: { west: 3, east: 5, south: 54, north: 56 } }]);
-  });
-
-  it('organisations among the creators are flagged', () => {
-    const xml = dataciteXml().replace('nameType="Personal">Sample, Boris', 'nameType="Organizational">Example Marine Laboratory');
-    expect(prefillOf(['a.xml', xml]).organisationsInCreators).toBe(true);
-    expect(prefillOf(['a.xml', dataciteXml()]).organisationsInCreators).toBe(false);
   });
 
   it('no record, no prefill', () => {
@@ -211,5 +228,91 @@ describe('what the user typed is never overwritten (refreshPrefill)', () => {
   it('a prefilled licence outside the three is never accepted', () => {
     const out = refreshPrefill(EMPTY_METADATA, new Set(), { licence: 'CC-BY-3.0' as never });
     expect(out.licence).toBe('');
+  });
+});
+
+describe('the licence verdict is the one of /check (analyseLicences), never stricter', () => {
+  it('ISO: a use limitation that is no licence next to otherConstraints CC BY 4.0 -> /check reports no contradiction, so the licence is taken, with the other statement as a neutral note', () => {
+    const rec = recordOf('nav.iso.xml', isoXml({ constraints: [{ kind: 'useLimitation', text: 'Not to be used for navigation' }, { kind: 'otherConstraints', text: 'CC-BY-4.0' }] }));
+    expect(analyseLicences([rec]).contradictions).toEqual([]);
+    const p = buildPrefill([rec]) as ConvertPrefill;
+    expect(p.licence.kind).toBe('taken');
+    if (p.licence.kind === 'taken') {
+      expect(p.licence.id).toBe('CC-BY-4.0');
+      expect(p.licence.also).toEqual([{ file: 'nav.iso.xml', field: 'useLimitation', says: 'Not to be used for navigation' }]);
+      expect(p.licence.sources).toEqual([{ file: 'nav.iso.xml', field: 'otherConstraints' }]);
+    }
+    expect(prefillValues(p).licence).toBe('CC-BY-4.0');
+  });
+
+  it('DataCite: "Open Access" (info:eu-repo openAccess) next to CC-BY-4.0 -> no contradiction, taken, the access note is only noted', () => {
+    const xml = dataciteXml({ licence: 'CC-BY-4.0', extraRights: [{ text: 'Open Access', uri: 'info:eu-repo/semantics/openAccess' }] });
+    const rec = recordOf('oa.datacite.xml', xml);
+    expect(analyseLicences([rec]).contradictions).toEqual([]);
+    const p = buildPrefill([rec]) as ConvertPrefill;
+    expect(p.licence.kind).toBe('taken');
+    if (p.licence.kind === 'taken') expect(p.licence.also.map((a) => a.says)).toEqual(['Open Access']);
+    expect(prefillValues(p).licence).toBe('CC-BY-4.0');
+  });
+
+  it('the case is "contradictory" exactly when analyseLicences reports contradictions (over every fixture combination of this file)', () => {
+    const files: [string, string][] = [
+      ['a.xml', dataciteXml({ licence: 'CC-BY-4.0' })],
+      ['b.json', zenodoJson({ licence: 'CC0-1.0', doi: '10.0000/synthetic.convert.2' })],
+      ['c.xml', dataciteXml({ licence: 'CC-BY-3.0' })],
+      ['d.xml', dataciteXml()],
+      ['e.iso.xml', isoXml({ freeText: 'Free to use.' })],
+      ['f.json', dataciteJson({ licence: 'CC-BY-4.0', doi: '10.0000/synthetic.convert.3' })],
+    ];
+    for (let mask = 1; mask < 1 << files.length; mask++) {
+      const picked = files.filter((_, i) => mask & (1 << i)).map(([n, t]) => recordOf(n, t));
+      const verdict = licenceCaseOf(picked).kind;
+      expect(verdict === 'contradictory', `mask ${mask}`).toBe(analyseLicences(picked).contradictions.length > 0);
+    }
+  });
+});
+
+describe('CONV-LICENCE-DIFFERS', () => {
+  it('is raised only when a licence is chosen and differs from every recognised licence of the metadata', () => {
+    const taken = prefillOf(['a.xml', dataciteXml({ licence: 'CC-BY-4.0' })]);
+    expect(recognisedLicenceIds(taken)).toEqual(['CC-BY-4.0']);
+    expect(licenceDiffersFindings('CC0-1.0', recognisedLicenceIds(taken)).map((f) => [f.ruleId, f.params])).toEqual([['CONV-LICENCE-DIFFERS', { chosen: 'CC0-1.0', source: 'CC-BY-4.0' }]]);
+    expect(licenceDiffersFindings('CC-BY-4.0', recognisedLicenceIds(taken))).toEqual([]);
+    expect(licenceDiffersFindings('', recognisedLicenceIds(taken))).toEqual([]);
+    const other = prefillOf(['old.xml', dataciteXml({ licence: 'CC-BY-3.0' })]);
+    expect(recognisedLicenceIds(other)).toEqual(['CC-BY-3.0']);
+    expect(licenceDiffersFindings('CC-BY-4.0', recognisedLicenceIds(other))).toHaveLength(1);
+    // nothing recognised (missing, free text, contradictory): nothing to differ from
+    for (const p of [prefillOf(['n.xml', dataciteXml()]), prefillOf(['f.iso.xml', isoXml({ freeText: 'Free to use.' })]), prefillOf(['dc.xml', CONTRADICTING.datacite], ['z.json', CONTRADICTING.zenodo])]) {
+      expect(recognisedLicenceIds(p)).toEqual([]);
+      expect(licenceDiffersFindings('CC0-1.0', recognisedLicenceIds(p))).toEqual([]);
+    }
+    expect(recognisedLicenceIds(null)).toEqual([]);
+  });
+});
+
+describe('text from the files is cleaned in the converter only', () => {
+  it('cleanText decodes HTML entities once, plain spaces, and lines', () => {
+    expect(cleanText('Counts &amp; sizes&nbsp;of plankton &#8211; &#x2013; &lt;b&gt;')).toBe('Counts & sizes of plankton – – <b>');
+    expect(cleanText('&amp;lt;')).toBe('&lt;');
+    expect(cleanText('  a \t  b  \r\n\r\n\r\n\r\n c ')).toBe('a b\n\nc');
+    expect(cleanText('&unknown; &#0;')).toBe('&unknown; &#0;');
+  });
+
+  it('a Zenodo record and its own DataCite record that differ only in entities and spaces do not disagree; the citation may still differ', () => {
+    const plain = 'Counts & sizes of plankton from an invented bay.';
+    const dc = dataciteXml({ abstract: plain, title: 'Plankton & more' });
+    const zen = zenodoJson({ rawDescription: '<p>Counts &amp; sizes&nbsp;of  plankton from an invented bay.</p>', title: 'Plankton &amp; more', doi: '10.0000/synthetic.convert.1' });
+    const p = prefillOf(['a.xml', dc], ['b.json', zen]);
+    expect(p.fields.abstract).toHaveLength(1);
+    expect(p.fields.abstract[0].value).toBe(plain);
+    expect(p.fields.title).toHaveLength(1);
+    expect(p.fields.title[0].value).toBe('Plankton & more');
+    expect(prefillValues(p).abstract).toBe(plain);
+  });
+
+  it('the shared parser is untouched: it still returns the entities as the file has them', () => {
+    const rec = recordOf('b.json', zenodoJson({ rawDescription: 'Counts &amp; sizes' }));
+    expect(rec.abstract).toContain('&amp;');
   });
 });

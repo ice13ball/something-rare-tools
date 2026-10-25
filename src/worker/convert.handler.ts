@@ -5,11 +5,12 @@
 // Not composed from createHandler() of worker/handler.ts, on purpose: that handler keeps the parsed files private and builds /check datasets,
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
+import { licenceDiffersFindings } from '../core/convert/validate';
 import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput } from '../core/convert';
 import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, prefillValues } from '../core/convert/prefill';
-import { readConvertFile } from '../core/convert/read';
+import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
 import { readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { parseFile } from '../core/parse';
@@ -65,10 +66,16 @@ export function createConvertHandler(): ConvertHandler {
   function parse(req: Extract<ConvertRequest, { type: 'parse' }>): ConvertParseResult {
     files = new Map();
     seq = 0;
-    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {}, prefillInfo: null };
+    const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false }, prefill: {}, prefillInfo: null };
     const records: MetadataRecord[] = [];
     const parsedAll: ParsedFile[] = [];
     for (const f of req.files as InputFile[]) {
+      const archiveKind = archiveDescriptorKind(f.bytes);
+      if (archiveKind) {
+        // an eml.xml or meta.xml of a Darwin Core archive: never a data sheet, listed and not read
+        result.archiveFiles.push({ fileName: f.name, kind: archiveKind });
+        continue;
+      }
       try {
         // the converter's own reading path: the formula guard of its code-proposal CSV comes off every text cell and header (core/convert/read.ts)
         parsedAll.push(readConvertFile(parseFile(f.name, f.bytes)));
@@ -175,7 +182,7 @@ export function createConvertHandler(): ConvertHandler {
   async function exportArchive(req: ExportBody): Promise<ExportResult> {
     const { r } = compute(req.body);
     const dataset = toDataset(r, req.metadata, decisionsOf(req.body));
-    const findings = [...r.findings, ...validateDataset(dataset, r.findings, { today: today() })];
+    const findings = [...r.findings, ...validateDataset(dataset, r.findings, { today: today() }), ...licenceDiffersFindings(req.metadata.licence, req.sourceLicences ?? [])];
     const j = judge(findings);
     if (j.blocking.length > 0) throw new Error(`Export refused: ${j.blocking.length} finding(s) block it (${[...new Set(j.blocking.map((f) => f.ruleId))].join(', ')}). Nothing was written.`);
     const open = j.acceptRules.filter((id) => !req.accepted.includes(id));

@@ -11,7 +11,7 @@ import { t } from './i18n';
 import { DERIVED_DECIMALS } from '../core/convert/events';
 import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '../core/convert/metadata';
 import { P01, P06 } from '../core/convert/vocab';
-import { NAME_PARTICLES } from '../core/convert/metadata';
+import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
 import { CONVERT_ROLE_CHOICES, ROLE_KINDS, roleChoiceLabelKey, roleLabelKey, type RoleKind } from './mappingModel';
 import { ACCEPTED_EXTENSIONS } from './types';
@@ -215,7 +215,7 @@ const DEFS = {
   convertSummaryColumn: { label: 'convert.summary.column' },
   convertMetaTitle: { label: 'convert.meta.f.title' },
   convertMetaAbstract: { label: 'convert.meta.f.abstract' },
-  convertMetaCreators: { label: 'convert.meta.f.creators', values: { particles: () => NAME_PARTICLES.join(', ') } },
+  convertMetaCreators: { label: 'convert.meta.f.creators', values: { particles: () => NAME_PARTICLES.join(', '), organisationWords: () => ORGANISATION_WORDS.join(', ') } },
   convertMetaContact: { label: 'convert.meta.f.contactName' },
   convertMetaInstitution: { label: 'convert.meta.f.institution' },
   convertMetaDatasetName: { label: 'convert.meta.f.datasetName' },
@@ -224,6 +224,8 @@ const DEFS = {
   convertMetaFiles: { label: 'convert.metafiles.title' },
   convertMetaSource: { label: 'convert.meta.src.label' },
   convertMetaChoice: { label: 'convert.meta.src.choose.label' },
+  convertMetaList: { label: 'convert.meta.src.list.label' },
+  convertArchiveDesc: { label: 'convert.archdesc.title' },
   convertMetaCitation: { label: 'convert.meta.f.citation' },
   convertMetaCoverage: { label: 'convert.meta.cov.title' },
   convertLicenceTaken: { label: 'convert.licence.note.label', values: { licences: () => LICENCES.join(', ') } },

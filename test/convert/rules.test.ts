@@ -19,7 +19,7 @@ describe('registry conventions', () => {
   it('has unique CONV-* ids, category B, and a severity of the three allowed', () => {
     const ids = CONVERT_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(30);
+    expect(ids.length).toBe(31);
     for (const r of CONVERT_RULES) {
       expect(r.id).toMatch(/^CONV-[A-Z]+(-[A-Z0-9]+)*$/);
       expect(r.category).toBe('B');
@@ -30,7 +30,7 @@ describe('registry conventions', () => {
   it('has the severities the plan fixes: blocking ones are errors, the accepted ones warnings, the counts information', () => {
     const sev = (id: string) => getConvertRule(id).severity;
     for (const id of ['CONV-SPLIT-UNDECIDED', 'CONV-QUANTITY-UNDECLARED', 'CONV-COUNT-NOT-INTEGER', 'CONV-NEGATIVE-QUANTITY', 'CONV-SAMPLE-CODE-MISSING', 'CONV-ID-DUPLICATE', 'CONV-TAB-IN-VALUE']) expect(sev(id), id).toBe('error');
-    for (const id of ['CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-NERC-UNKNOWN', 'CONV-UNIT-NO-P06', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING']) expect(sev(id), id).toBe('warning');
+    for (const id of ['CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-NERC-UNKNOWN', 'CONV-UNIT-NO-P06', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING', 'CONV-LICENCE-DIFFERS']) expect(sev(id), id).toBe('warning');
     expect(sev('CONV-MESH-INVALID')).toBe('error');
     expect(sev('CONV-ZERO-SKIPPED')).toBe('info');
     for (const id of ['CONV-EML-MISSING', 'CONV-LICENCE-UNSET', 'CONV-BASIS-UNSET', 'CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY']) expect(sev(id), id).toBe('error');

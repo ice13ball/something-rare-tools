@@ -21,6 +21,8 @@ export interface ConvertParseResult {
   problems: FileProblem[];
   /** Metadata files (ISO 19139, DataCite, Zenodo): never read as a data sheet; what they say is in `prefillInfo`. */
   metadataFiles: string[];
+  /** Description files of a Darwin Core archive (eml.xml, meta.xml), recognised by content: not a data sheet, not read. */
+  archiveFiles: { fileName: string; kind: 'eml' | 'meta' }[];
   /** Files that hold no table (PDF, unknown content). */
   notRead: { fileName: string; kind: string }[];
   /** Companion files of this drop: their settings were read. */
@@ -65,6 +67,8 @@ export interface ExportBody {
   metadata: DatasetMetadata;
   /** Rule ids of the warnings the user accepted in this run. */
   accepted: string[];
+  /** The licence ids the dropped metadata files state and recognise (core/convert/prefill.ts recognisedLicenceIds): the worker raises CONV-LICENCE-DIFFERS from them. */
+  sourceLicences: string[];
   /** UTC timestamp of the export, for pubDate and dateStamp of the EML (the core reads no clock). */
   generated: string;
 }

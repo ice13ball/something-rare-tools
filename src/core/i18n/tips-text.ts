@@ -277,7 +277,7 @@ No findings only means that no problems were found in the checked categories.`,
 • An empty abstract blocks the export.`,
   'tip.convertMetaCreators.does': `Lists the people or groups who made the dataset.`,
   'tip.convertMetaCreators.logic': `• One per line, as "Given Family" or "Family, Given". With a comma the name is taken as written: what stands before the comma is the family name. Without a comma the last word is the family name, together with any lowercase particle just before it ({particles}), so "Maria de la Cruz" has the family name "de la Cruz". A semicolon also separates two names.
-• They become the creators of the description and, when the citation field is left empty, the authors in the citation text. A creator that a metadata file marks as an organisation is still written as a given name and a family name; edit the line if that is wrong. The tool never looks anyone up.
+• They become the creators of the description and, when the citation field is left empty, the authors in the citation text. A line with a clear organisation word ({organisationWords}) is written as an organisation name and is not split; the form shows below how each line will be written. A name of only particles and one word ("de Vries") is a family name with no given name. The tool never looks anyone up.
 • At least one is needed.`,
   'tip.convertMetaContact.does': `Says whom a reader should write to about the dataset.`,
   'tip.convertMetaContact.logic': `• The name and the e-mail address become the contact and the metadata provider of the description. The address is only written into the file; this page never sends it anywhere.
@@ -344,6 +344,7 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertMetaChoice.does': `Lets you pick between values your metadata files disagree on.`,
   'tip.convertMetaChoice.logic': `• When files give different values for a field, none is filled in: the tool does not rank file formats or take the first file.
 • Each different value is listed once, with every file that says it. "Use this" copies it into the field, where you can still edit it.
+• When the field already holds a value that differs from what a file says (typed or chosen by you), the file's value stays visible with "Use this"; it never replaces your value by itself.
 • You can also ignore the list and type your own value.`,
   'tip.convertMetaCitation.does': `Sets the citation text carried in the archive description.`,
   'tip.convertMetaCitation.logic': `• It is written on one line into additionalMetadata/gbif/citation of eml.xml.
@@ -354,21 +355,31 @@ No findings only means that no problems were found in the checked categories.`,
 • The coverage written into eml.xml (bounding box, dates, taxa) is always computed from the events and occurrences of the archive, never from these values.
 • Each file is shown on its own line; the values are not merged.`,
   'tip.convertLicenceTaken.does': `Says that the licence was filled in from your metadata.`,
-  'tip.convertLicenceTaken.logic': `• It is filled in only when every licence statement in your files names the same licence, that licence is one of {licences}, and nothing in the files contradicts it (the comparison /check and the licence page use).
+  'tip.convertLicenceTaken.logic': `• It is filled in only when the comparison /check and the licence page use finds no contradiction in your files and exactly one licence is recognised, and that licence is one of {licences}.
+• Other statements that are no licence (an access note, a use limitation) are listed beside it as an extra note, never as a conflict.
 • The file and the field it was read from are shown, and you can change it.
 • The rights holder decides the licence: check that it is the one meant.`,
   'tip.convertLicenceOther.does': `Explains why no licence was filled in although your metadata states one.`,
-  'tip.convertLicenceOther.logic': `• OBIS accepts only {licences}. A statement that names another licence, another version of one, a ShareAlike or NoDerivatives licence, or only free text, is shown but not used.
+  'tip.convertLicenceOther.logic': `• OBIS accepts only {licences}. When the comparison finds no contradiction but the licence your files name is another one, another version of one, a ShareAlike or NoDerivatives licence, several licences side by side (dual licensing), or only free text, it is shown but not used.
 • The tool never maps a licence to the nearest accepted one: an older version is not turned into a newer one, and a share-alike licence becomes none of the three.
+• Statements that are no licence are listed as an extra note.
 • The rights holder decides which of the three to use; you choose it below.`,
   'tip.convertLicenceContradictory.does': `Explains why no licence was filled in when your metadata disagrees.`,
-  'tip.convertLicenceContradictory.logic': `• The files contradict each other, one file states several licences, or a statement contradicts itself (the comparison /check and the licence page use). Each statement is listed with its file and field.
+  'tip.convertLicenceContradictory.logic': `• The comparison /check and the licence page use reports a contradiction: the files disagree, a statement contradicts itself, or a restriction contradicts an open licence. Every statement is listed with its file and field.
 • The tool does not choose between them.
 • The rights holder decides which licence applies; you choose one of {licences} below.`,
   'tip.convertLicenceMissing.does': `Explains why no licence was filled in.`,
   'tip.convertLicenceMissing.logic': `• None of the files you added states a licence for the data.
 • Nothing is assumed: there is no default licence.
 • The rights holder decides; you choose one of {licences} below, and an unchosen licence blocks the export.`,
+  'tip.convertMetaList.does': `Lets you pick one of the contacts that a single file lists.`,
+  'tip.convertMetaList.logic': `• A file that names several contact persons is not in disagreement with itself: it is a list, and the tool does not know which one to write.
+• The first few are shown; "Show all" lists the rest. "Use this" copies the contact (name and, when the file has it, the e-mail address) into the fields, where you can still edit it.
+• Nothing is filled in until you choose. A file with exactly one contact fills the fields by itself.`,
+  'tip.convertArchiveDesc.does': `Lists the description files of a Darwin Core archive that you added.`,
+  'tip.convertArchiveDesc.logic': `• An eml.xml (an EML document) or a meta.xml (the archive's column map) is recognised from its content, not from its name.
+• It is never read as a data sheet and its values are not used: the description of your dataset comes from metadata files (ISO, DataCite, Zenodo) or from the form.
+• No request is sent; the file is only listed.`,
 } as const;
 
 export type TipKey = keyof typeof en;
@@ -639,7 +650,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Puste streszczenie blokuje eksport.`,
   'tip.convertMetaCreators.does': `Wymienia osoby lub grupy, które stworzyły zbiór danych.`,
   'tip.convertMetaCreators.logic': `• Po jednym w wierszu, jako „Imię Nazwisko” albo „Nazwisko, Imię”. Z przecinkiem nazwa jest przyjmowana tak, jak zapisano: to, co stoi przed przecinkiem, jest nazwiskiem. Bez przecinka nazwiskiem jest ostatnie słowo razem z małą literą partykułą tuż przed nim ({particles}), więc „Maria de la Cruz” ma nazwisko „de la Cruz”. Średnik też oddziela dwa nazwiska.
-• Stają się autorami w opisie i, gdy pole cytowania jest puste, autorami w tekście cytowania. Autor, którego plik z metadanymi oznacza jako instytucję, jest nadal zapisywany jako imię i nazwisko; popraw wiersz, jeśli to błąd. Narzędzie nikogo nie wyszukuje.
+• Stają się autorami w opisie i, gdy pole cytowania jest puste, autorami w tekście cytowania. Wiersz z wyraźnym słowem instytucji ({organisationWords}) jest zapisywany jako nazwa instytucji i nie jest dzielony; formularz pokazuje poniżej, jak każdy wiersz zostanie zapisany. Nazwa złożona tylko z partykuł i jednego słowa („de Vries”) to nazwisko bez imienia. Narzędzie nikogo nie wyszukuje.
 • Potrzebny jest co najmniej jeden.`,
   'tip.convertMetaContact.does': `Mówi, do kogo czytelnik ma pisać w sprawie zbioru danych.`,
   'tip.convertMetaContact.logic': `• Imię i nazwisko oraz adres e-mail stają się kontaktem i dostawcą metadanych w opisie. Adres jest tylko zapisywany w pliku; ta strona nigdzie go nie wysyła.
@@ -706,6 +717,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertMetaChoice.does': `Pozwala wybrać między wartościami, w których pliki z metadanymi się różnią.`,
   'tip.convertMetaChoice.logic': `• Gdy pliki podają różne wartości pola, żadna nie jest wpisywana: narzędzie nie ustawia formatów plików w kolejności ważności i nie bierze pierwszego pliku.
 • Każda inna wartość jest wymieniona raz, z każdym plikiem, który ją podaje. „Użyj tej” kopiuje ją do pola, gdzie nadal można ją edytować.
+• Gdy pole ma już wartość różną od tej, którą podaje plik (wpisaną lub wybraną przez Ciebie), wartość z pliku pozostaje widoczna z „Użyj tej”; nigdy sama nie zastępuje Twojej wartości.
 • Możesz też pominąć listę i wpisać własną wartość.`,
   'tip.convertMetaCitation.does': `Ustala tekst cytowania zapisany w opisie archiwum.`,
   'tip.convertMetaCitation.logic': `• Jest zapisywany w jednym wierszu w additionalMetadata/gbif/citation w eml.xml.
@@ -716,21 +728,31 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Zakres zapisany w eml.xml (prostokąt, daty, taksony) jest zawsze obliczany ze zdarzeń i wystąpień w archiwum, nigdy z tych wartości.
 • Każdy plik ma własny wiersz; wartości nie są łączone.`,
   'tip.convertLicenceTaken.does': `Mówi, że licencja została wzięta z Twoich metadanych.`,
-  'tip.convertLicenceTaken.logic': `• Jest wpisywana tylko wtedy, gdy każde oświadczenie o licencji w Twoich plikach wskazuje tę samą licencję, jest ona jedną z {licences}, a nic w plikach jej nie przeczy (to samo porównanie, którego używają /check i strona licencji).
+  'tip.convertLicenceTaken.logic': `• Jest wpisywana tylko wtedy, gdy porównanie, którego używają /check i strona licencji, nie znajduje w Twoich plikach sprzeczności i rozpoznano dokładnie jedną licencję, będącą jedną z {licences}.
+• Inne oświadczenia, które nie są licencją (uwaga o dostępie, ograniczenie użycia), są wymienione obok jako dodatkowa uwaga, nigdy jako konflikt.
 • Widać plik i pole, z którego ją odczytano, i możesz ją zmienić.
 • Licencję wybiera posiadacz praw: sprawdź, czy to ta właściwa.`,
   'tip.convertLicenceOther.does': `Wyjaśnia, dlaczego nie wpisano licencji, choć metadane jakąś podają.`,
-  'tip.convertLicenceOther.logic': `• OBIS przyjmuje tylko {licences}. Oświadczenie wskazujące inną licencję, inną wersję licencji, licencję ShareAlike lub NoDerivatives albo tylko wolny tekst jest pokazywane, ale nieużywane.
+  'tip.convertLicenceOther.logic': `• OBIS przyjmuje tylko {licences}. Gdy porównanie nie znajduje sprzeczności, ale licencja z Twoich plików to inna licencja, inna wersja licencji, licencja ShareAlike lub NoDerivatives, kilka licencji obok siebie (podwójne licencjonowanie) albo tylko wolny tekst, jest ona pokazywana, ale nieużywana.
 • Narzędzie nigdy nie zamienia licencji na najbliższą przyjmowaną: starsza wersja nie staje się nowszą, a licencja ShareAlike nie staje się żadną z trzech.
+• Oświadczenia, które nie są licencją, są wymienione jako dodatkowa uwaga.
 • O tym, której z trzech użyć, decyduje posiadacz praw; wybierasz ją poniżej.`,
   'tip.convertLicenceContradictory.does': `Wyjaśnia, dlaczego nie wpisano licencji, gdy metadane się różnią.`,
-  'tip.convertLicenceContradictory.logic': `• Pliki przeczą sobie nawzajem, jeden plik podaje kilka licencji albo oświadczenie przeczy samo sobie (to samo porównanie, którego używają /check i strona licencji). Każde oświadczenie jest wymienione z plikiem i polem.
+  'tip.convertLicenceContradictory.logic': `• Porównanie, którego używają /check i strona licencji, zgłasza sprzeczność: pliki się różnią, oświadczenie przeczy samo sobie albo ograniczenie przeczy otwartej licencji. Każde oświadczenie jest wymienione z plikiem i polem.
 • Narzędzie nie wybiera między nimi.
 • O tym, która licencja obowiązuje, decyduje posiadacz praw; wybierasz jedną z {licences} poniżej.`,
   'tip.convertLicenceMissing.does': `Wyjaśnia, dlaczego nie wpisano licencji.`,
   'tip.convertLicenceMissing.logic': `• Żaden z dodanych plików nie podaje licencji dla danych.
 • Nic nie jest zakładane: nie ma licencji domyślnej.
 • Decyduje posiadacz praw; wybierasz jedną z {licences} poniżej, a niewybrana licencja blokuje eksport.`,
+  'tip.convertMetaList.does': `Pozwala wybrać jeden z kontaktów, które wymienia pojedynczy plik.`,
+  'tip.convertMetaList.logic': `• Plik, który podaje kilka osób kontaktowych, nie jest w sprzeczności sam ze sobą: to lista, a narzędzie nie wie, którą zapisać.
+• Pokazano kilka pierwszych; „Pokaż wszystkie” wymienia resztę. „Użyj tej” kopiuje kontakt (imię i nazwisko oraz, jeśli plik je ma, adres e-mail) do pól, gdzie nadal można go edytować.
+• Nic nie jest wpisywane, dopóki nie wybierzesz. Plik z dokładnie jednym kontaktem wypełnia pola sam.`,
+  'tip.convertArchiveDesc.does': `Wymienia dodane pliki opisu archiwum Darwin Core.`,
+  'tip.convertArchiveDesc.logic': `• Plik eml.xml (dokument EML) lub meta.xml (mapa kolumn archiwum) jest rozpoznawany po zawartości, nie po nazwie.
+• Nigdy nie jest odczytywany jako arkusz z danymi, a jego wartości nie są używane: opis zbioru pochodzi z plików z metadanymi (ISO, DataCite, Zenodo) albo z formularza.
+• Nie jest wysyłane żadne żądanie; plik jest tylko wymieniony.`,
 };
 
 const de: Record<TipKey, string> = {
@@ -999,7 +1021,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Eine leere Zusammenfassung blockiert den Export.`,
   'tip.convertMetaCreators.does': `Nennt die Personen oder Gruppen, die den Datensatz erstellt haben.`,
   'tip.convertMetaCreators.logic': `• Einer pro Zeile, als „Vorname Familienname“ oder „Familienname, Vorname“. Mit Komma gilt der Name wie geschrieben: Was vor dem Komma steht, ist der Familienname. Ohne Komma ist das letzte Wort der Familienname, zusammen mit kleingeschriebenen Namenspartikeln direkt davor ({particles}); „Maria de la Cruz“ hat also den Familiennamen „de la Cruz“. Auch ein Semikolon trennt zwei Namen.
-• Sie werden zu den Autoren der Beschreibung und, wenn das Zitierfeld leer bleibt, zu den Autoren im Zitiertext. Ein Urheber, den eine Metadatendatei als Organisation kennzeichnet, wird trotzdem als Vorname und Familienname geschrieben; korrigieren Sie die Zeile, falls das falsch ist. Das Werkzeug sucht niemanden nach.
+• Sie werden zu den Autoren der Beschreibung und, wenn das Zitierfeld leer bleibt, zu den Autoren im Zitiertext. Eine Zeile mit einem klaren Organisationswort ({organisationWords}) wird als Organisationsname geschrieben und nicht geteilt; das Formular zeigt unten, wie jede Zeile geschrieben wird. Ein Name nur aus Partikeln und einem Wort („de Vries“) ist ein Familienname ohne Vornamen. Das Werkzeug sucht niemanden nach.
 • Mindestens einer ist nötig.`,
   'tip.convertMetaContact.does': `Sagt, an wen ein Leser zum Datensatz schreiben soll.`,
   'tip.convertMetaContact.logic': `• Name und E-Mail-Adresse werden zum Kontakt und zum Metadatenanbieter der Beschreibung. Die Adresse wird nur in die Datei geschrieben; diese Seite sendet sie nirgendwohin.
@@ -1066,6 +1088,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertMetaChoice.does': `Lässt Sie zwischen Werten wählen, in denen sich Ihre Metadatendateien widersprechen.`,
   'tip.convertMetaChoice.logic': `• Geben Dateien für ein Feld unterschiedliche Werte an, wird keiner eingetragen: Das Werkzeug reiht Dateiformate nicht und nimmt nicht die erste Datei.
 • Jeder abweichende Wert wird einmal aufgeführt, mit jeder Datei, die ihn nennt. „Diesen übernehmen“ kopiert ihn ins Feld, wo Sie ihn weiter bearbeiten können.
+• Enthält das Feld schon einen Wert, der von dem abweicht, was eine Datei sagt (von Ihnen getippt oder gewählt), bleibt der Wert der Datei mit „Diesen übernehmen“ sichtbar; er ersetzt Ihren Wert nie von selbst.
 • Sie können die Liste auch ignorieren und einen eigenen Wert eintippen.`,
   'tip.convertMetaCitation.does': `Legt den Zitiertext fest, den die Archivbeschreibung enthält.`,
   'tip.convertMetaCitation.logic': `• Er wird einzeilig in additionalMetadata/gbif/citation der eml.xml geschrieben.
@@ -1076,21 +1099,31 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Die in der eml.xml geschriebene Abdeckung (Rechteck, Daten, Taxa) wird immer aus den Ereignissen und Vorkommen des Archivs berechnet, nie aus diesen Werten.
 • Jede Datei steht in einer eigenen Zeile; die Werte werden nicht zusammengeführt.`,
   'tip.convertLicenceTaken.does': `Sagt, dass die Lizenz aus Ihren Metadaten übernommen wurde.`,
-  'tip.convertLicenceTaken.logic': `• Sie wird nur eingetragen, wenn jede Lizenzaussage in Ihren Dateien dieselbe Lizenz nennt, diese eine von {licences} ist und nichts in den Dateien ihr widerspricht (derselbe Vergleich wie in /check und auf der Lizenzseite).
+  'tip.convertLicenceTaken.logic': `• Sie wird nur eingetragen, wenn der Vergleich, den /check und die Lizenzseite verwenden, in Ihren Dateien keinen Widerspruch findet und genau eine Lizenz erkannt wird, die eine von {licences} ist.
+• Andere Aussagen, die keine Lizenz sind (ein Zugangshinweis, eine Nutzungsbeschränkung), werden daneben als zusätzlicher Hinweis aufgeführt, nie als Konflikt.
 • Datei und Feld, aus dem sie gelesen wurde, werden gezeigt, und Sie können sie ändern.
 • Die Lizenz bestimmt der Rechteinhaber: Prüfen Sie, ob es die gemeinte ist.`,
   'tip.convertLicenceOther.does': `Erklärt, warum keine Lizenz eingetragen wurde, obwohl Ihre Metadaten eine nennen.`,
-  'tip.convertLicenceOther.logic': `• OBIS akzeptiert nur {licences}. Eine Aussage, die eine andere Lizenz, eine andere Version einer Lizenz, eine ShareAlike- oder NoDerivatives-Lizenz oder nur Freitext nennt, wird gezeigt, aber nicht verwendet.
+  'tip.convertLicenceOther.logic': `• OBIS akzeptiert nur {licences}. Findet der Vergleich keinen Widerspruch, die Lizenz Ihrer Dateien ist aber eine andere, eine andere Version einer Lizenz, eine ShareAlike- oder NoDerivatives-Lizenz, mehrere Lizenzen nebeneinander (Doppellizenzierung) oder nur Freitext, wird sie gezeigt, aber nicht verwendet.
 • Das Werkzeug ordnet eine Lizenz nie der nächstliegenden akzeptierten zu: Eine ältere Version wird nicht zur neueren, und eine ShareAlike-Lizenz wird keine der drei.
+• Aussagen, die keine Lizenz sind, werden als zusätzlicher Hinweis aufgeführt.
 • Welche der drei verwendet wird, entscheidet der Rechteinhaber; Sie wählen sie unten.`,
   'tip.convertLicenceContradictory.does': `Erklärt, warum keine Lizenz eingetragen wurde, wenn sich Ihre Metadaten widersprechen.`,
-  'tip.convertLicenceContradictory.logic': `• Die Dateien widersprechen einander, eine Datei nennt mehrere Lizenzen, oder eine Aussage widerspricht sich selbst (derselbe Vergleich wie in /check und auf der Lizenzseite). Jede Aussage wird mit Datei und Feld aufgeführt.
+  'tip.convertLicenceContradictory.logic': `• Der Vergleich, den /check und die Lizenzseite verwenden, meldet einen Widerspruch: Die Dateien weichen voneinander ab, eine Aussage widerspricht sich selbst oder eine Einschränkung widerspricht einer offenen Lizenz. Jede Aussage wird mit Datei und Feld aufgeführt.
 • Das Werkzeug wählt nicht zwischen ihnen.
 • Welche Lizenz gilt, entscheidet der Rechteinhaber; Sie wählen unten eine von {licences}.`,
   'tip.convertLicenceMissing.does': `Erklärt, warum keine Lizenz eingetragen wurde.`,
   'tip.convertLicenceMissing.logic': `• Keine der hinzugefügten Dateien nennt eine Lizenz für die Daten.
 • Nichts wird angenommen: Es gibt keine Standardlizenz.
 • Der Rechteinhaber entscheidet; Sie wählen unten eine von {licences}, und eine nicht gewählte Lizenz blockiert den Export.`,
+  'tip.convertMetaList.does': `Lässt Sie einen der Kontakte wählen, die eine einzelne Datei auflistet.`,
+  'tip.convertMetaList.logic': `• Eine Datei, die mehrere Kontaktpersonen nennt, widerspricht sich nicht selbst: Es ist eine Liste, und das Werkzeug weiß nicht, welche es schreiben soll.
+• Die ersten werden gezeigt; „Alle zeigen“ führt den Rest auf. „Diesen übernehmen“ kopiert den Kontakt (Name und, falls die Datei sie hat, die E-Mail-Adresse) in die Felder, wo Sie ihn weiter bearbeiten können.
+• Nichts wird eingetragen, bis Sie wählen. Eine Datei mit genau einem Kontakt füllt die Felder selbst.`,
+  'tip.convertArchiveDesc.does': `Nennt die hinzugefügten Beschreibungsdateien eines Darwin-Core-Archivs.`,
+  'tip.convertArchiveDesc.logic': `• Eine eml.xml (ein EML-Dokument) oder eine meta.xml (die Spaltenzuordnung des Archivs) wird am Inhalt erkannt, nicht am Namen.
+• Sie wird nie als Datenblatt gelesen, und ihre Werte werden nicht verwendet: Die Beschreibung Ihres Datensatzes stammt aus Metadatendateien (ISO, DataCite, Zenodo) oder aus dem Formular.
+• Es wird keine Anfrage gesendet; die Datei wird nur aufgeführt.`,
 };
 
 const fr: Record<TipKey, string> = {
@@ -1359,7 +1392,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Un résumé vide bloque l'export.`,
   'tip.convertMetaCreators.does': `Liste les personnes ou groupes qui ont produit le jeu de données.`,
   'tip.convertMetaCreators.logic': `• Un par ligne, sous la forme « Prénom Nom » ou « Nom, Prénom ». Avec une virgule, le nom est pris tel qu'il est écrit : ce qui précède la virgule est le nom de famille. Sans virgule, le dernier mot est le nom de famille, avec les particules en minuscules juste avant lui ({particles}) ; « Maria de la Cruz » a donc pour nom de famille « de la Cruz ». Un point-virgule sépare aussi deux noms.
-• Ils deviennent les auteurs de la description et, quand le champ de citation reste vide, les auteurs du texte de citation. Un auteur qu'un fichier de métadonnées marque comme organisation est quand même écrit comme prénom et nom ; corrigez la ligne si c'est faux. L'outil ne cherche personne.
+• Ils deviennent les auteurs de la description et, quand le champ de citation reste vide, les auteurs du texte de citation. Une ligne avec un mot d'organisation clair ({organisationWords}) est écrite comme nom d'organisation et n'est pas coupée ; le formulaire montre en dessous comment chaque ligne sera écrite. Un nom fait seulement de particules et d'un mot (« de Vries ») est un nom de famille sans prénom. L'outil ne cherche personne.
 • Il en faut au moins un.`,
   'tip.convertMetaContact.does': `Dit à qui le lecteur doit écrire au sujet du jeu de données.`,
   'tip.convertMetaContact.logic': `• Le nom et l'adresse e-mail deviennent le contact et le fournisseur des métadonnées de la description. L'adresse est seulement écrite dans le fichier ; cette page ne l'envoie nulle part.
@@ -1426,6 +1459,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertMetaChoice.does': `Vous laisse choisir entre des valeurs sur lesquelles vos fichiers de métadonnées divergent.`,
   'tip.convertMetaChoice.logic': `• Quand des fichiers donnent des valeurs différentes pour un champ, aucune n'est saisie : l'outil ne classe pas les formats de fichier et ne prend pas le premier fichier.
 • Chaque valeur différente est listée une fois, avec chaque fichier qui la donne. « Utiliser celle-ci » la copie dans le champ, où vous pouvez encore la modifier.
+• Quand le champ contient déjà une valeur différente de ce que dit un fichier (saisie ou choisie par vous), la valeur du fichier reste visible avec « Utiliser celle-ci » ; elle ne remplace jamais votre valeur d'elle-même.
 • Vous pouvez aussi ignorer la liste et saisir votre propre valeur.`,
   'tip.convertMetaCitation.does': `Fixe le texte de citation contenu dans la description de l'archive.`,
   'tip.convertMetaCitation.logic': `• Il est écrit sur une seule ligne dans additionalMetadata/gbif/citation de l'eml.xml.
@@ -1436,21 +1470,31 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • La couverture écrite dans l'eml.xml (rectangle, dates, taxons) est toujours calculée à partir des événements et des occurrences de l'archive, jamais à partir de ces valeurs.
 • Chaque fichier a sa propre ligne ; les valeurs ne sont pas fusionnées.`,
   'tip.convertLicenceTaken.does': `Dit que la licence a été reprise de vos métadonnées.`,
-  'tip.convertLicenceTaken.logic': `• Elle n'est saisie que si chaque déclaration de licence de vos fichiers nomme la même licence, qu'elle est l'une de {licences} et que rien dans les fichiers ne la contredit (la même comparaison que /check et la page des licences).
+  'tip.convertLicenceTaken.logic': `• Elle n'est saisie que si la comparaison qu'utilisent /check et la page des licences ne trouve aucune contradiction dans vos fichiers et qu'exactement une licence est reconnue, et que celle-ci est l'une de {licences}.
+• Les autres déclarations qui ne sont pas une licence (une note d'accès, une limitation d'usage) sont listées à côté comme note supplémentaire, jamais comme un conflit.
 • Le fichier et le champ d'où elle a été lue sont indiqués, et vous pouvez la modifier.
 • Le détenteur des droits décide de la licence : vérifiez que c'est la bonne.`,
   'tip.convertLicenceOther.does': `Explique pourquoi aucune licence n'a été saisie alors que vos métadonnées en indiquent une.`,
-  'tip.convertLicenceOther.logic': `• OBIS n'accepte que {licences}. Une déclaration qui nomme une autre licence, une autre version d'une licence, une licence ShareAlike ou NoDerivatives, ou seulement du texte libre, est montrée mais pas utilisée.
+  'tip.convertLicenceOther.logic': `• OBIS n'accepte que {licences}. Quand la comparaison ne trouve aucune contradiction mais que la licence de vos fichiers est une autre, une autre version d'une licence, une licence ShareAlike ou NoDerivatives, plusieurs licences côte à côte (double licence) ou seulement du texte libre, elle est montrée mais pas utilisée.
 • L'outil ne ramène jamais une licence à la plus proche des licences acceptées : une version plus ancienne ne devient pas une plus récente, et une licence ShareAlike ne devient aucune des trois.
+• Les déclarations qui ne sont pas une licence sont listées comme note supplémentaire.
 • Le détenteur des droits décide laquelle des trois utiliser ; vous la choisissez ci-dessous.`,
   'tip.convertLicenceContradictory.does': `Explique pourquoi aucune licence n'a été saisie quand vos métadonnées se contredisent.`,
-  'tip.convertLicenceContradictory.logic': `• Les fichiers se contredisent, un fichier donne plusieurs licences, ou une déclaration se contredit elle-même (la même comparaison que /check et la page des licences). Chaque déclaration est listée avec son fichier et son champ.
+  'tip.convertLicenceContradictory.logic': `• La comparaison qu'utilisent /check et la page des licences signale une contradiction : les fichiers divergent, une déclaration se contredit elle-même ou une restriction contredit une licence ouverte. Chaque déclaration est listée avec son fichier et son champ.
 • L'outil ne choisit pas entre elles.
 • Le détenteur des droits décide quelle licence s'applique ; vous choisissez ci-dessous l'une de {licences}.`,
   'tip.convertLicenceMissing.does': `Explique pourquoi aucune licence n'a été saisie.`,
   'tip.convertLicenceMissing.logic': `• Aucun des fichiers ajoutés n'indique de licence pour les données.
 • Rien n'est supposé : il n'y a pas de licence par défaut.
 • Le détenteur des droits décide ; vous choisissez ci-dessous l'une de {licences}, et une licence non choisie bloque l'export.`,
+  'tip.convertMetaList.does': `Vous laisse choisir l'un des contacts qu'un seul fichier liste.`,
+  'tip.convertMetaList.logic': `• Un fichier qui nomme plusieurs personnes de contact ne se contredit pas : c'est une liste, et l'outil ne sait pas laquelle écrire.
+• Les premiers sont montrés ; « Tout afficher » liste le reste. « Utiliser celle-ci » copie le contact (nom et, si le fichier l'a, l'adresse e-mail) dans les champs, où vous pouvez encore le modifier.
+• Rien n'est saisi tant que vous n'avez pas choisi. Un fichier avec exactement un contact remplit les champs de lui-même.`,
+  'tip.convertArchiveDesc.does': `Liste les fichiers de description d'une archive Darwin Core que vous avez ajoutés.`,
+  'tip.convertArchiveDesc.logic': `• Un eml.xml (un document EML) ou un meta.xml (la correspondance des colonnes de l'archive) est reconnu d'après son contenu, pas d'après son nom.
+• Il n'est jamais lu comme une feuille de données et ses valeurs ne sont pas utilisées : la description de votre jeu de données vient des fichiers de métadonnées (ISO, DataCite, Zenodo) ou du formulaire.
+• Aucune requête n'est envoyée ; le fichier est seulement listé.`,
 };
 
 export const TIP_TEXTS: Record<'en' | 'pl' | 'de' | 'fr', Record<TipKey, string>> = { en, pl, de, fr };

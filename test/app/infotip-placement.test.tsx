@@ -237,6 +237,14 @@ describe('/convert: the metadata files of stage 3', () => {
     expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
   });
 
+  it('the list of contacts one file names and the archive description file carry their ⓘ', async () => {
+    await withFiles(
+      { name: NAME(1), text: meta.isoXml({ contacts: [{ name: 'Anna Example' }, { name: 'Boris Sample' }] }) },
+      { name: 'eml.xml', text: '<eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0"><dataset/></eml:eml>' },
+    );
+    expectTips(['convertMetaList', 'convertArchiveDesc']);
+  });
+
   it('the three other licence cases each carry their ⓘ', async () => {
     await withFiles({ name: NAME(1), text: meta.dataciteXml({ licence: 'CC-BY-4.0' }) });
     expectTips(['convertLicenceTaken']);

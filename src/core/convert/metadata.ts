@@ -151,6 +151,26 @@ export function splitPersonName(line: string): { givenName?: string; surName: st
   const words = t.split(' ');
   if (words.length === 1) return { surName: t };
   let from = words.length - 1;
-  while (from > 1 && PARTICLES.has(words[from - 1])) from--;
+  while (from > 0 && PARTICLES.has(words[from - 1])) from--;
+  // only particles before the last word ("de Vries", "de la Cruz"): the whole name is the family name, there is no given name
+  if (from === 0) return { surName: t };
   return { givenName: words.slice(0, from).join(' '), surName: words.slice(from).join(' ') };
+}
+
+/**
+ * Words that mark a creator or contact line as an ORGANISATION: it is written as an organisation name and never split into a given name and a surname.
+ * Whole words, any case, except PAN (the Polish Academy of Sciences, "IO PAN"), which only counts in capitals.
+ */
+export const ORGANISATION_WORDS = ['Institute', 'Institut', 'Instytut', 'University', 'Uniwersytet', 'Universität', 'Université', 'Laboratory', 'Laboratorium', 'Laboratoire', 'Centre', 'Center', 'Zentrum', 'Museum', 'Agency', 'Survey', 'Society', 'Academy', 'Akademia', 'PAN'] as const;
+const ORG_WORD = new RegExp(`(?<![\\p{L}\\p{N}])(?:${ORGANISATION_WORDS.filter((w) => w !== 'PAN').join('|')})(?![\\p{L}\\p{N}])`, 'iu');
+const ORG_PAN = /(?<![\p{L}\p{N}])PAN(?![\p{L}\p{N}])/u;
+
+export const isOrganisationName = (line: string): boolean => ORG_WORD.test(line) || ORG_PAN.test(line);
+
+/** How a creator or contact line is written into the EML: an organisation (organizationName) or a person (givenName and surName). */
+export type Party = { kind: 'organisation'; name: string } | { kind: 'person'; givenName?: string; surName: string };
+
+export function partyOf(line: string): Party {
+  const t = line.trim().replace(/\s+/g, ' ');
+  return isOrganisationName(t) ? { kind: 'organisation', name: t } : { kind: 'person', ...splitPersonName(t) };
 }

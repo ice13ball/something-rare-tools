@@ -45,6 +45,7 @@ import type { RuleSpec } from './spec';
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
  *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
  *   CONV-DEVICE-MISSING        (none)           the sheet has no sampling device
+ *   CONV-LICENCE-DIFFERS       chosen, source   the licence chosen differs from the recognised licence of the dropped metadata files
  *   CONV-MESH-INVALID          reason           value = the typed mesh size; reason = not-a-number | not-positive | ambiguous | thousands
  */
 const NERC_MANUAL = {
@@ -448,6 +449,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La colonne « {column} » ne contient que des nombres entiers et a été marquée à la main comme identifiant de taxon, mais son en-tête n'est pas AphiaID. Ils ressemblent à des AphiaID de WoRMS ; ils sont écrits tels quels. Renommez l'en-tête en AphiaID pour qu'ils soient écrits comme LSID de WoRMS.`,
     },
     technical: `{file}, {sheet}: column {column} was given the taxon ID role by hand; every filled cell is a positive whole number but the header is none of AphiaID, aphia_id, Aphia ID, so the values are written to scientificNameID as given, not as the urn:lsid of a WoRMS taxon.`,
+  },
+  {
+    id: 'CONV-LICENCE-DIFFERS',
+    category: 'B',
+    severity: 'warning',
+    params: ['chosen', 'source'],
+    plain: {
+      pl: `Wybrana licencja ({chosen}) różni się od tej, którą podają Twoje metadane ({source}). O tym, która licencja obowiązuje, decyduje posiadacz praw; zaakceptuj to tylko wtedy, gdy posiadacz praw tak zdecydował.`,
+      en: `The licence chosen ({chosen}) differs from the one your metadata states ({source}). The rights holder decides which licence applies; accept this only if the rights holder has decided it.`,
+      de: `Die gewählte Lizenz ({chosen}) weicht von der ab, die Ihre Metadaten nennen ({source}). Welche Lizenz gilt, entscheidet der Rechteinhaber; akzeptieren Sie dies nur, wenn der Rechteinhaber es so entschieden hat.`,
+      fr: `La licence choisie ({chosen}) diffère de celle que vos métadonnées indiquent ({source}). Le détenteur des droits décide quelle licence s'applique ; n'acceptez ceci que si le détenteur des droits l'a décidé.`,
+    },
+    technical: `{file}: the chosen licence {chosen} is not among the licence(s) recognised in the dropped metadata files ({source}). The archive would carry a licence different from its source's, so the user has to acknowledge it.`,
   },
 ];
 

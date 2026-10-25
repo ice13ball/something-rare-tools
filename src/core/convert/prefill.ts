@@ -46,14 +46,24 @@ export interface LicenceSaid {
 }
 
 /**
- * The licence cases. taken: prefilled. other: one licence that OBIS does not accept (or only free text); `says` holds what the files say.
- * contradictory: the files contradict each other or give several licences. missing: no file states a licence.
+ * The licence cases, derived strictly from `analyseLicences()` (the comparison /check and the licence page use):
+ *   contradictory  the analysis reports contradictions; `says` lists every statement, with its file and field
+ *   taken          no contradiction and exactly one recognised id, one of CC0-1.0, CC-BY-4.0, CC-BY-NC-4.0: prefilled
+ *   other          no contradiction and either one recognised id OBIS does not accept, several recognised ids (dual licensing), or only free text
+ *   missing        no source states a licence
+ * `also` lists the statements that are no recognised licence (an access note, a use limitation), as a neutral note: they are never a conflict.
  */
 export type LicenceCase =
-  | { kind: 'taken'; id: LicenceId; sources: SourceRef[] }
-  | { kind: 'other'; said: string; says: LicenceSaid[] }
+  | { kind: 'taken'; id: LicenceId; sources: SourceRef[]; also: LicenceSaid[] }
+  | { kind: 'other'; said: string; ids: string[]; says: LicenceSaid[]; also: LicenceSaid[] }
   | { kind: 'contradictory'; says: LicenceSaid[] }
   | { kind: 'missing' };
+
+/** The recognised licence ids the metadata state (taken or other); [] otherwise. What a different chosen licence is compared with (CONV-LICENCE-DIFFERS). */
+export function recognisedLicenceIds(p: Pick<ConvertPrefill, 'licence'> | null | undefined): string[] {
+  const l = p?.licence;
+  return l?.kind === 'taken' ? [l.id] : l?.kind === 'other' ? l.ids : [];
+}
 
 /** Where and when the metadata say the data were collected: shown for information only, the EML coverage is computed from the data. */
 export interface CoverageSaid {
@@ -75,8 +85,10 @@ export interface ConvertPrefill {
   fields: Record<PrefillKey, Candidate[]>;
   licence: LicenceCase;
   coverage: CoverageSaid[];
-  /** At least one creator is marked as an organisation by its file: it is written as a person's name, which the user may want to edit. */
-  organisationsInCreators: boolean;
+  /** Files that list SEVERAL contacts: a list to pick one from, not a disagreement between files. */
+  contactLists: { file: string; field: string; items: { name: string; email: string }[] }[];
+  /** The contacts of the files that name exactly one: differing ones are values of different files, a real disagreement. */
+  contactSingles: Candidate[];
 }
 
 /** The format of a record, as a proper name. */
@@ -104,8 +116,31 @@ const FIELD: Record<MetadataSource, Record<PrefillKey, string>> = {
   dataverse: { title: 'title', abstract: 'description', creators: 'authors', contact: 'contact', citation: 'authors, title, year, doi' },
 };
 
-const norm = (s: string): string => s.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
-const tidy = (s: string): string => s.replace(/\r\n?/g, '\n').trim();
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+/**
+ * The text of a value as the form takes it: HTML entities decoded (once: "&amp;lt;" becomes "&lt;"), non-breaking and odd spaces made plain, blanks within a line
+ * collapsed, lines trimmed, runs of blank lines cut to one. Done here and not in the shared parsers, because /check reads those unchanged. Values of different
+ * files are compared after this, so a Zenodo record and its own DataCite record do not disagree over an entity or a space.
+ */
+export function cleanText(s: string): string {
+  const decoded = s.replace(/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z]+));/g, (m, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
+    if (name !== undefined) return ENTITIES[name.toLowerCase()] ?? m;
+    const code = dec !== undefined ? Number(dec) : parseInt(hex as string, 16);
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+  });
+  return decoded
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u00a0\u2007\u202f\u2009\u200a\t]/g, ' ')
+    .split('\n')
+    .map((l) => l.replace(/ {2,}/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+const norm = (s: string): string => cleanText(s).normalize('NFC').replace(/\s+/g, ' ').toLowerCase();
+const tidy = cleanText;
 const shorten = (s: string): string => {
   const one = s.replace(/\s+/g, ' ').trim();
   return one.length > 160 ? `${one.slice(0, 157)}...` : one;
@@ -146,6 +181,7 @@ export function licenceCaseOf(records: readonly MetadataRecord[]): LicenceCase {
   const analysis = analyseLicences(records);
   const all = analysis.sources.flatMap((s) => s.statements.map((a) => ({ file: s.label, a })));
   const says = all.map(({ file, a }) => said(file, a));
+  // contradictory exactly when the shared analysis says so, never otherwise
   if (analysis.contradictions.length > 0) {
     // a restriction code that contradicts an open licence is part of what the files say
     const codes = analysis.contradictions.flatMap((c) => (c.kind === 'restriction-code' ? c.codes : []));
@@ -153,27 +189,29 @@ export function licenceCaseOf(records: readonly MetadataRecord[]): LicenceCase {
     return { kind: 'contradictory', says: [...says, ...(codes.length > 0 && rec ? [{ file: rec.label, field: 'restrictionCode', says: codes.join(', ') }] : [])] };
   }
   if (all.length === 0) return { kind: 'missing' };
-  const ids = [...new Set(all.flatMap(({ a }) => (a.classification.kind === 'spdx' ? [a.classification.id] : [])))];
-  const unrecognised = all.some(({ a }) => a.classification.kind !== 'spdx');
-  if (ids.length === 1 && !unrecognised) {
-    const id = ids[0];
-    if (isLicence(id)) return { kind: 'taken', id, sources: all.map(({ file, a }) => ({ file, field: a.statement.field })) };
-    return { kind: 'other', said: id, says };
-  }
-  if (ids.length === 0) return { kind: 'other', said: shorten(shownOf(all[0].a)) || '—', says };
-  return { kind: 'contradictory', says };
+  const licences = all.filter(({ a }) => a.classification.kind === 'spdx');
+  const others = all.filter(({ a }) => a.classification.kind !== 'spdx').map(({ file, a }) => said(file, a));
+  const ids = [...new Set(licences.flatMap(({ a }) => (a.classification.kind === 'spdx' ? [a.classification.id] : [])))];
+  if (ids.length === 1 && isLicence(ids[0])) return { kind: 'taken', id: ids[0], sources: licences.map(({ file, a }) => ({ file, field: a.statement.field })), also: others };
+  if (ids.length === 0) return { kind: 'other', said: shorten(shownOf(all[0].a)) || '—', ids: [], says, also: [] };
+  return { kind: 'other', said: ids.join(', '), ids, says: licences.map(({ file, a }) => said(file, a)), also: others };
 }
 
 /** What the metadata records say, as the page shows it. Undefined when there are no records. */
 export function buildPrefill(records: readonly MetadataRecord[]): ConvertPrefill | undefined {
   if (records.length === 0) return undefined;
   const fields: Record<PrefillKey, Candidate[]> = { title: [], abstract: [], creators: [], contact: [], citation: [] };
+  const contactSingles: Candidate[] = [];
+  const contactLists: ConvertPrefill['contactLists'] = [];
   for (const r of records) {
     const f = (k: PrefillKey): SourceRef => ({ file: r.label, field: FIELD[r.source][k] });
     if (r.title) add(fields.title, r.title, f('title'));
     if (r.abstract) add(fields.abstract, r.abstract, f('abstract'));
     if (r.creators && r.creators.length > 0) add(fields.creators, r.creators.map((c) => c.trim()).filter((c) => c !== '').join('\n'), f('creators'));
-    for (const c of r.contacts ?? []) addContact(fields.contact, c.name ?? '', c.email ?? '', f('contact'));
+    const own = (r.contacts ?? []).filter((c) => (c.name ?? '') !== '' || (c.email ?? '') !== '');
+    for (const c of own) addContact(fields.contact, c.name ?? '', c.email ?? '', f('contact'));
+    if (own.length === 1) addContact(contactSingles, own[0].name ?? '', own[0].email ?? '', f('contact'));
+    else if (own.length > 1) contactLists.push({ file: r.label, field: f('contact').field, items: own.map((c) => ({ name: cleanText(c.name ?? ''), email: (c.email ?? '').trim() })) });
     const cit = citationOfRecord(r);
     if (cit !== '') add(fields.citation, cit, f('citation'));
   }
@@ -188,7 +226,8 @@ export function buildPrefill(records: readonly MetadataRecord[]): ConvertPrefill
     fields,
     licence: licenceCaseOf(records),
     coverage,
-    organisationsInCreators: records.some((r) => (r.organisations?.length ?? 0) > 0),
+    contactLists,
+    contactSingles,
   };
 }
 
