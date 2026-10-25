@@ -96,6 +96,18 @@ describe('track: the converter events', () => {
     expect(JSON.stringify(entries())).not.toMatch(/Calanus|lsid|104464/);
   });
 
+  it('nvs is the enum none / used; a word, a code, a label or an address in its place is dropped', () => {
+    grantConsent();
+    win.dataLayer = [];
+    track('convert_exported', { input_type: 'file', mode: 'browser', nvs: 'used' });
+    track('convert_exported', { input_type: 'file', mode: 'browser', nvs: 'none' });
+    track('convert_exported', { input_type: 'file', mode: 'browser', nvs: 'TEMPPR01' } as never);
+    track('convert_exported', { input_type: 'file', mode: 'browser', nvs: 'Temperature of the water body' } as never);
+    track('convert_exported', { input_type: 'file', mode: 'browser', nvs: 'http://vocab.nerc.ac.uk/collection/P01/current/TEMPPR01/' } as never);
+    expect(entries().map((e) => (e[2] as Record<string, unknown>).nvs)).toEqual(['used', 'none', undefined, undefined, undefined]);
+    expect(JSON.stringify(entries())).not.toMatch(/TEMPPR01|Temperature|vocab\.nerc/);
+  });
+
   it('push nothing without consent', () => {
     denyConsent();
     win.dataLayer = [];

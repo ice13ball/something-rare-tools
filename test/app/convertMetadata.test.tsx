@@ -723,7 +723,7 @@ describe('GA4: the metadata source is an enum, never a title, a name or an e-mai
     await exportWith([DATA, BAY]);
     const exported = events().find((e) => e.name === 'convert_exported');
     expect(exported?.params.meta_source).toBe('file');
-    expect(Object.keys(exported?.params ?? {}).sort()).toEqual(['input_type', 'meta_source', 'mode', 'n_events', 'n_measurements', 'n_occurrences', 'profile', 'shape', 'worms']);
+    expect(Object.keys(exported?.params ?? {}).sort()).toEqual(['input_type', 'meta_source', 'mode', 'n_events', 'n_measurements', 'n_occurrences', 'nvs', 'profile', 'shape', 'worms']);
     expect(JSON.stringify(win.dataLayer)).not.toMatch(/Synthetic zooplankton|Example|Boris|bay\.datacite|synthetic\.convert|Marine Laboratory|ada@|INVENTED/);
     cleanup();
     await exportWith([DATA]);

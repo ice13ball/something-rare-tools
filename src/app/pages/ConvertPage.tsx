@@ -13,17 +13,21 @@ import { getConvertEngine } from '../../worker/convert.client';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
+import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
+import type { NercKind, NvsSearchView } from '../components/ConvertNerc';
 import { ConvertWorms } from '../components/ConvertWorms';
 import type { WormsStatus } from '../components/ConvertWorms';
 import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, plainOf, requestOf, sheetKey, codesFileName, tableMetadataOf, type SheetChoice } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
 import { CONVERT_ROLE_CHOICES } from '../mappingModel';
+import { searchNvs } from '../optins/nvs';
+import { searchWords } from '../../core/convert/nvs';
 import { lookupWormsNames } from '../optins/worms';
 import type { InputFile } from '../../worker/protocol';
 import type { CheckInput } from '../types';
@@ -113,6 +117,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [wormsStatus, setWormsStatus] = useState<WormsStatus>({ state: 'idle' });
   const wormsAbort = useRef<AbortController | null>(null);
   const wormsRun = useRef(0);
+  // The NERC identifiers (stage 5): what the user confirmed per measured-variable column, and the NVS opt-in. The box starts OFF for each upload (a companion file of the drop
+  // may tick it); nothing is sent until the user types a word for a column and presses "Search NVS" (runNvs): no effect, no timer and no render path calls the network.
+  const [nercPicks, setNercPicks] = useState<NercPicks>({});
+  const [nvsOn, setNvsOn] = useState(false);
+  const [nvsWords, setNvsWords] = useState<Record<string, string>>({});
+  const [nvsSearches, setNvsSearches] = useState<Record<string, NvsSearchView>>({});
+  const [nvsBusy, setNvsBusy] = useState<string | null>(null);
+  const nvsAbort = useRef<AbortController | null>(null);
+  const nvsRun = useRef(0);
   // the description fields the user typed in, cleared or chose a value for: a new drop never overwrites them (core/convert/metadata.ts refreshPrefill)
   const touched = useRef(new Set<keyof DatasetMetadata>());
   const files = parsed?.files ?? [];
@@ -130,8 +143,31 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setWormsChoices({});
     setWormsStatus({ state: 'idle' });
   };
+  /**
+   * Drops the NVS search: a running one is aborted and its late answer ignored, the typed words and the results are forgotten, and so is every identifier that came from a
+   * search (the user's choice from the converter's own verified list stays: it never needed the service).
+   */
+  const clearNvs = (): void => {
+    nvsRun.current += 1;
+    nvsAbort.current?.abort();
+    nvsAbort.current = null;
+    setNvsBusy(null);
+    setNvsWords({});
+    setNvsSearches({});
+    setNercPicks((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([k, v]) => [k, { ...(v.type && v.type.source !== 'nvs' ? { type: v.type } : {}), ...(v.unit && v.unit.source !== 'nvs' ? { unit: v.unit } : {}) }] as const),
+      ),
+    );
+  };
   // leaving the page ends a running lookup
-  useEffect(() => () => wormsAbort.current?.abort(), []);
+  useEffect(
+    () => () => {
+      wormsAbort.current?.abort();
+      nvsAbort.current?.abort();
+    },
+    [],
+  );
 
   // Work that leaving would lose: files chosen, or a conversion in view. Never an empty page.
   useLeaveWarning(filesChosen > 0 || phase !== 'input');
@@ -156,6 +192,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     // a new upload starts with the WoRMS box OFF and nothing looked up (a companion file of THIS drop may tick it below)
     setWormsOn(false);
     clearWorms();
+    // the NERC choices and the NVS box start empty and OFF as well
+    setNercPicks({});
+    setNvsOn(false);
+    clearNvs();
     track('convert_started', { input_type: 'file', mode: 'browser' });
     setPhase('reading');
     try {
@@ -169,6 +209,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setFullList(p.settings.fullList);
       setPrefixStation(p.settings.prefixStation);
       setWormsOn(p.settings.worms); // a pre-tick only: nothing is sent until the user presses the lookup button
+      setNvsOn(p.settings.nvs); // a pre-tick only: nothing is sent until the user types a word for a column and presses "Search NVS"
       setPhase(p.files.length > 0 ? 'work' : 'input');
     } catch (e) {
       setProblem(messageOf(e));
@@ -189,6 +230,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setMeta(EMPTY_METADATA);
     setWormsOn(false);
     clearWorms();
+    setNercPicks({});
+    setNvsOn(false);
+    clearNvs();
     setPhase('input');
   };
 
@@ -202,7 +246,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setWorking(true);
     const timer = setTimeout(() => {
       engine
-        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta, ...(wormsLookup ? { worms: wormsLookup } : {}) }))
+        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks }))
         .then(
           (v) => {
             if (token.current !== mine) return;
@@ -218,7 +262,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         });
     }, 120);
     return () => clearTimeout(timer);
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup]);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup, nercPicks]);
 
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
@@ -302,7 +346,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setExportError(null);
     setExported(null);
     try {
-      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}) });
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       const acceptedRules = judged.acceptRules.filter(isAccepted);
       const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
       downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
@@ -315,6 +359,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         meta_source: parsed.metadataFiles.length > 0 ? 'file' : 'none',
         // whether at least one WoRMS ID was actually written to the archive (the count of the conversion that was exported); never a name or an ID
         worms: (view?.worms.applied ?? 0) > 0 ? 'used' : 'none',
+        // whether at least one identifier that came from an NVS search was actually written (the count of the conversion that was exported); never a word, a code or a label
+        nvs: (view?.stats.nerc.nvsIds ?? 0) > 0 ? 'used' : 'none',
         n_events: res.counts.events,
         n_occurrences: res.counts.occurrences,
         n_measurements: res.counts.measurements,
@@ -357,7 +403,62 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const chooseWorms = (name: string, choice: WormsChoice | undefined): void =>
     setWormsChoices((prev) => (choice === undefined ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== name)) : { ...prev, [name]: choice }));
 
-  const downloadCompanion = (): void => download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn }), 'convert-companion.csv', 'text/csv');
+  /* ---- the measured variables (stage 5) ---- */
+  const nercColumns = useMemo(() => (parsed ? nercColumnsOf(parsed, mappings, choices) : []), [parsed, mappings, choices]);
+  const setPick = (col: NercColumn, kind: NercKind, pick: StoredPick | undefined): void =>
+    setNercPicks((prev) => {
+      const here = Object.prototype.hasOwnProperty.call(prev, col.key) ? prev[col.key] : {};
+      const next = { ...here };
+      if (pick) next[kind] = pick;
+      else delete next[kind];
+      return { ...prev, [col.key]: next };
+    });
+  // the columns that have a suggestion and no choice yet (a suggestion is a verified generic concept, or a unit that has a verified concept)
+  const suggestedCount = nercColumns.filter((c) => {
+    const s = suggestionOf(c);
+    return (s.type.proposed !== undefined && effectivePick(c, nercPicks, 'type') === undefined) || (s.unit !== undefined && effectivePick(c, nercPicks, 'unit') === undefined);
+  }).length;
+  /** The button of the suggestions: for each column without a choice, the proposed concept and unit are CONFIRMED (the user's act); anything already chosen stays. */
+  const useSuggested = (): void =>
+    setNercPicks((prev) => {
+      const out: NercPicks = { ...prev };
+      for (const c of nercColumns) {
+        const s = suggestionOf(c);
+        const here = Object.prototype.hasOwnProperty.call(prev, c.key) ? prev[c.key] : {};
+        const next = { ...here };
+        if (s.type.proposed && effectivePick(c, prev, 'type') === undefined) next.type = { id: s.type.proposed.uri, source: 'suggested', deprecated: false, label: `${s.type.proposed.code}: ${s.type.proposed.label}`, ctx: typeContext(c) };
+        if (s.unit && effectivePick(c, prev, 'unit') === undefined) next.unit = { id: s.unit.uri, source: 'suggested', deprecated: false, label: `${s.unit.code}: ${s.unit.label}`, ctx: unitContext(c) };
+        out[c.key] = next;
+      }
+      return out;
+    });
+  /** Unticking the box is withdrawing: a running search is aborted, and the results and the choices made from them are forgotten. */
+  const toggleNvs = (on: boolean): void => {
+    setNvsOn(on);
+    if (!on) clearNvs();
+  };
+  /** The ONE place an NVS search starts: the button of a column. Sends the typed word of that column (and nothing else), one search at a time. */
+  const runNvs = async (col: NercColumn, kind: NercKind): Promise<void> => {
+    const sid = searchId(col, kind);
+    const typed = Object.prototype.hasOwnProperty.call(nvsWords, sid) ? nvsWords[sid] : '';
+    if (!nvsOn || nvsBusy !== null || searchWords(typed).length === 0) return;
+    const mine = ++nvsRun.current;
+    const ac = new AbortController();
+    nvsAbort.current = ac;
+    setNvsBusy(sid);
+    setNvsSearches((prev) => ({ ...prev, [sid]: { status: 'running', word: typed } }));
+    const run = await searchNvs(typed, kind === 'type' ? 'P01' : 'P06', { signal: ac.signal });
+    if (nvsRun.current !== mine) return; // unticked, a new upload or the page left meanwhile: the late answer is ignored
+    nvsAbort.current = null;
+    setNvsBusy(null);
+    setNvsSearches((prev) => ({
+      ...prev,
+      [sid]: run.aborted ? { status: 'stopped', word: typed } : run.failure ? { status: 'failed', word: typed, failure: run.failure } : { status: 'done', word: typed, concepts: run.concepts, via: run.via },
+    }));
+  };
+  const abortNvs = (): void => nvsAbort.current?.abort();
+
+  const downloadCompanion = (): void => download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn }), 'convert-companion.csv', 'text/csv');
 
   return (
     <Layout titleKey="convert.title">
@@ -654,6 +755,22 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             status={wormsStatus}
             onLookup={() => void runWorms()}
             onAbort={abortWorms}
+          />
+
+          <ConvertNerc
+            columns={nercColumns}
+            picks={nercPicks}
+            onPick={setPick}
+            suggestedCount={suggestedCount}
+            onUseSuggested={useSuggested}
+            nvsOn={nvsOn}
+            onToggleNvs={toggleNvs}
+            words={nvsWords}
+            onWord={(id, text) => setNvsWords((prev) => ({ ...prev, [id]: text }))}
+            searches={nvsSearches}
+            busy={nvsBusy}
+            onSearch={(c, k) => void runNvs(c, k)}
+            onAbort={abortNvs}
           />
 
           <section className="convert-tree" aria-labelledby="convert-tree-title">

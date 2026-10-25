@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
-import { classifyMatches, isUnaccepted } from '../../core/convert/worms';
+import { classifyMatches, isUnaccepted, writesOwnName } from '../../core/convert/worms';
 import type { WormsChoice, WormsRecord } from '../../core/convert/worms';
 import type { UiKey } from '../../core/i18n/ui';
 import { t } from '../i18n';
@@ -210,6 +210,7 @@ export function ConvertWorms(p: ConvertWormsProps): React.ReactElement {
                             <td>
                               <code>{r.AphiaID}</code> {r.scientificname}
                               {r.authority ? <span className="muted"> {r.authority}</span> : null}
+                              {!auto && <div className="muted convert-worms-written">{writesOwnName(r) ? t('convert.worms.writtenAs', { name: r.scientificname.trim() }) : t('convert.worms.writtenSame')}</div>}
                             </td>
                             <td>
                               <code>{r.match_type}</code>{r.match_type === 'exact' ? null : <span className="muted"> ({matchTypeWord(r.match_type)})</span>}
