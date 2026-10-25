@@ -34,6 +34,17 @@ import type { RuleSpec } from './spec';
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-NO-TAXON              shape            shape = wide | long
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
+ *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
+ *   CONV-LICENCE-UNSET         (none)           no licence chosen
+ *   CONV-BASIS-UNSET           (none)           no basisOfRecord chosen
+ *   CONV-EMOF-ORPHAN           count, kind      kind = event | occurrence; value = an example id; file = the eMoF table
+ *   CONV-EMOF-EVENT-MISMATCH   count            value = an example occurrenceID
+ *   CONV-EMOF-VALUE-EMPTY      count            lines = rows of the eMoF table
+ *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
+ *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
+ *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
+ *   CONV-DEVICE-MISSING        (none)           the sheet has no sampling device
+ *   CONV-MESH-INVALID          reason           value = the typed mesh size; reason = not-a-number | not-positive | ambiguous | thousands
  */
 const NERC_MANUAL = {
   label: 'OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)',
@@ -281,6 +292,149 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted.`,
   },
+  {
+    id: 'CONV-EML-MISSING',
+    category: 'B',
+    severity: 'error',
+    params: ['fields'],
+    plain: {
+      pl: `Opis zbioru danych jest niepełny albo nieużyteczny: {fields}. Archiwum potrzebuje tych informacji (tytuł, streszczenie, autorzy, kontakt, kod instytucji, nazwa zbioru); uzupełnij je w formularzu.`,
+      en: `The dataset description is incomplete or not usable: {fields}. The archive needs these (title, abstract, creators, contact, institution code, dataset name); fill them in on the form.`,
+      de: `Die Beschreibung des Datensatzes ist unvollständig oder unbrauchbar: {fields}. Das Archiv braucht diese Angaben (Titel, Zusammenfassung, Autoren, Kontakt, Institutionskürzel, Datensatzname); tragen Sie sie im Formular ein.`,
+      fr: `La description du jeu de données est incomplète ou inutilisable : {fields}. L'archive a besoin de ces informations (titre, résumé, auteurs, contact, code d'institution, nom du jeu) ; remplissez-les dans le formulaire.`,
+    },
+    technical: `Dataset description (eml.xml, and the datasetName and institutionCode columns of event.txt) is missing or unusable: {fields}. BioCheck reports an Event table without datasetName and institutionCode as an error (docs/research/qc-sources.md, stage 0 spike, Item 2); OBIS asks for title, citation, contact and abstract (manual.obis.org/eml.html).`,
+  },
+  {
+    id: 'CONV-LICENCE-UNSET',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `Nie wybrano licencji. Wybierz jedną z trzech (CC0, CC-BY, CC-BY-NC); decyzję podejmuje posiadacz praw do danych, a narzędzie niczego nie zakłada.`,
+      en: `No licence is chosen. Pick one of the three (CC0, CC-BY, CC-BY-NC); the rights holder decides, and the tool assumes nothing.`,
+      de: `Es ist keine Lizenz gewählt. Wählen Sie eine der drei (CC0, CC-BY, CC-BY-NC); die Entscheidung trifft der Rechteinhaber, das Werkzeug nimmt nichts an.`,
+      fr: `Aucune licence n'est choisie. Choisissez l'une des trois (CC0, CC-BY, CC-BY-NC) ; le titulaire des droits décide, l'outil ne suppose rien.`,
+    },
+    technical: `No licence was chosen. The EML intellectualRights element is written only from an explicit choice of CC0-1.0, CC-BY-4.0 or CC-BY-NC-4.0 (the set the IPT supports); nothing is defaulted.`,
+  },
+  {
+    id: 'CONV-BASIS-UNSET',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `Nie wybrano rodzaju zapisu (basisOfRecord), np. obserwacja człowieka, okaz konserwowany albo próbka materiału. Zależy od tego, co faktycznie zebrano, więc nie ma wartości domyślnej.`,
+      en: `The kind of record (basisOfRecord) is not chosen, e.g. human observation, preserved specimen or material sample. It depends on what was actually collected, so there is no default.`,
+      de: `Die Art des Datensatzes (basisOfRecord) ist nicht gewählt, z. B. menschliche Beobachtung, konserviertes Exemplar oder Materialprobe. Sie hängt davon ab, was tatsächlich gesammelt wurde, daher gibt es keinen Standardwert.`,
+      fr: `Le type d'enregistrement (basisOfRecord) n'est pas choisi, par ex. observation humaine, spécimen conservé ou échantillon de matériel. Il dépend de ce qui a réellement été collecté : il n'y a pas de valeur par défaut.`,
+    },
+    technical: `basisOfRecord was not chosen. It is written on every occurrence row and must be a value of the Darwin Core vocabulary; there is no default because HumanObservation, PreservedSpecimen and MaterialSample mean different things about what was collected.`,
+  },
+  {
+    id: 'CONV-EMOF-ORPHAN',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'kind'],
+    plain: {
+      pl: `{count} {+count:wiersz pomiarów wskazuje|wiersze pomiarów wskazują|wierszy pomiarów wskazuje} na {kind} (np. „{value}”), którego nie ma w tabeli. Pomiar bez swojego zdarzenia lub wystąpienia zostałby odrzucony.`,
+      en: `{count} measurement {+count:row refers|rows refer} to {kind} (e.g. "{value}") that is not in the table. A measurement without its event or occurrence would be rejected.`,
+      de: `{count} {+count:Messzeile verweist|Messzeilen verweisen} auf {kind} (z. B. „{value}“), das in der Tabelle fehlt. Eine Messung ohne ihr Ereignis oder Vorkommen würde abgelehnt.`,
+      fr: `{count} {+count:ligne de mesure renvoie|lignes de mesure renvoient} à {kind} (p. ex. « {value} ») qui ne figure pas dans la table. Une mesure sans son événement ou son occurrence serait rejetée.`,
+    },
+    technical: `{file}: {count} eMoF row(s) name an {kind} id that is not in the {kind} table (example "{value}"). BioCheck: an eMoF eventID that is not in the core, or an eMoF occurrenceID that is not in Occurrence, is an error (docs/research/qc-sources.md, Item 2).`,
+  },
+  {
+    id: 'CONV-EMOF-EVENT-MISMATCH',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:pomiar jest przypisany|pomiary są przypisane|pomiarów jest przypisanych} do innego zdarzenia niż jego wystąpienie (np. „{value}”). Pomiar wystąpienia musi leżeć w zdarzeniu tego wystąpienia.`,
+      en: `{count} {+count:measurement belongs|measurements belong} to a different event than its occurrence (e.g. "{value}"). A measurement of an occurrence must sit in that occurrence's event.`,
+      de: `{count} {+count:Messung gehört|Messungen gehören} zu einem anderen Ereignis als ihr Vorkommen (z. B. „{value}“). Eine Messung eines Vorkommens muss im Ereignis dieses Vorkommens stehen.`,
+      fr: `{count} {+count:mesure appartient|mesures appartiennent} à un autre événement que son occurrence (p. ex. « {value} »). La mesure d'une occurrence doit figurer dans l'événement de cette occurrence.`,
+    },
+    technical: `{file}: {count} eMoF row(s) have an eventID different from the eventID of the occurrence they name (example occurrenceID "{value}"). BioCheck reports this as an error (docs/research/qc-sources.md, Item 2).`,
+  },
+  {
+    id: 'CONV-EMOF-VALUE-EMPTY',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz pomiarów nie ma|wiersze pomiarów nie mają|wierszy pomiarów nie ma} wartości (measurementValue). Pomiar bez wartości nic nie mówi, a archiwum zostałoby odrzucone.`,
+      en: `{count} measurement {+count:row has|rows have} no value (measurementValue). A measurement without a value says nothing, and the archive would be rejected.`,
+      de: `{count} {+count:Messzeile hat|Messzeilen haben} keinen Wert (measurementValue). Eine Messung ohne Wert sagt nichts aus, und das Archiv würde abgelehnt.`,
+      fr: `{count} {+count:ligne de mesure n'a|lignes de mesure n'ont} pas de valeur (measurementValue). Une mesure sans valeur ne dit rien et l'archive serait rejetée.`,
+    },
+    technical: `{file}:{lines}: {count} eMoF row(s) have an empty measurementValue. BioCheck: a NULL measurementValue is an error (docs/research/qc-sources.md, Item 2).`,
+  },
+  {
+    id: 'CONV-EMOF-TYPE-EMPTY',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz pomiarów nie ma|wiersze pomiarów nie mają|wierszy pomiarów nie ma} rodzaju pomiaru (measurementType), więc nie wiadomo, co zmierzono. Zadeklaruj, co oznaczają liczby w arkuszu.`,
+      en: `{count} measurement {+count:row has|rows have} no kind of measurement (measurementType), so it is not known what was measured. Declare what the numbers in the sheet mean.`,
+      de: `{count} {+count:Messzeile hat|Messzeilen haben} keine Messart (measurementType), daher ist unklar, was gemessen wurde. Geben Sie an, was die Zahlen im Blatt bedeuten.`,
+      fr: `{count} {+count:ligne de mesure n'a|lignes de mesure n'ont} pas de type de mesure (measurementType) : on ne sait pas ce qui a été mesuré. Indiquez ce que signifient les nombres de la feuille.`,
+    },
+    technical: `{file}:{lines}: {count} eMoF row(s) have an empty measurementType. The type text is the preferred label of the NERC concept, or the declared meaning when no concept is verified.`,
+  },
+  {
+    id: 'CONV-COLUMN-NOT-EXPORTED',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} znaczenie, którego ta wersja nie zapisuje (zmierzona wielkość, ciśnienie albo identyfikator taksonu w arkuszu szerokim): {columns}. Ich wartości nie trafią do archiwum; zaakceptuj to, aby eksportować bez nich.`,
+      en: `{count} {+count:column has|columns have} a meaning this version does not write (measured variable, pressure, or a taxon ID in a wide sheet): {columns}. Their values will not be in the archive; accept this to export without them.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} eine Bedeutung, die diese Version nicht schreibt (Messgröße, Druck oder Taxon-Kennung in einem breiten Blatt): {columns}. Ihre Werte stehen nicht im Archiv; akzeptieren Sie das, um ohne sie zu exportieren.`,
+      fr: `{count} {+count:colonne a|colonnes ont} un sens que cette version n'écrit pas (grandeur mesurée, pression ou identifiant de taxon dans une feuille large) : {columns}. Leurs valeurs ne seront pas dans l'archive ; acceptez-le pour exporter sans elles.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) with the role variable, pressure, or taxon ID in a wide sheet are not converted in this version ({columns}); measurements of the environment to eMoF come in a later stage. Nothing from them is written. The warning has to be accepted before the export.`,
+  },
+  {
+    id: 'CONV-NAMEID-MISSING',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wystąpienie nie ma|wystąpienia nie mają|wystąpień nie ma} scientificNameID. BioCheck i kontrole OBIS zgłaszają archiwum bez niego jako błąd. Wyszukiwanie w WoRMS pojawi się później; do tego czasu oznacz kolumnę, która już ma identyfikatory (AphiaID z WoRMS albo scientificNameID).`,
+      en: `{count} {+count:occurrence has|occurrences have} no scientificNameID. BioCheck and the OBIS checks report an archive without it as an error. The WoRMS lookup comes in a later stage; until then, mark a column that holds the IDs (a WoRMS AphiaID or a scientificNameID column).`,
+      de: `{count} {+count:Vorkommen hat|Vorkommen haben} keine scientificNameID. BioCheck und die OBIS-Prüfungen melden ein Archiv ohne sie als Fehler. Die WoRMS-Abfrage folgt später; bis dahin markieren Sie eine Spalte, die die Kennungen schon enthält (WoRMS-AphiaID oder scientificNameID).`,
+      fr: `{count} {+count:occurrence n'a|occurrences n'ont} pas de scientificNameID. BioCheck et les contrôles d'OBIS signalent comme erreur une archive qui en est dépourvue. La recherche dans WoRMS viendra plus tard ; d'ici là, marquez une colonne qui contient déjà les identifiants (AphiaID de WoRMS ou scientificNameID).`,
+    },
+    technical: `{file}: {count} occurrence(s) have no scientificNameID. BioCheck lists scientificNameID among the required fields of a leaf event (docs/research/qc-sources.md, Item 2). This stage writes one only from a column the user marked (a scientificNameID column as given, a WoRMS AphiaID column as urn:lsid:marinespecies.org:taxname:<id>); nothing is looked up or guessed.`,
+  },
+  {
+    id: 'CONV-DEVICE-MISSING',
+    category: 'B',
+    severity: 'warning',
+    params: [],
+    plain: {
+      pl: `Dla tego arkusza nie podano narzędzia próbkowania. BioCheck zgłasza „No sampling instrument present” dla archiwum bez pomiaru nazwy narzędzia próbkowania. Wybierz narzędzie w formularzu arkusza albo zaakceptuj jego brak.`,
+      en: `No sampling device is given for this sheet. BioCheck reports "No sampling instrument present" for an archive with no measurement of the name of the sampling instrument. Choose the device in the sheet's form, or accept that it is missing.`,
+      de: `Für dieses Blatt ist kein Probenahmegerät angegeben. BioCheck meldet „No sampling instrument present“, wenn das Archiv keine Messung des Namens des Probenahmegeräts enthält. Wählen Sie das Gerät im Formular des Blatts oder akzeptieren Sie, dass es fehlt.`,
+      fr: `Aucun engin d'échantillonnage n'est indiqué pour cette feuille. BioCheck signale « No sampling instrument present » pour une archive sans mesure du nom de l'instrument d'échantillonnage. Choisissez l'engin dans le formulaire de la feuille ou acceptez son absence.`,
+    },
+    technical: `{file}, {sheet}: no sampling device was chosen, so no eMoF row NMSPINST (Name of sampling instrument) is written for the samples. BioCheck warns "No sampling instrument present" (docs/research/qc-sources.md, Item 2).`,
+  },
+  {
+    id: 'CONV-MESH-INVALID',
+    category: 'B',
+    severity: 'error',
+    params: ['reason'],
+    plain: {
+      pl: `Rozmiaru oczka „{value}” nie można użyć: {reason}. Wpisz rozmiar w mikrometrach jako zwykłą liczbę albo zostaw pole puste.`,
+      en: `The mesh size "{value}" cannot be used: {reason}. Type the size in micrometres as a plain number, or leave it empty.`,
+      de: `Die Maschenweite „{value}“ ist nicht verwendbar: {reason}. Geben Sie die Größe in Mikrometern als einfache Zahl ein oder lassen Sie das Feld leer.`,
+      fr: `La taille de maille « {value} » est inutilisable : {reason}. Saisissez la taille en micromètres comme un nombre simple, ou laissez le champ vide.`,
+    },
+    technical: `{file}, {sheet}: the typed mesh size "{value}" is refused ({reason}). It is written as MSHSIZE1 with the unit um (P06 UMIC) only when it is a plain number above zero.`,
+  },
 ];
 
 /** Declared params per CONV rule id. */
@@ -338,6 +492,23 @@ const REASON_WORDS: Record<string, Record<Lang, string>> = {
   },
 };
 
+/** What the dataset description lacks, in words (CONV-EML-MISSING carries codes in `fields`). */
+const EML_WORDS: Record<string, Record<Lang, string>> = {
+  title: { en: 'title', pl: 'tytuł', de: 'Titel', fr: 'titre' },
+  abstract: { en: 'abstract', pl: 'streszczenie', de: 'Zusammenfassung', fr: 'résumé' },
+  creator: { en: 'at least one creator', pl: 'co najmniej jeden autor', de: 'mindestens ein Autor', fr: 'au moins un auteur' },
+  'contact name': { en: 'contact name', pl: 'imię i nazwisko osoby kontaktowej', de: 'Name der Kontaktperson', fr: 'nom du contact' },
+  'contact email': { en: 'contact e-mail', pl: 'e-mail osoby kontaktowej', de: 'E-Mail der Kontaktperson', fr: 'e-mail du contact' },
+  'institution code': { en: 'institution code', pl: 'kod instytucji', de: 'Institutionskürzel', fr: "code d'institution" },
+  'dataset name': { en: 'dataset name', pl: 'nazwa zbioru', de: 'Datensatzname', fr: 'nom du jeu de données' },
+};
+
+/** Which table an eMoF row points into, in words (CONV-EMOF-ORPHAN carries event | occurrence in `kind`). */
+const KIND_WORDS: Record<string, Record<Lang, string>> = {
+  event: { en: 'an event', pl: 'zdarzenie', de: 'ein Ereignis', fr: 'un événement' },
+  occurrence: { en: 'an occurrence', pl: 'wystąpienie', de: 'ein Vorkommen', fr: 'une occurrence' },
+};
+
 function fill(template: string, f: Finding, lang?: Lang): string {
   const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
   // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
@@ -352,11 +523,15 @@ function fill(template: string, f: Finding, lang?: Lang): string {
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
-  if (f.ruleId === 'CONV-EFFORT-VALUE-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
+  if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
     const words = f.params.missing.split(', ').map((m) => MISSING_WORDS[m]?.[lang] ?? m);
     f = { ...f, params: { ...f.params, missing: words.join('; ') } };
   }
+  if (f.ruleId === 'CONV-EML-MISSING' && typeof f.params.fields === 'string') {
+    f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
+  }
+  if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
   return fill(rule.plain[lang] || rule.plain.en, f, lang);
 }
 

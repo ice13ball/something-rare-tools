@@ -2,8 +2,9 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Messages between the /convert page and the convert worker. Plain structured-clonable data only. The parsed files and the full records
 // (events, occurrences, measurements: possibly hundreds of thousands) stay in the worker; the page gets light summaries.
-import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, QuantityDeclaration, SplitEntry, TreeSummary } from '../core/convert';
+import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, QuantityDeclaration, SamplingDevice, SplitEntry, TreeSummary } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
+import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertSettings } from '../core/convert/settings';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
@@ -25,6 +26,11 @@ export interface ConvertParseResult {
   mappingFiles: string[];
   /** What the companion file(s) of THIS drop say: the page starts the ticks from it and from nothing else. */
   settings: ConvertSettings;
+  /**
+   * What the dropped metadata files say about the dataset description (title, creators, licence, ...), to prefill the form (core/convert/metadata.ts
+   * applyPrefill: only empty fields, the user edits everything). Empty in this stage: metadata files are recognised, not yet read (stage 3).
+   */
+  prefill: Partial<DatasetMetadata>;
 }
 
 export interface ConvertSheetRequest {
@@ -34,12 +40,39 @@ export interface ConvertSheetRequest {
   shape: ConvertShape;
   quantity?: QuantityDeclaration;
   cruise?: string;
+  /** The sampling device of the sheet's samples (a verified one or the user's own text) and the mesh size in micrometres as typed. */
+  device?: SamplingDevice;
+  meshUm?: string;
 }
 
 export interface ConvertRequestBody {
   sheets: ConvertSheetRequest[];
   options: ConvertOptions;
   approvedSplits: ApprovedSplits;
+  /**
+   * The description of the dataset. The conversion view needs only the three fields that appear in the tables (datasetName, institutionCode,
+   * basisOfRecord); the page passes the rest empty so that typing a title does not rerun the conversion. Absent = all empty.
+   */
+  metadata?: DatasetMetadata;
+}
+
+/** What the page sends to export: the same body, the whole description, and what the user accepted. The worker checks everything again. */
+export interface ExportBody {
+  body: ConvertRequestBody;
+  metadata: DatasetMetadata;
+  /** Rule ids of the warnings the user accepted in this run. */
+  accepted: string[];
+  /** UTC timestamp of the export, for pubDate and dateStamp of the EML (the core reads no clock). */
+  generated: string;
+}
+
+/** The archive, built in the worker. `bytes` moves to the page instead of being copied. */
+export interface ExportResult {
+  fileName: string;
+  bytes: Uint8Array;
+  counts: { events: number; occurrences: number; measurements: number };
+  /** The entries were deflated (false: stored, where the browser has no CompressionStream). */
+  deflated: boolean;
 }
 
 /** What the page shows of a conversion: counts, findings, splits, example events. Never the records themselves. */
@@ -72,6 +105,7 @@ export interface ConvertProtocol {
   parse: { req: { files: InputFile[] }; res: ConvertParseResult };
   convert: { req: { body: ConvertRequestBody }; res: ConvertView };
   proposeCodes: { req: { fileId: string; sheet: string; mapping: SheetMapping }; res: CodeProposalView | null };
+  export: { req: { export: ExportBody }; res: ExportResult };
 }
 
 export type ConvertRequestType = keyof ConvertProtocol;
@@ -89,4 +123,5 @@ export interface ConvertEngine {
   parse(files: InputFile[]): Promise<ConvertParseResult>;
   convert(body: ConvertRequestBody): Promise<ConvertView>;
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping): Promise<CodeProposalView | null>;
+  export(body: ExportBody): Promise<ExportResult>;
 }

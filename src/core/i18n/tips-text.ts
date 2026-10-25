@@ -165,10 +165,10 @@ No findings only means that no problems were found in the checked categories.`,
 • The result is counts per problem, examples and a fix list as a CSV file.
 • It does not compare or rank institutions; a quick sample is labelled as a sample.`,
 
-  'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet. It cannot be used yet.`,
+  'tip.convertIntro.does': `Shows what this converter is for: a Darwin Core Archive built from your spreadsheet. The page is still a hidden test version.`,
   'tip.convertIntro.logic': `• The page is hidden for now: it is not in the menu or on the index page, and search engines are asked to skip it.
 • Your files are read and previewed in your browser; nothing is sent anywhere.
-• There is no export yet.
+• The archive is built in your browser and downloaded from it; nothing is uploaded and nothing is stored.
 • Two optional lookups are planned: taxon names in WoRMS and terms in the NERC vocabulary. Both will be off by default, and nothing will be sent to either service until you press its button.`,
   'tip.convertTaxa.does': `Confirms which of the proposed columns are taxa.`,
   'tip.convertTaxa.logic': `• In a wide sheet the tool proposes every numeric column it has no other meaning for, at low confidence, as a taxon whose header is the name.
@@ -264,7 +264,69 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertCodes.logic': `• A code is the station code, a hyphen and a running number, in the order of your sheet. If the station text would make a code that starts like a formula (with = + - or @), the code is S and the number of the row instead, so that it needs no apostrophe and is the same on the page and in the file.
 • You get your own sheet back as a CSV file with one new column. Cells are copied as text. A cell or a header that starts with = + - or @ (also in their full-width forms) or with a tab gets an apostrophe so that a spreadsheet does not run it; plain numbers, missing-data marks such as NA and the marks + x - on their own, spaces around them included, are left as they are. Dates of an xlsx file are written as ISO dates and times of day as hours and minutes.
 • Check it and upload that file again: only a code in your own uploaded sheet becomes an ID.
+• A leading apostrophe before a formula character is the spreadsheet's own text escape, so when you upload the file again the converter reads '=x as =x. It takes that one apostrophe off every text cell and header that starts with it, and only here: the checker reads a file as it is.
 • The converter never applies or renews codes by itself.`,
+  'tip.convertMetaTitle.does': `Gives the dataset a name that people will read.`,
+  'tip.convertMetaTitle.logic': `• It becomes the title in the description (eml.xml) and, when you leave the dataset name empty, the dataset name in every event row.
+• Write it in English: the description is marked as English.
+• Nothing is checked about the wording; an empty title blocks the export.`,
+  'tip.convertMetaAbstract.does': `Tells a reader what the data are and how they were collected.`,
+  'tip.convertMetaAbstract.logic': `• It becomes the abstract of the description. A blank line starts a new paragraph.
+• The OBIS data policy asks for a detailed description including the method of collection; this tool only checks that something is written.
+• An empty abstract blocks the export.`,
+  'tip.convertMetaCreators.does': `Lists the people or groups who made the dataset.`,
+  'tip.convertMetaCreators.logic': `• One per line, as "Given Family" or "Family, Given". Without a comma the last word is taken as the family name. A semicolon also separates two names.
+• They become the creators of the description and the authors in the citation text it carries. The tool never looks anyone up.
+• At least one is needed.`,
+  'tip.convertMetaContact.does': `Says whom a reader should write to about the dataset.`,
+  'tip.convertMetaContact.logic': `• The name and the e-mail address become the contact and the metadata provider of the description. The address is only written into the file; this page never sends it anywhere.
+• The address must look like an address (something@something.something); it is not tested.
+• Both are needed.`,
+  'tip.convertMetaInstitution.does': `Names the institution the data belong to, by its short code.`,
+  'tip.convertMetaInstitution.logic': `• It is written as institutionCode in every event row. BioCheck reports an Event table without it as an error.
+• Use the short code your institution uses in OBIS or GBIF; the tool does not check it.
+• It must not hold a tab or a line break.`,
+  'tip.convertMetaDatasetName.does': `Names the dataset as it appears in every event row.`,
+  'tip.convertMetaDatasetName.logic': `• It is written as datasetName in every event row. Left empty, the title is used. BioCheck reports an Event table without datasetName as an error, and can warn when it differs from the title.
+• The downloaded file is named after it.
+• It must not hold a tab or a line break.`,
+  'tip.convertMetaMethods.does': `Describes how the data were collected (optional).`,
+  'tip.convertMetaMethods.logic': `• It becomes the methods section of the description. A blank line starts a new paragraph.
+• Left empty, no methods section is written. The OBIS data policy asks for the method to be part of the description, so it is worth filling in.`,
+  'tip.convertLicence.does': `Chooses the licence the dataset is published under.`,
+  'tip.convertLicence.logic': `• Only {licences} are offered: they are the licences OBIS accepts (the public-domain one is preferred, the non-commercial one the least preferred) and the ones the GBIF publishing tool can write. A Creative Commons licence with ShareAlike (SA) or NoDerivatives (ND) is not on the OBIS list, so it is not offered.
+• The rights holder decides, not this tool. There is no default, and an unchosen licence blocks the export.
+• It is written into the description as the licence name with its web address, the form the GBIF publishing tool writes.`,
+  'tip.convertBasis.does': `Says what kind of record each occurrence is.`,
+  'tip.convertBasis.logic': `• One value for the whole dataset: {bases}. It is written as basisOfRecord on every occurrence, and BioCheck rejects any other value.
+• A human observation is counted and nothing is kept; a preserved specimen is kept in a collection (the OBIS Manual then also asks for a collection code and a catalog number, which this tool does not write); a material sample is a physical sample that was taken and may have been preserved or destroyed.
+• There is no default: it depends on what you did with the samples. An unchosen value blocks the export.`,
+  'tip.convertSummaryColumn.does': `Explains why a column of totals starts as "ignore".`,
+  'tip.convertSummaryColumn.logic': `• A column whose header reads as a total or a sum (Sum, Total, Suma, Razem, Summe, Gesamt, Somme, Σ) adds up other columns. Converted, it would count the same individuals twice.
+• So it starts as ignored and writes nothing into the archive. You can still give it another meaning; then it is your decision.
+• Only a column the tool would otherwise take as a measured variable is changed this way. A column it recognises as a standard variable keeps its proposal.`,
+  'tip.convertAccept.does': `Lets you accept a kind of warning for this export.`,
+  'tip.convertAccept.logic': `• A warning does not stop the export, but the archive will carry what it says (for example text in a species cell, a column that is not written, or a missing taxon ID). Each kind has to be accepted once, after you have read it.
+• Accepting holds only until you change a decision: every change clears all ticks, and nothing is stored. A new upload starts with every warning unaccepted.
+• Errors cannot be accepted: they block the export until the cause is removed.
+• Findings that only inform are shown and never need an answer.`,
+  'tip.convertExport.does': `Builds the Darwin Core Archive and downloads it.`,
+  'tip.convertExport.logic': `• The button works only when nothing blocks, the description is complete and every kind of warning is accepted. The archive is built in your browser by the code that checked it, which checks everything once more before it writes anything; if something blocks, nothing is written.
+• The zip holds the description (EML {eml}), the event, occurrence and measurement tables and meta.xml. The text files are UTF-8, tab-separated, one record per line.
+• A position or a depth that comes from one plain number cell is copied as written; only a decimal comma becomes a point. A position given in degrees and minutes is written as decimal degrees with the precision of the source, and a depth column marked positive upwards is written with its sign reversed. The position of a cruise or a station worked out from its samples is rounded to {derived} decimals with trailing zeros dropped, and its uncertainty to whole metres, rounded up. A count is written as a whole number (a decimal part that is zero is dropped). Densities, biomasses and sample sizes are copied as written, with the decimal comma turned into a point. Nothing is rescaled.
+• The file is named after the dataset name. Nothing is uploaded and nothing is stored.`,
+  'tip.convertCompanion.does': `Saves your two choices about the species list and the sample codes for the next run.`,
+  'tip.convertCompanion.logic': `• It is a small CSV file in the format of the companion file of the checker, with one row for "full species list" and one for "station prefix", each only when it is ticked.
+• Drop it together with your data next time and the two choices start ticked. Nothing is remembered in the browser, so this file is the only memory.
+• It holds no data, names or values from your sheet.`,
+  'tip.role.taxonId': `the ID of the taxon of that record, written to scientificNameID as given (a column named AphiaID, the whole-number ID of WoRMS, is written as the urn:lsid of the taxon). Only for a sheet with one record per row; nothing is looked up.`,
+  'tip.convertDevice.does': `Names the device the samples were taken with.`,
+  'tip.convertDevice.logic': `• Choose one of the devices that have a verified concept in the NERC vocabulary (named nets, a grab, a corer, and four device categories), or type your own name. It is written as a measurement on every sample event: the name of the sampling instrument ({instrument}) with the device as its value; a chosen device carries its vocabulary address, a typed name carries none.
+• The list holds only what was checked; a device that is not in it is typed. Nothing is guessed from your column names.
+• Leaving it empty is allowed, but BioCheck then warns that no sampling instrument is present, and that warning has to be accepted.`,
+  'tip.convertMesh.does': `Gives the mesh size of the net or sieve, in micrometres (optional).`,
+  'tip.convertMesh.logic': `• A plain number above zero, written with a point or a comma. It is written as a measurement on every sample event ({meshConcept}) with the unit micrometres ({unit}); no other unit is accepted here and nothing is converted.
+• Leaving it empty writes nothing. A value that cannot be read as a number blocks the export and says why.`,
   'tip.convertTree.does': `Shows the event tree the archive would have.`,
   'tip.convertTree.logic': `• Cruise, station and sample come from your columns, and the type is written as text.
 • The date of a cruise or station is the span of its samples; its position is the middle of the box around its samples, with an uncertainty that covers them all, in whole metres rounded up; its depth runs from the shallowest top to the deepest bottom.
@@ -427,10 +489,10 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Wynik to liczba przypadków każdego problemu, przykłady i lista poprawek w pliku CSV.
 • Instytucje nie są ze sobą porównywane ani szeregowane; szybka próba jest oznaczona jako próba.`,
 
-  'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza. Na razie nie można z niego korzystać.`,
+  'tip.convertIntro.does': `Pokazuje, do czego służy ten konwerter: archiwum Darwin Core zbudowane z Twojego arkusza. Strona jest nadal ukrytą wersją testową.`,
   'tip.convertIntro.logic': `• Strona jest na razie ukryta: nie ma jej w menu ani na stronie głównej, a wyszukiwarki są proszone, by ją pominąć.
 • Twoje pliki są odczytywane i pokazywane w podglądzie w Twojej przeglądarce; nic nie jest nigdzie wysyłane.
-• Eksportu jeszcze nie ma.
+• Archiwum jest budowane w Twojej przeglądarce i stąd pobierane; nic nie jest wysyłane i nic nie jest zapisywane.
 • Planowane są dwa opcjonalne wyszukiwania: nazw taksonów w WoRMS i terminów ze słownika NERC. Oba będą domyślnie wyłączone, a do żadnej z tych usług nic nie zostanie wysłane, dopóki nie naciśniesz jej przycisku.`,
   'tip.convertTaxa.does': `Potwierdza, które z zaproponowanych kolumn to taksony.`,
   'tip.convertTaxa.logic': `• W arkuszu szerokim narzędzie proponuje jako takson, którego nagłówek jest nazwą, każdą kolumnę liczbową bez innego znaczenia, z niską pewnością.
@@ -526,7 +588,69 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertCodes.logic': `• Kod to kod stacji, łącznik i kolejny numer, w kolejności Twojego arkusza. Jeśli z tekstu stacji powstałby kod zaczynający się jak formuła (od = + - lub @), kodem jest zamiast tego S i numer wiersza, aby nie potrzebował apostrofu i był taki sam na stronie i w pliku.
 • Dostajesz z powrotem własny arkusz jako plik CSV z jedną nową kolumną. Komórki są kopiowane jako tekst. Komórka lub nagłówek zaczynające się od = + - lub @ (także w formie pełnej szerokości) albo od tabulatora dostają apostrof, by arkusz kalkulacyjny ich nie wykonał; zwykłe liczby, oznaczenia braku danych, takie jak NA, oraz same znaki + x -, także ze spacjami wokół, zostają bez zmian. Daty z pliku xlsx są zapisywane jako daty ISO, a godziny jako godziny i minuty.
 • Sprawdź go i wgraj ten plik ponownie: identyfikatorem staje się tylko kod z Twojego wgranego arkusza.
+• Apostrof przed znakiem formuły to własny sposób arkusza na oznaczenie tekstu, więc gdy wgrasz plik ponownie, konwerter czyta '=x jako =x. Zdejmuje ten jeden apostrof z każdej komórki tekstowej i każdego nagłówka, które od niego zaczynają, i tylko tu: sprawdzarka czyta plik takim, jaki jest.
 • Konwerter nigdy sam nie stosuje ani nie odnawia kodów.`,
+  'tip.convertMetaTitle.does': `Nadaje zbiorowi danych nazwę, którą ludzie przeczytają.`,
+  'tip.convertMetaTitle.logic': `• Staje się tytułem w opisie (eml.xml), a gdy nazwa zbioru jest pusta, także nazwą zbioru w każdym wierszu zdarzenia.
+• Napisz go po angielsku: opis jest oznaczony jako angielski.
+• Brzmienie nie jest sprawdzane; pusty tytuł blokuje eksport.`,
+  'tip.convertMetaAbstract.does': `Mówi czytelnikowi, czym są dane i jak je zebrano.`,
+  'tip.convertMetaAbstract.logic': `• Staje się streszczeniem w opisie. Pusty wiersz zaczyna nowy akapit.
+• Polityka danych OBIS wymaga szczegółowego opisu, także metody zbioru; to narzędzie sprawdza tylko, czy coś napisano.
+• Puste streszczenie blokuje eksport.`,
+  'tip.convertMetaCreators.does': `Wymienia osoby lub grupy, które stworzyły zbiór danych.`,
+  'tip.convertMetaCreators.logic': `• Po jednym w wierszu, jako „Imię Nazwisko” albo „Nazwisko, Imię”. Bez przecinka ostatnie słowo jest nazwiskiem. Średnik też oddziela dwa nazwiska.
+• Stają się autorami w opisie i w tekście cytowania, który on zawiera. Narzędzie nikogo nie wyszukuje.
+• Potrzebny jest co najmniej jeden.`,
+  'tip.convertMetaContact.does': `Mówi, do kogo czytelnik ma pisać w sprawie zbioru danych.`,
+  'tip.convertMetaContact.logic': `• Imię i nazwisko oraz adres e-mail stają się kontaktem i dostawcą metadanych w opisie. Adres jest tylko zapisywany w pliku; ta strona nigdzie go nie wysyła.
+• Adres musi wyglądać jak adres (coś@coś.coś); nie jest testowany.
+• Potrzebne są oba.`,
+  'tip.convertMetaInstitution.does': `Podaje instytucję, do której należą dane, jej krótkim kodem.`,
+  'tip.convertMetaInstitution.logic': `• Jest zapisywany jako institutionCode w każdym wierszu zdarzenia. BioCheck zgłasza tabelę Event bez niego jako błąd.
+• Użyj krótkiego kodu, którego Twoja instytucja używa w OBIS lub GBIF; narzędzie go nie sprawdza.
+• Nie może zawierać tabulatora ani podziału wiersza.`,
+  'tip.convertMetaDatasetName.does': `Nazywa zbiór danych tak, jak pojawia się w każdym wierszu zdarzenia.`,
+  'tip.convertMetaDatasetName.logic': `• Jest zapisywana jako datasetName w każdym wierszu zdarzenia. Gdy jest pusta, używany jest tytuł. BioCheck zgłasza tabelę Event bez datasetName jako błąd i może ostrzegać, gdy różni się od tytułu.
+• Pobrany plik nosi jej nazwę.
+• Nie może zawierać tabulatora ani podziału wiersza.`,
+  'tip.convertMetaMethods.does': `Opisuje, jak zebrano dane (opcjonalnie).`,
+  'tip.convertMetaMethods.logic': `• Staje się sekcją metod w opisie. Pusty wiersz zaczyna nowy akapit.
+• Gdy jest puste, sekcja metod nie jest zapisywana. Polityka danych OBIS wymaga, by metoda była częścią opisu, więc warto ją uzupełnić.`,
+  'tip.convertLicence.does': `Wybiera licencję, na jakiej opublikowany jest zbiór danych.`,
+  'tip.convertLicence.logic': `• Oferowane są tylko {licences}: to licencje, które OBIS przyjmuje (preferowana jest ta z domeny publicznej, najmniej ta niekomercyjna), i te, które narzędzie GBIF do publikowania potrafi zapisać. Licencji Creative Commons z ShareAlike (SA) lub NoDerivatives (ND) nie ma na liście OBIS, więc nie jest oferowana.
+• Decyduje posiadacz praw, nie to narzędzie. Nie ma wartości domyślnej, a niewybrana licencja blokuje eksport.
+• Jest zapisywana w opisie jako nazwa licencji z jej adresem WWW, w formie, jaką zapisuje narzędzie GBIF do publikowania.`,
+  'tip.convertBasis.does': `Mówi, jakiego rodzaju zapisem jest każde wystąpienie.`,
+  'tip.convertBasis.logic': `• Jedna wartość dla całego zbioru: {bases}. Jest zapisywana jako basisOfRecord przy każdym wystąpieniu, a BioCheck odrzuca każdą inną wartość.
+• Obserwacja człowieka jest policzona i nic nie zachowano; okaz konserwowany jest przechowywany w kolekcji (podręcznik OBIS wymaga wtedy też kodu kolekcji i numeru katalogowego, których to narzędzie nie zapisuje); próbka materiału to fizyczna próbka, którą pobrano i która mogła zostać zakonserwowana albo zniszczona.
+• Nie ma wartości domyślnej: zależy od tego, co zrobiono z próbkami. Niewybrana wartość blokuje eksport.`,
+  'tip.convertSummaryColumn.does': `Wyjaśnia, dlaczego kolumna sum zaczyna jako „pomiń”.`,
+  'tip.convertSummaryColumn.logic': `• Kolumna, której nagłówek wygląda na sumę lub razem (Sum, Total, Suma, Razem, Summe, Gesamt, Somme, Σ), sumuje inne kolumny. Po przekształceniu policzyłaby te same osobniki dwa razy.
+• Dlatego zaczyna jako pominięta i niczego nie zapisuje w archiwum. Nadal możesz nadać jej inne znaczenie; wtedy to Twoja decyzja.
+• W ten sposób zmieniana jest tylko kolumna, którą narzędzie uznałoby inaczej za zmierzoną wielkość. Kolumna rozpoznana jako standardowa wielkość zachowuje swoją propozycję.`,
+  'tip.convertAccept.does': `Pozwala zaakceptować rodzaj ostrzeżenia dla tego eksportu.`,
+  'tip.convertAccept.logic': `• Ostrzeżenie nie blokuje eksportu, ale archiwum będzie zawierać to, o czym mówi (na przykład tekst w komórce gatunku, kolumna, która nie jest zapisywana, albo brak identyfikatora taksonu). Każdy rodzaj trzeba zaakceptować raz, po przeczytaniu.
+• Akceptacja trwa tylko do zmiany decyzji: każda zmiana czyści wszystkie zaznaczenia, a nic nie jest zapisywane. Nowe wgranie zaczyna z każdym ostrzeżeniem niezaakceptowanym.
+• Błędów nie można zaakceptować: blokują eksport, dopóki nie usuniesz przyczyny.
+• Uwagi, które tylko informują, są pokazywane i nie wymagają odpowiedzi.`,
+  'tip.convertExport.does': `Buduje archiwum Darwin Core i je pobiera.`,
+  'tip.convertExport.logic': `• Przycisk działa tylko wtedy, gdy nic nie blokuje, opis jest kompletny i każdy rodzaj ostrzeżenia jest zaakceptowany. Archiwum jest budowane w Twojej przeglądarce przez kod, który je sprawdził i który przed zapisem sprawdza wszystko jeszcze raz; jeśli coś blokuje, nic nie jest zapisywane.
+• Zip zawiera opis (EML {eml}), tabele zdarzeń, wystąpień i pomiarów oraz meta.xml. Pliki tekstowe są w UTF-8, rozdzielane tabulatorami, jeden rekord w wierszu.
+• Pozycja lub głębokość z jednej zwykłej komórki liczbowej jest kopiowana tak, jak jest zapisana; tylko przecinek dziesiętny staje się kropką. Pozycja podana w stopniach i minutach jest zapisywana jako stopnie dziesiętne z dokładnością źródła, a kolumna głębokości oznaczona jako dodatnia w górę jest zapisywana z odwróconym znakiem. Pozycja rejsu lub stacji obliczona z ich próbek jest zaokrąglana do {derived} miejsc po przecinku z obciętymi końcowymi zerami, a jej niepewność do pełnych metrów w górę. Liczebność jest zapisywana jako liczba całkowita (zerowa część dziesiętna jest odrzucana). Zagęszczenia, biomasy i wielkości prób są kopiowane tak, jak są zapisane, z przecinkiem dziesiętnym zamienionym na kropkę. Nic nie jest przeskalowywane.
+• Plik nosi nazwę zbioru. Nic nie jest wysyłane i nic nie jest zapisywane.`,
+  'tip.convertCompanion.does': `Zapisuje Twoje dwa wybory dotyczące listy gatunków i kodów próbek na następny raz.`,
+  'tip.convertCompanion.logic': `• To mały plik CSV w formacie pliku towarzyszącego sprawdzarki, z wierszem „pełna lista gatunków” i wierszem „przedrostek stacji”, każdy tylko gdy jest zaznaczony.
+• Wgraj go następnym razem razem z danymi, a oba wybory zaczną jako zaznaczone. Przeglądarka niczego nie pamięta, więc ten plik jest jedyną pamięcią.
+• Nie zawiera żadnych danych, nazw ani wartości z Twojego arkusza.`,
+  'tip.role.taxonId': `identyfikator taksonu tego rekordu, zapisywany do scientificNameID bez zmian (kolumna AphiaID, czyli liczbowy identyfikator WoRMS, jest zapisywana jako urn:lsid taksonu). Tylko dla arkusza z jednym rekordem w wierszu; nic nie jest wyszukiwane.`,
+  'tip.convertDevice.does': `Podaje narzędzie, którym pobrano próbki.`,
+  'tip.convertDevice.logic': `• Wybierz jedno z narzędzi, które mają sprawdzone pojęcie w słowniku NERC (nazwane sieci, chwytak, próbnik rdzeniowy i cztery kategorie narzędzi), albo wpisz własną nazwę. Jest zapisywane jako pomiar przy każdym zdarzeniu próbki: nazwa narzędzia próbkowania ({instrument}) z narzędziem jako wartością; wybrane narzędzie ma adres w słowniku, wpisana nazwa go nie ma.
+• Lista zawiera tylko to, co sprawdzono; narzędzie, którego na niej nie ma, się wpisuje. Nic nie jest zgadywane z nazw kolumn.
+• Można zostawić puste, ale BioCheck ostrzeże wtedy, że nie ma narzędzia próbkowania, i to ostrzeżenie trzeba zaakceptować.`,
+  'tip.convertMesh.does': `Podaje rozmiar oczka sieci lub sita w mikrometrach (opcjonalnie).`,
+  'tip.convertMesh.logic': `• Zwykła liczba większa od zera, z kropką lub przecinkiem. Jest zapisywana jako pomiar przy każdym zdarzeniu próbki ({meshConcept}) z jednostką mikrometry ({unit}); żadna inna jednostka nie jest tu przyjmowana i nic nie jest przeliczane.
+• Puste pole nic nie zapisuje. Wartość, której nie da się odczytać jako liczby, blokuje eksport i mówi dlaczego.`,
   'tip.convertTree.does': `Pokazuje drzewo zdarzeń, jakie miałoby archiwum.`,
   'tip.convertTree.logic': `• Rejs, stacja i próbka pochodzą z Twoich kolumn, a typ zapisuje się jako tekst.
 • Data rejsu lub stacji to przedział jej próbek; pozycja to środek ramki wokół jej próbek, z niepewnością obejmującą je wszystkie, w pełnych metrach zaokrąglonych w górę; głębokość biegnie od najpłytszej góry do najgłębszego dołu.
@@ -687,10 +811,10 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Das Ergebnis sind Zahlen je Problem, Beispiele und eine Korrekturliste als CSV-Datei.
 • Es vergleicht und reiht keine Institutionen; eine schnelle Stichprobe ist als Stichprobe gekennzeichnet.`,
 
-  'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Er ist noch nicht nutzbar.`,
+  'tip.convertIntro.does': `Zeigt, wofür dieser Konverter gedacht ist: ein Darwin-Core-Archiv, das aus Ihrer Tabelle entsteht. Die Seite ist noch eine verborgene Testversion.`,
   'tip.convertIntro.logic': `• Die Seite ist vorerst verborgen: Sie steht weder im Menü noch auf der Startseite, und Suchmaschinen werden gebeten, sie zu überspringen.
 • Ihre Dateien werden in Ihrem Browser gelesen und als Vorschau gezeigt; nichts wird irgendwohin gesendet.
-• Einen Export gibt es noch nicht.
+• Das Archiv wird in Ihrem Browser erstellt und von dort heruntergeladen; nichts wird hochgeladen und nichts gespeichert.
 • Zwei optionale Abfragen sind geplant: Taxonnamen in WoRMS und Begriffe im NERC-Vokabular. Beide sind standardmäßig aus, und an keinen der beiden Dienste wird etwas gesendet, bevor Sie dessen Schaltfläche drücken.`,
   'tip.convertTaxa.does': `Bestätigt, welche der vorgeschlagenen Spalten Taxa sind.`,
   'tip.convertTaxa.logic': `• In einem breiten Blatt schlägt das Werkzeug jede Zahlenspalte ohne andere Bedeutung mit niedriger Sicherheit als Taxon vor, dessen Kopf der Name ist.
@@ -786,7 +910,69 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertCodes.logic': `• Ein Code ist der Stationscode, ein Bindestrich und eine laufende Nummer, in der Reihenfolge Ihres Blatts. Würde der Stationstext einen Code ergeben, der wie eine Formel beginnt (mit = + - oder @), ist der Code stattdessen S und die Zeilennummer, damit er kein Apostroph braucht und auf der Seite und in der Datei gleich ist.
 • Sie erhalten Ihr eigenes Blatt als CSV-Datei mit einer neuen Spalte zurück. Zellen werden als Text kopiert. Eine Zelle oder eine Überschrift, die mit = + - oder @ (auch in der Vollbreitform) oder mit einem Tabulator beginnt, erhält ein Apostroph, damit eine Tabellenkalkulation sie nicht ausführt; einfache Zahlen, Kennzeichen für fehlende Werte wie NA und die Zeichen + x - allein, auch mit Leerzeichen darum, bleiben unverändert. Daten einer xlsx-Datei werden als ISO-Daten geschrieben, Uhrzeiten als Stunden und Minuten.
 • Prüfen Sie es und laden Sie diese Datei erneut hoch: Nur ein Code in Ihrem eigenen hochgeladenen Blatt wird zur Kennung.
+• Ein Apostroph vor einem Formelzeichen ist das eigene Textkennzeichen der Tabellenkalkulation; lädt man die Datei erneut hoch, liest der Konverter '=x daher als =x. Er nimmt diesen einen Apostroph von jeder Textzelle und jeder Überschrift ab, die damit beginnt, und nur hier: Das Prüfwerkzeug liest eine Datei, wie sie ist.
 • Der Konverter wendet Codes nie von selbst an und erneuert sie nie.`,
+  'tip.convertMetaTitle.does': `Gibt dem Datensatz einen Namen, den Menschen lesen werden.`,
+  'tip.convertMetaTitle.logic': `• Er wird zum Titel in der Beschreibung (eml.xml) und, wenn der Datensatzname leer bleibt, zum Datensatznamen in jeder Ereigniszeile.
+• Schreiben Sie ihn auf Englisch: Die Beschreibung ist als englisch gekennzeichnet.
+• Der Wortlaut wird nicht geprüft; ein leerer Titel blockiert den Export.`,
+  'tip.convertMetaAbstract.does': `Sagt einem Leser, was die Daten sind und wie sie erhoben wurden.`,
+  'tip.convertMetaAbstract.logic': `• Sie wird zur Zusammenfassung der Beschreibung. Eine Leerzeile beginnt einen neuen Absatz.
+• Die OBIS-Datenpolitik verlangt eine ausführliche Beschreibung einschließlich der Erhebungsmethode; dieses Werkzeug prüft nur, dass etwas geschrieben ist.
+• Eine leere Zusammenfassung blockiert den Export.`,
+  'tip.convertMetaCreators.does': `Nennt die Personen oder Gruppen, die den Datensatz erstellt haben.`,
+  'tip.convertMetaCreators.logic': `• Einer pro Zeile, als „Vorname Familienname“ oder „Familienname, Vorname“. Ohne Komma gilt das letzte Wort als Familienname. Auch ein Semikolon trennt zwei Namen.
+• Sie werden zu den Autoren der Beschreibung und des darin enthaltenen Zitiertexts. Das Werkzeug sucht niemanden nach.
+• Mindestens einer ist nötig.`,
+  'tip.convertMetaContact.does': `Sagt, an wen ein Leser zum Datensatz schreiben soll.`,
+  'tip.convertMetaContact.logic': `• Name und E-Mail-Adresse werden zum Kontakt und zum Metadatenanbieter der Beschreibung. Die Adresse wird nur in die Datei geschrieben; diese Seite sendet sie nirgendwohin.
+• Die Adresse muss wie eine Adresse aussehen (etwas@etwas.etwas); sie wird nicht getestet.
+• Beides wird gebraucht.`,
+  'tip.convertMetaInstitution.does': `Nennt die Institution, zu der die Daten gehören, mit ihrem Kürzel.`,
+  'tip.convertMetaInstitution.logic': `• Es wird als institutionCode in jeder Ereigniszeile geschrieben. BioCheck meldet eine Event-Tabelle ohne ihn als Fehler.
+• Verwenden Sie das Kürzel, das Ihre Institution in OBIS oder GBIF benutzt; das Werkzeug prüft es nicht.
+• Es darf keinen Tabulator und keinen Zeilenumbruch enthalten.`,
+  'tip.convertMetaDatasetName.does': `Benennt den Datensatz so, wie er in jeder Ereigniszeile steht.`,
+  'tip.convertMetaDatasetName.logic': `• Er wird als datasetName in jeder Ereigniszeile geschrieben. Bleibt er leer, wird der Titel verwendet. BioCheck meldet eine Event-Tabelle ohne datasetName als Fehler und kann warnen, wenn er vom Titel abweicht.
+• Die heruntergeladene Datei ist danach benannt.
+• Er darf keinen Tabulator und keinen Zeilenumbruch enthalten.`,
+  'tip.convertMetaMethods.does': `Beschreibt, wie die Daten erhoben wurden (optional).`,
+  'tip.convertMetaMethods.logic': `• Sie wird zum Methodenabschnitt der Beschreibung. Eine Leerzeile beginnt einen neuen Absatz.
+• Bleibt sie leer, wird kein Methodenabschnitt geschrieben. Die OBIS-Datenpolitik verlangt, dass die Methode Teil der Beschreibung ist; es lohnt sich also, sie auszufüllen.`,
+  'tip.convertLicence.does': `Wählt die Lizenz, unter der der Datensatz veröffentlicht wird.`,
+  'tip.convertLicence.logic': `• Angeboten werden nur {licences}: Es sind die Lizenzen, die OBIS akzeptiert (die gemeinfreie ist bevorzugt, die nichtkommerzielle am wenigsten), und die, die das GBIF-Publikationswerkzeug schreiben kann. Eine Creative-Commons-Lizenz mit ShareAlike (SA) oder NoDerivatives (ND) steht nicht auf der OBIS-Liste und wird daher nicht angeboten.
+• Der Rechteinhaber entscheidet, nicht dieses Werkzeug. Es gibt keinen Standardwert, und eine nicht gewählte Lizenz blockiert den Export.
+• Sie wird in die Beschreibung als Lizenzname mit Webadresse geschrieben, in der Form, die das GBIF-Publikationswerkzeug schreibt.`,
+  'tip.convertBasis.does': `Sagt, welche Art von Datensatz jedes Vorkommen ist.`,
+  'tip.convertBasis.logic': `• Ein Wert für den ganzen Datensatz: {bases}. Er wird als basisOfRecord bei jedem Vorkommen geschrieben, und BioCheck weist jeden anderen Wert ab.
+• Eine menschliche Beobachtung wird gezählt und nichts aufbewahrt; ein konserviertes Exemplar wird in einer Sammlung aufbewahrt (das OBIS-Handbuch verlangt dann auch einen Sammlungscode und eine Katalognummer, die dieses Werkzeug nicht schreibt); eine Materialprobe ist eine physische Probe, die entnommen wurde und konserviert oder vernichtet worden sein kann.
+• Es gibt keinen Standardwert: Er hängt davon ab, was mit den Proben geschah. Ein nicht gewählter Wert blockiert den Export.`,
+  'tip.convertSummaryColumn.does': `Erklärt, warum eine Summenspalte als „ignorieren“ beginnt.`,
+  'tip.convertSummaryColumn.logic': `• Eine Spalte, deren Kopf wie eine Summe oder ein Total klingt (Sum, Total, Suma, Razem, Summe, Gesamt, Somme, Σ), addiert andere Spalten. Umgewandelt würde sie dieselben Individuen doppelt zählen.
+• Deshalb beginnt sie als ignoriert und schreibt nichts ins Archiv. Sie können ihr trotzdem eine andere Bedeutung geben; dann ist es Ihre Entscheidung.
+• Nur eine Spalte, die das Werkzeug sonst als Messgröße nehmen würde, wird so geändert. Eine Spalte, die es als Standardgröße erkennt, behält ihren Vorschlag.`,
+  'tip.convertAccept.does': `Lässt Sie eine Art von Warnung für diesen Export akzeptieren.`,
+  'tip.convertAccept.logic': `• Eine Warnung stoppt den Export nicht, aber das Archiv enthält, was sie sagt (zum Beispiel Text in einer Artzelle, eine Spalte, die nicht geschrieben wird, oder eine fehlende Taxon-Kennung). Jede Art muss einmal akzeptiert werden, nachdem Sie sie gelesen haben.
+• Das Akzeptieren gilt nur, bis Sie eine Entscheidung ändern: Jede Änderung löscht alle Haken, und nichts wird gespeichert. Ein neuer Upload beginnt mit jeder Warnung unakzeptiert.
+• Fehler lassen sich nicht akzeptieren: Sie blockieren den Export, bis die Ursache beseitigt ist.
+• Hinweise, die nur informieren, werden gezeigt und brauchen keine Antwort.`,
+  'tip.convertExport.does': `Erstellt das Darwin-Core-Archiv und lädt es herunter.`,
+  'tip.convertExport.logic': `• Der Knopf funktioniert nur, wenn nichts blockiert, die Beschreibung vollständig ist und jede Art von Warnung akzeptiert wurde. Das Archiv wird in Ihrem Browser von dem Code erstellt, der es geprüft hat und vor dem Schreiben noch einmal alles prüft; blockiert etwas, wird nichts geschrieben.
+• Die Zip-Datei enthält die Beschreibung (EML {eml}), die Tabellen für Ereignisse, Vorkommen und Messungen sowie meta.xml. Die Textdateien sind UTF-8, tabulatorgetrennt, ein Datensatz pro Zeile.
+• Eine Position oder Tiefe aus einer einfachen Zahlenzelle wird so kopiert, wie sie steht; nur ein Dezimalkomma wird zum Punkt. Eine Position in Grad und Minuten wird als Dezimalgrad mit der Genauigkeit der Quelle geschrieben, und eine Tiefenspalte, die als nach oben positiv markiert ist, wird mit umgekehrtem Vorzeichen geschrieben. Die aus den Proben errechnete Position einer Fahrt oder Station wird auf {derived} Dezimalstellen gerundet, mit abgeschnittenen Endnullen, und ihre Unsicherheit auf ganze Meter aufgerundet. Eine Anzahl wird als ganze Zahl geschrieben (ein Dezimalteil von null entfällt). Dichten, Biomassen und Probengrößen werden wie geschrieben kopiert, ein Dezimalkomma wird zum Punkt. Nichts wird umskaliert.
+• Die Datei ist nach dem Datensatznamen benannt. Nichts wird hochgeladen und nichts gespeichert.`,
+  'tip.convertCompanion.does': `Hält Ihre zwei Entscheidungen zur Artenliste und zu den Probencodes für den nächsten Durchgang fest.`,
+  'tip.convertCompanion.logic': `• Es ist eine kleine CSV-Datei im Format der Begleitdatei des Prüfwerkzeugs, mit einer Zeile für „vollständige Artenliste“ und einer für „Stationspräfix“, jeweils nur wenn angehakt.
+• Legen Sie sie beim nächsten Mal zusammen mit Ihren Daten ab, und die beiden Entscheidungen beginnen angehakt. Der Browser merkt sich nichts, diese Datei ist also das einzige Gedächtnis.
+• Sie enthält keine Daten, Namen oder Werte aus Ihrem Blatt.`,
+  'tip.role.taxonId': `die Kennung des Taxons dieses Datensatzes, unverändert in scientificNameID geschrieben (eine Spalte AphiaID, die ganzzahlige WoRMS-Kennung, wird als urn:lsid des Taxons geschrieben). Nur für ein Blatt mit einem Datensatz pro Zeile; nichts wird nachgeschlagen.`,
+  'tip.convertDevice.does': `Nennt das Gerät, mit dem die Proben genommen wurden.`,
+  'tip.convertDevice.logic': `• Wählen Sie eines der Geräte mit geprüftem Begriff im NERC-Vokabular (benannte Netze, ein Greifer, ein Stechrohr und vier Gerätekategorien) oder geben Sie einen eigenen Namen ein. Es wird als Messung bei jedem Probenereignis geschrieben: der Name des Probenahmegeräts ({instrument}) mit dem Gerät als Wert; ein gewähltes Gerät trägt seine Vokabularadresse, ein eingegebener Name keine.
+• Die Liste enthält nur Geprüftes; ein Gerät, das nicht darin steht, wird eingegeben. Nichts wird aus Ihren Spaltennamen erraten.
+• Leer lassen ist erlaubt, aber BioCheck warnt dann, dass kein Probenahmegerät vorhanden ist, und diese Warnung muss akzeptiert werden.`,
+  'tip.convertMesh.does': `Gibt die Maschenweite von Netz oder Sieb in Mikrometern an (optional).`,
+  'tip.convertMesh.logic': `• Eine einfache Zahl größer als null, mit Punkt oder Komma. Sie wird als Messung bei jedem Probenereignis geschrieben ({meshConcept}) mit der Einheit Mikrometer ({unit}); eine andere Einheit wird hier nicht angenommen, und nichts wird umgerechnet.
+• Leer bedeutet, dass nichts geschrieben wird. Ein Wert, der sich nicht als Zahl lesen lässt, blockiert den Export und sagt warum.`,
   'tip.convertTree.does': `Zeigt den Ereignisbaum, den das Archiv hätte.`,
   'tip.convertTree.logic': `• Fahrt, Station und Probe stammen aus Ihren Spalten, und der Typ wird als Text geschrieben.
 • Das Datum einer Fahrt oder Station ist die Spanne ihrer Proben; ihre Position ist die Mitte des Kastens um ihre Proben, mit einer Unsicherheit, die alle abdeckt, in ganzen Metern aufgerundet; ihre Tiefe reicht von der flachsten Oberkante bis zur tiefsten Unterkante.
@@ -947,10 +1133,10 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Le résultat : des comptes par problème, des exemples et une liste de corrections en fichier CSV.
 • Il ne compare ni ne classe les institutions ; un échantillon rapide est signalé comme échantillon.`,
 
-  'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. Il n'est pas encore utilisable.`,
+  'tip.convertIntro.does': `Montre à quoi sert ce convertisseur : une archive Darwin Core construite à partir de votre tableur. La page est encore une version de test masquée.`,
   'tip.convertIntro.logic': `• La page est masquée pour l'instant : elle ne figure ni dans le menu ni sur la page d'accueil, et les moteurs de recherche sont priés de l'ignorer.
 • Vos fichiers sont lus et prévisualisés dans votre navigateur ; rien n'est envoyé nulle part.
-• L'export n'existe pas encore.
+• L'archive est construite dans votre navigateur et téléchargée depuis lui ; rien n'est envoyé et rien n'est enregistré.
 • Deux recherches facultatives sont prévues : les noms de taxons dans WoRMS et les termes du vocabulaire NERC. Les deux seront désactivées par défaut, et rien ne sera envoyé à l'un ou l'autre service avant que vous n'appuyiez sur son bouton.`,
   'tip.convertTaxa.does': `Confirme lesquelles des colonnes proposées sont des taxons.`,
   'tip.convertTaxa.logic': `• Dans une feuille large, l'outil propose comme taxon dont l'en-tête est le nom chaque colonne numérique sans autre sens, avec une faible confiance.
@@ -1046,7 +1232,69 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertCodes.logic': `• Un code est le code de station, un trait d'union et un numéro d'ordre, dans l'ordre de votre feuille. Si le texte de la station donnait un code qui commence comme une formule (par = + - ou @), le code est à la place S et le numéro de la ligne, pour qu'il n'ait pas besoin d'apostrophe et soit le même sur la page et dans le fichier.
 • Vous recevez votre propre feuille en fichier CSV avec une nouvelle colonne. Les cellules sont copiées comme texte. Une cellule ou un en-tête qui commence par = + - ou @ (aussi en forme pleine chasse) ou par une tabulation reçoit une apostrophe pour qu'un tableur ne l'exécute pas ; les nombres simples, les marques de donnée manquante comme NA et les signes + x - seuls, espaces autour compris, restent tels quels. Les dates d'un fichier xlsx sont écrites en dates ISO et les heures en heures et minutes.
 • Vérifiez-la et rechargez ce fichier : seul un code de votre propre feuille chargée devient un identifiant.
+• Une apostrophe devant un caractère de formule est l'échappement de texte propre au tableur : quand vous rechargez le fichier, le convertisseur lit donc '=x comme =x. Il retire cette seule apostrophe de chaque cellule de texte et de chaque en-tête qui commence par une, et seulement ici : le vérificateur lit un fichier tel quel.
 • Le convertisseur n'applique ni ne renouvelle jamais les codes de lui-même.`,
+  'tip.convertMetaTitle.does': `Donne au jeu de données un nom que les gens liront.`,
+  'tip.convertMetaTitle.logic': `• Il devient le titre de la description (eml.xml) et, si le nom du jeu reste vide, le nom du jeu dans chaque ligne d'événement.
+• Écrivez-le en anglais : la description est marquée comme anglaise.
+• La formulation n'est pas vérifiée ; un titre vide bloque l'export.`,
+  'tip.convertMetaAbstract.does': `Dit au lecteur ce que sont les données et comment elles ont été recueillies.`,
+  'tip.convertMetaAbstract.logic': `• Il devient le résumé de la description. Une ligne vide commence un nouveau paragraphe.
+• La politique de données d'OBIS demande une description détaillée, méthode de collecte comprise ; cet outil vérifie seulement que quelque chose est écrit.
+• Un résumé vide bloque l'export.`,
+  'tip.convertMetaCreators.does': `Liste les personnes ou groupes qui ont produit le jeu de données.`,
+  'tip.convertMetaCreators.logic': `• Un par ligne, sous la forme « Prénom Nom » ou « Nom, Prénom ». Sans virgule, le dernier mot est le nom de famille. Un point-virgule sépare aussi deux noms.
+• Ils deviennent les auteurs de la description et du texte de citation qu'elle contient. L'outil ne cherche personne.
+• Il en faut au moins un.`,
+  'tip.convertMetaContact.does': `Dit à qui le lecteur doit écrire au sujet du jeu de données.`,
+  'tip.convertMetaContact.logic': `• Le nom et l'adresse e-mail deviennent le contact et le fournisseur des métadonnées de la description. L'adresse est seulement écrite dans le fichier ; cette page ne l'envoie nulle part.
+• L'adresse doit ressembler à une adresse (quelquechose@quelquechose.quelquechose) ; elle n'est pas testée.
+• Les deux sont nécessaires.`,
+  'tip.convertMetaInstitution.does': `Nomme l'institution à laquelle appartiennent les données, par son code court.`,
+  'tip.convertMetaInstitution.logic': `• Il est écrit comme institutionCode dans chaque ligne d'événement. BioCheck signale comme erreur une table Event qui n'en a pas.
+• Utilisez le code court que votre institution emploie dans OBIS ou GBIF ; l'outil ne le vérifie pas.
+• Il ne doit contenir ni tabulation ni saut de ligne.`,
+  'tip.convertMetaDatasetName.does': `Nomme le jeu de données tel qu'il apparaît dans chaque ligne d'événement.`,
+  'tip.convertMetaDatasetName.logic': `• Il est écrit comme datasetName dans chaque ligne d'événement. Laissé vide, le titre est utilisé. BioCheck signale comme erreur une table Event sans datasetName et peut avertir quand il diffère du titre.
+• Le fichier téléchargé porte ce nom.
+• Il ne doit contenir ni tabulation ni saut de ligne.`,
+  'tip.convertMetaMethods.does': `Décrit comment les données ont été recueillies (facultatif).`,
+  'tip.convertMetaMethods.logic': `• Elle devient la section méthodes de la description. Une ligne vide commence un nouveau paragraphe.
+• Laissée vide, aucune section méthodes n'est écrite. La politique de données d'OBIS demande que la méthode fasse partie de la description : mieux vaut la remplir.`,
+  'tip.convertLicence.does': `Choisit la licence sous laquelle le jeu de données est publié.`,
+  'tip.convertLicence.logic': `• Seules {licences} sont proposées : ce sont les licences qu'OBIS accepte (celle du domaine public est préférée, la non commerciale la moins préférée) et celles que l'outil de publication de GBIF sait écrire. Une licence Creative Commons avec ShareAlike (SA) ou NoDerivatives (ND) ne figure pas sur la liste d'OBIS : elle n'est donc pas proposée.
+• Le titulaire des droits décide, pas cet outil. Il n'y a pas de valeur par défaut, et une licence non choisie bloque l'export.
+• Elle est écrite dans la description comme le nom de la licence avec son adresse web, sous la forme qu'écrit l'outil de publication de GBIF.`,
+  'tip.convertBasis.does': `Dit de quel type d'enregistrement relève chaque occurrence.`,
+  'tip.convertBasis.logic': `• Une valeur pour tout le jeu : {bases}. Elle est écrite comme basisOfRecord sur chaque occurrence, et BioCheck rejette toute autre valeur.
+• Une observation humaine est comptée et rien n'est conservé ; un spécimen conservé est gardé dans une collection (le manuel d'OBIS demande alors aussi un code de collection et un numéro de catalogue, que cet outil n'écrit pas) ; un échantillon de matériel est un échantillon physique qui a été prélevé et a pu être conservé ou détruit.
+• Il n'y a pas de valeur par défaut : elle dépend de ce qu'on a fait des échantillons. Une valeur non choisie bloque l'export.`,
+  'tip.convertSummaryColumn.does': `Explique pourquoi une colonne de totaux commence en « ignorer ».`,
+  'tip.convertSummaryColumn.logic': `• Une colonne dont l'en-tête ressemble à un total ou à une somme (Sum, Total, Suma, Razem, Summe, Gesamt, Somme, Σ) additionne d'autres colonnes. Convertie, elle compterait deux fois les mêmes individus.
+• Elle commence donc ignorée et n'écrit rien dans l'archive. Vous pouvez quand même lui donner un autre sens ; c'est alors votre décision.
+• Seule une colonne que l'outil prendrait sinon pour une grandeur mesurée est changée ainsi. Une colonne qu'il reconnaît comme grandeur standard garde sa proposition.`,
+  'tip.convertAccept.does': `Vous permet d'accepter un type d'avertissement pour cet export.`,
+  'tip.convertAccept.logic': `• Un avertissement n'arrête pas l'export, mais l'archive contiendra ce qu'il dit (par exemple du texte dans une cellule d'espèce, une colonne qui n'est pas écrite ou un identifiant de taxon manquant). Chaque type doit être accepté une fois, après lecture.
+• L'acceptation ne vaut que jusqu'à ce que vous changiez une décision : chaque changement efface toutes les coches, et rien n'est enregistré. Un nouveau dépôt commence avec chaque avertissement non accepté.
+• Les erreurs ne s'acceptent pas : elles bloquent l'export jusqu'à ce que la cause soit supprimée.
+• Les constats qui informent seulement sont affichés et n'appellent aucune réponse.`,
+  'tip.convertExport.does': `Construit l'archive Darwin Core et la télécharge.`,
+  'tip.convertExport.logic': `• Le bouton ne fonctionne que si rien ne bloque, si la description est complète et si chaque type d'avertissement est accepté. L'archive est construite dans votre navigateur par le code qui l'a vérifiée et qui revérifie tout avant d'écrire quoi que ce soit ; si quelque chose bloque, rien n'est écrit.
+• Le zip contient la description (EML {eml}), les tables d'événements, d'occurrences et de mesures et meta.xml. Les fichiers texte sont en UTF-8, séparés par des tabulations, un enregistrement par ligne.
+• Une position ou une profondeur issue d'une seule cellule numérique simple est copiée telle qu'écrite ; seule une virgule décimale devient un point. Une position en degrés et minutes est écrite en degrés décimaux avec la précision de la source, et une colonne de profondeur marquée positive vers le haut est écrite avec son signe inversé. La position d'une campagne ou d'une station calculée à partir de ses échantillons est arrondie à {derived} décimales, zéros finaux supprimés, et son incertitude au mètre entier supérieur. Un effectif est écrit comme un nombre entier (une partie décimale nulle est supprimée). Les densités, biomasses et tailles d'échantillon sont copiées telles qu'écrites, la virgule décimale devenant un point. Rien n'est mis à l'échelle.
+• Le fichier porte le nom du jeu de données. Rien n'est envoyé et rien n'est enregistré.`,
+  'tip.convertCompanion.does': `Garde vos deux choix sur la liste d'espèces et les codes d'échantillon pour la prochaine fois.`,
+  'tip.convertCompanion.logic': `• C'est un petit fichier CSV au format du fichier compagnon du vérificateur, avec une ligne « liste d'espèces complète » et une ligne « préfixe de station », chacune seulement si elle est cochée.
+• Déposez-le la prochaine fois avec vos données et les deux choix commenceront cochés. Le navigateur ne retient rien : ce fichier est la seule mémoire.
+• Il ne contient aucune donnée, aucun nom ni aucune valeur de votre feuille.`,
+  'tip.role.taxonId': `l'identifiant du taxon de cet enregistrement, écrit tel quel dans scientificNameID (une colonne AphiaID, l'identifiant numérique de WoRMS, est écrite comme l'urn:lsid du taxon). Seulement pour une feuille à un enregistrement par ligne ; rien n'est recherché.`,
+  'tip.convertDevice.does': `Nomme l'engin avec lequel les échantillons ont été pris.`,
+  'tip.convertDevice.logic': `• Choisissez l'un des engins qui ont un concept vérifié dans le vocabulaire NERC (filets nommés, une benne, un carottier et quatre catégories d'engins), ou saisissez votre propre nom. Il est écrit comme une mesure sur chaque événement d'échantillon : le nom de l'instrument d'échantillonnage ({instrument}) avec l'engin comme valeur ; un engin choisi porte son adresse de vocabulaire, un nom saisi n'en porte pas.
+• La liste ne contient que ce qui a été vérifié ; un engin qui n'y figure pas se saisit. Rien n'est deviné d'après vos noms de colonnes.
+• Le laisser vide est permis, mais BioCheck avertit alors qu'aucun instrument d'échantillonnage n'est présent, et cet avertissement doit être accepté.`,
+  'tip.convertMesh.does': `Donne la taille de maille du filet ou du tamis, en micromètres (facultatif).`,
+  'tip.convertMesh.logic': `• Un nombre simple supérieur à zéro, avec un point ou une virgule. Il est écrit comme une mesure sur chaque événement d'échantillon ({meshConcept}) avec l'unité micromètres ({unit}) ; aucune autre unité n'est acceptée ici et rien n'est converti.
+• Vide, rien n'est écrit. Une valeur qui ne peut pas être lue comme un nombre bloque l'export et dit pourquoi.`,
   'tip.convertTree.does': `Montre l'arbre des événements que l'archive aurait.`,
   'tip.convertTree.logic': `• Campagne, station et échantillon viennent de vos colonnes, et le type est écrit en texte.
 • La date d'une campagne ou d'une station est l'intervalle de ses échantillons ; sa position est le milieu du cadre autour de ses échantillons, avec une incertitude qui les couvre tous, en mètres entiers arrondis au supérieur ; sa profondeur va du haut le moins profond au bas le plus profond.

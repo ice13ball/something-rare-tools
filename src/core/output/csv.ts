@@ -25,8 +25,36 @@ const csvLine = (fields: readonly string[]): string => fields.map(csvField).join
  * OWASP CSV injection: a TEXT cell gets a leading apostrophe when it starts with tab or CR, or with = + @ - (also after leading spaces or
  * tabs, which a spreadsheet may drop before it reads the cell) or with their full-width forms ＝ ＋ － ＠ (U+FF1D U+FF0B U+FF0D U+FF20).
  */
+const GUARDED_START = /^(?:[\t\r]|[ \t]*[=+@\-\uFF1D\uFF0B\uFF0D\uFF20])/;
 export function guardText(s: string): string {
-  return /^(?:[\t\r]|[ \t]*[=+@\-\uFF1D\uFF0B\uFF0D\uFF20])/.test(s) ? `'${s}` : s;
+  return GUARDED_START.test(s) ? `'${s}` : s;
+}
+
+/** True when `s` is a guarded start, or apostrophes and then one: the strings an `unguardText` would otherwise read wrongly. */
+function guardedAfterApostrophes(s: string): boolean {
+  let i = 0;
+  while (s.charCodeAt(i) === 39) i++;
+  return GUARDED_START.test(s.slice(i));
+}
+
+/**
+ * guardText for a round trip through a file that is read back by the converter (`unguardText`). It is guardText with ONE more case: a
+ * text that starts with apostrophes and then with a guarded start (`'=x`) also gets an apostrophe (`''=x`), because unguardText would
+ * otherwise take its own apostrophe for a guard and strip it. For every other text it returns exactly what guardText returns.
+ * `unguardText(guardTextReversible(x)) === x` for every string x.
+ */
+export function guardTextReversible(s: string): string {
+  return guardedAfterApostrophes(s) ? `'${s}` : s;
+}
+
+/**
+ * The inverse of the formula guard, for reading a file the converter wrote itself (the code-proposal CSV): ONE leading apostrophe is removed
+ * when what follows is the start of a formula (= + - @ or a full-width form, after spaces or tabs, or a tab or CR), possibly behind more
+ * apostrophes. A leading apostrophe before a formula character is the spreadsheet's own text escape, so `'=x` is read as the text `=x`.
+ * Any other text, apostrophe or not, is returned unchanged. Used ONLY by /convert, on cells and headers after parsing; never by /check.
+ */
+export function unguardText(s: string): string {
+  return s.charCodeAt(0) === 39 && guardedAfterApostrophes(s.slice(1)) ? s.slice(1) : s;
 }
 
 /**

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ParsedFile, RawCell, RawSheet, SheetMapping } from '../types';
-import { guardText } from '../output/csv';
+import { guardTextReversible } from '../output/csv';
 import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 
@@ -19,10 +19,11 @@ import { parseNumber } from '../values/numbers';
  */
 
 /** A tab or a line break inside a value would break a tab-separated file with one record per line. */
-export const TAB_OR_NEWLINE = /[\t\r\n]/;
+/** Also the other line and paragraph breaks (vertical tab, form feed, NEL, line and paragraph separator): a reader that splits on them would cut the record too. */
+export const TAB_OR_NEWLINE = /[\t\r\n\v\f\u0085\u2028\u2029]/;
 export const hasTabOrNewline = (s: string): boolean => TAB_OR_NEWLINE.test(s);
 /** The text of such a value shown in a finding: the characters become a space. */
-export const shownText = (s: string): string => s.replace(/[\t\r\n]+/g, ' ');
+export const shownText = (s: string): string => s.replace(/[\t\r\n\v\f\u0085\u2028\u2029]+/g, ' ');
 
 /** The whole sample or station cell is exactly one of these words (any case): the row is a summary line, not a sample. "Total Bay" is a station and does not match. */
 export const SUMMARY_LABEL = /^(total|suma|razem|summe|gesamt|somme)$/i;
@@ -49,17 +50,17 @@ const cleanCode = (s: string): string => s.trim().replace(/[\t\r\n]+/g, ' ');
 const PRESENCE_MARKS = new Set(['+', 'x', 'X', '-']);
 
 /**
- * The spreadsheet formula guard of the proposal CSV: the repo's own guard (output/csv.ts guardText: a leading = + - @ or their full-width forms,
+ * The spreadsheet formula guard of the proposal CSV: the repo's own guard (output/csv.ts guardText, in its reversible form: a leading = + - @ or their full-width forms,
  * after spaces or tabs, and a leading tab or CR) on EVERY text cell, header and code, with three exemptions: a value that is a plain number (read with
- * the sheet's decimal setting: "-1,5", "+3"), a missing-data token (NA, -, n.d. ...) and a presence mark alone (+ x X -). The converter's reader does
- * not strip an apostrophe, so a guarded cell comes back with it.
+ * the sheet's decimal setting: "-1,5", "+3"), a missing-data token (NA, -, n.d. ...) and a presence mark alone (+ x X -). The converter's reading path removes exactly that apostrophe again
+ * (read.ts, output/csv.ts unguardText): a leading apostrophe before a formula character is the spreadsheet's own text escape, so `'=x` is read as `=x`.
  */
 export function guardCell(text: string, decimalComma: boolean): string {
   // spaces around a mark do not matter (the cell is written as it was); a tab or CR in front still gets the guard
   if (PRESENCE_MARKS.has(text.replace(/^ +| +$/g, ''))) return text;
   const p = parseNumber(text, decimalComma);
   if (p.status === 'ok' || p.status === 'missing') return text;
-  return guardText(text);
+  return guardTextReversible(text);
 }
 
 /**

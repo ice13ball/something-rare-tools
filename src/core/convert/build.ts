@@ -5,15 +5,16 @@ import type { Spec } from '../dataset';
 import { isBlankCell } from '../recognize/columns';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
-import type { Finding, ParsedFile, RawRow, RawSheet, SheetMapping } from '../types';
+import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 import { buildEventTree, eventDateText, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import type { ConvertResult, EventRec, MofIntent, OccRec, SourceRef } from './model';
-import { resolveQuantity } from './quantity';
+import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import type { ConvertShape } from './recognize';
+import { DEVICES, P01, P06 } from './vocab';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 
@@ -38,7 +39,13 @@ export interface ConvertSheetInput {
   quantity?: QuantityDeclaration;
   /** The cruise code when the sheet has no cruise column (it also fills a cruise cell left empty). */
   cruise?: string;
+  /** The sampling device of this sheet's samples: a verified one (a DEVICES key) or the user's own text. Absent: CONV-DEVICE-MISSING. */
+  device?: SamplingDevice;
+  /** The mesh size in micrometres, as typed. Optional. */
+  meshUm?: string;
 }
+
+export type SamplingDevice = { kind: 'known'; key: keyof typeof DEVICES } | { kind: 'other'; text: string };
 
 export interface ConvertOptions {
   /** "This is a full species list" (one tick per upload, kept only in the companion file): a 0 is an absence. */
@@ -66,15 +73,18 @@ interface Cols {
   quantityType?: Spec;
   lifeStage?: Spec;
   qualifier?: Spec;
+  taxonId?: Spec & { aphia: boolean };
   occurrenceId?: Spec;
   effort?: Spec & { unit?: string };
   depthMin?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   depthMax?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   depthPlain?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
+  /** Headers of columns the user gave a meaning this stage does not write (a measured variable, a pressure): said, never dropped silently. */
+  unexported: string[];
 }
 
 function colsOf(mapping: SheetMapping): Cols {
-  const c: Cols = { taxonHeaders: [] };
+  const c: Cols = { taxonHeaders: [], unexported: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
     const r = m.role;
@@ -101,8 +111,15 @@ function colsOf(mapping: SheetMapping): Cols {
       case 'occurrenceId':
         c.occurrenceId ??= spec;
         break;
+      case 'taxonId':
+        c.taxonId ??= { ...spec, aphia: r.aphia === true };
+        break;
       case 'effort':
         c.effort ??= { ...spec, ...(r.unit === undefined ? {} : { unit: r.unit }) };
+        break;
+      case 'variable':
+      case 'pressure':
+        c.unexported.push(m.header.trim());
         break;
       case 'depth': {
         const d = { ...spec, positive: r.positive, ...(r.unit === undefined ? {} : { unit: r.unit }) };
@@ -157,6 +174,8 @@ interface SampleAcc {
   source: SourceRef;
   /** the sample's effort MoF was written */
   effortWritten: boolean;
+  /** the sampling device and mesh size measurements of this sample were written */
+  deviceWritten: boolean;
 }
 
 /** Where a repeated ID stands: every file and sheet it occurs in, with its own lines (a duplicate across files is reported at each place). */
@@ -169,6 +188,20 @@ function addPlace(places: Places, file: string, sheet: string, line: number): vo
 }
 
 const sameNumber = (a: number | undefined, b: number | undefined): boolean => a === b;
+
+/**
+ * The text of a number cell to write, when the value came from this ONE cell and nothing was done to it but turning a decimal comma into a point: a plain
+ * decimal number (an optional sign, digits, an optional point and digits; no exponent, no thousands mark). Undefined otherwise (degrees and minutes, a
+ * flipped depth sign, a number written another way): the caller then writes the parsed value with the precision the reader counted.
+ */
+export function sourceNumberText(raw: RawCell | undefined, decimalComma: boolean, value: number | undefined): string | undefined {
+  if (value === undefined || raw === null || raw === undefined) return undefined;
+  if (typeof raw === 'number') return raw === value && !/e/i.test(String(raw)) ? String(raw) : undefined;
+  const t = raw.trim();
+  const out = decimalComma ? t.replace(',', '.') : t;
+  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(out)) return undefined;
+  return Number(out) === value ? out : undefined;
+}
 
 /** The taxon names of every sheet, as the page lists them for approval (distinct, first-seen order). */
 export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'>): SplitEntry[] {
@@ -276,12 +309,30 @@ export function convert(input: ConvertInput): ConvertResult {
     // a header with a tab or line break (wide taxon headers)
     for (const c of cols.taxonHeaders) checkText(c.header, sheet.headerLine, c.header.trim());
 
-    const depthOf = (row: RawRow): { min?: number; max?: number; decimals?: number } => {
-      const read = (d: NonNullable<Cols['depthMin']>): { v: number; decimals: number } | undefined => {
+    // the sampling device and the mesh size of the sheet, written as eMoF rows on every sample (BioCheck warns when no instrument is present)
+    let device: { label: string; uri?: string } | undefined;
+    if (sin.device?.kind === 'known') device = { label: DEVICES[sin.device.key].label, uri: DEVICES[sin.device.key].uri };
+    else if (sin.device?.kind === 'other' && sin.device.text.trim() !== '') {
+      device = { label: sin.device.text.trim() };
+      checkText('sampling device', sheet.headerLine, device.label);
+    }
+    let mesh: string | undefined;
+    if (sin.meshUm !== undefined && sin.meshUm.trim() !== '') {
+      const p = parseTypedNumber(sin.meshUm);
+      if (p.ok) mesh = p.text;
+      else findings.push(makeConvertFinding('CONV-MESH-INVALID', { ...base, value: sin.meshUm.trim(), params: { reason: p.reason } }));
+    }
+
+    const depthOf = (row: RawRow): { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string } => {
+      const read = (d: NonNullable<Cols['depthMin']>): { v: number; decimals: number; text?: string } | undefined => {
         const cell = row.cells[d.index] ?? null;
         if (isBlankCell(cell)) return undefined;
         const p = parseNumber(cell, dc);
-        if (p.status === 'ok') return { v: d.positive === 'up' ? (p.value === 0 ? 0 : -p.value) : p.value, decimals: p.decimals };
+        if (p.status === 'ok') {
+          const v = d.positive === 'up' ? (p.value === 0 ? 0 : -p.value) : p.value;
+          const text = sourceNumberText(cell, dc, v);
+          return { v, decimals: p.decimals, ...(text === undefined ? {} : { text }) };
+        }
         if (p.status === 'non-numeric') collector.add('ROW-NON-NUMERIC', sheet.name, d.header, row.line, p.token);
         else if (p.status === 'na-variant') collector.add('ROW-NA-VARIANT', sheet.name, d.header, row.line, p.token);
         return undefined;
@@ -290,12 +341,12 @@ export function convert(input: ConvertInput): ConvertResult {
         const lo = read(cols.depthMin);
         const hi = read(cols.depthMax);
         const decimals = Math.max(lo?.decimals ?? 0, hi?.decimals ?? 0);
-        return { ...(lo ? { min: lo.v } : {}), ...(hi ? { max: hi.v } : {}), ...(lo || hi ? { decimals } : {}) };
+        return { ...(lo ? { min: lo.v } : {}), ...(hi ? { max: hi.v } : {}), ...(lo || hi ? { decimals } : {}), ...(lo?.text === undefined ? {} : { minText: lo.text }), ...(hi?.text === undefined ? {} : { maxText: hi.text }) };
       }
       // one depth column (even one called a bound): min = max
       const only = cols.depthPlain ?? cols.depthMin ?? cols.depthMax;
       const one = only ? read(only) : undefined;
-      return one ? { min: one.v, max: one.v, decimals: one.decimals } : {};
+      return one ? { min: one.v, max: one.v, decimals: one.decimals, ...(one.text === undefined ? {} : { minText: one.text, maxText: one.text }) } : {};
     };
 
     const effortOf = (row: RawRow): string | undefined => {
@@ -386,10 +437,16 @@ export function convert(input: ConvertInput): ConvertResult {
           site.lon = m.lon;
           if (m.latDecimals !== undefined) site.latDecimals = m.latDecimals;
           if (m.lonDecimals !== undefined) site.lonDecimals = m.lonDecimals;
+          const latText = specs.lat ? sourceNumberText(row.cells[specs.lat.index], dc, m.lat) : undefined;
+          const lonText = specs.lon ? sourceNumberText(row.cells[specs.lon.index], dc, m.lon) : undefined;
+          if (latText !== undefined) site.latText = latText;
+          if (lonText !== undefined) site.lonText = lonText;
         }
         if (depth.min !== undefined) site.depthMin = depth.min;
         if (depth.max !== undefined) site.depthMax = depth.max;
         if (depth.decimals !== undefined) site.depthDecimals = depth.decimals;
+        if (depth.minText !== undefined) site.depthMinText = depth.minText;
+        if (depth.maxText !== undefined) site.depthMaxText = depth.maxText;
         if (effort !== undefined && quantity?.effort) {
           site.sampleSizeValue = effort;
           site.sampleSizeUnit = quantity.effort.unit;
@@ -402,11 +459,38 @@ export function convert(input: ConvertInput): ConvertResult {
           conflicts: new Set(),
           source,
           effortWritten: false,
+          deviceWritten: false,
           ...(stationText === undefined ? {} : { station: stationText }),
           ...(dateText === undefined ? {} : { dateText }),
           ...(effort === undefined ? {} : { effortText: effort }),
         };
         samples.set(eventId, acc);
+      }
+      if (!acc.deviceWritten) {
+        acc.deviceWritten = true;
+        if (device) {
+          measurements.push({
+            target: { kind: 'event', id: eventId },
+            role: 'device',
+            measurementType: P01.instrument.label,
+            measurementTypeId: P01.instrument.uri,
+            measurementValue: device.label,
+            ...(device.uri === undefined ? {} : { measurementValueId: device.uri }),
+            source,
+          });
+        }
+        if (mesh !== undefined) {
+          measurements.push({
+            target: { kind: 'event', id: eventId },
+            role: 'mesh',
+            measurementType: P01.meshSize.label,
+            measurementTypeId: P01.meshSize.uri,
+            measurementValue: mesh,
+            measurementUnit: 'um',
+            measurementUnitId: P06.um.uri,
+            source,
+          });
+        }
       }
       if (acc.site.sampleSizeValue !== undefined && !acc.effortWritten && quantity?.effort) {
         acc.effortWritten = true;
@@ -424,13 +508,17 @@ export function convert(input: ConvertInput): ConvertResult {
       }
 
       /* ---- the occurrences of this row ---- */
-      const cells: { verbatim: string; raw: unknown; column: string; userId?: string; lifeStageCol?: string; qualifierCol?: string }[] = [];
+      const cells: { verbatim: string; raw: unknown; column: string; userId?: string; lifeStageCol?: string; qualifierCol?: string; nameId?: string }[] = [];
       if (sin.shape === 'wide') {
         for (const c of cols.taxonHeaders) cells.push({ verbatim: c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim() });
       } else if (cols.taxonCell && cols.quantity && taxonCellText !== undefined) {
         const lifeStageCol = cols.lifeStage ? text(row.cells[cols.lifeStage.index]) : undefined;
         const qualifierCol = cols.qualifier ? text(row.cells[cols.qualifier.index]) : undefined;
         const userId = cols.occurrenceId ? text(row.cells[cols.occurrenceId.index]) : undefined;
+        const idText = cols.taxonId ? text(row.cells[cols.taxonId.index]) : undefined;
+        // the taxon ID of the sheet, never looked up: an AphiaID column (whole numbers only) as the urn:lsid, any other taxon ID column as given
+        const nameId = idText === undefined || cols.taxonId === undefined ? undefined : cols.taxonId.aphia ? (/^[1-9]\d*$/.test(idText) ? `urn:lsid:marinespecies.org:taxname:${idText}` : undefined) : idText;
+        if (cols.taxonId) checkText(cols.taxonId.header, row.line, idText);
         if (cols.taxonCell) checkText(cols.taxonCell.header, row.line, taxonCellText);
         if (cols.lifeStage) checkText(cols.lifeStage.header, row.line, lifeStageCol);
         if (cols.qualifier) checkText(cols.qualifier.header, row.line, qualifierCol);
@@ -440,6 +528,7 @@ export function convert(input: ConvertInput): ConvertResult {
           raw: row.cells[cols.quantity.index] ?? null,
           column: cols.taxonCell.header,
           ...(userId === undefined ? {} : { userId }),
+          ...(nameId === undefined ? {} : { nameId }),
           ...(lifeStageCol === undefined ? {} : { lifeStageCol }),
           ...(qualifierCol === undefined ? {} : { qualifierCol }),
         });
@@ -481,6 +570,10 @@ export function convert(input: ConvertInput): ConvertResult {
         const sp = splitOf(cell.verbatim);
         const lifeStage = cell.lifeStageCol ?? sp.lifeStage;
         const qualifier = cell.qualifierCol ?? sp.identificationQualifier;
+        // what the user typed into an approved split is written too: a tab or line break there would break the tab-separated file
+        checkText(cell.column, row.line, sp.scientificName);
+        checkText(cell.column, row.line, sp.identificationQualifier);
+        checkText(cell.column, row.line, sp.lifeStage);
         const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
         const occSource: SourceRef = { ...source, column: cell.column };
         const occ: OccRec = {
@@ -492,6 +585,7 @@ export function convert(input: ConvertInput): ConvertResult {
           source: occSource,
           ...(qualifier === undefined ? {} : { identificationQualifier: qualifier }),
           ...(lifeStage === undefined ? {} : { lifeStage }),
+          ...(cell.nameId === undefined ? {} : { scientificNameId: cell.nameId }),
           ...(sp.sex === undefined ? {} : { sex: sp.sex }),
           ...(remarks === undefined ? {} : { occurrenceRemarks: remarks }),
         };
@@ -514,6 +608,7 @@ export function convert(input: ConvertInput): ConvertResult {
             target: { kind: 'occurrence', id },
             role: quantity.kind,
             measurementType: t?.label ?? '',
+            ...(t || quantity.noTypeFor === undefined ? {} : { measurementTypeFallback: quantity.noTypeFor.charAt(0).toUpperCase() + quantity.noTypeFor.slice(1) }),
             ...(t ? { measurementTypeId: t.uri } : {}),
             measurementValue: quantity.kind === 'count' ? String(value) : valueText(raw, dc),
             ...(quantity.kind === 'count' ? {} : { measurementUnit: quantity.unit ?? '' }),
@@ -564,6 +659,12 @@ export function convert(input: ConvertInput): ConvertResult {
     if (zeros > 0) {
       stats.zerosSkipped += zeros;
       findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: zeros } }));
+    }
+    if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));
+    // a taxon ID column of a WIDE sheet has no taxon to belong to (the taxa are the columns): it is said, not dropped silently
+    if (sin.shape === 'wide' && cols.taxonId) cols.unexported.push(cols.taxonId.header.trim());
+    if (cols.unexported.length > 0) {
+      findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: cols.unexported.length, columns: cols.unexported.slice(0, 6).join(', ') + (cols.unexported.length > 6 ? ', …' : '') } }));
     }
     findings.push(...collector.findings());
   }

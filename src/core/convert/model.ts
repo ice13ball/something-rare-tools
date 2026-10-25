@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding } from '../types';
+import type { DatasetMetadata } from './metadata';
+import type { ConvertSettings } from './settings';
 import type { SplitEntry, TaxonSplit } from './taxon';
 import type { NercTerm } from './vocab';
 
@@ -36,6 +38,11 @@ export interface EventRec {
   /** Decimals to write: the source's own for a sample, 6 for a derived position. */
   latDecimals?: number;
   lonDecimals?: number;
+  /** The source text of a sample's position / depth when it came from one plain number cell: written as it is (events.ts SampleSite). */
+  latText?: string;
+  lonText?: string;
+  depthMinText?: string;
+  depthMaxText?: string;
   /** coordinateUncertaintyInMeters of a derived position: whole metres, rounded up. */
   coordinateUncertaintyInMeters?: number;
   depthMin?: number;
@@ -64,6 +71,8 @@ export interface OccRec {
   /** Darwin Core sex, from a ", f" / ", m" suffix of the taxon text. */
   sex?: 'female' | 'male';
   occurrenceStatus: OccurrenceStatus;
+  /** The taxon's scientificNameID: the user's column as given, or the urn:lsid of an AphiaID column. Never looked up. */
+  scientificNameId?: string;
   /** count only: a whole number (0 for an absence). */
   individualCount?: number;
   /** count only, present records: the same number with organismQuantityType "individuals". */
@@ -82,13 +91,17 @@ export interface OccRec {
 export interface MofIntent {
   target: { kind: 'event' | 'occurrence'; id: string };
   /** What it is: the quantity of an occurrence (count, density, biomass) or the effort of a sample. */
-  role: 'count' | 'density' | 'biomass' | 'effort';
+  role: 'count' | 'density' | 'biomass' | 'effort' | 'device' | 'mesh';
   /** measurementType: the preferred label of the concept; empty when no verified concept exists. */
   measurementType: string;
   measurementTypeId?: string;
   measurementValue: string;
+  /** A device with a verified L22 / L05 concept: its URI. */
+  measurementValueId?: string;
   measurementUnit?: string;
   measurementUnitId?: string;
+  /** Set when `measurementType` is empty because no concept is verified: the declared meaning in words, for the export (never an id). */
+  measurementTypeFallback?: string;
   source: SourceRef;
 }
 
@@ -138,3 +151,149 @@ export interface ConvertResult {
 }
 
 export type { SplitEntry, TaxonSplit, NercTerm };
+
+/* ---------- the export model (stage 2, plan 3.1) ---------- */
+
+/*
+ * What the writers take. The records above are in INPUT terms (flat, close to the sheet); this model groups what belongs together so a later
+ * writer for another profile (Darwin Core Data Package) can map it without re-deriving anything: an occurrence's IDENTIFICATION (what was
+ * seen), its QUANTITY (how much) and an event's EFFORT (how much was sampled) each stay one object. `toDataset` is the only place the flat
+ * records are turned into it.
+ */
+
+/** What was seen: the exact text of the sheet, and the name, qualifier and stage the user approved. */
+export interface Identification {
+  verbatim: string;
+  scientificName: string;
+  qualifier?: string;
+  /** Not written by this stage (the WoRMS lookup is a later stage). */
+  scientificNameId?: string;
+  lifeStage?: string;
+  sex?: 'female' | 'male';
+}
+
+/** How much, for a count. Density and biomass are measurements (ModelMeasurement), not fields of the occurrence. */
+export interface Quantity {
+  individualCount?: number;
+  organismQuantity?: number;
+  organismQuantityType?: string;
+}
+
+/** How much was sampled: written from the source text. */
+export interface Effort {
+  value: string;
+  unit: string;
+}
+
+export interface ModelEvent {
+  id: string;
+  parentId?: string;
+  type: EventType;
+  date?: string;
+  position?: { lat: number; lon: number; latDecimals?: number; lonDecimals?: number; latText?: string; lonText?: string; derived?: boolean; uncertaintyM?: number };
+  depth?: { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string };
+  effort?: Effort;
+  locality?: string;
+  source?: SourceRef;
+}
+
+export interface ModelOccurrence {
+  id: string;
+  eventId: string;
+  identification: Identification;
+  status: OccurrenceStatus;
+  quantity?: Quantity;
+  /** '' = not chosen yet (blocks; nothing is exported in that state). */
+  basisOfRecord: string;
+  remarks?: string;
+  source: SourceRef;
+}
+
+/** One eMoF row. The eventID is always filled: for an occurrence's measurement it is the eventID of that occurrence. */
+export interface ModelMeasurement {
+  eventId: string;
+  occurrenceId?: string;
+  type: string;
+  typeId?: string;
+  value: string;
+  valueId?: string;
+  unit?: string;
+  unitId?: string;
+  source: SourceRef;
+}
+
+export interface ConvertedDataset {
+  events: ModelEvent[];
+  occurrences: ModelOccurrence[];
+  measurements: ModelMeasurement[];
+  metadata: DatasetMetadata;
+  /** The decisions the companion file keeps. */
+  decisions: ConvertSettings;
+}
+
+/**
+ * The flat records of a conversion as the export model. A measurement of an occurrence takes the eventID of that occurrence; one whose occurrence is
+ * unknown keeps the id of its own target, so the cross-table check (CONV-EMOF-ORPHAN) can name it. The measurementType text is the preferred
+ * label of the NERC concept, or, when no concept is verified, the declared meaning (CONV-NERC-UNKNOWN says the id is missing).
+ */
+export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
+  const events: ModelEvent[] = result.events.map((e) => {
+    const m: ModelEvent = { id: e.id, type: e.eventType };
+    if (e.parentId !== undefined) m.parentId = e.parentId;
+    if (e.eventDate !== undefined) m.date = e.eventDate;
+    if (e.lat !== undefined && e.lon !== undefined) {
+      m.position = { lat: e.lat, lon: e.lon };
+      if (e.latDecimals !== undefined) m.position.latDecimals = e.latDecimals;
+      if (e.lonDecimals !== undefined) m.position.lonDecimals = e.lonDecimals;
+      if (e.latText !== undefined) m.position.latText = e.latText;
+      if (e.lonText !== undefined) m.position.lonText = e.lonText;
+      if (e.derived.position) m.position.derived = true;
+      if (e.coordinateUncertaintyInMeters !== undefined) m.position.uncertaintyM = e.coordinateUncertaintyInMeters;
+    }
+    if (e.depthMin !== undefined || e.depthMax !== undefined) {
+      m.depth = {};
+      if (e.depthMin !== undefined) m.depth.min = e.depthMin;
+      if (e.depthMax !== undefined) m.depth.max = e.depthMax;
+      if (e.depthDecimals !== undefined) m.depth.decimals = e.depthDecimals;
+      if (e.depthMinText !== undefined) m.depth.minText = e.depthMinText;
+      if (e.depthMaxText !== undefined) m.depth.maxText = e.depthMaxText;
+    }
+    if (e.sampleSizeValue !== undefined && e.sampleSizeUnit !== undefined) m.effort = { value: e.sampleSizeValue, unit: e.sampleSizeUnit };
+    if (e.locality !== undefined) m.locality = e.locality;
+    if (e.source) m.source = e.source;
+    return m;
+  });
+  const occurrences: ModelOccurrence[] = result.occurrences.map((o) => {
+    const identification: Identification = { verbatim: o.verbatimIdentification, scientificName: o.scientificName };
+    if (o.identificationQualifier !== undefined) identification.qualifier = o.identificationQualifier;
+    if (o.lifeStage !== undefined) identification.lifeStage = o.lifeStage;
+    if (o.scientificNameId !== undefined) identification.scientificNameId = o.scientificNameId;
+    if (o.sex !== undefined) identification.sex = o.sex;
+    const m: ModelOccurrence = { id: o.id, eventId: o.eventId, identification, status: o.occurrenceStatus, basisOfRecord: metadata.basisOfRecord, source: o.source };
+    if (o.individualCount !== undefined || o.organismQuantity !== undefined) {
+      m.quantity = {};
+      if (o.individualCount !== undefined) m.quantity.individualCount = o.individualCount;
+      if (o.organismQuantity !== undefined) m.quantity.organismQuantity = o.organismQuantity;
+      if (o.organismQuantityType !== undefined) m.quantity.organismQuantityType = o.organismQuantityType;
+    }
+    if (o.occurrenceRemarks !== undefined) m.remarks = o.occurrenceRemarks;
+    return m;
+  });
+  const eventOf = new Map(result.occurrences.map((o) => [o.id, o.eventId]));
+  const measurements: ModelMeasurement[] = result.measurements.map((x) => {
+    const occurrence = x.target.kind === 'occurrence';
+    const m: ModelMeasurement = {
+      eventId: occurrence ? (eventOf.get(x.target.id) ?? x.target.id) : x.target.id,
+      type: x.measurementType !== '' ? x.measurementType : (x.measurementTypeFallback ?? ''),
+      value: x.measurementValue,
+      source: x.source,
+    };
+    if (occurrence) m.occurrenceId = x.target.id;
+    if (x.measurementTypeId !== undefined) m.typeId = x.measurementTypeId;
+    if (x.measurementValueId !== undefined) m.valueId = x.measurementValueId;
+    if (x.measurementUnit !== undefined && x.measurementUnit !== '') m.unit = x.measurementUnit;
+    if (x.measurementUnitId !== undefined) m.unitId = x.measurementUnitId;
+    return m;
+  });
+  return { events, occurrences, measurements, metadata, decisions };
+}

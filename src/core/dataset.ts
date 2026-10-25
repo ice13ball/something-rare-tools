@@ -134,6 +134,7 @@ export function specsOf(mapping: SheetMapping): Specs {
       case 'occurrenceId':
       case 'lifeStage':
       case 'qualifier':
+      case 'taxonId':
       default:
         break;
     }

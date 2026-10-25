@@ -8,6 +8,8 @@ import { IPT_MAX_BYTES } from '../../config/ipt';
 import type { UiKey } from '../core/i18n/ui';
 import type { Lang } from '../core/types';
 import { t } from './i18n';
+import { DERIVED_DECIMALS } from '../core/convert/events';
+import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '../core/convert/metadata';
 import { P01, P06 } from '../core/convert/vocab';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
 import { CONVERT_ROLE_CHOICES, ROLE_KINDS, roleChoiceLabelKey, roleLabelKey, type RoleKind } from './mappingModel';
@@ -209,6 +211,21 @@ const DEFS = {
   convertEffortDimension: { label: 'convert.effort.dimension', values: { volumeConcept: codes(P01.volumeSampled), areaConcept: codes(P01.areaSampled) } },
   convertCodes: { label: 'convert.codes.title' },
   convertTree: { label: 'convert.tree.title' },
+  convertSummaryColumn: { label: 'convert.summary.column' },
+  convertMetaTitle: { label: 'convert.meta.f.title' },
+  convertMetaAbstract: { label: 'convert.meta.f.abstract' },
+  convertMetaCreators: { label: 'convert.meta.f.creators' },
+  convertMetaContact: { label: 'convert.meta.f.contactName' },
+  convertMetaInstitution: { label: 'convert.meta.f.institution' },
+  convertMetaDatasetName: { label: 'convert.meta.f.datasetName' },
+  convertMetaMethods: { label: 'convert.meta.f.methods' },
+  convertLicence: { label: 'convert.meta.f.licence', values: { licences: () => LICENCES.join(', ') } },
+  convertBasis: { label: 'convert.meta.f.basis', values: { bases: () => BASES_OF_RECORD.join(', ') } },
+  convertAccept: { label: 'convert.accept.title' },
+  convertExport: { label: 'convert.export.title', values: { eml: () => `${EML_VERSION}, GBIF Metadata Profile ${GBIF_PROFILE_VERSION}`, derived: () => String(DERIVED_DECIMALS) } },
+  convertCompanion: { label: 'convert.companion.button' },
+  convertDevice: { label: 'convert.device.label', values: { instrument: codes(P01.instrument) } },
+  convertMesh: { label: 'convert.mesh.label', values: { meshConcept: codes(P01.meshSize), unit: codes(P06.um) } },
 } satisfies Record<string, TipDef>;
 
 export type TipId = keyof typeof DEFS;

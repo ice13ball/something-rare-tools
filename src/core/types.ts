@@ -104,7 +104,9 @@ export type ConverterRole =
   | { kind: 'taxon'; header?: boolean }
   | { kind: 'quantity' } | { kind: 'quantityType' }
   | { kind: 'effort'; unit?: string }
-  | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' };
+  | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' }
+  /** The scientificNameID of a long sheet's taxon; `aphia: true` = the cells are WoRMS AphiaIDs (written as the urn:lsid), otherwise written as given. */
+  | { kind: 'taxonId'; aphia?: boolean };
 export type ConverterRoleKind = ConverterRole['kind'];
 export interface ColumnProposal {
   index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low';

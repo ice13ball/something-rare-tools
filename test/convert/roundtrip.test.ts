@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { convert, listSplits } from '../../src/core/convert/build';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
 import { proposeSampleCodes } from '../../src/core/convert/ids';
+import { readConvertFile } from '../../src/core/convert/read';
 import { proposeConvertMapping, suggestConvertShape } from '../../src/core/convert/recognize';
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
 import type { ColumnRole, ParsedFile, SheetMapping } from '../../src/core/types';
@@ -61,7 +62,8 @@ function roundTrip(original: ParsedFile, c: Case): { a: ReturnType<typeof conver
   const width = original.sheets[0].header.length;
   const mapping1: SheetMapping = { ...mapping0, columns: [...mapping0.columns, { index: width, header: p!.header, role: { kind: 'sampleId' } }] };
   const inMemory = withCodes(original, p!.codes, p!.header);
-  const reparsed = textFile(original.fileName, p!.csv);
+  // the converter's reading path: the formula guard of the proposal CSV comes off every text cell and header
+  const reparsed = readConvertFile(textFile(original.fileName, p!.csv));
   const approve = (f: ParsedFile) => Object.fromEntries(listSplits({ sheets: [input(f, mapping1, c)] }).filter((s) => s.needsDecision).map((s) => [s.verbatim, s.proposed]));
   const run = (f: ParsedFile) => convert({ sheets: [input(f, mapping1, c)], options: { fullList: true }, approvedSplits: approve(f) });
   return { a: run(inMemory), b: run(reparsed), csv: p!.csv };
@@ -102,6 +104,66 @@ describe('CSV sources', () => {
     same(a, b);
     expect(a.occurrences.some((o) => o.occurrenceRemarks === '+')).toBe(true);
     expect(a.findings.some((f) => f.ruleId === 'CONV-NEGATIVE-QUANTITY')).toBe(true);
+  });
+});
+
+describe('formula-looking text round-trips (the peer repro: a Uwagi column)', () => {
+  const header = ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Oithona similis', 'Uwagi'];
+  const rows: Cell[][] = [
+    ['S1', '-54.60', '-5.30', '2020-01-01', '@notatka', 4, '@notatka'],
+    ['S1', '-54.60', '-5.30', '2020-01-02', '=SUM(A1:A2)', '+', '=SUM(A1:A2)'],
+    ['=ST', '-5.30', '-10', '2020-01-03', '-ok', '-10', '-ok'],
+    ['@st', '-54.60', '-5.30', '2020-01-04', 3, '+', ' =lead'],
+    ['S5', '-54.60', '-5.30', '2020-01-05', '＝full', '\t=tab', "'already"],
+  ];
+  const taxon: ColumnRole = { kind: 'taxon', header: true };
+  const c: Case = { name: 'uwagi', header, rows, quantity: { kind: 'count' }, edit: { 'Calanus finmarchicus': taxon, 'Oithona similis': taxon } };
+  const original = (): ParsedFile => textFile('uwagi.csv', csvText(header, rows, false));
+  const codesOf = (file: ParsedFile) => proposeSampleCodes(file, file.sheets[0], proposeConvertMapping(file.sheets[0], { decimalComma: false, date1904: false }))!;
+
+  it('convert(original + codes in memory) deep-equals convert(re-uploaded): events, occurrences with their occurrenceRemarks, measurements, findings', () => {
+    const { a, b, csv } = roundTrip(original(), c);
+    same(a, b);
+    // the cells of the sheet are written guarded, and the guard is what is taken off
+    for (const guarded of ["'@notatka", "'=SUM(A1:A2)", "'-ok", "'＝full", "' =lead"]) expect(csv, guarded).toContain(guarded);
+    // the remarks really carry the text, and the negatives keep their figures
+    const remarks = a.occurrences.map((o) => o.occurrenceRemarks).filter((r): r is string => r !== undefined);
+    expect(remarks).toEqual(expect.arrayContaining(['@notatka', '=SUM(A1:A2)', '-ok', '+', '＝full']));
+    expect(b.occurrences.map((o) => o.occurrenceRemarks)).toEqual(a.occurrences.map((o) => o.occurrenceRemarks));
+    expect(a.findings.some((f) => f.ruleId === 'CONV-NEGATIVE-QUANTITY')).toBe(true);
+    expect(csv).toContain('-54.60');
+    expect(csv).toContain('-5.30');
+    expect(csv).not.toContain("'-54.60");
+    expect(csv).not.toContain("'-10");
+    // a bare + stays a bare +
+    expect(csv).toContain(',+,');
+    expect(csv).not.toContain("'+,");
+  });
+
+  it('every cell and every header of the sheet comes back as it was, the Uwagi column included (not only what the converter reads)', () => {
+    const file = original();
+    const p = codesOf(file);
+    const back = readConvertFile(textFile('back.csv', p.csv)).sheets[0];
+    const before = withCodes(file, p.codes, p.header).sheets[0];
+    expect(back.header).toEqual(before.header);
+    expect(back.rows.map((r) => r.cells)).toEqual(before.rows.map((r) => r.cells));
+  });
+
+  it("without the converter's reading path the apostrophe stays (the bug this fixes), and the checker's reader is not changed", () => {
+    const file = original();
+    const p = codesOf(file);
+    const plain = textFile('plain.csv', p.csv).sheets[0];
+    expect(plain.rows[0].cells[6]).toBe("'@notatka");
+    expect(plain.rows[1].cells[6]).toBe("'=SUM(A1:A2)");
+    expect(readConvertFile(textFile('plain.csv', p.csv)).sheets[0].rows[0].cells[6]).toBe('@notatka');
+  });
+
+  it('a text that already starts with an apostrophe and a formula character survives (the reversible guard adds one more)', () => {
+    const file = textFile('apos.csv', "Station,Uwagi\nS,'=x\nT,''@y\n");
+    const p = proposeSampleCodes(file, file.sheets[0], { sheet: 'apos.csv', columns: [{ index: 0, header: 'Station', role: { kind: 'station' } }] })!;
+    expect(p.csv).toContain("S,''=x");
+    const back = readConvertFile(textFile('apos2.csv', p.csv)).sheets[0];
+    expect(back.rows.map((r) => r.cells[1])).toEqual(["'=x", "''@y"]);
   });
 });
 

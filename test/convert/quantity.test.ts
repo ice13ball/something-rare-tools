@@ -153,13 +153,13 @@ describe('only the NERC concepts the spike verified are written', () => {
   it('every code in vocab.ts appears in the spike section of docs/research/qc-sources.md, with the URI form BioCheck joins on', () => {
     for (const t of [...Object.values(P01), ...Object.values(P06)]) {
       expect(spike, t.code).toContain(t.code);
-      expect(t.uri).toMatch(/^http:\/\/vocab\.nerc\.ac\.uk\/collection\/P0[16]\/current\/[A-Z0-9]+\/$/);
+      expect(t.uri).toMatch(/^http:\/\/vocab\.nerc\.ac\.uk\/collection\/(P0[16]|L22|L05)\/current\/[A-Z0-9]+\/$/);
     }
   });
 
-  it('the list is exactly the one of the task: OCOUNT01, SDBIOL01-05 and 07-09, VOLWBSMP, AREABEDS and eight P06 units', () => {
+  it('the list is exactly the verified one: the quantity and effort concepts, NMSPINST and MSHSIZE1, nine P06 units (UMIC added for the mesh size), six L22 devices and four L05 device categories', () => {
     expect([...VERIFIED_CODES]).toEqual(
-      ['P01/AREABEDS', 'P01/OCOUNT01', 'P01/SDBIOL01', 'P01/SDBIOL02', 'P01/SDBIOL03', 'P01/SDBIOL04', 'P01/SDBIOL05', 'P01/SDBIOL07', 'P01/SDBIOL08', 'P01/SDBIOL09', 'P01/VOLWBSMP', 'P06/MCUB', 'P06/UGMC', 'P06/UGMS', 'P06/UMMC', 'P06/UMMS', 'P06/UMSQ', 'P06/UPMM', 'P06/UPMS'].sort(),
+      ['P01/AREABEDS', 'P01/OCOUNT01', 'P01/SDBIOL01', 'P01/SDBIOL02', 'P01/SDBIOL03', 'P01/SDBIOL04', 'P01/SDBIOL05', 'P01/SDBIOL07', 'P01/SDBIOL08', 'P01/SDBIOL09', 'P01/VOLWBSMP', 'P01/NMSPINST', 'P01/MSHSIZE1', 'P06/MCUB', 'P06/UGMC', 'P06/UGMS', 'P06/UMMC', 'P06/UMMS', 'P06/UMSQ', 'P06/UPMM', 'P06/UPMS', 'P06/UMIC', 'L22/NETT0176', 'L22/TOOL0979', 'L22/NETT0168', 'L22/NETT0187', 'L22/TOOL0653', 'L22/TOOL1177', 'L05/22', 'L05/24', 'L05/50', 'L05/51'].sort(),
     );
   });
 

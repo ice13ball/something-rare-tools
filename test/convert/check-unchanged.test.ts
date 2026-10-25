@@ -15,7 +15,7 @@ import { ROLE_KINDS } from '../../src/app/mappingModel';
 import { join } from 'node:path';
 import { fixtureFile, rawSheet } from '../helpers/files';
 
-const CONVERTER_KINDS = ['taxon', 'quantity', 'quantityType', 'effort', 'occurrenceId', 'lifeStage', 'qualifier'];
+const CONVERTER_KINDS = ['taxon', 'quantity', 'quantityType', 'effort', 'occurrenceId', 'lifeStage', 'qualifier', 'taxonId'];
 const FIXTURE_DIR = join(__dirname, '..', 'fixtures');
 const dataFixtures = readdirSync(FIXTURE_DIR).filter((f) => /\.(csv|tab|txt)$/.test(f)).sort();
 
@@ -71,6 +71,7 @@ describe('the new role kinds are inert in /check', () => {
     { kind: 'occurrenceId' },
     { kind: 'lifeStage' },
     { kind: 'qualifier' },
+    { kind: 'taxonId', aphia: true },
     { kind: 'depth', positive: 'down', bound: 'max' },
   ];
 

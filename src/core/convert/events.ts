@@ -23,6 +23,9 @@ import type { EventRec, SourceRef, TreeSummary } from './model';
  * flattening (a flattened station still prefixes a sample's ID when the toggle is on), so a flattened and an unflattened archive agree on IDs.
  */
 
+/** The decimals of a position worked out from the children (the midpoint of their box); the writer drops trailing zeros. */
+export const DERIVED_DECIMALS = 6;
+
 /** One sample as the sheet gave it. */
 export interface SampleSite {
   /** The final eventID. */
@@ -36,6 +39,11 @@ export interface SampleSite {
   lon?: number;
   latDecimals?: number;
   lonDecimals?: number;
+  /** The source text of a position or depth that came from one plain number cell (only a decimal comma turned into a point): written as it is. */
+  latText?: string;
+  lonText?: string;
+  depthMinText?: string;
+  depthMaxText?: string;
   depthMin?: number;
   depthMax?: number;
   depthDecimals?: number;
@@ -210,8 +218,8 @@ function derive(node: Node): void {
   if (centre) {
     rec.lat = centre.lat;
     rec.lon = centre.lon;
-    rec.latDecimals = 6;
-    rec.lonDecimals = 6;
+    rec.latDecimals = DERIVED_DECIMALS;
+    rec.lonDecimals = DERIVED_DECIMALS;
     if (centre.uncertainty !== undefined) rec.coordinateUncertaintyInMeters = centre.uncertainty;
     rec.derived.position = true;
   }
@@ -274,7 +282,11 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
       rec.lon = s.lon;
       if (s.latDecimals !== undefined) rec.latDecimals = s.latDecimals;
       if (s.lonDecimals !== undefined) rec.lonDecimals = s.lonDecimals;
+      if (s.latText !== undefined) rec.latText = s.latText;
+      if (s.lonText !== undefined) rec.lonText = s.lonText;
     }
+    if (s.depthMinText !== undefined) rec.depthMinText = s.depthMinText;
+    if (s.depthMaxText !== undefined) rec.depthMaxText = s.depthMaxText;
     if (s.depthMin !== undefined) rec.depthMin = s.depthMin;
     if (s.depthMax !== undefined) rec.depthMax = s.depthMax;
     if (s.depthDecimals !== undefined) rec.depthDecimals = s.depthDecimals;
