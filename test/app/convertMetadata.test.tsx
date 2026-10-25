@@ -205,6 +205,78 @@ describe('files that disagree: a choice, never a silent pick', () => {
   });
 });
 
+describe('contacts of several files: none is left out', () => {
+  const TWO: F = { name: 'two.iso.xml', text: isoXml({ contacts: [{ name: 'Anna Example', email: 'anna@example.org' }, { name: 'Boris Sample', email: 'boris@example.org' }] }) };
+  const ONE: F = { name: 'one.datacite.xml', text: dataciteXml({ contacts: ['Single, Sam'] }) };
+
+  it('an ISO file with two contacts plus a DataCite file with one: the list AND the single contact (with its file) are shown, nothing is prefilled', async () => {
+    await load([DATA, TWO, ONE]);
+    expect(input(T['convert.meta.f.contactName']).value).toBe('');
+    const list = screen.getByRole('group', { name: T['convert.meta.src.list.label'] });
+    expect(list.textContent).toContain('two.iso.xml lists 2 contacts');
+    const single = screen.getAllByRole('group', { name: T['convert.meta.src.choose.label'] }).find((g) => g.textContent?.includes('Single, Sam')) as HTMLElement;
+    expect(single.textContent).toContain('one.datacite.xml, contributors (ContactPerson)');
+    expect(single.textContent).toContain(T['convert.meta.src.contacts']);
+    expect(single.textContent).not.toContain('give different values');
+    fireEvent.click(within(single).getByRole('button', { name: /^Use "Single, Sam" from one.datacite.xml/ }));
+    expect(input(T['convert.meta.f.contactName']).value).toBe('Single, Sam');
+  });
+
+  it('two files that each name a different single contact: both are offered with their files, nothing is filled in', async () => {
+    await load([DATA, ONE, { name: 'other.zenodo.json', text: zenodoJson({ contacts: ['Other, Olga'] }) }]);
+    expect(input(T['convert.meta.f.contactName']).value).toBe('');
+    const box = screen.getAllByRole('group', { name: T['convert.meta.src.choose.label'] }).find((g) => g.textContent?.includes('Other, Olga')) as HTMLElement;
+    expect(box.textContent).toContain('Single, Sam');
+    expect(box.textContent).toContain('other.zenodo.json, metadata.contributors (ContactPerson)');
+    expect(box.textContent).toContain(T['convert.meta.src.choose']);
+  });
+});
+
+describe('wording of the notes', () => {
+  it('"Your file X says" is plural when several files agree, in four languages', async () => {
+    const zen: F = { name: 'b.zenodo.json', text: zenodoJson({ licence: 'CC-BY-4.0', doi: '10.0000/synthetic.convert.2' }) };
+    await load([DATA, BAY, zen]);
+    typeInto(T['convert.meta.f.abstract'], 'My abstract');
+    const box = within(field(T['convert.meta.f.abstract'])).getByRole('group', { name: T['convert.meta.src.choose.label'] });
+    expect(box.textContent).toContain('Your files bay.datacite.xml, descriptions; b.zenodo.json, metadata.description say:');
+    expect(translate('pl', 'convert.meta.src.differs', { sources: 'a, b', n: 1 })).toBe('Twój plik a, b podaje:');
+    expect(translate('pl', 'convert.meta.src.differs', { sources: 'a, b', n: 2 })).toBe('Twoje pliki a, b podają:');
+    expect(translate('de', 'convert.meta.src.differs', { sources: 'a', n: 2 })).toBe('Ihre Dateien a nennen:');
+    expect(translate('fr', 'convert.meta.src.differs', { sources: 'a', n: 2 })).toBe('Vos fichiers a indiquent :');
+    expect(translate('fr', 'convert.meta.src.differs', { sources: 'a', n: 1 })).toBe('Votre fichier a indique :');
+  });
+
+  it('the neutral extra statement has a subject: "The file X also says (not a licence): ..."', async () => {
+    const xml = dataciteXml({ licence: 'CC-BY-4.0', extraRights: [{ text: 'Open Access', uri: 'info:eu-repo/semantics/openAccess' }] });
+    await load([DATA, { name: 'oa.datacite.xml', text: xml }]);
+    const note = field(T['convert.meta.f.licence']).querySelector('.convert-licence-note') as HTMLElement;
+    expect(note.textContent).toContain('The file oa.datacite.xml also says (not a licence): rightsList[1]: Open Access.');
+    expect(translate('de', 'convert.licence.also', { file: 'a.xml', items: 'x' })).toBe('Die Datei a.xml nennt außerdem (keine Lizenz): x.');
+  });
+
+  it('dual licensing (CC0 and CC BY) says the files give two licences and the rights holder picks one, not that neither qualifies', async () => {
+    const dual = dataciteXml({ licence: 'CC-BY-4.0' }).replace('</rightsList>', '<rights rightsURI="https://creativecommons.org/publicdomain/zero/1.0/legalcode" rightsIdentifier="CC0-1.0" rightsIdentifierScheme="SPDX">CC0 1.0 Universal</rights></rightsList>');
+    await load([DATA, { name: 'dual.datacite.xml', text: dual }]);
+    expect((screen.getByLabelText(T['convert.meta.f.licence']) as HTMLSelectElement).value).toBe('');
+    const note = field(T['convert.meta.f.licence']).querySelector('.convert-licence-note') as HTMLElement;
+    expect(note.textContent).toContain('Your metadata gives several licences: "CC-BY-4.0, CC0-1.0"');
+    expect(note.textContent).toContain('the rights holder decides which one applies');
+    expect(note.textContent).not.toContain('Your metadata says');
+    // choosing one of the two raises no warning
+    pick(T['convert.meta.f.licence'], 'CC0-1.0');
+    expect(document.querySelector('[data-rule-group="CONV-LICENCE-DIFFERS"]')).toBeNull();
+  });
+});
+
+describe('organisations marked by the file', () => {
+  it('a DataCite creator with nameType Organizational is written as an organisation although its words say nothing; the form says so', async () => {
+    await load([DATA, { name: 'org.datacite.xml', text: dataciteXml({ orgCreators: ['Plankton Group'] }) }]);
+    const writes = field(T['convert.meta.f.creators']).querySelector('.convert-writes') as HTMLElement;
+    expect(writes.textContent).toContain('Plankton Group: organisation');
+    expect(writes.textContent).toContain('Example, Anna: person, given name Anna, family name Example');
+  });
+});
+
 describe('a value of a file that differs from what the field holds stays visible, and is never applied by itself', () => {
   it('typing over a prefilled title shows "Your file X says: ..." with "Use this"; using it restores the file value', async () => {
     await load([DATA, BAY]);
@@ -308,20 +380,54 @@ describe('CONV-LICENCE-DIFFERS: a licence other than the one of the source needs
     await waitFor(() => expect(downloadFile).toHaveBeenCalledTimes(1));
   });
 
-  it('the worker refuses the export without the acknowledgement, from the request alone', async () => {
+  /** An export request to a fresh worker session that parsed `files` itself: the licence source comes from that parse, never from the request. */
+  async function workerExport(files: F[], licence: 'CC0-1.0' | 'CC-BY-4.0' | 'CC-BY-NC-4.0', accepted: string[]): Promise<unknown> {
     const h = createConvertHandler();
-    const parsed = (await Promise.resolve(h.handle({ type: 'parse', files: [DATA, BAY].map((f) => ({ name: f.name, bytes: new TextEncoder().encode(f.text), source: 'dropped' as const })) }))) as import('../../src/worker/convert.protocol').ConvertParseResult;
+    const parsed = (await Promise.resolve(h.handle({ type: 'parse', files: files.map((f) => ({ name: f.name, bytes: new TextEncoder().encode(f.text), source: 'dropped' as const })) }))) as import('../../src/worker/convert.protocol').ConvertParseResult;
     const f = parsed.files[0];
     const body = {
       sheets: [{ fileId: f.fileId, sheet: f.sheets[0].name, mapping: f.mappings[0], shape: 'wide' as const, quantity: { kind: 'count' as const, effort: { source: 'column' as const } } }],
       options: { fullList: true },
       approvedSplits: { 'Pseudocalanus sp.': { verbatimIdentification: 'Pseudocalanus sp.', scientificName: 'Pseudocalanus', identificationQualifier: 'sp.' } },
     };
-    const meta = { ...EMPTY_METADATA, ...(parsed.prefill as object), contactEmail: 'anna@example.org', institutionCode: 'INVENTED', basisOfRecord: 'HumanObservation' as const, licence: 'CC0-1.0' as const };
-    const run = (accepted: string[], sourceLicences: string[]) => Promise.resolve(h.handle({ type: 'export', export: { body, metadata: meta, accepted, sourceLicences, generated: '2026-10-25T12:00:00Z' } }));
-    await expect(run(['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'], ['CC-BY-4.0'])).rejects.toThrow(/CONV-LICENCE-DIFFERS not accepted/);
-    await expect(run(['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING', 'CONV-LICENCE-DIFFERS'], ['CC-BY-4.0'])).resolves.toBeTruthy();
-    await expect(run(['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'], [])).resolves.toBeTruthy();
+    const meta = { ...EMPTY_METADATA, ...(parsed.prefill as object), title: 'T', abstract: 'A', creators: 'Anna Example', contactName: 'Anna Example', contactEmail: 'anna@example.org', institutionCode: 'INVENTED', basisOfRecord: 'HumanObservation' as const, licence };
+    // a forged "nothing differs" from the page is ignored: the field does not exist any more
+    return Promise.resolve(h.handle({ type: 'export', export: { body, metadata: meta, accepted, sourceLicences: [], generated: '2026-10-25T12:00:00Z' } as never }));
+  }
+  const BASE_ACCEPT = ['CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING'];
+
+  it('the worker refuses the export without the acknowledgement, from its own parse of the dropped files', async () => {
+    await expect(workerExport([DATA, BAY], 'CC0-1.0', BASE_ACCEPT)).rejects.toThrow(/CONV-LICENCE-DIFFERS not accepted/);
+    await expect(workerExport([DATA, BAY], 'CC0-1.0', [...BASE_ACCEPT, 'CONV-LICENCE-DIFFERS'])).resolves.toBeTruthy();
+    await expect(workerExport([DATA, BAY], 'CC-BY-4.0', BASE_ACCEPT)).resolves.toBeTruthy();
+    await expect(workerExport([DATA], 'CC0-1.0', BASE_ACCEPT)).resolves.toBeTruthy();
+  });
+
+  it('contradicting files: a third licence is questioned, and so is either of the two (the files disagree, so a choice departs from one of them)', async () => {
+    const files = [DATA, { name: 'dc.xml', text: CONTRADICTING.datacite }, { name: 'zen.json', text: CONTRADICTING.zenodo }];
+    for (const chosen of ['CC-BY-NC-4.0', 'CC-BY-4.0', 'CC0-1.0'] as const) {
+      await expect(workerExport(files, chosen, BASE_ACCEPT), chosen).rejects.toThrow(/CONV-LICENCE-DIFFERS not accepted/);
+      await expect(workerExport(files, chosen, [...BASE_ACCEPT, 'CONV-LICENCE-DIFFERS']), chosen).resolves.toBeTruthy();
+    }
+  });
+
+  it('the page shows the warning for contradicting files too, naming every licence the files give', async () => {
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    await read(view, [DATA, { name: 'dc.xml', text: CONTRADICTING.datacite }, { name: 'zen.json', text: CONTRADICTING.zenodo }]);
+    fireEvent.click(screen.getByRole('button', { name: /Confirm all shown/ }));
+    pick(T['convert.meta.f.licence'], 'CC-BY-NC-4.0');
+    await waitFor(() => expect(group()).toBeTruthy());
+    expect((group() as HTMLElement).textContent).toContain('(CC-BY-NC-4.0) differs from the one your metadata states (CC-BY-4.0, CC0-1.0)');
+    pick(T['convert.meta.f.licence'], 'CC0-1.0');
+    await waitFor(() => expect((group() as HTMLElement).textContent).toContain('(CC0-1.0) differs'));
+  });
+
+  it('an ISO restriction code next to CC BY: choosing CC0 is questioned, choosing CC BY is not', async () => {
+    const iso = { name: 'r.iso.xml', text: isoXml({ constraints: [{ kind: 'otherConstraints', text: 'CC-BY-4.0' }], restriction: 'copyright' }) };
+    const rec = (await import('../../src/core/parse')).parseFile(iso.name, new TextEncoder().encode(iso.text)).embeddedMetadata as import('../../src/core/types').MetadataRecord;
+    expect((await import('../../src/core/licence/analyse')).analyseLicences([rec]).contradictions.map((c) => c.kind)).toContain('restriction-code');
+    await expect(workerExport([DATA, iso], 'CC0-1.0', BASE_ACCEPT)).rejects.toThrow(/CONV-LICENCE-DIFFERS not accepted/);
+    await expect(workerExport([DATA, iso], 'CC-BY-4.0', BASE_ACCEPT)).resolves.toBeTruthy();
   });
 });
 
@@ -367,9 +473,10 @@ describe('archive description files dropped on /convert', () => {
 describe('the German label of the bulk approval', () => {
   it('"1 gezeigten Namen bestätigen", and the forms for 1, 2 and 5', () => {
     expect(translate('de', 'convert.splits.approveAll', { n: 1 })).toBe('1 gezeigten Namen bestätigen');
-    expect(translate('de', 'convert.splits.approveAll', { n: 2 })).toBe('2 gezeigten Namen bestätigen');
-    expect(translate('de', 'convert.splits.approveAll', { n: 5 })).toBe('5 gezeigten Namen bestätigen');
+    expect(translate('de', 'convert.splits.approveAll', { n: 2 })).toBe('2 gezeigte Namen bestätigen');
+    expect(translate('de', 'convert.splits.approveAll', { n: 5 })).toBe('5 gezeigte Namen bestätigen');
     expect(translate('de', 'convert.splits.approveAllSkip', { n: 1, skipped: 2 })).toBe('1 gezeigten Namen bestätigen (2 mit Zweifel übersprungen)');
+    expect(translate('de', 'convert.splits.approveAllSkip', { n: 5, skipped: 1 })).toBe('5 gezeigte Namen bestätigen (1 mit Zweifel übersprungen)');
   });
 });
 describe('the licence in each case: a plain note, an ⓘ, and no prefill unless taken', () => {

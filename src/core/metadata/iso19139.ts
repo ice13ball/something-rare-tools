@@ -89,16 +89,22 @@ const codeOf = (el: Element | undefined): string | undefined => (el ? (attr(el.f
 function attribution(cit: Element | undefined, rec: MetadataRecord): void {
   if (!cit) return;
   const creators: string[] = [];
+  const orgParties: string[] = [];
   for (const party of children(cit, NS.gmd, 'citedResponsibleParty')) {
     for (const p of children(party, NS.gmd, 'CI_ResponsibleParty')) {
       const role = codeOf(child(p, NS.gmd, 'role'));
-      const name = textAndUri(child(p, NS.gmd, 'individualName')).text ?? textAndUri(child(p, NS.gmd, 'organisationName')).text;
+      const individual = textAndUri(child(p, NS.gmd, 'individualName')).text;
+      const name = individual ?? textAndUri(child(p, NS.gmd, 'organisationName')).text;
       if (!name) continue;
-      if (role && AUTHOR_ROLES.includes(role)) creators.push(name);
+      if (role && AUTHOR_ROLES.includes(role)) {
+        creators.push(name);
+        if (individual === undefined) orgParties.push(name);
+      }
       else if (role === 'publisher' && !rec.publisher) rec.publisher = textAndUri(child(p, NS.gmd, 'organisationName')).text ?? name;
     }
   }
   if (creators.length > 0) rec.creators = creators;
+  if (orgParties.length > 0) rec.organisationParties = orgParties;
   for (const d of children(cit, NS.gmd, 'date')) {
     for (const ci of children(d, NS.gmd, 'CI_Date')) {
       if (codeOf(child(ci, NS.gmd, 'dateType')) !== 'publication') continue;
@@ -129,9 +135,10 @@ export function parseIso19139(xml: string | Document, label: string): MetadataRe
     const contacts: NonNullable<MetadataRecord['contacts']> = [];
     for (const poc of children(idEl, NS.gmd, 'pointOfContact')) {
       for (const p of children(poc, NS.gmd, 'CI_ResponsibleParty')) {
-        const name = textAndUri(child(p, NS.gmd, 'individualName')).text ?? textAndUri(child(p, NS.gmd, 'organisationName')).text;
+        const individual = textAndUri(child(p, NS.gmd, 'individualName')).text;
+        const name = individual ?? textAndUri(child(p, NS.gmd, 'organisationName')).text;
         const email = text(child(path(p, NS.gmd, 'contactInfo', 'CI_Contact', 'address', 'CI_Address', 'electronicMailAddress') ?? p, NS.gco, 'CharacterString'));
-        if (name || email) contacts.push({ ...(name ? { name } : {}), ...(email ? { email } : {}) });
+        if (name || email) contacts.push({ ...(name ? { name } : {}), ...(email ? { email } : {}), ...(name && individual === undefined ? { organisation: true as const } : {}) });
       }
     }
     if (contacts.length > 0) rec.contacts = contacts;

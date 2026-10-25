@@ -44,6 +44,8 @@ export interface DatasetMetadata {
   methods: string;
   /** Optional: the citation written into the EML (additionalMetadata/gbif/citation). Empty = built from the creators, the year and the title. */
   citation: string;
+  /** Not a form field: the creator and contact names, one per line, that a dropped metadata file marks as organisations (DataCite nameType Organizational, an ISO organisationName without an individualName, Zenodo organizational). A line of this list is an organisation whatever its words; the word heuristic serves the lines the user typed. */
+  organisations: string;
 }
 
 export const EMPTY_METADATA: DatasetMetadata = {
@@ -58,6 +60,7 @@ export const EMPTY_METADATA: DatasetMetadata = {
   basisOfRecord: '',
   methods: '',
   citation: '',
+  organisations: '',
 };
 
 export const isLicence = (v: unknown): v is LicenceId => typeof v === 'string' && (LICENCES as readonly string[]).includes(v);
@@ -170,7 +173,9 @@ export const isOrganisationName = (line: string): boolean => ORG_WORD.test(line)
 /** How a creator or contact line is written into the EML: an organisation (organizationName) or a person (givenName and surName). */
 export type Party = { kind: 'organisation'; name: string } | { kind: 'person'; givenName?: string; surName: string };
 
-export function partyOf(line: string): Party {
+export function partyOf(line: string, flagged: string = ''): Party {
   const t = line.trim().replace(/\s+/g, ' ');
-  return isOrganisationName(t) ? { kind: 'organisation', name: t } : { kind: 'person', ...splitPersonName(t) };
+  const key = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const fromFile = flagged.split(/\r?\n/).some((l) => l.trim() !== '' && key(l) === key(t));
+  return fromFile || isOrganisationName(t) ? { kind: 'organisation', name: t } : { kind: 'person', ...splitPersonName(t) };
 }

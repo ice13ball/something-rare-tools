@@ -1538,6 +1538,8 @@ code.multiline {
 .convert-meta-note,
 .convert-choice,
 .convert-licence-note,
+.convert-also,
+.convert-writes,
 .convert-coverage,
 .convert-metafile-list {
   min-width: 0;

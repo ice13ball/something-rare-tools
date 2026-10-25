@@ -28,6 +28,10 @@ export interface MetaOpts {
   box?: { west: number; east: number; south: number; north: number };
   /** Extra rights entries, as the text of a <rights> element (an access note such as "Open Access", with an optional rightsURI). */
   extraRights?: { text: string; uri?: string }[];
+  /** Creators the file marks as organisations (nameType Organizational), written after `creators`. */
+  orgCreators?: string[];
+  /** Contacts the file marks as organisations (a ContactPerson contributor with nameType Organizational). */
+  orgContacts?: string[];
 }
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -48,13 +52,13 @@ export function dataciteXml(o: MetaOpts = {}): string {
 <resource xmlns="http://datacite.org/schema/kernel-4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4/metadata.xsd">
   <identifier identifierType="DOI">${esc(m.doi)}</identifier>
   <creators>
-${m.creators.map((c) => `    <creator><creatorName nameType="Personal">${esc(c)}</creatorName></creator>`).join('\n')}
+${[...m.creators.map((c) => `    <creator><creatorName nameType="Personal">${esc(c)}</creatorName></creator>`), ...(o.orgCreators ?? []).map((c) => `    <creator><creatorName nameType="Organizational">${esc(c)}</creatorName></creator>`)].join('\n')}
   </creators>
   <titles><title xml:lang="en">${esc(m.title)}</title></titles>
   <publisher>${esc(m.publisher)}</publisher>
   <publicationYear>${m.year}</publicationYear>
   <resourceType resourceTypeGeneral="Dataset">Dataset</resourceType>
-${o.contacts ? `  <contributors>\n${o.contacts.map((c) => `    <contributor contributorType="ContactPerson"><contributorName>${esc(c)}</contributorName></contributor>`).join('\n')}\n  </contributors>\n` : ''}${lic || o.extraRights ? `  <rightsList>\n${lic ? `    <rights xml:lang="en" rightsURI="${lic.uri}" rightsIdentifier="${o.licence}" rightsIdentifierScheme="SPDX" schemeURI="https://spdx.org/licenses/">${lic.text}</rights>\n` : ''}${(o.extraRights ?? []).map((r) => `    <rights${r.uri ? ` rightsURI="${esc(r.uri)}"` : ''}>${esc(r.text)}</rights>\n`).join('')}  </rightsList>\n` : ''}  <descriptions><description xml:lang="en" descriptionType="Abstract">${esc(m.abstract)}</description></descriptions>
+${o.contacts || o.orgContacts ? `  <contributors>\n${[...(o.contacts ?? []).map((c) => `    <contributor contributorType="ContactPerson"><contributorName>${esc(c)}</contributorName></contributor>`), ...(o.orgContacts ?? []).map((c) => `    <contributor contributorType="ContactPerson"><contributorName nameType="Organizational">${esc(c)}</contributorName></contributor>`)].join('\n')}\n  </contributors>\n` : ''}${lic || o.extraRights ? `  <rightsList>\n${lic ? `    <rights xml:lang="en" rightsURI="${lic.uri}" rightsIdentifier="${o.licence}" rightsIdentifierScheme="SPDX" schemeURI="https://spdx.org/licenses/">${lic.text}</rights>\n` : ''}${(o.extraRights ?? []).map((r) => `    <rights${r.uri ? ` rightsURI="${esc(r.uri)}"` : ''}>${esc(r.text)}</rights>\n`).join('')}  </rightsList>\n` : ''}  <descriptions><description xml:lang="en" descriptionType="Abstract">${esc(m.abstract)}</description></descriptions>
 ${o.collected ? `  <dates><date dateType="Collected">${o.collected}</date></dates>\n` : ''}${o.box ? `  <geoLocations><geoLocation><geoLocationBox><westBoundLongitude>${o.box.west}</westBoundLongitude><eastBoundLongitude>${o.box.east}</eastBoundLongitude><southBoundLatitude>${o.box.south}</southBoundLatitude><northBoundLatitude>${o.box.north}</northBoundLatitude></geoLocationBox></geoLocation></geoLocations>\n` : ''}</resource>
 `;
 }
@@ -117,7 +121,11 @@ export interface IsoOpts {
   /** Further constraints, each as <useLimitation> or <otherConstraints> with its text. */
   constraints?: { kind: 'useLimitation' | 'otherConstraints'; text: string }[];
   /** Several points of contact (instead of contactName / email). */
-  contacts?: { name?: string; email?: string }[];
+  contacts?: { name?: string; email?: string; org?: boolean }[];
+  /** An author named only by organisation (organisationName, no individualName). */
+  authorOrg?: string;
+  /** A restriction code in an accessConstraints element (for example "copyright"). */
+  restriction?: string;
 }
 
 export function isoXml(o: IsoOpts = {}): string {
@@ -129,10 +137,10 @@ export function isoXml(o: IsoOpts = {}): string {
       <gmd:citation>
         <gmd:CI_Citation>
           <gmd:title><gco:CharacterString>${esc(title)}</gco:CharacterString></gmd:title>
-${o.author ? `          <gmd:citedResponsibleParty><gmd:CI_ResponsibleParty><gmd:individualName><gco:CharacterString>${esc(o.author)}</gco:CharacterString></gmd:individualName><gmd:role><gmd:CI_RoleCode codeList="x" codeListValue="author"/></gmd:role></gmd:CI_ResponsibleParty></gmd:citedResponsibleParty>\n` : ''}        </gmd:CI_Citation>
+${o.author ? `          <gmd:citedResponsibleParty><gmd:CI_ResponsibleParty><gmd:individualName><gco:CharacterString>${esc(o.author)}</gco:CharacterString></gmd:individualName><gmd:role><gmd:CI_RoleCode codeList="x" codeListValue="author"/></gmd:role></gmd:CI_ResponsibleParty></gmd:citedResponsibleParty>\n` : ''}${o.authorOrg ? `          <gmd:citedResponsibleParty><gmd:CI_ResponsibleParty><gmd:organisationName><gco:CharacterString>${esc(o.authorOrg)}</gco:CharacterString></gmd:organisationName><gmd:role><gmd:CI_RoleCode codeList="x" codeListValue="author"/></gmd:role></gmd:CI_ResponsibleParty></gmd:citedResponsibleParty>\n` : ''}        </gmd:CI_Citation>
       </gmd:citation>
       <gmd:abstract><gco:CharacterString>${esc(o.abstract ?? 'Invented abstract of an ISO record.')}</gco:CharacterString></gmd:abstract>
-${(o.contacts ?? (o.contactName || o.email ? [{ name: o.contactName, email: o.email }] : [])).map((c) => `      <gmd:pointOfContact><gmd:CI_ResponsibleParty>${c.name ? `<gmd:individualName><gco:CharacterString>${esc(c.name)}</gco:CharacterString></gmd:individualName>` : ''}${c.email ? `<gmd:contactInfo><gmd:CI_Contact><gmd:address><gmd:CI_Address><gmd:electronicMailAddress><gco:CharacterString>${esc(c.email)}</gco:CharacterString></gmd:electronicMailAddress></gmd:CI_Address></gmd:address></gmd:CI_Contact></gmd:contactInfo>` : ''}<gmd:role><gmd:CI_RoleCode codeList="x" codeListValue="pointOfContact"/></gmd:role></gmd:CI_ResponsibleParty></gmd:pointOfContact>\n`).join('')}${o.freeText ? `      <gmd:resourceConstraints><gmd:MD_Constraints><gmd:useLimitation><gco:CharacterString>${esc(o.freeText)}</gco:CharacterString></gmd:useLimitation></gmd:MD_Constraints></gmd:resourceConstraints>\n` : ''}${(o.constraints ?? []).map((c) => `      <gmd:resourceConstraints><gmd:MD_Constraints><gmd:${c.kind}><gco:CharacterString>${esc(c.text)}</gco:CharacterString></gmd:${c.kind}></gmd:MD_Constraints></gmd:resourceConstraints>\n`).join('')}    </gmd:MD_DataIdentification>
+${(o.contacts ?? (o.contactName || o.email ? [{ name: o.contactName, email: o.email }] : [])).map((c) => `      <gmd:pointOfContact><gmd:CI_ResponsibleParty>${c.name ? (c.org ? `<gmd:organisationName><gco:CharacterString>${esc(c.name)}</gco:CharacterString></gmd:organisationName>` : `<gmd:individualName><gco:CharacterString>${esc(c.name)}</gco:CharacterString></gmd:individualName>`) : ''}${c.email ? `<gmd:contactInfo><gmd:CI_Contact><gmd:address><gmd:CI_Address><gmd:electronicMailAddress><gco:CharacterString>${esc(c.email)}</gco:CharacterString></gmd:electronicMailAddress></gmd:CI_Address></gmd:address></gmd:CI_Contact></gmd:contactInfo>` : ''}<gmd:role><gmd:CI_RoleCode codeList="x" codeListValue="pointOfContact"/></gmd:role></gmd:CI_ResponsibleParty></gmd:pointOfContact>\n`).join('')}${o.freeText ? `      <gmd:resourceConstraints><gmd:MD_Constraints><gmd:useLimitation><gco:CharacterString>${esc(o.freeText)}</gco:CharacterString></gmd:useLimitation></gmd:MD_Constraints></gmd:resourceConstraints>\n` : ''}${o.restriction ? `      <gmd:resourceConstraints><gmd:MD_LegalConstraints><gmd:accessConstraints><gmd:MD_RestrictionCode codeList="x" codeListValue="${esc(o.restriction)}"/></gmd:accessConstraints></gmd:MD_LegalConstraints></gmd:resourceConstraints>\n` : ''}${(o.constraints ?? []).map((c) => `      <gmd:resourceConstraints><gmd:MD_Constraints><gmd:${c.kind}><gco:CharacterString>${esc(c.text)}</gco:CharacterString></gmd:${c.kind}></gmd:MD_Constraints></gmd:resourceConstraints>\n`).join('')}    </gmd:MD_DataIdentification>
   </gmd:identificationInfo>
 </gmd:MD_Metadata>
 `;

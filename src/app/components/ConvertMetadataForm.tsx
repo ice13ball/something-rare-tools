@@ -56,10 +56,10 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
    * A list of values of the files to pick from. mode 'choose': values of DIFFERENT files that disagree (none is filled in). mode 'differs': one file's value
    * that differs from what the field holds now (typed or chosen): it stays visible and never replaces the value by itself.
    */
-  const box = (key: PrefillKey, cands: Candidate[], isCurrent: (c: Candidate) => boolean, apply: (c: Candidate) => Partial<DatasetMetadata>, mode: 'choose' | 'differs'): React.ReactNode => (
+  const box = (key: PrefillKey, cands: Candidate[], isCurrent: (c: Candidate) => boolean, apply: (c: Candidate) => Partial<DatasetMetadata>, mode: 'choose' | 'differs' | 'contacts'): React.ReactNode => (
     <div className="convert-choice" role="group" aria-label={t('convert.meta.src.choose.label')} data-mode={mode}>
       <p>
-        {mode === 'choose' ? t('convert.meta.src.choose') : t('convert.meta.src.differs', { sources: sourcesText(cands[0].sources) })} <InfoTip id="convertMetaChoice" />
+        {mode === 'choose' ? t('convert.meta.src.choose') : mode === 'contacts' ? t('convert.meta.src.contacts') : t('convert.meta.src.differs', { sources: sourcesText(cands[0].sources), n: new Set(cands[0].sources.map((x) => x.file)).size })} <InfoTip id="convertMetaChoice" />
       </p>
       <ul>
         {cands.map((c, i) => {
@@ -67,7 +67,7 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
           return (
             <li key={i}>
               <span className="convert-choice-value">{key === 'contact' ? shown : shorten(c.value)}</span>
-              {mode === 'choose' && <span className="muted"> ({sourcesText(c.sources)}) </span>}{' '}
+              {mode !== 'differs' && <span className="muted"> ({sourcesText(c.sources)}) </span>}{' '}
               {isCurrent(c) ? (
                 <span className="muted">{t('convert.meta.src.used')}</span>
               ) : (
@@ -100,7 +100,8 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
     const holds = value.contactName.trim() !== '' || value.contactEmail.trim() !== '';
     return (
       <>
-        {prefill.contactSingles.length >= 2 && box('contact', prefill.contactSingles, isCurrent, apply, 'choose')}
+        {prefill.contactLists.length === 0 && prefill.contactSingles.length >= 2 && box('contact', prefill.contactSingles, isCurrent, apply, 'choose')}
+        {prefill.contactLists.length > 0 && prefill.contactSingles.length >= 1 && box('contact', prefill.contactSingles, isCurrent, apply, 'contacts')}
         {all.length === 1 && holds && !isCurrent(all[0]) && box('contact', all, isCurrent, apply, 'differs')}
         {prefill.contactLists.map((l) => (
           <ContactList key={l.file} list={l} isCurrent={(c) => isCurrent(c)} onUse={(c) => set(apply(c))} />
@@ -143,7 +144,7 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
         <textarea id={`${id}-creators`} rows={3} value={value.creators} spellCheck={false} onChange={(e) => set({ creators: e.target.value })} />
         {note('creators', value.creators, (c) => c.value)}
         {choice('creators', value.creators, (c) => ({ creators: c.value }))}
-        <Writes lines={creatorLines(value)} />
+        <Writes lines={creatorLines(value)} organisations={value.organisations} />
       </div>
       <div className="field">
         <FieldLabel htmlFor={`${id}-contactName`} tip="convertMetaContact">
@@ -151,7 +152,7 @@ export function ConvertMetadataForm({ value, onChange, prefill = null }: Convert
         </FieldLabel>
         <input {...text('contactName')} />
         {note('contact', value.contactName, (c) => c.value)}
-        <Writes lines={value.contactName.trim() === '' ? [] : [value.contactName]} />
+        <Writes lines={value.contactName.trim() === '' ? [] : [value.contactName]} organisations={value.organisations} />
       </div>
       <div className="field">
         <label htmlFor={`${id}-contactEmail`}>{t('convert.meta.f.contactEmail')}</label>
@@ -268,7 +269,7 @@ function LicenceNote({ licence, current }: { licence: LicenceCase; current: stri
       const sources = [...new Set(licence.says.map((s) => `${s.file}, ${s.field}`))].join('; ');
       return (
         <p className="notice convert-licence-note" role="note">
-          {t('convert.licence.other', { said: licence.said, sources })} <InfoTip id="convertLicenceOther" />
+          {t(licence.ids.length > 1 ? 'convert.licence.otherSeveral' : 'convert.licence.other', { said: licence.said, sources })} <InfoTip id="convertLicenceOther" />
           <Also items={licence.also} />
         </p>
       );
@@ -300,11 +301,18 @@ function LicenceNote({ licence, current }: { licence: LicenceCase; current: stri
 function Also({ items }: { items: LicenceSaid[] }): React.ReactElement | null {
   useLang();
   if (items.length === 0) return null;
-  return <span className="convert-also"> {t('convert.licence.also', { items: items.map((i) => t('convert.licence.said', { file: i.file, field: i.field, says: i.says })).join('; ') })}</span>;
+  const files = [...new Set(items.map((i) => i.file))];
+  return (
+    <span className="convert-also">
+      {files.map((file) => (
+        <span key={file}> {t('convert.licence.also', { file, items: items.filter((i) => i.file === file).map((i) => t('convert.licence.alsoItem', { field: i.field, says: i.says })).join('; ') })}</span>
+      ))}
+    </span>
+  );
 }
 
 /** How each creator or contact line will be written: a person (given name and family name) or an organisation. */
-function Writes({ lines }: { lines: string[] }): React.ReactElement | null {
+function Writes({ lines, organisations }: { lines: string[]; organisations: string }): React.ReactElement | null {
   useLang();
   if (lines.length === 0) return null;
   return (
@@ -312,7 +320,7 @@ function Writes({ lines }: { lines: string[] }): React.ReactElement | null {
       <p>{t('convert.meta.writes.title')}</p>
       <ul>
         {lines.map((line, i) => {
-          const p = partyOf(line);
+          const p = partyOf(line, organisations);
           const text = p.kind === 'organisation' ? t('convert.meta.writes.org', { line }) : p.givenName === undefined ? t('convert.meta.writes.personSur', { line, surname: p.surName }) : t('convert.meta.writes.person', { line, given: p.givenName, surname: p.surName });
           return <li key={i}>{text}</li>;
         })}
