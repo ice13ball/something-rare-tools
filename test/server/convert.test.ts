@@ -19,6 +19,12 @@ const make = (over: Partial<Parameters<typeof createApp>[0]> = {}) => createApp(
 const BASELINE_CSP =
   "default-src 'self'; connect-src 'self' https://opendap.iopan.pl https://geo.iopan.pl https://geonetwork.iopan.pl https://zenodo.org https://doi.pangaea.de https://api.datacite.org https://repod.icm.edu.pl https://danebadawcze.uw.edu.pl https://api.gbif.org https://api.obis.org https://ipt.vliz.be https://www.marine.csiro.au https://hosted-datasets.gbif.org https://ipt-obis.gbif.us https://ipt.iobis.org https://ipt.env.duke.edu https://ipt.obis.org https://members.oceantrack.org https://ipt.inbo.be https://nzobisipt.niwa.co.nz https://ipt.biodiversity.aq https://ipt.sibbr.gov.br https://ipt.biodiversidad.co https://ipt.medobis.eu https://geo.abds.is https://data.aad.gov.au https://datasets.obis.org https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net https://basemaps.cartocdn.com https://tiles.basemaps.cartocdn.com https://tiles-a.basemaps.cartocdn.com https://tiles-b.basemaps.cartocdn.com https://tiles-c.basemaps.cartocdn.com https://tiles-d.basemaps.cartocdn.com; worker-src 'self' blob:; img-src 'self' data: blob: https://basemaps.cartocdn.com https://tiles.basemaps.cartocdn.com https://tiles-a.basemaps.cartocdn.com https://tiles-b.basemaps.cartocdn.com https://tiles-c.basemaps.cartocdn.com https://tiles-d.basemaps.cartocdn.com https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
 
+/**
+ * The policy of /convert alone: the baseline with connect-src cut to 'self' and the analytics hosts (GA after consent). No data host (the page takes
+ * no links, Q4) and no map host. Everything else is the baseline, word for word.
+ */
+const CONVERT_CSP = BASELINE_CSP.replace(/connect-src [^;]*;/, "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net;");
+
 describe('buildCsp', () => {
   it('a default call is byte-identical to the policy in production today', () => {
     expect(buildCsp()).toBe(BASELINE_CSP);
@@ -30,6 +36,12 @@ describe('buildCsp', () => {
     expect(extra).toBe(BASELINE_CSP.replace('https://tiles-d.basemaps.cartocdn.com; worker-src', 'https://tiles-d.basemaps.cartocdn.com https://www.marinespecies.org https://vocab.nerc.ac.uk; worker-src'));
     const directives = (c: string) => c.split('; ').map((d) => d.split(' ')[0]);
     expect(directives(extra)).toEqual(directives(BASELINE_CSP));
+  });
+
+  it('{ data: false } cuts connect-src to self, analytics and the extras, and changes nothing else', () => {
+    expect(buildCsp([], { data: false })).toBe(CONVERT_CSP);
+    expect(buildCsp([], { data: true })).toBe(BASELINE_CSP);
+    expect(buildCsp(['www.marinespecies.org'], { data: false })).toBe(CONVERT_CSP.replace('stats.g.doubleclick.net;', 'stats.g.doubleclick.net https://www.marinespecies.org;'));
   });
 
   it('the extra hosts never reach DATA_HOSTS (which also feeds the proxy)', () => {
@@ -72,9 +84,18 @@ describe('/convert is hidden', () => {
     expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
   });
 
-  it('gets today\'s policy while the extra list is empty', async () => {
-    const res = await request(make()).get('/convert');
-    expect(res.headers['content-security-policy']).toBe(BASELINE_CSP);
+  it('gets its own exact policy: self and analytics only, no data host and no map host', async () => {
+    for (const p of ['/convert', '/convert/']) {
+      const res = await request(make()).get(p);
+      expect(res.headers['content-security-policy'], p).toBe(CONVERT_CSP);
+    }
+    expect(CONVERT_CSP).toContain("connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://region1.analytics.google.com https://stats.g.doubleclick.net;");
+    const connect = /connect-src ([^;]*)/.exec(CONVERT_CSP)![1];
+    for (const h of DATA_HOSTS) expect(connect, h).not.toContain(h);
+    expect(connect).not.toContain('cartocdn');
+    // what GA needs today is what the global policy gives it: every analytics host of the baseline is still there
+    for (const h of ['www.googletagmanager.com', 'www.google-analytics.com', 'region1.google-analytics.com', 'analytics.google.com', 'region1.analytics.google.com', 'stats.g.doubleclick.net']) expect(connect).toContain(h);
+    expect(CONVERT_CSP).toContain("script-src 'self' https://www.googletagmanager.com");
   });
 
   it('the other security headers are the same as on every page', async () => {
@@ -103,7 +124,7 @@ describe('/convert is hidden', () => {
   });
 
   it('the extended policy applies to /convert only, when hosts are registered for it', async () => {
-    const extended = buildCsp(['www.marinespecies.org']);
+    const extended = buildCsp(['www.marinespecies.org'], { data: false });
     const app = createApp({ distDir: DIST, log: () => {}, pageConnect: { '/convert': ['www.marinespecies.org'] } });
     expect((await request(app).get('/convert')).headers['content-security-policy']).toBe(extended);
     expect((await request(app).get('/convert/')).headers['content-security-policy']).toBe(extended);

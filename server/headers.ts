@@ -15,12 +15,21 @@ export const HIDDEN_PATHS: readonly string[] = ['/convert'];
  */
 export const PAGE_CONNECT_HOSTS: Readonly<Record<string, readonly string[]>> = { '/convert': [] };
 
+/**
+ * Pages whose connect-src leaves out the data hosts and the map hosts: they take no links and show no map. The converter reads dropped files only
+ * (plan Q4), so it keeps 'self' and the analytics hosts the global policy allows after consent, plus what PAGE_CONNECT_HOSTS adds (the lookups of
+ * stages 4 and 5).
+ */
+export const PAGES_WITHOUT_DATA_HOSTS: readonly string[] = ['/convert'];
+
 const withoutSlash = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path);
 
 /** Headers set on EVERY response (pages, 404, /api, errors) before any route runs. */
 export function securityHeaders(opts: { noindex: boolean; pageConnect?: Readonly<Record<string, readonly string[]>> }): RequestHandler {
   const csp = buildCsp();
-  const pageCsp = new Map(Object.entries(opts.pageConnect ?? PAGE_CONNECT_HOSTS).map(([path, hosts]) => [path, buildCsp(hosts)]));
+  const connect = opts.pageConnect ?? PAGE_CONNECT_HOSTS;
+  const paths = [...new Set([...Object.keys(connect), ...PAGES_WITHOUT_DATA_HOSTS])];
+  const pageCsp = new Map(paths.map((path) => [path, buildCsp(connect[path] ?? [], { data: !PAGES_WITHOUT_DATA_HOSTS.includes(path) })]));
   return (req, res, next) => {
     // The slash variant of a page answers 301 to the page itself: it carries the page's own policy and robots header.
     const page = withoutSlash(req.path);

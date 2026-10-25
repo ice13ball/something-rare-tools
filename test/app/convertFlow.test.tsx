@@ -48,18 +48,18 @@ describe('W1: wide counts with a full species list', () => {
     pick(T['convert.effort.title'], 'column');
     // the split of "Pseudocalanus sp." is still undecided
     await screen.findByRole('heading', { name: T['convert.splits.title'] });
-    expect(summary().textContent).toContain('taxon names carry a qualifier');
+    expect(summary().textContent).toContain('taxon name carries a qualifier');
     expect(within(screen.getByRole('heading', { name: T['convert.splits.title'] }).closest('section') as HTMLElement).getByText('Pseudocalanus sp.', { selector: 'code' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Approve all shown \(1\)/ }));
     await settled(T['convert.summary.none']);
     // zeros are left out because the list was not declared full
-    expect(summary().textContent).toContain('cells with a zero were left out');
+    expect(summary().textContent).toContain('cell with a zero was left out');
 
     fireEvent.click(screen.getByLabelText(T['convert.fullList']));
     await settled('7 occurrences (6 present, 1 absent)');
     expect(summary().textContent).toContain('6 events');
     expect(summary().textContent).toContain('9 measurement rows');
-    expect(summary().textContent).not.toContain('cells with a zero were left out');
+    expect(summary().textContent).not.toContain('cell with a zero was left out');
     expect(summary().textContent).toContain(T['convert.summary.noExport']);
   });
 
@@ -68,14 +68,14 @@ describe('W1: wide counts with a full species list', () => {
     pick(T['convert.quantity.kind'], 'count');
     fireEvent.click(await screen.findByRole('button', { name: /Approve all shown/ }));
     const tree = (): HTMLElement => screen.getByRole('region', { name: T['convert.tree.title'] });
-    await waitFor(() => expect(tree().textContent).toContain('1 cruise events, 2 station events, 3 sample events.'));
+    await waitFor(() => expect(tree().textContent).toContain('1 cruise event, 2 station events, 3 sample events.'));
     expect(tree().textContent).toContain('2023-06-14/2023-06-16');
     expect(tree().textContent).toContain('worked out');
     expect(within(tree()).getAllByRole('listitem').length).toBeGreaterThan(3);
     // nothing is flattened until it is ticked
     expect((screen.getByLabelText(T['convert.flatten.station']) as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByLabelText(T['convert.flatten.station']));
-    await waitFor(() => expect(tree().textContent).toContain('1 cruise events, 0 station events, 3 sample events.'));
+    await waitFor(() => expect(tree().textContent).toContain('1 cruise event, 0 station events, 3 sample events.'));
     fireEvent.click(screen.getByLabelText(T['convert.flatten.cruise']));
     await waitFor(() => expect(tree().textContent).toContain('0 cruise events, 0 station events, 3 sample events.'));
     expect(tree().textContent).toContain('Cruise code for the dataset text: CR1');
@@ -98,7 +98,7 @@ describe('W2: wide density with stages and qualifiers', () => {
     await settled(T['convert.summary.blocked']);
     fireEvent.click(screen.getByRole('button', { name: /Approve all shown \(3\)/ }));
     await settled(T['convert.summary.none']);
-    expect(summary().textContent).toContain('cells with a zero were left out');
+    expect(summary().textContent).toContain('cell with a zero was left out');
     // a density has measurement rows for the occurrences and the sample size, never individualCount
     expect(summary().textContent).toContain('5 events, 7 occurrences (7 present, 0 absent) and 9 measurement rows');
   });
@@ -116,7 +116,7 @@ describe('L1 and L2: long sheets', () => {
     // no cruise column: the cruise field is offered, and empty means no cruise above the samples
     expect(screen.getByLabelText(T['convert.cruise.label'])).toBeTruthy();
     fireEvent.change(screen.getByLabelText(T['convert.cruise.label']), { target: { value: 'CR9' } });
-    await waitFor(() => expect(screen.getByRole('region', { name: T['convert.tree.title'] }).textContent).toContain('1 cruise events'));
+    await waitFor(() => expect(screen.getByRole('region', { name: T['convert.tree.title'] }).textContent).toContain('1 cruise event'));
   });
 
   it('L2: the life stage column is a role the user picks; occurrence IDs then come from the user code, and no cruise field when a column has it', async () => {
