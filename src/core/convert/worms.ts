@@ -17,13 +17,15 @@
  * use this identifier to pull the taxonomic information from the World Register of Marine Species (WoRMS) into OBIS and attach it to your dataset. This
  * information includes: ... The accepted name in case of invalid names or synonyms". So the valid_AphiaID is never written.
  *
- * Which scientificName is written (stage 5, part A1). An exact match, a synonym included, keeps scientificName as written: "scientificName should always contain the
- * originally recorded full scientific name, even if the name is currently a synonym" (Darwin Core page, same section). A result the USER CHOSE among non-exact ones
- * (near, phonetic, genus, several results) writes the chosen record's own `scientificname`, because the LSID has to "correspond to the name provided to the
- * scientificName field" (so "Calnaus finmarchicus" must not travel with the LSID of Calanus finmarchicus) and "Match Taxonomic Names" (manual.obis.org/name_matching.html,
- * read 2026-10-25) says of a name that is changed to the matched one: "verbatimIdentification must be populated with the scientific name as it was originally
- * documented"; the Darwin Core page adds that verbatimIdentification records the identification "as it appeared in the original record, unaltered, with ...
- * misspellings". verbatimIdentification keeps the sheet's text; the occurrenceID is built from the sheet's text and never changes.
+ * Which scientificName is written (stage 5, part A1). The basis is the Darwin Core page, same section (https://manual.obis.org/darwin_core.html, read 2026-10-25): the LSID
+ * "should correspond to the name provided to the scientificName field", and "verbatimIdentification should be used to record the taxon identification as it appeared in
+ * the original record, unaltered, with hybrid formulas, informal descriptions, misspellings, etc.". So the sheet's spelling belongs in verbatimIdentification, and the
+ * name next to a WoRMS LSID must be the name of that LSID. An exact match, a synonym included, keeps scientificName as written (the page says scientificName "should always
+ * contain the originally recorded full scientific name, even if the name is currently a synonym"). A result the USER CHOSE among non-exact ones (near, phonetic, genus, several
+ * results) writes the chosen record's own `scientificname`, so that "Calnaus finmarchicus" does not travel with the LSID of Calanus finmarchicus; verbatimIdentification keeps
+ * the sheet's text and the occurrenceID, built from the sheet's text, never changes. Supporting context only: "Match Taxonomic Names" (manual.obis.org/name_matching.html, read
+ * 2026-10-25) asks to take care that the right name is selected for a fuzzy result, and, for a name that is changed to an accepted one, to fill verbatimIdentification with the
+ * name as originally documented (it does not describe the choice of a typo's correction in so many words).
  */
 
 /** The most names one AphiaRecordsByMatchNames call takes (51 names answer HTTP 400). */

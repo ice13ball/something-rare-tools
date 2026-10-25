@@ -239,9 +239,9 @@ describe('the copy says what is sent', () => {
    * (it is then about the exceptions) unless it is exempted BY KEY below. The patterns are loose on purpose: a new sentence of the same kind is caught.
    */
   const CLAIMS: Record<(typeof LANGS)[number], RegExp[]> = {
-    en: [/\bnothing\b[^.;]{0,50}\b(sent|send|uploaded|transmitted|leaves? your|leaving your)\b/i, /\bnever\b[^.;]{0,40}\b(sends?|sent|leaves?|uploads?|transmits?)\b/i, /\bno (request|data|network)\b/i, /\bnot (sent|uploaded|transmitted)\b/i, /\bleaves? your (browser|computer)\b/i],
+    en: [/\bnothing\b[^.;]{0,50}\b(sent|send|uploaded|transmitted|leaves? your|leaving your)\b/i, /\bnever\b[^.;]{0,40}\b(sends?|sent|leaves?|uploads?|transmits?)\b/i, /\bno (request|data|network)\b/i, /\bnot (sent|uploaded|transmitted)\b/i, /\bleaves? your (browser|computer)\b/i, /\b(leaves?|sends?|uploads?|transmits?)\b[^.;]{0,30}\bnothing\b/i],
     pl: [/\bnic\b[^.;]{0,50}(wysyłan|wysyła|przesyłan|opuszcza|opuszczać)/i, /\bnigdy\b[^.;]{0,40}(wysyła|wysyłan|opuszcza|przesyła)/i, /nigdzie[^.;]{0,30}wysy|wysyła[^.;]{0,30}nigdzie/i, /żadn[eay][^.;]{0,15}(żądani|danych)|nie jest (wysyłan|przesyłan)|nie opuszcza/i],
-    de: [/\bnichts\b[^.;]{0,50}(gesendet|sendet|hochgeladen|übertragen|verlässt|verlassen)/i, /\bnie(mals)?\b[^.;]{0,40}(sendet|gesendet|verlässt|hochgeladen|überträgt)/i, /(irgend|nirgend)wohin[^.;]{0,30}(gesendet|sendet)|sendet[^.;]{0,30}(irgend|nirgend)wohin/i, /keine (Anfrage|Daten)|nicht (gesendet|hochgeladen|übertragen)/i],
+    de: [/\bnichts\b[^.;]{0,50}(gesendet|sendet|hochgeladen|übertragen|verlässt|verlassen)/i, /\bnie(mals)?\b[^.;]{0,40}(sendet|gesendet|verlässt|hochgeladen|überträgt)/i, /(irgend|nirgend)wohin[^.;]{0,30}(gesendet|sendet)|sendet[^.;]{0,30}(irgend|nirgend)wohin/i, /keine (Anfrage|Daten)|nicht (gesendet|hochgeladen|übertragen)/i, /\b(verlässt|sendet|überträgt|lädt|schickt)\b[^.;]{0,40}\bnichts\b/i, /\bwird\b[^.;]{0,40}\bnichts\b[^.;]{0,30}\b(gesendet|hochgeladen|übertragen)\b/i],
     fr: [/\brien\b[^.;]{0,50}(envoy|téléversé|transmis|quitt\w*\s+(votre|le|l'))/i, /\bjamais\b[^.;]{0,40}(envoie|envoy|quitte|téléverse|transmet)/i, /nulle part/i, /aucune (requête|donnée)|n'est pas (envoy|téléversé|transmis)/i],
   };
   /** Said about the FORM FIELDS (typed text and e-mail addresses: true, they are never sent), or about the lookup itself (the section of the opt-in and its tips). */
@@ -256,9 +256,9 @@ describe('the copy says what is sent', () => {
 
   it('the patterns catch the claims they are meant to, in every language (so a rewrite of convert.meta.intro to say nothing leaves the browser fails the test below)', () => {
     const sentences: Record<(typeof LANGS)[number], string[]> = {
-      en: ['Nothing ever leaves your browser; nothing is sent to any server.', 'Nothing is sent anywhere.', 'This page never sends it anywhere.', 'No request is sent.', 'Your data is not uploaded.'],
+      en: ['Nothing ever leaves your browser; nothing is sent to any server.', 'The page leaves nothing on any server and sends nothing out.', 'Nothing is sent anywhere.', 'This page never sends it anywhere.', 'No request is sent.', 'Your data is not uploaded.'],
       pl: ['Nic nigdy nie opuszcza Twojej przeglądarki; nic nie jest wysyłane na żaden serwer.', 'Nic nie jest nigdzie wysyłane.', 'Ta strona nigdy go nigdzie nie wysyła.', 'Nie jest wysyłane żadne żądanie.'],
-      de: ['Nichts verlässt jemals Ihren Browser; nichts wird an einen Server gesendet.', 'Nichts wird irgendwohin gesendet.', 'Diese Seite sendet sie nirgendwohin.', 'Es wird keine Anfrage gesendet.'],
+      de: ['Nichts verlässt jemals Ihren Browser; nichts wird an einen Server gesendet.', 'Es verlässt nichts Ihren Browser.', 'Diese Seite sendet nichts an einen Server.', 'Es wird nichts an irgendeinen Server gesendet.', 'Nichts wird irgendwohin gesendet.', 'Diese Seite sendet sie nirgendwohin.', 'Es wird keine Anfrage gesendet.'],
       fr: ["Rien ne quitte jamais votre navigateur ; rien n'est envoyé à un serveur.", "Rien n'est envoyé nulle part.", "Cette page ne l'envoie nulle part.", "Aucune requête n'est envoyée."],
     };
     for (const lang of LANGS) for (const t of sentences[lang]) expect(claimsNothingSent(lang, t), `${lang}: ${t}`).toBe(true);

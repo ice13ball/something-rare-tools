@@ -15,6 +15,7 @@ import { NVS_SPARQL_ENDPOINT } from '../../src/app/optins/nvs';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { nercUri } from '../../src/core/convert/vocab';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
+import { TIP_TEXTS } from '../../src/core/i18n/tips-text';
 import { UI } from '../../src/core/i18n/ui';
 import { openZip } from '../../src/core/parse/zip';
 import { LANGS } from '../../src/core/types';
@@ -127,16 +128,16 @@ describe('the measured variables are listed, and nothing is chosen for the user'
     expect(optionValues(unit(OXY))).toEqual(['', `s:${uri('P06', 'UPOX')}`]);
     expect(optionValues(unit(TEMP))).toEqual(['', `s:${uri('P06', 'UPAA')}`]);
     // without any choice: no ID is written, and the summary says which are left without
-    await settled('There is no confirmed NERC concept for temperature, oxygen');
+    await settled('There is no confirmed NERC concept for "temperature", "oxygen"');
     await settled('There is no confirmed NERC concept (P06) for the unit "°C"');
   });
 
   it('choosing the suggestion (or pressing the suggestions button) is what confirms it: the warnings go away for exactly those columns', async () => {
     await load();
-    await settled('temperature, oxygen');
+    await settled('"temperature", "oxygen"');
     fireEvent.change(concept(TEMP), { target: { value: `s:${uri('P01', 'TEMPPR01')}` } });
-    await settled('There is no confirmed NERC concept for oxygen');
-    expect(summary().textContent).not.toContain('NERC concept for temperature');
+    await settled('There is no confirmed NERC concept for "oxygen"');
+    expect(summary().textContent).not.toContain('NERC concept for "temperature"');
     // the button confirms the suggestions of the columns that have none yet, and keeps what was chosen
     const button = screen.getByRole('button', { name: 'Use the suggestions for 2 columns' });
     fireEvent.click(button);
@@ -148,7 +149,7 @@ describe('the measured variables are listed, and nothing is chosen for the user'
     expect(screen.queryByRole('button', { name: /^Use the suggestions/ })).toBeNull();
     // withdrawing a choice puts the warning back
     fireEvent.change(concept(OXY), { target: { value: '' } });
-    await settled('There is no confirmed NERC concept for oxygen');
+    await settled('There is no confirmed NERC concept for "oxygen"');
   });
 
   it('a choice belongs to the column, its variable and its unit: changing the unit of the column drops it', async () => {
@@ -166,7 +167,10 @@ describe('the measured variables are listed, and nothing is chosen for the user'
     expect(optionValues(concept(OXY))).toEqual(['', `s:${uri('P01', 'DOXMZZXX')}`]);
     expect(optionValues(unit(OXY))).toEqual(['', `s:${uri('P06', 'KGUM')}`]);
     // and the conversion no longer carries the dropped identifiers
-    await settled('There is no confirmed NERC concept for temperature, oxygen');
+    await settled('There is no confirmed NERC concept for "temperature", "oxygen"');
+    // the page says that the choice was dropped, instead of dropping it without a word
+    expect(document.querySelector('.convert-nerc-dropped')?.textContent).toBe(T['convert.nerc.dropped']);
+    expect(document.querySelectorAll('.convert-nerc-dropped').length).toBe(2); // the concept and the unit
   });
 });
 
@@ -298,6 +302,48 @@ describe('the search', () => {
     }
   });
 
+  it('a text whose cut would split an emoji does not lock the search: the results come, and the buttons are usable again', async () => {
+    const s = spies();
+    try {
+      await load();
+      fireEvent.click(box());
+      type(wordBox(TEMP), `${'a'.repeat(79)}😀`);
+      fireEvent.click(searchButton(TEMP));
+      await screen.findByText(/NVS has no concept for/);
+      expect(s.mock.calls.length).toBe(1);
+      expect(() => decodeURIComponent(s.mock.calls[0].url)).not.toThrow();
+      expect(searchButton(TEMP).disabled).toBe(false);
+      type(wordBox(OXY), 'invented current');
+      expect(searchButton(OXY).disabled).toBe(false);
+      fireEvent.click(searchButton(OXY));
+      await screen.findByText(/1 result for "invented current"/);
+    } finally {
+      s.restore();
+    }
+  });
+
+  it('a lone half of an emoji typed into the box is a space, and a thrown error would still release the lock', async () => {
+    const s = spies();
+    try {
+      await load();
+      fireEvent.click(box());
+      type(wordBox(TEMP), 'x\ud83dy');
+      fireEvent.click(searchButton(TEMP));
+      await screen.findByText(/NVS has no concept for/);
+      expect(searchButton(TEMP).disabled).toBe(false);
+      // fetch itself throwing at once (not a rejected promise) is a failure of the run, not an exception: the page shows it and the buttons work
+      vi.stubGlobal('fetch', () => {
+        throw new Error('boom');
+      });
+      fireEvent.click(searchButton(TEMP));
+      expect((await screen.findByRole('alert')).textContent).toContain('NVS could not be reached');
+      expect(searchButton(TEMP).disabled).toBe(false);
+      expect(searchButton(OXY).disabled).toBe(true); // nothing typed for oxygen yet, which is the only reason
+    } finally {
+      s.restore();
+    }
+  });
+
   it('hostile text is a word: the service, which parses the query as SPARQL does, answers it with an empty list and no error', async () => {
     const s = spies();
     try {
@@ -391,6 +437,61 @@ describe('the search', () => {
     } finally {
       s.restore();
     }
+  });
+});
+
+describe('the NVS box and the confirmed choices survive every re-run of the conversion (no remount, no reset)', () => {
+  it('ticking, typing, searching and choosing, then changing the quantity, the options, the shape, the language and the description: box, words, results and picks are all still there; only a new upload or the restart link clears them', async () => {
+    vi.stubGlobal('fetch', nvsMock().fetch);
+    await load();
+    fireEvent.click(box());
+    type(wordBox(TEMP), 'invented current');
+    fireEvent.click(searchButton(TEMP));
+    await screen.findByText(/1 result for "invented current"/);
+    fireEvent.change(concept(TEMP), { target: { value: `n:${uri('P01', 'ZZTESTC1')}` } });
+    fireEvent.change(concept(OXY), { target: { value: `s:${uri('P01', 'DOXYZZXX')}` } });
+    type(wordBox(OXY), 'typed, not searched');
+    const before = concept(TEMP);
+    const still = (): void => {
+      expect(box().checked).toBe(true);
+      expect(concept(TEMP).value).toBe(`n:${uri('P01', 'ZZTESTC1')}`);
+      expect(concept(OXY).value).toBe(`s:${uri('P01', 'DOXYZZXX')}`);
+      expect(wordBox(TEMP).value).toBe('invented current');
+      expect(wordBox(OXY).value).toBe('typed, not searched');
+      expect(document.querySelector('.convert-nvs-results')?.textContent).toContain('ZZTESTC1');
+    };
+    still();
+    // decisions that re-run the conversion (the worker answers again each time)
+    fireEvent.change(screen.getByLabelText(T['convert.quantity.kind']), { target: { value: 'density' } });
+    await idle();
+    still();
+    fireEvent.change(screen.getByLabelText(T['convert.quantity.kind']), { target: { value: 'count' } });
+    fireEvent.click(screen.getByLabelText(T['convert.fullList']));
+    fireEvent.click(screen.getByLabelText(T['convert.flatten.station']));
+    type(screen.getByLabelText(T['convert.meta.f.title']), 'A title');
+    await idle();
+    still();
+    // the same DOM node is kept: the section is not remounted
+    expect(concept(TEMP)).toBe(before);
+    // the language changes the words, not the state
+    setLang('pl');
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: UI.pl['convert.nvs.optin'] })).toBeTruthy());
+    expect((screen.getByRole('checkbox', { name: UI.pl['convert.nvs.optin'] }) as HTMLInputElement).checked).toBe(true);
+    setLang('en');
+    await waitFor(() => expect(box().checked).toBe(true));
+    // the restart link is the other way out (a new upload is the first)
+    fireEvent.click(screen.getByRole('button', { name: T['convert.restart'] }));
+    await waitFor(() => expect(document.querySelector('.convert-nerc')).toBeNull());
+  });
+
+  it('the explanations say what the code does: the unit is the one of the unit field, and only an exact capital-letter code starts the fallback', () => {
+    for (const lang of LANGS) {
+      const nerc = (TIP_TEXTS[lang] as Record<string, string>)['tip.convertNerc.logic'];
+      expect(nerc, lang).not.toMatch(/tak, jak podaje ją kolumna|wie die Spalte sie angibt|telle que la colonne la donne|as the column gives it/);
+    }
+    expect(TIP_TEXTS.en['tip.convertNerc.logic']).toContain('the unit as shown in the unit field of the column in the table above (the tool proposes it from the header and you can edit it), not necessarily as typed in the header');
+    expect(TIP_TEXTS.en['tip.convertNvsOptIn.logic']).toContain('exactly a code, in capital letters and nothing else (a word in lower case is never taken for a code)');
+    expect(TIP_TEXTS.de['tip.convertNvsOptIn.logic']).toContain('in Großbuchstaben und sonst nichts');
   });
 });
 

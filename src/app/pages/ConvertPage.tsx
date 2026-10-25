@@ -447,13 +447,23 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     nvsAbort.current = ac;
     setNvsBusy(sid);
     setNvsSearches((prev) => ({ ...prev, [sid]: { status: 'running', word: typed } }));
-    const run = await searchNvs(typed, kind === 'type' ? 'P01' : 'P06', { signal: ac.signal });
+    let run: Awaited<ReturnType<typeof searchNvs>> | undefined;
+    try {
+      run = await searchNvs(typed, kind === 'type' ? 'P01' : 'P06', { signal: ac.signal });
+    } catch {
+      run = undefined; // searchNvs resolves by contract; if it ever did not, the lock is still released below
+    } finally {
+      // the busy flag is ALWAYS cleared (a stale run was cleared by clearNvs already): one failed search can never leave every search button off
+      if (nvsRun.current === mine) {
+        nvsAbort.current = null;
+        setNvsBusy(null);
+      }
+    }
     if (nvsRun.current !== mine) return; // unticked, a new upload or the page left meanwhile: the late answer is ignored
-    nvsAbort.current = null;
-    setNvsBusy(null);
+    const result = run;
     setNvsSearches((prev) => ({
       ...prev,
-      [sid]: run.aborted ? { status: 'stopped', word: typed } : run.failure ? { status: 'failed', word: typed, failure: run.failure } : { status: 'done', word: typed, concepts: run.concepts, via: run.via },
+      [sid]: !result ? { status: 'failed', word: typed, failure: { kind: 'format' } } : result.aborted ? { status: 'stopped', word: typed } : result.failure ? { status: 'failed', word: typed, failure: result.failure } : { status: 'done', word: typed, concepts: result.concepts, via: result.via },
     }));
   };
   const abortNvs = (): void => nvsAbort.current?.abort();

@@ -172,8 +172,11 @@ export interface VariableUnit {
 const vu = (term: NercTerm, aliases: string[], per?: PerDimension): VariableUnit => ({ term, aliases, ...(per === undefined ? {} : { per }) });
 
 /*
- * 'ppt' is NOT an alias of parts per thousand (it also means parts per trillion), and a bare 'c' is not degrees Celsius (/check allows both: this converter does not
- * guess). A unit spelled any other way gets no suggestion: the user picks one, or searches NVS, or leaves it without an ID (CONV-UNIT-NO-P06).
+ * The text these aliases are matched against is the unit of the column's unit field in the mapping table (role.unit), NOT the text of the header: /check's recogniser
+ * (src/core/recognize/vocab.ts UNIT_VOCAB, untouched) has already turned a header unit it knows into its own spelling, for example 'degC' or a bare 'c' into '°C' and 'ppt'
+ * into '‰', and the user can edit the field. So this table does not guess either: it maps the spellings below, and a unit spelled any other way (and the text 'ppt' or 'c'
+ * itself, were it ever typed into the field) gets no suggestion: the user picks one, searches NVS, or leaves it without an ID (CONV-UNIT-NO-P06). A unit that arrives
+ * as '‰' is therefore offered the parts-per-thousand concept, which the user sees next to the unit it was read from and confirms or not.
  */
 export const VARIABLE_UNITS: readonly VariableUnit[] = [
   vu(p06('UPOX', 'Micromoles per litre'), ['umol/l', 'micromol/l', 'umoles/l', 'micromoles/l'], 'volume'),
