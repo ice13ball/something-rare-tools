@@ -12,6 +12,7 @@ import type { ConvertParseResult, ConvertRequestBody } from '../worker/convert.p
 import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
+import type { NercColumnDecision, NercDecisions, NercPick } from '../core/convert/nerc';
 
 /** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
 export interface QuantityForm {
@@ -82,6 +83,72 @@ export interface ConvertState {
   metadata?: DatasetMetadata;
   /** The WoRMS opt-in's results and decisions as entries by name; absent while the box is off or nothing was looked up (stage 4). */
   worms?: WormsLookup;
+  /** The NERC identifiers the user confirmed per measured-variable column (stage 5); only those that still match the column's variable and unit are sent. */
+  nerc?: NercPicks;
+}
+
+/* ---------- measured variables: the columns the NERC section lists, and what the user confirmed for each (stage 5) ---------- */
+
+/** A measured-variable column of a sheet that is used: what the conversion writes as an eMoF row per sample event. */
+export interface NercColumn {
+  key: string;
+  fileId: string;
+  fileName: string;
+  sheet: string;
+  index: number;
+  /** The column's header, as the sheet has it. */
+  header: string;
+  /** The variable name the column's role gives (written as measurementType). */
+  variable: string;
+  /** The unit the column's role gives (written as measurementUnit), when it has one. */
+  unit?: string;
+}
+
+export const nercKey = (fileId: string, sheet: string, index: number): string => `${fileId}\u0000${sheet}\u0000${index}`;
+
+/** What a confirmed identifier was confirmed FOR: a type belongs to the variable and its unit (oxygen per volume or per mass), a unit to the unit text. A pick whose context changed is dropped. */
+export const typeContext = (c: Pick<NercColumn, 'variable' | 'unit'>): string => `${c.variable}\u0000${c.unit ?? ''}`;
+export const unitContext = (c: Pick<NercColumn, 'unit'>): string => c.unit ?? '';
+
+/** One confirmed identifier as the page holds it: the pick the worker checks, the label to show, and the context it was confirmed for. */
+export interface StoredPick extends NercPick {
+  label: string;
+  ctx: string;
+}
+export type NercPicks = Record<string, { type?: StoredPick; unit?: StoredPick }>;
+
+/**
+ * The measured-variable columns of the sheets the user keeps, in sheet and column order: those whose role is a variable with a name (the conversion reads exactly those).
+ * A taxon candidate that is not confirmed has role "ignore" for the conversion and is not listed.
+ */
+export function nercColumnsOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>, choices: Record<string, SheetChoice>): NercColumn[] {
+  const out: NercColumn[] = [];
+  for (const f of parsed.files) {
+    for (const m of mappings[f.fileId] ?? f.mappings) {
+      const c = choices[sheetKey(f.fileId, m.sheet)];
+      if (!c || !c.use) continue;
+      for (const col of m.columns) {
+        if (col.role.kind !== 'variable' || col.role.variable.trim() === '') continue;
+        const unit = col.role.unit?.trim();
+        out.push({ key: nercKey(f.fileId, m.sheet, col.index), fileId: f.fileId, fileName: f.fileName, sheet: m.sheet, index: col.index, header: col.header.trim(), variable: col.role.variable.trim(), ...(unit === undefined || unit === '' ? {} : { unit }) });
+      }
+    }
+  }
+  return out;
+}
+
+/** The decisions of one sheet for the worker: the picks that still belong to their column (same variable and unit), by column index. */
+export function nercDecisionsOf(columns: readonly NercColumn[], picks: NercPicks, fileId: string, sheet: string): NercDecisions | undefined {
+  const out: Record<string, NercColumnDecision> = {};
+  for (const c of columns) {
+    if (c.fileId !== fileId || c.sheet !== sheet || !Object.prototype.hasOwnProperty.call(picks, c.key)) continue;
+    const p = picks[c.key];
+    const d: NercColumnDecision = {};
+    if (p.type && p.type.ctx === typeContext(c)) d.type = { id: p.type.id, source: p.type.source, deprecated: p.type.deprecated };
+    if (p.unit && c.unit !== undefined && p.unit.ctx === unitContext(c)) d.unit = { id: p.unit.id, source: p.unit.source, deprecated: p.unit.deprecated };
+    if (d.type || d.unit) out[String(c.index)] = d;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -140,7 +207,8 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       };
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };

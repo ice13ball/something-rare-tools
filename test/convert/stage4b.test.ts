@@ -235,8 +235,8 @@ describe('the DOI of the citation', () => {
 
 describe('the copy says what is sent', () => {
   /*
-   * Any claim that nothing leaves the browser or nothing is sent, in the four languages. A string of /convert that makes one must name WoRMS (it is then
-   * about the exception) unless it is exempted BY KEY below. The patterns are loose on purpose: a new sentence of the same kind is caught.
+   * Any claim that nothing leaves the browser or nothing is sent, in the four languages. A string of /convert that makes one must name BOTH opt-ins, WoRMS and NVS
+   * (it is then about the exceptions) unless it is exempted BY KEY below. The patterns are loose on purpose: a new sentence of the same kind is caught.
    */
   const CLAIMS: Record<(typeof LANGS)[number], RegExp[]> = {
     en: [/\bnothing\b[^.;]{0,50}\b(sent|send|uploaded|transmitted|leaves? your|leaving your)\b/i, /\bnever\b[^.;]{0,40}\b(sends?|sent|leaves?|uploads?|transmits?)\b/i, /\bno (request|data|network)\b/i, /\bnot (sent|uploaded|transmitted)\b/i, /\bleaves? your (browser|computer)\b/i],
@@ -251,7 +251,7 @@ describe('the copy says what is sent', () => {
     'tip.convertMetaFiles.logic', // no link or DOI of a metadata file is followed (no request for a record)
     'tip.convertArchiveDesc.logic', // an eml.xml / meta.xml dropped with the data is only listed
   ]);
-  const EXEMPT_PREFIXES = ['convert.worms.', 'tip.convertWorms'];
+  const EXEMPT_PREFIXES = ['convert.worms.', 'tip.convertWorms', 'convert.nvs.', 'tip.convertNvs'];
   const claimsNothingSent = (lang: (typeof LANGS)[number], text: string): boolean => CLAIMS[lang].some((p) => p.test(text));
 
   it('the patterns catch the claims they are meant to, in every language (so a rewrite of convert.meta.intro to say nothing leaves the browser fails the test below)', () => {
@@ -265,7 +265,7 @@ describe('the copy says what is sent', () => {
     for (const lang of LANGS) for (const t of ['Your files stay in your browser.', 'Pliki zostają w Twojej przeglądarce.', 'Ihre Dateien bleiben in Ihrem Browser.', 'Vos fichiers restent dans votre navigateur.']) expect(claimsNothingSent(lang, t), t).toBe(false);
   });
 
-  it('every text of /convert that says nothing leaves the browser or nothing is sent names WoRMS, unless it is exempted by key (the form fields, the lookup section)', () => {
+  it('every text of /convert that says nothing leaves the browser or nothing is sent names both WoRMS and NVS, unless it is exempted by key (the form fields, the two lookup sections)', () => {
     const seen: string[] = [];
     for (const lang of LANGS) {
       const all: Record<string, string> = { ...UI[lang], ...TIP_TEXTS[lang] };
@@ -274,9 +274,10 @@ describe('the copy says what is sent', () => {
         if (EXEMPT_KEYS.has(k) || EXEMPT_PREFIXES.some((p) => k.startsWith(p))) continue;
         seen.push(`${lang} ${k}`);
         expect(text, `${lang} ${k}`).toMatch(/WoRMS/);
+        expect(text, `${lang} ${k}`).toMatch(/NVS/);
       }
     }
-    // not vacuous: the status text and the intro tip make such a claim, and name WoRMS
+    // not vacuous: the status text and the intro tip make such a claim, and name both
     expect(seen).toContain('en convert.status.text');
     expect(seen).toContain('pl tip.convertIntro.logic');
   });
@@ -291,15 +292,26 @@ describe('the copy says what is sent', () => {
     expect(UI.en['convert.meta.intro']).not.toMatch(/Nothing ever leaves your browser/);
   });
 
-  it('the status text and the intro tip of every language name the WoRMS lookup as the one exception, and the NERC lookup stays planned', () => {
+  it('the status text and the intro tip of every language name both lookups as the exceptions (WoRMS and NVS), and neither is called planned any more', () => {
     for (const lang of LANGS) {
       expect(UI[lang]['convert.status.text'], lang).toMatch(/WoRMS/);
+      expect(UI[lang]['convert.status.text'], lang).toMatch(/NVS/);
       expect(UI[lang]['convert.status.text'], lang).not.toMatch(/planned|geplant|prévu|planowan/);
       const intro = (TIP_TEXTS[lang] as Record<string, string>)['tip.convertIntro.logic'];
       expect(intro, lang).toMatch(/WoRMS/);
+      expect(intro, lang).toMatch(/NVS/);
       expect(intro, lang).toMatch(/NERC/);
+      expect(intro, lang).not.toMatch(/planned|geplant|prévu|planowan/);
     }
-    expect(UI.en['convert.status.text']).toContain('nothing is sent anywhere except the taxon names you choose to look up in WoRMS, and only after you press that button');
+    expect(UI.en['convert.status.text']).toContain("nothing is sent anywhere except what you choose to look up, and only after you press that lookup's button: taxon names in WoRMS, and the search words you type for NVS");
+  });
+
+  it('a mutated sentence that claims nothing is sent without naming both lookups is caught: WoRMS alone is not enough any more', () => {
+    const only = 'Nothing is stored, and nothing is sent anywhere except the taxon names you choose to look up in WoRMS, and only after you press that button.';
+    expect(claimsNothingSent('en', only)).toBe(true);
+    expect(/NVS/.test(only)).toBe(false); // the guard above requires NVS as well: this sentence would fail it
+    const both = 'Nothing is sent anywhere except taxon names in WoRMS and the search words you type for NVS.';
+    expect(claimsNothingSent('en', both) && /WoRMS/.test(both) && /NVS/.test(both)).toBe(true);
   });
 
   it('the Polish summary takes the plural of its counts', () => {

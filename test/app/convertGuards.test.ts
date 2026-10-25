@@ -15,7 +15,7 @@ const walk = (dir: string, accept: (f: string) => boolean): string[] =>
   });
 const rel = (p: string): string => p.replace(ROOT + '/', '');
 
-describe('the only lookup host is WoRMS, called from one module, from a button', () => {
+describe('the only lookup hosts are WoRMS and NVS, each called from its own module, from a button', () => {
   const srcFiles = walk(join(ROOT, 'src'), (f) => /\.(ts|tsx|css|html)$/.test(f));
 
   // the identifier prefix of a WoRMS taxon (urn:lsid:marinespecies.org:taxname:<AphiaID>) is written into the archive: it is a name, never an address
@@ -29,36 +29,45 @@ describe('the only lookup host is WoRMS, called from one module, from a button',
     expect(srcFiles.filter((f) => readFileSync(f, 'utf8').includes('urn:lsid:marinespecies.org:taxname:')).map(rel)).toEqual(['src/core/convert/build.ts', 'src/core/convert/worms.ts', 'src/core/rules/convert.ts']);
   });
 
-  it('src/ names vocab.nerc.ac.uk only as the base of identifier URIs (the converter writes them, /check reads them from headers), never as an address to call', () => {
+  const stripComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  it('src/ names vocab.nerc.ac.uk as an address to call in exactly one module of the converter (the NVS opt-in); everywhere else only as the base of identifier URIs, or as text', () => {
     const hits = srcFiles.filter((f) => /vocab\.nerc\.ac\.uk/i.test(readFileSync(f, 'utf8'))).map(rel);
-    expect(hits).toEqual(['src/core/convert/vocab.ts', 'src/core/output/datacite.ts', 'src/core/output/draft.ts', 'src/core/recognize/vocab.ts']);
+    // the opt-in module and the pure half that mentions it in a comment; the identifier bases of the converter, /check and the draft writers; the privacy copy and the tips name the host as text
+    expect([...hits].sort()).toEqual(['src/app/optins/nvs.ts', 'src/core/convert/nvs.ts', 'src/core/convert/vocab.ts', 'src/core/output/datacite.ts', 'src/core/output/draft.ts', 'src/core/recognize/vocab.ts', 'src/core/i18n/tips-text.ts', 'src/core/i18n/ui.ts'].sort());
+    // an https address in CODE (a comment aside) among the files of the converter, its page, components and worker: the opt-in module only
+    const converter = srcFiles.filter((f) => /^src\/(app|worker)\//.test(rel(f)) || /^src\/core\/convert\//.test(rel(f)) || /^src\/core\/rules\/convert/.test(rel(f)));
+    expect(converter.filter((f) => /https:\/\/vocab\.nerc\.ac\.uk/i.test(stripComments(readFileSync(f, 'utf8')))).map(rel)).toEqual(['src/app/optins/nvs.ts']);
     const vocab = readFileSync(join(ROOT, 'src/core/convert/vocab.ts'), 'utf8');
-    // every mention is the identifier base `http://vocab.nerc.ac.uk/collection/`: plain http, so a fetch of it would also be refused by the page's CSP
+    // every mention in the converter's vocabulary is the identifier base `http://vocab.nerc.ac.uk/collection/`: plain http, so a fetch of it would also be refused by the page's CSP
     for (const m of vocab.matchAll(/.{0,12}vocab\.nerc\.ac\.uk.{0,12}/g)) expect(m[0], m[0]).toMatch(/http:\/\/vocab\.nerc\.ac\.uk\/collection\//);
-    // and nothing in src/ calls a network API near it
-    expect(vocab).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource/);
+    // and nothing in the vocabulary, the pure halves or the rules calls a network API
+    for (const f of ['src/core/convert/vocab.ts', 'src/core/convert/nerc.ts', 'src/core/convert/nvs.ts']) expect(stripComments(readFileSync(join(ROOT, f), 'utf8')), f).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource/);
   });
 
   it('the converter page, its components and its worker call no network or storage API at all (the WoRMS module is the one exception, and it uses no storage either)', () => {
     const files = [
       ...walk(join(ROOT, 'src/core/convert'), (f) => f.endsWith('.ts')),
-      ...['src/app/pages/ConvertPage.tsx', 'src/app/components/ConvertSheetForm.tsx', 'src/app/components/ConvertMetadataForm.tsx', 'src/app/components/ConvertWorms.tsx', 'src/app/convertModel.ts', 'src/worker/convert.worker.ts', 'src/worker/convert.handler.ts', 'src/worker/convert.client.ts', 'src/worker/convert.engine.ts', 'src/worker/convert.protocol.ts'].map((f) => join(ROOT, f)),
+      ...['src/app/pages/ConvertPage.tsx', 'src/app/components/ConvertSheetForm.tsx', 'src/app/components/ConvertMetadataForm.tsx', 'src/app/components/ConvertWorms.tsx', 'src/app/components/ConvertNerc.tsx', 'src/app/convertModel.ts', 'src/worker/convert.worker.ts', 'src/worker/convert.handler.ts', 'src/worker/convert.client.ts', 'src/worker/convert.engine.ts', 'src/worker/convert.protocol.ts'].map((f) => join(ROOT, f)),
     ];
     for (const f of files) {
       const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       expect(code, rel(f)).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|localStorage|sessionStorage|indexedDB|document\.cookie|navigator\.storage/);
     }
-    const worms = readFileSync(join(ROOT, 'src/app/optins/worms.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    expect(worms).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|localStorage|sessionStorage|indexedDB|document\.cookie|navigator\.storage/);
-    // no cookie, no Referer: the request says so
-    expect(worms).toContain("credentials: 'omit'");
-    expect(worms).toContain("referrerPolicy: 'no-referrer'");
+    for (const mod of ['worms', 'nvs']) {
+      const code = readFileSync(join(ROOT, `src/app/optins/${mod}.ts`), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      expect(code, mod).not.toMatch(/XMLHttpRequest|sendBeacon|WebSocket|EventSource|localStorage|sessionStorage|indexedDB|document\.cookie|navigator\.storage/);
+      // no cookie, no Referer, no redirect followed, no cache: the request says so
+      expect(code, mod).toContain("credentials: 'omit'");
+      expect(code, mod).toContain("referrerPolicy: 'no-referrer'");
+      expect(code, mod).toContain("redirect: 'error'");
+      expect(code, mod).toContain("cache: 'no-store'");
+    }
   });
 
   it('no page of the site, and no source of /convert, carries a preconnect, dns-prefetch, prefetch, preload or prerender link to WoRMS (a link tag is a request on page load)', () => {
     const pages = ['index.html', 'convert/index.html', 'check/index.html', 'collection/index.html', 'licence/index.html', 'privacy/index.html'].filter((f) => existsSync(join(ROOT, f)));
     expect(pages).toContain('convert/index.html');
-    for (const f of pages) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/marinespecies/i);
+    for (const f of pages) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/marinespecies|vocab\.nerc/i);
     for (const f of srcFiles.filter((x) => /\.(tsx|html)$/.test(x))) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/rel=["'](preconnect|dns-prefetch|prefetch|preload|prerender)["']/i);
   });
 
@@ -74,16 +83,19 @@ describe('the only lookup host is WoRMS, called from one module, from a button',
     for (const f of worker) expect(withoutLsid(readFileSync(f, 'utf8')), rel(f)).not.toMatch(/https?:\/\/(www\.)?marinespecies\.org/i);
     const withAddress = names.filter((f) => f !== html && /https?:\/\/www\.marinespecies\.org\/rest\/AphiaRecordsByMatchNames/.test(readFileSync(f, 'utf8')));
     expect(withAddress.length).toBe(1);
-    for (const f of [...names, ...worker]) {
-      const text = readFileSync(f, 'utf8');
-      for (const m of text.matchAll(/.{0,12}vocab\.nerc\.ac\.uk.{0,12}/g)) expect(m[0], `${rel(f)}: ${m[0]}`).toMatch(/https?:\/\/vocab\.nerc\.ac\.uk\/collection\//);
-    }
+    // NVS (stage 5): the worker bundle holds identifier bases only (the converter writes http addresses, /check's recogniser holds an https one: names, never an address it calls); in the page bundle every https address of it is the SPARQL
+    // endpoint or a concept page of the opt-in module (the privacy copy names the host as bare text), and the SPARQL address stands in one asset of the page
+    for (const f of worker) for (const m of readFileSync(f, 'utf8').matchAll(/.{0,12}vocab\.nerc\.ac\.uk.{0,12}/g)) expect(m[0], `${rel(f)}: ${m[0]}`).toMatch(/https?:\/\/vocab\.nerc\.ac\.uk\/collection\//);
+    for (const f of names.filter((x) => x !== html)) for (const m of readFileSync(f, 'utf8').matchAll(/https:\/\/vocab\.nerc\.ac\.uk.{0,20}/g)) expect(m[0], `${rel(f)}: ${m[0]}`).toMatch(/^https:\/\/vocab\.nerc\.ac\.uk\/(sparql\/sparql|collection\/)/);
+    expect(readFileSync(html, 'utf8')).not.toMatch(/vocab\.nerc/i);
+    expect(names.filter((f) => f !== html && /https:\/\/vocab\.nerc\.ac\.uk\/sparql\/sparql/.test(readFileSync(f, 'utf8'))).length).toBe(1);
+    for (const f of worker) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/sparql\/sparql/);
     // no other page of the site carries the WoRMS address
     for (const other of ['dist/index.html', 'dist/check/index.html', 'dist/collection/index.html', 'dist/licence/index.html', 'dist/privacy/index.html'].filter((f) => existsSync(join(ROOT, f)))) {
       const h = readFileSync(join(ROOT, other), 'utf8');
       for (const m of h.matchAll(/\/assets\/([\w.-]+\.js)/g)) {
         const f = join(ROOT, 'dist/assets', m[1]);
-        if (existsSync(f)) expect(readFileSync(f, 'utf8'), `${other} -> ${m[1]}`).not.toMatch(/AphiaRecordsByMatchNames/);
+        if (existsSync(f)) expect(readFileSync(f, 'utf8'), `${other} -> ${m[1]}`).not.toMatch(/AphiaRecordsByMatchNames|sparql\/sparql/);
       }
     }
   });

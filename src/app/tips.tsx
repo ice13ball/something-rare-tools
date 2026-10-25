@@ -10,7 +10,8 @@ import type { Lang } from '../core/types';
 import { t } from './i18n';
 import { DERIVED_DECIMALS } from '../core/convert/events';
 import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '../core/convert/metadata';
-import { P01, P06 } from '../core/convert/vocab';
+import { NVS_LIMIT } from '../core/convert/nvs';
+import { P01, P06, VARIABLE_CONCEPTS } from '../core/convert/vocab';
 import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
 import { WORMS_BATCH_MAX, wormsLsid } from '../core/convert/worms';
@@ -243,6 +244,11 @@ const DEFS = {
   convertWormsPrivacy: { label: 'convert.worms.privacy.title' },
   convertWormsTable: { label: 'convert.worms.table.title' },
   convertWormsChoice: { label: 'convert.worms.choose.label' },
+  convertNerc: { label: 'convert.nerc.title' },
+  convertNercChoice: { label: 'convert.nerc.choose.label', values: { oxygen: codes(...VARIABLE_CONCEPTS.oxygen.map((c) => c.term)) } },
+  convertNvsOptIn: { label: 'convert.nvs.optin', values: { limit: () => String(NVS_LIMIT) } },
+  convertNvsPrivacy: { label: 'convert.nvs.privacy.title' },
+  convertNvsResults: { label: 'convert.nvs.title' },
 } satisfies Record<string, TipDef>;
 
 export type TipId = keyof typeof DEFS;

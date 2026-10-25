@@ -14,6 +14,7 @@ import { denyConsent, grantConsent } from '../../src/app/analytics';
 import { initLang, setLang } from '../../src/app/i18n';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { WORMS_ENDPOINT } from '../../src/app/optins/worms';
+import { TIP_TEXTS } from '../../src/core/i18n/tips-text';
 import { UI } from '../../src/core/i18n/ui';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
 import { openZip } from '../../src/core/parse/zip';
@@ -436,6 +437,38 @@ describe('the archive and GA4', () => {
     await waitFor(() => expect(downloadFile).toHaveBeenCalled());
     expect(events().find((e) => e.name === 'convert_exported')?.params.worms).toBe('none');
     denyConsent();
+  });
+});
+
+describe('which name is written after a choice (stage 5, A1)', () => {
+  it('every result a name needs a choice for says how scientificName would be written: a non-exact result shows the record name and that the sheet spelling stays in verbatimIdentification; an exact one says the sheet name stays; an automatic name says nothing', async () => {
+    vi.stubGlobal('fetch', wormsMock().fetch);
+    await load([{ name: 'l1.csv', text: CSV }]);
+    fireEvent.click(box());
+    fireEvent.click(await screen.findByRole('button', { name: `Look up ${NAMES.length} names in WoRMS` }));
+    const table = await wormsTable();
+    const body = (name: string): HTMLElement => within(table).getByRole('rowheader', { name }).closest('tbody') as HTMLElement;
+    // near_1: the typo is replaced by the record's name once chosen
+    expect(body('Calanus finmarchicu').textContent).toContain('If you choose this: scientificName is written as "Calanus finmarchicus"; your own spelling stays in verbatimIdentification.');
+    // two exact records of a homonym: the sheet name stays whichever is chosen
+    expect(body('Oithona').textContent?.match(/If you choose this: scientificName stays as in your sheet\./g)?.length).toBe(2);
+    // a single exact match is automatic: no sentence
+    expect(body('Calanus finmarchicus').textContent).not.toContain('If you choose this');
+    expect(T['convert.worms.choose.intro']).toContain('the table says how scientificName would be written');
+  });
+
+  it('the explanations say it in every language: exact keeps the name (a synonym included), a chosen non-exact result takes the record name, the sheet spelling stays in verbatimIdentification, the occurrenceID does not change; "never changed" is gone', () => {
+    for (const lang of LANGS) {
+      const choice = (TIP_TEXTS[lang] as Record<string, string>)['tip.convertWormsChoice.logic'];
+      const optin = (TIP_TEXTS[lang] as Record<string, string>)['tip.convertWormsOptIn.logic'];
+      for (const text of [choice, optin]) {
+        expect(text, lang).toContain('verbatimIdentification');
+        expect(text, lang).not.toMatch(/never changed|never replaced|nigdy nie jest zmieniana|wird nie geändert|n'est jamais modifié|stays as you wrote it|zostaje taka, jak ją zapisano\.$/);
+      }
+      expect(choice, lang).toContain('occurrenceID');
+    }
+    expect(TIP_TEXTS.en['tip.convertWormsChoice.logic']).toContain('So an exact match, a synonym included, keeps scientificName as you wrote it.');
+    expect(TIP_TEXTS.en['tip.convertWormsOptIn.logic']).toContain('for a result you chose that is not an exact match it becomes the name of that record');
   });
 });
 

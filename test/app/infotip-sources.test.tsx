@@ -42,7 +42,7 @@ async function bubbleOf(id: TipId, lang: (typeof LANGS)[number] = 'en'): Promise
 const textKeys = (id: TipId): UiKey[] => [`tip.${id}.does`, `tip.${id}.logic`] as UiKey[];
 const placeholders = (s: string): string[] => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
 /** Digits that belong to the name of a standard, an encoding or a code list, not to a rule. */
-const NAMES_WITH_DIGITS = /UTF-8|windows-1250|ISO-8859-2|ISO[ -]19139|ISO[ -]19115-3|ISO 8601|P01/g;
+const NAMES_WITH_DIGITS = /UTF-8|windows-1250|ISO-8859-2|ISO[ -]19139|ISO[ -]19115-3|ISO 8601|P0[16]/g;
 
 describe('the registry', () => {
   it('has both parts of the text, in all four languages, for every tip; and a label that exists', () => {

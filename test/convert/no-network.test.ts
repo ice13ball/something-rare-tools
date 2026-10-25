@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Stage 3 reads metadata from DROPPED files only (plan section 5, Q4): no link, no DOI, no network. Stage 4 adds ONE network module, the WoRMS opt-in
-// src/app/optins/worms.ts, on the main thread (plan section 1). The behavioural proof is the spy test of the page flow (test/app/convertFlow.test.tsx,
+// src/app/optins/worms.ts, and stage 5 a SECOND, the NVS opt-in src/app/optins/nvs.ts, both on the main thread (plan section 1). The behavioural proof is the spy test of the page flow (test/app/convertFlow.test.tsx,
 // test/app/convertWorms.test.tsx); this is the structural one: following every import from the two entry points of /convert (the page and the worker),
-// that module is the ONLY one that calls fetch, nothing else is a network or link-fetching module, and the worker cannot reach it at all.
+// those two modules are the ONLY ones that call fetch, nothing else is a network or link-fetching module, and the worker cannot reach either at all.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(__dirname, '..', '..');
 const ENTRIES = ['src/app/entries/convert.tsx', 'src/worker/convert.worker.ts'];
-/** The one module of /convert allowed to call fetch (stage 4, the WoRMS opt-in). Nothing else, and never the worker. */
-const NETWORK_MODULE = 'src/app/optins/worms.ts';
+/** The modules of /convert allowed to call fetch: the WoRMS opt-in (stage 4) and the NVS opt-in (stage 5). Nothing else, and never the worker. */
+const NETWORK_MODULES = ['src/app/optins/worms.ts', 'src/app/optins/nvs.ts'];
+const NETWORK_MODULE = NETWORK_MODULES[0];
 
 /** A call or reference to fetch: `fetch(`, `fetch (`, and `globalThis.fetch`, `window.fetch`, `self.fetch`, `x["fetch"]`, `.fetch` with any whitespace. */
 const FETCH_CALL = /(?<![\w$])fetch\s*\(|\.\s*fetch(?![\w$])|\[\s*['"`]fetch['"`]\s*\]/;
@@ -71,13 +72,13 @@ describe('no link-fetching code is reachable from /convert', () => {
     return hits;
   }
 
-  it('no reachable module mentions /api/fetch, or calls XMLHttpRequest, sendBeacon, WebSocket or EventSource, and exactly one module calls fetch: the WoRMS opt-in (the analytics script tag is the only other outside address, and only after consent)', () => {
+  it('no reachable module mentions /api/fetch, or calls XMLHttpRequest, sendBeacon, WebSocket or EventSource, and exactly two modules call fetch: the WoRMS and the NVS opt-in (the analytics script tag is the only other outside address, and only after consent)', () => {
     const hits: string[] = [];
-    for (const [f, src] of modules) hits.push(...problemsOf(rel(f), src, rel(f) === NETWORK_MODULE));
+    for (const [f, src] of modules) hits.push(...problemsOf(rel(f), src, NETWORK_MODULES.includes(rel(f))));
     expect(hits).toEqual([]);
-    // not vacuous: the allowed module is reachable (from the page), it does call fetch, and it is the only module that does
+    // not vacuous: the allowed modules are reachable (from the page), they do call fetch, and they are the only modules that do
     const callers = [...modules].filter(([, src]) => FETCH_CALL.test(stripComments(src))).map(([f]) => rel(f));
-    expect(callers).toEqual([NETWORK_MODULE]);
+    expect(callers.sort()).toEqual([...NETWORK_MODULES].sort());
   });
 
   it('the guard still catches another module that fetches: the allowance is for exactly one file, not for a kind of code', () => {
@@ -86,19 +87,21 @@ describe('no link-fetching code is reachable from /convert', () => {
       expect(problemsOf('src/app/pages/ConvertPage.tsx', `${page}\n${added}`, false), added).not.toEqual([]);
     }
     expect(problemsOf('src/app/pages/ConvertPage.tsx', page, false)).toEqual([]);
-    // the network module itself: fetch is allowed, anything else of that kind is not
-    const worms = readFileSync(join(ROOT, NETWORK_MODULE), 'utf8');
-    expect(problemsOf(NETWORK_MODULE, worms, true)).toEqual([]);
-    expect(problemsOf(NETWORK_MODULE, `${worms}\nnavigator.sendBeacon('/x');`, true)).not.toEqual([]);
-    expect(problemsOf(NETWORK_MODULE, `${worms}\nnew WebSocket('wss://x');`, true)).not.toEqual([]);
-    // and the same file under any other name is not allowed to fetch
-    expect(problemsOf('src/app/optins/other.ts', worms, false)).not.toEqual([]);
+    // the network modules themselves: fetch is allowed, anything else of that kind is not
+    for (const mod of NETWORK_MODULES) {
+      const text = readFileSync(join(ROOT, mod), 'utf8');
+      expect(problemsOf(mod, text, true), mod).toEqual([]);
+      expect(problemsOf(mod, `${text}\nnavigator.sendBeacon('/x');`, true), mod).not.toEqual([]);
+      expect(problemsOf(mod, `${text}\nnew WebSocket('wss://x');`, true), mod).not.toEqual([]);
+      // and the same file under any other name is not allowed to fetch
+      expect(problemsOf('src/app/optins/other.ts', text, false), mod).not.toEqual([]);
+    }
   });
 
-  it('the worker never fetches: the network module is not reachable from the worker entry, and nothing in src/worker or src/core imports from src/app/optins', () => {
+  it('the worker never fetches: neither network module is reachable from the worker entry, and nothing in src/worker or src/core imports from src/app/optins', () => {
     const fromWorker = [...reachable(['src/worker/convert.worker.ts']).keys()].map(rel);
     expect(fromWorker.length).toBeGreaterThan(40);
-    expect(fromWorker).not.toContain(NETWORK_MODULE);
+    for (const mod of NETWORK_MODULES) expect(fromWorker).not.toContain(mod);
     expect(fromWorker.filter((f) => /^src\/app\/optins\//.test(f))).toEqual([]);
     const bad: string[] = [];
     for (const [f, src] of modules) if (/^src\/(worker|core)\//.test(rel(f)) && /from\s*['"][^'"]*\/optins\//.test(src)) bad.push(rel(f));

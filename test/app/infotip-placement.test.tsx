@@ -28,6 +28,7 @@ import { DC, dataciteJson, zenodoJson, ZEN } from '../helpers/licenceFixtures';
 import { MapFetcher } from '../sources/mapFetcher';
 import * as meta from '../convert/metaFixtures';
 import { wormsMock } from '../helpers/wormsFixtures';
+import { nvsMock } from '../helpers/nvsFixtures';
 
 const wideCsv = readFileSync(join(__dirname, '..', 'fixtures', 'layout-wide.csv'), 'utf-8');
 const seen = new Set<TipId>();
@@ -289,6 +290,29 @@ describe('/convert: the WoRMS result table', () => {
       fireEvent.click(await screen.findByRole('button', { name: translate(lang, 'convert.worms.lookup', { n: 2 }) }));
       await screen.findByRole('table');
       expectTips(['convertWormsOptIn', 'convertWormsPrivacy', 'convertWormsTable', 'convertWormsChoice'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('/convert: the NERC section and the NVS search', () => {
+  it('the section, the opt-in, its privacy copy, the decision and (after a search) the results carry their own ⓘ, in every language', async () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      vi.stubGlobal('fetch', nvsMock().fetch);
+      const csv = 'occurrenceID,eventID,scientificName,individualCount,decimalLatitude,decimalLongitude,eventDate,Temperature [°C]\no1,E1,Calanus finmarchicus,5,54.1,7.9,2022-05-05,7.1\n';
+      const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+      chooseFiles(container, [{ name: 'l.csv', text: csv }]);
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
+      await screen.findByRole('heading', { name: UI[lang]['convert.nerc.title'] });
+      expectTips(['convertNerc', 'convertNercChoice', 'convertNvsOptIn', 'convertNvsPrivacy'], lang);
+      fireEvent.click(screen.getByRole('checkbox', { name: UI[lang]['convert.nvs.optin'] }));
+      fireEvent.change(screen.getByLabelText(UI[lang]['convert.nvs.word.type.aria'].replace('{header}', 'Temperature [°C]')), { target: { value: 'invented current' } });
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.nvs.search.type.aria'].replace('{header}', 'Temperature [°C]') }));
+      await waitFor(() => expect(document.querySelector('.convert-nvs-results')).toBeTruthy());
+      expectTips(['convertNvsResults'], lang);
       expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
       vi.unstubAllGlobals();
     }

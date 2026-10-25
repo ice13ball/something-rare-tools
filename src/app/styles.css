@@ -1589,3 +1589,42 @@ code.multiline {
   max-width: 100%;
   min-width: 0;
 }
+
+/* the NERC section (stage 5): one card per measured-variable column with its lists and, when the NVS option is ticked, its search rows. Fields shrink and wrap. */
+.convert-nerc {
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+
+.convert-nerc-list,
+.convert-nvs-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.convert-nerc-col {
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.convert-nerc-head {
+  margin: 0 0 0.25rem;
+}
+
+.convert-nvs-privacy ul,
+.convert-nvs-results .convert-nvs-list {
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.convert-nvs-results .convert-nvs-list {
+  list-style: disc;
+}
+
+.convert-nerc .convert-fields select,
+.convert-nvs-search .convert-fields input[type='text'] {
+  min-width: 0;
+  max-width: 100%;
+}

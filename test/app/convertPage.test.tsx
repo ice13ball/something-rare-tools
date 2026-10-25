@@ -63,14 +63,13 @@ describe('ConvertPage', () => {
     expect(screen.getByText(UI.en['tip.logic'])).toBeTruthy();
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/hidden/);
-    expect(text).toMatch(/read and previewed in your browser and stay there\. The only thing that can leave it is the list of taxon names of the WoRMS lookup below, and only when you press its button/);
+    expect(text).toMatch(/read and previewed in your browser and stay there\. The only things that can leave it are the list of taxon names of the WoRMS lookup below and the search words you type for the NVS search, each only when you press its own button/);
     expect(text).not.toMatch(/nothing of them is sent anywhere/);
     expect(text).toMatch(/built in your browser and downloaded from it/);
     expect(text).not.toMatch(/no export yet/);
-    // WoRMS is here (stage 4), after its button and off by default; the NERC lookup is still planned
-    expect(text).toMatch(/One optional lookup is here: the taxon names you choose to look up go to WoRMS, and only after you press its button; it is off by default/);
-    expect(text).toMatch(/second one, for terms in the NERC vocabulary, is still planned/);
-    expect(text).not.toMatch(/Two optional lookups are planned/);
+    // both lookups are here: WoRMS (stage 4) and NVS (stage 5), each after its own button and off by default
+    expect(text).toMatch(/Two optional lookups are here, both off by default: the taxon names you choose to look up go to WoRMS, and only after you press its button; and a word you type for a measured variable or a unit goes to NVS, the NERC vocabulary server, and only after you press its button/);
+    expect(text).not.toMatch(/still planned|Two optional lookups are planned/);
   });
 
   it('is announced nowhere: the header menu and the footer do not link it, nor does the index', () => {

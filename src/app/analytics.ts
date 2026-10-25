@@ -32,6 +32,8 @@ export type ConvertProfileParam = 'none' | 'ctd';
 export type ConvertMetaSourceParam = 'none' | 'file';
 /** convert_exported: whether the WoRMS opt-in was used and at least one confirmed ID went into the archive (`used`) or not (`none`). Never a name or an ID. */
 export type ConvertWormsParam = 'none' | 'used';
+/** Whether at least one identifier from an NVS search was written to the archive: never a word, a code or a label. */
+export type ConvertNvsParam = 'none' | 'used';
 export interface TrackParams {
   input_type: InputType;
   mode: DownloadMode;
@@ -43,6 +45,7 @@ export interface TrackParams {
   profile?: ConvertProfileParam;
   meta_source?: ConvertMetaSourceParam;
   worms?: ConvertWormsParam;
+  nvs?: ConvertNvsParam;
   /** convert_exported: how many events, occurrences and measurement rows the archive has */
   n_events?: number;
   n_occurrences?: number;
@@ -56,6 +59,7 @@ const SHAPES: readonly string[] = ['wide', 'long', 'mixed'];
 const PROFILES: readonly string[] = ['none', 'ctd'];
 const META_SOURCES: readonly string[] = ['none', 'file'];
 const WORMS_PARAMS: readonly string[] = ['none', 'used'];
+const NVS_PARAMS: readonly string[] = ['none', 'used'];
 const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info', 'n_events', 'n_occurrences', 'n_measurements'] as const;
 
 const isState = (v: unknown): v is ConsentState => v === 'granted' || v === 'denied';
@@ -210,6 +214,7 @@ export function track(event: TrackEvent, params: TrackParams): void {
   if (typeof p.profile === 'string' && PROFILES.includes(p.profile)) clean.profile = p.profile;
   if (typeof p.meta_source === 'string' && META_SOURCES.includes(p.meta_source)) clean.meta_source = p.meta_source;
   if (typeof p.worms === 'string' && WORMS_PARAMS.includes(p.worms)) clean.worms = p.worms;
+  if (typeof p.nvs === 'string' && NVS_PARAMS.includes(p.nvs)) clean.nvs = p.nvs;
   for (const k of COUNT_KEYS) {
     const v = p[k];
     if (typeof v === 'number' && Number.isFinite(v)) clean[k] = Math.max(0, Math.round(v));

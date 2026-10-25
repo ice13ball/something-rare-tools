@@ -357,7 +357,7 @@ describe('per area needs a choice of medium (M2) and the page names what is miss
     expect([...medium.options].map((o) => o.textContent)).toEqual(['— choose —', 'Bed (sediment)', 'Water column']);
     await settled('Missing: water column or bed');
     fireEvent.change(medium, { target: { value: 'water' } });
-    await settled('no verified NERC concept');
+    await settled('no confirmed NERC concept');
     expect(summary().textContent).not.toContain('Missing: water column or bed');
   });
 
