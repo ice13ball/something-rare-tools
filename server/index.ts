@@ -136,7 +136,11 @@ export function createApp(opts: AppOptions): Express {
   // The 404 page wears the site's built stylesheet; one rendering per language, made once.
   const sheets = stylesheetsOf(pages.home.toString('utf8'));
   const notFoundPages = Object.fromEntries(NOT_FOUND_LANGS.map((l) => [l, renderNotFound(l, sheets)]));
-  const ogImage = readOptional(dist, 'og.png');
+  // Link-preview image (1200×630): the JPEG is what the pages' og:image / twitter:image name (not every scraper renders WebP); the WebP is the lighter copy.
+  const ogImages = [
+    { path: '/og.jpg', type: 'image/jpeg', body: readOptional(dist, 'og.jpg') },
+    { path: '/og.webp', type: 'image/webp', body: readOptional(dist, 'og.webp') },
+  ];
   const sitemap = Buffer.from(buildSitemap(statSync(join(dist, 'index.html')).mtime));
 
   const app = express();
@@ -184,11 +188,13 @@ export function createApp(opts: AppOptions): Express {
   }
   // Self-hosted fonts (SIL OFL, see NOTICE): a fixed directory, no index, no redirects, no dotfiles.
   app.use('/fonts', express.static(join(dist, 'fonts'), { index: false, redirect: false, dotfiles: 'ignore', etag: false, maxAge: '30d' }));
-  if (ogImage) {
-    app.get('/og.png', (_req, res) => {
-      res.setHeader('Content-Type', 'image/png');
+  for (const og of ogImages) {
+    const body = og.body;
+    if (!body) continue;
+    app.get(og.path, (_req, res) => {
+      res.setHeader('Content-Type', og.type);
       res.setHeader('Cache-Control', 'public, max-age=604800');
-      res.end(ogImage);
+      res.end(body);
     });
   }
   if (favicon) {
