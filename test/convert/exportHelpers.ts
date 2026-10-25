@@ -62,12 +62,14 @@ export interface ExportOptions {
   deflate?: boolean;
   device?: SamplingDevice;
   meshUm?: string;
+  /** The shape the user chose; default: the one the column roles suggest. */
+  shape?: 'wide' | 'long';
 }
 
 /** A sheet through convert, validation and the writers, as the export does it. */
 export async function exportSheet(header: string[], rows: Cell[][], o: ExportOptions): Promise<Exported> {
   const file = fileOf(header, rows, 'S', o.decimalComma ? { decimalComma: true } : {});
-  const sheet = sheetInput(file, { quantity: o.quantity, ...(o.edit ? { edit: o.edit } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }) });
+  const sheet = sheetInput(file, { quantity: o.quantity, ...(o.edit ? { edit: o.edit } : {}), ...(o.shape ? { shape: o.shape } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }) });
   const approvedSplits = o.approve === false ? {} : Object.fromEntries(listSplits({ sheets: [sheet] }).filter((s) => s.needsDecision).map((s) => [s.verbatim, s.proposed]));
   const input: ConvertInput = { sheets: [sheet], options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true }, approvedSplits };
   const result = convert(input);

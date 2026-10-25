@@ -134,20 +134,44 @@ describe('the export button', () => {
     await waitFor(() => expect(off()).toBe(true));
   });
 
-  it('a tick holds only until a decision changes: every change of a decision clears every tick, and the text says so', async () => {
+  it('a tick survives as long as the findings of its rule stay the same: typing in the description unticks nothing; a decision that changes those findings does', async () => {
     await loadW1();
     fillDescription();
     await tickAll();
     await waitFor(() => expect(off()).toBe(false));
-    expect(document.querySelector('.convert-accept')?.textContent).toContain(T['convert.accept.intro']);
-    expect(T['convert.accept.intro']).toContain('Every change of a decision clears all ticks');
-    // a decision of the sheet (the full-species-list tick) is a change: the ticks are gone, the button is off again, and ticking again switches it on
+    expect(T['convert.accept.intro']).toContain('A tick stays while the findings of that kind stay the same');
+    expect(T['convert.accept.intro']).not.toContain('clears all ticks');
+    // typing in the title, the abstract and the licence changes no finding of any warning: every tick stays
+    typeInto(T['convert.meta.f.title'], 'Another invented title');
+    typeInto(T['convert.meta.f.abstract'], 'Another abstract.');
+    await idle();
+    expect(off()).toBe(false);
+    const box = (rule: string): HTMLInputElement => within(document.querySelector(`[data-rule-group="${rule}"]`) as HTMLElement).getByRole('checkbox') as HTMLInputElement;
+    expect(box('CONV-NAMEID-MISSING').checked).toBe(true);
+    expect(box('CONV-DEVICE-MISSING').checked).toBe(true);
+    // the full-species-list tick changes how many occurrences lack an ID (7 -> 6): that kind has to be ticked again; the device warning is unchanged and stays ticked
     fireEvent.click(screen.getByLabelText(T['convert.fullList']));
-    await waitFor(() => expect(off()).toBe(true));
     await settled('6 occurrences (6 present, 0 absent)');
-    for (const box of document.querySelectorAll<HTMLInputElement>('.convert-accept [data-rule-group] input[type="checkbox"]')) expect(box.checked).toBe(false);
+    await idle();
+    expect(box('CONV-NAMEID-MISSING').checked).toBe(false);
+    expect(box('CONV-DEVICE-MISSING').checked).toBe(true);
+    expect(off()).toBe(true);
+    fireEvent.click(box('CONV-NAMEID-MISSING'));
+    await waitFor(() => expect(off()).toBe(false));
+  });
+
+  it('the reason the export is off is announced: the button points at a polite live note', async () => {
+    await loadW1();
+    await idle();
+    const note = document.getElementById('convert-export-note') as HTMLElement;
+    expect(note.getAttribute('aria-live')).toBe('polite');
+    expect(exportButton().getAttribute('aria-describedby')).toBe('convert-export-note');
+    expect(note.textContent).toBe(T['convert.export.blocked']);
+    fillDescription();
     await tickAll();
     await waitFor(() => expect(off()).toBe(false));
+    expect(note.textContent).toBe('');
+    expect(document.getElementById('convert-export-note')).toBe(note);
   });
 
   it('the sampling device and the mesh size are decisions of the sheet: choosing a device clears the device warning, and a bad mesh size blocks', async () => {

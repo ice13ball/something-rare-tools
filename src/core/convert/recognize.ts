@@ -183,7 +183,16 @@ const why = (p: ColumnProposal, code: OverlayReason): void => {
  * Column proposals for /convert: the shared proposals, with the converter's roles laid over them. Pure; the input proposals are not mutated.
  */
 export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProposal[] {
-  const base = proposeColumns(sheet, ctx).map((p) => ({ ...p }));
+  // T4 of the plan: the shared proposer gives a Darwin Core occurrenceID the sample-code slot (and the Sample column loses it). That is right for a long
+  // sheet, where the user's occurrenceID is used as given. On a WIDE sheet (no taxon column) one occurrenceID cannot belong to the many taxon cells of a row,
+  // so the shared proposer is asked as if that column had no name; the column then gets the occurrenceId role below, which is reported as not written.
+  const wide = !sheet.header.some((h) => {
+    const name = unitFromHeader(h).name;
+    return dwcTermOf(h) === 'scientificname' || TAXON_NAME.test(foldDiacritics(headerKey(name)));
+  });
+  const occurrenceIdAt = new Set(wide ? sheet.header.flatMap((h, i) => (dwcTermOf(h) === 'occurrenceid' ? [i] : [])) : []);
+  const asked = occurrenceIdAt.size === 0 ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) ? `__column ${i + 1}` : h)) };
+  const base = proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: sheet.header[p.index] } : { ...p }));
   const claims = new Map<number, Claim>();
   const bounds = new Map<number, 'min' | 'max'>();
   let dwcEventId = -1;
