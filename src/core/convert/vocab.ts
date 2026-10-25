@@ -208,6 +208,32 @@ export function foldUnit(text: string): string {
     .replace(/m-3$/, '/m3');
 }
 
+/**
+ * The dimension a unit text states: "per unit volume" (/L, /mL, /m3, /dm3, /cm3) or "per unit mass" (/kg, /g, /mg), or undefined (a unit with neither, or one
+ * spelled another way). The verified aliases say it themselves; any other unit is read from its denominator. Used for the oxygen choice, for a unit with no alias
+ * that is plainly per mass, and for CONV-NERC-UNIT-MISMATCH.
+ */
+export function unitDimension(text: string): PerDimension | undefined {
+  const k = foldUnit(text);
+  if (k === '') return undefined;
+  const alias = VARIABLE_UNITS.find((u) => u.aliases.includes(k))?.per;
+  if (alias !== undefined) return alias;
+  const d = k.replace(/([a-z0-9])(g|ml|dm3|cm3)-1$/, '$1/$2');
+  if (/\/(?:[kmun]?g)$/.test(d)) return 'mass';
+  if (/\/(?:[dcm]?l|m3|dm3|cm3)$/.test(d)) return 'volume';
+  return undefined;
+}
+
+/**
+ * The dimension a concept LABEL states: "per unit mass", "per unit dry weight", "per unit wet weight" (mass) or "per unit volume"; undefined when the label states
+ * neither (a temperature, a "per unit area" concept). Read from the label of a verified concept and of a result of the user's NVS search alike.
+ */
+export function labelDimension(label: string): PerDimension | undefined {
+  if (/\bper unit (?:mass|dry weight|wet weight)\b/i.test(label)) return 'mass';
+  if (/\bper unit volume\b/i.test(label)) return 'volume';
+  return undefined;
+}
+
 /** The verified P06 concept a unit text names, or undefined. */
 export function unitConcept(text: string): VariableUnit | undefined {
   const k = foldUnit(text);
@@ -218,3 +244,63 @@ export function unitConcept(text: string): VariableUnit | undefined {
 export const VARIABLE_VERIFIED_CODES: readonly string[] = [
   ...new Set([...Object.values(VARIABLE_CONCEPTS).flat().map((c) => `P01/${c.term.code}`), ...VARIABLE_UNITS.map((u) => `P06/${u.term.code}`)]),
 ].sort();
+
+/* ---------- header names of the measured variables, in the languages of the tool ---------- */
+
+/*
+ * CONVERTER ONLY. /check's recogniser (src/core/recognize/vocab.ts, pinned byte for byte, trap T11) knows the English names of a measured variable; a Polish, German or French
+ * header ("Zasolenie [PSU]", "Salzgehalt", "oxygène dissous") reaches the converter as a variable of its own name, which the table above does not know, so no concept was
+ * proposed. This table maps WHOLE header names (diacritics folded, case folded, a bracketed unit removed) to the variable of VARIABLE_CONCEPTS; nothing else. Never a
+ * substring: "temperatura powietrza", "Lufttemperatur" and "température de l'air" (air), "temperatura próbki" and "temperatura inkubacji" (a laboratory temperature) and "nasycenie
+ * tlenem" (saturation) are not here and so get nothing. A name that maps to a variable gets exactly what the variable gets: generic concepts are proposed, method-specific ones only
+ * offered (chlorophyll, DIC and alkalinity stay "offered"), oxygen is chosen by the unit's dimension, nothing is pre-selected.
+ */
+const VARIABLE_NAMES: Readonly<Record<string, { pl?: readonly string[]; de?: readonly string[]; fr?: readonly string[] }>> = {
+  temperature: { pl: ['temperatura', 'temperatura wody', 'temp. wody'], de: ['Temperatur', 'Wassertemperatur'], fr: ['température', "température de l'eau"] },
+  salinity: { pl: ['zasolenie'], de: ['Salzgehalt', 'Salinität'], fr: ['salinité'] },
+  oxygen: { pl: ['tlen', 'tlen rozpuszczony'], de: ['Sauerstoff', 'gelöster Sauerstoff'], fr: ['oxygène', 'oxygène dissous'] },
+  chlorophyll: { pl: ['chlorofil a', 'chlorofil-a', 'chlorofil'], de: ['Chlorophyll a', 'Chlorophyll-a'], fr: ['chlorophylle a', 'chlorophylle-a'] },
+  nitrate: { pl: ['azotany', 'azotan', 'NO3'], de: ['Nitrat'], fr: ['nitrate', 'nitrates'] },
+  nitrite: { pl: ['azotyny', 'azotyn', 'NO2'], de: ['Nitrit'], fr: ['nitrite', 'nitrites'] },
+  'nitrate+nitrite': { pl: ['azotany+azotyny', 'azotany i azotyny', 'suma azotanów i azotynów'] },
+  ammonium: { pl: ['amoniak', 'jon amonowy', 'amon', 'NH4'], de: ['Ammonium'], fr: ['ammonium'] },
+  phosphate: { pl: ['fosforany', 'fosforan', 'PO4'], de: ['Phosphat'], fr: ['phosphate', 'phosphates'] },
+  silicate: { pl: ['krzemiany', 'krzemian', 'krzemionka', 'SiO4'], de: ['Silikat'], fr: ['silicate', 'silicates'] },
+  pH: { pl: ['pH'] },
+  TA: { pl: ['alkaliczność', 'alkaliczność całkowita'], de: ['Alkalinität'], fr: ['alcalinité', 'alcalinité totale'] },
+  DIC: { pl: ['węgiel nieorganiczny rozpuszczony', 'DIC'], de: ['gelöster anorganischer Kohlenstoff'], fr: ['carbone inorganique dissous'] },
+};
+
+const FOLD_SPECIAL: Record<string, string> = { ł: 'l', ß: 'ss', ø: 'o', æ: 'ae', œ: 'oe', đ: 'd' };
+
+/** The folded key of a header name: diacritics folded (ł and ß included), lower case, anything but letters and digits as one space. The same fold as /check's headerKey. */
+const nameKey = (name: string): string =>
+  name
+    .normalize('NFKD')
+    .replace(/[łŁßøØæÆœŒđĐ]/g, (c) => FOLD_SPECIAL[c.toLowerCase()] ?? c)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** Folded header name -> variable of VARIABLE_CONCEPTS. */
+export const VARIABLE_SYNONYMS: ReadonlyMap<string, string> = new Map(
+  Object.entries(VARIABLE_NAMES).flatMap(([variable, byLang]) => Object.values(byLang).flatMap((names) => names.map((n): [string, string] => [nameKey(n), variable]))),
+);
+
+/** A header name without its bracketed unit ("Zasolenie [PSU]" -> "Zasolenie"), and without a trailing parenthesis that is a unit ("tlen (µmol/kg)"). */
+function stripUnit(name: string): string {
+  const t = name.replace(/\s*\[[^\]]*\]\s*$/, '').trim();
+  const m = /^(.*\S)\s*\(([^()]*)\)$/.exec(t);
+  return m !== null && (unitConcept(m[2]) !== undefined || unitDimension(m[2]) !== undefined) ? m[1].trim() : t;
+}
+
+/**
+ * The variable of VARIABLE_CONCEPTS a column's variable name stands for: the name itself when it is one of its keys (what /check's recogniser produces), else the variable of
+ * the synonym table for the whole name; undefined when the name is neither.
+ */
+export function conceptVariable(name: string): string | undefined {
+  if (Object.prototype.hasOwnProperty.call(VARIABLE_CONCEPTS, name)) return name;
+  return VARIABLE_SYNONYMS.get(nameKey(stripUnit(name)));
+}

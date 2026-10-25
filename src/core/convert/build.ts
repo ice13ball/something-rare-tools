@@ -11,7 +11,7 @@ import { buildEventTree, eventDateText, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import type { ConvertResult, EventRec, MofIntent, OccRec, SourceRef } from './model';
-import { readDecision } from './nerc';
+import { pickLabel, readDecision, unitContradictsConcept } from './nerc';
 import type { NercDecisions } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
@@ -769,6 +769,13 @@ export function convert(input: ConvertInput): ConvertResult {
       } else if (st.v.unit !== undefined && !noUnit.includes(st.v.unit)) noUnit.push(st.v.unit);
     }
     if (noType.length > 0) findings.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: noType.join(', ') } }));
+    // a confirmed concept whose label says "per unit mass" (or volume) for a column whose unit is per volume (or mass): said once per column, the pair is the user's
+    for (const st of varState) {
+      if (!st.written || !st.type || st.v.unit === undefined) continue;
+      if (unitContradictsConcept(pickLabel(st.type), st.v.unit)) {
+        findings.push(makeConvertFinding('CONV-NERC-UNIT-MISMATCH', { ...base, field: st.v.header, params: { column: st.v.header.trim(), code: st.type.id.split('/')[6], unit: st.v.unit } }));
+      }
+    }
     for (const unit of noUnit) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit } }));
 
     // sample-level conflicts of long sheets

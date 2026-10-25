@@ -31,9 +31,9 @@ export { FULL_LIST_SETTING, NVS_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, 
 export type { ConvertSettings } from './settings';
 export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
-export { DEVICES, P01, P06, VARIABLE_CONCEPTS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, VERIFIED_CODES, foldUnit, nercUri, unitConcept } from './vocab';
+export { DEVICES, P01, P06, VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, VERIFIED_CODES, conceptVariable, foldUnit, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 export type { DeviceKey, NercTerm, PerDimension, VariableConcept, VariableUnit } from './vocab';
-export { P01_URI, P06_URI, conceptUri, readDecision, readPick, suggestType, suggestUnit, suggestedPick } from './nerc';
+export { P01_URI, P06_URI, conceptUri, pickLabel, readDecision, readPick, suggestType, suggestUnit, suggestedPick, unitContradictsConcept } from './nerc';
 export type { NercColumnDecision, NercDecisions, NercPick, NercSource, TypeSuggestion } from './nerc';
 export { NVS_LIMIT, nvsQuery, readConceptJsonLd, readSparqlAnswer, searchWords, sparqlLiteralBody, typedCode } from './nvs';
 export type { NvsCollection, NvsConcept } from './nvs';

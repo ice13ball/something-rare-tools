@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { VARIABLE_CONCEPTS, VARIABLE_VERIFIED_CODES, nercUri, unitConcept } from './vocab';
+import { VARIABLE_CONCEPTS, VARIABLE_VERIFIED_CODES, conceptVariable, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 import type { NercTerm, PerDimension, VariableConcept } from './vocab';
 
 /*
@@ -23,6 +23,8 @@ export interface NercPick {
   id: string;
   source: NercSource;
   deprecated: boolean;
+  /** The label NVS gave the concept (a result of the user's search only; a verified concept's label is looked up here). Read for CONV-NERC-UNIT-MISMATCH, never written. */
+  label?: string;
 }
 
 /** The user's confirmed identifiers of one variable column. Absent = not confirmed = nothing written. */
@@ -55,7 +57,24 @@ export function readPick(collection: 'P01' | 'P06', x: unknown): NercPick | unde
   if (r.deprecated !== false) return undefined; // deprecated, or not stated: not written
   // a pick that says it came from the converter's own list must BE on that list (the verified, non-deprecated concepts): the page cannot vouch for anything else
   if (r.source === 'suggested' && !VARIABLE_VERIFIED_CODES.includes(`${collection}/${r.id.split('/')[6]}`)) return undefined;
-  return { id: r.id, source: r.source, deprecated: false };
+  const label = r.source === 'nvs' && typeof r.label === 'string' && r.label.length <= 600 ? r.label : undefined;
+  return { id: r.id, source: r.source, deprecated: false, ...(label === undefined ? {} : { label }) };
+}
+
+/** The label of a confirmed P01 pick: that of the verified list when the pick is from it, else what the page passed for the NVS result; undefined when none. */
+export function pickLabel(pick: NercPick): string | undefined {
+  if (pick.source === 'nvs') return pick.label;
+  const code = pick.id.split('/')[6];
+  for (const list of Object.values(VARIABLE_CONCEPTS)) for (const c of list) if (c.term.code === code) return c.term.label;
+  return undefined;
+}
+
+/** True when the label of a confirmed concept states a dimension (per unit mass or volume) that the column's unit contradicts. Neither side stating one is no mismatch. */
+export function unitContradictsConcept(label: string | undefined, unit: string | undefined): boolean {
+  if (label === undefined || unit === undefined) return false;
+  const l = labelDimension(label);
+  const u = unitDimension(unit);
+  return l !== undefined && u !== undefined && l !== u;
 }
 
 /** The decision of one column as the worker may use it: each part checked, the rest dropped. */
@@ -87,8 +106,10 @@ const proposable = (c: VariableConcept, per: PerDimension | undefined): boolean 
  * proposed, and the concepts are offered instead. When more than one generic concept fits, nothing is proposed.
  */
 export function suggestType(variable: string, unit: string | undefined): TypeSuggestion {
-  const list = own(VARIABLE_CONCEPTS, variable) ? VARIABLE_CONCEPTS[variable] : [];
-  const per = unit === undefined ? undefined : unitConcept(unit)?.per;
+  const known = conceptVariable(variable);
+  const list = known !== undefined && own(VARIABLE_CONCEPTS, known) ? VARIABLE_CONCEPTS[known] : [];
+  // a unit with no alias that is plainly per mass (µg/g, mg/kg) still says "not per volume of the water body"; a volume unit with no alias stays unverified (mL/L)
+  const per = unit === undefined ? undefined : (unitConcept(unit)?.per ?? (unitDimension(unit) === 'mass' ? 'mass' : undefined));
   const candidates = list.filter((c) => proposable(c, per));
   const proposed = candidates.length === 1 ? candidates[0] : undefined;
   return { ...(proposed ? { proposed: proposed.term } : {}), offered: list.filter((c) => fits(c, per) && c !== proposed).map((c) => c.term) };
