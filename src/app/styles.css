@@ -1519,3 +1519,10 @@ code.multiline {
   font-weight: 400;
   color: var(--warning);
 }
+
+/* The split table: its "approved / not approved" hint is a .visually-hidden span, which is position: absolute. Without a positioned ancestor its containing
+   block is the page, so it is NOT clipped by the sideways-scrolling wrapper and, sitting in the last column of a table wider than a phone, it stretched the
+   whole page sideways (scrollWidth 878 at 375 px). The wrapper is the containing block now: the table scrolls inside it and the page does not. */
+.convert-splits .table-scroll {
+  position: relative;
+}

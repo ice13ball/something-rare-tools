@@ -80,27 +80,55 @@ function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolea
   return marks > 0;
 }
 
-type Claim = { role: ColumnRole; confidence: 'high' | 'low'; reason: string };
+/** Every reason the overlay gives, by code: the English text is the technical wording, the page shows the text of `convert.reason.<code>` in the reader's language. */
+export const OVERLAY_REASONS = {
+  'dwc-occurrenceid': 'Darwin Core occurrenceID (used as given)',
+  'dwc-eventid': 'Darwin Core eventID is the sample code',
+  'dwc-scientificname': 'Darwin Core scientificName',
+  'dwc-individualcount': 'Darwin Core individualCount (a count)',
+  'dwc-organismquantity': 'Darwin Core organismQuantity',
+  'dwc-organismquantitytype': 'Darwin Core organismQuantityType',
+  'dwc-lifestage': 'Darwin Core lifeStage',
+  'dwc-identificationqualifier': 'Darwin Core identificationQualifier',
+  'name-stage': 'name says life stage',
+  'name-taxon': 'name says taxon or species',
+  'name-count': 'name says count',
+  'name-abundance': 'name says abundance, density or biomass',
+  'name-effort-volume': 'name says sampled (filtered) volume: the sampling effort',
+  'name-effort-area': 'name says sampled area: the sampling effort',
+  'depth-min-dwc': 'Darwin Core minimum (top) depth of a depth range',
+  'depth-max-dwc': 'Darwin Core maximum (bottom) depth of a depth range',
+  'depth-min-name': 'name says minimum (top) depth of a depth range',
+  'depth-max-name': 'name says maximum (bottom) depth of a depth range',
+  'quantity-other': 'another quantity column is used',
+  'eventid-used': 'the Darwin Core eventID column is used as the sample code',
+  'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
+  'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
+  'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
+} as const;
+export type OverlayReason = keyof typeof OVERLAY_REASONS;
+
+type Claim = { role: ColumnRole; confidence: 'high' | 'low'; code: OverlayReason };
 
 /** The Darwin Core terms the converter reads, by lower-cased term. */
 function dwcClaim(term: string): Claim | undefined {
   switch (term) {
     case 'occurrenceid':
-      return { role: { kind: 'occurrenceId' }, confidence: 'high', reason: 'Darwin Core occurrenceID (used as given)' };
+      return { role: { kind: 'occurrenceId' }, confidence: 'high', code: 'dwc-occurrenceid' };
     case 'eventid':
-      return { role: { kind: 'sampleId' }, confidence: 'high', reason: 'Darwin Core eventID is the sample code' };
+      return { role: { kind: 'sampleId' }, confidence: 'high', code: 'dwc-eventid' };
     case 'scientificname':
-      return { role: { kind: 'taxon' }, confidence: 'high', reason: 'Darwin Core scientificName' };
+      return { role: { kind: 'taxon' }, confidence: 'high', code: 'dwc-scientificname' };
     case 'individualcount':
-      return { role: { kind: 'quantity' }, confidence: 'high', reason: 'Darwin Core individualCount (a count)' };
+      return { role: { kind: 'quantity' }, confidence: 'high', code: 'dwc-individualcount' };
     case 'organismquantity':
-      return { role: { kind: 'quantity' }, confidence: 'high', reason: 'Darwin Core organismQuantity' };
+      return { role: { kind: 'quantity' }, confidence: 'high', code: 'dwc-organismquantity' };
     case 'organismquantitytype':
-      return { role: { kind: 'quantityType' }, confidence: 'high', reason: 'Darwin Core organismQuantityType' };
+      return { role: { kind: 'quantityType' }, confidence: 'high', code: 'dwc-organismquantitytype' };
     case 'lifestage':
-      return { role: { kind: 'lifeStage' }, confidence: 'high', reason: 'Darwin Core lifeStage' };
+      return { role: { kind: 'lifeStage' }, confidence: 'high', code: 'dwc-lifestage' };
     case 'identificationqualifier':
-      return { role: { kind: 'qualifier' }, confidence: 'high', reason: 'Darwin Core identificationQualifier' };
+      return { role: { kind: 'qualifier' }, confidence: 'high', code: 'dwc-identificationqualifier' };
     default:
       return undefined;
   }
@@ -108,16 +136,21 @@ function dwcClaim(term: string): Claim | undefined {
 
 /** The converter's own names (taxon, quantity, effort) in PL / EN / DE / FR; `key` is a headerKey. */
 function nameClaim(key: string, unit: string | undefined): Claim | undefined {
-  if (STAGE_NAME.test(key)) return { role: { kind: 'lifeStage' }, confidence: 'high', reason: 'name says life stage' };
-  if (TAXON_NAME.test(key)) return { role: { kind: 'taxon' }, confidence: 'high', reason: 'name says taxon or species' };
-  if (QUANTITY_STANDALONE.test(key)) return { role: { kind: 'quantity' }, confidence: 'high', reason: 'name says count' };
+  if (STAGE_NAME.test(key)) return { role: { kind: 'lifeStage' }, confidence: 'high', code: 'name-stage' };
+  if (TAXON_NAME.test(key)) return { role: { kind: 'taxon' }, confidence: 'high', code: 'name-taxon' };
+  if (QUANTITY_STANDALONE.test(key)) return { role: { kind: 'quantity' }, confidence: 'high', code: 'name-count' };
   const q = QUANTITY_WORD.exec(key);
-  if (q) return { role: { kind: 'quantity' }, confidence: q[2] === undefined ? 'high' : 'low', reason: 'name says abundance, density or biomass' };
-  const effort = (reason: string): Claim => ({ role: unit === undefined ? { kind: 'effort' } : { kind: 'effort', unit }, confidence: 'high', reason });
-  if (EFFORT_VOLUME.test(key)) return effort('name says sampled (filtered) volume: the sampling effort');
-  if (EFFORT_AREA.test(key)) return effort('name says sampled area: the sampling effort');
+  if (q) return { role: { kind: 'quantity' }, confidence: q[2] === undefined ? 'high' : 'low', code: 'name-abundance' };
+  const effort = (code: OverlayReason): Claim => ({ role: unit === undefined ? { kind: 'effort' } : { kind: 'effort', unit }, confidence: 'high', code });
+  if (EFFORT_VOLUME.test(key)) return effort('name-effort-volume');
+  if (EFFORT_AREA.test(key)) return effort('name-effort-area');
   return undefined;
 }
+
+const why = (p: ColumnProposal, code: OverlayReason): void => {
+  p.reason = OVERLAY_REASONS[code];
+  p.reasonCode = code;
+};
 
 /**
  * Column proposals for /convert: the shared proposals, with the converter's roles laid over them. Pure; the input proposals are not mutated.
@@ -166,7 +199,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const unit = dwcDepth ? 'm' : (was?.unit ?? hu.unit);
       p.role = { kind: 'depth', positive: dwcDepth ? 'down' : (was?.positive ?? sheetPositive), ...(unit === undefined ? {} : { unit }), bound };
       p.confidence = 'high';
-      p.reason = `${dwcDepth ? 'Darwin Core ' : 'name says '}${bound === 'min' ? 'minimum (top) depth' : 'maximum (bottom) depth'} of a depth range`;
+      why(p, `depth-${bound}-${dwcDepth ? 'dwc' : 'name'}` as OverlayReason);
       continue;
     }
     if (claim) {
@@ -175,37 +208,47 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         if (seenQuantity.size > 0) {
           p.role = { kind: 'ignore' };
           p.confidence = 'low';
-          p.reason = 'another quantity column is used';
+          why(p, 'quantity-other');
           continue;
         }
         seenQuantity.add(p.index);
       }
       p.role = claim.role;
       p.confidence = claim.confidence;
-      p.reason = claim.reason;
+      why(p, claim.code);
       continue;
     }
     // another sample-code column next to a Darwin Core eventID: the eventID is the code
     if (dwcEventId >= 0 && p.role.kind === 'sampleId' && p.index !== dwcEventId) {
       p.role = { kind: 'ignore' };
       p.confidence = 'low';
-      p.reason = 'the Darwin Core eventID column is used as the sample code';
+      why(p, 'eventid-used');
       continue;
     }
     // wide sheet: a column of presence marks (+, x) next to counts is a species column too; the shared proposer read it as text
     const headerName = unitFromHeader(p.header).name.trim();
     const summaryHeader = isSummaryHeader(headerName);
+    // a summary header that would otherwise have been proposed keeps the shared role; the page says why it is not a taxon candidate
+    if (
+      summaryHeader &&
+      !hasLongTaxon &&
+      ((p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) ||
+        (p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && p.role.p01 === undefined))
+    ) {
+      why(p, 'summary-header');
+      continue;
+    }
     if (!summaryHeader && !hasLongTaxon && p.role.kind === 'ignore' && /^text column/.test(p.reason) && holdsPresenceMarks(sheet, p.index, ctx.decimalComma)) {
       p.role = { kind: 'taxon', header: true };
       p.confidence = 'low';
-      p.reason = 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)';
+      why(p, 'taxon-marks');
       continue;
     }
     // wide sheet: a numeric column named like nothing we know is a taxon candidate; confirmed in bulk
     if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && p.role.p01 === undefined) {
       p.role = { kind: 'taxon', header: true };
       p.confidence = 'low';
-      p.reason = 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)';
+      why(p, 'taxon-numeric');
     }
   }
   return base;

@@ -148,3 +148,25 @@ describe('what the tips say is what the code does', () => {
     expect(UIT.pl['convert.flatten.station']).toContain('miejsce (locality)');
   });
 });
+
+describe('the page never scrolls sideways (root cause of the split table overflow)', () => {
+  const css = readFileSync(join(ROOT, 'src/app/styles.css'), 'utf8');
+  const page = readFileSync(join(ROOT, 'src/app/pages/ConvertPage.tsx'), 'utf8');
+
+  it('a table of the converter page that holds a position: absolute element (.visually-hidden) sits in a wrapper that is a containing block', () => {
+    // .visually-hidden is position: absolute; without a positioned ancestor it escapes overflow-x: auto and its place in a wide table widens the whole page
+    expect(css).toMatch(/\.visually-hidden\s*\{[^}]*position:\s*absolute/);
+    const tables = [...page.matchAll(/<table[\s\S]*?<\/table>/g)].map((m) => m[0]);
+    expect(tables.length).toBeGreaterThan(0);
+    const withHidden = tables.filter((t) => t.includes('visually-hidden'));
+    expect(withHidden.length).toBeGreaterThan(0);
+    // the split table is in section.convert-splits > .table-scroll, and that wrapper is positioned
+    expect(page).toMatch(/className="convert-splits"[\s\S]*?<div className="table-scroll">[\s\S]*?visually-hidden/);
+    expect(css).toMatch(/\.convert-splits \.table-scroll\s*\{[^}]*position:\s*relative/);
+  });
+
+  it('nothing else in the converter styles is absolutely or fixed positioned outside a positioned parent', () => {
+    const block = css.slice(css.indexOf('/* ---- /convert')).replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(block).not.toMatch(/position:\s*(absolute|fixed)/);
+  });
+});
