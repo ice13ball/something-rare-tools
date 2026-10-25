@@ -236,6 +236,23 @@ describe('static routes', () => {
     expect(res.headers['content-type']).toMatch(/svg/);
   });
 
+  it('/og.jpg and /og.webp are served when present with their image types; /og.png is gone', async () => {
+    expect((await request(app).get('/og.jpg')).status).toBe(404);
+    const dir = mkdtempSync(join(tmpdir(), 'dist-og-'));
+    cpSync(DIST, dir, { recursive: true });
+    writeFileSync(join(dir, 'og.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    writeFileSync(join(dir, 'og.webp'), Buffer.from('RIFF0000WEBP'));
+    writeFileSync(join(dir, 'og.png'), Buffer.from([0x89, 0x50]));
+    const a = make({ distDir: dir }).app;
+    const jpg = await request(a).get('/og.jpg');
+    expect(jpg.status).toBe(200);
+    expect(jpg.headers['content-type']).toBe('image/jpeg');
+    const webp = await request(a).get('/og.webp');
+    expect(webp.status).toBe(200);
+    expect(webp.headers['content-type']).toBe('image/webp');
+    expect((await request(a).get('/og.png')).status).toBe(404);
+  });
+
   it('refuses to start without the HTML pages', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dist-empty-'));
     expect(() => make({ distDir: dir })).toThrow(/index\.html/);
