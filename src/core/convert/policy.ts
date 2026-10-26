@@ -59,6 +59,7 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-PROFILE-NOTHING-READ',
   'CONV-SEAFLOOR-UNIT',
   'CONV-SEAFLOOR-VALUE',
+  'CONV-LONG-DUPLICATE',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */
@@ -87,6 +88,7 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-LICENCE-DIFFERS',
   'CONV-NO-SAMPLING-DESCRIPTOR',
   'CONV-SEAFLOOR-NO-SITE-DEPTH',
+  'CONV-LONG-ROWS-SKIPPED',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */

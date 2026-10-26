@@ -15,6 +15,9 @@ import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
 import { readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { parseFile } from '../core/parse';
+import { pivotLongSheet, pivotProposals } from '../core/convert/pivot';
+import type { PivotColumn } from '../core/convert/pivot';
+import { proposeLayout } from '../core/recognize/layout';
 import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
@@ -90,7 +93,7 @@ export function createConvertHandler(): ConvertHandler {
       }
     }
     const settings: ConvertSettings = result.settings;
-    for (const parsed of parsedAll) {
+    for (let parsed of parsedAll) {
       if (parsed.kind === 'metadata') {
         // never a data sheet: its record goes to the description of the dataset (core/convert/prefill.ts), read by the shared metadata parsers
         result.metadataFiles.push(parsed.fileName);
@@ -118,6 +121,21 @@ export function createConvertHandler(): ConvertHandler {
       // a PANGAEA file carries its own description (citation, title, authors, licence, DOI, coverage, abstract when it has one): it goes to the description of the dataset like a dropped
       // metadata file, with its file name as the source; the sheet itself is still a data table
       if (parsed.kind === 'pangaea' && parsed.embeddedMetadata) records.push(pangaeaHeaderRecord(parsed.embeddedMetadata));
+      // A sheet in the long layout that /check's layout plan recognises (a parameter, a unit and a value column) is turned into one row per sample or level with one column per parameter,
+      // so that it goes the normal way of a measured variable to an eMoF row (core/convert/pivot.ts). The sheet the page shows, and the one the conversion reads, is the pivoted one.
+      const pivotCols = new Map<string, PivotColumn[]>();
+      const pivoted = new Map<string, ParsedFile['sheets'][number]>();
+      const extra: ParsedFile['findings'] = [];
+      for (const t of proposeLayout(parsed).tables) {
+        const sheet = t.long ? parsed.sheets.find((x) => x.name === t.sheet) : undefined;
+        const r = sheet && t.long ? pivotLongSheet(parsed, sheet, t.long) : undefined;
+        if (r) {
+          pivoted.set(r.sheet.name, r.sheet);
+          pivotCols.set(r.sheet.name, r.columns);
+          extra.push(...r.findings);
+        }
+      }
+      if (pivoted.size > 0) parsed = { ...parsed, sheets: parsed.sheets.map((x) => pivoted.get(x.name) ?? x), findings: [...parsed.findings, ...extra] };
       const fileId = `c${++seq}`;
       files.set(fileId, { fileId, parsed });
       const proposals: Record<string, ColumnProposal[]> = Object.create(null) as Record<string, ColumnProposal[]>;
@@ -125,7 +143,9 @@ export function createConvertHandler(): ConvertHandler {
       const shapes: ConvertFileSummary['suggestedShapes'] = Object.create(null) as ConvertFileSummary['suggestedShapes'];
       const profiles: ConvertFileSummary['suggestedProfiles'] = Object.create(null) as ConvertFileSummary['suggestedProfiles'];
       for (const sheet of parsed.sheets) {
-        const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
+        const cols = pivotCols.get(sheet.name);
+        const p0 = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
+        const p = cols ? pivotProposals(p0, cols) : p0;
         proposals[sheet.name] = p;
         const m = toMapping(sheet, p);
         mappings.push(m);

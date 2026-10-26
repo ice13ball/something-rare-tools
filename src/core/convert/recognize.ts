@@ -206,6 +206,7 @@ export const OVERLAY_REASONS = {
   'area-not-effort': 'a plain area on a sheet with no taxa is a place name or an extent, not a sampled area: ignored (name it sampled area if it is one)',
   'seawater-density': 'name and unit say seawater density: a measured variable, not an abundance',
   'oxygen-saturation': 'oxygen as a percentage is oxygen saturation: a variable of its own, with no concentration concept',
+  'long-parameter': 'a parameter of a long sheet (one row per measurement): a measured variable named by the parameter column',
   'p01-malformed': 'the header declares a code that is not a well-formed P01 code (eight letters and digits): kept as a measured variable, and no concept is written',
   'p01-declared-unverified': 'the header declares a P01 code that the converter could not verify: it is offered as declared by the file and written only after you confirm it',
 } as const;

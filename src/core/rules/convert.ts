@@ -68,6 +68,9 @@ import type { RuleSpec } from './spec';
  *   CONV-SEAFLOOR-NO-SITE-DEPTH count          field = column, lines = rows that have a depth below the seafloor and no site depth
  *   CONV-NO-OCCURRENCES        (none)           the conversion produced no occurrence record (an environmental-only upload); with `zeros: 'yes'` taxa were there but every count was 0 and skipped (NO_OCCURRENCES_ZEROS text)
  *   CONV-PROFILE-NOTHING-READ  rows             a sheet marked as a profile file gave no level; rows = its data rows
+ *   CONV-LONG-PIVOTED          rows, samples, variables   a long sheet (parameter, unit, value) was turned into one row per sample or level (info)
+ *   CONV-LONG-ROWS-SKIPPED     count            lines = rows of a long sheet with a value and no parameter name
+ *   CONV-LONG-DUPLICATE        count            value = the parameter given twice with different values for one sample; lines = its rows
  *   CONV-STATION-FROM-POSITION count            value = the first station ID: the user ticked "each distinct position is a station" (info)
  * Stage 6 also gives two rules a second text for a profile file, chosen in renderConvertPlain / renderConvertTechnical (PROFILE_VARIANTS): CONV-SAMPLE-CODE-MISSING when the
  * finding carries `profile: 'yes'`, and CONV-ID-DUPLICATE when its `kind` is `level` (profile rows only; params: used = what each row's ID was made of) or `level-other` (a sample,
@@ -398,6 +401,45 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Rien n'a été lu dans la feuille « {sheet} », marquée comme fichier de profils : aucun niveau ({rows} {+rows:ligne de données|lignes de données}). Il faut une colonne de station, des colonnes de profondeur ou de mesures et des lignes de valeurs. Une feuille qui ne décrit que des colonnes ne se marque pas comme fichier de profils.`,
     },
     technical: `{file}, {sheet}: the sheet was marked as a profile file and produced 0 profile levels ({rows} data rows).`,
+  },
+  {
+    id: 'CONV-LONG-PIVOTED',
+    category: 'B',
+    severity: 'info',
+    params: ['rows', 'samples', 'variables'],
+    plain: {
+      pl: `Arkusz „{sheet}” ma układ długi (jeden wiersz na pomiar). Zamieniono go na jeden wiersz na próbkę lub poziom i jedną kolumnę na parametr: wierszy źródłowych {rows}, próbek lub poziomów {samples}, kolumn z pomiarami {variables}. Sprawdź kolumny.`,
+      en: `Sheet "{sheet}" is in the long layout (one row per measurement). It was turned into one row per sample or level with one column per parameter: {rows} source rows, {samples} samples or levels, {variables} measured columns. Check the columns.`,
+      de: `Das Blatt „{sheet}“ hat das lange Layout (eine Zeile je Messung). Es wurde in eine Zeile je Probe oder Ebene mit einer Spalte je Parameter umgewandelt: {rows} Quellzeilen, {samples} Proben oder Ebenen, {variables} Messspalten. Prüfen Sie die Spalten.`,
+      fr: `La feuille « {sheet} » est en format long (une ligne par mesure). Elle a été transformée en une ligne par échantillon ou niveau, avec une colonne par paramètre : {rows} lignes sources, {samples} échantillons ou niveaux, {variables} colonnes de mesures. Vérifiez les colonnes.`,
+    },
+    technical: `{file}, {sheet}: long layout (parameter, [unit], value columns of the /check layout plan) pivoted to one row per sample or level (key: station, cruise, sample code, position, date, time, depth, pressure): {rows} source rows -> {samples} rows, {variables} parameter columns. A row is numbered by the first line of its group; text and NA values are reported at their own lines.`,
+  },
+  {
+    id: 'CONV-LONG-ROWS-SKIPPED',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} wartość, ale nie ma nazwy parametru ({+lineCount:wiersz|wiersze|wierszy} {lines}), więc {+count:nie został odczytany|nie zostały odczytane|nie zostało odczytanych}. Uzupełnij nazwę parametru w pliku.`,
+      en: `{count} {+count:row has|rows have} a value but no parameter name ({+lineCount:line|lines} {lines}), so {+count:it was|they were} not read. Fill in the parameter name in the file.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} einen Wert, aber keinen Parameternamen ({+lineCount:Zeile|Zeilen} {lines}) und {+count:wurde|wurden} deshalb nicht gelesen. Tragen Sie den Parameternamen in der Datei ein.`,
+      fr: `{count} {+count:ligne a|lignes ont} une valeur mais pas de nom de paramètre ({+lineCount:ligne|lignes} {lines}) et {+count:n'a|n'ont} donc pas été {+count:lue|lues}. Renseignez le nom du paramètre dans le fichier.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} row(s) of a long sheet hold a value and no parameter name; they were not pivoted into any parameter column.`,
+  },
+  {
+    id: 'CONV-LONG-DUPLICATE',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `Arkusz podaje parametr „{value}” więcej niż raz z różnymi wartościami dla jednej próbki lub poziomu ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter nie wybiera jednej z nich: usuń powtórzenie albo zmień nazwę parametru.`,
+      en: `The sheet gives parameter "{value}" more than once, with different values, for one sample or level ({+lineCount:line|lines} {lines}). The converter does not choose one: remove the repeat or rename the parameter.`,
+      de: `Das Blatt nennt den Parameter „{value}“ mehr als einmal mit verschiedenen Werten für eine Probe oder Ebene ({+lineCount:Zeile|Zeilen} {lines}). Der Konverter wählt keinen aus: Entfernen Sie die Wiederholung oder benennen Sie den Parameter um.`,
+      fr: `La feuille donne le paramètre « {value} » plusieurs fois, avec des valeurs différentes, pour un échantillon ou niveau ({+lineCount:ligne|lignes} {lines}). Le convertisseur n'en choisit pas une : supprimez la répétition ou renommez le paramètre.`,
+    },
+    technical: `{file}, {sheet}:{lines}: parameter "{value}" has {count} differing value line(s) for one sample or level of a long sheet; the first value was kept for the preview and the sheet is blocked.`,
   },
   {
     id: 'CONV-STATION-FROM-POSITION',
