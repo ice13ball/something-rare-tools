@@ -69,8 +69,15 @@ export const PRESSURE = {
 /** The pressure concepts as `<collection>/<code>`: the list the test pins to the stage 6 section of docs/research/qc-sources.md. */
 export const PRESSURE_VERIFIED_CODES: readonly string[] = [PRESSURE.type, PRESSURE.unit].map((t) => `${t.uri.split('/')[4]}/${t.code}`).sort();
 
-/** True when the unit text of a pressure column says decibars (dbar, db, decibar, decibars; any case, spaces ignored): only then the unit gets its identifier. */
-export const isDecibar = (unit: string | undefined): boolean => unit !== undefined && /^(dbar|db|decibars?)$/.test(unit.toLowerCase().replace(/[\s.]/g, ''));
+/**
+ * True when the unit text of a pressure column says decibars: `dbar` or `decibar(s)` in any case, or `db` written with a LOWER-case b (spaces and dots ignored). An upper-case-B `dB` is a decibel
+ * (an acoustic level, a gain) and is never a pressure, so it never gets the decibar identifier and is never written as dbar.
+ */
+export const isDecibar = (unit: string | undefined): boolean => {
+  if (unit === undefined) return false;
+  const t = unit.replace(/[\s.]/g, '');
+  return /^(dbar|decibars?)$/i.test(t) || t === 'db';
+};
 
 /**
  * Sampling devices for measurementValueID of NMSPINST (docs/research/qc-sources.md, Item 1b and 1c, opened 2026-10-25, owl:deprecated false): the six
