@@ -17,6 +17,8 @@ import { judge, policyOf } from '../../src/core/convert/policy';
 import { isQualityHeader, proposeConvertColumns, suggestConvertProfile } from '../../src/core/convert/recognize';
 import { isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorMetres, seafloorUnitOf } from '../../src/core/convert/seafloor';
 import { validateTables } from '../../src/core/convert/validate';
+import { pivotLongSheet } from '../../src/core/convert/pivot';
+import { proposeLayout } from '../../src/core/recognize/layout';
 import { VARIABLE_CONCEPTS, isDecibar } from '../../src/core/convert/vocab';
 import { makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { UI } from '../../src/core/i18n/ui';
@@ -1004,3 +1006,83 @@ describe('review fixes of the fourth round', () => {
     expect(ps.find((p) => p.header === 'Sample depth [m]<Float32>')!.cleanHeader).toBe('Sample depth [m]');
   });
 });
+
+describe('4. the long layout (parameter, unit, value) is pivoted with /check\'s own plan (f4, f4b)', () => {
+  it('f4: one row per core and depth, one column per parameter with its unit, said as information; no species candidate', async () => {
+    const f4 = await load('f4-long-env.csv');
+    const sheet = f4.parsed.files[0].sheets[0];
+    expect(sheet.header).toEqual(['core_ID', 'sediment_depth', 'Corg [%]', 'd13C [permil]']);
+    expect(sheet.rowCount).toBe(3);
+    const note = parseAgainPivot('f4-long-env.csv');
+    expect(note.map((f) => [f.ruleId, f.params])).toEqual([['CONV-LONG-PIVOTED', { rows: 6, samples: 3, variables: 2 }]]);
+    expect(roleOf(f4.proposals, 'core_ID')).toEqual({ kind: 'sampleId' });
+    expect(roleOf(f4.proposals, 'Corg [%]')).toMatchObject({ kind: 'variable', variable: 'Corg', unit: '%' });
+    expect(roleOf(f4.proposals, 'd13C [permil]')).toMatchObject({ kind: 'variable', variable: 'd13C', unit: 'permil' });
+    expect(reasonOf(f4.proposals, 'd13C [permil]')).toBe('long-parameter');
+    expect(f4.proposals.some((p) => p.role.kind === 'taxon')).toBe(false);
+  });
+
+  it('f4b: every parameter becomes an eMoF row of its level event, with the unit; the text is said at its own line, NA is no record; a repeat with another value blocks', async () => {
+    const eng = createDirectConvertEngine();
+    const parsed = await eng.parse([{ name: 'f4b-long-env-stations.csv', bytes: bytes('f4b-long-env-stations.csv') }] as never);
+    const f = parsed.files[0];
+    expect(f.sheets[0].header).toEqual(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Method', 'TEMP [degC]', 'Sal']);
+    expect(f.sheets[0].rowCount).toBe(4);
+    const mapping = f.mappings[0];
+    expect(mapping.columns.find((c) => c.header === 'Method')!.role).toEqual({ kind: 'ignore' });
+    const body = { sheets: [{ fileId: f.fileId, sheet: mapping.sheet, mapping, shape: 'wide' as const, profile: PROFILE }], options: {}, approvedSplits: {}, metadata: EMPTY_METADATA };
+    const v = await eng.convert(body as never);
+    const ids = v.findings.map((x) => x.ruleId);
+    expect(ids).toContain('CONV-LONG-PIVOTED');
+    expect(ids).toContain('CONV-LONG-ROWS-SKIPPED');
+    expect(v.findings.find((x) => x.ruleId === 'CONV-LONG-ROWS-SKIPPED')!.lines).toEqual([10]);
+    // NA and the text are reported where they stand in the source sheet, and nothing is written for them
+    expect(v.findings.find((x) => x.ruleId === 'ROW-NA-VARIANT')).toBeUndefined(); // a plain NA is no record, as everywhere in the converter
+    expect(v.findings.find((x) => x.ruleId === 'ROW-NON-NUMERIC')!.lines).toEqual([8]);
+    expect(v.stats.levels).toBe(4);
+    expect(v.stats.measurements).toBe(6); // 8 cells with a value row, minus the NA and the text
+    const r = convert({ sheets: [{ file: parseAgainPivotFile('f4b-long-env-stations.csv'), sheet: mapping.sheet, mapping, shape: 'wide', profile: PROFILE }] });
+    expect(r.measurements.map((m) => [m.target.id, m.measurementType, m.measurementValue, m.measurementUnit ?? ''])).toEqual([
+      ['ZL1:5m', 'temperature', '4.1', '°C'],
+      ['ZL1:5m', 'salinity', '33.1', ''],
+      ['ZL1:10m', 'temperature', '3.9', '°C'],
+      ['ZL1:10m', 'salinity', '33.4', ''],
+      ['ZL2:5m', 'temperature', '4.4', '°C'],
+      ['ZL2:10m', 'salinity', '33.0', ''],
+    ]);
+    expect(r.findings.some((x) => x.ruleId === 'CONV-LONG-DUPLICATE')).toBe(false);
+  });
+
+  it('a parameter given twice for one sample with different values blocks, naming the lines; the same value twice is one value', () => {
+    const text = 'Station,Date,Latitude,Longitude,Depth_m,parameter,unit,value\nA,2020-05-01,70.1,20.2,5,TEMP,degC,4.1\nA,2020-05-01,70.1,20.2,5,TEMP,degC,4.1\nA,2020-05-01,70.1,20.2,5,Sal,,33\nA,2020-05-01,70.1,20.2,5,Sal,,34\n';
+    const file = readConvertFile(parseFile('dup.csv', new TextEncoder().encode(text)));
+    const piv = pivotLongSheet(file, file.sheets[0], { parameterCol: 5, unitCol: 6, valueCol: 7 })!;
+    expect(piv.findings.filter((f) => f.ruleId === 'CONV-LONG-DUPLICATE').map((f) => [f.value, f.lines])).toEqual([['Sal', [4, 5]]]);
+    expect(piv.sheet.rows).toHaveLength(1);
+    expect(policyOf(piv.findings.find((f) => f.ruleId === 'CONV-LONG-DUPLICATE')!)).toBe('block');
+    for (const id of ['CONV-LONG-PIVOTED', 'CONV-LONG-ROWS-SKIPPED', 'CONV-LONG-DUPLICATE']) {
+      const f = makeConvertFinding(id, { file: 'a.csv', sheet: 'a', value: 'Sal', lines: [4, 5], params: { count: 2, rows: 6, samples: 3, variables: 2 } });
+      for (const l of LANGS) expect(renderConvertPlain(f, l), `${id} ${l}`).not.toMatch(/\{|\}/);
+    }
+  });
+
+  it('a wide sheet, and a sheet the layout plan does not call long, are not touched', async () => {
+    for (const name of ['f10-env-only-small.csv', 'f7-oxygen-carbonate.csv', 'f3-porewater-cm.csv']) {
+      const t = await load(name);
+      expect(parseAgainPivot(name), name).toEqual([]);
+      expect(t.parsed.files[0].sheets[0].header.length, name).toBeGreaterThan(5);
+    }
+  });
+});
+
+function parseAgainPivot(name: string): Finding[] {
+  const file = parseAgain(name);
+  const plan = proposeLayout(file).tables[0]?.long;
+  return plan ? pivotLongSheet(file, file.sheets[0], plan)!.findings.filter((f) => f.ruleId === 'CONV-LONG-PIVOTED') : [];
+}
+function parseAgainPivotFile(name: string) {
+  const file = parseAgain(name);
+  const plan = proposeLayout(file).tables[0].long!;
+  const piv = pivotLongSheet(file, file.sheets[0], plan)!;
+  return { ...file, sheets: [piv.sheet], findings: [...file.findings, ...piv.findings] };
+}
