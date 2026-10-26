@@ -2,7 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Spec } from '../dataset';
-import { isBlankCell } from '../recognize/columns';
+import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
+import { p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
@@ -127,7 +128,7 @@ interface Cols {
   depthPlain?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   /** Stage 6: the FIRST pressure column; read only on a profile sheet (a second one is not read, as a second depth is not). */
   pressure?: Spec & { unit?: string };
-  /** The FIRST depth-below-seafloor column (sediment / porewater): written as a negative distance above the surface in metres (core/convert/seafloor.ts). */
+  /** The FIRST depth-below-seafloor column (sediment / porewater): written as a distance above the surface in metres, negative below (core/convert/seafloor.ts). */
   seafloor?: Spec & { unit?: string; positive: SeafloorDirection };
   /** Measured-variable columns with a name: each becomes one eMoF row per sample event (stage 5). `name` is the variable as the column's role gives it, `unit` as given. */
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
@@ -170,7 +171,9 @@ function colsOf(mapping: SheetMapping): Cols {
       case 'variable': {
         const name = r.variable.trim();
         const unit = r.unit?.trim();
-        if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(r.p01 === undefined ? {} : { p01: r.p01 }) });
+        // the P01 code a header declares is read from the HEADER here, never taken from the role the page sent: a declared concept is written only for the code the column's own header holds
+        const declared = p01CodeOf(stripTypeSuffix(m.header))?.code;
+        if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(declared === undefined ? {} : { p01: declared }) });
         break;
       }
       case 'depthBelowSeafloor':
@@ -215,7 +218,7 @@ const text = (raw: unknown): string | undefined => {
 
 /**
  * The lines of a sheet that the parser found RAGGED (ROW-RAGGED: more or fewer fields than the header). Such a row is not converted: its values are shifted against the header, so any
- * cell read from it could belong to another column. The finding itself blocks the sheet (policy.ts) and names the lines.
+ * cell read from it could belong to another column. The finding itself stops the export (policy.ts) and names the lines.
  */
 function raggedLines(file: ParsedFile, sheet: string): ReadonlySet<number> {
   return new Set(file.findings.filter((f) => f.ruleId === 'ROW-RAGGED' && f.sheet === sheet).flatMap((f) => f.lines ?? []));
@@ -341,7 +344,7 @@ function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: s
   };
 }
 
-/** The depth below the seafloor of one row: the negative distance in metres as text, and the number as written with its unit (for a level ID). */
+/** The depth below the seafloor of one row: the distance above the surface in metres as text (negative below), and the number as written with its unit (for a level ID). */
 interface SeafloorRead {
   /** minimum = maximumDistanceAboveSurfaceInMeters */
   text: string;
@@ -354,13 +357,15 @@ interface SeafloorRead {
 
 /**
  * Reads the depth-below-seafloor column of a sheet (core/convert/seafloor.ts). A unit that is not cm or m (or none) refuses the whole column (CONV-SEAFLOOR-UNIT, nothing is
- * written from it); a negative number, or a number with no exact plain text (an exponent), refuses that cell (CONV-SEAFLOOR-VALUE); text and NA are reported like any number cell.
+ * written from it); a number with no exact plain text (an exponent) refuses that cell (CONV-SEAFLOOR-VALUE); text and NA are reported like any number cell. Both signs are written (counted
+ * downwards a negative number is a position above the seafloor); a column that has both is said once, with the count and the lines of the minority sign (CONV-SEAFLOOR-SIGNS, not blocking).
  */
 function seafloorReader(cols: Cols, dc: boolean, collector: Collector, base: { file: string; sheet: string }): { read: (row: RawRow) => SeafloorRead | undefined; findings: () => Finding[] } {
   const col = cols.seafloor;
   const unit = seafloorUnitOf(col?.unit);
-  const negative = new Lines();
   const notation = new Lines();
+  const negatives = new Lines();
+  const positives = new Lines();
   return {
     read: (row) => {
       if (!col || unit === undefined) return undefined;
@@ -373,14 +378,28 @@ function seafloorReader(cols: Cols, dc: boolean, collector: Collector, base: { f
       const plain = sourceNumberText(cell, dc, p.value);
       const m = seafloorMetres(plain, unit, col.positive);
       if (!m.ok) {
-        (m.reason === 'negative' ? negative : notation).add(base.file, base.sheet, col.header, row.line, String(cell).trim());
+        notation.add(base.file, base.sheet, col.header, row.line, String(cell).trim());
         return undefined;
       }
+      if (p.value < 0) negatives.add(base.file, base.sheet, col.header, row.line);
+      else if (p.value > 0) positives.add(base.file, base.sheet, col.header, row.line);
       return { text: m.text, plain: plain as string, unit, value: p.value, direction: col.positive };
     },
     findings: () => [
       ...(col && unit === undefined ? [makeConvertFinding('CONV-SEAFLOOR-UNIT', { ...base, field: col.header, params: { unit: col.unit ?? 'none' } })] : []),
-      ...negative.entries().map((e) => makeConvertFinding('CONV-SEAFLOOR-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, reason: 'negative' } })),
+      // both signs in one column: the minority sign (the one with fewer cells; on a tie, the positive one) is said, so the user can check the direction
+      ...(col && negatives.size > 0 && positives.size > 0
+        ? (() => {
+            const neg = negatives.entries()[0];
+            const pos = positives.entries()[0];
+            const minority = neg.lines.length < pos.lines.length ? neg : pos;
+            const minorityNegative = minority === neg;
+            const direction = col.positive;
+            // counted downwards a negative number is above the seafloor and a positive one below; counted upwards the other way round
+            const side = (direction === 'down') === minorityNegative ? 'above' : 'below';
+            return [makeConvertFinding('CONV-SEAFLOOR-SIGNS', { file: minority.file, sheet: minority.sheet, field: minority.field, lines: minority.lines, params: { count: minority.lines.length, direction, side } })];
+          })()
+        : []),
       ...notation.entries().map((e) => makeConvertFinding('CONV-SEAFLOOR-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, reason: 'notation' } })),
     ],
   };
@@ -887,7 +906,7 @@ export function convert(input: ConvertInput): ConvertResult {
   let sheetKeyN = 0;
 
   // The findings the PARSER raised for the files these sheets come from (/check puts them in its report; the converter must too): a ragged row (an extra or a missing field: the
-  // values of that row are shifted against the header, so the sheet's conversion is blocked, ROW-RAGGED names the lines), an encoding that was guessed, a decimal comma, a 1904 workbook.
+  // values of that row are shifted against the header, so the finding stops the export, and ROW-RAGGED names the lines), an encoding that was guessed, a decimal comma, a 1904 workbook.
   // A finding that names a sheet is kept only for a sheet that is converted; one that names none (the whole file) is kept once per file.
   {
     const used = new Map<ParsedFile, Set<string>>();
@@ -1660,7 +1679,8 @@ export function convert(input: ConvertInput): ConvertResult {
   const found = input.sheets.find((x) => x.file.sheets.some((sh) => sh.name === x.sheet));
   if (occurrences.length === 0 && found !== undefined) {
     const first = found;
-    findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet }));
+    // taxa that were there but all 0 and skipped (the full species list is not ticked) are another case from an upload with no taxon: its own text says what to tick
+    findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet, params: stats.zerosSkipped > 0 && !fullList ? { zeros: 'yes' } : {} }));
   }
 
   const blocking = findings.filter((f) => f.severity === 'error');
