@@ -31,22 +31,23 @@ export function seafloorUnitOf(unit: string | undefined): SeafloorUnit | undefin
   return undefined;
 }
 
-export type SeafloorText = { ok: true; text: string } | { ok: false; reason: 'negative' | 'notation' };
+export type SeafloorText = { ok: true; text: string } | { ok: false; reason: 'notation' };
 
 /**
- * Which way the numbers of the column count. `down` (the usual, and the default of the role): the number is the depth below the seafloor, so it is positive and the converter adds the sign.
- * `up`: the number is a distance counted upwards from the seafloor, so a depth below it is NEGATIVE (a header "Pore_water_Depth[cm]" over negative numbers): the sign is the sheet's own and is kept.
+ * Which way the numbers of the column count. `down` (the usual, and the default of the role): a positive number is a depth below the seafloor and is written as a NEGATIVE distance; a negative
+ * number is then a position ABOVE the seafloor (the water over the sediment) and is written as a positive distance (-2 cm is +0.02 m), never refused.
+ * `up`: the number is a distance counted upwards from the seafloor, so a depth below it is NEGATIVE (a header "Pore_water_Depth[cm]" over negative numbers) and the sheet's own sign is kept.
+ * A column that has both signs is said, once, with the count of the cells of the minority sign (CONV-SEAFLOOR-SIGNS), so the user can check the direction.
  */
 export type SeafloorDirection = 'down' | 'up';
 
 /**
  * `plain` is the number as the exported numbers are written (sourceNumberText: a plain decimal, a decimal comma already a point), or undefined when the cell has no exact plain text
- * (an exponent, degrees, a flipped sign). Returns the negative distance in metres as text.
+ * (an exponent, degrees, a flipped sign). Returns the distance above the surface in metres as text (negative below), the digits as in the cell.
  */
 export function seafloorMetres(plain: string | undefined, unit: SeafloorUnit, direction: SeafloorDirection = 'down'): SeafloorText {
   if (plain === undefined || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(plain)) return { ok: false, reason: 'notation' };
   const negativeInput = plain.startsWith('-') && !/^-0*\.?0*$/.test(plain);
-  if (negativeInput && direction === 'down') return { ok: false, reason: 'negative' };
   const [intRaw, frac = ''] = plain.replace(/^[+-]/, '').split('.');
   const digits = `${intRaw}${frac}`;
   const shift = unit === 'cm' ? -2 : 0;
@@ -65,9 +66,10 @@ export function seafloorMetres(plain: string | undefined, unit: SeafloorUnit, di
   }
   whole = whole.replace(/^0+(?=\d)/, '') || '0';
   const tidy = fraction === '' ? whole : `${whole}.${fraction}`;
-  // zero has no sign; counted downwards the converter adds the minus, counted upwards the sheet's own sign stays
+  // zero has no sign. Counted downwards the sign is turned round (positive = below = negative distance, negative = above = positive distance); counted upwards the sheet's own sign stays.
   if (/^0*\.?0*$/.test(tidy)) return { ok: true, text: '0' };
-  return { ok: true, text: direction === 'down' || negativeInput ? `-${tidy}` : tidy };
+  const negativeOut = direction === 'down' ? !negativeInput : negativeInput;
+  return { ok: true, text: negativeOut ? `-${tidy}` : tidy };
 }
 
 /* ---------- recognition (conservative, converter only) ---------- */

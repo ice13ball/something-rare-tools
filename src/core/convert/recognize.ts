@@ -115,23 +115,32 @@ function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolea
   return marks > 0;
 }
 
-/** A quality flag or quality column (never a measurement): ODV's `QV:ODV:...`, `Q_<name>`, `QF_` / `QC_` prefixes, and `_quality`, `_QC`, `_QF`, `_flag` suffixes. The words are whole name parts (a lone Q is a discharge). */
+/**
+ * A quality flag or quality column (never a measurement): ODV's `QV:ODV:...`, the prefixes `Q_`, `QC_` and `QF_` (an UNDERSCORE right after the letters, as written: "Q. seminula" is an abbreviated
+ * genus and "Q river" a discharge, neither is a flag), and the suffixes `_quality`, `_QC`, `_QF`, `_flag` (and a word `flag`, `QC` or `QF` after a space). A bare word "quality" is not enough ("Water quality").
+ */
 export function isQualityHeader(header: string): boolean {
   if (/qv:odv/i.test(header)) return true;
-  const k = headerKey(unitFromHeader(header).name);
-  return /^q[cf]? [a-z0-9]/.test(k) || / (qc|qf|flag|flags|quality)$/.test(k);
+  const name = unitFromHeader(header).name.trim();
+  if (/^q[cf]?_./i.test(name) || /_quality$/i.test(name)) return true;
+  return / (qc|qf|flag|flags)$/.test(headerKey(name));
 }
 
 /**
- * At least one filled number of the column is negative: the numbers count upwards from the seafloor (a depth below it is written as a negative number, a position above it as a positive one). A
- * depth counted downwards is never negative, so one negative number is the sheet's own statement of its direction; it is only a proposal, shown with its reason, and the user can change it.
+ * The NEGATIVE numbers are the majority of the filled non-zero numbers: the column counts upwards from the seafloor (a depth below it is written as a negative number, a position above it as a
+ * positive one). A few negative numbers among many positive ones are the water above the sediment of a column that counts downwards, so they do not turn the direction round. Only a proposal,
+ * shown with its reason; the user can change it, and a column with both signs is told how many cells have the minority sign (CONV-SEAFLOOR-SIGNS).
  */
 function countsUpwards(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
+  let negative = 0;
+  let positive = 0;
   for (const row of sheet.rows) {
     const p = parseNumber(row.cells[index] ?? null, decimalComma);
-    if (p.status === 'ok' && p.value < 0) return true;
+    if (p.status !== 'ok') continue;
+    if (p.value < 0) negative++;
+    else if (p.value > 0) positive++;
   }
-  return false;
+  return negative > positive;
 }
 
 /** The sheet says it is about pore water, sediment or a core: its name, a header or a text cell says so (the first 200 rows). */
@@ -180,7 +189,8 @@ export const OVERLAY_REASONS = {
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
   'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres',
   'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
-  'seafloor-depth-negative': 'some numbers of this depth below the seafloor are negative: read as counted upwards from the seafloor (negative = below, positive = above), and the sign is kept; change the direction if it is wrong',
+  'seafloor-depth-negative': 'most numbers of this depth below the seafloor are negative: read as counted upwards from the seafloor (negative = below, positive = above), and the sign is kept; change the direction if it is wrong',
+  'site-depth-only': 'name says the water depth of the site and no other column gives a depth: used as the depth of every row',
   'site-depth': 'name says the water depth of the site: it is the depth of the sediment or porewater samples',
   'site-depth-ignored': 'name says the water depth of the site, not the depth of each row: not written (give it the meaning depth if it is the depth of every row)',
   'area-not-effort': 'a plain area on a sheet with no taxa is a place name or an extent, not a sampled area: ignored (name it sampled area if it is one)',
@@ -362,6 +372,9 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const sheetPositive = sharedDepth && sharedDepth.kind === 'depth' ? sharedDepth.positive : 'unknown';
 
   const hasRange = [...bounds.values()].includes('min') && [...bounds.values()].includes('max');
+  // another column that gives the depth of each row (a plain depth or a bound): then the water depth of the site is not the sheet's depth
+  const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || bounds.has(q.index)));
+  let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   const seenQuantity = new Set<number>();
   for (const p of base) {
@@ -392,15 +405,25 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       continue;
     }
     if (siteDepthAt.has(p.index)) {
+      const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
       if (seafloorAt.size > 0) {
-        const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+        // a sediment or porewater sheet: the water depth of the site is the depth of its samples (min / maxDepthInMeters)
         p.role = { kind: 'depth', positive: 'down', ...(unit === undefined ? {} : { unit }) };
         p.confidence = 'high';
         why(p, 'site-depth');
-      } else {
+      } else if (otherDepth || siteDepthTaken) {
+        // another column gives the depth of each row: the water depth of the site is not that depth
         p.role = { kind: 'ignore' };
         p.confidence = 'low';
         why(p, 'site-depth-ignored');
+      } else {
+        // the only depth the sheet has: used as the depth, as before (the shared proposer's own reading when it made it a depth)
+        siteDepthTaken = true;
+        if (p.role.kind !== 'depth') {
+          p.role = { kind: 'depth', positive: 'down', ...(unit === undefined ? {} : { unit }) };
+          p.confidence = 'low';
+          why(p, 'site-depth-only');
+        }
       }
       continue;
     }

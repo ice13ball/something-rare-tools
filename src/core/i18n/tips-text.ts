@@ -31,7 +31,7 @@ const en = {
   'tip.role.cruise': `in the ship-speed test, separates cruises and replaces the one-cruise tick.`,
   'tip.role.sampleId': `the id of a sample or core; when sheets are joined, it stands in for the station.`,
   'tip.role.variable': `a measured quantity; needs a name and a unit, and the tool never guesses the unit.`,
-  'tip.role.depthBelowSeafloor': `the depth of a sediment or porewater sample below the seafloor, counted as a positive number in the unit of the column (cm or m; set the unit in the table). If your numbers are negative below the seafloor, set the positive direction to upwards and the sign is kept. It is written as a negative distance in metres (minimum and maximum distance above surface), and the water depth of the site stays the depth. The only conversion the converter makes anywhere: cm to m, by moving the decimal point two places in the text of the number, with no rounding.`,
+  'tip.role.depthBelowSeafloor': `the depth of a sediment or porewater sample relative to the seafloor, in the unit of the column (cm or m; set the unit in the table). With the direction downwards (the default) a positive number is below the seafloor and a negative one above it; with upwards the sign is kept (negative = below). It is written as minimum and maximum distance above surface in metres (negative below), and the water depth of the site stays the depth. When both signs occur you are told how many numbers have the minority sign. The only conversion the converter makes anywhere: cm to m, by moving the decimal point two places in the text of the number, with no rounding.`,
 
   'tip.dropZone.does': `Reads files from your computer so that they can be checked.`,
   'tip.dropZone.logic': `• Accepted extensions: {formats}.
@@ -491,7 +491,7 @@ const pl: Record<TipKey, string> = {
   'tip.role.cruise': `w teście prędkości statku rozdziela rejsy i zastępuje zaznaczenie pola o jednym rejsie.`,
   'tip.role.sampleId': `identyfikator próbki lub rdzenia; przy połączonych arkuszach zastępuje stację.`,
   'tip.role.variable': `mierzona wielkość; wymaga nazwy i jednostki, a jednostki narzędzie nigdy nie zgaduje.`,
-  'tip.role.depthBelowSeafloor': `głębokość próbki osadu lub wody porowej pod dnem, jako liczba dodatnia w jednostce kolumny (cm lub m; ustaw jednostkę w tabeli). Jeśli Twoje liczby są ujemne pod dnem, ustaw kierunek dodatni w górę, a znak zostanie zachowany. Zapisywana jest jako ujemna odległość w metrach (minimalna i maksymalna odległość nad powierzchnią), a głębokość wody na stanowisku pozostaje głębokością. Jedyne przeliczenie, jakie konwerter wykonuje: cm na m przez przesunięcie przecinka o dwa miejsca w tekście liczby, bez zaokrąglania.`,
+  'tip.role.depthBelowSeafloor': `głębokość próbki osadu lub wody porowej względem dna, w jednostce kolumny (cm lub m; ustaw jednostkę w tabeli). Przy kierunku w dół (domyślnym) liczba dodatnia jest pod dnem, a ujemna nad dnem; przy kierunku w górę znak zostaje (ujemna = pod dnem). Zapisywana jest jako minimalna i maksymalna odległość nad powierzchnią w metrach (ujemna pod dnem), a głębokość wody na stanowisku pozostaje głębokością. Gdy występują oba znaki, dowiesz się, ile liczb ma znak mniejszości. Jedyne przeliczenie, jakie konwerter wykonuje: cm na m przez przesunięcie przecinka o dwa miejsca w tekście liczby, bez zaokrąglania.`,
 
   'tip.dropZone.does': `Wczytuje pliki z Twojego komputera, żeby je sprawdzić.`,
   'tip.dropZone.logic': `• Przyjmowane rozszerzenia: {formats}.
@@ -908,6 +908,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Podpowiedź: pojęcie ogólne, które nazywa wielkość, a nie metodę, sprawdzone w słowniku NERC (jest aktualne, nie przestarzałe). Do wyboru: pojęcie, które wskazuje metodę, fazę albo węższą wielkość; nigdy nie jest podpowiadane i wybierasz je tylko wtedy, gdy to jest to, co zmierzono.
 • Tlen zależy od jednostki: {oxygen}. Pojęcie określone na objętość albo na masę jest podpowiadane tylko wtedy, gdy wymiar jednostki wynika ze zweryfikowanej listy jednostek; przy każdej innej jednostce jest tylko oferowane.
 • Zapisać można tylko pojęcie P01 (wielkość) albo jednostkę P06, a przestarzałego nigdy.
+• Kod P01 zadeklarowany w nagłówku kolumny jest na pierwszym miejscu, gdy narzędzie go sprawdziło. Kod, którego nie sprawdziło, jest na liście jako „zadeklarowany przez plik”; zapisuje się go tylko wtedy, gdy go wybierzesz, i tylko dla kolumny, której nagłówek deklaruje dokładnie ten kod.
+• Kolumnie bez jednostki, dla potwierdzonego zasolenia praktycznego lub pH, proponowana jest jednostka „bezwymiarowa” ze słownika NERC.
 • Wybór należy do kolumny, jej wielkości i jednostki: jeśli zmienisz jednostkę albo znaczenie kolumny, wybór zostaje odrzucony i trzeba go zrobić od nowa.`,
   'tip.convertNvsOptIn.does': `Pozwala szukać w serwerze słownika NERC (NVS) pojęcia lub jednostki, których nie ma na listach. Jest wyłączone i niczego nie wysyła, dopóki nie naciśniesz przycisku wyszukiwania przy kolumnie.`,
   'tip.convertNvsOptIn.logic': `• Wyłączone przy każdym wgraniu. Plik towarzyszący może tylko zaznaczyć pole; zaznaczenie niczego nie wysyła.
@@ -947,7 +949,7 @@ const de: Record<TipKey, string> = {
   'tip.role.cruise': `trennt beim Geschwindigkeitstest die Fahrten und ersetzt das Häkchen für eine Fahrt.`,
   'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; bei verknüpften Blättern vertritt sie die Station.`,
   'tip.role.variable': `eine gemessene Größe; braucht einen Namen und eine Einheit, und die Einheit rät das Werkzeug nie.`,
-  'tip.role.depthBelowSeafloor': `die Tiefe einer Sediment- oder Porenwasserprobe unter dem Meeresboden, als positive Zahl in der Einheit der Spalte (cm oder m; die Einheit in der Tabelle setzen). Sind Ihre Zahlen unter dem Meeresboden negativ, stellen Sie die positive Richtung auf aufwärts, dann bleibt das Vorzeichen. Sie wird als negative Entfernung in Metern geschrieben (minimale und maximale Entfernung über der Oberfläche); die Wassertiefe der Station bleibt die Tiefe. Die einzige Umrechnung des Konverters: cm in m, durch Verschieben des Dezimalkommas um zwei Stellen im Text der Zahl, ohne Runden.`,
+  'tip.role.depthBelowSeafloor': `die Tiefe einer Sediment- oder Porenwasserprobe relativ zum Meeresboden, in der Einheit der Spalte (cm oder m; die Einheit in der Tabelle setzen). Bei der Richtung abwärts (Standard) liegt eine positive Zahl unter dem Meeresboden und eine negative darüber; bei aufwärts bleibt das Vorzeichen (negativ = darunter). Sie wird als minimale und maximale Entfernung über der Oberfläche in Metern geschrieben (darunter negativ); die Wassertiefe der Station bleibt die Tiefe. Kommen beide Vorzeichen vor, erfahren Sie, wie viele Zahlen das Minderheitsvorzeichen haben. Die einzige Umrechnung des Konverters: cm in m, durch Verschieben des Dezimalkommas um zwei Stellen im Text der Zahl, ohne Runden.`,
 
   'tip.dropZone.does': `Liest Dateien von Ihrem Rechner ein, damit sie geprüft werden können.`,
   'tip.dropZone.logic': `• Angenommene Endungen: {formats}.
@@ -1364,6 +1366,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Vorschlag: ein allgemeiner Begriff, der die Größe und keine Methode nennt, im NERC-Vokabular geprüft (er ist aktuell, nicht veraltet). Zur Auswahl: ein Begriff, der eine Methode, eine Phase oder eine engere Größe nennt; er wird nie vorgeschlagen, und Sie wählen ihn nur, wenn er das ist, was Sie gemessen haben.
 • Sauerstoff hängt von der Einheit ab: {oxygen}. Ein auf Volumen oder Masse bezogener Begriff wird nur vorgeschlagen, wenn die Dimension der Einheit aus der geprüften Einheitenliste bekannt ist; bei jeder anderen Einheit wird er nur angeboten.
 • Nur ein P01-Begriff (die Größe) oder eine P06-Einheit kann geschrieben werden, ein veralteter nie.
+• Ein P01-Code, den der Kopf einer Spalte angibt, steht an erster Stelle, wenn das Werkzeug ihn geprüft hat. Einer, den es nicht geprüft hat, steht in der Liste als „von der Datei angegeben“; er wird nur geschrieben, wenn Sie ihn wählen, und nur für die Spalte, deren Kopf genau diesen Code angibt.
+• Für eine Spalte ohne Einheit wird bei einer bestätigten praktischen Salinität oder einem bestätigten pH die Einheit „dimensionslos“ aus dem NERC-Vokabular angeboten.
 • Eine Wahl gehört zur Spalte, ihrer Größe und ihrer Einheit: Ändern Sie die Einheit oder die Bedeutung der Spalte, wird die Wahl verworfen und muss neu getroffen werden.`,
   'tip.convertNvsOptIn.does': `Lässt Sie im NERC-Vokabularserver (NVS) nach einem Begriff oder einer Einheit suchen, die die Listen nicht bieten. Es ist aus und sendet nichts, bis Sie die Such-Taste einer Spalte drücken.`,
   'tip.convertNvsOptIn.logic': `• Bei jedem Hochladen aus. Eine Begleitdatei kann das Kästchen nur ankreuzen; das Ankreuzen sendet nichts.
@@ -1403,7 +1407,7 @@ const fr: Record<TipKey, string> = {
   'tip.role.cruise': `dans le test de vitesse, sépare les campagnes et remplace la case d'une seule campagne.`,
   'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; quand des feuilles sont reliées, il tient lieu de station.`,
   'tip.role.variable': `une grandeur mesurée ; demande un nom et une unité, et l'outil ne devine jamais l'unité.`,
-  'tip.role.depthBelowSeafloor': `la profondeur d'un échantillon de sédiment ou d'eau interstitielle sous le fond, comptée comme nombre positif dans l'unité de la colonne (cm ou m ; indiquez l'unité dans le tableau). Si vos nombres sont négatifs sous le fond, réglez le sens positif sur vers le haut et le signe est conservé. Elle est écrite comme une distance négative en mètres (distance minimale et maximale au-dessus de la surface), et la profondeur d'eau du site reste la profondeur. La seule conversion du convertisseur : cm en m, en déplaçant la virgule de deux positions dans le texte du nombre, sans arrondi.`,
+  'tip.role.depthBelowSeafloor': `la profondeur d'un échantillon de sédiment ou d'eau interstitielle par rapport au fond, dans l'unité de la colonne (cm ou m ; indiquez l'unité dans le tableau). Avec le sens vers le bas (par défaut), un nombre positif est sous le fond et un nombre négatif au-dessus ; avec vers le haut, le signe est conservé (négatif = dessous). Elle est écrite comme distance minimale et maximale au-dessus de la surface en mètres (négative dessous), et la profondeur d'eau du site reste la profondeur. Quand les deux signes existent, on vous dit combien de nombres ont le signe minoritaire. La seule conversion du convertisseur : cm en m, en déplaçant la virgule de deux positions dans le texte du nombre, sans arrondi.`,
 
   'tip.dropZone.does': `Lit des fichiers de votre ordinateur pour les vérifier.`,
   'tip.dropZone.logic': `• Extensions acceptées : {formats}.
@@ -1820,6 +1824,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Suggestion : un concept général qui nomme la grandeur et aucune méthode, vérifié dans le vocabulaire NERC (il est en vigueur, non obsolète). Au choix : un concept qui indique une méthode, une phase ou une grandeur plus étroite ; il n'est jamais suggéré, et vous ne le choisissez que si c'est ce que vous avez mesuré.
 • L'oxygène dépend de l'unité : {oxygen}. Un concept rapporté au volume ou à la masse n'est suggéré que si la dimension de l'unité est connue par la liste d'unités vérifiées ; avec toute autre unité, il est seulement proposé dans la liste.
 • Seul un concept P01 (la grandeur) ou une unité P06 peut être écrit, et jamais un concept obsolète.
+• Un code P01 que l'en-tête d'une colonne déclare passe en premier quand l'outil l'a vérifié. Un code qu'il n'a pas vérifié figure dans la liste comme « déclaré par le fichier » ; il n'est écrit que si vous le choisissez, et seulement pour la colonne dont l'en-tête déclare exactement ce code.
+• Pour une colonne sans unité, avec une salinité pratique ou un pH confirmés, l'unité « sans dimension » du vocabulaire NERC est proposée.
 • Un choix appartient à la colonne, à sa grandeur et à son unité : si vous changez l'unité ou le sens de la colonne, le choix est abandonné et doit être refait.`,
   'tip.convertNvsOptIn.does': `Vous permet de chercher dans le serveur de vocabulaire NERC (NVS) un concept ou une unité que les listes ne proposent pas. C'est désactivé et rien n'est envoyé tant que vous n'appuyez pas sur le bouton de recherche d'une colonne.`,
   'tip.convertNvsOptIn.logic': `• Désactivé à chaque dépôt. Un fichier compagnon peut seulement cocher la case ; cocher n'envoie rien.

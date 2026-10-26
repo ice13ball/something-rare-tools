@@ -63,9 +63,10 @@ import type { RuleSpec } from './spec';
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
- *   CONV-SEAFLOOR-VALUE        count, reason    field = column, value = an example, lines = rows; reason = negative | notation
+ *   CONV-SEAFLOOR-VALUE        count, reason    field = column, value = an example, lines = rows; reason = notation (a number with no exact plain text)
+ *   CONV-SEAFLOOR-SIGNS        count, direction, side   field = column, lines = the cells of the minority sign; direction = down | up; side = above | below: where such a cell is written (info for the user, not blocking)
  *   CONV-SEAFLOOR-NO-SITE-DEPTH count          field = column, lines = rows that have a depth below the seafloor and no site depth
- *   CONV-NO-OCCURRENCES        (none)           the conversion produced no occurrence record (an environmental-only upload)
+ *   CONV-NO-OCCURRENCES        (none)           the conversion produced no occurrence record (an environmental-only upload); with `zeros: 'yes'` taxa were there but every count was 0 and skipped (NO_OCCURRENCES_ZEROS text)
  *   CONV-PROFILE-NOTHING-READ  rows             a sheet marked as a profile file gave no level; rows = its data rows
  *   CONV-STATION-FROM-POSITION count            value = the first station ID: the user ticked "each distinct position is a station" (info)
  * Stage 6 also gives two rules a second text for a profile file, chosen in renderConvertPlain / renderConvertTechnical (PROFILE_VARIANTS): CONV-SAMPLE-CODE-MISSING when the
@@ -341,6 +342,20 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Dans la colonne « {field} » (profondeur sous le fond), des valeurs {+lineCount:à la ligne|aux lignes} {lines} ne peuvent pas être écrites ({count} au total) : {reason}, p. ex. « {value} ». Ces cellules n'ont pas été écrites.`,
     },
     technical: `{file}:{lines} field {field}: {count} depth-below-seafloor value(s) cannot be written (reason {reason}, example {value}). Negative: a depth below the seafloor is a positive distance, and the sign is added by the converter. Notation: only a plain decimal number is shifted exactly on its text.`,
+    citations: [OBIS_DARWIN_CORE],
+  },
+  {
+    id: 'CONV-SEAFLOOR-SIGNS',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'direction', 'side'],
+    plain: {
+      pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny niż większość kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dna. Sprawdź, czy kierunek jest właściwy.`,
+      en: `In column "{field}", {count} {+count:number has|numbers have} the opposite sign to most of the column ({+lineCount:line|lines} {lines}). With the direction "{direction}", such a number is written as a position {side} the seafloor. Check that the direction is the right one.`,
+      de: `In der Spalte „{field}“ ist bei {count} {+count:Zahl|Zahlen} das Vorzeichen entgegengesetzt zu dem der meisten Zahlen ({+lineCount:Zeile|Zeilen} {lines}). Bei der Richtung „{direction}“ wird eine solche Zahl als Lage {side} dem Meeresboden geschrieben. Prüfen Sie, ob die Richtung stimmt.`,
+      fr: `Dans la colonne « {field} », {count} {+count:nombre a|nombres ont} le signe opposé à celui de la plupart des nombres ({+lineCount:ligne|lignes} {lines}). Avec le sens « {direction} », un tel nombre est écrit comme une position {side} fond. Vérifiez que le sens est le bon.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} depth-below-seafloor cell(s) have the sign that most cells do not have. Direction {direction}: they are written as a distance {side} the seafloor (minimumDistanceAboveSurfaceInMeters = maximumDistanceAboveSurfaceInMeters; positive above, negative below). Not blocking: the direction is the user's to confirm.`,
     citations: [OBIS_DARWIN_CORE],
   },
   {
@@ -860,18 +875,20 @@ const EML_WORDS: Record<string, Record<Lang, string>> = {
 
 /** What a profile level lacks, in words (CONV-PROFILE-LEVEL-INCOMPLETE carries date | position | date and position in `what`). */
 const SEAFLOOR_REASON_WORDS: Record<string, Record<Lang, string>> = {
-  negative: {
-    en: 'counted downwards, a depth below the seafloor is a positive number (the converter adds the sign); if negative numbers are below the seafloor in your file, set the positive direction to upwards',
-    pl: 'liczona w dół, głębokość w osadzie to liczba dodatnia (znak dodaje konwerter); jeśli w pliku liczby ujemne oznaczają miejsce pod dnem, ustaw kierunek dodatni w górę',
-    de: 'nach unten gezählt ist eine Tiefe unter dem Meeresboden eine positive Zahl (das Vorzeichen setzt der Konverter); sind in Ihrer Datei negative Zahlen unter dem Meeresboden, stellen Sie die positive Richtung auf aufwärts',
-    fr: "comptée vers le bas, une profondeur sous le fond est un nombre positif (le convertisseur ajoute le signe) ; si dans votre fichier les nombres négatifs sont sous le fond, réglez le sens positif sur vers le haut",
-  },
   notation: {
     en: 'it is not a plain decimal number (for example it has an exponent), and the shift from cm to m is made exactly on the text of a plain number',
     pl: 'to nie jest zwykła liczba dziesiętna (na przykład ma wykładnik), a przesunięcie z cm na m wykonuje się dokładnie na tekście zwykłej liczby',
     de: 'es ist keine einfache Dezimalzahl (zum Beispiel mit Exponent), und die Verschiebung von cm nach m erfolgt exakt am Text einer einfachen Zahl',
     fr: "ce n'est pas un nombre décimal simple (par exemple avec un exposant), et le décalage de cm en m se fait exactement sur le texte d'un nombre simple",
   },
+};
+const SIGNS_DIRECTION_WORDS: Record<string, Record<Lang, string>> = {
+  down: { en: 'downwards', pl: 'w dół', de: 'abwärts', fr: 'vers le bas' },
+  up: { en: 'upwards', pl: 'w górę', de: 'aufwärts', fr: 'vers le haut' },
+};
+const SIGNS_SIDE_WORDS: Record<string, Record<Lang, string>> = {
+  above: { en: 'above', pl: 'nad', de: 'über', fr: 'au-dessus du' },
+  below: { en: 'below', pl: 'pod', de: 'unter', fr: 'au-dessous du' },
 };
 const NONE_WORDS: Record<Lang, string> = { en: 'none', pl: 'brak', de: 'keine', fr: 'aucune' };
 
@@ -933,6 +950,15 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
+  'CONV-NO-OCCURRENCES:zeros': {
+    plain: {
+      pl: `To archiwum nie zawierałoby ani jednego rekordu występowania: wszystkie liczebności wynosiły 0 i zostały pominięte, bo lista nie jest zadeklarowana jako pełna. Zaznacz pełną listę gatunków, aby zapisać je jako nieobecności, albo dodaj rekordy obecności.`,
+      en: `This archive would contain no occurrences: every count was 0 and was skipped, because the list is not declared complete. Tick the full species list to write them as absences, or add the records of what was present.`,
+      de: `Dieses Archiv würde keinen Nachweis enthalten: alle Anzahlen waren 0 und wurden übersprungen, weil die Liste nicht als vollständig erklärt ist. Wählen Sie die vollständige Artenliste, um sie als Abwesenheiten zu schreiben, oder fügen Sie Nachweise hinzu.`,
+      fr: `Cette archive ne contiendrait aucune occurrence : tous les effectifs étaient à 0 et ont été ignorés, car la liste n'est pas déclarée complète. Cochez la liste complète des espèces pour les écrire comme absences, ou ajoutez des enregistrements de présence.`,
+    },
+    technical: `The conversion produced 0 occurrence records: every taxon cell was 0 and the full species list is not ticked, so the zeros were skipped (CONV-ZERO-SKIPPED). With the tick a zero becomes occurrenceStatus absent.`,
+  },
   'CONV-ID-DUPLICATE:other': {
     plain: {
       pl: `Identyfikator poziomu „{value}” {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest też identyfikatorem innego zdarzenia (utworzony z: {used}). Identyfikatory muszą być unikalne: zmień kod wierszy profilu albo kody próbek.`,
@@ -948,6 +974,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];
+  if (f.ruleId === 'CONV-NO-OCCURRENCES' && f.params.zeros === 'yes') return PROFILE_VARIANTS['CONV-NO-OCCURRENCES:zeros'];
   return undefined;
 };
 
@@ -956,6 +983,7 @@ const USED_WORDS: Record<string, Record<Lang, string>> = {
   code: { en: 'code', pl: 'kod', de: 'Code', fr: 'code' },
   depth: { en: 'depth', pl: 'głębokość', de: 'Tiefe', fr: 'profondeur' },
   pressure: { en: 'pressure', pl: 'ciśnienie', de: 'Druck', fr: 'pression' },
+  seafloor: { en: 'depth below the seafloor', pl: 'głębokość w osadzie', de: 'Tiefe unter dem Meeresboden', fr: 'profondeur sous le fond' },
   sample: { en: 'a sample', pl: 'próbka', de: 'Probe', fr: 'échantillon' },
   station: { en: 'a station or cruise', pl: 'stacja lub rejs', de: 'Station oder Fahrt', fr: 'station ou campagne' },
 };
@@ -1000,6 +1028,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-SEAFLOOR-VALUE' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: SEAFLOOR_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
+  if (f.ruleId === 'CONV-SEAFLOOR-SIGNS') f = { ...f, params: { ...f.params, direction: SIGNS_DIRECTION_WORDS[String(f.params.direction)]?.[lang] ?? f.params.direction, side: SIGNS_SIDE_WORDS[String(f.params.side)]?.[lang] ?? f.params.side } };
   if (f.ruleId === 'CONV-SEAFLOOR-UNIT' && f.params.unit === 'none') f = { ...f, params: { ...f.params, unit: NONE_WORDS[lang] } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
     const words = f.params.missing.split(', ').map((m) => MISSING_WORDS[m]?.[lang] ?? m);
