@@ -3,7 +3,7 @@
 import { dwcTermOf, proposeColumns, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
-import { conceptVariable, isAbundanceUnit } from './vocab';
+import { CONVERTER_VARIABLES, conceptVariable, isAbundanceUnit } from './vocab';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 
@@ -49,13 +49,15 @@ function isSummaryHeader(rawName: string): boolean {
   const words = headerKey(name).split(' ').filter((w) => w !== '');
   return words.length > 0 && (SUMMARY_FIRST.has(words[0]) || words.some((w) => SUMMARY_ANYWHERE.has(w)));
 }
+// the sample code of a row: PANGAEA's "Sample label (Multinet number)" and "Sample code/label" (the bracket text after the name is cut off before the match)
+const SAMPLE_CODE_NAME = /^(sample label|sample code|sample code label|sample name|sample id|sample number)$/;
 // "Stage" and its translations: the life stage of the record (a long sheet)
 const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
 
 const DEPTH_WORDS = /^(depth|tiefe|profondeur|glebokosc)(?: (.*))?$/;
 const BOUND_MIN = new Set(['top', 'min', 'minimum', 'from', 'von', 'od', 'de', 'upper', 'start', 'ab']);
 // 'a' is the French "à" after foldDiacritics
-const BOUND_MAX = new Set(['bottom', 'max', 'maximum', 'to', 'bis', 'do', 'a', 'lower', 'end']);
+const BOUND_MAX = new Set(['bottom', 'bot', 'max', 'maximum', 'to', 'bis', 'do', 'a', 'lower', 'end']);
 
 /** 'min' / 'max' when the tail of a depth name ("top/min", "bottom/max", "od", "von", "à") says which end of a range it is. */
 function depthBoundOfName(key: string): 'min' | 'max' | undefined {
@@ -122,6 +124,9 @@ export const OVERLAY_REASONS = {
   'name-abundance': 'name says abundance, density or biomass',
   'name-effort-volume': 'name says sampled (filtered) volume: the sampling effort',
   'name-effort-area': 'name says sampled area: the sampling effort',
+  'name-sample-code': 'name says sample code or label: used as the eventID of the sample',
+  'converter-variable': 'name says a measured variable the converter knows (conductivity, potential temperature or sigma-theta)',
+  'depth-range-used': 'a depth range (top and bottom) is used, so this single depth, a mid-depth or a geocode, is ignored (it would make the range a point)',
   'depth-min-dwc': 'Darwin Core minimum (top) depth of a depth range',
   'depth-max-dwc': 'Darwin Core maximum (bottom) depth of a depth range',
   'depth-min-name': 'name says minimum (top) depth of a depth range',
@@ -184,7 +189,24 @@ function nameClaim(key: string, unit: string | undefined): Claim | undefined {
   const effort = (code: OverlayReason): Claim => ({ role: unit === undefined ? { kind: 'effort' } : { kind: 'effort', unit }, confidence: 'high', code });
   if (EFFORT_VOLUME.test(key)) return effort('name-effort-volume');
   if (EFFORT_AREA.test(key)) return effort('name-effort-area');
+  if (SAMPLE_CODE_NAME.test(key)) return { role: { kind: 'sampleId' }, confidence: 'high', code: 'name-sample-code' };
   return undefined;
+}
+
+/** The text of a trailing bracket group, whatever it says ("Volume filtered (m3)" -> "m3"): the unit of a name the shared unit reader left whole. */
+const bracketText = (name: string): string | undefined => {
+  const t = /[[(]([^[\]()]*)[\])]\s*$/.exec(name)?.[1]?.trim();
+  return t === undefined || t === '' ? undefined : t;
+};
+
+/** Of a claim made on a name WITHOUT its bracket text, only an effort column or a sample code stands (a taxon, a quantity or a stage is never read from a bracketed name). */
+const onlyEffortOrCode = (c: Claim | undefined): Claim | undefined => (c !== undefined && (c.role.kind === 'effort' || c.role.kind === 'sampleId') ? c : undefined);
+
+/** The measured variables the converter knows beyond /check's canonical ones (conductivity, potential temperature, sigma-theta): by the whole header name, PANGAEA abbreviations included. */
+function variableClaim(name: string, unit: string | undefined): Claim | undefined {
+  const variable = conceptVariable(name);
+  if (variable === undefined || !CONVERTER_VARIABLES.has(variable)) return undefined;
+  return { role: { kind: 'variable', variable, ...(unit === undefined ? {} : { unit, unitSource: 'header' as const }) }, confidence: 'high', code: 'converter-variable' };
 }
 
 const why = (p: ColumnProposal, code: OverlayReason): void => {
@@ -234,7 +256,14 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const bound = depthBoundOfName(foldDiacritics(key));
       if (bound !== undefined) bounds.set(p.index, bound);
       else {
-        const named = nameClaim(foldDiacritics(key), hu.unit) ?? quantityClaim(foldDiacritics(headerKey(withoutBrackets(hu.name))));
+        // the name as it stands, then without a trailing bracket group of any text ("Volume filtered (m3)", "Sample label (Multinet number)"); a bracket text
+        // is the unit of an effort column when the shared reader found none
+        const bare = foldDiacritics(headerKey(withoutBrackets(hu.name)));
+        const named =
+          variableClaim(hu.name, hu.unit) ??
+          nameClaim(foldDiacritics(key), hu.unit) ??
+          onlyEffortOrCode(bare === foldDiacritics(key) ? undefined : nameClaim(bare, hu.unit ?? bracketText(hu.name))) ??
+          quantityClaim(bare);
         if (named) claims.set(p.index, named);
       }
     }
@@ -244,6 +273,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const sharedDepth = base.find((p) => p.role.kind === 'depth' && p.role.bound === undefined)?.role;
   const sheetPositive = sharedDepth && sharedDepth.kind === 'depth' ? sharedDepth.positive : 'unknown';
 
+  const hasRange = [...bounds.values()].includes('min') && [...bounds.values()].includes('max');
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   const seenQuantity = new Set<number>();
   for (const p of base) {
@@ -257,6 +287,14 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       p.role = { kind: 'depth', positive: dwcDepth ? 'down' : (was?.positive ?? sheetPositive), ...(unit === undefined ? {} : { unit }), bound };
       p.confidence = 'high';
       why(p, `depth-${bound}-${dwcDepth ? 'dwc' : 'name'}` as OverlayReason);
+      continue;
+    }
+    // a sheet with a top and a bottom bound reads the RANGE; a single depth column next to it (a mid-depth, PANGAEA's "Depth water" GEOCODE) would win the plain slot and
+    // turn the range into a point, so it is ignored, with its reason (the user can still give it a meaning)
+    if (hasRange && p.role.kind === 'depth' && p.role.bound === undefined) {
+      p.role = { kind: 'ignore' };
+      p.confidence = 'low';
+      why(p, 'depth-range-used');
       continue;
     }
     if (claim) {

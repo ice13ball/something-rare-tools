@@ -239,10 +239,14 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
   return filled >= 2;
 }
 
-export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector): (row: RawRow) => Meta {
+/**
+ * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
+ * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
+ */
+export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector, opts: { whenUtc?: boolean } = {}): (row: RawRow) => Meta {
   const dc = file.decimalComma;
   const dateCache = new Map<string, ParsedDate | DateError>();
-  const whenUtc = specs.when ? UTC_HEADER.test(specs.when.header) : false;
+  const whenUtc = opts.whenUtc === true || (specs.when ? UTC_HEADER.test(specs.when.header) : false);
   const timeUtc = specs.time ? UTC_HEADER.test(specs.time.header) : false;
   // D?M/YYYY order is a property of the column, not of a cell: decided once from every cell of the date column
   const whenIndex = specs.when?.index;

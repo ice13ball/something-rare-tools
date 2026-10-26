@@ -44,6 +44,8 @@ export interface SheetChoice {
   profile: boolean;
   /** Stage 6: the user's approval of level IDs made of the station and the depth as written, for a profile sheet with no code column. Starts unticked; a companion file can pre-tick it. */
   profileDepthIds: boolean;
+  /** Stage 7: the user's tick "match the stations ignoring a trailing cast number", for a profile sheet. Never automatic; starts unticked; a companion file can pre-tick it. */
+  profileIgnoreCast: boolean;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -223,7 +225,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, profile: c.profileDepthIds ? { depthIds: true } : {}, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}) }, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
@@ -243,28 +245,31 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   const out: Record<string, SheetChoice> = {};
   const marked = new Set(parsed.settings.profileSheets ?? []);
   const approved = new Set(parsed.settings.profileDepthIds ?? []);
+  const castTicked = new Set(parsed.settings.profileIgnoreCast ?? []);
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name) };
+      out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name) };
     }
   }
   return out;
 }
 
 /** The names of the sheets in use that are marked as profile files, and of those among them whose depth-based level IDs were approved: what the companion file keeps (nothing but names). */
-export function profileSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { profileSheets: string[]; profileDepthIds: string[] } {
+export function profileSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { profileSheets: string[]; profileDepthIds: string[]; profileIgnoreCast: string[] } {
   const profileSheets: string[] = [];
   const profileDepthIds: string[] = [];
+  const profileIgnoreCast: string[] = [];
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const c = choices[sheetKey(f.fileId, sh.name)];
       if (!c || !c.use || !c.profile) continue;
       if (!profileSheets.includes(sh.name)) profileSheets.push(sh.name);
       if (c.profileDepthIds && !profileDepthIds.includes(sh.name)) profileDepthIds.push(sh.name);
+      if (c.profileIgnoreCast && !profileIgnoreCast.includes(sh.name)) profileIgnoreCast.push(sh.name);
     }
   }
-  return { profileSheets, profileDepthIds };
+  return { profileSheets, profileDepthIds, profileIgnoreCast };
 }
 
 /** A finding in words: the converter's own rules from their registry, the data-check rules (a date that cannot be read) from theirs. */

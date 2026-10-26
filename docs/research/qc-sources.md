@@ -811,3 +811,45 @@ Each opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/?_profile
 ### Part 5. Size
 
 A profile sheet of 50 stations of 1000 levels (50 000 rows, with depth, pressure and two variables: 150 000 eMoF rows, 50 101 events) was converted, checked (Event table through the same checks as /check, Occurrence, eMoF and cross-table checks) and written (tables, meta.xml, deflated zip of about 1.2 MB) on the development machine in about 0.3 s, 0.6 s and 0.3 s (test/convert/stage6.test.ts; the test bounds each step well above that, to catch a quadratic loop, which would take minutes). The page receives counts and a few examples only (the worker keeps the records).
+
+## Converter (/convert) — stage 7 verification, 26.10.2026: the two real public PANGAEA datasets
+
+Third-party files (never copied into the repository; the tests use synthetic sheets with the same structure): Kosobokova & Hirche (2014), PANGAEA.839758 (wide Multinet counts, CC-BY-3.0) and Schauer & Rohardt (2010), PANGAEA.742586 (CTD, CC-BY-3.0). What the run on the unedited files showed, and what was decided:
+
+### Part 1. PANGAEA header and names
+
+- The table header of a PANGAEA file holds an ABBREVIATION plus the unit and the comment: `Short [unit] (comment)`; the header block `Parameter(s):` lists the LONG name of each parameter in column order: `Long name [unit] (Short) * PI: ... * METHOD/DEVICE: ... * COMMENT: ...`. In PANGAEA.839758 all 332 columns agree (the header of a column is `Short`, then ` [unit]`, then ` (comment)` when the parameter has a comment); in PANGAEA.742586 three columns carry a comment in the parameter list that the header leaves out (`ITS-90`, `PSU`), so the converter checks only that the abbreviation is what the header of the column starts with, not the whole header.
+- Abbreviations collide: `S. polaris c3 [#/m**3]`, `P. polaris f` and three more stand for two genera each (five header pairs in the file). Long names do not collide, except three pairs that differ by the parameter COMMENT: `Calanus finmarchicus, c2` and `c3` (one column of each pair has `COMMENT: including Calanus glacialis`) and `Cirripedia, cypris, nauplii` (comments `1` and `2`). The converter keeps every such pair as two occurrences per sample, with the comment in `occurrenceRemarks`, and says so with the accepted warning CONV-TAXON-SAME-EVENT. Nothing is summed.
+- occurrenceID of a wide sheet = `<sample eventID>:<long name>`. The long name is what the user sees in the list of names to approve, it is not an abbreviation that two genera share, and it does not change when a unit or a comment is edited; only when two columns share a long name is the comment (else the header) added in brackets, so the IDs stay unique without a counter.
+- The header block's citation, title, authors, year and DOI, licence, coverage and abstract (when the file has one; neither of the two files does) feed the description of the dataset like a dropped metadata file (source: the file name, kind PANGAEA). PANGAEA's citation marks its title with ` [dataset]`; that marker is cut so that it does not disagree with the DataCite title of the same dataset.
+- UTC: PANGAEA states that its Date/Time is UTC. https://wiki.pangaea.de/wiki/Data_submission (section on the data columns): "Date/Time of sampling/measurement provided in ISO format (YYYY-MM-DDThh:mm:ss) and in UTC. An additional column with local date/time may be provided." and https://wiki.pangaea.de/wiki/Event: "Date/Time is provided as ISO-format YYYY-MM-DD T hh:mm:ss, UTC" (both read 2026-10-26). So a time with no zone in the column PANGAEA calls `Date/Time` of a PANGAEA file is written with a Z and ROW-TZ-UNKNOWN is not raised for it; a local-time column has another name and is not read this way. /check is unchanged.
+
+### Part 2. NERC concepts added (opened 2026-10-26)
+
+Each opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/?_profile=nvs&_mediatype=application/ld+json`: HTTP 200, `owl:deprecated` = "false".
+
+| collection | code | preferred label (NVS) | kind |
+|---|---|---|---|
+| P01 | CNDCST01 | Electrical conductivity of the water body by CTD | method (offered, never proposed) |
+| P01 | POTMCV01 | Potential temperature of the water body by computation using UNESCO 1983 algorithm | method |
+| P01 | SIGTEQ01 | Sigma-theta of the water body by computation from salinity and potential temperature using UNESCO algorithm | method |
+| P06 | MSCM | MilliSiemens per centimetre | unit (alias `mS/cm`) |
+| P06 | UKMC | Kilograms per cubic metre | unit (alias `kg/m3`; `kg/m**3` folds to it) |
+
+Potential temperature is its own variable (`potential temperature`, POTMCV01) and is never mapped to plain temperature (TEMPPR01). All three P01 concepts name a method (a CTD, a computation), so by the stage 5 rule they are offered in the list and the user chooses them.
+
+### Part 3. Sampling device (NVS L22)
+
+L22 (2441 concepts, read 2026-10-26) has `NETT0187` "Hydro-Bios MultiNet Mammoth" (already the device `multinet` of the converter) and no MultiNet Midi and no generic MultiNet; the two PANGAEA events name "Multiple opening/closing net, 150 µm meshsize". The Mammoth is a different instrument (larger mouth), so nothing is added and the Midi is not labelled as a Mammoth: the device of the acceptance run is the generic "plankton nets" (NVS L05 22), with the mesh size typed by the user.
+
+### Part 4. Stations, casts and level IDs (changes of stage 7)
+
+- The event labels of PANGAEA end with the cast of each device: a net cast `PS27/006-6` and a CTD cast `PS27/006-1` of one station differ only by that suffix. On the raw files only 1 of 64 CTD casts matched a net station by the exact text. The converter offers, per profile sheet and only when the user ticks it (never by itself), to match the stations ignoring a final hyphen and number on both sides. A base that more than one biology station has is not matched (never guessed). A matched level sits under the biology station; its own ID keeps the cast (`PS27:PS27/006-1:2.0m`), so two casts of one station stay apart. With the tick 33 of 64 casts matched (the others have no net sample); the 31 left over are the accepted warning CONV-PROFILE-STATION-UNMATCHED.
+- A matched profile station more than 10 km (the tool's own limit, in the rule as `{limit}`) from the biology station it sits under is the accepted warning CONV-PROFILE-STATION-FAR, naming both stations and the distance (haversine, `greatCircleM` of `events.ts`). The review's example: `PS27/014-1` and `PS27/014-4`, 74 km apart; `PS27/007-1` and `PS27/007-5`, 26 km. The check is made for an exact match as well.
+- Level IDs made of the depth carry their unit, as the pressure ones always did: `<station eventID>:<depth as written>m` and `<station eventID>:<pressure as written>dbar`. Without the unit a depth ID (`S1:2`) equalled a numeric sample code (`2`) of a station-prefixed sample, which gave 96 blocking duplicates on the real files.
+
+### Part 5. Column names and stages
+
+- A bracketed unit never belongs to a taxon name, a "(comment)" after the unit is a remark (kept in `occurrenceRemarks`). A "Depth bot" or "Depth, bottom" header is the maximum of a range, and a single depth column (PANGAEA's "Depth water", a mid-depth GEOCODE) next to a top and a bottom bound is ignored, so a 0-25 m haul stays 0-25 m.
+- Stage words: copepodite(s), nauplius/nauplii, metanauplius, calyptopis, furcilia, zoea, megalopa, veliger, cypris/cyprid, egg(s), juvenile(s), adult(s), larva(e) (plurals written as the singular); a range of copepodite stages (`c1-c5`) is written as `C1-C5`; several stages of one name are written together (`cypris, nauplius`). lifeStage is free text in Darwin Core. "indeterminata" and "indet." are an identificationQualifier (`indet.`).
+- WoRMS: an answer whose match_type is `exact` but whose name is not the name sent (the genus for a name the sheet spelled with a descriptor) is not automatic; the user chooses, and the page shows what scientificName would be written as. Of the 107 names of PANGAEA.839758 after the splits, 99 are single exact answers under the same name, 6 have several WoRMS records, 1 (`Foraminifera, planktic`) is an exact answer under another name, and 1 (`Ophiopluteus`) has none.

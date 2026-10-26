@@ -200,10 +200,13 @@ describe('the page never scrolls sideways (root cause of the split table overflo
     expect(css).toMatch(/\.visually-hidden\s*\{[^}]*position:\s*absolute/);
     const tables = [...page.matchAll(/<table[\s\S]*?<\/table>/g)].map((m) => m[0]);
     expect(tables.length).toBeGreaterThan(0);
-    const withHidden = tables.filter((t) => t.includes('visually-hidden'));
-    expect(withHidden.length).toBeGreaterThan(0);
-    // the split table is in section.convert-splits > .table-scroll, and that wrapper is positioned
-    expect(page).toMatch(/className="convert-splits"[\s\S]*?<div className="table-scroll">[\s\S]*?visually-hidden/);
+    // the row of the split tables (splitRow) holds the hidden span; both split tables (the names with a doubt, and the folded list of the others) are in
+    // section.convert-splits > .table-scroll, and that wrapper is positioned
+    expect(page).toMatch(/const splitRow[\s\S]*?visually-hidden/);
+    const section = page.slice(page.indexOf('className="convert-splits"'));
+    expect([...section.slice(0, section.indexOf('</section>')).matchAll(/<div className="table-scroll">/g)].length).toBe(2);
+    expect(section).toMatch(/doubted\.map\(splitRow\)/);
+    expect(section).toMatch(/rest\.map\(splitRow\)/);
     expect(css).toMatch(/\.convert-splits \.table-scroll\s*\{[^}]*position:\s*relative/);
   });
 

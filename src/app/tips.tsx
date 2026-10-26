@@ -194,6 +194,7 @@ const DEFS = {
   convertShape: { label: 'convert.sheet.shape' },
   convertProfile: { label: 'convert.sheet.profile' },
   convertProfileDepthIds: { label: 'convert.sheet.profile.depthIds' },
+  convertProfileCast: { label: 'convert.sheet.profile.cast' },
   convertProfileStations: { label: 'convert.sheet.profile.stations.title' },
   convertProfilePressure: { label: 'convert.sheet.profile.pressure.title', values: { pressureConcept: codes(PRESSURE.type), unitConcept: codes(PRESSURE.unit) } },
   convertQuantityKind: { label: 'convert.quantity.kind', values: { countConcept: codes(P01.count) } },

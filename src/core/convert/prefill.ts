@@ -228,6 +228,14 @@ export function licenceCaseOf(records: readonly MetadataRecord[]): LicenceCase {
   return { kind: 'other', said: ids.join(', '), ids, says: licences.map(({ file, a }) => said(file, a)), also: others };
 }
 
+/**
+ * The record of a PANGAEA file's own header, as the description of the dataset takes it. PANGAEA's citation marks its title with " [dataset]" (the type of the record), which is not
+ * part of the title that the DataCite record of the same dataset gives; it is cut here (and not in the shared parser, which /check reads unchanged), so that the two do not disagree.
+ */
+export function pangaeaHeaderRecord(rec: MetadataRecord): MetadataRecord {
+  return rec.title === undefined ? rec : { ...rec, title: rec.title.replace(/\s*\[dataset(?: publication series)?\]\s*$/i, '').trim() };
+}
+
 /** What the metadata records say, as the page shows it. Undefined when there are no records. */
 export function buildPrefill(records: readonly MetadataRecord[]): ConvertPrefill | undefined {
   if (records.length === 0) return undefined;
