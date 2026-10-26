@@ -62,6 +62,12 @@ import type { RuleSpec } from './spec';
  *   CONV-PANGAEA-NAMES-FALLBACK (none)      a PANGAEA file's parameter list was not matched to its columns: the abbreviations of the table header are the names (info)
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
+ *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
+ *   CONV-SEAFLOOR-VALUE        count, reason    field = column, value = an example, lines = rows; reason = negative | notation
+ *   CONV-SEAFLOOR-NO-SITE-DEPTH count          field = column, lines = rows that have a depth below the seafloor and no site depth
+ *   CONV-NO-OCCURRENCES        (none)           the conversion produced no occurrence record (an environmental-only upload)
+ *   CONV-PROFILE-NOTHING-READ  rows             a sheet marked as a profile file gave no level; rows = its data rows
+ *   CONV-STATION-FROM-POSITION count            value = the first station ID: the user ticked "each distinct position is a station" (info)
  * Stage 6 also gives two rules a second text for a profile file, chosen in renderConvertPlain / renderConvertTechnical (PROFILE_VARIANTS): CONV-SAMPLE-CODE-MISSING when the
  * finding carries `profile: 'yes'`, and CONV-ID-DUPLICATE when its `kind` is `level` (profile rows only; params: used = what each row's ID was made of) or `level-other` (a sample,
  * station or cruise has the same ID).
@@ -70,6 +76,17 @@ const NERC_MANUAL = {
   label: 'OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)',
   url: 'https://manual.obis.org/format_emof.html',
   locator: '"For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."',
+};
+
+const OBIS_DARWIN_CORE = {
+  label: 'OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)',
+  url: 'https://manual.obis.org/darwin_core.html',
+  locator: '"This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."',
+};
+const OBIS_OCCURRENCE = {
+  label: 'OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)',
+  url: 'https://manual.obis.org/format_occurrence.html',
+  locator: '"(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"',
 };
 
 const OBIS_NAME_MATCH = {
@@ -291,12 +308,94 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['unit'],
     plain: {
-      pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter niczego nie przelicza. Podaj głębokość w metrach albo usuń jednostkę, jeśli to są metry.`,
-      en: `Depth column "{field}" states the unit "{unit}". Darwin Core needs metres and the converter converts nothing. Give the depth in metres, or remove the unit if it is metres.`,
-      de: `Die Tiefenspalte „{field}“ nennt die Einheit „{unit}“. Darwin Core verlangt Meter, und der Konverter rechnet nichts um. Geben Sie die Tiefe in Metern an oder entfernen Sie die Einheit, wenn es Meter sind.`,
-      fr: `La colonne de profondeur « {field} » indique l'unité « {unit} ». Darwin Core exige des mètres et le convertisseur ne convertit rien. Donnez la profondeur en mètres, ou retirez l'unité si ce sont des mètres.`,
+      pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter nie przelicza kolumny głębokości: podaj metry. Dla głębokości w osadzie lub wodzie porowej wybierz znaczenie „Głębokość w osadzie”: zapisze ją jako ujemną odległość w metrach.`,
+      en: `Depth column "{field}" states the unit "{unit}". Darwin Core needs metres and the converter does not rescale a depth column: give metres. For a depth below the seafloor of a sediment or porewater sample, choose the meaning "Depth below seafloor": it is written as a negative distance in metres.`,
+      de: `Die Tiefenspalte „{field}“ nennt die Einheit „{unit}“. Darwin Core verlangt Meter; eine Tiefenspalte wird nicht umgerechnet: geben Sie Meter an. Für die Tiefe unter dem Meeresboden einer Sediment- oder Porenwasserprobe wählen Sie die Bedeutung „Tiefe unter dem Meeresboden“ (negative Entfernung in Metern).`,
+      fr: `La colonne de profondeur « {field} » indique l'unité « {unit} ». Darwin Core exige des mètres ; une colonne de profondeur n'est pas convertie : donnez des mètres. Pour la profondeur sous le fond d'un échantillon de sédiment ou d'eau interstitielle, choisissez « Profondeur sous le fond » (distance négative en mètres).`,
     },
-    technical: `{file}, {sheet} field {field}: depth unit "{unit}" is not metres; minimumDepthInMeters and maximumDepthInMeters are in metres and values are never rescaled.`,
+    technical: `{file}, {sheet} field {field}: depth unit "{unit}" is not metres; minimumDepthInMeters and maximumDepthInMeters are in metres and a depth column is never rescaled. A depth below the seafloor in cm or m has its own role (CONV-SEAFLOOR-UNIT, CONV-SEAFLOOR-VALUE).`,
+  },
+  {
+    id: 'CONV-SEAFLOOR-UNIT',
+    category: 'B',
+    severity: 'error',
+    params: ['unit'],
+    plain: {
+      pl: `Kolumna „{field}” (głębokość w osadzie) ma jednostkę: {unit}. Konwerter przyjmuje tylko centymetry (cm) albo metry (m). Wpisz jednostkę kolumny w tabeli ról: cm albo m. Niczego innego nie przelicza.`,
+      en: `Column "{field}" (depth below the seafloor) has the unit: {unit}. The converter accepts only centimetres (cm) or metres (m). Set the unit of the column in the role table to cm or m. It converts nothing else.`,
+      de: `Die Spalte „{field}“ (Tiefe unter dem Meeresboden) hat die Einheit: {unit}. Der Konverter akzeptiert nur Zentimeter (cm) oder Meter (m). Tragen Sie die Einheit der Spalte in der Rollentabelle ein: cm oder m. Alles andere rechnet er nicht um.`,
+      fr: `La colonne « {field} » (profondeur sous le fond) a l'unité : {unit}. Le convertisseur n'accepte que les centimètres (cm) ou les mètres (m). Indiquez l'unité de la colonne dans le tableau des rôles : cm ou m. Il ne convertit rien d'autre.`,
+    },
+    technical: `{file}, {sheet} field {field}: the unit "{unit}" of a depth-below-seafloor column is not cm or m; nothing was written from the column. Only cm to m (a decimal shift of the text) is converted.`,
+    citations: [OBIS_DARWIN_CORE],
+  },
+  {
+    id: 'CONV-SEAFLOOR-VALUE',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'reason'],
+    plain: {
+      pl: `W kolumnie „{field}” (głębokość w osadzie) {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}) wartości nie da się zapisać: {reason}, np. „{value}”. Te komórki nie zostały zapisane.`,
+      en: `In column "{field}" (depth below the seafloor) {count} {+count:value|values} in {+lineCount:line|lines} {lines} cannot be written: {reason}, e.g. "{value}". Those cells were not written.`,
+      de: `In der Spalte „{field}“ (Tiefe unter dem Meeresboden) lassen sich in {+lineCount:der Zeile|den Zeilen} {lines} Werte nicht schreiben (insgesamt {count}): {reason}, z. B. „{value}“. Diese Zellen wurden nicht geschrieben.`,
+      fr: `Dans la colonne « {field} » (profondeur sous le fond), des valeurs {+lineCount:à la ligne|aux lignes} {lines} ne peuvent pas être écrites ({count} au total) : {reason}, p. ex. « {value} ». Ces cellules n'ont pas été écrites.`,
+    },
+    technical: `{file}:{lines} field {field}: {count} depth-below-seafloor value(s) cannot be written (reason {reason}, example {value}). Negative: a depth below the seafloor is a positive distance, and the sign is added by the converter. Notation: only a plain decimal number is shifted exactly on its text.`,
+    citations: [OBIS_DARWIN_CORE],
+  },
+  {
+    id: 'CONV-SEAFLOOR-NO-SITE-DEPTH',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `Głębokość w osadzie z kolumny „{field}” jest {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}) bez głębokości stanowiska (wody nad dnem). Darwin Core liczy wtedy odległość od poziomu odniesienia wysokości, nie od dna. Dodaj głębokość stanowiska w metrach (znaczenie „Głębokość”).`,
+      en: `Depth below the seafloor from column "{field}" is in {+lineCount:line|lines} {lines} ({count} in all) without the water depth of the site. Darwin Core then measures from the elevation reference, not from the seafloor. Add the water depth of the site in metres (meaning "Depth").`,
+      de: `Die Tiefe unter dem Meeresboden aus der Spalte „{field}“ steht in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}) ohne die Wassertiefe der Station. Darwin Core misst dann von der Höhenreferenz, nicht vom Meeresboden. Fügen Sie die Wassertiefe der Station in Metern hinzu (Bedeutung „Tiefe“).`,
+      fr: `La profondeur sous le fond de la colonne « {field} » figure {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) sans la profondeur d'eau du site. Darwin Core mesure alors depuis la référence d'altitude, pas depuis le fond. Ajoutez la profondeur d'eau du site en mètres (sens « Profondeur »).`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) have a depth below the seafloor and no minimumDepthInMeters / maximumDepthInMeters. Reference surface of minimumDistanceAboveSurfaceInMeters: "If depth measures are given, the reference surface is the location given by the depth, otherwise ... the elevation" (Darwin Core).`,
+    citations: [OBIS_DARWIN_CORE],
+  },
+  {
+    id: 'CONV-NO-OCCURRENCES',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `To archiwum nie zawierałoby ani jednego rekordu występowania. OBIS publikuje rekordy gatunków, więc dodaj arkusz z taksonami (nazwy gatunków z liczebnością lub obecnością). Same dane środowiskowe nie tworzą zbioru danych OBIS.`,
+      en: `This archive would contain no occurrences. OBIS publishes species records, so add a sheet with taxa (names of species with their counts or presence). Environmental data alone is not an OBIS dataset.`,
+      de: `Dieses Archiv würde keinen einzigen Nachweis (Occurrence) enthalten. OBIS veröffentlicht Artnachweise; fügen Sie daher ein Blatt mit Taxa hinzu (Artnamen mit Anzahl oder Vorkommen). Umweltdaten allein ergeben keinen OBIS-Datensatz.`,
+      fr: `Cette archive ne contiendrait aucune occurrence. OBIS publie des enregistrements d'espèces : ajoutez une feuille avec des taxons (noms d'espèces avec leurs effectifs ou leur présence). Des données environnementales seules ne forment pas un jeu de données OBIS.`,
+    },
+    technical: `The conversion produced 0 occurrence records. Every OBIS dataset has at least one occurrence record; an Event core with only profile levels and eMoF rows has none. The Occurrence table is empty, so its DWC-TERM-MISSING findings are not raised.`,
+    citations: [OBIS_OCCURRENCE],
+  },
+  {
+    id: 'CONV-PROFILE-NOTHING-READ',
+    category: 'B',
+    severity: 'error',
+    params: ['rows'],
+    plain: {
+      pl: `Z arkusza „{sheet}”, oznaczonego jako plik profili, nie odczytano żadnego poziomu ({rows} {+rows:wiersz danych|wiersze danych|wierszy danych}). Potrzebna jest kolumna stacji, kolumny głębokości lub pomiarów i wiersze z wartościami. Jeśli arkusz tylko opisuje kolumny albo nie ma pomiarów, nie oznaczaj go jako pliku profili.`,
+      en: `Nothing was read from sheet "{sheet}", marked as a profile file: no level ({rows} {+rows:data row|data rows}). Such a sheet needs a station column, depth or measured columns, and rows with values. If it only describes columns, or has no measurements, do not mark it as a profile file.`,
+      de: `Aus dem Blatt „{sheet}“, markiert als Profildatei, wurde nichts gelesen: keine Stufe ({rows} {+rows:Datenzeile|Datenzeilen}). Ein solches Blatt braucht eine Stationsspalte, Tiefen- oder Messspalten und Zeilen mit Werten. Beschreibt es nur Spalten oder hat es keine Messungen, markieren Sie es nicht als Profildatei.`,
+      fr: `Rien n'a été lu dans la feuille « {sheet} », marquée comme fichier de profils : aucun niveau ({rows} {+rows:ligne de données|lignes de données}). Il faut une colonne de station, des colonnes de profondeur ou de mesures et des lignes de valeurs. Une feuille qui ne décrit que des colonnes ne se marque pas comme fichier de profils.`,
+    },
+    technical: `{file}, {sheet}: the sheet was marked as a profile file and produced 0 profile levels ({rows} data rows).`,
+  },
+  {
+    id: 'CONV-STATION-FROM-POSITION',
+    category: 'B',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `W arkuszu „{sheet}” każde różne położenie (szerokość i długość geograficzna tak, jak zapisano) jest stacją, według Twojego wyboru: {count} {+count:stacja|stacje|stacji}, np. „{value}”. Identyfikator stacji składa się z kodu rejsu i położenia.`,
+      en: `In sheet "{sheet}" each distinct position (latitude and longitude as written) is a station, as you chose: {count} {+count:station|stations}, e.g. "{value}". A station ID is made of the cruise code and the position.`,
+      de: `Im Blatt „{sheet}“ ist jede verschiedene Position (Breite und Länge wie geschrieben) eine Station, wie Sie es gewählt haben: {count} {+count:Station|Stationen}, z. B. „{value}“. Die Stations-ID besteht aus dem Fahrtcode und der Position.`,
+      fr: `Dans la feuille « {sheet} », chaque position distincte (latitude et longitude telles qu'écrites) est une station, comme vous l'avez choisi : {count} {+count:station|stations}, p. ex. « {value} ». L'identifiant d'une station se compose du code de campagne et de la position.`,
+    },
+    technical: `{file}, {sheet}: the sheet has no station column and the user ticked "each distinct position is a station": {count} station(s), first "{value}" (cruise:latitude_longitude, as written).`,
   },
   {
     id: 'CONV-EFFORT-INVALID',
@@ -684,10 +783,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'column'],
     plain: {
-      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} stacji ({+lineCount:wiersz|wiersze|wierszy} {lines}). Poziom profilu trafia pod swoją stację, więc każdy wiersz musi ją mieć. Wskaż kolumnę stacji albo uzupełnij puste komórki.`,
-      en: `{count} profile {+count:row has|rows have} no station ({+lineCount:line|lines} {lines}). A profile level is placed under its station, so every row needs one. Map the station column, or fill in the empty cells.`,
-      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keine Station ({+lineCount:Zeile|Zeilen} {lines}). Eine Profilebene wird unter ihre Station gehängt, daher braucht jede Zeile eine. Ordnen Sie die Stationsspalte zu oder füllen Sie die leeren Zellen.`,
-      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de station ({+lineCount:ligne|lignes} {lines}). Un niveau de profil est placé sous sa station : chaque ligne doit en avoir une. Indiquez la colonne de station ou remplissez les cellules vides.`,
+      pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} stacji ({+lineCount:wiersz|wiersze|wierszy} {lines}). Poziom profilu trafia pod swoją stację, więc każdy wiersz musi ją mieć. Wskaż kolumnę stacji, zaznacz „Każde różne położenie to stacja” albo uzupełnij puste komórki.`,
+      en: `{count} profile {+count:row has|rows have} no station ({+lineCount:line|lines} {lines}). A profile level is placed under its station, so every row needs one. Map the station column, tick "Each distinct position is a station", or fill in the empty cells.`,
+      de: `{count} {+count:Profilzeile hat|Profilzeilen haben} keine Station ({+lineCount:Zeile|Zeilen} {lines}). Eine Profilebene wird unter ihre Station gehängt, daher braucht jede Zeile eine. Ordnen Sie die Stationsspalte zu, wählen Sie „Jede verschiedene Position ist eine Station“ oder füllen Sie die leeren Zellen.`,
+      fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de station ({+lineCount:ligne|lignes} {lines}). Un niveau de profil est placé sous sa station : chaque ligne doit en avoir une. Indiquez la colonne de station, cochez « Chaque position distincte est une station » ou remplissez les cellules vides.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} profile row(s) hold data but no station text (station column: {column}). A level event needs its station as its parent, so these rows were not converted.`,
   },
@@ -760,6 +859,22 @@ const EML_WORDS: Record<string, Record<Lang, string>> = {
 };
 
 /** What a profile level lacks, in words (CONV-PROFILE-LEVEL-INCOMPLETE carries date | position | date and position in `what`). */
+const SEAFLOOR_REASON_WORDS: Record<string, Record<Lang, string>> = {
+  negative: {
+    en: 'a depth below the seafloor is a positive distance (the converter adds the sign)',
+    pl: 'głębokość w osadzie to dodatnia odległość (znak dodaje konwerter)',
+    de: 'eine Tiefe unter dem Meeresboden ist eine positive Entfernung (das Vorzeichen setzt der Konverter)',
+    fr: 'une profondeur sous le fond est une distance positive (le convertisseur ajoute le signe)',
+  },
+  notation: {
+    en: 'it is not a plain decimal number (for example it has an exponent), and the shift from cm to m is made exactly on the text of a plain number',
+    pl: 'to nie jest zwykła liczba dziesiętna (na przykład ma wykładnik), a przesunięcie z cm na m wykonuje się dokładnie na tekście zwykłej liczby',
+    de: 'es ist keine einfache Dezimalzahl (zum Beispiel mit Exponent), und die Verschiebung von cm nach m erfolgt exakt am Text einer einfachen Zahl',
+    fr: "ce n'est pas un nombre décimal simple (par exemple avec un exposant), et le décalage de cm en m se fait exactement sur le texte d'un nombre simple",
+  },
+};
+const NONE_WORDS: Record<Lang, string> = { en: 'none', pl: 'brak', de: 'keine', fr: 'aucune' };
+
 const LEVEL_WHAT_WORDS: Record<string, Record<Lang, string>> = {
   date: { en: 'date', pl: 'daty', de: 'Datum', fr: 'date' },
   position: { en: 'position', pl: 'pozycji', de: 'Position', fr: 'position' },
@@ -884,6 +999,8 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
+  if (f.ruleId === 'CONV-SEAFLOOR-VALUE' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: SEAFLOOR_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
+  if (f.ruleId === 'CONV-SEAFLOOR-UNIT' && f.params.unit === 'none') f = { ...f, params: { ...f.params, unit: NONE_WORDS[lang] } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
     const words = f.params.missing.split(', ').map((m) => MISSING_WORDS[m]?.[lang] ?? m);
     f = { ...f, params: { ...f.params, missing: words.join('; ') } };

@@ -180,6 +180,35 @@ export const VARIABLE_CONCEPTS: Readonly<Record<string, readonly VariableConcept
   conductivity: [vc('CNDCST01', 'Electrical conductivity of the water body by CTD', 'method')],
   'potential temperature': [vc('POTMCV01', 'Potential temperature of the water body by computation using UNESCO 1983 algorithm', 'method')],
   'sigma-theta': [vc('SIGTEQ01', 'Sigma-theta of the water body by computation from salinity and potential temperature using UNESCO algorithm', 'method')],
+  // opened 2026-10-26 (docs/research/qc-sources.md, "Converter (/convert) - environmental data fixes"). Oxygen as a PERCENTAGE is saturation, a variable of its own: the concentration
+  // concepts above are never offered for it (the unit would contradict them).
+  'oxygen saturation': [vc('OXYSZZ01', 'Saturation of oxygen {O2 CAS 7782-44-7} in the water body [dissolved plus reactive particulate phase]', 'generic')],
+  // seawater density in kg m-3: both concepts name a computation, so they are offered, never proposed; sigma-theta (SIGTEQ01) is a density ANOMALY and is offered only as such
+  density: [
+    vc('INDENS01', 'Density of the water body by computation from absolute salinity and conservative temperature using UNESCO 2010 algorithm', 'method'),
+    vc('SIGTEQ01', 'Sigma-theta of the water body by computation from salinity and potential temperature using UNESCO algorithm', 'method'),
+  ],
+  // dissolved organic carbon and the major ions: each of these concepts names its MATRIX (the water body, or the sediment pore water) and a phase, and a sheet of pore water is not a sheet of
+  // the water body, so they are only OFFERED, never proposed: the user picks the one that matches the sample. No generic concept for dissolved inorganic nitrogen (DIN) exists in P01 (searched 2026-10-26).
+  DOC: [
+    vc('DOCGZZ01', 'Concentration of organic carbon {organic_C CAS 7440-44-0} {DOC} per unit volume of the water body [dissolved plus reactive particulate specified elsewhere phase]', 'method', 'volume'),
+    vc('CORGZZKG', 'Concentration of organic carbon {organic_C CAS 7440-44-0} {DOC} per unit mass of the water body [dissolved plus reactive particulate phase]', 'method', 'mass'),
+  ],
+  chloride: [vc('CLXXWBUP', 'Concentration of chloride {Cl- CAS 16887-00-6} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume')],
+  sodium: [vc('RWS00021', 'Concentration of sodium {Na CAS 7440-23-5} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume')],
+  potassium: [vc('RWS00022', 'Concentration of potassium {K CAS 7440-09-7} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume')],
+  calcium: [
+    vc('RWS00023', 'Concentration of calcium {Ca CAS 7440-70-2} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume'),
+    vc('NEWCXX09', 'Concentration of calcium {Ca CAS 7440-70-2} per unit mass of the sediment pore water [dissolved plus reactive particulate <0.4/0.45um phase]', 'method', 'mass'),
+  ],
+  magnesium: [
+    vc('RWS00024', 'Concentration of magnesium {Mg CAS 7439-95-4} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume'),
+    vc('NEWCXX08', 'Concentration of magnesium {Mg CAS 7439-95-4} per unit mass of the sediment pore water [dissolved plus reactive particulate <0.4/0.45um phase]', 'method', 'mass'),
+  ],
+  sulphate: [
+    vc('S04DISP1', 'Concentration of sulfate {SO4(2-) sulphate CAS 14808-79-8} per unit volume of the water body [dissolved plus reactive particulate phase]', 'method', 'volume'),
+    vc('SPHTMAXX', 'Concentration of sulfate {SO4(2-) sulphate CAS 14808-79-8} per unit volume of the sediment pore water [dissolved plus reactive particulate phase]', 'method', 'volume'),
+  ],
   d15N: [vc('D15NEAM1', 'Enrichment of nitrogen-15 in total nitrogen {15N_in_total_N CAS 14390-96-6} {delta(15)N} in the water body [particulate >GF/F phase] by filtration, acidification, combustion and mass spectrometry', 'method')],
 };
 
@@ -210,6 +239,8 @@ export const VARIABLE_UNITS: readonly VariableUnit[] = [
   vu(P06.gPerM3, ['g/m3'], 'volume'),
   vu(p06('UPAA', 'Degrees Celsius'), ['°c', 'ºc', '˚c', 'degc', 'degreec', 'degreesc', 'celsius', 'degreecelsius', 'degreescelsius']),
   vu(p06('UUUU', 'Dimensionless'), ['dimensionless', 'unitless']),
+  // opened 2026-10-26: UPCT (Percent). The unit of a saturation and of a percentage of a total.
+  vu(p06('UPCT', 'Percent'), ['%', 'percent', 'percentage', 'pct']),
   vu(p06('PSUX', 'Practical salinity units'), ['psu']),
   vu(p06('UUPH', 'pH units'), ['phunits', 'phunit']),
   vu(p06('UATM', 'Microatmospheres'), ['uatm', 'microatm', 'microatmosphere', 'microatmospheres']),
@@ -297,6 +328,8 @@ const VARIABLE_NAMES: Readonly<Record<string, { en?: readonly string[]; pl?: rea
   conductivity: { en: ['conductivity', 'cond', 'electrical conductivity'], pl: ['przewodnictwo', 'przewodność elektryczna'], de: ['Leitfähigkeit', 'elektrische Leitfähigkeit'], fr: ['conductivité', 'conductivité électrique'] },
   'potential temperature': { en: ['potential temperature', 'tpot', 'temperature potential', 'temperature, water, potential', 'temperature water potential', 'pot. temperature'], pl: ['temperatura potencjalna'], de: ['potentielle Temperatur'], fr: ['température potentielle'] },
   'sigma-theta': { en: ['sigma-theta', 'sigma theta', 'sigmatheta', 'density, sigma-theta', 'density, sigma-theta (0)'], pl: ['sigma-theta'], de: ['Sigma-Theta'], fr: ['sigma-thêta'] },
+  'oxygen saturation': { en: ['oxygen saturation', 'o2 saturation', 'dissolved oxygen saturation', 'oxygen saturation percent'], pl: ['nasycenie tlenem', 'nasycenie tlenu', 'nasycenie wody tlenem'], de: ['Sauerstoffsättigung'], fr: ["saturation en oxygène", "saturation de l'oxygène"] },
+  density: { en: ['seawater density', 'sea water density', 'water density', 'in situ density', 'density of seawater'], pl: ['gęstość wody', 'gęstość wody morskiej'], de: ['Wasserdichte', 'Meerwasserdichte'], fr: ["masse volumique de l'eau"] },
   DIC: { pl: ['węgiel nieorganiczny rozpuszczony', 'DIC'], de: ['gelöster anorganischer Kohlenstoff'], fr: ['carbone inorganique dissous'] },
 };
 
@@ -314,7 +347,7 @@ const nameKey = (name: string): string =>
     .trim();
 
 /** The variables of VARIABLE_CONCEPTS that /check's recogniser has no name for: the converter's column overlay reads them from the header (core/convert/recognize.ts variableClaim). */
-export const CONVERTER_VARIABLES: ReadonlySet<string> = new Set(['conductivity', 'potential temperature', 'sigma-theta']);
+export const CONVERTER_VARIABLES: ReadonlySet<string> = new Set(['conductivity', 'potential temperature', 'sigma-theta', 'oxygen saturation']);
 
 /** Folded header name -> variable of VARIABLE_CONCEPTS. */
 export const VARIABLE_SYNONYMS: ReadonlyMap<string, string> = new Map(

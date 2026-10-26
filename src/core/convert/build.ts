@@ -14,12 +14,14 @@ import type { SampleSite, TreeOptions } from './events';
 import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
-import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept } from './nerc';
+import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
 import type { NercDecisions, NercPick } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
+import { seafloorMetres, seafloorUnitOf } from './seafloor';
+import type { SeafloorUnit } from './seafloor';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
@@ -76,6 +78,12 @@ export interface ProfileDeclaration {
    * more than one biology station has is not matched (it is never guessed). The level then sits under the biology station; its own ID keeps the cast, so the casts stay apart.
    */
   ignoreCast?: boolean;
+  /**
+   * The user's explicit tick (one per sheet, never automatic), for a sheet that has NO station column (a file of lat, lon, time, depth and variables): each distinct position is a
+   * station. The station's ID is `<cruise>:<latitude>_<longitude>` with the two numbers as written in the sheet (a decimal comma turned into a point, nothing else). A row with no
+   * position then has no station (CONV-PROFILE-NO-STATION). Ignored when the sheet has a station column.
+   */
+  positionStation?: boolean;
 }
 
 export type SamplingDevice = { kind: 'known'; key: keyof typeof DEVICES } | { kind: 'other'; text: string };
@@ -119,8 +127,10 @@ interface Cols {
   depthPlain?: Spec & { positive: 'down' | 'up' | 'unknown'; unit?: string };
   /** Stage 6: the FIRST pressure column; read only on a profile sheet (a second one is not read, as a second depth is not). */
   pressure?: Spec & { unit?: string };
+  /** The FIRST depth-below-seafloor column (sediment / porewater): written as a negative distance above the surface in metres (core/convert/seafloor.ts). */
+  seafloor?: Spec & { unit?: string };
   /** Measured-variable columns with a name: each becomes one eMoF row per sample event (stage 5). `name` is the variable as the column's role gives it, `unit` as given. */
-  variables: (Spec & { name: string; unit?: string })[];
+  variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
 
 function colsOf(mapping: SheetMapping): Cols {
@@ -160,9 +170,12 @@ function colsOf(mapping: SheetMapping): Cols {
       case 'variable': {
         const name = r.variable.trim();
         const unit = r.unit?.trim();
-        if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }) });
+        if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(r.p01 === undefined ? {} : { p01: r.p01 }) });
         break;
       }
+      case 'depthBelowSeafloor':
+        c.seafloor ??= { ...spec, ...(r.unit === undefined || r.unit.trim() === '' ? {} : { unit: r.unit.trim() }) };
+        break;
       case 'pressure':
         c.pressure ??= { ...spec, ...(r.unit === undefined || r.unit.trim() === '' ? {} : { unit: r.unit.trim() }) };
         break;
@@ -199,6 +212,14 @@ const text = (raw: unknown): string | undefined => {
   const t = String(raw).trim();
   return t === '' ? undefined : t;
 };
+
+/**
+ * The lines of a sheet that the parser found RAGGED (ROW-RAGGED: more or fewer fields than the header). Such a row is not converted: its values are shifted against the header, so any
+ * cell read from it could belong to another column. The finding itself blocks the sheet (policy.ts) and names the lines.
+ */
+function raggedLines(file: ParsedFile, sheet: string): ReadonlySet<number> {
+  return new Set(file.findings.filter((f) => f.ruleId === 'ROW-RAGGED' && f.sheet === sheet).flatMap((f) => f.lines ?? []));
+}
 
 /** Lines and an example per (sheet, field): the shape of every "these rows" finding. */
 class Lines {
@@ -269,6 +290,7 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   else if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
   for (const v of cols.variables) use(v);
+  use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
     use(cols.depthMax);
@@ -319,9 +341,53 @@ function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: s
   };
 }
 
+/** The depth below the seafloor of one row: the negative distance in metres as text, and the number as written with its unit (for a level ID). */
+interface SeafloorRead {
+  /** minimum = maximumDistanceAboveSurfaceInMeters */
+  text: string;
+  /** the number as written ("0.5") and the unit it was written in */
+  plain: string;
+  unit: SeafloorUnit;
+  value: number;
+}
+
+/**
+ * Reads the depth-below-seafloor column of a sheet (core/convert/seafloor.ts). A unit that is not cm or m (or none) refuses the whole column (CONV-SEAFLOOR-UNIT, nothing is
+ * written from it); a negative number, or a number with no exact plain text (an exponent), refuses that cell (CONV-SEAFLOOR-VALUE); text and NA are reported like any number cell.
+ */
+function seafloorReader(cols: Cols, dc: boolean, collector: Collector, base: { file: string; sheet: string }): { read: (row: RawRow) => SeafloorRead | undefined; findings: () => Finding[] } {
+  const col = cols.seafloor;
+  const unit = seafloorUnitOf(col?.unit);
+  const negative = new Lines();
+  const notation = new Lines();
+  return {
+    read: (row) => {
+      if (!col || unit === undefined) return undefined;
+      const cell = row.cells[col.index] ?? null;
+      if (isBlankCell(cell)) return undefined;
+      const p = parseNumber(cell, dc);
+      if (p.status === 'non-numeric') collector.add('ROW-NON-NUMERIC', base.sheet, col.header, row.line, p.token);
+      else if (p.status === 'na-variant') collector.add('ROW-NA-VARIANT', base.sheet, col.header, row.line, p.token);
+      if (p.status !== 'ok') return undefined;
+      const plain = sourceNumberText(cell, dc, p.value);
+      const m = seafloorMetres(plain, unit);
+      if (!m.ok) {
+        (m.reason === 'negative' ? negative : notation).add(base.file, base.sheet, col.header, row.line, String(cell).trim());
+        return undefined;
+      }
+      return { text: m.text, plain: plain as string, unit, value: p.value };
+    },
+    findings: () => [
+      ...(col && unit === undefined ? [makeConvertFinding('CONV-SEAFLOOR-UNIT', { ...base, field: col.header, params: { unit: col.unit ?? 'none' } })] : []),
+      ...negative.entries().map((e) => makeConvertFinding('CONV-SEAFLOOR-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, reason: 'negative' } })),
+      ...notation.entries().map((e) => makeConvertFinding('CONV-SEAFLOOR-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, reason: 'notation' } })),
+    ],
+  };
+}
+
 /** A measured-variable column of a sheet with what the user confirmed for it (stage 5): read the same way on a biology sheet and a profile sheet. */
 interface VarState {
-  v: Spec & { name: string; unit?: string };
+  v: Spec & { name: string; unit?: string; p01?: string };
   type: NercPick | undefined;
   unit: NercPick | undefined;
   written: boolean;
@@ -490,7 +556,7 @@ function bioBases(stations: ReadonlyMap<string, BioStation>): Map<string, string
 export const STATION_FAR_KM = 10;
 
 /** What a level's ID was made of (the user's code column, the depth, the pressure), and for a collision also a sample or a station that has the ID. */
-type LevelVia = 'code' | 'depth' | 'pressure';
+type LevelVia = 'code' | 'depth' | 'pressure' | 'seafloor';
 type LevelSource = LevelVia | 'sample' | 'station';
 interface LevelInfo {
   id: string;
@@ -508,9 +574,11 @@ interface LevelRow {
 
 /** A number cell read for a level ID: the text written into the ID and the number it stands for (the key of the duplicate check). */
 interface Vertical {
-  via: 'depth' | 'pressure';
+  via: 'depth' | 'pressure' | 'seafloor';
   text: string;
   value: number;
+  /** What follows the number in the ID: m, dbar, or cmbsf / mbsf (centimetres / metres below the seafloor). The unit is part of the ID, so no two kinds of coordinate give the same ID. */
+  suffix: string;
 }
 
 /**
@@ -521,15 +589,18 @@ interface Vertical {
  * and 10.0 are one depth. Never rounded, never turned into a depth from a pressure.
  */
 function verticalOf(row: RawRow, cols: Cols, decimalComma: boolean): Vertical | undefined {
-  const read = (spec: Spec | undefined, via: Vertical['via']): Vertical | undefined => {
+  const read = (spec: Spec | undefined, via: Vertical['via'], suffix: string): Vertical | undefined => {
     if (!spec) return undefined;
     const raw = row.cells[spec.index] ?? null;
     if (isBlankCell(raw)) return undefined;
     const p = parseNumber(raw, decimalComma);
     if (p.status !== 'ok') return undefined;
-    return { via, value: p.value, text: sourceNumberText(raw, decimalComma, p.value) ?? String(p.value) };
+    return { via, suffix, value: p.value, text: sourceNumberText(raw, decimalComma, p.value) ?? String(p.value) };
   };
-  return read(cols.depthPlain ?? cols.depthMin ?? cols.depthMax, 'depth') ?? (isDecibar(cols.pressure?.unit) ? read(cols.pressure, 'pressure') : undefined);
+  // a sediment or porewater sheet: the depth in the sediment is the coordinate of the level (its water depth is the same for every level of a station); a unit that is not cm or m gives none
+  const sfUnit = seafloorUnitOf(cols.seafloor?.unit);
+  const seafloor = sfUnit === undefined ? undefined : read(cols.seafloor, 'seafloor', `${sfUnit}bsf`);
+  return seafloor ?? read(cols.depthPlain ?? cols.depthMin ?? cols.depthMax, 'depth', 'm') ?? (isDecibar(cols.pressure?.unit) ? read(cols.pressure, 'pressure', 'dbar') : undefined);
 }
 
 /**
@@ -551,6 +622,9 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
   const base = { file: fileName, sheet: sheet.name };
   const depthOf = depthReader(cols, dc, collector, sheet.name);
+  const seafloorOf = seafloorReader(cols, dc, collector, base);
+  const noSiteDepth = new Lines();
+  const levelsBefore = ctx.sites.length;
 
   for (const d of [cols.depthMin, cols.depthMax, cols.depthPlain]) {
     if (d?.unit !== undefined && !METRES.test(d.unit.trim())) ctx.findings.push(makeConvertFinding('CONV-DEPTH-UNIT', { ...base, field: d.header, params: { unit: d.unit } }));
@@ -563,10 +637,10 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
   };
   const varState: VarState[] = cols.variables.map((v) => {
-    const d = readDecision(sin.nerc, v.index);
+    const d = readDecision(sin.nerc, v.index, v.p01);
     checkText(v.header, sheet.headerLine, v.name);
     checkText(v.header, sheet.headerLine, v.unit);
-    return { v, type: d.type, unit: v.unit === undefined ? undefined : d.unit, written: false };
+    return { v, type: d.type, unit: unitPickFor(v.unit, d), written: false };
   });
   const pressure = cols.pressure;
   if (pressure) checkText(pressure.header, sheet.headerLine, pressure.unit);
@@ -576,8 +650,35 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const depthIds = !codeColumn && sin.profile?.depthIds === true;
   const ignoreCast = sin.profile?.ignoreCast === true;
   // a row with none of these filled is an empty line, not a level
-  const dataColumns = [specs.station, specs.sampleId, cols.depthPlain, cols.depthMin, cols.depthMax, cols.pressure, ...cols.variables].flatMap((c) => (c === undefined ? [] : [c.index]));
+  const dataColumns = [specs.station, specs.sampleId, cols.depthPlain, cols.depthMin, cols.depthMax, cols.pressure, cols.seafloor, ...cols.variables].flatMap((c) => (c === undefined ? [] : [c.index]));
   const sheetUnmatched = new Set<string>();
+
+  // a sheet with no station column and the user's tick: each distinct position is a station, its text `<latitude>_<longitude>` as the two numbers are written in the sheet
+  const positionStation = specs.station === undefined && sin.profile?.positionStation === true;
+  const positionStations = new Set<string>();
+  const stationOf = (row: RawRow, m: ReturnType<typeof parse>): string | undefined => {
+    if (m.station !== undefined || !positionStation) return m.station;
+    if (m.lat === undefined || m.lon === undefined || specs.lat === undefined || specs.lon === undefined) return undefined;
+    const lat = sourceNumberText(row.cells[specs.lat.index], dc, m.lat) ?? String(row.cells[specs.lat.index] ?? '').trim();
+    const lon = sourceNumberText(row.cells[specs.lon.index], dc, m.lon) ?? String(row.cells[specs.lon.index] ?? '').trim();
+    return `${lat}_${lon}`;
+  };
+  // the dates of each station's rows, read BEFORE the rows are given their IDs: a station that was visited on more than one date puts the date into the IDs that are made of the depth
+  // (the same depth of two visits is not one level). The value comes from the data, never from the order of the rows.
+  const datesOf = new Map<string, Set<string>>();
+  {
+    const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header) });
+    for (const row of sheet.rows) {
+      const m = scan(row);
+      const st = stationOf(row, m);
+      if (st === undefined || m.datetime === undefined) continue;
+      const cr = (m.cruise ?? sin.cruise?.trim()) || undefined;
+      const k = stationEventId(cr, st);
+      let set = datesOf.get(k);
+      if (!set) datesOf.set(k, (set = new Set()));
+      set.add(m.datetime.iso.slice(0, 10));
+    }
+  }
 
   /** A number cell as the text to write; text and NA are reported like any number cell and write nothing. */
   const numberText = (raw: RawCell | undefined, header: string, line: number): string | undefined => {
@@ -595,9 +696,11 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     return valueText(cell, dc);
   };
 
+  const ragged = raggedLines(file, sheet.name);
   for (const row of sheet.rows) {
+    if (ragged.has(row.line)) continue;
     const m = parse(row);
-    const stationText = m.station;
+    const stationText = stationOf(row, m);
     // conservative, as on a biology sheet: only the exact word as the WHOLE station or code cell
     const summaryLabel = [m.sampleId, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
     if (summaryLabel !== undefined) {
@@ -613,20 +716,24 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     const cruise = cruiseText === '' ? undefined : cruiseText;
     if (specs.station) checkText(specs.station.header, row.line, stationText);
     if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
-    // the level's own code: the code column, or (only with the user's approval, and only without a code column) the depth as written, else the pressure as written with "dbar"
+    const stationId = stationEventId(cruise, stationText);
+    if (positionStation && specs.station === undefined) positionStations.add(stationId);
+    // the level's own code: the code column, or (only with the user's approval, and only without a code column) the depth in the sediment as written with its unit, else the depth as
+    // written, else the pressure as written with "dbar"
     const vertical = codeColumn || !depthIds ? undefined : verticalOf(row, cols, dc);
-    // the unit is part of the ID ("2m", "2dbar"): a depth-made code never equals a numeric sample code ("2") of a station prefixed with the same station
-    const code = codeColumn ? m.sampleId : vertical === undefined ? undefined : `${vertical.text}${vertical.via === 'pressure' ? 'dbar' : 'm'}`;
+    // the unit is part of the ID ("2m", "2dbar", "5cmbsf"): a depth-made code never equals a numeric sample code ("2") of a station prefixed with the same station
+    // a station that was visited on more than one date: the date of the row is part of a depth-made ID (`<station>:<YYYY-MM-DD>:<depth>m`); a row with no date there has no ID
+    const idDate = vertical !== undefined && (datesOf.get(stationId)?.size ?? 0) > 1 ? (m.datetime?.iso.slice(0, 10) ?? null) : undefined;
+    const code = codeColumn ? m.sampleId : vertical === undefined || idDate === null ? undefined : `${idDate === undefined ? '' : `${idDate}:`}${vertical.text}${vertical.suffix}`;
     const via: LevelVia = codeColumn ? 'code' : (vertical?.via ?? 'depth');
     if (code === undefined) {
       noCode.add(fileName, sheet.name, specs.sampleId?.header ?? '', row.line);
       continue;
     }
     if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
-    const stationId = stationEventId(cruise, stationText);
     const id = stationPrefixedId(stationId, code);
     // the key of the duplicate check: a depth or pressure by its number (10 and 10.0 are the same), a code as written; a code "10" and a depth 10 are the same key, as they are the same ID
-    const key = vertical === undefined ? id : stationPrefixedId(stationId, `${vertical.value}${vertical.via === 'pressure' ? 'dbar' : 'm'}`);
+    const key = vertical === undefined ? id : stationPrefixedId(stationId, `${idDate === undefined || idDate === null ? '' : `${idDate}:`}${vertical.value}${vertical.suffix}`);
     const source: SourceRef = { file: fileName, sheet: sheet.name, line: row.line };
 
     // the same ID twice (two rows of one station with the same code, depth or pressure: repeated casts), or an ID a sample already has
@@ -667,6 +774,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     }
 
     const depth = depthOf(row);
+    const sf = seafloorOf.read(row);
+    if (sf !== undefined && depth.min === undefined && depth.max === undefined) noSiteDepth.add(fileName, sheet.name, cols.seafloor?.header ?? '', row.line);
     const date = m.datetime;
     // a level matched by the cast-free base sits under the BIOLOGY station (its own ID keeps the cast: two casts of one station stay two sets of levels)
     const parentBio = matchVia === 'cast' && bioId !== undefined ? ctx.bioStationInfo.get(bioId) : undefined;
@@ -689,6 +798,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     if (depth.decimals !== undefined) site.depthDecimals = depth.decimals;
     if (depth.minText !== undefined) site.depthMinText = depth.minText;
     if (depth.maxText !== undefined) site.depthMaxText = depth.maxText;
+    if (sf !== undefined) site.distanceText = sf.text;
     ctx.sites.push(site);
     // the first position of a matched station, for the distance check
     const at = ctx.matchedAt.get(stationId);
@@ -708,7 +818,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
         measurementType: measurementTypeText(st.type, st.v.name),
         ...(st.type ? { measurementTypeId: st.type.id } : {}),
         measurementValue: written,
-        ...(st.v.unit === undefined ? {} : { measurementUnit: st.v.unit }),
+        ...(st.v.unit === undefined ? (st.unit ? { measurementUnit: 'Dimensionless' } : {}) : { measurementUnit: st.v.unit }),
         ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
         source: { ...source, column: st.v.header },
       });
@@ -731,6 +841,11 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     }
   }
 
+  ctx.findings.push(...seafloorOf.findings());
+  for (const e of noSiteDepth.entries()) ctx.findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
+  if (positionStations.size > 0) ctx.findings.push(makeConvertFinding('CONV-STATION-FROM-POSITION', { ...base, value: [...positionStations][0], params: { count: positionStations.size } }));
+  // a sheet marked as a profile file that gave no level at all: said plainly (a description of columns, a sheet with no station and no tick, an empty sheet)
+  if (ctx.sites.length === levelsBefore) ctx.findings.push(makeConvertFinding('CONV-PROFILE-NOTHING-READ', { ...base, params: { rows: sheet.rows.length } }));
   // a pressure that was written with no unit: said, by column (a unit that is stated but is not decibars is said by CONV-UNIT-NO-P06 below)
   if (pressureWritten && pressure && pressure.unit === undefined) ctx.findings.push(makeConvertFinding('CONV-PROFILE-PRESSURE-NO-UNIT', { ...base, field: pressure.header, params: { column: pressure.header.trim() } }));
   // the pressure's unit has an identifier only when it is decibars: any other unit is written as given, and said
@@ -769,6 +884,15 @@ export function convert(input: ConvertInput): ConvertResult {
   // measured variables: the columns written, and the identifiers that were written for them (never a name or a label)
   const nercStats = { columns: 0, typeIds: 0, unitIds: 0, nvsIds: 0 };
   let sheetKeyN = 0;
+
+  // The findings the PARSER raised for the files these sheets come from (/check puts them in its report; the converter must too): a ragged row (an extra or a missing field: the
+  // values of that row are shifted against the header, so the sheet's conversion is blocked, ROW-RAGGED names the lines), an encoding that was guessed, a decimal comma, a 1904 workbook.
+  // A finding that names a sheet is kept only for a sheet that is converted; one that names none (the whole file) is kept once per file.
+  {
+    const used = new Map<ParsedFile, Set<string>>();
+    for (const sin of input.sheets) (used.get(sin.file) ?? used.set(sin.file, new Set()).get(sin.file)!).add(sin.sheet);
+    for (const [file, sheets] of used) for (const f of file.findings) if (f.sheet === undefined || sheets.has(f.sheet)) findings.push(f);
+  }
 
   const splits = listSplits(input);
   const undecided = splits.filter((s) => s.needsDecision && !s.approved);
@@ -865,13 +989,15 @@ export function convert(input: ConvertInput): ConvertResult {
     // the measured-variable columns (stage 5): the identifiers the user confirmed for each, checked here (not believed because the page sent them). A unit identifier
     // counts only for a column that has a unit text. What is written into the file is checked for tabs and line breaks like every other text.
     const varState = cols.variables.map((v) => {
-      const d = readDecision(sin.nerc, v.index);
+      const d = readDecision(sin.nerc, v.index, v.p01);
       checkText(v.header, sheet.headerLine, v.name);
       checkText(v.header, sheet.headerLine, v.unit);
-      return { v, type: d.type, unit: v.unit === undefined ? undefined : d.unit, written: false };
+      return { v, type: d.type, unit: unitPickFor(v.unit, d), written: false };
     });
 
     const depthOf = depthReader(cols, dc, collector, sheet.name);
+    const seafloorOf = seafloorReader(cols, dc, collector, base);
+    const noSiteDepth = new Lines();
 
     const effortOf = (row: RawRow): string | undefined => {
       const e = quantity?.effort;
@@ -896,7 +1022,9 @@ export function convert(input: ConvertInput): ConvertResult {
       return undefined;
     };
 
+    const ragged = raggedLines(file, sheet.name);
     for (const row of sheet.rows) {
+      if (ragged.has(row.line)) continue;
       const m = parse(row);
       const code = m.sampleId;
       const stationText = m.station;
@@ -925,6 +1053,8 @@ export function convert(input: ConvertInput): ConvertResult {
       const stationId = stationText === undefined ? undefined : stationEventId(cruise, stationText);
       const eventId = opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code;
       const depth = depthOf(row);
+      const sf = seafloorOf.read(row);
+      if (sf !== undefined && depth.min === undefined && depth.max === undefined) noSiteDepth.add(fileName, sheet.name, cols.seafloor?.header ?? '', row.line);
       const effort = effortOf(row);
       const date = m.datetime;
       const dateText = date === undefined ? undefined : eventDateText(date);
@@ -950,6 +1080,7 @@ export function convert(input: ConvertInput): ConvertResult {
         if (acc.dateText !== dateText) differs('date');
         if (!sameNumber(acc.site.lat, m.lat) || !sameNumber(acc.site.lon, m.lon)) differs('position');
         if (!sameNumber(acc.site.depthMin, depth.min) || !sameNumber(acc.site.depthMax, depth.max)) differs('depth');
+        if (acc.site.distanceText !== sf?.text) differs('depth below seafloor');
         if (acc.effortText !== effort) differs('sample size');
       } else {
         const site: SampleSite = { id: eventId, code, source };
@@ -971,6 +1102,7 @@ export function convert(input: ConvertInput): ConvertResult {
         if (depth.decimals !== undefined) site.depthDecimals = depth.decimals;
         if (depth.minText !== undefined) site.depthMinText = depth.minText;
         if (depth.maxText !== undefined) site.depthMaxText = depth.maxText;
+        if (sf !== undefined) site.distanceText = sf.text;
         if (effort !== undefined && quantity?.effort) {
           site.sampleSizeValue = effort;
           site.sampleSizeUnit = quantity.effort.unit;
@@ -1062,7 +1194,7 @@ export function convert(input: ConvertInput): ConvertResult {
           measurementType: measurementTypeText(st.type, v.name),
           ...(st.type ? { measurementTypeId: st.type.id } : {}),
           measurementValue: written,
-          ...(v.unit === undefined ? {} : { measurementUnit: v.unit }),
+          ...(v.unit === undefined ? (st.unit ? { measurementUnit: 'Dimensionless' } : {}) : { measurementUnit: v.unit }),
           ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
           source: { ...source, column: v.header },
         });
@@ -1206,6 +1338,8 @@ export function convert(input: ConvertInput): ConvertResult {
     }
 
     findings.push(...reportVariables(varState, base, [], nercStats));
+    findings.push(...seafloorOf.findings());
+    for (const e of noSiteDepth.entries()) findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
 
     // sample-level conflicts of long sheets
     for (const a of samples.values()) {
@@ -1346,7 +1480,7 @@ export function convert(input: ConvertInput): ConvertResult {
       const k = `${r.file}\u0000${r.sheet}`;
       (byWhere.get(k) ?? byWhere.set(k, []).get(k)!).push(r);
     }
-    const onlyLevels = d.rows.every((r) => r.via === 'code' || r.via === 'depth' || r.via === 'pressure');
+    const onlyLevels = d.rows.every((r) => r.via === 'code' || r.via === 'depth' || r.via === 'pressure' || r.via === 'seafloor');
     for (const rows of byWhere.values()) {
       const sorted = [...rows].sort((a, b) => a.line - b.line);
       const used = [...new Set(sorted.map((r) => r.via))];
@@ -1518,6 +1652,14 @@ export function convert(input: ConvertInput): ConvertResult {
         params: { count: g.ids.size, columns: g.refs.join(', '), names: g.verbatim.join(', ') },
       }),
     );
+  }
+
+  // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
+  // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).
+  const found = input.sheets.find((x) => x.file.sheets.some((sh) => sh.name === x.sheet));
+  if (occurrences.length === 0 && found !== undefined) {
+    const first = found;
+    findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet }));
   }
 
   const blocking = findings.filter((f) => f.severity === 'error');

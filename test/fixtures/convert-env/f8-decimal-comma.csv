@@ -1,0 +1,4 @@
+Station;Datum;Breite;Laenge;Tiefe [m];Temperatur [°C];Salzgehalt;Nitrat [µmol/L]
+ZD1;01.05.2020;70,1;20,2;5;4,1;33,1;1,25
+ZD1;01.05.2020;70,1;20,2;10;3,9;33,4;1,35
+ZD2;02.05.2020;70,3;20,4;5;4,4;33,0;1,45

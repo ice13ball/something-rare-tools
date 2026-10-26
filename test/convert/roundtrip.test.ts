@@ -73,7 +73,9 @@ const same = (x: ReturnType<typeof convert>, y: ReturnType<typeof convert>): voi
   expect(y.events).toEqual(x.events);
   expect(y.occurrences).toEqual(x.occurrences);
   expect(y.measurements).toEqual(x.measurements);
-  expect(y.findings).toEqual(x.findings);
+  // the findings the PARSER raised about the input file (IN-*: a 1904 workbook, a guessed encoding) describe that file, not the data: the re-read CSV is another file
+  const dataFindings = (r: ReturnType<typeof convert>) => r.findings.filter((f) => !f.ruleId.startsWith('IN-'));
+  expect(dataFindings(y)).toEqual(dataFindings(x));
   expect(y.tree).toEqual(x.tree);
 };
 

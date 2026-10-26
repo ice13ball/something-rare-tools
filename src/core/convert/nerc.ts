@@ -13,8 +13,12 @@ import { TAB_OR_NEWLINE } from './ids';
  * collection, not a string of the page's own making.
  */
 
-/** Where a confirmed identifier came from: the converter's own verified list, or a result of the user's NVS search (the opt-in). */
-export type NercSource = 'suggested' | 'nvs';
+/**
+ * Where a confirmed identifier came from: the converter's own verified list, a result of the user's NVS search (the opt-in), or a P01 code that the file's own header declares
+ * (`SDN:P01::CODE`) and that the converter could NOT verify: shown as "declared by the file" and written only after the user confirmed it (the worker checks that the column's header
+ * declares exactly that code).
+ */
+export type NercSource = 'suggested' | 'nvs' | 'declared';
 
 /**
  * One confirmed identifier for one column. `deprecated` is what NVS (or the verified list) says about the concept; a deprecated concept is never written, whatever
@@ -50,11 +54,13 @@ export function conceptUri(collection: 'P01' | 'P06', code: string): string | un
 const own = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
 /** The pick of a page's message, or undefined when it is not shaped like one of the right collection. The worker applies this to everything the page sends. */
-export function readPick(collection: 'P01' | 'P06', x: unknown): NercPick | undefined {
+export function readPick(collection: 'P01' | 'P06', x: unknown, declared?: string): NercPick | undefined {
   if (typeof x !== 'object' || x === null) return undefined;
   const r = x as Record<string, unknown>;
   if (typeof r.id !== 'string' || !(collection === 'P01' ? P01_URI : P06_URI).test(r.id)) return undefined;
-  if (r.source !== 'suggested' && r.source !== 'nvs') return undefined;
+  if (r.source !== 'suggested' && r.source !== 'nvs' && r.source !== 'declared') return undefined;
+  // a declared code is a P01 type only, and only the code that THIS column's header declares (the page cannot name another one)
+  if (r.source === 'declared' && (collection !== 'P01' || declared === undefined || r.id.split('/')[6] !== declared)) return undefined;
   if (r.deprecated !== false) return undefined; // deprecated, or not stated: not written
   // a pick that says it came from the converter's own list must BE on that list (the verified, non-deprecated concepts): the page cannot vouch for anything else
   if (r.source === 'suggested' && !VARIABLE_VERIFIED_CODES.includes(`${collection}/${r.id.split('/')[6]}`)) return undefined;
@@ -70,21 +76,26 @@ export function pickLabel(pick: NercPick): string | undefined {
   return pick.source === 'nvs' ? pick.label : undefined;
 }
 
+/** A unit that is a percentage: "%", "percent", "per cent", "pct". */
+export const isPercentUnit = (unit: string): boolean => /^(%|percent|per ?cent|pct)$/.test(unit.trim().toLowerCase());
+
 /** True when the label of a confirmed concept states a dimension (per unit mass or volume) that the column's unit contradicts. Neither side stating one is no mismatch. */
 export function unitContradictsConcept(label: string | undefined, unit: string | undefined): boolean {
   if (label === undefined || unit === undefined) return false;
+  // a percentage (oxygen saturation, a percent of a total) is not a concentration: a concept that says "per unit volume / mass" is the wrong quantity for it
+  if (isPercentUnit(unit)) return labelDimension(label) !== undefined;
   const l = labelDimension(label);
   const u = unitDimension(unit);
   return l !== undefined && u !== undefined && l !== u;
 }
 
 /** The decision of one column as the worker may use it: each part checked, the rest dropped. */
-export function readDecision(decisions: NercDecisions | undefined, index: number): NercColumnDecision {
+export function readDecision(decisions: NercDecisions | undefined, index: number, declared?: string): NercColumnDecision {
   if (decisions === undefined || typeof decisions !== 'object' || decisions === null || !own(decisions, String(index))) return {};
   const d = decisions[String(index)] as unknown;
   if (typeof d !== 'object' || d === null) return {};
   const r = d as Record<string, unknown>;
-  const type = readPick('P01', r.type);
+  const type = readPick('P01', r.type, declared);
   const unit = readPick('P06', r.unit);
   return { ...(type ? { type } : {}), ...(unit ? { unit } : {}) };
 }
@@ -92,8 +103,10 @@ export function readDecision(decisions: NercDecisions | undefined, index: number
 /* ---------- what is suggested ---------- */
 
 export interface TypeSuggestion {
-  /** A verified generic concept for this variable and this unit, shown as the suggestion. Never selected for the user. */
+  /** A verified generic concept for this variable and this unit, shown as the suggestion. Never selected for the user. A verified code the header DECLARES comes first (it is the file's own statement). */
   proposed?: NercTerm;
+  /** A well-formed P01 code the header declares that the converter has not verified: listed as "declared by the file", never proposed, written only after the user chose it. */
+  declared?: NercTerm;
   /** The other verified concepts that fit the unit's dimension (method-specific ones, and a generic one that was not picked), offered in the list. */
   offered: NercTerm[];
 }
@@ -106,15 +119,63 @@ const proposable = (c: VariableConcept, per: PerDimension | undefined): boolean 
  * concept defined per unit volume or per unit mass (oxygen, nutrients), only when the unit says which: with a unit of neither dimension, or none, nothing is
  * proposed, and the concepts are offered instead. When more than one generic concept fits, nothing is proposed.
  */
-export function suggestType(variable: string, unit: string | undefined): TypeSuggestion {
-  const known = conceptVariable(variable);
+export function suggestType(variable: string, unit: string | undefined, declaredCode?: string): TypeSuggestion {
+  const base = suggestTypeFor(variable, unit);
+  if (declaredCode === undefined) return base;
+  const verified = verifiedConcept(declaredCode);
+  if (verified) {
+    // the file's own verified code first; what would have been proposed becomes one of the offered concepts
+    const offered = [...(base.proposed ? [base.proposed] : []), ...base.offered].filter((t) => t.code !== verified.code);
+    return { proposed: verified, offered };
+  }
+  if (P01_DECLARED.test(declaredCode)) return { ...base, declared: { code: declaredCode, uri: nercUri('P01', declaredCode), label: '' } };
+  return base;
+}
+
+/** A P01 code of the shape the vocabulary uses: eight upper-case letters and digits. */
+export const P01_DECLARED = /^[A-Z0-9]{8}$/;
+
+/** The converter's verified concept of a P01 code (any variable, any kind), or undefined. */
+export function verifiedConcept(code: string): NercTerm | undefined {
+  for (const list of Object.values(VARIABLE_CONCEPTS)) for (const c of list) if (c.term.code === code) return c.term;
+  return undefined;
+}
+
+function suggestTypeFor(variable: string, unit: string | undefined): TypeSuggestion {
+  let known = conceptVariable(variable);
+  const percent = unit !== undefined && isPercentUnit(unit);
+  // oxygen as a percentage is SATURATION: it gets the saturation concept (when one is verified) and never a concentration concept
+  if (known === 'oxygen' && percent) known = 'oxygen saturation';
   const list = known !== undefined && own(VARIABLE_CONCEPTS, known) ? VARIABLE_CONCEPTS[known] : [];
   const per = unit === undefined ? undefined : unitConcept(unit)?.per;
-  // the dimension of a unit with no verified alias (µg/g, mg/kg) only HIDES the per-volume concepts; it never makes a concept proposable
-  const shown = per ?? (unit !== undefined && unitDimension(unit) === 'mass' ? 'mass' : undefined);
+  // the dimension of a unit with no verified alias (µg/g, mg/kg, mL/L) only HIDES the concepts of the other dimension; it never makes a concept proposable
+  const shown = per ?? (unit === undefined ? undefined : unitDimension(unit));
   const candidates = list.filter((c) => proposable(c, per));
   const proposed = candidates.length === 1 ? candidates[0] : undefined;
-  return { ...(proposed ? { proposed: proposed.term } : {}), offered: list.filter((c) => fits(c, shown) && c !== proposed).map((c) => c.term) };
+  // a percentage is not a concentration: a concept that is defined per unit volume or mass is never offered for it
+  return { ...(proposed ? { proposed: proposed.term } : {}), offered: list.filter((c) => fits(c, shown) && !(percent && c.per !== undefined) && c !== proposed).map((c) => c.term) };
+}
+
+/**
+ * The P01 concepts of a quantity that has no unit (practical salinity, pH): once the user has CONFIRMED one of them for a column that states no unit, the unit "Dimensionless" (P06 UUUU, opened
+ * 2026-10-26) is proposed for it. Never for a column that states a unit, and never before the concept is confirmed.
+ */
+export const DIMENSIONLESS_TYPE_CODES: ReadonlySet<string> = new Set(['PSLTZZ01', 'PSALST01', 'PSALMV01', 'PHXXZZXX', 'PHXXSP02']);
+
+/** The unit to propose for a confirmed type of a column with no unit text, or undefined. */
+export function dimensionlessUnitFor(typeId: string | undefined): NercTerm | undefined {
+  if (typeId === undefined || !DIMENSIONLESS_TYPE_CODES.has(typeId.split('/')[6] ?? '')) return undefined;
+  return unitConcept('dimensionless')?.term;
+}
+
+/**
+ * The unit pick that counts for a column: with a unit text, the user's pick; without one, only the "Dimensionless" pick (verified list, UUUU) of a column whose confirmed type is a dimensionless
+ * quantity. Everything else is dropped, as before.
+ */
+export function unitPickFor(unitText: string | undefined, d: NercColumnDecision): NercPick | undefined {
+  if (unitText !== undefined) return d.unit;
+  const term = dimensionlessUnitFor(d.type?.id);
+  return term !== undefined && d.unit?.id === term.uri && d.unit.source === 'suggested' ? d.unit : undefined;
 }
 
 /** The verified P06 concept for a unit text, to propose. A unit spelled any other way has none. */

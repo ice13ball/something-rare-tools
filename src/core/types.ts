@@ -120,7 +120,12 @@ export type ConverterRole =
   | { kind: 'effort'; unit?: string }
   | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' }
   /** The scientificNameID of a long sheet's taxon; `aphia: true` = the cells are WoRMS AphiaIDs (written as the urn:lsid), otherwise written as given. */
-  | { kind: 'taxonId'; aphia?: boolean };
+  | { kind: 'taxonId'; aphia?: boolean }
+  /**
+   * Depth BELOW THE SEAFLOOR of a sediment or porewater sample, in the unit of `unit` (cm or m). Written as a negative minimum/maximumDistanceAboveSurfaceInMeters (an exact
+   * decimal shift of the text, core/convert/seafloor.ts); the site's water depth is the plain depth column and goes to minimum/maximumDepthInMeters.
+   */
+  | { kind: 'depthBelowSeafloor'; unit?: string };
 export type ConverterRoleKind = ConverterRole['kind'];
 export interface ColumnProposal {
   index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low';

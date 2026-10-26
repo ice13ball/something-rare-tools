@@ -155,6 +155,9 @@ describe('header names in PL / DE / FR reach the concepts of the English variabl
       conductivity: ['conductivity', 'Cond', 'electrical conductivity', 'przewodnictwo', 'przewodność elektryczna', 'Leitfähigkeit', 'elektrische Leitfähigkeit', 'conductivité', 'conductivité électrique'],
       'potential temperature': ['potential temperature', 'Tpot', 'temperature potential', 'Temperature, water, potential', 'temperature water potential', 'pot. temperature', 'temperatura potencjalna', 'potentielle Temperatur', 'température potentielle'],
       'sigma-theta': ['sigma-theta', 'Sigma-theta', 'sigma theta', 'sigmatheta', 'density, sigma-theta', 'density, sigma-theta (0)', 'Sigma-Theta', 'sigma-thêta'],
+      // environmental fixes (26.10): oxygen as a percentage is saturation, with its own concept; seawater density by name
+      'oxygen saturation': ['oxygen saturation', 'O2 saturation', 'dissolved oxygen saturation', 'oxygen saturation percent', 'nasycenie tlenem', 'nasycenie tlenu', 'nasycenie wody tlenem', 'Sauerstoffsättigung', 'saturation en oxygène', "saturation de l'oxygène"],
+      density: ['seawater density', 'sea water density', 'water density', 'in situ density', 'density of seawater', 'gęstość wody', 'gęstość wody morskiej', 'Wasserdichte', 'Meerwasserdichte', "masse volumique de l'eau"],
     };
     for (const [variable, names] of Object.entries(expected)) {
       expect(Object.prototype.hasOwnProperty.call(VARIABLE_CONCEPTS, variable), variable).toBe(true);
@@ -201,12 +204,13 @@ describe('what must NOT get the water-body concept', () => {
     }
   });
 
-  it('a saturation: nothing is proposed (no saturation concept is verified), and "nasycenie tlenem" is not oxygen at all', () => {
-    expect(conceptVariable('nasycenie tlenem')).toBeUndefined();
-    none('nasycenie tlenem', '%');
-    none('Nasycenie tlenem [%]', '%');
-    expect(suggestType('tlen', '%').proposed).toBeUndefined();
-    expect(suggestType('Tlen [%]', '%').proposed).toBeUndefined();
+  it('a saturation is a variable of its own: the verified saturation concept is proposed and no concentration concept is ever offered for it', () => {
+    expect(conceptVariable('nasycenie tlenem')).toBe('oxygen saturation');
+    for (const [n, u] of [['nasycenie tlenem', '%'], ['Nasycenie tlenem [%]', '%'], ['tlen', '%'], ['Tlen [%]', '%']] as const) {
+      const s = suggestType(n, u);
+      expect(s.proposed?.code, n).toBe('OXYSZZ01');
+      expect(s.offered, n).toEqual([]);
+    }
   });
 
   it('chlorophyll (and a nutrient) per unit mass of a sediment: no water-body concept, whether it is offered or proposed', () => {
@@ -219,7 +223,7 @@ describe('what must NOT get the water-body concept', () => {
   });
 
   it('names that only CONTAIN a known name are never matched (whole headers, never substrings)', () => {
-    for (const n of ['temperatura dna', 'zasolenie wody powierzchniowej', 'tlen w osadzie', 'amoniak calkowity', 'chlorofil a w osadzie', 'sea temperatura', 'azotanowy', 'pH metr', 'Nitratgehalt', 'Sauerstoffsättigung', 'salinité de surface', 'oxygène dissous saturation']) {
+    for (const n of ['temperatura dna', 'zasolenie wody powierzchniowej', 'tlen w osadzie', 'amoniak calkowity', 'chlorofil a w osadzie', 'sea temperatura', 'azotanowy', 'pH metr', 'Nitratgehalt', 'Sauerstoffsättigung im Sediment', 'salinité de surface', 'oxygène dissous saturation']) {
       expect(conceptVariable(n), n).toBeUndefined();
       none(n, 'µmol/L');
     }

@@ -53,6 +53,8 @@ export interface EventRec {
   depthMin?: number;
   depthMax?: number;
   depthDecimals?: number;
+  /** minimum = maximumDistanceAboveSurfaceInMeters of a sediment or porewater sample: a negative distance in metres, as text (seafloor.ts). */
+  distanceText?: string;
   /** A flattened station's code lives here on its samples. */
   locality?: string;
   /** Effort on a sample: written from the source text. */
@@ -228,6 +230,8 @@ export interface ModelEvent {
   date?: string;
   position?: { lat: number; lon: number; latDecimals?: number; lonDecimals?: number; latText?: string; lonText?: string; derived?: boolean; uncertaintyM?: number };
   depth?: { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string };
+  /** minimum = maximumDistanceAboveSurfaceInMeters (a negative number in metres, as text): the depth below the seafloor of a sediment or porewater sample. */
+  distance?: string;
   effort?: Effort;
   locality?: string;
   source?: SourceRef;
@@ -294,6 +298,7 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
       if (e.depthMinText !== undefined) m.depth.minText = e.depthMinText;
       if (e.depthMaxText !== undefined) m.depth.maxText = e.depthMaxText;
     }
+    if (e.distanceText !== undefined) m.distance = e.distanceText;
     if (e.sampleSizeValue !== undefined && e.sampleSizeUnit !== undefined) m.effort = { value: e.sampleSizeValue, unit: e.sampleSizeUnit };
     if (e.locality !== undefined) m.locality = e.locality;
     if (e.source) m.source = e.source;

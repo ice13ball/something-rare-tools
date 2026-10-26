@@ -130,7 +130,7 @@ export function createConvertHandler(): ConvertHandler {
         const m = toMapping(sheet, p);
         mappings.push(m);
         shapes[sheet.name] = suggestConvertShape(m.columns);
-        profiles[sheet.name] = suggestConvertProfile(m.columns);
+        profiles[sheet.name] = suggestConvertProfile(p);
       }
       result.files.push({
         fileId,
@@ -165,7 +165,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
-      ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true } } : {}),
+      ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
     const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
