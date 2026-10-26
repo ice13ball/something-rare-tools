@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { dwcTermOf, proposeColumns, toMapping, unitFromHeader } from '../recognize/columns';
+import { dwcTermOf, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
@@ -280,11 +280,15 @@ function variableClaim(name: string, unit: string | undefined): Claim | undefine
   return { role: { kind: 'variable', variable, ...(unit === undefined ? {} : { unit, unitSource: 'header' as const }) }, confidence: 'high', code: 'converter-variable' };
 }
 
-/** A column in decibars that the proposer took for an unknown variable (a pressure the overlay reads as a pressure, not as a species). */
-const isUnitPressure = (q: ColumnProposal): boolean => q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && isDecibar(q.role.unit ?? unitFromHeader(q.header).unit);
+/**
+ * A column in decibars that the proposer took for an unknown variable (a pressure the overlay reads as a pressure, not as a species). Decided from the header's RAW unit text, case-sensitively
+ * (isDecibar): /check's unit table turns "dB" into "dbar", but a decibel is no pressure. A site-depth column is never one, whatever its unit (`exclude`).
+ */
+const isUnitPressure = (q: ColumnProposal, exclude: ReadonlySet<number> = new Set<number>()): boolean =>
+  q.role.kind === 'variable' && !exclude.has(q.index) && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && isDecibar(unitFromHeader(q.header).unitText);
 
 /** A vertical coordinate of the proposer's own reading: a depth (not an elevation or altitude), a pressure, or a column in decibars. */
-const isVerticalProposal = (q: ColumnProposal): boolean => (q.role.kind === 'depth' && q.reasonCode !== 'name-elevation') || q.role.kind === 'pressure' || isUnitPressure(q);
+const isVerticalProposal = (q: ColumnProposal, exclude: ReadonlySet<number>): boolean => !exclude.has(q.index) && ((q.role.kind === 'depth' && q.reasonCode !== 'name-elevation') || q.role.kind === 'pressure' || isUnitPressure(q, exclude));
 
 const why = (p: ColumnProposal, code: OverlayReason): void => {
   p.reason = OVERLAY_REASONS[code];
@@ -324,10 +328,10 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const askedWith = (maskSite: boolean): { proposals: ColumnProposal[] } => {
     const masked = maskSite ? siteAt : new Set<number>();
     const asked = !rewritten && masked.size === 0 ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) || masked.has(i) ? `__column ${i + 1}` : (mlPerLAt.get(i) ?? h))) };
-    return { proposals: proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) || masked.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: sheet.header[p.index] } : { ...p }))};
+    return { proposals: proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) || masked.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: stripTypeSuffix(sheet.header[p.index]) } : { ...p }))};
   };
   let asked0 = siteAt.size > 0 && !seafloorPre ? askedWith(true) : undefined;
-  if (asked0 !== undefined && !asked0.proposals.some(isVerticalProposal)) asked0 = undefined;
+  if (asked0 !== undefined && !asked0.proposals.some((q) => isVerticalProposal(q, siteAt))) asked0 = undefined;
   const base = (asked0 ?? askedWith(false)).proposals;
   const qualityAt = new Set<number>();
   const seafloorAt = new Map<number, 'seafloor-depth-name' | 'seafloor-depth-cm'>();
@@ -405,7 +409,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const hasRange = [...bounds.values()].includes('min') && [...bounds.values()].includes('max');
   // another column that gives the depth of each row (a plain depth or a bound): then the water depth of the site is not the sheet's depth
   // (ANY vertical coordinate counts: a plain depth, a top or bottom bound, a DwC minimum / maximum depth, a pressure; a depth below the seafloor makes the sheet a sediment sheet)
-  const pressureByUnit = new Set(base.filter(isUnitPressure).map((q) => q.index));
+  const pressureByUnit = new Set(base.filter((q) => isUnitPressure(q, siteDepthAt)).map((q) => q.index));
   const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || q.role.kind === 'pressure' || bounds.has(q.index) || pressureByUnit.has(q.index)));
   let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
@@ -500,6 +504,10 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       p.confidence = 'low';
       why(p, 'eventid-used');
       continue;
+    }
+    // /check's unit table writes a decibel ("dB") as "dbar": a variable or a pressure whose RAW unit is not a pressure unit keeps the unit as written
+    if ((p.role.kind === 'variable' || p.role.kind === 'pressure') && p.role.unit === 'dbar' && hdr.unitText !== undefined && !isDecibar(hdr.unitText)) {
+      p.role = { ...p.role, unit: hdr.unitText, ...(p.role.kind === 'variable' ? { unitSource: 'header' as const } : {}) };
     }
     // a column in decibars is a pressure (the proposer took "Sea pressure [dbar]" and "CTDPRS [dbar]" for unknown variables, which would be species candidates here)
     if (pressureByUnit.has(p.index) && claim === undefined && p.role.kind === 'variable') {

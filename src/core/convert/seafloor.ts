@@ -103,7 +103,8 @@ export const SEDIMENT_CONTEXT = /\b(?:pore ?water|porewater|sediments?|sediment 
 
 /** The water depth of the SITE (not the depth of a measurement): `Site_depth_m`, `Depth of the site (m)`, `water depth`, `bottom depth`, the station depth. */
 const SITE_DEPTH_NAME = [
-  /^(?:site|station|sampling site|sampling station|bottom|water|seabed|sea floor|seafloor|total water|local water) depth$/,
+  // `bot`: ODV's "Bot. Depth" (also "Bot.Depth", "Bot Depth"), its bottom depth
+  /^(?:site|station|sampling site|sampling station|bottom|bot|water|seabed|sea floor|seafloor|total water|local water) depth$/,
   /^depth (?:of|at) (?:the )?(?:site|station|sampling site|sampling station|bottom|seabed|seafloor|sea floor)$/,
   /^(?:site|station) depth m$/,
   /^(?:bottom|water) depth m$/,

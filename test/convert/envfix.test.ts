@@ -17,7 +17,7 @@ import { judge, policyOf } from '../../src/core/convert/policy';
 import { isQualityHeader, proposeConvertColumns, suggestConvertProfile } from '../../src/core/convert/recognize';
 import { isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorMetres, seafloorUnitOf } from '../../src/core/convert/seafloor';
 import { validateTables } from '../../src/core/convert/validate';
-import { VARIABLE_CONCEPTS } from '../../src/core/convert/vocab';
+import { VARIABLE_CONCEPTS, isDecibar } from '../../src/core/convert/vocab';
 import { makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { UI } from '../../src/core/i18n/ui';
 import { LANGS } from '../../src/core/types';
@@ -941,5 +941,66 @@ describe('review fixes of the third round', () => {
     expect(tie(5, [3, 4, 5, 6, 7])).toContain('5 liczb dodatnich jest zapisywanych jako położenie nad dnem');
     expect(UI.pl['convert.reason.site-depth-ignored']).toContain('„Głębokość”');
     expect(UI.de['convert.reason.seafloor-depth-name']).toContain(', und eine negative Zahl,');
+  });
+});
+
+describe('review fixes of the fourth round', () => {
+  const ask = (header: string[], rows: (string | number)[][]) => proposeConvertColumns(rawSheet(header, rows), { decimalComma: false, date1904: false });
+
+  it('decibels are no pressure: "Sv [dB]", "TS [dB]" and "Sv mean [dB]" are not pressure, and the water depth stays the depth', () => {
+    for (const name of ['Sv [dB]', 'TS [dB]', 'Sv mean [dB]']) {
+      const ps = ask(['Station', 'Latitude', 'Longitude', 'Date', 'Water depth [m]', name, 'Temp [degC]'], [['A', 70, 20, '2020-05-01', 400, -65.2, 4.1], ['A', 70, 20, '2020-05-01', 400, -70.1, 4.2]]);
+      expect(ps.find((p) => p.header === name)!.role.kind, name).not.toBe('pressure');
+      expect(ps.find((p) => p.header === name)!.reasonCode, name).not.toBe('pressure-unit');
+      expect(ps.find((p) => p.header === 'Water depth [m]')!.role, name).toMatchObject({ kind: 'depth', unit: 'm' });
+    }
+    expect(isDecibar('dB')).toBe(false);
+    expect(isDecibar('DB')).toBe(false);
+    for (const u of ['db', 'dbar', 'dBar', 'DBAR', 'decibar', 'decibars', 'd.bar']) expect(isDecibar(u), u).toBe(true);
+    // the pressures stay pressures: lower-case db, dbar
+    for (const name of ['PRES [db]', 'Pres [dbar]']) {
+      const ps = ask(['Station', 'Latitude', 'Longitude', 'Water depth [m]', name, 'Temp [degC]'], [['A', 70, 20, 400, 5, 4.1]]);
+      expect(ps.find((p) => p.header === name)!.role.kind, name).toBe('pressure');
+      expect(ps.find((p) => p.header === 'Water depth [m]')!.role, name).toEqual({ kind: 'ignore' });
+    }
+  });
+
+  it('a decibel unit is written as written, never as dbar: /check\'s "dB" -> "dbar" is undone by the overlay, and a "dB" pressure has no decibar identifier', () => {
+    // a variable the proposer knows by name, with a unit in dB: the unit stays "dB"
+    const ps = ask(['Station', 'Latitude', 'Longitude', 'Oxygen [dB]', 'PRES [dB]'], [['A', 70, 20, 5, 6]]);
+    expect(ps.find((p) => p.header === 'Oxygen [dB]')!.role).toMatchObject({ kind: 'variable', unit: 'dB' });
+    expect(ps.find((p) => p.header === 'PRES [dB]')!.role).toEqual({ kind: 'pressure', unit: 'dB' });
+  });
+
+  it('ODV\'s bottom depth ("Bot. Depth", "Bot.Depth", "Bot Depth", "Bottom Depth") is the site depth; sample-depth spellings are not', () => {
+    for (const bot of ['Bot. Depth [m]', 'Bot.Depth [m]', 'Bot Depth [m]', 'Bottom Depth [m]', 'BOT. DEPTH [m]']) {
+      const header = ['Station', 'Date', 'Latitude', 'Longitude', bot, 'PRES [db]', 'TEMP [degC]'];
+      const ps = ask(header, [['A', '2020-05-01', 70.1, 20.2, 400, 5, 4.1]]);
+      expect(ps.find((p) => p.header === bot)!.reasonCode, bot).toBe('site-depth-ignored');
+      expect(ps.find((p) => p.header === 'PRES [db]')!.role.kind, bot).toBe('pressure');
+      const text = `${header.join(',')}\nA,2020-05-01,70.1,20.2,400,5,4.1\nA,2020-05-01,70.1,20.2,400,15,3.9\n`;
+      const file = readConvertFile(parseFile('odv.csv', new TextEncoder().encode(text)));
+      const mapping = { sheet: file.sheets[0].name, columns: proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false }).map((p) => ({ index: p.index, header: p.header, role: p.role })) };
+      const r = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping, shape: 'wide', profile: PROFILE }] });
+      expect(r.events.filter((e) => e.eventType === 'profile level').map((e) => e.id), bot).toEqual(['A:5dbar', 'A:15dbar']);
+      expect(rulesOf(r), bot).not.toContain('CONV-ID-DUPLICATE');
+    }
+    for (const h of ['Sample depth', 'Bottle depth', 'Sampling depth', 'Depth', 'Bottom sample depth', 'Both depth', 'Bot depth sample']) expect(isSiteDepthName(h), h).toBe(false);
+  });
+
+  it('a site depth never counts as another vertical coordinate, whatever its unit: "Water depth [dbar]" alone keeps its high confidence', () => {
+    const ps = ask(['Station', 'Latitude', 'Longitude', 'Water depth [dbar]', 'Temp [degC]'], [['A', 70, 20, 400, 4.1]]);
+    const p = ps.find((q) => q.header === 'Water depth [dbar]')!;
+    expect(p.role.kind).toBe('depth');
+    expect(p.confidence).toBe('high');
+    expect(p.reasonCode).not.toBe('site-depth-only');
+  });
+
+  it('the header restored after masking keeps no <Float32> suffix in cleanHeader, as the unmasked path', () => {
+    const ps = ask(['Station', 'Latitude', 'Longitude', 'Water depth [m]<Float32>', 'Sample depth [m]<Float32>', 'Temp [degC]'], [['A', 70, 20, 400, 5, 4.1]]);
+    const site = ps.find((p) => p.header === 'Water depth [m]<Float32>')!;
+    expect(site.cleanHeader).toBe('Water depth [m]');
+    expect(site.reasonCode).toBe('site-depth-ignored');
+    expect(ps.find((p) => p.header === 'Sample depth [m]<Float32>')!.cleanHeader).toBe('Sample depth [m]');
   });
 });
