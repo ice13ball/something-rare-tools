@@ -291,7 +291,7 @@ describe('3. depth of the sediment and of the porewater (f3)', () => {
     expect(renderConvertPlain(s, 'en')).toContain('"downwards"');
     expect(renderConvertPlain(s, 'en')).toContain('a position above the seafloor');
     expect(renderConvertPlain(s, 'pl')).toContain('„w dół”');
-    expect(renderConvertPlain(s, 'pl')).toContain('położenie nad dna');
+    expect(renderConvertPlain(s, 'pl')).toContain('położenie nad dnem');
     expect(renderConvertPlain(s, 'de')).toContain('„abwärts“');
     expect(renderConvertPlain(s, 'fr')).toContain('au-dessus du fond');
     for (const l of LANGS) expect(renderConvertPlain(s, l)).not.toMatch(/\{|\}/);
@@ -482,8 +482,18 @@ describe('6. quality columns (f9)', () => {
   });
 
   it('only whole name parts count: a lone Q (a discharge), quality as a measured word, and a DwC term are not flags', () => {
-    for (const h of ['Q', 'Q [m3/s]', 'Quantity', 'Qualifier', 'identificationQualifier', 'Equality', 'Flagellates', 'Flag', 'Q. seminula', 'Q river', 'Water quality', 'QC salinity', 'O2 quality']) expect(isQualityHeader(h), h).toBe(false);
-    for (const h of ['Q_TEMP', 'QC_Sal', 'QF_Nitrate', 'Q_Silicate', 'Temp_QC', 'Temp_flag', 'Sal_flag', 'O2_quality', 'QV:ODV:SAMPLE', 'Sal QV:ODV:SDN', 'qv:odv:temperature']) expect(isQualityHeader(h), h).toBe(true);
+    // without a sibling column of that name, the loose forms are names (a discharge, a genus, a water quality), not flags
+    for (const h of ['Q', 'Q [m3/s]', 'Quantity', 'Qualifier', 'identificationQualifier', 'Equality', 'Flagellates', 'Flag', 'Q. seminula', 'Q river', 'Water quality', 'QC salinity', 'O2 quality', 'Q TEMP', 'Q-TEMP']) expect(isQualityHeader(h, ['Station', h, 'Depth [m]']), h).toBe(false);
+    for (const h of ['Q_TEMP', 'QC_Sal', 'QF_Nitrate', 'Q_Silicate', 'Temp_QC', 'Temp_QF', 'Temp_flag', 'Temp_flags', 'Sal_flag', 'O2_quality', 'Temp quality flag', 'QV:ODV:SAMPLE', 'Sal QV:ODV:SDN', 'qv:odv:temperature']) expect(isQualityHeader(h, ['Station']), h).toBe(true);
+    // the loose forms count when the sheet has the column they qualify
+    const sheet = ['Station', 'TEMP', 'Q TEMP', 'Q-TEMP', 'O2 [umol/l]', 'O2 quality', 'O2-QC', 'Salinity [PSU]', 'QC salinity', 'Sal flag', 'Q river', 'Water quality', 'Q. seminula'];
+    for (const h of ['Q TEMP', 'Q-TEMP', 'O2 quality', 'O2-QC', 'QC salinity']) expect(isQualityHeader(h, sheet), h).toBe(true);
+    for (const h of ['Q river', 'Water quality', 'Q. seminula', 'Sal flag']) expect(isQualityHeader(h, sheet), h).toBe(false);
+    // and in a whole sheet: a bio sheet keeps "Q. seminula" as a species candidate, a CTD sheet drops the quality columns of its own variables
+    const ctd = proposeConvertColumns(rawSheet(['Station', 'Latitude', 'Longitude', 'Depth [m]', 'Temp', 'Temp quality', 'Q Sal', 'Sal'], [['A', 70, 20, 5, 4.1, 1, 1, 33]]), { decimalComma: false, date1904: false });
+    expect(ctd.find((p) => p.header === 'Temp quality')!.reasonCode).toBe('quality-column');
+    expect(ctd.find((p) => p.header === 'Q Sal')!.role).toEqual({ kind: 'ignore' });
+    expect(ctd.some((p) => p.role.kind === 'taxon')).toBe(false);
   });
 });
 
@@ -756,6 +766,73 @@ describe('review fixes of the first round', () => {
     for (const lang of LANGS) {
       const t = (TIP_TEXTS as Record<string, Record<string, string>>)[lang]?.['tip.convertNercChoice.logic'] ?? '';
       expect(t.split('\n').length, lang).toBeGreaterThanOrEqual(7);
+    }
+  });
+});
+
+describe('review fixes of the second round', () => {
+  const props = (header: string[], rows: (string | number)[][], name = 'S') => proposeConvertColumns(rawSheet(header, rows, name), { decimalComma: false, date1904: false });
+
+  it('a pressure column is another depth column: the site depth stays ignored on a CTD sheet and the levels stay A:5dbar', () => {
+    const header = ['Station', 'Bottle', 'Latitude', 'Longitude', 'Date', 'Pressure [dbar]', 'Water depth [m]', 'Temp [degC]'];
+    const ps = props(header, [['A', 'B1', 70.1, 20.2, '2020-05-01', 5, 400, 4.1], ['A', 'B2', 70.1, 20.2, '2020-05-01', 15, 400, 3.9]]);
+    expect(ps.find((p) => p.header === 'Water depth [m]')!.role).toEqual({ kind: 'ignore' });
+    expect(ps.find((p) => p.header === 'Water depth [m]')!.reasonCode).toBe('site-depth-ignored');
+    const text = `${header.join(',')}\nA,B1,70.1,20.2,2020-05-01,5,400,4.1\nA,B2,70.1,20.2,2020-05-01,15,400,3.9\n`;
+    const file = readConvertFile(parseFile('ctd.csv', new TextEncoder().encode(text)));
+    const mapping = { sheet: file.sheets[0].name, columns: proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false }).map((p) => ({ index: p.index, header: p.header, role: p.role.kind === 'sampleId' ? ({ kind: 'ignore' } as ColumnRole) : p.role })) };
+    const r = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping, shape: 'wide', profile: PROFILE }] });
+    expect(r.events.filter((e) => e.eventType === 'profile level').map((e) => e.id)).toEqual(['A:5dbar', 'A:15dbar']);
+    expect(rulesOf(r)).not.toContain('CONV-ID-DUPLICATE');
+  });
+
+  it('any vertical coordinate counts as the sheet\'s depth: a DwC minimum / maximum depth, a top and a bottom column, a pressure', () => {
+    for (const cols of [['minimumDepthInMeters', 'maximumDepthInMeters'], ['Depth top [m]', 'Depth bottom [m]'], ['Pressure [dbar]'], ['Depth [m]']]) {
+      const header = ['Station', 'Latitude', 'Longitude', ...cols, 'Site depth [m]', 'Temp [degC]'];
+      const ps = props(header, [['A', 70, 20, ...cols.map(() => 5), 400, 4.1]]);
+      expect(ps.find((p) => p.header === 'Site depth [m]')!.role.kind, cols.join()).toBe('ignore');
+    }
+  });
+
+  it('the declared P01 code is read from the parsed file\'s own header: a forged header in the mapping does not declare it', () => {
+    const text = 'Station,Date,Latitude,Longitude,Depth_m,Temp\nA,2020-05-01,70.1,20.2,5,4.1\n';
+    const file = readConvertFile(parseFile('forgedh.csv', new TextEncoder().encode(text)));
+    const props0 = proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false });
+    const tempIndex = props0.find((q) => q.header === 'Temp')!.index;
+    const columns = props0.map((q) => ({ index: q.index, header: q.header === 'Temp' ? 'SDN:P01::ABCD1234' : q.header, role: q.header === 'Temp' ? ({ kind: 'variable', variable: 'Temp', p01: 'ABCD1234' } as ColumnRole) : q.role }));
+    const pick = { id: 'http://vocab.nerc.ac.uk/collection/P01/current/ABCD1234/', source: 'declared', deprecated: false };
+    const r = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping: { sheet: file.sheets[0].name, columns }, shape: 'wide', profile: PROFILE, nerc: { [String(tempIndex)]: { type: pick } } as NercDecisions }] });
+    expect(r.measurements.length).toBeGreaterThan(0);
+    expect(r.measurements.every((m) => m.measurementTypeId === undefined)).toBe(true);
+  });
+
+  it('a tie of the two signs has its own wording, in four languages, and the Polish side words agree with "dnem"', () => {
+    const header = 'Site_ID,Date,Latitude,Longitude,Site_depth_m,Pore_water_Depth[cm],Cl_mg_l';
+    const text = `${header}\nZT1,2020-05-01,70.1,20.2,45,-1,10100\nZT1,2020-05-01,70.1,20.2,45,1,10200\n`;
+    const file = readConvertFile(parseFile('tie.csv', new TextEncoder().encode(text)));
+    const mapping = { sheet: file.sheets[0].name, columns: proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false }).map((p) => ({ index: p.index, header: p.header, role: p.role })) };
+    const r = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping, shape: 'wide', profile: PROFILE }] });
+    const f = r.findings.find((x) => x.ruleId === 'CONV-SEAFLOOR-SIGNS')!;
+    expect(f.params.tie).toBe('yes');
+    for (const l of LANGS) {
+      const t = renderConvertPlain(f, l);
+      expect(t, l).not.toMatch(/\{|\}/);
+      expect(t, l).not.toMatch(/opposite sign|znak przeciwny|entgegengesetzt|signe opposé/);
+    }
+    expect(renderConvertPlain(f, 'en')).toContain('as many positive as negative');
+    expect(renderConvertPlain(f, 'pl')).toMatch(/położenie (nad|pod) dnem/);
+    expect(renderConvertTechnical(f)).not.toContain('Negative:');
+    const notTie = makeConvertFinding('CONV-SEAFLOOR-SIGNS', { file: 'a', sheet: 'a', field: 'c', lines: [3], params: { count: 1, direction: 'down', side: 'below' } });
+    expect(renderConvertPlain(notTie, 'pl')).toMatch(/położenie pod dnem/);
+    expect(renderConvertPlain(notTie, 'en')).toContain('opposite sign');
+  });
+
+  it('the NERC tip quotes "Dimensionless" as the list shows it, and says suggested / listed the same way in every language', async () => {
+    const { TIP_TEXTS } = await import('../../src/core/i18n/tips-text');
+    for (const lang of LANGS) {
+      const t = (TIP_TEXTS as Record<string, Record<string, string>>)[lang]['tip.convertNercChoice.logic'];
+      expect(t, lang).toContain('Dimensionless');
+      expect(t, lang).not.toMatch(/proponowana jest jednostka|l'unité « Dimensionless » \(sans dimension\) du vocabulaire NERC est proposée|Einheit „Dimensionless“[^\n]*angeboten|is offered the unit/);
     }
   });
 });

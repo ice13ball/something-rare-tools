@@ -116,14 +116,23 @@ function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolea
 }
 
 /**
- * A quality flag or quality column (never a measurement): ODV's `QV:ODV:...`, the prefixes `Q_`, `QC_` and `QF_` (an UNDERSCORE right after the letters, as written: "Q. seminula" is an abbreviated
- * genus and "Q river" a discharge, neither is a flag), and the suffixes `_quality`, `_QC`, `_QF`, `_flag` (and a word `flag`, `QC` or `QF` after a space). A bare word "quality" is not enough ("Water quality").
+ * A quality flag or quality column (never a measurement). Two tiers:
+ *   always   ODV's `QV:ODV:...`; the prefixes `Q_`, `QC_`, `QF_` (an UNDERSCORE right after the letters, as written); the suffixes `_QC`, `_QF`, `_flag(s)`, `_quality`; "quality flag" anywhere
+ *   loose    `Q`, `QC` or `QF` + a space or hyphen + X, and X + a space or hyphen + `quality`, `QC`, `QF` or `flag`: a quality column ONLY when X names another column of the same sheet
+ *            (compared by the folded header without its unit): "Q TEMP" next to "TEMP", "O2 quality" next to "O2 [umol/l]". Without that sibling it is a name: "Q river" (a discharge),
+ *            "Water quality" and "Q. seminula" (an abbreviated genus on a biology sheet) are not flags.
+ * `all` are the headers of the sheet (the loose tier needs them; without them only the first tier applies).
  */
-export function isQualityHeader(header: string): boolean {
-  if (/qv:odv/i.test(header)) return true;
+export function isQualityHeader(header: string, all: readonly string[] = []): boolean {
+  if (/qv:odv/i.test(header) || /quality[ _-]?flag/i.test(header)) return true;
   const name = unitFromHeader(header).name.trim();
-  if (/^q[cf]?_./i.test(name) || /_quality$/i.test(name)) return true;
-  return / (qc|qf|flag|flags)$/.test(headerKey(name));
+  if (/^q[cf]?_./i.test(name) || /_(qc|qf|flags?|quality)$/i.test(name)) return true;
+  const k = headerKey(name);
+  const siblings = new Set(all.filter((h) => h !== header).map((h) => headerKey(unitFromHeader(h).name)));
+  const pre = /^(?:q|qc|qf) (.+)$/.exec(k);
+  if (pre && siblings.has(pre[1])) return true;
+  const suf = /^(.+) (?:quality|qc|qf|flags?)$/.exec(k);
+  return suf !== null && siblings.has(suf[1]);
 }
 
 /**
@@ -187,7 +196,7 @@ export const OVERLAY_REASONS = {
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
-  'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres',
+  'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres, and a negative number counted downwards (above the seafloor) as a positive one',
   'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
   'seafloor-depth-negative': 'most numbers of this depth below the seafloor are negative: read as counted upwards from the seafloor (negative = below, positive = above), and the sign is kept; change the direction if it is wrong',
   'site-depth-only': 'name says the water depth of the site and no other column gives a depth: used as the depth of every row',
@@ -312,7 +321,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const term = dwcTermOf(p.header);
     const dwc = term === undefined ? undefined : dwcClaim(term);
     if (!dwc && term === undefined) {
-      if (isQualityHeader(p.header)) {
+      if (isQualityHeader(p.header, sheet.header)) {
         qualityAt.add(p.index);
         continue;
       }
@@ -373,7 +382,8 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
 
   const hasRange = [...bounds.values()].includes('min') && [...bounds.values()].includes('max');
   // another column that gives the depth of each row (a plain depth or a bound): then the water depth of the site is not the sheet's depth
-  const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || bounds.has(q.index)));
+  // (ANY vertical coordinate counts: a plain depth, a top or bottom bound, a DwC minimum / maximum depth, a pressure; a depth below the seafloor makes the sheet a sediment sheet)
+  const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || q.role.kind === 'pressure' || bounds.has(q.index)));
   let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   const seenQuantity = new Set<number>();

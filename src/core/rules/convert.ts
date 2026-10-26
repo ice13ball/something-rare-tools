@@ -341,7 +341,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `In der Spalte „{field}“ (Tiefe unter dem Meeresboden) lassen sich in {+lineCount:der Zeile|den Zeilen} {lines} Werte nicht schreiben (insgesamt {count}): {reason}, z. B. „{value}“. Diese Zellen wurden nicht geschrieben.`,
       fr: `Dans la colonne « {field} » (profondeur sous le fond), des valeurs {+lineCount:à la ligne|aux lignes} {lines} ne peuvent pas être écrites ({count} au total) : {reason}, p. ex. « {value} ». Ces cellules n'ont pas été écrites.`,
     },
-    technical: `{file}:{lines} field {field}: {count} depth-below-seafloor value(s) cannot be written (reason {reason}, example {value}). Negative: a depth below the seafloor is a positive distance, and the sign is added by the converter. Notation: only a plain decimal number is shifted exactly on its text.`,
+    technical: `{file}:{lines} field {field}: {count} depth-below-seafloor value(s) cannot be written (reason {reason}, example {value}). Notation: only a plain decimal number (no exponent) is shifted exactly on its text.`,
     citations: [OBIS_DARWIN_CORE],
   },
   {
@@ -350,7 +350,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'direction', 'side'],
     plain: {
-      pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny niż większość kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dna. Sprawdź, czy kierunek jest właściwy.`,
+      pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny niż większość kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
       en: `In column "{field}", {count} {+count:number has|numbers have} the opposite sign to most of the column ({+lineCount:line|lines} {lines}). With the direction "{direction}", such a number is written as a position {side} the seafloor. Check that the direction is the right one.`,
       de: `In der Spalte „{field}“ ist bei {count} {+count:Zahl|Zahlen} das Vorzeichen entgegengesetzt zu dem der meisten Zahlen ({+lineCount:Zeile|Zeilen} {lines}). Bei der Richtung „{direction}“ wird eine solche Zahl als Lage {side} dem Meeresboden geschrieben. Prüfen Sie, ob die Richtung stimmt.`,
       fr: `Dans la colonne « {field} », {count} {+count:nombre a|nombres ont} le signe opposé à celui de la plupart des nombres ({+lineCount:ligne|lignes} {lines}). Avec le sens « {direction} », un tel nombre est écrit comme une position {side} fond. Vérifiez que le sens est le bon.`,
@@ -950,6 +950,15 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
+  'CONV-SEAFLOOR-SIGNS:tie': {
+    plain: {
+      pl: `Kolumna „{field}” ma tyle samo liczb dodatnich co ujemnych. Przy kierunku „{direction}” liczby dodatnie ({+lineCount:wiersz|wiersze|wierszy} {lines}, razem {count}) są zapisywane jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
+      en: `Column "{field}" has as many positive as negative numbers. With the direction "{direction}", the positive ones ({+lineCount:line|lines} {lines}, {count} in all) are written as a position {side} the seafloor. Check that the direction is the right one.`,
+      de: `Die Spalte „{field}“ hat gleich viele positive wie negative Zahlen. Bei der Richtung „{direction}“ werden die positiven ({+lineCount:Zeile|Zeilen} {lines}, insgesamt {count}) als Lage {side} dem Meeresboden geschrieben. Prüfen Sie, ob die Richtung stimmt.`,
+      fr: `La colonne « {field} » a autant de nombres positifs que négatifs. Avec le sens « {direction} », les positifs ({+lineCount:ligne|lignes} {lines}, {count} au total) sont écrits comme une position {side} fond. Vérifiez que le sens est le bon.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: the column has as many positive as negative depth-below-seafloor cells; the {count} positive one(s) are listed. Direction {direction}: written as a distance {side} the seafloor. Not blocking: the direction is the user's to confirm.`,
+  },
   'CONV-NO-OCCURRENCES:zeros': {
     plain: {
       pl: `To archiwum nie zawierałoby ani jednego rekordu występowania: wszystkie liczebności wynosiły 0 i zostały pominięte, bo lista nie jest zadeklarowana jako pełna. Zaznacz pełną listę gatunków, aby zapisać je jako nieobecności, albo dodaj rekordy obecności.`,
@@ -975,6 +984,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];
   if (f.ruleId === 'CONV-NO-OCCURRENCES' && f.params.zeros === 'yes') return PROFILE_VARIANTS['CONV-NO-OCCURRENCES:zeros'];
+  if (f.ruleId === 'CONV-SEAFLOOR-SIGNS' && f.params.tie === 'yes') return PROFILE_VARIANTS['CONV-SEAFLOOR-SIGNS:tie'];
   return undefined;
 };
 
