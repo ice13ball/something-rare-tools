@@ -236,6 +236,42 @@ describe('3. depth of the sediment and of the porewater (f3)', () => {
     }
   });
 
+  it('a column whose numbers are negative below the seafloor counts upwards: the sign is kept, the proposal says so, and the user can change the direction', async () => {
+    const text = 'Site_ID,Date,Latitude,Longitude,Site_depth_m,Pore_water_Depth[cm],Cl_mg_l\nZN1,2020-05-01,70.1,20.2,45,0,10100\nZN1,2020-05-01,70.1,20.2,45,-0.5,10200\nZN1,2020-05-01,70.1,20.2,45,-12.30,10300\n';
+    const file = readConvertFile(parseFile('zn.csv', new TextEncoder().encode(text)));
+    const props = proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false });
+    const p = props.find((x) => x.header === 'Pore_water_Depth[cm]')!;
+    expect(p.role).toEqual({ kind: 'depthBelowSeafloor', unit: 'cm', positive: 'up' });
+    expect(p.reasonCode).toBe('seafloor-depth-negative');
+    expect(p.confidence).toBe('low');
+    const mapping = { sheet: file.sheets[0].name, columns: props.map((q) => ({ index: q.index, header: q.header, role: q.role })) };
+    const r = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping, shape: 'wide', profile: PROFILE }] });
+    expect(r.findings.some((f) => f.ruleId === 'CONV-SEAFLOOR-VALUE')).toBe(false);
+    const lv = r.events.filter((e) => e.eventType === 'profile level');
+    expect(lv.map((e) => e.distanceText)).toEqual(['0', '-0.005', '-0.1230']);
+    // the level IDs say "above the seafloor" (asf): a negative number written as it is, never mistaken for a depth below
+    expect(lv.map((e) => e.id)).toEqual(['ZN1:0cmasf', 'ZN1:-0.5cmasf', 'ZN1:-12.30cmasf']);
+    // the same sheet read as counted downwards: the negative numbers are refused, said once, naming the lines
+    const down = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping: { ...mapping, columns: mapping.columns.map((c) => (c.header === 'Pore_water_Depth[cm]' ? { ...c, role: { kind: 'depthBelowSeafloor', unit: 'cm' } as ColumnRole } : c)) }, shape: 'wide', profile: PROFILE }] });
+    expect(down.findings.find((f) => f.ruleId === 'CONV-SEAFLOOR-VALUE')!.lines).toEqual([3, 4]);
+    // one negative number is the sheet's statement of its direction (a few rows above the seafloor are positive then); with no negative number the usual direction stands (the user decides)
+    expect(proposeConvertColumns(rawSheet(['Site', 'Pore_water_Depth[cm]'], [['A', -1], ['A', 2]]), { decimalComma: false, date1904: false })[1].role).toEqual({ kind: 'depthBelowSeafloor', unit: 'cm', positive: 'up' });
+    expect(proposeConvertColumns(rawSheet(['Site', 'Pore_water_Depth[cm]'], [['A', 0], ['A', 3]]), { decimalComma: false, date1904: false })[1].role).toEqual({ kind: 'depthBelowSeafloor', unit: 'cm' });
+    expect(proposeConvertColumns(rawSheet(['Site', 'Pore_water_Depth[cm]'], [['A', 0], ['A', 0]]), { decimalComma: false, date1904: false })[1].role).toEqual({ kind: 'depthBelowSeafloor', unit: 'cm' });
+    // the exact shift is the same upwards
+    expect(seafloorMetres('-0.5', 'cm', 'up')).toEqual({ ok: true, text: '-0.005' });
+    expect(seafloorMetres('2', 'm', 'up')).toEqual({ ok: true, text: '2' });
+    expect(seafloorMetres('-2.50', 'm', 'up')).toEqual({ ok: true, text: '-2.50' });
+    expect(seafloorMetres('0', 'cm', 'up')).toEqual({ ok: true, text: '0' });
+    expect(seafloorMetres('-1', 'cm', 'down')).toEqual({ ok: false, reason: 'negative' });
+  });
+
+  it('the sheet name counts as context: a plain Depth in cm on a sheet named Porewater is a depth below the seafloor', () => {
+    const sheet = rawSheet(['Station', 'Depth (cm)', 'Cl'], [['A', 5, 100]], 'Porewater');
+    expect(proposeConvertColumns(sheet, { decimalComma: false, date1904: false })[1].role.kind).toBe('depthBelowSeafloor');
+    expect(proposeConvertColumns({ ...sheet, name: 'CTD' }, { decimalComma: false, date1904: false })[1].role.kind).toBe('depth');
+  });
+
   it('metres are only given their sign; any other unit, and no unit, block the column and write nothing from it', async () => {
     const f3 = await load('f3-porewater-cm.csv');
     const m = (unit: string | undefined): ColumnRole => ({ kind: 'depthBelowSeafloor', ...(unit === undefined ? {} : { unit }) });

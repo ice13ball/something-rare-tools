@@ -122,9 +122,21 @@ export function isQualityHeader(header: string): boolean {
   return /^q[cf]? [a-z0-9]/.test(k) || / (qc|qf|flag|flags|quality)$/.test(k);
 }
 
-/** The sheet says it is about pore water, sediment or a core: a header says so, or a text cell does (the first 200 rows). */
+/**
+ * At least one filled number of the column is negative: the numbers count upwards from the seafloor (a depth below it is written as a negative number, a position above it as a positive one). A
+ * depth counted downwards is never negative, so one negative number is the sheet's own statement of its direction; it is only a proposal, shown with its reason, and the user can change it.
+ */
+function countsUpwards(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
+  for (const row of sheet.rows) {
+    const p = parseNumber(row.cells[index] ?? null, decimalComma);
+    if (p.status === 'ok' && p.value < 0) return true;
+  }
+  return false;
+}
+
+/** The sheet says it is about pore water, sediment or a core: its name, a header or a text cell says so (the first 200 rows). */
 function sedimentContext(sheet: RawSheet): boolean {
-  if (sheet.header.some((h) => SEDIMENT_CONTEXT.test(h))) return true;
+  if (SEDIMENT_CONTEXT.test(sheet.name) || sheet.header.some((h) => SEDIMENT_CONTEXT.test(h))) return true;
   for (let i = 0; i < sheet.header.length; i++) {
     for (const row of sheet.rows.slice(0, 200)) {
       const c = row.cells[i] ?? null;
@@ -168,6 +180,7 @@ export const OVERLAY_REASONS = {
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
   'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres',
   'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
+  'seafloor-depth-negative': 'some numbers of this depth below the seafloor are negative: read as counted upwards from the seafloor (negative = below, positive = above), and the sign is kept; change the direction if it is wrong',
   'site-depth': 'name says the water depth of the site: it is the depth of the sediment or porewater samples',
   'site-depth-ignored': 'name says the water depth of the site, not the depth of each row: not written (give it the meaning depth if it is the depth of every row)',
   'area-not-effort': 'a plain area on a sheet with no taxa is a place name or an extent, not a sampled area: ignored (name it sampled area if it is one)',
@@ -368,9 +381,13 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const seafloorCode = seafloorAt.get(p.index);
     if (seafloorCode !== undefined) {
       const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
-      p.role = { kind: 'depthBelowSeafloor', ...(unit === undefined ? {} : { unit }) };
-      p.confidence = seafloorCode === 'seafloor-depth-cm' ? 'low' : 'high'; // a guess from the sheet's context shows its reason
-      if (seafloorCode === 'seafloor-depth-cm') why(p, 'seafloor-depth-cm');
+      // the direction the numbers count, read from the DATA and shown as a proposal the user can change: all numbers at or below zero (and some below) means they count upwards from the
+      // seafloor, so a depth below it is negative; anything else is the usual depth below (positive)
+      const up = countsUpwards(sheet, p.index, ctx.decimalComma);
+      p.role = { kind: 'depthBelowSeafloor', ...(unit === undefined ? {} : { unit }), ...(up ? { positive: 'up' as const } : {}) };
+      p.confidence = up || seafloorCode === 'seafloor-depth-cm' ? 'low' : 'high'; // a guess from the sheet's context or the data shows its reason
+      if (up) why(p, 'seafloor-depth-negative');
+      else if (seafloorCode === 'seafloor-depth-cm') why(p, 'seafloor-depth-cm');
       else why(p, 'seafloor-depth-name');
       continue;
     }
