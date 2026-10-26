@@ -341,6 +341,22 @@ describe('/convert: the profile / environment file (stage 6)', () => {
     }
   });
 
+  it('the tick "each distinct position is a station" carries its ⓘ on a profile sheet with no station column, in every language', async () => {
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      const nostn = 'Date,Latitude,Longitude,Depth [m],Temperature [°C]\n2023-06-14,55.5,2.5,0,11.2\n';
+      const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+      chooseFiles(container, [{ name: 'nostn.csv', text: nostn }]);
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
+      await screen.findByRole('heading', { name: UI[lang]['convert.columns.title'] });
+      expect(document.querySelector('[data-tip="convertProfilePosition"]')).toBeNull();
+      fireEvent.click(screen.getByLabelText(UI[lang]['convert.sheet.profile']));
+      expectTips(['convertProfile', 'convertProfilePosition'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+    }
+  });
+
   it('the roles tip says what a pressure column does here, in the converter\'s own words, not /check\'s', () => {
     cleanup();
     setLang('en');

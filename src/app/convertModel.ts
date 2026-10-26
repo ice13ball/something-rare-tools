@@ -46,6 +46,8 @@ export interface SheetChoice {
   profileDepthIds: boolean;
   /** Stage 7: the user's tick "match the stations ignoring a trailing cast number", for a profile sheet. Never automatic; starts unticked; a companion file can pre-tick it. */
   profileIgnoreCast: boolean;
+  /** The user's tick "each distinct position is a station", for a profile sheet with no station column. Never automatic; starts unticked on every upload and is not kept in the companion file. */
+  profilePosition: boolean;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -108,6 +110,8 @@ export interface NercColumn {
   variable: string;
   /** The unit the column's role gives (written as measurementUnit), when it has one. */
   unit?: string;
+  /** The P01 code the header declares (`SDN:P01::CODE` or a code of /check's list): proposed first when verified, listed as declared by the file when not. */
+  p01?: string;
 }
 
 export const nercKey = (fileId: string, sheet: string, index: number): string => `${fileId}\u0000${sheet}\u0000${index}`;
@@ -136,7 +140,7 @@ export function nercColumnsOf(parsed: ConvertParseResult, mappings: Record<strin
       for (const col of m.columns) {
         if (col.role.kind !== 'variable' || col.role.variable.trim() === '') continue;
         const unit = col.role.unit?.trim();
-        out.push({ key: nercKey(f.fileId, m.sheet, col.index), fileId: f.fileId, fileName: f.fileName, sheet: m.sheet, index: col.index, header: col.header.trim(), variable: col.role.variable.trim(), ...(unit === undefined || unit === '' ? {} : { unit }) });
+        out.push({ key: nercKey(f.fileId, m.sheet, col.index), fileId: f.fileId, fileName: f.fileName, sheet: m.sheet, index: col.index, header: col.header.trim(), variable: col.role.variable.trim(), ...(unit === undefined || unit === '' ? {} : { unit }), ...(col.role.p01 === undefined ? {} : { p01: col.role.p01 }) });
       }
     }
   }
@@ -225,7 +229,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}) }, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
@@ -249,7 +253,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name) };
+      out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false };
     }
   }
   return out;

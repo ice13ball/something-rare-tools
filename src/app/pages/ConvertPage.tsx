@@ -485,7 +485,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     });
   // the columns that have a suggestion and no choice yet (a suggestion is a verified generic concept, or a unit that has a verified concept)
   const suggestedCount = nercColumns.filter((c) => {
-    const s = suggestionOf(c);
+    const s = suggestionOf(c, effectivePick(c, nercPicks, 'type')?.id);
     return (s.type.proposed !== undefined && effectivePick(c, nercPicks, 'type') === undefined) || (s.unit !== undefined && effectivePick(c, nercPicks, 'unit') === undefined);
   }).length;
   /** The button of the suggestions: for each column without a choice, the proposed concept and unit are CONFIRMED (the user's act); anything already chosen stays. */
@@ -493,7 +493,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setNercPicks((prev) => {
       const out: NercPicks = { ...prev };
       for (const c of nercColumns) {
-        const s = suggestionOf(c);
+        const s = suggestionOf(c, effectivePick(c, prev, 'type')?.id);
         const here = Object.prototype.hasOwnProperty.call(prev, c.key) ? prev[c.key] : {};
         const next = { ...here };
         if (s.type.proposed && effectivePick(c, prev, 'type') === undefined) next.type = { id: s.type.proposed.uri, source: 'suggested', deprecated: false, label: `${s.type.proposed.code}: ${s.type.proposed.label}`, ctx: typeContext(c) };
@@ -671,6 +671,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     suggestedProfile={f.suggestedProfiles[m.sheet] === true}
                     hasCodeColumn={m.columns.some((c) => c.role.kind === 'sampleId')}
                     hasPressureColumn={m.columns.some((c) => c.role.kind === 'pressure')}
+                    hasStationColumn={m.columns.some((c) => c.role.kind === 'station')}
                     choice={choice}
                     onChange={(c) => setChoices((prev) => ({ ...prev, [key]: c }))}
                   />

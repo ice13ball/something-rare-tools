@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useId } from 'react';
-import { suggestType, suggestUnit } from '../../core/convert/nerc';
+import { dimensionlessUnitFor, suggestType, suggestUnit } from '../../core/convert/nerc';
 import type { NvsConcept } from '../../core/convert/nvs';
 import { searchWords } from '../../core/convert/nvs';
 import type { NercTerm } from '../../core/convert/vocab';
@@ -48,35 +48,43 @@ interface Opt {
   value: string;
   label: string;
   term: { uri: string; label: string };
-  source: 'suggested' | 'nvs';
+  source: 'suggested' | 'nvs' | 'declared';
   disabled?: boolean;
-  group: 'suggested' | 'offered' | 'nvs';
+  group: 'suggested' | 'offered' | 'nvs' | 'declared';
 }
+
+/** The prefix of an option's value: where the identifier came from. */
+const prefixOf = (source: Opt['source']): string => (source === 'nvs' ? 'n' : source === 'declared' ? 'd' : 's');
 
 const short = (code: string, label: string): string => `${code}: ${label}`;
 const termOpt = (term: NercTerm, group: 'suggested' | 'offered'): Opt => ({ value: `s:${term.uri}`, label: short(term.code, term.label), term, source: 'suggested', group });
 
 /** The suggestion for a column: the proposed concept and unit, and the other verified concepts that fit (never the proposed one twice). */
-export function suggestionOf(col: Pick<NercColumn, 'variable' | 'unit'>): { type: ReturnType<typeof suggestType>; unit: NercTerm | undefined } {
-  return { type: suggestType(col.variable, col.unit), unit: suggestUnit(col.unit) };
+export function suggestionOf(col: Pick<NercColumn, 'variable' | 'unit' | 'p01'>, confirmedTypeId?: string): { type: ReturnType<typeof suggestType>; unit: NercTerm | undefined } {
+  const type = suggestType(col.variable, col.unit, col.p01);
+  // a column with no unit: once its type is a practical salinity or a pH (the one that is confirmed, else the one that is proposed), "Dimensionless" is suggested as its unit
+  const unit = suggestUnit(col.unit) ?? (col.unit === undefined ? dimensionlessUnitFor(confirmedTypeId ?? type.proposed?.uri) : undefined);
+  return { type, unit };
 }
 
 /** The choices of one list: the suggested concept, the offered ones, the results of the user's NVS search, and the choice already made when it is no longer among them. */
-function optionsOf(col: NercColumn, kind: NercKind, search: NvsSearchView | undefined, current: StoredPick | undefined): Opt[] {
+function optionsOf(col: NercColumn, kind: NercKind, search: NvsSearchView | undefined, current: StoredPick | undefined, typePickId?: string): Opt[] {
   const out: Opt[] = [];
   if (kind === 'type') {
-    const s = suggestType(col.variable, col.unit);
+    const s = suggestType(col.variable, col.unit, col.p01);
     if (s.proposed) out.push(termOpt(s.proposed, 'suggested'));
     for (const o of s.offered) out.push(termOpt(o, 'offered'));
+    // a well-formed code the header declares that the tool could not verify: listed under its own heading, written only if chosen
+    if (s.declared) out.push({ value: `d:${s.declared.uri}`, label: short(s.declared.code, t('convert.nerc.declared.label')), term: { uri: s.declared.uri, label: short(s.declared.code, t('convert.nerc.declared.label')) }, source: 'declared', group: 'declared' });
   } else {
-    const u = suggestUnit(col.unit);
+    const u = suggestUnit(col.unit) ?? (col.unit === undefined ? dimensionlessUnitFor(typePickId) : undefined);
     if (u) out.push(termOpt(u, 'suggested'));
   }
   if (search?.status === 'done') {
     for (const c of search.concepts) out.push({ value: `n:${c.uri}`, label: `${short(c.code, c.label)}${c.deprecated ? ` (${t('convert.nerc.deprecated')})` : ''}`, term: c, source: 'nvs', group: 'nvs', ...(c.deprecated ? { disabled: true } : {}) });
   }
   if (current && !out.some((o) => o.term.uri === current.id && o.source === current.source)) {
-    out.push({ value: `${current.source === 'nvs' ? 'n' : 's'}:${current.id}`, label: current.label, term: { uri: current.id, label: current.label }, source: current.source, group: current.source === 'nvs' ? 'nvs' : 'offered' });
+    out.push({ value: `${prefixOf(current.source)}:${current.id}`, label: current.label, term: { uri: current.id, label: current.label }, source: current.source, group: current.source === 'nvs' ? 'nvs' : current.source === 'declared' ? 'declared' : 'offered' });
   }
   return out;
 }
@@ -158,7 +166,7 @@ export function ConvertNerc(p: ConvertNercProps): React.ReactElement | null {
             </p>
             <div className="convert-fields">
               <PickList p={p} col={col} kind="type" />
-              {col.unit !== undefined && <PickList p={p} col={col} kind="unit" />}
+              {(col.unit !== undefined || dimensionlessUnitFor(effectivePick(col, p.picks, 'type')?.id) !== undefined) && <PickList p={p} col={col} kind="unit" />}
             </div>
             {p.nvsOn && (
               <div className="convert-nvs-searches">
@@ -177,8 +185,8 @@ function PickList({ p, col, kind }: { p: ConvertNercProps; col: NercColumn; kind
   const id = useId();
   const sid = searchId(col, kind);
   const current = effectivePick(col, p.picks, kind);
-  const opts = optionsOf(col, kind, has(p.searches, sid) && p.nvsOn ? p.searches[sid] : undefined, current);
-  const value = current ? `${current.source === 'nvs' ? 'n' : 's'}:${current.id}` : '';
+  const opts = optionsOf(col, kind, has(p.searches, sid) && p.nvsOn ? p.searches[sid] : undefined, current, effectivePick(col, p.picks, 'type')?.id);
+  const value = current ? `${prefixOf(current.source)}:${current.id}` : '';
   const group = (g: Opt['group'], label: UiKey): React.ReactNode => {
     const list = opts.filter((o) => o.group === g);
     return list.length === 0 ? null : (
@@ -213,6 +221,7 @@ function PickList({ p, col, kind }: { p: ConvertNercProps; col: NercColumn; kind
         <option value="">{t('convert.nerc.choice.none')}</option>
         {group('suggested', kind === 'type' ? 'convert.nerc.group.suggested' : 'convert.nerc.group.suggestedUnit')}
         {group('offered', 'convert.nerc.group.offered')}
+        {group('declared', 'convert.nerc.group.declared')}
         {group('nvs', 'convert.nerc.group.nvs')}
       </select>
       {dropped && <p className="muted convert-nerc-dropped" role="status">{t('convert.nerc.dropped')}</p>}

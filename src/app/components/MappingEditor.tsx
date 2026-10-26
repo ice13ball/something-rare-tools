@@ -133,7 +133,7 @@ interface RoleCellProps {
 
 function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleKinds, onRole }: RoleCellProps): React.ReactElement {
   const unit = roleUnit(role) ?? '';
-  const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort';
+  const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort' || role.kind === 'depthBelowSeafloor';
   const converter = roleKinds !== ROLE_KINDS;
   const boundId = useId();
   return (

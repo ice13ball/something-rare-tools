@@ -43,6 +43,7 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
   'latitude',
   'longitude',
   'depth',
+  'depthBelowSeafloor',
   'pressure',
   'taxon',
   'taxonHeader',
@@ -96,7 +97,7 @@ export function changeRole(_current: ColumnRole, proposed: ColumnRole, kind: Rol
 }
 
 export function roleUnit(role: ColumnRole): string | undefined {
-  return role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort' ? role.unit : undefined;
+  return role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort' || role.kind === 'depthBelowSeafloor' ? role.unit : undefined;
 }
 
 /** A unit typed by the user (trimmed). Empty removes it. Roles without a unit are returned unchanged. */
@@ -110,7 +111,7 @@ export function setUnit(role: ColumnRole, text: string): ColumnRole {
     const { unit: _u, ...rest } = role;
     return unit === '' ? rest : { ...rest, unit };
   }
-  if (role.kind === 'pressure' || role.kind === 'effort') {
+  if (role.kind === 'pressure' || role.kind === 'effort' || role.kind === 'depthBelowSeafloor') {
     const { unit: _u, ...rest } = role;
     return unit === '' ? rest : { ...rest, unit };
   }
