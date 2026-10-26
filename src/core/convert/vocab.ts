@@ -176,6 +176,10 @@ export const VARIABLE_CONCEPTS: Readonly<Record<string, readonly VariableConcept
   pCO2: [vc('PCO2EG01', 'Partial pressure of carbon dioxide {CO2 CAS 124-38-9} {pCO2} in the water body by equilibration with air, drying and infra-red gas analysis', 'method')],
   POC: [vc('CORGCAP1', 'Concentration of organic carbon {organic_C CAS 7440-44-0} {POC} per unit volume of the water body [particulate >GF/F phase] by filtration, acidification and elemental analysis', 'method', 'volume')],
   PON: [vc('NTOTCAP1', 'Concentration of total nitrogen {total_N} {PON} per unit volume of the water body [particulate >GF/F phase] by filtration, acidification and elemental analysis', 'method', 'volume')],
+  // opened 2026-10-26 (docs/research/qc-sources.md, "Converter (/convert) - stage 7"): all three NAME A METHOD (a CTD, a computation), so they are offered, never proposed
+  conductivity: [vc('CNDCST01', 'Electrical conductivity of the water body by CTD', 'method')],
+  'potential temperature': [vc('POTMCV01', 'Potential temperature of the water body by computation using UNESCO 1983 algorithm', 'method')],
+  'sigma-theta': [vc('SIGTEQ01', 'Sigma-theta of the water body by computation from salinity and potential temperature using UNESCO algorithm', 'method')],
   d15N: [vc('D15NEAM1', 'Enrichment of nitrogen-15 in total nitrogen {15N_in_total_N CAS 14390-96-6} {delta(15)N} in the water body [particulate >GF/F phase] by filtration, acidification, combustion and mass spectrometry', 'method')],
 };
 
@@ -211,6 +215,9 @@ export const VARIABLE_UNITS: readonly VariableUnit[] = [
   vu(p06('UATM', 'Microatmospheres'), ['uatm', 'microatm', 'microatmosphere', 'microatmospheres']),
   vu(p06('UPPT', 'Parts per thousand'), ['‰', 'permil', 'permille', 'permill', 'partsperthousand']),
   vu(p06('ULAA', 'Metres'), ['m', 'metre', 'metres', 'meter', 'meters']),
+  // opened 2026-10-26: MSCM (MilliSiemens per centimetre) and UKMC (Kilograms per cubic metre); 'kg/m**3' folds to 'kg/m3' (the stars and the dots go)
+  vu(p06('MSCM', 'MilliSiemens per centimetre'), ['ms/cm', 'millisiemens/cm']),
+  vu(p06('UKMC', 'Kilograms per cubic metre'), ['kg/m3']),
 ];
 
 /** The unit text folded for the alias table: lower case, mu signs as u, no spaces or dots, "l-1" / "kg-1" / "m-3" as "/l" / "/kg" / "/m3", superscripts as digits. */
@@ -273,7 +280,7 @@ export const VARIABLE_VERIFIED_CODES: readonly string[] = [
  * tlenem" (saturation) are not here and so get nothing. A name that maps to a variable gets exactly what the variable gets: generic concepts are proposed, method-specific ones only
  * offered (chlorophyll, DIC and alkalinity stay "offered"), oxygen is chosen by the unit's dimension, nothing is pre-selected.
  */
-const VARIABLE_NAMES: Readonly<Record<string, { pl?: readonly string[]; de?: readonly string[]; fr?: readonly string[] }>> = {
+const VARIABLE_NAMES: Readonly<Record<string, { en?: readonly string[]; pl?: readonly string[]; de?: readonly string[]; fr?: readonly string[] }>> = {
   temperature: { pl: ['temperatura', 'temperatura wody', 'temp. wody'], de: ['Temperatur', 'Wassertemperatur'], fr: ['température', "température de l'eau"] },
   salinity: { pl: ['zasolenie'], de: ['Salzgehalt', 'Salinität'], fr: ['salinité'] },
   oxygen: { pl: ['tlen', 'tlen rozpuszczony'], de: ['Sauerstoff', 'gelöster Sauerstoff'], fr: ['oxygène', 'oxygène dissous'] },
@@ -286,6 +293,10 @@ const VARIABLE_NAMES: Readonly<Record<string, { pl?: readonly string[]; de?: rea
   silicate: { pl: ['krzemiany', 'krzemian', 'krzemionka', 'SiO4'], de: ['Silikat'], fr: ['silicate', 'silicates'] },
   pH: { pl: ['pH'] },
   TA: { pl: ['alkaliczność', 'alkaliczność całkowita'], de: ['Alkalinität'], fr: ['alcalinité', 'alcalinité totale'] },
+  // the three variables the converter adds to /check's canonical ones (CONVERTER_VARIABLES): English names too, because /check's recogniser does not know them
+  conductivity: { en: ['conductivity', 'cond', 'electrical conductivity'], pl: ['przewodnictwo', 'przewodność elektryczna'], de: ['Leitfähigkeit', 'elektrische Leitfähigkeit'], fr: ['conductivité', 'conductivité électrique'] },
+  'potential temperature': { en: ['potential temperature', 'tpot', 'temperature potential', 'temperature, water, potential', 'temperature water potential', 'pot. temperature'], pl: ['temperatura potencjalna'], de: ['potentielle Temperatur'], fr: ['température potentielle'] },
+  'sigma-theta': { en: ['sigma-theta', 'sigma theta', 'sigmatheta', 'density, sigma-theta', 'density, sigma-theta (0)'], pl: ['sigma-theta'], de: ['Sigma-Theta'], fr: ['sigma-thêta'] },
   DIC: { pl: ['węgiel nieorganiczny rozpuszczony', 'DIC'], de: ['gelöster anorganischer Kohlenstoff'], fr: ['carbone inorganique dissous'] },
 };
 
@@ -301,6 +312,9 @@ const nameKey = (name: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+
+/** The variables of VARIABLE_CONCEPTS that /check's recogniser has no name for: the converter's column overlay reads them from the header (core/convert/recognize.ts variableClaim). */
+export const CONVERTER_VARIABLES: ReadonlySet<string> = new Set(['conductivity', 'potential temperature', 'sigma-theta']);
 
 /** Folded header name -> variable of VARIABLE_CONCEPTS. */
 export const VARIABLE_SYNONYMS: ReadonlyMap<string, string> = new Map(

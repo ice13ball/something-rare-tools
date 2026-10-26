@@ -25,6 +25,7 @@ import type { RuleSpec } from './spec';
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
  *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
+ *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column: no record, no finding about their rows (info)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
  *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
@@ -56,6 +57,7 @@ import type { RuleSpec } from './spec';
  *   CONV-MESH-INVALID          reason           value = the typed mesh size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-PROFILE-STATION-UNMATCHED count, names value = the first station; names = the eventIDs of the profile stations that match no station of the biology sheets
  *   CONV-PROFILE-NO-STATION    count, column    column = the station column ('none' when the sheet has none); lines = the profile rows that hold data and no station
+ *   CONV-PROFILE-STATION-FAR   count, names, limit  names = "profile station <-> biology station (N km)" for each matched pair farther apart than `limit` km (a haversine distance; the tool's own limit)
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  * Stage 6 also gives two rules a second text for a profile file, chosen in renderConvertPlain / renderConvertTechnical (PROFILE_VARIANTS): CONV-SAMPLE-CODE-MISSING when the
@@ -198,6 +200,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Le même taxon « {value} » (le même nom ou le même identifiant WoRMS, même stade et même mention) apparaît {count} fois dans un échantillon : {columns}. Votre feuille l'écrit : {names}. Chaque enregistrement reste séparé et rien n'est additionné. Vérifiez s'il ne devrait y en avoir qu'un.`,
     },
     technical: `{file}, {sheet}: {count} columns or rows give the same taxon in one event: the same (eventID, scientificNameID, lifeStage, identificationQualifier), or the same scientificName when there is no ID: {value} in {columns}; written in the sheet as {names}. Judged after the WoRMS lookup, so two spellings that resolved to one AphiaID are caught. No values are summed; each keeps its own occurrenceID.`,
+  },
+  {
+    id: 'CONV-NA-SKIPPED',
+    category: 'B',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `Pominięto {count} {+count:komórkę|komórki|komórek} z oznaczeniem „NA” (brak danych) w kolumnach taksonów lub ilości. Taka komórka nie tworzy rekordu, tak samo jak pusta: brak danych nie jest zerem ani obecnością.`,
+      en: `{count} {+count:cell|cells} marked "NA" (not available) in a taxon or quantity column {+count:was|were} left out. Such a cell makes no record, like an empty one: no data is neither a zero nor a presence.`,
+      de: `{count} {+count:Zelle|Zellen} mit „NA“ (nicht verfügbar) in Taxon- oder Mengenspalten {+count:wurde|wurden} ausgelassen. Eine solche Zelle ergibt keinen Datensatz, wie eine leere: keine Daten sind weder Null noch Anwesenheit.`,
+      fr: `{count} {+count:cellule marquée|cellules marquées} « NA » (non disponible) dans des colonnes de taxon ou de quantité {+count:a été ignorée|ont été ignorées}. Une telle cellule ne crée aucun enregistrement, comme une cellule vide : pas de données n'est ni un zéro ni une présence.`,
+    },
+    technical: `{file}, {sheet}: {count} cell(s) of a taxon or quantity column hold NA (or a similar "not available" token) and were not converted: no occurrence is written, as for an empty cell. Only a numeric 0 can become occurrenceStatus absent, and only with the full species list ticked.`,
   },
   {
     id: 'CONV-ZERO-SKIPPED',
@@ -461,7 +476,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Name aus der WoRMS-Abfrage wartet|Namen aus der WoRMS-Abfrage warten} auf Ihre Wahl: {names}. Wählen Sie für jeden eines der Ergebnisse oder „ohne Kennung“; nichts Unsicheres wird automatisch übernommen.`,
       fr: `{count} {+count:nom de la recherche WoRMS attend|noms de la recherche WoRMS attendent} votre choix : {names}. Pour chacun, choisissez l'un des résultats ou « sans identifiant » ; rien d'incertain n'est accepté automatiquement.`,
     },
-    technical: `{count} name(s) looked up in WoRMS have a result that is not a single exact match (a phonetic or near match, a genus-only match, several results, or a deleted record) and the user has not chosen one of the results or "no ID" yet (first: "{value}"). Only exactly one result with match_type exact is automatic. The export is blocked until every such name is decided. Names: {names}.`,
+    technical: `{count} name(s) looked up in WoRMS have a result that is not a single exact match under the name sent (a phonetic or near match, a genus-only match, an exact match under another name, several results, or a deleted record) and the user has not chosen one of the results or "no ID" yet (first: "{value}"). Only exactly one result with match_type exact and the name sent is automatic. The export is blocked until every such name is decided. Names: {names}.`,
     citations: [OBIS_NAME_MATCH],
   },
   {
@@ -595,6 +610,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:station de profil ne correspond|stations de profil ne correspondent} à aucune station des feuilles de biologie (texte de la station et campagne, si donnée, identiques) : {names}. Chacune devient un événement de station à part. Acceptez s'il n'y a pas eu de biologie là, ou corrigez l'orthographe.`,
     },
     technical: `{file}, {sheet}: {count} station(s) of the profile sheet match no station of the biology sheets ({names}). The match is exact on the trimmed station text and the cruise when the sheet gives one; nothing is matched approximately. Each of these stations became its own station event, with its levels as children and a date, position and depth range derived from them. The warning has to be accepted before the export.`,
+  },
+  {
+    id: 'CONV-PROFILE-STATION-FAR',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'names', 'limit'],
+    plain: {
+      pl: `{count} {+count:dopasowana stacja profilu leży|dopasowane stacje profilu leżą|dopasowanych stacji profilu leży} dalej niż {limit} km od stacji biologicznej: {names}. Dwa pomiary na jednej stacji są blisko siebie, więc sprawdź, czy to ta sama stacja. Zaakceptuj, jeśli tak, albo popraw dopasowanie.`,
+      en: `{count} matched profile {+count:station lies|stations lie} more than {limit} km from the biology station: {names}. Two samplings at one station are close together, so check that it is the same station. Accept this if it is, or correct the match.`,
+      de: `{count} {+count:zugeordnete Profilstation liegt|zugeordnete Profilstationen liegen} mehr als {limit} km von der Biologie-Station entfernt: {names}. Zwei Einsätze an einer Station liegen nah beieinander; prüfen Sie, ob es dieselbe Station ist. Akzeptieren Sie das, wenn ja, oder korrigieren Sie die Zuordnung.`,
+      fr: `{count} {+count:station de profil associée est|stations de profil associées sont} à plus de {limit} km de la station de biologie : {names}. Deux opérations sur une station sont proches ; vérifiez qu'il s'agit de la même. Acceptez si oui, ou corrigez l'association.`,
+    },
+    technical: `{file}, {sheet}: {count} profile station(s) matched to a biology station lie more than {limit} km from it (great-circle distance, haversine): {names}. The position of a profile station is that of its first level that has one, the position of a biology station that of its first sample that has one. The warning has to be accepted before the export.`,
   },
   {
     id: 'CONV-PROFILE-LEVEL-INCOMPLETE',
@@ -825,7 +853,7 @@ function shortList(text: string): string {
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
   if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
-    f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
+    f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
@@ -839,6 +867,11 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: LEVEL_WHAT_WORDS[f.params.what]?.[lang] ?? f.params.what } };
   if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
   if (f.ruleId === 'CONV-PROFILE-STATION-UNMATCHED' && typeof f.params.names === 'string') f = { ...f, params: { ...f.params, names: stationList(f.params.names) } };
+  // the pairs of CONV-PROFILE-STATION-FAR are separated by "; " (a station text may hold a comma): the first few, then the count of the rest
+  if (f.ruleId === 'CONV-PROFILE-STATION-FAR' && typeof f.params.names === 'string') {
+    const items = f.params.names.split('; ');
+    f = { ...f, params: { ...f.params, names: items.length <= 4 ? items.join('; ') : `${items.slice(0, 4).join('; ')}; … (+${items.length - 4})` } };
+  }
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.used === 'string') f = { ...f, params: { ...f.params, used: f.params.used.split(', ').map((w) => USED_WORDS[w]?.[lang] ?? w).join(', ') } };
   const variant = profileVariant(f);
   return fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);

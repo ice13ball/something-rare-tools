@@ -291,7 +291,7 @@ describe('/convert: the WoRMS result table', () => {
       await screen.findByRole('heading', { name: UI[lang]['convert.worms.title'] });
       fireEvent.click(screen.getByRole('checkbox', { name: UI[lang]['convert.worms.optin'] }));
       fireEvent.click(await screen.findByRole('button', { name: translate(lang, 'convert.worms.lookup', { n: 2 }) }));
-      await screen.findByRole('table');
+      await waitFor(() => expect(document.querySelector('.convert-worms-table')).toBeTruthy());
       expectTips(['convertWormsOptIn', 'convertWormsPrivacy', 'convertWormsTable', 'convertWormsChoice'], lang);
       expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
       vi.unstubAllGlobals();
@@ -336,7 +336,7 @@ describe('/convert: the profile / environment file (stage 6)', () => {
       expectTips(['convertProfile'], lang);
       expect(document.querySelector('[data-tip="convertProfileDepthIds"]')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.sheet.profile.mark'] }));
-      expectTips(['convertProfile', 'convertProfileDepthIds', 'convertProfileStations', 'convertProfilePressure'], lang);
+      expectTips(['convertProfile', 'convertProfileDepthIds', 'convertProfileStations', 'convertProfileCast', 'convertProfilePressure'], lang);
       expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
     }
   });

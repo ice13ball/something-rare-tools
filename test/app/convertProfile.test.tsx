@@ -129,7 +129,7 @@ describe('level IDs and the station match on the page', () => {
     expect(levelLines.length).toBeGreaterThan(0);
     expect(levelLines.length).toBeLessThanOrEqual(4);
     expect(levelLines[0].textContent).toContain('profile level');
-    expect(levelLines[0].textContent).toContain('CR1:S1:0');
+    expect(levelLines[0].textContent).toContain('CR1:S1:0m');
     // the warning for the unmatched station is among the ones to accept
     await waitFor(() => expect(document.querySelector('[data-rule-group="CONV-PROFILE-STATION-UNMATCHED"]')).toBeTruthy());
     expect(document.querySelector('[data-rule-group="CONV-PROFILE-STATION-UNMATCHED"]')!.textContent).toContain('CR1:S9');
@@ -148,7 +148,7 @@ describe('level IDs and the station match on the page', () => {
     const ctd = within(sheetBox('ctd.csv'));
     expect(sheetBox('ctd.csv').querySelector('[data-tip="convertProfile"]')).toBeTruthy();
     fireEvent.click(ctd.getByRole('button', { name: T['convert.sheet.profile.mark'] }));
-    for (const id of ['convertProfileDepthIds', 'convertProfileStations', 'convertProfilePressure']) expect(sheetBox('ctd.csv').querySelector(`[data-tip="${id}"]`), id).toBeTruthy();
+    for (const id of ['convertProfileDepthIds', 'convertProfileStations', 'convertProfileCast', 'convertProfilePressure']) expect(sheetBox('ctd.csv').querySelector(`[data-tip="${id}"]`), id).toBeTruthy();
     expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
   });
 });
@@ -188,12 +188,12 @@ describe('export, GA4 and the companion file', () => {
     const z = openZip(await bytesOf(blob));
     const text = async (n: string): Promise<string> => new TextDecoder().decode(await z.read(z.find(n)!, nodeInflate));
     const event = await text('event.txt');
-    expect(event).toContain('CR1:S1:10\tCR1:S1\tprofile level\t');
-    expect(event).toContain('CR1:S9:0\tCR1:S9\tprofile level\t');
+    expect(event).toContain('CR1:S1:10m\tCR1:S1\tprofile level\t');
+    expect(event).toContain('CR1:S9:0m\tCR1:S9\tprofile level\t');
     expect(event).toContain('CR1:S9\tCR1\tstation\t');
     const emof = await text('extendedmeasurementorfact.txt');
-    expect(emof).toContain('CR1:S1:10\t\tPressure (spatial coordinate) exerted by the water body by profiling pressure sensor and correction to read zero at sea level\thttp://vocab.nerc.ac.uk/collection/P01/current/PRESPR01/\t10.4\t\tdbar\thttp://vocab.nerc.ac.uk/collection/P06/current/UPDB/');
-    expect(emof).toContain('CR1:S1:10\t\ttemperature\t\t10.9\t\t°C\t');
+    expect(emof).toContain('CR1:S1:10m\t\tPressure (spatial coordinate) exerted by the water body by profiling pressure sensor and correction to read zero at sea level\thttp://vocab.nerc.ac.uk/collection/P01/current/PRESPR01/\t10.4\t\tdbar\thttp://vocab.nerc.ac.uk/collection/P06/current/UPDB/');
+    expect(emof).toContain('CR1:S1:10m\t\ttemperature\t\t10.9\t\t°C\t');
     const sent = win.dataLayer.map((e) => Array.from(e as ArrayLike<unknown>)).filter((e) => e[0] === 'event' && e[1] === 'convert_exported');
     expect(sent).toHaveLength(1);
     expect((sent[0][2] as Record<string, unknown>).profile).toBe('used');
@@ -253,6 +253,32 @@ describe('export, GA4 and the companion file', () => {
     expect(again.queryByLabelText(T['convert.sheet.profile.depthIds'])).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it('the cast-number match is a tick of its own on a profile sheet: unticked at every upload, kept by sheet name in the companion file, a pre-tick only, and gone when the mark is taken back', async () => {
+    const { download } = await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'ctd.csv', text: CTD_CSV }]);
+    await decideBiology();
+    const ctd = within(sheetBox('ctd.csv'));
+    // not offered before the sheet is marked as a profile file
+    expect(ctd.queryByLabelText(T['convert.sheet.profile.cast'])).toBeNull();
+    fireEvent.click(ctd.getByRole('button', { name: T['convert.sheet.profile.mark'] }));
+    const box = ctd.getByLabelText(T['convert.sheet.profile.cast']) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(ctd.getByText(T['convert.sheet.profile.cast.help'])).toBeTruthy();
+    expect(sheetBox('ctd.csv').querySelector('[data-tip="convertProfileCast"]')).toBeTruthy();
+    fireEvent.click(box);
+    await idle();
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    const [text] = download.mock.calls[0] as [string];
+    expect(text).toContain('(setting),profileIgnoreCast=ctd.csv,,,\n');
+    cleanup();
+    await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'ctd.csv', text: CTD_CSV }, { name: 'run.companion.csv', text }]);
+    const again = within(sheetBox('ctd.csv'));
+    expect((again.getByLabelText(T['convert.sheet.profile.cast']) as HTMLInputElement).checked).toBe(true);
+    // taking the mark back takes the tick back
+    fireEvent.click(again.getByLabelText(T['convert.sheet.profile']));
+    fireEvent.click(again.getByLabelText(T['convert.sheet.profile']));
+    expect((again.getByLabelText(T['convert.sheet.profile.cast']) as HTMLInputElement).checked).toBe(false);
   });
 
   it('a companion file that names another sheet pre-ticks nothing', async () => {

@@ -151,6 +151,10 @@ describe('header names in PL / DE / FR reach the concepts of the English variabl
       pH: ['pH'],
       TA: ['alkaliczność', 'alkaliczność całkowita', 'Alkalinität', 'alcalinité', 'alcalinité totale'],
       DIC: ['węgiel nieorganiczny rozpuszczony', 'DIC', 'gelöster anorganischer Kohlenstoff', 'carbone inorganique dissous'],
+      // stage 7: the three variables of /check's canonical ones that the converter adds, English names included
+      conductivity: ['conductivity', 'Cond', 'electrical conductivity', 'przewodnictwo', 'przewodność elektryczna', 'Leitfähigkeit', 'elektrische Leitfähigkeit', 'conductivité', 'conductivité électrique'],
+      'potential temperature': ['potential temperature', 'Tpot', 'temperature potential', 'Temperature, water, potential', 'temperature water potential', 'pot. temperature', 'temperatura potencjalna', 'potentielle Temperatur', 'température potentielle'],
+      'sigma-theta': ['sigma-theta', 'Sigma-theta', 'sigma theta', 'sigmatheta', 'density, sigma-theta', 'density, sigma-theta (0)', 'Sigma-Theta', 'sigma-thêta'],
     };
     for (const [variable, names] of Object.entries(expected)) {
       expect(Object.prototype.hasOwnProperty.call(VARIABLE_CONCEPTS, variable), variable).toBe(true);

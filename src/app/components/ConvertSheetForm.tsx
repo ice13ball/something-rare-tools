@@ -55,7 +55,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
           <div className="convert-group">
             <div className="choice-line">
               <label className="inline-choice">
-                <input type="checkbox" checked={choice.profile} onChange={(e) => onChange({ ...choice, profile: e.target.checked, ...(e.target.checked ? {} : { profileDepthIds: false }) })} aria-describedby={`${id}-profile-help`} />
+                <input type="checkbox" checked={choice.profile} onChange={(e) => onChange({ ...choice, profile: e.target.checked, ...(e.target.checked ? {} : { profileDepthIds: false, profileIgnoreCast: false }) })} aria-describedby={`${id}-profile-help`} />
                 <span>{t('convert.sheet.profile')}</span>
               </label>
               <InfoTip id="convertProfile" />
@@ -91,6 +91,16 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                   <p className="muted">{t('convert.sheet.profile.stations')}</p>
                   <InfoTip id="convertProfileStations" />
                 </div>
+                <div className="choice-line">
+                  <label className="inline-choice">
+                    <input type="checkbox" checked={choice.profileIgnoreCast} onChange={(e) => onChange({ ...choice, profileIgnoreCast: e.target.checked })} aria-describedby={`${id}-cast-help`} />
+                    <span>{t('convert.sheet.profile.cast')}</span>
+                  </label>
+                  <InfoTip id="convertProfileCast" />
+                </div>
+                <p id={`${id}-cast-help`} className="muted">
+                  {t('convert.sheet.profile.cast.help')}
+                </p>
                 {hasPressureColumn && (
                   <div className="with-tip">
                     <p className="muted">{t('convert.sheet.profile.pressure')}</p>

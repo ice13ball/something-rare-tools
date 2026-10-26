@@ -82,7 +82,7 @@ function habitatText(r: WormsRecord): string {
  */
 export function ConvertWorms(p: ConvertWormsProps): React.ReactElement {
   const shown = p.names.filter((n) => has(p.records, n));
-  const classes = shown.map((n) => ({ name: n, records: p.records[n], match: classifyMatches(p.records[n]) }));
+  const classes = shown.map((n) => ({ name: n, records: p.records[n], match: classifyMatches(p.records[n], n) }));
   const exact = classes.filter((c) => c.match.kind === 'auto').length;
   const choose = classes.filter((c) => c.match.kind === 'choose').length;
   const none = classes.filter((c) => c.match.kind === 'none').length;
@@ -210,7 +210,7 @@ export function ConvertWorms(p: ConvertWormsProps): React.ReactElement {
                             <td>
                               <code>{r.AphiaID}</code> {r.scientificname}
                               {r.authority ? <span className="muted"> {r.authority}</span> : null}
-                              {!auto && <div className="muted convert-worms-written">{writesOwnName(r) ? t('convert.worms.writtenAs', { name: r.scientificname.trim() }) : t('convert.worms.writtenSame')}</div>}
+                              {!auto && <div className="muted convert-worms-written">{writesOwnName(r, c.name) ? t('convert.worms.writtenAs', { name: r.scientificname.trim() }) : t('convert.worms.writtenSame')}</div>}
                             </td>
                             <td>
                               <code>{r.match_type}</code>{r.match_type === 'exact' ? null : <span className="muted"> ({matchTypeWord(r.match_type)})</span>}

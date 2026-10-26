@@ -295,9 +295,12 @@ describe('the conversion with the entries of a lookup', () => {
   });
 
   it('an unaccepted name is written with its own AphiaID, not the valid one', async () => {
-    const worms = lookupOf({ 'Calanus finmarchicus': rec('Sagitta elegans') }, {});
+    // an exact answer under ANOTHER name than the one sent is a choice (never automatic); once chosen, the record's own AphiaID is written, not the valid name's
+    const worms = lookupOf({ 'Calanus finmarchicus': rec('Sagitta elegans') }, { 'Calanus finmarchicus': 105450 });
     const r = await run(worms);
-    for (const o of r.result.occurrences.filter((x) => x.scientificName === 'Calanus finmarchicus')) expect(o.scientificNameId).toBe('urn:lsid:marinespecies.org:taxname:105450');
+    const written = r.result.occurrences.filter((x) => x.scientificNameId === 'urn:lsid:marinespecies.org:taxname:105450');
+    expect(written.length).toBeGreaterThan(0);
+    expect(r.result.occurrences.some((x) => x.scientificNameId !== undefined && x.scientificNameId !== 'urn:lsid:marinespecies.org:taxname:105450')).toBe(false);
   });
 
   it('an undecided name blocks the export (CONV-WORMS-UNDECIDED) and gets no ID; choosing clears it', async () => {
@@ -326,17 +329,17 @@ describe('the conversion with the entries of a lookup', () => {
   });
 
   it('freshwater or terrestrial only: the ID is written and CONV-WORMS-NOT-MARINE is raised, to accept', async () => {
-    const r = await run(lookupOf({ 'Calanus finmarchicus': rec('Homo sapiens') }, {}));
+    const r = await run(lookupOf({ 'Calanus finmarchicus': rec('Homo sapiens') }, { 'Calanus finmarchicus': 1455977 }));
     expect(r.findings.find((x) => x.ruleId === 'CONV-WORMS-NOT-MARINE')?.severity).toBe('warning');
     expect(judge(r.findings).acceptRules).toContain('CONV-WORMS-NOT-MARINE');
-    expect(r.result.occurrences.find((o) => o.scientificName === 'Calanus finmarchicus')?.scientificNameId).toBe('urn:lsid:marinespecies.org:taxname:1455977');
+    expect(r.result.occurrences.find((o) => o.scientificNameId === 'urn:lsid:marinespecies.org:taxname:1455977')).toBeDefined();
   });
 
   it('a name whose ID comes from the sheet is never listed and never overwritten', () => {
     const header = ['Station', 'Sample', 'Latitude', 'Longitude', 'Date', 'scientificName', 'AphiaID', 'Count'];
     const file = fileOf(header, [['S1', 'a', 55, 3, '2020-01-01', 'Calanus finmarchicus', 104464, 4], ['S1', 'b', 55, 3, '2020-01-01', 'Oithona similis', null, 2]], 'S');
     const sheet = sheetInput(file, { quantity: { kind: 'count' }, shape: 'long' });
-    const worms = lookupOf({ 'Calanus finmarchicus': rec('Pseudocalanus'), 'Oithona similis': [one({ AphiaID: 106656 })] }, {});
+    const worms = lookupOf({ 'Calanus finmarchicus': rec('Pseudocalanus'), 'Oithona similis': [one({ AphiaID: 106656, scientificname: 'Oithona similis' })] }, {});
     const r = convert({ sheets: [sheet], worms });
     expect(r.nameLookup).toEqual({ names: ['Oithona similis'], withSheetId: 1, applied: 1 });
     expect(r.occurrences.find((o) => o.scientificName === 'Calanus finmarchicus')?.scientificNameId).toBe('urn:lsid:marinespecies.org:taxname:104464');

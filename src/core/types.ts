@@ -15,6 +15,14 @@ export interface RawSheet {
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
 }
+/** One parameter of a PANGAEA header block (the converter's reading, core/convert/pangaeaHeader.ts). */
+export interface PangaeaParameter {
+  name: string;
+  unit?: string;
+  /** The abbreviation the table header uses. */
+  short?: string;
+  comment?: string;
+}
 export interface ParsedFile {
   fileName: string;
   kind: 'csv' | 'xlsx' | 'pangaea' | 'metadata' | 'pdf' | 'unknown';
@@ -25,6 +33,8 @@ export interface ParsedFile {
   embeddedMetadata?: MetadataRecord;   // PANGAEA header, or the record itself for kind 'metadata'
   findings: Finding[];          // parse-level findings (ragged rows, encoding fallback, …)
   /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
+  /** Set only by the converter's reading path (core/convert/read.ts), never by the shared parsers: the parameters of a PANGAEA header block with their abbreviations and comments. */
+  pangaeaParameters?: PangaeaParameter[];
   dwca?: { core: 'Occurrence' | 'Event'; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
 }
 

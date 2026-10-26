@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { unguardText } from '../output/csv';
 import type { ParsedFile, RawCell, RawRow, RawSheet } from '../types';
+import { readPangaeaParameters } from './pangaeaHeader';
 
 /*
  * The converter's reading path. A file is parsed as /check parses it, then every TEXT cell and every header goes through `unguardText`:
@@ -20,8 +21,11 @@ function unguardSheet(s: RawSheet): RawSheet {
 }
 
 /** The file as the converter reads it: the formula guard of the proposal CSV taken off every text cell and header. Pure; the input is not changed. */
-export function readConvertFile(file: ParsedFile): ParsedFile {
-  return { ...file, sheets: file.sheets.map(unguardSheet) };
+export function readConvertFile(file: ParsedFile, text?: string): ParsedFile {
+  const read = { ...file, sheets: file.sheets.map(unguardSheet) };
+  // a PANGAEA file: the long names, abbreviations and comments of its Parameter(s) block (the shared parser keeps less, for /check)
+  const parameters = file.kind === 'pangaea' && text !== undefined ? readPangaeaParameters(text) : undefined;
+  return parameters === undefined ? read : { ...read, pangaeaParameters: parameters };
 }
 
 /**

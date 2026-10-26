@@ -7,7 +7,9 @@ import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
-import { buildEventTree, eventDateText, stationEventId } from './events';
+import { taxonColumnNames } from './headers';
+import type { TaxonColumnName } from './headers';
+import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
@@ -68,6 +70,12 @@ export interface ProfileDeclaration {
    * Never derived from the order of the rows.
    */
   depthIds?: boolean;
+  /**
+   * The user's explicit tick (one per sheet, never automatic): match the stations of this sheet to the biology stations ignoring a trailing cast number ("-6" of "PS27/006-6"), on both
+   * sides. Event labels of PANGAEA carry the cast of each device, so a net cast ("PS27/006-6") and a CTD cast ("PS27/006-1") of one station differ only by that suffix. A base that
+   * more than one biology station has is not matched (it is never guessed). The level then sits under the biology station; its own ID keeps the cast, so the casts stay apart.
+   */
+  ignoreCast?: boolean;
 }
 
 export type SamplingDevice = { kind: 'known'; key: keyof typeof DEVICES } | { kind: 'other'; text: string };
@@ -173,6 +181,13 @@ function colsOf(mapping: SheetMapping): Cols {
 }
 
 const METRES = /^(m|meters?|metres?)$/i;
+
+/**
+ * PANGAEA writes its Date/Time column in UTC: "Date/Time of sampling/measurement provided in ISO format (YYYY-MM-DDThh:mm:ss) and in UTC. An additional column with
+ * local date/time may be provided" (https://wiki.pangaea.de/wiki/Data_submission, section "Data"; and https://wiki.pangaea.de/wiki/Event: "Date/Time is provided as ISO-format
+ * YYYY-MM-DD T hh:mm:ss, UTC", read 2026-10-26). So a time with no zone in the column PANGAEA calls "Date/Time" of a PANGAEA file is UTC. A local-time column has another name and is not this.
+ */
+export const isUtcBySource = (file: ParsedFile, whenHeader: string | undefined): boolean => file.kind === 'pangaea' && whenHeader !== undefined && /^date\/time$/i.test(whenHeader.replace(/\s*\[[^\]]*\]/g, '').trim());
 
 /** The scientificNameID a taxon ID column gives for a cell text: an AphiaID column (whole numbers only) as the urn:lsid, any other taxon ID column as given. */
 function sheetNameId(col: Spec & { aphia: boolean }, idText: string): string | undefined {
@@ -385,7 +400,7 @@ export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'
     if (!sheet) continue;
     const cols = colsOf(s.mapping);
     if (s.shape === 'wide') {
-      for (const c of cols.taxonHeaders) names.push(c.header.trim());
+      for (const n of taxonColumnNames(s.file, sheet, cols.taxonHeaders).values()) names.push(n.verbatim);
     } else if (cols.taxonCell) {
       for (const row of sheet.rows) {
         const t = text(row.cells[cols.taxonCell.index]);
@@ -418,7 +433,55 @@ interface ProfileContext {
   /** Station eventIDs of profile rows that match a biology station / that match none (each distinct, first-seen order). */
   matched: Set<string>;
   unmatched: Set<string>;
+  /** The biology stations by eventID: their own text and cruise, and the position of their first sample that has one. */
+  bioStationInfo: ReadonlyMap<string, BioStation>;
+  /** The biology stations by cruise and station text without its cast suffix. */
+  bioByBase: ReadonlyMap<string, readonly string[]>;
+  /** A matched profile station: the biology station it sits under, how it matched, and the position of its first level that has one (for the distance check). */
+  matchedAt: Map<string, { bio: string; via: 'exact' | 'cast'; lat?: number; lon?: number; file: string; sheet: string }>;
 }
+
+interface BioStation {
+  code: string;
+  cruise?: string;
+  lat?: number;
+  lon?: number;
+}
+
+/** A station text without a trailing cast number: "PS27/006-6" -> "PS27/006". Only a final "-" and digits. */
+export const castBase = (station: string): string => station.trim().replace(/-\d+$/, '');
+const baseKey = (cruise: string | undefined, station: string): string => `${cruise ?? ''}\u0000${castBase(station)}`;
+
+/** The biology stations of the samples, by eventID. */
+function bioStationsOf(samples: ReadonlyMap<string, SampleAcc>): Map<string, BioStation> {
+  const out = new Map<string, BioStation>();
+  for (const a of samples.values()) {
+    if (a.site.stationCode === undefined) continue;
+    const id = stationEventId(a.site.cruiseCode, a.site.stationCode);
+    let b = out.get(id);
+    if (!b) out.set(id, (b = { code: a.site.stationCode, ...(a.site.cruiseCode === undefined ? {} : { cruise: a.site.cruiseCode }) }));
+    if (b.lat === undefined && a.site.lat !== undefined && a.site.lon !== undefined) {
+      b.lat = a.site.lat;
+      b.lon = a.site.lon;
+    }
+  }
+  return out;
+}
+
+/** The eventIDs of the biology stations that share a station text apart from its cast suffix, by cruise and base. */
+function bioBases(stations: ReadonlyMap<string, BioStation>): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const [id, b] of stations) {
+    const k = baseKey(b.cruise, b.code);
+    const list = out.get(k);
+    if (list) list.push(id);
+    else out.set(k, [id]);
+  }
+  return out;
+}
+
+/** A profile station farther than this from the biology station it matched is said (the tool's own choice: the distance between two casts of one station is small, and 10 km already means another place). */
+export const STATION_FAR_KM = 10;
 
 /** What a level's ID was made of (the user's code column, the depth, the pressure), and for a collision also a sample or a station that has the ID. */
 type LevelVia = 'code' | 'depth' | 'pressure';
@@ -467,7 +530,7 @@ function verticalOf(row: RawRow, cols: Cols, decimalComma: boolean): Vertical | 
  * One profile sheet. Every row with a station is its own event "profile level": parentEventID = its station (`cruise:station`, the same text the biology sheets build, matched
  * EXACTLY on the trimmed station text and the cruise when there is one: nothing is guessed), min = max depth = the row's depth, and the row's own date, time and position when the sheet
  * has them (else the level inherits them from its station). Its measured variables and its pressure are eMoF rows of THAT event. The level's ID is `<station eventID>:<code>` with the
- * code column, else `<station eventID>:<depth as written>` only when the user approved it for this sheet (never derived from the order of the rows). A station of the sheet that
+ * code column, else `<station eventID>:<depth as written>m` (or `...dbar`) only when the user approved it for this sheet (never derived from the order of the rows). A station of the sheet that
  * no biology station matches gets its own station event and CONV-PROFILE-STATION-UNMATCHED (a warning to accept) that names it.
  */
 function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
@@ -479,7 +542,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const cols = colsOf(sin.mapping);
   const collector = new Collector(fileName);
   const specs = specsOf(sin.mapping);
-  const parse = metaParser(file, sheet, specs, collector);
+  const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
   const base = { file: fileName, sheet: sheet.name };
   const depthOf = depthReader(cols, dc, collector, sheet.name);
 
@@ -505,6 +568,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
   const codeColumn = specs.sampleId !== undefined;
   const depthIds = !codeColumn && sin.profile?.depthIds === true;
+  const ignoreCast = sin.profile?.ignoreCast === true;
   // a row with none of these filled is an empty line, not a level
   const dataColumns = [specs.station, specs.sampleId, cols.depthPlain, cols.depthMin, cols.depthMax, cols.pressure, ...cols.variables].flatMap((c) => (c === undefined ? [] : [c.index]));
   const sheetUnmatched = new Set<string>();
@@ -545,7 +609,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
     // the level's own code: the code column, or (only with the user's approval, and only without a code column) the depth as written, else the pressure as written with "dbar"
     const vertical = codeColumn || !depthIds ? undefined : verticalOf(row, cols, dc);
-    const code = codeColumn ? m.sampleId : vertical === undefined ? undefined : vertical.via === 'pressure' ? `${vertical.text}dbar` : vertical.text;
+    // the unit is part of the ID ("2m", "2dbar"): a depth-made code never equals a numeric sample code ("2") of a station prefixed with the same station
+    const code = codeColumn ? m.sampleId : vertical === undefined ? undefined : `${vertical.text}${vertical.via === 'pressure' ? 'dbar' : 'm'}`;
     const via: LevelVia = codeColumn ? 'code' : (vertical?.via ?? 'depth');
     if (code === undefined) {
       noCode.add(fileName, sheet.name, specs.sampleId?.header ?? '', row.line);
@@ -555,7 +620,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     const stationId = stationEventId(cruise, stationText);
     const id = stationPrefixedId(stationId, code);
     // the key of the duplicate check: a depth or pressure by its number (10 and 10.0 are the same), a code as written; a code "10" and a depth 10 are the same key, as they are the same ID
-    const key = vertical === undefined ? id : stationPrefixedId(stationId, `${vertical.value}${vertical.via === 'pressure' ? 'dbar' : ''}`);
+    const key = vertical === undefined ? id : stationPrefixedId(stationId, `${vertical.value}${vertical.via === 'pressure' ? 'dbar' : 'm'}`);
     const source: SourceRef = { file: fileName, sheet: sheet.name, line: row.line };
 
     // the same ID twice (two rows of one station with the same code, depth or pressure: repeated casts), or an ID a sample already has
@@ -575,17 +640,33 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     ctx.levels.set(key, info);
     ctx.levelById.set(id, info);
 
-    // the station match: EXACT, on the trimmed station text and the cruise when there is one
-    if (ctx.bioStations.has(stationId)) ctx.matched.add(stationId);
-    else {
+    // the station match: EXACT, on the trimmed station text and the cruise when there is one; with the user's tick for this sheet (never otherwise), also by the station text without its
+    // cast suffix, when exactly one biology station has that base
+    let bioId: string | undefined;
+    let matchVia: 'exact' | 'cast' = 'exact';
+    if (ctx.bioStations.has(stationId)) bioId = stationId;
+    else if (ignoreCast) {
+      const same = ctx.bioByBase.get(baseKey(cruise, stationText));
+      if (same !== undefined && same.length === 1) {
+        bioId = same[0];
+        matchVia = 'cast';
+      }
+    }
+    if (bioId !== undefined) {
+      ctx.matched.add(stationId);
+      if (!ctx.matchedAt.has(stationId)) ctx.matchedAt.set(stationId, { bio: bioId, via: matchVia, file: fileName, sheet: sheet.name });
+    } else {
       ctx.unmatched.add(stationId);
       sheetUnmatched.add(stationId);
     }
 
     const depth = depthOf(row);
     const date = m.datetime;
-    const site: SampleSite = { id, code, eventType: 'profile level', stationCode: stationText, source };
-    if (cruise !== undefined) site.cruiseCode = cruise;
+    // a level matched by the cast-free base sits under the BIOLOGY station (its own ID keeps the cast: two casts of one station stay two sets of levels)
+    const parentBio = matchVia === 'cast' && bioId !== undefined ? ctx.bioStationInfo.get(bioId) : undefined;
+    const site: SampleSite = { id, code, eventType: 'profile level', stationCode: parentBio?.code ?? stationText, source };
+    const parentCruise = parentBio === undefined ? cruise : parentBio.cruise;
+    if (parentCruise !== undefined) site.cruiseCode = parentCruise;
     if (date) site.date = date;
     if (m.lat !== undefined && m.lon !== undefined) {
       site.lat = m.lat;
@@ -603,6 +684,12 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     if (depth.minText !== undefined) site.depthMinText = depth.minText;
     if (depth.maxText !== undefined) site.depthMaxText = depth.maxText;
     ctx.sites.push(site);
+    // the first position of a matched station, for the distance check
+    const at = ctx.matchedAt.get(stationId);
+    if (at !== undefined && at.lat === undefined && site.lat !== undefined && site.lon !== undefined) {
+      at.lat = site.lat;
+      at.lon = site.lon;
+    }
 
     // eMoF rows of THIS level event (never of a sample): the measured variables, then the pressure
     for (const st of varState) {
@@ -704,9 +791,11 @@ export function convert(input: ConvertInput): ConvertResult {
     const cols = colsOf(sin.mapping);
     const collector = new Collector(fileName);
     const specs = specsOf(sin.mapping);
-    const parse = metaParser(file, sheet, specs, collector);
+    const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
     const base = { file: fileName, sheet: sheet.name };
 
+    // the names of the wide taxon columns: the header without its unit, or the long name of a PANGAEA parameter (core/convert/headers.ts)
+    const taxonNames = sin.shape === 'wide' ? taxonColumnNames(file, sheet, cols.taxonHeaders) : new Map<number, TaxonColumnName>();
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
     if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
 
@@ -744,6 +833,7 @@ export function convert(input: ConvertInput): ConvertResult {
     const effortBad = new Lines();
     const summaries = new Lines();
     let zeros = 0;
+    let naCells = 0;
     const checkText = (field: string, line: number, value: string | undefined): void => {
       if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
     };
@@ -971,9 +1061,12 @@ export function convert(input: ConvertInput): ConvertResult {
       }
 
       /* ---- the occurrences of this row ---- */
-      const cells: { verbatim: string; raw: unknown; column: string; userId?: string; lifeStageCol?: string; qualifierCol?: string; nameId?: string }[] = [];
+      const cells: { verbatim: string; raw: unknown; column: string; idText?: string; columnRemark?: string; userId?: string; lifeStageCol?: string; qualifierCol?: string; nameId?: string }[] = [];
       if (sin.shape === 'wide') {
-        for (const c of cols.taxonHeaders) cells.push({ verbatim: c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim() });
+        for (const c of cols.taxonHeaders) {
+          const n = taxonNames.get(c.index);
+          cells.push({ verbatim: n?.verbatim ?? c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim(), ...(n === undefined ? {} : { idText: n.idText }), ...(n?.remark === undefined ? {} : { columnRemark: n.remark }) });
+        }
       } else if (cols.taxonCell && cols.quantity && taxonCellText !== undefined) {
         const lifeStageCol = cols.lifeStage ? text(row.cells[cols.lifeStage.index]) : undefined;
         const qualifierCol = cols.qualifier ? text(row.cells[cols.qualifier.index]) : undefined;
@@ -1003,7 +1096,11 @@ export function convert(input: ConvertInput): ConvertResult {
         let status: 'present' | 'absent' = 'present';
         let value: number | undefined;
         let remarks: string | undefined;
-        if (p.status === 'missing') continue;
+        if (p.status === 'missing') {
+          // a cell that says NA (not a blank one) is counted: it makes no record, and the user is told how many
+          if (typeof raw === 'string' && raw.trim() !== '') naCells++;
+          continue;
+        }
         if (p.status === 'na-variant') {
           collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
           continue;
@@ -1031,13 +1128,16 @@ export function convert(input: ConvertInput): ConvertResult {
           }
         }
         const sp = splitOf(cell.verbatim);
+        // what the file says about the column (a PANGAEA parameter comment) and the text of a text cell: both stay with the record
+        const occRemarks = [cell.columnRemark, remarks].filter((x): x is string => x !== undefined && x !== '').join('; ');
+        checkText(cell.column, row.line, occRemarks);
         const lifeStage = cell.lifeStageCol ?? sp.lifeStage;
         const qualifier = cell.qualifierCol ?? sp.identificationQualifier;
         // what the user typed into an approved split is written too: a tab or line break there would break the tab-separated file
         checkText(cell.column, row.line, sp.scientificName);
         checkText(cell.column, row.line, sp.identificationQualifier);
         checkText(cell.column, row.line, sp.lifeStage);
-        const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
+        const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.idText ?? cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
         const occSource: SourceRef = { ...source, column: cell.column };
         const occ: OccRec = {
           id,
@@ -1050,7 +1150,7 @@ export function convert(input: ConvertInput): ConvertResult {
           ...(lifeStage === undefined ? {} : { lifeStage }),
           ...(cell.nameId === undefined ? {} : { scientificNameId: cell.nameId }),
           ...(sp.sex === undefined ? {} : { sex: sp.sex }),
-          ...(remarks === undefined ? {} : { occurrenceRemarks: remarks }),
+          ...(occRemarks === '' ? {} : { occurrenceRemarks: occRemarks }),
         };
         if (cols.quantityType && sin.shape === 'long') {
           const qt = text(row.cells[cols.quantityType.index]);
@@ -1113,6 +1213,7 @@ export function convert(input: ConvertInput): ConvertResult {
     for (const e of notInteger.entries()) findings.push(makeConvertFinding('CONV-COUNT-NOT-INTEGER', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of effortBad.entries()) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of summaries.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+    if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));
     if (zeros > 0) {
       stats.zerosSkipped += zeros;
       findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: zeros } }));
@@ -1132,6 +1233,7 @@ export function convert(input: ConvertInput): ConvertResult {
 
   /* ---- the profile sheets (stage 6): each row is a level event under its station ---- */
   const profileSheets = input.sheets.filter((s) => s.profile !== undefined);
+  const bioStationInfo = bioStationsOf(samples);
   const profile: ProfileContext = {
     samples,
     findings,
@@ -1145,8 +1247,26 @@ export function convert(input: ConvertInput): ConvertResult {
     sites: [],
     matched: new Set(),
     unmatched: new Set(),
+    bioStationInfo,
+    bioByBase: bioBases(bioStationInfo),
+    matchedAt: new Map(),
   };
   for (const sin of profileSheets) readProfileSheet(sin, profile);
+  // a matched profile station far from the biology station it sits under: said, naming both (the position of each is its first level / first sample that has one)
+  {
+    const far = new Map<string, { file: string; sheet: string; names: string[] }>();
+    for (const [pid, at] of profile.matchedAt) {
+      const bio = profile.bioStationInfo.get(at.bio);
+      if (at.lat === undefined || at.lon === undefined || bio?.lat === undefined || bio.lon === undefined) continue;
+      const km = greatCircleM(at.lat, at.lon, bio.lat, bio.lon) / 1000;
+      if (km <= STATION_FAR_KM) continue;
+      const k = `${at.file}\u0000${at.sheet}`;
+      let e = far.get(k);
+      if (!e) far.set(k, (e = { file: at.file, sheet: at.sheet, names: [] }));
+      e.names.push(`${pid} <-> ${at.bio} (${Math.round(km)} km)`);
+    }
+    for (const e of far.values()) findings.push(makeConvertFinding('CONV-PROFILE-STATION-FAR', { file: e.file, sheet: e.sheet, value: e.names[0], params: { count: e.names.length, names: e.names.join('; '), limit: STATION_FAR_KM } }));
+  }
 
   /* ---- identifiers across the whole archive ---- */
   const tree = buildEventTree(

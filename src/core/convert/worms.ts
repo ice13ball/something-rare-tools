@@ -120,7 +120,7 @@ export function wormsBatches(names: readonly string[]): string[][] {
 /* ---------- what an answer means ---------- */
 
 /** Why a name needs the user's choice. */
-export type ChooseWhy = 'ambiguous' | 'not-exact' | 'genus-only' | 'not-valid-record';
+export type ChooseWhy = 'ambiguous' | 'not-exact' | 'genus-only' | 'not-valid-record' | 'other-name';
 
 export type MatchClass =
   | { kind: 'none' }
@@ -130,16 +130,25 @@ export type MatchClass =
 /** A record whose AphiaID is no longer a usable identifier: the answer says it was deleted or quarantined. */
 const unusable = (r: WormsRecord): boolean => r.status === 'deleted' || r.status === 'quarantined';
 
+/** Two taxon names are the same text apart from case and spacing. */
+const sameName = (a: string, b: string): boolean => a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
+
 /**
  * What the records of ONE name mean. Automatic only for exactly one record whose match_type is exactly `exact` (and that is not a deleted or quarantined
- * record, which the user must look at). No record: none. Everything else: the user chooses, and nothing is pre-selected.
+ * record, which the user must look at) and, when the name sent is given, whose scientificname is that name (an `exact` answer under ANOTHER name, such as the genus
+ * for a name the user's sheet spelled differently, is a choice: the page shows what would be written). No record: none. Everything else: the user chooses, and
+ * nothing is pre-selected.
  */
-export function classifyMatches(records: readonly WormsRecord[]): MatchClass {
+export function classifyMatches(records: readonly WormsRecord[], sent?: string): MatchClass {
   if (records.length === 0) return { kind: 'none' };
   const candidates = [...records];
   if (records.length > 1) return { kind: 'choose', why: 'ambiguous', candidates };
   const r = records[0];
-  if (r.match_type === 'exact') return unusable(r) ? { kind: 'choose', why: 'not-valid-record', candidates } : { kind: 'auto', record: r };
+  if (r.match_type === 'exact') {
+    if (unusable(r)) return { kind: 'choose', why: 'not-valid-record', candidates };
+    if (sent !== undefined && !sameName(r.scientificname, sent)) return { kind: 'choose', why: 'other-name', candidates };
+    return { kind: 'auto', record: r };
+  }
   return { kind: 'choose', why: r.match_type === 'exact_genus' ? 'genus-only' : 'not-exact', candidates };
 }
 
@@ -172,18 +181,21 @@ export type WormsChoice = number | 'none';
  * The entry for one name from its records and the user's choice. An automatic name keeps its ID unless the user chose "no ID" for it; a name that needs a
  * choice has one only for a record that was offered, otherwise it is undecided.
  */
-export function entryOf(records: readonly WormsRecord[], choice?: WormsChoice): WormsEntry {
-  const m = classifyMatches(records);
+export function entryOf(records: readonly WormsRecord[], choice?: WormsChoice, sent?: string): WormsEntry {
+  const m = classifyMatches(records, sent);
   if (m.kind === 'none') return { state: 'none', reason: 'no-match' };
   if (m.kind === 'auto') return choice === 'none' ? { state: 'none', reason: 'user' } : { state: 'id', aphiaId: m.record.AphiaID, notMarine: isNotMarine(m.record) };
   if (choice === 'none') return { state: 'none', reason: 'user' };
   const picked = typeof choice === 'number' ? m.candidates.find((c) => c.AphiaID === choice) : undefined;
   if (!picked) return { state: 'undecided' };
-  return { state: 'id', aphiaId: picked.AphiaID, notMarine: isNotMarine(picked), ...(writesOwnName(picked) ? { scientificName: picked.scientificname.trim() } : {}) };
+  return { state: 'id', aphiaId: picked.AphiaID, notMarine: isNotMarine(picked), ...(writesOwnName(picked, sent) ? { scientificName: picked.scientificname.trim() } : {}) };
 }
 
-/** The name a chosen record is written under, when that is not the sheet's: only a record that is not an exact match of the name sent (and that has a name to write). */
-export const writesOwnName = (r: WormsRecord): boolean => r.match_type !== 'exact' && r.scientificname.trim() !== '';
+/**
+ * The name a chosen record is written under, when that is not the sheet's: a record that is not an exact match of the name sent, or whose name is not the name sent
+ * (and that has a name to write).
+ */
+export const writesOwnName = (r: WormsRecord, sent?: string): boolean => r.scientificname.trim() !== '' && (r.match_type !== 'exact' || (sent !== undefined && !sameName(r.scientificname, sent)));
 
 /**
  * A scientificName that came with a WoRMS entry is text that will be written into a tab-separated file: it must be a non-empty line of text. The worker applies this to
@@ -194,7 +206,7 @@ export const isWritableName = (v: unknown): v is string => typeof v === 'string'
 /** The lookup the conversion takes: an entry per name that has a result; `choices` are the user's decisions by name. */
 export function lookupOf(results: Readonly<Record<string, readonly WormsRecord[]>>, choices: Readonly<Record<string, WormsChoice>>): Record<string, WormsEntry> {
   const out: Record<string, WormsEntry> = Object.create(null) as Record<string, WormsEntry>;
-  for (const name of Object.keys(results)) out[name] = entryOf(results[name], Object.prototype.hasOwnProperty.call(choices, name) ? choices[name] : undefined);
+  for (const name of Object.keys(results)) out[name] = entryOf(results[name], Object.prototype.hasOwnProperty.call(choices, name) ? choices[name] : undefined, name);
   return out;
 }
 

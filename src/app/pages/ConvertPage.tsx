@@ -49,6 +49,8 @@ async function toInputFiles(files: File[]): Promise<InputFile[]> {
 }
 
 const splitText = (s: TaxonSplit): string => s.scientificName;
+/** A list of names without a doubt this short is shown open; a longer one is folded behind "show all N names". */
+const SPLITS_OPEN_MAX = 15;
 
 /**
  * What a tick of "I accept" holds for: the findings of one rule as they are now. A tick is kept per rule id together with this fingerprint, so a rule whose
@@ -294,7 +296,12 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
 
   const candidates = useMemo(() => (parsed ? candidatesOf(parsed, mappings, choices) : []), [parsed, mappings, choices]);
   const unconfirmed = candidates.filter((c) => confirmed[c.key] !== true);
-  const toApprove = (view?.splits ?? []).filter((s) => s.needsDecision);
+  const allSplits = view?.splits ?? [];
+  const toApprove = allSplits.filter((s) => s.needsDecision);
+  // the names with a doubt are always shown; every other name (a split that only needs approval, and the plain names, which need none) is in the list under them, open for a
+  // short list and folded for a long one (a sheet of three hundred taxon columns); every name can be edited and approved
+  const doubted = allSplits.filter((s) => s.needsDecision && s.doubt !== undefined);
+  const rest = allSplits.filter((s) => !(s.needsDecision && s.doubt !== undefined));
   // "approve all shown" takes only the names without a doubt; a doubted one needs its own action on its row
   const bulk = bulkApprovable(toApprove);
   const draftOf = (s: (typeof toApprove)[number]): TaxonSplit => drafts[s.verbatim] ?? s.split;
@@ -309,6 +316,67 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // a doubted split taken exactly as proposed is approved "as it is"; once the user has edited it, it is simply approved
   const asIs = (s: (typeof toApprove)[number]): boolean => s.doubt !== undefined && drafts[s.verbatim] === undefined;
   const setDraft = (s: (typeof toApprove)[number], patch: Partial<TaxonSplit>): void => setDrafts((prev) => ({ ...prev, [s.verbatim]: { ...draftOf(s), ...patch } }));
+  // one row of the table of names: every name can be edited and approved; a name that needs no decision (a plain name) is approved only if the user changes it
+  const splitRow = (s: (typeof toApprove)[number]): React.ReactElement => {
+  const d = draftOf(s);
+  const locked = s.approved;
+  return (
+    <tr key={s.verbatim} data-approved={s.approved ? 'true' : 'false'}>
+      <th scope="row">
+        <code>{s.verbatim}</code>
+        <span className="muted"> {t('convert.splits.uses', { n: s.uses })}</span>
+        {s.doubt && !locked && <span className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${s.doubt}` as UiKey) })}</span>}
+      </th>
+      <td>
+        <input type="text" className="convert-input" aria-label={`${t('convert.splits.name')}: ${s.verbatim}`} value={d.scientificName} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { scientificName: e.target.value })} />
+      </td>
+      <td>
+        <input type="text" className="convert-input" aria-label={`${t('convert.splits.qualifier')}: ${s.verbatim}`} value={d.identificationQualifier ?? ''} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { identificationQualifier: e.target.value })} />
+      </td>
+      <td>
+        <input type="text" className="convert-input" aria-label={`${t('convert.splits.stage')}: ${s.verbatim}`} value={d.lifeStage ?? ''} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { lifeStage: e.target.value })} />
+      </td>
+      <td>
+        <select
+          className="convert-input"
+          aria-label={`${t('convert.splits.sex')}: ${s.verbatim}`}
+          value={d.sex ?? ''}
+          disabled={locked}
+          onChange={(e) => {
+            const v = e.target.value;
+            const { sex: _drop, ...rest } = draftOf(s);
+            setDrafts((prev) => ({ ...prev, [s.verbatim]: v === 'female' || v === 'male' ? { ...rest, sex: v } : rest }));
+          }}
+        >
+          <option value="">{t('convert.sex.none')}</option>
+          <option value="female">{t('convert.sex.female')}</option>
+          <option value="male">{t('convert.sex.male')}</option>
+        </select>
+      </td>
+      <td>
+        {s.approved ? (
+          <button type="button" className="link-button" aria-label={`${t('convert.splits.withdraw')}: ${s.verbatim}`} onClick={() => setApproved((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== s.verbatim)))}>
+            {t('convert.splits.withdraw')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="button"
+            aria-label={`${t(asIs(s) ? 'convert.splits.approveAsIs' : 'convert.splits.approve')}: ${s.verbatim}`}
+            disabled={finalSplit(s) === null || (!s.needsDecision && drafts[s.verbatim] === undefined)}
+            onClick={() => {
+              const f = finalSplit(s);
+              if (f) setApproved((prev) => ({ ...prev, [s.verbatim]: f }));
+            }}
+          >
+            {t(asIs(s) ? 'convert.splits.approveAsIs' : 'convert.splits.approve')}
+          </button>
+        )}
+        <span className="visually-hidden"> {s.approved ? t('convert.splits.approved') : s.needsDecision ? t('convert.splits.undecided') : t('convert.splits.noDecision')}</span>
+      </td>
+    </tr>
+  );
+  };
   // what each finding does to the export (core/convert/policy.ts): blocks, needs an acceptance, or is only shown
   // CONV-LICENCE-DIFFERS: the licence chosen is not the one the dropped metadata state; raised here (the worker raises it again from the same two values at export)
   const licenceSource = useMemo(() => licenceSourceOf(parsed?.prefillInfo), [parsed]);
@@ -472,8 +540,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
 
   const downloadCompanion = (): void => {
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
-    const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [] };
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(profile.profileSheets.length > 0 ? profile : {}) }), 'convert-companion.csv', 'text/csv');
+    const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -639,7 +707,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             )}
           </section>
 
-          {toApprove.length > 0 && (
+          {allSplits.length > 0 && (
             <section className="convert-splits" aria-labelledby="convert-splits-title">
               <HeadingTip tip="convertSplits">
                 <h2 id="convert-splits-title">{t('convert.splits.title')}</h2>
@@ -673,70 +741,29 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                       <th scope="col">{t('convert.splits.approved')}</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {toApprove.map((s) => {
-                      const d = draftOf(s);
-                      const locked = s.approved;
-                      return (
-                        <tr key={s.verbatim} data-approved={s.approved ? 'true' : 'false'}>
-                          <th scope="row">
-                            <code>{s.verbatim}</code>
-                            <span className="muted"> {t('convert.splits.uses', { n: s.uses })}</span>
-                            {s.doubt && !locked && <span className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${s.doubt}` as UiKey) })}</span>}
-                          </th>
-                          <td>
-                            <input type="text" className="convert-input" aria-label={`${t('convert.splits.name')}: ${s.verbatim}`} value={d.scientificName} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { scientificName: e.target.value })} />
-                          </td>
-                          <td>
-                            <input type="text" className="convert-input" aria-label={`${t('convert.splits.qualifier')}: ${s.verbatim}`} value={d.identificationQualifier ?? ''} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { identificationQualifier: e.target.value })} />
-                          </td>
-                          <td>
-                            <input type="text" className="convert-input" aria-label={`${t('convert.splits.stage')}: ${s.verbatim}`} value={d.lifeStage ?? ''} disabled={locked} autoComplete="off" spellCheck={false} onChange={(e) => setDraft(s, { lifeStage: e.target.value })} />
-                          </td>
-                          <td>
-                            <select
-                              className="convert-input"
-                              aria-label={`${t('convert.splits.sex')}: ${s.verbatim}`}
-                              value={d.sex ?? ''}
-                              disabled={locked}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                const { sex: _drop, ...rest } = draftOf(s);
-                                setDrafts((prev) => ({ ...prev, [s.verbatim]: v === 'female' || v === 'male' ? { ...rest, sex: v } : rest }));
-                              }}
-                            >
-                              <option value="">{t('convert.sex.none')}</option>
-                              <option value="female">{t('convert.sex.female')}</option>
-                              <option value="male">{t('convert.sex.male')}</option>
-                            </select>
-                          </td>
-                          <td>
-                            {s.approved ? (
-                              <button type="button" className="link-button" aria-label={`${t('convert.splits.withdraw')}: ${s.verbatim}`} onClick={() => setApproved((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== s.verbatim)))}>
-                                {t('convert.splits.withdraw')}
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="button"
-                                aria-label={`${t(asIs(s) ? 'convert.splits.approveAsIs' : 'convert.splits.approve')}: ${s.verbatim}`}
-                                disabled={finalSplit(s) === null}
-                                onClick={() => {
-                                  const f = finalSplit(s);
-                                  if (f) setApproved((prev) => ({ ...prev, [s.verbatim]: f }));
-                                }}
-                              >
-                                {t(asIs(s) ? 'convert.splits.approveAsIs' : 'convert.splits.approve')}
-                              </button>
-                            )}
-                            <span className="visually-hidden"> {s.approved ? t('convert.splits.approved') : t('convert.splits.undecided')}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
+                  <tbody>{doubted.map(splitRow)}</tbody>
                 </table>
               </div>
+              {rest.length > 0 && (
+                <details className="convert-splits-rest" open={rest.length <= SPLITS_OPEN_MAX}>
+                  <summary>{t('convert.splits.showAll', { n: rest.length })}</summary>
+                  <div className="table-scroll">
+                    <table className="convert-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">{t('convert.splits.verbatim')}</th>
+                          <th scope="col">{t('convert.splits.name')}</th>
+                          <th scope="col">{t('convert.splits.qualifier')}</th>
+                          <th scope="col">{t('convert.splits.stage')}</th>
+                          <th scope="col">{t('convert.splits.sex')}</th>
+                          <th scope="col">{t('convert.splits.approved')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>{rest.map(splitRow)}</tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
             </section>
           )}
 

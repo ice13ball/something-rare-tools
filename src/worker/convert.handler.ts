@@ -9,12 +9,13 @@ import { licenceDiffersFindings } from '../core/convert/validate';
 import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput, EventRec } from '../core/convert';
 import { EMPTY_METADATA } from '../core/convert/metadata';
-import { buildPrefill, licenceSourceOf, prefillValues } from '../core/convert/prefill';
+import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
 import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
 import { readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { parseFile } from '../core/parse';
+import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult } from './convert.protocol';
@@ -82,7 +83,8 @@ export function createConvertHandler(): ConvertHandler {
       }
       try {
         // the converter's own reading path: the formula guard of its code-proposal CSV comes off every text cell and header (core/convert/read.ts)
-        parsedAll.push(readConvertFile(parseFile(f.name, f.bytes)));
+        const read = parseFile(f.name, f.bytes);
+        parsedAll.push(readConvertFile(read, read.kind === 'pangaea' ? decodeText(f.bytes).text : undefined));
       } catch (e) {
         result.problems.push({ fileName: f.name, message: e instanceof Error ? e.message : String(e) });
       }
@@ -106,12 +108,16 @@ export function createConvertHandler(): ConvertHandler {
         // profile marks of the companion file(s), by sheet name: pre-ticks only (the page ticks the boxes; nothing else follows from them)
         for (const n of s.profileSheets ?? []) if (!(settings.profileSheets ??= []).includes(n)) settings.profileSheets.push(n);
         for (const n of s.profileDepthIds ?? []) if (!(settings.profileDepthIds ??= []).includes(n)) settings.profileDepthIds.push(n);
+        for (const n of s.profileIgnoreCast ?? []) if (!(settings.profileIgnoreCast ??= []).includes(n)) settings.profileIgnoreCast.push(n);
         continue;
       }
       if (!isTable(parsed)) {
         result.notRead.push({ fileName: parsed.fileName, kind: parsed.kind });
         continue;
       }
+      // a PANGAEA file carries its own description (citation, title, authors, licence, DOI, coverage, abstract when it has one): it goes to the description of the dataset like a dropped
+      // metadata file, with its file name as the source; the sheet itself is still a data table
+      if (parsed.kind === 'pangaea' && parsed.embeddedMetadata) records.push(pangaeaHeaderRecord(parsed.embeddedMetadata));
       const fileId = `c${++seq}`;
       files.set(fileId, { fileId, parsed });
       const proposals: Record<string, ColumnProposal[]> = Object.create(null) as Record<string, ColumnProposal[]>;
@@ -159,7 +165,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
-      ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true } } : {}),
+      ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true } } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
     const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
@@ -171,6 +177,7 @@ export function createConvertHandler(): ConvertHandler {
   const decisionsOf = (body: ConvertRequestBody): ConvertSettings => {
     const profileSheets = [...new Set(body.sheets.filter((s) => s.profile !== undefined).map((s) => s.sheet))];
     const profileDepthIds = [...new Set(body.sheets.filter((s) => s.profile?.depthIds === true).map((s) => s.sheet))];
+    const profileIgnoreCast = [...new Set(body.sheets.filter((s) => s.profile?.ignoreCast === true).map((s) => s.sheet))];
     return {
       fullList: body.options.fullList === true,
       prefixStation: body.options.prefixStation === true,
@@ -178,6 +185,7 @@ export function createConvertHandler(): ConvertHandler {
       nvs: body.sheets.some((s) => Object.values(s.nerc ?? {}).some((d) => d?.type?.source === 'nvs' || d?.unit?.source === 'nvs')),
       ...(profileSheets.length > 0 ? { profileSheets } : {}),
       ...(profileDepthIds.length > 0 ? { profileDepthIds } : {}),
+      ...(profileIgnoreCast.length > 0 ? { profileIgnoreCast } : {}),
     };
   };
 

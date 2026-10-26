@@ -17,7 +17,7 @@ import { parseNumber } from '../values/numbers';
  * ⛔ A SAMPLE's ID is NEVER derived from depth, from row order or from a WoRMS name. The only generated codes are the one-time proposal below,
  * which the user checks and uploads again; from then on the ID is the user's own code, and the converter never regenerates it silently.
  *
- *   profile level eventID (stage 6)   `<station eventID>:<code>` with the sheet's code column; without one, `<station eventID>:<depth as written>` ONLY with the user's explicit
+ *   profile level eventID (stage 6)   `<station eventID>:<code>` with the sheet's code column; without one, `<station eventID>:<depth as written>m` (`<pressure as written>dbar` without a depth) ONLY with the user's explicit
  *                    approval for that sheet (the pressure as written when the sheet has no depth column). The one exception to the rule above, and never from the order of the rows
  *                    (build.ts readProfileSheet). Without the approval and without a code column the rows block (CONV-SAMPLE-CODE-MISSING, profile text).
  */

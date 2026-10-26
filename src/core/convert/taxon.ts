@@ -28,23 +28,62 @@ export interface TaxonSplit {
 }
 
 /** What the split reads, for the page's explanation (the tip is filled from these, never typed). */
-export const QUALIFIER_TOKENS = ['cf.', 'aff.', 'sp.', 'spp.', '?'] as const;
-export const STAGE_TOKENS = ['c1–c6', 'CI–CVI', 'nauplius', 'juv', 'larva', 'adult'] as const;
+export const QUALIFIER_TOKENS = ['cf.', 'aff.', 'sp.', 'spp.', 'indet.', '?'] as const;
+export const STAGE_TOKENS = ['c1–c6', 'CI–CVI', 'copepodite', 'nauplius', 'metanauplius', 'calyptopis', 'furcilia', 'zoea', 'megalopa', 'veliger', 'cypris', 'egg', 'juvenile', 'adult', 'larva'] as const;
 
 const COPEPODITE_ROMAN: Record<string, string> = { i: 'C1', ii: 'C2', iii: 'C3', iv: 'C4', v: 'C5', vi: 'C6' };
 
-/** A stage token (the whole token, any case), or undefined. Fixed list: c1-c6, CI-CVI, nauplius, juv, larva, adult. */
+/**
+ * The stage words of zooplankton counts, each with the plural and the abbreviation read as the singular value written to lifeStage (free text in Darwin Core; the words are the
+ * plain English names of the stages, the copepodite stages as C1-C6). A word that is not here is left in the name and the user is asked.
+ */
+const STAGE_WORDS: Record<string, string> = {
+  copepodite: 'copepodite',
+  copepodites: 'copepodite',
+  nauplius: 'nauplius',
+  nauplii: 'nauplius',
+  metanauplius: 'metanauplius',
+  metanauplii: 'metanauplius',
+  calyptopis: 'calyptopis',
+  calyptopes: 'calyptopis',
+  furcilia: 'furcilia',
+  furciliae: 'furcilia',
+  zoea: 'zoea',
+  zoeae: 'zoea',
+  megalopa: 'megalopa',
+  megalopae: 'megalopa',
+  veliger: 'veliger',
+  veligers: 'veliger',
+  cypris: 'cypris',
+  cyprid: 'cypris',
+  cyprids: 'cypris',
+  egg: 'egg',
+  eggs: 'egg',
+  juv: 'juvenile',
+  'juv.': 'juvenile',
+  juvenile: 'juvenile',
+  juveniles: 'juvenile',
+  larva: 'larva',
+  larvae: 'larva',
+  larv: 'larva',
+  'larv.': 'larva',
+  adult: 'adult',
+  adults: 'adult',
+};
+
+/** A stage token (the whole token, any case), or undefined: c1-c6, CI-CVI, a range of copepodite stages (c1-c5), or one of the stage words above. */
 function stageToken(tok: string): string | undefined {
   const t = tok.toLowerCase().replace(/^\((.*)\)$/, '$1');
   let m = /^c([1-6])$/.exec(t);
   if (m) return `C${m[1]}`;
   m = /^c(i{1,3}|iv|v|vi)$/.exec(t);
   if (m) return COPEPODITE_ROMAN[m[1]];
-  if (t === 'nauplius' || t === 'nauplii') return 'nauplius';
-  if (t === 'juv' || t === 'juv.' || t === 'juvenile' || t === 'juveniles') return 'juvenile';
-  if (t === 'larva' || t === 'larvae') return 'larva';
-  if (t === 'adult' || t === 'adults') return 'adult';
-  return undefined;
+  // a range of copepodite stages ("c1-c5", "C1–C5", "CI-CV"): written as the range
+  m = /^c([1-6])\s*[-–]\s*c?([1-6])$/.exec(t);
+  if (m && Number(m[1]) < Number(m[2])) return `C${m[1]}-C${m[2]}`;
+  m = /^c(i{1,3}|iv|v|vi)\s*[-–]\s*c?(i{1,3}|iv|v|vi)$/.exec(t);
+  if (m && COPEPODITE_ROMAN[m[1]] !== undefined && COPEPODITE_ROMAN[m[2]] !== undefined && Number(COPEPODITE_ROMAN[m[1]].slice(1)) < Number(COPEPODITE_ROMAN[m[2]].slice(1))) return `${COPEPODITE_ROMAN[m[1]]}-${COPEPODITE_ROMAN[m[2]]}`;
+  return Object.prototype.hasOwnProperty.call(STAGE_WORDS, t) ? STAGE_WORDS[t] : undefined;
 }
 
 /**
@@ -71,17 +110,20 @@ export function splitTaxon(text: string): TaxonSplit {
   let sex: 'female' | 'male' | undefined;
   const qualifiers: string[] = [];
 
-  // 1. a comma suffix: ", c2" or ", f" (the only place f / m are read)
-  const comma = /^(.*\S)\s*,\s*(\S+)$/.exec(rest);
-  if (comma) {
+  // 1. comma suffixes: ", c2", ", cypris, nauplii" (several stages are written together, in the order of the text) or ", f" (the only place f / m are read)
+  const stages: string[] = [];
+  for (;;) {
+    const comma = /^(.*\S)\s*,\s*(\S+)$/.exec(rest);
+    if (!comma) break;
     const stage = stageToken(comma[2]);
-    const sx = stage === undefined ? sexToken(comma[2]) : undefined;
-    if (stage !== undefined || sx !== undefined) {
-      lifeStage = stage;
-      sex = sx;
-      rest = comma[1];
-    }
+    const sx = stage === undefined && stages.length === 0 && sex === undefined ? sexToken(comma[2]) : undefined;
+    if (stage === undefined && sx === undefined) break;
+    if (stage !== undefined) stages.unshift(stage);
+    else sex = sx;
+    rest = comma[1];
+    if (sx !== undefined) break;
   }
+  if (stages.length > 0) lifeStage = stages.join(', ');
 
   const words = rest.split(/\s+/).filter(HAS_DETAIL);
   // 1b. a bare f / m reads as the sex only straight after a stage or a "?" ("Calanus finmarchicus C5 f", "Acartia ? f"); after a plain epithet it is
@@ -108,6 +150,10 @@ export function splitTaxon(text: string): TaxonSplit {
     const last = words[words.length - 1].toLowerCase().replace(/,$/, '');
     if (last === 'sp.' || last === 'sp' || last === 'spp.' || last === 'spp') {
       qualifiers.push(last.startsWith('spp') ? 'spp.' : 'sp.');
+      words.pop();
+    } else if (last === 'indet.' || last === 'indet' || last === 'indeterminata' || last === 'indeterminate') {
+      // "indeterminata" says the identification stops at the name before it: an identification qualifier, like sp.
+      qualifiers.push('indet.');
       words.pop();
     }
   }
