@@ -19,6 +19,7 @@ import { isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorMetres, seaf
 import { validateTables } from '../../src/core/convert/validate';
 import { VARIABLE_CONCEPTS } from '../../src/core/convert/vocab';
 import { makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
+import { UI } from '../../src/core/i18n/ui';
 import { LANGS } from '../../src/core/types';
 import type { ColumnProposal, ColumnRole, Finding, SheetMapping } from '../../src/core/types';
 import { createDirectConvertEngine } from '../../src/worker/convert.handler';
@@ -834,5 +835,111 @@ describe('review fixes of the second round', () => {
       expect(t, lang).toContain('Dimensionless');
       expect(t, lang).not.toMatch(/proponowana jest jednostka|l'unité « Dimensionless » \(sans dimension\) du vocabulaire NERC est proposée|Einheit „Dimensionless“[^\n]*angeboten|is offered the unit/);
     }
+  });
+});
+
+describe('review fixes of the third round', () => {
+  const ask = (header: string[], rows: (string | number)[][], name = 'S') => proposeConvertColumns(rawSheet(header, rows, name), { decimalComma: false, date1904: false });
+  /** Two levels (5 and 15) of one station; the site depth 400; text cells for the dates. */
+  const levelsOf = (header: string[]) => {
+    const row = (v: number): (string | number)[] => header.map((h) => (h === 'Station' ? 'A' : h === 'Date' ? '2020-05-01' : h === 'Latitude' ? 70.1 : h === 'Longitude' ? 20.2 : /^(water|station) depth/i.test(h) ? 400 : /temp/i.test(h) ? 4.1 : v));
+    const text = `${header.join(',')}\n${[5, 15].map((v) => row(v).join(',')).join('\n')}\n`;
+    const file = readConvertFile(parseFile('o.csv', new TextEncoder().encode(text)));
+    const mapping = { sheet: file.sheets[0].name, columns: proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false }).map((p) => ({ index: p.index, header: p.header, role: p.role })) };
+    return convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping, shape: 'wide', profile: PROFILE }] });
+  };
+  const SITE = ['Water depth [m]', 'Station depth [m]'];
+  const DEPTHS: [string, string][] = [
+    ['Depth water [m]', 'A:5m'],
+    ['Sampling depth [m]', 'A:5m'],
+    ['Sample depth [m]', 'A:5m'],
+    ['Bottle depth [m]', 'A:5m'],
+    ['Depth sediment [m]', 'A:5m'],
+    ['SDN:P01::ADEPZZ01<Float32>', 'A:5m'],
+  ];
+
+  it('the real depth column wins the slot whichever comes first; the site depth is ignored with its reason, and the levels are the real depths', () => {
+    for (const site of SITE) {
+      for (const [depth, firstId] of DEPTHS) {
+        for (const siteFirst of [true, false]) {
+          const cols = siteFirst ? [site, depth] : [depth, site];
+          const header = ['Station', 'Latitude', 'Longitude', 'Date', ...cols, 'Temp [degC]'];
+          const ps = ask(header, [['A', 70, 20, '2020-05-01', 5, 400, 4.1]]);
+          const label = cols.join(' + ');
+          expect(ps.find((p) => p.header === depth)!.role.kind, label).toBe('depth');
+          expect(ps.find((p) => p.header === site)!.role, label).toEqual({ kind: 'ignore' });
+          expect(ps.find((p) => p.header === site)!.reasonCode, label).toBe('site-depth-ignored');
+          const r = levelsOf(header);
+          expect(r.events.filter((e) => e.eventType === 'profile level').map((e) => e.id), label).toEqual([firstId, firstId.replace('5', '15')]);
+          expect(rulesOf(r), label).not.toContain('CONV-ID-DUPLICATE');
+        }
+      }
+    }
+  });
+
+  it('with several depth-like columns the proposer\'s own preference decides (the leftmost of the best name tier)', () => {
+    const header = ['Station', 'Latitude', 'Longitude', 'Water depth [m]', 'Sample depth [m]', 'Bottle depth [m]', 'Temp [degC]'];
+    const ps = ask(header, [['A', 70, 20, 400, 5, 5, 4.1]]);
+    expect(ps.filter((p) => p.role.kind === 'depth').map((p) => p.header)).toHaveLength(1);
+    expect(ps.find((p) => p.header === 'Water depth [m]')!.role.kind).toBe('ignore');
+    const without = ask(header.filter((h) => h !== 'Water depth [m]'), [['A', 70, 20, 5, 5, 4.1]]);
+    expect(ps.find((p) => p.role.kind === 'depth')!.header).toBe(without.find((p) => p.role.kind === 'depth')!.header);
+  });
+
+  it('a sheet whose only depth is the site depth keeps it as the depth, and the sediment sheet is unchanged', () => {
+    const only = ask(['Station', 'Latitude', 'Longitude', 'Water depth [m]', 'Temp [degC]'], [['A', 70, 20, 400, 4.1]]);
+    expect(only.find((p) => p.header === 'Water depth [m]')!.role).toMatchObject({ kind: 'depth', unit: 'm' });
+    const sed = ask(['Station', 'Latitude', 'Longitude', 'Water depth [m]', 'Pore water depth [cm]', 'Depth water [m]'], [['A', 70, 20, 400, 5, 3]]);
+    expect(sed.find((p) => p.header === 'Water depth [m]')!.reasonCode).toBe('site-depth');
+  });
+
+  it('Elevation / Altitude: the converter has no role for it; next to a site depth nothing changes (the site depth is the depth, the elevation is ignored as before)', () => {
+    const next = ask(['Station', 'Latitude', 'Longitude', 'Elevation [m]', 'Water depth [m]', 'Temp [degC]'], [['A', 70, 20, 12, 400, 4.1]]);
+    expect(next.find((p) => p.header === 'Water depth [m]')!.role.kind).toBe('depth');
+    expect(next.find((p) => p.header === 'Elevation [m]')!.role).toEqual({ kind: 'ignore' });
+    expect(next.find((p) => p.header === 'Elevation [m]')!.reasonCode).toBe('other-depth');
+    // alone it takes the slot, counted upwards, as /check does
+    const alone = ask(['Station', 'Latitude', 'Longitude', 'Altitude [m]', 'Temp [degC]'], [['A', 70, 20, 12, 4.1]]);
+    expect(alone.find((p) => p.header === 'Altitude [m]')!.role).toMatchObject({ kind: 'depth', positive: 'up' });
+  });
+
+  it('a column in decibars is a pressure (not a species), with or without a water depth; and it counts as a vertical coordinate', () => {
+    for (const name of ['Sea pressure [dbar]', 'CTDPRS [dbar]', 'Pres [db]', 'Pressure x [decibar]']) {
+      const plain = ask(['Station', 'Latitude', 'Longitude', name, 'Temp [degC]'], [['A', 70, 20, 5, 4.1]]);
+      expect(plain.find((p) => p.header === name)!.role, name).toMatchObject({ kind: 'pressure' });
+      expect(plain.some((p) => p.role.kind === 'taxon'), name).toBe(false);
+      const withSite = ask(['Station', 'Latitude', 'Longitude', 'Water depth [m]', name, 'Temp [degC]'], [['A', 70, 20, 400, 5, 4.1]]);
+      expect(withSite.find((p) => p.header === name)!.role, name).toMatchObject({ kind: 'pressure' });
+      expect(withSite.find((p) => p.header === 'Water depth [m]')!.role, name).toEqual({ kind: 'ignore' });
+      expect(withSite.some((p) => p.role.kind === 'taxon'), name).toBe(false);
+    }
+    const header = ['Station', 'Latitude', 'Longitude', 'Date', 'Sea pressure [dbar]', 'Water depth [m]', 'Temp [degC]'];
+    const r = levelsOf(header);
+    expect(r.events.filter((e) => e.eventType === 'profile level').map((e) => e.id)).toEqual(['A:5dbar', 'A:15dbar']);
+    // a pressure the proposer already knows, and a variable of a known name, are left alone
+    expect(ask(['Station', 'Pressure [dbar]', 'Temp [degC]'], [['A', 5, 4.1]]).find((p) => p.header === 'Pressure [dbar]')!.role.kind).toBe('pressure');
+    expect(ask(['Station', 'Temp [degC]'], [['A', 4.1]]).find((p) => p.header === 'Temp [degC]')!.role.kind).toBe('variable');
+  });
+
+  it('"quality flag" is a whole phrase, and the loose tier takes only a space or a hyphen', () => {
+    for (const h of ['Quality flagellates', 'Equality flag', 'Quality flagged']) expect(isQualityHeader(h, ['Station', h]), h).toBe(false);
+    for (const h of ['Temp quality flag', 'Temp_quality_flag', 'quality flags']) expect(isQualityHeader(h, ['Station']), h).toBe(true);
+    // "Q. seminula" next to a "Seminula" column is still a genus, not a flag; "Q TEMP" and "Q-TEMP" next to TEMP still are
+    expect(isQualityHeader('Q. seminula', ['Station', 'Seminula', 'Q. seminula'])).toBe(false);
+    expect(isQualityHeader('Q.TEMP', ['Station', 'TEMP', 'Q.TEMP'])).toBe(false);
+    expect(isQualityHeader('Q TEMP', ['TEMP', 'Q TEMP'])).toBe(true);
+    expect(isQualityHeader('Q-TEMP', ['TEMP', 'Q-TEMP'])).toBe(true);
+    expect(isQualityHeader('TEMP.quality', ['TEMP', 'TEMP.quality'])).toBe(false);
+  });
+
+  it('Polish wording: "przeciwny do większości", "Głębokość" in quotes, and the tie text agrees in number', () => {
+    const sign = makeConvertFinding('CONV-SEAFLOOR-SIGNS', { file: 'a', sheet: 'a', field: 'c', lines: [3], params: { count: 1, direction: 'down', side: 'below' } });
+    expect(renderConvertPlain(sign, 'pl')).toContain('znak przeciwny do większości kolumny');
+    const tie = (count: number, lines: number[]) => renderConvertPlain(makeConvertFinding('CONV-SEAFLOOR-SIGNS', { file: 'a', sheet: 'a', field: 'c', lines, params: { count, direction: 'down', side: 'above', tie: 'yes' } }), 'pl');
+    expect(tie(1, [3])).toContain('1 liczba dodatnia jest zapisywana jako położenie nad dnem');
+    expect(tie(2, [3, 4])).toContain('2 liczby dodatnie są zapisywane jako położenie nad dnem');
+    expect(tie(5, [3, 4, 5, 6, 7])).toContain('5 liczb dodatnich jest zapisywanych jako położenie nad dnem');
+    expect(UI.pl['convert.reason.site-depth-ignored']).toContain('„Głębokość”');
+    expect(UI.de['convert.reason.seafloor-depth-name']).toContain(', und eine negative Zahl,');
   });
 });

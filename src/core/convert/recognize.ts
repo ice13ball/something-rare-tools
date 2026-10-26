@@ -3,7 +3,7 @@
 import { dwcTermOf, proposeColumns, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
-import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit } from './vocab';
+import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
 import { isPercentUnit, verifiedConcept } from './nerc';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
@@ -124,15 +124,15 @@ function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolea
  * `all` are the headers of the sheet (the loose tier needs them; without them only the first tier applies).
  */
 export function isQualityHeader(header: string, all: readonly string[] = []): boolean {
-  if (/qv:odv/i.test(header) || /quality[ _-]?flag/i.test(header)) return true;
+  if (/qv:odv/i.test(header) || /\bquality[ _-]?flags?\b/i.test(header)) return true;
   const name = unitFromHeader(header).name.trim();
   if (/^q[cf]?_./i.test(name) || /_(qc|qf|flags?|quality)$/i.test(name)) return true;
-  const k = headerKey(name);
+  // the loose tier: ONLY a space or a hyphen joins the two parts, as written ("Q. seminula" is not "Q" + "seminula")
   const siblings = new Set(all.filter((h) => h !== header).map((h) => headerKey(unitFromHeader(h).name)));
-  const pre = /^(?:q|qc|qf) (.+)$/.exec(k);
-  if (pre && siblings.has(pre[1])) return true;
-  const suf = /^(.+) (?:quality|qc|qf|flags?)$/.exec(k);
-  return suf !== null && siblings.has(suf[1]);
+  const pre = /^(?:q|qc|qf)[ -]+(.+)$/i.exec(name);
+  if (pre && siblings.has(headerKey(pre[1]))) return true;
+  const suf = /^(.+?)[ -]+(?:quality|qc|qf|flags?)$/i.exec(name);
+  return suf !== null && siblings.has(headerKey(suf[1]));
 }
 
 /**
@@ -199,6 +199,7 @@ export const OVERLAY_REASONS = {
   'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres, and a negative number counted downwards (above the seafloor) as a positive one',
   'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
   'seafloor-depth-negative': 'most numbers of this depth below the seafloor are negative: read as counted upwards from the seafloor (negative = below, positive = above), and the sign is kept; change the direction if it is wrong',
+  'pressure-unit': 'a column in decibars is a pressure, not a species and not a variable of its own',
   'site-depth-only': 'name says the water depth of the site and no other column gives a depth: used as the depth of every row',
   'site-depth': 'name says the water depth of the site: it is the depth of the sediment or porewater samples',
   'site-depth-ignored': 'name says the water depth of the site, not the depth of each row: not written (give it the meaning depth if it is the depth of every row)',
@@ -279,6 +280,12 @@ function variableClaim(name: string, unit: string | undefined): Claim | undefine
   return { role: { kind: 'variable', variable, ...(unit === undefined ? {} : { unit, unitSource: 'header' as const }) }, confidence: 'high', code: 'converter-variable' };
 }
 
+/** A column in decibars that the proposer took for an unknown variable (a pressure the overlay reads as a pressure, not as a species). */
+const isUnitPressure = (q: ColumnProposal): boolean => q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && isDecibar(q.role.unit ?? unitFromHeader(q.header).unit);
+
+/** A vertical coordinate of the proposer's own reading: a depth (not an elevation or altitude), a pressure, or a column in decibars. */
+const isVerticalProposal = (q: ColumnProposal): boolean => (q.role.kind === 'depth' && q.reasonCode !== 'name-elevation') || q.role.kind === 'pressure' || isUnitPressure(q);
+
 const why = (p: ColumnProposal, code: OverlayReason): void => {
   p.reason = OVERLAY_REASONS[code];
   p.reasonCode = code;
@@ -303,10 +310,25 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   // "O2_ml_l": the shared reader knows a unit written after an underscore only for the units it lists, and millilitres per litre is not one of them. The shared proposer is asked as if the
   // header were "O2 [mL/L]" (the converter's own reading of it); the column keeps its own header.
   const mlPerLAt = new Map<number, string>(sheet.header.flatMap((h, i) => { const m = /^(.*\S)[_ ]ml[_ ]l$/i.exec(h.trim()); return m ? [[i, `${m[1]} [mL/L]`] as [number, string]] : []; }));
-  const rewritten = occurrenceIdAt.size > 0 || mlPerLAt.size > 0;
-  const asked = !rewritten ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) ? `__column ${i + 1}` : (mlPerLAt.get(i) ?? h))) };
-  const base = proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: sheet.header[p.index] } : { ...p }));
   const sedCtx = sedimentContext(sheet);
+  // The shared proposer has ONE plain-depth slot, and the water depth of the site ("Water depth", "Station depth") can take it from the column that gives the depth of each row. When the sheet has
+  // another vertical coordinate (what the proposer itself finds when the site-depth headers are left out), the proposer is asked without them, so that its own preference picks the real depth
+  // column (name tier, then the leftmost); the site depth is then ignored by the rule below. A sediment sheet is not masked (there the site depth is the depth by design), and neither is a sheet
+  // whose only other "depth" is an elevation or an altitude (the converter has no role for it).
+  const siteAt = new Set(sheet.header.flatMap((h, i) => (dwcTermOf(h) === undefined && isSiteDepthName(unitFromHeader(h).name) ? [i] : [])));
+  const seafloorPre = sheet.header.some((h) => {
+    const hu = unitFromHeader(h);
+    return dwcTermOf(h) === undefined && (isSeafloorName(hu.name) || (sedCtx && isPlainDepthName(hu.name) && seafloorUnitOf(hu.unit) === 'cm'));
+  });
+  const rewritten = occurrenceIdAt.size > 0 || mlPerLAt.size > 0;
+  const askedWith = (maskSite: boolean): { proposals: ColumnProposal[] } => {
+    const masked = maskSite ? siteAt : new Set<number>();
+    const asked = !rewritten && masked.size === 0 ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) || masked.has(i) ? `__column ${i + 1}` : (mlPerLAt.get(i) ?? h))) };
+    return { proposals: proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) || masked.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: sheet.header[p.index] } : { ...p }))};
+  };
+  let asked0 = siteAt.size > 0 && !seafloorPre ? askedWith(true) : undefined;
+  if (asked0 !== undefined && !asked0.proposals.some(isVerticalProposal)) asked0 = undefined;
+  const base = (asked0 ?? askedWith(false)).proposals;
   const qualityAt = new Set<number>();
   const seafloorAt = new Map<number, 'seafloor-depth-name' | 'seafloor-depth-cm'>();
   const siteDepthAt = new Set<number>();
@@ -383,7 +405,8 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const hasRange = [...bounds.values()].includes('min') && [...bounds.values()].includes('max');
   // another column that gives the depth of each row (a plain depth or a bound): then the water depth of the site is not the sheet's depth
   // (ANY vertical coordinate counts: a plain depth, a top or bottom bound, a DwC minimum / maximum depth, a pressure; a depth below the seafloor makes the sheet a sediment sheet)
-  const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || q.role.kind === 'pressure' || bounds.has(q.index)));
+  const pressureByUnit = new Set(base.filter(isUnitPressure).map((q) => q.index));
+  const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || q.role.kind === 'pressure' || bounds.has(q.index) || pressureByUnit.has(q.index)));
   let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   const seenQuantity = new Set<number>();
@@ -476,6 +499,14 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       p.role = { kind: 'ignore' };
       p.confidence = 'low';
       why(p, 'eventid-used');
+      continue;
+    }
+    // a column in decibars is a pressure (the proposer took "Sea pressure [dbar]" and "CTDPRS [dbar]" for unknown variables, which would be species candidates here)
+    if (pressureByUnit.has(p.index) && claim === undefined && p.role.kind === 'variable') {
+      const unit = p.role.unit ?? hdr.unit;
+      p.role = { kind: 'pressure', ...(unit === undefined ? {} : { unit }) };
+      p.confidence = 'low'; // so that the page shows the reason
+      why(p, 'pressure-unit');
       continue;
     }
     // oxygen as a percentage is SATURATION: a variable of its own, never given a concentration concept (a concept that says "per unit volume" is another quantity)

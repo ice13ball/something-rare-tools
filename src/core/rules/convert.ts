@@ -350,7 +350,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'direction', 'side'],
     plain: {
-      pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny niż większość kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
+      pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny do większości kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
       en: `In column "{field}", {count} {+count:number has|numbers have} the opposite sign to most of the column ({+lineCount:line|lines} {lines}). With the direction "{direction}", such a number is written as a position {side} the seafloor. Check that the direction is the right one.`,
       de: `In der Spalte „{field}“ ist bei {count} {+count:Zahl|Zahlen} das Vorzeichen entgegengesetzt zu dem der meisten Zahlen ({+lineCount:Zeile|Zeilen} {lines}). Bei der Richtung „{direction}“ wird eine solche Zahl als Lage {side} dem Meeresboden geschrieben. Prüfen Sie, ob die Richtung stimmt.`,
       fr: `Dans la colonne « {field} », {count} {+count:nombre a|nombres ont} le signe opposé à celui de la plupart des nombres ({+lineCount:ligne|lignes} {lines}). Avec le sens « {direction} », un tel nombre est écrit comme une position {side} fond. Vérifiez que le sens est le bon.`,
@@ -952,7 +952,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   },
   'CONV-SEAFLOOR-SIGNS:tie': {
     plain: {
-      pl: `Kolumna „{field}” ma tyle samo liczb dodatnich co ujemnych. Przy kierunku „{direction}” liczby dodatnie ({+lineCount:wiersz|wiersze|wierszy} {lines}, razem {count}) są zapisywane jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
+      pl: `Kolumna „{field}” ma tyle samo liczb dodatnich co ujemnych. Przy kierunku „{direction}” {count} {+count:liczba dodatnia jest zapisywana|liczby dodatnie są zapisywane|liczb dodatnich jest zapisywanych} jako położenie {side} dnem ({+lineCount:wiersz|wiersze|wierszy} {lines}). Sprawdź, czy kierunek jest właściwy.`,
       en: `Column "{field}" has as many positive as negative numbers. With the direction "{direction}", the positive ones ({+lineCount:line|lines} {lines}, {count} in all) are written as a position {side} the seafloor. Check that the direction is the right one.`,
       de: `Die Spalte „{field}“ hat gleich viele positive wie negative Zahlen. Bei der Richtung „{direction}“ werden die positiven ({+lineCount:Zeile|Zeilen} {lines}, insgesamt {count}) als Lage {side} dem Meeresboden geschrieben. Prüfen Sie, ob die Richtung stimmt.`,
       fr: `La colonne « {field} » a autant de nombres positifs que négatifs. Avec le sens « {direction} », les positifs ({+lineCount:ligne|lignes} {lines}, {count} au total) sont écrits comme une position {side} fond. Vérifiez que le sens est le bon.`,
