@@ -448,8 +448,8 @@ No findings only means that no problems were found in the checked categories.`,
 • Suggested: a generic concept that names the quantity and no method, checked in the NERC vocabulary (it is current, not deprecated). Offered: a concept that names a method, a phase or a narrower quantity; it is never suggested, and you choose it only if it is what you measured.
 • Oxygen depends on the unit: {oxygen}. A concept defined per volume or per mass is suggested only when the dimension of the unit is known from the verified unit list; with any other unit it is only offered.
 • Only a P01 concept (the quantity) or a P06 unit can be written, and a deprecated one never can.
-• A P01 code that the header of a column declares comes first when the tool has verified it. One it has not verified is listed as "declared by the file"; it is written only if you choose it, and only for the column whose header declares exactly that code.
-• A column with no unit, for a confirmed practical salinity or pH, is offered the unit "Dimensionless" of the NERC vocabulary.
+• A P01 code that the header of a column declares is suggested first when the tool has verified it. One it has not verified is listed under "Declared by the file", never suggested; it is written only if you choose it, and only for the column whose header declares exactly that code.
+• A column with no unit, for a confirmed practical salinity or pH, is suggested the unit "Dimensionless" of the NERC vocabulary.
 • A choice belongs to the column, its variable and its unit: if you change the unit or the meaning of the column, the choice is dropped and has to be made again.`,
   'tip.convertNvsOptIn.does': `Lets you search the NERC vocabulary server (NVS) for a concept or a unit that the lists do not offer. It is off, and sends nothing, until you press the search button of a column.`,
   'tip.convertNvsOptIn.logic': `• Off at every upload. A companion file can only tick the box; ticking sends nothing.
@@ -908,8 +908,8 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Podpowiedź: pojęcie ogólne, które nazywa wielkość, a nie metodę, sprawdzone w słowniku NERC (jest aktualne, nie przestarzałe). Do wyboru: pojęcie, które wskazuje metodę, fazę albo węższą wielkość; nigdy nie jest podpowiadane i wybierasz je tylko wtedy, gdy to jest to, co zmierzono.
 • Tlen zależy od jednostki: {oxygen}. Pojęcie określone na objętość albo na masę jest podpowiadane tylko wtedy, gdy wymiar jednostki wynika ze zweryfikowanej listy jednostek; przy każdej innej jednostce jest tylko oferowane.
 • Zapisać można tylko pojęcie P01 (wielkość) albo jednostkę P06, a przestarzałego nigdy.
-• Kod P01 zadeklarowany w nagłówku kolumny jest na pierwszym miejscu, gdy narzędzie go sprawdziło. Kod, którego nie sprawdziło, jest na liście jako „zadeklarowany przez plik”; zapisuje się go tylko wtedy, gdy go wybierzesz, i tylko dla kolumny, której nagłówek deklaruje dokładnie ten kod.
-• Kolumnie bez jednostki, dla potwierdzonego zasolenia praktycznego lub pH, proponowana jest jednostka „bezwymiarowa” ze słownika NERC.
+• Kod P01 zadeklarowany w nagłówku kolumny jest podpowiadany na pierwszym miejscu, gdy narzędzie go sprawdziło. Kod, którego nie sprawdziło, jest na liście w grupie „Zadeklarowane przez plik” i nigdy nie jest podpowiadany; zapisuje się go tylko wtedy, gdy go wybierzesz, i tylko dla kolumny, której nagłówek deklaruje dokładnie ten kod.
+• Kolumnie bez jednostki, dla potwierdzonego zasolenia praktycznego lub pH, podpowiadana jest jednostka „Dimensionless” (bezwymiarowa) ze słownika NERC.
 • Wybór należy do kolumny, jej wielkości i jednostki: jeśli zmienisz jednostkę albo znaczenie kolumny, wybór zostaje odrzucony i trzeba go zrobić od nowa.`,
   'tip.convertNvsOptIn.does': `Pozwala szukać w serwerze słownika NERC (NVS) pojęcia lub jednostki, których nie ma na listach. Jest wyłączone i niczego nie wysyła, dopóki nie naciśniesz przycisku wyszukiwania przy kolumnie.`,
   'tip.convertNvsOptIn.logic': `• Wyłączone przy każdym wgraniu. Plik towarzyszący może tylko zaznaczyć pole; zaznaczenie niczego nie wysyła.
@@ -1366,8 +1366,8 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Vorschlag: ein allgemeiner Begriff, der die Größe und keine Methode nennt, im NERC-Vokabular geprüft (er ist aktuell, nicht veraltet). Zur Auswahl: ein Begriff, der eine Methode, eine Phase oder eine engere Größe nennt; er wird nie vorgeschlagen, und Sie wählen ihn nur, wenn er das ist, was Sie gemessen haben.
 • Sauerstoff hängt von der Einheit ab: {oxygen}. Ein auf Volumen oder Masse bezogener Begriff wird nur vorgeschlagen, wenn die Dimension der Einheit aus der geprüften Einheitenliste bekannt ist; bei jeder anderen Einheit wird er nur angeboten.
 • Nur ein P01-Begriff (die Größe) oder eine P06-Einheit kann geschrieben werden, ein veralteter nie.
-• Ein P01-Code, den der Kopf einer Spalte angibt, steht an erster Stelle, wenn das Werkzeug ihn geprüft hat. Einer, den es nicht geprüft hat, steht in der Liste als „von der Datei angegeben“; er wird nur geschrieben, wenn Sie ihn wählen, und nur für die Spalte, deren Kopf genau diesen Code angibt.
-• Für eine Spalte ohne Einheit wird bei einer bestätigten praktischen Salinität oder einem bestätigten pH die Einheit „dimensionslos“ aus dem NERC-Vokabular angeboten.
+• Ein P01-Code, den der Kopf einer Spalte angibt, wird zuerst vorgeschlagen, wenn das Werkzeug ihn geprüft hat. Einer, den es nicht geprüft hat, steht in der Liste unter „Von der Datei angegeben“ und wird nie vorgeschlagen; er wird nur geschrieben, wenn Sie ihn wählen, und nur für die Spalte, deren Kopf genau diesen Code angibt.
+• Für eine Spalte ohne Einheit wird bei einer bestätigten praktischen Salinität oder einem bestätigten pH die Einheit „Dimensionless“ (dimensionslos) des NERC-Vokabulars vorgeschlagen.
 • Eine Wahl gehört zur Spalte, ihrer Größe und ihrer Einheit: Ändern Sie die Einheit oder die Bedeutung der Spalte, wird die Wahl verworfen und muss neu getroffen werden.`,
   'tip.convertNvsOptIn.does': `Lässt Sie im NERC-Vokabularserver (NVS) nach einem Begriff oder einer Einheit suchen, die die Listen nicht bieten. Es ist aus und sendet nichts, bis Sie die Such-Taste einer Spalte drücken.`,
   'tip.convertNvsOptIn.logic': `• Bei jedem Hochladen aus. Eine Begleitdatei kann das Kästchen nur ankreuzen; das Ankreuzen sendet nichts.
@@ -1824,8 +1824,8 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Suggestion : un concept général qui nomme la grandeur et aucune méthode, vérifié dans le vocabulaire NERC (il est en vigueur, non obsolète). Au choix : un concept qui indique une méthode, une phase ou une grandeur plus étroite ; il n'est jamais suggéré, et vous ne le choisissez que si c'est ce que vous avez mesuré.
 • L'oxygène dépend de l'unité : {oxygen}. Un concept rapporté au volume ou à la masse n'est suggéré que si la dimension de l'unité est connue par la liste d'unités vérifiées ; avec toute autre unité, il est seulement proposé dans la liste.
 • Seul un concept P01 (la grandeur) ou une unité P06 peut être écrit, et jamais un concept obsolète.
-• Un code P01 que l'en-tête d'une colonne déclare passe en premier quand l'outil l'a vérifié. Un code qu'il n'a pas vérifié figure dans la liste comme « déclaré par le fichier » ; il n'est écrit que si vous le choisissez, et seulement pour la colonne dont l'en-tête déclare exactement ce code.
-• Pour une colonne sans unité, avec une salinité pratique ou un pH confirmés, l'unité « sans dimension » du vocabulaire NERC est proposée.
+• Un code P01 que l'en-tête d'une colonne déclare est suggéré en premier quand l'outil l'a vérifié. Un code qu'il n'a pas vérifié figure dans la liste sous « Déclaré par le fichier » et n'est jamais suggéré ; il n'est écrit que si vous le choisissez, et seulement pour la colonne dont l'en-tête déclare exactement ce code.
+• Pour une colonne sans unité, avec une salinité pratique ou un pH confirmés, l'unité « Dimensionless » (sans dimension) du vocabulaire NERC est suggérée.
 • Un choix appartient à la colonne, à sa grandeur et à son unité : si vous changez l'unité ou le sens de la colonne, le choix est abandonné et doit être refait.`,
   'tip.convertNvsOptIn.does': `Vous permet de chercher dans le serveur de vocabulaire NERC (NVS) un concept ou une unité que les listes ne proposent pas. C'est désactivé et rien n'est envoyé tant que vous n'appuyez pas sur le bouton de recherche d'une colonne.`,
   'tip.convertNvsOptIn.logic': `• Désactivé à chaque dépôt. Un fichier compagnon peut seulement cocher la case ; cocher n'envoie rien.

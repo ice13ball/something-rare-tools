@@ -134,7 +134,7 @@ interface Cols {
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
 
-function colsOf(mapping: SheetMapping): Cols {
+function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): Cols {
   const c: Cols = { taxonHeaders: [], variables: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
@@ -171,8 +171,10 @@ function colsOf(mapping: SheetMapping): Cols {
       case 'variable': {
         const name = r.variable.trim();
         const unit = r.unit?.trim();
-        // the P01 code a header declares is read from the HEADER here, never taken from the role the page sent: a declared concept is written only for the code the column's own header holds
-        const declared = p01CodeOf(stripTypeSuffix(m.header))?.code;
+        // the P01 code a header declares is read from the PARSED FILE's own header here (not from the role, nor from the header text the page sent in the mapping): a declared concept is
+        // written only for the code the column's own header holds
+        const own = header?.[m.index];
+        const declared = own === undefined ? undefined : p01CodeOf(stripTypeSuffix(own))?.code;
         if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(declared === undefined ? {} : { p01: declared }) });
         break;
       }
@@ -397,7 +399,7 @@ function seafloorReader(cols: Cols, dc: boolean, collector: Collector, base: { f
             const direction = col.positive;
             // counted downwards a negative number is above the seafloor and a positive one below; counted upwards the other way round
             const side = (direction === 'down') === minorityNegative ? 'above' : 'below';
-            return [makeConvertFinding('CONV-SEAFLOOR-SIGNS', { file: minority.file, sheet: minority.sheet, field: minority.field, lines: minority.lines, params: { count: minority.lines.length, direction, side } })];
+            return [makeConvertFinding('CONV-SEAFLOOR-SIGNS', { file: minority.file, sheet: minority.sheet, field: minority.field, lines: minority.lines, params: { count: minority.lines.length, direction, side, ...(neg.lines.length === pos.lines.length ? { tie: 'yes' } : {}) } })];
           })()
         : []),
       ...notation.entries().map((e) => makeConvertFinding('CONV-SEAFLOOR-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, reason: 'notation' } })),
@@ -490,7 +492,7 @@ export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'
     if (s.profile !== undefined) continue; // a profile sheet's taxon columns are not read (CONV-COLUMN-NOT-EXPORTED says so)
     const sheet = s.file.sheets.find((x) => x.name === s.sheet);
     if (!sheet) continue;
-    const cols = colsOf(s.mapping);
+    const cols = colsOf(s.mapping, sheet.header);
     if (s.shape === 'wide') {
       for (const n of taxonColumnNames(s.file, sheet, cols.taxonHeaders).values()) names.push(n.verbatim);
     } else if (cols.taxonCell) {
@@ -636,7 +638,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   if (!sheet) return;
   const fileName = file.fileName;
   const dc = file.decimalComma;
-  const cols = colsOf(sin.mapping);
+  const cols = colsOf(sin.mapping, sheet.header);
   const collector = new Collector(fileName);
   const specs = specsOf(sin.mapping);
   const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
@@ -938,7 +940,7 @@ export function convert(input: ConvertInput): ConvertResult {
     const fileName = file.fileName;
     const sheetKey = `${fileName}\u0000${sheet.name}\u0000${sheetKeyN++}`;
     const dc = file.decimalComma;
-    const cols = colsOf(sin.mapping);
+    const cols = colsOf(sin.mapping, sheet.header);
     const collector = new Collector(fileName);
     const specs = specsOf(sin.mapping);
     const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
@@ -1568,7 +1570,7 @@ export function convert(input: ConvertInput): ConvertResult {
   for (const sin of input.sheets) {
     const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
     if (!sheet || sin.shape !== 'long' || sin.profile !== undefined) continue;
-    const cols = colsOf(sin.mapping);
+    const cols = colsOf(sin.mapping, sheet.header);
     if (!cols.taxonCell || !cols.taxonId) continue;
     for (const row of sheet.rows) {
       const verbatim = text(row.cells[cols.taxonCell.index]);
