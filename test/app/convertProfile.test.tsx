@@ -281,6 +281,39 @@ describe('export, GA4 and the companion file', () => {
     expect((again.getByLabelText(T['convert.sheet.profile.cast']) as HTMLInputElement).checked).toBe(false);
   });
 
+  it('a sheet with no station column may take each distinct position for a station: the user\'s tick, off at every upload, never in the companion file, with its ⓘ', async () => {
+    const NOSTN = csvOf(['Date', 'Latitude', 'Longitude', 'Depth [m]', 'Temperature [°C]', 'Salinity [PSU]'], [['2023-06-14', 55.51, 2.51, 0, 11.2, 34.1], ['2023-06-14', 55.51, 2.51, 10, 10.9, 34.2], ['2023-06-17', 56.2, 3.4, 0, 12, 34]]);
+    const { download } = await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'nostn.csv', text: NOSTN }, { name: 'ctd.csv', text: CTD_CSV }]);
+    const box = within(sheetBox('nostn.csv'));
+    // not before the sheet is marked, and never for a sheet that has a station column
+    expect(box.queryByLabelText(T['convert.sheet.profile.position'])).toBeNull();
+    fireEvent.click(box.getByLabelText(T['convert.sheet.profile']));
+    const ctd = within(sheetBox('ctd.csv'));
+    fireEvent.click(ctd.getByRole('button', { name: T['convert.sheet.profile.mark'] }));
+    expect(ctd.queryByLabelText(T['convert.sheet.profile.position'])).toBeNull();
+    const tick = box.getByLabelText(T['convert.sheet.profile.position']) as HTMLInputElement;
+    expect(tick.checked).toBe(false);
+    expect(box.getByText(T['convert.sheet.profile.position.help'])).toBeTruthy();
+    expect(sheetBox('nostn.csv').querySelector('[data-tip="convertProfilePosition"]')).toBeTruthy();
+    await idle();
+    // without the tick the rows have no station
+    expect(document.body.textContent).toContain('profile rows have no station');
+    fireEvent.click(tick);
+    await idle();
+    expect(document.body.textContent).not.toContain('profile rows have no station');
+    expect(document.body.textContent).toContain('each distinct position (latitude and longitude as written) is a station, as you chose');
+    // taking the mark back takes the tick back
+    fireEvent.click(box.getByLabelText(T['convert.sheet.profile']));
+    fireEvent.click(box.getByLabelText(T['convert.sheet.profile']));
+    expect((box.getByLabelText(T['convert.sheet.profile.position']) as HTMLInputElement).checked).toBe(false);
+    // the companion file keeps nothing of it: the tick is made again at every upload
+    fireEvent.click(tick);
+    await idle();
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    const [text] = download.mock.calls[0] as [string];
+    expect(text).not.toMatch(/position/i);
+  });
+
   it('a companion file that names another sheet pre-ticks nothing', async () => {
     const text = 'original_column,output_column,unit,unit_source,p01\n(setting),profile=another.csv,,,\n(setting),profileDepthIds=another.csv,,,\n';
     await load([{ name: 'w1.csv', text: W1_CSV }, { name: 'ctd.csv', text: CTD_CSV }, { name: 'x.companion.csv', text }]);

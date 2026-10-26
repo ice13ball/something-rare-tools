@@ -22,6 +22,8 @@ export interface ConvertSheetFormProps {
   hasCodeColumn: boolean;
   /** a column of this sheet is mapped as a pressure */
   hasPressureColumn: boolean;
+  /** a column of this sheet is mapped as the station (without one, a profile sheet may take each distinct position for a station) */
+  hasStationColumn: boolean;
   choice: SheetChoice;
   onChange: (choice: SheetChoice) => void;
 }
@@ -32,7 +34,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, hasCodeColumn, hasPressureColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -55,7 +57,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
           <div className="convert-group">
             <div className="choice-line">
               <label className="inline-choice">
-                <input type="checkbox" checked={choice.profile} onChange={(e) => onChange({ ...choice, profile: e.target.checked, ...(e.target.checked ? {} : { profileDepthIds: false, profileIgnoreCast: false }) })} aria-describedby={`${id}-profile-help`} />
+                <input type="checkbox" checked={choice.profile} onChange={(e) => onChange({ ...choice, profile: e.target.checked, ...(e.target.checked ? {} : { profileDepthIds: false, profileIgnoreCast: false, profilePosition: false }) })} aria-describedby={`${id}-profile-help`} />
                 <span>{t('convert.sheet.profile')}</span>
               </label>
               <InfoTip id="convertProfile" />
@@ -73,6 +75,20 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             )}
             {choice.profile && (
               <>
+                {!hasStationColumn && (
+                  <>
+                    <div className="choice-line">
+                      <label className="inline-choice">
+                        <input type="checkbox" checked={choice.profilePosition} onChange={(e) => onChange({ ...choice, profilePosition: e.target.checked })} aria-describedby={`${id}-position-help`} />
+                        <span>{t('convert.sheet.profile.position')}</span>
+                      </label>
+                      <InfoTip id="convertProfilePosition" />
+                    </div>
+                    <p id={`${id}-position-help`} className="muted">
+                      {t('convert.sheet.profile.position.help')}
+                    </p>
+                  </>
+                )}
                 {!hasCodeColumn && (
                   <>
                     <div className="choice-line">
