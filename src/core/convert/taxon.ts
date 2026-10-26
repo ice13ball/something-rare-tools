@@ -86,6 +86,9 @@ function stageToken(tok: string): string | undefined {
   return Object.prototype.hasOwnProperty.call(STAGE_WORDS, t) ? STAGE_WORDS[t] : undefined;
 }
 
+/** Does the text read as a stage (a stage word, c1-c6, CI-CVI or a range of them)? */
+export const isStageText = (text: string): boolean => stageToken(text.trim()) !== undefined;
+
 /**
  * A sex marker: f, m, fem, female, male, with or without a final dot, and the symbols. It reads as the sex after a comma, or straight after a stage or a
  * "?"; after a plain epithet it is left in the name, which the plausibility check then puts to the user ("Metridia longa f."). A "f." inside a name,
@@ -105,7 +108,8 @@ const HAS_DETAIL = (s: string): boolean => s.length > 0;
 
 export function splitTaxon(text: string): TaxonSplit {
   const verbatim = text.trim();
-  let rest = verbatim;
+  // a range written with spaces ("c1 - c5") is the same range as "c1-c5"
+  let rest = verbatim.replace(/\b(c(?:[1-6]|i{1,3}|iv|v|vi))\s+[-–]\s+(c?(?:[1-6]|i{1,3}|iv|v|vi))\b/gi, '$1-$2');
   let lifeStage: string | undefined;
   let sex: 'female' | 'male' | undefined;
   const qualifiers: string[] = [];
@@ -185,9 +189,11 @@ export function splitTaxon(text: string): TaxonSplit {
  * Is what is left of the name plausibly a Latin name? A reason code when it is not (the user is asked, whatever the split did):
  * digits, a slash, a "?", a stage range such as CVI-CV, a one-letter word, a sex marker at the end, or more than three words.
  */
-export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long';
+export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long' | 'remark';
 export function nameDoubt(name: string): NameDoubt | undefined {
   if (/\d/.test(name)) return 'digits';
+  // a comma that is left in the name: a remark after it that is no stage, no qualifier and no sex ("Foraminifera, planktic"); the user decides what is the name and what the remark
+  if (name.includes(',')) return 'remark';
   if (name.includes('/')) return 'slash';
   if (name.includes('?')) return 'question';
   const words = name.split(/\s+/).filter((w) => w !== '');

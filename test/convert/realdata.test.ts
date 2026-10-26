@@ -414,6 +414,15 @@ describe('a cast number at the end of a station label', () => {
       ['XX1/007-1:2m', 'XX1/007-5'],
     ]);
     expect(judge(r.findings).blocking).toEqual([]);
+    // every cast-matched pair is listed, whatever its distance (an info line: nothing to accept)
+    const info = r.findings.filter((f) => f.ruleId === 'CONV-PROFILE-STATION-CAST-MATCHED');
+    expect(info).toHaveLength(1);
+    expect(info[0].severity).toBe('info');
+    expect(info[0].params).toMatchObject({ count: 3, names: 'XX1/006-1 <-> XX1/006-6; XX1/006-2 <-> XX1/006-6; XX1/007-1 <-> XX1/007-5' });
+    expect(judge(r.findings).showOnly.map((f) => f.ruleId)).toContain('CONV-PROFILE-STATION-CAST-MATCHED');
+    for (const lang of LANGS) expect(renderConvertPlain(info[0], lang), lang).toContain('XX1/006-1 <-> XX1/006-6');
+    // without the tick there is no such line, and an exact match is not one
+    expect(run([bio(NET), ctd(CTD, false)]).findings.some((f) => f.ruleId === 'CONV-PROFILE-STATION-CAST-MATCHED')).toBe(false);
   });
 
   it('a base that two biology stations share is not matched (never guessed); a station of another base is not matched either', () => {

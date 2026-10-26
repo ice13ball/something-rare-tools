@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { VARIABLE_CONCEPTS, VARIABLE_VERIFIED_CODES, conceptVariable, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 import type { NercTerm, PerDimension, VariableConcept } from './vocab';
+import { TAB_OR_NEWLINE } from './ids';
 
 /*
  * NERC identifiers of the measured-variable columns (stage 5), the pure half. No I/O: the one module that talks to NVS is src/app/optins/nvs.ts (main thread only).
@@ -135,7 +136,8 @@ const MAX_TYPE_LABEL = 500;
 export function measurementTypeText(pick: NercPick | undefined, name: string): string {
   if (pick === undefined) return name;
   const label = pickLabel(pick)?.trim();
+  // the same test as every other text of the archive (a tab, a line break, vertical tab, form feed, NEL, line and paragraph separator), and any other control character
   // eslint-disable-next-line no-control-regex
-  if (label === undefined || label === '' || label.length > MAX_TYPE_LABEL || /[\u0000-\u001f\u007f]/.test(label)) return name;
+  if (label === undefined || label === '' || label.length > MAX_TYPE_LABEL || TAB_OR_NEWLINE.test(label) || /[\u0000-\u001f\u007f-\u009f]/.test(label)) return name;
   return label;
 }

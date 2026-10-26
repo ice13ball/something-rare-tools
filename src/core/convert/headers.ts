@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { normaliseUnit } from '../recognize/vocab';
 import type { ParsedFile, RawSheet } from '../types';
+import { isStageText } from './taxon';
+import { isAbundanceUnit } from './vocab';
 
 /*
  * What the header of a taxon column of a wide sheet says about the taxon, apart from its unit.
@@ -25,7 +28,20 @@ export interface TaxonColumnName {
   abbreviation?: string;
 }
 
-/** A header without a unit bracket and without a trailing remark in round brackets, and the two parts it lost. */
+/**
+ * Does the text of a round bracket read as a unit? ("ind/m3", "#/m**3", "mg m-3", "ind. m-2"). A subgenus ("Parasagitta"), a stage ("c5") or a remark ("including X") is not one.
+ * A round bracket is a unit only when it parses as one, exactly as the shared unit reader decides; a square bracket is always a unit.
+ */
+export function isUnitText(text: string): boolean {
+  const t = text.trim();
+  if (t === '') return false;
+  return normaliseUnit(t) !== undefined || isAbundanceUnit(t) || /\*\*\d|[A-Za-zµμ]-\d$/.test(t) || /^[^/]*\/\s*(?:[kmcdnµu]?(?:m|l|g)|h|s|d|day|yr)\s*(?:\*\*|\^)?-?\d*$/i.test(t);
+}
+
+/**
+ * A header without its unit and remark, and the parts it lost: "[unit]" anywhere, a "(unit)" at the end, and the "(remark)" after a unit. A round bracket that is not a unit and
+ * stands before or without a unit stays in the name ("Sagitta (Parasagitta) elegans", "Calanus (Calanus) finmarchicus" are subgenera, and are kept).
+ */
 export function stripHeaderUnit(header: string): { name: string; unit?: string; remark?: string } {
   let s = header.trim();
   let unit: string | undefined;
@@ -40,19 +56,32 @@ export function stripHeaderUnit(header: string): { name: string; unit?: string; 
     if (r) remark = r[1].trim();
     s = (s.slice(0, sq.index) + (r ? '' : ' ' + after)).replace(/\s+/g, ' ').trim();
   }
+  // "(unit)" at the end of what is left: a unit as well, and no part of the name
+  const round = /\s*\(([^()]*)\)\s*$/.exec(s);
+  if (round && round.index > 0 && isUnitText(round[1])) {
+    unit ??= round[1].trim();
+    s = s.slice(0, round.index).trim();
+  }
   return { name: s, ...(unit ? { unit } : {}), ...(remark ? { remark } : {}) };
 }
 
-/** The base of a table header for comparing with a PANGAEA abbreviation: no unit bracket, no trailing round-bracket group. */
-const headerBase = (h: string): string => h.replace(/\s*\[[^\]]*\]/g, '').replace(/\s*\([^()]*\)\s*$/, '').trim().toLowerCase();
+/** The table header of a column starts with the abbreviation, and what follows it is the end, a unit bracket or a remark in brackets (the abbreviation may hold brackets of its own). */
+const startsWithShort = (header: string, short: string): boolean => {
+  const h = header.trim().toLowerCase();
+  const s = short.trim().toLowerCase();
+  return h.startsWith(s) && (h.length === s.length || /^\s*[[(]/.test(h.slice(s.length)));
+};
 
 /** Does the PANGAEA parameter list stand for this table, column by column? */
 function parametersOf(file: ParsedFile, sheet: RawSheet) {
   if (file.kind !== 'pangaea') return undefined;
   const params = file.pangaeaParameters;
   if (params === undefined || params.length !== sheet.header.length) return undefined;
-  return params.every((p, i) => p.short !== undefined && p.short.trim().toLowerCase() === headerBase(sheet.header[i] ?? '')) ? params : undefined;
+  return params.every((p, i) => p.short !== undefined && startsWithShort(sheet.header[i] ?? '', p.short)) ? params : undefined;
 }
+
+/** True when the long names of the parameter list are the names of this table's columns (false: the abbreviations of the table header are used). */
+export const pangaeaNamesUsed = (file: ParsedFile, sheet: RawSheet): boolean => parametersOf(file, sheet) !== undefined;
 
 /**
  * The names of the taxon columns of a sheet (`columns` are the wide taxon header columns, in column order), by column index.
@@ -64,10 +93,12 @@ export function taxonColumnNames(file: ParsedFile, sheet: RawSheet, columns: rea
   const draft = columns.map((c) => {
     const own = stripHeaderUnit(c.header);
     const p = params?.[c.index];
-    if (p !== undefined && p.name.trim() !== '') {
-      return { c, verbatim: p.name.trim(), remark: p.comment?.trim() || own.remark, abbreviation: own.name };
-    }
-    return { c, verbatim: own.name, remark: own.remark, abbreviation: undefined as string | undefined };
+    const long = p !== undefined && p.name.trim() !== '';
+    const text = long ? p.name.trim() : own.name;
+    const note = (long ? p.comment?.trim() : undefined) || own.remark;
+    // a remark that is a stage ("c5", "nauplii") is the stage of this column: it goes to the name, so that each stage is a name of its own for the page and for lifeStage
+    if (note !== undefined && isStageText(note)) return { c, verbatim: `${text}, ${note}`, remark: undefined as string | undefined, abbreviation: long ? own.name : undefined };
+    return { c, verbatim: text, remark: note, abbreviation: long ? own.name : undefined };
   });
   const count = new Map<string, number>();
   for (const d of draft) count.set(d.verbatim, (count.get(d.verbatim) ?? 0) + 1);
