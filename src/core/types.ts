@@ -32,9 +32,9 @@ export interface ParsedFile {
   encoding: string;             // 'utf-8' | 'utf-8-bom' | 'windows-1250' | 'iso-8859-2'
   embeddedMetadata?: MetadataRecord;   // PANGAEA header, or the record itself for kind 'metadata'
   findings: Finding[];          // parse-level findings (ragged rows, encoding fallback, …)
-  /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
   /** Set only by the converter's reading path (core/convert/read.ts), never by the shared parsers: the parameters of a PANGAEA header block with their abbreviations and comments. */
   pangaeaParameters?: PangaeaParameter[];
+  /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
   dwca?: { core: 'Occurrence' | 'Event'; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
 }
 

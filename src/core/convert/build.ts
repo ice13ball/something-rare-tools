@@ -7,7 +7,7 @@ import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
-import { taxonColumnNames } from './headers';
+import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
@@ -306,8 +306,14 @@ function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: s
       const decimals = Math.max(lo?.decimals ?? 0, hi?.decimals ?? 0);
       return { ...(lo ? { min: lo.v } : {}), ...(hi ? { max: hi.v } : {}), ...(lo || hi ? { decimals } : {}), ...(lo?.text === undefined ? {} : { minText: lo.text }), ...(hi?.text === undefined ? {} : { maxText: hi.text }) };
     }
-    // one depth column (even one called a bound): min = max
-    const only = cols.depthPlain ?? cols.depthMin ?? cols.depthMax;
+    // one plain depth column: min = max. A sheet with only ONE BOUND (only a top, or only a bottom) writes that end and no other: the other end is never made up
+    if (!cols.depthPlain && (cols.depthMin || cols.depthMax)) {
+      const isMin = cols.depthMin !== undefined;
+      const b = read((isMin ? cols.depthMin : cols.depthMax) as NonNullable<Cols['depthMin']>);
+      if (!b) return {};
+      return { ...(isMin ? { min: b.v } : { max: b.v }), decimals: b.decimals, ...(b.text === undefined ? {} : isMin ? { minText: b.text } : { maxText: b.text }) };
+    }
+    const only = cols.depthPlain;
     const one = only ? read(only) : undefined;
     return one ? { min: one.v, max: one.v, decimals: one.decimals, ...(one.text === undefined ? {} : { minText: one.text, maxText: one.text }) } : {};
   };
@@ -796,6 +802,8 @@ export function convert(input: ConvertInput): ConvertResult {
 
     // the names of the wide taxon columns: the header without its unit, or the long name of a PANGAEA parameter (core/convert/headers.ts)
     const taxonNames = sin.shape === 'wide' ? taxonColumnNames(file, sheet, cols.taxonHeaders) : new Map<number, TaxonColumnName>();
+    // a PANGAEA file whose parameter list could not be matched to its columns: its table-header abbreviations are the names, and that is said
+    if (sin.shape === 'wide' && file.kind === 'pangaea' && cols.taxonHeaders.length > 0 && !pangaeaNamesUsed(file, sheet)) findings.push(makeConvertFinding('CONV-PANGAEA-NAMES-FALLBACK', { ...base }));
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
     if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
 
@@ -1265,6 +1273,16 @@ export function convert(input: ConvertInput): ConvertResult {
       if (!e) far.set(k, (e = { file: at.file, sheet: at.sheet, names: [] }));
       e.names.push(`${pid} <-> ${at.bio} (${Math.round(km)} km)`);
     }
+    // the pairs that matched only because the user ticked the cast-number match: said in full, whatever their distance
+    const cast = new Map<string, { file: string; sheet: string; names: string[] }>();
+    for (const [pid, at] of profile.matchedAt) {
+      if (at.via !== 'cast') continue;
+      const k = `${at.file}\u0000${at.sheet}`;
+      let e = cast.get(k);
+      if (!e) cast.set(k, (e = { file: at.file, sheet: at.sheet, names: [] }));
+      e.names.push(`${pid} <-> ${at.bio}`);
+    }
+    for (const e of cast.values()) findings.push(makeConvertFinding('CONV-PROFILE-STATION-CAST-MATCHED', { file: e.file, sheet: e.sheet, value: e.names[0], params: { count: e.names.length, names: e.names.join('; ') } }));
     for (const e of far.values()) findings.push(makeConvertFinding('CONV-PROFILE-STATION-FAR', { file: e.file, sheet: e.sheet, value: e.names[0], params: { count: e.names.length, names: e.names.join('; '), limit: STATION_FAR_KM } }));
   }
 

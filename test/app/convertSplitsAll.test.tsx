@@ -51,8 +51,28 @@ describe('every name is editable', () => {
     // the edit can be withdrawn
     fireEvent.click(within(rest).getByRole('button', { name: `${T['convert.splits.withdraw']}: Oithona similis` }));
     await waitFor(() => expect((within(rest).getByLabelText('Scientific name: Oithona similis') as HTMLInputElement).disabled).toBe(false));
-    // the split that needs an approval ("Pseudocalanus sp.") is in the same list and has its own approve button
-    expect(within(rest).getByRole('button', { name: 'Approve: Pseudocalanus sp.' })).toBeTruthy();
+    // the split that needs an approval ("Pseudocalanus sp.") is in the table above, not in the list of plain names, so that the button for all of them is about names that are on screen
+    expect(within(rest).queryByLabelText('Scientific name: Pseudocalanus sp.')).toBeNull();
+    expect(within(section).getByRole('button', { name: 'Approve: Pseudocalanus sp.' })).toBeTruthy();
+  });
+
+  it('24 taxa, 6 with a stage: the 6 that need approval are in the table and are the ones "approve all" approves; only the 18 plain names are folded', async () => {
+    const plain = Array.from({ length: 18 }, (_, i) => `Genus${String.fromCharCode(97 + i)} species${String.fromCharCode(97 + i)}`);
+    const staged = ['Calanus finmarchicus c5', 'Calanus finmarchicus c4', 'Decapoda zoea', 'Bivalvia veliger', 'Copepoda nauplii', 'Oithona similis c2'];
+    const section = await load([...plain, ...staged]);
+    const rest = section.querySelector('details.convert-splits-rest') as HTMLDetailsElement;
+    expect(rest.open).toBe(false);
+    expect(rest.querySelectorAll('tbody tr').length).toBe(18);
+    for (const n of staged) {
+      expect(within(section).getByLabelText(`Scientific name: ${n}`)).toBeTruthy();
+      expect(within(rest).queryByLabelText(`Scientific name: ${n}`)).toBeNull();
+    }
+    const button = within(section).getByRole('button', { name: 'Approve 6 shown names' });
+    fireEvent.click(button);
+    await waitFor(() => expect(within(section).queryByRole('button', { name: /^Approve 6 shown/ })).toBeNull());
+    // each of the six is approved (its field is locked), none of the plain names was touched
+    for (const n of staged) expect((within(section).getByLabelText(`Scientific name: ${n}`) as HTMLInputElement).disabled, n).toBe(true);
+    expect([...rest.querySelectorAll('input[type="text"]')].every((i) => !(i as HTMLInputElement).disabled)).toBe(true);
   });
 
   it('a long list is folded behind "show all names", and a name with a doubt stays in the table above', async () => {

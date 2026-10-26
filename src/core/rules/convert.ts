@@ -58,6 +58,8 @@ import type { RuleSpec } from './spec';
  *   CONV-PROFILE-STATION-UNMATCHED count, names value = the first station; names = the eventIDs of the profile stations that match no station of the biology sheets
  *   CONV-PROFILE-NO-STATION    count, column    column = the station column ('none' when the sheet has none); lines = the profile rows that hold data and no station
  *   CONV-PROFILE-STATION-FAR   count, names, limit  names = "profile station <-> biology station (N km)" for each matched pair farther apart than `limit` km (a haversine distance; the tool's own limit)
+ *   CONV-PROFILE-STATION-CAST-MATCHED count, names  names = "profile station <-> biology station" of every pair matched by ignoring the trailing cast number (info)
+ *   CONV-PANGAEA-NAMES-FALLBACK (none)      a PANGAEA file's parameter list was not matched to its columns: the abbreviations of the table header are the names (info)
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  * Stage 6 also gives two rules a second text for a profile file, chosen in renderConvertPlain / renderConvertTechnical (PROFILE_VARIANTS): CONV-SAMPLE-CODE-MISSING when the
@@ -625,6 +627,32 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: {count} profile station(s) matched to a biology station lie more than {limit} km from it (great-circle distance, haversine): {names}. The position of a profile station is that of its first level that has one, the position of a biology station that of its first sample that has one. The warning has to be accepted before the export.`,
   },
   {
+    id: 'CONV-PROFILE-STATION-CAST-MATCHED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'names'],
+    plain: {
+      pl: `{count} {+count:stacja pliku profilowego została dopasowana|stacje pliku profilowego zostały dopasowane|stacji pliku profilowego zostało dopasowanych} do stacji biologicznej z pominięciem numeru operacji na końcu, na co pozwoliłeś: {names}. Sprawdź, czy każda para to jedna stacja.`,
+      en: `{count} profile {+count:station was|stations were} matched to a biology station by ignoring the cast number at the end, as you allowed: {names}. Check that each pair is one station.`,
+      de: `{count} {+count:Station der Profildatei wurde|Stationen der Profildatei wurden} unter Auslassung der Einsatznummer am Ende, wie Sie es erlaubt haben, einer Biologie-Station zugeordnet: {names}. Prüfen Sie, ob jedes Paar eine Station ist.`,
+      fr: `{count} {+count:station du fichier de profils a été associée|stations du fichier de profils ont été associées} à une station de biologie sans le numéro d'opération final, comme vous l'avez permis : {names}. Vérifiez que chaque paire est une même station.`,
+    },
+    technical: `{file}, {sheet}: {count} profile station(s) matched to a biology station with the trailing cast number ignored (ticked for this sheet): {names}. Each pair is "profile station <-> biology station". Nothing needs to be accepted; a pair farther apart than the limit of CONV-PROFILE-STATION-FAR also raises that warning.`,
+  },
+  {
+    id: 'CONV-PANGAEA-NAMES-FALLBACK',
+    category: 'B',
+    severity: 'info',
+    params: [],
+    plain: {
+      pl: `Lista parametrów w nagłówku pliku PANGAEA nie pasuje do jego kolumn, więc jako nazw taksonów użyto skrótów z nagłówka tabeli. Skróty mogą oznaczać dwa różne taksony, więc sprawdź nazwy na liście poniżej.`,
+      en: `The parameter list in the header of the PANGAEA file does not fit its columns, so the abbreviations of the table header are used as the taxon names. An abbreviation can stand for two different taxa, so check the names in the list below.`,
+      de: `Die Parameterliste im Kopf der PANGAEA-Datei passt nicht zu ihren Spalten, daher werden die Abkürzungen der Tabellenüberschrift als Taxonnamen verwendet. Eine Abkürzung kann für zwei verschiedene Taxa stehen; prüfen Sie die Namen in der Liste unten.`,
+      fr: `La liste des paramètres de l'en-tête du fichier PANGAEA ne correspond pas à ses colonnes : les abréviations de l'en-tête du tableau servent donc de noms de taxons. Une abréviation peut désigner deux taxons différents ; vérifiez les noms dans la liste ci-dessous.`,
+    },
+    technical: `{file}, {sheet}: the Parameter(s) block of the PANGAEA header was not matched to the table columns (another number of columns, or an abbreviation that is not what the column header starts with), so the long names are not used and the table-header abbreviations are the taxon names.`,
+  },
+  {
     id: 'CONV-PROFILE-LEVEL-INCOMPLETE',
     category: 'B',
     severity: 'error',
@@ -853,7 +881,7 @@ function shortList(text: string): string {
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   const rule = getConvertRule(f.ruleId);
   if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
-    f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
+    f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-QUANTITY-UNDECLARED' && typeof f.params.missing === 'string') {
@@ -868,7 +896,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
   if (f.ruleId === 'CONV-PROFILE-STATION-UNMATCHED' && typeof f.params.names === 'string') f = { ...f, params: { ...f.params, names: stationList(f.params.names) } };
   // the pairs of CONV-PROFILE-STATION-FAR are separated by "; " (a station text may hold a comma): the first few, then the count of the rest
-  if (f.ruleId === 'CONV-PROFILE-STATION-FAR' && typeof f.params.names === 'string') {
+  if ((f.ruleId === 'CONV-PROFILE-STATION-FAR' || f.ruleId === 'CONV-PROFILE-STATION-CAST-MATCHED') && typeof f.params.names === 'string') {
     const items = f.params.names.split('; ');
     f = { ...f, params: { ...f.params, names: items.length <= 4 ? items.join('; ') : `${items.slice(0, 4).join('; ')}; … (+${items.length - 4})` } };
   }
