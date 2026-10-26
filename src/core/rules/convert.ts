@@ -861,10 +861,10 @@ const EML_WORDS: Record<string, Record<Lang, string>> = {
 /** What a profile level lacks, in words (CONV-PROFILE-LEVEL-INCOMPLETE carries date | position | date and position in `what`). */
 const SEAFLOOR_REASON_WORDS: Record<string, Record<Lang, string>> = {
   negative: {
-    en: 'a depth below the seafloor is a positive distance (the converter adds the sign)',
-    pl: 'głębokość w osadzie to dodatnia odległość (znak dodaje konwerter)',
-    de: 'eine Tiefe unter dem Meeresboden ist eine positive Entfernung (das Vorzeichen setzt der Konverter)',
-    fr: 'une profondeur sous le fond est une distance positive (le convertisseur ajoute le signe)',
+    en: 'counted downwards, a depth below the seafloor is a positive number (the converter adds the sign); if negative numbers are below the seafloor in your file, set the positive direction to upwards',
+    pl: 'liczona w dół, głębokość w osadzie to liczba dodatnia (znak dodaje konwerter); jeśli w pliku liczby ujemne oznaczają miejsce pod dnem, ustaw kierunek dodatni w górę',
+    de: 'nach unten gezählt ist eine Tiefe unter dem Meeresboden eine positive Zahl (das Vorzeichen setzt der Konverter); sind in Ihrer Datei negative Zahlen unter dem Meeresboden, stellen Sie die positive Richtung auf aufwärts',
+    fr: "comptée vers le bas, une profondeur sous le fond est un nombre positif (le convertisseur ajoute le signe) ; si dans votre fichier les nombres négatifs sont sous le fond, réglez le sens positif sur vers le haut",
   },
   notation: {
     en: 'it is not a plain decimal number (for example it has an exponent), and the shift from cm to m is made exactly on the text of a plain number',

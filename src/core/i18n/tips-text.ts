@@ -31,7 +31,7 @@ const en = {
   'tip.role.cruise': `in the ship-speed test, separates cruises and replaces the one-cruise tick.`,
   'tip.role.sampleId': `the id of a sample or core; when sheets are joined, it stands in for the station.`,
   'tip.role.variable': `a measured quantity; needs a name and a unit, and the tool never guesses the unit.`,
-  'tip.role.depthBelowSeafloor': `the depth of a sediment or porewater sample below the seafloor, counted as a positive number in the unit of the column (cm or m; set the unit in the table). It is written as a negative distance in metres (minimum and maximum distance above surface), and the water depth of the site stays the depth. The only conversion the converter makes anywhere: cm to m, by moving the decimal point two places in the text of the number, with no rounding.`,
+  'tip.role.depthBelowSeafloor': `the depth of a sediment or porewater sample below the seafloor, counted as a positive number in the unit of the column (cm or m; set the unit in the table). If your numbers are negative below the seafloor, set the positive direction to upwards and the sign is kept. It is written as a negative distance in metres (minimum and maximum distance above surface), and the water depth of the site stays the depth. The only conversion the converter makes anywhere: cm to m, by moving the decimal point two places in the text of the number, with no rounding.`,
 
   'tip.dropZone.does': `Reads files from your computer so that they can be checked.`,
   'tip.dropZone.logic': `• Accepted extensions: {formats}.
@@ -491,7 +491,7 @@ const pl: Record<TipKey, string> = {
   'tip.role.cruise': `w teście prędkości statku rozdziela rejsy i zastępuje zaznaczenie pola o jednym rejsie.`,
   'tip.role.sampleId': `identyfikator próbki lub rdzenia; przy połączonych arkuszach zastępuje stację.`,
   'tip.role.variable': `mierzona wielkość; wymaga nazwy i jednostki, a jednostki narzędzie nigdy nie zgaduje.`,
-  'tip.role.depthBelowSeafloor': `głębokość próbki osadu lub wody porowej pod dnem, jako liczba dodatnia w jednostce kolumny (cm lub m; ustaw jednostkę w tabeli). Zapisywana jest jako ujemna odległość w metrach (minimalna i maksymalna odległość nad powierzchnią), a głębokość wody na stanowisku pozostaje głębokością. Jedyne przeliczenie, jakie konwerter wykonuje: cm na m przez przesunięcie przecinka o dwa miejsca w tekście liczby, bez zaokrąglania.`,
+  'tip.role.depthBelowSeafloor': `głębokość próbki osadu lub wody porowej pod dnem, jako liczba dodatnia w jednostce kolumny (cm lub m; ustaw jednostkę w tabeli). Jeśli Twoje liczby są ujemne pod dnem, ustaw kierunek dodatni w górę, a znak zostanie zachowany. Zapisywana jest jako ujemna odległość w metrach (minimalna i maksymalna odległość nad powierzchnią), a głębokość wody na stanowisku pozostaje głębokością. Jedyne przeliczenie, jakie konwerter wykonuje: cm na m przez przesunięcie przecinka o dwa miejsca w tekście liczby, bez zaokrąglania.`,
 
   'tip.dropZone.does': `Wczytuje pliki z Twojego komputera, żeby je sprawdzić.`,
   'tip.dropZone.logic': `• Przyjmowane rozszerzenia: {formats}.
@@ -947,7 +947,7 @@ const de: Record<TipKey, string> = {
   'tip.role.cruise': `trennt beim Geschwindigkeitstest die Fahrten und ersetzt das Häkchen für eine Fahrt.`,
   'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; bei verknüpften Blättern vertritt sie die Station.`,
   'tip.role.variable': `eine gemessene Größe; braucht einen Namen und eine Einheit, und die Einheit rät das Werkzeug nie.`,
-  'tip.role.depthBelowSeafloor': `die Tiefe einer Sediment- oder Porenwasserprobe unter dem Meeresboden, als positive Zahl in der Einheit der Spalte (cm oder m; die Einheit in der Tabelle setzen). Sie wird als negative Entfernung in Metern geschrieben (minimale und maximale Entfernung über der Oberfläche); die Wassertiefe der Station bleibt die Tiefe. Die einzige Umrechnung des Konverters: cm in m, durch Verschieben des Dezimalkommas um zwei Stellen im Text der Zahl, ohne Runden.`,
+  'tip.role.depthBelowSeafloor': `die Tiefe einer Sediment- oder Porenwasserprobe unter dem Meeresboden, als positive Zahl in der Einheit der Spalte (cm oder m; die Einheit in der Tabelle setzen). Sind Ihre Zahlen unter dem Meeresboden negativ, stellen Sie die positive Richtung auf aufwärts, dann bleibt das Vorzeichen. Sie wird als negative Entfernung in Metern geschrieben (minimale und maximale Entfernung über der Oberfläche); die Wassertiefe der Station bleibt die Tiefe. Die einzige Umrechnung des Konverters: cm in m, durch Verschieben des Dezimalkommas um zwei Stellen im Text der Zahl, ohne Runden.`,
 
   'tip.dropZone.does': `Liest Dateien von Ihrem Rechner ein, damit sie geprüft werden können.`,
   'tip.dropZone.logic': `• Angenommene Endungen: {formats}.
@@ -1403,7 +1403,7 @@ const fr: Record<TipKey, string> = {
   'tip.role.cruise': `dans le test de vitesse, sépare les campagnes et remplace la case d'une seule campagne.`,
   'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; quand des feuilles sont reliées, il tient lieu de station.`,
   'tip.role.variable': `une grandeur mesurée ; demande un nom et une unité, et l'outil ne devine jamais l'unité.`,
-  'tip.role.depthBelowSeafloor': `la profondeur d'un échantillon de sédiment ou d'eau interstitielle sous le fond, comptée comme nombre positif dans l'unité de la colonne (cm ou m ; indiquez l'unité dans le tableau). Elle est écrite comme une distance négative en mètres (distance minimale et maximale au-dessus de la surface), et la profondeur d'eau du site reste la profondeur. La seule conversion du convertisseur : cm en m, en déplaçant la virgule de deux positions dans le texte du nombre, sans arrondi.`,
+  'tip.role.depthBelowSeafloor': `la profondeur d'un échantillon de sédiment ou d'eau interstitielle sous le fond, comptée comme nombre positif dans l'unité de la colonne (cm ou m ; indiquez l'unité dans le tableau). Si vos nombres sont négatifs sous le fond, réglez le sens positif sur vers le haut et le signe est conservé. Elle est écrite comme une distance négative en mètres (distance minimale et maximale au-dessus de la surface), et la profondeur d'eau du site reste la profondeur. La seule conversion du convertisseur : cm en m, en déplaçant la virgule de deux positions dans le texte du nombre, sans arrondi.`,
 
   'tip.dropZone.does': `Lit des fichiers de votre ordinateur pour les vérifier.`,
   'tip.dropZone.logic': `• Extensions acceptées : {formats}.

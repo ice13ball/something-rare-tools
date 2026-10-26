@@ -171,6 +171,15 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleK
           </select>
         </label>
       )}
+      {role.kind === 'depthBelowSeafloor' && (
+        <label className="inline-field">
+          <span>{t('mapping.positive')}</span>
+          <select value={role.positive ?? 'down'} onChange={(e) => onRole(setPositive(role, e.target.value as 'down' | 'up'))}>
+            <option value="down">{t('mapping.positive.down')}</option>
+            <option value="up">{t('mapping.positive.up')}</option>
+          </select>
+        </label>
+      )}
       {converter && role.kind === 'depth' && (
         <div className="inline-field">
           <FieldLabel htmlFor={boundId} tip="convertDepthBound">

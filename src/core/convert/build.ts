@@ -21,7 +21,7 @@ import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { seafloorMetres, seafloorUnitOf } from './seafloor';
-import type { SeafloorUnit } from './seafloor';
+import type { SeafloorDirection, SeafloorUnit } from './seafloor';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
@@ -128,7 +128,7 @@ interface Cols {
   /** Stage 6: the FIRST pressure column; read only on a profile sheet (a second one is not read, as a second depth is not). */
   pressure?: Spec & { unit?: string };
   /** The FIRST depth-below-seafloor column (sediment / porewater): written as a negative distance above the surface in metres (core/convert/seafloor.ts). */
-  seafloor?: Spec & { unit?: string };
+  seafloor?: Spec & { unit?: string; positive: SeafloorDirection };
   /** Measured-variable columns with a name: each becomes one eMoF row per sample event (stage 5). `name` is the variable as the column's role gives it, `unit` as given. */
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
@@ -174,7 +174,7 @@ function colsOf(mapping: SheetMapping): Cols {
         break;
       }
       case 'depthBelowSeafloor':
-        c.seafloor ??= { ...spec, ...(r.unit === undefined || r.unit.trim() === '' ? {} : { unit: r.unit.trim() }) };
+        c.seafloor ??= { ...spec, positive: r.positive === 'up' ? 'up' : 'down', ...(r.unit === undefined || r.unit.trim() === '' ? {} : { unit: r.unit.trim() }) };
         break;
       case 'pressure':
         c.pressure ??= { ...spec, ...(r.unit === undefined || r.unit.trim() === '' ? {} : { unit: r.unit.trim() }) };
@@ -349,6 +349,7 @@ interface SeafloorRead {
   plain: string;
   unit: SeafloorUnit;
   value: number;
+  direction: SeafloorDirection;
 }
 
 /**
@@ -370,12 +371,12 @@ function seafloorReader(cols: Cols, dc: boolean, collector: Collector, base: { f
       else if (p.status === 'na-variant') collector.add('ROW-NA-VARIANT', base.sheet, col.header, row.line, p.token);
       if (p.status !== 'ok') return undefined;
       const plain = sourceNumberText(cell, dc, p.value);
-      const m = seafloorMetres(plain, unit);
+      const m = seafloorMetres(plain, unit, col.positive);
       if (!m.ok) {
         (m.reason === 'negative' ? negative : notation).add(base.file, base.sheet, col.header, row.line, String(cell).trim());
         return undefined;
       }
-      return { text: m.text, plain: plain as string, unit, value: p.value };
+      return { text: m.text, plain: plain as string, unit, value: p.value, direction: col.positive };
     },
     findings: () => [
       ...(col && unit === undefined ? [makeConvertFinding('CONV-SEAFLOOR-UNIT', { ...base, field: col.header, params: { unit: col.unit ?? 'none' } })] : []),
@@ -577,7 +578,7 @@ interface Vertical {
   via: 'depth' | 'pressure' | 'seafloor';
   text: string;
   value: number;
-  /** What follows the number in the ID: m, dbar, or cmbsf / mbsf (centimetres / metres below the seafloor). The unit is part of the ID, so no two kinds of coordinate give the same ID. */
+  /** What follows the number in the ID: m, dbar, or cmbsf / mbsf (centimetres / metres below the seafloor; cmasf / masf when the sheet counts them upwards and a depth below is negative). The unit is part of the ID, so no two kinds of coordinate give the same ID. */
   suffix: string;
 }
 
@@ -599,7 +600,7 @@ function verticalOf(row: RawRow, cols: Cols, decimalComma: boolean): Vertical | 
   };
   // a sediment or porewater sheet: the depth in the sediment is the coordinate of the level (its water depth is the same for every level of a station); a unit that is not cm or m gives none
   const sfUnit = seafloorUnitOf(cols.seafloor?.unit);
-  const seafloor = sfUnit === undefined ? undefined : read(cols.seafloor, 'seafloor', `${sfUnit}bsf`);
+  const seafloor = sfUnit === undefined ? undefined : read(cols.seafloor, 'seafloor', `${sfUnit}${cols.seafloor?.positive === 'up' ? 'asf' : 'bsf'}`);
   return seafloor ?? read(cols.depthPlain ?? cols.depthMin ?? cols.depthMax, 'depth', 'm') ?? (isDecibar(cols.pressure?.unit) ? read(cols.pressure, 'pressure', 'dbar') : undefined);
 }
 

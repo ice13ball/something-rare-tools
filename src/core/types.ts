@@ -125,7 +125,7 @@ export type ConverterRole =
    * Depth BELOW THE SEAFLOOR of a sediment or porewater sample, in the unit of `unit` (cm or m). Written as a negative minimum/maximumDistanceAboveSurfaceInMeters (an exact
    * decimal shift of the text, core/convert/seafloor.ts); the site's water depth is the plain depth column and goes to minimum/maximumDepthInMeters.
    */
-  | { kind: 'depthBelowSeafloor'; unit?: string };
+  | { kind: 'depthBelowSeafloor'; unit?: string; /** 'down' (the default): positive numbers are depths below the seafloor. 'up': positive numbers go up, so a NEGATIVE number is below the seafloor and the sign is kept. */ positive?: 'down' | 'up' };
 export type ConverterRoleKind = ConverterRole['kind'];
 export interface ColumnProposal {
   index: number; header: string; cleanHeader: string; role: ColumnRole; confidence: 'high' | 'low';

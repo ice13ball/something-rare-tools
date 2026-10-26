@@ -34,12 +34,19 @@ export function seafloorUnitOf(unit: string | undefined): SeafloorUnit | undefin
 export type SeafloorText = { ok: true; text: string } | { ok: false; reason: 'negative' | 'notation' };
 
 /**
+ * Which way the numbers of the column count. `down` (the usual, and the default of the role): the number is the depth below the seafloor, so it is positive and the converter adds the sign.
+ * `up`: the number is a distance counted upwards from the seafloor, so a depth below it is NEGATIVE (a header "Pore_water_Depth[cm]" over negative numbers): the sign is the sheet's own and is kept.
+ */
+export type SeafloorDirection = 'down' | 'up';
+
+/**
  * `plain` is the number as the exported numbers are written (sourceNumberText: a plain decimal, a decimal comma already a point), or undefined when the cell has no exact plain text
  * (an exponent, degrees, a flipped sign). Returns the negative distance in metres as text.
  */
-export function seafloorMetres(plain: string | undefined, unit: SeafloorUnit): SeafloorText {
+export function seafloorMetres(plain: string | undefined, unit: SeafloorUnit, direction: SeafloorDirection = 'down'): SeafloorText {
   if (plain === undefined || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(plain)) return { ok: false, reason: 'notation' };
-  if (plain.startsWith('-') && !/^-0*\.?0*$/.test(plain)) return { ok: false, reason: 'negative' };
+  const negativeInput = plain.startsWith('-') && !/^-0*\.?0*$/.test(plain);
+  if (negativeInput && direction === 'down') return { ok: false, reason: 'negative' };
   const [intRaw, frac = ''] = plain.replace(/^[+-]/, '').split('.');
   const digits = `${intRaw}${frac}`;
   const shift = unit === 'cm' ? -2 : 0;
@@ -58,8 +65,9 @@ export function seafloorMetres(plain: string | undefined, unit: SeafloorUnit): S
   }
   whole = whole.replace(/^0+(?=\d)/, '') || '0';
   const tidy = fraction === '' ? whole : `${whole}.${fraction}`;
-  // zero has no sign
-  return { ok: true, text: /^0*\.?0*$/.test(tidy) ? '0' : `-${tidy}` };
+  // zero has no sign; counted downwards the converter adds the minus, counted upwards the sheet's own sign stays
+  if (/^0*\.?0*$/.test(tidy)) return { ok: true, text: '0' };
+  return { ok: true, text: direction === 'down' || negativeInput ? `-${tidy}` : tidy };
 }
 
 /* ---------- recognition (conservative, converter only) ---------- */

@@ -123,6 +123,11 @@ export function setVariableName(role: ColumnRole, name: string): ColumnRole {
 }
 
 export function setPositive(role: ColumnRole, positive: 'down' | 'up' | 'unknown'): ColumnRole {
+  if (role.kind === 'depthBelowSeafloor') {
+    // the depth below the seafloor counts down or up; "not stated" is the default (down)
+    const { positive: _p, ...rest } = role;
+    return positive === 'up' ? { ...rest, positive: 'up' } : rest;
+  }
   return role.kind === 'depth' ? { ...role, positive } : role;
 }
 
