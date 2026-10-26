@@ -33,7 +33,7 @@ export const BLOCK_OUTPUT_RULES: readonly string[] = [
 ];
 
 /** Blocking: findings of the INPUT, for a sheet chosen for conversion. */
-export const BLOCK_INPUT_RULES: readonly string[] = ['IN-LAYOUT-UNSUPPORTED', 'IN-FILE-UNREADABLE'];
+export const BLOCK_INPUT_RULES: readonly string[] = ['IN-LAYOUT-UNSUPPORTED', 'IN-FILE-UNREADABLE', 'ROW-RAGGED'];
 
 /** Blocking: the converter's own rules. (CONV-WORMS-UNDECIDED is raised from stage 4 on, after a WoRMS lookup.) */
 export const BLOCK_CONV_RULES: readonly string[] = [
@@ -55,6 +55,10 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-SPLIT-UNDECIDED',
   'CONV-MESH-INVALID',
   'CONV-WORMS-UNDECIDED',
+  'CONV-NO-OCCURRENCES',
+  'CONV-PROFILE-NOTHING-READ',
+  'CONV-SEAFLOOR-UNIT',
+  'CONV-SEAFLOOR-VALUE',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */
@@ -82,6 +86,7 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-PROFILE-PRESSURE-NO-UNIT',
   'CONV-LICENCE-DIFFERS',
   'CONV-NO-SAMPLING-DESCRIPTOR',
+  'CONV-SEAFLOOR-NO-SITE-DEPTH',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */

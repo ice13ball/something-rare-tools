@@ -1,0 +1,3 @@
+Station,Date,Latitude,Longitude,Depth_m,TEMP_C,TEMP_flag,S,S_QC,QF_Nitrate,Nitrate_umol_L,Q_Silicate,Silicate_umol_L,Chl_a_ug_l,Chl_a_ug_l_quality,Sal QV:ODV:SDN
+ZF1,2020-05-01,70.1,20.2,5,4.1,1,33.1,1,2,1.2,1,3.1,0.5,1,1
+ZF1,2020-05-01,70.1,20.2,10,3.9,1,33.4,1,2,1.3,1,3.2,0.6,4,1

@@ -31,6 +31,7 @@ const en = {
   'tip.role.cruise': `in the ship-speed test, separates cruises and replaces the one-cruise tick.`,
   'tip.role.sampleId': `the id of a sample or core; when sheets are joined, it stands in for the station.`,
   'tip.role.variable': `a measured quantity; needs a name and a unit, and the tool never guesses the unit.`,
+  'tip.role.depthBelowSeafloor': `the depth of a sediment or porewater sample below the seafloor, counted as a positive number in the unit of the column (cm or m; set the unit in the table). It is written as a negative distance in metres (minimum and maximum distance above surface), and the water depth of the site stays the depth. The only conversion the converter makes anywhere: cm to m, by moving the decimal point two places in the text of the number, with no rounding.`,
 
   'tip.dropZone.does': `Reads files from your computer so that they can be checked.`,
   'tip.dropZone.logic': `• Accepted extensions: {formats}.
@@ -411,7 +412,7 @@ No findings only means that no problems were found in the checked categories.`,
 • Species and quantity columns of the sheet are not read, and the conversion names each such column.
 • The tool may suggest this mark; it is never set without your tick. The companion file keeps it by sheet name and only ticks the box again when you drop it with a sheet of the same name.`,
   'tip.convertProfileDepthIds.does': `Lets the tool make the ID of each profile level from the station and the depth, for a sheet without a code column.`,
-  'tip.convertProfileDepthIds.logic': `• The ID is the station's eventID, a colon and the depth as written in the sheet, with a decimal comma turned into a point and m after it. A row whose depth cannot be read takes its pressure instead, written the same way with dbar after it, and only when the pressure column is in decibars. A row with neither is blocked.
+  'tip.convertProfileDepthIds.logic': `• The ID is the station's eventID, a colon and the depth as written in the sheet, with a decimal comma turned into a point and m after it. A station with rows of more than one date has the date (year, month and day, from the data) between the station and the depth, so the same depth on two visits is two levels; a row without a date there is blocked. A depth in the sediment is used before the water depth and is written with its own unit and bsf after it. A row whose depth cannot be read takes its pressure instead, written the same way with dbar after it, and only when the pressure column is in decibars. A row with neither is blocked.
 • It is used only when you tick this and the sheet has no code column. With a code column the ID is the station's eventID, a colon and that code.
 • Two rows of a station at the same depth or the same pressure (the same number written another way counts too; repeated casts do this) make the same ID and block the export. A depth and a pressure never make the same ID. Add a column with a code that is unique within the station and mark it as the sample code.
 • An ID is never made from the order of the rows.
@@ -421,6 +422,11 @@ No findings only means that no problems were found in the checked categories.`,
 • With it ticked, a final hyphen and number are ignored on both sides: the station "…-N" of the profile sheet is matched to the biology station whose text is the same before the ending.
 • Only one biology station may have that base. When more than one does, the profile station is not matched, and the warning for unmatched stations names it.
 • A matched level sits under the biology station, and its own ID keeps the cast, so two casts of one station stay apart. A matched station that lies farther from the biology station than the limit named in its warning gets a warning to accept, naming both stations.`,
+  'tip.convertProfilePosition.does': `Lets the tool treat every distinct position of a sheet with no station column as one station.`,
+  'tip.convertProfilePosition.logic': `• It is off for every sheet and is never ticked by the tool. It is offered only for a sheet marked as a profile file that has no station column.
+• The station's ID is the cruise code (when there is one), a colon, the latitude, an underscore and the longitude, both written exactly as in the sheet (a decimal comma turned into a point, nothing rounded).
+• Two rows with the same two numbers are one station; a position written another way, even with a tiny difference, is another station. A row with no readable position has no station and blocks the export.
+• After the conversion you are told how many stations this made, with the first one as an example.`,
   'tip.convertProfileStations.does': `Explains how the stations of a profile sheet are matched to the stations of the biology sheets.`,
   'tip.convertProfileStations.logic': `• The match is exact: the station text with the spaces at both ends removed, and the cruise when there is one. Upper and lower case, spelling and zeros in front all count.
 • Nothing is matched approximately.
@@ -442,6 +448,8 @@ No findings only means that no problems were found in the checked categories.`,
 • Suggested: a generic concept that names the quantity and no method, checked in the NERC vocabulary (it is current, not deprecated). Offered: a concept that names a method, a phase or a narrower quantity; it is never suggested, and you choose it only if it is what you measured.
 • Oxygen depends on the unit: {oxygen}. A concept defined per volume or per mass is suggested only when the dimension of the unit is known from the verified unit list; with any other unit it is only offered.
 • Only a P01 concept (the quantity) or a P06 unit can be written, and a deprecated one never can.
+• A P01 code that the header of a column declares comes first when the tool has verified it. One it has not verified is listed as "declared by the file"; it is written only if you choose it, and only for the column whose header declares exactly that code.
+• A column with no unit, for a confirmed practical salinity or pH, is offered the unit "Dimensionless" of the NERC vocabulary.
 • A choice belongs to the column, its variable and its unit: if you change the unit or the meaning of the column, the choice is dropped and has to be made again.`,
   'tip.convertNvsOptIn.does': `Lets you search the NERC vocabulary server (NVS) for a concept or a unit that the lists do not offer. It is off, and sends nothing, until you press the search button of a column.`,
   'tip.convertNvsOptIn.logic': `• Off at every upload. A companion file can only tick the box; ticking sends nothing.
@@ -483,6 +491,7 @@ const pl: Record<TipKey, string> = {
   'tip.role.cruise': `w teście prędkości statku rozdziela rejsy i zastępuje zaznaczenie pola o jednym rejsie.`,
   'tip.role.sampleId': `identyfikator próbki lub rdzenia; przy połączonych arkuszach zastępuje stację.`,
   'tip.role.variable': `mierzona wielkość; wymaga nazwy i jednostki, a jednostki narzędzie nigdy nie zgaduje.`,
+  'tip.role.depthBelowSeafloor': `głębokość próbki osadu lub wody porowej pod dnem, jako liczba dodatnia w jednostce kolumny (cm lub m; ustaw jednostkę w tabeli). Zapisywana jest jako ujemna odległość w metrach (minimalna i maksymalna odległość nad powierzchnią), a głębokość wody na stanowisku pozostaje głębokością. Jedyne przeliczenie, jakie konwerter wykonuje: cm na m przez przesunięcie przecinka o dwa miejsca w tekście liczby, bez zaokrąglania.`,
 
   'tip.dropZone.does': `Wczytuje pliki z Twojego komputera, żeby je sprawdzić.`,
   'tip.dropZone.logic': `• Przyjmowane rozszerzenia: {formats}.
@@ -863,7 +872,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Kolumny gatunków i liczebności tego arkusza nie są czytane, a przekształcenie wymienia każdą taką kolumnę.
 • Narzędzie może zaproponować to oznaczenie; nigdy nie ustawia go bez Twojego zaznaczenia. Plik towarzyszący zapamiętuje je według nazwy arkusza i tylko ponownie zaznacza pole, gdy wgrasz go z arkuszem o tej samej nazwie.`,
   'tip.convertProfileDepthIds.does': `Pozwala narzędziu utworzyć identyfikator każdego poziomu profilu ze stacji i głębokości, dla arkusza bez kolumny z kodem.`,
-  'tip.convertProfileDepthIds.logic': `• Identyfikator to eventID stacji, dwukropek i głębokość tak, jak jest zapisana w arkuszu, z przecinkiem dziesiętnym zamienionym na kropkę i literą m na końcu. Wiersz, którego głębokości nie da się odczytać, bierze zamiast niej ciśnienie, zapisane tak samo z dbar na końcu, i tylko gdy kolumna ciśnienia jest w decybarach. Wiersz bez żadnej z nich jest blokowany.
+  'tip.convertProfileDepthIds.logic': `• Identyfikator to eventID stacji, dwukropek i głębokość tak, jak jest zapisana w arkuszu, z przecinkiem dziesiętnym zamienionym na kropkę i literą m na końcu. Stacja z wierszami z więcej niż jednej daty ma datę (rok, miesiąc i dzień, z danych) między stacją a głębokością, więc ta sama głębokość z dwóch wizyt to dwa poziomy; wiersz bez daty jest wtedy blokowany. Głębokość w osadzie jest używana przed głębokością wody i zapisywana ze swoją jednostką i bsf na końcu. Wiersz, którego głębokości nie da się odczytać, bierze zamiast niej ciśnienie, zapisane tak samo z dbar na końcu, i tylko gdy kolumna ciśnienia jest w decybarach. Wiersz bez żadnej z nich jest blokowany.
 • Jest używany tylko wtedy, gdy to zaznaczysz, a arkusz nie ma kolumny z kodem. Przy kolumnie z kodem identyfikator to eventID stacji, dwukropek i ten kod.
 • Dwa wiersze stacji na tej samej głębokości albo przy tym samym ciśnieniu (ta sama liczba zapisana inaczej też się liczy; tak robią powtórzone rzuty) dają ten sam identyfikator i blokują eksport. Głębokość i ciśnienie nigdy nie dają tego samego identyfikatora. Dodaj kolumnę z kodem unikalnym w obrębie stacji i wskaż ją jako kod próbki.
 • Identyfikator nigdy nie powstaje z kolejności wierszy.
@@ -873,6 +882,11 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Po zaznaczeniu końcowy myślnik z numerem jest pomijany po obu stronach: stacja „…-N” z arkusza profilowego jest dopasowywana do stacji biologicznej, której tekst przed zakończeniem jest taki sam.
 • Tę podstawę może mieć tylko jedna stacja biologiczna. Gdy ma ją więcej niż jedna, stacja z arkusza profilowego nie jest dopasowana, a ostrzeżenie o niedopasowanych stacjach ją wymienia.
 • Dopasowany poziom trafia pod stację biologiczną, a jego własny identyfikator zachowuje numer operacji, więc dwie operacje jednej stacji pozostają rozdzielone. Dopasowana stacja leżąca dalej od stacji biologicznej niż limit podany w jej ostrzeżeniu dostaje ostrzeżenie do zaakceptowania, które wymienia obie stacje.`,
+  'tip.convertProfilePosition.does': `Pozwala narzędziu traktować każde różne położenie w arkuszu bez kolumny stacji jako jedną stację.`,
+  'tip.convertProfilePosition.logic': `• Jest wyłączone dla każdego arkusza i narzędzie nigdy samo tego nie zaznacza. Jest oferowane tylko dla arkusza oznaczonego jako plik profili, który nie ma kolumny stacji.
+• Identyfikator stacji to kod rejsu (gdy jest), dwukropek, szerokość, podkreślnik i długość, obie zapisane dokładnie tak jak w arkuszu (przecinek dziesiętny zamieniony na kropkę, nic nie zaokrąglone).
+• Dwa wiersze z tymi samymi dwiema liczbami to jedna stacja; położenie zapisane inaczej, nawet z drobną różnicą, to inna stacja. Wiersz bez czytelnego położenia nie ma stacji i blokuje eksport.
+• Po konwersji dowiesz się, ile stacji to dało, z pierwszą jako przykładem.`,
   'tip.convertProfileStations.does': `Wyjaśnia, jak stacje arkusza profilowego są dopasowywane do stacji z arkuszy biologicznych.`,
   'tip.convertProfileStations.logic': `• Dopasowanie jest dokładne: tekst stacji bez spacji na obu końcach oraz rejs, jeśli jest. Liczy się wielkość liter, pisownia i zera na początku.
 • Nic nie jest dopasowywane w przybliżeniu.
@@ -933,6 +947,7 @@ const de: Record<TipKey, string> = {
   'tip.role.cruise': `trennt beim Geschwindigkeitstest die Fahrten und ersetzt das Häkchen für eine Fahrt.`,
   'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; bei verknüpften Blättern vertritt sie die Station.`,
   'tip.role.variable': `eine gemessene Größe; braucht einen Namen und eine Einheit, und die Einheit rät das Werkzeug nie.`,
+  'tip.role.depthBelowSeafloor': `die Tiefe einer Sediment- oder Porenwasserprobe unter dem Meeresboden, als positive Zahl in der Einheit der Spalte (cm oder m; die Einheit in der Tabelle setzen). Sie wird als negative Entfernung in Metern geschrieben (minimale und maximale Entfernung über der Oberfläche); die Wassertiefe der Station bleibt die Tiefe. Die einzige Umrechnung des Konverters: cm in m, durch Verschieben des Dezimalkommas um zwei Stellen im Text der Zahl, ohne Runden.`,
 
   'tip.dropZone.does': `Liest Dateien von Ihrem Rechner ein, damit sie geprüft werden können.`,
   'tip.dropZone.logic': `• Angenommene Endungen: {formats}.
@@ -1313,7 +1328,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Arten- und Mengenspalten des Blatts werden nicht gelesen, und die Umwandlung nennt jede solche Spalte.
 • Das Werkzeug kann diese Markierung vorschlagen; sie wird nie ohne Ihr Häkchen gesetzt. Die Begleitdatei merkt sie sich nach dem Blattnamen und setzt das Häkchen nur wieder, wenn Sie sie mit einem Blatt desselben Namens ablegen.`,
   'tip.convertProfileDepthIds.does': `Lässt das Werkzeug die Kennung jeder Profilebene aus Station und Tiefe bilden, für ein Blatt ohne Codespalte.`,
-  'tip.convertProfileDepthIds.logic': `• Die Kennung ist die eventID der Station, ein Doppelpunkt und die Tiefe so, wie sie im Blatt steht, mit einem Dezimalkomma als Punkt und einem m dahinter. Eine Zeile, deren Tiefe nicht lesbar ist, nimmt stattdessen ihren Druck, ebenso geschrieben mit dbar dahinter und nur, wenn die Druckspalte in Dezibar ist. Eine Zeile mit keinem von beiden wird blockiert.
+  'tip.convertProfileDepthIds.logic': `• Die Kennung ist die eventID der Station, ein Doppelpunkt und die Tiefe so, wie sie im Blatt steht, mit einem Dezimalkomma als Punkt und einem m dahinter. Hat eine Station Zeilen von mehr als einem Datum, steht das Datum (Jahr, Monat und Tag, aus den Daten) zwischen Station und Tiefe, sodass dieselbe Tiefe bei zwei Besuchen zwei Ebenen ergibt; eine Zeile ohne Datum wird dann blockiert. Eine Tiefe im Sediment wird vor der Wassertiefe verwendet und mit ihrer eigenen Einheit und bsf dahinter geschrieben. Eine Zeile, deren Tiefe nicht lesbar ist, nimmt stattdessen ihren Druck, ebenso geschrieben mit dbar dahinter und nur, wenn die Druckspalte in Dezibar ist. Eine Zeile mit keinem von beiden wird blockiert.
 • Sie wird nur verwendet, wenn Sie das ankreuzen und das Blatt keine Codespalte hat. Mit Codespalte ist die Kennung die eventID der Station, ein Doppelpunkt und dieser Code.
 • Zwei Zeilen einer Station in derselben Tiefe oder bei demselben Druck (dieselbe Zahl anders geschrieben zählt mit; wiederholte Einsätze tun das) ergeben dieselbe Kennung und blockieren den Export. Tiefe und Druck ergeben nie dieselbe Kennung. Fügen Sie eine Spalte mit je Station eindeutigem Code hinzu und ordnen Sie sie als Probencode zu.
 • Eine Kennung entsteht nie aus der Reihenfolge der Zeilen.
@@ -1323,6 +1338,11 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Mit dem Häkchen werden ein letzter Bindestrich und die Nummer auf beiden Seiten ignoriert: die Station „…-N“ des Profilblatts wird der Biologie-Station zugeordnet, deren Text vor der Endung gleich ist.
 • Diese Basis darf nur eine Biologie-Station haben. Hat sie mehr als eine, wird die Profilstation nicht zugeordnet, und die Warnung zu nicht zugeordneten Stationen nennt sie.
 • Eine zugeordnete Ebene hängt unter der Biologie-Station, und ihre eigene Kennung behält den Einsatz, so bleiben zwei Einsätze einer Station getrennt. Eine zugeordnete Station, die weiter von der Biologie-Station entfernt liegt als die in ihrer Warnung genannte Grenze, erhält eine Warnung zum Akzeptieren, die beide Stationen nennt.`,
+  'tip.convertProfilePosition.does': `Lässt das Werkzeug jede verschiedene Position eines Blatts ohne Stationsspalte als eine Station behandeln.`,
+  'tip.convertProfilePosition.logic': `• Es ist für jedes Blatt aus und wird vom Werkzeug nie selbst angekreuzt. Es wird nur für ein als Profildatei markiertes Blatt ohne Stationsspalte angeboten.
+• Die Kennung der Station ist der Fahrtcode (falls vorhanden), ein Doppelpunkt, die Breite, ein Unterstrich und die Länge, beide genau wie im Blatt geschrieben (ein Dezimalkomma als Punkt, nichts gerundet).
+• Zwei Zeilen mit denselben zwei Zahlen sind eine Station; eine anders geschriebene Position, auch mit winziger Abweichung, ist eine andere Station. Eine Zeile ohne lesbare Position hat keine Station und blockiert den Export.
+• Nach der Umwandlung erfahren Sie, wie viele Stationen das ergab, mit der ersten als Beispiel.`,
   'tip.convertProfileStations.does': `Erklärt, wie die Stationen eines Profilblatts den Stationen der Biologie-Blätter zugeordnet werden.`,
   'tip.convertProfileStations.logic': `• Die Zuordnung ist genau: der Stationstext ohne Leerzeichen an beiden Enden und die Fahrt, falls vorhanden. Groß- und Kleinschreibung, Schreibweise und führende Nullen zählen.
 • Nichts wird ungefähr zugeordnet.
@@ -1383,6 +1403,7 @@ const fr: Record<TipKey, string> = {
   'tip.role.cruise': `dans le test de vitesse, sépare les campagnes et remplace la case d'une seule campagne.`,
   'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; quand des feuilles sont reliées, il tient lieu de station.`,
   'tip.role.variable': `une grandeur mesurée ; demande un nom et une unité, et l'outil ne devine jamais l'unité.`,
+  'tip.role.depthBelowSeafloor': `la profondeur d'un échantillon de sédiment ou d'eau interstitielle sous le fond, comptée comme nombre positif dans l'unité de la colonne (cm ou m ; indiquez l'unité dans le tableau). Elle est écrite comme une distance négative en mètres (distance minimale et maximale au-dessus de la surface), et la profondeur d'eau du site reste la profondeur. La seule conversion du convertisseur : cm en m, en déplaçant la virgule de deux positions dans le texte du nombre, sans arrondi.`,
 
   'tip.dropZone.does': `Lit des fichiers de votre ordinateur pour les vérifier.`,
   'tip.dropZone.logic': `• Extensions acceptées : {formats}.
@@ -1763,7 +1784,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Les colonnes d'espèces et de quantités de la feuille ne sont pas lues, et la conversion nomme chacune d'elles.
 • L'outil peut suggérer ce marquage ; il n'est jamais posé sans votre coche. Le fichier compagnon le garde par nom de feuille et ne recoche la case que si vous le déposez avec une feuille du même nom.`,
   'tip.convertProfileDepthIds.does': `Permet à l'outil de former l'identifiant de chaque niveau de profil avec la station et la profondeur, pour une feuille sans colonne de code.`,
-  'tip.convertProfileDepthIds.logic': `• L'identifiant est l'eventID de la station, deux-points et la profondeur telle qu'écrite dans la feuille, avec une virgule décimale changée en point et un m derrière. Une ligne dont la profondeur est illisible prend sa pression à la place, écrite de même avec dbar derrière, et seulement si la colonne de pression est en décibars. Une ligne sans l'une ni l'autre est bloquée.
+  'tip.convertProfileDepthIds.logic': `• L'identifiant est l'eventID de la station, deux-points et la profondeur telle qu'écrite dans la feuille, avec une virgule décimale changée en point et un m derrière. Une station dont les lignes ont plus d'une date reçoit la date (année, mois et jour, tirés des données) entre la station et la profondeur : la même profondeur lors de deux visites donne deux niveaux ; une ligne sans date est alors bloquée. Une profondeur dans le sédiment est utilisée avant la profondeur d'eau et écrite avec sa propre unité puis bsf. Une ligne dont la profondeur est illisible prend sa pression à la place, écrite de même avec dbar derrière, et seulement si la colonne de pression est en décibars. Une ligne sans l'une ni l'autre est bloquée.
 • Il n'est utilisé que si vous cochez cette case et que la feuille n'a pas de colonne de code. Avec une colonne de code, l'identifiant est l'eventID de la station, deux-points et ce code.
 • Deux lignes d'une station à la même profondeur ou à la même pression (le même nombre écrit autrement compte aussi ; des déploiements répétés font cela) donnent le même identifiant et bloquent l'export. Une profondeur et une pression ne donnent jamais le même identifiant. Ajoutez une colonne à code unique par station et indiquez-la comme code d'échantillon.
 • Un identifiant n'est jamais formé d'après l'ordre des lignes.
@@ -1773,6 +1794,11 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Une fois coché, un tiret final et son numéro sont ignorés des deux côtés : la station « …-N » de la feuille de profils est associée à la station de biologie dont le texte est identique avant la terminaison.
 • Une seule station de biologie peut avoir cette base. Si plusieurs l'ont, la station de profil n'est pas associée, et l'avertissement sur les stations non associées la nomme.
 • Un niveau associé se place sous la station de biologie, et son propre identifiant garde l'opération : deux opérations d'une station restent séparées. Une station associée plus éloignée de la station de biologie que la limite indiquée dans son avertissement reçoit un avertissement à accepter, qui nomme les deux stations.`,
+  'tip.convertProfilePosition.does': `Permet à l'outil de traiter chaque position distincte d'une feuille sans colonne de station comme une station.`,
+  'tip.convertProfilePosition.logic': `• C'est désactivé pour chaque feuille et l'outil ne le coche jamais lui-même. C'est proposé seulement pour une feuille marquée comme fichier de profils qui n'a pas de colonne de station.
+• L'identifiant de la station est le code de campagne (s'il y en a un), deux-points, la latitude, un tiret bas et la longitude, écrites exactement comme dans la feuille (virgule décimale changée en point, rien d'arrondi).
+• Deux lignes avec les deux mêmes nombres forment une station ; une position écrite autrement, même avec une infime différence, est une autre station. Une ligne sans position lisible n'a pas de station et bloque l'export.
+• Après la conversion, on vous dit combien de stations cela a donné, avec la première en exemple.`,
   'tip.convertProfileStations.does': `Explique comment les stations d'une feuille de profils sont appariées aux stations des feuilles de biologie.`,
   'tip.convertProfileStations.logic': `• L'appariement est exact : le texte de la station sans les espaces aux deux bouts, et la campagne s'il y en a une. Majuscules et minuscules, orthographe et zéros initiaux comptent.
 • Rien n'est apparié approximativement.

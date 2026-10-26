@@ -1,0 +1,6 @@
+Site_ID,Date,Latitude,Longitude,Site_depth_m,Type_of_water,Depth_cm,Cl_mg_l,DIC_umol_kg,PO4_umol_L
+ZP1,2020-05-01,70.1,20.2,45,porewater,0.5,10100.2,2100.1,1.2
+ZP1,2020-05-01,70.1,20.2,45,porewater,1.5,10200.3,2150.4,1.4
+ZP1,2020-05-01,70.1,20.2,45,porewater,2.5,10300.4,2200.2,1.6
+ZP2,2020-05-02,70.3,20.4,60,porewater,0.5,10150.5,2120.0,1.1
+ZP2,2020-05-02,70.3,20.4,60,porewater,1.5,10250.6,2170.3,1.3

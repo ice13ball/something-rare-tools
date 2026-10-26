@@ -151,7 +151,9 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   const out: Finding[] = [];
   out.push(...eventFindings(tables.event, opts));
   // the Occurrence table's own recommended-term finding is only the empty scientificNameID column, which CONV-NAMEID-MISSING says in the converter's words
-  out.push(...checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter((f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID')));
+  // An EMPTY Occurrence table (an upload with no taxon: CONV-NO-OCCURRENCES says so) is not checked: "eventDate, decimalLatitude, decimalLongitude are missing" would send the user to fill a table that
+  // has no row. With no occurrence the archive is refused whatever the table holds.
+  if (judged.occurrences.length > 0) out.push(...checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter((f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID')));
   const noId = judged.occurrences.filter((o) => o.identification.scientificNameId === undefined).length;
   if (noId > 0) out.push(makeConvertFinding('CONV-NAMEID-MISSING', { file: tables.occurrence.name, sheet: tables.occurrence.name, params: { count: noId } }));
   // BioCheck: no measurementTypeID among its BODCeffort codes in the whole eMoF table (R/checkdataset.R 562-566, inside the eMoF block that starts at line 457): a warning, to accept

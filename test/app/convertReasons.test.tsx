@@ -47,7 +47,7 @@ describe('the reason table', () => {
     const src = readFileSync(join(__dirname, '..', '..', 'src', 'core', 'convert', 'recognize.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     const assigns = [...src.matchAll(/\.reason\s*=\s*([^;\n]*)/g)].map((m) => m[1].trim());
     expect(assigns).toEqual(['OVERLAY_REASONS[code]']);
-    expect([...src.matchAll(/why\(p, ([^)]*)\)/g)].every((m) => /^'[a-z-]+'$|^claim\.code$|^`depth-\$\{bound\}-\$\{dwcDepth \? 'dwc' : 'name'\}` as OverlayReason$/.test(m[1]))).toBe(true);
+    expect([...src.matchAll(/why\(p, ([^)]*)\)/g)].every((m) => /^'[a-z0-9-]+'$|^claim\.code$|^`depth-\$\{bound\}-\$\{dwcDepth \? 'dwc' : 'name'\}` as OverlayReason$/.test(m[1]))).toBe(true);
   });
 
   it('every proposal of the overlay that has a reason code has one from the table, and the English reason is the table text', () => {

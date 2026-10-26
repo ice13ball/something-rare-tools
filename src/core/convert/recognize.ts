@@ -3,7 +3,9 @@
 import { dwcTermOf, proposeColumns, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
-import { CONVERTER_VARIABLES, conceptVariable, isAbundanceUnit } from './vocab';
+import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit } from './vocab';
+import { isPercentUnit, verifiedConcept } from './nerc';
+import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 
@@ -37,7 +39,13 @@ const QUANTITY_PHRASE_COUNT = /^(liczba osobnikow|liczba os|anzahl individuen|no
 const QUANTITY_PHRASE_DENSITY = /^(individuendichte)$/;
 const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zageszczenie|liczebnosc|biomass|biomasa|biomasse)( .*)?$/;
 const EFFORT_VOLUME = /^(volume filtered|volume sampled|sampled volume|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
-const EFFORT_AREA = /^(area|area sampled|sampled area|powierzchnia|flache|surface|surface echantillonnee)$/;
+const EFFORT_AREA = /^(area|area sampled|sampled area|swept area|area swept|powierzchnia|flache|surface|surface echantillonnee)$/;
+// a plain "Area" is a place name on a sheet with no taxa; only a header that says sampled or swept is an effort there
+const PLAIN_AREA = /^(area|powierzchnia|flache|surface)$/;
+// the words that mean the water, not an abundance, when a "density" header names them; and the units of a seawater density (mass per volume)
+const SEAWATER_DENSITY_NAME = /^(density|seawater density|sea water density|water density|in situ density|density of seawater|gestosc wody|gestosc wody morskiej|dichte|wasserdichte|meerwasserdichte|masse volumique|masse volumique de l eau)$/;
+const SEAWATER_DENSITY_ONLY = /^(seawater density|sea water density|water density|in situ density|density of seawater|gestosc wody|gestosc wody morskiej|wasserdichte|meerwasserdichte|masse volumique de l eau)$/;
+const isSeawaterDensityUnit = (unit: string | undefined): boolean => unit !== undefined && /^(kg\/m3|g\/cm3|g\/ml|kg\/l)$/.test(foldUnit(unit));
 
 // a summary column is never proposed as a species: its header (after the key folding: case, diacritics, punctuation) STARTS with one of these words,
 // or holds total / suma / razem / gesamt as a separate word ("Total copepods", "Abundance, total", "Razem Copepoda"). "Totalia sp." is a genus and stays.
@@ -50,7 +58,8 @@ function isSummaryHeader(rawName: string): boolean {
   return words.length > 0 && (SUMMARY_FIRST.has(words[0]) || words.some((w) => SUMMARY_ANYWHERE.has(w)));
 }
 // the sample code of a row: PANGAEA's "Sample label (Multinet number)" and "Sample code/label" (the bracket text after the name is cut off before the match)
-const SAMPLE_CODE_NAME = /^(sample label|sample code|sample code label|sample name|sample id|sample number)$/;
+// (German whole headers: "Nr. der Probe", "Probennummer", "Proben-Nr.", "Probe Nr.", "Proben-ID"; /check's columns.ts is not changed for them)
+const SAMPLE_CODE_NAME = /^(sample label|sample code|sample code label|sample name|sample id|sample number|nr der probe|probennummer|proben nr|probe nr|proben id)$/;
 // "Stage" and its translations: the life stage of the record (a long sheet)
 const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
 
@@ -106,6 +115,25 @@ function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolea
   return marks > 0;
 }
 
+/** A quality flag or quality column (never a measurement): ODV's `QV:ODV:...`, `Q_<name>`, `QF_` / `QC_` prefixes, and `_quality`, `_QC`, `_QF`, `_flag` suffixes. The words are whole name parts (a lone Q is a discharge). */
+export function isQualityHeader(header: string): boolean {
+  if (/qv:odv/i.test(header)) return true;
+  const k = headerKey(unitFromHeader(header).name);
+  return /^q[cf]? [a-z0-9]/.test(k) || / (qc|qf|flag|flags|quality)$/.test(k);
+}
+
+/** The sheet says it is about pore water, sediment or a core: a header says so, or a text cell does (the first 200 rows). */
+function sedimentContext(sheet: RawSheet): boolean {
+  if (sheet.header.some((h) => SEDIMENT_CONTEXT.test(h))) return true;
+  for (let i = 0; i < sheet.header.length; i++) {
+    for (const row of sheet.rows.slice(0, 200)) {
+      const c = row.cells[i] ?? null;
+      if (typeof c === 'string' && /^\s*(pore ?water|porewater|sediment)/i.test(c)) return true;
+    }
+  }
+  return false;
+}
+
 /** Every reason the overlay gives, by code: the English text is the technical wording, the page shows the text of `convert.reason.<code>` in the reader's language. */
 export const OVERLAY_REASONS = {
   'dwc-occurrenceid': 'Darwin Core occurrenceID (used as given)',
@@ -137,6 +165,16 @@ export const OVERLAY_REASONS = {
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
+  'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
+  'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres',
+  'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
+  'site-depth': 'name says the water depth of the site: it is the depth of the sediment or porewater samples',
+  'site-depth-ignored': 'name says the water depth of the site, not the depth of each row: not written (give it the meaning depth if it is the depth of every row)',
+  'area-not-effort': 'a plain area on a sheet with no taxa is a place name or an extent, not a sampled area: ignored (name it sampled area if it is one)',
+  'seawater-density': 'name and unit say seawater density: a measured variable, not an abundance',
+  'oxygen-saturation': 'oxygen as a percentage is oxygen saturation: a variable of its own, with no concentration concept',
+  'p01-malformed': 'the header declares a code that is not a well-formed P01 code (eight letters and digits): kept as a measured variable, and no concept is written',
+  'p01-declared-unverified': 'the header declares a P01 code that the converter could not verify: it is offered as declared by the file and written only after you confirm it',
 } as const;
 export type OverlayReason = keyof typeof OVERLAY_REASONS;
 
@@ -230,8 +268,17 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     return dwcTermOf(h) === 'scientificname' || TAXON_NAME.test(foldDiacritics(headerKey(name)));
   });
   const occurrenceIdAt = new Set(wide ? sheet.header.flatMap((h, i) => (dwcTermOf(h) === 'occurrenceid' ? [i] : [])) : []);
-  const asked = occurrenceIdAt.size === 0 ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) ? `__column ${i + 1}` : h)) };
-  const base = proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: sheet.header[p.index] } : { ...p }));
+  // "O2_ml_l": the shared reader knows a unit written after an underscore only for the units it lists, and millilitres per litre is not one of them. The shared proposer is asked as if the
+  // header were "O2 [mL/L]" (the converter's own reading of it); the column keeps its own header.
+  const mlPerLAt = new Map<number, string>(sheet.header.flatMap((h, i) => { const m = /^(.*\S)[_ ]ml[_ ]l$/i.exec(h.trim()); return m ? [[i, `${m[1]} [mL/L]`] as [number, string]] : []; }));
+  const rewritten = occurrenceIdAt.size > 0 || mlPerLAt.size > 0;
+  const asked = !rewritten ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) ? `__column ${i + 1}` : (mlPerLAt.get(i) ?? h))) };
+  const base = proposeColumns(asked, ctx).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: sheet.header[p.index] } : { ...p }));
+  const sedCtx = sedimentContext(sheet);
+  const qualityAt = new Set<number>();
+  const seafloorAt = new Map<number, 'seafloor-depth-name' | 'seafloor-depth-cm'>();
+  const siteDepthAt = new Set<number>();
+  const plainAreaAt = new Set<number>();
   const claims = new Map<number, Claim>();
   const bounds = new Map<number, 'min' | 'max'>();
   let dwcEventId = -1;
@@ -241,6 +288,25 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const key = headerKey(hu.name);
     const term = dwcTermOf(p.header);
     const dwc = term === undefined ? undefined : dwcClaim(term);
+    if (!dwc && term === undefined) {
+      if (isQualityHeader(p.header)) {
+        qualityAt.add(p.index);
+        continue;
+      }
+      const depthUnit = hu.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+      if (isSeafloorName(hu.name)) {
+        seafloorAt.set(p.index, 'seafloor-depth-name');
+        continue;
+      }
+      if (sedCtx && isPlainDepthName(hu.name) && seafloorUnitOf(depthUnit) === 'cm') {
+        seafloorAt.set(p.index, 'seafloor-depth-cm');
+        continue;
+      }
+      if (isSiteDepthName(hu.name)) {
+        siteDepthAt.add(p.index);
+        continue;
+      }
+    }
     if (!dwc && APHIA_HEADERS.has(p.header.trim()) && holdsAphiaIds(sheet, p.index)) {
       claims.set(p.index, { role: { kind: 'taxonId', aphia: true }, confidence: 'high', code: 'name-aphiaid' });
       continue;
@@ -259,12 +325,21 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         // the name as it stands, then without a trailing bracket group of any text ("Volume filtered (m3)", "Sample label (Multinet number)"); a bracket text
         // is the unit of an effort column when the shared reader found none
         const bare = foldDiacritics(headerKey(withoutBrackets(hu.name)));
+        const key0 = foldDiacritics(key);
+        const seawaterDensity: Claim | undefined =
+          SEAWATER_DENSITY_NAME.test(key0) && (SEAWATER_DENSITY_ONLY.test(key0) || isSeawaterDensityUnit(hu.unit))
+            ? { role: { kind: 'variable', variable: 'density', ...(hu.unit === undefined ? {} : { unit: hu.unit, unitSource: 'header' as const }) }, confidence: 'high', code: 'seawater-density' }
+            : undefined;
         const named =
+          seawaterDensity ??
           variableClaim(hu.name, hu.unit) ??
           nameClaim(foldDiacritics(key), hu.unit) ??
           onlyEffortOrCode(bare === foldDiacritics(key) ? undefined : nameClaim(bare, hu.unit ?? bracketText(hu.name))) ??
           quantityClaim(bare);
-        if (named) claims.set(p.index, named);
+        if (named) {
+          claims.set(p.index, named);
+          if (named.role.kind === 'effort' && PLAIN_AREA.test(foldDiacritics(headerKey(hu.name)))) plainAreaAt.add(p.index);
+        }
       }
     }
   }
@@ -279,6 +354,39 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   for (const p of base) {
     const claim = claims.get(p.index);
     const bound = bounds.get(p.index);
+    // a quality flag is never a measurement or a taxon (the shared proposer already ignores `_flag` and `_QC`; the rest of the spellings are read here)
+    if (qualityAt.has(p.index)) {
+      if (p.role.kind !== 'ignore' || p.reasonCode !== 'quality-flag') {
+        p.role = { kind: 'ignore' };
+        p.confidence = 'low'; // so that the page shows the reason
+        why(p, 'quality-column');
+      }
+      continue;
+    }
+    // the depth in a sediment or porewater sample, and the water depth of the site
+    const hdr = unitFromHeader(p.header);
+    const seafloorCode = seafloorAt.get(p.index);
+    if (seafloorCode !== undefined) {
+      const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+      p.role = { kind: 'depthBelowSeafloor', ...(unit === undefined ? {} : { unit }) };
+      p.confidence = seafloorCode === 'seafloor-depth-cm' ? 'low' : 'high'; // a guess from the sheet's context shows its reason
+      if (seafloorCode === 'seafloor-depth-cm') why(p, 'seafloor-depth-cm');
+      else why(p, 'seafloor-depth-name');
+      continue;
+    }
+    if (siteDepthAt.has(p.index)) {
+      if (seafloorAt.size > 0) {
+        const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+        p.role = { kind: 'depth', positive: 'down', ...(unit === undefined ? {} : { unit }) };
+        p.confidence = 'high';
+        why(p, 'site-depth');
+      } else {
+        p.role = { kind: 'ignore' };
+        p.confidence = 'low';
+        why(p, 'site-depth-ignored');
+      }
+      continue;
+    }
     if (bound !== undefined) {
       const hu = unitFromHeader(p.header);
       const dwcDepth = dwcTermOf(p.header) === 'minimumdepthinmeters' || dwcTermOf(p.header) === 'maximumdepthinmeters';
@@ -320,6 +428,27 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       why(p, 'eventid-used');
       continue;
     }
+    // oxygen as a percentage is SATURATION: a variable of its own, never given a concentration concept (a concept that says "per unit volume" is another quantity)
+    if (p.role.kind === 'variable' && p.role.variable === 'oxygen' && ((p.role.unit !== undefined && isPercentUnit(p.role.unit)) || /saturation|sattigung|nasycenie/i.test(foldDiacritics(p.header)))) {
+      p.role = { ...p.role, variable: 'oxygen saturation' };
+      why(p, 'oxygen-saturation');
+      continue;
+    }
+    // a P01 code the header declares (`SDN:P01::CODE`): a well-formed one the converter cannot verify is offered as "declared by the file" (written only after the user confirms); a malformed one (the
+    // wrong number of characters) stays a measured variable with that said, and is never read as a species
+    {
+      const m = /^SDN:P01::([A-Za-z0-9]+)$/.exec(hdr.name.trim());
+      if (m !== null && p.role.kind === 'variable' && p.role.p01 === undefined) {
+        p.confidence = 'low';
+        why(p, 'p01-malformed');
+        continue;
+      }
+      if (m !== null && p.role.kind === 'variable' && p.role.p01 !== undefined && verifiedConcept(p.role.p01) === undefined) {
+        p.confidence = 'low';
+        why(p, 'p01-declared-unverified');
+        continue;
+      }
+    }
     // wide sheet: a column of presence marks (+, x) next to counts is a species column too; the shared proposer read it as text
     const headerName = unitFromHeader(p.header).name.trim();
     const summaryHeader = isSummaryHeader(headerName);
@@ -350,6 +479,17 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       why(p, 'taxon-numeric');
     }
   }
+  // a plain "Area" on a sheet that has no taxon, quantity or occurrence ID is a place name or an extent, not a sampled area (a header that says sampled or swept area stays an effort)
+  const biology = base.some((q) => q.role.kind === 'taxon' || q.role.kind === 'quantity' || q.role.kind === 'occurrenceId' || q.role.kind === 'taxonId');
+  if (!biology) {
+    for (const q of base) {
+      if (plainAreaAt.has(q.index) && q.role.kind === 'effort') {
+        q.role = { kind: 'ignore' };
+        q.confidence = 'low';
+        why(q, 'area-not-effort');
+      }
+    }
+  }
   return base;
 }
 
@@ -371,9 +511,15 @@ export function suggestConvertShape(columns: readonly { role: ColumnRole }[]): C
  * quantity or occurrence-ID column (a sheet with those is a biology sheet). A column that only MIGHT be a species (a numeric column with a name the converter does not know)
  * counts as a taxon column here: a CTD sheet with parameter names it does not know is then simply not suggested, which costs the user one tick.
  */
-export function suggestConvertProfile(columns: readonly { role: ColumnRole }[]): boolean {
+export function suggestConvertProfile(columns: readonly { role: ColumnRole; confidence?: 'high' | 'low' }[]): boolean {
   const kinds = new Set(columns.map((c) => c.role.kind));
-  if (kinds.has('taxon') || kinds.has('quantity') || kinds.has('occurrenceId') || kinds.has('taxonId')) return false;
-  const hasVariable = columns.some((c) => c.role.kind === 'variable' && c.role.variable.trim() !== '');
-  return kinds.has('station') && (kinds.has('depth') || kinds.has('pressure')) && hasVariable;
+  if (kinds.has('quantity') || kinds.has('occurrenceId') || kinds.has('taxonId')) return false;
+  // a taxon column the user or the file named (high confidence, or a long sheet's taxon column) makes it a biology sheet; low-confidence candidates (numeric columns with a name the converter does not
+  // know) block only when they are at least as many as the named variables (the tool's own choice: a CTD file has a few unknown parameters, a species table has many species)
+  const candidates = columns.filter((c) => c.role.kind === 'taxon' && c.role.header === true && c.confidence === 'low').length;
+  const named = columns.filter((c) => c.role.kind === 'taxon').length - candidates;
+  if (named > 0) return false;
+  const variables = columns.filter((c) => c.role.kind === 'variable' && c.role.variable.trim() !== '').length;
+  if (!(kinds.has('station') && (kinds.has('depth') || kinds.has('pressure') || kinds.has('depthBelowSeafloor')) && variables > 0)) return false;
+  return candidates === 0 || (variables >= 2 && candidates < variables);
 }

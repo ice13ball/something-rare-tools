@@ -1,0 +1,7 @@
+core_ID,sediment_depth,parameter,unit,value
+CORE_A,0.5,Corg,%,1.2
+CORE_A,0.5,d13C,permil,-24.5
+CORE_A,1.5,Corg,%,1.1
+CORE_A,1.5,d13C,permil,-24.7
+CORE_B,0.5,Corg,%,0.9
+CORE_B,0.5,d13C,permil,-25.1

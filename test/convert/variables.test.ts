@@ -258,10 +258,22 @@ describe('Q5: what is proposed, what is only offered', () => {
     expect(suggestType('oxygen', 'µmol/kg').proposed?.code).toBe('DOXMZZXX');
     expect(suggestType('oxygen', 'µmol kg-1').proposed?.code).toBe('DOXMZZXX');
     expect(suggestType('oxygen', 'µmol/kg').offered).toEqual([]); // the per-volume concept would describe another quantity
-    for (const unit of ['mL/L', 'ml/l', '%', 'saturation', undefined]) {
+    for (const unit of ['saturation', undefined]) {
       const s = suggestType('oxygen', unit);
       expect(s.proposed, String(unit)).toBeUndefined();
       expect(s.offered.map((t) => t.code).sort(), String(unit)).toEqual(['DOXMZZXX', 'DOXYZZXX']);
+    }
+    // millilitres per litre is per unit volume: the per-mass concept would describe another quantity (nothing is proposed: no verified alias for the unit)
+    for (const unit of ['mL/L', 'ml/l']) {
+      const s = suggestType('oxygen', unit);
+      expect(s.proposed, unit).toBeUndefined();
+      expect(s.offered.map((t) => t.code), unit).toEqual(['DOXYZZXX']);
+    }
+    // oxygen in per cent is SATURATION: the saturation concept (opened 2026-10-26) is proposed, and no concentration concept is offered
+    for (const [v, unit] of [['oxygen', '%'], ['tlen', '%'], ['oxygen saturation', '%']] as const) {
+      const s = suggestType(v, unit);
+      expect(s.proposed?.code, v).toBe('OXYSZZ01');
+      expect(s.offered, v).toEqual([]);
     }
   });
 
@@ -306,6 +318,7 @@ describe('Q5: what is proposed, what is only offered', () => {
       [
         'P01/AMONZZXX', 'P01/ALKYPOTK', 'P01/ALKYZZXX', 'P01/CNDCST01', 'P01/CORGCAP1', 'P01/CPHLZZXX', 'P01/D15NEAM1', 'P01/DOXMZZXX', 'P01/DOXYZZXX', 'P01/NTOTCAP1', 'P01/NTRAZZXX', 'P01/NTRIZZXX', 'P01/NTRZZZXX', 'P01/PCO2EG01',
         'P01/PHOSKGD5', 'P01/PHOSZZXX', 'P01/PHXXSP02', 'P01/PHXXZZXX', 'P01/PSALMV01', 'P01/PSALST01', 'P01/POTMCV01', 'P01/PSLTZZ01', 'P01/SIGTEQ01', 'P01/SLCAKGD5', 'P01/SLCAZZXX', 'P01/TCO2KG02', 'P01/TCO2ZZXX', 'P01/TEMPP901', 'P01/TEMPPR01', 'P01/TEMPST01',
+        'P01/CLXXWBUP', 'P01/CORGZZKG', 'P01/DOCGZZ01', 'P01/INDENS01', 'P01/NEWCXX08', 'P01/NEWCXX09', 'P01/OXYSZZ01', 'P01/RWS00021', 'P01/RWS00022', 'P01/RWS00023', 'P01/RWS00024', 'P01/S04DISP1', 'P01/SPHTMAXX', 'P06/UPCT',
         'P06/KGUM', 'P06/MMPL', 'P06/MSCM', 'P06/PSUX', 'P06/UATM', 'P06/UGMC', 'P06/UGPL', 'P06/ULAA', 'P06/UMGL', 'P06/UMMC', 'P06/UKMC', 'P06/UPAA', 'P06/UPNM', 'P06/UPOX', 'P06/UPPT', 'P06/UUPH', 'P06/UUUU',
       ].sort(),
     );

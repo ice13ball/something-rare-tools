@@ -54,6 +54,8 @@ export interface SampleSite {
   depthMin?: number;
   depthMax?: number;
   depthDecimals?: number;
+  /** minimum = maximumDistanceAboveSurfaceInMeters: the depth below the seafloor of a sediment or porewater sample, a negative number in metres as text (seafloor.ts). */
+  distanceText?: string;
   sampleSizeValue?: string;
   sampleSizeUnit?: string;
   source?: SourceRef;
@@ -299,6 +301,7 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
     if (s.depthMin !== undefined) rec.depthMin = s.depthMin;
     if (s.depthMax !== undefined) rec.depthMax = s.depthMax;
     if (s.depthDecimals !== undefined) rec.depthDecimals = s.depthDecimals;
+    if (s.distanceText !== undefined) rec.distanceText = s.distanceText;
     if (s.sampleSizeValue !== undefined) rec.sampleSizeValue = s.sampleSizeValue;
     if (s.sampleSizeUnit !== undefined) rec.sampleSizeUnit = s.sampleSizeUnit;
     if (s.source) rec.source = s.source;

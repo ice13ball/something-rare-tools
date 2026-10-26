@@ -860,3 +860,55 @@ L22 (2441 concepts, read 2026-10-26) has `NETT0187` "Hydro-Bios MultiNet Mammoth
 - A sheet with only a bottom (or only a top) bound writes only maximumDepthInMeters (or only minimumDepthInMeters); the other end is not made up. One plain depth column is both ends.
 - Cast-number matches are listed in full as an info line (CONV-PROFILE-STATION-CAST-MATCHED). A PANGAEA file whose Parameter(s) block cannot be matched to its columns says so (CONV-PANGAEA-NAMES-FALLBACK, info) and uses the table-header abbreviations.
 - The duplicate pairs of PANGAEA.839758: `Calanus finmarchicus, c2` and `c3`, one column with the parameter comment "including Calanus glacialis", one without; in no one of the 158 samples are both columns above zero (45 and 17 samples for c2, 79 and 23 for c3), so they never write the same taxon twice into a sample. `Cirripedia, cypris, nauplii`, comments "1" and "2" (they say nothing else): both columns are above zero in two samples (`PS27/030-4`, nets 4 and 5), so those two samples hold the taxon twice, each record with its own occurrenceID and its comment; the accepted warning CONV-TAXON-SAME-EVENT says so, nothing is summed, and BioCheck's "potential duplicate record" for these four records is the same fact.
+
+## Converter (/convert) — environmental data fixes, 26.10.2026: a local run on a private environmental data set
+
+The defects came from a local run on files that must not go online (nothing of them is in the repository; the tests use invented files with the same patterns). What was researched for the fixes, and what was decided.
+
+### Part 1. Environmental data alone is not an OBIS dataset (CONV-NO-OCCURRENCES)
+
+- OBIS Manual, "How to format Occurrence tables" (https://manual.obis.org/format_occurrence.html, read 2026-10-26): "If your dataset structure is based on Occurrence core, or has an Occurrence extension (remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen), there are several terms that are required in your dataset by OBIS." Same manual, "Data formatting" (https://manual.obis.org/data_format.html): abiotic measurements (ENV-DATA) are "linked to either events or occurrences" in the eMoF, next to the occurrences of the same events. "Contribute" (https://manual.obis.org/contribute.html) lists abiotic measurements among the data OBIS accepts, and calls it "a common misconception that OBIS only accepts species occurrence data": they are accepted WITH species records, not instead of them. So an upload with no taxon gives an archive with no occurrence: blocked, in these words (CONV-NO-OCCURRENCES), and the empty Occurrence table is not run through the Darwin Core term check (it reported eventDate, decimalLatitude and decimalLongitude as missing from a table that has no row).
+- A sheet marked as a profile file that gives no level at all (a description of columns, a sheet with no station column and no tick) says so (CONV-PROFILE-NOTHING-READ) instead of ending silently with nothing.
+
+### Part 2. Sediment and porewater depth (CONV-SEAFLOOR-*)
+
+- Darwin Core (https://dwc.tdwg.org/terms/, read 2026-10-26), minimumDistanceAboveSurfaceInMeters: "The lesser distance in a range of distance from a reference surface in the vertical direction, in meters. Use positive values for locations above the surface, negative values for locations below. If depth measures are given, the reference surface is the location given by the depth, otherwise the reference surface is the location given by the elevation." (maximumDistanceAboveSurfaceInMeters: the same with "greater".) Its own example: "For a 1.5 meter sediment core from the bottom of a lake (at depth 20m) ...: minimumDepthInMeters: 20, maximumDepthInMeters: 20, minimumDistanceAboveSurfaceInMeters: 0, maximumDistanceAboveSurfaceInMeters: -1.5".
+- OBIS Manual, "Darwin Core" (https://manual.obis.org/darwin_core.html, read 2026-10-26): "If a depth is given (i.e. value >0), the reference surface is the location of the depth. This can be especially useful for sediment cores taken from the sea bottom (scenario 3 in Figure 2.2 and table below). In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."
+- Decision from these: the depth below the seafloor goes to minimum = maximumDistanceAboveSurfaceInMeters as a NEGATIVE number of metres, and the water depth of the site (`Site_depth_m`, `Depth of the site (m)`, `water depth`, `bottom depth`) goes to minimum = maximumDepthInMeters of the same event, so the reference surface is the seafloor and not the elevation. A depth below the seafloor with no site depth is the accepted warning CONV-SEAFLOOR-NO-SITE-DEPTH.
+- The only unit conversion of the converter: centimetres to metres by moving the decimal point two places on the TEXT of the cell (`0.5` cm -> `-0.005`, `12.30` cm -> `-0.1230`; no float, no rounding, every digit kept); metres get the sign only. Any other unit (and no unit) is refused (CONV-SEAFLOOR-UNIT); a number written with an exponent has no exact plain text and is refused (CONV-SEAFLOOR-VALUE); a negative depth below the seafloor is refused, because the sign is the converter's. A plain depth column in cm is still refused (CONV-DEPTH-UNIT), and its old advice "remove the unit if it is metres" is gone (it would have written centimetres as metres).
+- One column = one depth: minimum = maximum. A top and a bottom column are not read: the two terms are the "lesser" and the "greater" distance, but the standard's own example lists the top as the minimum (0) and the bottom as the maximum (-1.5), so a pair of columns would have to settle an inconsistency of the standard. Not decided here.
+- Recognition (conservative): a header that names the depth in a sediment, core or pore water (`Pore_water_Depth[cm]`, `depth below seafloor`, `sediment depth`, `głębokość w osadzie`, `Sedimenttiefe`, `profondeur dans le sédiment`, ...), and a plain `Depth` in centimetres only on a sheet that says it is about pore water, sediment or a core (a header or a text cell). Never a plain `Depth`.
+
+### Part 3. NERC concepts added (opened 2026-10-26)
+
+Each opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/?_profile=nvs&_mediatype=application/ld+json`: HTTP 200, no redirect, `owl:deprecated` = "false". The search for generic concepts was made with the NVS SPARQL endpoint on the preferred labels.
+
+| collection | code | preferred label (NVS) | kind in the converter |
+|---|---|---|---|
+| P01 | OXYSZZ01 | Saturation of oxygen {O2 CAS 7782-44-7} in the water body [dissolved plus reactive particulate phase] | generic: proposed for oxygen in per cent |
+| P01 | INDENS01 | Density of the water body by computation from absolute salinity and conservative temperature using UNESCO 2010 algorithm | method: offered for a seawater density |
+| P01 | SIGTEQ01 | Sigma-theta of the water body by computation from salinity and potential temperature using UNESCO algorithm | (already listed) offered for a density too: it is a density ANOMALY |
+| P01 | DOCGZZ01 | Concentration of organic carbon {organic_C CAS 7440-44-0} {DOC} per unit volume of the water body [dissolved plus reactive particulate specified elsewhere phase] | matrix: offered |
+| P01 | CORGZZKG | Concentration of organic carbon {organic_C CAS 7440-44-0} {DOC} per unit mass of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | CLXXWBUP | Concentration of chloride {Cl- CAS 16887-00-6} per unit volume of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | RWS00021 | Concentration of sodium {Na CAS 7440-23-5} per unit volume of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | RWS00022 | Concentration of potassium {K CAS 7440-09-7} per unit volume of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | RWS00023 | Concentration of calcium {Ca CAS 7440-70-2} per unit volume of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | RWS00024 | Concentration of magnesium {Mg CAS 7439-95-4} per unit volume of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | S04DISP1 | Concentration of sulfate {SO4(2-) sulphate CAS 14808-79-8} per unit volume of the water body [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | SPHTMAXX | Concentration of sulfate {SO4(2-) sulphate CAS 14808-79-8} per unit volume of the sediment pore water [dissolved plus reactive particulate phase] | matrix: offered |
+| P01 | NEWCXX09 | Concentration of calcium {Ca CAS 7440-70-2} per unit mass of the sediment pore water [dissolved plus reactive particulate <0.4/0.45um phase] | matrix: offered |
+| P01 | NEWCXX08 | Concentration of magnesium {Mg CAS 7439-95-4} per unit mass of the sediment pore water [dissolved plus reactive particulate <0.4/0.45um phase] | matrix: offered |
+| P06 | UPCT | Percent | unit (aliases `%`, `percent`) |
+| P06 | UUUU | Dimensionless | unit: proposed for a confirmed practical salinity or pH with no unit (already in the table) |
+
+- The matrix concepts name the water body or the sediment pore water: a sheet of pore water is not a sheet of the water body, so the converter does not guess the matrix. They are only OFFERED (never proposed), and the unit's dimension hides the ones of the other dimension. No generic concept for dissolved inorganic nitrogen (DIN) exists in P01 (searched for "inorganic nitrogen" and "DIN" in the preferred labels): none is added.
+- Oxygen in per cent is SATURATION, a variable of its own; a concentration concept chosen for a `%` column raises the unit-mismatch warning (CONV-NERC-UNIT-MISMATCH), and `mL/L` is per unit volume, so the per-mass oxygen concept is not offered for it.
+
+### Part 4. Decisions without a source (the tool's own choices)
+
+- A level of a station visited on more than one date has the date in a depth-made ID: `<station>:<YYYY-MM-DD>:<depth>m` (or `dbar`, or `<depth><unit>bsf` for a depth in the sediment); the date is read from the data (a row with no date there has no ID), never from the order of the rows.
+- A sheet with no station column: the user may tick "each distinct position is a station" (never automatic): the station ID is `<cruise>:<latitude>_<longitude>`, the two numbers as written.
+- The ID of a level made of a depth in the sediment is `<station>:<number as written><cm|m>bsf` (`cmbsf`, `mbsf` are the usual abbreviations of centimetres and metres below the seafloor).
+- A ragged row (ROW-RAGGED, raised by the parser) blocks the sheet and is not converted: its values are shifted against the header.
+- A P01 code declared in a header (`SDN:P01::CODE`): a code the converter has verified is proposed first; a well-formed one (eight upper-case letters and digits) it has not verified is offered as "declared by the file" and written only after the user chose it, and the worker checks that the column's header declares exactly that code; a malformed one stays a measured variable with a note.

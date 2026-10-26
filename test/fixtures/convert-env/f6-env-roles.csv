@@ -1,0 +1,4 @@
+Area,Site ID,Date,Longitude,Latitude,Depth of the site (m),Depth (m),T (°C),S,Density (kg m-3),Water Mass
+Invented Bay,ZA1,2020-05-01,20.2,70.1,45,5,4.1,33.1,1026.5,ArW
+Invented Bay,ZA1,2020-05-01,20.2,70.1,45,10,3.9,33.4,1026.8,ArW
+Invented Bay,ZA2,2020-05-02,20.4,70.3,60,5,4.4,33.0,1026.4,ArW
