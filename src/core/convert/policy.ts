@@ -37,6 +37,7 @@ export const BLOCK_INPUT_RULES: readonly string[] = ['IN-LAYOUT-UNSUPPORTED', 'I
 
 /** Blocking: the converter's own rules. (CONV-WORMS-UNDECIDED is raised from stage 4 on, after a WoRMS lookup.) */
 export const BLOCK_CONV_RULES: readonly string[] = [
+  'CONV-COLUMN-UNNAMED',
   'CONV-QUANTITY-UNDECLARED',
   'CONV-COUNT-NOT-INTEGER',
   'CONV-NEGATIVE-QUANTITY',
@@ -63,6 +64,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
 
 /** Warnings the user must accept (per rule, per run) before exporting. */
 export const ACCEPT_RULES: readonly string[] = [
+  // the header had fewer names than the rows have values: the tool cannot know where names are missing, so values may sit under another column's name (/check: a warning)
+  'IN-HEADER-SHORT',
   'ROW-NON-NUMERIC',
   'ROW-INVISIBLE-CHAR',
   'ROW-DATE-FUTURE',

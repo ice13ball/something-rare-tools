@@ -34,6 +34,7 @@ import type { RuleSpec } from './spec';
  *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
+ *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
  *   CONV-NO-TAXON              shape            shape = wide | long
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
@@ -302,6 +303,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     },
     technical: `{file}, {sheet}: unit "{unit}" has no confirmed P06 concept; measurementUnit is written as declared, measurementUnitID is empty, no conversion is made. For a measured-variable column an identifier is written only when the user confirmed it for that column.`,
     citations: [NERC_MANUAL],
+  },
+  {
+    id: 'CONV-COLUMN-UNNAMED',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `Kolumna „{field}” nie ma nazwy w nagłówku pliku, a jej nazwa miałaby trafić do archiwum jako nazwa zmiennej lub taksonu. Wpisz nazwę zmiennej albo wybierz dla niej inne znaczenie (np. „Pomiń”).`,
+      en: `Column "{field}" has no name in the file's header, and its name would go into the archive as the name of a variable or a taxon. Type a name for the variable, or choose another meaning for the column (for example "Ignore").`,
+      de: `Die Spalte „{field}“ hat keinen Namen in der Kopfzeile der Datei, und ihr Name würde als Name einer Variablen oder eines Taxons ins Archiv gelangen. Geben Sie der Variablen einen Namen oder wählen Sie eine andere Bedeutung für die Spalte (z. B. „Ignorieren“).`,
+      fr: `La colonne « {field} » n'a pas de nom dans l'en-tête du fichier, et son nom irait dans l'archive comme nom d'une variable ou d'un taxon. Saisissez un nom pour la variable, ou choisissez un autre sens pour la colonne (par ex. « Ignorer »).`,
+    },
+    technical: `{file}, {sheet} field {field}: the header has no name for this column (IN-HEADER-SHORT; internal name "Column N"); it is mapped as a variable that keeps that name, or as a taxon whose header is the name. The export is blocked until the variable has a name or the column another role.`,
   },
   {
     id: 'CONV-DEPTH-UNIT',
