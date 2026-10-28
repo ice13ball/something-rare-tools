@@ -94,8 +94,10 @@ function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonC
 
 function detectLong(sheet: RawSheet, proposals: readonly ColumnProposal[], decimalComma: boolean): TablePlan['long'] | undefined {
   const keyOf = (p: ColumnProposal) => headerKey(unitFromHeader(p.header).name);
-  const textCols = proposals.filter((p) => p.role.kind === 'ignore');
-  const varCols = proposals.filter((p) => p.role.kind === 'variable');
+  // a column the short-header detection added (IN-HEADER-SHORT) says nothing about the layout: never a parameter, unit or value column
+  const named = proposals.filter((p) => sheet.unnamedFrom === undefined || p.index < sheet.unnamedFrom);
+  const textCols = named.filter((p) => p.role.kind === 'ignore');
+  const varCols = named.filter((p) => p.role.kind === 'variable');
 
   const repeats = (col: number): { distinct: Set<string>; n: number } => {
     const distinct = new Set<string>();
