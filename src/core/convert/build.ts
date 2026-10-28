@@ -916,6 +916,17 @@ export function convert(input: ConvertInput): ConvertResult {
     for (const sin of input.sheets) (used.get(sin.file) ?? used.set(sin.file, new Set()).get(sin.file)!).add(sin.sheet);
     for (const [file, sheets] of used) for (const f of file.findings) if (f.sheet === undefined || sheets.has(f.sheet)) findings.push(f);
   }
+  // a column the header does not name (IN-HEADER-SHORT) must not give its internal name ("Column 7") to a variable or a taxon of the archive
+  for (const sin of input.sheets) {
+    const from = sin.file.sheets.find((x) => x.name === sin.sheet)?.unnamedFrom;
+    if (from === undefined) continue;
+    for (const c of sin.mapping.columns) {
+      if (c.index < from) continue;
+      const unnamedVariable = c.role.kind === 'variable' && /^column \d+$/i.test(c.role.variable.trim());
+      const taxonHeader = c.role.kind === 'taxon' && c.role.header === true;
+      if (unnamedVariable || taxonHeader) findings.push(makeConvertFinding('CONV-COLUMN-UNNAMED', { file: sin.file.fileName, sheet: sin.sheet, field: c.header }));
+    }
+  }
 
   const splits = listSplits(input);
   const undecided = splits.filter((s) => s.needsDecision && !s.approved);

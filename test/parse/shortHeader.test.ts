@@ -4,7 +4,7 @@
 // cruise export, the values are made up.
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { policyOf } from '../../src/core/convert/policy';
+import { exportAllowed, judge, policyOf } from '../../src/core/convert/policy';
 import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import { readConvertFile } from '../../src/core/convert/read';
 import { buildDatasets } from '../../src/core/dataset';
@@ -14,6 +14,7 @@ import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout'
 import { formatLines, renderPlain, renderTechnical } from '../../src/core/report';
 import type { ColumnRole, Finding, ParsedFile } from '../../src/core/types';
 import { LANGS } from '../../src/core/types';
+import { renderConvertPlain } from '../../src/core/rules/convert';
 import { createDirectEngine } from '../../src/worker/handler';
 
 const NAMES = ['Station', 'Date', 'Beg Lat Dir', 'Beg Lon Dir', 'Depth', 'Temp', 'Remarks', 'Photo'];
@@ -105,9 +106,9 @@ describe('IN-HEADER-SHORT: the finding text', () => {
   it('says in every language how many names are missing, without claiming where', () => {
     const f = finding(2);
     expect(renderPlain(f, 'en')).toContain(`The header has ${H} names, but 30 of 30 rows have ${H + 2} values, so 2 names are missing.`);
-    expect(renderPlain(f, 'en')).toContain(`Column ${H + 1}…${H + 2}`);
+    expect(renderPlain(f, 'en')).toContain(`Columns ${H + 1}…${H + 2}`);
     expect(renderPlain(f, 'pl')).toContain(`Nagłówek ma ${H} nazw, ale 30 z 30 wierszy ma ${H + 2} wartości, więc brakuje 2 nazw.`);
-    expect(renderPlain(f, 'pl')).toContain(`Kolumna ${H + 1}…${H + 2}`);
+    expect(renderPlain(f, 'pl')).toContain(`Kolumny ${H + 1}…${H + 2}`);
     expect(renderPlain(f, 'de')).toContain(`daher fehlen 2 Namen`);
     expect(renderPlain(f, 'fr')).toContain(`donc 2 noms manquent`);
     for (const lang of LANGS) expect(renderPlain(f, lang)).not.toMatch(/\{|\+/);
@@ -121,7 +122,7 @@ describe('IN-HEADER-SHORT: the finding text', () => {
     expect(renderPlain(f, 'de')).toContain('daher fehlt 1 Name');
     expect(renderPlain(f, 'fr')).toContain('donc 1 nom manque');
   });
-  it('Polish uses the few form for 3 missing names', () => {
+  it('Polish uses the many form "nazw" for 3 missing names', () => {
     expect(renderPlain(finding(3), 'pl')).toContain('brakuje 3 nazw.');
     expect(formatLines(finding(3).lines)).toBe('');
   });
@@ -177,17 +178,22 @@ describe('IN-HEADER-SHORT: /convert', () => {
     return { file, props, mapping: { sheet: 'env.csv', columns: props.map((p) => ({ index: p.index, header: p.header, role: p.role as ColumnRole })) } };
   };
 
-  it('sees the extended sheet, proposes the new columns, converts, and the finding is shown, never a block', () => {
+  it('sees the extended sheet, proposes the new columns, converts, and the finding must be accepted once (not a block, not a silent show)', () => {
     const { file, props, mapping } = input(make());
     expect(file.sheets[0].header.slice(-2)).toEqual(['Column 7', 'Column 8']);
     expect(props.map((p) => p.header).slice(-2)).toEqual(['Column 7', 'Column 8']);
     // the new column 7 holds salinity-like numbers: give it a role like any column
     const sal = mapping.columns.find((c) => c.header === 'Column 7')!;
+    // the converter proposes an added column as ignored, with a reason (never a taxon named "Column 7")
+    expect(sal.role).toEqual({ kind: 'ignore' });
+    expect(props.find((q) => q.header === 'Column 7')!.reasonCode).toBe('unnamed-column');
     sal.role = { kind: 'variable', variable: 'Salinity', unit: 'PSU' };
     const r = convert({ sheets: [{ file, sheet: 'env.csv', mapping, shape: 'wide', profile: { depthIds: true } }] });
     const short = r.findings.filter((f) => f.ruleId === 'IN-HEADER-SHORT');
     expect(short).toHaveLength(1);
-    expect(policyOf(short[0])).toBe('show');
+    expect(policyOf(short[0])).toBe('accept');
+    expect(judge(r.findings).acceptRules).toContain('IN-HEADER-SHORT');
+    expect(judge(r.findings).blocking.map((f) => f.ruleId)).not.toContain('IN-HEADER-SHORT');
     expect(r.findings.map((f) => f.ruleId)).not.toContain('ROW-RAGGED');
     expect(r.findings.filter((f) => f.severity === 'error' && f.ruleId.startsWith('IN-'))).toEqual([]);
     expect(r.measurements.some((m) => m.measurementValue === '35.0')).toBe(true);
@@ -215,5 +221,78 @@ describe('IN-HEADER-SHORT: the layout', () => {
     // the same table with the column NAMED keeps its long plan: named columns are judged as before
     const named = parseCsvText(lines.join('\n').replace('Parameter\n', 'Parameter,Value\n') + '\n', 'n.csv');
     expect(proposeLayout(named).tables[0].long).toBeDefined();
+  });
+});
+
+describe('IN-HEADER-SHORT: what is not a short header', () => {
+  const enc = (rows: string[][]): string => rows.map((r) => r.join(',')).join('\n') + '\n';
+  const body = (n: number, cells: (i: number) => string[]): string[][] => Array.from({ length: n }, (_, i) => cells(i));
+
+  it('a trailing delimiter on the data rows adds no column and raises nothing; rows with and without it are both regular', () => {
+    const all = parseCsvText(enc([['a', 'b', 'c'], ...body(20, (i) => [String(i), '2', '3', ''])]), 't.csv');
+    expect(ids(all)).toEqual([]);
+    expect(all.sheets[0].header).toEqual(['a', 'b', 'c']);
+    expect(all.sheets[0].rows.every((x) => x.cells.length === 3 && x.fieldCount === 3)).toBe(true);
+    const mixed = parseCsvText(enc([['a', 'b', 'c'], ...body(20, (i) => (i === 7 ? [String(i), '2', '3'] : [String(i), '2', '3', '']))]), 'm.csv');
+    expect(ids(mixed)).toEqual([]);
+    // but one filled extra field is a real extra column
+    const filled = parseCsvText(enc([['a', 'b', 'c'], ...body(20, (i) => [String(i), '2', '3', i === 3 ? 'x' : ''])]), 'f.csv');
+    expect(ids(filled)).toEqual(['IN-HEADER-SHORT']);
+  });
+
+  it('a one-name header is never short: a title line above a header, a one-column file with decimal commas', () => {
+    const title = parseCsvText(enc([['Cruise report AB-2021'], ...body(10, (i) => ['x', 'y', 'z', 'u', 'v', String(i)])]), 'title.csv');
+    expect(ids(title)).toEqual(['ROW-RAGGED']);
+    expect(title.sheets[0].header).toEqual(['Cruise report AB-2021']);
+    const comma = parseCsvText(enc([['Temp'], ...body(10, (i) => [`"3,${i}"`.replace(/"/g, '')])]), 'dc.csv');
+    expect(ids(comma)).toEqual(['ROW-RAGGED']);
+    expect(comma.sheets[0].header).toEqual(['Temp']);
+  });
+
+  it('a title line of two names above a real header is not a short header: the first data row is a header row', () => {
+    const t = parseCsvText(enc([['Cruise report', 'AB-2021'], ['Station', 'Lat', 'Lon', 'Temp'], ...body(30, (i) => [`S${i}`, '50.5', '10.5', String(4 + i / 10)])]), 'title2.csv');
+    expect(ids(t)).toEqual(['ROW-RAGGED']);
+    expect(t.sheets[0].header).toEqual(['Cruise report', 'AB-2021']);
+  });
+
+  it('an added column of a header like ",,,Name" does not make the header look filled: the layout is still unsupported', () => {
+    const f = parseCsvText(enc([['', '', '', 'Name'], ...body(10, (i) => ['1', '2', '3', 'n', String(i), 'q'])]), 'e.csv');
+    expect(f.sheets[0].unnamedFrom).toBe(4);
+    expect(proposeLayout(f).unsupported).toBeDefined();
+  });
+});
+
+describe('IN-HEADER-SHORT: /convert names of added columns', () => {
+  const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'TEMP_C'];
+  const lines = [header.join(',')];
+  for (let i = 0; i < 30; i++) lines.push(['ZE1', '2020-05-01', '70.1', '20.2', String(i + 1), (4 + i / 10).toFixed(1), (35 + i / 10).toFixed(1)].join(','));
+  const file = readConvertFile(parseCsvText(lines.join('\n') + '\n', 'env.csv'));
+  const props = proposeConvertColumns(file.sheets[0], { decimalComma: false, date1904: false });
+  const mapping = (role?: ColumnRole) => ({ sheet: 'env.csv', columns: props.map((p) => ({ index: p.index, header: p.header, role: p.index === 6 && role ? role : (p.role as ColumnRole) })) });
+  const run = (m: ReturnType<typeof mapping>) => convert({ sheets: [{ file, sheet: 'env.csv', mapping: m, shape: 'wide', profile: { depthIds: true } }] });
+  const unnamed = (r: ReturnType<typeof run>) => r.findings.filter((f) => f.ruleId === 'CONV-COLUMN-UNNAMED');
+
+  it('(a) the added column is proposed as ignored, with its reason, never as a taxon', () => {
+    const p = props[6];
+    expect(p.header).toBe('Column 7');
+    expect(p.role).toEqual({ kind: 'ignore' });
+    expect(p.reasonCode).toBe('unnamed-column');
+    expect(unnamed(run(mapping()))).toEqual([]);
+  });
+
+  it('(b) a variable that keeps the internal name, or a taxon whose header is the name, blocks the export; a typed name does not', () => {
+    const kept = run(mapping({ kind: 'variable', variable: 'Column 7' }));
+    expect(unnamed(kept)).toHaveLength(1);
+    expect(unnamed(kept)[0].field).toBe('Column 7');
+    expect(policyOf(unnamed(kept)[0])).toBe('block');
+    expect(exportAllowed(kept.findings, ['IN-HEADER-SHORT'])).toBe(false);
+    const taxon = run(mapping({ kind: 'taxon', header: true }));
+    expect(unnamed(taxon)).toHaveLength(1);
+    const named = run(mapping({ kind: 'variable', variable: 'Salinity', unit: 'PSU' }));
+    expect(unnamed(named)).toEqual([]);
+    expect(JSON.stringify(named.measurements)).toContain('Salinity');
+    expect(named.measurements.some((m) => `${m.measurementType} ${m.measurementTypeFallback ?? ''}`.includes('Salinity'))).toBe(true);
+    expect(named.measurements.every((m) => !`${m.measurementType} ${m.measurementTypeFallback ?? ''}`.includes('Column 7'))).toBe(true);
+    for (const lang of LANGS) expect(renderConvertPlain(unnamed(kept)[0], lang)).toContain('Column 7');
   });
 });

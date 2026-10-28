@@ -3,6 +3,7 @@
 import type { Finding, RawRow } from '../types';
 import { makeFinding } from '../rules/registry';
 import type { DecodedText } from '../values/encoding';
+import { parseNumber } from '../values/numbers';
 
 /**
  * Thrown by parseFile when a file cannot be read at all (corrupt workbook, malformed XML or JSON, JSON that is
@@ -61,14 +62,20 @@ export function extendShortHeader(
   sheet: string,
   header: readonly string[],
   rows: readonly RawRow[],
-): { header: string[]; unnamedFrom: number; finding: Finding } | undefined {
-  if (rows.length < SHORT_HEADER_MIN_ROWS) return undefined;
+  decimalComma = false,
+): { kind: 'extend'; header: string[]; unnamedFrom: number; finding: Finding } | { kind: 'trim' } | undefined {
+  // a one-name "header" is a title line, or the only column of a file whose decimal commas split its values: neither says the header lacks names
+  if (header.length < 2 || rows.length < SHORT_HEADER_MIN_ROWS) return undefined;
   const freq = new Map<number, number>();
   for (const r of rows) freq.set(r.fieldCount, (freq.get(r.fieldCount) ?? 0) + 1);
   let width = 0;
   let count = 0;
   for (const [n, k] of freq) if (k > count || (k === count && n > width)) [width, count] = [n, k];
   if (width <= header.length || count < rows.length * SHORT_HEADER_SHARE) return undefined;
+  // every field past the header is empty in every row (a trailing delimiter on the data rows): nothing is missing but the delimiter, no column and no finding
+  if (!rows.some((r) => r.cells.some((c, i) => i >= header.length && !(c === null || String(c).trim() === '')))) return { kind: 'trim' };
+  // the first data row reads as a header row (all text, while the later rows have numbers there): the real header is that row, and the lines above it are not a table
+  if (firstRowLooksLikeHeader(rows, decimalComma)) return undefined;
   const extra = width - header.length;
   const first = header.length + 1;
   const extended = [...header];
@@ -78,5 +85,29 @@ export function extendShortHeader(
     sheet,
     params: { header: header.length, count, rows: rows.length, width, extra, range: extra === 1 ? String(first) : `${first}…${width}` },
   });
-  return { header: extended, unnamedFrom: header.length, finding };
+  return { kind: 'extend', header: extended, unnamedFrom: header.length, finding };
+}
+
+/** The first data row has at least one filled cell, every filled cell is text, and in those columns the later rows (the first 50) hold mostly numbers. */
+function firstRowLooksLikeHeader(rows: readonly RawRow[], decimalComma: boolean): boolean {
+  const first = rows[0].cells;
+  const cols: number[] = [];
+  for (let i = 0; i < first.length; i++) {
+    const c = first[i];
+    if (c === null || String(c).trim() === '') continue;
+    if (parseNumber(c, decimalComma).status === 'ok') return false;
+    cols.push(i);
+  }
+  if (cols.length === 0) return false;
+  let numeric = 0;
+  let filled = 0;
+  for (const r of rows.slice(1, 51)) {
+    for (const i of cols) {
+      const c = r.cells[i] ?? null;
+      if (c === null || String(c).trim() === '') continue;
+      filled++;
+      if (parseNumber(c, decimalComma).status === 'ok') numeric++;
+    }
+  }
+  return filled > 0 && numeric * 2 > filled;
 }

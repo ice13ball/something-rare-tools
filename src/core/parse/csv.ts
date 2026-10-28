@@ -183,14 +183,17 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
   if (file.decimalComma) findings.push(makeFinding('IN-DECIMAL-COMMA', { file: fileName }));
 
   const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows };
-  const shortHeader = extendShortHeader(fileName, fileName, header, rows);
-  if (shortHeader) {
+  const shortHeader = extendShortHeader(fileName, fileName, header, rows, file.decimalComma);
+  if (shortHeader?.kind === 'trim') {
+    // fields past the header are empty in every row: the rows end with a delimiter. Drop them; rows with and without it are both regular.
+    sheet.rows = rows.map((r) => (r.cells.length > header.length ? { line: r.line, cells: r.cells.slice(0, header.length), fieldCount: header.length } : r));
+  } else if (shortHeader) {
     sheet.header = shortHeader.header;
     sheet.unnamedFrom = shortHeader.unnamedFrom;
     findings.push(shortHeader.finding);
   }
   file.sheets.push(sheet);
-  const rag = raggedFinding(fileName, fileName, sheet.header.length, rows);
+  const rag = raggedFinding(fileName, fileName, sheet.header.length, sheet.rows);
   if (rag) findings.push(rag);
   return file;
 }

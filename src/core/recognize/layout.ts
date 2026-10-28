@@ -66,8 +66,9 @@ function transposedReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonC
 }
 
 function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
-  const cols = sheet.header.length;
-  if (cols >= 3 && sheet.header.filter((h) => h.trim() === '').length * 2 > cols) {
+  // the names the tool added (IN-HEADER-SHORT) are not the file's: only the file's own header says whether it is empty
+  const cols = sheet.unnamedFrom ?? sheet.header.length;
+  if (cols >= 3 && sheet.header.slice(0, cols).filter((h) => h.trim() === '').length * 2 > cols) {
     return 'header-empty';
   }
   if (sheet.rows.length >= 2) {

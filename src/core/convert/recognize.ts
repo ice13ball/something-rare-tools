@@ -194,6 +194,7 @@ export const OVERLAY_REASONS = {
   'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
+  'unnamed-column': 'column without a name in the header: give it a meaning',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
   'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres, and a negative number counted downwards (above the seafloor) as a positive one',
@@ -342,6 +343,13 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   let dwcEventId = -1;
 
   for (const p of base) {
+    // a column the short-header detection added (IN-HEADER-SHORT) has no name to read a meaning from: never a taxon, never a variable named "Column 7"
+    if (sheet.unnamedFrom !== undefined && p.index >= sheet.unnamedFrom) {
+      p.role = { kind: 'ignore' };
+      p.confidence = 'low';
+      why(p, 'unnamed-column');
+      continue;
+    }
     const hu = unitFromHeader(p.header);
     const key = headerKey(hu.name);
     const term = dwcTermOf(p.header);
