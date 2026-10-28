@@ -13,6 +13,7 @@ import { missingFields } from './metadata';
 import { isEffortTypeId } from './vocab';
 import type { DatasetMetadata } from './metadata';
 import type { ConvertedDataset } from './model';
+import { pushAll } from '../util/arrays';
 
 /*
  * Validation of what is about to be written (plan 1 "Same rules" and 3.4). The OUTPUT tables, rendered as the files they will be, go through the
@@ -149,18 +150,18 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   const judged: ConvertedDataset = ds.metadata.basisOfRecord === '' ? { ...ds, occurrences: ds.occurrences.map((o) => ({ ...o, basisOfRecord: 'HumanObservation' })) } : ds;
   const tables = buildTables(judged);
   const out: Finding[] = [];
-  out.push(...eventFindings(tables.event, opts));
+  pushAll(out, eventFindings(tables.event, opts));
   // the Occurrence table's own recommended-term finding is only the empty scientificNameID column, which CONV-NAMEID-MISSING says in the converter's words
   // An EMPTY Occurrence table (an upload with no taxon: CONV-NO-OCCURRENCES says so) is not checked: "eventDate, decimalLatitude, decimalLongitude are missing" would send the user to fill a table that
   // has no row. With no occurrence the archive is refused whatever the table holds.
-  if (judged.occurrences.length > 0) out.push(...checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter((f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID')));
+  if (judged.occurrences.length > 0) pushAll(out, checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter((f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID')));
   const noId = judged.occurrences.filter((o) => o.identification.scientificNameId === undefined).length;
   if (noId > 0) out.push(makeConvertFinding('CONV-NAMEID-MISSING', { file: tables.occurrence.name, sheet: tables.occurrence.name, params: { count: noId } }));
   // BioCheck: no measurementTypeID among its BODCeffort codes in the whole eMoF table (R/checkdataset.R 562-566, inside the eMoF block that starts at line 457): a warning, to accept
   // (BioCheck runs it only when the archive has an eMoF table: `if (exists("eMoF"))`, line 457)
   if (tables.emof && !judged.measurements.some((m) => m.typeId !== undefined && isEffortTypeId(m.typeId))) out.push(makeConvertFinding('CONV-NO-SAMPLING-DESCRIPTOR', { file: tables.emof.name }));
-  if (tables.emof) out.push(...emofFindings(judged, tables.emof));
-  if (!stage1.some((f) => f.ruleId === 'CONV-TAB-IN-VALUE')) out.push(...tabFindings(tables));
+  if (tables.emof) pushAll(out, emofFindings(judged, tables.emof));
+  if (!stage1.some((f) => f.ruleId === 'CONV-TAB-IN-VALUE')) pushAll(out, tabFindings(tables));
   return out;
 }
 

@@ -6,6 +6,7 @@ import type { LicenceStatement, MetadataRecord } from '../types';
 import { parseBbox, parseIso19139, parseTemporal } from './iso19139';
 import { buildStatement } from './licence';
 import { NS, NS3, attr, child, children, descendants, elementChildren, parseXml, text } from './xml';
+import { pushAll } from '../util/arrays';
 
 /** Text of a gco:CharacterString or gcx:Anchor (with xlink:href) wrapped by `el`. */
 function textAndUri(el: Element | undefined): { text?: string; uri?: string } {
@@ -71,7 +72,7 @@ function partyNames(resp: Element): string[] {
   for (const party of children(resp, NS3.cit, 'party')) {
     const individuals = descendants(party, NS3.cit, 'CI_Individual').map((i) => textAndUri(child(i, NS3.cit, 'name')).text);
     const org = children(party, NS3.cit, 'CI_Organisation').map((o) => textAndUri(child(o, NS3.cit, 'name')).text);
-    names.push(...(individuals.some(Boolean) ? individuals : org).filter((n): n is string => !!n));
+    pushAll(names, (individuals.some(Boolean) ? individuals : org).filter((n): n is string => !!n));
   }
   return names;
 }
@@ -108,7 +109,7 @@ export function parseIso19115_3(xml: string | Document, label: string): Metadata
       );
       for (const resp of responsibilities) {
         const role = codeOf(child(resp, NS3.cit, 'role'));
-        if (role && AUTHOR_ROLES.includes(role)) creators.push(...partyNames(resp));
+        if (role && AUTHOR_ROLES.includes(role)) pushAll(creators, partyNames(resp));
         else if (role === 'publisher' && !rec.publisher) rec.publisher = partyNames(resp)[0];
       }
       if (creators.length > 0) rec.creators = [...new Set(creators)];

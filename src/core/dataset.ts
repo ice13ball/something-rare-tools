@@ -27,6 +27,7 @@ import { parseCoordinate } from './values/coords';
 import { combineDateTime, detectDayMonthOrder, parseDate, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
+import { pushAll } from './util/arrays';
 
 /* ---------- findings collector ---------- */
 
@@ -669,13 +670,13 @@ export function buildDataset(
     for (const r of built.rows) rows.push(r);
     // META-NO-DATES (checks/metadata.ts) fires when neither a row nor a metadata record has a date: the empty-eventDate finding leaves that case to it
     const noDateSaid = !built.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== '')) && !metadata.some((m) => m.temporalExtent && (m.temporalExtent.start || m.temporalExtent.end));
-    findings.push(...checkRawTable(file, sheet, [specs.station, specs.cruise, specs.sampleId].filter((x): x is Spec => x !== undefined).map((x) => x.index), { noDateSaid }));
-    variables.push(...built.variables);
-    positives.push(...built.positives);
+    pushAll(findings, checkRawTable(file, sheet, [specs.station, specs.cruise, specs.sampleId].filter((x): x is Spec => x !== undefined).map((x) => x.index), { noDateSaid }));
+    pushAll(variables, built.variables);
+    pushAll(positives, built.positives);
   }
 
   fillUnitsFromMetadata(variables, metadata);
-  findings.push(...collector.findings());
+  pushAll(findings, collector.findings());
 
   const used = usedSheets
     .map((name) => file.sheets.find((s) => s.name === name))
@@ -709,14 +710,14 @@ export function buildDatasets(
   // (a workbook of an OBIS template has event, occurrence and emof sheets: the layout builds one of them as data, the Darwin Core
   // structure of every sheet is still judged here, whatever the layout did with it)
   const built = new Set(layout.tables.map((t) => t.sheet));
-  for (const sheet of file.sheets) if (!built.has(sheet.name)) findings.push(...checkRawTable(file, sheet, []));
+  for (const sheet of file.sheets) if (!built.has(sheet.name)) pushAll(findings, checkRawTable(file, sheet, []));
   const datasets: Dataset[] = [];
   for (const g of groups) {
     const sheet = g.tables[0].sheet;
     const label = file.sheets.length > 1 ? `${file.fileName} (${sheet})` : file.fileName;
     const r = buildDataset(file, g, mappings, metadata, groups.length === 1 ? id : `${id}:${sheet}`, { label });
     datasets.push(r.dataset);
-    findings.push(...r.findings);
+    pushAll(findings, r.findings);
   }
   return { datasets, findings };
 }

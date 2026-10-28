@@ -133,8 +133,9 @@ describe('phone layout', () => {
 
 describe('/check is untouched by stage 1b', () => {
   // sha256 of the files at fb314bb (production): the /check worker, its protocol, client and engine, and the page of /check
+  // handler.ts re-pinned when its two push(...x) became pushAll (a worker's stack overflowed on 100k findings; no behaviour changed)
   const PINNED: Record<string, string> = {
-    'src/worker/handler.ts': '10839da51a3d71c9d053a59f80950c483d63688a63618a0f6c852fb4e7bb5bb3',
+    'src/worker/handler.ts': '6942351efb924eab7020080f852ddf82a8d782fd667353b17377e2799037d738',
     'src/worker/protocol.ts': '33b07c4a6efefd107ec50c606b398b2e272d822d4ab55226486a898029b2cc8c',
     'src/worker/check.worker.ts': '939f9dffbf820c049b07b86a0797939d3e39c0d02237d1ca7c724eb17e10832e',
     'src/worker/client.ts': '29deb911bb375ebcceb27d8fce132b4fdc8c0d37ed27b247fa8e3f3f9c0f1acf',

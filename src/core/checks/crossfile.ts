@@ -4,6 +4,7 @@
 import { unitDimension } from '../recognize/vocab';
 import { makeFinding } from '../rules/registry';
 import type { DataRow, Dataset, Finding, NumericCell, Variable } from '../types';
+import { minOf, maxOf } from '../util/arrays';
 
 /*
  * Category C — checks across several loaded datasets. A dataset is one table (a CSV file, or ONE sheet of a
@@ -322,7 +323,7 @@ function stationAliases(preps: Prep[], out: Finding[]): void {
         const [nameA, useA] = sorted[i];
         const [nameB, useB] = sorted[j];
         const label = (u: Use) => [...u.datasets].sort((a, b) => a - b).map((k) => preps[k].ds.label).join(', ');
-        const firstB = preps[Math.min(...useB.datasets)];
+        const firstB = preps[minOf([...useB.datasets])];
         out.push(
           makeFinding('XF-STATION-ALIAS', {
             file: firstB.ds.file,
@@ -369,8 +370,8 @@ function stationPositions(p: Prep): Map<string, StPos> {
   const out = new Map<string, StPos>();
   for (const [station, rows] of groups) {
     const decs = rows.map((r) => ({ la: r.row.latDecimals ?? decimalsOfNumber(r.row.lat!), lo: r.row.lonDecimals ?? decimalsOfNumber(r.row.lon!) }));
-    const dLat = Math.min(...decs.map((d) => d.la));
-    const dLon = Math.min(...decs.map((d) => d.lo));
+    const dLat = minOf(decs.map((d) => d.la));
+    const dLon = minOf(decs.map((d) => d.lo));
     const rl = (v: number, d: number): number => Math.round(v * 10 ** d) / 10 ** d;
     const counts = new Map<string, { n: number; lat: number; lon: number }>();
     for (const r of rows) {
@@ -391,10 +392,10 @@ function stationPositions(p: Prep): Map<string, StPos> {
       lon: dom.lon,
       dLat,
       dLon,
-      minLat: Math.min(...lats),
-      maxLat: Math.max(...lats),
-      minLon: Math.min(...lons),
-      maxLon: Math.max(...lons),
+      minLat: minOf(lats),
+      maxLat: maxOf(lats),
+      minLon: minOf(lons),
+      maxLon: maxOf(lons),
       lines: rows.map((r) => r.row.line),
     });
   }
@@ -424,7 +425,7 @@ function distance(p: StPos, q: StPos): number {
 /** Mean Earth radius (IUGG, 6371.0088 km) — converts degrees of arc to km for display only, never for a decision. */
 const KM_PER_DEGREE = (6371.0088 * Math.PI) / 180;
 const offsetKm = (p: StPos, others: StPos[]): string => {
-  const km = Math.max(...others.map((q) => distance(p, q))) * KM_PER_DEGREE;
+  const km = maxOf(others.map((q) => distance(p, q))) * KM_PER_DEGREE;
   return km < 10 ? km.toFixed(1) : km.toFixed(0);
 };
 
@@ -532,7 +533,7 @@ function positionChecks(preps: Prep[], out: Finding[]): void {
       const outlier = all.find(
         (x) =>
           all.every((y) => y === x || dis[x][y]) &&
-          Math.min(...all.filter((y) => y !== x).map((y) => dist(x, y))) > Math.max(0, ...all.filter((y) => y !== x).flatMap((y) => all.filter((z) => z !== x && z > y).map((z) => dist(y, z)))),
+          minOf(all.filter((y) => y !== x).map((y) => dist(x, y))) > Math.max(0, maxOf(all.filter((y) => y !== x).flatMap((y) => all.filter((z) => z !== x && z > y).map((z) => dist(y, z))))),
       );
       if (outlier === undefined) continue;
       const independent = new Set(entries.filter((_, i) => i !== outlier).map((e) => preps[e.k].ds.file)).size;

@@ -27,6 +27,7 @@ import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
+import { pushAll } from '../util/arrays';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -863,7 +864,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     }
   }
 
-  ctx.findings.push(...seafloorOf.findings());
+  pushAll(ctx.findings, seafloorOf.findings());
   for (const e of noSiteDepth.entries()) ctx.findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
   if (positionStations.size > 0) ctx.findings.push(makeConvertFinding('CONV-STATION-FROM-POSITION', { ...base, value: [...positionStations][0], params: { count: positionStations.size } }));
   // a sheet marked as a profile file that gave no level at all: said plainly (a description of columns, a sheet with no station and no tick, an empty sheet)
@@ -871,7 +872,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // a pressure that was written with no unit: said, by column (a unit that is stated but is not decibars is said by CONV-UNIT-NO-P06 below)
   if (pressureWritten && pressure && pressure.unit === undefined) ctx.findings.push(makeConvertFinding('CONV-PROFILE-PRESSURE-NO-UNIT', { ...base, field: pressure.header, params: { column: pressure.header.trim() } }));
   // the pressure's unit has an identifier only when it is decibars: any other unit is written as given, and said
-  ctx.findings.push(...reportVariables(varState, base, pressureWritten && pressure?.unit !== undefined && !isDecibar(pressure.unit) ? [pressure.unit] : [], ctx.nercStats));
+  pushAll(ctx.findings, reportVariables(varState, base, pressureWritten && pressure?.unit !== undefined && !isDecibar(pressure.unit) ? [pressure.unit] : [], ctx.nercStats));
   for (const e of noStation.entries()) ctx.findings.push(makeConvertFinding('CONV-PROFILE-NO-STATION', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));
   for (const e of noCode.entries()) {
     ctx.findings.push(makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field, profile: 'yes' } }));
@@ -885,7 +886,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // every column of the sheet that has a meaning this conversion does not read as a profile (a taxon or quantity column, a second pressure): said, nothing is dropped silently
   const unexported = unreadColumns(sin, cols, specs);
   if (unexported.length > 0) ctx.findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
-  ctx.findings.push(...collector.findings());
+  pushAll(ctx.findings, collector.findings());
 }
 
 /* ---------- the conversion ---------- */
@@ -1359,8 +1360,8 @@ export function convert(input: ConvertInput): ConvertResult {
       }
     }
 
-    findings.push(...reportVariables(varState, base, [], nercStats));
-    findings.push(...seafloorOf.findings());
+    pushAll(findings, reportVariables(varState, base, [], nercStats));
+    pushAll(findings, seafloorOf.findings());
     for (const e of noSiteDepth.entries()) findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
 
     // sample-level conflicts of long sheets
@@ -1392,7 +1393,7 @@ export function convert(input: ConvertInput): ConvertResult {
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
       findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: cols.taxonId.header.trim() } }));
     }
-    findings.push(...collector.findings());
+    pushAll(findings, collector.findings());
   }
 
   /* ---- the profile sheets (stage 6): each row is a level event under its station ---- */

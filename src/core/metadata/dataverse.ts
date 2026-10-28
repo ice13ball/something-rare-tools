@@ -5,6 +5,7 @@ import { dataverseName } from '../../../config/dataverse';
 import type { LicenceStatement, MetadataRecord } from '../types';
 import { buildStatement } from './licence';
 import { stripTags } from './xml';
+import { minOf, maxOf, pushAll } from '../util/arrays';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -111,10 +112,10 @@ function boxOf(o: Obj): Box | undefined {
       .map((l) => l.trim().split(/[\s,;]+/).map(Number))
       .filter((p) => p.length === 2 && p.every(Number.isFinite));
     if (pts.length < 2) return undefined;
-    west = Math.min(...pts.map((p) => p[0]!));
-    east = Math.max(...pts.map((p) => p[0]!));
-    south = Math.min(...pts.map((p) => p[1]!));
-    north = Math.max(...pts.map((p) => p[1]!));
+    west = minOf(pts.map((p) => p[0]!));
+    east = maxOf(pts.map((p) => p[0]!));
+    south = minOf(pts.map((p) => p[1]!));
+    north = maxOf(pts.map((p) => p[1]!));
   }
   if (west === undefined || east === undefined || south === undefined || north === undefined) return undefined;
   // A box that is not on the globe, or one that crosses the antimeridian (west > east), is not turned into a wrong box.
@@ -126,10 +127,10 @@ function bboxOf(fields: unknown[]): Box | undefined {
   const boxes = compound(fields, 'geographicBoundingBox').map(boxOf).filter((b): b is Box => !!b);
   if (boxes.length === 0) return undefined;
   return {
-    west: Math.min(...boxes.map((b) => b.west)),
-    east: Math.max(...boxes.map((b) => b.east)),
-    south: Math.min(...boxes.map((b) => b.south)),
-    north: Math.max(...boxes.map((b) => b.north)),
+    west: minOf(boxes.map((b) => b.west)),
+    east: maxOf(boxes.map((b) => b.east)),
+    south: minOf(boxes.map((b) => b.south)),
+    north: maxOf(boxes.map((b) => b.north)),
   };
 }
 
@@ -247,7 +248,7 @@ export function parseDataverseVersion(json: unknown, label: string, ctx: { host:
     const s = buildStatement({ source: 'dataverse', field: 'termsOfUse', text: terms });
     if (s) rec.licences.push(s);
   }
-  if (rec.licences.length === 0) rec.licences.push(...fileLicences(rawFiles));
+  if (rec.licences.length === 0) pushAll(rec.licences, fileLicences(rawFiles));
 
   const files: DataverseFile[] = [];
   const names = new Set<string>();
