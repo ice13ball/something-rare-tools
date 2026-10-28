@@ -113,6 +113,10 @@ function battery(): { sheet: RawSheet; long?: { parameterCol: number; valueCol: 
     S(['Longitude', 'Lon', 'Time', 'Uhrzeit', 'Cruise', 'Expedition'], [[18.5, 18.5, '10:30', '10:30', 'C1', 'C1'], [18.6, 18.6, '11:30', '11:30', 'C1', 'C1']]),
     // a German sheet: a depth range with von / bis (the second bound is not read)
     S(['Tiefe von', 'Tiefe bis', 'Probe'], [[0, 10, 'P-1'], [5, 15, 'P-2']]),
+    // the start and end of a tow, a hemisphere letter, an identifier and an abundance
+    S(['Begin Latitude', 'End Latitude', 'Begin Longitude', 'Lon Dir', 'Catalog ID', 'Count'], [[54.5, 54.6, 18.5, 'E', 101, 1], [54.6, 54.7, 18.6, 'E', 102, 12]]),
+    // only the end position of a tow
+    S(['End Lat', 'End Lon'], [[54.5, 18.5], [54.6, 18.6]]),
     // long format: the parameter, unit and value columns are read through the layout
     { ...S(['Param', 'Unit', 'Value', 'Date'], [['T', 'C', 4.5, '2020-05-12'], ['S', 'psu', 35, '2020-05-12']]), long: { parameterCol: 0, unitCol: 1, valueCol: 2 } },
   ];

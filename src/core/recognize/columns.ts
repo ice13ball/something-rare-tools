@@ -5,6 +5,7 @@ import { parseCoordinate } from '../values/coords';
 import { parseDate, parseTimeOfDay } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
+import { coordinateBound, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
 
 export interface ProposeContext {
@@ -12,6 +13,8 @@ export interface ProposeContext {
   date1904: boolean;
   /** When the sheet is a long table, its parameter / unit / value columns are read through the layout, not as columns. */
   long?: TablePlan['long'];
+  /** The converter asks for abundance columns (Count, Individuals, ...) as they were before /check ignored them: it reads them as a quantity or a taxon candidate itself. */
+  keepAbundance?: boolean;
 }
 
 /* ---------- header text ---------- */
@@ -145,6 +148,8 @@ interface Cand {
   guard?: 'date-values' | 'not-plain-numbers' | 'time-values';
   /** Depth from/to (od/do, von/bis, de/a): which end of a range; two bounds compete for the one depth slot. */
   bound?: 'from' | 'to';
+  /** The end of a tow or transect (End Latitude): loses the slot to the start position and is ignored; alone it is used, at low confidence. */
+  coordEnd?: boolean;
 }
 
 /* ---------- Polish, German and French names (keys come from headerKey: ASCII, lower case, 'ł' -> 'l', 'ä' -> 'a') ---------- */
@@ -198,6 +203,15 @@ const OTHER_DEPTH = /\b(secchi|mixed layer|mld|euphotic|photic|thermocline|chlor
 const FLAG = /^(qf|qc|flag)( |$)|( flag| flags| qf| qc)$|^quality( flag| control| code)?( |$)/;
 
 function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
+  // the hemisphere letter of a coordinate ('Lon Dir') is never the coordinate
+  if (isHemisphereHeader(key)) return undefined;
+  // start / end of a tow or transect: 'Begin Latitude', 'Lat start', 'Latitude (start)' (a bracket text that is no unit stays in the header)
+  const cb = coordinateBound(key) ?? (hdr === undefined ? undefined : coordinateBound(headerKey(hdr.cleanHeader)));
+  if (cb) {
+    if (cb.bound === 'start' && cb.axis === 'latitude') return { slot: 'latitude', tier: 1, kind: 'latitude', why: why('name-latitude') };
+    if (cb.bound === 'start') return { slot: 'longitude', tier: 1, kind: 'longitude', why: why('name-longitude') };
+    return { slot: cb.axis, tier: 1.5, kind: cb.axis, why: why('end-position'), coordEnd: true };
+  }
   const other = nameCandidateOther(key, hdr);
   if (other) return other;
   if (/^lat(\s|$)|^latit\w*(\s|$)/.test(key)) {
@@ -547,6 +561,18 @@ function guardPasses(guard: NonNullable<Cand['guard']>, sheet: RawSheet, rows: r
   return seen > 0 && good * 2 >= seen;
 }
 
+/** Every filled value is a hemisphere letter or word (N, s, East ...) and there is at least one: the column holds the hemispheres, not a coordinate. */
+function holdsOnlyHemisphereLetters(rows: readonly RawRow[], col: number): boolean {
+  let seen = 0;
+  for (const r of rows) {
+    const c = r.cells[col] ?? null;
+    if (isBlank(c)) continue;
+    if (typeof c !== 'string' || !/^(n|s|e|w|north|south|east|west)\.?$/i.test(c.trim())) return false;
+    seen++;
+  }
+  return seen > 0;
+}
+
 /** Every non-blank sampled value is a number within the range of the axis (|lat| <= 90, |lon| <= 180). */
 function valuesFitAxis(rows: readonly RawRow[], col: number, axis: 'latitude' | 'longitude', decimalComma: boolean): boolean {
   const limit = axis === 'latitude' ? 90 : 180;
@@ -633,6 +659,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
 
     // 1. header names
     if (FLAG.test(key)) return ignore(why('quality-flag'));
+    if (isHemisphereHeader(key)) return ignore(why('hemisphere'), 'low');
 
     const dwc = dwcColumn(cleanHeader, dwcSheet);
     if (dwc && 'ignore' in dwc) return ignore(dwc.ignore);
@@ -665,6 +692,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     } else if (!candidate && !pressure && code?.declared) {
       p01Code = code.code; // declared by the file itself, not in our table
     }
+
+    if (candidate && (candidate.kind === 'latitude' || candidate.kind === 'longitude') && holdsOnlyHemisphereLetters(rows, index)) return ignore(why('hemisphere'), 'low');
 
     if (candidate) {
       return { proposal: { ...base, role: { kind: 'ignore' }, confidence: candidate.tier >= 3 ? 'low' : 'high', ...reasonOf(candidate.why) }, cand: candidate, elevation: candidate.elevation };
@@ -710,7 +739,11 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
       return ignore(why('text-column'), 'high');
     }
 
-    // 5. variable
+    // 5. variable. An identifier or an abundance is never one (a canonical name such as temperature wins over these words)
+    if (canonical === undefined) {
+      if (ctx.keepAbundance !== true && isAbundanceName(key)) return ignore(why('abundance'), 'low');
+      if (isIdentifierName(key, cleanHeader)) return ignore(why('identifier'), 'low');
+    }
     const name = hu.name;
     const variable = canonical ?? name;
     const role: ColumnRole = {
@@ -748,7 +781,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
         e.proposal.role = { kind: 'ignore' };
         e.proposal.confidence = 'low';
         const lead = c.empty && !entries[winner].cand!.empty ? why('lead-empty') : undefined;
-        applyReason(e.proposal, why(OTHER_USED[slot], { name: w }), [...(c.bound ? [why('note-depth-range-unread')] : [])], lead);
+        if (c.coordEnd) applyReason(e.proposal, why('end-position'), [], lead);
+        else applyReason(e.proposal, why(OTHER_USED[slot], { name: w }), [...(c.bound ? [why('note-depth-range-unread')] : [])], lead);
         continue;
       }
       const hu = unitFromHeader(e.proposal.header);
@@ -763,6 +797,10 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
         case 'cruise':
         case 'sampleId':
           e.proposal.role = { kind: c.kind };
+          if (c.coordEnd) {
+            e.proposal.confidence = 'low';
+            applyReason(e.proposal, why('end-position-only'), []);
+          }
           break;
         case 'depth': {
           const unit = hu.unit ?? code?.hint?.unit;
