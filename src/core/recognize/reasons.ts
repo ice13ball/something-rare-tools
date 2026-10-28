@@ -43,11 +43,11 @@ export const CHECK_REASONS = {
   'no-header': 'column without a header',
   'long-format': 'long format: this column is read through the layout (parameter, unit or value)',
   'quality-flag': 'quality flag column',
-  'end-position': 'end position of a tow or transect: the start position is used',
+  'end-position': 'end position of a tow or transect, not read: the position comes from "{name}"',
   'end-position-only': 'only the end position of a tow or transect is given: it is used as the position (check that this is what you want)',
   'hemisphere': 'hemisphere letter for the coordinate column; the tool does not yet combine them, so check the signs of the coordinates',
   identifier: 'identifier, not a measurement',
-  abundance: 'abundance (number of specimens): not an environmental measurement; the converter reads it as a quantity',
+  abundance: 'abundance (number of specimens): not an environmental measurement',
   // another column won the slot ({name} is that column)
   'other-latitude': 'another column ("{name}") is used for latitude',
   'other-longitude': 'another column ("{name}") is used for longitude',
