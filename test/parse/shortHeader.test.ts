@@ -201,3 +201,19 @@ describe('IN-HEADER-SHORT: /convert', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('IN-HEADER-SHORT: the layout', () => {
+  it('a column added by the detection is never the value (or parameter, or unit) column of a long table', () => {
+    // Invented: a repeating text column of variable names and ONE added numeric column would form a long plan if the added column counted
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Parameter'];
+    const lines = [header.join(',')];
+    for (let i = 0; i < 40; i++) lines.push([`S${i % 4}`, '2021-07-01', '50.5', '10.5', i % 2 ? 'Temperature' : 'Salinity', (i / 3).toFixed(2)].join(','));
+    const file = parseCsvText(lines.join('\n') + '\n', 'l.csv');
+    expect(file.sheets[0].header).toEqual([...header, 'Column 6']);
+    expect(file.sheets[0].unnamedFrom).toBe(5);
+    expect(proposeLayout(file).tables).toEqual([{ sheet: 'l.csv' }]);
+    // the same table with the column NAMED keeps its long plan: named columns are judged as before
+    const named = parseCsvText(lines.join('\n').replace('Parameter\n', 'Parameter,Value\n') + '\n', 'n.csv');
+    expect(proposeLayout(named).tables[0].long).toBeDefined();
+  });
+});
