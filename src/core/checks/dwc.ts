@@ -5,6 +5,7 @@ import { dwcTermOf } from '../recognize/columns';
 import { parseDate } from '../values/dates';
 import { makeFinding } from '../rules/registry';
 import type { Finding, ParsedFile, RawCell, RawSheet } from '../types';
+import { pushAll } from '../util/arrays';
 
 /*
  * Checks of one raw table that need its cells, not the parsed rows: the Darwin Core structure (required and recommended terms,
@@ -192,7 +193,7 @@ function repeated(ids: { line: number; v: string; sig?: string }[], disagreeing 
   for (const [v, ls] of seen) {
     if (ls.length < 2) continue;
     count++;
-    lines.push(...ls);
+    pushAll(lines, ls);
     if (ls[0] < first) {
       first = ls[0];
       example = v;

@@ -34,6 +34,7 @@ import {
   type Request,
   type RowDetail,
 } from './protocol';
+import { pushAll } from '../core/util/arrays';
 
 interface Held {
   fileId: string;
@@ -190,7 +191,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
     records = req.records.map((r) => ({ ...r, files: r.files.map((f) => ({ name: f.name, ...(f.url ? { url: f.url } : {}) })) }));
     parseFindings = [...req.extraFindings];
     hasDropped = req.files.some((f) => f.source === 'dropped');
-    for (const r of records) recordMeta.push(...r.metadata);
+    for (const r of records) pushAll(recordMeta, r.metadata);
 
     const archives = req.files.filter((f) => isArchiveZip(f.bytes, f.name));
     if (archives.length === 0) return finishParse(req, new Map());
@@ -215,7 +216,7 @@ export function createHandler(opts: HandlerOptions = {}): Handler {
         result.problems.push({ fileName: f.name, message: e instanceof Error ? e.message : String(e) });
         continue;
       }
-      parseFindings.push(...parsed.findings);
+      pushAll(parseFindings, parsed.findings);
       parsedAll.push({ parsed, source: f.source });
     }
     // Nothing could be read at all: the report must say so itself, or an empty report reads as "no problems found".

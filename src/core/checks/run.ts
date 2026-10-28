@@ -11,6 +11,7 @@ import { checkLicence } from './licence';
 import { checkMetadataVsData } from './metadata';
 import { checkRows } from './rows';
 import { checkShipSpeed } from './speed';
+import { pushAll, unshiftAll } from '../util/arrays';
 
 /** The metadata source a failed load leaves unread. A dropped file has none. */
 const SOURCE_OF_KIND: Partial<Record<LoadedRecord['kind'], MetadataSource>> = {
@@ -49,7 +50,7 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
   // archives whose eml.xml states a version: a record whose data came in one of them states a version
   const versioned = new Set(session.parseFindings.filter((f) => f.ruleId === 'IN-DWCA-VERSION' && f.params.version !== 'n/a' && f.file).map((f) => f.file as string));
   for (const record of session.records) {
-    findings.push(...record.findings);
+    pushAll(findings, record.findings);
     // The same "could not be read" as on the licence page (a refused read, a blocked one, a host not allowed): the record then says nothing
     // about a licence. File-download failures reuse these rules with the file name; only the record's own label counts.
     const own = !!ownLoadFailure(record.findings, record.label, record.kind, record.metadata.length);
@@ -57,18 +58,20 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
     const inaccessible = own || !!landingNotRead(record.findings, record.label, record.kind, record.metadata.length);
     if (record.metadata.length > 0 || inaccessible) {
       const versionInArchive = record.files.some((f) => versioned.has(f.name));
-      findings.push(...checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: own ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [], versionInArchive }));
+      pushAll(findings, checkLicence(record.metadata, { label: record.label, inaccessible, unreadable: own ? [SOURCE_OF_KIND[record.kind]].filter((x): x is MetadataSource => !!x) : [], versionInArchive }));
     }
   }
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   for (const ds of session.datasets) {
-    findings.push(...checkMetadataVsData(ds), ...checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today }), ...checkChemistry(ds));
+    pushAll(findings, checkMetadataVsData(ds));
+    pushAll(findings, checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today }));
+    pushAll(findings, checkChemistry(ds));
   }
-  if (session.datasets.length > 1) findings.push(...checkCrossFile(session.datasets));
+  if (session.datasets.length > 1) pushAll(findings, checkCrossFile(session.datasets));
   const speed = checkShipSpeed(session.datasets, { singleCruise: opts.singleCruise === true });
-  findings.push(...speed.findings);
+  pushAll(findings, speed.findings);
   const report = buildReport(findings);
-  report.notChecked.unshift(...speed.notChecked);
+  unshiftAll(report.notChecked, speed.notChecked);
   if (opts.land === null) report.notChecked.unshift('notChecked.landMask');
   if (session.datasets.some(oxygenRangeSkipped)) report.notChecked.unshift('notChecked.oxygenUnit');
   // a Darwin Core Archive was read: its extension tables were not (the core only), so their eventIDs were not compared with the core's

@@ -4,6 +4,7 @@ import { parseIsoRecord } from '../metadata/iso19115-3';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
 import { allowed, decodeUtf8, hasDataExtension, hostNotAllowed, inaccessible, noDataFile, ok2xx, attempt } from './common';
 import { hostOf, type Fetcher } from './fetcher';
+import { pushAll } from '../util/arrays';
 
 export function geonetworkRecordUrl(host: string, uuid: string): string {
   return `https://${host}/geonetwork/srv/api/records/${uuid}/formatters/xml`;
@@ -86,7 +87,7 @@ export async function loadGeoNetwork(host: string, uuid: string, fetcher: Fetche
   out.metadata = known ? [iso, known] : [iso];
   const { files, findings } = dataFiles(iso.distributionLinks, label);
   out.files = files;
-  out.findings.push(...findings);
+  pushAll(out.findings, findings);
   if (files.length === 0 && findings.length === 0) out.findings.push(noDataFile(label, []));
   return out;
 }

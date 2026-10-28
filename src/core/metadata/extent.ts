@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Shared by the Zenodo and DataCite readers: shapes -> one bbox, collected dates -> one temporal extent.
 import type { MetadataRecord } from '../types';
+import { minOf, maxOf } from '../util/arrays';
 
 export type Bbox = NonNullable<MetadataRecord['bbox']>;
 export type Extent = NonNullable<MetadataRecord['temporalExtent']>;
@@ -26,10 +27,10 @@ export function unionBoxes(boxes: Bbox[]): Bbox | undefined {
   const ok = boxes.filter(validBox);
   if (ok.length === 0) return undefined;
   if (ok.length === 1) return ok[0];
-  const south = Math.min(...ok.map((b) => b.south));
-  const north = Math.max(...ok.map((b) => b.north));
-  const west = Math.min(...ok.map((b) => b.west));
-  const east = Math.max(...ok.map((b) => b.east));
+  const south = minOf(ok.map((b) => b.south));
+  const north = maxOf(ok.map((b) => b.north));
+  const west = minOf(ok.map((b) => b.west));
+  const east = maxOf(ok.map((b) => b.east));
   if (ok.some((b) => b.west > b.east) || east - west > 180) return { west: -180, east: 180, south, north };
   return { west, east, south, north };
 }
@@ -41,10 +42,10 @@ export function boxOfPoints(points: { lon?: number; lat?: number }[]): Bbox | un
   if (p.length === 0 || p.length !== points.length || p.some((x) => Math.abs(x.lon) > 180 || Math.abs(x.lat) > 90)) return undefined;
   const lons = p.map((x) => x.lon);
   const lats = p.map((x) => x.lat);
-  const west = Math.min(...lons);
-  const east = Math.max(...lons);
-  const south = Math.min(...lats);
-  const north = Math.max(...lats);
+  const west = minOf(lons);
+  const east = maxOf(lons);
+  const south = minOf(lats);
+  const north = maxOf(lats);
   // Vertices 179 and -179 are a small shape across the antimeridian, not a huge one; the vertex order does not tell which.
   if (east - west > 180) return { west: -180, east: 180, south, north };
   return { west, east, south, north };

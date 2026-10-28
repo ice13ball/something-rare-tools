@@ -5,6 +5,7 @@ import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land'
 import { makeFinding, threshold } from '../rules/registry';
 import { earliestUtcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
+import { minOf, pushAll } from '../util/arrays';
 
 /*
  * Category B — row checks.
@@ -190,7 +191,7 @@ function positionsOf(rows: DataRow[]): Pos[] {
   const merged: Pos[] = [];
   for (const p of exact.values()) {
     const into = merged.find((m) => samePosition(m, p));
-    if (into) into.rows.push(...p.rows);
+    if (into) pushAll(into.rows, p.rows);
     else merged.push(p);
   }
   return merged;
@@ -205,7 +206,7 @@ function positionText(p: Pos): string {
   return `${lon}, ${lat} (${n}${shown ? `, ${shown}` : ''})`;
 }
 
-const firstLine = (p: Pos): number => Math.min(...p.rows.map((r) => r.line));
+const firstLine = (p: Pos): number => minOf(p.rows.map((r) => r.line));
 
 /*
  * No citable distance tolerance for "the same station at another position" exists (docs/research/qc-sources.md, item 6),

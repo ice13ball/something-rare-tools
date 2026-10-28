@@ -5,6 +5,7 @@ import { slugOf } from './dwca';
 import type { DatasetMetadata, LicenceId } from './metadata';
 import { EML_VERSION, GBIF_PROFILE_VERSION, creatorLines, datasetNameOf, partyOf } from './metadata';
 import type { ConvertedDataset } from './model';
+import { minOf, maxOf } from '../util/arrays';
 
 /*
  * eml.xml: EML 2.2.0 with the GBIF Metadata Profile 1.3, the form the IPT 3.3.7 writes (docs/research/qc-sources.md, Item 3: the IPT's template root is
@@ -119,7 +120,7 @@ export function coverageOf(ds: Pick<ConvertedDataset, 'events' | 'occurrences'>)
     }
   }
   const out: Coverage = { taxa: [...new Set(ds.occurrences.map((o) => o.identification.scientificName))].sort() };
-  if (lats.length > 0) out.bbox = { ...lonBounds(lons), north: Math.max(...lats), south: Math.min(...lats) };
+  if (lats.length > 0) out.bbox = { ...lonBounds(lons), north: maxOf(lats), south: minOf(lats) };
   if (begin !== undefined && end !== undefined) out.dates = { begin, end };
   return out;
 }

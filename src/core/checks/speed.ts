@@ -7,6 +7,7 @@ import type { DataRow, Dataset, Finding, ParsedDate } from '../types';
 import { SHIP_SPEED_MIN_SEPARATION_KM } from './constants';
 import { decimalsOfNumber } from './crossfile';
 import { km, writtenDecimals } from './rows';
+import { minOf } from '../util/arrays';
 
 /*
  * ROW-SHIP-SPEED, ROW-SHIP-SPEED-UNUSUAL, ROW-SHIP-SPEED-PAIR — can one vessel have sailed between consecutive events?
@@ -212,7 +213,7 @@ const runRows = (run: Run): DataRow[] => run.events.flatMap((e) => e.rows);
 /** Line number of ONE event within one file and sheet (its first row there); an event with no row there is named with its file. */
 function eventRef(e: Ev, bucket: string): string {
   const here = e.rows.filter((r) => bucketOf(r) === bucket);
-  if (here.length > 0) return String(Math.min(...here.map((r) => r.line)));
+  if (here.length > 0) return String(minOf(here.map((r) => r.line)));
   return `${e.rows[0].file}:${e.rows[0].line}`;
 }
 

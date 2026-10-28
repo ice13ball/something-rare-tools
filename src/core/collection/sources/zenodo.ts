@@ -9,6 +9,7 @@ import { request } from '../net';
 import { SourceFailure, type Estimate, type Item, type PageData, type Pager } from '../types';
 import { UNREADABLE_RECORD, type Deps } from './datacite';
 import { addIds, decodeIds, encodeIds, hasId, idOf } from './idset';
+import { pushAll } from '../../util/arrays';
 
 export const ZENODO_HOST = 'zenodo.org';
 export const ZENODO_PAGE = 25;
@@ -394,7 +395,7 @@ export function zenodoPager(deps: Deps, plan: ZenodoPlan): Pager<ZenodoCursor> {
       let { next, notices: end } = advance(withIds, ids, got);
       // The slice ended earlier than its count said (records deleted meanwhile, or an empty page in the middle): go to the next slice.
       if (listed.length === 0 && next && next.cur === s) ({ next, notices: end } = after(withIds, ids));
-      notices.push(...end);
+      pushAll(notices, end);
       // ... and say so: the records it announced and did not deliver are not part of the run, and the run is not complete.
       let shortfall = 0;
       const ended = next === null || next.cur !== s;

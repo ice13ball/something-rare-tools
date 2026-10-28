@@ -3,6 +3,7 @@
 import { decodeReasons, reasonsText } from './recognize/layoutReasons';
 import { getRule } from './rules/registry';
 import type { Finding, Lang, Report, Severity } from './types';
+import { minOf } from './util/arrays';
 
 /** UI message keys for what the tool does not check (shown with every report). */
 export const NOT_CHECKED: readonly string[] = [
@@ -42,7 +43,7 @@ function dedupeKey(f: Finding): string {
 }
 
 function firstLine(f: Finding): number {
-  return f.lines && f.lines.length > 0 ? Math.min(...f.lines) : Number.POSITIVE_INFINITY;
+  return f.lines && f.lines.length > 0 ? minOf(f.lines) : Number.POSITIVE_INFINITY;
 }
 
 function compareText(a: string | undefined, b: string | undefined): number {

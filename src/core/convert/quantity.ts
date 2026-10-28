@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { P01, P06, type NercTerm } from './vocab';
+import { pushAll } from '../util/arrays';
 
 /*
  * What the numbers of a sheet mean (declared per sheet by the user) and how that becomes Darwin Core terms and measurement intents.
@@ -209,7 +210,7 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
   }
   if (decl.effort) {
     const r = resolveEffort(decl.effort, opts.columnEffortUnit);
-    missing.push(...r.missing);
+    pushAll(missing, r.missing);
     if (r.effort) out.effort = r.effort;
     if (r.invalid !== undefined) out.effortInvalid = r.invalid;
   }
