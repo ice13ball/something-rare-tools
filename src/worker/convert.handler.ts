@@ -137,7 +137,7 @@ export function createConvertHandler(): ConvertHandler {
         fileName: parsed.fileName,
         kind: parsed.kind,
         encoding: parsed.encoding,
-        sheets: parsed.sheets.map((s) => ({ name: s.name, header: s.header, rowCount: s.rows.length })),
+        sheets: parsed.sheets.map((s) => ({ name: s.name, header: s.header, ...(s.unnamedFrom === undefined ? {} : { unnamedFrom: s.unnamedFrom }), rowCount: s.rows.length })),
         layout: layoutOf(parsed),
         mappings,
         proposals,

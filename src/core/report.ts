@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { decodeReasons, reasonsText } from './recognize/layoutReasons';
+import { applyPlurals } from './i18n/plural';
 import { getRule } from './rules/registry';
 import type { Finding, Lang, Report, Severity } from './types';
 import { minOf } from './util/arrays';
@@ -87,7 +88,7 @@ export function buildReport(findings: readonly Finding[]): Report {
  * never disagree with the number the check used). A generic field the finding does not have renders as
  * an empty string; a param that is missing is left as `{name}`, so a check that forgot it is visible.
  */
-function fill(template: string, f: Finding): string {
+function fill(template: string, f: Finding, lang?: Lang): string {
   const rule = getRule(f.ruleId);
   const generic: Record<string, string> = {
     file: f.file ?? '',
@@ -96,7 +97,9 @@ function fill(template: string, f: Finding): string {
     value: f.value ?? '',
     lines: formatLines(f.lines),
   };
-  return template.replace(/\{([A-Za-z_][\w.]*)\}/g, (whole, name: string) => {
+  // plural tokens ({+name:one|other}, i18n/plural.ts) depend on a numeric param
+  const text = lang === undefined ? template : applyPlurals(lang, template, (name) => (Object.prototype.hasOwnProperty.call(f.params, name) ? Number(f.params[name]) : undefined));
+  return text.replace(/\{([A-Za-z_][\w.]*)\}/g, (whole, name: string) => {
     if (name.startsWith('threshold.')) {
       const t = rule.thresholds?.find((x) => x.name === name.slice('threshold.'.length));
       return t ? String(t.value) : whole;
@@ -122,7 +125,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
   // The layout reason is the English phrase in `reason`; the codes in `reasons` are rendered in the reader's language.
   const reasons = f.ruleId === 'IN-LAYOUT-UNSUPPORTED' ? decodeReasons(f.params.reasons) : undefined;
   if (reasons) f = { ...f, params: { ...f.params, reason: reasonsText(reasons, lang) } };
-  let base = fill(texts[lang] || texts.en, f);
+  let base = fill(texts[lang] || texts.en, f, lang);
   if (rule.plainOtherRest && f.params.otherRest) base = `${base} ${fill(rule.plainOtherRest[lang] || rule.plainOtherRest.en, f)}`;
   for (const extra of rule.plainIf ?? []) {
     const v = f.params[extra.param];

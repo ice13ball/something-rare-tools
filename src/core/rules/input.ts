@@ -25,6 +25,7 @@ import type { RuleSpec } from './spec';
  *   IN-LAYOUT-UNSUPPORTED   reason, reasons   English phrase from LayoutPlan.unsupported; JSON of LayoutPlan.unsupportedReasons (codes, rendered per language by renderPlain)
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
+ *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
  *   IN-DATE1904             (none)
  *   IN-DWCA-NOT-ARCHIVE     (none)
  *   IN-DWCA-UNSUPPORTED-CORE core    local name of the core rowType (e.g. Taxon), or the raw rowType when it has none
@@ -323,6 +324,19 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `Ce fichier écrit les nombres avec une virgule décimale (3,14). Ils ont été lus correctement ; utilisez un point décimal lors de la publication.`,
     },
     technical: `{file}: decimal comma detected (semicolon or tab delimiter, most numeric cells look like 3,14); values parsed with ',' as the decimal separator.`,
+  },
+  {
+    id: 'IN-HEADER-SHORT',
+    category: 'input',
+    severity: 'warning',
+    params: ['header', 'count', 'rows', 'width', 'extra', 'range'],
+    plain: {
+      pl: `Nagłówek ma {header} {+header:nazwę|nazwy|nazw}, ale {count} z {rows} wierszy ma {width} {+width:wartość|wartości|wartości}, więc brakuje {extra} {+extra:nazwy|nazw|nazw}. Narzędzie nie wie, gdzie: dodatkowe wartości na końcu pokazuje jako Kolumna {range}. Jeśli nazw brakuje wcześniej w nagłówku, kolumny od tego miejsca niosą wartości sąsiedniej kolumny: sprawdź też pierwsze wartości ostatnich nazwanych kolumn i nadaj każdej kolumnie znaczenie jej wartości.`,
+      en: `The header has {header} {+header:name|names}, but {count} of {rows} rows have {width} values, so {extra} {+extra:name is|names are} missing. The tool cannot tell where: it shows the extra values at the end as Column {range}. If names are missing earlier in the header, the columns from that point on carry the values of their neighbour: check the first values of the last named columns too, and give each column the meaning of its values.`,
+      de: `Die Kopfzeile hat {header} {+header:Name|Namen}, aber {count} von {rows} Zeilen haben {width} Werte, daher {+extra:fehlt|fehlen} {extra} {+extra:Name|Namen}. Das Werkzeug kann nicht erkennen, wo: Es zeigt die zusätzlichen Werte am Ende als Spalte {range}. Fehlen Namen weiter vorn in der Kopfzeile, tragen die Spalten ab dieser Stelle die Werte ihrer Nachbarn: Prüfen Sie auch die ersten Werte der letzten benannten Spalten und geben Sie jeder Spalte die Bedeutung ihrer Werte.`,
+      fr: `L'en-tête compte {header} {+header:nom|noms}, mais {count} lignes sur {rows} ont {width} valeurs, donc {extra} {+extra:nom manque|noms manquent}. L'outil ne peut pas savoir où : il montre les valeurs en trop à la fin comme Colonne {range}. Si des noms manquent plus tôt dans l'en-tête, les colonnes à partir de ce point portent les valeurs de leur voisine : vérifiez aussi les premières valeurs des dernières colonnes nommées et donnez à chaque colonne le sens de ses valeurs.`,
+    },
+    technical: `{file}: the header has {header} names; {count} of {rows} data rows have {width} fields; {extra} names missing, position unknown; the extra values are shown as Column {range} (internal names "Column N").`,
   },
   {
     id: 'IN-DATE1904',

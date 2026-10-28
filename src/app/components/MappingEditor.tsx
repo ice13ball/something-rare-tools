@@ -18,6 +18,8 @@ export interface MappingEditorProps {
   mapping: SheetMapping;
   /** Columns the table layout reads itself (long format: parameter, unit, value): shown, not editable. */
   layoutColumns?: ReadonlySet<number>;
+  /** Columns from this index on have no name in the file (IN-HEADER-SHORT): their header is the internal `Column N`, shown as the reader's own word. */
+  unnamedFrom?: number;
   /** The entries of the role dropdown. Default: the roles /check offers. /convert passes its own list (the converter roles included). */
   roleKinds?: readonly RoleChoice[];
   /** The ⓘ of the role column header. Default: the /check one. */
@@ -47,7 +49,7 @@ const CANONICAL_KEYS: readonly string[] = CANONICAL_VARIABLES.map((c) => c.key);
  * highlighted), and for a measured variable its name and unit. The unit box starts from the proposal only: a column with no
  * stated unit stays empty. ⛔ Never fills in a unit nobody stated.
  */
-export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumns, roleKinds = ROLE_KINDS, rolesTip = 'roles', onChange }: MappingEditorProps): React.ReactElement {
+export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumns, unnamedFrom, roleKinds = ROLE_KINDS, rolesTip = 'roles', onChange }: MappingEditorProps): React.ReactElement {
   useLang();
   return (
     <section className="mapping-editor" aria-label={t('mapping.title', { sheet })}>
@@ -75,7 +77,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
               const consumed = layoutColumns?.has(col.index) === true;
               const low = proposal?.confidence === 'low' && !consumed;
               const shown = (samples[col.index] ?? []).slice(0, MAX_SAMPLES);
-              const label = col.header === '' ? `#${col.index + 1}` : col.header;
+              const label = unnamedFrom !== undefined && col.index >= unnamedFrom ? t('mapping.unnamed', { n: col.index + 1 }) : col.header === '' ? `#${col.index + 1}` : col.header;
               return (
                 <tr key={col.index} className={low ? 'low-confidence' : undefined} data-low={low ? 'true' : 'false'}>
                   <th scope="row">

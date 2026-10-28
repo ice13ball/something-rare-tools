@@ -41,3 +41,42 @@ export function raggedFinding(fileName: string, sheet: string, headerLength: num
 export function encodingFinding(fileName: string, d: Pick<DecodedText, 'encoding' | 'fallback'>): Finding | undefined {
   return d.fallback ? makeFinding('IN-ENCODING-FALLBACK', { file: fileName, params: { encoding: d.encoding } }) : undefined;
 }
+
+/** A header is short when at least this share of the non-empty data rows have one and the same field count that is larger than the header's. */
+export const SHORT_HEADER_SHARE = 0.95;
+/** Fewer data rows than this say nothing about the real width of the table. */
+export const SHORT_HEADER_MIN_ROWS = 3;
+
+/** Internal name of a column the header does not name: language-neutral, numbered by its 1-based position. The UI shows the reader's own word for it. */
+export const unnamedColumn = (position: number): string => `Column ${position}`;
+
+/**
+ * "The header is missing names": the modal field count N of the data rows is above the header's count H and at least SHORT_HEADER_SHARE of the rows have exactly N fields.
+ * Returns the header extended with N-H unnamed columns (`Column H+1` ... `Column N`), the index of the first of them, and the IN-HEADER-SHORT finding; undefined otherwise
+ * (N <= H, a weaker mode, fewer than SHORT_HEADER_MIN_ROWS rows). Rows are not touched: those with N fields are regular afterwards, the others stay ragged, relative to N.
+ * The tool cannot know WHERE names are missing, so the new columns are appended at the end; the user maps them (and the named columns after the gap) as they are.
+ */
+export function extendShortHeader(
+  fileName: string,
+  sheet: string,
+  header: readonly string[],
+  rows: readonly RawRow[],
+): { header: string[]; unnamedFrom: number; finding: Finding } | undefined {
+  if (rows.length < SHORT_HEADER_MIN_ROWS) return undefined;
+  const freq = new Map<number, number>();
+  for (const r of rows) freq.set(r.fieldCount, (freq.get(r.fieldCount) ?? 0) + 1);
+  let width = 0;
+  let count = 0;
+  for (const [n, k] of freq) if (k > count || (k === count && n > width)) [width, count] = [n, k];
+  if (width <= header.length || count < rows.length * SHORT_HEADER_SHARE) return undefined;
+  const extra = width - header.length;
+  const first = header.length + 1;
+  const extended = [...header];
+  for (let p = first; p <= width; p++) extended.push(unnamedColumn(p));
+  const finding = makeFinding('IN-HEADER-SHORT', {
+    file: fileName,
+    sheet,
+    params: { header: header.length, count, rows: rows.length, width, extra, range: extra === 1 ? String(first) : `${first}…${width}` },
+  });
+  return { header: extended, unnamedFrom: header.length, finding };
+}
