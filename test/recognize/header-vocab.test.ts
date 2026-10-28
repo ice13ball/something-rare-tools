@@ -170,3 +170,111 @@ describe('the museum sheet (invented values, real column names)', () => {
     });
   });
 });
+
+describe('review round: the values decide, not the header alone', () => {
+  const LATV = [32.7, 32.8, 33.1];
+  const LONV = [-117.3, -117.2, -118.0];
+  it('a hemisphere-named header that holds NUMBERS stays a coordinate, high confidence, as before', () => {
+    for (const [h, kind] of [
+      ['Latitude N/S', 'latitude'], ['Longitude E/W', 'longitude'], ['Lat NS', 'latitude'], ['Lon EW', 'longitude'], ['Latitude hemisphere', 'latitude'],
+      ['Lat dir', 'latitude'], ['Lon dir', 'longitude'], ['Long dir', 'longitude'], ['Lat Direction', 'latitude'],
+    ] as const) {
+      const p = roleOf({ [h]: kind === 'latitude' ? LATV : LONV, Other: [1.5, 2.5, 3.5] }, h);
+      expect(p.role.kind, h).toBe(kind);
+      expect(p.confidence, h).toBe('high');
+    }
+  });
+  it('the same headers holding letters are hemispheres', () => {
+    for (const h of ['Latitude N/S', 'Longitude E/W', 'Lat NS', 'Lon EW', 'Latitude hemisphere', 'Lat dir', 'Lon dir', 'Long dir']) {
+      const p = roleOf({ [h]: ['N', 'S', 'E'], Other: [1.5, 2.5, 3.5] }, h);
+      expect(p.reasonCode, h).toBe('hemisphere');
+    }
+  });
+  it('a bare N:S or NS holding numbers is what it was (a variable), never a hemisphere', () => {
+    for (const h of ['N:S', 'NS', 'N/S', 'EW', 'E/W']) {
+      const p = roleOf({ [h]: [1.5, 2.5, 3.5] }, h);
+      expect(p.role.kind, h).toBe('variable');
+      expect(p.reasonCode, h).not.toBe('hemisphere');
+    }
+  });
+});
+
+describe('review round: "NO" is nitric oxide', () => {
+  it('NO, NO [ppb], NO3 and NOx are variables; No., No, Nr. and Sample No are not', () => {
+    for (const h of ['NO', 'NO [ppb]', 'NO3', 'NOx']) expect(roleOf({ [h]: [1.5, 2.5, 3.5] }, h).role.kind, h).toBe('variable');
+    for (const h of ['No.', 'No', 'Nr.', 'Nr']) expect(roleOf({ [h]: [1, 2, 3] }, h).reasonCode, h).toBe('identifier');
+    expect(roleOf({ 'Sample No': [1, 2, 3] }, 'Sample No').role.kind).toBe('sampleId');
+  });
+});
+
+describe('review round: an abundance with a unit is a density or another measurement', () => {
+  it('stays a variable', () => {
+    for (const h of ['Abundance [ind/m2]', 'Abundance (cells/L)', 'Abundance [#/m3]', 'Abundance (%)', 'Individuals [ind/m2]', 'Count [cells/mL]', 'Counts [cps]']) {
+      const p = roleOf({ [h]: [1.5, 12.5, 3.5] }, h);
+      expect(p.role.kind, h).toBe('variable');
+    }
+  });
+  it('a plain count unit leaves it an abundance', () => {
+    for (const h of ['Count [n]', 'Abundance [ind]', 'Individuals [individuals]']) expect(roleOf({ [h]: [1, 12, 3] }, h).reasonCode, h).toBe('abundance');
+  });
+});
+
+describe('review round: an end position ranks below every other reading of a position', () => {
+  it('a P01 latitude code and a degrees-minutes column beat an end coordinate', () => {
+    const p = propose({ 'End Latitude': LAT, ALATZZ01: LAT, Other: [1.5, 2.5, 3.5] });
+    expect(p.find((x) => x.header === 'ALATZZ01')!.role.kind).toBe('latitude');
+    expect(p.find((x) => x.header === 'End Latitude')!.role.kind).toBe('ignore');
+    const q = propose({ 'End Latitude': LAT, Position: ['32°42.5′N', '32°43.5′N', '33°06.0′N'] });
+    expect(q.find((x) => x.header === 'Position')!.role.kind).toBe('latitude');
+    expect(q.find((x) => x.header === 'End Latitude')!.role.kind).toBe('ignore');
+  });
+  it('the reason names the column that is used', () => {
+    const p = propose({ Latitude: LAT, 'End Latitude': LAT });
+    expect(p[1].reasonCode).toBe('end-position');
+    expect(p[1].reasonParams).toEqual({ name: 'Latitude' });
+  });
+});
+
+describe('review round: Polish, German and French plain forms', () => {
+  it('start and end words after a bare width / length word, when the values fit the axis', () => {
+    for (const [h, kind] of [
+      ['Szerokość początkowa', 'latitude'], ['Długość początkowa', 'longitude'], ['Breite Anfang', 'latitude'], ['Länge Anfang', 'longitude'],
+      ['Szer. pocz.', 'latitude'], ['Dł. pocz.', 'longitude'], ['Latitude de début', 'latitude'],
+    ] as const) {
+      const p = roleOf({ [h]: kind === 'latitude' ? LAT : LON, Other: [1.5, 2.5, 3.5] }, h);
+      expect(p.role.kind, h).toBe(kind);
+    }
+    for (const [begin, end] of [['Szerokość początkowa', 'Szerokość końcowa'], ['Długość początkowa', 'Długość końcowa'], ['Breite Anfang', 'Breite Ende'], ['Länge Anfang', 'Länge Ende'], ['Latitude de début', 'Latitude de fin']]) {
+      const lon = /Dług|Länge/.test(begin);
+      const v = lon ? LON : LAT;
+      const p = propose({ [begin]: v, [end]: v });
+      expect(p[0].role.kind, begin).toBe(lon ? 'longitude' : 'latitude');
+      expect(p[1].reasonCode, end).toBe('end-position');
+    }
+    const only = roleOf({ 'Latitude de fin': LAT, Other: [1.5, 2.5, 3.5] }, 'Latitude de fin');
+    expect(only.reasonCode).toBe('end-position-only');
+  });
+  it('a body length is no coordinate: whole numbers under a bare word with an end word stay a variable', () => {
+    expect(roleOf({ 'Länge Ende': [120, 150, 90] }, 'Länge Ende').role.kind).toBe('variable');
+  });
+});
+
+describe('the converter overlay reads the same words', () => {
+  const sheet = rawSheet(
+    ['Species', 'Count', 'Begin Latitude', 'End Latitude', 'Begin Longitude', 'End Longitude', 'Lon Dir', 'Catalog ID', 'Photo', 'NO'],
+    [['Alpha beta', 1, 32.7, 32.8, -117.3, -117.2, 'W', 1001, 5, 1.5], ['Gamma delta', 12, 32.9, 33.0, -117.5, -117.4, 'W', 1002, 6, 2.5]],
+  );
+  const roles = (): Record<string, string> => Object.fromEntries(proposeConvertColumns(sheet, CTX).map((p) => [p.header, p.role.kind]));
+  it('start coordinates are coordinates, end coordinates are ignored', () => {
+    expect(roles()).toMatchObject({ 'Begin Latitude': 'latitude', 'Begin Longitude': 'longitude', 'End Latitude': 'ignore', 'End Longitude': 'ignore' });
+  });
+  it('hemisphere letters (by values) and identifiers are ignored; the abundance stays a quantity', () => {
+    expect(roles()).toMatchObject({ 'Lon Dir': 'ignore', 'Catalog ID': 'ignore', Photo: 'ignore', Count: 'quantity', Species: 'taxon' });
+  });
+  it('a header that says Dir but holds numbers keeps its old reading; NO is no identifier', () => {
+    const s = rawSheet(['Species', 'Lon dir', 'NO'], [['Alpha beta', -117.3, 1.5], ['Gamma delta', -117.2, 2.5]]);
+    const r = Object.fromEntries(proposeConvertColumns(s, CTX).map((p) => [p.header, p.role.kind]));
+    expect(r['Lon dir']).toBe('longitude');
+    expect(r.NO).not.toBe('ignore');
+  });
+});

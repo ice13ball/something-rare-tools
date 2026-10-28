@@ -150,6 +150,8 @@ interface Cand {
   bound?: 'from' | 'to';
   /** The end of a tow or transect (End Latitude): loses the slot to the start position and is ignored; alone it is used, at low confidence. */
   coordEnd?: boolean;
+  /** A bare width / length word with a start or end word ('Länge Ende'): a coordinate only when the values fit the axis (see valuesFitAxis). */
+  fitAxis?: boolean;
 }
 
 /* ---------- Polish, German and French names (keys come from headerKey: ASCII, lower case, 'ł' -> 'l', 'ä' -> 'a') ---------- */
@@ -202,15 +204,17 @@ const SITE_DEPTH =
 const OTHER_DEPTH = /\b(secchi|mixed layer|mld|euphotic|photic|thermocline|chlorophyll max|compensation)\b/;
 const FLAG = /^(qf|qc|flag)( |$)|( flag| flags| qf| qc)$|^quality( flag| control| code)?( |$)/;
 
+const PLAIN_COUNT_UNIT = /^(n|ind|inds|individuals?|specimens?|count|counts)\.?$/i;
+
 function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
-  // the hemisphere letter of a coordinate ('Lon Dir') is never the coordinate
-  if (isHemisphereHeader(key)) return undefined;
   // start / end of a tow or transect: 'Begin Latitude', 'Lat start', 'Latitude (start)' (a bracket text that is no unit stays in the header)
   const cb = coordinateBound(key) ?? (hdr === undefined ? undefined : coordinateBound(headerKey(hdr.cleanHeader)));
   if (cb) {
-    if (cb.bound === 'start' && cb.axis === 'latitude') return { slot: 'latitude', tier: 1, kind: 'latitude', why: why('name-latitude') };
-    if (cb.bound === 'start') return { slot: 'longitude', tier: 1, kind: 'longitude', why: why('name-longitude') };
-    return { slot: cb.axis, tier: 1.5, kind: cb.axis, why: why('end-position'), coordEnd: true };
+    const fit = cb.bare ? { fitAxis: true } : {};
+    if (cb.bound === 'start' && cb.axis === 'latitude') return { slot: 'latitude', tier: 1, kind: 'latitude', why: why('name-latitude'), ...fit };
+    if (cb.bound === 'start') return { slot: 'longitude', tier: 1, kind: 'longitude', why: why('name-longitude'), ...fit };
+    // tier 4: an end position ranks below every other reading of a position (a degrees-minutes column, a P01 code, a bare width), so it only wins when nothing else is there
+    return { slot: cb.axis, tier: 4, kind: cb.axis, why: why('end-position', { name: '' }), coordEnd: true, ...fit };
   }
   const other = nameCandidateOther(key, hdr);
   if (other) return other;
@@ -659,12 +663,14 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
 
     // 1. header names
     if (FLAG.test(key)) return ignore(why('quality-flag'));
-    if (isHemisphereHeader(key)) return ignore(why('hemisphere'), 'low');
+    // a header that names a hemisphere letter ('Lon Dir', 'Lat NS'): the VALUES decide. Numbers keep the header's old reading (a coordinate, or a variable such as the ratio N:S)
+    if (isHemisphereHeader(key) && !isNumeric(numericStats(rows, index, ctx.decimalComma))) return ignore(why('hemisphere'), 'low');
 
     const dwc = dwcColumn(cleanHeader, dwcSheet);
     if (dwc && 'ignore' in dwc) return ignore(dwc.ignore);
     let cand = dwc ? dwc.cand : (nameCandidate(key, { unitText: hu.unitText, cleanHeader }) ?? bareCands.get(index));
     if (cand?.guard && !guardPasses(cand.guard, sheet, rows, index, ctx)) cand = undefined; // an ambiguous name the values do not back
+    if (cand?.fitAxis && !valuesFitAxis(rows, index, cand.kind === 'longitude' ? 'longitude' : 'latitude', ctx.decimalComma)) cand = undefined;
     let candidate: Cand | undefined = cand;
     let pressure = isPressureName(key, hu.unitText);
     let variableKey: string | undefined;
@@ -741,8 +747,9 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
 
     // 5. variable. An identifier or an abundance is never one (a canonical name such as temperature wins over these words)
     if (canonical === undefined) {
-      if (ctx.keepAbundance !== true && isAbundanceName(key)) return ignore(why('abundance'), 'low');
-      if (isIdentifierName(key, cleanHeader)) return ignore(why('identifier'), 'low');
+      // an abundance with a unit (ind/m2, cells/L, %) is a density or another measurement; only a plain count unit ([n], [ind]) leaves it an abundance
+      if (ctx.keepAbundance !== true && isAbundanceName(key) && (hu.unitText === undefined || PLAIN_COUNT_UNIT.test(hu.unitText.trim()))) return ignore(why('abundance'), 'low');
+      if (isIdentifierName(key, cleanHeader, hu.name)) return ignore(why('identifier'), 'low');
     }
     const name = hu.name;
     const variable = canonical ?? name;
@@ -781,7 +788,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
         e.proposal.role = { kind: 'ignore' };
         e.proposal.confidence = 'low';
         const lead = c.empty && !entries[winner].cand!.empty ? why('lead-empty') : undefined;
-        if (c.coordEnd) applyReason(e.proposal, why('end-position'), [], lead);
+        if (c.coordEnd) applyReason(e.proposal, why('end-position', { name: w }), [], lead);
         else applyReason(e.proposal, why(OTHER_USED[slot], { name: w }), [...(c.bound ? [why('note-depth-range-unread')] : [])], lead);
         continue;
       }

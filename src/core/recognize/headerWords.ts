@@ -9,6 +9,9 @@ const START_WORDS: ReadonlySet<string> = new Set(['begin', 'beg', 'start', 'star
 const END_WORDS: ReadonlySet<string> = new Set(['end', 'stop', 'final', 'to', 'koniec', 'koncowa', 'koncowy', 'konc', 'ende', 'fin']);
 const LAT_WORD = /^(lat|latit\w*|szerokosc geogr\w*|szerokosc (polnocna|poludniowa)|breitengrad|(geographische|geogr) breite)$/;
 const LON_WORD = /^(lon|long|lng|longit\w*|dlugosc geogr\w*|dlugosc (wschodnia|zachodnia)|l(?:a|ae)ngengrad|(geographische|geogr) l(?:a|ae)nge)$/;
+const CONNECTOR = /^(de|du|d|of)$/;
+const BARE_LAT = /^(szerokosc|szer|breite)$/;
+const BARE_LON = /^(dlugosc|dl|dlug|lange|laenge)$/;
 const AXIS_TAIL = /( (dd|deg|degs|degrees|decimal|dec|wgs84))+$/;
 const AXIS_GLUED = /^(begin|beg|start|starting|initial|end|stop|final)(lat|lon|long|lng|latitude|longitude)$|^(lat|lon|long|lng|latitude|longitude)(begin|beg|start|end|stop|final)$/;
 
@@ -25,7 +28,7 @@ export function axisOfWord(key: string): 'latitude' | 'longitude' | undefined {
  * 'BeginLat', 'Szerokość początkowa', 'Anfang Breitengrad', 'Longitude fin'. The bound word is the first or the last word and the rest is a
  * latitude or longitude name; undefined for every other header ('Start date', 'End Depth', 'Latitude').
  */
-export function coordinateBound(key: string): { axis: 'latitude' | 'longitude'; bound: 'start' | 'end' } | undefined {
+export function coordinateBound(key: string): { axis: 'latitude' | 'longitude'; bound: 'start' | 'end'; bare?: true } | undefined {
   const glued = AXIS_GLUED.exec(key);
   if (glued) {
     const word = glued[1] ?? glued[4];
@@ -38,8 +41,15 @@ export function coordinateBound(key: string): { axis: 'latitude' | 'longitude'; 
     const word = tokens[at];
     const bound = START_WORDS.has(word) ? 'start' : END_WORDS.has(word) ? 'end' : undefined;
     if (bound === undefined) continue;
-    const axis = axisOfWord(tokens.filter((_, i) => i !== at).join(' '));
+    // 'Latitude de fin', 'Begin of latitude': a connector next to the bound word goes with it
+    const near = at === 0 ? 1 : at - 1;
+    const drop = CONNECTOR.test(tokens[near] ?? '') && tokens.length > 2 ? near : -1;
+    const rest = tokens.filter((_, i) => i !== at && i !== drop).join(' ');
+    const axis = axisOfWord(rest);
     if (axis !== undefined) return { axis, bound };
+    // 'Szerokość początkowa', 'Länge Ende', 'Szer. pocz.', 'Dł. pocz.': a bare width / length word; the caller asks the values to fit the axis
+    const bareAxis = BARE_LAT.test(rest) ? 'latitude' : BARE_LON.test(rest) ? 'longitude' : undefined;
+    if (bareAxis !== undefined) return { axis: bareAxis, bound, bare: true };
   }
   return undefined;
 }
@@ -70,9 +80,11 @@ export function isHemisphereHeader(key: string): boolean {
 const IDENTIFIER_TOKEN = /^(id|ids|no|nr|num|number|catalog|catalogue|accession|acc|reference|ref|image|photo|loan|gift|voucher|specimen|record|barcode|uuid|guid|genbank|gen ?b[a-z]{2,4}k|collection|\d+)$/;
 const IDENTIFIER_WEAK = /^(collection|\d+)$/;
 
-/** Is this header (headerKey) an identifier of a specimen, a record or a photo, not a measurement? `cleanHeader` is the header as written ('#' alone has no key). */
-export function isIdentifierName(key: string, cleanHeader = ''): boolean {
+/** Is this header (headerKey) an identifier of a specimen, a record or a photo, not a measurement? `cleanHeader` is the header as written ('#' alone has no key), `rawName` its name without the unit. */
+export function isIdentifierName(key: string, cleanHeader = '', rawName = cleanHeader): boolean {
   if (key === '') return /^[#№]$/.test(cleanHeader.trim());
+  // an all-capitals 'NO' without a dot is nitric oxide, not 'No.'; the key is lower case, so the raw name decides
+  if (rawName.trim() === 'NO') return false;
   const tokens = key.split(' ').filter((t) => t !== '');
   // 'GenBank' written in two words ('Gen Bank') is one word
   const words: string[] = [];
