@@ -15,7 +15,8 @@ const ROWS = 200_000;
 
 function bigCsv(): Uint8Array {
   const parts = ['Station,Date,Latitude,Longitude,Depth,Temp'];
-  for (let i = 0; i < ROWS; i++) parts.push(`ZB${(i % 50) + 1},2021-07-${String((i % 28) + 1).padStart(2, '0')},52.2,21.0,${(i % 40) + 1},${(4 + (i % 100) / 10).toFixed(1)},x,y`);
+  // 7 and 8 extra fields alternate: no field count reaches 95 % of the rows, so the header is NOT taken for a short one (IN-HEADER-SHORT) and every row stays ragged
+  for (let i = 0; i < ROWS; i++) parts.push(`ZB${(i % 50) + 1},2021-07-${String((i % 28) + 1).padStart(2, '0')},52.2,21.0,${(i % 40) + 1},${(4 + (i % 100) / 10).toFixed(1)}${i % 2 ? ',x,y,x,y,x,y,x,y' : ',x,y,x,y,x,y,x'}`);
   return new TextEncoder().encode(parts.join('\n') + '\n');
 }
 

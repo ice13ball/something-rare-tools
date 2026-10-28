@@ -12,6 +12,7 @@ export interface RawSheet {
   header: string[];             // original header text, OPeNDAP suffixes kept
   headerLine: number;           // 1-based physical line/row of the header
   rows: RawRow[];               // data rows only, physical line numbers
+  unnamedFrom?: number;         // CSV: the header had too few names (IN-HEADER-SHORT); columns from this index on were added by the tool as `Column N`
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
 }

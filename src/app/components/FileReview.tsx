@@ -36,6 +36,7 @@ export function FileReview({ file, layout, mappings, proposals, onLayout, onMapp
       {mappings.map((m) => {
         const long = layout.tables.find((tb) => tb.sheet === m.sheet)?.long;
         const consumed = long ? new Set<number>([long.parameterCol, long.valueCol, ...(long.unitCol === undefined ? [] : [long.unitCol])]) : undefined;
+        const unnamedFrom = file.sheets.find((s) => s.name === m.sheet)?.unnamedFrom;
         return (
           <MappingEditor
             key={m.sheet}
@@ -44,6 +45,7 @@ export function FileReview({ file, layout, mappings, proposals, onLayout, onMapp
             samples={file.samples[m.sheet] ?? []}
             mapping={m}
             layoutColumns={consumed}
+            {...(unnamedFrom === undefined ? {} : { unnamedFrom })}
             {...(roleKinds ? { roleKinds } : {})}
             {...(rolesTip ? { rolesTip } : {})}
             onChange={onMapping}

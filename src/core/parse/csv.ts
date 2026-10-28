@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { Finding, ParsedFile, RawRow } from '../types';
+import type { Finding, ParsedFile, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registry';
 import type { DecodedText } from '../values/encoding';
-import { encodingFinding, raggedFinding } from './shared';
+import { encodingFinding, extendShortHeader, raggedFinding } from './shared';
 
 export interface CsvRecord {
   /** physical line where the record STARTS (a quoted field with newlines belongs to its first line) */
@@ -182,8 +182,15 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
   file.decimalComma = looksDecimalComma(delim, body.map((r) => r.cells));
   if (file.decimalComma) findings.push(makeFinding('IN-DECIMAL-COMMA', { file: fileName }));
 
-  file.sheets.push({ name: fileName, header, headerLine: records[0].line, rows });
-  const rag = raggedFinding(fileName, fileName, header.length, rows);
+  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows };
+  const shortHeader = extendShortHeader(fileName, fileName, header, rows);
+  if (shortHeader) {
+    sheet.header = shortHeader.header;
+    sheet.unnamedFrom = shortHeader.unnamedFrom;
+    findings.push(shortHeader.finding);
+  }
+  file.sheets.push(sheet);
+  const rag = raggedFinding(fileName, fileName, sheet.header.length, rows);
   if (rag) findings.push(rag);
   return file;
 }

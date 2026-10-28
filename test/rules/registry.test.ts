@@ -26,6 +26,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'IN-LAYOUT-UNSUPPORTED': ['error', 'input'],
   'IN-ENCODING-FALLBACK': ['info', 'input'],
   'IN-DECIMAL-COMMA': ['info', 'input'],
+  'IN-HEADER-SHORT': ['warning', 'input'],
   'IN-DATE1904': ['info', 'input'],
   'IN-DWCA-NOT-ARCHIVE': ['error', 'input'],
   'IN-DWCA-UNSUPPORTED-CORE': ['error', 'input'],
@@ -105,7 +106,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(90);
+    expect(ids.length).toBe(91);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -130,7 +131,7 @@ describe('rule table', () => {
 
 // Wording decided by Michal word for word (ROW-ON-LAND-NEAR, 23.10.2026: the map, not the position, says land; the skip list
 // names estuaries and tidal inlets): longer than the usual cap, allowed explicitly.
-const LONG_TEXT_ALLOWED: Record<string, number> = { 'ROW-ON-LAND-NEAR': 420 };
+const LONG_TEXT_ALLOWED: Record<string, number> = { 'ROW-ON-LAND-NEAR': 420, 'IN-HEADER-SHORT': 620 };
 
 describe('messages', () => {
   const GENERIC = new Set<string>(GENERIC_PARAMS);

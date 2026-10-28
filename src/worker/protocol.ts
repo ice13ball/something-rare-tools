@@ -18,6 +18,8 @@ export interface InputFile {
 export interface SheetSummary {
   name: string;
   header: string[];
+  /** Columns from this index on have no name in the file (the tool called them `Column N`): the page shows its own word. */
+  unnamedFrom?: number;
   rowCount: number;
 }
 
