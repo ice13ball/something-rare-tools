@@ -267,7 +267,7 @@ describe('/convert: the metadata files of stage 3', () => {
   });
 
   it('the note of a long environmental sheet that was read as one row per sample carries its ⓘ, beside the heading, in every language', async () => {
-    const LONG = 'Station,Date,Latitude,Longitude,Depth_m,Parameter,Unit,Value\nZL1,2020-05-01,70.1,20.2,5,Temperature,degC,4.1\nZL1,2020-05-01,70.1,20.2,5,Salinity,PSU,33.1\nZL2,2020-05-02,70.3,20.4,5,Temperature,degC,4.4\n';
+    const LONG = 'Station,Date,Latitude,Longitude,Depth_m,Parameter,Unit,Value,Comment\nZL1,2020-05-01,70.1,20.2,5,Temperature,degC,4.1,a\nZL1,2020-05-01,70.1,20.2,5,Salinity,PSU,33.1,b\nZL2,2020-05-02,70.3,20.4,5,Temperature,degC,4.4,a\n';
     for (const lang of LANGS) {
       cleanup();
       setLang(lang);
@@ -275,7 +275,7 @@ describe('/convert: the metadata files of stage 3', () => {
       chooseFiles(container, [{ name: 'long.csv', text: LONG }]);
       fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
       await screen.findByRole('heading', { name: UI[lang]['convert.columns.title'] });
-      expectTips(['convertPivot'], lang);
+      expectTips(['convertPivot', 'convertPivotOff', 'convertPivotKey'], lang);
       expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
     }
     setLang('en');

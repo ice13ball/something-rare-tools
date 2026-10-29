@@ -275,6 +275,29 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === mapping.sheet ? mapping : m)) }));
   };
 
+  /**
+   * The user's choice about a long environmental sheet (read it as a normal table; key columns that describe the measurement). The worker reads the sheet again; its columns may change, so the
+   * roles, the sheet's decisions and everything keyed by its column indexes start again for that sheet. Nothing else is touched.
+   */
+  const pivotChoice = async (fileId: string, sheet: string, off: boolean, describes: string[]): Promise<void> => {
+    if (!parsed) return;
+    try {
+      const f = await engine.pivotChoice(fileId, sheet, off, describes);
+      const mapping = f.mappings.find((m) => m.sheet === sheet);
+      if (!mapping) return;
+      const prefix = `${fileId}\u0000${sheet}\u0000`;
+      const fresh = initialChoices({ ...parsed, files: [f] })[sheetKey(fileId, sheet)];
+      setParsed((p) => (p ? { ...p, files: p.files.map((x) => (x.fileId === fileId ? f : x)) } : p));
+      setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === sheet ? mapping : m)) }));
+      if (fresh) setChoices((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: fresh }));
+      setConfirmed((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      setNercPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      setCodesDone({});
+    } catch (e) {
+      setConvertError(messageOf(e));
+    }
+  };
+
   const proposeCodes = async (fileId: string, sheet: string): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
     if (!mapping) return;
@@ -541,7 +564,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const downloadCompanion = (): void => {
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -624,6 +648,51 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     {pivotNoteFindings(f.fileName, sheetName, note).map((fi, i) => (
                       <p key={i}>{plainOf(fi, pageLang)}</p>
                     ))}
+                    <div className="choice-line">
+                      <label className="inline-choice">
+                        <input type="checkbox" checked={false} onChange={() => void pivotChoice(f.fileId, sheetName, true, [])} />
+                        <span>{t('convert.pivot.off')}</span>
+                      </label>
+                      <InfoTip id="convertPivotOff" />
+                    </div>
+                    {note.keyOptions.length > 0 && (
+                      <div className="convert-pivot-key">
+                        <div className="choice-line">
+                          <p>{t('convert.pivot.describes.title')}</p>
+                          <InfoTip id="convertPivotKey" />
+                        </div>
+                        <ul>
+                          {note.keyOptions.map((o) => (
+                            <li key={o.header}>
+                              <label className="inline-choice">
+                                <input
+                                  type="checkbox"
+                                  checked={o.describes}
+                                  aria-label={t('convert.pivot.describes.one', { column: o.header })}
+                                  onChange={(e) => void pivotChoice(f.fileId, sheetName, false, note.keyOptions.filter((k) => (k.header === o.header ? e.target.checked : k.describes)).map((k) => k.header))}
+                                />
+                                <span>
+                                  <code>{o.header}</code>
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </section>
+                ))}
+                {/* a long sheet the user chose to read as a normal table: the way back */}
+                {(f.pivotOff ?? []).map((sheetName) => (
+                  <section key={`off-${sheetName}`} className="notice convert-pivot" role="note" aria-label={t('convert.pivot.title')}>
+                    <p>{t('convert.pivot.offNote')}</p>
+                    <div className="choice-line">
+                      <label className="inline-choice">
+                        <input type="checkbox" checked onChange={() => void pivotChoice(f.fileId, sheetName, false, [])} />
+                        <span>{t('convert.pivot.off')}</span>
+                      </label>
+                      <InfoTip id="convertPivotOff" />
+                    </div>
                   </section>
                 ))}
                 <FileReview

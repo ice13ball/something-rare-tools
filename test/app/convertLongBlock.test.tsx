@@ -105,6 +105,47 @@ describe('a long environmental sheet on the /convert page', () => {
     expect(document.body.textContent).not.toContain('more than once');
   });
 
+  it('can be read as a normal table instead (one tick), which gives back the columns of the file and the block of production; unticking pivots it again', async () => {
+    await load('opt.csv', PIV_H, PIV_ROWS);
+    expect(screen.getByLabelText('Temperature [degC]: Meaning')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(T['convert.pivot.off']));
+    await waitFor(() => expect(screen.getByLabelText('Parameter: Meaning')).toBeTruthy());
+    expect(screen.getByLabelText('Value: Meaning')).toBeTruthy();
+    expect(screen.queryByLabelText('Temperature [degC]: Meaning')).toBeNull();
+    expect(document.body.textContent).toContain(T['convert.pivot.offNote']);
+    await idle();
+    await waitFor(() => expect(document.body.textContent).toContain(LONG_TEXT));
+    // the production way out still works: another meaning for the value column lifts the block
+    fireEvent.change(screen.getByLabelText('Value: Meaning'), { target: { value: 'ignore' } });
+    await idle();
+    await waitFor(() => expect(document.body.textContent).not.toContain(LONG_TEXT));
+    // and back
+    fireEvent.click(screen.getByLabelText(T['convert.pivot.off']));
+    await waitFor(() => expect(screen.getByLabelText('Temperature [degC]: Meaning')).toBeTruthy());
+    expect(screen.queryByLabelText('Parameter: Meaning')).toBeNull();
+    await idle();
+    expect(document.body.textContent).not.toContain(LONG_TEXT);
+  });
+
+  it('a per-row column splits the samples; marking it as describing the measurement removes it from the key, and unmarking brings it back', async () => {
+    const H = [...PIV_H, 'Comment'];
+    const rows: Cell[][] = PIV_ROWS.filter((r) => r[6] !== 'Salinity_QC').map((r) => [...r, r[6] === 'Temperature' ? 'checked' : 'late sample']);
+    await load('cmt.csv', H, rows);
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await idle();
+    expect(screen.getByLabelText('Comment: Meaning')).toBeTruthy();
+    await waitFor(() => expect(document.body.textContent).toContain('differ in Comment'));
+    const box = screen.getByLabelText('Comment: describes the measurement, not the sample') as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    await waitFor(() => expect(screen.queryByLabelText('Comment: Meaning')).toBeNull());
+    expect((screen.getByLabelText('Comment: describes the measurement, not the sample') as HTMLInputElement).checked).toBe(true);
+    expect(document.body.textContent).toContain('columns you marked as describing the measurement');
+    expect(document.body.textContent).not.toContain('differ in Comment');
+    fireEvent.click(screen.getByLabelText('Comment: describes the measurement, not the sample'));
+    await waitFor(() => expect(screen.getByLabelText('Comment: Meaning')).toBeTruthy());
+  });
+
   it('a sample with the same parameter and unit on two rows blocks, and the text names the original lines', async () => {
     const rows: Cell[][] = [...PIV_ROWS, ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Temperature', 'degC', 3.95]];
     await load('dup.csv', PIV_H, rows);

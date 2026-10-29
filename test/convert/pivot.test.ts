@@ -245,6 +245,90 @@ describe('line numbers', () => {
   });
 });
 
+describe('a column that varies per measurement splits one sample, and the user can say so', () => {
+  const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value', 'Comment'];
+  const rows = (): Cell[][] => [
+    ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'Temperature', 'degC', 8.1, 'checked'],
+    ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'Salinity', 'PSU', 34.2, 'late sample'],
+    ['ZL1', '2023-06-14', 55.5, 2.5, 10, 'Temperature', 'degC', 7.9, 'checked'],
+    ['ZL1', '2023-06-14', 55.5, 2.5, 10, 'Salinity', 'PSU', 34.4, 'late sample'],
+  ];
+  const conv = (choices: Record<string, { describes?: string[] }> = {}) => {
+    const file = pivotConvertFile(fileOf(header, rows()), choices);
+    return { file, r: convert({ sheets: [sheetInput(file, { profile: { depthIds: true } })] }) };
+  };
+
+  it('the finding names the column and says it varies inside what looks like one sample; the note offers the column', () => {
+    const { file, r } = conv();
+    expect(file.sheets[0].rows).toHaveLength(4);
+    const f = r.findings.find((x) => x.ruleId === 'CONV-LONG-KEY-VARIES');
+    expect(f?.params).toMatchObject({ columns: 'Comment', count: 2 });
+    for (const lang of LANGS) expect(renderConvertPlain(f!, lang), lang).toContain('Comment');
+    expect(file.sheets[0].pivot?.keyOptions).toEqual([{ header: 'Comment', describes: false }]);
+    expect(ids(r)).toContain('CONV-ID-DUPLICATE');
+  });
+
+  it('marking it as describing the measurement removes it from the key: one sample per station and depth, its values dropped and said, no ID collision', () => {
+    const { file, r } = conv({ S: { describes: ['Comment'] } });
+    const sh = file.sheets[0];
+    expect(sh.header).not.toContain('Comment');
+    expect(sh.rows).toHaveLength(2);
+    expect(sh.pivot?.dropped).toEqual(['Comment']);
+    expect(sh.pivot?.keyOptions).toEqual([{ header: 'Comment', describes: true }]);
+    expect(ids(r)).toContain('CONV-LONG-DROPPED');
+    expect(ids(r)).not.toContain('CONV-LONG-KEY-VARIES');
+    expect(ids(r)).not.toContain('CONV-ID-DUPLICATE');
+    expect(r.stats.levels).toBe(2);
+    expect(JSON.stringify(r.measurements)).not.toContain('late sample');
+  });
+
+  it('a position or identity column is never offered, and a column that is not in the sheet is ignored', () => {
+    const { file } = conv({ S: { describes: ['Station', 'Depth_m', 'Nope'] } });
+    expect(file.sheets[0].header.slice(0, 5)).toEqual(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m']);
+    expect(file.sheets[0].pivot?.keyOptions.map((o) => o.header)).toEqual(['Comment']);
+  });
+
+  it('the sheet read as a normal table (off) is left as it is, and the block of production applies to it', () => {
+    const raw = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'], longRows());
+    expect(pivotConvertFile(raw, { S: { off: true } })).toBe(raw);
+    const r = convert({ sheets: [sheetInput(raw)] });
+    expect(ids(r)).toContain('CONV-LONG-UNSUPPORTED');
+  });
+});
+
+describe('the worker: the companion file pre-ticks "read as a normal table"', () => {
+  it('a drop with the companion file reads the sheet of that name as a normal table and offers the way back; without it the sheet is pivoted', async () => {
+    const { createConvertHandler } = await import('../../src/worker/convert.handler');
+    const { writeConvertSidecar } = await import('../../src/core/convert/settings');
+    const { csvOf } = await import('../app/convertHelpers');
+    const csv = csvOf(H, longRows());
+    const enc = (t: string) => new TextEncoder().encode(t);
+    type Parsed = import('../../src/worker/convert.protocol').ConvertParseResult;
+    const plain = createConvertHandler().handle({ type: 'parse', files: [{ name: 'long.csv', bytes: enc(csv), source: 'dropped' }] }) as Parsed;
+    expect(plain.files[0].pivots?.['long.csv']).toBeDefined();
+    const h = createConvertHandler();
+    const ticked = h.handle({ type: 'parse', files: [{ name: 'long.csv', bytes: enc(csv), source: 'dropped' }, { name: 'c.csv', bytes: enc(writeConvertSidecar({ longAsTable: ['long.csv'] })), source: 'dropped' }] }) as Parsed;
+    expect(ticked.files[0].pivots).toBeUndefined();
+    expect(ticked.files[0].pivotOff).toEqual(['long.csv']);
+    expect(ticked.files[0].sheets[0].header).toContain('Parameter');
+    // and the way back
+    const back = h.handle({ type: 'pivotChoice', fileId: ticked.files[0].fileId, sheet: 'long.csv', off: false, describes: [] }) as Parsed['files'][number];
+    expect(back.pivots?.['long.csv']).toBeDefined();
+    expect(back.pivotOff).toBeUndefined();
+  });
+});
+
+describe('the companion file keeps "read as a normal table", by sheet name', () => {
+  it('written and read back; an unknown value is ignored', async () => {
+    const { writeConvertSidecar, readConvertSettings } = await import('../../src/core/convert/settings');
+    const { parseFile } = await import('../../src/core/parse');
+    const text = writeConvertSidecar({ longAsTable: ['Sheet A', 'long.csv'] });
+    expect(text).toContain('longAsTable=Sheet A');
+    const s = readConvertSettings(parseFile('c.csv', new TextEncoder().encode(text)));
+    expect(s?.longAsTable).toEqual(['Sheet A', 'long.csv']);
+  });
+});
+
 describe('CONV-NO-OCCURRENCES is not said while the kind of number is still undeclared', () => {
   const bio = fileOf(['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count'], [['ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 4], ['ZL2', 'ZL2-a', '2023-06-15', 55.6, 2.6, 'Oithona similis', 9]]);
   it('a sheet with a taxon and a count column and no declared kind: the quantity block says what to do, not "environmental data alone"', () => {

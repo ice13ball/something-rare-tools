@@ -19,7 +19,7 @@ import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, u
 import type { NercDecisions, NercPick } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
-import { longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
+import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { proposeConvertMapping } from './recognize';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
@@ -946,7 +946,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const header = sin.file.sheets.find((x) => x.name === sin.sheet)?.header;
       const long = header === undefined ? undefined : longEnvironmentalHeaders(sin, header);
       if (long === undefined) return true;
-      longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count }) } }));
+      longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count, ...(long.reason.reason === 'too-many' ? { max: MAX_PAIRS } : {}) }) } }));
       return false;
     }),
   };
@@ -999,7 +999,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   }
 
   const splits = listSplits(input);
-  const undecided =splits.filter((s) => s.needsDecision && !s.approved);
+  const undecided = splits.filter((s) => s.needsDecision && !s.approved);
   if (undecided.length > 0) {
     const first = input.sheets[0];
     findings.push(

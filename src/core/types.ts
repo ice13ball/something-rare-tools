@@ -41,6 +41,13 @@ export interface PivotInfo {
   duplicates: { header: string; lines: number[] }[];
   /** Original lines that have a value but no parameter name (nothing can be named for them). */
   unnamed: number[];
+  /** The key columns that are not position / identity columns (station, cruise, sample, time, depth, position): the user may mark each as describing the measurement, not the sample. */
+  keyOptions: { header: string; describes: boolean }[];
+  /** Columns the user marked as describing the measurement: removed from the key, their values not written. */
+  dropped: string[];
+  /** Key columns that differ between rows sharing every position / identity column, and how many such samples there are. */
+  varying: string[];
+  varyingSamples: number;
 }
 /** One parameter of a PANGAEA header block (the converter's reading, core/convert/pangaeaHeader.ts). */
 export interface PangaeaParameter {
