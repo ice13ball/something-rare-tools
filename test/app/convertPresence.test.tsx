@@ -54,6 +54,14 @@ describe('the presence-only tick', () => {
     expect(box.queryByLabelText(T['convert.quantity.kind'])).toBeNull();
   });
 
+  it('a sheet with a count column is not offered the tick, and keeps its quantity questions', async () => {
+    const counted = csvOf(['Station', 'Date', 'Latitude', 'Longitude', 'scientificName', 'individualCount'], [['ZL1', '2020-05-01', 70.1, 20.2, 'Calanus finmarchicus', 4]]);
+    await load([{ name: 'counted.csv', text: counted }]);
+    const box = within(sheetBox('counted.csv'));
+    expect(box.queryByLabelText(T['convert.sheet.presence'])).toBeNull();
+    expect(box.getByLabelText(T['convert.quantity.kind'])).toBeTruthy();
+  });
+
   it('the companion file keeps the tick by sheet name, and a new drop with it pre-ticks the box', async () => {
     const { download } = await load([{ name: 'list.csv', text: LIST }]);
     fireEvent.click(within(sheetBox('list.csv')).getByLabelText(T['convert.sheet.presence']));

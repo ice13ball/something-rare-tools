@@ -20,6 +20,8 @@ export interface ConvertSheetFormProps {
   suggestedProfile: boolean;
   /** the sheet looks like a data dictionary (a glossary of columns): it started unticked, and the note says why */
   dictionary?: boolean;
+  /** a column of this sheet is mapped as the quantity (a count, a density, a biomass): the sheet has numbers, so "presence only" does not apply and is not offered */
+  hasQuantityColumn?: boolean;
   /** the sheet looks transposed (species or variables in rows): the blocking message is in the list below, the tick "read as a normal table" is here */
   transposed?: boolean;
   /** a column of this sheet is mapped as the sample code (a profile sheet's own level code) */
@@ -38,7 +40,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -163,6 +165,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
               </div>
             </div>
 
+            {hasQuantityColumn !== true && (
             <div className="convert-group">
               <div className="choice-line">
                 <label className="inline-choice">
@@ -174,8 +177,9 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                 {t('convert.sheet.presence.help')}
               </p>
             </div>
+            )}
 
-            {!choice.presenceOnly && (
+            {(!choice.presenceOnly || hasQuantityColumn === true) && (
             <div className="convert-group">
               <h4>{t('convert.quantity.title')}</h4>
               <div className="convert-fields">

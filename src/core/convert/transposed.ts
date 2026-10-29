@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { isBlankCell, isKnownColumnName } from '../recognize/columns';
+import { isBlankCell, isKnownColumnName, unitFromHeader } from '../recognize/columns';
+import { isQuantityHeader } from './recognize';
 import type { LayoutReasonCode } from '../recognize/layoutReasons';
 import { transposedReason } from '../recognize/layout';
-import type { ParsedFile, RawSheet } from '../types';
+import type { ColumnRole, ParsedFile, RawSheet } from '../types';
 import { parseNumber } from '../values/numbers';
 
 /*
@@ -28,9 +29,15 @@ const PRESENCE_MARK = /^(\+|x|\*)$/i;
 
 const MIN_NAMES = 3;
 
-function taxaInRows(sheet: RawSheet, decimalComma: boolean): boolean {
+/** The roles that say a column is NOT a sample code: the sheet is a table of records (a long species sheet, a table with a quantity), whatever its first column holds. */
+const STRUCTURAL = new Set(['station', 'cruise', 'sampleId', 'date', 'datetime', 'time', 'latitude', 'longitude', 'hemisphere', 'depth', 'depthBelowSeafloor', 'pressure', 'quantity', 'quantityType', 'effort', 'occurrenceId', 'lifeStage', 'qualifier', 'taxonId', 'replicate']);
+
+function taxaInRows(sheet: RawSheet, decimalComma: boolean, columns?: readonly { index: number; role: ColumnRole }[]): boolean {
   const cols = sheet.unnamedFrom ?? sheet.header.length;
   if (cols < 3 || sheet.rows.length < MIN_NAMES) return false;
+  // the converter's own reading of the columns comes first: any column after the first that has a structural role (a quantity, a code, a date, a station...) makes a long species sheet, a table
+  // of records (a species header over the first column is a taxon column in a transposed table too, so that alone says nothing) and not a table of species with samples across
+  if (columns?.some((c) => c.index > 0 && STRUCTURAL.has(c.role.kind))) return false;
   const first = sheet.header[0]?.trim() ?? '';
   if (first !== '' && !NAME_HEADER.test(first) && isKnownColumnName(first)) return false;
   let filled = 0;
@@ -44,7 +51,7 @@ function taxaInRows(sheet: RawSheet, decimalComma: boolean): boolean {
   if (latin < MIN_NAMES || latin * 10 < filled * 6) return false;
   // the other headers are sample codes: none is a column name the tool knows (a total column apart), and at most one in five reads as a species
   const others = sheet.header.slice(1, cols).filter((h) => h.trim() !== '' && !SUM_HEADER.test(h.trim()));
-  if (others.length < 2 || others.some((h) => isKnownColumnName(h))) return false;
+  if (others.length < 2 || others.some((h) => isKnownColumnName(h) || isQuantityHeader(h) || unitFromHeader(h).unit !== undefined)) return false;
   if (others.filter((h) => LATIN_NAME.test(h.trim())).length * 5 > others.length) return false;
   let cells = 0;
   let numeric = 0;
@@ -60,9 +67,9 @@ function taxaInRows(sheet: RawSheet, decimalComma: boolean): boolean {
 }
 
 /** Why the sheet looks transposed, or undefined when it does not (the usual case). */
-export function transposedSheetReason(sheet: RawSheet, file: Pick<ParsedFile, 'decimalComma'>): LayoutReasonCode | undefined {
+export function transposedSheetReason(sheet: RawSheet, file: Pick<ParsedFile, 'decimalComma'>, columns?: readonly { index: number; role: ColumnRole }[]): LayoutReasonCode | undefined {
   if (sheet.pivot !== undefined) return undefined;
   const a = transposedReason(sheet, file.decimalComma);
   if (a !== undefined) return a;
-  return taxaInRows(sheet, file.decimalComma) ? 'transposed-taxa' : undefined;
+  return taxaInRows(sheet, file.decimalComma, columns) ? 'transposed-taxa' : undefined;
 }

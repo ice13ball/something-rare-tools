@@ -698,7 +698,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Zusammenfassungszeile|Zusammenfassungszeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:wurde|wurden} ausgelassen. {+count:Sie ist keine Probe|Sie sind keine Proben}. Eine echte Station mit so einem Namen benennen Sie im Blatt um.`,
       fr: `{count} {+count:ligne de synthèse|lignes de synthèse} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:a été ignorée|ont été ignorées}. {+count:Ce n'est pas un échantillon|Ce ne sont pas des échantillons}. Renommez dans la feuille une vraie station portant un tel nom.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted. A total word (total, suma, razem, summe, gesamt, somme) always counts; a statistics label (mean, average, median, min, max, sd, se, cv, n, count and their pl / de / fr words; one definition with /check, summaryLabels.ts) counts only when the row has no date and no position of its own and only rows without a record follow it (the foot of the sheet).`,
+    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted. A total word (total, suma, razem, summe, gesamt, somme) always counts; a statistics label (mean, average, median, sd, sum, ... and their pl / de / fr words; one definition with /check, summaryLabels.ts) counts when the row has no date and no position of its own and the label is unambiguous or stands in a block of two or more label rows; the short ambiguous ones (n, se, cv, min, max, count) alone are CONV-SUMMARY-ROW-KEPT. The label may be in the sample-code column under a real station (a station subtotal).`,
   },
   {
     id: 'CONV-SUMMARY-ROW-KEPT',
@@ -706,12 +706,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} {+count:wygląda|wyglądają|wygląda} jak statystyki, ale {+count:nie stoi|nie stoją|nie stoi} na końcu arkusza, więc {+count:został zachowany|zostały zachowane|zostało zachowane}. Jeśli to nie stacje, usuń je; jeśli tak, potwierdź.`,
-      en: `{count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:looks|look} like statistics but {+count:is|are} not at the foot of the sheet, so {+count:it was|they were} kept. If not stations, delete them from the sheet; if they are, confirm.`,
-      de: `{count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:sieht|sehen} wie Statistik aus, {+count:steht|stehen} aber nicht am Blattende und {+count:wurde|wurden} behalten. Sind es keine Stationen, löschen Sie sie im Blatt; sonst bestätigen Sie.`,
-      fr: `{count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:ressemble|ressemblent} à des statistiques mais {+count:n'est|ne sont} pas à la fin de la feuille ; {+count:elle a été conservée|elles ont été conservées}. Si ce ne sont pas des stations, supprimez-les de la feuille ; sinon, confirmez.`,
+      pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} {+count:wygląda|wyglądają|wygląda} jak statystyki, ale {+count:nie stoi|nie stoją|nie stoi} w bloku, więc {+count:został zachowany|zostały zachowane|zostało zachowanych}. Jeśli to nie prawdziwe próbki, usuń je; jeśli tak, potwierdź.`,
+      en: `{count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:looks|look} like statistics but {+count:is|are} not in a summary block, so {+count:it was|they were} kept. If {+count:it is not a real sample|they are not real samples}, delete {+count:it|them}; otherwise confirm.`,
+      de: `{count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:sieht|sehen} wie Statistik aus, {+count:steht|stehen} aber nicht in einem Block und {+count:wurde|wurden} behalten. Sind es keine echten Proben, löschen Sie sie; sonst bestätigen Sie.`,
+      fr: `{count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:ressemble|ressemblent} à des statistiques mais {+count:n'est|ne sont} pas dans un bloc ; {+count:elle a été conservée|elles ont été conservées}. Si ce ne sont pas de vrais échantillons, supprimez-les ; sinon, confirmez.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station is a statistics label ({value}), with no date and no position of its own, but with rows that hold records after it, so not the foot of the sheet: converted as a sample (a station really named Max or N stays a station) and said, to accept.`,
+    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station is a statistics label ({value}), with no date and no position of its own, but a short ambiguous label (n, se, cv, min, max, count; a compass point such as N is one) standing alone, not in a block of two or more label rows: converted as a sample (a station really named Max or N stays a station) and said, to accept.`,
   },
   {
     id: 'CONV-ID-REVISIT',
@@ -1225,6 +1225,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
+  // CONV-ZERO-SKIPPED of a presence-only list: the cells are marks (0, -, absent), not zeros
+  'CONV-ZERO-SKIPPED:presence': {
+    plain: {
+      pl: `Pominięto {count} {+count:komórkę|komórki|komórek} oznaczone jako brak (0, -, absent), bo nie zaznaczono, że lista gatunków jest pełna. Brak zapisuje się tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
+      en: `{count} {+count:cell marked|cells marked} as absent (0, -, absent) {+count:was|were} left out, because the species list was not declared complete. An absence is written only when every species of the list was looked for in the sample.`,
+      de: `{count} {+count:Zelle|Zellen} mit der Markierung „fehlt“ (0, -, absent) {+count:wurde|wurden} ausgelassen, da die Artenliste nicht als vollständig angegeben wurde. Eine Abwesenheit wird nur geschrieben, wenn in der Probe nach allen Arten der Liste gesucht wurde.`,
+      fr: `{count} {+count:cellule marquée|cellules marquées} comme absente (0, -, absent) {+count:a été ignorée|ont été ignorées}, car la liste d'espèces n'a pas été déclarée complète. Une absence n'est écrite que si toutes les espèces de la liste ont été recherchées dans l'échantillon.`,
+    },
+    technical: `{file}, {sheet}: {count} cell(s) of a presence-only sheet marked absent (0, -, absent, ...) not converted (full species list not ticked). With the tick they become occurrenceStatus absent.`,
+  },
   // CONV-ID-DUPLICATE of a sheet whose rows differ in one ignored column (`column` = its header): the advice is the replicate role, not another code
   'CONV-ID-DUPLICATE:replicate': {
     plain: {
@@ -1292,6 +1302,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:replicate'];
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];

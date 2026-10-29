@@ -736,7 +736,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const tabs = new Lines();
   const summaries = new Lines();
   const keptStats = new Lines();
-  const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId, specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
+  const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
   const checkText = (field: string, line: number, value: string | undefined): void => {
     if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
   };
@@ -1030,7 +1030,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       if (long === undefined) {
         // a table that looks turned (species or variables in rows) is not read as it stands unless the user says so; not a profile sheet, not a pivot (transposedSheetReason)
         const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
-        const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file);
+        const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file, sin.mapping.columns);
         if (turned === undefined) return true;
         longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
         return false;
@@ -1190,8 +1190,9 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const summaries = new Lines();
     const keptStats = new Lines();
     const presenceBad = new Lines();
-    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId, specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
+    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
     let zeros = 0;
+    let presenceSkipped = 0;
     let naCells = 0;
     const checkText = (field: string, line: number, value: string | undefined): void => {
       if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
@@ -1267,14 +1268,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (code === undefined || [code, m.station].some((v) => v !== undefined && SUMMARY_LABEL.test(v))) continue;
         if (cols.replicate && text(row.cells[cols.replicate.index]) === undefined) continue;
         const stationText = m.station;
-        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && cols.quantity !== undefined && !isBlankCell(row.cells[cols.quantity.index] ?? null);
+        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && (presence || (cols.quantity !== undefined && !isBlankCell(row.cells[cols.quantity.index] ?? null)));
         if (!filled) continue;
         const cruiseText = m.cruise ?? sin.cruise?.trim();
         const stationId = stationText === undefined ? undefined : stationEventId(cruiseText === '' ? undefined : cruiseText, stationText);
         const id = opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code;
         const iso = m.datetime?.iso ?? '';
         const depth = m.depthMin ?? m.depth;
-        const key: VisitKey = { date: iso.slice(0, 10), time: iso.length > 10 ? iso.slice(11) : '', depth: depth === undefined ? '' : String(depth) };
+        const key: VisitKey = { date: m.datetime?.end ? `${iso.slice(0, 10)}/${m.datetime.end.iso.slice(0, 10)}` : iso.slice(0, 10), time: iso.length > 10 ? iso.slice(11) : '', depth: depth === undefined ? '' : String(depth) };
         const g = groups.get(id);
         if (g === undefined) groups.set(id, { station: stationText, stationId, code, rows: [{ line: row.line, key }], mixed: false });
         else {
@@ -1543,7 +1544,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           if (mark.kind === 'absent') {
             // an absence only for a full species list; otherwise nothing is written (as a zero)
             if (!fullList) {
-              zeros++;
+              presenceSkipped++;
               continue;
             }
             status = 'absent';
@@ -1677,6 +1678,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     for (const e of keptStats.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     for (const e of presenceBad.entries()) findings.push(makeConvertFinding('CONV-PRESENCE-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));
+    if (presenceSkipped > 0) {
+      stats.zerosSkipped += presenceSkipped;
+      findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: presenceSkipped, marks: 'yes' } }));
+    }
     if (zeros > 0) {
       stats.zerosSkipped += zeros;
       findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: zeros } }));

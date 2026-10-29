@@ -277,6 +277,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === mapping.sheet ? mapping : m)) }));
   };
 
+  /** The user's confirmation of the column a duplicate message names: it gets the role Replicate / sub-sample, and only now the replicate level exists. */
+  const useAsReplicate = (f: Finding): void => {
+    const file = files.find((x) => x.fileName === f.file);
+    const mapping = file === undefined ? undefined : (mappings[file.fileId] ?? file.mappings).find((m) => m.sheet === f.sheet);
+    const column = mapping?.columns.find((c) => c.header.trim() === f.params.column);
+    if (file === undefined || mapping === undefined || column === undefined) return;
+    changeMapping(file.fileId, { ...mapping, columns: mapping.columns.map((c) => (c.index === column.index ? { ...c, role: { kind: 'replicate' as const } } : c)) });
+  };
+
   /**
    * The user's choice about a long environmental sheet (read it as a normal table; key columns that describe the measurement). The worker reads the sheet again; its columns may change, so the
    * roles, the sheet's decisions and everything keyed by its column indexes start again for that sheet. Nothing else is touched.
@@ -762,6 +771,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     hasEffortColumn={m.columns.some((c) => c.role.kind === 'effort')}
                     suggestedProfile={f.suggestedProfiles[m.sheet] === true}
                     dictionary={f.dictionarySheets?.[m.sheet] !== undefined}
+                    hasQuantityColumn={m.columns.some((c) => c.role.kind === 'quantity')}
                     transposed={f.transposedSheets?.[m.sheet] !== undefined}
                     hasCodeColumn={m.columns.some((c) => c.role.kind === 'sampleId')}
                     hasPressureColumn={m.columns.some((c) => c.role.kind === 'pressure')}
@@ -989,7 +999,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
                   </p>
                 )}
-                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" />
+                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} />
                 {(judged.acceptRules.length > 0 || unconfirmed.length > 0) && (
                   <div className="convert-accept">
                     <HeadingTip tip="convertAccept">
@@ -1078,7 +1088,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   );
 }
 
-function FindingItems({ findings }: { findings: Finding[] }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1086,6 +1096,14 @@ function FindingItems({ findings }: { findings: Finding[] }): React.ReactElement
         <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
           {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
           {plainOf(f, lang)}
+          {f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '' && onUseReplicate !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" onClick={() => onUseReplicate(f)}>
+                {t('convert.finding.useReplicate', { column: f.params.column })}
+              </button>
+            </>
+          )}
           {f.ruleId === 'CONV-ENV-ONLY-SHEET' && (
             <>
               {' '}
@@ -1098,12 +1116,12 @@ function FindingItems({ findings }: { findings: Finding[] }): React.ReactElement
   );
 }
 
-function FindingList({ titleKey, findings, kind }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity'] }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <FindingItems findings={findings} />
+      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} />
     </div>
   );
 }
