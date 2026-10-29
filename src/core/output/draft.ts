@@ -71,13 +71,36 @@ function dayRange(d: ParsedDate): { first: string; last: string } | undefined {
 export const p01Url = (code: string): string | undefined =>
   P01_CODE_SHAPE.test(code) ? `https://vocab.nerc.ac.uk/collection/P01/current/${code}/` : undefined;
 
+/**
+ * The smallest interval of longitudes that holds every point, as the bounding box of a metadata record states it. Plain minimum and maximum, unless the points lie on both sides of the
+ * antimeridian and the arc that crosses it is the shorter one: then west > east (178, 179, -179, -178 -> west 178, east -178). ISO 19115 (EX_GeographicBoundingBox) and the EML,
+ * GeoJSON (RFC 7946, 5.2) and DataCite (each bound in -180..180, no order stated) boxes all allow it. A spread that needs more than 180 degrees either way is global in practice and keeps the
+ * plain minimum and maximum, so a worldwide dataset still gives -180..180 style bounds and never an odd 270-degree arc. `lons` are in -180..180; at least one.
+ */
+export function smallestLonInterval(lons: readonly number[]): { west: number; east: number } {
+  const sorted = [...lons].sort((a, b) => a - b);
+  const plain = { west: sorted[0], east: sorted[sorted.length - 1] };
+  // the widest empty stretch between neighbours (going east) is where the box is cut; the plain box is cut at the antimeridian (gap: last -> first + 360)
+  let gap = sorted[0] + 360 - sorted[sorted.length - 1];
+  let cut = -1;
+  for (let i = 1; i < sorted.length; i++) {
+    const g = sorted[i] - sorted[i - 1];
+    if (g > gap) {
+      gap = g;
+      cut = i;
+    }
+  }
+  if (cut < 0) return plain;
+  const width = 360 - gap;
+  return width <= 180 ? { west: sorted[cut], east: sorted[cut - 1] } : plain;
+}
+
 export function metadataDraft(datasets: Dataset[], metadata: MetadataRecord[]): MetadataDraft {
   const draft: MetadataDraft = { variables: [] };
 
   let start: string | undefined;
   let end: string | undefined;
-  let west = Infinity;
-  let east = -Infinity;
+  const lons: number[] = [];
   let south = Infinity;
   let north = -Infinity;
   for (const ds of datasets) {
@@ -89,15 +112,14 @@ export function metadataDraft(datasets: Dataset[], metadata: MetadataRecord[]): 
       }
       // out-of-range coordinates are reported by the row rules; they must not make an invalid bounding box
       if (r.lat !== undefined && r.lon !== undefined && Math.abs(r.lat) <= 90 && r.lon >= -180 && r.lon <= 180) {
-        west = Math.min(west, r.lon);
-        east = Math.max(east, r.lon);
+        lons.push(r.lon);
         south = Math.min(south, r.lat);
         north = Math.max(north, r.lat);
       }
     }
   }
   if (start !== undefined && end !== undefined) draft.temporalExtent = { start, end };
-  if (west <= east) draft.bbox = { west, east, south, north };
+  if (lons.length > 0) draft.bbox = { ...smallestLonInterval(lons), south, north };
 
   // Constraints that describe the METADATA record are not the licence of the data.
   for (const rec of metadata) {

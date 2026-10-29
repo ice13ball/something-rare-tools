@@ -723,9 +723,12 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
   is marked missing, with `gco:nilReason` or XML comments, for the editor to complete. The page also
   shows the values with the names of the GeoNetwork editor sections and copy buttons. **Known gap:**
   the draft's bounding box is the plain minimum and maximum of the longitudes of rows within
-  ±180°, so data across the antimeridian gives a very wide box (the check
-  [META-POINT-OUTSIDE-BBOX](rules.md#META-POINT-OUTSIDE-BBOX) does handle a *record's* box with
-  west greater than east, but the draft does not write one).
+  ±180°. **Across the antimeridian** the draft writes the smallest interval of longitudes
+  (`smallestLonInterval`, `output/draft.ts`): points at 178, 179, -179, -178 give west 178, east -178,
+  i.e. west greater than east, which ISO 19115 `EX_GeographicBoundingBox`, EML, GeoJSON (RFC 7946
+  section 5.2) and DataCite `geoLocationBox` (each bound -180..180, no order required) allow, and which the check
+  [META-POINT-OUTSIDE-BBOX](rules.md#META-POINT-OUTSIDE-BBOX) already reads as crossing. The short way
+  round is used only when it is at most 180° wide; a global spread keeps the plain minimum and maximum.
 - **Map preview**: points on a CARTO dark base map (`MapPreview`, `mapModel.ts`), coloured by worst
   severity; a click opens the row's file, line, station, date and values (fetched from the worker
   by file and line, built with `textContent`). `maplibre-gl` is imported only when there is
@@ -1728,7 +1731,7 @@ Each item below is confirmed from code, a test, or a rule text.
   rivers and canals are never judged, and if the grid cannot load the report says so.
 - Ship speed is not tested unless a cruise column is mapped or the user declares one ship.
 - Oxygen in a unit with no cited range is not range-checked (`notChecked.oxygenUnit`).
-- The metadata draft's bounding box does not handle data across the antimeridian.
+- The metadata draft's bounding box crosses the antimeridian only as one box (west > east); data in two far-apart regions on either side of the globe gives the plain minimum and maximum (no multi-box).
 - In server mode a linked file above 30 MB (proxy `MAX_BYTES`) is not read and an archive above
   100 MB is refused; in browser mode only archives are capped by the reader. For Dataverse files a
   known size above 30 MB is reported before download.
