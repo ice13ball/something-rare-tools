@@ -11,6 +11,7 @@ import { t } from './i18n';
 import { DERIVED_DECIMALS } from '../core/convert/events';
 import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '../core/convert/metadata';
 import { NVS_LIMIT } from '../core/convert/nvs';
+import { MAX_PAIRS } from '../core/convert/pivot';
 import { P01, P06, PRESSURE, VARIABLE_CONCEPTS } from '../core/convert/vocab';
 import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
@@ -192,6 +193,7 @@ const DEFS = {
   // /convert (hidden until its reveal)
   convertIntro: { label: 'convert.title' },
   convertRoles: { label: 'mapping.role', values: { roles: convertRolesList } },
+  convertPivot: { label: 'convert.pivot.title', values: { maxPairs: () => String(MAX_PAIRS) } },
   convertSheetUse: { label: 'convert.sheet.use' },
   convertShape: { label: 'convert.sheet.shape' },
   convertProfile: { label: 'convert.sheet.profile' },

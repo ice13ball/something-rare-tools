@@ -15,6 +15,32 @@ export interface RawSheet {
   unnamedFrom?: number;         // CSV: the header had too few names (IN-HEADER-SHORT); columns from this index on were added by the tool as `Column N`
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
+  /** Set only by the converter's long-sheet reader (core/convert/pivot.ts): this sheet is a PIVOT of a long environmental sheet, with where each cell came from. Never set for /check. */
+  pivot?: PivotInfo;
+}
+/** What the converter's reader of a long environmental sheet (one row per measured parameter) did: the facts the converter turns into findings and the page into a note. */
+export interface PivotInfo {
+  parameterColumn: string;
+  valueColumn: string;
+  unitColumn?: string;
+  /** The columns that were made of parameters, by index in the pivoted header. */
+  pivoted: { index: number; parameter: string; unit?: string }[];
+  /** Original rows read, and pivoted rows (samples) made of them. */
+  rowsIn: number;
+  samples: number;
+  /** Per pivoted row (by its `line`, the first original line of its group): the ORIGINAL line of each pivoted column's cell, by index in `pivoted`. */
+  cellLines: Record<number, number[]>;
+  /** Pivoted headers that got " (2)" because they collided with another header. */
+  renamed: string[];
+  /** Quality-flag columns of the long sheet (not part of the key, not written). */
+  flagColumns: string[];
+  /** Parameters that are quality flags (their rows were skipped), and how many rows. */
+  flagParameters: string[];
+  flagRows: number;
+  /** A group that has the same parameter and unit twice: the header of the pivoted column, a label of the group and the original lines of the repeated rows. */
+  duplicates: { header: string; lines: number[] }[];
+  /** Original lines that have a value but no parameter name (nothing can be named for them). */
+  unnamed: number[];
 }
 /** One parameter of a PANGAEA header block (the converter's reading, core/convert/pangaeaHeader.ts). */
 export interface PangaeaParameter {

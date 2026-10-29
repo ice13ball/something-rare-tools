@@ -6,8 +6,8 @@
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
 import { licenceDiffersFindings } from '../core/convert/validate';
-import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
-import type { ConvertSheetInput, EventRec } from '../core/convert';
+import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
+import type { ConvertSheetInput, EventRec, PivotNote } from '../core/convert';
 import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
@@ -84,7 +84,9 @@ export function createConvertHandler(): ConvertHandler {
       try {
         // the converter's own reading path: the formula guard of its code-proposal CSV comes off every text cell and header (core/convert/read.ts)
         const read = parseFile(f.name, f.bytes);
-        parsedAll.push(readConvertFile(read, read.kind === 'pangaea' ? decodeText(f.bytes).text : undefined));
+        // a long environmental sheet (one row per measured parameter) that can be read safely is replaced by its pivot, one row per sample, HERE: the page, the roles and every later
+        // request see the same columns and the same indexes (core/convert/pivot.ts)
+        parsedAll.push(pivotConvertFile(readConvertFile(read, read.kind === 'pangaea' ? decodeText(f.bytes).text : undefined)));
       } catch (e) {
         result.problems.push({ fileName: f.name, message: e instanceof Error ? e.message : String(e) });
       }
@@ -124,7 +126,12 @@ export function createConvertHandler(): ConvertHandler {
       const mappings: SheetMapping[] = [];
       const shapes: ConvertFileSummary['suggestedShapes'] = Object.create(null) as ConvertFileSummary['suggestedShapes'];
       const profiles: ConvertFileSummary['suggestedProfiles'] = Object.create(null) as ConvertFileSummary['suggestedProfiles'];
+      const pivots: Record<string, PivotNote> = Object.create(null) as Record<string, PivotNote>;
       for (const sheet of parsed.sheets) {
+        if (sheet.pivot !== undefined) {
+          const { cellLines: _lines, ...note } = sheet.pivot;
+          pivots[sheet.name] = note;
+        }
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
         proposals[sheet.name] = p;
         const m = toMapping(sheet, p);
@@ -144,6 +151,7 @@ export function createConvertHandler(): ConvertHandler {
         samples: Object.fromEntries(parsed.sheets.map((s) => [s.name, samplesOf(s)])),
         suggestedShapes: shapes,
         suggestedProfiles: profiles,
+        ...(Object.keys(pivots).length > 0 ? { pivots } : {}),
       });
     }
     result.prefillInfo = buildPrefill(records) ?? null;

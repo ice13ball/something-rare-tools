@@ -24,11 +24,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 const LONG_H = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'];
+// one parameter only: the converter does not read it as a long sheet (fewer than two parameters), so it still ends in the block
 const LONG_ROWS: Cell[][] = [
   ['ZL1', '2020-05-01', 70.1, 20.2, 5, 'Temperature', 'degC', 4.1],
-  ['ZL1', '2020-05-01', 70.1, 20.2, 5, 'Salinity', 'PSU', 33.1],
   ['ZL1', '2020-05-01', 70.1, 20.2, 10, 'Temperature', 'degC', 3.9],
-  ['ZL1', '2020-05-01', 70.1, 20.2, 10, 'Salinity', 'PSU', 33.4],
+  ['ZL2', '2020-05-02', 70.3, 20.4, 5, 'Temperature', 'degC', 4.4],
 ];
 const WIDE_H = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Variable', 'Temperature', 'Result'];
 const WIDE_ROWS: Cell[][] = [
@@ -51,6 +51,7 @@ describe('CONV-LONG-UNSUPPORTED on the /convert page', () => {
     await load('long.csv', LONG_H, LONG_ROWS);
     await waitFor(() => expect(document.body.textContent).toContain(LONG_TEXT));
     expect(document.body.textContent).toContain('"Parameter" and "Value"');
+    expect(document.body.textContent).toContain('fewer than two different values');
     // the value column is only an unconfirmed taxon candidate; the user gives it another meaning
     fireEvent.change(screen.getByLabelText('Value: Meaning'), { target: { value: 'ignore' } });
     await idle();
@@ -68,5 +69,48 @@ describe('CONV-LONG-UNSUPPORTED on the /convert page', () => {
   it('never fires on a wide sheet with a Variable and a Result column next to a measured variable', async () => {
     await load('wide.csv', WIDE_H, WIDE_ROWS);
     expect(document.body.textContent).not.toContain(LONG_TEXT);
+  });
+});
+
+/* ---- a long environmental sheet that CAN be read: one row per sample, its columns in the role table ---- */
+const PIV_H = ['Station', 'Bottle', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'];
+const PIV_ROWS: Cell[][] = [
+  ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Temperature', 'degC', 4.1],
+  ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Salinity', 'PSU', 33.1],
+  ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Salinity_QC', '', 1],
+  ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Temperature', 'degC', 3.9],
+  ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Salinity', 'PSU', 33.4],
+];
+
+describe('a long environmental sheet on the /convert page', () => {
+  it('is read as one row per sample when the file is read: the note, the pivoted columns in the role table, no block', async () => {
+    await load('piv.csv', PIV_H, PIV_ROWS);
+    expect(document.body.textContent).not.toContain(LONG_TEXT);
+    expect(document.body.textContent).toContain('has one row per measurement');
+    expect(document.body.textContent).toContain('It was read as 2 samples');
+    expect(document.body.textContent).toContain('Salinity_QC');
+    expect(document.body.textContent).toContain('no value is summed, averaged or rounded');
+    // the pivoted columns are columns like any other
+    expect(screen.getByLabelText('Temperature [degC]: Meaning')).toBeTruthy();
+    expect(screen.getByLabelText('Salinity [PSU]: Meaning')).toBeTruthy();
+    expect(document.querySelector('[data-tip="convertPivot"]')).toBeTruthy();
+  });
+
+  it('converts: marked as a profile file, its samples become levels with measurements and nothing says "long layout"', async () => {
+    await load('piv2.csv', PIV_H, PIV_ROWS);
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await idle();
+    await waitFor(() => expect(document.body.textContent).toContain('2 profile level events'));
+    expect(document.body.textContent).not.toContain(LONG_TEXT);
+    expect(document.body.textContent).not.toContain('more than once');
+  });
+
+  it('a sample with the same parameter and unit on two rows blocks, and the text names the original lines', async () => {
+    const rows: Cell[][] = [...PIV_ROWS, ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Temperature', 'degC', 3.95]];
+    await load('dup.csv', PIV_H, rows);
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await idle();
+    await waitFor(() => expect(document.body.textContent).toContain('has the parameter "Temperature [degC]" more than once'));
+    expect(document.body.textContent).toContain('lines 5, 7');
   });
 });
