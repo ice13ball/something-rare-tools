@@ -90,7 +90,7 @@ describe('a plain species list on the /convert page', () => {
     await waitFor(() => expect(rules()).toContain('CONV-ENV-ONLY-SHEET'));
     expect(rules().filter((r) => r.startsWith('CONV-') && !FORM_RULES.includes(r) && getConvertRule(r).severity === 'error')).toEqual(['CONV-ENV-ONLY-SHEET']);
     const text = summary().textContent ?? '';
-    expect(text).toContain('Ten arkusz zawiera tylko pomiary środowiskowe');
+    expect(text).toContain('nie zaznaczono kolumny z taksonami ani z liczebnością');
     for (const id of ['CONV-NO-TAXON', 'CONV-QUANTITY-UNDECLARED', 'CONV-NO-OCCURRENCES']) {
       expect(rules(), id).not.toContain(id);
       expect(text, id).not.toContain(getConvertRule(id).plain.pl.slice(0, 40));

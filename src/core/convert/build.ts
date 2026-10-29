@@ -3,7 +3,8 @@
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
-import { badHeaderCodes, headerKey, p01CodeOf } from '../recognize/vocab';
+import { badHeaderCodes } from '../recognize/headerCodes';
+import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
@@ -473,7 +474,7 @@ function reportVariables(varState: readonly VarState[], base: { file: string; sh
   for (const st of varState) {
     if (!st.written) continue;
     for (const bad of badHeaderCodes(st.v.header)) {
-      out.push(makeConvertFinding('CONV-NERC-CODE-MALFORMED', { ...base, field: st.v.header, params: { column: st.v.header.trim(), code: bad.code, collection: bad.collection, length: bad.length } }));
+      out.push(makeConvertFinding('CONV-NERC-CODE-MALFORMED', { ...base, field: st.v.header, params: { column: stripTypeSuffix(st.v.header), code: bad.code, collection: bad.collection, length: bad.length } }));
     }
   }
   // a confirmed concept whose label says "per unit mass" (or volume) for a column whose unit is per volume (or mass): said once per column, the pair is the user's
@@ -997,8 +998,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   let sheetKeyN = 0;
   // a sheet with a taxon and a count column whose quantity kind is not declared yet (CONV-QUANTITY-UNDECLARED says so): its missing occurrences are no "environment-only upload"
   let taxaWaitForQuantity = false;
-  // a sheet of environmental measurements only (CONV-ENV-ONLY-SHEET) already said that no occurrence can come out of it
-  let envOnlySaid = false;
+  // CONV-ENV-ONLY-SHEET already said that no occurrence can come out of such a sheet; sheets that are not that kind keep their own say (a species sheet of zeros next to one
+  // has its own CONV-NO-OCCURRENCES text), so the two are counted
+  let envOnlySheets = 0;
+  let otherSheets = 0;
 
   // The findings the PARSER raised for the files these sheets come from (/check puts them in its report; the converter must too): a ragged row (an extra or a missing field: the
   // values of that row are shifted against the header, so the finding stops the export, and ROW-RAGGED names the lines), an encoding that was guessed, a decimal comma, a 1904 workbook.
@@ -1071,16 +1074,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
     // a sheet with measured variables and NO taxon column (wide: no taxon header; long: no taxon cell column), NO quantity column and no unconfirmed taxon candidate (the user may still confirm one)
     // is environmental data only: one message instead of "no taxon", "kind of number" and "no occurrences". A mixed sheet keeps the messages above.
-    const envOnly =
-      !taxonNoQuantity &&
-      missingTaxon &&
-      cols.quantity === undefined &&
-      (sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined) &&
-      (sin.unconfirmedTaxa?.length ?? 0) === 0 &&
-      sin.mapping.columns.some((c) => c.role.kind === 'variable');
+    const noTaxonColumn = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined;
+    const envOnly = noTaxonColumn && cols.quantity === undefined && (sin.unconfirmedTaxa?.length ?? 0) === 0 && sin.mapping.columns.some((c) => c.role.kind === 'variable');
+    if (envOnly) envOnlySheets++;
+    else otherSheets++;
     if (envOnly) {
-      findings.push(makeConvertFinding('CONV-ENV-ONLY-SHEET', { ...base }));
-      envOnlySaid = true;
+      // another sheet of the upload (not a profile file) that has a taxon column: the fix is to mark THIS sheet as a profile file, not to add species
+      const taxaElsewhere = input.sheets.some((o) => o !== sin && o.profile === undefined && o.mapping.columns.some((c) => c.role.kind === 'taxon'));
+      findings.push(makeConvertFinding('CONV-ENV-ONLY-SHEET', { ...base, ...(taxaElsewhere ? { params: { other: 'taxa' } } : {}) }));
     } else if (speciesList) findings.push(makeConvertFinding('CONV-SPECIES-LIST-NO-COUNTS', { ...base }));
     else if (taxonNoQuantity) findings.push(makeConvertFinding('CONV-TAXON-NO-QUANTITY', { ...base }));
     else if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
@@ -1815,7 +1816,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
   // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).
   const found = input.sheets.find((x) => x.file.sheets.some((sh) => sh.name === x.sheet));
-  if (occurrences.length === 0 && found !== undefined && !taxaWaitForQuantity && !envOnlySaid) {
+  if (occurrences.length === 0 && found !== undefined && !taxaWaitForQuantity && !(envOnlySheets > 0 && otherSheets === 0)) {
     const first = found;
     // taxa that were there but all 0 and skipped (the full species list is not ticked) are another case from an upload with no taxon: its own text says what to tick
     findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet, params: stats.zerosSkipped > 0 && !fullList ? { zeros: 'yes' } : {} }));

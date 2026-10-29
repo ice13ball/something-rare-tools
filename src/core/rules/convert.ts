@@ -640,12 +640,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: [],
     plain: {
-      pl: `Ten arkusz zawiera tylko pomiary środowiskowe, a OBIS potrzebuje rekordów gatunków. Dodaj arkusz z gatunkami (i liczebnością), a ten pójdzie razem z nim jako dane środowiskowe (eMoF), albo sprawdź ten plik w /check pod kątem innych repozytoriów.`,
-      en: `This sheet holds environmental measurements only, and OBIS needs species records. Add a sheet with species (and counts) and this one can go with it as environmental data (eMoF), or check this file with /check for other repositories.`,
-      de: `Dieses Blatt enthält nur Umweltmessungen, OBIS braucht aber Artnachweise. Fügen Sie ein Blatt mit Arten (und Anzahlen) hinzu, dann kann dieses als Umweltdaten (eMoF) mitgehen, oder prüfen Sie diese Datei mit /check für andere Repositorien.`,
-      fr: `Cette feuille ne contient que des mesures environnementales, alors qu'OBIS exige des enregistrements d'espèces. Ajoutez une feuille d'espèces (et d'effectifs) : celle-ci l'accompagnera comme données environnementales (eMoF), ou vérifiez ce fichier avec /check pour d'autres dépôts.`,
+      pl: `W tym arkuszu nie zaznaczono kolumny z taksonami ani z liczebnością, a pozostałe kolumny to mierzone wielkości. OBIS potrzebuje rekordów gatunków. Jeśli któraś kolumna zawiera nazwy gatunków, zaznacz ją jako takson; w przeciwnym razie dodaj arkusz z gatunkami albo sprawdź ten plik w /check pod kątem innych repozytoriów.`,
+      en: `No taxon or count column is marked in this sheet, and its other columns are measured variables. OBIS needs species records. If a column holds species names, mark it as the taxon; otherwise add a sheet with species, or check this file with /check for other repositories.`,
+      de: `In diesem Blatt ist weder eine Taxon- noch eine Anzahlspalte markiert, die übrigen Spalten sind Messgrößen. OBIS braucht Artnachweise. Enthält eine Spalte Artnamen, markieren Sie sie als Taxon; andernfalls fügen Sie ein Blatt mit Arten hinzu oder prüfen Sie diese Datei mit /check für andere Repositorien.`,
+      fr: `Aucune colonne de taxon ni d'effectifs n'est marquée dans cette feuille, et les autres colonnes sont des variables mesurées. OBIS exige des enregistrements d'espèces. Si une colonne contient des noms d'espèces, marquez-la comme taxon ; sinon ajoutez une feuille d'espèces ou vérifiez ce fichier avec /check pour d'autres dépôts.`,
     },
-    technical: `{file}, {sheet}: the sheet has measured-variable columns and no taxon column, no quantity column and no unconfirmed taxon candidate (environmental data only). This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet; a sheet with a taxon column is CONV-SPECIES-LIST-NO-COUNTS, CONV-TAXON-NO-QUANTITY or normal, and a sheet marked as a profile file keeps CONV-NO-OCCURRENCES.`,
+    technical: `{file}, {sheet}: the sheet has measured-variable columns and no taxon column, no quantity column and no unconfirmed taxon candidate (typically environmental data only; a column of species names the converter did not recognise is the other possibility, and the text says so). This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet; a sheet with a taxon column is CONV-SPECIES-LIST-NO-COUNTS, CONV-TAXON-NO-QUANTITY or normal, and a sheet marked as a profile file keeps CONV-NO-OCCURRENCES.`,
   },
   {
     id: 'CONV-SUMMARY-ROW-SKIPPED',
@@ -1155,6 +1155,15 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines} field {field}: the column has as many positive as negative depth-below-seafloor cells; the {count} positive one(s) are listed. Direction {direction}: written as a distance {side} the seafloor. Not blocking: the direction is the user's to confirm.`,
   },
+  'CONV-ENV-ONLY-SHEET:other-taxa': {
+    plain: {
+      pl: `Ten arkusz ma mierzone wielkości, ale nie ma kolumny z taksonami ani z liczebnością, a gatunki są w innym arkuszu. Oznacz ten arkusz jako plik profilu lub środowiska, aby trafił razem z nimi jako pomiary, albo sprawdź ten plik w /check pod kątem innych repozytoriów.`,
+      en: `This sheet has measured variables and no taxon or count column, while another sheet holds the species. Mark this sheet as a profile or environment file so that it goes with them as measurements, or check this file with /check for other repositories.`,
+      de: `Dieses Blatt hat Messgrößen, aber keine Taxon- oder Anzahlspalte, die Arten stehen in einem anderen Blatt. Kennzeichnen Sie dieses Blatt als Profil- oder Umweltdatei, damit es als Messungen mitgeht, oder prüfen Sie diese Datei mit /check für andere Repositorien.`,
+      fr: `Cette feuille a des variables mesurées mais ni colonne de taxon ni d'effectifs, alors qu'une autre feuille contient les espèces. Marquez cette feuille comme fichier de profil ou d'environnement pour qu'elle les accompagne comme mesures, ou vérifiez ce fichier avec /check pour d'autres dépôts.`,
+    },
+    technical: `{file}, {sheet}: as CONV-ENV-ONLY-SHEET, in an upload where another sheet that is not a profile file has a taxon column: this sheet is probably environmental data of the same cruise and is to be marked as a profile file.`,
+  },
   'CONV-NO-OCCURRENCES:zeros': {
     plain: {
       pl: `To archiwum nie zawierałoby ani jednego rekordu występowania: wszystkie liczebności wynosiły 0 i zostały pominięte, bo lista nie jest zadeklarowana jako pełna. Zaznacz pełną listę gatunków, aby zapisać je jako nieobecności, albo dodaj rekordy obecności.`,
@@ -1197,6 +1206,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];
+  if (f.ruleId === 'CONV-ENV-ONLY-SHEET' && f.params.other === 'taxa') return PROFILE_VARIANTS['CONV-ENV-ONLY-SHEET:other-taxa'];
   if (f.ruleId === 'CONV-NO-OCCURRENCES' && f.params.zeros === 'yes') return PROFILE_VARIANTS['CONV-NO-OCCURRENCES:zeros'];
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS' && f.params.tie === 'yes') return PROFILE_VARIANTS['CONV-SEAFLOOR-SIGNS:tie'];
   if (f.ruleId === 'CONV-LONG-UNSUPPORTED' && (f.params.reason === 'one-parameter' || f.params.reason === 'too-many')) return PROFILE_VARIANTS[`CONV-LONG-UNSUPPORTED:${f.params.reason}`];

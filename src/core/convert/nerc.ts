@@ -3,6 +3,7 @@
 import { VARIABLE_CONCEPTS, VARIABLE_VERIFIED_CODES, conceptVariable, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 import type { NercTerm, PerDimension, VariableConcept } from './vocab';
 import { TAB_OR_NEWLINE } from './ids';
+import { P01_CODE_SHAPE } from '../recognize/headerCodes';
 
 /*
  * NERC identifiers of the measured-variable columns (stage 5), the pure half. No I/O: the one module that talks to NVS is src/app/optins/nvs.ts (main thread only).
@@ -133,7 +134,7 @@ export function suggestType(variable: string, unit: string | undefined, declared
 }
 
 /** A P01 code of the shape the vocabulary uses: eight upper-case letters and digits. */
-export const P01_DECLARED = /^[A-Z0-9]{8}$/;
+export const P01_DECLARED = P01_CODE_SHAPE;
 
 /** The converter's verified concept of a P01 code (any variable, any kind), or undefined. */
 export function verifiedConcept(code: string): NercTerm | undefined {

@@ -460,7 +460,7 @@ describe('the profile suggestion (low confidence, never applied)', () => {
     expect(sug(['Station', 'Depth [m]'], [['S1', 2]])).toBe(false);
     expect(sug(['Station', 'Temperature [°C]'], [['S1', 2]])).toBe(false);
     // an unknown numeric column is a possible species: a CTD sheet with one is not suggested (it costs one tick)
-    expect(sug([...CTD_H, 'Fluorescence mystery'], CTD_ROWS.map((r) => [...r, 3]))).toBe(false);
+    expect(sug([...CTD_H, 'Zorbulon mystery'], CTD_ROWS.map((r) => [...r, 3]))).toBe(false);
   });
   it('the converter never sets the mark itself: a sheet is a profile sheet only when its input says so', () => {
     const r = run([sheetInput(fileOf(CTD_H, CTD_ROWS, 'CTD', { fileName: 'ctd.csv' }))]);

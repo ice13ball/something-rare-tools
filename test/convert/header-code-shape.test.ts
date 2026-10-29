@@ -12,7 +12,10 @@ import { judge, policyOf } from '../../src/core/convert/policy';
 import { readConvertFile } from '../../src/core/convert/read';
 import { parseFile } from '../../src/core/parse';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
-import { badHeaderCodes } from '../../src/core/recognize/vocab';
+import { P01_CODE_SHAPE, badHeaderCodes } from '../../src/core/recognize/headerCodes';
+import { p01CodeOf } from '../../src/core/recognize/vocab';
+import { P01_DECLARED } from '../../src/core/convert/nerc';
+import { p01Url } from '../../src/core/output/draft';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import { renderPlain } from '../../src/core/report';
 import { LANGS } from '../../src/core/types';
@@ -28,6 +31,27 @@ describe('badHeaderCodes: only the explicit prefix, only the wrong shape', () =>
     expect(badHeaderCodes('SDN:P01::ABC123')[0]).toMatchObject({ code: 'ABC123' });
     expect(badHeaderCodes('SDN:P01::psalst01')[0]).toMatchObject({ code: 'psalst01' });
     expect(badHeaderCodes('Sal [SDN:P06::UUUUU]')).toEqual([{ collection: 'P06', code: 'UUUUU', length: 4 }]);
+  });
+
+  it('reads only the run of letters and digits after the prefix: what follows (_QC, <Float32>, |, a full stop, a zero-width space...) never turns a valid code into a bad one', () => {
+    for (const h of ['SDN:P01::TEMPPR01_QC', 'SDN:P01::TEMPPR01:INSTANCE', 'SDN:P01::TEMPPR01|SDN:P06::UPAA', 'SDN:P01::TEMPPR01{x}', 'SDN:P01::TEMPPR01.', 'SDN:P01::TEMPPR01/', 'SDN:P01::TEMPPR01*', 'SDN:P01::TEMPPR01\u200b', 'SDN:P01:: TEMPPR01', 'SDN:P01::1EMPPR01']) {
+      expect(badHeaderCodes(h), JSON.stringify(h)).toEqual([]);
+    }
+    // a code that is wrong keeps being reported when something follows it
+    expect(badHeaderCodes('SDN:P01::D13CMOP11_QC')).toEqual([{ collection: 'P01', code: 'D13CMOP11', length: 8 }]);
+    expect(badHeaderCodes('SDN:P01::D13CMOP11|SDN:P06::UPAAA').map((b) => b.code)).toEqual(['D13CMOP11', 'UPAAA']);
+  });
+
+  it('a prefix with no code after it names no code at all, so nothing is reported (an empty "code" would say nothing useful)', () => {
+    for (const h of ['SDN:P01::', 'SDN:P01:: ', 'SDN:P06::<Float32>', 'SDN:P01::_QC']) expect(badHeaderCodes(h), h).toEqual([]);
+  });
+
+  it('P01_CODE_SHAPE is the one definition: a code that begins with a digit is a valid P01 code everywhere (the vocabulary has 66)', () => {
+    expect(P01_CODE_SHAPE.test('1EMPPR01')).toBe(true);
+    expect(p01CodeOf('SDN:P01::1EMPPR01')).toMatchObject({ code: '1EMPPR01', declared: true });
+    expect(P01_DECLARED).toBe(P01_CODE_SHAPE);
+    expect(p01Url('1EMPPR01')).toBe('https://vocab.nerc.ac.uk/collection/P01/current/1EMPPR01/');
+    expect(p01CodeOf('SDN:P01::1EMPPR0')).toBeUndefined();
   });
 
   it('says nothing about a valid code or about ordinary words, however they look', () => {
@@ -79,7 +103,8 @@ describe('/convert: CONV-NERC-CODE-MALFORMED, and no dead address is written', (
     const { r } = await run();
     const f = r.findings.filter((x) => x.ruleId === 'CONV-NERC-CODE-MALFORMED');
     expect(f).toHaveLength(1);
-    expect(f[0].params).toMatchObject({ column: BAD, code: 'D13CMOP11', collection: 'P01', length: 8 });
+    // the column is shown without the type suffix of the file, as /check shows it
+    expect(f[0].params).toMatchObject({ column: 'SDN:P01::D13CMOP11', code: 'D13CMOP11', collection: 'P01', length: 8 });
     expect(policyOf(f[0])).toBe('accept');
     expect(judge(r.findings).acceptRules).toContain('CONV-NERC-CODE-MALFORMED');
     for (const lang of LANGS) expect(renderConvertPlain(f[0], lang), lang).toContain('D13CMOP11');
