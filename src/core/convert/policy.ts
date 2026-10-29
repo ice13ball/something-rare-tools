@@ -91,6 +91,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-NERC-CODE-MALFORMED',
   'CONV-UNIT-NO-P06',
   'CONV-COLUMN-NOT-EXPORTED',
+  // a biomass column whose kind (wet, dry, ash-free dry) is open: the rows are written with no measurementTypeID; no default is invented
+  'CONV-BIOMASS-KIND-UNSET',
   // a row labelled like a statistic (Max, N) in the middle of the sheet, kept as a sample: the user says it is a station
   'CONV-SUMMARY-ROW-KEPT',
   // a code repeated at one station on different dates: each visit got the date in its ID, made of the data

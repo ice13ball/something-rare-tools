@@ -80,9 +80,9 @@ describe('the reason table', () => {
 });
 
 /** A battery of synthetic sheets that between them reach every reason the proposer can give. */
-function battery(): { sheet: RawSheet; long?: { parameterCol: number; valueCol: number; unitCol?: number } }[] {
+function battery(): { sheet: RawSheet; place?: true; long?: { parameterCol: number; valueCol: number; unitCol?: number } }[] {
   const S = (h: string[], r: Cell[][], df?: boolean[]): { sheet: RawSheet } => ({ sheet: rawSheet(h, r, 'S', df) });
-  const out: { sheet: RawSheet; long?: { parameterCol: number; valueCol: number; unitCol?: number } }[] = [
+  const out: { sheet: RawSheet; place?: true; long?: { parameterCol: number; valueCol: number; unitCol?: number } }[] = [
     // English names, one per role
     S(['Latitude', 'Longitude', 'Date', 'Time', 'Depth', 'Cruise', 'Station', 'Sample ID', 'Salinity', 'Comments', 'QC flag', '', 'Mystery'], [
       [54.5, 18.5, '2020-05-12', '10:30', 12, 'C1', 'S1', 'A-1', 35.1, 'ok', 1, 'x', 3.3],
@@ -122,6 +122,8 @@ function battery(): { sheet: RawSheet; long?: { parameterCol: number; valueCol: 
     S(['Latitude', 'Lat NS'], [[-32.7, 'S'], [-33, 'S']]),
     // only the end position of a tow
     S(['End Lat', 'End Lon'], [[54.5, 18.5], [54.6, 18.6]]),
+    // a place column with short repeated names is the station when the converter asks for it
+    { ...S(['Location', 'Temp'], [['North bay', 4.5], ['North bay', 4.6], ['Rocky point', 5.1]]), place: true as const },
     // long format: the parameter, unit and value columns are read through the layout
     { ...S(['Param', 'Unit', 'Value', 'Date'], [['T', 'C', 4.5, '2020-05-12'], ['S', 'psu', 35, '2020-05-12']]), long: { parameterCol: 0, unitCol: 1, valueCol: 2 } },
   ];
@@ -130,7 +132,7 @@ function battery(): { sheet: RawSheet; long?: { parameterCol: number; valueCol: 
 
 function proposalsOf(): { p: ColumnProposal; sheet: RawSheet }[] {
   const all: { p: ColumnProposal; sheet: RawSheet }[] = [];
-  for (const b of battery()) for (const p of proposeColumns(b.sheet, { ...CTX, ...(b.long ? { long: b.long } : {}) })) all.push({ p, sheet: b.sheet });
+  for (const b of battery()) for (const p of proposeColumns(b.sheet, { ...CTX, ...(b.long ? { long: b.long } : {}), ...(b.place ? { placeAsStation: true } : {}) })) all.push({ p, sheet: b.sheet });
   return all;
 }
 

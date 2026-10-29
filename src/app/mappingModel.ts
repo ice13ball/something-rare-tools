@@ -33,7 +33,10 @@ export const roleLabelKey = (kind: RoleKind): UiKey => `role.${kind}` as UiKey;
  * An entry of the role dropdown. /check offers the RoleKind list; /convert offers CONVERT_ROLE_CHOICES: the same kinds plus the converter roles, and
  * 'taxonHeader' for a wide sheet's species column (role taxon with header: true), which is a choice of its own so the user sees what it means.
  */
-export type RoleChoice = RoleKind | ConverterRoleKind | 'taxonHeader';
+export type RoleChoice = RoleKind | ConverterRoleKind | 'taxonHeader' | 'biomassWet' | 'biomassDry' | 'biomassAfdw';
+
+/** The kind of mass each biomass entry of the dropdown stands for; plain 'biomass' leaves it open (the converter then asks). */
+const BIOMASS_CHOICES = { biomassWet: 'wet', biomassDry: 'dry', biomassAfdw: 'afdw' } as const;
 
 /** Order of the role dropdown on /convert. */
 export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
@@ -58,6 +61,10 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
   'occurrenceId',
   'lifeStage',
   'replicate',
+  'biomass',
+  'biomassWet',
+  'biomassDry',
+  'biomassAfdw',
   'qualifier',
   'taxonId',
   'variable',
@@ -66,11 +73,14 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
 export const roleChoiceLabelKey = (c: RoleChoice): UiKey => `role.${c}` as UiKey;
 
 /** The dropdown entry that stands for a role. */
-export const roleChoiceOf = (role: ColumnRole): RoleChoice => (role.kind === 'taxon' && role.header === true ? 'taxonHeader' : role.kind);
+export const roleChoiceOf = (role: ColumnRole): RoleChoice =>
+  role.kind === 'taxon' && role.header === true ? 'taxonHeader' : role.kind === 'biomass' ? (role.basis === 'wet' ? 'biomassWet' : role.basis === 'dry' ? 'biomassDry' : role.basis === 'afdw' ? 'biomassAfdw' : 'biomass') : role.kind;
 
 /** The role after the user picked `choice`. Every /check kind goes through changeRole, so its behaviour is the one it always had. */
 export function roleFromChoice(current: ColumnRole, proposed: ColumnRole, choice: RoleChoice, cleanHeader: string, samples: readonly string[] = []): ColumnRole {
   if (choice === 'taxonHeader') return proposed.kind === 'taxon' && proposed.header === true ? proposed : { kind: 'taxon', header: true };
+  if (choice === 'biomassWet' || choice === 'biomassDry' || choice === 'biomassAfdw') return { kind: 'biomass', basis: BIOMASS_CHOICES[choice] };
+  if (choice === 'biomass') return proposed.kind === 'biomass' && proposed.basis === undefined ? proposed : { kind: 'biomass' };
   if (choice === 'taxon') return proposed.kind === 'taxon' && proposed.header !== true ? proposed : { kind: 'taxon' };
   return changeRole(current, proposed, choice, cleanHeader, samples);
 }

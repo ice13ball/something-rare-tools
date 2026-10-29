@@ -30,7 +30,7 @@ const PRESENCE_MARK = /^(\+|x|\*)$/i;
 const MIN_NAMES = 3;
 
 /** The roles that say a column is NOT a sample code: the sheet is a table of records (a long species sheet, a table with a quantity), whatever its first column holds. */
-const STRUCTURAL = new Set(['station', 'cruise', 'sampleId', 'date', 'datetime', 'time', 'latitude', 'longitude', 'hemisphere', 'depth', 'depthBelowSeafloor', 'pressure', 'quantity', 'quantityType', 'effort', 'occurrenceId', 'lifeStage', 'qualifier', 'taxonId', 'replicate']);
+const STRUCTURAL = new Set(['station', 'cruise', 'sampleId', 'date', 'datetime', 'time', 'latitude', 'longitude', 'hemisphere', 'depth', 'depthBelowSeafloor', 'pressure', 'quantity', 'quantityType', 'effort', 'occurrenceId', 'lifeStage', 'qualifier', 'taxonId', 'replicate', 'biomass']);
 
 function taxaInRows(sheet: RawSheet, decimalComma: boolean, columns?: readonly { index: number; role: ColumnRole }[]): boolean {
   const cols = sheet.unnamedFrom ?? sheet.header.length;

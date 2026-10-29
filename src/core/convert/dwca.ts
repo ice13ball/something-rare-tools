@@ -93,15 +93,17 @@ const OCCURRENCE_COLUMNS: { col: Column; always: boolean }[] = [
 ];
 
 /** The eMoF extension: eventID is the coreid (the extension has no eventID property), measurementTypeID / ValueID / UnitID live in the OBIS namespace. */
-const EMOF_COLUMNS: Column[] = [
-  dwc('eventID'),
-  dwc('occurrenceID'),
-  dwc('measurementType'),
-  obis('measurementTypeID'),
-  dwc('measurementValue'),
-  obis('measurementValueID'),
-  dwc('measurementUnit'),
-  obis('measurementUnitID'),
+const EMOF_COLUMNS: { col: Column; always: boolean }[] = [
+  { col: dwc('eventID'), always: true },
+  { col: dwc('occurrenceID'), always: true },
+  { col: dwc('measurementType'), always: true },
+  { col: obis('measurementTypeID'), always: true },
+  { col: dwc('measurementValue'), always: true },
+  { col: obis('measurementValueID'), always: true },
+  { col: dwc('measurementUnit'), always: true },
+  { col: obis('measurementUnitID'), always: true },
+  // only when a measurement has remarks (a biomass column next to a declared sample size)
+  { col: dwc('measurementRemarks'), always: false },
 ];
 
 /** Keeps the columns that are always written and those with at least one non-empty cell. */
@@ -181,8 +183,10 @@ export function buildTables(ds: ConvertedDataset): ArchiveTables {
   if (ds.measurements.length > 0) {
     tables.emof = {
       name: EMOF_FILE,
-      columns: EMOF_COLUMNS,
-      rows: ds.measurements.map((m) => [m.eventId, m.occurrenceId ?? '', m.type, m.typeId ?? '', m.value, m.valueId ?? '', m.unit ?? '', m.unitId ?? '']),
+      ...prune(
+        EMOF_COLUMNS,
+        ds.measurements.map((m) => [m.eventId, m.occurrenceId ?? '', m.type, m.typeId ?? '', m.value, m.valueId ?? '', m.unit ?? '', m.unitId ?? '', m.remarks ?? '']),
+      ),
     };
   }
   return tables;

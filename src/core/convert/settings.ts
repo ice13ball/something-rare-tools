@@ -25,6 +25,8 @@ import type { ParsedFile } from '../types';
  *   transposedAsTable=<sheet>  the sheet of that name looked transposed (species or variables in rows; core/convert/transposed.ts) and the user chose to read it as a normal table. A PRE-TICK only,
  *                     undone on the page. A sheet name, never a value.
  *   presenceOnly=<sheet>  the sheet of that name was ticked "This is a list of species found (presence only, no counts)". A PRE-TICK only; the user can undo it on the page. A sheet name, never a value.
+ *   biomassBasis=<basis>:<sheet>  the biomass / weight columns of the sheet of that name were given the kind of mass <basis> (wet | dry | afdw). A PRE-PICK only: it sets that kind on the biomass
+ *                     columns of a sheet of the same name that have none, and the user can change it on the page. A basis word and a sheet name, never a value.
  * An unknown name or value is ignored.
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
@@ -37,6 +39,7 @@ export const PROFILE_IGNORE_CAST_SETTING = 'profileIgnoreCast=';
 export const LONG_AS_TABLE_SETTING = 'longAsTable=';
 export const TRANSPOSED_AS_TABLE_SETTING = 'transposedAsTable=';
 export const PRESENCE_ONLY_SETTING = 'presenceOnly=';
+export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
 export const MAX_SETTING_SHEETS = 100;
 export const MAX_SETTING_NAME = 255;
@@ -60,6 +63,19 @@ export interface ConvertSettings {
   transposedAsTable?: string[];
   /** The sheets the user ticked as presence-only species lists, by sheet name. Only present when there is at least one. A pre-tick only. */
   presenceOnly?: string[];
+  /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
+  biomassBasis?: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[];
+}
+
+/** The biomass kind each sheet's columns were given: one entry per sheet whose biomass columns that state a kind all agree on it (a sheet with a wet and a dry column keeps nothing). */
+export function biomassBasisOf(mappings: readonly { sheet: string; columns: readonly { role: { kind: string; basis?: 'wet' | 'dry' | 'afdw' } }[] }[]): { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[] {
+  const out: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[] = [];
+  for (const m of mappings) {
+    const kinds = new Set(m.columns.flatMap((c) => (c.role.kind === 'biomass' && c.role.basis !== undefined ? [c.role.basis] : [])));
+    const [basis] = [...kinds];
+    if (kinds.size === 1 && basis !== undefined && !out.some((o) => o.sheet === m.sheet)) out.push({ sheet: m.sheet, basis });
+  }
+  return out;
 }
 
 const addName = (list: string[], name: string): void => {
@@ -82,7 +98,12 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v.startsWith(PROFILE_IGNORE_CAST_SETTING)) addName((settings.profileIgnoreCast ??= []), v.slice(PROFILE_IGNORE_CAST_SETTING.length));
     else if (v.startsWith(LONG_AS_TABLE_SETTING)) addName((settings.longAsTable ??= []), v.slice(LONG_AS_TABLE_SETTING.length));
     else if (v.startsWith(PRESENCE_ONLY_SETTING)) addName((settings.presenceOnly ??= []), v.slice(PRESENCE_ONLY_SETTING.length));
-    else if (v.startsWith(TRANSPOSED_AS_TABLE_SETTING)) addName((settings.transposedAsTable ??= []), v.slice(TRANSPOSED_AS_TABLE_SETTING.length));
+    else if (v.startsWith(BIOMASS_BASIS_SETTING)) {
+      const rest = v.slice(BIOMASS_BASIS_SETTING.length);
+      const basis = rest.slice(0, rest.indexOf(':'));
+      const sheet = rest.slice(rest.indexOf(':') + 1);
+      if ((basis === 'wet' || basis === 'dry' || basis === 'afdw') && rest.includes(':') && sheet !== '' && sheet.length <= MAX_SETTING_NAME && (settings.biomassBasis ??= []).length < MAX_SETTING_SHEETS && !settings.biomassBasis.some((b) => b.sheet === sheet)) settings.biomassBasis.push({ sheet, basis });
+    } else if (v.startsWith(TRANSPOSED_AS_TABLE_SETTING)) addName((settings.transposedAsTable ??= []), v.slice(TRANSPOSED_AS_TABLE_SETTING.length));
   }
   return settings;
 }
@@ -102,6 +123,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.profileIgnoreCast ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PROFILE_IGNORE_CAST_SETTING}${n}`, '', '', ''])),
       ...(settings.longAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${LONG_AS_TABLE_SETTING}${n}`, '', '', ''])),
       ...(settings.transposedAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TRANSPOSED_AS_TABLE_SETTING}${n}`, '', '', ''])),
+      ...(settings.biomassBasis ?? []).filter((b) => b.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((b) => line([SETTING_ROW, `${BIOMASS_BASIS_SETTING}${b.basis}:${b.sheet}`, '', '', ''])),
       ...(settings.presenceOnly ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PRESENCE_ONLY_SETTING}${n}`, '', '', ''])),
     ].join('\n') + '\n'
   );

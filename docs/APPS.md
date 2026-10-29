@@ -1074,7 +1074,7 @@ with `Z` and `ROW-TZ-UNKNOWN` is not raised; `/check` never does this.
 (`proposeColumns`, 3.3), so coordinates, dates, depth, station, cruise and sample names (in four
 languages) are not repeated. It adds the roles `/check` does not have (`ConverterRole`,
 `src/core/types.ts`): `taxon` (with `header: true` when the column's *header* is the taxon),
-`quantity`, `quantityType`, `effort`, `occurrenceId`, `lifeStage`, `replicate`, `qualifier`, `taxonId` (an
+`quantity`, `quantityType`, `effort`, `occurrenceId`, `lifeStage`, `replicate`, `biomass`, `qualifier`, `taxonId` (an
 AphiaID column or any other ID, as given), and `depthBelowSeafloor`. It reads Darwin Core terms as
 roles (`occurrenceID`, `eventID` as the sample code, `scientificName`, `individualCount`,
 `organismQuantity`, `organismQuantityType`, minimum/maximum depth, `lifeStage`,
@@ -1084,6 +1084,26 @@ Only when sample IDs collide and exactly one ignored column tells the colliding 
 `CONV-ID-DUPLICATE` message name that column and the page offer a button, **Use "<column>" as
 replicate / sub-sample**; pressing it is the user's confirmation. The role can also be chosen in the
 role list at any time.
+
+**Biomass next to a count.** On a long sheet that has a taxon column and a count / abundance
+column, a column named `Biomass`, `Biomasa`, `Biomasse`, or (only as a whole name made of weight words)
+`Weight`, `Wet weight`, `Dry weight`, `AFDW`, `Masa`, `Wet mass` … is proposed as the role **Biomass /
+weight** (`{ kind: 'biomass', basis? }`) instead of being left out as "a second quantity column".
+Each value becomes an eMoF row **of the occurrence** (`measurementType` "biomass", `measurementValue`
+as written, `measurementUnit` from the header, no unit ID, never converted); the abundance stays
+`organismQuantity`. The **kind of mass** decides the NERC concept, and a header that says it pre-selects
+it: wet (`wet`, `fresh`, `mokra`, `Nass`) is S06 `S0600088` "Wet weight biomass", dry (`dry`, `sucha`, `Trocken`) is
+`S0600087` "Dry weight biomass", ash-free dry (`AFDW`, `ash-free dry`) is `S0600086` "Ash-free dry weight
+biomass" (concepts opened in the NVS on 2026-10-30; the P01 biomass concepts SDBIOL03/04/05/07/08/09 are
+all per unit area or volume, so none of them says "a mass in this sample"). **There is no default**: the
+role list has "Biomass / weight (kind not chosen)" and one entry per kind; until a kind is chosen no
+`measurementTypeID` is written and `CONV-BIOMASS-KIND-UNSET` (warning, needs acceptance) says which
+column. A sample size declared for the sheet appears only in `measurementRemarks`
+(`per sample of 0.0625 m2`, column written only when used); nothing is divided. The companion file keeps
+the kind as `biomassBasis=<wet|dry|afdw>:<sheet>` (a sheet whose biomass columns agree on one kind) and a
+dropped companion pre-picks it for columns whose header leaves it open. Without a count column a
+`Biomass` header is still the sheet's quantity (the kind of number is then declared as before), and on a
+wide sheet or a profile sheet the role is not read and is named by `CONV-COLUMN-NOT-EXPORTED`.
 
 **Measured variable or taxon name?** This is the central decision for a **wide** sheet, where a
 species is a numeric column with the species as its header. The shared proposer calls such a
@@ -1660,7 +1680,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-29**. The total, **167 rules**, equals the number of rule rows in
+**2026-10-29**. The total, **168 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1674,8 +1694,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 72 | 37 / 24 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **167** | | | |
+| `CONV-` | `B` | 73 | 37 / 25 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **168** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
