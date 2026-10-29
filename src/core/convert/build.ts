@@ -19,6 +19,7 @@ import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, u
 import type { NercDecisions, NercPick } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
+import { proposeConvertMapping } from './recognize';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { seafloorMetres, seafloorUnitOf } from './seafloor';
@@ -907,6 +908,17 @@ function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly strin
   // the proposer reads the explicit "value" column of such a sheet as a species column (a number under a header): that reading is the very thing this finding refuses, so it does not count as a taxon
   const own = (c: Spec): boolean => c.index === valueAt || c.index === parameterAt;
   if (cols.taxonHeaders.some((c) => !own(c)) || (cols.taxonCell !== undefined && !own(cols.taxonCell)) || cols.quantity !== undefined) return undefined;
+  // a measured variable in any other column: a wide sheet whose "Parameter" / "Result" columns are something else (cruise names, QC text)
+  if (sin.mapping.columns.some((c) => c.role.kind === 'variable' && c.index !== valueAt && c.index !== parameterAt)) return undefined;
+  // the page can unblock the sheet: a parameter or value column the user mapped to anything but the proposed role (for example "ignore") is theirs, not a long layout
+  const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
+  if (sheet === undefined) return undefined;
+  const proposed = proposeConvertMapping(sheet, { decimalComma: sin.file.decimalComma, date1904: sin.file.date1904 });
+  for (const at of [parameterAt, valueAt]) {
+    const now = sin.mapping.columns.find((c) => c.index === at)?.role;
+    const was = proposed.columns.find((c) => c.index === at)?.role;
+    if (now === undefined || JSON.stringify(now) !== JSON.stringify(was)) return undefined;
+  }
   return { parameter: header[parameterAt].trim(), value: header[valueAt].trim() };
 }
 

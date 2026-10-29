@@ -181,10 +181,10 @@ export const ROW_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['expected', 'found'],
     plain: {
-      pl: `{+lines:Wiersz|Wiersze|Wiersze} {lines} {+lines:ma|mają|mają} inną liczbę wartości niż nagłówek (oczekiwano {expected}, {+lines:jest|np.|np.} {found}{+lines:| w pierwszym| w pierwszym}). Kolumny mogły się przesunąć: popraw {+lines:ten wiersz|te wiersze|te wiersze} w pliku; narzędzie {+lines:go|ich|ich} nie zmieniło.`,
+      pl: `{+lines:Wiersz|Wiersze} {lines} {+lines:ma|mają} inną liczbę wartości niż nagłówek (oczekiwano {expected}, {+lines:jest|np.} {found}{+lines:| w pierwszym z nich}). Kolumny mogły się przesunąć; popraw {+lines:ten wiersz|te wiersze} w pliku źródłowym, narzędzie {+lines:go|ich} nie zmieniło.`,
       en: `{+lines:Line|Lines} {lines} {+lines:has|have} a different number of values than the header (expected {expected}, {+lines:found|e.g.} {found}{+lines:| in the first of them|}). The columns may be shifted; fix {+lines:this line|these lines} in the original file — the tool did not change {+lines:it|them}.`,
       de: `{+lines:Die Zeile|Die Zeilen} {lines} {+lines:hat|haben} eine andere Anzahl von Werten als die Kopfzeile (erwartet {expected}, {+lines:gefunden|z. B.} {found}{+lines:| in der ersten|}). Die Spalten sind möglicherweise verschoben; korrigieren Sie sie in der Originaldatei – das Werkzeug hat sie nicht verändert.`,
-      fr: `{+lines:La ligne|Les lignes} {lines} {+lines:a|ont} un nombre de valeurs différent de l'en-tête ({expected} attendues, {+lines:trouvées|par ex.} {found}{+lines:| dans la première|}). Les colonnes sont peut-être décalées ; corrigez-{+lines:la|les} dans le fichier d'origine — l'outil ne {+lines:l'|les }a pas modifiée{+lines:|s}.`,
+      fr: `{+lines:La ligne|Les lignes} {lines} {+lines:a|ont} un nombre de valeurs différent de l'en-tête ({expected} attendues, {+lines:|par ex. }{found}{+lines: trouvées| dans la première}). Les colonnes sont peut-être décalées ; corrigez-{+lines:la|les} dans le fichier d'origine — l'outil ne {+lines:l'|les }a pas modifiée{+lines:|s}.`,
     },
     technical: `{file}:{lines} expected {expected} fields, found {found} (first listed line); rows kept as found, not realigned.`,
   },
