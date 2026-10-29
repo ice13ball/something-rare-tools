@@ -187,6 +187,72 @@ describe('ROW-YEAR-OUTLIER', () => {
   });
 });
 
+describe('ROW-YEAR-OUTLIER: a year range names every year in it', () => {
+  const inside = () => [...rows(2, 20, { lat: 1, lon: 2, date: '1995-07-01' }), ...rows(22, 20, { lat: 1, lon: 2, date: '2008-07-01' }), ...rows(42, 20, { lat: 1, lon: 2, date: '2019-07-01' })];
+  const fires = (file: string, label = file, data = inside()) => only(checkRows(dataset(data, { file, label })), 'ROW-YEAR-OUTLIER');
+
+  const files = [
+    'Primary_production_in_the_period_1994-2019.xlsx',
+    'data_1994-2019.csv',
+    'data_1994\u20132019.csv',
+    'data_1994\u20142019.csv',
+    'data 1994 - 2019.csv',
+    'data_1994_to_2019.csv',
+    'from 1994 to 2019.csv',
+    'data_1994/2019.csv',
+    'in_the_period_1994_2019.csv',
+    'between_1994_and_2019.csv',
+  ];
+  it.each(files)('file name %s covers 1995, 2008 and 2019', (file) => {
+    expect(fires(file)).toEqual([]);
+  });
+
+  const titles = ['Primary production in the period 1994-2019', 'Survey 1994\u20132019', 'Survey 1994\u20142019', 'Survey 1994 to 2019', 'Survey from 1994 to 2019', 'Survey 1994/2019'];
+  it.each(titles)('title "%s" covers every year in between', (title) => {
+    const ds = dataset(inside(), { file: 'data.csv', label: 'data.csv', metadata: [record({ title })] });
+    expect(only(checkRows(ds), 'ROW-YEAR-OUTLIER')).toEqual([]);
+  });
+
+  it('rows outside the range still fire (2021 for 1994-2019), and the declared years are compacted', () => {
+    const f = fires('Primary_production_1994-2019.xlsx', undefined, [...inside(), ...rows(62, 3, { lat: 1, lon: 2, date: '2021-07-01' })]);
+    expect(f).toHaveLength(1);
+    expect(f[0].params).toMatchObject({ years: '2021', declared: '1994\u20132019' });
+    expect(f[0].lines).toEqual(range(62, 64));
+  });
+
+  it('one year in the title (2019) and rows in 2015 still fire', () => {
+    const data = [...rows(2, 40, { lat: 1, lon: 2, date: '2019-07-01' }), ...rows(42, 5, { lat: 1, lon: 2, date: '2015-07-01' })];
+    const ds = dataset(data, { file: 'data.csv', label: 'data.csv', metadata: [record({ title: 'Cruise 2019' })] });
+    const f = only(checkRows(ds), 'ROW-YEAR-OUTLIER');
+    expect(f).toHaveLength(1);
+    expect(f[0].params).toMatchObject({ years: '2015', declared: '2019' });
+  });
+
+  it('two years joined only by an underscore in a file name are two years, not a range', () => {
+    const f = fires('cruise_2015_2019.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2017-07-01' }));
+    expect(f).toHaveLength(1);
+    expect(f[0].params).toMatchObject({ years: '2017', declared: '2015, 2019' });
+  });
+
+  it('a year-month (2019-08) names the year 2019 only, never a range', () => {
+    const f = fires('data_2019-08.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2015-07-01' }));
+    expect(f[0].params).toMatchObject({ years: '2015', declared: '2019' });
+    expect(fires('data_2019-08-15.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2015-07-01' }))[0].params).toMatchObject({ declared: '2019' });
+  });
+
+  it('a two-digit end is a range only when it cannot be a month: 1994-95 spans two years, 2011-12 names 2011', () => {
+    const r1995 = rows(2, 10, { lat: 1, lon: 2, date: '1995-03-01' });
+    expect(fires('survey_1994-95.csv', undefined, r1995)).toEqual([]);
+    const r2012 = rows(2, 10, { lat: 1, lon: 2, date: '2012-03-01' });
+    expect(fires('survey_2011-12.csv', undefined, r2012)[0].params).toMatchObject({ years: '2012', declared: '2011' });
+  });
+
+  it('a descending pair is not a range', () => {
+    const f = fires('data_2019-1994.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2008-03-01' }));
+    expect(f[0].params).toMatchObject({ declared: '1994, 2019' });
+  });
+});
+
 describe('ROW-UNIT-MISSING', () => {
   it('lists variables without a unit but exempts practical salinity and pH', () => {
     const ds = dataset([], {

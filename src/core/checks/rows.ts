@@ -364,8 +364,42 @@ const YEAR_TOKEN = /(?<![\p{L}\p{N}])(19[0-9]{2}|20[0-9]{2}|2100)(?![\p{L}\p{N}]
 const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
 
+/*
+ * A year RANGE names every year in it: "1994-2019", "1994–2019" (en dash), "1994—2019", "1994 to 2019", "from 1994 until 2019", "1994/2019" (an ISO 8601 interval) and
+ * "in the period 1994_2019" (an underscore in a file name separates words, so two years joined by one only count as a range after a word that says so: period, years, from,
+ * between, during, and their German, French and Polish forms). Two years in a file name that are only joined by an underscore ("cruise_2015_2019") are two years, as before.
+ * The end of a range is a four-digit year at or after the start. A two-digit end ("1994-95") is a range only when it cannot be a month (13 to 99, after the century of the start):
+ * "2019-08" is a year and a month, and "2011-12" stays the year 2011 alone. A date ("2019-08-15", "1994-95-03") is never a range.
+ */
+const YEAR = '(?<![\\p{L}\\p{N}])(19[0-9]{2}|20[0-9]{2}|2100)';
+const YEAR_END = '(19[0-9]{2}|20[0-9]{2}|2100)';
+const DASH = '[-\\u2010-\\u2015\\u2212]';
+const RANGE_DASH = new RegExp(`${YEAR}\\s*${DASH}\\s*${YEAR_END}(?![\\p{L}\\p{N}]|[-/.:]\\d)`, 'gu');
+const RANGE_SLASH = new RegExp(`${YEAR}/${YEAR_END}(?![\\p{L}\\p{N}]|[-/.:]\\d)`, 'gu');
+const RANGE_WORD = new RegExp(`${YEAR}[\\s_]+(?:to|until|till|through|bis|do|au|\\u00e0)[\\s_]+${YEAR_END}(?![\\p{L}\\p{N}])`, 'giu');
+const RANGE_CUE = new RegExp(
+  `(?:period|periode|p\\u00e9riode|okres|years|jahre|ann\\u00e9es|lata|from|between|during|zwischen|entre|von|od|de)[\\s_]+${YEAR}[\\s_]+(?:and[\\s_]+|und[\\s_]+|et[\\s_]+|i[\\s_]+)?${YEAR_END}(?![\\p{L}\\p{N}])`,
+  'giu',
+);
+const RANGE_SHORT = new RegExp(`${YEAR}\\s*${DASH}\\s*([0-9]{2})(?![\\p{L}\\p{N}]|[-/.:]\\d)`, 'gu');
+const MAX_RANGE_SPAN = 150;
+
+function rangeYears(text: string): number[] {
+  const out: number[] = [];
+  const add = (a: number, b: number): void => {
+    if (b > a && b - a <= MAX_RANGE_SPAN) for (let y = a; y <= b; y++) out.push(y);
+  };
+  for (const re of [RANGE_DASH, RANGE_SLASH, RANGE_WORD, RANGE_CUE]) for (const m of text.matchAll(re)) add(Number(m[1]), Number(m[2]));
+  for (const m of text.matchAll(RANGE_SHORT)) {
+    const start = Number(m[1]);
+    const end2 = Number(m[2]);
+    if (end2 >= 13) add(start, start - (start % 100) + end2);
+  }
+  return out;
+}
+
 function yearsIn(text: string | undefined): number[] {
-  return text === undefined ? [] : [...text.matchAll(YEAR_TOKEN)].map((m) => Number(m[1]));
+  return text === undefined ? [] : [...rangeYears(text), ...[...text.matchAll(YEAR_TOKEN)].map((m) => Number(m[1]))];
 }
 
 /** Years named in the dataset label / file name, in record titles, and every year the temporal extents span. */
