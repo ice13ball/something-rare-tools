@@ -114,6 +114,17 @@ function fill(template: string, f: Finding, lang?: Lang): string {
   });
 }
 
+const TIME_PART = /^(?:(?:[01]?\d|2[0-4])[:.h][0-5]\d(?:[:.][0-5]\d)?|(?:[01]?\d|2[0-3])[0-5]\d)\s*(?:[ap]\.?m\.?)?\s*(?:z|utc|gmt)?$/i;
+
+/** True when every value listed in a finding reads as a time of day or a range of two ("10:00-12:00", "1430-1500"): the column holds times, not dates. */
+export function valuesAreTimes(value: string | undefined): boolean {
+  if (value === undefined || value.trim() === '') return false;
+  return value.split(',').every((token) => {
+    const parts = token.trim().split(/\s*[-–—]\s*|\s+to\s+/i);
+    return parts.length >= 1 && parts.length <= 2 && parts.every((p) => TIME_PART.test(p.trim()));
+  });
+}
+
 /** One or two sentences for a non-technical scientist, in `lang` (English when the language is unknown). */
 export function renderPlain(f: Finding, lang: Lang): string {
   const rule = getRule(f.ruleId);
@@ -126,6 +137,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
   }
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
+  if (rule.plainTime && valuesAreTimes(f.value)) texts = rule.plainTime;
   // The layout reason is the English phrase in `reason`; the codes in `reasons` are rendered in the reader's language.
   const reasons = f.ruleId === 'IN-LAYOUT-UNSUPPORTED' ? decodeReasons(f.params.reasons) : undefined;
   if (reasons) f = { ...f, params: { ...f.params, reason: reasonsText(reasons, lang) } };
@@ -140,5 +152,6 @@ export function renderPlain(f: Finding, lang: Lang): string {
 
 /** The English technical detail line (file, lines, field, value, parameters). */
 export function renderTechnical(f: Finding): string {
-  return fill(getRule(f.ruleId).technical, f);
+  const rule = getRule(f.ruleId);
+  return fill(rule.technicalTime !== undefined && valuesAreTimes(f.value) ? rule.technicalTime : rule.technical, f);
 }
