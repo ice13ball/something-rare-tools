@@ -78,6 +78,38 @@ export function scanStatisticRows(rows: readonly RawRow[], labelColumns: readonl
   return out;
 }
 
+/* ---------- visits: one station, the same code, different dates ---------- */
+
+/** What tells one visit of a station from another, from the row: the date (YYYY-MM-DD), the time of day (HH:MM[:SS]) and the depth as a number, each '' when the row has none. */
+export interface VisitKey {
+  date: string;
+  time: string;
+  depth: string;
+}
+export const VISIT_PARTS = ['date', 'time', 'depth'] as const;
+export type VisitPart = (typeof VISIT_PARTS)[number];
+
+/**
+ * The rows of ONE station that make the same ID (a code reused on every visit: "1", "2", "A") and differ in when or at what depth they were taken are different visits, not a repeat.
+ * The number of leading parts of (date, time, depth) that tell them apart, the fewest that do: 0 when they are one visit only (nothing to tell apart, the ID stays as it is; identical rows stay
+ * a real duplicate). `parts` is how many of the three may be used (a long sheet's rows of one sample may differ in depth: that stays a conflict, so it uses 2).
+ */
+export function visitLevel(keys: readonly VisitKey[], parts: 2 | 3): number {
+  const text = (k: VisitKey, n: number): string => [k.date, k.time, k.depth].slice(0, n).join('\u0000');
+  const distinct = (n: number): number => new Set(keys.map((k) => text(k, n))).size;
+  const all = distinct(parts);
+  if (all < 2) return 0;
+  for (let n = 1; n <= parts; n++) if (distinct(n) === all) return n;
+  return parts;
+}
+
+/** `<date>[T<time>][:<depth>m]` of the leading `level` parts: the middle of `<station>:<date>:<code>`, in the shape of the profile levels (`<station>:<date>:<depth>m`). '' when the row has none of them. */
+export function visitQualifier(key: VisitKey, level: number): string {
+  const when = level >= 1 ? key.date + (level >= 2 && key.time !== '' ? `T${key.time}` : '') : '';
+  const depth = level >= 3 && key.depth !== '' ? `${key.depth}m` : '';
+  return [when, depth].filter((s) => s !== '').join(':');
+}
+
 export const stationPrefixedId = (stationEventId: string, code: string): string => `${stationEventId}:${code}`;
 export const occurrenceIdWide = (sampleEventId: string, header: string): string => `${sampleEventId}:${header}`;
 export const occurrenceIdLong = (sampleEventId: string, taxonCell: string, lifeStageColumn?: string): string =>
