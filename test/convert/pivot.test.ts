@@ -218,6 +218,13 @@ describe('what the reader cannot read blocks, never falls back to a wide sheet',
     const ok = pivoted(H, many(MAX_PAIRS));
     expect(ok.sheet.pivot?.pivoted).toHaveLength(MAX_PAIRS);
   });
+  it('rows x distinct parameters cannot explode: 10 000 rows with 5 000 distinct parameters is a block, decided at once', () => {
+    const rows: Cell[][] = Array.from({ length: 10_000 }, (_, i) => [`ZL${i % 50}`, '2023-06-14', 55.5, 2.5, 5, `P${i % 5000}`, 'x', i + 0.5]);
+    const t0 = performance.now();
+    const r = blocked(H, rows);
+    expect(performance.now() - t0).toBeLessThan(3000);
+    expect(r.findings.find((x) => x.ruleId === 'CONV-LONG-UNSUPPORTED')?.params.reason).toBe('too-many');
+  });
   it('the pairs count units: 201 pairs of 2 parameters blocks too', () => {
     const rows: Cell[][] = Array.from({ length: MAX_PAIRS + 1 }, (_, i) => ['ZL1', '2023-06-14', 55.5, 2.5, 5, i % 2 === 0 ? 'A' : 'B', `u${i}`, i]);
     expect(blocked(H, rows).findings.find((x) => x.ruleId === 'CONV-LONG-UNSUPPORTED')?.params.reason).toBe('too-many');

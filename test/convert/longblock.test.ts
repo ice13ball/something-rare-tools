@@ -2,9 +2,17 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // CONV-LONG-UNSUPPORTED (a long environmental sheet is blocked, never misread), the IO PAN spellings of oxygen saturation, and the Polish number agreement of ROW-RAGGED.
 // Synthetic sheets only; the stations are invented.
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
+import { lookupOf, readWormsRecord } from '../../src/core/convert/worms';
+import type { WormsRecord } from '../../src/core/convert/worms';
+import { createConvertHandler } from '../../src/worker/convert.handler';
+import type { ConvertParseResult } from '../../src/worker/convert.protocol';
+import { csvOf } from '../app/convertHelpers';
+import { RECORDED, wormsRecord } from '../helpers/wormsFixtures';
+import { exportSheet } from './exportHelpers';
 import { BLOCK_CONV_RULES, judge } from '../../src/core/convert/policy';
 import { VARIABLE_CONCEPTS } from '../../src/core/convert/vocab';
 import { renderPlain } from '../../src/core/report';
@@ -130,7 +138,7 @@ describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
   });
 });
 
-/* The converted output of long biology sheets is the output of origin/main: the snapshot was generated at origin/main (3880e43) by running this file there with LB_WRITE set. */
+/* The converted output of long biology sheets is the output of origin/main: the snapshot was generated at origin/main (2b2d854) by running this file there with LB_WRITE set (the archives and the worker part included). */
 const SNAP = new URL('./longblock.snap.json', import.meta.url);
 const bioCases = (): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -152,15 +160,97 @@ const bioCases = (): Record<string, unknown> => {
   return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
 };
 
+/* The ARCHIVES (every file of the zip as text, and the zip's own hash) of long biology sheets, WoRMS off and on (the test stub, no network), and what the worker makes of each dropped file
+ * (its sheets, mappings and suggestions): both generated at origin/main (2b2d854) and compared here byte for byte. */
+const BIO_SHEETS: Record<string, { header: string[]; rows: Cell[][]; edit?: Record<string, ColumnRole> }> = {
+  english: {
+    header: ['Cruise', 'Station', 'Sample code', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Taxon', 'AphiaID', 'Count'],
+    rows: [
+      ['ZC1', 'ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 5, 'Calanus finmarchicus', 104464, 4],
+      ['ZC1', 'ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 5, 'Oithona similis', 106656, 9],
+      ['ZC1', 'ZL2', 'ZL2-a', '2023-06-15', 55.6, 2.6, 10, 'Calanus finmarchicus', 104464, 1],
+    ],
+  },
+  polish: {
+    header: ['Rejs', 'Stacja', 'Kod próby', 'Data', 'Szerokość', 'Długość', 'Głębokość [m]', 'Takson', 'AphiaID', 'Liczba osobników'],
+    rows: [
+      ['ZR1', 'ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 5, 'Calanus finmarchicus', 104464, 4],
+      ['ZR1', 'ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 5, 'Oithona similis', 106656, 9],
+      ['ZR1', 'ZL2', 'ZL2-a', '2023-06-15', 55.6, 2.6, 10, 'Calanus finmarchicus', 104464, 1],
+    ],
+  },
+  'taxon-analysis-count': {
+    header: ['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Analysis', 'Count'],
+    rows: [['ZL1', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 'net', 4], ['ZL1', '2023-06-14', 55.5, 2.5, 'Oithona similis', 'net', 9]],
+  },
+  'taxon-quantity-unit-value': {
+    header: ['Taxon', 'Quantity', 'Unit', 'Value'],
+    rows: [['Calanus finmarchicus', 4, 'ind', 4], ['Oithona similis', 9, 'ind', 9]],
+  },
+  'scientificName-parameter-unit-value': {
+    header: ['scientificName', 'parameter', 'unit', 'value'],
+    rows: [['Calanus finmarchicus', 'abundance', 'ind/m3', 4], ['Oithona similis', 'abundance', 'ind/m3', 9]],
+  },
+  'taxon-with-parameter-result': {
+    header: ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count', 'Parameter', 'Result'],
+    rows: [['ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 4, 'temperature', 8.1], ['ZL1', 'ZL1-a', '2023-06-14', 55.5, 2.5, 'Oithona similis', 9, 'temperature', 8.1]],
+  },
+  'wide-analysis-ctd': {
+    header: ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Analysis', 'Temperature'],
+    rows: [['ZL1', '2023-06-14', 55.5, 2.5, 5, 'CTD', 8.1], ['ZL2', '2023-06-15', 55.6, 2.6, 5, 'CTD', 8.4]],
+  },
+};
+const sha256 = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
+const wormsStub = () => {
+  const rec = (name: string): WormsRecord[] => (RECORDED[name] as unknown[]).map((r) => readWormsRecord(r) as WormsRecord);
+  return lookupOf({ 'Calanus finmarchicus': rec('Calanus finmarchicus'), 'Oithona similis': [readWormsRecord(wormsRecord({ AphiaID: 106656, scientificname: 'Oithona similis' })) as WormsRecord] }, {});
+};
+async function archiveCases(): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  for (const [name, s] of Object.entries(BIO_SHEETS)) {
+    for (const worms of [false, true]) {
+      const r = await exportSheet(s.header, s.rows.map((x) => [...x]), { quantity: { kind: 'count' }, ...(worms ? { worms: wormsStub() } : {}) });
+      out[`${name}${worms ? '+worms' : ''}`] = {
+        blocking: judge(r.findings).blocking.map((f) => f.ruleId),
+        findings: r.findings,
+        files: Object.fromEntries(r.files.map((f) => [f.name, new TextDecoder().decode(f.data)])),
+        zip: sha256(r.zip),
+      };
+    }
+  }
+  return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+}
+/** What the worker makes of each dropped file: its sheets, mappings and suggestions, as the page gets them. */
+function workerCases(): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, s] of Object.entries(BIO_SHEETS)) {
+    const h = createConvertHandler();
+    const res = h.handle({ type: 'parse', files: [{ name: `${name}.csv`, bytes: new TextEncoder().encode(csvOf(s.header, s.rows)), source: 'dropped' }] }) as ConvertParseResult;
+    const f = res.files[0];
+    out[name] = { sheets: f.sheets, mappings: f.mappings, shapes: f.suggestedShapes, profiles: f.suggestedProfiles, hasPivots: 'pivots' in f };
+  }
+  return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+}
+
 describe('long biology sheets keep the output of origin/main', () => {
   const now = bioCases();
-  if (process.env.LB_WRITE) writeFileSync(process.env.LB_WRITE, JSON.stringify(now, null, 1));
   it('no CONV-LONG-UNSUPPORTED on any of them', () => {
     for (const [k, v] of Object.entries(now)) expect(JSON.stringify(v), k).not.toContain('CONV-LONG-UNSUPPORTED');
   });
-  it('identical to the snapshot generated at origin/main', () => {
-    if (process.env.LB_WRITE) return;
-    expect(now).toEqual(JSON.parse(readFileSync(SNAP, 'utf8')));
+  it('identical to the snapshot generated at origin/main: the conversions, the archives (WoRMS off and on) and what the worker reads of each file', async () => {
+    const snapshot = { ...now, archives: await archiveCases(), worker: workerCases() };
+    if (process.env.LB_WRITE) {
+      writeFileSync(process.env.LB_WRITE, JSON.stringify(snapshot, null, 1));
+      return;
+    }
+    expect(snapshot).toEqual(JSON.parse(readFileSync(SNAP, 'utf8')));
+  });
+  it('the Polish and the English bio sheets really produce an archive (they are not blocked), so that the snapshot compares something', async () => {
+    const a = (await archiveCases()) as Record<string, { blocking: string[]; files: Record<string, string> }>;
+    for (const k of ['english', 'polish', 'english+worms', 'polish+worms']) {
+      expect(a[k].blocking, k).toEqual([]);
+      expect(Object.keys(a[k].files), k).toContain('occurrence.txt');
+    }
   });
   it('the taxon + count sheet really is long', () => {
     const s = sheetInput(fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count'], [['ZL1', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 4]]));
