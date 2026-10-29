@@ -25,6 +25,10 @@ import type { EventRec, SourceRef, TreeSummary } from './model';
  * no cast level between a station and its levels: the manual's hierarchy example has three levels (cruise, station, sample), and a cast level would need a cast column the
  * sheet mapping does not have; repeated casts are told apart by the level's own code.
  *
+ * Replicates (a replicate column, eventType "replicate"): a sheet row belongs to a REPLICATE of a sample (a frame, a quadrat, a replicate core). The sample is an event of its own, between the
+ * station and its replicates (cruise -> station -> sample -> replicate); it has no row of its own, so it is derived from its replicates exactly as a station is. The replicate is the leaf
+ * that carries the data (its own date, position, depth, species records and measurements). eventIDs: the sample keeps its usual ID, a replicate is `<sample eventID>:<replicate value>`.
+ *
  * "Flatten a level": the station level is dropped and each sample's `locality` holds the station code; the cruise level is dropped and the
  * cruise code goes to the dataset text (`cruiseText`). The children are re-parented to the level above. eventIDs never change with
  * flattening (a flattened station still prefixes a sample's ID when the toggle is on), so a flattened and an unflattened archive agree on IDs.
@@ -59,8 +63,13 @@ export interface SampleSite {
   sampleSizeValue?: string;
   sampleSizeUnit?: string;
   source?: SourceRef;
-  /** What the event is: a sample of a biology sheet (default) or a level of a profile file. */
-  eventType?: 'sample' | 'profile level';
+  /** What the event is: a sample of a biology sheet (default), a replicate of a sample, or a level of a profile file. */
+  eventType?: 'sample' | 'replicate' | 'profile level';
+  /**
+   * A replicate (a frame, a quadrat, a replicate core): the sample it belongs to. The sample is an event of its own, made here from its replicates: its date, position and depth are DERIVED
+   * from them like a station's, and the replicate hangs under it (eventID `<sample eventID>:<replicate>`).
+   */
+  parentSample?: { id: string; code: string };
 }
 
 export interface TreeOptions {
@@ -284,6 +293,33 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
     return n;
   };
 
+  /** Puts a leaf (or a replicate's sample) under its station, or under the cruise when the station is flattened. */
+  const attach = (s: SampleSite, node: Node, rec: EventRec): void => {
+    // the parent chain: cruise -> station -> sample, minus the flattened levels
+    const cruise = s.cruiseCode === undefined ? undefined : cruiseNode(s.cruiseCode);
+    if (cruise && flattenCruise && !cruiseSeen.has(cruise.rec.code)) {
+      cruiseSeen.add(cruise.rec.code);
+      cruiseText.push(cruise.rec.code);
+    }
+    const station = s.stationCode === undefined ? undefined : stationNode(s.cruiseCode, s.stationCode);
+    if (station) {
+      if (cruise && !flattenCruise) station.rec.parentId = cruise.rec.id;
+      if (flattenStation) {
+        rec.locality = station.rec.code;
+        if (cruise && !flattenCruise) {
+          rec.parentId = cruise.rec.id;
+          cruise.children.push(node); // each sample is visited once (a repeated id was skipped above)
+        }
+      } else {
+        rec.parentId = station.rec.id;
+        station.children.push(node);
+      }
+    } else if (cruise && !flattenCruise) {
+      rec.parentId = cruise.rec.id;
+      cruise.children.push(node);
+    }
+  };
+
   for (const s of samples) {
     if (leaves.has(s.id)) continue;
     const rec: EventRec = { id: s.id, eventType: s.eventType ?? 'sample', code: s.code, derived: { date: false, position: false, depth: false } };
@@ -310,30 +346,23 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
       const span = spanOf(s.date);
       if (span) node.span = span;
     }
-    leaves.set(s.id, node);
-
-    // the parent chain: cruise -> station -> sample, minus the flattened levels
-    const cruise = s.cruiseCode === undefined ? undefined : cruiseNode(s.cruiseCode);
-    if (cruise && flattenCruise && !cruiseSeen.has(cruise.rec.code)) {
-      cruiseSeen.add(cruise.rec.code);
-      cruiseText.push(cruise.rec.code);
-    }
-    const station = s.stationCode === undefined ? undefined : stationNode(s.cruiseCode, s.stationCode);
-    if (station) {
-      if (cruise && !flattenCruise) station.rec.parentId = cruise.rec.id;
-      if (flattenStation) {
-        rec.locality = station.rec.code;
-        if (cruise && !flattenCruise) {
-          rec.parentId = cruise.rec.id;
-          cruise.children.push(node); // each sample is visited once (a repeated id was skipped above)
-        }
-      } else {
-        rec.parentId = station.rec.id;
-        station.children.push(node);
+    if (s.parentSample === undefined) {
+      leaves.set(s.id, node);
+      attach(s, node, rec);
+    } else {
+      // a replicate: its sample is made once, from the first replicate that names it, and the replicate hangs under it
+      let parent = leaves.get(s.parentSample.id);
+      if (!parent) {
+        const prec: EventRec = { id: s.parentSample.id, eventType: 'sample', code: s.parentSample.code, derived: { date: false, position: false, depth: false } };
+        if (s.source) prec.source = s.source;
+        parent = { rec: prec, children: [] };
+        leaves.set(s.parentSample.id, parent);
+        attach(s, parent, prec);
       }
-    } else if (cruise && !flattenCruise) {
-      rec.parentId = cruise.rec.id;
-      cruise.children.push(node);
+      rec.parentId = parent.rec.id;
+      if (parent.rec.locality !== undefined) rec.locality = parent.rec.locality;
+      parent.children.push(node);
+      leaves.set(s.id, node);
     }
   }
   // stations hang under their cruise (when the station level stays)
@@ -345,6 +374,8 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
     if ((n.rec.eventType === 'cruise' && flattenCruise) || (n.rec.eventType === 'station' && flattenStation)) continue;
     derive(n);
   }
+  // with a flattened station or cruise, a sample made of replicates hangs under no derived parent: derive it here (its children are the replicates)
+  for (const n of leaves.values()) if (n.children.length > 0 && !n.rec.derived.date && !n.rec.derived.position && !n.rec.derived.depth) derive(n);
 
   const events: EventRec[] = [];
   if (!flattenCruise) for (const n of cruises.values()) events.push(n.rec);
@@ -367,6 +398,7 @@ export function summarizeTree(events: readonly EventRec[], flattened: { station:
     stations: by('station'),
     samples: by('sample'),
     levels: by('profile level'),
+    ...(by('replicate') > 0 ? { replicates: by('replicate') } : {}),
     roots: events.filter((e) => e.parentId === undefined).length,
     flattened,
     derivedDates: events.filter((e) => e.derived.date).length,

@@ -924,6 +924,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.tree.counts', { cruises: view.tree.cruises, stations: view.tree.stations, samples: view.tree.samples })}</p>
                 {view.tree.levels > 0 && <p>{t('convert.tree.levels', { levels: view.tree.levels })}</p>}
+                {(view.tree.replicates ?? 0) > 0 && <p>{t('convert.tree.replicates', { replicates: view.tree.replicates ?? 0 })}</p>}
                 {view.profile.sheets > 0 && (
                   <>
                     <p className="muted">{t('convert.tree.profile', { matched: view.profile.stationsMatched, unmatched: view.profile.stationsUnmatched })}</p>

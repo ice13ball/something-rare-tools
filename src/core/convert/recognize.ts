@@ -62,6 +62,10 @@ function isSummaryHeader(rawName: string): boolean {
 // (German whole headers: "Nr. der Probe", "Probennummer", "Proben-Nr.", "Probe Nr.", "Proben-ID"; /check's columns.ts is not changed for them)
 const SAMPLE_CODE_NAME = /^(sample label|sample code|sample code label|sample name|sample id|sample number|nr der probe|probennummer|proben nr|probe nr|proben id)$/;
 // "Stage" and its translations: the life stage of the record (a long sheet)
+// a column that numbers the replicates or sub-samples of one sample (folded header key, an optional "no / number / id / digits" after it). The whole header must be such a word:
+// "Darwin Core", "core depth" and "grab sample" are not. "core" and "grab" can also be the sample code of a sediment file, so they are proposed with low confidence (the reason is shown).
+const REPLICATE_NAME = /^(frame|quadrat|quadrant|replicate|replicates|replica|rep|repl|subsample|sub sample|powtorzenie|ramka|kwadrat|replikat|wiederholung|teilprobe|unterprobe|replicat|repetition|sous echantillon)(?: (?:no|nr|num|number|numero|numer|n|id|\d+))?$/;
+const REPLICATE_WEAK = /^(core|grab)(?: (?:no|nr|num|number|id|\d+))?$/;
 const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
 
 const DEPTH_WORDS = /^(depth|tiefe|profondeur|glebokosc)(?: (.*))?$/;
@@ -178,6 +182,7 @@ export const OVERLAY_REASONS = {
   'dwc-scientificnameid': 'Darwin Core scientificNameID (written as given)',
   'name-aphiaid': 'a WoRMS AphiaID column of whole numbers: written as the urn:lsid of the taxon',
   'name-stage': 'name says life stage',
+  'name-replicate': 'name says replicate or sub-sample (frame, quadrat, replicate, core): each value is an event under the sample',
   'name-taxon': 'name says taxon or species',
   'name-count': 'name says count',
   'name-abundance': 'name says abundance, density or biomass',
@@ -282,6 +287,8 @@ function nameClaim(key: string, unit: string | undefined): Claim | undefined {
   if (EFFORT_VOLUME.test(key)) return effort('name-effort-volume');
   if (EFFORT_AREA.test(key)) return effort('name-effort-area');
   if (SAMPLE_CODE_NAME.test(key)) return { role: { kind: 'sampleId' }, confidence: 'high', code: 'name-sample-code' };
+  if (REPLICATE_NAME.test(key)) return { role: { kind: 'replicate' }, confidence: 'high', code: 'name-replicate' };
+  if (REPLICATE_WEAK.test(key)) return { role: { kind: 'replicate' }, confidence: 'low', code: 'name-replicate' };
   return undefined;
 }
 

@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Spec } from '../dataset';
-import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
+import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
 import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
@@ -136,6 +136,8 @@ interface Cols {
   quantityType?: Spec;
   lifeStage?: Spec;
   qualifier?: Spec;
+  /** The column that numbers the replicates or sub-samples of one sample: each value is an event under the sample. */
+  replicate?: Spec;
   taxonId?: Spec & { aphia: boolean };
   occurrenceId?: Spec;
   effort?: Spec & { unit?: string };
@@ -174,6 +176,9 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         break;
       case 'qualifier':
         c.qualifier ??= spec;
+        break;
+      case 'replicate':
+        c.replicate ??= spec;
         break;
       case 'occurrenceId':
         c.occurrenceId ??= spec;
@@ -243,6 +248,28 @@ function raggedLines(file: ParsedFile, sheet: string): ReadonlySet<number> {
 }
 
 /** Lines and an example per (sheet, field): the shape of every "these rows" finding. */
+/**
+ * Rows that make the same ID and differ in exactly ONE column that the mapping ignores: that column probably numbers replicates or sub-samples of one sample (a frame, a quadrat), and the
+ * advice is to give it the role "replicate" instead of "change a code". Its header, or undefined when no single ignored column tells ALL the rows apart. A column that is a measurement
+ * (a unit in its header) or a quantity is expected to differ between replicates and does not count; a blank cell does not tell rows apart.
+ */
+function replicateColumn(sheets: readonly ConvertSheetInput[], file: string, sheetName: string, lines: readonly number[]): string | undefined {
+  const sin = sheets.find((s) => s.file.fileName === file && s.sheet === sheetName);
+  const sheet = sin?.file.sheets.find((x) => x.name === sheetName);
+  if (sin === undefined || sheet === undefined || sin.profile !== undefined) return undefined;
+  const rows = sheet.rows.filter((r) => lines.includes(r.line));
+  if (rows.length < 2) return undefined;
+  const found: string[] = [];
+  for (const c of sin.mapping.columns) {
+    if (c.role.kind !== 'ignore' || c.header.trim() === '' || unitFromHeader(c.header).unit !== undefined || isQuantityHeader(c.header)) continue;
+    if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
+    const values = rows.map((r) => (isBlankCell(r.cells[c.index] ?? null) ? undefined : String(r.cells[c.index]).trim()));
+    if (values.some((v) => v === undefined)) continue;
+    if (new Set(values).size === values.length) found.push(c.header.trim());
+  }
+  return found.length === 1 ? found[0] : undefined;
+}
+
 /** The column indexes of the given specs that exist. */
 const indexesOf = (...specs: ({ index: number } | undefined)[]): number[] => specs.flatMap((c) => (c === undefined ? [] : [c.index]));
 
@@ -317,6 +344,7 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   else if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
   for (const v of cols.variables) use(v);
+  use(cols.replicate);
   use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
@@ -1154,6 +1182,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     const tabs = new Lines();
     const noCode = new Lines();
+    const noReplicate = new Lines();
     const texts = new Lines();
     const negatives = new Lines();
     const notInteger = new Lines();
@@ -1236,6 +1265,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         const m = scan(row);
         const code = m.sampleId;
         if (code === undefined || [code, m.station].some((v) => v !== undefined && SUMMARY_LABEL.test(v))) continue;
+        if (cols.replicate && text(row.cells[cols.replicate.index]) === undefined) continue;
         const stationText = m.station;
         const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && cols.quantity !== undefined && !isBlankCell(row.cells[cols.quantity.index] ?? null);
         if (!filled) continue;
@@ -1305,7 +1335,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
 
       const stationId = stationText === undefined ? undefined : stationEventId(cruise, stationText);
-      const eventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code);
+      const sampleEventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code);
+      // a replicate column: the row belongs to a replicate event `<sample eventID>:<value>` under the sample, and everything the row carries hangs on the replicate
+      const replicate = cols.replicate ? text(row.cells[cols.replicate.index]) : undefined;
+      if (cols.replicate && replicate === undefined) {
+        noReplicate.add(fileName, sheet.name, cols.replicate.header, row.line);
+        continue;
+      }
+      if (cols.replicate) checkText(cols.replicate.header, row.line, replicate);
+      const eventId = replicate === undefined ? sampleEventId : `${sampleEventId}:${replicate}`;
       const depth = depthOf(row);
       const sf = seafloorOf.read(row);
       if (sf !== undefined && depth.min === undefined && depth.max === undefined) noSiteDepth.add(fileName, sheet.name, cols.seafloor?.header ?? '', row.line);
@@ -1337,7 +1375,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (acc.site.distanceText !== sf?.text) differs('depth below seafloor');
         if (acc.effortText !== effort) differs('sample size');
       } else {
-        const site: SampleSite = { id: eventId, code, source };
+        const site: SampleSite = { id: eventId, code: replicate ?? code, source };
+        if (replicate !== undefined) {
+          site.eventType = 'replicate';
+          site.parentSample = { id: sampleEventId, code };
+        }
         if (stationText !== undefined) site.stationCode = stationText;
         if (cruise !== undefined) site.cruiseCode = cruise;
         if (date) site.date = date;
@@ -1622,6 +1664,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (visitGroups.length > 0) {
       findings.push(makeConvertFinding('CONV-ID-REVISIT', { ...base, value: visitGroups[0].id, lines: visitGroups.flatMap((g) => g.lines).sort((a, b) => a - b), params: { count: visitGroups.length, by: VISIT_PARTS.filter((p) => visitParts.has(p)).join(', ') } }));
     }
+    for (const e of noReplicate.entries()) findings.push(makeConvertFinding('CONV-REPLICATE-MISSING', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (noCode.size > 0) {
       for (const e of noCode.entries()) findings.push(makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));
     }
@@ -1782,13 +1825,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   }
   for (const [id, places] of dups) {
     for (const w of places.values()) {
+      const column = replicateColumn(input.sheets, w.file, w.sheet, [...w.lines]);
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
           file: w.file,
           sheet: w.sheet,
           value: id,
           lines: [...w.lines],
-          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.' },
+          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(column === undefined ? {} : { column }) },
         }),
       );
     }
@@ -1805,13 +1849,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
     }
     for (const w of byWhere.values()) {
+      const column = replicateColumn(input.sheets, w.file, w.sheet, w.lines);
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
           file: w.file,
           sheet: w.sheet,
           value: w.ids[0],
           lines: w.lines,
-          params: { kind: 'occurrence', count: w.ids.length, hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.' },
+          params: { kind: 'occurrence', count: w.ids.length, hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.', ...(column === undefined ? {} : { column }) },
         }),
       );
     }

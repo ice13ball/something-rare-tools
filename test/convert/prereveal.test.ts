@@ -136,8 +136,8 @@ describe('item 2: the NAME part of a header decides between a species and a meas
 describe('item 7: sample descriptors are never a taxon', () => {
   it.each(['Replicate', 'Rep', 'Cast', 'Bottle', 'Niskin', 'Run', 'Haul', 'Tow', 'Subsample', 'Core', 'Section', 'Slice', 'Frame', 'Replicate no', 'Bottle no.'])('%s', (h) => {
     const p = proposalOf(h, [1, 2, 1]);
-    // a sample code where the shared rules already read it as one (bottle, core), otherwise ignored with its reason; never a taxon, never a variable
-    expect(['ignore', 'sampleId']).toContain(p.role.kind);
+    // a sample code where the shared rules already read it as one (bottle, core), a replicate / sub-sample column where the name says so (replicate, rep, subsample, core, frame), otherwise ignored with its reason; never a taxon, never a variable
+    expect(['ignore', 'sampleId', 'replicate']).toContain(p.role.kind);
     if (p.role.kind === 'ignore') expect(p.reasonCode).toBe('sample-descriptor');
   });
   it('the shared proposer keeps a station or sample number that it already recognises', () => {
