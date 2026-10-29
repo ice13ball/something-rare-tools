@@ -1,10 +1,10 @@
 # Abyssal Claims Tools
 
-A browser-first checker for marine datasets, served at https://tools.something-rare.com.
-Drop CSV/xlsx files (or point at a public record); the tool proposes a column mapping,
-runs declarative, cited rules (licence, metadata versus data, rows, cross-file, chemistry),
-shows a two-layer report and a map, and exports a clean CSV, GeoJSON and metadata drafts.
-Checks run in your browser; dropped files never leave it.
+Browser-first tools for marine datasets, served at https://tools.something-rare.com: a data check,
+a licence check, a collection review and a spreadsheet to Darwin Core Archive converter. Drop CSV/Excel
+files (or point at a public record); the tools propose a column mapping, run declarative rules that cite
+the source of every threshold, show a plain-language report and a map, and export a clean CSV, GeoJSON,
+metadata drafts or a Darwin Core Archive for OBIS. Files you drop are read in your browser and never leave it.
 
 ## What is in here
 
@@ -213,7 +213,8 @@ Remove the image when you are done: `docker rmi abyssal-tools`. The container ru
 
 ```sh
 npm run typecheck    # tsc for the app and for the server
-npm test             # vitest run: the whole suite
+npm test             # vitest run: the whole suite (several minutes, all CPU cores)
+npx vitest run --maxWorkers=2   # the whole suite on two cores: slower, but the computer stays cool
 npx vitest run test/server   # one folder or file only
 npm run build        # vite build, then the server build into dist-server/
 npm run test:perf    # the performance tests
@@ -268,6 +269,16 @@ uses it, so the scripts themselves run unchanged on Windows.
   Linux) and run the command again.
 
 The public site is deployed by the maintainers with `scripts/deploy.sh`; you do not need it to run the tools yourself.
+
+## How to cite
+
+Two Zenodo records are being prepared: an article describing the tools and the source code with its own DOI.
+Until they are published, cite the tools by their URL, https://tools.something-rare.com.
+
+- Article: DOI to be added on publication
+- Source code: DOI to be added on publication
+
+[`CITATION.cff`](CITATION.cff) will carry the same identifiers.
 
 ## Licence
 
