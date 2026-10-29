@@ -171,7 +171,7 @@ export function pairHemisphere(cell: RawCell, hemi: RawCell, axis: 'lat' | 'lon'
   if (cell === null) return { cell };
   const text = normaliseMarks(cell);
   if (/^[-−–]/.test(text)) return { cell, issue: 'conflict' };
-  const own = /^([NSEW])\s*\d|\d\s*([NSEW])$/i.exec(text);
+  const own = /^([NSEW])[\s°]*\d|[\d°'"]\s*([NSEW])$/i.exec(text);
   if (own) {
     const ownLetter = (own[1] ?? own[2]).toUpperCase();
     return ownLetter === letter ? { cell } : { cell, issue: 'conflict' };

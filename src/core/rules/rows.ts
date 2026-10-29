@@ -106,6 +106,7 @@ const SHIP_DECLARED = {
  *   ROW-DM-COORDS         (none)      field = column, value = example text (once per column)
  *   ROW-HEMISPHERE-CONFLICT hemisphere  field = coordinate column, hemisphere = its hemisphere column, value = example as written, lines = rows
  *   ROW-HEMISPHERE-MISSING  hemisphere  the same, for a filled value with an empty or unknown letter
+ *   ROW-HEMISPHERE-UNPAIRED hemisphere  field = coordinate column, hemisphere = a hemisphere column whose start / end word disagrees with it (not applied; once per column)
  *   ROW-ZERO-COORD        (none)    lines = rows with latitude and longitude both 0
  *   ROW-NO-COORD          count       lines = rows with a blank latitude or longitude cell, count = how many
  *   ROW-DEPTH-MIN-MAX     (none)      value = "min > max" of the first row
@@ -479,6 +480,19 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Aux lignes {lines}, la valeur de la colonne « {field} » (par ex. « {value} ») ne concorde pas avec la lettre d'hémisphère de la colonne « {hemisphere} » : elle a un moins ou une lettre propre, ou la lettre est de l'autre axe. Elle est gardée telle quelle, sans second changement de signe ; corrigez ces lignes.`,
     },
     technical: `{file}:{lines} field {field} value '{value}': disagrees with the hemisphere letter in {hemisphere}; kept as written, not negated again.`,
+  },
+  {
+    id: 'ROW-HEMISPHERE-UNPAIRED',
+    category: 'B',
+    severity: 'warning',
+    params: ['hemisphere'],
+    plain: {
+      pl: `Kolumna „{hemisphere}” jest ustawiona jako litera półkuli, ale należy do innego położenia niż „{field}” (słowa początek/koniec się nie zgadzają), więc nie została zastosowana. Sprawdź, którą kolumnę wybrano jako współrzędną.`,
+      en: `Column "{hemisphere}" is set as a hemisphere letter, but it belongs to a different position than "{field}" (their start and end words disagree), so it was not applied. Check which column is mapped as the coordinate.`,
+      de: `Die Spalte „{hemisphere}“ ist als Hemisphärenbuchstabe eingestellt, gehört aber zu einer anderen Position als „{field}“ (Anfangs- und Endwörter passen nicht), daher wurde sie nicht angewendet. Prüfen Sie, welche Spalte als Koordinate zugeordnet ist.`,
+      fr: `La colonne « {hemisphere} » est définie comme lettre d'hémisphère, mais elle appartient à une autre position que « {field} » (les mots début et fin ne concordent pas) ; elle n'a donc pas été appliquée. Vérifiez quelle colonne est associée à la coordonnée.`,
+    },
+    technical: `{file} field {field}: hemisphere column {hemisphere} belongs to another start/end position; not applied.`,
   },
   {
     id: 'ROW-HEMISPHERE-MISSING',

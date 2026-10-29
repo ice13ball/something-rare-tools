@@ -20,6 +20,7 @@ import type {
 import { checkRawTable } from './checks/dwc';
 import { makeFinding } from './rules/registry';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
+import { hemisphereBoundAgrees } from './recognize/headerWords';
 import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
@@ -31,7 +32,7 @@ import { pushAll } from './util/arrays';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' |'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -113,7 +114,7 @@ export function specsOf(mapping: SheetMapping): Specs {
         break;
       case 'date':
       case 'datetime':
-        s.when ??={ ...spec, kind: r.kind };
+        s.when ??= { ...spec, kind: r.kind };
         break;
       case 'time':
         s.time ??= spec;
@@ -263,6 +264,18 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
   const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
   const dwcDepth = dwcDepthCols(sheet);
 
+  // a hemisphere column signs its coordinate only while their start / end words agree with the CURRENT mapping (a user who moved the latitude from the
+  // begin to the end column must not leave 'Beg Lat Dir' signing it); otherwise it is not applied, and one finding names the column
+  const keyOf = (s: Spec): string => headerKey(unitFromHeader(s.header).name);
+  const hemisphereFor = (coord: Spec | undefined, hemi: Spec | undefined): Spec | undefined => {
+    if (!coord || !hemi) return undefined;
+    if (hemisphereBoundAgrees(keyOf(hemi), keyOf(coord))) return hemi;
+    c.add('ROW-HEMISPHERE-UNPAIRED', sheet.name, coord.header, 0, undefined, false, { hemisphere: hemi.header });
+    return undefined;
+  };
+  const latHemi = hemisphereFor(specs.lat, specs.latHemi);
+  const lonHemi = hemisphereFor(specs.lon, specs.lonHemi);
+
   const coordinate = (row: RawRow, spec: Spec, axis: 'lat' | 'lon', hemi?: Spec): { value: number; decimals: number } | undefined => {
     const written = row.cells[spec.index] ?? null;
     if (isBlankCell(written)) return undefined;
@@ -297,14 +310,14 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
       if ((latBlank || lonBlank) && !(latBlank && !lonBlank && na(specs.lon)) && !(lonBlank && !latBlank && na(specs.lat)) && holdsRecord(row, [specs.lat.index, specs.lon.index])) m.posBlank = latBlank && lonBlank ? 'both' : latBlank ? 'lat' : 'lon';
     }
     if (specs.lat) {
-      const r = coordinate(row, specs.lat, 'lat', specs.latHemi);
+      const r = coordinate(row, specs.lat, 'lat', latHemi);
       if (r) {
         m.lat = r.value;
         m.latDecimals = r.decimals;
       }
     }
     if (specs.lon) {
-      const r = coordinate(row, specs.lon, 'lon', specs.lonHemi);
+      const r = coordinate(row, specs.lon, 'lon', lonHemi);
       if (r) {
         m.lon = r.value;
         m.lonDecimals = r.decimals;
