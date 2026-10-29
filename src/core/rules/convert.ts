@@ -47,6 +47,7 @@ import type { RuleSpec } from './spec';
  *   CONV-NO-TAXON              shape            shape = wide | long; no taxon column is marked (a long sheet with a taxon column and no quantity column is CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY)
  *   CONV-TAXON-NO-QUANTITY     (none)           a long sheet with a taxon column, other numbers (measured variables) and no quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: a presence-only species list, not written yet (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
+ *   CONV-ENV-ONLY-SHEET        (none)           a sheet with measured variables and no taxon column, no quantity column and no unconfirmed taxon candidate: environmental data only (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
  *   CONV-LICENCE-UNSET         (none)           no licence chosen
@@ -632,6 +633,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La colonne de taxon est marquée dans cette feuille, mais il n'y a pas de colonne de quantité. Marquez la colonne d'effectifs, de densité ou de biomasse, ou ajoutez-en une ; le convertisseur n'écrit pas encore de listes de présence seule.`,
     },
     technical: `{file}, {sheet}: a long sheet has a taxon column and other numeric or measured-variable columns, but no quantity column. Presence-only lists are not written yet; the sheet is not converted. This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet. A sheet with a taxon column and no numbers at all is CONV-SPECIES-LIST-NO-COUNTS.`,
+  },
+  {
+    id: 'CONV-ENV-ONLY-SHEET',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `Ten arkusz zawiera tylko pomiary środowiskowe, a OBIS potrzebuje rekordów gatunków. Dodaj arkusz z gatunkami (i liczebnością), a ten pójdzie razem z nim jako dane środowiskowe (eMoF), albo sprawdź ten plik w /check pod kątem innych repozytoriów.`,
+      en: `This sheet holds environmental measurements only, and OBIS needs species records. Add a sheet with species (and counts) and this one can go with it as environmental data (eMoF), or check this file with /check for other repositories.`,
+      de: `Dieses Blatt enthält nur Umweltmessungen, OBIS braucht aber Artnachweise. Fügen Sie ein Blatt mit Arten (und Anzahlen) hinzu, dann kann dieses als Umweltdaten (eMoF) mitgehen, oder prüfen Sie diese Datei mit /check für andere Repositorien.`,
+      fr: `Cette feuille ne contient que des mesures environnementales, alors qu'OBIS exige des enregistrements d'espèces. Ajoutez une feuille d'espèces (et d'effectifs) : celle-ci l'accompagnera comme données environnementales (eMoF), ou vérifiez ce fichier avec /check pour d'autres dépôts.`,
+    },
+    technical: `{file}, {sheet}: the sheet has measured-variable columns and no taxon column, no quantity column and no unconfirmed taxon candidate (environmental data only). This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet; a sheet with a taxon column is CONV-SPECIES-LIST-NO-COUNTS, CONV-TAXON-NO-QUANTITY or normal, and a sheet marked as a profile file keeps CONV-NO-OCCURRENCES.`,
   },
   {
     id: 'CONV-SUMMARY-ROW-SKIPPED',

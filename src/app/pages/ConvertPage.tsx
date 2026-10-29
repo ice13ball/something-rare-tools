@@ -1082,6 +1082,12 @@ function FindingItems({ findings }: { findings: Finding[] }): React.ReactElement
         <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
           {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
           {plainOf(f, lang)}
+          {f.ruleId === 'CONV-ENV-ONLY-SHEET' && (
+            <>
+              {' '}
+              <a href="/check">{t('convert.finding.envOnly.checkLink')}</a>
+            </>
+          )}
         </li>
       ))}
     </ul>
