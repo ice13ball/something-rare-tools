@@ -40,6 +40,28 @@ const SHIP_IMPOSSIBLE_HOP = {
   },
 } as const;
 
+/** The three speed rules: reversing the sign of one coordinate of the offending row alone makes the hops plausible (row and the value before→after). */
+const SHIP_SIGN_LON = {
+  param: 'signLon',
+  plain: {
+    pl: `Prawdopodobnie brak lub nadmiar minusa przy długości w wierszu {signLon}.`,
+    en: `Probably a missing or extra minus sign in the longitude of row {signLon}.`,
+    de: `Wahrscheinlich fehlt beim Längengrad in Zeile {signLon} ein Minuszeichen oder es steht fälschlich da.`,
+    fr: `Probablement un signe moins manquant ou en trop dans la longitude de la ligne {signLon}.`,
+  },
+} as const;
+
+/** The three speed rules: reversing the sign of one coordinate of the offending row alone makes the hops plausible (row and the value before→after). */
+const SHIP_SIGN_LAT = {
+  param: 'signLat',
+  plain: {
+    pl: `Prawdopodobnie brak lub nadmiar minusa przy szerokości w wierszu {signLat}.`,
+    en: `Probably a missing or extra minus sign in the latitude of row {signLat}.`,
+    de: `Wahrscheinlich fehlt beim Breitengrad in Zeile {signLat} ein Minuszeichen oder es steht fälschlich da.`,
+    fr: `Probablement un signe moins manquant ou en trop dans la latitude de la ligne {signLat}.`,
+  },
+} as const;
+
 /** Sentence added when the group came from the tick (not from a cruise column): the likely cause of a false alarm is mixed ships. */
 /** All three rules: a case names a place with more than one row, so its rows are listed event by event in square brackets. */
 const SHIP_PLACES = {
@@ -95,6 +117,7 @@ const SHIP_DECLARED = {
  *                         (line numbers; km = distance, h = LONGEST possible time between the two events, kn = the speed at least); declared (optional) = 'yes' when
  *                         the single-cruise tick, not a cruise column, formed the group; mixed (optional) = 'yes' when a large share of the places is named
  *   ROW-SHIP-SPEED-UNUSUAL  the same, at the lower limit (info)
+ *   (all three)           signLon, signLat  optional: "row (x→−x)" of the cases where reversing that coordinate's sign alone makes the hops plausible
  *   ROW-SHIP-SPEED-PAIR   count, cases   count = pairs; cases = "first→second: km, h, ≥kn"; declared as above
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
@@ -329,7 +352,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Um hierher und weiter zu kommen, müsste das Schiff schneller als {threshold.speed.extreme} Knoten fahren, obwohl die Ereignisse davor und danach zusammenpassen: {cases} (Zeilen vorher→dieses→nächstes; km; h = längstmöglicher Abstand). Position oder Datum bzw. Uhrzeit eines davon ist falsch.`,
       fr: `Numéros de ligne : {lines}. Pour arriver ici et repartir, le navire devrait filer à plus de {threshold.speed.extreme} nœuds, alors que les événements d'avant et d'après concordent : {cases} (lignes précédent→celui-ci→suivant ; km ; h = écart maximal possible). La position, la date ou l'heure de l'un d'eux est fausse.`,
     },
-    plainIf: [SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
+    plainIf: [SHIP_SIGN_LON, SHIP_SIGN_LAT, SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} event(s) whose implied speed from the previous event and to the next event both exceed {threshold.speed.extreme} knots while previous-to-next does not (Met Office marine-qc extreme speed limit, applied on both sides; MEDATLAS 4.4.4, GTSPP Test 1.5 and WOD18 name position or date/time as the possible error). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow (end of the previous event to start of the next): {cases}.`,
   },
   {
@@ -345,7 +368,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Um hierher und weiter zu kommen, müsste das Schiff schneller als {threshold.speed.unusual} Knoten fahren, ungewöhnlich für ein Forschungsschiff, obwohl davor und danach alles passt: {cases} (Zeilen vorher→dieses→nächstes; km; h = längstmöglicher Abstand).`,
       fr: `Numéros de ligne : {lines}. Pour arriver ici et repartir, le navire devrait filer à plus de {threshold.speed.unusual} nœuds, inhabituel pour un navire de recherche, alors que les voisins concordent : {cases} (lignes précédent→celui-ci→suivant ; km ; h = écart maximal possible).`,
     },
-    plainIf: [SHIP_MAY_BE_REAL, SHIP_IMPOSSIBLE_HOP, SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
+    plainIf: [SHIP_MAY_BE_REAL, SHIP_IMPOSSIBLE_HOP, SHIP_SIGN_LON, SHIP_SIGN_LAT, SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} event(s) whose implied speed from the previous event and to the next event both exceed {threshold.speed.unusual} knots (MEDATLAS 4.4.4 default maximum ship velocity) while previous-to-next does not, and which ROW-SHIP-SPEED does not already report. Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: {cases}.`,
   },
   {
@@ -361,7 +384,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Zwischen diesen beiden Punkten der Fahrt müsste das Schiff schneller als {threshold.speed.extreme} Knoten fahren: {cases} (Zeilen erstes→zweites; km; h = längstmöglicher Abstand). Position oder Zeit an einem der beiden ist falsch, an welchem, ist unklar. Vertauschte Tage und Monate wirken genauso.`,
       fr: `Numéros de ligne : {lines}. Entre ces deux points du trajet, le navire devrait filer à plus de {threshold.speed.extreme} nœuds : {cases} (lignes premier→second ; km ; h = écart maximal possible). La position ou l'heure de l'un des deux est fausse, sans qu'on sache lequel. Un jour et un mois inversés ont le même effet.`,
     },
-    plainIf: [SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
+    plainIf: [SHIP_SIGN_LON, SHIP_SIGN_LAT, SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} pair(s) of consecutive events whose implied speed exceeds {threshold.speed.extreme} knots (Met Office marine-qc extreme speed limit) and which are not part of a two-sided finding (first or last event, or two bad events in a row). Position or date/time of either event may be wrong (WOD18 speed check; MEDATLAS 4.4.4). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: {cases}.`,
   },
   {

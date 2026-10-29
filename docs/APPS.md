@@ -481,7 +481,15 @@ sources):
   hops to its neighbours exceed the limit while previous-to-next does not. A single impossible hop
   (at the start or end of a track, or between two bad events in a row) cannot say which of its two
   events is wrong: it is the note `ROW-SHIP-SPEED-PAIR`, which uses only the extreme limit and is not
-  raised for an event that already has a two-sided finding. If findings blame more
+  raised for an event that already has a two-sided finding. A sign hint (params `signLon` /
+  `signLat`, a sentence only; which findings fire and their severities do not change) is added when
+  reversing the sign of ONE coordinate of the offending event alone makes both hops plausible under
+  the limit the rule used (a pair: its one hop, falling by `SIGN_FLIP_RATIO`, the ratio of the
+  station check in `checks/rows.ts`). It needs a move of at least `SIGN_FLIP_MIN_KM` (near 0° a sign
+  changes little), is never given for a longitude within 10° of 180° (the antimeridian), and exactly
+  one axis of one event may explain it: a flip that also needs another row changed, both axes, or
+  neither gives no hint. For a pair the two events are symmetric (flipping either fits), so a pair
+  practically never gets one. If findings blame more
   than `MIXED_SHARE` (a third) of a group's places, and at least `MIXED_MIN` (8), the finding says
   the likely cause is the premise (several ships) rather than the data. Groups of fewer than
   `MIN_EVENTS` (3) events are not judged. Limits: [ROW-SHIP-SPEED](rules.md#ROW-SHIP-SPEED),

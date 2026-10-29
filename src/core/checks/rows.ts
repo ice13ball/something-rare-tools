@@ -157,9 +157,9 @@ export function km(aLat: number, aLon: number, bLat: number, bLon: number): numb
  * written, 1.2 km flipped). The minimum keeps positions on both sides of 0 or of 180 degrees, which a flip barely moves,
  * out of it.
  */
-const SIGN_FLIP_KM = 50;
-const SIGN_FLIP_MIN_KM = 100;
-const SIGN_FLIP_RATIO = 10;
+export const SIGN_FLIP_KM = 50;
+export const SIGN_FLIP_MIN_KM = 100;
+export const SIGN_FLIP_RATIO = 10;
 function flippedAxis(p: Pos, q: Pos): 'lat' | 'lon' | undefined {
   if (p.lon * q.lon >= 0 && p.lat * q.lat >= 0) return undefined; // no opposite sign: skip the distance (pairs are many)
   const written = km(p.lat, p.lon, q.lat, q.lon);
