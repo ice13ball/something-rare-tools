@@ -1228,7 +1228,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-ZERO-SKIPPED of a presence-only list: the cells are marks (0, -, absent), not zeros
   'CONV-ZERO-SKIPPED:presence': {
     plain: {
-      pl: `Pominięto {count} {+count:komórkę|komórki|komórek} oznaczone jako brak (0, -, absent), bo nie zaznaczono, że lista gatunków jest pełna. Brak zapisuje się tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
+      pl: `Pominięto {count} {+count:komórkę oznaczoną|komórki oznaczone|komórek oznaczonych} jako brak (0, -, absent), bo nie zaznaczono, że lista gatunków jest pełna. Brak zapisuje się tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
       en: `{count} {+count:cell marked|cells marked} as absent (0, -, absent) {+count:was|were} left out, because the species list was not declared complete. An absence is written only when every species of the list was looked for in the sample.`,
       de: `{count} {+count:Zelle|Zellen} mit der Markierung „fehlt“ (0, -, absent) {+count:wurde|wurden} ausgelassen, da die Artenliste nicht als vollständig angegeben wurde. Eine Abwesenheit wird nur geschrieben, wenn in der Probe nach allen Arten der Liste gesucht wurde.`,
       fr: `{count} {+count:cellule marquée|cellules marquées} comme absente (0, -, absent) {+count:a été ignorée|ont été ignorées}, car la liste d'espèces n'a pas été déclarée complète. Une absence n'est écrite que si toutes les espèces de la liste ont été recherchées dans l'échantillon.`,

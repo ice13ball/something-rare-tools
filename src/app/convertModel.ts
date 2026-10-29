@@ -295,11 +295,13 @@ export function transposedSettingsOf(parsed: ConvertParseResult, choices: Record
 }
 
 /** The names of the sheets in use that are ticked as presence-only species lists: what the companion file keeps (nothing but names). */
-export function presenceSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): string[] {
+export function presenceSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, mappings: Record<string, SheetMapping[]> = {}): string[] {
   const out: string[] = [];
   for (const f of parsed.files) for (const sh of f.sheets) {
     const c = choices[sheetKey(f.fileId, sh.name)];
-    if (c?.use === true && c.presenceOnly && !c.profile && !out.includes(sh.name)) out.push(sh.name);
+    // a sheet with a quantity column does not show the tick (and does not send it): it is not kept either
+    const hidden = (mappings[f.fileId] ?? f.mappings).find((m) => m.sheet === sh.name)?.columns.some((col) => col.role.kind === 'quantity') === true;
+    if (c?.use === true && c.presenceOnly && !c.profile && !hidden && !out.includes(sh.name)) out.push(sh.name);
   }
   return out;
 }

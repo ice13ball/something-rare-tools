@@ -216,11 +216,11 @@ describe('statistics rows at the foot of a sheet', () => {
     expect(find(r2.findings, 'CONV-SUMMARY-ROW-KEPT')[0]).toMatchObject({ value: 'SE' });
   });
 
-  it('two label rows in a row are a block: n and SE under a Mean are skipped', () => {
-    const f = fileOf(['Sample', 'Calanus finmarchicus', 'Oithona similis'], [['a', 1, 2], ['b', 3, 4], ['n', 2, 2], ['SE', 1, 1]]);
+  it('label rows in a row that hold an unambiguous one are a block: n and SE under a Mean are skipped', () => {
+    const f = fileOf(['Sample', 'Calanus finmarchicus', 'Oithona similis'], [['a', 1, 2], ['b', 3, 4], ['Mean', 2, 2], ['n', 2, 2], ['SE', 1, 1]]);
     const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] });
     expect(sampleIds(r)).toEqual(['a', 'b']);
-    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5] });
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5, 6] });
   });
 
   it('a statistic in the sample-code column under a real station ("St1 | Mean") is skipped, a subtotal in the middle of the sheet too', () => {
@@ -233,6 +233,39 @@ describe('statistics rows at the foot of a sheet', () => {
     const r2 = convert({ sheets: [sheetInput(g, { quantity: { kind: 'count' } })] });
     expect(sampleIds(r2)).toEqual(['a', 'n', 'c']);
     expect(find(r2.findings, 'CONV-SUMMARY-ROW-KEPT')).toHaveLength(1);
+  });
+
+  it('a block of short ambiguous codes only is no statistics block: every row stays and is asked about', () => {
+    const H = ['Station', 'Sample', 'Calanus finmarchicus', 'Oithona similis'];
+    const cases: [string, Cell[][]][] = [
+      ['N and S per station', [['St1', 'N', 1, 2], ['St2', 'N', 3, 4], ['St1', 'S', 5, 6], ['St2', 'S', 7, 8]]],
+      ['N and SE per station', [['St1', 'N', 1, 2], ['St1', 'SE', 3, 4], ['St2', 'N', 5, 6], ['St2', 'SE', 7, 8]]],
+      ['Min and Max', [['St1', 'Min', 1, 2], ['St1', 'Max', 3, 4]]],
+    ];
+    for (const [name, rows] of cases) {
+      const r = convert({ sheets: [sheetInput(fileOf(H, rows), { quantity: { kind: 'count' } })] });
+      expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED'), name).toEqual([]);
+      expect(sampleIds(r).length, name).toBeGreaterThan(0);
+      expect(find(r.findings, 'CONV-SUMMARY-ROW-KEPT').length, name).toBeGreaterThan(0);
+    }
+  });
+
+  it('a Mean, SD, n foot is still skipped, and an unambiguous statistic with a copied-down date is asked about or skipped in a block', () => {
+    const f = fileOf(['Sample', 'Calanus finmarchicus', 'Oithona similis'], [['a', 1, 2], ['b', 3, 4], ['Mean', 2, 3], ['SD', 1, 1], ['n', 2, 2]]);
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] });
+    expect(sampleIds(r)).toEqual(['a', 'b']);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5, 6] });
+    const H = ['Station', 'Sample', 'Date', 'Calanus finmarchicus'];
+    const one = convert({ sheets: [sheetInput(fileOf(H, [['St1', 'a', '2020-01-01', 1], ['St1', 'Mean', '2020-01-01', 2]]), { quantity: { kind: 'count' } })] });
+    expect(sampleIds(one)).toEqual(['a', 'Mean']);
+    expect(find(one.findings, 'CONV-SUMMARY-ROW-KEPT')[0]).toMatchObject({ lines: [3], value: 'Mean' });
+    const two = convert({ sheets: [sheetInput(fileOf(H, [['St1', 'a', '2020-01-01', 1], ['St1', 'Mean', '2020-01-01', 2], ['St1', 'SD', '2020-01-01', 1]]), { quantity: { kind: 'count' } })] });
+    expect(sampleIds(two)).toEqual(['a']);
+    expect(find(two.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [3, 4] });
+    // a short code with a date is a station
+    const code = convert({ sheets: [sheetInput(fileOf(H, [['St1', 'a', '2020-01-01', 1], ['St1', 'N', '2020-01-01', 2]]), { quantity: { kind: 'count' } })] });
+    expect(sampleIds(code)).toEqual(['a', 'N']);
+    expect(find(code.findings, 'CONV-SUMMARY-ROW-KEPT')).toEqual([]);
   });
 
   it('the texts exist in four languages', () => {
