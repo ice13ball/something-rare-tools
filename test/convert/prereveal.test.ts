@@ -7,7 +7,9 @@ import { createDirectConvertEngine } from '../../src/worker/convert.handler';
 import { candidatesOf, initialChoices, requestOf, sheetKey, type ConvertState } from '../../src/app/convertModel';
 import type { ConvertParseResult } from '../../src/worker/convert.protocol';
 import { csvOf } from '../app/convertHelpers';
-import type { Cell } from './helpers';
+import { fileOf, type Cell } from './helpers';
+import { proposeConvertColumns } from '../../src/core/convert/recognize';
+import { suggestConvertProfile } from '../../src/core/convert/recognize';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -56,6 +58,83 @@ describe('item 1: a table whose station names read like column names is not "tra
     const csv = csvOf(['Station', 'Sample', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus'], stations.map((c, i) => [c, `S${i}`, 70 + i / 10, 10 + i / 10, `2099-01-0${i + 1}`, i + 1]));
     const { run } = await open('codes.csv', csv);
     expect((await run()).findings.map((f) => f.ruleId)).not.toContain('IN-LAYOUT-UNSUPPORTED');
+  });
+});
+
+/** The proposal of one extra numeric column on a wide sheet with a station, a position and a date. */
+function proposalOf(header: string, values: Cell[] = [1.5, 2.5, 3.5]) {
+  const f = fileOf(['Station', 'Latitude', 'Longitude', 'Date', header], values.map((v, i) => [`S${i}`, 55 + i, 3 + i, `2099-01-0${i + 1}`, v]));
+  const p = proposeConvertColumns(f.sheets[0], { decimalComma: false, date1904: false }).find((q) => q.header === header)!;
+  return p;
+}
+
+describe('item 2: the NAME part of a header decides between a species and a measured variable, never the unit alone', () => {
+  const stayTaxon = [
+    'Acartia sp. [ind/m3]',
+    'Mytilus edulis [ind/m2]',
+    'Calanus finmarchicus [mg C/m3]',
+    'Acartia [g/m2]',
+    'ACARTIA SP. [ind/m3]',
+    'MYTILUS EDULIS [ind/m2]',
+    'Acartia sp. 1 [ind/m3]',
+    'Nematoda sp. 2 [ind/m2]',
+    'Acartia/Centropages [ind/m3]',
+    'Pseudocalanus/Paracalanus [ind/m3]',
+    'Morphotype 3 [ind/m2]',
+    'C. finmarchicus c2 [#/m**3] (including Calanus glacialis)',
+    'Calanus finmarchicus',
+  ];
+  it.each(stayTaxon)('%s stays a taxon candidate', (h) => {
+    const p = proposalOf(h);
+    expect(p.role).toEqual({ kind: 'taxon', header: true });
+    expect(p.confidence).toBe('low');
+  });
+
+  const becomeVariable = ['PN [µmol/l]', 'PP [µmol/l]', 'GPP C [mg/m**2/day]', 'Ntot [%]', 'd15N [‰]', 'δ13C [‰]', 'C/N [molar]', 'N:P', 'Chl a [µg/l]', 'POC [µg/l]', 'Corg [%]', 'DNRAw (µmol m-2h-1)', 'Dw (µmol m-2h-1)'];
+  it.each(becomeVariable)('%s is a measured variable, never a taxon candidate', (h) => {
+    const p = proposalOf(h);
+    expect(p.role.kind, `${p.reasonCode}: ${p.reason}`).toBe('variable');
+  });
+
+  it('a wide bio sheet with taxa and abundance units is unchanged: every taxon column is a candidate, the measured ones are variables', () => {
+    const header = ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus [ind/m3]', 'Oithona similis [mg C/m3]', 'Acartia sp. [ind/m3]', 'PN [µmol/l]'];
+    const f = fileOf(header, [['A', 55, 3, '2099-01-01', 4, 1.5, 2, 3.5], ['B', 56, 4, '2099-01-02', 1, 2.5, 0, 4.5]]);
+    const cols = proposeConvertColumns(f.sheets[0], { decimalComma: false, date1904: false });
+    expect(cols.filter((c) => c.role.kind === 'taxon').map((c) => c.header)).toEqual(['Calanus finmarchicus [ind/m3]', 'Oithona similis [mg C/m3]', 'Acartia sp. [ind/m3]']);
+    expect(cols.find((c) => c.header === 'PN [µmol/l]')!.role.kind).toBe('variable');
+  });
+
+  it('a sheet of measured variables with unknown names is not a "biology sheet" for the profile suggestion any more', () => {
+    const header = ['Station', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'PN [µmol/l]', 'PP [µmol/l]', 'd15N [‰]'];
+    const f = fileOf(header, [['A', 55, 3, '2099-01-01', 5, 1, 2, 3], ['B', 56, 4, '2099-01-02', 10, 2, 3, 4]]);
+    const cols = proposeConvertColumns(f.sheets[0], { decimalComma: false, date1904: false });
+    expect(cols.some((c) => c.role.kind === 'taxon')).toBe(false);
+    expect(suggestConvertProfile(cols)).toBe(true);
+  });
+});
+
+describe('item 7: sample descriptors are never a taxon', () => {
+  it.each(['Replicate', 'Rep', 'Cast', 'Bottle', 'Niskin', 'Run', 'Haul', 'Tow', 'Subsample', 'Core', 'Section', 'Slice', 'Frame', 'Replicate no', 'Bottle no.'])('%s', (h) => {
+    const p = proposalOf(h, [1, 2, 1]);
+    // a sample code where the shared rules already read it as one (bottle, core), otherwise ignored with its reason; never a taxon, never a variable
+    expect(['ignore', 'sampleId']).toContain(p.role.kind);
+    if (p.role.kind === 'ignore') expect(p.reasonCode).toBe('sample-descriptor');
+  });
+  it('the shared proposer keeps a station or sample number that it already recognises', () => {
+    const f = fileOf(['Sample no', 'Latitude', 'Longitude', 'Date', 'Salinity'], [['S1', 55, 3, '2099-01-01', 34], ['S2', 56, 4, '2099-01-02', 35]]);
+    const cols = proposeConvertColumns(f.sheets[0], { decimalComma: false, date1904: false });
+    expect(cols.find((c) => c.header === 'Sample no')!.role.kind).toBe('sampleId');
+  });
+  it('a long environmental sheet with a Replicate column is still read as long: the replicate stays in the key and tells the samples apart', async () => {
+    const rows: Cell[][] = [];
+    for (const rep of [1, 2]) for (const [par, val] of [['PN', 3], ['PP', 4]] as const) rows.push(['A', 55, 3, '2099-01-01', rep, par, val + rep]);
+    const csv = csvOf(['Station', 'Latitude', 'Longitude', 'Date', 'Replicate', 'Parameter', 'Value'], rows);
+    const { parsed } = await open('long.csv', csv);
+    const note = parsed.files[0].pivots?.['long.csv'];
+    expect(note).toBeDefined();
+    const sheet = parsed.files[0].sheets[0];
+    expect(sheet.rowCount).toBe(2);
+    expect(sheet.header).toContain('Replicate');
   });
 });
 

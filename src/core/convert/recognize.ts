@@ -5,6 +5,7 @@ import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
 import { isPercentUnit, verifiedConcept } from './nerc';
+import { isNonOrganismUnit, nameKind } from './measured';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -194,6 +195,8 @@ export const OVERLAY_REASONS = {
   'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
+  'measured-name': 'the name is a measured variable (a nutrient, a pigment, an isotope ratio, a rate), not a species: it stays a variable, and nothing is written for it as a taxon',
+  'sample-descriptor': 'the name describes the sample (replicate, cast, bottle, haul, core, ...), not a measurement and not a species: ignored (give it a meaning if it is one)',
   'unnamed-column': 'column without a name in the header: give it a meaning',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
@@ -300,6 +303,17 @@ const isUnitPressure = (q: ColumnProposal, exclude: ReadonlySet<number> = new Se
 
 /** A vertical coordinate of the proposer's own reading: a depth (not an elevation or altitude), a pressure, or a column in decibars. */
 const isVerticalProposal = (q: ColumnProposal, exclude: ReadonlySet<number>): boolean => !exclude.has(q.index) && ((q.role.kind === 'depth' && q.reasonCode !== 'name-elevation') || q.role.kind === 'pressure' || isUnitPressure(q, exclude));
+
+/**
+ * The unit of a column whose name did not decide: a name of no taxon shape at all ('unknown') with any unit that does not count organisms is a measurement; a taxon-shaped name needs a unit that no
+ * sheet of organisms writes (an amount of substance, a rate per time: isNonOrganismUnit), because a species may carry a biomass unit.
+ */
+function isMeasurementUnit(kind: 'taxon' | 'unknown' | 'variable' | 'descriptor', unit: string | undefined, unitText: string | undefined): boolean {
+  const text = unitText ?? unit;
+  if (text === undefined || isAbundanceUnit(text) || isAbundanceUnit(unit)) return false;
+  if (kind === 'unknown') return true;
+  return kind === 'taxon' && (isNonOrganismUnit(text) || isNonOrganismUnit(unit));
+}
 
 const why = (p: ColumnProposal, code: OverlayReason): void => {
   p.reason = OVERLAY_REASONS[code];
@@ -582,9 +596,22 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     }
     // wide sheet: a numeric column named like nothing we know is a taxon candidate; confirmed in bulk
     if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
-      p.role = { kind: 'taxon', header: true };
-      p.confidence = 'low';
-      why(p, 'taxon-numeric');
+      // the NAME decides (core/convert/measured.ts), never the unit alone: a species of a wide sheet may carry a biomass unit ("Calanus finmarchicus [mg C/m3]")
+      const kind = nameKind(p.header);
+      if (kind === 'descriptor') {
+        p.role = { kind: 'ignore' };
+        p.confidence = 'low';
+        why(p, 'sample-descriptor');
+      } else if (kind === 'variable' || isMeasurementUnit(kind, hdr.unit, hdr.unitText)) {
+        // (a unit that no sheet of organisms writes (an amount of substance, a rate per time), or, for a name that is no taxon shape at all, any unit that does not count organisms, also makes it a
+        // variable: "DNRAw (µmol m-2h-1)", "Dw (µmol m-2h-1)")
+        p.confidence = 'low';
+        why(p, 'measured-name');
+      } else {
+        p.role = { kind: 'taxon', header: true };
+        p.confidence = 'low';
+        why(p, 'taxon-numeric');
+      }
     }
   }
   // a plain "Area" on a sheet that has no taxon, quantity or occurrence ID is a place name or an extent, not a sampled area (a header that says sampled or swept area stays an effort)
