@@ -74,6 +74,21 @@ function hasTaxonShape(folded: string): boolean {
 }
 
 /**
+ * True when the name is a plain measurement word of a CTD or bottle file (MEASUREMENT_WORDS: "Activity", "Fluorescence", "Temperature") and no earlier test (descriptor, variable token,
+ * isotope ratio) already took it: the page then gives the physical or optical reason instead of the nutrient / pigment / isotope / rate one. It does not look at the unit.
+ */
+export function isMeasurementWord(header: string): boolean {
+  const folded = foldDiacritics(namePart(header)).toLowerCase().replace(/\s+/g, ' ').trim();
+  const asLetters = folded.replace(/δ/g, 'd');
+  const key = asLetters.replace(/[^a-z0-9]+/g, ' ').trim();
+  if (key === '' || DESCRIPTOR.test(key)) return false;
+  const lead = asLetters.split(/[\s,]+/)[0].replace(/[.;]+$/, '');
+  const compact = lead.replace(/[^a-z0-9]/g, '');
+  if (VARIABLE_TOKENS.has(key) || VARIABLE_TOKENS.has(lead) || VARIABLE_TOKENS.has(compact) || ISOTOPE.test(compact) || RATIO.test(lead)) return false;
+  return MEASUREMENT_WORDS.has(key) || MEASUREMENT_WORDS.has(lead) || MEASUREMENT_WORDS.has(compact);
+}
+
+/**
  * See the module comment. `header` is the whole header; its unit and trailing brackets are cut off here. `abundance` is true when the unit counts organisms (isAbundanceUnit): such a
  * column may always be a species, whatever its name looks like (after a descriptor or a known variable token, which are decided first).
  */

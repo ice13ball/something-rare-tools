@@ -4,7 +4,9 @@
 // "kind of number" and "no occurrences"; every mixed case keeps the message it had. Every value is invented.
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { nameKind } from '../../src/core/convert/measured';
+import { isMeasurementWord, nameKind } from '../../src/core/convert/measured';
+import { proposeConvertColumns } from '../../src/core/convert/recognize';
+import { translate } from '../../src/core/i18n/ui';
 import { renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { LANGS } from '../../src/core/types';
 import { fileOf, sheetInput } from './helpers';
@@ -141,5 +143,41 @@ describe('CONV-ENV-ONLY-SHEET', () => {
     expect(nameKind('Nitrogen fixers [cells/l]', true)).toBe('taxon');
     expect(nameKind('Light [ind]', true)).toBe('taxon');
     expect(nameKind('Light')).toBe('variable');
+  });
+});
+
+describe('the column reason of a plain measurement word', () => {
+  const reasonOf = (header: string) => {
+    const f = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Temperature [degC]', header], [['E1', '2099-01-01', 55, 3, 5, 4.5, 9], ['E1', '2099-01-01', 55, 3, 10, 4.2, 8]]);
+    return proposeConvertColumns(f.sheets[0], { decimalComma: false, date1904: false }).find((p) => p.header === header)!;
+  };
+
+  it.each(['Activity', 'Fluorescence', 'Turbidity [FTU]', 'Irradiance'])('"%s" gets the measurement-word reason, not the nutrient / pigment / isotope / rate one', (word) => {
+    const p = reasonOf(word);
+    expect(p.role.kind).toBe('variable');
+    expect(p.reasonCode).toBe('measured-word');
+    expect(p.reason).toContain('physical or optical measurement word');
+    expect(p.reason).not.toContain('nutrient');
+  });
+
+  it('nutrients, pigments, isotope ratios and rates keep the old reason', () => {
+    for (const h of ['PN [µmol/l]', 'PP [µmol/l]', 'Ntot [%]']) {
+      const p = reasonOf(h);
+      expect(p.reasonCode, h).toBe('measured-name');
+      expect(p.reason, h).toContain('a nutrient, a pigment, an isotope ratio, a rate');
+    }
+    expect(isMeasurementWord('Activity')).toBe(true);
+    expect(isMeasurementWord('PN')).toBe(false);
+    expect(isMeasurementWord('d15N')).toBe(false);
+    expect(isMeasurementWord('Calanus finmarchicus')).toBe(false);
+  });
+
+  it('the text exists in four languages and names CTD words, not nutrients', () => {
+    const words: Record<string, RegExp> = { en: /physical or optical measurement word.*fluorescence/, pl: /pomiar fizyczny lub optyczny.*fluorescencja/, de: /physikalische oder optische Messung.*Fluoreszenz/, fr: /mesure physique ou optique.*fluorescence/ };
+    for (const lang of LANGS) {
+      const t = translate(lang, 'convert.reason.measured-word');
+      expect(t, lang).toMatch(words[lang]);
+      expect(t, lang).not.toBe(translate(lang, 'convert.reason.measured-name'));
+    }
   });
 });
