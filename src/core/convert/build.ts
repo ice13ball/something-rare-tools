@@ -20,7 +20,7 @@ import type { NercDecisions, NercPick } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
-import { proposeConvertMapping } from './recognize';
+import { isQuantityHeader, proposeConvertMapping } from './recognize';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { seafloorMetres, seafloorUnitOf } from './seafloor';
@@ -309,7 +309,30 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
     use(cols.depthMax);
   } else use(cols.depthPlain ?? cols.depthMin ?? cols.depthMax);
   if (sin.profile === undefined && sin.quantity?.effort?.source === 'column') use(cols.effort);
-  return sin.mapping.columns.filter((c) => c.role.kind !== 'ignore' && !used.has(c.index)).map((c) => c.header.trim());
+  const named = sin.mapping.columns.filter((c) => c.role.kind !== 'ignore' && !used.has(c.index)).map((c) => c.header.trim());
+  // two kinds of IGNORED column that hold data are said as well, so that nothing is left out without a word: a column with an empty header (shown by its letter in brackets: "[E]"), and
+  // a second quantity column (a "Biomass [g]" next to a count: one quantity column is read per sheet). Columns the short-header detection added (IN-HEADER-SHORT, CONV-COLUMN-UNNAMED) are said by those.
+  const sheet = sin.file.sheets.find((s) => s.name === sin.sheet);
+  const holdsData = (index: number): boolean => sheet !== undefined && sheet.rows.some((r) => !isBlankCell(r.cells[index] ?? null));
+  const left = sin.mapping.columns.flatMap((c) => {
+    if (c.role.kind !== 'ignore' || used.has(c.index)) return [];
+    if (sheet?.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) return [];
+    if (c.header.trim() === '') return holdsData(c.index) ? [`[${columnLetters(c.index)}]`] : [];
+    if (sin.profile === undefined && isQuantityHeader(c.header) && holdsData(c.index)) return [c.header.trim()];
+    return [];
+  });
+  return [...named, ...left];
+}
+
+/** The spreadsheet letters of a zero-based column index (0 -> A, 26 -> AA). */
+function columnLetters(index: number): string {
+  let n = index;
+  let out = '';
+  do {
+    out = String.fromCharCode(65 + (n % 26)) + out;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return out;
 }
 
 /** The depth of a row: one depth column gives min = max, a pair of bound columns gives both. Text that is not a number is reported (ROW-NON-NUMERIC / ROW-NA-VARIANT). */

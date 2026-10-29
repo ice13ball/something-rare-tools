@@ -262,6 +262,12 @@ function quantityClaim(key: string): Claim | undefined {
   return undefined;
 }
 
+/** A header whose name says a count, an abundance, a density or a biomass ("Count", "Biomass [g]", "Abundance"): a quantity column by its name alone. */
+export function isQuantityHeader(header: string): boolean {
+  const hu = unitFromHeader(header);
+  return quantityClaim(foldDiacritics(headerKey(hu.name))) !== undefined || quantityClaim(foldDiacritics(headerKey(withoutBrackets(hu.name)))) !== undefined;
+}
+
 /** The name without a trailing bracket group of any text ("Liczba osobników (ind.)"): the shared unit reader cuts only what it knows as a unit. */
 const withoutBrackets = (name: string): string => name.replace(/\s*[[(][^[\]()]*[\])]\s*$/, '');
 

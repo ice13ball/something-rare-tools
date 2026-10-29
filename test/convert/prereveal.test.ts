@@ -223,5 +223,26 @@ describe('item 5: a data-dictionary sheet starts unticked, with a note', () => {
   });
 });
 
+describe('item 6: a column with data that is left out is said', () => {
+  const notExported = (v: { findings: { ruleId: string; params: Record<string, unknown> }[] }) => v.findings.find((f) => f.ruleId === 'CONV-COLUMN-NOT-EXPORTED');
+  it('an empty-header column that holds data is named by its letter; an empty one is not', async () => {
+    const withData = csvOf(['Station', 'Latitude', 'Longitude', 'Date', '', 'Calanus finmarchicus'], [['A', 55, 3, '2099-01-01', 'note', 4], ['B', 56, 4, '2099-01-02', '', 5]]);
+    const f = notExported(await (await open('gap.csv', withData)).run());
+    expect(f?.params).toMatchObject({ count: 1, columns: '[E]' });
+    const withoutData = csvOf(['Station', 'Latitude', 'Longitude', 'Date', '', 'Calanus finmarchicus'], [['A', 55, 3, '2099-01-01', '', 4], ['B', 56, 4, '2099-01-02', '', 5]]);
+    expect(notExported(await (await open('gap2.csv', withoutData)).run())).toBeUndefined();
+  });
+  it('a second quantity column next to a count is named; the count is read', async () => {
+    const csv = csvOf(['eventID', 'scientificName', 'individualCount', 'Biomass [g]', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['E1', 'Calanus finmarchicus', 4, 0.5, 55, 3, '2099-01-01'], ['E1', 'Oithona similis', 2, 0.1, 55, 3, '2099-01-01']]);
+    const v = await (await open('two-q.csv', csv)).run();
+    expect(notExported(v)?.params).toMatchObject({ count: 1, columns: 'Biomass [g]' });
+    expect(v.stats.occurrences).toBe(2);
+  });
+  it('an ignored column the user wants out, such as a plain remark, is not said', async () => {
+    const csv = csvOf(['scientificName', 'individualCount', 'Remarks', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['Calanus finmarchicus', 4, 'ok', 55, 3, '2099-01-01']]);
+    expect(notExported(await (await open('remarks.csv', csv)).run())).toBeUndefined();
+  });
+});
+
 export { candidatesOf, sheetKey };
 export type { Cell };
