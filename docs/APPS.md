@@ -59,7 +59,7 @@ Six HTML entry points are built by Vite (`vite.config.ts`, `rollupOptions.input`
 footer. All six are in `/sitemap.xml` (`buildSitemap` in `server/index.ts`). The robots meta tag
 and `X-Robots-Tag: noindex` are added only while `SITE.noindex` in `config/site.ts` is true; it
 is currently `false`. The fetch proxy and CSW routes (`/api/*`) are always `noindex`
-(`server/headers.ts`, `securityHeaders`). I found no page that is built but hidden.
+(`server/headers.ts`, `securityHeaders`). No page is built but hidden.
 
 ### How a file flows
 
@@ -113,23 +113,29 @@ order, a `?lang=` parameter on arrival (it is then removed from the address), th
 
 ## 2. What leaves your browser
 
-**Dropped files never leave the browser.** This was checked against every `fetch`, `XMLHttpRequest`,
+**Dropped files are never uploaded.** This was checked against every `fetch`, `XMLHttpRequest`,
 `sendBeacon`, `WebSocket` and `EventSource` in `src/`: there is no code path that posts the
-content of a dropped file anywhere. The only `fetch` calls in `src/` are listed below, and only
-the first three can carry anything that comes from the visitor. A test fails when a module of the
-converter other than the two opt-in files calls `fetch` (`test/convert/no-network.test.ts`).
+content of a dropped file anywhere. That is **not** the same as "nothing derived from them leaves
+the browser". Three things derived from your files can leave it, and the table below lists them:
+**taxon names** when you press the WoRMS lookup on `/convert` (`lookupWormsNames`); **a word you
+type** in an NVS search on `/convert` (`searchNvs`); and **the map area of the positions**, as CARTO
+tile requests, automatically after a `/check` report that has positions (`MapPreview`, `fitBounds`).
+Taxon names and search words can reveal unpublished findings (the privacy page says so). The links
+and identifiers you paste are, of course, sent to the record's host. A test fails when a module of
+the converter other than the two opt-in files calls `fetch` (`test/convert/no-network.test.ts`).
 
 | What | Where it goes | When | What it carries |
 |---|---|---|---|
 | **A link, DOI or id you paste** (`/check`, `/licence`) | **Browser mode (default):** your browser fetches the public record and its files directly from an allowlisted host. **Server mode (you choose it):** `POST /api/fetch` to this site's server, which fetches for you. | Only when you submit a link. | The URL of the record or file. In server mode the URL travels in a JSON body, never in a query string (`serverFetcher`, `src/core/sources/fetcher.ts`). The server's application log keeps only host name, status and byte count (`logHost`, `server/index.ts`). |
-| **Collection review** (`/collection`) | DataCite (`api.datacite.org`) and Zenodo (`zenodo.org`) are asked **by your browser directly**. CSW catalogues are asked **through `POST /api/csw`** on this site's server. | While a run is going. | A DOI batch, a DataCite client or prefix, a Zenodo community name; for a catalogue only a catalogue id from a closed list plus three small numbers; the server builds the catalogue request itself (`server/csw.ts`, `parseCswBody`). |
+| **Collection review** (`/collection`) | DataCite (`api.datacite.org`) and Zenodo (`zenodo.org`) are asked **by your browser directly**. CSW catalogues are asked **through `POST /api/csw`** on this site's server. | While a run is going. | A DOI batch, a DataCite client or prefix, a Zenodo community name; for a catalogue only a catalogue id from a closed list plus the operation, start position, page size and schema name; the server builds the catalogue request itself (`server/csw.ts`, `parseCswBody`). |
 | **Check a record's data files** (button on a `/collection` example) | Same as a link in browser mode. | Only when you press it. Browser mode only. | A DOI. |
 | **WoRMS lookup** (`/convert`, opt-in) | `www.marinespecies.org`, directly from your browser, **not** through the server. | Only when you tick the box **and** press the lookup button. A companion file can tick the box; ticking sends nothing. | Taxon names only (the scientific name after the approved split), at most 50 per call (`WORMS_BATCH_MAX`) (`src/app/optins/worms.ts`). |
-| **NVS search** (`/convert`, opt-in) | `vocab.nerc.ac.uk`, directly from your browser, not through the server. | Only when you tick the box, type a word for a column and press that column's search button. | Only the word you typed (or, as a fallback when the search fails and the text is exactly a concept code, that code) (`src/app/optins/nvs.ts`). No cookie, no storage, no Referer (`referrerPolicy: 'no-referrer'`), `credentials: 'omit'` on both lookups. |
+| **NVS search** (`/convert`, opt-in) | `vocab.nerc.ac.uk`, directly from your browser, not through the server. | Only when you tick the box, type a word for a column and press that column's search button. | Only the word you typed (or, as a fallback when the search fails and the text is exactly a concept code, that code) (`src/app/optins/nvs.ts`). No cookie, no storage, no Referer (`referrerPolicy: 'no-referrer'`), `credentials: 'omit'` on both lookups; the browser's CORS `Origin` header (the site's address) is still sent. |
 | **GBIF / OBIS datasets** (`/check` by link or DOI; `/licence` only for a DOI that DataCite routes to GBIF) | The registry (`api.gbif.org` or `api.obis.org`) is asked for the archive's address; the archive is then downloaded from one of the IPT hosts in `config/ipt.ts`, never from any other host a registry may name. | Only when you paste such a link or DOI. | The dataset identifier; then a download URL. |
 | **Map preview** (`/check`, after a check) | The base map is loaded from CARTO (`basemaps.cartocdn.com` and its tile hosts, `MAP_HOSTS` in `config/hosts.ts`), **automatically** as soon as the report has at least one position (`MapPreview`). There is no opt-in. | After every check with positions. | The map library requests style, tiles, glyphs and sprites; the tile addresses reveal the map area shown, not the points (the points are drawn locally). CARTO also sees your IP address. |
 | **Land mask** | Your own site (`/assets/…`): a bundled file (`src/core/geo/land-mask.bin`). | Prefetched when the proposed mapping has a latitude and a longitude column. | Nothing: a GET of a static file (`browserLandLoader`, `src/worker/handler.ts`). |
-| **Google Analytics 4** | `www.googletagmanager.com` (script) and the Google Analytics hosts. | **Only after you accept the cookie banner.** Until then consent defaults are all `denied` (`public/consent-default.js`) and no analytics script is loaded; the HTML pages carry no `gtag` call (`activate`, `src/app/analytics.ts`). | Page view with `page_location` set explicitly to origin plus path (no query, no hash). Events, from `track()`: `check_started`, `check_finished`, `convert_started`, `convert_blocked`, `convert_exported`, with only these parameters: `input_type` (file, zenodo, geonetwork, doi, pangaea, mixed), `mode` (browser, server), counts of errors, warnings and notes, and for `convert_exported` also `shape` (wide, long, mixed), `profile`, `meta_source`, `worms`, `nvs` (each a yes/no flag as `used`/`none`/`file`) and counts of events, occurrences and measurement rows. `track()` drops anything that is not an allowed enum string or a finite number, so file names, DOIs, links, taxon names and values cannot be sent. `/licence`, `/collection`, `/` and `/privacy` send no events of their own (only the page view). Declining removes the Google cookies of an earlier acceptance. |
+| **Google Analytics 4** | `www.googletagmanager.com` (script) and the Google Analytics hosts. | **Only after you accept the cookie banner.** Until then consent defaults are all `denied` (`public/consent-default.js`) and no analytics script is loaded; the HTML pages carry no `gtag.js` and no `gtag('config')`, and
+`consent-default.js` only calls `gtag('consent', 'default')` (`activate`, `src/app/analytics.ts`). | Page view with `page_location` set explicitly to origin plus path (no query, no hash). Events, from `track()`: `check_started`, `check_finished`, `convert_started`, `convert_blocked`, `convert_exported`, with only these custom parameters: `input_type` (file, zenodo, geonetwork, doi, pangaea, mixed), `mode` (browser, server), counts of errors, warnings and notes, and for `convert_exported` also `shape` (wide, long, mixed), `profile`, `meta_source`, `worms`, `nvs` (each a yes/no flag as `used`/`none`/`file`) and counts of events, occurrences and measurement rows. `track()` drops anything that is not an allowed enum string or a finite number, so file names, DOIs, links, taxon names and values cannot be sent. `/licence`, `/collection`, `/` and `/privacy` send no events of their own (only the page view). Declining removes the Google cookies of an earlier acceptance. **Caveat:** "only these parameters" holds for the `track()` events. The page view carries the fields `gtag.js` adds on its own (page title, referrer, screen and language, a client id), and any enhanced-measurement events enabled in the GA4 property (for example outbound clicks with the link address) are outside the code's control. |
 
 **Stored in your browser, never on the server:**
 
@@ -137,8 +143,10 @@ converter other than the two opt-in files calls `fetch` (`test/convert/no-networ
   site on the parent domain (`SITE.consentCookie`);
 - the language choice (`localStorage` key `lang`);
 - a collection run's progress and fix-list parts (IndexedDB; see 7). Nothing else the visitor
-  provides is stored: no router, no history calls, and a pasted link or DOI is never written to
-  the address bar (stated in the comments of `CheckPage` and `LicencePage`).
+  provides is stored, and nothing the visitor provides is written to the address bar: there is no
+  router, a pasted link or DOI never goes into the URL (stated in the comments of `CheckPage` and
+  `LicencePage`), and the one call to `history.replaceState` only removes a `?lang=` parameter on
+  arrival (`src/app/i18n.ts`).
 
 **What the server sees.** Every request to this site is logged by the hosting platform (see the
 privacy text on `/privacy`). The application itself logs one JSON line per proxied request:
@@ -215,8 +223,9 @@ licence, coverage, parameters in column order); the first line after it is the t
 Occurrence or Event core with exactly one file (a different core gives
 `IN-DWCA-UNSUPPORTED-CORE`; an unusable `meta.xml` or a missing core file gives `IN-DWCA-UNREADABLE`
 with the reason); the core is read with its declared delimiter, enclosure, encoding and header
-lines; default-value fields are copied into every row. Only the **core** is read: extension tables
-are counted for information (`IN-DWCA-EVENT-CORE`), not compared, and the report says so
+lines; default-value fields are copied into every row. Only the **core** is read: for an Event core the rows of its
+**Occurrence** extension are counted for information (`IN-DWCA-EVENT-CORE`); other extensions are
+neither read nor counted, none is compared, and the report says so
 (`notChecked.dwcExtensions`). Limits: `ZIP_LIMITS` (100 MB archive, 150 MB uncompressed in total
 and per entry, 1000 entries, a compression-ratio guard of 200 above 1 MiB), `DWCA_MAX_ROWS`
 (200 000 core rows; more rows give `IN-DWCA-PARTIAL` with how many were read), at most
@@ -224,7 +233,7 @@ and per entry, 1000 entries, a compression-ratio guard of 200 above 1 MiB), `DWC
 only title and version (`IN-DWCA-VERSION`).
 
 **Size limits for ordinary tables.** None in the parsers or the page for a dropped CSV or
-workbook beyond what the browser can hold (I found no cap in `src/app` or `src/worker`). A file
+workbook beyond what the browser can hold (no cap exists in `src/app` or `src/worker`). A file
 fetched by link is limited as described in 3.6.
 
 **The sidecar.** The checker offers a companion CSV (`original_column, output_column, unit,
@@ -253,10 +262,11 @@ column (a column that mixes unambiguous DD/MM and MM/DD cells is `conflict` and 
 that differs in its parts is unparseable); `YY-MM-DD` (century inferred, always flagged
 `ROW-DATE-YYMMDD`); an ISO interval `start/end` (the start is the date; the end must parse and not
 precede the start); a bare 4-digit year string. An Excel serial is read as a date **only** when the
-cell is date-formatted (`dateFormatted`), and the 1900 or 1904 system is applied; a number in a
+column holds date-formatted cells (`dateFormatted` is a per-column flag of the sheet), and the 1900 or 1904 system is applied; a number in a
 text column is never guessed to be a serial. Calendar dates are validated (`2021-02-30` is
 unparseable). All arithmetic is on UTC milliseconds, so the machine's time zone cannot move a
-date. A time with no zone stays "unknown" (`ROW-TZ-UNKNOWN`); a separate time column is combined
+date. A time with no zone stays "unknown" (`ROW-TZ-UNKNOWN`), except that a date or time column whose
+header names UTC or GMT (`UTC_HEADER`, `dataset.ts`) is read as UTC and raises no such finding; a separate time column is combined
 with a day-precision date (`combineDateTime`).
 
 **Coordinates** (`values/coords.ts`, `parseCoordinate`). Accepted: decimals; degrees with decimal
@@ -322,9 +332,11 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    columns in which every value is an ISO date (low confidence).
 9. **Otherwise a numeric column is a variable.** Its name is the canonical variable name when the
    header matches the vocabulary (high confidence), else the header as written (low confidence,
-   reason "numeric, name not recognised"). An identifier-shaped name and an abundance word
-   (`Count`, `Individuals`) are never a variable on `/check`; the converter turns the abundance
-   words back on (`keepAbundance`).
+   reason "numeric, name not recognised"). An identifier-shaped name is never a variable on
+   `/check`; an abundance word (`Count`, `Individuals`) is ignored when it has no unit or a plain
+   count unit (`[n]`, `[ind]`) and is a variable when it carries another unit (`ind/m2`, `cells/L`,
+   `%`); a canonical variable name wins over both. The converter turns abundance words back on
+   (`keepAbundance`).
 10. **One column per slot.** When several columns claim a slot, a column with values wins over an
     empty one, then the best tier, then the leftmost; the losers become `ignore` with the reason
     "another column is used". A depth column's direction is read from the data: a negative value
@@ -384,9 +396,15 @@ long environmental sheets (8.4).
 **A rule** (`src/core/rules/*.ts`, assembled in `registry.ts`) has an id, a category (`input`,
 `A` licence and metadata, `B` rows and Darwin Core, `C` across files and chemistry), a severity,
 a plain wording for a non-specialist and a technical wording, in four languages, optional
-`thresholds` (a number with its unit and a citation) and `citations`. Every number a check
-compares against is read with `threshold(ruleId, name)`, which throws on a typo, so a check cannot
-use a number that is not in the rule. A **finding** is an instance of a rule on a file, sheet,
+`thresholds` (a number with its unit and a citation) and `citations`. Every **published**
+limit a check compares against is read with `threshold(ruleId, name)`, which throws on a typo, so it
+cannot drift from the rule that cites it. The tool's **own choices** are named constants in the
+code, not rule thresholds: `SPREAD_KM` (10) and `FAR_KM` (1000) in `checks/rows.ts` (the rules
+`ROW-STATION-SPREAD` and `ROW-STATION-SPREAD-FAR` have no thresholds), `SHIP_SPEED_MIN_SEPARATION_KM`
+(10, `checks/constants.ts`), `MIXED_SHARE`, `MIXED_MIN` and `MIN_EVENTS` in `checks/speed.ts`,
+`SIGN_FLIP_KM`, `SIGN_FLIP_MIN_KM` and `SIGN_FLIP_RATIO` in `checks/rows.ts`, `ON_LAND_MIN_KM` (50),
+`ON_LAND_NEAR_MIN_KM` (10) and `COAST_BUFFER_KM` (5) in `geo/land.ts`, and `DWC_MIN_TERMS` (3) in
+`checks/dwc.ts`. A **finding** is an instance of a rule on a file, sheet,
 lines, field and value (`makeFinding`).
 
 **Severities.** `error`, `warning`, `info` (shown as Error, Warning, Note). Severity is a property
@@ -438,7 +456,7 @@ sources):
   sea at least `COAST_BUFFER_KM` from land, or land or an inland lake at least a bucket distance
   from the sea. A row is reported as on land at `ON_LAND_MIN_KM` or more inland (warning) and as
   near-land from `ON_LAND_NEAR_MIN_KM` to that (note); the coastal band, rivers and canals are
-  never judged. The grid ships gzip-compressed (about 0.45 MB) and is loaded only when a dataset
+  never judged. The grid ships gzip-compressed (about 0.32 MB, 322 667 bytes) and is loaded only when a dataset
   has positions; if it cannot be loaded the report says that positions were not compared with land
   (`notChecked.landMask`) rather than passing silently.
 - **Ship speed** (`checks/speed.ts`): can one vessel have sailed between consecutive events? It
@@ -453,7 +471,10 @@ sources):
   alone is any instant of that day, so the longest possible gap is used and a date is never read
   as 00:00; month and year precision are too coarse to time anything); the rounding of the written
   coordinates is deducted from each distance. A two-sided test then flags an event only when both
-  hops to its neighbours exceed the limit while previous-to-next does not. If findings blame more
+  hops to its neighbours exceed the limit while previous-to-next does not. A single impossible hop
+  (at the start or end of a track, or between two bad events in a row) cannot say which of its two
+  events is wrong: it is the note `ROW-SHIP-SPEED-PAIR`, which uses only the extreme limit and is not
+  raised for an event that already has a two-sided finding. If findings blame more
   than `MIXED_SHARE` (a third) of a group's places, and at least `MIXED_MIN` (8), the finding says
   the likely cause is the premise (several ships) rather than the data. Groups of fewer than
   `MIN_EVENTS` (3) events are not judged. Limits: [ROW-SHIP-SPEED](rules.md#ROW-SHIP-SPEED),
@@ -527,10 +548,13 @@ credentials). Browser mode is a CORS request from your own browser with a
 `IN-FETCH-BLOCKED` and the page offers server mode (`LoadProblems`, `ModeSwitch`). Server mode is
 described in 10.
 
-**Size limits.** A linked file larger than `LINKED_FILE_MAX_BYTES` (30 MB, equal to the proxy's
-`MAX_BYTES`) is reported (`IN-FILE-TOO-LARGE`) before it is downloaded when its size is known. A
-Darwin Core Archive from an IPT is limited to `IPT_MAX_BYTES` (100 MB) and `IPT_TIMEOUT_MS`
-(90 s) in server mode.
+**Size limits.** In **server mode** the proxy refuses a body above `MAX_BYTES` (30 MB) for an ordinary
+URL, and a Darwin Core Archive from an IPT is limited to `IPT_MAX_BYTES` (100 MB) and
+`IPT_TIMEOUT_MS` (90 s). In **browser mode** there is no cap for non-archive files. The
+`LINKED_FILE_MAX_BYTES` check (30 MB, the same number) exists only for **Dataverse** records
+(`sources/dataverse.ts`): a file whose size the API gives is reported (`IN-FILE-TOO-LARGE`) before
+anything is downloaded, and a `too_large` answer of the proxy for a Dataverse file of unknown size is
+said the same way (`loadInputs`).
 
 Each downloaded failure becomes an input finding (host only, never the full URL:
 `fetchErrorFinding`) and loading continues with the rest.
@@ -877,7 +901,7 @@ institutions.
   with the tab is `interrupted` on the next visit and can be resumed from its checkpoint.
 - A run that ends with unread pages, or with records its source announced but did not deliver,
   is "finished" but **not complete**: it says so in a notice that no cap can drop and in the last
-  row of the fix list (`RUN-INCOMPLETE`, `gapRow`). An unfinished fix list also carries a last row
+  row of the fix list (a marker row, `RUN-INCOMPLETE`, written by `gapRow`; it is not a rule of the registry). An unfinished fix list also carries a last row
   saying why it stops.
 
 ### Outputs
@@ -965,7 +989,7 @@ read by `src/worker/convert.handler.ts`):
   Notes, Codebook or About without any position, or a sheet with a column naming the described
   column next to one that explains it and mostly text below.
 
-No size cap beyond what the browser holds (I found none in `src/core/convert` or the worker).
+No size cap beyond what the browser holds (there is none in `src/core/convert` or the converter's worker).
 
 ### The flow (`ConvertPage`, `createConvertHandler`)
 
@@ -1025,9 +1049,9 @@ brackets cut off), in this order (`nameKind`, `convert/measured.ts`):
 5. anything else is unknown and the earlier reading is kept.
 
 A unit alone never decides it, because a species column may carry a biomass or rate unit
-(`[mg C/m3]`); but a unit no sheet of organisms writes (an amount of substance, a rate per time),
-or, for a name that has no taxon shape at all, any unit that does not count organisms, makes it a
-variable. The rule leans to the taxon on purpose: a false candidate costs one tick, a false
+(`[mg C/m3]`): **a taxon-shaped name is never made a variable by its unit**. Only a name that is
+neither a descriptor, a known variable nor taxon-shaped (kind `unknown`, `isMeasurementUnit` in
+`recognize.ts`) is made a variable by any unit that does not count organisms. The rule leans to the taxon on purpose: a false candidate costs one tick, a false
 variable loses occurrences. **Taxon candidates from a wide sheet start at low confidence and must
 be confirmed in bulk**; a column the user turns into a taxon by hand needs no confirmation.
 Unconfirmed candidates are left out, and leaving them out has to be accepted
@@ -1063,8 +1087,11 @@ The user declares, **per sheet**, the kind of quantity (`resolveQuantity`, `conv
 | biomass | an eMoF row on the occurrence by basis (wet, dry or ash-free dry weight) and per volume or area (`SDBIOL03`, `04`, `05`, `07`, `08`, `09`); per area the user **must** say whether water column or bed (there is no default, and only the bed has a verified concept). |
 | effort | `sampleSizeValue` and `sampleSizeUnit` on the sample event plus an eMoF row `VOLWBSMP` (volume) or `AREABEDS` (area): one value for every sample, or a column with the `effort` role. |
 
-**Nothing is converted**: the unit is written as declared. A unit must agree with the kind (grams
-are not a density, individuals are not a biomass). A typed sample size is accepted as a number above
+**Nothing is converted**: the unit is written as declared. The declared unit is read for its
+numerator and denominator (`parseRateUnit`); a unit that does not fit the kind (grams for a density,
+individuals for a biomass) is **not an error**: it is simply not parsed, so no P06 id is found
+(`CONV-UNIT-NO-P06`, a warning to accept) and the user has to say per volume or per area
+(`resolveQuantity` reports what is missing). A typed sample size is accepted as a number above
 zero with at most one decimal mark; ambiguous forms (`1,234`, `12.345`, `1.234,5`) are refused
 (`CONV-EFFORT-VALUE-INVALID`) because they could be a thousands separator. A missing or incomplete
 declaration blocks (`CONV-QUANTITY-UNDECLARED`). `P06/UCNT` is **not** used for counts: its
@@ -1092,7 +1119,9 @@ definition is an echo-intensity unit of an instrument, so a count carries no uni
   off and read the sheet as a normal table (`pivotChoice`, `longAsTable`).
 - **Transposed** sheets: the converter reads each sheet as one table with no joins; a header with
   no name for a column is `CONV-COLUMN-UNNAMED` (blocks until the variable has a name or the
-  column is ignored). I did not find a transposed-table reader in the converter.
+  column is ignored). The converter **never runs layout detection** (`layoutOf` in
+  `convert.handler.ts` lists each sheet as a table), so a transposed sheet is read silently with its
+  first row as the header, and `IN-LAYOUT-UNSUPPORTED` cannot come from a `/convert` input.
 
 ### 8.5 Taxon names, splits and WoRMS
 
@@ -1132,14 +1161,19 @@ optional **profile level** under a station.
 - **Identifiers** (`convert/ids.ts`): sample `eventID` = the user's own sample code (optionally
   prefixed with the station's `eventID` when codes repeat between stations); station `eventID` =
   `cruise:station` (the station code alone with no cruise); cruise `eventID` = the cruise code.
-  `occurrenceID` of a wide sheet is `<sample eventID>:<exact species header>`; of a long sheet the
+  `occurrenceID` of a wide sheet is `<sample eventID>:<taxon name of the column>`, where the name is
+  the header without its unit and remark (or a PANGAEA parameter's long name), with the remark or
+  header added only to tell apart two columns of the same name (`taxonColumnNames`,
+  `convert/headers.ts`); of a long sheet the
   user's occurrence-id column, else `<sample eventID>:<exact taxon cell>` plus the life-stage column
   when there is one. **A sample's id is never derived from depth, row order or a WoRMS name.** The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
   new code column last, for the user to check and drop again); a missing code blocks
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
-  station reads as a summary label (`Total`, `Mean`, `SD`, …) are skipped and said.
+  station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
+  `SUMMARY_LABEL`, `convert/ids.ts`) are skipped and said. Other summary rows (`Mean`, `SD`,
+  `Median`, …) are **not** recognised here and are converted as samples.
 - **Parents are derived from their children, never typed:** `eventDate` is the interval from the
   earliest start to the latest end; the position is the **midpoint of the children's bounding box**
   (across the antimeridian the box is the shortest arc of longitudes that holds every child) with
@@ -1157,10 +1191,13 @@ optional **profile level** under a station.
   type `profile level` under its station, with minimum = maximum depth = the row's depth; its
   measured variables and pressure are eMoF rows **of that event**, never of a sample. A level's id is
   `<station eventID>:<code>` from a code column; without one, `<station>:<depth as written>m`
-  (`<pressure>dbar` without a depth) **only with the user's explicit approval** for that sheet. The
+  (`<pressure>dbar` without a depth) **only with the user's explicit approval** for that sheet; the
+  unit is part of the id (`cmbsf`/`mbsf` for a depth below the seafloor, `cmasf`/`masf` when the
+  sheet counts upwards), and for a station visited on more than one date the date goes in too
+  (`<station>:<YYYY-MM-DD>:<depth>m`; a row with no date then has no id). The
   profile's stations are matched to the biology stations by **exact** trimmed station text (and
   cruise when given); an unmatched station becomes its own station event with a warning
-  (`CONV-PROFILE-STATION-UNMATCHED`); a matched pair farther apart than a limit is warned
+  (`CONV-PROFILE-STATION-UNMATCHED`); a matched pair farther apart than `STATION_FAR_KM` (10 km, the tool's own choice) is warned
   (`CONV-PROFILE-STATION-FAR`). Two explicit per-sheet ticks widen this: ignore a trailing cast
   number on both sides (never guessed: a base with more than one biology station is not matched),
   and, for a sheet with no station column, treat each distinct position as a station
@@ -1247,7 +1284,10 @@ measured-variable column**.
 Files are UTF-8, tab-separated, `\n` line ends, one header line, no enclosure; a tab or line break
 inside a value is **refused, never replaced**. Values are written **from their source text** (a
 coordinate with its own decimals, a depth with its own, a quantity as the cell said it with a decimal
-comma turned into a point); **nothing is rounded or rescaled**. **`meta.xml`** declares the Event
+comma turned into a point); **nothing is rescaled**. The exceptions are computed values: a derived
+parent position is rounded to 6 decimals (`round6`, `DERIVED_DECIMALS` in `events.ts`), and a
+coordinate read from degrees and minutes is written as decimal degrees at the precision of its
+text. **`meta.xml`** declares the Event
 core and the two extensions, with `metadata="eml.xml"`.
 
 **`eml.xml`** (`convert/eml.ts`): EML 2.2.0 with the GBIF Metadata Profile 1.3, the form the IPT
@@ -1263,7 +1303,8 @@ typed) and the GBIF citation (typed, or built from creators, year and title; wit
 timestamp so the same input gives the same bytes, CRC-32 per entry, deflated through the browser's
 `CompressionStream('deflate-raw')` and **stored** when deflate does not help or is unavailable;
 **no ZIP64**: an archive above what the format's 32-bit fields or this tool's own reader limits can
-take is refused, never written wrong.
+take is refused, never written wrong. The caps mirror the reader's `ZIP_LIMITS`: 100 MB for the
+archive, 150 MB per entry and in total, 1000 entries.
 
 **The description form** (`convert/metadata.ts`, `prefill.ts`): fields from dropped metadata files
 fill **empty** fields only and keep their source; where files disagree on a field there is **no**
@@ -1277,7 +1318,8 @@ files state raises `CONV-LICENCE-DIFFERS`, which must be accepted.
 **The companion file** (`convert/settings.ts`): same sidecar format as `/check`; settings
 `fullList`, `stationPrefix`, `worms`, `nvs`, `profile`, `profileDepthIds`, `profileIgnoreCast`,
 `longAsTable`. They live **only** in the file and are read as **pre-ticks only**: `worms=yes` and
-`nvs=yes` tick a box and send nothing. The file holds no word, code, label or identifier. Dropped
+`nvs=yes` tick a box and send nothing. The file holds no search word, vocabulary code, label or identifier and no data value; it does hold
+the names of the sheets it refers to (`profile=<sheet>`, `longAsTable=<sheet>`). Dropped
 on `/check` it is recognised as a sidecar and changes nothing there but `singleCruise`.
 
 ### 8.10 Vocabularies and the two opt-in lookups
@@ -1320,7 +1362,7 @@ written to `scientificName` (so a typo does not travel with another taxon's LSID
 **NVS search** (`src/app/optins/nvs.ts`, pure half `convert/nvs.ts`). Off at every upload; a search
 starts only from a column's own button, one at a time, no retry. `GET
 https://vocab.nerc.ac.uk/sparql/sparql?query=…` for the typed word in P01 (variable) or P06 (unit);
-the only fallback is one request for the concept page of a code, and only when the typed text is
+the only fallback is one more request, for the concept page of a code, made only after the search has failed and when the typed text is
 exactly a concept code. Limits: `NVS_LIMIT` results (20), `NVS_MAX_CHARS` (80) and `NVS_MAX_WORDS`
 (4) for the typed text.
 
@@ -1515,9 +1557,10 @@ Each item below is confirmed from code, a test, or a rule text.
 
 **General**
 
-- Rule thresholds that are the tool's own choice rather than a published number are stated as such
-  in the rule text (for example the 10 km "one place" size of the ship-speed check and
-  `ROW-STATION-SPREAD`, and the 1000 km of `ROW-STATION-SPREAD-FAR`).
+- Several limits are the tool's own choice, kept as code constants rather than cited thresholds
+  (listed in 3.5): the 10 km "one place" size of the ship-speed check and `ROW-STATION-SPREAD`, the
+  1000 km of `ROW-STATION-SPREAD-FAR` (its technical text says so), the land-mask distances, the
+  number of terms that make a table Darwin Core. Only the rule texts that say so state it.
 - No page claims data is publication-ready; reports list what they do not check.
 - Server counters (rate limits, daily budgets) are in memory and per server instance.
 
@@ -1533,7 +1576,9 @@ Each item below is confirmed from code, a test, or a rule text.
 - Ship speed is not tested unless a cruise column is mapped or the user declares one ship.
 - Oxygen in a unit with no cited range is not range-checked (`notChecked.oxygenUnit`).
 - The metadata draft's bounding box does not handle data across the antimeridian.
-- Linked files above 30 MB are not read; an archive above 100 MB is refused.
+- In server mode a linked file above 30 MB (proxy `MAX_BYTES`) is not read and an archive above
+  100 MB is refused; in browser mode only archives are capped by the reader. For Dataverse files a
+  known size above 30 MB is reported before download.
 - Files of a linked record that are not tables (NetCDF, zip, SPSS, pictures) are not read.
 - Browser mode depends on the data host allowing cross-origin requests; most IPT servers do not, so
   an archive by link usually needs server mode.
@@ -1555,6 +1600,14 @@ Each item below is confirmed from code, a test, or a rule text.
 **`/convert`**
 
 - Presence-only species lists (taxon column, no quantity column) are not written.
+- No layout detection: a transposed sheet is read as a table with row 1 as header, without a warning.
+- Summary rows are recognised only by the six words `total`, `suma`, `razem`, `summe`, `gesamt`,
+  `somme`; `Mean`, `SD` and similar rows are converted as samples.
+- A declared unit that does not fit the kind of quantity is not rejected: it is written as typed with
+  no unit id (`CONV-UNIT-NO-P06`, to accept).
+- Derived parent positions are rounded to 6 decimals; coordinates given in degrees and minutes are
+  written as decimals.
+- The archive is limited to 100 MB, 150 MB per entry and in total, and 1000 entries.
 - A long environmental sheet with one parameter, or more than 200 (parameter, unit) pairs, is not
   read and blocks.
 - The only unit conversion is centimetres to metres for a depth below the seafloor; other units are
