@@ -73,3 +73,86 @@ describe('the other languages agree in number too', () => {
     expect(translate('en', 'collection.time.days', { n: 1 })).toBe('1 day');
   });
 });
+
+describe('every counted page key, at 0, 1, 2, 5, 12, 22 and 101, in all four languages', () => {
+  // key -> the placeholders that hold the counted number
+  const KEYS: Record<string, string[]> = {
+    'collection.progress.met': ['n'],
+    'collection.saved.text': ['n'],
+    'collection.estimate.extra': ['n'],
+    'collection.notice.slices-differ': ['sum'],
+    'collection.notice.window-exceeded': ['total'],
+    'collection.notice.ended-before-total': ['total'],
+    'collection.notice.more-than-matched': ['seen'],
+    'collection.notice.ended-by-exception': ['matched'],
+    'collection.notice.empty-page': ['matched'],
+    'collection.notice.ended-before-matched': ['matched'],
+    'collection.notice.overrun-stopped': ['seen'],
+    'collection.cross.notDone': ['n'],
+    'collection.duplicates': ['n'],
+    'convert.worms.stopped': ['done', 'total'],
+    'collection.progress.requests': ['requests', 'retries', 'throttled'],
+    'collection.csv.rows': ['rows'],
+    'collection.rule.count': ['count'],
+    'collection.time.days': ['n'],
+    'downloads.rows': ['rows'],
+    'map.skipped': ['count'],
+  };
+  const COUNTS = [0, 1, 2, 5, 12, 22, 101] as const;
+  const render = (lang: 'pl' | 'en' | 'de' | 'fr', key: string, n: number): string => {
+    const names = new Set([...translate(lang, key).matchAll(/\{\+?(\w+)[:}]/g)].map((m) => m[1]));
+    const params = Object.fromEntries([...names].map((p) => [p, KEYS[key].includes(p) ? n : 'x']));
+    return translate(lang, key, params);
+  };
+
+  it('no placeholder is left open, and every language renders something different for 1 and for 5 when the grammar changes', () => {
+    for (const key of Object.keys(KEYS)) for (const lang of ['pl', 'en', 'de', 'fr'] as const) for (const n of COUNTS) expect(render(lang, key, n), `${lang} ${key} ${n}`).not.toMatch(/[{}]/);
+  });
+
+  it('English and German: no plural noun after 1; French: none after 0 or 1', () => {
+    const enDe = /\b1 (?:records|repeats|requests|retries|rows|names|days|findings|times|Datensätze|Wiederholungen|Anfragen|Zeilen|Namen|Tage|Befunde)\b/;
+    const fr = /\b[01] (?:notices|répétitions|requêtes|nouvelles tentatives|lignes|noms|jours|constats|demandes)\b/;
+    for (const key of Object.keys(KEYS)) {
+      for (const lang of ['en', 'de'] as const) expect(render(lang, key, 1), `${lang} ${key}`).not.toMatch(enDe);
+      for (const n of [0, 1]) expect(render('fr', key, n), `fr ${key} ${n}`).not.toMatch(fr);
+    }
+    expect(render('en', 'collection.duplicates', 1)).toMatch(/^1 repeat was counted once/);
+    expect(render('en', 'collection.duplicates', 2)).toMatch(/^2 repeats were counted once/);
+    expect(render('de', 'collection.progress.met', 1)).toBe('Bisher 1 Datensatz erfasst.');
+    expect(render('fr', 'collection.progress.met', 1)).toBe('1 notice rencontrée jusqu’ici.');
+    expect(render('en', 'collection.estimate.extra', 1)).toBe('Plus up to 1 request to DataCite for the comparison.');
+    expect(render('en', 'collection.progress.requests', 1)).toBe('1 request, 1 retry, asked to slow down 1 time.');
+  });
+
+  it('Polish: the noun takes its form at 1, 2, 5, 12, 22, 101', () => {
+    const form = (n: number) => /Dotąd napotkano \d+ (\S+)\./.exec(render('pl', 'collection.progress.met', n))![1];
+    expect(COUNTS.map(form)).toEqual(['rekordów', 'rekord', 'rekordy', 'rekordów', 'rekordów', 'rekordy', 'rekordów']);
+    const dup = (n: number) => /^\d+ (\S+) policzono raz/.exec(render('pl', 'collection.duplicates', n))![1];
+    expect(COUNTS.map(dup)).toEqual(['powtórzeń', 'powtórzenie', 'powtórzenia', 'powtórzeń', 'powtórzeń', 'powtórzenia', 'powtórzeń']);
+    expect(render('pl', 'collection.cross.notDone', 1)).toContain('sprawdzono go tylko');
+    expect(render('pl', 'collection.cross.notDone', 2)).toContain('sprawdzono je tylko');
+    expect(render('pl', 'collection.cross.notDone', 1)).toContain('dla 1 rekordu');
+  });
+
+  it('IN-DWCA-EVENT-CORE and CONV-COLUMN-NOT-EXPORTED agree in en, de, fr at 0, 1, 2', () => {
+    const core = (lang: 'en' | 'de' | 'fr', n: number) => renderPlain(makeFinding('IN-DWCA-EVENT-CORE', { file: 'f.zip', params: { occurrences: n } }), lang);
+    expect(core('en', 1)).toContain('has 1 row.');
+    expect(core('en', 2)).toContain('has 2 rows.');
+    expect(core('de', 1)).toContain('hat 1 Zeile.');
+    expect(core('fr', 1)).toContain('compte 1 ligne.');
+    expect(core('fr', 0)).toContain('compte 0 ligne.');
+    const col = (lang: 'pl' | 'en' | 'de' | 'fr', n: number) => renderConvertPlain(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { file: 'f.csv', sheet: 'S', params: { count: n, columns: 'a' } }), lang);
+    expect(col('pl', 1)).toContain('bez niej.');
+    expect(col('pl', 2)).toContain('bez nich.');
+    expect(col('en', 1)).toContain('without it.');
+    expect(col('en', 2)).toContain('without them.');
+    expect(col('fr', 1)).toContain('sans elle.');
+    expect(col('fr', 2)).toContain('sans elles.');
+  });
+
+  it('XF-DUPLICATE-SAMPLES reads naturally at 1 and 2 in English', () => {
+    const t = (n: number) => renderPlain(makeFinding('XF-DUPLICATE-SAMPLES', { file: 'f.csv', lines: [3], params: { count: n, fileA: 'a', fileB: 'b' } }), 'en');
+    expect(t(1)).toBe('The files a and b have 1 sample in common. Make sure it is not counted twice.');
+    expect(t(2)).toBe('The files a and b have 2 samples in common. Make sure they are not counted twice.');
+  });
+});

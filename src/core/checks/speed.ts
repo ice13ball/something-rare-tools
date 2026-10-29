@@ -6,7 +6,7 @@ import { makeFinding, threshold } from '../rules/registry';
 import type { DataRow, Dataset, Finding, ParsedDate } from '../types';
 import { SHIP_SPEED_MIN_SEPARATION_KM } from './constants';
 import { decimalsOfNumber } from './crossfile';
-import { SIGN_FLIP_MIN_KM, SIGN_FLIP_RATIO, km, writtenDecimals } from './rows';
+import { SIGN_FLIP_MIN_KM, km, writtenDecimals } from './rows';
 import { minOf } from '../util/arrays';
 
 /*
@@ -262,16 +262,12 @@ const hopText = (h: Hop): string => `${num(h.km)} km, ${hoursText(h.hours)} h, �
 
 type Axis = 'lat' | 'lon';
 
-/** Longitudes within this many degrees of 180 are the antimeridian (a track crossing it), not a sign: no hint there. */
-const ANTIMERIDIAN_DEG = 10;
-
 const flipEv = (e: Ev, axis: Axis): Ev => (axis === 'lat' ? { ...e, lat: -e.lat } : { ...e, lon: -e.lon });
 
 /** The run with the sign of one coordinate reversed in every event; null when its events do not all carry the same sign of it. */
 function flipRun(run: Run, axis: Axis): Run | null {
   const sign = run.first[axis];
   if (sign === 0 || run.events.some((e) => e[axis] * sign <= 0)) return null;
-  if (axis === 'lon' && Math.abs(sign) > 180 - ANTIMERIDIAN_DEG) return null;
   const events = run.events.map((e) => flipEv(e, axis));
   return { ...run, events, first: events[0], last: events[events.length - 1], endEv: events[run.events.indexOf(run.endEv)] };
 }
@@ -279,38 +275,31 @@ function flipRun(run: Run, axis: Axis): Run | null {
 /** A flipped hop is plausible when it is not measured at all (the places came together) or stays within the limit. */
 const plausible = (h: Hop | undefined, limit: number): boolean => h === undefined || h.kn <= limit;
 
-const degrees = (v: number): string => String(Number(v.toFixed(5))).replace('-', '−');
+/** A coordinate as the user would search for it in the file: plain ASCII minus. */
+const degrees = (v: number): string => String(Number(v.toFixed(5)));
 
 /**
- * ROW-SHIP-SPEED hint: reversing the sign of ONE coordinate of the offending event (the same events and times, no other row changed)
- * makes the hops plausible under the limit the rule itself used. Two-sided: both hops. A pair: its single hop, and only when it falls by
- * SIGN_FLIP_RATIO (the same ratio as the station check in rows.ts), and only when exactly one event and axis do it. The flip must move
- * the position by at least SIGN_FLIP_MIN_KM (near 0 degrees a sign changes little) and a longitude near 180 is not a sign. Exactly one
- * axis may explain it: both or neither gives no hint.
+ * Hint of a two-sided finding: reversing the sign of ONE coordinate of the middle event alone (same events, same times, no other row
+ * changed) makes both hops plausible under the limit the rule itself used. The flip must move the position by at least SIGN_FLIP_MIN_KM
+ * (the station check's minimum in rows.ts: near 0 degrees a sign changes little, and the same minimum keeps a position a degree or so
+ * from 180 out, where the flip is a short step). km() measures across the antimeridian, so a longitude of 175 against neighbours at
+ * -175 is a real sign error and gets the hint. Exactly one axis may explain it: both or neither gives no hint. A pair (first or last
+ * event, two bad events in a row) never gets one: flipping either of its two events fits equally, so the hint could not name the row.
  */
 function signHint(item: Item, bucket: string): { axis: Axis; text: string } | undefined {
+  if (item.chain.length !== 3) return undefined;
   const limit = item.rule === 'ROW-SHIP-SPEED-UNUSUAL' ? threshold('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual') : threshold('ROW-SHIP-SPEED', 'speed.extreme');
-  const n = item.chain.length;
-  const found: { axis: Axis; index: number; run: Run }[] = [];
-  const middle = n === 3 ? 1 : -1;
-  for (const index of n === 3 ? [1] : [0, 1]) {
-    const run = item.chain[index];
-    for (const axis of ['lon', 'lat'] as const) {
-      const flipped = flipRun(run, axis);
-      if (!flipped) continue;
-      if (km(run.first.lat, run.first.lon, flipped.first.lat, flipped.first.lon) < SIGN_FLIP_MIN_KM) continue;
-      const chain = item.chain.map((c, i) => (i === index ? flipped : c));
-      const ok =
-        index === middle
-          ? plausible(hop(chain[0], chain[1]), limit) && plausible(hop(chain[1], chain[2]), limit)
-          : ((h, was) => plausible(h, limit) && (h === undefined || h.kn * SIGN_FLIP_RATIO <= was.kn))(hop(chain[0], chain[1]), item.hops[0]);
-      if (ok) found.push({ axis, index, run });
-    }
+  const [before, run, after] = item.chain;
+  const found: Axis[] = [];
+  for (const axis of ['lon', 'lat'] as const) {
+    const flipped = flipRun(run, axis);
+    if (!flipped) continue;
+    if (km(run.first.lat, run.first.lon, flipped.first.lat, flipped.first.lon) < SIGN_FLIP_MIN_KM) continue;
+    if (plausible(hop(before, flipped), limit) && plausible(hop(flipped, after), limit)) found.push(axis);
   }
   if (found.length !== 1) return undefined;
-  const { axis, index, run } = found[0];
-  const v = run.first[axis];
-  return { axis, text: `${placeLabel(run, bucket, index > 0, index < n - 1)} (${degrees(v)}→${degrees(-v)})` };
+  const v = run.first[found[0]];
+  return { axis: found[0], text: `${placeLabel(run, bucket, true, true)} (${degrees(v)}→${degrees(-v)})` };
 }
 
 function caseText(item: Item, bucket: string): { text: string; places: boolean; split: boolean; hint?: { axis: Axis; text: string } } {
@@ -354,7 +343,10 @@ function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
       if (shown.some((c) => c.split)) params.split = 'yes';
       for (const axis of ['lon', 'lat'] as const) {
         const hints = shown.flatMap((c) => (c.hint?.axis === axis ? [c.hint.text] : []));
-        if (hints.length > 0) params[axis === 'lon' ? 'signLon' : 'signLat'] = hints.join('; ');
+        if (hints.length > 0) {
+          params[axis === 'lon' ? 'signLon' : 'signLat'] = hints.join('; ');
+          params[axis === 'lon' ? 'signLonCount' : 'signLatCount'] = hints.length;
+        }
       }
       if (rule === 'ROW-SHIP-SPEED-UNUSUAL') {
         const extreme = threshold('ROW-SHIP-SPEED', 'speed.extreme');

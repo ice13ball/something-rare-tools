@@ -26,7 +26,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     params: ['fileA', 'fileB', 'count'],
     plain: {
       pl: `Pliki {fileA} i {fileB} zawierają {count} {+count:tę samą próbkę|te same próbki|tych samych próbek}. Upewnij się, że {+count:nie jest liczona|nie są liczone|nie są liczone} dwa razy.`,
-      en: `The files {fileA} and {fileB} contain {count} of the same {+count:sample|samples}. Make sure {+count:it is|they are} not counted twice.`,
+      en: `The files {fileA} and {fileB} have {count} {+count:sample|samples} in common. Make sure {+count:it is|they are} not counted twice.`,
       de: `Die Dateien {fileA} und {fileB} enthalten {count} {+count:gleiche Probe|gleiche Proben}. Stellen Sie sicher, dass sie nicht doppelt gezählt {+count:wird|werden}.`,
       fr: `Les fichiers {fileA} et {fileB} contiennent {count} {+count:échantillon identique|échantillons identiques}. Assurez-vous {+count:qu'il n'est pas compté|qu'ils ne sont pas comptés} deux fois.`,
     },

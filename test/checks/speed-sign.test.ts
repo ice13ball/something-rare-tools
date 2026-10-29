@@ -33,10 +33,10 @@ describe('ship speed: sign hint', () => {
     const fs = run(rows);
     expect(fs.map((f) => f.ruleId)).toEqual(['ROW-SHIP-SPEED']);
     expect(fs[0].lines).toEqual([line(8)]);
-    expect(fs[0].params.signLon).toBe(`${line(8)} (20→−20)`);
+    expect(fs[0].params.signLon).toBe(`${line(8)} (20→-20)`);
     expect(fs[0].params.signLat).toBeUndefined();
-    expect(renderPlain(fs[0], 'en')).toContain(`missing or extra minus sign in the longitude of row ${line(8)} (20→−20)`);
-    expect(renderPlain(fs[0], 'pl')).toContain(`brak lub nadmiar minusa przy długości w wierszu ${line(8)}`);
+    expect(renderPlain(fs[0], 'en')).toContain(`missing or extra minus sign in the longitude of row ${line(8)} (20→-20)`);
+    expect(renderPlain(fs[0], 'pl')).toContain(`brak lub nadmiar minusa przy długości geograficznej w wierszu ${line(8)}`);
     expect(renderPlain(fs[0], 'de')).toContain(`Längengrad in Zeile ${line(8)}`);
     expect(renderPlain(fs[0], 'fr')).toContain(`longitude de la ligne ${line(8)}`);
   });
@@ -46,7 +46,7 @@ describe('ship speed: sign hint', () => {
     rows[6] = { ...rows[6], lat: -26 };
     const fs = run(rows);
     expect(fs.map((f) => f.ruleId)).toEqual(['ROW-SHIP-SPEED']);
-    expect(fs[0].params.signLat).toBe(`${line(6)} (−26→26)`);
+    expect(fs[0].params.signLat).toBe(`${line(6)} (-26→26)`);
     expect(fs[0].params.signLon).toBeUndefined();
     expect(renderPlain(fs[0], 'en')).toContain('in the latitude of row');
   });
@@ -91,15 +91,35 @@ describe('ship speed: sign hint', () => {
     expect(fs[0].params.signLon).toBeUndefined();
   });
 
-  it('near 180 degrees of longitude (the antimeridian): no hint', () => {
+  it('near 180 degrees: km() measures across the antimeridian, so 175 against neighbours at -175 is a real sign error and is hinted', () => {
     const rows = track(12, 40, 175);
     rows[8] = { ...rows[8], lon: -175 };
     const fs = run(rows);
     expect(fs.map((f) => f.ruleId)).toEqual(['ROW-SHIP-SPEED']);
-    expect(fs[0].params.signLon).toBeUndefined();
+    expect(fs[0].params.signLon).toBe(`${line(8)} (-175→175)`);
   });
 
-  it('a pair (first event wrong): it is not known which of the two, so no hint, the finding is unchanged', () => {
+  it('179.5 against neighbours at -179.5: the flip moves the position less than 100 km, so no hint', () => {
+    const rows = track(12, 40, 179.5, 0.2);
+    rows[8] = { ...rows[8], lon: -179.5 };
+    const fs = run(rows);
+    for (const f of fs) expect(f.params.signLon).toBeUndefined();
+  });
+
+  it('two flipped events: one count, both rows, and the sentence is plural in all four languages', () => {
+    const rows = track(24, 40, -20);
+    rows[5] = { ...rows[5], lon: 20 };
+    rows[16] = { ...rows[16], lon: 20 };
+    const [f] = run(rows);
+    expect(f.params.signLon).toBe(`${line(5)} (20→-20); ${line(16)} (20→-20)`);
+    expect(f.params.signLonCount).toBe(2);
+    expect(renderPlain(f, 'pl')).toContain(`długości geograficznej w wierszach ${line(5)} (20→-20); ${line(16)}`);
+    expect(renderPlain(f, 'en')).toContain(`longitude of rows ${line(5)} (20→-20); ${line(16)}`);
+    expect(renderPlain(f, 'de')).toContain(`Längengrad in den Zeilen ${line(5)}`);
+    expect(renderPlain(f, 'fr')).toContain(`longitude des lignes ${line(5)}`);
+  });
+
+  it('a pair (first event wrong): flipping either event fits, so no hint and the pair rule carries no hint sentence', () => {
     const rows = track(12, 40, -20);
     rows[0] = { ...rows[0], lon: 20 };
     const fs = run(rows);
@@ -112,6 +132,6 @@ describe('ship speed: sign hint', () => {
     rows[8] = { ...rows[8], lon: 20 };
     const [f] = run(rows);
     expect(f.severity).toBe('warning');
-    expect(Object.keys(f.params).sort()).toEqual(['cases', 'count', 'declared', 'signLon']);
+    expect(Object.keys(f.params).sort()).toEqual(['cases', 'count', 'declared', 'signLon', 'signLonCount']);
   });
 });
