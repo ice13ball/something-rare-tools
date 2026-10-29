@@ -6,7 +6,7 @@ import { makeFinding, threshold } from '../rules/registry';
 import type { DataRow, Dataset, Finding, ParsedDate } from '../types';
 import { SHIP_SPEED_MIN_SEPARATION_KM } from './constants';
 import { decimalsOfNumber } from './crossfile';
-import { km, writtenDecimals } from './rows';
+import { SIGN_FLIP_MIN_KM, SIGN_FLIP_RATIO, km, writtenDecimals } from './rows';
 import { minOf } from '../util/arrays';
 
 /*
@@ -258,7 +258,62 @@ const num = (v: number): string => String(v >= 10 ? Math.round(v) : Math.round(v
 const hoursText = (v: number): string => (v < 0.1 ? v.toFixed(2) : num(v)); // "0.02 h": events stamped within the same minute stay visible
 const hopText = (h: Hop): string => `${num(h.km)} km, ${hoursText(h.hours)} h, ≥${Math.floor(h.kn)} kn`;
 
-function caseText(item: Item, bucket: string): { text: string; places: boolean; split: boolean } {
+/* ---------- a sign explains the speed ---------- */
+
+type Axis = 'lat' | 'lon';
+
+/** Longitudes within this many degrees of 180 are the antimeridian (a track crossing it), not a sign: no hint there. */
+const ANTIMERIDIAN_DEG = 10;
+
+const flipEv = (e: Ev, axis: Axis): Ev => (axis === 'lat' ? { ...e, lat: -e.lat } : { ...e, lon: -e.lon });
+
+/** The run with the sign of one coordinate reversed in every event; null when its events do not all carry the same sign of it. */
+function flipRun(run: Run, axis: Axis): Run | null {
+  const sign = run.first[axis];
+  if (sign === 0 || run.events.some((e) => e[axis] * sign <= 0)) return null;
+  if (axis === 'lon' && Math.abs(sign) > 180 - ANTIMERIDIAN_DEG) return null;
+  const events = run.events.map((e) => flipEv(e, axis));
+  return { ...run, events, first: events[0], last: events[events.length - 1], endEv: events[run.events.indexOf(run.endEv)] };
+}
+
+/** A flipped hop is plausible when it is not measured at all (the places came together) or stays within the limit. */
+const plausible = (h: Hop | undefined, limit: number): boolean => h === undefined || h.kn <= limit;
+
+const degrees = (v: number): string => String(Number(v.toFixed(5))).replace('-', '−');
+
+/**
+ * ROW-SHIP-SPEED hint: reversing the sign of ONE coordinate of the offending event (the same events and times, no other row changed)
+ * makes the hops plausible under the limit the rule itself used. Two-sided: both hops. A pair: its single hop, and only when it falls by
+ * SIGN_FLIP_RATIO (the same ratio as the station check in rows.ts), and only when exactly one event and axis do it. The flip must move
+ * the position by at least SIGN_FLIP_MIN_KM (near 0 degrees a sign changes little) and a longitude near 180 is not a sign. Exactly one
+ * axis may explain it: both or neither gives no hint.
+ */
+function signHint(item: Item, bucket: string): { axis: Axis; text: string } | undefined {
+  const limit = item.rule === 'ROW-SHIP-SPEED-UNUSUAL' ? threshold('ROW-SHIP-SPEED-UNUSUAL', 'speed.unusual') : threshold('ROW-SHIP-SPEED', 'speed.extreme');
+  const n = item.chain.length;
+  const found: { axis: Axis; index: number; run: Run }[] = [];
+  const middle = n === 3 ? 1 : -1;
+  for (const index of n === 3 ? [1] : [0, 1]) {
+    const run = item.chain[index];
+    for (const axis of ['lon', 'lat'] as const) {
+      const flipped = flipRun(run, axis);
+      if (!flipped) continue;
+      if (km(run.first.lat, run.first.lon, flipped.first.lat, flipped.first.lon) < SIGN_FLIP_MIN_KM) continue;
+      const chain = item.chain.map((c, i) => (i === index ? flipped : c));
+      const ok =
+        index === middle
+          ? plausible(hop(chain[0], chain[1]), limit) && plausible(hop(chain[1], chain[2]), limit)
+          : ((h, was) => plausible(h, limit) && (h === undefined || h.kn * SIGN_FLIP_RATIO <= was.kn))(hop(chain[0], chain[1]), item.hops[0]);
+      if (ok) found.push({ axis, index, run });
+    }
+  }
+  if (found.length !== 1) return undefined;
+  const { axis, index, run } = found[0];
+  const v = run.first[axis];
+  return { axis, text: `${placeLabel(run, bucket, index > 0, index < n - 1)} (${degrees(v)}→${degrees(-v)})` };
+}
+
+function caseText(item: Item, bucket: string): { text: string; places: boolean; split: boolean; hint?: { axis: Axis; text: string } } {
   const n = item.chain.length;
   const labels = item.chain.map((r, i) => placeLabel(r, bucket, i > 0, i < n - 1));
   const legend = item.chain.flatMap((r, i) => {
@@ -267,7 +322,7 @@ function caseText(item: Item, bucket: string): { text: string; places: boolean; 
   });
   const text = `${labels.join('→')}: ${item.hops.map(hopText).join('; ')}${legend.length > 0 ? ` [${legend.join('; ')}]` : ''}`;
   // "a/b" is decided by the events, not by looking for "/" in the text (a file name inside a zip may hold one)
-  return { text, places: legend.length > 0, split: item.chain.some((r, i) => i < n - 1 && r.endEv !== r.last) };
+  return { text, places: legend.length > 0, split: item.chain.some((r, i) => i < n - 1 && r.endEv !== r.last), hint: signHint(item, bucket) };
 }
 
 function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
@@ -297,6 +352,10 @@ function findingsOf(items: Item[], declaredGroup: boolean): Finding[] {
       if (b.items.some((i) => i.mixed)) params.mixed = 'yes';
       if (shown.some((c) => c.places)) params.places = 'yes';
       if (shown.some((c) => c.split)) params.split = 'yes';
+      for (const axis of ['lon', 'lat'] as const) {
+        const hints = shown.flatMap((c) => (c.hint?.axis === axis ? [c.hint.text] : []));
+        if (hints.length > 0) params[axis === 'lon' ? 'signLon' : 'signLat'] = hints.join('; ');
+      }
       if (rule === 'ROW-SHIP-SPEED-UNUSUAL') {
         const extreme = threshold('ROW-SHIP-SPEED', 'speed.extreme');
         if (b.items.some((i) => i.hops.some((h) => h.kn > extreme))) params.impossible = 'yes';
