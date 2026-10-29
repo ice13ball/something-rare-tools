@@ -254,6 +254,21 @@ describe('static routes', () => {
     expect((await request(a).get('/og.png')).status).toBe(404);
   });
 
+  it('/og-convert.jpg and /og-convert.webp (the /convert preview) are served when present with their image types', async () => {
+    expect((await request(app).get('/og-convert.jpg')).status).toBe(404);
+    const dir = mkdtempSync(join(tmpdir(), 'dist-ogc-'));
+    cpSync(DIST, dir, { recursive: true });
+    writeFileSync(join(dir, 'og-convert.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    writeFileSync(join(dir, 'og-convert.webp'), Buffer.from('RIFF0000WEBP'));
+    const a = make({ distDir: dir }).app;
+    const jpg = await request(a).get('/og-convert.jpg');
+    expect(jpg.status).toBe(200);
+    expect(jpg.headers['content-type']).toBe('image/jpeg');
+    const webp = await request(a).get('/og-convert.webp');
+    expect(webp.status).toBe(200);
+    expect(webp.headers['content-type']).toBe('image/webp');
+  });
+
   it('refuses to start without the HTML pages', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dist-empty-'));
     expect(() => make({ distDir: dir })).toThrow(/index\.html/);
