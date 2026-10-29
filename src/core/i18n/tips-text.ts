@@ -216,6 +216,16 @@ No findings only means that no problems were found in the checked categories.`,
 • Every value is the cell you wrote: nothing is summed, averaged, rounded or chosen; only a decimal comma is written as a point, as everywhere.
 • The same sample with the same parameter and unit on two rows is never merged: it blocks, and the lines are named. A flag parameter such as Temp_QC is not a measurement; it is left out, and said.
 • A long sheet that does not meet these conditions is blocked, with the reason. A sheet with a taxon or quantity column is not touched.`,
+  'tip.convertPivotOff.does': `Reads this sheet as a normal table instead of regrouping its rows, so each of its columns keeps its own meaning.`,
+  'tip.convertPivotOff.logic': `• Tick it when the parameter and value columns are not one row per measurement: for example "Variable" is a cruise leg and "Value" a price.
+• Untick it to read the sheet as one row per sample again.
+• With the box ticked the sheet is read exactly as it is. The block for a long sheet then applies as usual, and you can change the meaning of any column.
+• The choice is kept in the companion file, for a sheet of the same name.`,
+  'tip.convertPivotKey.does': `Takes a column out of the key that tells samples apart, when it describes each measurement.`,
+  'tip.convertPivotKey.logic': `• Two rows belong to one sample when all their other columns are equal: a comment, analyst, method or detection limit that differs from row to row would split one sample into several.
+• A column you mark here leaves that key. Its values are not written, because the archive has no place for a value per measurement; the note says which columns were left out.
+• Mark only columns that describe the measurement. Cast, replicate or depth tell samples apart: leave them unmarked.
+• The choice is for this run only.`,
   'tip.convertSheetUse.does': `Chooses whether this sheet is converted.`,
   'tip.convertSheetUse.logic': `• A sheet you untick is left out completely: nothing from it is converted, counted or checked.
 • Every sheet starts ticked.`,
@@ -689,6 +699,16 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Każda wartość to komórka, którą wpisano: nic nie jest sumowane, uśredniane, zaokrąglane ani wybierane; tylko przecinek dziesiętny jest zapisywany jako kropka, jak wszędzie.
 • Ta sama próbka z tym samym parametrem i jednostką w dwóch wierszach nigdy nie jest łączona: blokuje, a wiersze są wymienione. Parametr będący flagą, np. Temp_QC, nie jest pomiarem; jest pomijany, i jest to powiedziane.
 • Arkusz długi, który nie spełnia tych warunków, jest blokowany z podaniem powodu. Arkusza z kolumną taksonu lub liczebności to nie dotyczy.`,
+  'tip.convertPivotOff.does': `Czyta ten arkusz jako zwykłą tabelę zamiast grupować jego wiersze, więc każda kolumna zachowuje własne znaczenie.`,
+  'tip.convertPivotOff.logic': `• Zaznacz, gdy kolumny parametru i wartości nie oznaczają jednego wiersza na pomiar: na przykład „Variable” to odcinek rejsu, a „Value” to cena.
+• Odznacz, aby znów czytać arkusz jako jeden wiersz na próbkę.
+• Przy zaznaczonym polu arkusz jest czytany dokładnie taki, jaki jest. Blokada arkusza długiego działa wtedy jak zwykle i można zmienić znaczenie dowolnej kolumny.
+• Wybór zapisuje plik towarzyszący, dla arkusza o tej samej nazwie.`,
+  'tip.convertPivotKey.does': `Wyjmuje z klucza odróżniającego próbki kolumnę, która opisuje każdy pomiar.`,
+  'tip.convertPivotKey.logic': `• Dwa wiersze należą do jednej próbki, gdy wszystkie ich pozostałe kolumny są równe: komentarz, analityk, metoda lub granica wykrywalności różne w każdym wierszu rozbiłyby jedną próbkę na kilka.
+• Kolumna zaznaczona tutaj wypada z tego klucza. Jej wartości nie są zapisywane, bo archiwum nie ma miejsca na wartość przypisaną do pomiaru; uwaga mówi, które kolumny pominięto.
+• Zaznacz tylko kolumny opisujące pomiar. Rzut, powtórzenie lub głębokość odróżniają próbki: zostaw je bez zaznaczenia.
+• Wybór dotyczy tylko tego przebiegu.`,
   'tip.convertSheetUse.does': `Wybiera, czy ten arkusz jest przekształcany.`,
   'tip.convertSheetUse.logic': `• Odznaczony arkusz jest całkowicie pomijany: nic z niego nie jest przekształcane, liczone ani sprawdzane.
 • Każdy arkusz na początku jest zaznaczony.`,
@@ -1160,6 +1180,16 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Jeder Wert ist die Zelle, die Sie geschrieben haben: nichts wird summiert, gemittelt, gerundet oder ausgewählt; nur ein Dezimalkomma wird wie überall als Punkt geschrieben.
 • Dieselbe Probe mit demselben Parameter und derselben Einheit in zwei Zeilen wird nie zusammengeführt: Das blockiert, und die Zeilen werden genannt. Ein Flaggen-Parameter wie Temp_QC ist keine Messung; er wird ausgelassen, und das wird gesagt.
 • Ein langes Blatt, das diese Bedingungen nicht erfüllt, wird mit Begründung blockiert. Ein Blatt mit einer Taxon- oder Mengenspalte bleibt unberührt.`,
+  'tip.convertPivotOff.does': `Liest dieses Blatt als normale Tabelle, statt seine Zeilen neu zu gruppieren, sodass jede Spalte ihre eigene Bedeutung behält.`,
+  'tip.convertPivotOff.logic': `• Setzen Sie den Haken, wenn Parameter- und Wertspalte nicht eine Zeile je Messung bedeuten: etwa wenn „Variable“ ein Fahrtabschnitt und „Value“ ein Preis ist.
+• Nehmen Sie ihn weg, um das Blatt wieder als eine Zeile je Probe zu lesen.
+• Mit gesetztem Haken wird das Blatt genau so gelesen, wie es ist. Die Sperre für ein langes Blatt gilt dann wie üblich, und Sie können die Bedeutung jeder Spalte ändern.
+• Die Wahl steht in der Begleitdatei, für ein Blatt gleichen Namens.`,
+  'tip.convertPivotKey.does': `Nimmt eine Spalte aus dem Schlüssel, der Proben unterscheidet, wenn sie jede Messung beschreibt.`,
+  'tip.convertPivotKey.logic': `• Zwei Zeilen gehören zu einer Probe, wenn alle ihre übrigen Spalten gleich sind: Ein Kommentar, Analyst, eine Methode oder Nachweisgrenze, die von Zeile zu Zeile abweicht, würde eine Probe in mehrere teilen.
+• Eine hier markierte Spalte verlässt diesen Schlüssel. Ihre Werte werden nicht geschrieben, weil das Archiv keinen Platz für einen Wert je Messung hat; der Hinweis nennt die ausgelassenen Spalten.
+• Markieren Sie nur Spalten, die die Messung beschreiben. Einsatz, Wiederholung oder Tiefe unterscheiden Proben: Lassen Sie sie unmarkiert.
+• Die Wahl gilt nur für diesen Durchlauf.`,
   'tip.convertSheetUse.does': `Legt fest, ob dieses Blatt umgewandelt wird.`,
   'tip.convertSheetUse.logic': `• Ein abgewähltes Blatt wird vollständig ausgelassen: Nichts daraus wird umgewandelt, gezählt oder geprüft.
 • Jedes Blatt beginnt angekreuzt.`,
@@ -1631,6 +1661,16 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Chaque valeur est la cellule que vous avez écrite : rien n'est additionné, moyenné, arrondi ni choisi ; seule une virgule décimale est écrite en point, comme partout.
 • Le même échantillon avec le même paramètre et la même unité sur deux lignes n'est jamais fusionné : cela bloque, et les lignes sont nommées. Un paramètre indicateur, comme Temp_QC, n'est pas une mesure ; il est écarté, et c'est dit.
 • Une feuille longue qui ne remplit pas ces conditions est bloquée, avec la raison. Une feuille avec une colonne de taxon ou de quantité n'est pas touchée.`,
+  'tip.convertPivotOff.does': `Lit cette feuille comme un tableau normal au lieu de regrouper ses lignes, de sorte que chaque colonne garde son propre sens.`,
+  'tip.convertPivotOff.logic': `• Cochez-la quand les colonnes de paramètre et de valeur ne sont pas une ligne par mesure : par exemple « Variable » est un tronçon de campagne et « Value » un prix.
+• Décochez-la pour lire de nouveau la feuille comme une ligne par échantillon.
+• Case cochée, la feuille est lue exactement telle quelle. Le blocage d'une feuille longue s'applique alors comme d'habitude, et vous pouvez changer le sens de n'importe quelle colonne.
+• Le choix est gardé dans le fichier compagnon, pour une feuille du même nom.`,
+  'tip.convertPivotKey.does': `Retire de la clé qui distingue les échantillons une colonne qui décrit chaque mesure.`,
+  'tip.convertPivotKey.logic': `• Deux lignes appartiennent au même échantillon quand toutes leurs autres colonnes sont égales : un commentaire, un analyste, une méthode ou une limite de détection qui change d'une ligne à l'autre couperait un échantillon en plusieurs.
+• Une colonne marquée ici quitte cette clé. Ses valeurs ne sont pas écrites, car l'archive n'a pas de place pour une valeur par mesure ; la note dit quelles colonnes sont écartées.
+• Ne marquez que les colonnes qui décrivent la mesure. Déploiement, réplicat ou profondeur distinguent les échantillons : laissez-les non marquées.
+• Le choix ne vaut que pour cette exécution.`,
   'tip.convertSheetUse.does': `Choisit si cette feuille est convertie.`,
   'tip.convertSheetUse.logic': `• Une feuille décochée est entièrement écartée : rien n'en est converti, compté ni contrôlé.
 • Chaque feuille commence cochée.`,

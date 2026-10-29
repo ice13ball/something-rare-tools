@@ -23,7 +23,7 @@ export type { EventTree, SampleSite, TreeOptions } from './events';
 export { proposeSampleCodes } from './ids';
 export { readConvertFile } from './read';
 export { MAX_PAIRS, pivotConvertFile, pivotNoteFindings } from './pivot';
-export type { PivotNote } from './pivot';
+export type { PivotChoice, PivotNote } from './pivot';
 export type { SampleCodeProposal } from './ids';
 export type { ConvertResult, ConvertStats, EventRec, EventType, MofIntent, OccRec, OccurrenceStatus, ProfileSummary, SourceRef, TreeSummary } from './model';
 export { parseEffortUnit, parseRateUnit, resolveQuantity } from './quantity';

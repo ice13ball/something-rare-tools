@@ -26,6 +26,8 @@ export interface ConvertFileSummary extends FileSummary {
    * The sheet in `sheets`, `mappings`, `proposals` and `samples` is the pivoted one, so the role table shows its columns like any other.
    */
   pivots?: Record<string, PivotNote>;
+  /** The long sheets the user chose to read as normal tables (their names), so that the page can offer the way back. */
+  pivotOff?: string[];
 }
 
 export interface ConvertParseResult {
@@ -137,6 +139,8 @@ export interface ConvertProtocol {
   parse: { req: { files: InputFile[] }; res: ConvertParseResult };
   convert: { req: { body: ConvertRequestBody }; res: ConvertView };
   proposeCodes: { req: { fileId: string; sheet: string; mapping: SheetMapping }; res: CodeProposalView | null };
+  /** The user's choice about a long environmental sheet: read it as a normal table (`off`), and which key columns describe the measurement, not the sample. The file is read again; the answer is its new summary. */
+  pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: string[] }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
 }
 
@@ -155,5 +159,6 @@ export interface ConvertEngine {
   parse(files: InputFile[]): Promise<ConvertParseResult>;
   convert(body: ConvertRequestBody): Promise<ConvertView>;
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping): Promise<CodeProposalView | null>;
+  pivotChoice(fileId: string, sheet: string, off: boolean, describes: string[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
 }

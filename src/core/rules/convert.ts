@@ -35,11 +35,13 @@ import type { RuleSpec } from './spec';
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
- *   CONV-LONG-UNSUPPORTED      parameterColumn, valueColumn, reason, count   a sheet in the long environmental layout (a parameter column and a value column, no taxon and no quantity column) that the converter does not read; sheet = the sheet; reason = one-parameter | too-many (absent: the sheet was not read as a long one for another reason), count = the distinct parameters / the (parameter, unit) pairs
+ *   CONV-LONG-UNSUPPORTED      parameterColumn, valueColumn, reason, count, max   a sheet in the long environmental layout (a parameter column and a value column, no taxon and no quantity column) that the converter does not read; sheet = the sheet; reason = one-parameter | too-many (absent: the sheet was not read as a long one for another reason), count = the distinct parameters / the (parameter, unit) pairs
  *   CONV-LONG-READ             parameterColumn, valueColumn, rows, samples, columns   info: a long environmental sheet was read as one row per sample (core/convert/pivot.ts); rows = rows read, samples = rows made, columns = parameter columns made
  *   CONV-LONG-FLAG-COLUMNS     count, columns   info: quality-flag columns of a long sheet left out
  *   CONV-LONG-FLAG-PARAMETERS  count, names, rows   info: parameters of a long sheet that are quality flags, their rows left out
  *   CONV-LONG-RENAMED          count, names     info: parameter columns whose header collided with another header and got a number
+ *   CONV-LONG-DROPPED          count, columns   info: key columns the user marked as describing the measurement, not the sample: removed from the key, values not written
+ *   CONV-LONG-KEY-VARIES       count, columns   warning: rows that share every position / identity column differ in these columns (count = such samples), so each difference is read as another sample
  *   CONV-LONG-DUPLICATE        (none)           field = the parameter column (header with unit), lines = the original lines of the repeated rows of ONE sample
  *   CONV-LONG-NO-PARAMETER     count            lines = the original lines that have a value and no parameter name
  *   CONV-NO-TAXON              shape            shape = wide | long
@@ -328,14 +330,14 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-UNSUPPORTED',
     category: 'B',
     severity: 'error',
-    params: ['parameterColumn', 'valueColumn', 'reason', 'count'],
+    params: ['parameterColumn', 'valueColumn', 'reason', 'count', 'max'],
     plain: {
       pl: `Arkusz „{sheet}” ma układ długi: wiersz na parametr (kolumny „{parameterColumn}” i „{valueColumn}”), którego konwerter nie czyta. Zrób kolumnę na parametr, z jednostką w nagłówku (np. „Temp [°C]”), wiersz na próbkę i wczytaj ponownie. Jeśli arkusz zawiera gatunki, zaznacz powyżej kolumnę taksonu i liczebności.`,
       en: `Sheet "{sheet}" is in the long layout: a row per parameter (columns "{parameterColumn}" and "{valueColumn}"), which the converter cannot read. Reshape it to one column per parameter, unit in the header (e.g. "Temp [°C]"), one row per sample, and load it again. If it holds species, mark the taxon column and the count above.`,
       de: `Das Blatt „{sheet}“ hat das lange Layout: eine Zeile je Parameter („{parameterColumn}“, „{valueColumn}“), das der Konverter nicht liest. Formen Sie es um: eine Spalte je Parameter, Einheit in der Überschrift („Temp [°C]“), eine Zeile je Probe, dann neu laden. Bei Arten markieren Sie oben die Taxon- und die Anzahlspalte.`,
       fr: `La feuille « {sheet} » est en format long : une ligne par paramètre (« {parameterColumn} », « {valueColumn} »), que le convertisseur ne lit pas. Une colonne par paramètre, l'unité dans l'en-tête (« Temp [°C] »), une ligne par échantillon, puis rechargez. Pour des espèces, marquez ci-dessus la colonne du taxon et celle du nombre.`,
     },
-    technical: `{file}, {sheet}: a header names a parameter column ("{parameterColumn}") and a value column ("{valueColumn}") and the sheet has no taxon and no quantity column: one row per measured parameter. The converter writes nothing from this sheet; the export is blocked until it is reshaped to one column per parameter (unit in the header) or left out. reason: {reason} (one-parameter: fewer than two distinct parameters; too-many: more than 200 (parameter, unit) pairs; count: {count} distinct parameters or pairs; otherwise the sheet was not read as a long one for another reason).`,
+    technical: `{file}, {sheet}: a header names a parameter column ("{parameterColumn}") and a value column ("{valueColumn}") and the sheet has no taxon and no quantity column: one row per measured parameter. The converter writes nothing from this sheet; the export is blocked until it is reshaped to one column per parameter (unit in the header) or left out. reason: {reason} (one-parameter: fewer than two distinct parameters; too-many: more than {max} (parameter, unit) pairs; count: {count} distinct parameters or pairs; otherwise the sheet was not read as a long one for another reason).`,
   },
   {
     id: 'CONV-LONG-READ',
@@ -388,6 +390,32 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `En-têtes renommés dans la feuille « {sheet} » : {names} ({count} au total). Un en-tête doit être unique et celui-ci égalait celui d'une autre colonne ; un numéro entre parenthèses a donc été ajouté.`,
     },
     technical: `{file}, {sheet}: {count} parameter column header(s) equalled another header and got a number in brackets: {names}.`,
+  },
+  {
+    id: 'CONV-LONG-DROPPED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Pominięto kolumny oznaczone jako opisujące pomiar, a nie próbkę: {columns} (arkusz „{sheet}”, razem: {count}). Archiwum nie ma miejsca na wartość przypisaną do pomiaru, więc te wartości nie są zapisywane.`,
+      en: `Left out: columns you marked as describing the measurement, not the sample: {columns} (sheet "{sheet}", {count} in all). The archive has no place for a value per measurement, so these values are not written.`,
+      de: `Ausgelassen: Spalten, die Sie als Beschreibung der Messung statt der Probe markiert haben: {columns} (Blatt „{sheet}“, insgesamt {count}). Das Archiv hat keinen Platz für einen Wert je Messung, daher werden diese Werte nicht geschrieben.`,
+      fr: `Ignorées : colonnes que vous avez marquées comme décrivant la mesure et non l'échantillon : {columns} (feuille « {sheet} », {count} au total). L'archive n'a pas de place pour une valeur par mesure ; ces valeurs ne sont donc pas écrites.`,
+    },
+    technical: `{file}, {sheet}: {count} key column(s) of a long sheet were marked by the user as describing the measurement: {columns}. They are not part of the sample key and their values are not written.`,
+  },
+  {
+    id: 'CONV-LONG-KEY-VARIES',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `W arkuszu „{sheet}” wiersze o tej samej stacji, dacie i głębokości różnią się w: {columns} (takich próbek: {count}), więc każda różnica jest czytana jako osobna próbka. Jeśli te kolumny opisują pomiar (komentarz, analityk, metoda), zaznacz je wyżej jako opisujące pomiar.`,
+      en: `In sheet "{sheet}", rows with the same station, date and depth differ in {columns} ({count} such {+count:sample|samples}), so each difference is read as another sample. If they describe the measurement (comment, analyst, method), mark them above as describing the measurement.`,
+      de: `Im Blatt „{sheet}“ unterscheiden sich Zeilen mit gleicher Station, gleichem Datum und gleicher Tiefe in: {columns} (betroffene Proben: {count}); jeder Unterschied gilt daher als eigene Probe. Beschreiben sie die Messung (Kommentar, Analyst, Methode), markieren Sie sie oben entsprechend.`,
+      fr: `Dans la feuille « {sheet} », des lignes de même station, date et profondeur diffèrent par : {columns} (échantillons concernés : {count}) ; chaque différence est donc lue comme un autre échantillon. Si elles décrivent la mesure (commentaire, analyste, méthode), marquez-les plus haut en ce sens.`,
+    },
+    technical: `{file}, {sheet}: rows of a long sheet that share every position and identity column (station, cruise, sample, date, time, depth, pressure, position) differ in {columns}, in {count} sample(s); each combination is read as a separate sample. A column that describes the measurement can be marked as such: it then leaves the sample key and its values are not written.`,
   },
   {
     id: 'CONV-LONG-DUPLICATE',
@@ -1091,12 +1119,12 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   },
   'CONV-LONG-UNSUPPORTED:too-many': {
     plain: {
-      pl: `Arkusz „{sheet}” ma układ długi („{parameterColumn}” i „{valueColumn}”) i {count} różnych par parametr–jednostka: więcej niż 200, czyli najwięcej, ile konwerter zamienia na kolumny. Podziel arkusz na grupy parametrów albo zostaw potrzebne i wczytaj ponownie.`,
-      en: `Sheet "{sheet}" is in the long layout ("{parameterColumn}" and "{valueColumn}") with {count} different parameter and unit pairs: more than 200, the most the converter turns into columns. Split the sheet by group of parameters, or keep the ones you need, and load it again.`,
-      de: `Das Blatt „{sheet}“ hat das lange Layout („{parameterColumn}“, „{valueColumn}“) mit {count} verschiedenen Paaren aus Parameter und Einheit: mehr als 200, das Höchste, was der Konverter zu Spalten macht. Teilen Sie das Blatt nach Parametergruppen oder behalten Sie die nötigen, und laden Sie neu.`,
-      fr: `La feuille « {sheet} » est en format long (« {parameterColumn} », « {valueColumn} ») avec {count} paires paramètre-unité différentes : plus de 200, le maximum que le convertisseur met en colonnes. Divisez la feuille par groupes de paramètres ou gardez ceux dont vous avez besoin, puis rechargez.`,
+      pl: `Arkusz „{sheet}” ma układ długi („{parameterColumn}” i „{valueColumn}”) i {count} różnych par parametr–jednostka: więcej niż {max}, czyli najwięcej, ile konwerter zamienia na kolumny. Podziel arkusz na grupy parametrów albo zostaw potrzebne i wczytaj ponownie.`,
+      en: `Sheet "{sheet}" is in the long layout ("{parameterColumn}" and "{valueColumn}") with {count} different parameter and unit pairs: more than {max}, the most the converter turns into columns. Split the sheet by group of parameters, or keep the ones you need, and load it again.`,
+      de: `Das Blatt „{sheet}“ hat das lange Layout („{parameterColumn}“, „{valueColumn}“) mit {count} verschiedenen Paaren aus Parameter und Einheit: mehr als {max}, das Höchste, was der Konverter zu Spalten macht. Teilen Sie das Blatt nach Parametergruppen oder behalten Sie die nötigen, und laden Sie neu.`,
+      fr: `La feuille « {sheet} » est en format long (« {parameterColumn} », « {valueColumn} ») avec {count} paires paramètre-unité différentes : plus de {max}, le maximum que le convertisseur met en colonnes. Divisez la feuille par groupes de paramètres ou gardez ceux dont vous avez besoin, puis rechargez.`,
     },
-    technical: `{file}, {sheet}: a long sheet ("{parameterColumn}", "{valueColumn}") has {count} distinct (parameter, unit) pairs; the converter makes at most 200 columns of them. Nothing is written from this sheet; the export is blocked.`,
+    technical: `{file}, {sheet}: a long sheet ("{parameterColumn}", "{valueColumn}") has {count} distinct (parameter, unit) pairs; the converter makes at most {max} columns of them. Nothing is written from this sheet; the export is blocked.`,
   },
   'CONV-ID-DUPLICATE:other': {
     plain: {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { isBlankCell } from '../recognize/columns';
+import { MAX_PAIRS } from './pivotLimits';
 import { headerKey } from '../recognize/vocab';
 import { makeConvertFinding } from '../rules/convert';
 import type { ColumnProposal, Finding, ParsedFile, PivotInfo, RawCell, RawRow, RawSheet } from '../types';
@@ -26,8 +27,7 @@ export const LONG_PARAMETER = new Set(['parameter', 'parameters', 'parametr', 'p
 export const LONG_VALUE = new Set(['value', 'values', 'wartosc', 'wert', 'valeur', 'result', 'measurement value', 'measurementvalue']);
 export const LONG_UNIT = new Set(['unit', 'units', 'jednostka', 'einheit', 'unite']);
 
-/** The most distinct (parameter, unit) pairs one long sheet may have: each becomes a column. */
-export const MAX_PAIRS = 200;
+export { MAX_PAIRS };
 
 export interface LongColumns {
   parameterAt: number;
@@ -94,8 +94,17 @@ export type LongVerdict = { kind: 'no' } | { kind: 'blocked'; reason: LongReason
 
 const raggedOf = (file: ParsedFile, sheet: string): ReadonlySet<number> => new Set(file.findings.filter((f) => f.ruleId === 'ROW-RAGGED' && f.sheet === sheet).flatMap((f) => f.lines ?? []));
 
-/** Reads one sheet: pivoted, left alone (not a long sheet) or blocked (a long sheet that cannot be read safely). */
-export function readLongSheet(file: ParsedFile, sheet: RawSheet): LongVerdict {
+/** The user's choices about one long sheet: `off` = read it as a normal table; `describes` = key columns (by header) that describe the measurement, not the sample. */
+export interface PivotChoice {
+  off?: boolean;
+  describes?: readonly string[];
+}
+
+/** The meanings that tell where and when a sample is (its position and identity): a column with any other meaning may vary per measurement. */
+const IDENTITY_KINDS = new Set(['latitude', 'longitude', 'datetime', 'date', 'time', 'depth', 'pressure', 'station', 'cruise', 'sampleId', 'depthBelowSeafloor']);
+
+/** Reads one sheet: pivoted, left alone (not a long sheet) or blocked (a long sheet that cannot be read safely). `choice.off` is the caller's business (see pivotConvertFile). */
+export function readLongSheet(file: ParsedFile, sheet: RawSheet, choice: PivotChoice = {}): LongVerdict {
   if (sheet.pivot !== undefined) return { kind: 'no' };
   const c = longColumnsOf(sheet.header);
   if (c === undefined) return { kind: 'no' };
@@ -105,7 +114,8 @@ export function readLongSheet(file: ParsedFile, sheet: RawSheet): LongVerdict {
   const ragged = raggedOf(file, sheet.name);
   const why = longReasonOf(sheet, c, ragged);
   if (why !== undefined) return { kind: 'blocked', ...why };
-  return { kind: 'pivot', sheet: pivotSheet(sheet, c, ragged) };
+  const identity = new Set(proposals.filter((p) => IDENTITY_KINDS.has(p.role.kind)).map((p) => p.index));
+  return { kind: 'pivot', sheet: pivotSheet(sheet, c, ragged, identity, new Set((choice.describes ?? []).map((h) => h.trim()))) };
 }
 
 interface Group {
@@ -115,16 +125,25 @@ interface Group {
   entries: Map<number, { cell: RawCell; line: number; lines: number[] }>;
 }
 
-function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>): RawSheet {
+function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>, identity: ReadonlySet<number>, describes: ReadonlySet<string>): RawSheet {
   const header = sheet.header;
   const own = new Set([c.parameterAt, c.valueAt, ...(c.unitAt === undefined ? [] : [c.unitAt])]);
   // the key: every column but the parameter, the unit, the value and the quality flags (a flag column is dropped, and said)
   const keyAt: number[] = [];
   const flagColumns: string[] = [];
+  const dropped: string[] = [];
+  const keyOptions: { header: string; describes: boolean }[] = [];
   for (let i = 0; i < header.length; i++) {
     if (own.has(i)) continue;
     if (isQualityHeader(header[i], header)) flagColumns.push(header[i].trim());
-    else keyAt.push(i);
+    else if (!identity.has(i) && describes.has(header[i].trim())) {
+      // the user marked it as describing the measurement: out of the key, its values not written
+      dropped.push(header[i].trim());
+      keyOptions.push({ header: header[i].trim(), describes: true });
+    } else {
+      keyAt.push(i);
+      if (!identity.has(i)) keyOptions.push({ header: header[i].trim(), describes: false });
+    }
   }
   const keyHeaders = keyAt.map((i) => header[i]);
 
@@ -213,6 +232,29 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     cellLines[rows[gi].line] = lines;
   });
 
+  // rows that share every position / identity column but differ in another key column: that column splits what may be one sample
+  const idPos = keyAt.map((at, j) => (identity.has(at) ? j : -1)).filter((j) => j >= 0);
+  const otherPos = keyAt.map((at, j) => (identity.has(at) ? -1 : j)).filter((j) => j >= 0);
+  const varying = new Set<number>();
+  let varyingSamples = 0;
+  if (idPos.length > 0 && otherPos.length > 0) {
+    const byIdentity = new Map<string, RawRow[]>();
+    for (const r of rows) {
+      const k = idPos.map((j) => text(r.cells[j]) ?? '').join('\u0001');
+      if (k.replace(/\u0001/g, '') === '') continue;
+      const list = byIdentity.get(k);
+      if (list) list.push(r);
+      else byIdentity.set(k, [r]);
+    }
+    for (const list of byIdentity.values()) {
+      if (list.length < 2) continue;
+      varyingSamples++;
+      for (const j of otherPos) {
+        const first = text(list[0].cells[j]);
+        if (list.some((r) => text(r.cells[j]) !== first)) varying.add(j);
+      }
+    }
+  }
   const pivot: PivotInfo = {
     parameterColumn: header[c.parameterAt].trim(),
     valueColumn: header[c.valueAt].trim(),
@@ -227,6 +269,10 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     flagRows,
     duplicates: [...duplicates.values()],
     unnamed,
+    keyOptions,
+    dropped,
+    varying: [...varying].sort((a, b) => a - b).map((j) => keyHeaders[j].trim()),
+    varyingSamples: varying.size === 0 ? 0 : varyingSamples,
   };
   return {
     name: sheet.name,
@@ -243,10 +289,12 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
  * The file as the converter reads it: every long environmental sheet that can be read safely replaced by its pivot (pivotSheet). Other sheets, and a sheet that cannot be read, are left
  * as they are (a long sheet that cannot be read is blocked later, by CONV-LONG-UNSUPPORTED). Pure; the input is not changed; the same file object comes back when nothing was pivoted.
  */
-export function pivotConvertFile(file: ParsedFile): ParsedFile {
+export function pivotConvertFile(file: ParsedFile, choices: Readonly<Record<string, PivotChoice>> = {}): ParsedFile {
   let changed = false;
   const sheets = file.sheets.map((s) => {
-    const v = readLongSheet(file, s);
+    const choice = Object.prototype.hasOwnProperty.call(choices, s.name) ? choices[s.name] : {};
+    if (choice.off === true) return s;
+    const v = readLongSheet(file, s, choice);
     if (v.kind !== 'pivot') return s;
     changed = true;
     return v.sheet;
@@ -263,6 +311,8 @@ export function pivotNoteFindings(file: string, sheet: string, p: PivotNote): Fi
   if (p.flagColumns.length > 0) out.push(makeConvertFinding('CONV-LONG-FLAG-COLUMNS', { file, sheet, params: { count: p.flagColumns.length, columns: p.flagColumns.join(', ') } }));
   if (p.flagParameters.length > 0) out.push(makeConvertFinding('CONV-LONG-FLAG-PARAMETERS', { file, sheet, params: { count: p.flagParameters.length, names: p.flagParameters.join(', '), rows: p.flagRows } }));
   if (p.renamed.length > 0) out.push(makeConvertFinding('CONV-LONG-RENAMED', { file, sheet, params: { count: p.renamed.length, names: p.renamed.join(', ') } }));
+  if (p.dropped.length > 0) out.push(makeConvertFinding('CONV-LONG-DROPPED', { file, sheet, params: { count: p.dropped.length, columns: p.dropped.join(', ') } }));
+  if (p.varying.length > 0) out.push(makeConvertFinding('CONV-LONG-KEY-VARIES', { file, sheet, params: { count: p.varyingSamples, columns: p.varying.join(', ') } }));
   return out;
 }
 
