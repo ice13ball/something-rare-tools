@@ -757,7 +757,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'columns'],
     plain: {
-      pl: `Do archiwum nie trafi {count} {+count:kolumna|kolumny|kolumn}: {columns}. Powód: znaczenie, którego się tu nie zapisuje (np. ciśnienie poza plikiem profilowym), brak nagłówka (podana jako [litera]) albo druga kolumna z ilością. Zaakceptuj to, aby eksportować bez nich.`,
+      pl: `Do archiwum {+count:nie trafi|nie trafią|nie trafi} {count} {+count:kolumna|kolumny|kolumn}: {columns}. Powód: znaczenie, którego się tu nie zapisuje (np. ciśnienie poza plikiem profilowym), brak nagłówka (podana jako [litera]) albo druga kolumna z ilością. Zaakceptuj to, aby eksportować bez nich.`,
       en: `Not written to the archive: {count} {+count:column|columns}: {columns}. Reason: a meaning that is not written here (e.g. a pressure outside a profile file), no header (shown as [letter]) or a second quantity column. Accept this to export without them.`,
       de: `Nicht ins Archiv geschrieben: {count} {+count:Spalte|Spalten}: {columns}. Grund: eine hier nicht geschriebene Bedeutung (z. B. Druck außerhalb einer Profildatei), kein Kopf (als [Buchstabe] gezeigt) oder eine zweite Mengenspalte. Akzeptieren Sie das, um ohne sie zu exportieren.`,
       fr: `Non écrit dans l'archive : {count} {+count:colonne|colonnes} : {columns}. Raison : un sens qu'on n'écrit pas ici (par ex. pression hors fichier de profils), pas d'en-tête (indiquée par [lettre]) ou une deuxième colonne de quantité. Acceptez-le pour exporter sans elles.`,
