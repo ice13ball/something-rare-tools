@@ -66,6 +66,8 @@ export interface ConvertSheetInput {
    * of a sample. `shape`, `quantity`, `device` and `meshUm` mean nothing for such a sheet and are not read.
    */
   profile?: ProfileDeclaration;
+  /** Columns whose proposed taxon-header role the page replaced by "ignore" because the candidate is not confirmed; such a column is still the proposal, not a decision of the user (CONV-LONG-UNSUPPORTED). */
+  unconfirmedTaxa?: readonly number[];
 }
 
 export interface ProfileDeclaration {
@@ -917,7 +919,10 @@ function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly strin
   for (const at of [parameterAt, valueAt]) {
     const now = sin.mapping.columns.find((c) => c.index === at)?.role;
     const was = proposed.columns.find((c) => c.index === at)?.role;
-    if (now === undefined || JSON.stringify(now) !== JSON.stringify(was)) return undefined;
+    if (now === undefined || was === undefined) return undefined;
+    // an unconfirmed taxon candidate is sent by the page as "ignore": that is the proposal, not an edit. Otherwise only the kind (and the taxon "header" flag) is compared.
+    if (sin.unconfirmedTaxa?.includes(at) === true && was.kind === 'taxon' && was.header === true) continue;
+    if (now.kind !== was.kind || (now.kind === 'taxon' && was.kind === 'taxon' && (now.header === true) !== (was.header === true))) return undefined;
   }
   return { parameter: header[parameterAt].trim(), value: header[valueAt].trim() };
 }

@@ -164,6 +164,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.device ? { device: s.device } : {}),
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
+      ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));

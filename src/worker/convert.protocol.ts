@@ -59,6 +59,8 @@ export interface ConvertSheetRequest {
   nerc?: NercDecisions;
   /** Stage 6: the sheet is a profile / environment file. Present = marked by the user; `depthIds` = the user's explicit approval of level IDs made of the station and the depth as written. */
   profile?: ProfileDeclaration;
+  /** The columns whose proposed taxon role the page left out for the conversion (a candidate the user has not confirmed: sent as "ignore"). Only these count as "not changed by the user" (CONV-LONG-UNSUPPORTED). */
+  unconfirmedTaxa?: number[];
 }
 
 export interface ConvertRequestBody {

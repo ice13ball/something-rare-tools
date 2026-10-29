@@ -217,13 +217,18 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       if (!c || !c.use) continue;
       // a proposed taxon column that is not confirmed is left out: its role becomes "ignore" for the conversion. On a PROFILE sheet it keeps its role instead (there is no
       // confirmation of species there), so that the conversion says that the column is not written (CONV-COLUMN-NOT-EXPORTED) and nothing is dropped without a word.
+      const unconfirmedTaxa: number[] = [];
       const m: SheetMapping = {
         ...m0,
         columns: m0.columns.map((col) => {
           if (c.profile) return col;
           const proposed = (f.proposals[m0.sheet] ?? []).find((p) => p.index === col.index);
           const candidate = proposed && proposed.confidence === 'low' && proposed.role.kind === 'taxon' && proposed.role.header === true && col.role.kind === 'taxon' && col.role.header === true;
-          return candidate && s.confirmed[candidateKey(f.fileId, m0.sheet, col.index)] !== true ? { ...col, role: { kind: 'ignore' as const } } : col;
+          if (candidate && s.confirmed[candidateKey(f.fileId, m0.sheet, col.index)] !== true) {
+            unconfirmedTaxa.push(col.index);
+            return { ...col, role: { kind: 'ignore' as const } };
+          }
+          return col;
         }),
       };
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
@@ -234,7 +239,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };

@@ -104,6 +104,13 @@ describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
     }
   });
 
+  it('a value column the page sent as "ignore" because its taxon candidate is unconfirmed still counts as the proposal (unconfirmedTaxa); a plain "ignore" is the user\'s edit', () => {
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'];
+    const edit = { Value: { kind: 'ignore' as const } };
+    expect(ids(convert({ sheets: [sheetInput(fileOf(header, longRows()), { edit, unconfirmedTaxa: [7] })] }))).toContain('CONV-LONG-UNSUPPORTED');
+    expect(ids(convert({ sheets: [sheetInput(fileOf(header, longRows()), { edit })] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+
   it('tells a long biology sheet with an unrecognised taxon column what to mark instead, in four languages', () => {
     const f = makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: 'a.csv', sheet: 'S', params: { parameterColumn: 'Parameter', valueColumn: 'Value' } });
     expect(renderConvertPlain(f, 'en')).toContain('mark the taxon column and the count');
