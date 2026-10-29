@@ -11,6 +11,8 @@ https://tools.something-rare.com; changes land here directly.
    below. **A pull request is merged only when that box is ticked**; without it, it is not
    merged, however good the change is.
 3. **Expect a delay.** This is a single-maintainer project.
+4. **Update `docs/APPS.md`** in the same pull request when you change how an application behaves
+   (what it reads, sends, decides or writes).
 
 ## Licence grant for contributions
 
