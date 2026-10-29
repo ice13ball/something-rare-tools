@@ -1679,25 +1679,15 @@
   },
   "wide-analysis-ctd": {
    "blocking": [
-    "CONV-NO-TAXON",
-    "CONV-NO-OCCURRENCES"
+    "CONV-ENV-ONLY-SHEET"
    ],
    "findings": [
     {
      "file": "sheet.csv",
      "sheet": "S",
-     "params": {
-      "shape": "wide"
-     },
-     "ruleId": "CONV-NO-TAXON",
-     "severity": "error"
-    },
-    {
-     "file": "sheet.csv",
-     "sheet": "S",
-     "params": {},
-     "ruleId": "CONV-NO-OCCURRENCES",
-     "severity": "error"
+     "ruleId": "CONV-ENV-ONLY-SHEET",
+     "severity": "error",
+     "params": {}
     }
    ],
    "files": {},
@@ -1705,25 +1695,15 @@
   },
   "wide-analysis-ctd+worms": {
    "blocking": [
-    "CONV-NO-TAXON",
-    "CONV-NO-OCCURRENCES"
+    "CONV-ENV-ONLY-SHEET"
    ],
    "findings": [
     {
      "file": "sheet.csv",
      "sheet": "S",
-     "params": {
-      "shape": "wide"
-     },
-     "ruleId": "CONV-NO-TAXON",
-     "severity": "error"
-    },
-    {
-     "file": "sheet.csv",
-     "sheet": "S",
-     "params": {},
-     "ruleId": "CONV-NO-OCCURRENCES",
-     "severity": "error"
+     "ruleId": "CONV-ENV-ONLY-SHEET",
+     "severity": "error",
+     "params": {}
     }
    ],
    "files": {},

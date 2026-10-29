@@ -997,6 +997,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   let sheetKeyN = 0;
   // a sheet with a taxon and a count column whose quantity kind is not declared yet (CONV-QUANTITY-UNDECLARED says so): its missing occurrences are no "environment-only upload"
   let taxaWaitForQuantity = false;
+  // a sheet of environmental measurements only (CONV-ENV-ONLY-SHEET) already said that no occurrence can come out of it
+  let envOnlySaid = false;
 
   // The findings the PARSER raised for the files these sheets come from (/check puts them in its report; the converter must too): a ragged row (an extra or a missing field: the
   // values of that row are shifted against the header, so the finding stops the export, and ROW-RAGGED names the lines), an encoding that was guessed, a decimal comma, a 1904 workbook.
@@ -1067,7 +1069,19 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const taxonNoQuantity = sin.shape === 'long' && cols.taxonCell !== undefined && cols.quantity === undefined;
     const speciesList = taxonNoQuantity && !sin.mapping.columns.some((c) => c.role.kind === 'variable');
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
-    if (speciesList) findings.push(makeConvertFinding('CONV-SPECIES-LIST-NO-COUNTS', { ...base }));
+    // a sheet with measured variables and NO taxon column (wide: no taxon header; long: no taxon cell column), NO quantity column and no unconfirmed taxon candidate (the user may still confirm one)
+    // is environmental data only: one message instead of "no taxon", "kind of number" and "no occurrences". A mixed sheet keeps the messages above.
+    const envOnly =
+      !taxonNoQuantity &&
+      missingTaxon &&
+      cols.quantity === undefined &&
+      (sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined) &&
+      (sin.unconfirmedTaxa?.length ?? 0) === 0 &&
+      sin.mapping.columns.some((c) => c.role.kind === 'variable');
+    if (envOnly) {
+      findings.push(makeConvertFinding('CONV-ENV-ONLY-SHEET', { ...base }));
+      envOnlySaid = true;
+    } else if (speciesList) findings.push(makeConvertFinding('CONV-SPECIES-LIST-NO-COUNTS', { ...base }));
     else if (taxonNoQuantity) findings.push(makeConvertFinding('CONV-TAXON-NO-QUANTITY', { ...base }));
     else if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
 
@@ -1084,7 +1098,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (!quantity || missing.length > 0) {
       if (missing.length === 0) missing = ['kind'];
       // a species list has no numbers to declare: CONV-SPECIES-LIST-NO-COUNTS already said what is missing
-      if (!taxonNoQuantity) findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
+      if (!taxonNoQuantity && !envOnly) findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
       quantity = undefined;
       // a sheet that HAS its taxon (and count) columns writes no occurrence only because the user has not said what the numbers are: that block already says what to do
       if (!missingTaxon) taxaWaitForQuantity = true;
@@ -1801,7 +1815,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
   // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).
   const found = input.sheets.find((x) => x.file.sheets.some((sh) => sh.name === x.sheet));
-  if (occurrences.length === 0 && found !== undefined && !taxaWaitForQuantity) {
+  if (occurrences.length === 0 && found !== undefined && !taxaWaitForQuantity && !envOnlySaid) {
     const first = found;
     // taxa that were there but all 0 and skipped (the full species list is not ticked) are another case from an upload with no taxon: its own text says what to tick
     findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet, params: stats.zerosSkipped > 0 && !fullList ? { zeros: 'yes' } : {} }));

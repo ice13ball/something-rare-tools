@@ -74,11 +74,12 @@ describe('a taxon column and measured variables, but no quantity column', () => 
 });
 
 describe('the other two cases keep their messages', () => {
-  it('an environmental-only upload still gets CONV-NO-OCCURRENCES', () => {
+  it('an environmental-only upload (marked as a profile file) still gets CONV-NO-OCCURRENCES', () => {
     const env = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Temperature [degC]'], [['E1', '2099-01-01', 55, 3, 4.5]]);
-    const r = convert({ sheets: [sheetInput(env)] });
+    const r = convert({ sheets: [sheetInput(env, { profile: { positionStation: true } })] });
     expect(ids(r)).toContain('CONV-NO-OCCURRENCES');
     expect(ids(r)).not.toContain('CONV-SPECIES-LIST-NO-COUNTS');
+    expect(ids(r)).not.toContain('CONV-ENV-ONLY-SHEET');
   });
 
   it('a sheet with counts and no declared kind keeps the quantity-kind block, and no species-list message', () => {

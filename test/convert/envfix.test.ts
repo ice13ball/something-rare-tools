@@ -115,12 +115,12 @@ describe('2. an environmental-only upload (f10, f11)', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('the same without the profile mark: the sheet has no taxon, and it is the same message that stands', async () => {
+  it('the same without the profile mark: the sheet has no taxon and no quantity, and ONE message stands (CONV-ENV-ONLY-SHEET) instead of three stacked blockers', async () => {
     const f10 = await load('f10-env-only-small.csv');
     const r = convert({ sheets: [f10.input()] });
     const ids = rulesOf(r);
-    expect(ids).toContain('CONV-NO-OCCURRENCES');
-    expect(ids).toContain('CONV-NO-TAXON');
+    expect(ids).toContain('CONV-ENV-ONLY-SHEET');
+    for (const id of ['CONV-NO-OCCURRENCES', 'CONV-NO-TAXON', 'CONV-QUANTITY-UNDECLARED']) expect(ids, id).not.toContain(id);
   });
 
   it('is said in four languages, names OBIS and tells what to add, and cites the OBIS manual', () => {

@@ -386,7 +386,9 @@ describe('CONV-NO-OCCURRENCES is not said while the kind of number is still unde
   it('a genuinely environment-only upload still gets it', () => {
     const env = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Temperature'], [['ZL1', '2023-06-14', 55.5, 2.5, 5, 8.1], ['ZL2', '2023-06-15', 55.6, 2.6, 5, 8.4]]);
     expect(ids(convert({ sheets: [sheetInput(env, { profile: { positionStation: true } })] }))).toContain('CONV-NO-OCCURRENCES');
-    expect(ids(convert({ sheets: [sheetInput(env)] }))).toContain('CONV-NO-OCCURRENCES');
+    // without the profile mark the sheet is environmental data only: its own single message says the same, and the three others are not stacked on it
+    expect(ids(convert({ sheets: [sheetInput(env)] }))).toContain('CONV-ENV-ONLY-SHEET');
+    expect(ids(convert({ sheets: [sheetInput(env)] }))).not.toContain('CONV-NO-OCCURRENCES');
   });
 });
 
