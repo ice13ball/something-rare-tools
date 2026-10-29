@@ -33,6 +33,8 @@ export interface ConvertFileSummary extends FileSummary {
   pivots?: Record<string, PivotNote>;
   /** The long sheets the user chose to read as normal tables (their names), so that the page can offer the way back. */
   pivotOff?: string[];
+  /** by sheet name, only for a sheet that looks transposed (species or variables in rows; core/convert/transposed.ts): the page offers "read as a normal table" next to the blocking message. */
+  transposedSheets?: Record<string, 'transposed' | 'transposed-taxa'>;
 }
 
 export interface ConvertParseResult {
@@ -73,6 +75,8 @@ export interface ConvertSheetRequest {
   profile?: ProfileDeclaration;
   /** The columns whose proposed taxon role the page left out for the conversion (a candidate the user has not confirmed: sent as "ignore"). Only these count as "not changed by the user" (CONV-LONG-UNSUPPORTED). */
   unconfirmedTaxa?: number[];
+  /** The user's tick "read as a normal table" for a sheet that looks transposed (only the boolean true counts). */
+  readAsTable?: boolean;
 }
 
 export interface ConvertRequestBody {

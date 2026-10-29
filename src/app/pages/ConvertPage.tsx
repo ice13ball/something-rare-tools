@@ -21,7 +21,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -573,7 +573,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
     const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -760,6 +761,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     hasEffortColumn={m.columns.some((c) => c.role.kind === 'effort')}
                     suggestedProfile={f.suggestedProfiles[m.sheet] === true}
                     dictionary={f.dictionarySheets?.[m.sheet] !== undefined}
+                    transposed={f.transposedSheets?.[m.sheet] !== undefined}
                     hasCodeColumn={m.columns.some((c) => c.role.kind === 'sampleId')}
                     hasPressureColumn={m.columns.some((c) => c.role.kind === 'pressure')}
                     hasStationColumn={m.columns.some((c) => c.role.kind === 'station')}

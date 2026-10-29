@@ -120,6 +120,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-UNIT-NO-P06 | warning | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-UNIT-NO-P06"></a> |
 | CONV-COLUMN-UNNAMED | error | B | — | —<a id="CONV-COLUMN-UNNAMED"></a> |
 | CONV-LONG-UNSUPPORTED | error | B | — | —<a id="CONV-LONG-UNSUPPORTED"></a> |
+| CONV-SHEET-TRANSPOSED | error | B | — | —<a id="CONV-SHEET-TRANSPOSED"></a> |
 | CONV-LONG-READ | info | B | — | —<a id="CONV-LONG-READ"></a> |
 | CONV-LONG-FLAG-COLUMNS | info | B | — | —<a id="CONV-LONG-FLAG-COLUMNS"></a> |
 | CONV-LONG-FLAG-PARAMETERS | info | B | — | —<a id="CONV-LONG-FLAG-PARAMETERS"></a> |

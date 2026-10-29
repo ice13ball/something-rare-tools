@@ -185,7 +185,7 @@ export interface LayoutPlan {
   joins: { left: string; right: string; leftKey: number; rightKey: number }[];   // sheet names + column indices
   unsupported?: string;         // plain English description of a layout the tool cannot handle (technical line, tests)
   /** The same reasons as language-neutral codes; every language renders from these (recognize/layoutReasons.ts). */
-  unsupportedReasons?: { code: 'transposed' | 'header-empty' | 'header-units' | 'no-table' | 'no-rows' | 'no-data-sheet'; sheet?: string }[];
+  unsupportedReasons?: { code: 'transposed' | 'transposed-taxa' | 'header-empty' | 'header-units' | 'no-table' | 'no-rows' | 'no-data-sheet'; sheet?: string }[];
 }
 
 /* ---------- dataset ---------- */

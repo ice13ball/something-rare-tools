@@ -1141,9 +1141,22 @@ definition is an echo-intensity unit of an instrument, so a count carries no uni
   off and read the sheet as a normal table (`pivotChoice`, `longAsTable`).
 - **Transposed** sheets: the converter reads each sheet as one table with no joins; a header with
   no name for a column is `CONV-COLUMN-UNNAMED` (blocks until the variable has a name or the
-  column is ignored). The converter **never runs layout detection** (`layoutOf` in
-  `convert.handler.ts` lists each sheet as a table), so a transposed sheet is read silently with its
-  first row as the header, and `IN-LAYOUT-UNSUPPORTED` cannot come from a `/convert` input.
+  column is ignored). A table turned the wrong way is detected by `transposedSheetReason`
+  (`convert/transposed.ts`): **variables in rows** is exactly `/check`'s detection
+  (`transposedReason`, `recognize/layout.ts`: the first column holds known column names, the other
+  headers none, the cells are numbers), and **species in rows** is the converter's own addition (at
+  least three Latin names make up 60 % or more of the first column, the other headers are sample
+  codes and at most one in five reads as a species, 80 % of the cells are numbers or presence marks;
+  a header over the first column that is a known role such as a station disqualifies it). `/check`
+  only reports such a sheet and cannot read it, so the converter does the same: nothing of the sheet
+  is read, `CONV-SHEET-TRANSPOSED` blocks with the reason in four languages and says to transpose
+  the table in the spreadsheet, and a tick next to the sheet (**Read this sheet as a normal table**,
+  `readAsTable`, kept in the companion file as `transposedAsTable=<sheet>`) reads it as it stands.
+  Not tested: a pivot of a long sheet, a profile sheet, a data-dictionary sheet (the page does not
+  offer the tick there), a sheet with the tick. A normal wide species sheet (species are the
+  headers) is the standard input and is never flagged. A sample column whose header the tool takes
+  for a column name (`Station A`) hides a transposed species table from the test: it is then read as
+  it stands.
 
 ### 8.5 Taxon names, splits and WoRMS
 
@@ -1571,7 +1584,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-29**. The total, **163 rules**, equals the number of rule rows in
+**2026-10-29**. The total, **164 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1585,8 +1598,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 68 | 34 / 23 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **163** | | | |
+| `CONV-` | `B` | 69 | 35 / 23 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **164** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1644,7 +1657,6 @@ Each item below is confirmed from code, a test, or a rule text.
 **`/convert`**
 
 - Presence-only species lists (taxon column, no quantity column) are not written.
-- No layout detection: a transposed sheet is read as a table with row 1 as header, without a warning.
 - A statistics line is told from a station by its date and position and by where it stands (the
   foot of the sheet); a station called `Max` or `N` with neither a date nor a position, as the last
   row of a sheet, is skipped (and said, so it can be renamed).

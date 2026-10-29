@@ -4,7 +4,7 @@
 // must never end up inside a Polish, German or French sentence). Pure.
 import type { Lang } from '../types';
 
-export type LayoutReasonCode = 'transposed' | 'header-empty' | 'header-units' | 'no-table' | 'no-rows' | 'no-data-sheet';
+export type LayoutReasonCode = 'transposed' | 'transposed-taxa' | 'header-empty' | 'header-units' | 'no-table' | 'no-rows' | 'no-data-sheet';
 export interface LayoutReason { code: LayoutReasonCode; sheet?: string }
 
 const TEXT: Record<LayoutReasonCode, Record<Lang, string>> = {
@@ -13,6 +13,13 @@ const TEXT: Record<LayoutReasonCode, Record<Lang, string>> = {
     pl: 'dane są obrócone (zmienne w wierszach, próbki w kolumnach)',
     de: 'die Daten sind transponiert (Variablen in Zeilen, Proben in Spalten)',
     fr: 'les données sont transposées (variables en lignes, échantillons en colonnes)',
+  },
+  // raised by the converter only (convert/transposed.ts): /check never produces it
+  'transposed-taxa': {
+    en: 'data is transposed (species in rows, samples in columns)',
+    pl: 'dane są obrócone (gatunki w wierszach, próbki w kolumnach)',
+    de: 'die Daten sind transponiert (Arten in Zeilen, Proben in Spalten)',
+    fr: 'les données sont transposées (espèces en lignes, échantillons en colonnes)',
   },
   'header-empty': {
     en: 'header spans several rows (more than half of the header cells are empty)',

@@ -42,7 +42,7 @@ function sampleOf(rows: readonly RawRow[], max: number): RawRow[] {
 
 /* ---------- layouts the tool cannot read ---------- */
 
-function transposedReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
+export function transposedReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
   if (sheet.header.length < 3 || sheet.rows.length < 2) return undefined;
   const labels = new Set<string>();
   for (const r of sheet.rows) {
