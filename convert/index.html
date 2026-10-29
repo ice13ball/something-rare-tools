@@ -7,12 +7,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Turn a marine biologist's spreadsheet (species counts, densities, CTD profiles) into a Darwin Core Archive with Event, Occurrence and eMoF tables and EML metadata, for an OBIS node. Every decision is shown; files stay in your browser." />
+    <meta name="description" content="Turn a marine biologist's spreadsheet (species counts, densities, CTD profiles; wide, or long with one row per measurement) into a Darwin Core Archive with Event, Occurrence and eMoF tables and EML metadata, for an OBIS node. Every decision is shown; files stay in your browser." />
     <link rel="canonical" href="https://tools.something-rare.com/convert" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Abyssal Claims" />
     <meta property="og:title" content="Darwin Core converter: turn a marine biology spreadsheet into a Darwin Core Archive — Abyssal Claims" />
-    <meta property="og:description" content="Turn a marine biologist's spreadsheet (species counts, densities, CTD profiles) into a Darwin Core Archive with Event, Occurrence and eMoF tables and EML metadata, for an OBIS node. Every decision is shown; files stay in your browser." />
+    <meta property="og:description" content="Turn a marine biologist's spreadsheet (species counts, densities, CTD profiles; wide, or long with one row per measurement) into a Darwin Core Archive with Event, Occurrence and eMoF tables and EML metadata, for an OBIS node. Every decision is shown; files stay in your browser." />
     <meta property="og:url" content="https://tools.something-rare.com/convert" />
     <meta property="og:image" content="https://tools.something-rare.com/og.jpg" />
     <meta property="og:image:width" content="1200" />
@@ -27,7 +27,7 @@
   "@type": "WebApplication",
   "name": "Abyssal Claims — Tools: Darwin Core converter",
   "url": "https://tools.something-rare.com/convert",
-  "description": "Turn a marine biologist's spreadsheet (species counts, densities, CTD profiles) into a Darwin Core Archive with Event, Occurrence and eMoF tables and EML metadata, for an OBIS node. Every decision is shown; files stay in your browser.",
+  "description": "Turn a marine biologist's spreadsheet (species counts, densities, CTD profiles; wide, or long with one row per measurement) into a Darwin Core Archive with Event, Occurrence and eMoF tables and EML metadata, for an OBIS node. Every decision is shown; files stay in your browser.",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Any (web browser)",
   "isAccessibleForFree": true,
@@ -71,7 +71,7 @@
         <h2>What this page does</h2>
         <p>It reads your spreadsheet in your browser, asks you to confirm what it cannot know, and builds the archive there:</p>
         <ul>
-          <li>a sheet with one column per species, or a long sheet with one row per species and sample, as a CSV or Excel file;</li>
+          <li>a sheet with one column per species, or a long sheet with one row per species and sample, or one row per measured parameter (read as one row per sample), as a CSV or Excel file;</li>
           <li>the cruise, station and sample of each row, and the profile or environment file of a cruise (CTD casts, bottle data);</li>
           <li>the taxa, the kind of number and its unit, the sampling effort, the licence and the description of the dataset.</li>
         </ul>
