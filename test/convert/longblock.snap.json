@@ -1364,5 +1364,1017 @@
     "nvsIds": 0
    }
   }
+ },
+ "archives": {
+  "english": {
+   "blocking": [],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "ruleId": "CONV-DEVICE-MISSING",
+     "severity": "warning",
+     "params": {}
+    },
+    {
+     "file": "extendedmeasurementorfact.txt",
+     "ruleId": "CONV-NO-SAMPLING-DESCRIPTOR",
+     "severity": "warning",
+     "params": {}
+    }
+   ],
+   "files": {
+    "meta.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<archive xmlns=\"http://rs.tdwg.org/dwc/text/\" metadata=\"eml.xml\">\n  <core encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Event\">\n    <files><location>event.txt</location></files>\n    <id index=\"0\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/parentEventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/eventType\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/eventDate\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/decimalLatitude\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/decimalLongitude\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/geodeticDatum\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/minimumDepthInMeters\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/maximumDepthInMeters\"/>\n    <field index=\"10\" term=\"http://rs.tdwg.org/dwc/terms/datasetName\"/>\n    <field index=\"11\" term=\"http://rs.tdwg.org/dwc/terms/institutionCode\"/>\n  </core>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Occurrence\">\n    <files><location>occurrence.txt</location></files>\n    <coreid index=\"1\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/basisOfRecord\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceStatus\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/scientificName\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/scientificNameID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/verbatimIdentification\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/individualCount\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantity\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantityType\"/>\n  </extension>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact\">\n    <files><location>extendedmeasurementorfact.txt</location></files>\n    <coreid index=\"0\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/measurementType\"/>\n    <field index=\"3\" term=\"http://rs.iobis.org/obis/terms/measurementTypeID\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/measurementValue\"/>\n    <field index=\"5\" term=\"http://rs.iobis.org/obis/terms/measurementValueID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/measurementUnit\"/>\n    <field index=\"7\" term=\"http://rs.iobis.org/obis/terms/measurementUnitID\"/>\n  </extension>\n</archive>\n",
+    "eml.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<eml:eml xmlns:eml=\"https://eml.ecoinformatics.org/eml-2.2.0\"\n         xmlns:dc=\"http://purl.org/dc/terms/\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd\"\n         packageId=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val/v1.0\" system=\"http://gbif.org\" scope=\"system\" xml:lang=\"en\">\n  <dataset>\n    <title xml:lang=\"en\">Synthetic zooplankton counts of an invented bay (invented values)</title>\n    <creator>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n    </creator>\n    <creator>\n      <individualName><givenName>Bob</givenName><surName>Sample</surName></individualName>\n    </creator>\n    <metadataProvider>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </metadataProvider>\n    <pubDate>2026-10-25</pubDate>\n    <language>en</language>\n    <abstract>\n      <para>SYNTHETIC test dataset. Positions, dates and counts are invented.</para>\n    </abstract>\n    <keywordSet>\n      <keyword>Occurrence</keyword>\n      <keyword>Samplingevent</keyword>\n      <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>\n    </keywordSet>\n    <intellectualRights>\n      <para>This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"><citetitle>Creative Commons Attribution (CC-BY 4.0) License</citetitle></ulink>.</para>\n    </intellectualRights>\n    <coverage>\n      <geographicCoverage>\n        <geographicDescription>Bounding box of the positions of the sampling events in this dataset</geographicDescription>\n        <boundingCoordinates>\n          <westBoundingCoordinate>2.5</westBoundingCoordinate>\n          <eastBoundingCoordinate>2.6</eastBoundingCoordinate>\n          <northBoundingCoordinate>55.6</northBoundingCoordinate>\n          <southBoundingCoordinate>55.5</southBoundingCoordinate>\n        </boundingCoordinates>\n      </geographicCoverage>\n      <temporalCoverage>\n        <rangeOfDates>\n          <beginDate><calendarDate>2023-06-14</calendarDate></beginDate>\n          <endDate><calendarDate>2023-06-15</calendarDate></endDate>\n        </rangeOfDates>\n      </temporalCoverage>\n      <taxonomicCoverage>\n        <generalTaxonomicCoverage>2 distinct scientific names in the occurrence table</generalTaxonomicCoverage>\n        <taxonomicClassification>\n          <taxonRankValue>Calanus finmarchicus</taxonRankValue>\n        </taxonomicClassification>\n        <taxonomicClassification>\n          <taxonRankValue>Oithona similis</taxonRankValue>\n        </taxonomicClassification>\n      </taxonomicCoverage>\n    </coverage>\n    <contact>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </contact>\n  </dataset>\n  <additionalMetadata>\n    <metadata>\n      <gbif>\n        <dateStamp>2026-10-25T12:00:00Z</dateStamp>\n        <hierarchyLevel>dataset</hierarchyLevel>\n        <citation identifier=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val\">Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.</citation>\n      </gbif>\n    </metadata>\n  </additionalMetadata>\n</eml:eml>\n",
+    "event.txt": "eventID\tparentEventID\teventType\teventDate\tdecimalLatitude\tdecimalLongitude\tgeodeticDatum\tcoordinateUncertaintyInMeters\tminimumDepthInMeters\tmaximumDepthInMeters\tdatasetName\tinstitutionCode\nZC1\t\tcruise\t2023-06-14/2023-06-15\t55.55\t2.55\tEPSG:4326\t6389\t5\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZC1:ZL1\tZC1\tstation\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZC1:ZL2\tZC1\tstation\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL1-a\tZC1:ZL1\tsample\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL2-a\tZC1:ZL2\tsample\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\n",
+    "occurrence.txt": "occurrenceID\teventID\tbasisOfRecord\toccurrenceStatus\tscientificName\tscientificNameID\tverbatimIdentification\tindividualCount\torganismQuantity\torganismQuantityType\nZL1-a:Calanus finmarchicus\tZL1-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t4\t4\tindividuals\nZL1-a:Oithona similis\tZL1-a\tHumanObservation\tpresent\tOithona similis\turn:lsid:marinespecies.org:taxname:106656\tOithona similis\t9\t9\tindividuals\nZL2-a:Calanus finmarchicus\tZL2-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t1\t1\tindividuals\n",
+    "extendedmeasurementorfact.txt": "eventID\toccurrenceID\tmeasurementType\tmeasurementTypeID\tmeasurementValue\tmeasurementValueID\tmeasurementUnit\tmeasurementUnitID\nZL1-a\tZL1-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t4\t\t\t\nZL1-a\tZL1-a:Oithona similis\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t9\t\t\t\nZL2-a\tZL2-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t1\t\t\t\n"
+   },
+   "zip": "ecc0d6d9c240298ab425fcb09f88622afe19a9c29e93bbf7026b2181c9e90600"
+  },
+  "english+worms": {
+   "blocking": [],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "ruleId": "CONV-DEVICE-MISSING",
+     "severity": "warning",
+     "params": {}
+    },
+    {
+     "file": "extendedmeasurementorfact.txt",
+     "ruleId": "CONV-NO-SAMPLING-DESCRIPTOR",
+     "severity": "warning",
+     "params": {}
+    }
+   ],
+   "files": {
+    "meta.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<archive xmlns=\"http://rs.tdwg.org/dwc/text/\" metadata=\"eml.xml\">\n  <core encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Event\">\n    <files><location>event.txt</location></files>\n    <id index=\"0\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/parentEventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/eventType\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/eventDate\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/decimalLatitude\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/decimalLongitude\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/geodeticDatum\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/minimumDepthInMeters\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/maximumDepthInMeters\"/>\n    <field index=\"10\" term=\"http://rs.tdwg.org/dwc/terms/datasetName\"/>\n    <field index=\"11\" term=\"http://rs.tdwg.org/dwc/terms/institutionCode\"/>\n  </core>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Occurrence\">\n    <files><location>occurrence.txt</location></files>\n    <coreid index=\"1\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/basisOfRecord\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceStatus\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/scientificName\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/scientificNameID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/verbatimIdentification\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/individualCount\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantity\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantityType\"/>\n  </extension>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact\">\n    <files><location>extendedmeasurementorfact.txt</location></files>\n    <coreid index=\"0\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/measurementType\"/>\n    <field index=\"3\" term=\"http://rs.iobis.org/obis/terms/measurementTypeID\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/measurementValue\"/>\n    <field index=\"5\" term=\"http://rs.iobis.org/obis/terms/measurementValueID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/measurementUnit\"/>\n    <field index=\"7\" term=\"http://rs.iobis.org/obis/terms/measurementUnitID\"/>\n  </extension>\n</archive>\n",
+    "eml.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<eml:eml xmlns:eml=\"https://eml.ecoinformatics.org/eml-2.2.0\"\n         xmlns:dc=\"http://purl.org/dc/terms/\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd\"\n         packageId=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val/v1.0\" system=\"http://gbif.org\" scope=\"system\" xml:lang=\"en\">\n  <dataset>\n    <title xml:lang=\"en\">Synthetic zooplankton counts of an invented bay (invented values)</title>\n    <creator>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n    </creator>\n    <creator>\n      <individualName><givenName>Bob</givenName><surName>Sample</surName></individualName>\n    </creator>\n    <metadataProvider>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </metadataProvider>\n    <pubDate>2026-10-25</pubDate>\n    <language>en</language>\n    <abstract>\n      <para>SYNTHETIC test dataset. Positions, dates and counts are invented.</para>\n    </abstract>\n    <keywordSet>\n      <keyword>Occurrence</keyword>\n      <keyword>Samplingevent</keyword>\n      <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>\n    </keywordSet>\n    <intellectualRights>\n      <para>This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"><citetitle>Creative Commons Attribution (CC-BY 4.0) License</citetitle></ulink>.</para>\n    </intellectualRights>\n    <coverage>\n      <geographicCoverage>\n        <geographicDescription>Bounding box of the positions of the sampling events in this dataset</geographicDescription>\n        <boundingCoordinates>\n          <westBoundingCoordinate>2.5</westBoundingCoordinate>\n          <eastBoundingCoordinate>2.6</eastBoundingCoordinate>\n          <northBoundingCoordinate>55.6</northBoundingCoordinate>\n          <southBoundingCoordinate>55.5</southBoundingCoordinate>\n        </boundingCoordinates>\n      </geographicCoverage>\n      <temporalCoverage>\n        <rangeOfDates>\n          <beginDate><calendarDate>2023-06-14</calendarDate></beginDate>\n          <endDate><calendarDate>2023-06-15</calendarDate></endDate>\n        </rangeOfDates>\n      </temporalCoverage>\n      <taxonomicCoverage>\n        <generalTaxonomicCoverage>2 distinct scientific names in the occurrence table</generalTaxonomicCoverage>\n        <taxonomicClassification>\n          <taxonRankValue>Calanus finmarchicus</taxonRankValue>\n        </taxonomicClassification>\n        <taxonomicClassification>\n          <taxonRankValue>Oithona similis</taxonRankValue>\n        </taxonomicClassification>\n      </taxonomicCoverage>\n    </coverage>\n    <contact>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </contact>\n  </dataset>\n  <additionalMetadata>\n    <metadata>\n      <gbif>\n        <dateStamp>2026-10-25T12:00:00Z</dateStamp>\n        <hierarchyLevel>dataset</hierarchyLevel>\n        <citation identifier=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val\">Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.</citation>\n      </gbif>\n    </metadata>\n  </additionalMetadata>\n</eml:eml>\n",
+    "event.txt": "eventID\tparentEventID\teventType\teventDate\tdecimalLatitude\tdecimalLongitude\tgeodeticDatum\tcoordinateUncertaintyInMeters\tminimumDepthInMeters\tmaximumDepthInMeters\tdatasetName\tinstitutionCode\nZC1\t\tcruise\t2023-06-14/2023-06-15\t55.55\t2.55\tEPSG:4326\t6389\t5\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZC1:ZL1\tZC1\tstation\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZC1:ZL2\tZC1\tstation\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL1-a\tZC1:ZL1\tsample\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL2-a\tZC1:ZL2\tsample\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\n",
+    "occurrence.txt": "occurrenceID\teventID\tbasisOfRecord\toccurrenceStatus\tscientificName\tscientificNameID\tverbatimIdentification\tindividualCount\torganismQuantity\torganismQuantityType\nZL1-a:Calanus finmarchicus\tZL1-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t4\t4\tindividuals\nZL1-a:Oithona similis\tZL1-a\tHumanObservation\tpresent\tOithona similis\turn:lsid:marinespecies.org:taxname:106656\tOithona similis\t9\t9\tindividuals\nZL2-a:Calanus finmarchicus\tZL2-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t1\t1\tindividuals\n",
+    "extendedmeasurementorfact.txt": "eventID\toccurrenceID\tmeasurementType\tmeasurementTypeID\tmeasurementValue\tmeasurementValueID\tmeasurementUnit\tmeasurementUnitID\nZL1-a\tZL1-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t4\t\t\t\nZL1-a\tZL1-a:Oithona similis\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t9\t\t\t\nZL2-a\tZL2-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t1\t\t\t\n"
+   },
+   "zip": "ecc0d6d9c240298ab425fcb09f88622afe19a9c29e93bbf7026b2181c9e90600"
+  },
+  "polish": {
+   "blocking": [],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "ruleId": "CONV-DEVICE-MISSING",
+     "severity": "warning",
+     "params": {}
+    },
+    {
+     "file": "extendedmeasurementorfact.txt",
+     "ruleId": "CONV-NO-SAMPLING-DESCRIPTOR",
+     "severity": "warning",
+     "params": {}
+    }
+   ],
+   "files": {
+    "meta.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<archive xmlns=\"http://rs.tdwg.org/dwc/text/\" metadata=\"eml.xml\">\n  <core encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Event\">\n    <files><location>event.txt</location></files>\n    <id index=\"0\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/parentEventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/eventType\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/eventDate\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/decimalLatitude\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/decimalLongitude\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/geodeticDatum\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/minimumDepthInMeters\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/maximumDepthInMeters\"/>\n    <field index=\"10\" term=\"http://rs.tdwg.org/dwc/terms/datasetName\"/>\n    <field index=\"11\" term=\"http://rs.tdwg.org/dwc/terms/institutionCode\"/>\n  </core>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Occurrence\">\n    <files><location>occurrence.txt</location></files>\n    <coreid index=\"1\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/basisOfRecord\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceStatus\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/scientificName\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/scientificNameID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/verbatimIdentification\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/individualCount\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantity\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantityType\"/>\n  </extension>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact\">\n    <files><location>extendedmeasurementorfact.txt</location></files>\n    <coreid index=\"0\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/measurementType\"/>\n    <field index=\"3\" term=\"http://rs.iobis.org/obis/terms/measurementTypeID\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/measurementValue\"/>\n    <field index=\"5\" term=\"http://rs.iobis.org/obis/terms/measurementValueID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/measurementUnit\"/>\n    <field index=\"7\" term=\"http://rs.iobis.org/obis/terms/measurementUnitID\"/>\n  </extension>\n</archive>\n",
+    "eml.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<eml:eml xmlns:eml=\"https://eml.ecoinformatics.org/eml-2.2.0\"\n         xmlns:dc=\"http://purl.org/dc/terms/\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd\"\n         packageId=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val/v1.0\" system=\"http://gbif.org\" scope=\"system\" xml:lang=\"en\">\n  <dataset>\n    <title xml:lang=\"en\">Synthetic zooplankton counts of an invented bay (invented values)</title>\n    <creator>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n    </creator>\n    <creator>\n      <individualName><givenName>Bob</givenName><surName>Sample</surName></individualName>\n    </creator>\n    <metadataProvider>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </metadataProvider>\n    <pubDate>2026-10-25</pubDate>\n    <language>en</language>\n    <abstract>\n      <para>SYNTHETIC test dataset. Positions, dates and counts are invented.</para>\n    </abstract>\n    <keywordSet>\n      <keyword>Occurrence</keyword>\n      <keyword>Samplingevent</keyword>\n      <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>\n    </keywordSet>\n    <intellectualRights>\n      <para>This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"><citetitle>Creative Commons Attribution (CC-BY 4.0) License</citetitle></ulink>.</para>\n    </intellectualRights>\n    <coverage>\n      <geographicCoverage>\n        <geographicDescription>Bounding box of the positions of the sampling events in this dataset</geographicDescription>\n        <boundingCoordinates>\n          <westBoundingCoordinate>2.5</westBoundingCoordinate>\n          <eastBoundingCoordinate>2.6</eastBoundingCoordinate>\n          <northBoundingCoordinate>55.6</northBoundingCoordinate>\n          <southBoundingCoordinate>55.5</southBoundingCoordinate>\n        </boundingCoordinates>\n      </geographicCoverage>\n      <temporalCoverage>\n        <rangeOfDates>\n          <beginDate><calendarDate>2023-06-14</calendarDate></beginDate>\n          <endDate><calendarDate>2023-06-15</calendarDate></endDate>\n        </rangeOfDates>\n      </temporalCoverage>\n      <taxonomicCoverage>\n        <generalTaxonomicCoverage>2 distinct scientific names in the occurrence table</generalTaxonomicCoverage>\n        <taxonomicClassification>\n          <taxonRankValue>Calanus finmarchicus</taxonRankValue>\n        </taxonomicClassification>\n        <taxonomicClassification>\n          <taxonRankValue>Oithona similis</taxonRankValue>\n        </taxonomicClassification>\n      </taxonomicCoverage>\n    </coverage>\n    <contact>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </contact>\n  </dataset>\n  <additionalMetadata>\n    <metadata>\n      <gbif>\n        <dateStamp>2026-10-25T12:00:00Z</dateStamp>\n        <hierarchyLevel>dataset</hierarchyLevel>\n        <citation identifier=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val\">Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.</citation>\n      </gbif>\n    </metadata>\n  </additionalMetadata>\n</eml:eml>\n",
+    "event.txt": "eventID\tparentEventID\teventType\teventDate\tdecimalLatitude\tdecimalLongitude\tgeodeticDatum\tcoordinateUncertaintyInMeters\tminimumDepthInMeters\tmaximumDepthInMeters\tdatasetName\tinstitutionCode\nZR1\t\tcruise\t2023-06-14/2023-06-15\t55.55\t2.55\tEPSG:4326\t6389\t5\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZR1:ZL1\tZR1\tstation\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZR1:ZL2\tZR1\tstation\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL1-a\tZR1:ZL1\tsample\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL2-a\tZR1:ZL2\tsample\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\n",
+    "occurrence.txt": "occurrenceID\teventID\tbasisOfRecord\toccurrenceStatus\tscientificName\tscientificNameID\tverbatimIdentification\tindividualCount\torganismQuantity\torganismQuantityType\nZL1-a:Calanus finmarchicus\tZL1-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t4\t4\tindividuals\nZL1-a:Oithona similis\tZL1-a\tHumanObservation\tpresent\tOithona similis\turn:lsid:marinespecies.org:taxname:106656\tOithona similis\t9\t9\tindividuals\nZL2-a:Calanus finmarchicus\tZL2-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t1\t1\tindividuals\n",
+    "extendedmeasurementorfact.txt": "eventID\toccurrenceID\tmeasurementType\tmeasurementTypeID\tmeasurementValue\tmeasurementValueID\tmeasurementUnit\tmeasurementUnitID\nZL1-a\tZL1-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t4\t\t\t\nZL1-a\tZL1-a:Oithona similis\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t9\t\t\t\nZL2-a\tZL2-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t1\t\t\t\n"
+   },
+   "zip": "f371371513360818685ae0d67cad154242e9aad5a12b5ee5a23aa32dcb386a81"
+  },
+  "polish+worms": {
+   "blocking": [],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "ruleId": "CONV-DEVICE-MISSING",
+     "severity": "warning",
+     "params": {}
+    },
+    {
+     "file": "extendedmeasurementorfact.txt",
+     "ruleId": "CONV-NO-SAMPLING-DESCRIPTOR",
+     "severity": "warning",
+     "params": {}
+    }
+   ],
+   "files": {
+    "meta.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<archive xmlns=\"http://rs.tdwg.org/dwc/text/\" metadata=\"eml.xml\">\n  <core encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Event\">\n    <files><location>event.txt</location></files>\n    <id index=\"0\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/parentEventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/eventType\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/eventDate\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/decimalLatitude\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/decimalLongitude\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/geodeticDatum\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/minimumDepthInMeters\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/maximumDepthInMeters\"/>\n    <field index=\"10\" term=\"http://rs.tdwg.org/dwc/terms/datasetName\"/>\n    <field index=\"11\" term=\"http://rs.tdwg.org/dwc/terms/institutionCode\"/>\n  </core>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Occurrence\">\n    <files><location>occurrence.txt</location></files>\n    <coreid index=\"1\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/basisOfRecord\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceStatus\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/scientificName\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/scientificNameID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/verbatimIdentification\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/individualCount\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantity\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantityType\"/>\n  </extension>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact\">\n    <files><location>extendedmeasurementorfact.txt</location></files>\n    <coreid index=\"0\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/measurementType\"/>\n    <field index=\"3\" term=\"http://rs.iobis.org/obis/terms/measurementTypeID\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/measurementValue\"/>\n    <field index=\"5\" term=\"http://rs.iobis.org/obis/terms/measurementValueID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/measurementUnit\"/>\n    <field index=\"7\" term=\"http://rs.iobis.org/obis/terms/measurementUnitID\"/>\n  </extension>\n</archive>\n",
+    "eml.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<eml:eml xmlns:eml=\"https://eml.ecoinformatics.org/eml-2.2.0\"\n         xmlns:dc=\"http://purl.org/dc/terms/\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd\"\n         packageId=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val/v1.0\" system=\"http://gbif.org\" scope=\"system\" xml:lang=\"en\">\n  <dataset>\n    <title xml:lang=\"en\">Synthetic zooplankton counts of an invented bay (invented values)</title>\n    <creator>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n    </creator>\n    <creator>\n      <individualName><givenName>Bob</givenName><surName>Sample</surName></individualName>\n    </creator>\n    <metadataProvider>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </metadataProvider>\n    <pubDate>2026-10-25</pubDate>\n    <language>en</language>\n    <abstract>\n      <para>SYNTHETIC test dataset. Positions, dates and counts are invented.</para>\n    </abstract>\n    <keywordSet>\n      <keyword>Occurrence</keyword>\n      <keyword>Samplingevent</keyword>\n      <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>\n    </keywordSet>\n    <intellectualRights>\n      <para>This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"><citetitle>Creative Commons Attribution (CC-BY 4.0) License</citetitle></ulink>.</para>\n    </intellectualRights>\n    <coverage>\n      <geographicCoverage>\n        <geographicDescription>Bounding box of the positions of the sampling events in this dataset</geographicDescription>\n        <boundingCoordinates>\n          <westBoundingCoordinate>2.5</westBoundingCoordinate>\n          <eastBoundingCoordinate>2.6</eastBoundingCoordinate>\n          <northBoundingCoordinate>55.6</northBoundingCoordinate>\n          <southBoundingCoordinate>55.5</southBoundingCoordinate>\n        </boundingCoordinates>\n      </geographicCoverage>\n      <temporalCoverage>\n        <rangeOfDates>\n          <beginDate><calendarDate>2023-06-14</calendarDate></beginDate>\n          <endDate><calendarDate>2023-06-15</calendarDate></endDate>\n        </rangeOfDates>\n      </temporalCoverage>\n      <taxonomicCoverage>\n        <generalTaxonomicCoverage>2 distinct scientific names in the occurrence table</generalTaxonomicCoverage>\n        <taxonomicClassification>\n          <taxonRankValue>Calanus finmarchicus</taxonRankValue>\n        </taxonomicClassification>\n        <taxonomicClassification>\n          <taxonRankValue>Oithona similis</taxonRankValue>\n        </taxonomicClassification>\n      </taxonomicCoverage>\n    </coverage>\n    <contact>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </contact>\n  </dataset>\n  <additionalMetadata>\n    <metadata>\n      <gbif>\n        <dateStamp>2026-10-25T12:00:00Z</dateStamp>\n        <hierarchyLevel>dataset</hierarchyLevel>\n        <citation identifier=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val\">Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.</citation>\n      </gbif>\n    </metadata>\n  </additionalMetadata>\n</eml:eml>\n",
+    "event.txt": "eventID\tparentEventID\teventType\teventDate\tdecimalLatitude\tdecimalLongitude\tgeodeticDatum\tcoordinateUncertaintyInMeters\tminimumDepthInMeters\tmaximumDepthInMeters\tdatasetName\tinstitutionCode\nZR1\t\tcruise\t2023-06-14/2023-06-15\t55.55\t2.55\tEPSG:4326\t6389\t5\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZR1:ZL1\tZR1\tstation\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZR1:ZL2\tZR1\tstation\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL1-a\tZR1:ZL1\tsample\t2023-06-14\t55.5\t2.5\tEPSG:4326\t\t5\t5\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL2-a\tZR1:ZL2\tsample\t2023-06-15\t55.6\t2.6\tEPSG:4326\t\t10\t10\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\n",
+    "occurrence.txt": "occurrenceID\teventID\tbasisOfRecord\toccurrenceStatus\tscientificName\tscientificNameID\tverbatimIdentification\tindividualCount\torganismQuantity\torganismQuantityType\nZL1-a:Calanus finmarchicus\tZL1-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t4\t4\tindividuals\nZL1-a:Oithona similis\tZL1-a\tHumanObservation\tpresent\tOithona similis\turn:lsid:marinespecies.org:taxname:106656\tOithona similis\t9\t9\tindividuals\nZL2-a:Calanus finmarchicus\tZL2-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t1\t1\tindividuals\n",
+    "extendedmeasurementorfact.txt": "eventID\toccurrenceID\tmeasurementType\tmeasurementTypeID\tmeasurementValue\tmeasurementValueID\tmeasurementUnit\tmeasurementUnitID\nZL1-a\tZL1-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t4\t\t\t\nZL1-a\tZL1-a:Oithona similis\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t9\t\t\t\nZL2-a\tZL2-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t1\t\t\t\n"
+   },
+   "zip": "f371371513360818685ae0d67cad154242e9aad5a12b5ee5a23aa32dcb386a81"
+  },
+  "taxon-analysis-count": {
+   "blocking": [
+    "CONV-SAMPLE-CODE-MISSING",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "lines": [
+      2,
+      3
+     ],
+     "params": {
+      "count": 2,
+      "column": "none"
+     },
+     "ruleId": "CONV-SAMPLE-CODE-MISSING",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "taxon-analysis-count+worms": {
+   "blocking": [
+    "CONV-SAMPLE-CODE-MISSING",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "lines": [
+      2,
+      3
+     ],
+     "params": {
+      "count": 2,
+      "column": "none"
+     },
+     "ruleId": "CONV-SAMPLE-CODE-MISSING",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "taxon-quantity-unit-value": {
+   "blocking": [
+    "CONV-NO-TAXON",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "shape": "long"
+     },
+     "ruleId": "CONV-NO-TAXON",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "taxon-quantity-unit-value+worms": {
+   "blocking": [
+    "CONV-NO-TAXON",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "shape": "long"
+     },
+     "ruleId": "CONV-NO-TAXON",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "scientificName-parameter-unit-value": {
+   "blocking": [
+    "CONV-NO-TAXON",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "shape": "long"
+     },
+     "ruleId": "CONV-NO-TAXON",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "scientificName-parameter-unit-value+worms": {
+   "blocking": [
+    "CONV-NO-TAXON",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "shape": "long"
+     },
+     "ruleId": "CONV-NO-TAXON",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "taxon-with-parameter-result": {
+   "blocking": [],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "what": "Result"
+     },
+     "ruleId": "CONV-NERC-UNKNOWN",
+     "severity": "warning"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "ruleId": "CONV-DEVICE-MISSING",
+     "severity": "warning",
+     "params": {}
+    },
+    {
+     "file": "event.txt",
+     "sheet": "event.txt",
+     "params": {
+      "core": "Event",
+      "terms": "minimumDepthInMeters, maximumDepthInMeters"
+     },
+     "ruleId": "DWC-RECOMMENDED",
+     "severity": "warning"
+    },
+    {
+     "file": "occurrence.txt",
+     "sheet": "occurrence.txt",
+     "params": {
+      "count": 2
+     },
+     "ruleId": "CONV-NAMEID-MISSING",
+     "severity": "warning"
+    },
+    {
+     "file": "extendedmeasurementorfact.txt",
+     "ruleId": "CONV-NO-SAMPLING-DESCRIPTOR",
+     "severity": "warning",
+     "params": {}
+    }
+   ],
+   "files": {
+    "meta.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<archive xmlns=\"http://rs.tdwg.org/dwc/text/\" metadata=\"eml.xml\">\n  <core encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Event\">\n    <files><location>event.txt</location></files>\n    <id index=\"0\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/parentEventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/eventType\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/eventDate\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/decimalLatitude\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/decimalLongitude\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/geodeticDatum\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/datasetName\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/institutionCode\"/>\n  </core>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Occurrence\">\n    <files><location>occurrence.txt</location></files>\n    <coreid index=\"1\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/basisOfRecord\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceStatus\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/scientificName\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/verbatimIdentification\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/individualCount\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantity\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantityType\"/>\n  </extension>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact\">\n    <files><location>extendedmeasurementorfact.txt</location></files>\n    <coreid index=\"0\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/measurementType\"/>\n    <field index=\"3\" term=\"http://rs.iobis.org/obis/terms/measurementTypeID\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/measurementValue\"/>\n    <field index=\"5\" term=\"http://rs.iobis.org/obis/terms/measurementValueID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/measurementUnit\"/>\n    <field index=\"7\" term=\"http://rs.iobis.org/obis/terms/measurementUnitID\"/>\n  </extension>\n</archive>\n",
+    "eml.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<eml:eml xmlns:eml=\"https://eml.ecoinformatics.org/eml-2.2.0\"\n         xmlns:dc=\"http://purl.org/dc/terms/\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd\"\n         packageId=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val/v1.0\" system=\"http://gbif.org\" scope=\"system\" xml:lang=\"en\">\n  <dataset>\n    <title xml:lang=\"en\">Synthetic zooplankton counts of an invented bay (invented values)</title>\n    <creator>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n    </creator>\n    <creator>\n      <individualName><givenName>Bob</givenName><surName>Sample</surName></individualName>\n    </creator>\n    <metadataProvider>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </metadataProvider>\n    <pubDate>2026-10-25</pubDate>\n    <language>en</language>\n    <abstract>\n      <para>SYNTHETIC test dataset. Positions, dates and counts are invented.</para>\n    </abstract>\n    <keywordSet>\n      <keyword>Occurrence</keyword>\n      <keyword>Samplingevent</keyword>\n      <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>\n    </keywordSet>\n    <intellectualRights>\n      <para>This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"><citetitle>Creative Commons Attribution (CC-BY 4.0) License</citetitle></ulink>.</para>\n    </intellectualRights>\n    <coverage>\n      <geographicCoverage>\n        <geographicDescription>Bounding box of the positions of the sampling events in this dataset</geographicDescription>\n        <boundingCoordinates>\n          <westBoundingCoordinate>2.5</westBoundingCoordinate>\n          <eastBoundingCoordinate>2.5</eastBoundingCoordinate>\n          <northBoundingCoordinate>55.5</northBoundingCoordinate>\n          <southBoundingCoordinate>55.5</southBoundingCoordinate>\n        </boundingCoordinates>\n      </geographicCoverage>\n      <temporalCoverage>\n        <rangeOfDates>\n          <beginDate><calendarDate>2023-06-14</calendarDate></beginDate>\n          <endDate><calendarDate>2023-06-14</calendarDate></endDate>\n        </rangeOfDates>\n      </temporalCoverage>\n      <taxonomicCoverage>\n        <generalTaxonomicCoverage>2 distinct scientific names in the occurrence table</generalTaxonomicCoverage>\n        <taxonomicClassification>\n          <taxonRankValue>Calanus finmarchicus</taxonRankValue>\n        </taxonomicClassification>\n        <taxonomicClassification>\n          <taxonRankValue>Oithona similis</taxonRankValue>\n        </taxonomicClassification>\n      </taxonomicCoverage>\n    </coverage>\n    <contact>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </contact>\n  </dataset>\n  <additionalMetadata>\n    <metadata>\n      <gbif>\n        <dateStamp>2026-10-25T12:00:00Z</dateStamp>\n        <hierarchyLevel>dataset</hierarchyLevel>\n        <citation identifier=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val\">Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.</citation>\n      </gbif>\n    </metadata>\n  </additionalMetadata>\n</eml:eml>\n",
+    "event.txt": "eventID\tparentEventID\teventType\teventDate\tdecimalLatitude\tdecimalLongitude\tgeodeticDatum\tdatasetName\tinstitutionCode\nZL1\t\tstation\t2023-06-14\t55.5\t2.5\tEPSG:4326\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL1-a\tZL1\tsample\t2023-06-14\t55.5\t2.5\tEPSG:4326\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\n",
+    "occurrence.txt": "occurrenceID\teventID\tbasisOfRecord\toccurrenceStatus\tscientificName\tverbatimIdentification\tindividualCount\torganismQuantity\torganismQuantityType\nZL1-a:Calanus finmarchicus\tZL1-a\tHumanObservation\tpresent\tCalanus finmarchicus\tCalanus finmarchicus\t4\t4\tindividuals\nZL1-a:Oithona similis\tZL1-a\tHumanObservation\tpresent\tOithona similis\tOithona similis\t9\t9\tindividuals\n",
+    "extendedmeasurementorfact.txt": "eventID\toccurrenceID\tmeasurementType\tmeasurementTypeID\tmeasurementValue\tmeasurementValueID\tmeasurementUnit\tmeasurementUnitID\nZL1-a\t\tResult\t\t8.1\t\t\t\nZL1-a\tZL1-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t4\t\t\t\nZL1-a\tZL1-a:Oithona similis\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t9\t\t\t\n"
+   },
+   "zip": "c76c7b7561c5321a364791b33faeef48a1763b9757695fba9b6ecab299ab4ad4"
+  },
+  "taxon-with-parameter-result+worms": {
+   "blocking": [],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "what": "Result"
+     },
+     "ruleId": "CONV-NERC-UNKNOWN",
+     "severity": "warning"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "ruleId": "CONV-DEVICE-MISSING",
+     "severity": "warning",
+     "params": {}
+    },
+    {
+     "file": "event.txt",
+     "sheet": "event.txt",
+     "params": {
+      "core": "Event",
+      "terms": "minimumDepthInMeters, maximumDepthInMeters"
+     },
+     "ruleId": "DWC-RECOMMENDED",
+     "severity": "warning"
+    },
+    {
+     "file": "extendedmeasurementorfact.txt",
+     "ruleId": "CONV-NO-SAMPLING-DESCRIPTOR",
+     "severity": "warning",
+     "params": {}
+    }
+   ],
+   "files": {
+    "meta.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<archive xmlns=\"http://rs.tdwg.org/dwc/text/\" metadata=\"eml.xml\">\n  <core encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Event\">\n    <files><location>event.txt</location></files>\n    <id index=\"0\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/parentEventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/eventType\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/eventDate\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/decimalLatitude\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/decimalLongitude\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/geodeticDatum\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/datasetName\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/institutionCode\"/>\n  </core>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.tdwg.org/dwc/terms/Occurrence\">\n    <files><location>occurrence.txt</location></files>\n    <coreid index=\"1\"/>\n    <field index=\"0\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/eventID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/basisOfRecord\"/>\n    <field index=\"3\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceStatus\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/scientificName\"/>\n    <field index=\"5\" term=\"http://rs.tdwg.org/dwc/terms/scientificNameID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/verbatimIdentification\"/>\n    <field index=\"7\" term=\"http://rs.tdwg.org/dwc/terms/individualCount\"/>\n    <field index=\"8\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantity\"/>\n    <field index=\"9\" term=\"http://rs.tdwg.org/dwc/terms/organismQuantityType\"/>\n  </extension>\n  <extension encoding=\"UTF-8\" fieldsTerminatedBy=\"\\t\" linesTerminatedBy=\"\\n\" fieldsEnclosedBy=\"\" ignoreHeaderLines=\"1\" rowType=\"http://rs.iobis.org/obis/terms/ExtendedMeasurementOrFact\">\n    <files><location>extendedmeasurementorfact.txt</location></files>\n    <coreid index=\"0\"/>\n    <field index=\"1\" term=\"http://rs.tdwg.org/dwc/terms/occurrenceID\"/>\n    <field index=\"2\" term=\"http://rs.tdwg.org/dwc/terms/measurementType\"/>\n    <field index=\"3\" term=\"http://rs.iobis.org/obis/terms/measurementTypeID\"/>\n    <field index=\"4\" term=\"http://rs.tdwg.org/dwc/terms/measurementValue\"/>\n    <field index=\"5\" term=\"http://rs.iobis.org/obis/terms/measurementValueID\"/>\n    <field index=\"6\" term=\"http://rs.tdwg.org/dwc/terms/measurementUnit\"/>\n    <field index=\"7\" term=\"http://rs.iobis.org/obis/terms/measurementUnitID\"/>\n  </extension>\n</archive>\n",
+    "eml.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<eml:eml xmlns:eml=\"https://eml.ecoinformatics.org/eml-2.2.0\"\n         xmlns:dc=\"http://purl.org/dc/terms/\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd\"\n         packageId=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val/v1.0\" system=\"http://gbif.org\" scope=\"system\" xml:lang=\"en\">\n  <dataset>\n    <title xml:lang=\"en\">Synthetic zooplankton counts of an invented bay (invented values)</title>\n    <creator>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n    </creator>\n    <creator>\n      <individualName><givenName>Bob</givenName><surName>Sample</surName></individualName>\n    </creator>\n    <metadataProvider>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </metadataProvider>\n    <pubDate>2026-10-25</pubDate>\n    <language>en</language>\n    <abstract>\n      <para>SYNTHETIC test dataset. Positions, dates and counts are invented.</para>\n    </abstract>\n    <keywordSet>\n      <keyword>Occurrence</keyword>\n      <keyword>Samplingevent</keyword>\n      <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>\n    </keywordSet>\n    <intellectualRights>\n      <para>This work is licensed under a <ulink url=\"http://creativecommons.org/licenses/by/4.0/legalcode\"><citetitle>Creative Commons Attribution (CC-BY 4.0) License</citetitle></ulink>.</para>\n    </intellectualRights>\n    <coverage>\n      <geographicCoverage>\n        <geographicDescription>Bounding box of the positions of the sampling events in this dataset</geographicDescription>\n        <boundingCoordinates>\n          <westBoundingCoordinate>2.5</westBoundingCoordinate>\n          <eastBoundingCoordinate>2.5</eastBoundingCoordinate>\n          <northBoundingCoordinate>55.5</northBoundingCoordinate>\n          <southBoundingCoordinate>55.5</southBoundingCoordinate>\n        </boundingCoordinates>\n      </geographicCoverage>\n      <temporalCoverage>\n        <rangeOfDates>\n          <beginDate><calendarDate>2023-06-14</calendarDate></beginDate>\n          <endDate><calendarDate>2023-06-14</calendarDate></endDate>\n        </rangeOfDates>\n      </temporalCoverage>\n      <taxonomicCoverage>\n        <generalTaxonomicCoverage>2 distinct scientific names in the occurrence table</generalTaxonomicCoverage>\n        <taxonomicClassification>\n          <taxonRankValue>Calanus finmarchicus</taxonRankValue>\n        </taxonomicClassification>\n        <taxonomicClassification>\n          <taxonRankValue>Oithona similis</taxonRankValue>\n        </taxonomicClassification>\n      </taxonomicCoverage>\n    </coverage>\n    <contact>\n      <individualName><givenName>Ada</givenName><surName>Example</surName></individualName>\n      <electronicMailAddress>ada@example.org</electronicMailAddress>\n    </contact>\n  </dataset>\n  <additionalMetadata>\n    <metadata>\n      <gbif>\n        <dateStamp>2026-10-25T12:00:00Z</dateStamp>\n        <hierarchyLevel>dataset</hierarchyLevel>\n        <citation identifier=\"synthetic-zooplankton-counts-of-an-invented-bay-invented-val\">Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.</citation>\n      </gbif>\n    </metadata>\n  </additionalMetadata>\n</eml:eml>\n",
+    "event.txt": "eventID\tparentEventID\teventType\teventDate\tdecimalLatitude\tdecimalLongitude\tgeodeticDatum\tdatasetName\tinstitutionCode\nZL1\t\tstation\t2023-06-14\t55.5\t2.5\tEPSG:4326\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\nZL1-a\tZL1\tsample\t2023-06-14\t55.5\t2.5\tEPSG:4326\tSynthetic zooplankton counts of an invented bay (invented values)\tINVENTED\n",
+    "occurrence.txt": "occurrenceID\teventID\tbasisOfRecord\toccurrenceStatus\tscientificName\tscientificNameID\tverbatimIdentification\tindividualCount\torganismQuantity\torganismQuantityType\nZL1-a:Calanus finmarchicus\tZL1-a\tHumanObservation\tpresent\tCalanus finmarchicus\turn:lsid:marinespecies.org:taxname:104464\tCalanus finmarchicus\t4\t4\tindividuals\nZL1-a:Oithona similis\tZL1-a\tHumanObservation\tpresent\tOithona similis\turn:lsid:marinespecies.org:taxname:106656\tOithona similis\t9\t9\tindividuals\n",
+    "extendedmeasurementorfact.txt": "eventID\toccurrenceID\tmeasurementType\tmeasurementTypeID\tmeasurementValue\tmeasurementValueID\tmeasurementUnit\tmeasurementUnitID\nZL1-a\t\tResult\t\t8.1\t\t\t\nZL1-a\tZL1-a:Calanus finmarchicus\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t4\t\t\t\nZL1-a\tZL1-a:Oithona similis\tCount of biological entity specified elsewhere\thttp://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/\t9\t\t\t\n"
+   },
+   "zip": "196307a7943d996de8fd8e0bdd32b317f00e72cb0b7938fb4170445c7b1bbf86"
+  },
+  "wide-analysis-ctd": {
+   "blocking": [
+    "CONV-NO-TAXON",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "shape": "wide"
+     },
+     "ruleId": "CONV-NO-TAXON",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "wide-analysis-ctd+worms": {
+   "blocking": [
+    "CONV-NO-TAXON",
+    "CONV-NO-OCCURRENCES"
+   ],
+   "findings": [
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {
+      "shape": "wide"
+     },
+     "ruleId": "CONV-NO-TAXON",
+     "severity": "error"
+    },
+    {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "params": {},
+     "ruleId": "CONV-NO-OCCURRENCES",
+     "severity": "error"
+    }
+   ],
+   "files": {},
+   "zip": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "worker": {
+  "english": {
+   "sheets": [
+    {
+     "name": "english.csv",
+     "header": [
+      "Cruise",
+      "Station",
+      "Sample code",
+      "Date",
+      "Latitude",
+      "Longitude",
+      "Depth [m]",
+      "Taxon",
+      "AphiaID",
+      "Count"
+     ],
+     "rowCount": 3
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "english.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "Cruise",
+       "role": {
+        "kind": "cruise"
+       }
+      },
+      {
+       "index": 1,
+       "header": "Station",
+       "role": {
+        "kind": "station"
+       }
+      },
+      {
+       "index": 2,
+       "header": "Sample code",
+       "role": {
+        "kind": "sampleId"
+       }
+      },
+      {
+       "index": 3,
+       "header": "Date",
+       "role": {
+        "kind": "date"
+       }
+      },
+      {
+       "index": 4,
+       "header": "Latitude",
+       "role": {
+        "kind": "latitude"
+       }
+      },
+      {
+       "index": 5,
+       "header": "Longitude",
+       "role": {
+        "kind": "longitude"
+       }
+      },
+      {
+       "index": 6,
+       "header": "Depth [m]",
+       "role": {
+        "kind": "depth",
+        "positive": "down",
+        "unit": "m"
+       }
+      },
+      {
+       "index": 7,
+       "header": "Taxon",
+       "role": {
+        "kind": "taxon"
+       }
+      },
+      {
+       "index": 8,
+       "header": "AphiaID",
+       "role": {
+        "kind": "taxonId",
+        "aphia": true
+       }
+      },
+      {
+       "index": 9,
+       "header": "Count",
+       "role": {
+        "kind": "quantity"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {
+    "english.csv": "long"
+   },
+   "profiles": {
+    "english.csv": false
+   },
+   "hasPivots": false
+  },
+  "polish": {
+   "sheets": [
+    {
+     "name": "polish.csv",
+     "header": [
+      "Rejs",
+      "Stacja",
+      "Kod próby",
+      "Data",
+      "Szerokość",
+      "Długość",
+      "Głębokość [m]",
+      "Takson",
+      "AphiaID",
+      "Liczba osobników"
+     ],
+     "rowCount": 3
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "polish.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "Rejs",
+       "role": {
+        "kind": "cruise"
+       }
+      },
+      {
+       "index": 1,
+       "header": "Stacja",
+       "role": {
+        "kind": "station"
+       }
+      },
+      {
+       "index": 2,
+       "header": "Kod próby",
+       "role": {
+        "kind": "sampleId"
+       }
+      },
+      {
+       "index": 3,
+       "header": "Data",
+       "role": {
+        "kind": "date"
+       }
+      },
+      {
+       "index": 4,
+       "header": "Szerokość",
+       "role": {
+        "kind": "latitude"
+       }
+      },
+      {
+       "index": 5,
+       "header": "Długość",
+       "role": {
+        "kind": "longitude"
+       }
+      },
+      {
+       "index": 6,
+       "header": "Głębokość [m]",
+       "role": {
+        "kind": "depth",
+        "positive": "down",
+        "unit": "m"
+       }
+      },
+      {
+       "index": 7,
+       "header": "Takson",
+       "role": {
+        "kind": "taxon"
+       }
+      },
+      {
+       "index": 8,
+       "header": "AphiaID",
+       "role": {
+        "kind": "taxonId",
+        "aphia": true
+       }
+      },
+      {
+       "index": 9,
+       "header": "Liczba osobników",
+       "role": {
+        "kind": "quantity"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {
+    "polish.csv": "long"
+   },
+   "profiles": {
+    "polish.csv": false
+   },
+   "hasPivots": false
+  },
+  "taxon-analysis-count": {
+   "sheets": [
+    {
+     "name": "taxon-analysis-count.csv",
+     "header": [
+      "Station",
+      "Date",
+      "Latitude",
+      "Longitude",
+      "Taxon",
+      "Analysis",
+      "Count"
+     ],
+     "rowCount": 2
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "taxon-analysis-count.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "Station",
+       "role": {
+        "kind": "station"
+       }
+      },
+      {
+       "index": 1,
+       "header": "Date",
+       "role": {
+        "kind": "date"
+       }
+      },
+      {
+       "index": 2,
+       "header": "Latitude",
+       "role": {
+        "kind": "latitude"
+       }
+      },
+      {
+       "index": 3,
+       "header": "Longitude",
+       "role": {
+        "kind": "longitude"
+       }
+      },
+      {
+       "index": 4,
+       "header": "Taxon",
+       "role": {
+        "kind": "taxon"
+       }
+      },
+      {
+       "index": 5,
+       "header": "Analysis",
+       "role": {
+        "kind": "ignore"
+       }
+      },
+      {
+       "index": 6,
+       "header": "Count",
+       "role": {
+        "kind": "quantity"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {
+    "taxon-analysis-count.csv": "long"
+   },
+   "profiles": {
+    "taxon-analysis-count.csv": false
+   },
+   "hasPivots": false
+  },
+  "taxon-quantity-unit-value": {
+   "sheets": [
+    {
+     "name": "taxon-quantity-unit-value.csv",
+     "header": [
+      "Taxon",
+      "Quantity",
+      "Unit",
+      "Value"
+     ],
+     "rowCount": 2
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "taxon-quantity-unit-value.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "Taxon",
+       "role": {
+        "kind": "taxon"
+       }
+      },
+      {
+       "index": 1,
+       "header": "Quantity",
+       "role": {
+        "kind": "variable",
+        "variable": "Quantity"
+       }
+      },
+      {
+       "index": 2,
+       "header": "Unit",
+       "role": {
+        "kind": "ignore"
+       }
+      },
+      {
+       "index": 3,
+       "header": "Value",
+       "role": {
+        "kind": "variable",
+        "variable": "Value"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {
+    "taxon-quantity-unit-value.csv": "long"
+   },
+   "profiles": {
+    "taxon-quantity-unit-value.csv": false
+   },
+   "hasPivots": false
+  },
+  "scientificName-parameter-unit-value": {
+   "sheets": [
+    {
+     "name": "scientificName-parameter-unit-value.csv",
+     "header": [
+      "scientificName",
+      "parameter",
+      "unit",
+      "value"
+     ],
+     "rowCount": 2
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "scientificName-parameter-unit-value.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "scientificName",
+       "role": {
+        "kind": "taxon"
+       }
+      },
+      {
+       "index": 1,
+       "header": "parameter",
+       "role": {
+        "kind": "ignore"
+       }
+      },
+      {
+       "index": 2,
+       "header": "unit",
+       "role": {
+        "kind": "ignore"
+       }
+      },
+      {
+       "index": 3,
+       "header": "value",
+       "role": {
+        "kind": "variable",
+        "variable": "value"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {
+    "scientificName-parameter-unit-value.csv": "long"
+   },
+   "profiles": {
+    "scientificName-parameter-unit-value.csv": false
+   },
+   "hasPivots": false
+  },
+  "taxon-with-parameter-result": {
+   "sheets": [
+    {
+     "name": "taxon-with-parameter-result.csv",
+     "header": [
+      "Station",
+      "Sample",
+      "Date",
+      "Latitude",
+      "Longitude",
+      "Taxon",
+      "Count",
+      "Parameter",
+      "Result"
+     ],
+     "rowCount": 2
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "taxon-with-parameter-result.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "Station",
+       "role": {
+        "kind": "station"
+       }
+      },
+      {
+       "index": 1,
+       "header": "Sample",
+       "role": {
+        "kind": "sampleId"
+       }
+      },
+      {
+       "index": 2,
+       "header": "Date",
+       "role": {
+        "kind": "date"
+       }
+      },
+      {
+       "index": 3,
+       "header": "Latitude",
+       "role": {
+        "kind": "latitude"
+       }
+      },
+      {
+       "index": 4,
+       "header": "Longitude",
+       "role": {
+        "kind": "longitude"
+       }
+      },
+      {
+       "index": 5,
+       "header": "Taxon",
+       "role": {
+        "kind": "taxon"
+       }
+      },
+      {
+       "index": 6,
+       "header": "Count",
+       "role": {
+        "kind": "quantity"
+       }
+      },
+      {
+       "index": 7,
+       "header": "Parameter",
+       "role": {
+        "kind": "ignore"
+       }
+      },
+      {
+       "index": 8,
+       "header": "Result",
+       "role": {
+        "kind": "variable",
+        "variable": "Result"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {
+    "taxon-with-parameter-result.csv": "long"
+   },
+   "profiles": {
+    "taxon-with-parameter-result.csv": false
+   },
+   "hasPivots": false
+  },
+  "wide-analysis-ctd": {
+   "sheets": [
+    {
+     "name": "wide-analysis-ctd.csv",
+     "header": [
+      "Station",
+      "Date",
+      "Latitude",
+      "Longitude",
+      "Depth_m",
+      "Analysis",
+      "Temperature"
+     ],
+     "rowCount": 2
+    }
+   ],
+   "mappings": [
+    {
+     "sheet": "wide-analysis-ctd.csv",
+     "columns": [
+      {
+       "index": 0,
+       "header": "Station",
+       "role": {
+        "kind": "station"
+       }
+      },
+      {
+       "index": 1,
+       "header": "Date",
+       "role": {
+        "kind": "date"
+       }
+      },
+      {
+       "index": 2,
+       "header": "Latitude",
+       "role": {
+        "kind": "latitude"
+       }
+      },
+      {
+       "index": 3,
+       "header": "Longitude",
+       "role": {
+        "kind": "longitude"
+       }
+      },
+      {
+       "index": 4,
+       "header": "Depth_m",
+       "role": {
+        "kind": "depth",
+        "positive": "down",
+        "unit": "m"
+       }
+      },
+      {
+       "index": 5,
+       "header": "Analysis",
+       "role": {
+        "kind": "ignore"
+       }
+      },
+      {
+       "index": 6,
+       "header": "Temperature",
+       "role": {
+        "kind": "variable",
+        "variable": "temperature"
+       }
+      }
+     ]
+    }
+   ],
+   "shapes": {},
+   "profiles": {
+    "wide-analysis-ctd.csv": true
+   },
+   "hasPivots": false
+  }
  }
 }
