@@ -70,7 +70,8 @@ export function licenceDiffersFindings(chosen: string, source: { ids: readonly s
 /** The Event table through the Event checks of /check. */
 function eventFindings(t: Table, opts: ValidateOptions): Finding[] {
   const file = fileOf(t, 'Event');
-  const layout = proposeLayout(file);
+  // the Event table is the converter's own output, never a transposed table: its first column holds the user's station names, and a name that reads like a column name ("stn A") must not turn it into one
+  const layout = proposeLayout(file, { skipTransposed: true });
   const mappings = proposeMappings(file, layout);
   const built = buildDatasets(file, layout, mappings, [], 'event');
   const report = runChecks({ datasets: built.datasets, records: [], parseFindings: built.findings }, { ...(opts.today === undefined ? {} : { today: opts.today }) });
