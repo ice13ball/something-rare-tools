@@ -23,3 +23,5 @@ const MORE = [
 export const SUMMARY_LABEL_EN = new RegExp(`^(?:${EN})[:.]?$`, 'i');
 /** Every statistics label the converter knows (a superset of the English ones). */
 export const STATISTIC_LABEL = new RegExp(`^(?:${EN}|${MORE})[:.]?$`, 'i');
+/** The short statistics labels that are also ordinary codes (a compass point, a sample "n", a station "Max"): on their own they are asked about, never skipped silently (convert/ids.ts scanStatisticRows). */
+export const AMBIGUOUS_STATISTIC = /^(?:n|se|sem|cv|min|max|count|maks\.?)[:.]?$/i;

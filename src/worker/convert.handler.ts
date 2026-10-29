@@ -179,7 +179,7 @@ export function createConvertHandler(): ConvertHandler {
         const dict = dictionaryReason(sheet, p, parsed.decimalComma);
         if (dict !== undefined) dictionary[sheet.name] = dict;
         // a data dictionary is not tested (its rows are words); a pivoted sheet is skipped inside the test
-        const turned = dict === undefined ? transposedSheetReason(sheet, parsed) : undefined;
+        const turned = dict === undefined ? transposedSheetReason(sheet, parsed, p) : undefined;
         if (turned === 'transposed' || turned === 'transposed-taxa') transposed[sheet.name] = turned;
       }
       return {

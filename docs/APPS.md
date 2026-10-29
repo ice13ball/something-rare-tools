@@ -1054,12 +1054,12 @@ languages) are not repeated. It adds the roles `/check` does not have (`Converte
 AphiaID column or any other ID, as given), and `depthBelowSeafloor`. It reads Darwin Core terms as
 roles (`occurrenceID`, `eventID` as the sample code, `scientificName`, `individualCount`,
 `organismQuantity`, `organismQuantityType`, minimum/maximum depth, `lifeStage`,
-`identificationQualifier`). A column whose WHOLE header is a replicate word (`Frame`, `Quadrat`,
-`Replicate`, `Rep`, `Replica`, `Subsample`, with an optional `no` / `number` / digits; Polish
-`Powtórzenie`, `Ramka`, `Kwadrat`; German `Replikat`, `Wiederholung`, `Teilprobe`; French `Réplicat`,
-`Répétition`) starts as the role **Replicate / sub-sample** (`name-replicate`); `Core` and `Grab` are
-proposed too but with low confidence, because in a sediment file they can be the sample code.
-`Darwin Core`, `core depth` and `Frame rate` are not proposed. The user can change the role.
+`identificationQualifier`). The role **Replicate / sub-sample** is never applied by the tool on its own, because it
+changes the IDs: a column called `Frame`, `Quadrat`, `Replicate`, `Core` and so on stays ignored.
+Only when sample IDs collide and exactly one ignored column tells the colliding rows apart does the
+`CONV-ID-DUPLICATE` message name that column and the page offer a button, **Use "<column>" as
+replicate / sub-sample**; pressing it is the user's confirmation. The role can also be chosen in the
+role list at any time.
 
 **Measured variable or taxon name?** This is the central decision for a **wide** sheet, where a
 species is a numeric column with the species as its header. The shared proposer calls such a
@@ -1152,7 +1152,9 @@ definition is an echo-intensity unit of an instrument, so a count carries no uni
   headers none, the cells are numbers), and **species in rows** is the converter's own addition (at
   least three Latin names make up 60 % or more of the first column, the other headers are sample
   codes and at most one in five reads as a species, 80 % of the cells are numbers or presence marks;
-  a header over the first column that is a known role such as a station disqualifies it). `/check`
+  a header over the first column that is a known role such as a station disqualifies it; so does any
+  other column that has a structural role in the converter's own reading, such as a quantity, a
+  code, a date or a station, or a header with a unit, which makes it a long species sheet). `/check`
   only reports such a sheet and cannot read it, so the converter does the same: nothing of the sheet
   is read, `CONV-SHEET-TRANSPOSED` blocks with the reason in four languages and says to transpose
   the table in the spreadsheet, and a tick next to the sheet (**Read this sheet as a normal table**,
@@ -1204,10 +1206,10 @@ replicate, and the occurrence IDs are `<replicate eventID>:<taxon>`. The sample 
 own, so it is **derived from its replicates** exactly like a station (date interval, midpoint
 position with its uncertainty, depth range). A row with no value in the replicate column is not
 converted (`CONV-REPLICATE-MISSING`, blocking); the same replicate twice in one sample is still a
-duplicate. A sheet without the role is unchanged. When the role is not set and the rows that
+duplicate. A sheet without the role is unchanged (unique sample codes keep their IDs, with or without a replicate column). When the role is not set and the rows that
 collide differ in exactly one ignored column (measurements and quantities do not count: they are
 expected to differ), `CONV-ID-DUPLICATE` names that column and advises the role instead of "change a
-code".
+code" (the button above applies it).
 
 - **Identifiers** (`convert/ids.ts`): sample `eventID` = the user's own sample code (optionally
   prefixed with the station's `eventID` when codes repeat between stations); station `eventID` =
@@ -1225,14 +1227,17 @@ code".
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
   `SUMMARY_LABEL`, `convert/ids.ts`) are skipped and said (`CONV-SUMMARY-ROW-SKIPPED`). **Statistics
-  lines** (`Mean`, `Average`, `Median`, `Min`, `Max`, `SD`, `StDev`, `SE`, `CV`, `n`, `Count`,
-  `Średnia`, `Mittelwert`, `Moyenne`, `Écart-type`, …; one list with `/check`, `core/summaryLabels.ts`)
-  are decided by the row, not by the word alone, because a station can be called `Max` or `N`: a row
-  with a date or a position of its own is a station and is kept silently; a row with neither, in the
-  trailing block of the sheet (every later row is blank, a summary line or holds one value at most), is
-  skipped and said; a row with neither in the middle of the sheet is kept as a sample and said
-  (`CONV-SUMMARY-ROW-KEPT`, a warning to accept). Both cells of the sample and station columns must be
-  labels (a station `Max` with a real sample code is a station).
+  lines** (`Mean`, `Average`, `Median`, `SD`, `StDev`, `Sum`, `Średnia`, `Mittelwert`, `Moyenne`,
+  `Écart-type`, and the short `Min`, `Max`, `n`, `SE`, `CV`, `Count`; one list with `/check`,
+  `core/summaryLabels.ts`) are decided by the row, not by the word alone, because a station can be
+  called `Max`, `N` or `E`. The label is the whole cell of the sample-code column (also under a real
+  station: `St1 | Mean | 2` is a station subtotal), or of the station column when the sample code is
+  blank or a label too (a station `Max` with a real sample code is a station). A row with a date or a
+  position of its own is a station and is kept silently. A row with neither is skipped and said
+  (`CONV-SUMMARY-ROW-SKIPPED`) when its label is unambiguous (`Mean`, `SD`, ...) or it stands in a
+  block of two or more label rows in a row; a short ambiguous label (`n`, `SE`, `CV`, `Min`, `Max`,
+  `Count`) on its own is **never skipped silently**: the row is kept as a sample and said
+  (`CONV-SUMMARY-ROW-KEPT`, a warning to accept).
 - **Visits:** a code that repeats at **one** station on rows that differ in date (then time of
   day, then depth in a wide sheet; a long sheet never splits on depth) is one sample per visit, not
   a duplicate. The fewest of date, time and depth that tell the rows apart go into the ID, in the
@@ -1240,7 +1245,10 @@ code".
   (`visitLevel`, `visitQualifier`, `convert/ids.ts`; read from the data before the rows get their
   IDs, never from their order). Only the colliding codes change; every other ID is as it was, and
   the same code at two stations is still a duplicate (use the station prefix). Rows identical in
-  all of these stay `CONV-ID-DUPLICATE`. The ID is made of the data, so the sheet says so
+  all of these stay `CONV-ID-DUPLICATE`. A part that one row of the group has and another lacks (a
+  blank date from a merged cell) tells nothing: no split, and the old blocking findings
+  (`CONV-ID-DUPLICATE`, `CONV-SAMPLE-CONFLICT`) say what is wrong. A date range is a visit value by
+  its text (`2020-01-01/2020-01-03`). A presence-only long sheet goes through the same logic. The ID is made of the data, so the sheet says so
   (`CONV-ID-REVISIT`, a warning to accept, listing the rows and which parts the IDs hold), which
   also catches a mistyped date. A sheet with no code column still gets the one-time code proposal.
 - **Parents are derived from their children, never typed:** `eventDate` is the interval from the
@@ -1301,11 +1309,12 @@ species found (presence only, no counts)** (`presenceOnly`, off by default, neve
 kept in the companion file as `presenceOnly=<sheet>`). OBIS requires `occurrenceStatus` and does not
 require a quantity ([OBIS Manual, "How to format Occurrence tables"](https://manual.obis.org/format_occurrence.html)),
 so a ticked sheet writes occurrences with status **present** and no `organismQuantity`,
-`organismQuantityType` or measurement, and asks for no quantity declaration. A **long** sheet writes
+`organismQuantityType` or measurement, and asks for no quantity declaration. The tick is not offered for a sheet that has a quantity column
+(it has numbers, so it is not a presence list), and is not sent for one. A **long** sheet writes
 one occurrence per taxon row. In a **wide** sheet a cell is a mark (`presence.ts`): `x X + * ✓ ✔ ☑`,
 `1`, `yes y tak ja oui present obecny vorhanden présent` mean present; an empty cell or NA writes
 nothing; `0 - – — absent nieobecny abwesend no nie nein non` mean absent **only with the
-full-species-list tick** (otherwise nothing is written, counted as zeros); any other value (a number
+full-species-list tick** (otherwise nothing is written, said as cells marked absent, not as zeros); any other value (a number
 above 1, a negative number, other text) is **not guessed**: `CONV-PRESENCE-VALUE` blocks, naming the
 column, the values and the rows. The proposer takes a column of `+ x * ✓` marks for a species
 column; a column of words (`yes`, `tak`) is given the species role in the role table. Unticked,
@@ -1699,9 +1708,11 @@ Each item below is confirmed from code, a test, or a rule text.
 - A replicate level exists only for a column with the role Replicate / sub-sample; a profile sheet
   does not read that role (its replicate column is ignored without a word), and a sample's replicates
   are not compared with each other (they may differ in date or position; the sample takes the span).
-- A statistics line is told from a station by its date and position and by where it stands (the
-  foot of the sheet); a station called `Max` or `N` with neither a date nor a position, as the last
-  row of a sheet, is skipped (and said, so it can be renamed).
+- A statistics line is told from a station by its date and position and by its label (an
+  unambiguous one, or a block of label rows); a station called `Mean` with neither a date nor a position
+  is skipped (and said, so it can be renamed). Short codes alone (`N`, `SE`) are asked about.
+- Revisits are told apart within one sheet only: the same station and code on different dates in
+  different sheets or files still collide (`CONV-ID-DUPLICATE`).
 - A declared unit that does not fit the kind of quantity is not rejected: it is written as typed with
   no unit id (`CONV-UNIT-NO-P06`, to accept).
 - Derived parent positions are rounded to 6 decimals; coordinates given in degrees and minutes are

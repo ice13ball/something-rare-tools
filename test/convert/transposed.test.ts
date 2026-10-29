@@ -130,6 +130,40 @@ describe('convert: CONV-SHEET-TRANSPOSED', () => {
   });
 });
 
+describe('a long species sheet is never transposed, whatever its other headers are', () => {
+  const NAMES = ['Calanus finmarchicus', 'Oithona similis', 'Pseudocalanus sp.', 'Calanus cf. glacialis'];
+  const cases: string[][] = [
+    ['Species', 'Nr der Probe', 'Anzahl'],
+    ['Taxon', 'Haul', 'Count'],
+    ['Species', 'Transect', 'Count'],
+    ['Taxon', 'Year', 'Count'],
+    ['Species', 'Replicate', 'Count'],
+    ['Species', 'Frame', 'Count'],
+    ['Species', 'Quadrat', 'Count'],
+    ['Species', 'Grab', 'Count'],
+    ['scientificName', 'individualCount', 'organismQuantity'],
+    ['Species', 'AphiaID', 'Count'],
+    ['Species', 'Abundance', 'Biomass [g]'],
+    ['Gatunek', 'Liczebność', 'Biomasa'],
+    ['Art', 'Anzahl', 'Biomasse'],
+    ['Species', 'Length [mm]', 'Weight [mg]'],
+  ];
+  it.each(cases)('%s | %s | %s', (a, b, c) => {
+    // numeric codes in the second column, numbers in the third: the cells look like a transposed table by their numbers alone
+    const rows: Cell[][] = NAMES.map((n, i) => [n, 100 + i, 3 + i]);
+    const f = fileOf([a, b, c], rows);
+    const input = sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' });
+    expect(find(convert({ sheets: [input] }).findings, 'CONV-SHEET-TRANSPOSED'), `${a} | ${b} | ${c}`).toEqual([]);
+    // the page's own test (the worker passes the proposals) agrees
+    expect(transposedSheetReason(f.sheets[0], f, input.mapping.columns)).toBeUndefined();
+  });
+
+  it('the transposed species table is still found when the converter\'s reading is passed in', () => {
+    const f = fileOf(TAXA_HEADER, TAXA_ROWS);
+    expect(transposedSheetReason(f.sheets[0], f, sheetInput(f).mapping.columns)).toBe('transposed-taxa');
+  });
+});
+
 describe('sample columns named like "Sample 1"', () => {
   it.each([['Sample 1', 'Sample 2', 'Sample 3'], ['Site 1', 'Site 2', 'Site 3'], ['2020-01', '2020-02', '2020-03']])('%s is a transposed species table', (a, b, c) => {
     const f = fileOf(['Species', a, b, c], TAXA_ROWS.map((r) => r.slice(0, 4)));

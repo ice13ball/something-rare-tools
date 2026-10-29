@@ -122,6 +122,46 @@ describe('what stays as it was', () => {
   });
 });
 
+describe('a blank part is no visit of its own', () => {
+  it('long: a sample whose second row has blank date and position (merged cells) is one sample and still conflicts', () => {
+    const r = long([
+      ['S', 'S-1', '2020-01-01', 54, 18, 'Calanus finmarchicus', 3],
+      ['S', 'S-1', null, null, null, 'Oithona similis', 4],
+    ]);
+    expect(find(r.findings, 'CONV-ID-REVISIT')).toEqual([]);
+    expect(find(r.blocking, 'CONV-SAMPLE-CONFLICT').length).toBeGreaterThan(0);
+    expect(samples(r)).toEqual(['S-1']);
+  });
+
+  it('wide: the same code twice, one row undated, is a duplicate and not two visits', () => {
+    const r = wide([['S1', '1', '2020-01-01', 1, 2, 4], ['S1', '1', null, 1, 2, 5]]);
+    expect(find(r.findings, 'CONV-ID-REVISIT')).toEqual([]);
+    expect(find(r.blocking, 'CONV-ID-DUPLICATE')).toHaveLength(1);
+  });
+
+  it('a time that one row has and another lacks does not split either', () => {
+    const header = ['Station', 'Sample', 'Date', 'Time', 'Latitude', 'Longitude', 'Calanus finmarchicus'];
+    const r = wide([['S1', '1', '2020-01-01', '08:00', 1, 2, 4], ['S1', '1', '2020-01-01', null, 1, 2, 5]], header);
+    expect(find(r.findings, 'CONV-ID-REVISIT')).toEqual([]);
+    expect(find(r.blocking, 'CONV-ID-DUPLICATE')).toHaveLength(1);
+  });
+});
+
+describe('a date range is a visit value, and a presence list goes through the same logic', () => {
+  it('two different intervals of one code are two visits; the interval text is the key', () => {
+    const r = wide([['S1', '1', '2020-01-01/2020-01-03', 1, 2, 4], ['S1', '1', '2020-02-01/2020-02-03', 1, 2, 5]]);
+    expect(samples(r)).toEqual(['S1:2020-01-01/2020-01-03:1', 'S1:2020-02-01/2020-02-03:1']);
+    expect(find(r.findings, 'CONV-ID-DUPLICATE')).toEqual([]);
+  });
+
+  it('a long presence list with the same code on two dates gives two samples, not a conflict', () => {
+    const r = convert({ sheets: [sheetInput(fileOf(['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species'], [['S1', '1', '2020-01-01', 1, 2, 'Calanus finmarchicus'], ['S1', '1', '2020-02-01', 1, 2, 'Calanus finmarchicus']]), { shape: 'long', presenceOnly: true })] });
+    expect(samples(r)).toEqual(['S1:2020-01-01:1', 'S1:2020-02-01:1']);
+    expect(find(r.findings, 'CONV-SAMPLE-CONFLICT')).toEqual([]);
+    expect(find(r.findings, 'CONV-ID-DUPLICATE')).toEqual([]);
+  });
+});
+
 describe('CONV-ID-REVISIT texts', () => {
   it('four languages, the plural agrees, the parts are named in the language', () => {
     const f = find(wide([['S1', '1', '2020-01-01', 1, 2, 4], ['S1', '1', '2020-02-01', 1, 2, 5]]).findings, 'CONV-ID-REVISIT')[0];

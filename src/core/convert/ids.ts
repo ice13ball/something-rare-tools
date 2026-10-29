@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
 import { isBlankCell } from '../recognize/columns';
-import { STATISTIC_LABEL } from '../summaryLabels';
+import { AMBIGUOUS_STATISTIC, STATISTIC_LABEL } from '../summaryLabels';
 import { guardTextReversible } from '../output/csv';
 import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
 import { parseNumber } from '../values/numbers';
@@ -35,12 +35,14 @@ export const shownText = (s: string): string => s.replace(/[\t\r\n\v\f\u0085\u20
 export const SUMMARY_LABEL = /^(total|suma|razem|summe|gesamt|somme)$/i;
 
 /**
- * Statistics lines at the foot of a sheet (Mean, SD, Median, Min, Max, n, Count, Średnia, Mittelwert, Écart-type, ...): the label is the WHOLE cell of the sample or station column
- * (a sheet with neither reads nothing). The label alone is not enough, because a station can be called "Max" or "N":
+ * Statistics lines (Mean, SD, Median, Min, Max, n, Count, Średnia, Mittelwert, Écart-type, ...): the label is the WHOLE cell of the sample-code column, or of the station column when the
+ * sample code is blank or a label too (a sheet with neither column reads nothing). A station "Max" with a real sample code is a station; a sample code "Mean" under a real station
+ * ("St1 | Mean | 2", a subtotal of a station) is a statistic. The label alone is not enough, because a station can be called "Max" or "N" or "E":
  *   - a row with a date or a position of its own is a station: kept, silently;
- *   - a row with neither, in the trailing block of the sheet (every later row is blank, a summary line, or holds one value at most): skipped, and said (CONV-SUMMARY-ROW-SKIPPED);
- *   - a row with neither, but with real rows after it: kept, and said (CONV-SUMMARY-ROW-KEPT) - the user decides.
- * The total words (SUMMARY_LABEL) are decided by the caller, as they always were: this function leaves them out.
+ *   - a row with neither, whose label is unambiguous (Mean, Average, Median, SD, StDev, Sum, Średnia, Mittelwert, Moyenne, ...) or that stands in a BLOCK of at least two label rows in a row:
+ *     skipped, and said (CONV-SUMMARY-ROW-SKIPPED);
+ *   - a row with neither and a short ambiguous label (n, N, SE, CV, Min, Max, Count) on its own: kept, and said (CONV-SUMMARY-ROW-KEPT) - the user decides; it is never skipped silently.
+ * The total words (SUMMARY_LABEL) are decided by the caller, as they always were: this function leaves them out of its answer.
  */
 export interface StatisticRows {
   /** line -> the label of a row that is left out */
@@ -48,32 +50,39 @@ export interface StatisticRows {
   /** line -> the label of a row that reads like a statistic and is kept */
   kept: Map<number, string>;
 }
-export function scanStatisticRows(rows: readonly RawRow[], labelColumns: readonly number[], ownColumns: readonly number[]): StatisticRows {
+export function scanStatisticRows(rows: readonly RawRow[], sampleColumns: readonly number[], stationColumns: readonly number[], ownColumns: readonly number[]): StatisticRows {
   const out: StatisticRows = { skipped: new Map(), kept: new Map() };
-  if (labelColumns.length === 0) return out;
+  if (sampleColumns.length === 0 && stationColumns.length === 0) return out;
   const isLabel = (t: string): boolean => STATISTIC_LABEL.test(t) || SUMMARY_LABEL.test(t);
-  // a label row: every filled label cell is a label ("Max" with a real station in the other cell is a station and a sample)
-  const labelOf = (r: RawRow): string | undefined => {
-    let label: string | undefined;
-    for (const i of labelColumns) {
-      const c = r.cells[i] ?? null;
-      if (isBlankCell(c)) continue;
-      const t = typeof c === 'string' ? c.trim() : '';
-      if (t === '' || !isLabel(t)) return undefined;
-      label ??= t;
-    }
-    return label;
+  const textOf = (r: RawRow, i: number): string | undefined => {
+    const c = r.cells[i] ?? null;
+    return isBlankCell(c) ? undefined : typeof c === 'string' ? c.trim() : '';
   };
-  const labels = rows.map(labelOf);
-  // the trailing block starts after the last row that is a real record (a label, a blank row or a row with one value at most do not count as one)
-  const neutral = (r: RawRow, label: string | undefined): boolean => label !== undefined || r.cells.filter((c) => !isBlankCell(c ?? null)).length <= 1;
-  let tail = rows.length;
-  while (tail > 0 && neutral(rows[tail - 1], labels[tail - 1])) tail--;
-  rows.forEach((r, i) => {
+  const labelOf = (r: RawRow): string | undefined => {
+    for (const i of sampleColumns) {
+      const t = textOf(r, i);
+      if (t !== undefined && isLabel(t)) return t;
+    }
+    // a label in the station column counts only when the sample code does not name a real sample
+    if (sampleColumns.some((i) => {
+      const t = textOf(r, i);
+      return t !== undefined && !isLabel(t);
+    })) return undefined;
+    for (const i of stationColumns) {
+      const t = textOf(r, i);
+      if (t !== undefined && isLabel(t)) return t;
+    }
+    return undefined;
+  };
+  // the rows that hold something, in order: a blank row neither breaks nor makes a block
+  const filled = rows.filter((r) => r.cells.some((c) => !isBlankCell(c ?? null)));
+  const labels = filled.map(labelOf);
+  filled.forEach((r, i) => {
     const label = labels[i];
     if (label === undefined || SUMMARY_LABEL.test(label)) return;
     if (ownColumns.some((c) => !isBlankCell(r.cells[c] ?? null))) return;
-    (i >= tail ? out.skipped : out.kept).set(r.line, label);
+    const inBlock = labels[i - 1] !== undefined || labels[i + 1] !== undefined;
+    (inBlock || !AMBIGUOUS_STATISTIC.test(label) ? out.skipped : out.kept).set(r.line, label);
   });
   return out;
 }
@@ -92,15 +101,27 @@ export type VisitPart = (typeof VISIT_PARTS)[number];
 /**
  * The rows of ONE station that make the same ID (a code reused on every visit: "1", "2", "A") and differ in when or at what depth they were taken are different visits, not a repeat.
  * The number of leading parts of (date, time, depth) that tell them apart, the fewest that do: 0 when they are one visit only (nothing to tell apart, the ID stays as it is; identical rows stay
- * a real duplicate). `parts` is how many of the three may be used (a long sheet's rows of one sample may differ in depth: that stays a conflict, so it uses 2).
+ * a real duplicate), and 0 when a part that the visits are told apart by is blank in some of the rows and filled in others. `parts` is how many of the three may be used (a long sheet's rows of one sample may differ in depth: that stays a conflict, so it uses 2).
  */
 export function visitLevel(keys: readonly VisitKey[], parts: 2 | 3): number {
   const text = (k: VisitKey, n: number): string => [k.date, k.time, k.depth].slice(0, n).join('\u0000');
   const distinct = (n: number): number => new Set(keys.map((k) => text(k, n))).size;
   const all = distinct(parts);
   if (all < 2) return 0;
-  for (let n = 1; n <= parts; n++) if (distinct(n) === all) return n;
-  return parts;
+  let level: number = parts;
+  for (let n = 1; n <= parts; n++) {
+    if (distinct(n) === all) {
+      level = n;
+      break;
+    }
+  }
+  // a part that one row has and another lacks (a merged cell, a blank date) cannot tell visits apart: a blank is no visit of its own. The rows are left as they are, and the old blocking
+  // findings (a repeated ID, rows of one sample that disagree) say what is wrong.
+  for (let i = 0; i < level; i++) {
+    const values = keys.map((k) => [k.date, k.time, k.depth][i]);
+    if (values.some((v) => v === '') && values.some((v) => v !== '')) return 0;
+  }
+  return level;
 }
 
 /** `<date>[T<time>][:<depth>m]` of the leading `level` parts: the middle of `<station>:<date>:<code>`, in the shape of the profile levels (`<station>:<date>:<depth>m`). '' when the row has none of them. */
