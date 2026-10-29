@@ -266,6 +266,21 @@ describe('/convert: the metadata files of stage 3', () => {
     expectTips(['convertMetaList', 'convertArchiveDesc']);
   });
 
+  it('the note of a long environmental sheet that was read as one row per sample carries its ⓘ, beside the heading, in every language', async () => {
+    const LONG = 'Station,Date,Latitude,Longitude,Depth_m,Parameter,Unit,Value\nZL1,2020-05-01,70.1,20.2,5,Temperature,degC,4.1\nZL1,2020-05-01,70.1,20.2,5,Salinity,PSU,33.1\nZL2,2020-05-02,70.3,20.4,5,Temperature,degC,4.4\n';
+    for (const lang of LANGS) {
+      cleanup();
+      setLang(lang);
+      const { container } = render(<ConvertPage engine={createDirectConvertEngine()} />);
+      chooseFiles(container, [{ name: 'long.csv', text: LONG }]);
+      fireEvent.click(screen.getByRole('button', { name: UI[lang]['convert.read'] }));
+      await screen.findByRole('heading', { name: UI[lang]['convert.columns.title'] });
+      expectTips(['convertPivot'], lang);
+      expect(document.querySelectorAll('h1 .infotip, h2 .infotip, h3 .infotip, h4 .infotip, label .infotip').length).toBe(0);
+    }
+    setLang('en');
+  });
+
   it('the three other licence cases each carry their ⓘ', async () => {
     await withFiles({ name: NAME(1), text: meta.dataciteXml({ licence: 'CC-BY-4.0' }) });
     expectTips(['convertLicenceTaken']);

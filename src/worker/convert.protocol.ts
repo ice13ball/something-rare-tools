@@ -3,7 +3,7 @@
 // Messages between the /convert page and the convert worker. Plain structured-clonable data only. The parsed files and the full records
 // (events, occurrences, measurements: possibly hundreds of thousands) stay in the worker; the page gets light summaries.
 import type { ConvertOptions, ConvertShape, EventRec, ConvertStats, ProfileDeclaration, ProfileSummary, QuantityDeclaration, SamplingDevice, SplitEntry, TreeSummary } from '../core/convert';
-import type { ApprovedSplits } from '../core/convert';
+import type { ApprovedSplits, PivotNote } from '../core/convert';
 import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertPrefill } from '../core/convert/prefill';
 import type { NercDecisions } from '../core/convert/nerc';
@@ -21,6 +21,11 @@ export interface ConvertFileSummary extends FileSummary {
    * by itself: the page offers a button, and the user ticks the mark.
    */
   suggestedProfiles: Record<string, boolean>;
+  /**
+   * by sheet name, only for a sheet that was a long environmental sheet (one row per measured parameter) and was READ as one row per sample (core/convert/pivot.ts): what was done.
+   * The sheet in `sheets`, `mappings`, `proposals` and `samples` is the pivoted one, so the role table shows its columns like any other.
+   */
+  pivots?: Record<string, PivotNote>;
 }
 
 export interface ConvertParseResult {

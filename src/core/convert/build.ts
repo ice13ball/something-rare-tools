@@ -19,6 +19,7 @@ import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, u
 import type { NercDecisions, NercPick } from './nerc';
 import { parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
+import { longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { proposeConvertMapping } from './recognize';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
@@ -903,21 +904,20 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
 /* ---------- the conversion ---------- */
 
-/** The strict header names of a long environmental sheet (one row per measured parameter): headerKey of the header, diacritics folded. */
-const LONG_PARAMETER = new Set(['parameter', 'parameters', 'parametr', 'parametre', 'variable', 'determinand', 'analyte', 'measurement type', 'measurementtype']);
-const LONG_VALUE = new Set(['value', 'values', 'wartosc', 'wert', 'valeur', 'result', 'measurement value', 'measurementvalue']);
-
 /**
- * The headers of a sheet in the long environmental layout (CONV-LONG-UNSUPPORTED): an explicit parameter column AND an explicit value column, and, in the converter's own
- * reading (the confirmed mapping), no taxon column and no quantity column. A long biology sheet (taxon + count) is not this. Never the /check LayoutPlan.long heuristic.
+ * The headers of a sheet in the long environmental layout (CONV-LONG-UNSUPPORTED): an explicit parameter column AND an explicit value column (the lists of core/convert/pivot.ts), and, in the
+ * converter's own reading (the confirmed mapping), no taxon column and no quantity column. A long biology sheet (taxon + count) is not this. Never the /check LayoutPlan.long heuristic.
+ * A long sheet that the reader of pivot.ts can read has been replaced by its pivot before it gets here (the worker does it when the file is read); what reaches this function is a long sheet
+ * that was NOT read: fewer than two parameters, too many parameter and unit pairs, or a mapping that differs from the proposal.
  */
-function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly string[]): { parameter: string; value: string } | undefined {
-  const parameterAt = header.findIndex((h) => LONG_PARAMETER.has(headerKey(h)));
-  const valueAt = header.findIndex((h) => LONG_VALUE.has(headerKey(h)));
-  if (parameterAt < 0 || valueAt < 0) return undefined;
+function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly string[]): { parameter: string; value: string; reason?: { reason: string; count: number } } | undefined {
+  if (sin.file.sheets.find((x) => x.name === sin.sheet)?.pivot !== undefined) return undefined;
+  const long = longColumnsOf(header);
+  if (long === undefined) return undefined;
+  const { parameterAt, valueAt } = long;
   const cols = colsOf(sin.mapping, header);
   // the proposer reads the explicit "value" column of such a sheet as a species column (a number under a header): that reading is the very thing this finding refuses, so it does not count as a taxon
-  const own = (c: Spec): boolean => c.index === valueAt || c.index === parameterAt;
+  const own = (c: Spec): boolean => c.index === valueAt || c.index === parameterAt || c.index === long.unitAt;
   if (cols.taxonHeaders.some((c) => !own(c)) || (cols.taxonCell !== undefined && !own(cols.taxonCell)) || cols.quantity !== undefined) return undefined;
   // a measured variable in any other column: a wide sheet whose "Parameter" / "Result" columns are something else (cruise names, QC text)
   if (sin.mapping.columns.some((c) => c.role.kind === 'variable' && c.index !== valueAt && c.index !== parameterAt)) return undefined;
@@ -933,7 +933,8 @@ function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly strin
     if (sin.unconfirmedTaxa?.includes(at) === true && was.kind === 'taxon' && was.header === true) continue;
     if (now.kind !== was.kind || (now.kind === 'taxon' && was.kind === 'taxon' && (now.header === true) !== (was.header === true))) return undefined;
   }
-  return { parameter: header[parameterAt].trim(), value: header[valueAt].trim() };
+  const reason = longReasonOf(sheet, long, raggedLines(sin.file, sin.sheet));
+  return { parameter: header[parameterAt].trim(), value: header[valueAt].trim(), ...(reason === undefined ? {} : { reason }) };
 }
 
 export function convert(rawInput: ConvertInput): ConvertResult {
@@ -945,7 +946,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const header = sin.file.sheets.find((x) => x.name === sin.sheet)?.header;
       const long = header === undefined ? undefined : longEnvironmentalHeaders(sin, header);
       if (long === undefined) return true;
-      longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value } }));
+      longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count }) } }));
       return false;
     }),
   };
@@ -964,6 +965,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   // measured variables: the columns written, and the identifiers that were written for them (never a name or a label)
   const nercStats = { columns: 0, typeIds: 0, unitIds: 0, nvsIds: 0 };
   let sheetKeyN = 0;
+  // a sheet with a taxon and a count column whose quantity kind is not declared yet (CONV-QUANTITY-UNDECLARED says so): its missing occurrences are no "environment-only upload"
+  let taxaWaitForQuantity = false;
 
   // The findings the PARSER raised for the files these sheets come from (/check puts them in its report; the converter must too): a ragged row (an extra or a missing field: the
   // values of that row are shifted against the header, so the finding stops the export, and ROW-RAGGED names the lines), an encoding that was guessed, a decimal comma, a 1904 workbook.
@@ -985,8 +988,18 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     }
   }
 
+  // a long environmental sheet that was read as one row per sample (pivot.ts): how it was read, and what it could not read (blocking)
+  const pivoted: { file: string; sheet: RawSheet }[] = [];
+  for (const sin of input.sheets) {
+    const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
+    if (sh?.pivot === undefined) continue;
+    pivoted.push({ file: sin.file.fileName, sheet: sh });
+    pushAll(findings, pivotNoteFindings(sin.file.fileName, sh.name, sh.pivot));
+    pushAll(findings, pivotBlockFindings(sin.file.fileName, sh.name, sh.pivot));
+  }
+
   const splits = listSplits(input);
-  const undecided = splits.filter((s) => s.needsDecision && !s.approved);
+  const undecided =splits.filter((s) => s.needsDecision && !s.approved);
   if (undecided.length > 0) {
     const first = input.sheets[0];
     findings.push(
@@ -1035,6 +1048,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       if (missing.length === 0) missing = ['kind'];
       findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
       quantity = undefined;
+      // a sheet that HAS its taxon (and count) columns writes no occurrence only because the user has not said what the numbers are: that block already says what to do
+      if (!missingTaxon) taxaWaitForQuantity = true;
     } else {
       if (quantity.effortInvalid !== undefined) findings.push(makeConvertFinding('CONV-EFFORT-VALUE-INVALID', { ...base, value: quantity.effortInvalid.text, params: { reason: quantity.effortInvalid.reason } }));
       if (quantity.noTypeFor !== undefined) findings.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: quantity.noTypeFor } }));
@@ -1748,10 +1763,17 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
   // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).
   const found = input.sheets.find((x) => x.file.sheets.some((sh) => sh.name === x.sheet));
-  if (occurrences.length === 0 && found !== undefined) {
+  if (occurrences.length === 0 && found !== undefined && !taxaWaitForQuantity) {
     const first = found;
     // taxa that were there but all 0 and skipped (the full species list is not ticked) are another case from an upload with no taxon: its own text says what to tick
     findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet, params: stats.zerosSkipped > 0 && !fullList ? { zeros: 'yes' } : {} }));
+  }
+
+  // a finding about a cell of a pivoted sheet names the line of the long sheet that cell came from, not the line of the pivoted row
+  for (const p of pivoted) {
+    const moved = originalLines(findings, p.file, p.sheet);
+    findings.length = 0;
+    pushAll(findings, moved);
   }
 
   const blocking = findings.filter((f) => f.severity === 'error');

@@ -207,8 +207,15 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.role.qualifier': `the identification qualifier of that record (cf., sp., ?); it wins over one found in the name.`,
   'tip.convertRoles.does': `Lists every meaning a column can have in the converter, including the ones that exist only here.`,
   'tip.convertRoles.logic': `{roles}
-• The meanings only say how a cell is read; the converter changes none of your values.
+• The meanings only say how a cell is read; the converter does not change your values (a decimal comma is written as a point, and a long sheet is regrouped into one row per sample: see its note).
 • Coordinates, dates, depth, station, cruise and sample names are recognised by the same rules as in the data check.`,
+  'tip.convertPivot.does': `Reads a sheet with one row per measurement (parameter, unit, value) as one row per sample, with one column per parameter.`,
+  'tip.convertPivot.logic': `• A sheet is read this way only when its headers name a parameter column and a value column (a unit column is optional), it has no taxon, quantity or other measured-variable column, the parameter column holds at least two different values, and there are at most {maxPairs} different parameter and unit pairs.
+• A sample is each distinct combination of all the other columns (station, date, position, depth, cast, replicate and so on); the parameter, unit, value and quality-flag columns do not tell samples apart.
+• Each parameter and unit pair becomes one column, headed "parameter [unit]"; two units of one parameter are two columns. A header equal to another header gets a number in brackets added.
+• Every value is the cell you wrote: nothing is summed, averaged, rounded or chosen; only a decimal comma is written as a point, as everywhere.
+• The same sample with the same parameter and unit on two rows is never merged: it blocks, and the lines are named. A flag parameter such as Temp_QC is not a measurement; it is left out, and said.
+• A long sheet that does not meet these conditions is blocked, with the reason. A sheet with a taxon or quantity column is not touched.`,
   'tip.convertSheetUse.does': `Chooses whether this sheet is converted.`,
   'tip.convertSheetUse.logic': `• A sheet you untick is left out completely: nothing from it is converted, counted or checked.
 • Every sheet starts ticked.`,
@@ -673,8 +680,15 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.role.qualifier': `dopisek przy oznaczeniu tego rekordu (cf., sp., ?); ma pierwszeństwo przed dopiskiem znalezionym w nazwie.`,
   'tip.convertRoles.does': `Wymienia każde znaczenie, jakie kolumna może mieć w konwerterze, także te, które istnieją tylko tutaj.`,
   'tip.convertRoles.logic': `{roles}
-• Znaczenia mówią tylko, jak odczytać komórkę; konwerter nie zmienia żadnej Twojej wartości.
+• Znaczenia mówią tylko, jak odczytać komórkę; konwerter nie zmienia Twoich wartości (przecinek dziesiętny zapisuje jako kropkę, a arkusz długi grupuje w jeden wiersz na próbkę: zob. jego uwagę).
 • Współrzędne, daty, głębokość oraz nazwy stacji, rejsu i próbki rozpoznają te same reguły co w sprawdzaniu danych.`,
+  'tip.convertPivot.does': `Odczytuje arkusz z jednym wierszem na pomiar (parametr, jednostka, wartość) jako jeden wiersz na próbkę, z jedną kolumną na parametr.`,
+  'tip.convertPivot.logic': `• Arkusz jest tak odczytywany tylko wtedy, gdy nagłówki wskazują kolumnę parametru i kolumnę wartości (kolumna jednostki jest opcjonalna), nie ma w nim kolumny taksonu, liczebności ani innej zmierzonej wielkości, kolumna parametru ma co najmniej dwie różne wartości, a par parametr–jednostka jest najwyżej {maxPairs}.
+• Próbką jest każda odrębna kombinacja wszystkich pozostałych kolumn (stacja, data, położenie, głębokość, rzut, powtórzenie itd.); kolumny parametru, jednostki, wartości i flag jakości nie odróżniają próbek.
+• Każda para parametr–jednostka daje jedną kolumnę o nagłówku „parametr [jednostka]”; dwie jednostki jednego parametru to dwie kolumny. Nagłówek równy innemu nagłówkowi dostaje dopisany numer w nawiasie.
+• Każda wartość to komórka, którą wpisano: nic nie jest sumowane, uśredniane, zaokrąglane ani wybierane; tylko przecinek dziesiętny jest zapisywany jako kropka, jak wszędzie.
+• Ta sama próbka z tym samym parametrem i jednostką w dwóch wierszach nigdy nie jest łączona: blokuje, a wiersze są wymienione. Parametr będący flagą, np. Temp_QC, nie jest pomiarem; jest pomijany, i jest to powiedziane.
+• Arkusz długi, który nie spełnia tych warunków, jest blokowany z podaniem powodu. Arkusza z kolumną taksonu lub liczebności to nie dotyczy.`,
   'tip.convertSheetUse.does': `Wybiera, czy ten arkusz jest przekształcany.`,
   'tip.convertSheetUse.logic': `• Odznaczony arkusz jest całkowicie pomijany: nic z niego nie jest przekształcane, liczone ani sprawdzane.
 • Każdy arkusz na początku jest zaznaczony.`,
@@ -1137,8 +1151,15 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.role.qualifier': `der Bestimmungszusatz dieses Datensatzes (cf., sp., ?); er hat Vorrang vor einem im Namen gefundenen Zusatz.`,
   'tip.convertRoles.does': `Listet jede Bedeutung auf, die eine Spalte im Konverter haben kann, auch die, die es nur hier gibt.`,
   'tip.convertRoles.logic': `{roles}
-• Die Bedeutungen sagen nur, wie eine Zelle gelesen wird; der Konverter ändert keinen Ihrer Werte.
+• Die Bedeutungen sagen nur, wie eine Zelle gelesen wird; der Konverter ändert Ihre Werte nicht (ein Dezimalkomma wird als Punkt geschrieben, ein langes Blatt wird zu einer Zeile je Probe gruppiert: siehe seinen Hinweis).
 • Koordinaten, Daten, Tiefe sowie Namen von Station, Fahrt und Probe werden nach denselben Regeln erkannt wie in der Datenprüfung.`,
+  'tip.convertPivot.does': `Liest ein Blatt mit einer Zeile je Messung (Parameter, Einheit, Wert) als eine Zeile je Probe, mit einer Spalte je Parameter.`,
+  'tip.convertPivot.logic': `• Ein Blatt wird nur so gelesen, wenn die Überschriften eine Parameterspalte und eine Wertspalte nennen (eine Einheitenspalte ist optional), es keine Taxon-, Mengen- oder andere Messgrößenspalte hat, die Parameterspalte mindestens zwei verschiedene Werte enthält und es höchstens {maxPairs} verschiedene Paare aus Parameter und Einheit gibt.
+• Eine Probe ist jede verschiedene Kombination aller übrigen Spalten (Station, Datum, Position, Tiefe, Einsatz, Wiederholung usw.); die Spalten für Parameter, Einheit, Wert und Qualitätsflaggen unterscheiden keine Proben.
+• Jedes Paar aus Parameter und Einheit wird eine Spalte mit der Überschrift „Parameter [Einheit]“; zwei Einheiten eines Parameters sind zwei Spalten. Eine Überschrift, die einer anderen gleicht, erhält eine Zahl in Klammern.
+• Jeder Wert ist die Zelle, die Sie geschrieben haben: nichts wird summiert, gemittelt, gerundet oder ausgewählt; nur ein Dezimalkomma wird wie überall als Punkt geschrieben.
+• Dieselbe Probe mit demselben Parameter und derselben Einheit in zwei Zeilen wird nie zusammengeführt: Das blockiert, und die Zeilen werden genannt. Ein Flaggen-Parameter wie Temp_QC ist keine Messung; er wird ausgelassen, und das wird gesagt.
+• Ein langes Blatt, das diese Bedingungen nicht erfüllt, wird mit Begründung blockiert. Ein Blatt mit einer Taxon- oder Mengenspalte bleibt unberührt.`,
   'tip.convertSheetUse.does': `Legt fest, ob dieses Blatt umgewandelt wird.`,
   'tip.convertSheetUse.logic': `• Ein abgewähltes Blatt wird vollständig ausgelassen: Nichts daraus wird umgewandelt, gezählt oder geprüft.
 • Jedes Blatt beginnt angekreuzt.`,
@@ -1601,8 +1622,15 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.role.qualifier': `la mention d'identification de cet enregistrement (cf., sp., ?) ; elle l'emporte sur une mention trouvée dans le nom.`,
   'tip.convertRoles.does': `Énumère chaque sens qu'une colonne peut avoir dans le convertisseur, y compris ceux qui n'existent qu'ici.`,
   'tip.convertRoles.logic': `{roles}
-• Les sens disent seulement comment lire une cellule ; le convertisseur ne modifie aucune de vos valeurs.
+• Les sens disent seulement comment lire une cellule ; le convertisseur ne modifie pas vos valeurs (une virgule décimale est écrite en point, et une feuille longue est regroupée en une ligne par échantillon : voir sa note).
 • Coordonnées, dates, profondeur et noms de station, de campagne et d'échantillon sont reconnus par les mêmes règles que dans le contrôle des données.`,
+  'tip.convertPivot.does': `Lit une feuille à une ligne par mesure (paramètre, unité, valeur) comme une ligne par échantillon, avec une colonne par paramètre.`,
+  'tip.convertPivot.logic': `• Une feuille n'est lue ainsi que si ses en-têtes nomment une colonne de paramètre et une colonne de valeur (une colonne d'unité est facultative), si elle n'a ni colonne de taxon, ni de quantité, ni d'autre grandeur mesurée, si la colonne du paramètre contient au moins deux valeurs différentes et s'il y a au plus {maxPairs} paires paramètre-unité.
+• Un échantillon est chaque combinaison distincte de toutes les autres colonnes (station, date, position, profondeur, déploiement, réplicat, etc.) ; les colonnes de paramètre, d'unité, de valeur et d'indicateur de qualité ne distinguent pas les échantillons.
+• Chaque paire paramètre-unité devient une colonne, avec l'en-tête « paramètre [unité] » ; deux unités d'un paramètre font deux colonnes. Un en-tête égal à un autre reçoit un numéro entre parenthèses.
+• Chaque valeur est la cellule que vous avez écrite : rien n'est additionné, moyenné, arrondi ni choisi ; seule une virgule décimale est écrite en point, comme partout.
+• Le même échantillon avec le même paramètre et la même unité sur deux lignes n'est jamais fusionné : cela bloque, et les lignes sont nommées. Un paramètre indicateur, comme Temp_QC, n'est pas une mesure ; il est écarté, et c'est dit.
+• Une feuille longue qui ne remplit pas ces conditions est bloquée, avec la raison. Une feuille avec une colonne de taxon ou de quantité n'est pas touchée.`,
   'tip.convertSheetUse.does': `Choisit si cette feuille est convertie.`,
   'tip.convertSheetUse.logic': `• Une feuille décochée est entièrement écartée : rien n'en est converti, compté ni contrôlé.
 • Chaque feuille commence cochée.`,

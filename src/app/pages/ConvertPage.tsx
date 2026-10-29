@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { bulkApprovable, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, writeConvertSidecar } from '../../core/convert';
+import { bulkApprovable, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
 import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
@@ -84,7 +84,7 @@ function nodeLine(e: EventRec): string {
  * warning rule is accepted; the worker checks all of that again before it writes anything.
  */
 export function ConvertPage({ engine: engineProp, download = downloadText, downloadFile = downloadBlob }: ConvertPageProps): React.ReactElement {
-  useLang();
+  const { lang: pageLang } = useLang();
   const engine = useMemo(() => engineProp ?? getConvertEngine(), [engineProp]);
   const [phase, setPhase] = useState<Phase>('input');
   const [problem, setProblem] = useState<string | null>(null);
@@ -614,17 +614,29 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             <h2 id="convert-columns-title">{t('convert.columns.title')}</h2>
             <p>{t('convert.columns.intro')}</p>
             {files.map((f: ConvertFileSummary) => (
-              <FileReview
-                key={f.fileId}
-                file={f}
-                layout={f.layout}
-                mappings={mappings[f.fileId] ?? f.mappings}
-                proposals={f.proposals}
-                onLayout={() => undefined}
-                onMapping={(m) => changeMapping(f.fileId, m)}
-                roleKinds={CONVERT_ROLE_CHOICES}
-                rolesTip="convertRoles"
-              />
+              <React.Fragment key={f.fileId}>
+                {/* a long environmental sheet that was read as one row per sample: said here, when the file is read, before anything is converted */}
+                {Object.entries(f.pivots ?? {}).map(([sheetName, note]) => (
+                  <section key={sheetName} className="notice convert-pivot" role="note" aria-label={t('convert.pivot.title')}>
+                    <HeadingTip tip="convertPivot">
+                      <h3>{t('convert.pivot.title')}</h3>
+                    </HeadingTip>
+                    {pivotNoteFindings(f.fileName, sheetName, note).map((fi, i) => (
+                      <p key={i}>{plainOf(fi, pageLang)}</p>
+                    ))}
+                  </section>
+                ))}
+                <FileReview
+                  file={f}
+                  layout={f.layout}
+                  mappings={mappings[f.fileId] ?? f.mappings}
+                  proposals={f.proposals}
+                  onLayout={() => undefined}
+                  onMapping={(m) => changeMapping(f.fileId, m)}
+                  roleKinds={CONVERT_ROLE_CHOICES}
+                  rolesTip="convertRoles"
+                />
+              </React.Fragment>
             ))}
           </section>
 
