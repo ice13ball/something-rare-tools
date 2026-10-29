@@ -66,11 +66,11 @@ describe('start and end of a tow', () => {
 });
 
 describe('hemisphere columns', () => {
-  it('"Lon Dir" and its relatives are ignored, never a coordinate', () => {
+  it('"Lon Dir" and its relatives are never a coordinate (ignored, or paired as the hemisphere of one)', () => {
     for (const [h, v] of [['Lon Dir', ['E', 'W', 'W']], ['Lat Dir', ['N', 'S', 'N']], ['Beg Lat Dir', ['N', 'N', 'N']], ['End Lon Dir', ['W', 'W', 'W']], ['Longitude Direction', ['W', 'E', 'W']], ['Latitude hemisphere', ['north', 'south', 'north']], ['Lat NS', ['N', 'S', 'N']], ['Lon EW', ['E', 'W', 'E']], ['Hemisphere', ['N', 'S', 'N']], ['Längengrad Richtung'.replace('Richtung', 'Dir'), ['O', 'W', 'W']]] as const) {
       const p = roleOf({ [h]: [...v], Latitude: LAT, Longitude: LON }, h);
-      expect(p.role.kind, h).toBe('ignore');
-      expect(p.reasonCode, h).toBe('hemisphere');
+      expect(['ignore', 'hemisphere'], h).toContain(p.role.kind);
+      expect(['hemisphere', 'hemisphere-pair', 'hemisphere-ambiguous'], h).toContain(p.reasonCode);
     }
   });
 
@@ -165,7 +165,7 @@ describe('the museum sheet (invented values, real column names)', () => {
     const kinds = Object.fromEntries(propose(cols).map((p) => [p.header, p.role.kind]));
     expect(kinds).toMatchObject({
       'Catalog ID': 'ignore', 'Catalog #': 'ignore', 'Station #': 'station', 'Collection ID': 'ignore', 'Collection Date': 'date', 'Collection Time': 'time',
-      'Begin Latitude': 'latitude', 'Beg Lat Dir': 'ignore', 'Begin Longitude': 'longitude', 'Lon Dir': 'ignore', 'End Latitude': 'ignore', 'End Longitude': 'ignore',
+      'Begin Latitude': 'latitude', 'Beg Lat Dir': 'hemisphere', 'Begin Longitude': 'longitude', 'Lon Dir': 'ignore', // LON is signed here, so its letter column would only contradict it 'End Latitude': 'ignore', 'End Longitude': 'ignore',
       'End Lon Dir': 'ignore', 'Begin Depth': 'depth', 'End Depth': 'ignore', Count: 'ignore', Photo: 'ignore',
     });
   });

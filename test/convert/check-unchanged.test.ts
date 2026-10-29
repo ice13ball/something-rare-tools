@@ -110,7 +110,8 @@ describe('the new role kinds are inert in /check', () => {
   });
 
   it('the role dropdown of /check lists the same kinds as before, none of the new ones, and no tip lists them', () => {
-    expect([...ROLE_KINDS]).toEqual(['ignore', 'latitude', 'longitude', 'datetime', 'date', 'time', 'depth', 'pressure', 'station', 'cruise', 'sampleId', 'variable']);
+    // 'hemisphere' is a /check role too (a column of N/S/E/W letters that signs the coordinate); it is not a converter-only kind
+    expect([...ROLE_KINDS]).toEqual(['ignore', 'latitude', 'longitude', 'hemisphere', 'datetime', 'date', 'time', 'depth', 'pressure', 'station', 'cruise', 'sampleId', 'variable']);
     for (const k of CONVERTER_KINDS) {
       expect(ROLE_KINDS as readonly string[]).not.toContain(k);
       expect(Object.keys(ROLE_FEEDS)).not.toContain(k);

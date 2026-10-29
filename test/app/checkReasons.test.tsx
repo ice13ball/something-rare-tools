@@ -115,6 +115,9 @@ function battery(): { sheet: RawSheet; long?: { parameterCol: number; valueCol: 
     S(['Tiefe von', 'Tiefe bis', 'Probe'], [[0, 10, 'P-1'], [5, 15, 'P-2']]),
     // the start and end of a tow, a hemisphere letter, an identifier and an abundance
     S(['Begin Latitude', 'End Latitude', 'Begin Longitude', 'Lon Dir', 'Catalog ID', 'Count'], [[54.5, 54.6, 18.5, 'E', 101, 1], [54.6, 54.7, 18.6, 'E', 102, 12]]),
+    // a hemisphere letter that names no mapped coordinate stays ignored; one of two positions with nothing to tell which is ambiguous
+    S(['Lon Dir', 'Depth'], [['E', 10], ['W', 15]]),
+    S(['Begin Latitude', 'End Latitude', 'Lat Dir'], [[54.5, 54.6, 'N'], [54.6, 54.7, 'N']]),
     // only the end position of a tow
     S(['End Lat', 'End Lon'], [[54.5, 18.5], [54.6, 18.6]]),
     // long format: the parameter, unit and value columns are read through the layout
