@@ -424,9 +424,9 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     params: ['occurrences'],
     plain: {
       pl: `Rdzeniem archiwum są zdarzenia (Event); rozszerzenie Occurrence ma {occurrences} {+occurrences:wiersz|wiersze|wierszy}. Pozycje i daty pochodzą ze zdarzeń, więc sprawdzono tabelę zdarzeń, a nie osobne wiersze występowań.`,
-      en: `The archive's core is Event; its Occurrence extension has {occurrences} rows. Positions and dates belong to the events, so the event table was checked, not the occurrence rows one by one.`,
-      de: `Der Kern des Archivs ist Event; die Occurrence-Erweiterung hat {occurrences} Zeilen. Positionen und Daten gehören zu den Events, daher wurde die Event-Tabelle geprüft, nicht die einzelnen Occurrence-Zeilen.`,
-      fr: `Le cœur de l'archive est Event ; son extension Occurrence compte {occurrences} lignes. Positions et dates appartiennent aux événements : c'est la table des événements qui a été vérifiée, pas les occurrences une à une.`,
+      en: `The archive's core is Event; its Occurrence extension has {occurrences} {+occurrences:row|rows}. Positions and dates belong to the events, so the event table was checked, not the occurrence rows one by one.`,
+      de: `Der Kern des Archivs ist Event; die Occurrence-Erweiterung hat {occurrences} {+occurrences:Zeile|Zeilen}. Positionen und Daten gehören zu den Events, daher wurde die Event-Tabelle geprüft, nicht die einzelnen Occurrence-Zeilen.`,
+      fr: `Le cœur de l'archive est Event ; son extension Occurrence compte {occurrences} {+occurrences:ligne|lignes}. Positions et dates appartiennent aux événements : c'est la table des événements qui a été vérifiée, pas les occurrences une à une.`,
     },
     technical: `{file}: Event core with an Occurrence extension of {occurrences} rows; positions and dates are the events', the event table was checked.`,
   },

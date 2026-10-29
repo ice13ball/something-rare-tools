@@ -43,6 +43,15 @@ const MEASUREMENT_WORDS = new Set([
   'phosphorus', 'sulphate', 'sulfate', 'secchi', 'sigma', 'visibility', 'light', 'nutrients', 'pigments',
 ]);
 
+/**
+ * The physical and optical part of MEASUREMENT_WORDS (isMeasurementWord): what the page calls "a physical or optical measurement word". The chemical words (nutrients, gases,
+ * alkalinity, pigments) are left out on purpose: they keep the nutrient / pigment / isotope ratio / rate reason.
+ */
+const PHYSICAL_WORDS = new Set([
+  'activity', 'fluorescence', 'turbidity', 'irradiance', 'transmission', 'transmittance', 'attenuation', 'beam', 'backscatter', 'backscattering', 'absorbance', 'absorption', 'radiance',
+  'extinction', 'conductivity', 'conductance', 'salinity', 'temperature', 'density', 'pressure', 'secchi', 'sigma', 'visibility', 'light',
+]);
+
 /** A leading word like d13C, d15N, d18O, δ13C, δ15N (an isotope ratio) and the ratios C/N, C:N, N:P, C/P written with letters only. */
 const ISOTOPE = /^[δd]\d{1,2}[a-z]{1,2}$/;
 const RATIO = /^[a-z]{1,3}[/:][a-z]{1,3}$/;
@@ -74,7 +83,7 @@ function hasTaxonShape(folded: string): boolean {
 }
 
 /**
- * True when the name is a plain measurement word of a CTD or bottle file (MEASUREMENT_WORDS: "Activity", "Fluorescence", "Temperature") and no earlier test (descriptor, variable token,
+ * True when the name is a plain PHYSICAL or OPTICAL measurement word of a CTD or bottle file (PHYSICAL_WORDS: "Activity", "Fluorescence", "Temperature"; "Nitrogen" or "Oxygen" are not) and no earlier test (descriptor, variable token,
  * isotope ratio) already took it: the page then gives the physical or optical reason instead of the nutrient / pigment / isotope / rate one. It does not look at the unit.
  */
 export function isMeasurementWord(header: string): boolean {
@@ -85,7 +94,7 @@ export function isMeasurementWord(header: string): boolean {
   const lead = asLetters.split(/[\s,]+/)[0].replace(/[.;]+$/, '');
   const compact = lead.replace(/[^a-z0-9]/g, '');
   if (VARIABLE_TOKENS.has(key) || VARIABLE_TOKENS.has(lead) || VARIABLE_TOKENS.has(compact) || ISOTOPE.test(compact) || RATIO.test(lead)) return false;
-  return MEASUREMENT_WORDS.has(key) || MEASUREMENT_WORDS.has(lead) || MEASUREMENT_WORDS.has(compact);
+  return PHYSICAL_WORDS.has(key) || PHYSICAL_WORDS.has(lead) || PHYSICAL_WORDS.has(compact);
 }
 
 /**

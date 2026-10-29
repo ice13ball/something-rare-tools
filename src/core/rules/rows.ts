@@ -44,10 +44,10 @@ const SHIP_IMPOSSIBLE_HOP = {
 const SHIP_SIGN_LON = {
   param: 'signLon',
   plain: {
-    pl: `Prawdopodobnie brak lub nadmiar minusa przy długości w wierszu {signLon}.`,
-    en: `Probably a missing or extra minus sign in the longitude of row {signLon}.`,
-    de: `Wahrscheinlich fehlt beim Längengrad in Zeile {signLon} ein Minuszeichen oder es steht fälschlich da.`,
-    fr: `Probablement un signe moins manquant ou en trop dans la longitude de la ligne {signLon}.`,
+    pl: `Prawdopodobnie brak lub nadmiar minusa przy długości geograficznej {+signLonCount:w wierszu|w wierszach|w wierszach} {signLon}.`,
+    en: `Probably a missing or extra minus sign in the longitude of {+signLonCount:row|rows} {signLon}.`,
+    de: `Wahrscheinlich fehlt beim Längengrad in {+signLonCount:Zeile|den Zeilen} {signLon} ein Minuszeichen oder es steht fälschlich da.`,
+    fr: `Probablement un signe moins manquant ou en trop dans la longitude {+signLonCount:de la ligne|des lignes} {signLon}.`,
   },
 } as const;
 
@@ -55,10 +55,10 @@ const SHIP_SIGN_LON = {
 const SHIP_SIGN_LAT = {
   param: 'signLat',
   plain: {
-    pl: `Prawdopodobnie brak lub nadmiar minusa przy szerokości w wierszu {signLat}.`,
-    en: `Probably a missing or extra minus sign in the latitude of row {signLat}.`,
-    de: `Wahrscheinlich fehlt beim Breitengrad in Zeile {signLat} ein Minuszeichen oder es steht fälschlich da.`,
-    fr: `Probablement un signe moins manquant ou en trop dans la latitude de la ligne {signLat}.`,
+    pl: `Prawdopodobnie brak lub nadmiar minusa przy szerokości geograficznej {+signLatCount:w wierszu|w wierszach|w wierszach} {signLat}.`,
+    en: `Probably a missing or extra minus sign in the latitude of {+signLatCount:row|rows} {signLat}.`,
+    de: `Wahrscheinlich fehlt beim Breitengrad in {+signLatCount:Zeile|den Zeilen} {signLat} ein Minuszeichen oder es steht fälschlich da.`,
+    fr: `Probablement un signe moins manquant ou en trop dans la latitude {+signLatCount:de la ligne|des lignes} {signLat}.`,
   },
 } as const;
 
@@ -117,7 +117,7 @@ const SHIP_DECLARED = {
  *                         (line numbers; km = distance, h = LONGEST possible time between the two events, kn = the speed at least); declared (optional) = 'yes' when
  *                         the single-cruise tick, not a cruise column, formed the group; mixed (optional) = 'yes' when a large share of the places is named
  *   ROW-SHIP-SPEED-UNUSUAL  the same, at the lower limit (info)
- *   (all three)           signLon, signLat  optional: "row (x→−x)" of the cases where reversing that coordinate's sign alone makes the hops plausible
+ *   (all three)           signLon, signLat  optional: "row (x→-x)" (with signLonCount, signLatCount) of the cases where reversing that coordinate's sign alone makes the hops plausible
  *   ROW-SHIP-SPEED-PAIR   count, cases   count = pairs; cases = "first→second: km, h, ≥kn"; declared as above
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
@@ -384,7 +384,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Zeilennummern: {lines}. Zwischen diesen beiden Punkten der Fahrt müsste das Schiff schneller als {threshold.speed.extreme} Knoten fahren: {cases} (Zeilen erstes→zweites; km; h = längstmöglicher Abstand). Position oder Zeit an einem der beiden ist falsch, an welchem, ist unklar. Vertauschte Tage und Monate wirken genauso.`,
       fr: `Numéros de ligne : {lines}. Entre ces deux points du trajet, le navire devrait filer à plus de {threshold.speed.extreme} nœuds : {cases} (lignes premier→second ; km ; h = écart maximal possible). La position ou l'heure de l'un des deux est fausse, sans qu'on sache lequel. Un jour et un mois inversés ont le même effet.`,
     },
-    plainIf: [SHIP_SIGN_LON, SHIP_SIGN_LAT, SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
+    plainIf: [SHIP_PLACES, SHIP_SPLIT, SHIP_DECLARED, SHIP_MIXED],
     technical: `{file}:{lines} {count} pair(s) of consecutive events whose implied speed exceeds {threshold.speed.extreme} knots (Met Office marine-qc extreme speed limit) and which are not part of a two-sided finding (first or last event, or two bad events in a row). Position or date/time of either event may be wrong (WOD18 speed check; MEDATLAS 4.4.4). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: {cases}.`,
   },
   {

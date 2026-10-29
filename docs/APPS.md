@@ -482,14 +482,13 @@ sources):
   (at the start or end of a track, or between two bad events in a row) cannot say which of its two
   events is wrong: it is the note `ROW-SHIP-SPEED-PAIR`, which uses only the extreme limit and is not
   raised for an event that already has a two-sided finding. A sign hint (params `signLon` /
-  `signLat`, a sentence only; which findings fire and their severities do not change) is added when
-  reversing the sign of ONE coordinate of the offending event alone makes both hops plausible under
-  the limit the rule used (a pair: its one hop, falling by `SIGN_FLIP_RATIO`, the ratio of the
-  station check in `checks/rows.ts`). It needs a move of at least `SIGN_FLIP_MIN_KM` (near 0° a sign
-  changes little), is never given for a longitude within 10° of 180° (the antimeridian), and exactly
-  one axis of one event may explain it: a flip that also needs another row changed, both axes, or
-  neither gives no hint. For a pair the two events are symmetric (flipping either fits), so a pair
-  practically never gets one. If findings blame more
+  `signLat` with the row and the value, e.g. `72 (20→-20)`, and `signLonCount` / `signLatCount` so the sentence reads
+  "row" or "rows"; a sentence only, which findings fire and their severities do not change) is added to a
+  two-sided finding when reversing the sign of ONE coordinate of the middle event alone makes both hops plausible
+  under the limit the rule used. It needs a move of at least `SIGN_FLIP_MIN_KM` (the station check's minimum in
+  `checks/rows.ts`; near 0° a sign changes little). The distance is great-circle, so 175° against neighbours at
+  -175° is a real sign error and is hinted. Exactly one axis may explain it: both or neither gives no hint. A pair
+  (`ROW-SHIP-SPEED-PAIR`) never gets one: flipping either of its two events fits equally. If findings blame more
   than `MIXED_SHARE` (a third) of a group's places, and at least `MIXED_MIN` (8), the finding says
   the likely cause is the premise (several ships) rather than the data. Groups of fewer than
   `MIN_EVENTS` (3) events are not judged. Limits: [ROW-SHIP-SPEED](rules.md#ROW-SHIP-SPEED),
@@ -1260,7 +1259,7 @@ instead. A sheet marked as a profile file keeps `CONV-NO-OCCURRENCES`, and a spe
 environmental one keeps its own `CONV-NO-OCCURRENCES` text. Plain physical and optical words (activity,
 fluorescence, turbidity, irradiance, transmission, attenuation, backscatter...) are measured variables,
 not taxon candidates (`measured.ts`), and the column reason says so with its own text (`measured-word`:
-"a physical or optical measurement word (e.g. temperature, fluorescence, turbidity)") instead of the
+"a physical or optical measurement word (e.g. temperature, fluorescence, turbidity)"; only temperature, salinity, conductivity, pressure, density, light and optical words, not nitrogen, oxygen, nutrients or pigments) instead of the
 nutrient / pigment / isotope ratio / rate one (`measured-name`), which stays for those names.
 The converter reads every header without its ODV / OPeNDAP type suffix (`Activity<String>`, `"Latitude<Float32>"`) and the quotes
 around it, for kind, unit, vocabulary hints, taxon names and the text shown to the user, as `/check` does.

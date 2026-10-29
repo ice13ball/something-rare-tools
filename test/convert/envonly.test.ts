@@ -161,13 +161,15 @@ describe('the column reason of a plain measurement word', () => {
   });
 
   it('nutrients, pigments, isotope ratios and rates keep the old reason', () => {
-    for (const h of ['PN [µmol/l]', 'PP [µmol/l]', 'Ntot [%]']) {
+    for (const h of ['PN [µmol/l]', 'PP [µmol/l]', 'Ntot [%]', 'Nitrogen', 'Phosphorus', 'Pigments', 'Nutrients']) {
       const p = reasonOf(h);
       expect(p.reasonCode, h).toBe('measured-name');
       expect(p.reason, h).toContain('a nutrient, a pigment, an isotope ratio, a rate');
     }
     expect(isMeasurementWord('Activity')).toBe(true);
+    for (const w of ['Temperature', 'Salinity', 'Conductivity', 'Pressure', 'Density', 'Sigma', 'Light', 'Irradiance', 'Turbidity']) expect(isMeasurementWord(w), w).toBe(true);
     expect(isMeasurementWord('PN')).toBe(false);
+    for (const w of ['Nitrogen', 'Phosphorus', 'Pigments', 'Nutrients', 'Oxygen', 'Nitrate', 'Silicate', 'Ammonium', 'Alkalinity', 'Sulphate']) expect(isMeasurementWord(w), w).toBe(false);
     expect(isMeasurementWord('d15N')).toBe(false);
     expect(isMeasurementWord('Calanus finmarchicus')).toBe(false);
   });
