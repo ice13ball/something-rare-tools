@@ -327,10 +327,12 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    pressure unit; air, barometric, vapour, partial and gas pressures are not.
 6. **P01 codes** (`SDN:P01::CODE`) in a header, only when the name said nothing. A code after an
    explicit `SDN:P01::` or `SDN:P06::` prefix that does not have the shape of its collection (P01: eight
-   upper-case letters and digits; P06: four) is not a code at all: no concept page exists (NVS answers 404)
+   upper-case letters and digits, a digit first allowed (66 of the 50 613 current codes begin with one); P06: four) is not a code at all: no concept page exists (NVS answers 404)
    and it is reported (`ROW-HEADER-CODE-SHAPE` on `/check`, `CONV-NERC-CODE-MALFORMED` on `/convert`). P02
    has no fixed length (18 of its current codes have five characters, the rest four), so it is not checked.
-   Only the prefixed form is read: a bare word that looks like a code is never flagged.
+   Only the prefixed form is read, and only the run of letters and digits right after the prefix
+   (`SDN:P01::TEMPPR01_QC` is the valid code TEMPPR01; a prefix with no code reports nothing): a bare word
+   that looks like a code is never flagged.
 7. **A date-formatted xlsx column** becomes a date or datetime.
 8. **Values**, only when no name or code explained the column and the column is not numeric:
    degrees-and-minutes text with hemisphere letters (latitude or longitude by the letters), and
@@ -708,11 +710,12 @@ On the report, citations are hidden under `LIC-*` findings (`NO_CITATIONS_IN_CHE
 - Darwin Core: only the core is read; extension tables are not compared.
 - Long layouts keep the first value of a repeated (sample, parameter) pair.
 - Years named in a title, file name or record title are single years or **ranges**: `1994-2019` (hyphen,
-  en or em dash), `1994/2019`, `1994 to 2019` (also until, through, bis, do, au) and a pair after a cue
-  word (`in the period 1994_2019`, `from 1994 and 2019`) cover every year between. A two-digit end counts
-  only when it cannot be a month (`1994-95` is a range, `2019-08` is the year 2019, `2011-12` is 2011);
-  descending pairs, dates, and two years joined only by an underscore (`cruise_2015_2019`) are separate
-  years. The covered years only widen what is accepted: rows in a year outside them still raise
+  en or em dash), `1994/2019`, `1994 to 2019` (also until, through, bis, do, au), `between 1994 and 2019`
+  and a pair after a whole cue word (`in the period 1994_2019`; `Station_code_2015_2019` has no cue)
+  cover every year between. A two-digit end counts only when it cannot be a month (`1994-95` and
+  `2019/20` are ranges, `2019-08` is the year 2019, `2011-12` is 2011); a range followed by a unit
+  (`1950-2000 m`), descending pairs, dates, two years joined only by an underscore (`cruise_2015_2019`)
+  and two years joined by "and" after "years" or "lata" are separate years. The covered years only widen what is accepted: rows in a year outside them still raise
   `ROW-YEAR-OUTLIER`.
 - The report does not check scientific validity, calibration, taxonomy or PDF content
   (`NOT_CHECKED`).
@@ -1239,11 +1242,16 @@ For each taxon cell (`convert/build.ts`):
 The same taxon twice in one event is warned (`CONV-TAXON-SAME-EVENT`). **Presence-only species
 lists** (a taxon column and no quantity column) are **not written yet**: one blocking finding says
 so (`CONV-SPECIES-LIST-NO-COUNTS`, or `CONV-TAXON-NO-QUANTITY` when there are other numeric
-columns) instead of three contradicting ones. A **sheet of environmental measurements only** (measured
-variables, and no taxon column, no quantity column and no unconfirmed taxon candidate) gets one
+columns) instead of three contradicting ones. A sheet with **measured variables and no taxon column, no
+quantity column and no unconfirmed taxon candidate** (typically environmental data only) gets one
 blocking finding too, `CONV-ENV-ONLY-SHEET`, with a link to `/check`, in place of
-`CONV-NO-TAXON`, `CONV-QUANTITY-UNDECLARED` and `CONV-NO-OCCURRENCES`; a sheet marked as a profile file
-keeps `CONV-NO-OCCURRENCES`.
+`CONV-NO-TAXON`, `CONV-QUANTITY-UNDECLARED` and `CONV-NO-OCCURRENCES`. Its text covers the other possibility
+(a column of species names that was not recognised: mark it as the taxon); when another sheet of the
+upload that is not a profile file has a taxon column, the text says to mark this sheet as a profile file
+instead. A sheet marked as a profile file keeps `CONV-NO-OCCURRENCES`, and a species sheet next to an
+environmental one keeps its own `CONV-NO-OCCURRENCES` text. Plain physical and optical words (activity,
+fluorescence, turbidity, irradiance, transmission, attenuation, backscatter...) are measured variables,
+not taxon candidates (`measured.ts`).
 
 ### 8.8 What blocks an export and why (`convert/policy.ts`, `convert/validate.ts`)
 
@@ -1544,8 +1552,8 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 ## 13. Rule families
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
-assembles the per-category files) by a throwaway script run outside the commit, at commit
-**`d188863`**. The total, **162 rules**, equals the number of rule rows in
+assembles the per-category files) by a throwaway script run outside the commit, as of
+**2026-10-29**. The total, **162 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1628,9 +1636,11 @@ Each item below is confirmed from code, a test, or a rule text.
 - The archive is limited to 100 MB, 150 MB per entry and in total, and 1000 entries.
 - A long environmental sheet with one parameter, or more than 200 (parameter, unit) pairs, is not
   read and blocks.
-- A sheet of environmental measurements only cannot be converted on its own: OBIS needs species
-  records, so it blocks with `CONV-ENV-ONLY-SHEET` (add a species sheet, or mark the sheet as a
-  profile file next to one; `/check` still reads such a file).
+- A sheet of measured variables with no taxon or quantity column cannot be converted on its own: OBIS
+  needs species records, so it blocks with `CONV-ENV-ONLY-SHEET` (mark a species-name column as the
+  taxon, add a species sheet, or mark the sheet as a profile file next to one; `/check` still reads
+  such a file). The measurement words that are not taken for taxa are a short list in `measured.ts`: an
+  unlisted word still becomes a taxon candidate that the user must confirm or leave.
 - A code in a header is only checked for its shape (P01 and P06 after an explicit `SDN:` prefix),
   never looked up; a well-shaped code that does not exist is not caught offline.
 - The only unit conversion is centimetres to metres for a depth below the seafloor; other units are

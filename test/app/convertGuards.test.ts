@@ -32,8 +32,8 @@ describe('the only lookup hosts are WoRMS and NVS, each called from its own modu
   const stripComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   it('src/ names vocab.nerc.ac.uk as an address to call in exactly one module of the converter (the NVS opt-in); everywhere else only as the base of identifier URIs, or as text', () => {
     const hits = srcFiles.filter((f) => /vocab\.nerc\.ac\.uk/i.test(readFileSync(f, 'utf8'))).map(rel);
-    // the opt-in module and the pure half that mentions it in a comment; the identifier bases of the converter, /check and the draft writers; the privacy copy and the tips name the host as text
-    expect([...hits].sort()).toEqual(['src/app/optins/nvs.ts', 'src/core/convert/nvs.ts', 'src/core/convert/vocab.ts', 'src/core/output/datacite.ts', 'src/core/output/draft.ts', 'src/core/recognize/vocab.ts', 'src/core/i18n/tips-text.ts', 'src/core/i18n/ui.ts'].sort());
+    // the opt-in module and the pure half that mentions it in a comment; the identifier bases of the converter, /check and the draft writers; the privacy copy and the tips name the host as text; the citation of the code shapes (NVS_CODE_SHAPE) names the vocabulary pages it was read on, as text
+    expect([...hits].sort()).toEqual(['src/app/optins/nvs.ts', 'src/core/convert/nvs.ts', 'src/core/convert/vocab.ts', 'src/core/output/datacite.ts', 'src/core/output/draft.ts', 'src/core/recognize/vocab.ts', 'src/core/i18n/tips-text.ts', 'src/core/i18n/ui.ts', 'src/core/rules/citations.ts'].sort());
     // an https address in CODE (a comment aside) among the files of the converter, its page, components and worker: the opt-in module only
     const converter = srcFiles.filter((f) => /^src\/(app|worker)\//.test(rel(f)) || /^src\/core\/convert\//.test(rel(f)) || /^src\/core\/rules\/convert/.test(rel(f)));
     expect(converter.filter((f) => /https:\/\/vocab\.nerc\.ac\.uk/i.test(stripComments(readFileSync(f, 'utf8')))).map(rel)).toEqual(['src/app/optins/nvs.ts']);

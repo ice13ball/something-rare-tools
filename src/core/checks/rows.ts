@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
-import { badHeaderCodes } from '../recognize/vocab';
+import { badHeaderCodes } from '../recognize/headerCodes';
 import { makeFinding, threshold } from '../rules/registry';
 import { earliestUtcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
@@ -366,23 +366,28 @@ const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
 
 /*
- * A year RANGE names every year in it: "1994-2019", "1994–2019" (en dash), "1994—2019", "1994 to 2019", "from 1994 until 2019", "1994/2019" (an ISO 8601 interval) and
- * "in the period 1994_2019" (an underscore in a file name separates words, so two years joined by one only count as a range after a word that says so: period, years, from,
- * between, during, and their German, French and Polish forms). Two years in a file name that are only joined by an underscore ("cruise_2015_2019") are two years, as before.
- * The end of a range is a four-digit year at or after the start. A two-digit end ("1994-95") is a range only when it cannot be a month (13 to 99, after the century of the start):
- * "2019-08" is a year and a month, and "2011-12" stays the year 2011 alone. A date ("2019-08-15", "1994-95-03") is never a range.
+ * A year RANGE names every year in it: "1994-2019", "1994–2019" (en dash), "1994—2019", "1994 to 2019", "from 1994 until 2019", "1994/2019" (an ISO 8601 interval),
+ * "between 1994 and 2019" and "in the period 1994_2019" (an underscore in a file name separates words, so two years joined only by one count as a range after a word that says so:
+ * period, years, from, during and their German, French and Polish forms; the cue is a whole word, never the end of one: "Station_code_2015_2019" has none). Two years in a file name
+ * that are only joined by an underscore ("cruise_2015_2019") are two years, as before, and so are two years joined by "and" after "years" ("the years 1994 and 2019").
+ * The end of a range is a four-digit year at or after the start. A two-digit end ("1994-95", "2019/20") is a range only when it cannot be a month (13 to 99, after the century of the
+ * start): "2019-08" is a year and a month, and "2011-12" stays the year 2011 alone. A date ("2019-08-15", "1994-95-03") is never a range, and neither is a number range that
+ * is followed by a unit ("CTD casts 1950-2000 m"). Where a range is not clear, the years stay single years: a range only ever widens what is accepted.
  */
 const YEAR = '(?<![\\p{L}\\p{N}])(19[0-9]{2}|20[0-9]{2}|2100)';
 const YEAR_END = '(19[0-9]{2}|20[0-9]{2}|2100)';
 const DASH = '[-\\u2010-\\u2015\\u2212]';
-const RANGE_DASH = new RegExp(`${YEAR}\\s*${DASH}\\s*${YEAR_END}(?![\\p{L}\\p{N}]|[-/.:]\\d)`, 'gu');
-const RANGE_SLASH = new RegExp(`${YEAR}/${YEAR_END}(?![\\p{L}\\p{N}]|[-/.:]\\d)`, 'gu');
-const RANGE_WORD = new RegExp(`${YEAR}[\\s_]+(?:to|until|till|through|bis|do|au|\\u00e0)[\\s_]+${YEAR_END}(?![\\p{L}\\p{N}])`, 'giu');
+const NOT_MORE = '(?![\\p{L}\\p{N}]|[-/.:]\\d|\\s*(?:km|mm|cm|m|dbar|db|hpa|mbar|ft)(?![\\p{L}\\p{N}]))';
+const RANGE_DASH = new RegExp(`${YEAR}\\s*${DASH}\\s*${YEAR_END}${NOT_MORE}`, 'gu');
+const RANGE_SLASH = new RegExp(`${YEAR}/${YEAR_END}${NOT_MORE}`, 'gu');
+const RANGE_WORD = new RegExp(`${YEAR}[\\s_]+(?:to|until|till|through|bis|do|au|\\u00e0)[\\s_]+${YEAR_END}${NOT_MORE}`, 'giu');
+const CUE_LEFT = '(?<![\\p{L}\\p{N}])';
 const RANGE_CUE = new RegExp(
-  `(?:period|periode|p\\u00e9riode|okres|years|jahre|ann\\u00e9es|lata|from|between|during|zwischen|entre|von|od|de)[\\s_]+${YEAR}[\\s_]+(?:and[\\s_]+|und[\\s_]+|et[\\s_]+|i[\\s_]+)?${YEAR_END}(?![\\p{L}\\p{N}])`,
+  `${CUE_LEFT}(?:period|periode|p\\u00e9riode|okres|years|jahre|ann\\u00e9es|lata|from|during|von|od)[\\s_]+${YEAR}[\\s_]+${YEAR_END}${NOT_MORE}`,
   'giu',
 );
-const RANGE_SHORT = new RegExp(`${YEAR}\\s*${DASH}\\s*([0-9]{2})(?![\\p{L}\\p{N}]|[-/.:]\\d)`, 'gu');
+const RANGE_BETWEEN = new RegExp(`${CUE_LEFT}(?:between|zwischen|entre)[\\s_]+${YEAR}[\\s_]+(?:and|und|et)[\\s_]+${YEAR_END}${NOT_MORE}`, 'giu');
+const RANGE_SHORT = new RegExp(`${YEAR}\\s*(?:${DASH}|/)\\s*([0-9]{2})${NOT_MORE}`, 'gu');
 const MAX_RANGE_SPAN = 150;
 
 function rangeYears(text: string): number[] {
@@ -390,7 +395,7 @@ function rangeYears(text: string): number[] {
   const add = (a: number, b: number): void => {
     if (b > a && b - a <= MAX_RANGE_SPAN) for (let y = a; y <= b; y++) out.push(y);
   };
-  for (const re of [RANGE_DASH, RANGE_SLASH, RANGE_WORD, RANGE_CUE]) for (const m of text.matchAll(re)) add(Number(m[1]), Number(m[2]));
+  for (const re of [RANGE_DASH, RANGE_SLASH, RANGE_WORD, RANGE_CUE, RANGE_BETWEEN]) for (const m of text.matchAll(re)) add(Number(m[1]), Number(m[2]));
   for (const m of text.matchAll(RANGE_SHORT)) {
     const start = Number(m[1]);
     const end2 = Number(m[2]);

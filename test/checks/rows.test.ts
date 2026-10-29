@@ -192,7 +192,7 @@ describe('ROW-YEAR-OUTLIER: a year range names every year in it', () => {
   const fires = (file: string, label = file, data = inside()) => only(checkRows(dataset(data, { file, label })), 'ROW-YEAR-OUTLIER');
 
   const files = [
-    'Primary_production_in_the_period_1994-2019.xlsx',
+    'Survey_in_the_period_1994-2019.xlsx',
     'data_1994-2019.csv',
     'data_1994\u20132019.csv',
     'data_1994\u20142019.csv',
@@ -207,14 +207,14 @@ describe('ROW-YEAR-OUTLIER: a year range names every year in it', () => {
     expect(fires(file)).toEqual([]);
   });
 
-  const titles = ['Primary production in the period 1994-2019', 'Survey 1994\u20132019', 'Survey 1994\u20142019', 'Survey 1994 to 2019', 'Survey from 1994 to 2019', 'Survey 1994/2019'];
+  const titles = ['Survey in the period 1994-2019', 'Survey 1994\u20132019', 'Survey 1994\u20142019', 'Survey 1994 to 2019', 'Survey from 1994 to 2019', 'Survey 1994/2019'];
   it.each(titles)('title "%s" covers every year in between', (title) => {
     const ds = dataset(inside(), { file: 'data.csv', label: 'data.csv', metadata: [record({ title })] });
     expect(only(checkRows(ds), 'ROW-YEAR-OUTLIER')).toEqual([]);
   });
 
   it('rows outside the range still fire (2021 for 1994-2019), and the declared years are compacted', () => {
-    const f = fires('Primary_production_1994-2019.xlsx', undefined, [...inside(), ...rows(62, 3, { lat: 1, lon: 2, date: '2021-07-01' })]);
+    const f = fires('Survey_1994-2019.xlsx', undefined, [...inside(), ...rows(62, 3, { lat: 1, lon: 2, date: '2021-07-01' })]);
     expect(f).toHaveLength(1);
     expect(f[0].params).toMatchObject({ years: '2021', declared: '1994\u20132019' });
     expect(f[0].lines).toEqual(range(62, 64));
@@ -245,6 +245,41 @@ describe('ROW-YEAR-OUTLIER: a year range names every year in it', () => {
     expect(fires('survey_1994-95.csv', undefined, r1995)).toEqual([]);
     const r2012 = rows(2, 10, { lat: 1, lon: 2, date: '2012-03-01' });
     expect(fires('survey_2011-12.csv', undefined, r2012)[0].params).toMatchObject({ years: '2012', declared: '2011' });
+  });
+
+  it('a cue word is a whole word: Station_code_, episode_, Method_ and Prod_ before two years are no cue (the rows of 2017 still fire)', () => {
+    for (const file of ['Station_code_2015_2019.csv', 'episode_2015_2019.csv', 'Method_2015_2019.csv', 'Prod_2015_2019.csv', 'Fromage_2015_2019.csv', 'Period2_2015_2019.csv']) {
+      const f = fires(file, undefined, rows(2, 10, { lat: 1, lon: 2, date: '2017-07-01' }));
+      expect(f, file).toHaveLength(1);
+      expect(f[0].params, file).toMatchObject({ years: '2017', declared: '2015, 2019' });
+    }
+  });
+
+  it('two years joined by "and" after "years" or "lata" are two years, not a range; after "between" they are a range', () => {
+    const data = rows(2, 10, { lat: 1, lon: 2, date: '2017-07-01' });
+    expect(fires('in_the_years_2015_and_2019.csv', undefined, data)[0].params).toMatchObject({ declared: '2015, 2019' });
+    expect(fires('w_latach_2015_i_2019.csv', undefined, data)[0].params).toMatchObject({ declared: '2015, 2019' });
+    expect(fires('between_2015_and_2019.csv', undefined, data)).toEqual([]);
+    expect(fires('zwischen_2015_und_2019.csv', undefined, data)).toEqual([]);
+  });
+
+  it('a number range followed by a unit is not a range of years (CTD casts 1950-2000 m)', () => {
+    const data = rows(2, 10, { lat: 1, lon: 2, date: '1975-07-01' });
+    for (const label of ['CTD casts 1950-2000 m', 'CTD casts 1950-2000 dbar', 'levels 1950-2000 m']) {
+      const ds = dataset(data, { file: 'data.csv', label: 'data.csv', metadata: [record({ title: label })] });
+      const f = only(checkRows(ds), 'ROW-YEAR-OUTLIER');
+      expect(f, label).toHaveLength(1);
+      expect(f[0].params, label).toMatchObject({ declared: '1950, 2000' });
+    }
+  });
+
+  it('a season written 2019/20 is 2019 and 2020 (the same two-digit rule as 1994-95); 2019/08 is not', () => {
+    expect(fires('season_2019_20.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2020-03-01' }))[0].params).toMatchObject({ declared: '2019' });
+    expect(fires('season_2019-20.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2020-03-01' }))).toEqual([]);
+    const ds = dataset(rows(2, 10, { lat: 1, lon: 2, date: '2020-03-01' }), { file: 'data.csv', label: 'data.csv', metadata: [record({ title: 'Winter 2019/20' })] });
+    expect(only(checkRows(ds), 'ROW-YEAR-OUTLIER')).toEqual([]);
+    const m = dataset(rows(2, 10, { lat: 1, lon: 2, date: '2015-03-01' }), { file: 'data.csv', label: 'data.csv', metadata: [record({ title: 'Cruise 2019/08' })] });
+    expect(only(checkRows(m), 'ROW-YEAR-OUTLIER')[0].params).toMatchObject({ declared: '2019' });
   });
 
   it('a descending pair is not a range', () => {

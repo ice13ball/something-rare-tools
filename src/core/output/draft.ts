@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // A metadata draft computed from the DATA (extent, bbox, variables) plus what the metadata already states (licence, title).
 import { unitFromHeader } from '../recognize/columns';
+import { P01_CODE_SHAPE } from '../recognize/headerCodes';
 import type { Dataset, Lang, MetadataRecord, ParsedDate } from '../types';
 
 export interface MetadataDraft {
@@ -67,9 +68,8 @@ function dayRange(d: ParsedDate): { first: string; last: string } | undefined {
   return undefined;
 }
 
-const P01_CODE = /^[A-Z][A-Z0-9]{7}$/;
 export const p01Url = (code: string): string | undefined =>
-  P01_CODE.test(code) ? `https://vocab.nerc.ac.uk/collection/P01/current/${code}/` : undefined;
+  P01_CODE_SHAPE.test(code) ? `https://vocab.nerc.ac.uk/collection/P01/current/${code}/` : undefined;
 
 export function metadataDraft(datasets: Dataset[], metadata: MetadataRecord[]): MetadataDraft {
   const draft: MetadataDraft = { variables: [] };

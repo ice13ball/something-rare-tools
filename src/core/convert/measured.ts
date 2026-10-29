@@ -28,6 +28,11 @@ const VARIABLE_TOKENS = new Set([
   'gpp', 'npp', 'ncp', 'cp',
   'o2', 'no3', 'no2', 'nh4', 'nh3', 'po4', 'sio4', 'sio2', 'h2s', 'co2', 'ch4', 'n2o',
   'chl', 'chla', 'chlorophyll', 'phaeo', 'phaeopigments', 'tss', 'spm', 'tsm', 'cdom', 'par', 'ph', 'eh',
+  // physical and optical sensor quantities of a CTD or bottle file: plain English words that the genus shape below would otherwise take for a taxon candidate (the repo holds no genus list to
+  // check against; none of these is a genus name to the author's knowledge: they are ordinary English measurement words, not Latin names)
+  'activity', 'fluorescence', 'turbidity', 'irradiance', 'transmission', 'transmittance', 'attenuation', 'beam', 'backscatter', 'backscattering', 'absorbance', 'absorption', 'radiance',
+  'extinction', 'conductivity', 'conductance', 'salinity', 'temperature', 'oxygen', 'density', 'pressure', 'alkalinity', 'nitrate', 'nitrite', 'phosphate', 'silicate', 'ammonium', 'nitrogen',
+  'phosphorus', 'sulphate', 'sulfate', 'secchi', 'sigma', 'visibility', 'light', 'nutrients', 'pigments',
 ]);
 
 /** A leading word like d13C, d15N, d18O, δ13C, δ15N (an isotope ratio) and the ratios C/N, C:N, N:P, C/P written with letters only. */
