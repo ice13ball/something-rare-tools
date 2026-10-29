@@ -5,7 +5,7 @@ import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { parseDate, parseTimeOfDay } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
-import { coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
+import { LATITUDE_SPELLING, LONGITUDE_SPELLING, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
 
 export interface ProposeContext {
@@ -206,6 +206,9 @@ const FLAG = /^(qf|qc|flag)( |$)|( flag| flags| qf| qc)$|^quality( flag| control
 
 const PLAIN_COUNT_UNIT = /^(n|ind|inds|individuals?|specimens?|count|counts)\.?$/i;
 
+const LAT_NAME = new RegExp(`^lat(\\s|$)|^(${LATITUDE_SPELLING})(\\s|$)`);
+const LON_NAME = new RegExp(`^(lon|long|lng)(\\s|$)|^(${LONGITUDE_SPELLING})(\\s|$)`);
+
 function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   // start / end of a tow or transect: 'Begin Latitude', 'Lat start', 'Latitude (start)' (a bracket text that is no unit stays in the header)
   const cb = coordinateBound(key) ?? (hdr === undefined ? undefined : coordinateBound(headerKey(hdr.cleanHeader)));
@@ -218,10 +221,10 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   }
   const other = nameCandidateOther(key, hdr);
   if (other) return other;
-  if (/^lat(\s|$)|^latit\w*(\s|$)/.test(key)) {
+  if (LAT_NAME.test(key)) {
     return { slot: 'latitude', tier: key === 'latitude' || key === 'lat' ? 0 : 1, kind: 'latitude', why: why('name-latitude') };
   }
-  if (/^(lon|long|lng)(\s|$)|^longit\w*(\s|$)/.test(key)) {
+  if (LON_NAME.test(key)) {
     return { slot: 'longitude', tier: ['longitude', 'lon', 'long', 'lng'].includes(key) ? 0 : 1, kind: 'longitude', why: why('name-longitude') };
   }
   if (/^(date ?time|timestamp|time ?stamp|date and time)(\s|$)/.test(key)) {

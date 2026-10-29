@@ -7,8 +7,15 @@
 /** Words that say "start" / "end" of a track in English, Polish, German and French (headerKey: ASCII, lower case). */
 const START_WORDS: ReadonlySet<string> = new Set(['begin', 'beg', 'start', 'starting', 'initial', 'from', 'poczatek', 'poczatkowa', 'poczatkowy', 'pocz', 'anfang', 'anfangs', 'beginn', 'debut']);
 const END_WORDS: ReadonlySet<string> = new Set(['end', 'stop', 'final', 'to', 'koniec', 'koncowa', 'koncowy', 'konc', 'ende', 'fin']);
-const LAT_WORD = /^(lat|latit\w*|szerokosc geogr\w*|szerokosc (polnocna|poludniowa)|breitengrad|(geographische|geogr) breite)$/;
-const LON_WORD = /^(lon|long|lng|longit\w*|dlugosc geogr\w*|dlugosc (wschodnia|zachodnia)|l(?:a|ae)ngengrad|(geographische|geogr) l(?:a|ae)nge)$/;
+/**
+ * The full English / Romance word for each axis, as a regular-expression source for one token (headerKey: lower case ASCII): 'latitude', 'latitud', 'latitudine' and the misspellings
+ * seen in real files ('lattitude', 'latitute', 'latidude'); 'longitude', 'longitud' and 'longtitude', 'longitute', 'longditude', 'lontitude', 'longtidude'. 'longt…' is NOT a stem on its
+ * own: 'longterm' is a word of its own, so only the spellings of 'longitude' are listed.
+ */
+export const LATITUDE_SPELLING = 'latit\\w*|lattit\\w*|latid\\w*|lattid\\w*';
+export const LONGITUDE_SPELLING = 'longit\\w*|longtit\\w*|longtid\\w*|longdit\\w*|lontit\\w*|lontut\\w*';
+const LAT_WORD = new RegExp(`^(lat|${LATITUDE_SPELLING}|szerokosc geogr\\w*|szerokosc (polnocna|poludniowa)|breitengrad|(geographische|geogr) breite)$`);
+const LON_WORD = new RegExp(`^(lon|long|lng|${LONGITUDE_SPELLING}|dlugosc geogr\\w*|dlugosc (wschodnia|zachodnia)|l(?:a|ae)ngengrad|(geographische|geogr) l(?:a|ae)nge)$`);
 const CONNECTOR = /^(de|du|d|of)$/;
 const BARE_LAT = /^(szerokosc|szer|breite)$/;
 const BARE_LON = /^(dlugosc|dl|dlug|lange|laenge)$/;
