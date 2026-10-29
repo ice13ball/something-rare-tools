@@ -323,7 +323,28 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    coordinate only if the values fit the axis, at least one has a decimal, and the opposite axis
    is present too, and then at low confidence; a unit that is not degrees rules the word out; `DL`
    counts only with its `ł`. A depth header counts unless it names the depth of the site, the
-   bottom or a Secchi or mixed-layer depth. Pressure is its own role: water pressure in a sea
+   bottom or a Secchi or mixed-layer depth, or a measurement made over a range of depths
+   (`Depth-integrated chlorophyll`, `Depth averaged temperature`, `integrated over depth`); a
+   bare `Mean depth` is still a depth.
+   **Whole-token abbreviations.** `Lat`, `Lon`, `Long`, `Lng` name a coordinate only as the whole
+   name or when nothing but a unit, a degree notation, a datum, a hemisphere letter or word, or a
+   start / end word follows (`Long [deg]`, `Long E`, `Lat dd`, `Lon WGS84`); any other word after
+   them (`Long term mean`, `Long-term trend`, `Long-line catch`, `Long axis`) means it is not a
+   coordinate. The full words accept the common misspellings seen in real files
+   (`Longtitude`, `Longitute`, `Lontitude`, `Longditude`, `Lattitude`, `Latidude`).
+   **Dates of collection.** Besides `Date`, `Sampling date`, `Sample date`, `Collection date`:
+   `Date of collection / sampling / observation / measurement / survey`, `Date sampled`, `Date
+   collected`, `Date taken` and the Polish, German and French forms (`Data poboru`, `Data
+   pobrania`, `Probenahmedatum`, `Datum der Probenahme`, `Date de prélèvement`,
+   `Date d'échantillonnage`); a bare `Collected` counts only when the values read as
+   dates. Text dates `06.12.2010` are read day first (2010-12-06).
+   **Place columns.** `Location`, `Locality`, `Place` (also `Ort`, `Lieu`, `Miejsce`,
+   `Lokalizacja`, …) are proposed as the **station** at tier 3 (low confidence), and only when the
+   filled values are short place names: at most 40 characters and 6 words, at least one value
+   repeated, none a number, a date, a coordinate pair or a value with degrees, at least 80 % of the
+   cells. A column of sentences, coordinates or all-different values stays ignored. A real
+   `Station` / `Site` / `Stanowisko` column has tier 0 or 1 and wins the slot; the place column
+   is then ignored ("another column is used for station"). Pressure is its own role: water pressure in a sea
    pressure unit; air, barometric, vapour, partial and gas pressures are not.
 6. **P01 codes** (`SDN:P01::CODE`) in a header, only when the name said nothing. A code after an
    explicit `SDN:P01::` or `SDN:P06::` prefix that does not have the shape of its collection (P01: eight

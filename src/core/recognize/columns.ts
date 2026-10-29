@@ -233,9 +233,11 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   if (/^(date ?time|timestamp|time ?stamp|date and time)(\s|$)/.test(key)) {
     return { slot: 'when', tier: 0, kind: 'datetime', why: why('name-datetime') };
   }
-  if (/^((sampling|sample|collection|start|observation|measurement) )?date( utc)?$/.test(key)) {
+  // 'Date of collection', 'Collection date', 'Date sampled', 'Date collected' ... name the date of the event; a bare 'Collected' needs date values (it can be a yes / no column)
+  if (/^(((sampling|sample|collection|start|observation|measurement) )?date|date of (collection|sampling|sample|observation|measurement|survey)|date (sampled|collected|taken))( utc)?$/.test(key)) {
     return { slot: 'when', tier: key === 'date' ? 0 : 1, kind: 'date', why: why('name-date') };
   }
+  if (key === 'collected') return { slot: 'when', tier: 1, kind: 'date', why: why('name-date'), guard: 'date-values' };
   if (/^((sampling|sample|collection|start|observation|measurement) )?time( utc| of day| hh mm| hhmm)?$/.test(key)) {
     return { slot: 'time', tier: key === 'time' ? 0 : 1, kind: 'time', why: why('name-time') };
   }
