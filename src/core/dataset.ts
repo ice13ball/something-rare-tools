@@ -143,6 +143,7 @@ export function specsOf(mapping: SheetMapping): Specs {
       case 'effort':
       case 'occurrenceId':
       case 'lifeStage':
+      case 'replicate':
       case 'qualifier':
       case 'taxonId':
       default:

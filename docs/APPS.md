@@ -1050,11 +1050,16 @@ with `Z` and `ROW-TZ-UNKNOWN` is not raised; `/check` never does this.
 (`proposeColumns`, 3.3), so coordinates, dates, depth, station, cruise and sample names (in four
 languages) are not repeated. It adds the roles `/check` does not have (`ConverterRole`,
 `src/core/types.ts`): `taxon` (with `header: true` when the column's *header* is the taxon),
-`quantity`, `quantityType`, `effort`, `occurrenceId`, `lifeStage`, `qualifier`, `taxonId` (an
+`quantity`, `quantityType`, `effort`, `occurrenceId`, `lifeStage`, `replicate`, `qualifier`, `taxonId` (an
 AphiaID column or any other ID, as given), and `depthBelowSeafloor`. It reads Darwin Core terms as
 roles (`occurrenceID`, `eventID` as the sample code, `scientificName`, `individualCount`,
 `organismQuantity`, `organismQuantityType`, minimum/maximum depth, `lifeStage`,
-`identificationQualifier`).
+`identificationQualifier`). A column whose WHOLE header is a replicate word (`Frame`, `Quadrat`,
+`Replicate`, `Rep`, `Replica`, `Subsample`, with an optional `no` / `number` / digits; Polish
+`Powtórzenie`, `Ramka`, `Kwadrat`; German `Replikat`, `Wiederholung`, `Teilprobe`; French `Réplicat`,
+`Répétition`) starts as the role **Replicate / sub-sample** (`name-replicate`); `Core` and `Grab` are
+proposed too but with low confidence, because in a sediment file they can be the sample code.
+`Darwin Core`, `core depth` and `Frame rate` are not proposed. The user can change the role.
 
 **Measured variable or taxon name?** This is the central decision for a **wide** sheet, where a
 species is a numeric column with the species as its header. The shared proposer calls such a
@@ -1191,7 +1196,18 @@ the accepted name).
 ### 8.6 Events and identifiers
 
 The event tree is **cruise → station → sample** (`buildEventTree`, `convert/events.ts`), with an
-optional **profile level** under a station.
+optional **profile level** under a station and, for a sheet with a **replicate column**, a
+**replicate** level under each sample: **cruise → station → sample → replicate**. A row then belongs
+to the replicate `<sample eventID>:<replicate value>` (`eventType` `replicate`, `parentEventID` = the
+sample); its species records, measurements, effort and its own date, position and depth hang on the
+replicate, and the occurrence IDs are `<replicate eventID>:<taxon>`. The sample has no row of its
+own, so it is **derived from its replicates** exactly like a station (date interval, midpoint
+position with its uncertainty, depth range). A row with no value in the replicate column is not
+converted (`CONV-REPLICATE-MISSING`, blocking); the same replicate twice in one sample is still a
+duplicate. A sheet without the role is unchanged. When the role is not set and the rows that
+collide differ in exactly one ignored column (measurements and quantities do not count: they are
+expected to differ), `CONV-ID-DUPLICATE` names that column and advises the role instead of "change a
+code".
 
 - **Identifiers** (`convert/ids.ts`): sample `eventID` = the user's own sample code (optionally
   prefixed with the station's `eventID` when codes repeat between stations); station `eventID` =
@@ -1341,7 +1357,7 @@ loaded here**: the converter does not compare positions with land (`ROW-ON-LAND`
 ### 8.9 What the archive contains
 
 **`event.txt`** (Event core; `convert/dwca.ts`): `eventID`, `parentEventID`, `eventType`
-(`cruise`, `station`, `sample`, `profile level`: there is no controlled list in the OBIS Manual),
+(`cruise`, `station`, `sample`, `replicate`, `profile level`: there is no controlled list in the OBIS Manual),
 `eventDate`, `decimalLatitude`, `decimalLongitude` (always written, even when empty, so an empty one
 is reported), `geodeticDatum` (`EPSG:4326` for an event with a position), `coordinateUncertaintyInMeters`,
 `minimum/maximumDepthInMeters`, `minimum/maximumDistanceAboveSurfaceInMeters`, `sampleSizeValue`,
@@ -1608,7 +1624,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-29**. The total, **166 rules**, equals the number of rule rows in
+**2026-10-29**. The total, **167 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1622,8 +1638,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 71 | 36 / 24 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **166** | | | |
+| `CONV-` | `B` | 72 | 37 / 24 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **167** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1680,6 +1696,9 @@ Each item below is confirmed from code, a test, or a rule text.
 
 **`/convert`**
 
+- A replicate level exists only for a column with the role Replicate / sub-sample; a profile sheet
+  does not read that role (its replicate column is ignored without a word), and a sample's replicates
+  are not compared with each other (they may differ in date or position; the sample takes the span).
 - A statistics line is told from a station by its date and position and by where it stands (the
   foot of the sheet); a station called `Max` or `N` with neither a date nor a position, as the last
   row of a sheet, is skipped (and said, so it can be renamed).

@@ -155,6 +155,8 @@ export type ConverterRole =
   | { kind: 'quantity' } | { kind: 'quantityType' }
   | { kind: 'effort'; unit?: string }
   | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' }
+  /** A column that numbers the replicates or sub-samples of ONE sample (a frame, a quadrat, a replicate core): each value is an event under the sample (core/convert/events.ts). */
+  | { kind: 'replicate' }
   /** The scientificNameID of a long sheet's taxon; `aphia: true` = the cells are WoRMS AphiaIDs (written as the urn:lsid), otherwise written as given. */
   | { kind: 'taxonId'; aphia?: boolean }
   /**

@@ -209,6 +209,7 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.role.effort': `the volume or area sampled for that sample; its unit goes in the unit box.`,
   'tip.role.occurrenceId': `your own identifier of the record, used exactly as you wrote it.`,
   'tip.role.lifeStage': `the life stage of that record; it wins over a stage found in the name.`,
+  'tip.role.replicate': `a column that numbers the replicates or sub-samples of one sample (a frame, a quadrat, a replicate core). Each value becomes an event under the sample, and the species records hang on it.`,
   'tip.role.qualifier': `the identification qualifier of that record (cf., sp., ?); it wins over one found in the name.`,
   'tip.convertRoles.does': `Lists every meaning a column can have in the converter, including the ones that exist only here.`,
   'tip.convertRoles.logic': `{roles}
@@ -697,6 +698,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.role.effort': `objętość lub powierzchnia pobrana dla danej próbki; jednostkę wpisz w polu jednostki.`,
   'tip.role.occurrenceId': `Twój własny identyfikator rekordu, użyty dokładnie tak, jak go zapisałeś.`,
   'tip.role.lifeStage': `stadium rozwojowe danego rekordu; ma pierwszeństwo przed stadium znalezionym w nazwie.`,
+  'tip.role.replicate': `kolumna numerująca powtórzenia lub podpróbki jednej próbki (ramka, kwadrat, rdzeń powtórzeniowy). Każda wartość staje się zdarzeniem pod próbką, a rekordy gatunków wiszą na nim.`,
   'tip.role.qualifier': `dopisek przy oznaczeniu tego rekordu (cf., sp., ?); ma pierwszeństwo przed dopiskiem znalezionym w nazwie.`,
   'tip.convertRoles.does': `Wymienia każde znaczenie, jakie kolumna może mieć w konwerterze, także te, które istnieją tylko tutaj.`,
   'tip.convertRoles.logic': `{roles}
@@ -1183,6 +1185,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.role.effort': `das beprobte Volumen oder die beprobte Fläche der Probe; die Einheit gehört in das Einheitenfeld.`,
   'tip.role.occurrenceId': `Ihre eigene Kennung des Datensatzes, genau so verwendet, wie Sie sie geschrieben haben.`,
   'tip.role.lifeStage': `das Entwicklungsstadium dieses Datensatzes; es hat Vorrang vor einem im Namen gefundenen Stadium.`,
+  'tip.role.replicate': `eine Spalte, die die Replikate oder Teilproben einer Probe nummeriert (ein Rahmen, ein Quadrat, ein Replikat-Kern). Jeder Wert wird ein Ereignis unter der Probe, die Artnachweise hängen daran.`,
   'tip.role.qualifier': `der Bestimmungszusatz dieses Datensatzes (cf., sp., ?); er hat Vorrang vor einem im Namen gefundenen Zusatz.`,
   'tip.convertRoles.does': `Listet jede Bedeutung auf, die eine Spalte im Konverter haben kann, auch die, die es nur hier gibt.`,
   'tip.convertRoles.logic': `{roles}
@@ -1669,6 +1672,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.role.effort': `le volume ou la surface prélevé pour cet échantillon ; son unité se saisit dans la case d'unité.`,
   'tip.role.occurrenceId': `votre propre identifiant de l'enregistrement, utilisé exactement tel que vous l'avez écrit.`,
   'tip.role.lifeStage': `le stade de développement de cet enregistrement ; il l'emporte sur un stade trouvé dans le nom.`,
+  'tip.role.replicate': `une colonne qui numérote les réplicats ou sous-échantillons d'un même échantillon (un cadre, un quadrat, une carotte réplicat). Chaque valeur devient un événement sous l'échantillon, et les relevés d'espèces s'y rattachent.`,
   'tip.role.qualifier': `la mention d'identification de cet enregistrement (cf., sp., ?) ; elle l'emporte sur une mention trouvée dans le nom.`,
   'tip.convertRoles.does': `Énumère chaque sens qu'une colonne peut avoir dans le convertisseur, y compris ceux qui n'existent qu'ici.`,
   'tip.convertRoles.logic': `{roles}

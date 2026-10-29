@@ -57,6 +57,7 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
   'effort',
   'occurrenceId',
   'lifeStage',
+  'replicate',
   'qualifier',
   'taxonId',
   'variable',

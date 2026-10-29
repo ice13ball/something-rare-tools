@@ -16,7 +16,7 @@ import type { NercTerm } from './vocab';
  * handle mixed date information") and its example values are cruise, station and sample. A row of a profile file (a CTD scan, a bottle, one depth of a cast) is written
  * as "profile level": the nature of the event, in the same plain style, not a sample of a biology sheet.
  */
-export type EventType = 'cruise' | 'station' | 'sample' | 'profile level';
+export type EventType = 'cruise' | 'station' | 'sample' | 'replicate' | 'profile level';
 
 /** Where a record came from, for findings in input terms. */
 export interface SourceRef {
@@ -31,7 +31,7 @@ export interface EventRec {
   /** The eventID. Cruise: the cruise code. Station: `cruise:station` (or the station code without a cruise). Sample: the user's sample code, prefixed with the station eventID when the toggle is on. */
   id: string;
   parentId?: string;
-  /** Written as the text "cruise" / "station" / "sample" / "profile level". */
+  /** Written as the text "cruise" / "station" / "sample" / "replicate" / "profile level". */
   eventType: EventType;
   /** The user's own code at this level (no prefix). */
   code: string;
@@ -119,6 +119,8 @@ export interface TreeSummary {
   samples: number;
   /** Profile levels (stage 6): one event per row of a profile file, under its station. */
   levels: number;
+  /** Replicate events (a sheet with a replicate column): one per value under each sample. Only present when there is at least one. */
+  replicates?: number;
   /** Events with no parent. */
   roots: number;
   flattened: { station: boolean; cruise: boolean };

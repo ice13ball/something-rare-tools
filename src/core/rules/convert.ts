@@ -54,6 +54,7 @@ import type { RuleSpec } from './spec';
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows; a Total word, or a statistics label (Mean, SD, Min, Max, n, ...) in the trailing block with no date or position of its own
  *   CONV-SUMMARY-ROW-KEPT      count            value = the labels, lines = rows: a statistics label in the middle of a sheet, with no date or position of its own, kept as a sample (warning, accept)
  *   CONV-ID-REVISIT            count, by        value = an example ID, lines = the rows; by = date | date, time | date, time, depth: a code repeated at one station on different visits got the visit in its ID (warning, accept)
+ *   CONV-REPLICATE-MISSING     count            field = the replicate column, lines = the rows with no value in it (blocking; the rows are not converted)
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
  *   CONV-LICENCE-UNSET         (none)           no licence chosen
  *   CONV-BASIS-UNSET           (none)           no basisOfRecord chosen
@@ -726,6 +727,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}:{lines}: {count} sample code(s) repeat at ONE station on rows that differ in {by} (the fewest of date, time, depth that tell them apart; a long sheet never uses depth). Each visit is its own sample with the ID <station eventID>:<date>[T<time>][:<depth>m]:<code> (example {value}), the shape of the profile levels; the other IDs are unchanged. Rows identical in all of these stay a real duplicate (CONV-ID-DUPLICATE). The same code at another station is not a revisit (use the station prefix). To accept: the ID is made of the data.`,
   },
   {
+    id: 'CONV-REPLICATE-MISSING',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz nie ma|wiersze nie mają|wierszy nie ma} wartości w kolumnie powtórzeń „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Każdy wiersz należy do jakiegoś powtórzenia próbki: uzupełnij kolumnę albo nadaj jej inną rolę (np. „Pomiń”), jeśli nie numeruje powtórzeń.`,
+      en: `{count} {+count:row has|rows have} no value in the replicate column "{field}" ({+lineCount:line|lines} {lines}). Every row belongs to a replicate of its sample: fill the column, or give it another role (for example "Ignore") if it does not number replicates.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} keinen Wert in der Replikatspalte „{field}“ ({+lineCount:Zeile|Zeilen} {lines}). Jede Zeile gehört zu einem Replikat ihrer Probe: Füllen Sie die Spalte oder geben Sie ihr eine andere Rolle (z. B. „Ignorieren“), wenn sie keine Replikate nummeriert.`,
+      fr: `{count} {+count:ligne n'a|lignes n'ont} pas de valeur dans la colonne des réplicats « {field} » ({+lineCount:ligne|lignes} {lines}). Chaque ligne appartient à un réplicat de son échantillon : remplissez la colonne ou donnez-lui un autre rôle (par ex. « Ignorer ») si elle ne numérote pas de réplicats.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a sheet with a column in the role replicate / sub-sample have no value in it. The rows are not converted: a replicate event is <sample eventID>:<value>, and a row without a value would have the ID of the sample itself.`,
+  },
+  {
     id: 'CONV-EML-MISSING',
     category: 'B',
     severity: 'error',
@@ -1211,6 +1225,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
+  // CONV-ID-DUPLICATE of a sheet whose rows differ in one ignored column (`column` = its header): the advice is the replicate role, not another code
+  'CONV-ID-DUPLICATE:replicate': {
+    plain: {
+      pl: `Ten sam identyfikator powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines}, a wiersze te różnią się w pominiętej kolumnie „{column}”. Jeśli numeruje ona powtórzenia lub podpróbki jednej próbki (ramka, kwadrat, powtórzenie), nadaj jej rolę „Powtórzenie / podpróbka”: każde powtórzenie stanie się osobnym zdarzeniem.`,
+      en: `The same identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines}, and these rows differ in the ignored column "{column}". If it numbers replicates or sub-samples of one sample (frame, quadrat, replicate), give it the role "Replicate / sub-sample": each replicate then becomes its own event.`,
+      de: `Dieselbe Kennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines}, und diese Zeilen unterscheiden sich in der ignorierten Spalte „{column}“. Nummeriert sie Replikate oder Teilproben einer Probe (Rahmen, Quadrat, Replikat), geben Sie ihr die Rolle „Replikat / Teilprobe“: Jedes Replikat wird dann ein eigenes Ereignis.`,
+      fr: `Le même identifiant est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines}, et ces lignes diffèrent par la colonne ignorée « {column} ». Si elle numérote des réplicats ou des sous-échantillons d'un même échantillon (cadre, quadrat, réplicat), donnez-lui le rôle « Réplicat / sous-échantillon » : chaque réplicat devient alors un événement distinct.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". The rows differ in the ignored column "{column}" (the only ignored column, apart from measurements and quantities, whose values tell all of them apart). If it numbers replicates or sub-samples of one sample, give it the role "Replicate / sub-sample": a replicate event is <sample eventID>:<value>, under the sample, and the occurrences hang on it.`,
+  },
   'CONV-SEAFLOOR-SIGNS:tie': {
     plain: {
       pl: `Kolumna „{field}” ma tyle samo liczb dodatnich co ujemnych. Przy kierunku „{direction}” {count} {+count:liczba dodatnia jest zapisywana|liczby dodatnie są zapisywane|liczb dodatnich jest zapisywanych} jako położenie {side} dnem ({+lineCount:wiersz|wiersze|wierszy} {lines}). Sprawdź, czy kierunek jest właściwy.`,
@@ -1268,6 +1292,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:replicate'];
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];

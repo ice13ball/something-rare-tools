@@ -147,6 +147,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-SUMMARY-ROW-SKIPPED | info | B | — | —<a id="CONV-SUMMARY-ROW-SKIPPED"></a> |
 | CONV-SUMMARY-ROW-KEPT | warning | B | — | —<a id="CONV-SUMMARY-ROW-KEPT"></a> |
 | CONV-ID-REVISIT | warning | B | — | —<a id="CONV-ID-REVISIT"></a> |
+| CONV-REPLICATE-MISSING | error | B | — | —<a id="CONV-REPLICATE-MISSING"></a> |
 | CONV-EML-MISSING | error | B | — | —<a id="CONV-EML-MISSING"></a> |
 | CONV-LICENCE-UNSET | error | B | — | —<a id="CONV-LICENCE-UNSET"></a> |
 | CONV-BASIS-UNSET | error | B | — | —<a id="CONV-BASIS-UNSET"></a> |
