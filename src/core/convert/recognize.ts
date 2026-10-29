@@ -358,7 +358,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const askedWith = (maskSite: boolean): { proposals: ColumnProposal[] } => {
     const masked = maskSite ? siteAt : new Set<number>();
     const asked = !rewritten && masked.size === 0 ? sheet : { ...sheet, header: sheet.header.map((h, i) => (occurrenceIdAt.has(i) || masked.has(i) ? `__column ${i + 1}` : (mlPerLAt.get(i) ?? h))) };
-    return { proposals: proposeColumns(asked, { ...ctx, keepAbundance: true }).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) || masked.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: stripTypeSuffix(sheet.header[p.index]) } : { ...p }))};
+    return { proposals: proposeColumns(asked, { ...ctx, keepAbundance: true, placeAsStation: true }).map((p) => (occurrenceIdAt.has(p.index) || mlPerLAt.has(p.index) || masked.has(p.index) ? { ...p, header: sheet.header[p.index], cleanHeader: stripTypeSuffix(sheet.header[p.index]) } : { ...p }))};
   };
   let asked0 = siteAt.size > 0 && !seafloorPre ? askedWith(true) : undefined;
   if (asked0 !== undefined && !asked0.proposals.some((q) => isVerticalProposal(q, siteAt))) asked0 = undefined;

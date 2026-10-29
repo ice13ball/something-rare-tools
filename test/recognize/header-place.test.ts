@@ -3,9 +3,10 @@
 // Place columns (Location, Locality, Ort, Lieu, Miejsce) read as a weak station. Every header and value is synthetic.
 import { describe, expect, it } from 'vitest';
 import { proposeColumns } from '../../src/core/recognize/columns';
+import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import { rawSheet } from '../helpers/files';
 
-const CTX = { decimalComma: false, date1904: false };
+const CTX = { decimalComma: false, date1904: false, placeAsStation: true };
 type Cell = string | number | null;
 
 function propose(cols: Record<string, Cell[]>) {
@@ -18,7 +19,31 @@ const of = (cols: Record<string, Cell[]>, header: string) => propose(cols).find(
 const PLACES = ['North bay', 'North bay', 'Rocky point', 'Rocky point', 'North bay', 'Deep channel'];
 const NUM = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5];
 
-describe('a place column is a weak station', () => {
+describe('/check does not read a place column as a station', () => {
+  it('without placeAsStation (the /check proposer) Location, Locality and Ort stay ignored: a region is no fixed point for the station checks', () => {
+    for (const h of ['Location', 'Locality', 'Ort', 'Lieu', 'Miejsce']) {
+      const header = [h, 'X'];
+      const rows = PLACES.map((v, i) => [v, NUM[i]]);
+      const p = proposeColumns(rawSheet(header, rows), { decimalComma: false, date1904: false });
+      expect(p[0].role.kind, h).toBe('ignore');
+    }
+  });
+});
+
+describe('a place column is a weak station (the converter)', () => {
+  it('the converter overlay proposes Location as the station, low confidence; with a Station column that one wins', () => {
+    const header = ['Location', 'Species', 'Count'];
+    const rows = PLACES.map((v, i) => [v, i % 2 === 0 ? 'Mytilus edulis' : 'Cerastoderma edule', i + 1]);
+    const q = proposeConvertColumns(rawSheet(header, rows), { decimalComma: false, date1904: false });
+    expect(q[0].role.kind).toBe('station');
+    expect(q[0].confidence).toBe('low');
+    const header2 = ['Location', 'Station', 'Species', 'Count'];
+    const rows2 = PLACES.map((v, i) => [v, `S${i % 2}`, i % 2 === 0 ? 'Mytilus edulis' : 'Cerastoderma edule', i + 1]);
+    const q2 = proposeConvertColumns(rawSheet(header2, rows2), { decimalComma: false, date1904: false });
+    expect(q2[1].role.kind).toBe('station');
+    expect(q2[0].role.kind).toBe('ignore');
+  });
+
   it.each(['Location', 'Location name', 'Locality', 'Locality name', 'Sampling location', 'Ort', 'Lieu', 'Miejsce', 'Miejsce poboru', 'Lokalizacja', 'Probenahmeort', 'Lieu de prélèvement'])(
     '%s with short repeated names is the station, with low confidence',
     (h) => {
