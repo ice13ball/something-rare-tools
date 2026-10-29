@@ -88,6 +88,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-NERC-CODE-MALFORMED',
   'CONV-UNIT-NO-P06',
   'CONV-COLUMN-NOT-EXPORTED',
+  // a row labelled like a statistic (Max, N) in the middle of the sheet, kept as a sample: the user says it is a station
+  'CONV-SUMMARY-ROW-KEPT',
   'CONV-NAMEID-MISSING',
   'CONV-NAMEID-APHIA-LIKE',
   'CONV-NAMEID-INCOMPLETE',

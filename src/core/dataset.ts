@@ -29,6 +29,7 @@ import { combineDateTime, detectDayMonthOrder, parseDate, parseTimeOfDay } from 
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
+import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
@@ -231,7 +232,7 @@ function dwcDepthCols(sheet: RawSheet): { min?: Spec; max?: Spec } {
 }
 
 /** A label that makes a row a summary line ("Total", "Mean ± SD" is not matched: only the bare label), not a record without a position. */
-const SUMMARY_LABEL = /^(totals?|grand total|sub-?total|sum|mean|average|avg|median|min(imum)?|max(imum)?|st(an)?d(ard)?\.? ?dev(iation)?|stdev|sd|count)[:.]?$/i;
+const SUMMARY_LABEL = SUMMARY_LABEL_EN;
 
 /**
  * A row without a position is only a record without one when it holds more than a label: at least two cells besides the position have

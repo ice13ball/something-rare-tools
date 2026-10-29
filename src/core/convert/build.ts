@@ -13,7 +13,7 @@ import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
-import { SUMMARY_LABEL, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
+import { SUMMARY_LABEL, scanStatisticRows, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
 import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
@@ -233,6 +233,9 @@ function raggedLines(file: ParsedFile, sheet: string): ReadonlySet<number> {
 }
 
 /** Lines and an example per (sheet, field): the shape of every "these rows" finding. */
+/** The column indexes of the given specs that exist. */
+const indexesOf = (...specs: ({ index: number } | undefined)[]): number[] => specs.flatMap((c) => (c === undefined ? [] : [c.index]));
+
 class Lines {
   private readonly map = new Map<string, { lines: Set<number>; examples: string[]; sheet: string; file: string; field: string }>();
   add(file: string, sheet: string, field: string, line: number, example?: string): void {
@@ -694,6 +697,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const noCode = new Lines();
   const tabs = new Lines();
   const summaries = new Lines();
+  const keptStats = new Lines();
+  const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId, specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
   const checkText = (field: string, line: number, value: string | undefined): void => {
     if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
   };
@@ -774,6 +779,13 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
       summaries.add(fileName, sheet.name, 'station', row.line, summaryLabel);
       continue;
     }
+    const statLabel = statRows.skipped.get(row.line);
+    if (statLabel !== undefined) {
+      summaries.add(fileName, sheet.name, 'station', row.line, statLabel);
+      continue;
+    }
+    const keptLabel = statRows.kept.get(row.line);
+    if (keptLabel !== undefined) keptStats.add(fileName, sheet.name, 'station', row.line, keptLabel);
     if (!dataColumns.some((i) => !isBlankCell(row.cells[i] ?? null))) continue;
     if (stationText === undefined) {
       noStation.add(fileName, sheet.name, specs.station?.header ?? '', row.line);
@@ -923,6 +935,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   }
   for (const e of tabs.entries()) ctx.findings.push(makeConvertFinding('CONV-TAB-IN-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
   for (const e of summaries.entries()) ctx.findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+  for (const e of keptStats.entries()) ctx.findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
   if (sheetUnmatched.size > 0) {
     const names = [...sheetUnmatched];
     ctx.findings.push(makeConvertFinding('CONV-PROFILE-STATION-UNMATCHED', { ...base, value: names[0], params: { count: names.length, names: names.join(', ') } }));
@@ -1123,6 +1136,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const notInteger = new Lines();
     const effortBad = new Lines();
     const summaries = new Lines();
+    const keptStats = new Lines();
+    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId, specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
     let zeros = 0;
     let naCells = 0;
     const checkText = (field: string, line: number, value: string | undefined): void => {
@@ -1198,6 +1213,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         summaries.add(fileName, sheet.name, 'sample', row.line, summaryLabel);
         continue;
       }
+      const statLabel = statRows.skipped.get(row.line);
+      if (statLabel !== undefined) {
+        summaries.add(fileName, sheet.name, 'sample', row.line, statLabel);
+        continue;
+      }
+      const keptLabel = statRows.kept.get(row.line);
+      if (keptLabel !== undefined) keptStats.add(fileName, sheet.name, 'sample', row.line, keptLabel);
       if (!relevant) continue;
       if (code === undefined) {
         noCode.add(fileName, sheet.name, cols.sampleId?.header ?? '', row.line);
@@ -1514,6 +1536,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     for (const e of notInteger.entries()) findings.push(makeConvertFinding('CONV-COUNT-NOT-INTEGER', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of effortBad.entries()) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of summaries.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+    for (const e of keptStats.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));
     if (zeros > 0) {
       stats.zerosSkipped += zeros;

@@ -48,7 +48,8 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-NO-QUANTITY     (none)           a long sheet with a taxon column, other numbers (measured variables) and no quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: a presence-only species list, not written yet (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-ENV-ONLY-SHEET        (none)           a sheet with measured variables and no taxon column, no quantity column and no unconfirmed taxon candidate: environmental data only (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
- *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
+ *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows; a Total word, or a statistics label (Mean, SD, Min, Max, n, ...) in the trailing block with no date or position of its own
+ *   CONV-SUMMARY-ROW-KEPT      count            value = the labels, lines = rows: a statistics label in the middle of a sheet, with no date or position of its own, kept as a sample (warning, accept)
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
  *   CONV-LICENCE-UNSET         (none)           no licence chosen
  *   CONV-BASIS-UNSET           (none)           no basisOfRecord chosen
@@ -653,12 +654,25 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'info',
     params: ['count'],
     plain: {
-      pl: `Pominięto {count} {+count:wiersz podsumowania|wiersze podsumowania|wierszy podsumowania} ({value}) w {+count:wierszu|wierszach|wierszach} {lines}. {+count:To nie jest próbka, a jej wartości podwoiłyby|To nie są próbki, a ich wartości podwoiłyby|To nie są próbki, a ich wartości podwoiłyby} liczebności.`,
-      en: `{count} summary {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:was|were} left out. {+count:It is not a sample, and its value would|They are not samples, and their values would} double the counts.`,
-      de: `{count} {+count:Zusammenfassungszeile|Zusammenfassungszeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:wurde|wurden} ausgelassen. {+count:Sie ist keine Probe, und ihre Werte würden|Sie sind keine Proben, und ihre Werte würden} die Anzahlen verdoppeln.`,
-      fr: `{count} {+count:ligne de synthèse|lignes de synthèse} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:a été ignorée|ont été ignorées}. {+count:Ce n'est pas un échantillon et sa valeur doublerait|Ce ne sont pas des échantillons et leurs valeurs doubleraient} les effectifs.`,
+      pl: `Pominięto {count} {+count:wiersz podsumowania|wiersze podsumowania|wierszy podsumowania} ({value}) w {+count:wierszu|wierszach|wierszach} {lines}. {+count:To nie jest próbka|To nie są próbki|To nie są próbki}. Prawdziwą stację o takiej nazwie przemianuj w arkuszu.`,
+      en: `{count} summary {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:was|were} left out. {+count:It is not a sample|They are not samples}. A real station with such a name: rename it in the sheet.`,
+      de: `{count} {+count:Zusammenfassungszeile|Zusammenfassungszeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:wurde|wurden} ausgelassen. {+count:Sie ist keine Probe|Sie sind keine Proben}. Eine echte Station mit so einem Namen benennen Sie im Blatt um.`,
+      fr: `{count} {+count:ligne de synthèse|lignes de synthèse} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:a été ignorée|ont été ignorées}. {+count:Ce n'est pas un échantillon|Ce ne sont pas des échantillons}. Renommez dans la feuille une vraie station portant un tel nom.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted.`,
+    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted. A total word (total, suma, razem, summe, gesamt, somme) always counts; a statistics label (mean, average, median, min, max, sd, se, cv, n, count and their pl / de / fr words; one definition with /check, summaryLabels.ts) counts only when the row has no date and no position of its own and only rows without a record follow it (the foot of the sheet).`,
+  },
+  {
+    id: 'CONV-SUMMARY-ROW-KEPT',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} {+count:wygląda|wyglądają|wygląda} jak statystyki, ale {+count:nie stoi|nie stoją|nie stoi} na końcu arkusza, więc {+count:został zachowany|zostały zachowane|zostało zachowane}. Jeśli to nie stacje, usuń je; jeśli tak, potwierdź.`,
+      en: `{count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:looks|look} like statistics but {+count:is|are} not at the foot of the sheet, so {+count:it was|they were} kept. If not stations, delete them from the sheet; if they are, confirm.`,
+      de: `{count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:sieht|sehen} wie Statistik aus, {+count:steht|stehen} aber nicht am Blattende und {+count:wurde|wurden} behalten. Sind es keine Stationen, löschen Sie sie im Blatt; sonst bestätigen Sie.`,
+      fr: `{count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:ressemble|ressemblent} à des statistiques mais {+count:n'est|ne sont} pas à la fin de la feuille ; {+count:elle a été conservée|elles ont été conservées}. Si ce ne sont pas des stations, supprimez-les de la feuille ; sinon, confirmez.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station is a statistics label ({value}), with no date and no position of its own, but with rows that hold records after it, so not the foot of the sheet: converted as a sample (a station really named Max or N stays a station) and said, to accept.`,
   },
   {
     id: 'CONV-EML-MISSING',

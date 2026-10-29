@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { ParsedFile, RawCell, RawSheet, SheetMapping } from '../types';
+import type { ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
+import { isBlankCell } from '../recognize/columns';
+import { STATISTIC_LABEL } from '../summaryLabels';
 import { guardTextReversible } from '../output/csv';
 import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
 import { parseNumber } from '../values/numbers';
@@ -31,6 +33,50 @@ export const shownText = (s: string): string => s.replace(/[\t\r\n\v\f\u0085\u20
 
 /** The whole sample or station cell is exactly one of these words (any case): the row is a summary line, not a sample. "Total Bay" is a station and does not match. */
 export const SUMMARY_LABEL = /^(total|suma|razem|summe|gesamt|somme)$/i;
+
+/**
+ * Statistics lines at the foot of a sheet (Mean, SD, Median, Min, Max, n, Count, Średnia, Mittelwert, Écart-type, ...): the label is the WHOLE cell of the sample or station column
+ * (a sheet with neither reads nothing). The label alone is not enough, because a station can be called "Max" or "N":
+ *   - a row with a date or a position of its own is a station: kept, silently;
+ *   - a row with neither, in the trailing block of the sheet (every later row is blank, a summary line, or holds one value at most): skipped, and said (CONV-SUMMARY-ROW-SKIPPED);
+ *   - a row with neither, but with real rows after it: kept, and said (CONV-SUMMARY-ROW-KEPT) - the user decides.
+ * The total words (SUMMARY_LABEL) are decided by the caller, as they always were: this function leaves them out.
+ */
+export interface StatisticRows {
+  /** line -> the label of a row that is left out */
+  skipped: Map<number, string>;
+  /** line -> the label of a row that reads like a statistic and is kept */
+  kept: Map<number, string>;
+}
+export function scanStatisticRows(rows: readonly RawRow[], labelColumns: readonly number[], ownColumns: readonly number[]): StatisticRows {
+  const out: StatisticRows = { skipped: new Map(), kept: new Map() };
+  if (labelColumns.length === 0) return out;
+  const isLabel = (t: string): boolean => STATISTIC_LABEL.test(t) || SUMMARY_LABEL.test(t);
+  // a label row: every filled label cell is a label ("Max" with a real station in the other cell is a station and a sample)
+  const labelOf = (r: RawRow): string | undefined => {
+    let label: string | undefined;
+    for (const i of labelColumns) {
+      const c = r.cells[i] ?? null;
+      if (isBlankCell(c)) continue;
+      const t = typeof c === 'string' ? c.trim() : '';
+      if (t === '' || !isLabel(t)) return undefined;
+      label ??= t;
+    }
+    return label;
+  };
+  const labels = rows.map(labelOf);
+  // the trailing block starts after the last row that is a real record (a label, a blank row or a row with one value at most do not count as one)
+  const neutral = (r: RawRow, label: string | undefined): boolean => label !== undefined || r.cells.filter((c) => !isBlankCell(c ?? null)).length <= 1;
+  let tail = rows.length;
+  while (tail > 0 && neutral(rows[tail - 1], labels[tail - 1])) tail--;
+  rows.forEach((r, i) => {
+    const label = labels[i];
+    if (label === undefined || SUMMARY_LABEL.test(label)) return;
+    if (ownColumns.some((c) => !isBlankCell(r.cells[c] ?? null))) return;
+    (i >= tail ? out.skipped : out.kept).set(r.line, label);
+  });
+  return out;
+}
 
 export const stationPrefixedId = (stationEventId: string, code: string): string => `${stationEventId}:${code}`;
 export const occurrenceIdWide = (sampleEventId: string, header: string): string => `${sampleEventId}:${header}`;
