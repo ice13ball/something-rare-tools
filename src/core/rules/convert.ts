@@ -52,6 +52,7 @@ import type { RuleSpec } from './spec';
  *   CONV-ENV-ONLY-SHEET        (none)           a sheet with measured variables and no taxon column, no quantity column and no unconfirmed taxon candidate: environmental data only (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows; a Total word, or a statistics label (Mean, SD, Min, Max, n, ...) in the trailing block with no date or position of its own
  *   CONV-SUMMARY-ROW-KEPT      count            value = the labels, lines = rows: a statistics label in the middle of a sheet, with no date or position of its own, kept as a sample (warning, accept)
+ *   CONV-ID-REVISIT            count, by        value = an example ID, lines = the rows; by = date | date, time | date, time, depth: a code repeated at one station on different visits got the visit in its ID (warning, accept)
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
  *   CONV-LICENCE-UNSET         (none)           no licence chosen
  *   CONV-BASIS-UNSET           (none)           no basisOfRecord chosen
@@ -690,6 +691,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station is a statistics label ({value}), with no date and no position of its own, but with rows that hold records after it, so not the foot of the sheet: converted as a sample (a station really named Max or N stays a station) and said, to accept.`,
   },
   {
+    id: 'CONV-ID-REVISIT',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'by'],
+    plain: {
+      pl: `{count} {+count:kod próbki jest użyty|kody próbek są użyte|kodów próbek jest użytych} dla więcej niż jednej wizyty na stacji (np. {value}). Każda wizyta to osobne zdarzenie, a jej identyfikator zawiera: {by}. Sprawdź, czy te wiersze to naprawdę różne wizyty, a nie literówka.`,
+      en: `{count} sample {+count:code is|codes are} used for more than one visit of a station (for example {value}). Each visit is its own event, and its ID holds the {by}. Check that the rows really are different visits and not a mistyped value.`,
+      de: `{count} {+count:Probencode wird|Probencodes werden} für mehr als einen Besuch einer Station verwendet (z. B. {value}). Jeder Besuch ist ein eigenes Ereignis, seine Kennung enthält: {by}. Prüfen Sie, ob die Zeilen wirklich verschiedene Besuche sind und kein Tippfehler.`,
+      fr: `{count} {+count:code d'échantillon sert|codes d'échantillon servent} pour plus d'une visite d'une station (p. ex. {value}). Chaque visite est un événement distinct et son identifiant contient : {by}. Vérifiez que ces lignes sont bien des visites différentes et non une faute de frappe.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} sample code(s) repeat at ONE station on rows that differ in {by} (the fewest of date, time, depth that tell them apart; a long sheet never uses depth). Each visit is its own sample with the ID <station eventID>:<date>[T<time>][:<depth>m]:<code> (example {value}), the shape of the profile levels; the other IDs are unchanged. Rows identical in all of these stay a real duplicate (CONV-ID-DUPLICATE). The same code at another station is not a revisit (use the station prefix). To accept: the ID is made of the data.`,
+  },
+  {
     id: 'CONV-EML-MISSING',
     category: 'B',
     severity: 'error',
@@ -1306,6 +1320,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
   }
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, lang) } };
+  if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, lang) } };
   if (f.ruleId === 'CONV-NERC-UNKNOWN' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: shortList(quantityWhat(f.params.what, lang)) } };
   if (f.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: LEVEL_WHAT_WORDS[f.params.what]?.[lang] ?? f.params.what } };
   if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
@@ -1320,6 +1335,18 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   return fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
 }
 
+/** What a visit's ID holds (CONV-ID-REVISIT carries date | time | depth, comma separated, in `by`). */
+const VISIT_WORDS: Record<string, Record<Lang, string>> = {
+  date: { en: 'date', pl: 'data', de: 'Datum', fr: 'date' },
+  time: { en: 'time', pl: 'godzina', de: 'Uhrzeit', fr: 'heure' },
+  depth: { en: 'depth', pl: 'głębokość', de: 'Tiefe', fr: 'profondeur' },
+};
+const visitWords = (by: unknown, lang: Lang): string =>
+  String(by)
+    .split(', ')
+    .map((p) => VISIT_WORDS[p]?.[lang] ?? p)
+    .join(', ');
+
 /** The reason code of CONV-SHEET-TRANSPOSED in words (the texts of recognize/layoutReasons.ts, shared with /check). */
 const transposedWords = (code: unknown, lang: Lang): string => reasonsText([{ code: code === 'transposed' ? 'transposed' : 'transposed-taxa' }], lang);
 
@@ -1327,5 +1354,6 @@ const transposedWords = (code: unknown, lang: Lang): string => reasonsText([{ co
 export function renderConvertTechnical(f: Finding): string {
   f = withDefaults(f);
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, 'en') } };
+  if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, 'en') } };
   return fill(profileVariant(f)?.technical ?? getConvertRule(f.ruleId).technical, f);
 }

@@ -13,8 +13,9 @@ import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
+import type { VisitKey } from './ids';
 import { transposedSheetReason } from './transposed';
-import { SUMMARY_LABEL, scanStatisticRows, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
+import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
 import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
@@ -1207,6 +1208,55 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     };
 
     const ragged = raggedLines(file, sheet.name);
+
+    // Visits (CONV-ID-REVISIT): a code that repeats at ONE station on rows that differ in date (then time, then depth for a wide sheet) is one sample per visit, not a duplicate. The ID of such a
+    // visit is `<station eventID>:<date>[T<time>][:<depth>m]:<code>` (the shape of the profile levels); every other ID is exactly as before. Read from the data BEFORE the rows get their IDs, never from
+    // the order of the rows. Identical rows stay a real duplicate.
+    const visitIds = new Map<number, string>();
+    const visitParts = new Set<string>();
+    const visitGroups: { id: string; lines: number[] }[] = [];
+    {
+      const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header) });
+      const groups = new Map<string, { station: string | undefined; stationId: string | undefined; code: string; rows: { line: number; key: VisitKey }[]; mixed: boolean }>();
+      for (const row of sheet.rows) {
+        if (ragged.has(row.line) || statRows.skipped.has(row.line)) continue;
+        const m = scan(row);
+        const code = m.sampleId;
+        if (code === undefined || [code, m.station].some((v) => v !== undefined && SUMMARY_LABEL.test(v))) continue;
+        const stationText = m.station;
+        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && cols.quantity !== undefined && !isBlankCell(row.cells[cols.quantity.index] ?? null);
+        if (!filled) continue;
+        const cruiseText = m.cruise ?? sin.cruise?.trim();
+        const stationId = stationText === undefined ? undefined : stationEventId(cruiseText === '' ? undefined : cruiseText, stationText);
+        const id = opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code;
+        const iso = m.datetime?.iso ?? '';
+        const depth = m.depthMin ?? m.depth;
+        const key: VisitKey = { date: iso.slice(0, 10), time: iso.length > 10 ? iso.slice(11) : '', depth: depth === undefined ? '' : String(depth) };
+        const g = groups.get(id);
+        if (g === undefined) groups.set(id, { station: stationText, stationId, code, rows: [{ line: row.line, key }], mixed: false });
+        else {
+          g.rows.push({ line: row.line, key });
+          if (g.station !== stationText) g.mixed = true;
+        }
+      }
+      for (const [id, g] of groups) {
+        // another station with the same code is not a revisit: the station prefix is the way out there (codeCollision)
+        if (g.mixed || g.station === undefined || g.stationId === undefined) continue;
+        const level = visitLevel(g.rows.map((r) => r.key), sin.shape === 'wide' ? 3 : 2);
+        if (level === 0) continue;
+        for (let i = 0; i < level; i++) visitParts.add(VISIT_PARTS[i]);
+        const lines: number[] = [];
+        for (const r of g.rows) {
+          const q = visitQualifier(r.key, level);
+          // a row with none of the parts the group needs has no way to be told from the others: its ID stays, and it is then a duplicate like before
+          if (q === '') continue;
+          visitIds.set(r.line, `${g.stationId}:${q}:${g.code}`);
+          lines.push(r.line);
+        }
+        if (lines.length > 0) visitGroups.push({ id: visitIds.get(lines[0])!, lines });
+      }
+    }
+
     for (const row of sheet.rows) {
       if (ragged.has(row.line)) continue;
       const m = parse(row);
@@ -1242,7 +1292,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
 
       const stationId = stationText === undefined ? undefined : stationEventId(cruise, stationText);
-      const eventId = opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code;
+      const eventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code);
       const depth = depthOf(row);
       const sf = seafloorOf.read(row);
       if (sf !== undefined && depth.min === undefined && depth.max === undefined) noSiteDepth.add(fileName, sheet.name, cols.seafloor?.header ?? '', row.line);
@@ -1536,6 +1586,9 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     for (const a of samples.values()) {
       if (a.sheetKey !== sheetKey || a.conflicts.size === 0) continue;
       findings.push(makeConvertFinding('CONV-SAMPLE-CONFLICT', { ...base, value: a.site.code, lines: a.lines, params: { what: [...a.conflicts].join(', '), count: 1 } }));
+    }
+    if (visitGroups.length > 0) {
+      findings.push(makeConvertFinding('CONV-ID-REVISIT', { ...base, value: visitGroups[0].id, lines: visitGroups.flatMap((g) => g.lines).sort((a, b) => a - b), params: { count: visitGroups.length, by: VISIT_PARTS.filter((p) => visitParts.has(p)).join(', ') } }));
     }
     if (noCode.size > 0) {
       for (const e of noCode.entries()) findings.push(makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));

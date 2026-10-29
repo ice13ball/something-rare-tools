@@ -91,6 +91,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-COLUMN-NOT-EXPORTED',
   // a row labelled like a statistic (Max, N) in the middle of the sheet, kept as a sample: the user says it is a station
   'CONV-SUMMARY-ROW-KEPT',
+  // a code repeated at one station on different dates: each visit got the date in its ID, made of the data
+  'CONV-ID-REVISIT',
   'CONV-NAMEID-MISSING',
   'CONV-NAMEID-APHIA-LIKE',
   'CONV-NAMEID-INCOMPLETE',
