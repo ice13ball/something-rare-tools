@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import { proposeSampleCodes } from '../../src/core/convert/ids';
+import { RULES } from '../../src/core/rules/registry';
 import { guardText } from '../../src/core/output/csv';
 import type { Finding } from '../../src/core/types';
 import { textFile } from '../helpers/files';
@@ -145,10 +146,69 @@ describe('summary rows are matched conservatively', () => {
     const r = convert({ sheets: [wide(rows)] });
     const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
     expect(s).toHaveLength(1);
-    expect(s[0].lines).toEqual([3, 4, 5, 6, 7, 8, 9]);
-    expect(s[0].params.count).toBe(7);
-    // "Mean" / "mean" are no longer treated as summaries: they stay samples
-    expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.id)).toEqual(['a', 'mean']);
+    expect(s[0].lines).toEqual([3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(s[0].params.count).toBe(8);
+    // a Mean line at the foot of the sheet (station "Mean", code "mean", no date, no position) is a statistic too, said like the others
+    expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.id)).toEqual(['a']);
+  });
+});
+
+describe('statistics rows at the foot of a sheet', () => {
+  const sampleIds = (r: ReturnType<typeof convert>) => r.events.filter((e) => e.eventType === 'sample').map((e) => e.id);
+  const stat = (w: string, ...v: Cell[]): Cell[] => ['', w, w, null, null, null, ...v];
+
+  it('Mean, SD, Min, Max, n and their Polish, German and French words are skipped and reported', () => {
+    const rows: Cell[][] = [['CR', 'S1', 'a', 1, 2, '2020-01-01', 4, 5], ['CR', 'S2', 'b', 1, 2, '2020-01-02', 6, 7]];
+    const words = ['Mean', 'SD', 'Median', 'Min', 'Max', 'Average', 'StDev', 'SE', 'CV', 'n', 'N', 'Count', 'Średnia', 'Odchylenie (standardowe)', 'Mittelwert', 'Standardabweichung', 'Moyenne', 'Écart-type'];
+    for (const w of words) rows.push(stat(w, 1, 1));
+    const r = convert({ sheets: [wide(rows)] });
+    expect(sampleIds(r)).toEqual(['a', 'b']);
+    const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
+    expect(s).toHaveLength(1);
+    expect(s[0].lines).toEqual(words.map((_, i) => i + 4));
+    expect(s[0].params.count).toBe(words.length);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-KEPT')).toEqual([]);
+  });
+
+  it('a station named "Max" or "N" with its own date and position is kept, without a word', () => {
+    const r = convert({ sheets: [wide([['CR', 'Max', 'm-1', 1, 2, '2020-01-01', 4, 5], ['CR', 'N', 'n-1', 3, 4, '2020-01-02', 6, 7]])] });
+    expect(sampleIds(r)).toEqual(['m-1', 'n-1']);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')).toEqual([]);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-KEPT')).toEqual([]);
+  });
+
+  it('a station named "Max" with a real sample code in the other cell is a station, even without a date', () => {
+    const r = convert({ sheets: [wide([['CR', 'Max', 'm-1', null, null, null, 4, 5]])] });
+    expect(sampleIds(r)).toEqual(['m-1']);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')).toEqual([]);
+  });
+
+  it('a label in the middle of the sheet with no date or position is kept and said (to accept)', () => {
+    const r = convert({ sheets: [wide([['CR', 'S1', 'a', 1, 2, '2020-01-01', 4, 5], stat('Max', 9, 9), ['CR', 'S2', 'b', 1, 2, '2020-01-02', 6, 7]])] });
+    expect(sampleIds(r)).toEqual(['a', 'Max', 'b']);
+    const k = find(r.findings, 'CONV-SUMMARY-ROW-KEPT');
+    expect(k).toHaveLength(1);
+    expect(k[0]).toMatchObject({ severity: 'warning', lines: [3], value: 'Max' });
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')).toEqual([]);
+  });
+
+  it('a long sheet: Mean and SD rows at the foot are skipped', () => {
+    const f = fileOf(['Sample', 'Species', 'Count', 'Date', 'Latitude', 'Longitude'], [
+      ['a', 'Calanus finmarchicus', 3, '2020-01-01', 1, 2],
+      ['b', 'Calanus finmarchicus', 5, '2020-01-02', 1, 2],
+      ['Mean', 'Calanus finmarchicus', 4, null, null, null],
+      ['SD', 'Calanus finmarchicus', 1.4, null, null, null],
+    ]);
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' })] });
+    expect(sampleIds(r)).toEqual(['a', 'b']);
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5], value: 'Mean, SD' });
+  });
+
+  it('the texts exist in four languages', () => {
+    for (const id of ['CONV-SUMMARY-ROW-SKIPPED', 'CONV-SUMMARY-ROW-KEPT']) {
+      const rule = RULES.find((x) => x.id === id)!;
+      for (const l of ['pl', 'en', 'de', 'fr'] as const) expect(rule.plain[l].length).toBeGreaterThan(20);
+    }
   });
 });
 

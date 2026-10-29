@@ -143,6 +143,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-TAXON-NO-QUANTITY | error | B | — | —<a id="CONV-TAXON-NO-QUANTITY"></a> |
 | CONV-ENV-ONLY-SHEET | error | B | — | —<a id="CONV-ENV-ONLY-SHEET"></a> |
 | CONV-SUMMARY-ROW-SKIPPED | info | B | — | —<a id="CONV-SUMMARY-ROW-SKIPPED"></a> |
+| CONV-SUMMARY-ROW-KEPT | warning | B | — | —<a id="CONV-SUMMARY-ROW-KEPT"></a> |
 | CONV-EML-MISSING | error | B | — | —<a id="CONV-EML-MISSING"></a> |
 | CONV-LICENCE-UNSET | error | B | — | —<a id="CONV-LICENCE-UNSET"></a> |
 | CONV-BASIS-UNSET | error | B | — | —<a id="CONV-BASIS-UNSET"></a> |

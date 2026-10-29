@@ -1194,8 +1194,15 @@ optional **profile level** under a station.
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
-  `SUMMARY_LABEL`, `convert/ids.ts`) are skipped and said. Other summary rows (`Mean`, `SD`,
-  `Median`, …) are **not** recognised here and are converted as samples.
+  `SUMMARY_LABEL`, `convert/ids.ts`) are skipped and said (`CONV-SUMMARY-ROW-SKIPPED`). **Statistics
+  lines** (`Mean`, `Average`, `Median`, `Min`, `Max`, `SD`, `StDev`, `SE`, `CV`, `n`, `Count`,
+  `Średnia`, `Mittelwert`, `Moyenne`, `Écart-type`, …; one list with `/check`, `core/summaryLabels.ts`)
+  are decided by the row, not by the word alone, because a station can be called `Max` or `N`: a row
+  with a date or a position of its own is a station and is kept silently; a row with neither, in the
+  trailing block of the sheet (every later row is blank, a summary line or holds one value at most), is
+  skipped and said; a row with neither in the middle of the sheet is kept as a sample and said
+  (`CONV-SUMMARY-ROW-KEPT`, a warning to accept). Both cells of the sample and station columns must be
+  labels (a station `Max` with a real sample code is a station).
 - **Parents are derived from their children, never typed:** `eventDate` is the interval from the
   earliest start to the latest end; the position is the **midpoint of the children's bounding box**
   (across the antimeridian the box is the shortest arc of longitudes that holds every child) with
@@ -1564,7 +1571,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-29**. The total, **162 rules**, equals the number of rule rows in
+**2026-10-29**. The total, **163 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1578,8 +1585,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 67 | 34 / 22 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **162** | | | |
+| `CONV-` | `B` | 68 | 34 / 23 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **163** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1638,8 +1645,9 @@ Each item below is confirmed from code, a test, or a rule text.
 
 - Presence-only species lists (taxon column, no quantity column) are not written.
 - No layout detection: a transposed sheet is read as a table with row 1 as header, without a warning.
-- Summary rows are recognised only by the six words `total`, `suma`, `razem`, `summe`, `gesamt`,
-  `somme`; `Mean`, `SD` and similar rows are converted as samples.
+- A statistics line is told from a station by its date and position and by where it stands (the
+  foot of the sheet); a station called `Max` or `N` with neither a date nor a position, as the last
+  row of a sheet, is skipped (and said, so it can be renamed).
 - A declared unit that does not fit the kind of quantity is not rejected: it is written as typed with
   no unit id (`CONV-UNIT-NO-P06`, to accept).
 - Derived parent positions are rounded to 6 decimals; coordinates given in degrees and minutes are
