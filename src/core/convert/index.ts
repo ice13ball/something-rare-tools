@@ -30,7 +30,7 @@ export { parseEffortUnit, parseRateUnit, resolveQuantity } from './quantity';
 export type { BiomassBasis, EffortDeclaration, EffortDimension, QuantityDeclaration, QuantityKind, QuantityResolution, ResolvedQuantity } from './quantity';
 export { proposeConvertColumns, proposeConvertMapping, suggestConvertProfile, suggestConvertShape } from './recognize';
 export type { ConvertShape } from './recognize';
-export { FULL_LIST_SETTING, NVS_SETTING, PROFILE_DEPTH_IDS_SETTING, PROFILE_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, readConvertSettings, writeConvertSidecar } from './settings';
+export { FULL_LIST_SETTING, NVS_SETTING, PROFILE_DEPTH_IDS_SETTING, PROFILE_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, biomassBasisOf, readConvertSettings, writeConvertSidecar } from './settings';
 export type { ConvertSettings } from './settings';
 export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';

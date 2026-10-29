@@ -55,6 +55,7 @@ import type { RuleSpec } from './spec';
  *   CONV-SUMMARY-ROW-KEPT      count            value = the labels, lines = rows: a statistics label in the middle of a sheet, with no date or position of its own, kept as a sample (warning, accept)
  *   CONV-ID-REVISIT            count, by        value = an example ID, lines = the rows; by = date | date, time | date, time, depth: a code repeated at one station on different visits got the visit in its ID (warning, accept)
  *   CONV-REPLICATE-MISSING     count            field = the replicate column, lines = the rows with no value in it (blocking; the rows are not converted)
+ *   CONV-BIOMASS-KIND-UNSET    count, columns   columns = the biomass / weight columns whose kind (wet, dry, ash-free dry mass) is not chosen; lines = rows: written as eMoF rows with no measurementTypeID (warning, accept)
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
  *   CONV-LICENCE-UNSET         (none)           no licence chosen
  *   CONV-BASIS-UNSET           (none)           no basisOfRecord chosen
@@ -738,6 +739,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:ligne n'a|lignes n'ont} pas de valeur dans la colonne des réplicats « {field} » ({+lineCount:ligne|lignes} {lines}). Chaque ligne appartient à un réplicat de son échantillon : remplissez la colonne ou donnez-lui un autre rôle (par ex. « Ignorer ») si elle ne numérote pas de réplicats.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a sheet with a column in the role replicate / sub-sample have no value in it. The rows are not converted: a replicate event is <sample eventID>:<value>, and a row without a value would have the ID of the sample itself.`,
+  },
+  {
+    id: 'CONV-BIOMASS-KIND-UNSET',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:wartość|wartości|wartości} z {columns} zapisano jako biomasę bez measurementTypeID: nie wiadomo, czy to masa mokra, sucha czy sucha bez popiołu, a NERC ma osobne pojęcie dla każdej. Wybierz rodzaj w liście ról kolumny albo zaakceptuj brak identyfikatora.`,
+      en: `{count} {+count:value|values} of {columns} {+count:was|were} written as biomass with no measurementTypeID: wet mass, dry mass and ash-free dry mass each have a different NERC concept and the kind is not known. Pick it in the role list of the column, or accept that no identifier is written.`,
+      de: `{count} {+count:Wert|Werte} aus {columns} als Biomasse ohne measurementTypeID geschrieben: Nassmasse, Trockenmasse und aschefreie Trockenmasse haben je ein eigenes NERC-Konzept, die Art ist unbekannt. Wählen Sie sie in der Rollenliste der Spalte oder akzeptieren Sie, dass keine Kennung geschrieben wird.`,
+      fr: `{count} {+count:valeur|valeurs} de {columns} {+count:a été écrite|ont été écrites} comme biomasse sans measurementTypeID : masse humide, sèche et sèche sans cendres ont chacune un concept NERC différent et le type est inconnu. Choisissez-le dans la liste des rôles de la colonne ou acceptez qu'aucun identifiant ne soit écrit.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} eMoF row(s) of the biomass / weight column(s) {columns} have measurementType "biomass" and no measurementTypeID, because the kind of mass is not known (the header names none and the user has not chosen). The kinds map to different NERC S06 concepts: wet weight biomass S0600088, dry weight biomass S0600087, ash-free dry weight biomass S0600086 (the P01 biomass concepts are all per unit area or volume). There is no default.`,
   },
   {
     id: 'CONV-EML-MISSING',

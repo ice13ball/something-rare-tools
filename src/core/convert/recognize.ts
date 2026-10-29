@@ -191,6 +191,8 @@ export const OVERLAY_REASONS = {
   'depth-min-name': 'name says minimum (top) depth of a depth range',
   'depth-max-name': 'name says maximum (bottom) depth of a depth range',
   'quantity-other': 'another quantity column is used',
+  'name-biomass': 'name says biomass or weight next to a count: written as a measurement of each occurrence, as given; choose its kind (wet, dry or ash-free dry mass)',
+  'name-biomass-kind': 'name says biomass or weight and its kind (wet, dry or ash-free dry mass): written as a measurement of each occurrence, as given',
   'eventid-used': 'the Darwin Core eventID column is used as the sample code',
   'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
@@ -261,6 +263,22 @@ function quantityClaim(key: string): Claim | undefined {
   const q = QUANTITY_WORD.exec(key);
   if (q) return { role: { kind: 'quantity' }, confidence: q[2] === undefined ? 'high' : 'low', code: 'name-abundance' };
   return undefined;
+}
+
+// A biomass or weight column next to a count column. `biomass…` names are claimed as the quantity when no count column is there (the kind of number is then declared for the sheet);
+// next to a count they become a measurement of the occurrence. Plain weight / mass words count only when EVERY word of the name is one of these, so 'weight loss' or 'body mass index' never do.
+const BIOMASS_STRONG = /^(biomass|biomasa|biomasse)( .*)?$/;
+const BIOMASS_WORDS = new Set(['wet', 'dry', 'fresh', 'ash', 'free', 'afdw', 'ww', 'dw', 'weight', 'mass', 'wt', 'total', 'masa', 'waga', 'mokra', 'sucha', 'nass', 'trocken', 'gewicht', 'nassgewicht', 'trockengewicht', 'poids', 'sec', 'humide', 'frais', 'masse', 'seche', 'of', 'the']);
+const BIOMASS_HEAD = new Set(['weight', 'mass', 'wt', 'afdw', 'masa', 'waga', 'gewicht', 'nassgewicht', 'trockengewicht', 'poids', 'masse']);
+
+/** A biomass / weight name (a headerKey, folded) and the kind of mass it states; undefined when the name is no biomass name. */
+function biomassName(key: string): { basis?: 'wet' | 'dry' | 'afdw' } | undefined {
+  const tokens = key.split(' ').filter((t) => t !== '');
+  const strong = BIOMASS_STRONG.test(key);
+  if (!strong && !(tokens.length > 0 && tokens.every((t) => BIOMASS_WORDS.has(t)) && tokens.some((t) => BIOMASS_HEAD.has(t)))) return undefined;
+  const has = (...w: string[]): boolean => tokens.some((t) => w.includes(t));
+  const basis = has('afdw') || (has('ash') && has('free')) ? 'afdw' : has('dry', 'dw', 'sucha', 'trocken', 'trockengewicht', 'sec', 'seche') ? 'dry' : has('wet', 'ww', 'fresh', 'mokra', 'nass', 'nassgewicht', 'humide', 'frais') ? 'wet' : undefined;
+  return basis === undefined ? {} : { basis };
 }
 
 /** A header whose name says a count, an abundance, a density or a biomass ("Count", "Biomass [g]", "Abundance"): a quantity column by its name alone. */
@@ -452,6 +470,19 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   const seenQuantity = new Set<number>();
+  // a biomass or weight column next to a count column of a long sheet is a measurement of the occurrence, not a second quantity
+  const biomassKey = (h: string): string => foldDiacritics(headerKey(unitFromHeader(h).name));
+  const hasCount = [...claims.entries()].some(([i, c]) => c.role.kind === 'quantity' && !BIOMASS_STRONG.test(biomassKey(sheet.header[i] ?? '')));
+  if (hasCount && hasLongTaxon) {
+    for (const p of base) {
+      const claim = claims.get(p.index);
+      if (claim !== undefined && claim.role.kind !== 'quantity') continue;
+      if (claim === undefined && p.role.kind !== 'variable') continue;
+      const b = biomassName(biomassKey(p.header));
+      if (b === undefined) continue;
+      claims.set(p.index, { role: { kind: 'biomass', ...(b.basis === undefined ? {} : { basis: b.basis }) }, confidence: b.basis === undefined ? 'low' : 'high', code: b.basis === undefined ? 'name-biomass' : 'name-biomass-kind' });
+    }
+  }
   for (const p of base) {
     const claim = claims.get(p.index);
     const bound = bounds.get(p.index);

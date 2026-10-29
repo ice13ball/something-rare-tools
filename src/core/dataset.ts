@@ -144,6 +144,7 @@ export function specsOf(mapping: SheetMapping): Specs {
       case 'occurrenceId':
       case 'lifeStage':
       case 'replicate':
+      case 'biomass':
       case 'qualifier':
       case 'taxonId':
       default:

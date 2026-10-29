@@ -78,6 +78,13 @@ describe('the stage-1 rules stay', () => {
     const sheet = rawSheet(['Station', 'Latitude', 'Longitude', 'Date', 'Species', 'Liczba osobników', 'Biomasa'], LONG_ROWS.map((r) => [...r, 0.5]));
     const p = proposeConvertColumns(sheet, CTX);
     expect(p.filter((x) => x.role.kind === 'quantity').map((x) => x.header)).toEqual(['Liczba osobników']);
-    expect(p.find((x) => x.header === 'Biomasa')!.role).toEqual({ kind: 'ignore' });
+    // a biomass next to a count is not a second quantity: it is a measurement of the occurrence, its kind still open
+    expect(p.find((x) => x.header === 'Biomasa')!.role).toEqual({ kind: 'biomass' });
+  });
+  it('only one quantity column is read; a second COUNT-like one is left out', () => {
+    const sheet = rawSheet(['Station', 'Latitude', 'Longitude', 'Date', 'Species', 'Liczba osobników', 'Abundance'], LONG_ROWS.map((r) => [...r, 5]));
+    const p = proposeConvertColumns(sheet, CTX);
+    expect(p.filter((x) => x.role.kind === 'quantity').map((x) => x.header)).toEqual(['Liczba osobników']);
+    expect(p.find((x) => x.header === 'Abundance')!.role).toEqual({ kind: 'ignore' });
   });
 });

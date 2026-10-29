@@ -21,7 +21,7 @@ import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
 import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
 import type { NercDecisions, NercPick } from './nerc';
-import { parseTypedNumber, resolveQuantity } from './quantity';
+import { biomassKindConcept, parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
@@ -149,11 +149,13 @@ interface Cols {
   /** The FIRST depth-below-seafloor column (sediment / porewater): written as a distance above the surface in metres, negative below (core/convert/seafloor.ts). */
   seafloor?: Spec & { unit?: string; positive: SeafloorDirection };
   /** Measured-variable columns with a name: each becomes one eMoF row per sample event (stage 5). `name` is the variable as the column's role gives it, `unit` as given. */
+  /** Biomass / weight columns next to the quantity column of a long sheet: one eMoF row per occurrence and column (as given, never converted). `basis` = the kind of mass, when known. */
+  biomass: (Spec & { basis?: 'wet' | 'dry' | 'afdw' })[];
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
 
 function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): Cols {
-  const c: Cols = { taxonHeaders: [], variables: [] };
+  const c: Cols = { taxonHeaders: [], variables: [], biomass: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
     const r = m.role;
@@ -179,6 +181,9 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         break;
       case 'replicate':
         c.replicate ??= spec;
+        break;
+      case 'biomass':
+        c.biomass.push({ ...spec, ...(r.basis === undefined ? {} : { basis: r.basis }) });
         break;
       case 'occurrenceId':
         c.occurrenceId ??= spec;
@@ -346,6 +351,8 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
   for (const v of cols.variables) use(v);
   use(cols.replicate);
+  // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
+  if (sin.profile === undefined && sin.shape === 'long' && cols.quantity !== undefined && cols.taxonCell !== undefined) for (const b of cols.biomass) use(b);
   use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
@@ -1184,6 +1191,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const tabs = new Lines();
     const noCode = new Lines();
     const noReplicate = new Lines();
+    const biomassNoKind = new Lines();
     const texts = new Lines();
     const negatives = new Lines();
     const notInteger = new Lines();
@@ -1636,6 +1644,38 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             source: occSource,
           });
         }
+        // biomass / weight columns next to the quantity: one eMoF row of THIS occurrence per column, the value as written and the unit of the header, never converted. The kind of mass
+        // (wet, dry, ash-free dry) decides the concept; while it is open no measurementTypeID is written (CONV-BIOMASS-KIND-UNSET). A sample size, when declared, is only said in the remarks.
+        if (status === 'present' && value !== undefined && sin.shape === 'long' && cols.taxonCell !== undefined) {
+          for (const b of cols.biomass) {
+            const bcell = row.cells[b.index] ?? null;
+            const bp = parseNumber(bcell, dc);
+            if (bp.status === 'missing') continue;
+            if (bp.status === 'na-variant') {
+              collector.add('ROW-NA-VARIANT', sheet.name, b.header, row.line, bp.token);
+              continue;
+            }
+            if (bp.status === 'non-numeric') {
+              collector.add('ROW-NON-NUMERIC', sheet.name, b.header, row.line, bp.token);
+              continue;
+            }
+            const concept = biomassKindConcept(b.basis);
+            const unitText = unitFromHeader(b.header).unitText;
+            const sizeValue = acc.site.sampleSizeValue;
+            const sizeUnit = quantity?.effort?.unit;
+            if (concept === undefined) biomassNoKind.add(fileName, sheet.name, b.header, row.line);
+            measurements.push({
+              target: { kind: 'occurrence', id },
+              role: 'biomass',
+              measurementType: concept?.label ?? 'biomass',
+              ...(concept ? { measurementTypeId: concept.uri } : {}),
+              measurementValue: valueText(bcell, dc),
+              ...(unitText === undefined ? {} : { measurementUnit: unitText }),
+              ...(sizeValue !== undefined && sizeUnit !== undefined ? { measurementRemarks: `per sample of ${sizeValue} ${sizeUnit}` } : {}),
+              source: { ...occSource, column: b.header },
+            });
+          }
+        }
         occurrences.push(occ);
         if (status === 'present') stats.present++;
         else stats.absent++;
@@ -1665,6 +1705,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     }
     if (visitGroups.length > 0) {
       findings.push(makeConvertFinding('CONV-ID-REVISIT', { ...base, value: visitGroups[0].id, lines: visitGroups.flatMap((g) => g.lines).sort((a, b) => a - b), params: { count: visitGroups.length, by: VISIT_PARTS.filter((p) => visitParts.has(p)).join(', ') } }));
+    }
+    {
+      const kinds = biomassNoKind.entries();
+      if (kinds.length > 0) {
+        const total = new Set(kinds.flatMap((e) => e.lines)).size;
+        findings.push(makeConvertFinding('CONV-BIOMASS-KIND-UNSET', { ...base, field: kinds[0].field, lines: kinds.flatMap((e) => e.lines).sort((a, b) => a - b), params: { count: total, columns: kinds.map((e) => e.field.trim()).join(', ') } }));
+      }
     }
     for (const e of noReplicate.entries()) findings.push(makeConvertFinding('CONV-REPLICATE-MISSING', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (noCode.size > 0) {

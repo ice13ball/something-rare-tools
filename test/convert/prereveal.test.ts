@@ -266,9 +266,16 @@ describe('item 6: a column with data that is left out is said', () => {
     expect(notExported(await (await open('gap2.csv', withoutData)).run())).toBeUndefined();
   });
   it('a second quantity column next to a count is named; the count is read', async () => {
-    const csv = csvOf(['eventID', 'scientificName', 'individualCount', 'Biomass [g]', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['E1', 'Calanus finmarchicus', 4, 0.5, 55, 3, '2099-01-01'], ['E1', 'Oithona similis', 2, 0.1, 55, 3, '2099-01-01']]);
+    const csv = csvOf(['eventID', 'scientificName', 'individualCount', 'Abundance', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['E1', 'Calanus finmarchicus', 4, 0.5, 55, 3, '2099-01-01'], ['E1', 'Oithona similis', 2, 0.1, 55, 3, '2099-01-01']]);
     const v = await (await open('two-q.csv', csv)).run();
-    expect(notExported(v)?.params).toMatchObject({ count: 1, columns: 'Biomass [g]' });
+    expect(notExported(v)?.params).toMatchObject({ count: 1, columns: 'Abundance' });
+    expect(v.stats.occurrences).toBe(2);
+  });
+  it('a biomass column next to a count is no longer left out: it is written as a measurement of each occurrence and the open kind is asked', async () => {
+    const csv = csvOf(['eventID', 'scientificName', 'individualCount', 'Biomass [g]', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['E1', 'Calanus finmarchicus', 4, 0.5, 55, 3, '2099-01-01'], ['E1', 'Oithona similis', 2, 0.1, 55, 3, '2099-01-01']]);
+    const v = await (await open('biomass.csv', csv)).run();
+    expect(notExported(v)).toBeUndefined();
+    expect(v.findings.find((f) => f.ruleId === 'CONV-BIOMASS-KIND-UNSET')?.params).toMatchObject({ count: 2, columns: 'Biomass [g]' });
     expect(v.stats.occurrences).toBe(2);
   });
   it('an ignored column the user wants out, such as a plain remark, is not said', async () => {

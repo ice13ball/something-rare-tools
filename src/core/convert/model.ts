@@ -107,6 +107,8 @@ export interface MofIntent {
   measurementValueId?: string;
   measurementUnit?: string;
   measurementUnitId?: string;
+  /** Free text about the measurement (eMoF measurementRemarks); a biomass column next to a declared sample size says "per sample of <size>" here and nowhere else. */
+  measurementRemarks?: string;
   /** Set when `measurementType` is empty because no concept is verified: the declared meaning in words, for the export (never an id). */
   measurementTypeFallback?: string;
   source: SourceRef;
@@ -261,6 +263,7 @@ export interface ModelMeasurement {
   valueId?: string;
   unit?: string;
   unitId?: string;
+  remarks?: string;
   source: SourceRef;
 }
 
@@ -336,6 +339,7 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
     if (x.measurementValueId !== undefined) m.valueId = x.measurementValueId;
     if (x.measurementUnit !== undefined && x.measurementUnit !== '') m.unit = x.measurementUnit;
     if (x.measurementUnitId !== undefined) m.unitId = x.measurementUnitId;
+    if (x.measurementRemarks !== undefined) m.remarks = x.measurementRemarks;
     return m;
   });
   return { events, occurrences, measurements, metadata, decisions };

@@ -15,7 +15,7 @@ import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
 import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
-import { readConvertSettings } from '../core/convert/settings';
+import { biomassBasisOf, readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
@@ -68,6 +68,8 @@ export function createConvertHandler(): ConvertHandler {
   let files = new Map<string, Held>();
   // what the dropped metadata files state about the licence, from THIS session's own parse: CONV-LICENCE-DIFFERS at export is judged from it, never from what the page sends
   let licenceSource: LicenceSource = { ids: [], disagree: false };
+  // the kind of mass a companion file of this drop gave the biomass columns of a sheet, by sheet name: a pre-pick for columns the header leaves open
+  let biomassPick = new Map<string, 'wet' | 'dry' | 'afdw'>();
 
   const held = (fileId: string): Held => {
     const h = files.get(fileId);
@@ -100,7 +102,13 @@ export function createConvertHandler(): ConvertHandler {
     const settings: ConvertSettings = result.settings;
     // the sheets a companion file of this drop says are read as normal tables (a pre-tick, by sheet name): known before any file is pivoted, whatever the order of the files
     const asTable = new Set<string>();
-    for (const parsed of parsedAll) if (parsed.kind !== 'metadata') for (const n of readConvertSettings(parsed)?.longAsTable ?? []) asTable.add(n);
+    biomassPick = new Map();
+    for (const parsed of parsedAll) {
+      if (parsed.kind === 'metadata') continue;
+      const cs = readConvertSettings(parsed);
+      for (const n of cs?.longAsTable ?? []) asTable.add(n);
+      for (const b of cs?.biomassBasis ?? []) if (!biomassPick.has(b.sheet)) biomassPick.set(b.sheet, b.basis);
+    }
     for (const parsed of parsedAll) {
       if (parsed.kind === 'metadata') {
         // never a data sheet: its record goes to the description of the dataset (core/convert/prefill.ts), read by the shared metadata parsers
@@ -123,6 +131,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.longAsTable ?? []) if (!(settings.longAsTable ??= []).includes(n)) settings.longAsTable.push(n);
         for (const n of s.transposedAsTable ?? []) if (!(settings.transposedAsTable ??= []).includes(n)) settings.transposedAsTable.push(n);
         for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
+        for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         continue;
       }
       if (!isTable(parsed)) {
@@ -171,6 +180,8 @@ export function createConvertHandler(): ConvertHandler {
           pivots[sheet.name] = note;
         }
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
+        const pick = biomassPick.get(sheet.name);
+        if (pick !== undefined) for (const q of p) if (q.role.kind === 'biomass' && q.role.basis === undefined) q.role = { kind: 'biomass', basis: pick };
         proposals[sheet.name] = p;
         const m = toMapping(sheet, p);
         mappings.push(m);
@@ -246,6 +257,7 @@ export function createConvertHandler(): ConvertHandler {
     const longAsTable = [...new Set(body.sheets.filter((s) => files.get(s.fileId)?.choices[s.sheet]?.off === true).map((s) => s.sheet))];
     const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
     const presenceOnly = [...new Set(body.sheets.filter((s) => s.presenceOnly === true).map((s) => s.sheet))];
+    const biomassBasis = biomassBasisOf(body.sheets.map((s) => s.mapping));
     return {
       fullList: body.options.fullList === true,
       prefixStation: body.options.prefixStation === true,
@@ -257,6 +269,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(longAsTable.length > 0 ? { longAsTable } : {}),
       ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
       ...(presenceOnly.length > 0 ? { presenceOnly } : {}),
+      ...(biomassBasis.length > 0 ? { biomassBasis } : {}),
     };
   };
 

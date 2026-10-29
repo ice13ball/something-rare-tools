@@ -157,6 +157,11 @@ export type ConverterRole =
   | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' }
   /** A column that numbers the replicates or sub-samples of ONE sample (a frame, a quadrat, a replicate core): each value is an event under the sample (core/convert/events.ts). */
   | { kind: 'replicate' }
+  /**
+   * A column of biomass or weight next to the quantity (count) column of a long sheet: written as an eMoF measurement of the occurrence, as given, never converted. `basis` is the kind of mass (wet,
+   * dry, ash-free dry) the user chose or the header names; without it no measurementTypeID is written and CONV-BIOMASS-KIND-UNSET asks (core/convert/quantity.ts biomassKindConcept).
+   */
+  | { kind: 'biomass'; basis?: 'wet' | 'dry' | 'afdw' }
   /** The scientificNameID of a long sheet's taxon; `aphia: true` = the cells are WoRMS AphiaIDs (written as the urn:lsid), otherwise written as given. */
   | { kind: 'taxonId'; aphia?: boolean }
   /**

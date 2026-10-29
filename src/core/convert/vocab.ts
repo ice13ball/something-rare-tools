@@ -12,7 +12,7 @@
  * individuals is written with OCOUNT01 and NO unit id (BioCheck lists OCOUNT01 as "no unit/value ID needed"); whether OBIS wants P06/UUUU
  * there is unverified (the manual is silent), so none is written.
  */
-export const nercUri = (collection: 'P01' | 'P06' | 'L22' | 'L05', code: string): string => `http://vocab.nerc.ac.uk/collection/${collection}/current/${code}/`;
+export const nercUri = (collection: 'P01' | 'P06' | 'L22' | 'L05' | 'S06', code: string): string => `http://vocab.nerc.ac.uk/collection/${collection}/current/${code}/`;
 
 export interface NercTerm {
   code: string;
@@ -23,6 +23,7 @@ export interface NercTerm {
 const p01 = (code: string, label: string): NercTerm => ({ code, uri: nercUri('P01', code), label });
 const p06 = (code: string, label: string): NercTerm => ({ code, uri: nercUri('P06', code), label });
 const l22 = (code: string, label: string): NercTerm => ({ code, uri: nercUri('L22', code), label });
+const s06 = (code: string, label: string): NercTerm => ({ code, uri: nercUri('S06', code), label });
 const l05 = (code: string, label: string): NercTerm => ({ code, uri: nercUri('L05', code), label });
 
 /** measurementTypeID (P01). */
@@ -40,6 +41,17 @@ export const P01 = {
   areaSampled: p01('AREABEDS', 'Area of sample {sampled area} from the bed'),
   instrument: p01('NMSPINST', 'Name of sampling instrument'),
   meshSize: p01('MSHSIZE1', 'Mesh size of sample collector'),
+} as const;
+
+/**
+ * measurementTypeID (S06) for a mass of biological material that is NOT per unit area or volume (a "Biomass [g]" column of a sample or frame). The P01 biomass concepts (SDBIOL03/04/05/07/08/09)
+ * are all "per unit area of the bed" or "per unit volume of the water body", so none of them says "a mass in this sample"; the S06 parameter concepts below say the kind of mass and nothing
+ * about a denominator. Each was opened on 2026-10-30 in the NVS (collection S06, current): English prefLabel as written here, owl:deprecated = false.
+ */
+export const S06 = {
+  wetWeightBiomass: s06('S0600088', 'Wet weight biomass'),
+  dryWeightBiomass: s06('S0600087', 'Dry weight biomass'),
+  afdwBiomass: s06('S0600086', 'Ash-free dry weight biomass'),
 } as const;
 
 /** measurementUnitID (P06). */

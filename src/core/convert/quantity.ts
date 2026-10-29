@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { P01, P06, type NercTerm } from './vocab';
+import { P01, P06, S06, type NercTerm } from './vocab';
 import { pushAll } from '../util/arrays';
 
 /*
@@ -40,6 +40,11 @@ export interface QuantityDeclaration {
   /** density / biomass per area: the water column ('water') or the bed ('bed'). REQUIRED for an area (no default); only a bed has a verified concept. */
   medium?: 'water' | 'bed';
   effort?: EffortDeclaration;
+}
+
+/** The concept of a biomass column that is a mass per sample (no per area / volume claimed), by the kind the user chose or the header names; undefined while the kind is open. */
+export function biomassKindConcept(basis: BiomassBasis | undefined): NercTerm | undefined {
+  return basis === 'wet' ? S06.wetWeightBiomass : basis === 'dry' ? S06.dryWeightBiomass : basis === 'afdw' ? S06.afdwBiomass : undefined;
 }
 
 /* ---------- units ---------- */
