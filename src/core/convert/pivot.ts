@@ -94,10 +94,10 @@ export type LongVerdict = { kind: 'no' } | { kind: 'blocked'; reason: LongReason
 
 const raggedOf = (file: ParsedFile, sheet: string): ReadonlySet<number> => new Set(file.findings.filter((f) => f.ruleId === 'ROW-RAGGED' && f.sheet === sheet).flatMap((f) => f.lines ?? []));
 
-/** The user's choices about one long sheet: `off` = read it as a normal table; `describes` = key columns (by header) that describe the measurement, not the sample. */
+/** The user's choices about one long sheet: `off` = read it as a normal table; `describes` = key columns (by column index in the sheet as read) that describe the measurement, not the sample. */
 export interface PivotChoice {
   off?: boolean;
-  describes?: readonly string[];
+  describes?: readonly number[];
 }
 
 /** The meanings that tell where and when a sample is (its position and identity): a column with any other meaning may vary per measurement. */
@@ -115,7 +115,7 @@ export function readLongSheet(file: ParsedFile, sheet: RawSheet, choice: PivotCh
   const why = longReasonOf(sheet, c, ragged);
   if (why !== undefined) return { kind: 'blocked', ...why };
   const identity = new Set(proposals.filter((p) => IDENTITY_KINDS.has(p.role.kind)).map((p) => p.index));
-  return { kind: 'pivot', sheet: pivotSheet(sheet, c, ragged, identity, new Set((choice.describes ?? []).map((h) => h.trim()))) };
+  return { kind: 'pivot', sheet: pivotSheet(sheet, c, ragged, identity, new Set(choice.describes ?? [])) };
 }
 
 interface Group {
@@ -125,24 +125,24 @@ interface Group {
   entries: Map<number, { cell: RawCell; line: number; lines: number[] }>;
 }
 
-function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>, identity: ReadonlySet<number>, describes: ReadonlySet<string>): RawSheet {
+function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>, identity: ReadonlySet<number>, describes: ReadonlySet<number>): RawSheet {
   const header = sheet.header;
   const own = new Set([c.parameterAt, c.valueAt, ...(c.unitAt === undefined ? [] : [c.unitAt])]);
   // the key: every column but the parameter, the unit, the value and the quality flags (a flag column is dropped, and said)
   const keyAt: number[] = [];
   const flagColumns: string[] = [];
   const dropped: string[] = [];
-  const keyOptions: { header: string; describes: boolean }[] = [];
+  const keyOptions: { index: number; header: string; describes: boolean }[] = [];
   for (let i = 0; i < header.length; i++) {
     if (own.has(i)) continue;
     if (isQualityHeader(header[i], header)) flagColumns.push(header[i].trim());
-    else if (!identity.has(i) && describes.has(header[i].trim())) {
+    else if (!identity.has(i) && describes.has(i)) {
       // the user marked it as describing the measurement: out of the key, its values not written
       dropped.push(header[i].trim());
-      keyOptions.push({ header: header[i].trim(), describes: true });
+      keyOptions.push({ index: i, header: header[i].trim(), describes: true });
     } else {
       keyAt.push(i);
-      if (!identity.has(i)) keyOptions.push({ header: header[i].trim(), describes: false });
+      if (!identity.has(i)) keyOptions.push({ index: i, header: header[i].trim(), describes: false });
     }
   }
   const keyHeaders = keyAt.map((i) => header[i]);

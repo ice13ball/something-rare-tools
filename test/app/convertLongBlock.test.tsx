@@ -146,6 +146,23 @@ describe('a long environmental sheet on the /convert page', () => {
     await waitFor(() => expect(screen.getByLabelText('Comment: Meaning')).toBeTruthy());
   });
 
+  it('a re-read of the sheet clears what was typed for its columns in the NVS search (the columns have other indexes now)', async () => {
+    const H = [...PIV_H, 'Comment'];
+    const rows: Cell[][] = PIV_ROWS.filter((r) => r[6] !== 'Salinity_QC').map((r) => [...r, r[6] === 'Temperature' ? 'checked' : 'late sample']);
+    await load('nvs.csv', H, rows);
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await idle();
+    fireEvent.click(await screen.findByRole('checkbox', { name: T['convert.nvs.optin'] }));
+    const word = (col: string): HTMLInputElement => screen.getByLabelText(T['convert.nvs.word.type.aria'].replace('{header}', col)) as HTMLInputElement;
+    fireEvent.change(word('Temperature [degC]'), { target: { value: 'temperature' } });
+    expect(word('Temperature [degC]').value).toBe('temperature');
+    fireEvent.click(screen.getByLabelText('Comment: describes the measurement, not the sample'));
+    await waitFor(() => expect(screen.queryByLabelText('Comment: Meaning')).toBeNull());
+    await idle();
+    expect(word('Temperature [degC]').value).toBe('');
+    expect(word('Salinity [PSU]').value).toBe('');
+  });
+
   it('a sample with the same parameter and unit on two rows blocks, and the text names the original lines', async () => {
     const rows: Cell[][] = [...PIV_ROWS, ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Temperature', 'degC', 3.95]];
     await load('dup.csv', PIV_H, rows);

@@ -129,7 +129,7 @@ export function createConvertHandler(): ConvertHandler {
       // metadata file, with its file name as the source; the sheet itself is still a data table
       if (parsed.kind === 'pangaea' && parsed.embeddedMetadata) records.push(pangaeaHeaderRecord(parsed.embeddedMetadata));
       const fileId = `c${++seq}`;
-      const h: Held = { fileId, original: parsed, parsed, choices: Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }])) };
+      const h: Held = { fileId, original: parsed, parsed, choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
       repivot(h);
       files.set(fileId, h);
       result.files.push(summaryOf(h));
@@ -192,7 +192,9 @@ export function createConvertHandler(): ConvertHandler {
   /** The user's choice about the long sheets of one file: the sheet is read again, and the page gets the file's summary again (its columns may have changed). */
   function pivotChoice(req: Extract<ConvertRequest, { type: 'pivotChoice' }>): ConvertFileSummary {
     const h = held(req.fileId);
-    const choice: PivotChoice = { ...(req.off ? { off: true } : {}), ...(req.describes.length > 0 ? { describes: req.describes.filter((d) => typeof d === 'string') } : {}) };
+    // the page's word is not taken for more than it is: `off` only when it is true, `describes` only as whole numbers (anything else is ignored)
+    const describes = Array.isArray(req.describes) ? req.describes.filter((d): d is number => Number.isInteger(d) && d >= 0) : [];
+    const choice: PivotChoice = { ...(req.off === true ? { off: true } : {}), ...(describes.length > 0 ? { describes } : {}) };
     if (choice.off === true || choice.describes !== undefined) h.choices[req.sheet] = choice;
     else delete h.choices[req.sheet];
     repivot(h);
