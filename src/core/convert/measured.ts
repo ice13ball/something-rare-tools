@@ -44,22 +44,27 @@ export function namePart(header: string): string {
   }
 }
 
-const GENUS = /^[a-z]{3,}$/;
-const EPITHET = /^(?:sp|spp|cf|aff|nr|gr|indet|juv|juvenile|adult|larvae|larva|nauplii|copepodite|[a-z]{1,}|\d{1,3}|[a-z]\d{1,2})\.?$/;
+/** One genus-like word: 3+ characters, letters with an internal "-", "_" or "." ("Pseudo-nitzschia", "Macoma_balthica"), a trailing full stop allowed. */
+const GENUS_WORD = /^[a-z][a-z._-]+[a-z.]$/;
 
-/** A genus-like word (3+ letters or an abbreviation "C."), optionally slash-joined with other genera, then words, stage marks and small numbers ("sp. 1", "Morphotype 3", "c2"). */
+/**
+ * A genus-shaped FIRST word decides the taxon shape: a word of 3+ letters (case does not matter), several of them joined by a slash ("Acartia/Centropages"), or an abbreviated genus
+ * ("C. finmarchicus"). Whatever follows is not looked at: an epithet, sp. / spp. / cf. / indet. / juv., a stage code (C1-C3, CIV-CVI), a size or range class (0-1 cm, >5mm, <200 µm),
+ * a morphospecies number. A false candidate costs the user one tick; a false variable loses occurrences, so the rule leans to the taxon.
+ */
 function hasTaxonShape(folded: string): boolean {
-  const tokens = folded.replace(/[()?;]/g, ' ').split(/[\s,]+/).filter((t) => t !== '');
-  if (tokens.length === 0) return false;
-  const parts = tokens[0].split('/');
-  // slash-joined genera need whole words ("Acartia/Centropages"); a single abbreviated genus is one letter and a full stop ("C. finmarchicus")
-  const firstOk = parts.length > 1 ? parts.every((w) => GENUS.test(w)) : GENUS.test(tokens[0].replace(/\.$/, '')) || /^[a-z]\.$/.test(tokens[0]);
-  if (!firstOk) return false;
-  return tokens.slice(1).every((t) => t.split('/').every((w) => EPITHET.test(w))); // ("pusillus/pygmaeus")
+  const first = folded.replace(/[()?;]/g, ' ').split(/[\s,]+/).find((t) => t !== '');
+  if (first === undefined) return false;
+  const parts = first.split('/');
+  if (parts.length > 1) return parts.every((w) => GENUS_WORD.test(w));
+  return GENUS_WORD.test(first) || /^[a-z]\.$/.test(first);
 }
 
-/** See the module comment. `header` is the whole header; its unit and trailing brackets are cut off here. */
-export function nameKind(header: string): NameKind {
+/**
+ * See the module comment. `header` is the whole header; its unit and trailing brackets are cut off here. `abundance` is true when the unit counts organisms (isAbundanceUnit): such a
+ * column may always be a species, whatever its name looks like (after a descriptor or a known variable token, which are decided first).
+ */
+export function nameKind(header: string, abundance = false): NameKind {
   const raw = namePart(header);
   const folded = foldDiacritics(raw).toLowerCase().replace(/\s+/g, ' ').trim();
   // the greek delta is not folded to a letter by every table: δ13C is read as d13C
@@ -69,20 +74,9 @@ export function nameKind(header: string): NameKind {
   if (DESCRIPTOR.test(key)) return 'descriptor';
   const lead = asLetters.split(/[\s,]+/)[0].replace(/[.;]+$/, '');
   if (VARIABLE_TOKENS.has(key) || VARIABLE_TOKENS.has(lead) || VARIABLE_TOKENS.has(lead.replace(/[^a-z0-9]/g, '')) || ISOTOPE.test(lead.replace(/[^a-z0-9]/g, '')) || RATIO.test(lead)) return 'variable';
-  if (hasTaxonShape(asLetters)) return 'taxon';
+  if (abundance || hasTaxonShape(asLetters)) return 'taxon';
   if (/[\d/:]/.test(asLetters)) return 'variable';
   const letters = raw.replace(/[^A-Za-z]/g, '');
   if (letters.length > 0 && letters.length <= 5 && letters === letters.toUpperCase() && !/\s/.test(raw.trim())) return 'variable';
   return 'unknown';
-}
-
-/**
- * A unit that no sheet of ORGANISMS writes: an amount of substance ("µmol/l", "mmol m-2") or a rate per hour, day or year ("mg/m2/day", "µmol m-2h-1"). A species column may carry a count, a density or a biomass
- * ("ind/m3", "mg C/m3", "g/m2", even a percent cover), never these; a column that has one is a measurement whatever its name looks like ("DNRAw (µmol m-2h-1)"). Organism counts per area and time
- * ("ind/m2/day") are not caught: the caller asks isAbundanceUnit first.
- */
-export function isNonOrganismUnit(unit: string | undefined): boolean {
-  if (unit === undefined) return false;
-  const u = unit.toLowerCase().replace(/µ|μ/g, 'u');
-  return /mol/.test(u) || /(?:^|[^a-z])(?:h|hr|d|day|days|yr|year|a)\s*[-−⁻]\s*1(?![0-9])/.test(u) || /\/\s*(?:h|hr|d|day|days|yr|year)\b/.test(u) || /\bper\s+(?:hour|day|year)\b/.test(u);
 }
