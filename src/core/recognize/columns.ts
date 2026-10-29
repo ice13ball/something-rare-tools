@@ -5,7 +5,7 @@ import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { parseDate, parseTimeOfDay } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
-import { LATITUDE_SPELLING, LONGITUDE_SPELLING, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
+import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
 
 export interface ProposeContext {
@@ -201,13 +201,16 @@ function bareCoordinate(key: string, unitText: string | undefined, cleanHeader: 
 
 const SITE_DEPTH =
   /\b(site|bottom|seafloor|seabed|sea floor|sounding|total|maximum|max)\b.*\bdepth\b|\bdepth\b.*\b(of the site|of the station|of the bottom|of the seafloor|of the sea floor)\b|\bdepth (at|of) (the )?(site|station|bottom)\b/;
+// 'Depth-integrated chlorophyll', 'Depth averaged temperature', 'Integrated over depth': the depth word qualifies a measurement made over a depth range, it is not the depth of the sample.
+// A bare 'Mean depth' / 'Average depth' IS a depth (the middle of the sampled layer) and stays one.
+const DEPTH_QUALIFIER = /\bdepth (integrated|integral|averaged|weighted|resolved|dependent|corrected|normali[sz]ed|specific)\b|\b(integrated|averaged|integral) (over|across|through|within|by) (the )?(water )?(column|depth)\b|\b(over|across) (the )?depth\b/;
 const OTHER_DEPTH = /\b(secchi|mixed layer|mld|euphotic|photic|thermocline|chlorophyll max|compensation)\b/;
 const FLAG = /^(qf|qc|flag)( |$)|( flag| flags| qf| qc)$|^quality( flag| control| code)?( |$)/;
 
 const PLAIN_COUNT_UNIT = /^(n|ind|inds|individuals?|specimens?|count|counts)\.?$/i;
 
-const LAT_NAME = new RegExp(`^lat(\\s|$)|^(${LATITUDE_SPELLING})(\\s|$)`);
-const LON_NAME = new RegExp(`^(lon|long|lng)(\\s|$)|^(${LONGITUDE_SPELLING})(\\s|$)`);
+const LAT_NAME = new RegExp(`^(${LATITUDE_SPELLING})(\\s|$)`);
+const LON_NAME = new RegExp(`^(${LONGITUDE_SPELLING})(\\s|$)`);
 
 function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   // start / end of a tow or transect: 'Begin Latitude', 'Lat start', 'Latitude (start)' (a bracket text that is no unit stays in the header)
@@ -221,10 +224,10 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   }
   const other = nameCandidateOther(key, hdr);
   if (other) return other;
-  if (LAT_NAME.test(key)) {
+  if (LAT_NAME.test(key) || abbreviatedAxis(key) === 'latitude') {
     return { slot: 'latitude', tier: key === 'latitude' || key === 'lat' ? 0 : 1, kind: 'latitude', why: why('name-latitude') };
   }
-  if (LON_NAME.test(key)) {
+  if (LON_NAME.test(key) || abbreviatedAxis(key) === 'longitude') {
     return { slot: 'longitude', tier: ['longitude', 'lon', 'long', 'lng'].includes(key) ? 0 : 1, kind: 'longitude', why: why('name-longitude') };
   }
   if (/^(date ?time|timestamp|time ?stamp|date and time)(\s|$)/.test(key)) {
@@ -239,7 +242,7 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   if (/^(elevation|altitude)(\s|$)/.test(key)) {
     return { slot: 'depth', tier: 2, kind: 'depth', why: why('name-elevation'), elevation: true };
   }
-  if (/\bdepth\b/.test(key) && !SITE_DEPTH.test(key) && !OTHER_DEPTH.test(key)) {
+  if (/\bdepth\b/.test(key) && !SITE_DEPTH.test(key) && !OTHER_DEPTH.test(key) && !DEPTH_QUALIFIER.test(key)) {
     return { slot: 'depth', tier: key === 'depth' ? 0 : 1, kind: 'depth', why: why('name-depth') };
   }
   if (/^(pressure|pres|press|prs)(\s|$)/.test(key)) return undefined; // pressure is not a slot, handled by the caller

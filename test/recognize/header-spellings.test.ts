@@ -42,3 +42,41 @@ describe('misspelled latitude and longitude', () => {
     expect(p.slice(0, 2).map((x) => x.role.kind)).toEqual(['latitude', 'longitude']);
   });
 });
+
+describe('prefix traps: a name that merely starts with Lat / Long / Depth', () => {
+  const NOT_POSITION = [
+    'Long term mean', 'Long-term mean', 'Long term average', 'Long_term_average', 'Longterm', 'Long-term trend [%]', 'Long-line catch', 'Long axis [mm]', 'Long distance',
+    'Lat bound mean', 'Lateral line', 'Latency [ms]', 'Lat of station', 'Lon bar',
+  ];
+  it.each(NOT_POSITION)('%s is not a coordinate', (h) => {
+    const p = of({ [h]: OTHER, Y: LAT }, h);
+    expect(['latitude', 'longitude'], h).not.toContain(p.role.kind);
+  });
+
+  it('a long-term column does not take the longitude slot from the real one', () => {
+    const p = propose({ 'Long term mean': OTHER, Longitude: LON, Latitude: LAT });
+    expect(p.find((x) => x.header === 'Longitude')!.role.kind).toBe('longitude');
+    expect(p.find((x) => x.header === 'Long term mean')!.role.kind).toBe('variable');
+  });
+
+  it('the abbreviations still count when only a unit, a datum, a hemisphere or a start / end word follows', () => {
+    for (const [h, kind] of [
+      ['Long', 'longitude'], ['Long.', 'longitude'], ['Long [deg]', 'longitude'], ['Long (E)', 'longitude'], ['Long E', 'longitude'], ['LONG_dd', 'longitude'], ['Lon decimal degrees', 'longitude'],
+      ['Lng', 'longitude'], ['Lon WGS84', 'longitude'], ['Lat', 'latitude'], ['Lat deg N', 'latitude'], ['Lat. N', 'latitude'], ['Lat dd', 'latitude'], ['Lat start', 'latitude'],
+      ['Lon East', 'longitude'], ['Latitude of start', 'latitude'], ['Longitude (E)', 'longitude'],
+    ] as const) {
+      const p = of({ [h]: kind === 'latitude' ? LAT : LON, X: OTHER }, h);
+      expect(p.role.kind, h).toBe(kind);
+    }
+  });
+
+  it('Depth-integrated and depth-averaged measurements are not the depth of the sample; Mean depth and Depth [m] are', () => {
+    for (const h of ['Depth-integrated chlorophyll', 'Depth integrated chl a [mg/m2]', 'Depth-averaged temperature', 'Depth weighted mean salinity', 'Chlorophyll integrated over depth']) {
+      const p = of({ [h]: OTHER, Depth: [5, 10, 15, 20] }, h);
+      expect(p.role.kind, h).not.toBe('depth');
+    }
+    expect(of({ Depth: [5, 10, 15, 20], X: OTHER }, 'Depth').role.kind).toBe('depth');
+    expect(of({ 'Mean depth [m]': [5, 10, 15, 20], X: OTHER }, 'Mean depth [m]').role.kind).toBe('depth');
+    expect(of({ 'Depth-integrated chlorophyll': OTHER, Depth: [5, 10, 15, 20] }, 'Depth').role.kind).toBe('depth');
+  });
+});

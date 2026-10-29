@@ -22,6 +22,22 @@ const BARE_LON = /^(dlugosc|dl|dlug|lange|laenge)$/;
 const AXIS_TAIL = /( (dd|deg|degs|degrees|decimal|dec|wgs84))+$/;
 const AXIS_GLUED = /^(begin|beg|start|starting|initial|end|stop|final)(lat|lon|long|lng|latitude|longitude)$|^(lat|lon|long|lng|latitude|longitude)(begin|beg|start|end|stop|final)$/;
 
+const ABBREVIATED_AXIS: Readonly<Record<string, 'latitude' | 'longitude'>> = { lat: 'latitude', lon: 'longitude', long: 'longitude', lng: 'longitude' };
+// What may follow an abbreviated axis word and still name the coordinate: a degree notation, a datum, a hemisphere letter or word, a start / end word.
+// 'Long term mean', 'Long-line catch', 'Lat of station', 'Long axis' are NOT coordinates: 'long' / 'lat' are whole-token abbreviations only here.
+const ABBREVIATED_TAIL = /^(dd|dm|ddm|dms|deg|degs|degree|degrees|decimal|dec|min|wgs84|wgs|n|s|e|w|o|north|south|east|west|ost|nord|sud|hemisphere|hemi|hem|dir|direction|ns|ew)$/;
+
+/**
+ * The axis an abbreviated name ('Lat', 'Lon', 'Long', 'Lng') stands for, with a tail that is only a unit, a datum, a hemisphere or a start / end word
+ * ('Long E', 'Lat deg', 'Lon dd', 'Lat start'); undefined when other words follow ('Long term mean', 'Long line', 'Lat bound mean'). The key is a headerKey.
+ */
+export function abbreviatedAxis(key: string): 'latitude' | 'longitude' | undefined {
+  const tokens = key.split(' ').filter((t) => t !== '');
+  const axis = ABBREVIATED_AXIS[tokens[0] ?? ''];
+  if (axis === undefined) return undefined;
+  return tokens.slice(1).every((t) => ABBREVIATED_TAIL.test(t) || START_WORDS.has(t) || END_WORDS.has(t)) ? axis : undefined;
+}
+
 /** The axis a header word names ('lat', 'Latitude', 'Szerokość geogr.', 'Breitengrad'), undefined for anything else. */
 export function axisOfWord(key: string): 'latitude' | 'longitude' | undefined {
   const k = key.replace(AXIS_TAIL, '');
