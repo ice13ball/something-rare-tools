@@ -759,6 +759,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     hasCruiseColumn={m.columns.some((c) => c.role.kind === 'cruise')}
                     hasEffortColumn={m.columns.some((c) => c.role.kind === 'effort')}
                     suggestedProfile={f.suggestedProfiles[m.sheet] === true}
+                    dictionary={f.dictionarySheets?.[m.sheet] !== undefined}
                     hasCodeColumn={m.columns.some((c) => c.role.kind === 'sampleId')}
                     hasPressureColumn={m.columns.some((c) => c.role.kind === 'pressure')}
                     hasStationColumn={m.columns.some((c) => c.role.kind === 'station')}

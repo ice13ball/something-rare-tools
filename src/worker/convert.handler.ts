@@ -8,6 +8,7 @@
 import { licenceDiffersFindings } from '../core/convert/validate';
 import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../core/convert';
+import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
 import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
@@ -156,6 +157,7 @@ export function createConvertHandler(): ConvertHandler {
       const mappings: SheetMapping[] = [];
       const shapes: ConvertFileSummary['suggestedShapes'] = Object.create(null) as ConvertFileSummary['suggestedShapes'];
       const profiles: ConvertFileSummary['suggestedProfiles'] = Object.create(null) as ConvertFileSummary['suggestedProfiles'];
+      const dictionary: Record<string, 'name' | 'columns'> = Object.create(null) as Record<string, 'name' | 'columns'>;
       const pivots: Record<string, PivotNote> = Object.create(null) as Record<string, PivotNote>;
       // the long sheets the user chose to read as normal tables: listed, so that the page can offer the way back
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
@@ -170,6 +172,8 @@ export function createConvertHandler(): ConvertHandler {
         mappings.push(m);
         shapes[sheet.name] = suggestConvertShape(m.columns);
         profiles[sheet.name] = suggestConvertProfile(p);
+        const dict = dictionaryReason(sheet, p, parsed.decimalComma);
+        if (dict !== undefined) dictionary[sheet.name] = dict;
       }
       return {
         fileId,
@@ -183,6 +187,7 @@ export function createConvertHandler(): ConvertHandler {
         samples: Object.fromEntries(parsed.sheets.map((s) => [s.name, samplesOf(s)])),
         suggestedShapes: shapes,
         suggestedProfiles: profiles,
+        ...(Object.keys(dictionary).length > 0 ? { dictionarySheets: dictionary } : {}),
         ...(Object.keys(pivots).length > 0 ? { pivots } : {}),
         ...(pivotOff.length > 0 ? { pivotOff } : {}),
       };
