@@ -89,6 +89,20 @@ describe('item 2: the NAME part of a header decides between a species and a meas
     'Morphotype 3 [ind/m2]',
     'C. finmarchicus c2 [#/m**3] (including Calanus glacialis)',
     'Calanus finmarchicus',
+    // modifiers after the genus: stage codes, size and range classes, underscores and hyphens in the name; any unit
+    'Oithona similis C1-C3 [ind/m3]',
+    'Pseudocalanus spp. C1-C3',
+    'Mytilus edulis 0-1 cm [ind/m2]',
+    'Cerastoderma glaucum >5mm [ind/m2]',
+    'Copepoda <200 µm [ind/m3]',
+    'Gymnodinium spp. 20-40 µm [cells/L]',
+    'Calanus finmarchicus CIV-CVI [mg C/m3]',
+    'Macoma_balthica [g/m2]',
+    'Pseudo-nitzschia spp. [µg C/L]',
+    // a biomass or a rate of a species is still a species
+    'Calanus finmarchicus [mmol C/m3]',
+    'Gadus morhua [kg/h]',
+    'Acartia tonsa [µmol O2/h]',
   ];
   it.each(stayTaxon)('%s stays a taxon candidate', (h) => {
     const p = proposalOf(h);
@@ -96,7 +110,7 @@ describe('item 2: the NAME part of a header decides between a species and a meas
     expect(p.confidence).toBe('low');
   });
 
-  const becomeVariable = ['PN [µmol/l]', 'PP [µmol/l]', 'GPP C [mg/m**2/day]', 'Ntot [%]', 'd15N [‰]', 'δ13C [‰]', 'C/N [molar]', 'N:P', 'Chl a [µg/l]', 'POC [µg/l]', 'Corg [%]', 'DNRAw (µmol m-2h-1)', 'Dw (µmol m-2h-1)'];
+  const becomeVariable = ['PN [µmol/l]', 'PP [µmol/l]', 'GPP C [mg/m**2/day]', 'Ntot [%]', 'd15N [‰]', 'δ13C [‰]', 'C/N [molar]', 'N:P', 'Chl a [µg/l]', 'POC [µg/l]', 'Corg [%]', 'Dw (µmol m-2h-1)'];
   it.each(becomeVariable)('%s is a measured variable, never a taxon candidate', (h) => {
     const p = proposalOf(h);
     expect(p.role.kind, `${p.reasonCode}: ${p.reason}`).toBe('variable');
@@ -144,6 +158,17 @@ describe('item 7: sample descriptors are never a taxon', () => {
   });
 });
 
+describe('item 2, end to end: a wide sheet whose taxa carry stages, size classes and biomass units writes every confirmed taxon', () => {
+  it('eight taxon columns, eight occurrences', async () => {
+    const taxa = ['Oithona similis C1-C3 [ind/m3]', 'Pseudocalanus spp. C1-C3 [ind/m3]', 'Mytilus edulis 0-1 cm [ind/m2]', 'Cerastoderma glaucum >5mm [ind/m2]', 'Copepoda <200 µm [ind/m3]', 'Gymnodinium spp. 20-40 µm [cells/L]', 'Calanus finmarchicus CIV-CVI [mg C/m3]', 'Macoma_balthica [g/m2]'];
+    const csv = csvOf(['Sample', 'Station', 'Latitude', 'Longitude', 'Date', ...taxa], [['S1', 'A', 55, 3, '2099-01-01', ...taxa.map((_, i) => i + 1)]]);
+    const { run, parsed } = await open('stages.csv', csv);
+    expect(candidatesOf(parsed, {}, undefined).map((c) => c.header)).toHaveLength(8);
+    const v = await run();
+    expect(v.stats.occurrences).toBe(8);
+  });
+});
+
 describe('item 3: a species list with no quantity column says plainly what the converter needs', () => {
   it('the text of CONV-NO-TAXON names the quantity column and says presence-only lists are not written, in all four languages; the finding itself is unchanged', async () => {
     const csv = csvOf(['scientificName', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['Calanus finmarchicus', 55, 3, '2099-01-01'], ['Oithona similis', 56, 4, '2099-01-02']]);
@@ -160,15 +185,17 @@ describe('item 4: the advice for a time-of-day column is about the time format',
   const finding = (value: string) => makeFinding('ROW-DATE-UNPARSEABLE', { file: 't.csv', sheet: 't', field: 'Time', value, lines: [2, 3] });
   it('ranges of times are told apart from dates by their values', () => {
     expect(valuesAreTimes('10:00-12:00, 14:30-15:00')).toBe(true);
-    expect(valuesAreTimes('1430-1500')).toBe(true);
+    expect(valuesAreTimes('14h30')).toBe(true);
+    expect(valuesAreTimes('1430-1500')).toBe(false); // a bare 4-digit range may be years: the finding does not know the role
     expect(valuesAreTimes('10:00')).toBe(true);
     expect(valuesAreTimes('2020-13-45')).toBe(false);
     expect(valuesAreTimes('1999-2005')).toBe(false);
+    for (const v of ['2019-2020', '12.05-14.05', '12.05']) expect(valuesAreTimes(v), v).toBe(false);
     expect(valuesAreTimes('31.02.2020, 10:00-12:00')).toBe(false);
     expect(valuesAreTimes('')).toBe(false);
   });
   it('a time column: HH:MM, one time, UTC or a stated zone, in every language; a date column keeps the date advice', () => {
-    const t = finding('10:00-12:00, 1430-1500');
+    const t = finding('10:00-12:00, 14:30-15:00');
     expect(t.ruleId).toBe('ROW-DATE-UNPARSEABLE');
     expect(renderPlain(t, 'en')).toMatch(/HH:MM.*UTC or with the time zone stated/);
     expect(renderPlain(t, 'pl')).toMatch(/GG:MM.*UTC/);
@@ -179,6 +206,9 @@ describe('item 4: the advice for a time-of-day column is about the time format',
     const d = finding('2020-13-45');
     expect(renderPlain(d, 'en')).toContain('Write dates as YYYY-MM-DD');
     expect(renderTechnical(d)).toContain('date not parseable');
+  });
+  it('a date column that fails with a year range or a day.month keeps the date wording', () => {
+    for (const v of ['2019-2020', '12.05-14.05', '12.05']) expect(renderPlain(finding(v), 'en'), v).toContain('Write dates as YYYY-MM-DD');
   });
   it('the finding itself is the same as before: no new param, the rule id is kept', () => {
     expect(finding('10:00-12:00').params).toEqual({});
@@ -192,6 +222,8 @@ describe('item 5: a data-dictionary sheet starts unticked, with a note', () => {
     return dictionaryReason(f.sheets[0], proposeConvertColumns(f.sheets[0], ctx));
   };
   it('by the name of the sheet', () => {
+    expect(reason(['A', 'B'], [['x', 'y']], 'metadata.csv')).toBe('name');
+    expect(reason(['A', 'B'], [['x', 'y']], 'seawater.csv')).toBeUndefined();
     for (const n of ['Metadata', 'README', 'Info', 'Description', 'Data dictionary', 'Legend', 'Notes', 'Opis']) expect(reason(['A', 'B'], [['x', 'y']], n), n).toBe('name');
     expect(reason(['A', 'B'], [['x', 'y']], 'Seawater')).toBeUndefined();
     expect(reason(['A', 'B'], [['x', 'y']], 'Measured_variables')).toBeUndefined();

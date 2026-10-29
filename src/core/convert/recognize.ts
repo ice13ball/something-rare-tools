@@ -5,7 +5,7 @@ import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
 import { isPercentUnit, verifiedConcept } from './nerc';
-import { isNonOrganismUnit, nameKind } from './measured';
+import { nameKind } from './measured';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -311,14 +311,12 @@ const isUnitPressure = (q: ColumnProposal, exclude: ReadonlySet<number> = new Se
 const isVerticalProposal = (q: ColumnProposal, exclude: ReadonlySet<number>): boolean => !exclude.has(q.index) && ((q.role.kind === 'depth' && q.reasonCode !== 'name-elevation') || q.role.kind === 'pressure' || isUnitPressure(q, exclude));
 
 /**
- * The unit of a column whose name did not decide: a name of no taxon shape at all ('unknown') with any unit that does not count organisms is a measurement; a taxon-shaped name needs a unit that no
- * sheet of organisms writes (an amount of substance, a rate per time: isNonOrganismUnit), because a species may carry a biomass unit.
+ * The unit of a column whose name did not decide: a name that is no taxon shape at all ('unknown': its first word is not genus-like) with any unit that does not count organisms is a
+ * measurement. A taxon-shaped name is never made a variable by its unit: a species may carry a biomass or a rate ("[mmol C/m3]", "[kg/h]").
  */
 function isMeasurementUnit(kind: 'taxon' | 'unknown' | 'variable' | 'descriptor', unit: string | undefined, unitText: string | undefined): boolean {
   const text = unitText ?? unit;
-  if (text === undefined || isAbundanceUnit(text) || isAbundanceUnit(unit)) return false;
-  if (kind === 'unknown') return true;
-  return kind === 'taxon' && (isNonOrganismUnit(text) || isNonOrganismUnit(unit));
+  return kind === 'unknown' && text !== undefined && !isAbundanceUnit(text) && !isAbundanceUnit(unit);
 }
 
 const why = (p: ColumnProposal, code: OverlayReason): void => {
@@ -603,7 +601,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     // wide sheet: a numeric column named like nothing we know is a taxon candidate; confirmed in bulk
     if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
       // the NAME decides (core/convert/measured.ts), never the unit alone: a species of a wide sheet may carry a biomass unit ("Calanus finmarchicus [mg C/m3]")
-      const kind = nameKind(p.header);
+      const kind = nameKind(p.header, isAbundanceUnit(hdr.unit) || isAbundanceUnit(hdr.unitText));
       if (kind === 'descriptor') {
         p.role = { kind: 'ignore' };
         p.confidence = 'low';

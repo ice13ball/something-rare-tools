@@ -114,9 +114,10 @@ function fill(template: string, f: Finding, lang?: Lang): string {
   });
 }
 
-const TIME_PART = /^(?:(?:[01]?\d|2[0-4])[:.h][0-5]\d(?:[:.][0-5]\d)?|(?:[01]?\d|2[0-3])[0-5]\d)\s*(?:[ap]\.?m\.?)?\s*(?:z|utc|gmt)?$/i;
+// a time of day has a colon or an "h" between the hour and the minutes; a bare 4-digit number or a day.month is as likely a year or a date, and the finding does not know the column's role
+const TIME_PART = /^(?:[01]?\d|2[0-4])[:h][0-5]\d(?:[:.][0-5]\d)?\s*(?:[ap]\.?m\.?)?\s*(?:z|utc|gmt)?$/i;
 
-/** True when every value listed in a finding reads as a time of day or a range of two ("10:00-12:00", "1430-1500"): the column holds times, not dates. */
+/** True when every value listed in a finding reads as a time of day or a range of two ("14:30", "14h30", "10:00-12:00"): the column holds times, not dates. */
 export function valuesAreTimes(value: string | undefined): boolean {
   if (value === undefined || value.trim() === '') return false;
   return value.split(',').every((token) => {

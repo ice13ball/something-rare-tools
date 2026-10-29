@@ -44,7 +44,8 @@ export function dictionaryReason(sheet: RawSheet, proposals: readonly ColumnProp
   if (hasPosition) return undefined;
   const cols = sheet.unnamedFrom === undefined ? sheet.header : sheet.header.slice(0, sheet.unnamedFrom);
   const keys = cols.map(key);
-  if (SHEET_NAME.test(key(sheet.name))) return 'name';
+  // a CSV sheet is named after its file ("metadata.csv"): the extension is not part of the name
+  if (SHEET_NAME.test(key(sheet.name.replace(/\.(csv|tsv|tab|txt|xlsx?|ods)$/i, '')))) return 'name';
   if (keys.some((k) => NAMES_A_COLUMN.test(k)) && keys.some((k) => EXPLAINS.test(k)) && cols.length <= 8 && textShare(sheet, decimalComma) >= 0.9) return 'columns';
   return undefined;
 }
