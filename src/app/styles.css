@@ -1384,7 +1384,7 @@ code.multiline {
   z-index: 4;
 }
 
-/* ---- /convert (hidden until its reveal) ----
+/* ---- /convert ----
    Nothing here sets a fixed width: every field shrinks (min-width: 0) and wraps, so the forms hold at 375 px. The mapping table keeps its own
    behaviour (.mapping-table scrolls sideways inside .table-scroll); the taxon table does the same. */
 .convert-sheet {
