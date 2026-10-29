@@ -117,7 +117,7 @@ const SHIP_DECLARED = {
  *                         (line numbers; km = distance, h = LONGEST possible time between the two events, kn = the speed at least); declared (optional) = 'yes' when
  *                         the single-cruise tick, not a cruise column, formed the group; mixed (optional) = 'yes' when a large share of the places is named
  *   ROW-SHIP-SPEED-UNUSUAL  the same, at the lower limit (info)
- *   (all three)           signLon, signLat  optional: "row (x→-x)" (with signLonCount, signLatCount) of the cases where reversing that coordinate's sign alone makes the hops plausible
+ *   (these two)           signLon, signLat  optional: "row (x→-x)" (with signLonCount, signLatCount) of the cases where reversing that coordinate's sign alone makes the hops plausible
  *   ROW-SHIP-SPEED-PAIR   count, cases   count = pairs; cases = "first→second: km, h, ≥kn"; declared as above
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)

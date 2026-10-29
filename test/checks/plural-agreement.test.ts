@@ -113,7 +113,8 @@ describe('every counted page key, at 0, 1, 2, 5, 12, 22 and 101, in all four lan
     const enDe = /\b1 (?:records|repeats|requests|retries|rows|names|days|findings|times|Datensätze|Wiederholungen|Anfragen|Zeilen|Namen|Tage|Befunde)\b/;
     const fr = /\b[01] (?:notices|répétitions|requêtes|nouvelles tentatives|lignes|noms|jours|constats|demandes)\b/;
     for (const key of Object.keys(KEYS)) {
-      for (const lang of ['en', 'de'] as const) expect(render(lang, key, 1), `${lang} ${key}`).not.toMatch(enDe);
+      // German "von 1 Namen" is the dative after "von" (the same form for every count), not a plural after 1
+      for (const lang of ['en', 'de'] as const) expect(render(lang, key, 1).replace(/\bvon 1 Namen\b/, ''), `${lang} ${key}`).not.toMatch(enDe);
       for (const n of [0, 1]) expect(render('fr', key, n), `fr ${key} ${n}`).not.toMatch(fr);
     }
     expect(render('en', 'collection.duplicates', 1)).toMatch(/^1 repeat was counted once/);
@@ -121,7 +122,10 @@ describe('every counted page key, at 0, 1, 2, 5, 12, 22 and 101, in all four lan
     expect(render('de', 'collection.progress.met', 1)).toBe('Bisher 1 Datensatz erfasst.');
     expect(render('fr', 'collection.progress.met', 1)).toBe('1 notice rencontrée jusqu’ici.');
     expect(render('en', 'collection.estimate.extra', 1)).toBe('Plus up to 1 request to DataCite for the comparison.');
-    expect(render('en', 'collection.progress.requests', 1)).toBe('1 request, 1 retry, asked to slow down 1 time.');
+    expect(render('en', 'collection.progress.requests', 1)).toBe('1 request, 1 retry, 1 request to slow down.');
+    expect(render('de', 'convert.worms.stopped', 1)).toMatch(/^Abfrage abgebrochen: 1 von 1 Namen beantwortet\./);
+    expect(render('de', 'collection.notice.empty-page', 1)).toContain('gemeldet war 1 Datensatz');
+    expect(render('de', 'collection.notice.empty-page', 2)).toContain('gemeldet waren 2 Datensätze');
   });
 
   it('Polish: the noun takes its form at 1, 2, 5, 12, 22, 101', () => {
