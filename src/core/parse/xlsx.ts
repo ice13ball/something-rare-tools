@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import * as XLSX from 'xlsx';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet } from '../types';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import { ParseError } from './shared';
 
 type Grid = Map<number, Map<number, XLSX.CellObject>>;

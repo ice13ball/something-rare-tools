@@ -4,7 +4,7 @@
 // downloaded from an IPT server, and ONLY from the static list of config/ipt.ts. Registry data is never trusted for the
 // host: an archive URL off that list is a finding that names the host, not a download.
 import { iptArchiveUrl } from '../../../config/ipt';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
 import { decodeUtf8, getJson, inaccessible, ok2xx } from './common';
 import { hostOf, type Fetcher } from './fetcher';

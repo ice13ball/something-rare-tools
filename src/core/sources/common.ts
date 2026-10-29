@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Helpers shared by the record handlers.
 import { isAllowedHost } from '../../../config/hosts';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import type { Finding } from '../types';
 import { fetchErrorFinding, hostOf, type FetchResult, type Fetcher } from './fetcher';
 

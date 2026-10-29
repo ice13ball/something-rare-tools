@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
 import { formatLines, renderPlain, renderTechnical } from '../../core/report';
-import { getRule } from '../../core/rules/registry';
+import { getRule } from '../../core/rules/registryCheck';
 import type { Citation, Finding, Report, Severity } from '../../core/types';
 import { isUiKey, type UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';

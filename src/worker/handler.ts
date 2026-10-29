@@ -18,7 +18,7 @@ import type { Inflate } from '../core/parse/zip';
 import { proposeColumns, unitFromHeader } from '../core/recognize/columns';
 import { proposeLayout, proposeMappings } from '../core/recognize/layout';
 import { buildReport } from '../core/report';
-import { makeFinding } from '../core/rules/registry';
+import { makeFinding } from '../core/rules/registryCheck';
 import type { ColumnProposal, Dataset, Finding, LayoutPlan, LoadedRecord, MetadataRecord, ParsedFile, RawCell, Report, SheetMapping } from '../core/types';
 import { makeEngine } from './engine';
 import {

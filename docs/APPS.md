@@ -424,7 +424,7 @@ long environmental sheets (8.4).
 
 ### 3.5 Rules, findings and severities
 
-**A rule** (`src/core/rules/*.ts`, assembled in `registry.ts`) has an id, a category (`input`,
+**A rule** (`src/core/rules/*.ts`, assembled in `registryCheck.ts` for the pages and workers that raise only /check, /licence and /collection rules, and in `registry.ts` for the full public registry that adds the converter's) has an id, a category (`input`,
 `A` licence and metadata, `B` rows and Darwin Core, `C` across files and chemistry), a severity,
 a plain wording for a non-specialist and a technical wording, in four languages, optional
 `thresholds` (a number with its unit and a citation) and `citations`. Every **published**
@@ -1662,7 +1662,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 | Column and layout recognition | `src/core/recognize/` (`columns.ts`, `layout.ts`, `vocab.ts`, `headerWords.ts`, `reasons.ts`) |
 | Typed rows | `src/core/dataset.ts` |
 | Checks | `src/core/checks/` (`run.ts`, `rows.ts`, `speed.ts`, `crossfile.ts`, `chemistry.ts`, `metadata.ts`, `licence.ts`, `dwc.ts`) |
-| Rule definitions, citations, registry | `src/core/rules/` (`registry.ts`, per-category files, `citations.ts`) |
+| Rule definitions, citations, registry | `src/core/rules/` (`registry.ts` the full registry, `registryCheck.ts` without the converter's rules, per-category files, `citations.ts`) |
 | Report | `src/core/report.ts` |
 | Licence analysis | `src/core/licence/`, `src/core/metadata/licence.ts` |
 | Metadata parsers | `src/core/metadata/` |

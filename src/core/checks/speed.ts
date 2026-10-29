@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { formatLines } from '../report';
-import { makeFinding, threshold } from '../rules/registry';
+import { makeFinding, threshold } from '../rules/registryCheck';
 import type { DataRow, Dataset, Finding, ParsedDate } from '../types';
 import { SHIP_SPEED_MIN_SEPARATION_KM } from './constants';
 import { decimalsOfNumber } from './crossfile';

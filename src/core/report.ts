@@ -3,7 +3,7 @@
 import { decodeReasons, reasonsText } from './recognize/layoutReasons';
 import { applyPlurals } from './i18n/plural';
 import { formatLines } from './lines';
-import { getRule } from './rules/registry';
+import { getRule } from './rules/registryCheck';
 import type { Finding, Lang, Report, Severity } from './types';
 import { minOf } from './util/arrays';
 

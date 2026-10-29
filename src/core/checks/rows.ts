@@ -3,7 +3,7 @@
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
 import { badHeaderCodes } from '../recognize/headerCodes';
-import { makeFinding, threshold } from '../rules/registry';
+import { makeFinding, threshold } from '../rules/registryCheck';
 import { earliestUtcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
 import { minOf, pushAll } from '../util/arrays';
