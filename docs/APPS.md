@@ -116,7 +116,7 @@ order, a `?lang=` parameter on arrival (it is then removed from the address), th
 **Dropped files are never uploaded.** This was checked against every `fetch`, `XMLHttpRequest`,
 `sendBeacon`, `WebSocket` and `EventSource` in `src/`: there is no code path that posts the
 content of a dropped file anywhere. That is **not** the same as "nothing derived from them leaves
-the browser". Three things derived from your files can leave it, and the table below lists them:
+the browser". Three things can leave it, two derived from your files and one you type; the table below lists them:
 **taxon names** when you press the WoRMS lookup on `/convert` (`lookupWormsNames`); **a word you
 type** in an NVS search on `/convert` (`searchNvs`); and **the map area of the positions**, as CARTO
 tile requests, automatically after a `/check` report that has positions (`MapPreview`, `fitBounds`).
@@ -262,7 +262,7 @@ column (a column that mixes unambiguous DD/MM and MM/DD cells is `conflict` and 
 that differs in its parts is unparseable); `YY-MM-DD` (century inferred, always flagged
 `ROW-DATE-YYMMDD`); an ISO interval `start/end` (the start is the date; the end must parse and not
 precede the start); a bare 4-digit year string. An Excel serial is read as a date **only** when the
-column holds date-formatted cells (`dateFormatted` is a per-column flag of the sheet), and the 1900 or 1904 system is applied; a number in a
+most of the column's numeric cells are date-formatted (`dateFormatted` is a per-column flag of the sheet), and the 1900 or 1904 system is applied; a number in a
 text column is never guessed to be a serial. Calendar dates are validated (`2021-02-30` is
 unparseable). All arithmetic is on UTC milliseconds, so the machine's time zone cannot move a
 date. A time with no zone stays "unknown" (`ROW-TZ-UNKNOWN`), except that a date or time column whose
@@ -332,8 +332,8 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    columns in which every value is an ISO date (low confidence).
 9. **Otherwise a numeric column is a variable.** Its name is the canonical variable name when the
    header matches the vocabulary (high confidence), else the header as written (low confidence,
-   reason "numeric, name not recognised"). An identifier-shaped name is never a variable on
-   `/check`; an abundance word (`Count`, `Individuals`) is ignored when it has no unit or a plain
+   reason "numeric, name not recognised"). An identifier-shaped name is not a variable on
+   `/check` unless the header is a canonical variable name; an abundance word (`Count`, `Individuals`) is ignored when it has no unit or a plain
    count unit (`[n]`, `[ind]`) and is a variable when it carries another unit (`ind/m2`, `cells/L`,
    `%`); a canonical variable name wins over both. The converter turns abundance words back on
    (`keepAbundance`).
@@ -1560,7 +1560,7 @@ Each item below is confirmed from code, a test, or a rule text.
 - Several limits are the tool's own choice, kept as code constants rather than cited thresholds
   (listed in 3.5): the 10 km "one place" size of the ship-speed check and `ROW-STATION-SPREAD`, the
   1000 km of `ROW-STATION-SPREAD-FAR` (its technical text says so), the land-mask distances, the
-  number of terms that make a table Darwin Core. Only the rule texts that say so state it.
+  number of terms that make a table Darwin Core. Of these, only `ROW-STATION-SPREAD-FAR` says so in its rule text.
 - No page claims data is publication-ready; reports list what they do not check.
 - Server counters (rate limits, daily budgets) are in memory and per server instance.
 
