@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { stripTypeSuffix } from '../recognize/columns';
 import { normaliseUnit } from '../recognize/vocab';
 import type { ParsedFile, RawSheet } from '../types';
 import { isStageText } from './taxon';
@@ -43,7 +44,7 @@ export function isUnitText(text: string): boolean {
  * stands before or without a unit stays in the name ("Sagitta (Parasagitta) elegans", "Calanus (Calanus) finmarchicus" are subgenera, and are kept).
  */
 export function stripHeaderUnit(header: string): { name: string; unit?: string; remark?: string } {
-  let s = header.trim();
+  let s = stripTypeSuffix(header);
   let unit: string | undefined;
   let remark: string | undefined;
   // "[unit]" anywhere: a square bracket in a header is a unit (the shared unit reader treats it the same way)

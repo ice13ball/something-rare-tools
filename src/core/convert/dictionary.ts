@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { stripTypeSuffix } from '../recognize/columns';
 import { headerKey } from '../recognize/vocab';
 import type { ColumnProposal, RawSheet } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -21,7 +22,7 @@ const SHEET_NAME = /^(metadata|meta data|readme|read me|info|information|descrip
 const NAMES_A_COLUMN = /^(column|column name|columns|column names|variable|variable name|variables|parameter|parameter name|field|field name|header|name|short name|code|abbreviation|kolumna|nazwa kolumny|nazwa|zmienna|spalte|spaltenname|variable name|colonne|nom de colonne)$/;
 const EXPLAINS = /^(description|descriptions|explanation|meaning|definition|comment|comments|notes|note|long name|details|what it is|opis|objasnienie|znaczenie|definicja|komentarz|uwagi|erklarung|beschreibung|bedeutung|definition|kommentar|signification|commentaire|explication)$/;
 
-const key = (h: string): string => headerKey(h.replace(/[_.]+/g, ' '));
+const key = (h: string): string => headerKey(stripTypeSuffix(h).replace(/[_.]+/g, ' '));
 
 /** Share of the sampled filled cells (outside the column that names the described column) that are not numbers. */
 function textShare(sheet: RawSheet, decimalComma: boolean): number {

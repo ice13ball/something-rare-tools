@@ -1252,6 +1252,8 @@ instead. A sheet marked as a profile file keeps `CONV-NO-OCCURRENCES`, and a spe
 environmental one keeps its own `CONV-NO-OCCURRENCES` text. Plain physical and optical words (activity,
 fluorescence, turbidity, irradiance, transmission, attenuation, backscatter...) are measured variables,
 not taxon candidates (`measured.ts`).
+The converter reads every header without its ODV / OPeNDAP type suffix (`Activity<String>`, `"Latitude<Float32>"`) and the quotes
+around it, for kind, unit, vocabulary hints, taxon names and the text shown to the user, as `/check` does.
 
 ### 8.8 What blocks an export and why (`convert/policy.ts`, `convert/validate.ts`)
 
