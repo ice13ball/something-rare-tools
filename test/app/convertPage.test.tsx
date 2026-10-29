@@ -139,14 +139,17 @@ describe('the converter is announced in the sources', () => {
     expect(html).toContain(`<meta property="og:title" content="${UI.en['convert.docTitle']} — Abyssal Claims" />`);
     expect(html).toContain('<link rel="canonical" href="https://tools.something-rare.com/convert" />');
     expect(html).toContain('<meta property="og:url" content="https://tools.something-rare.com/convert" />');
-    expect(html).toContain('<meta property="og:image" content="https://tools.something-rare.com/og.jpg" />');
+    expect(html).toContain('<meta property="og:image" content="https://tools.something-rare.com/og-convert.jpg" />');
+    expect(html).toContain('<meta name="twitter:image" content="https://tools.something-rare.com/og-convert.jpg" />');
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />');
     expect(html).toContain('"@type": "WebApplication"');
     expect(html).toContain(UI.en['convert.intro']);
     expect(html).not.toMatch(/name="robots"|noindex|In preparation/i);
-    // the og alt is the same site-wide image alt as on the other pages
+    // /convert has its own preview image, so its own alt (the other pages share the site-wide one), the same in og and twitter
     const alt = (f: string) => /property="og:image:alt" content="([^"]*)"/.exec(readFileSync(join(root, f), 'utf8'))?.[1];
-    expect(alt('convert/index.html')).toBe(alt('collection/index.html'));
+    expect(alt('convert/index.html')).toContain('Spreadsheet to Darwin Core Archive for OBIS');
+    expect(alt('convert/index.html')).not.toBe(alt('collection/index.html'));
+    expect(html).toContain(`<meta name="twitter:image:alt" content="${alt('convert/index.html')}" />`);
     const description = /<meta name="description" content="([^"]*)"/.exec(html)?.[1] ?? '';
     expect(description.length).toBeGreaterThan(80);
     expect(description.length).toBeLessThanOrEqual(320);

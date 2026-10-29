@@ -139,6 +139,9 @@ export function createApp(opts: AppOptions): Express {
   const ogImages = [
     { path: '/og.jpg', type: 'image/jpeg', body: readOptional(dist, 'og.jpg') },
     { path: '/og.webp', type: 'image/webp', body: readOptional(dist, 'og.webp') },
+    // /convert has its own preview: the same layout and text style, its own picture and line.
+    { path: '/og-convert.jpg', type: 'image/jpeg', body: readOptional(dist, 'og-convert.jpg') },
+    { path: '/og-convert.webp', type: 'image/webp', body: readOptional(dist, 'og-convert.webp') },
   ];
   const sitemap = Buffer.from(buildSitemap(statSync(join(dist, 'index.html')).mtime));
 
