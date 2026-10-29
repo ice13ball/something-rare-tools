@@ -77,6 +77,8 @@ export interface ConvertSheetRequest {
   unconfirmedTaxa?: number[];
   /** The user's tick "read as a normal table" for a sheet that looks transposed (only the boolean true counts). */
   readAsTable?: boolean;
+  /** The user's tick "this is a list of species found (presence only, no counts)" for the sheet (only the boolean true counts). */
+  presenceOnly?: boolean;
 }
 
 export interface ConvertRequestBody {

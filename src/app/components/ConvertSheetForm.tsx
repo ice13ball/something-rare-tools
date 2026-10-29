@@ -164,6 +164,19 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             </div>
 
             <div className="convert-group">
+              <div className="choice-line">
+                <label className="inline-choice">
+                  <input type="checkbox" checked={choice.presenceOnly} onChange={(e) => onChange({ ...choice, presenceOnly: e.target.checked })} aria-describedby={`${id}-presence-help`} />
+                  <span>{t('convert.sheet.presence')}</span>
+                </label>
+              </div>
+              <p id={`${id}-presence-help`} className="muted">
+                {t('convert.sheet.presence.help')}
+              </p>
+            </div>
+
+            {!choice.presenceOnly && (
+            <div className="convert-group">
               <h4>{t('convert.quantity.title')}</h4>
               <div className="convert-fields">
                 <div className="field">
@@ -270,6 +283,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                 </p>
               )}
             </div>
+            )}
 
             <div className="convert-group">
               <div className="convert-fields">

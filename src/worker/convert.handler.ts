@@ -122,6 +122,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.profileIgnoreCast ?? []) if (!(settings.profileIgnoreCast ??= []).includes(n)) settings.profileIgnoreCast.push(n);
         for (const n of s.longAsTable ?? []) if (!(settings.longAsTable ??= []).includes(n)) settings.longAsTable.push(n);
         for (const n of s.transposedAsTable ?? []) if (!(settings.transposedAsTable ??= []).includes(n)) settings.transposedAsTable.push(n);
+        for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
         continue;
       }
       if (!isTable(parsed)) {
@@ -227,6 +228,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.nerc ? { nerc: s.nerc } : {}),
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
+      ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
@@ -243,6 +245,7 @@ export function createConvertHandler(): ConvertHandler {
     const profileIgnoreCast = [...new Set(body.sheets.filter((s) => s.profile?.ignoreCast === true).map((s) => s.sheet))];
     const longAsTable = [...new Set(body.sheets.filter((s) => files.get(s.fileId)?.choices[s.sheet]?.off === true).map((s) => s.sheet))];
     const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
+    const presenceOnly = [...new Set(body.sheets.filter((s) => s.presenceOnly === true).map((s) => s.sheet))];
     return {
       fullList: body.options.fullList === true,
       prefixStation: body.options.prefixStation === true,
@@ -253,6 +256,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(profileIgnoreCast.length > 0 ? { profileIgnoreCast } : {}),
       ...(longAsTable.length > 0 ? { longAsTable } : {}),
       ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
+      ...(presenceOnly.length > 0 ? { presenceOnly } : {}),
     };
   };
 

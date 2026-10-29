@@ -1278,9 +1278,22 @@ For each taxon cell (`convert/build.ts`):
 - otherwise status **present**, with the quantity as declared in 8.3.
 
 The same taxon twice in one event is warned (`CONV-TAXON-SAME-EVENT`). **Presence-only species
-lists** (a taxon column and no quantity column) are **not written yet**: one blocking finding says
-so (`CONV-SPECIES-LIST-NO-COUNTS`, or `CONV-TAXON-NO-QUANTITY` when there are other numeric
-columns) instead of three contradicting ones. A sheet with **measured variables and no taxon column, no
+lists** (a taxon column and no quantity column) block with one finding instead of three
+contradicting ones (`CONV-SPECIES-LIST-NO-COUNTS`, or `CONV-TAXON-NO-QUANTITY` when there are other
+numeric columns), and the first of them **offers the way out**: the per-sheet tick **This is a list of
+species found (presence only, no counts)** (`presenceOnly`, off by default, never set by the tool,
+kept in the companion file as `presenceOnly=<sheet>`). OBIS requires `occurrenceStatus` and does not
+require a quantity ([OBIS Manual, "How to format Occurrence tables"](https://manual.obis.org/format_occurrence.html)),
+so a ticked sheet writes occurrences with status **present** and no `organismQuantity`,
+`organismQuantityType` or measurement, and asks for no quantity declaration. A **long** sheet writes
+one occurrence per taxon row. In a **wide** sheet a cell is a mark (`presence.ts`): `x X + * ✓ ✔ ☑`,
+`1`, `yes y tak ja oui present obecny vorhanden présent` mean present; an empty cell or NA writes
+nothing; `0 - – — absent nieobecny abwesend no nie nein non` mean absent **only with the
+full-species-list tick** (otherwise nothing is written, counted as zeros); any other value (a number
+above 1, a negative number, other text) is **not guessed**: `CONV-PRESENCE-VALUE` blocks, naming the
+column, the values and the rows. The proposer takes a column of `+ x * ✓` marks for a species
+column; a column of words (`yes`, `tak`) is given the species role in the role table. Unticked,
+nothing changes (a text cell stays a present record with a warning, `CONV-TEXT-IN-TAXON-CELL`). A sheet with **measured variables and no taxon column, no
 quantity column and no unconfirmed taxon candidate** (typically environmental data only) gets one
 blocking finding too, `CONV-ENV-ONLY-SHEET`, with a link to `/check`, in place of
 `CONV-NO-TAXON`, `CONV-QUANTITY-UNDECLARED` and `CONV-NO-OCCURRENCES`. Its text covers the other possibility
@@ -1595,7 +1608,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-29**. The total, **165 rules**, equals the number of rule rows in
+**2026-10-29**. The total, **166 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1609,8 +1622,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 70 | 35 / 24 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **165** | | | |
+| `CONV-` | `B` | 71 | 36 / 24 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **166** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1667,7 +1680,6 @@ Each item below is confirmed from code, a test, or a rule text.
 
 **`/convert`**
 
-- Presence-only species lists (taxon column, no quantity column) are not written.
 - A statistics line is told from a station by its date and position and by where it stands (the
   foot of the sheet); a station called `Max` or `N` with neither a date nor a position, as the last
   row of a sheet, is skipped (and said, so it can be renamed).

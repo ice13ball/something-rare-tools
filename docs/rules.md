@@ -140,7 +140,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-EFFORT-INVALID | error | B | — | —<a id="CONV-EFFORT-INVALID"></a> |
 | CONV-EFFORT-VALUE-INVALID | error | B | — | —<a id="CONV-EFFORT-VALUE-INVALID"></a> |
 | CONV-NO-TAXON | error | B | — | —<a id="CONV-NO-TAXON"></a> |
-| CONV-SPECIES-LIST-NO-COUNTS | error | B | — | —<a id="CONV-SPECIES-LIST-NO-COUNTS"></a> |
+| CONV-SPECIES-LIST-NO-COUNTS | error | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not](https://manual.obis.org/format_occurrence.html), "These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"<a id="CONV-SPECIES-LIST-NO-COUNTS"></a> |
+| CONV-PRESENCE-VALUE | error | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not](https://manual.obis.org/format_occurrence.html), "These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"<a id="CONV-PRESENCE-VALUE"></a> |
 | CONV-TAXON-NO-QUANTITY | error | B | — | —<a id="CONV-TAXON-NO-QUANTITY"></a> |
 | CONV-ENV-ONLY-SHEET | error | B | — | —<a id="CONV-ENV-ONLY-SHEET"></a> |
 | CONV-SUMMARY-ROW-SKIPPED | info | B | — | —<a id="CONV-SUMMARY-ROW-SKIPPED"></a> |
