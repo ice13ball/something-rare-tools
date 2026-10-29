@@ -86,7 +86,7 @@ function proposalAllowsPivot(proposals: readonly ColumnProposal[], own: Readonly
     if (r.kind === 'quantity' || r.kind === 'quantityType' || r.kind === 'occurrenceId' || r.kind === 'taxonId') return false;
     if (r.kind === 'taxon' && (r.header !== true || p.confidence !== 'low')) return false;
     // a numeric column the overlay names a measured variable ("Ntot [%]") was a taxon CANDIDATE before it was told apart: it does not make the sheet a biology sheet either
-    if (r.kind === 'variable' && p.reasonCode !== 'measured-name') return false;
+    if (r.kind === 'variable' && p.reasonCode !== 'measured-name' && p.reasonCode !== 'measured-word') return false;
   }
   return true;
 }

@@ -1259,7 +1259,9 @@ upload that is not a profile file has a taxon column, the text says to mark this
 instead. A sheet marked as a profile file keeps `CONV-NO-OCCURRENCES`, and a species sheet next to an
 environmental one keeps its own `CONV-NO-OCCURRENCES` text. Plain physical and optical words (activity,
 fluorescence, turbidity, irradiance, transmission, attenuation, backscatter...) are measured variables,
-not taxon candidates (`measured.ts`).
+not taxon candidates (`measured.ts`), and the column reason says so with its own text (`measured-word`:
+"a physical or optical measurement word (e.g. temperature, fluorescence, turbidity)") instead of the
+nutrient / pigment / isotope ratio / rate one (`measured-name`), which stays for those names.
 The converter reads every header without its ODV / OPeNDAP type suffix (`Activity<String>`, `"Latitude<Float32>"`) and the quotes
 around it, for kind, unit, vocabulary hints, taxon names and the text shown to the user, as `/check` does.
 

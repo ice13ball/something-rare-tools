@@ -5,7 +5,7 @@ import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
 import { isPercentUnit, verifiedConcept } from './nerc';
-import { nameKind } from './measured';
+import { isMeasurementWord, nameKind } from './measured';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -196,6 +196,7 @@ export const OVERLAY_REASONS = {
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
   'measured-name': 'the name is a measured variable (a nutrient, a pigment, an isotope ratio, a rate), not a species: it stays a variable, and nothing is written for it as a taxon',
+  'measured-word': 'the name is a physical or optical measurement word (e.g. temperature, fluorescence, turbidity), not a species: it stays a variable, and nothing is written for it as a taxon',
   'sample-descriptor': 'the name describes the sample (replicate, cast, bottle, haul, core, ...), not a measurement and not a species: ignored (give it a meaning if it is one)',
   'unnamed-column': 'column without a name in the header: give it a meaning',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
@@ -610,7 +611,9 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         // (a unit that no sheet of organisms writes (an amount of substance, a rate per time), or, for a name that is no taxon shape at all, any unit that does not count organisms, also makes it a
         // variable: "DNRAw (µmol m-2h-1)", "Dw (µmol m-2h-1)")
         p.confidence = 'low';
-        why(p, 'measured-name');
+        // a plain CTD / optical word gets its own reason: the nutrient, pigment, isotope and rate examples of the other one would be wrong for it
+        if (kind === 'variable' && isMeasurementWord(p.header)) why(p, 'measured-word');
+        else why(p, 'measured-name');
       } else {
         p.role = { kind: 'taxon', header: true };
         p.confidence = 'low';
