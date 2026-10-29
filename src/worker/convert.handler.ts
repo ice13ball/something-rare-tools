@@ -10,6 +10,7 @@ import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, list
 import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../core/convert';
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
+import { transposedSheetReason } from '../core/convert/transposed';
 import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
@@ -120,6 +121,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.profileDepthIds ?? []) if (!(settings.profileDepthIds ??= []).includes(n)) settings.profileDepthIds.push(n);
         for (const n of s.profileIgnoreCast ?? []) if (!(settings.profileIgnoreCast ??= []).includes(n)) settings.profileIgnoreCast.push(n);
         for (const n of s.longAsTable ?? []) if (!(settings.longAsTable ??= []).includes(n)) settings.longAsTable.push(n);
+        for (const n of s.transposedAsTable ?? []) if (!(settings.transposedAsTable ??= []).includes(n)) settings.transposedAsTable.push(n);
         continue;
       }
       if (!isTable(parsed)) {
@@ -159,6 +161,7 @@ export function createConvertHandler(): ConvertHandler {
       const profiles: ConvertFileSummary['suggestedProfiles'] = Object.create(null) as ConvertFileSummary['suggestedProfiles'];
       const dictionary: Record<string, 'name' | 'columns'> = Object.create(null) as Record<string, 'name' | 'columns'>;
       const pivots: Record<string, PivotNote> = Object.create(null) as Record<string, PivotNote>;
+      const transposed: Record<string, 'transposed' | 'transposed-taxa'> = Object.create(null) as Record<string, 'transposed' | 'transposed-taxa'>;
       // the long sheets the user chose to read as normal tables: listed, so that the page can offer the way back
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
       for (const sheet of parsed.sheets) {
@@ -174,6 +177,9 @@ export function createConvertHandler(): ConvertHandler {
         profiles[sheet.name] = suggestConvertProfile(p);
         const dict = dictionaryReason(sheet, p, parsed.decimalComma);
         if (dict !== undefined) dictionary[sheet.name] = dict;
+        // a data dictionary is not tested (its rows are words); a pivoted sheet is skipped inside the test
+        const turned = dict === undefined ? transposedSheetReason(sheet, parsed) : undefined;
+        if (turned === 'transposed' || turned === 'transposed-taxa') transposed[sheet.name] = turned;
       }
       return {
         fileId,
@@ -190,6 +196,7 @@ export function createConvertHandler(): ConvertHandler {
         ...(Object.keys(dictionary).length > 0 ? { dictionarySheets: dictionary } : {}),
         ...(Object.keys(pivots).length > 0 ? { pivots } : {}),
         ...(pivotOff.length > 0 ? { pivotOff } : {}),
+        ...(Object.keys(transposed).length > 0 ? { transposedSheets: transposed } : {}),
       };
     }
   }
@@ -219,6 +226,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
+      ...(s.readAsTable === true ? { readAsTable: true } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
@@ -234,6 +242,7 @@ export function createConvertHandler(): ConvertHandler {
     const profileDepthIds = [...new Set(body.sheets.filter((s) => s.profile?.depthIds === true).map((s) => s.sheet))];
     const profileIgnoreCast = [...new Set(body.sheets.filter((s) => s.profile?.ignoreCast === true).map((s) => s.sheet))];
     const longAsTable = [...new Set(body.sheets.filter((s) => files.get(s.fileId)?.choices[s.sheet]?.off === true).map((s) => s.sheet))];
+    const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
     return {
       fullList: body.options.fullList === true,
       prefixStation: body.options.prefixStation === true,
@@ -243,6 +252,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(profileDepthIds.length > 0 ? { profileDepthIds } : {}),
       ...(profileIgnoreCast.length > 0 ? { profileIgnoreCast } : {}),
       ...(longAsTable.length > 0 ? { longAsTable } : {}),
+      ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
     };
   };
 

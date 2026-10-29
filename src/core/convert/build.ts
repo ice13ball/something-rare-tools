@@ -13,6 +13,7 @@ import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
+import { transposedSheetReason } from './transposed';
 import { SUMMARY_LABEL, scanStatisticRows, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
@@ -70,6 +71,8 @@ export interface ConvertSheetInput {
   profile?: ProfileDeclaration;
   /** Columns whose proposed taxon-header role the page replaced by "ignore" because the candidate is not confirmed; such a column is still the proposal, not a decision of the user (CONV-LONG-UNSUPPORTED). */
   unconfirmedTaxa?: readonly number[];
+  /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
+  readAsTable?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -989,7 +992,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     sheets: rawInput.sheets.filter((sin) => {
       const header = sin.file.sheets.find((x) => x.name === sin.sheet)?.header;
       const long = header === undefined ? undefined : longEnvironmentalHeaders(sin, header);
-      if (long === undefined) return true;
+      if (long === undefined) {
+        // a table that looks turned (species or variables in rows) is not read as it stands unless the user says so; not a profile sheet, not a pivot (transposedSheetReason)
+        const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
+        const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file);
+        if (turned === undefined) return true;
+        longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
+        return false;
+      }
       longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count, ...(long.reason.reason === 'too-many' ? { max: MAX_PAIRS } : {}) }) } }));
       return false;
     }),

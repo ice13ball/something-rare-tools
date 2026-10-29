@@ -22,6 +22,8 @@ import type { ParsedFile } from '../types';
  *   profileIgnoreCast=<sheet>  (stage 7) the user ticked "match stations ignoring a trailing cast number" for that sheet. A PRE-TICK only, on a sheet marked as a profile.
  *   longAsTable=<sheet>  the sheet of that name has one row per measurement (a parameter and a value column) and the user chose to read it as a normal table instead of one row per sample
  *                     (core/convert/pivot.ts). A PRE-TICK only: it makes the sheet of that name in this drop be read that way, and the user can undo it on the page. A sheet name, never a value.
+ *  *   transposedAsTable=<sheet>  the sheet of that name looked transposed (species or variables in rows; core/convert/transposed.ts) and the user chose to read it as a normal table. A PRE-TICK only,
+ *                     undone on the page. A sheet name, never a value.
  * An unknown name or value is ignored.
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
@@ -32,6 +34,7 @@ export const PROFILE_SETTING = 'profile=';
 export const PROFILE_DEPTH_IDS_SETTING = 'profileDepthIds=';
 export const PROFILE_IGNORE_CAST_SETTING = 'profileIgnoreCast=';
 export const LONG_AS_TABLE_SETTING = 'longAsTable=';
+export const TRANSPOSED_AS_TABLE_SETTING = 'transposedAsTable=';
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
 export const MAX_SETTING_SHEETS = 100;
 export const MAX_SETTING_NAME = 255;
@@ -51,6 +54,8 @@ export interface ConvertSettings {
   profileIgnoreCast?: string[];
   /** The long environmental sheets the user chose to read as normal tables, by sheet name. Only present when there is at least one. A pre-tick only. */
   longAsTable?: string[];
+  /** The sheets that looked transposed and that the user chose to read as normal tables, by sheet name. Only present when there is at least one. A pre-tick only. */
+  transposedAsTable?: string[];
 }
 
 const addName = (list: string[], name: string): void => {
@@ -72,6 +77,7 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v.startsWith(PROFILE_DEPTH_IDS_SETTING)) addName((settings.profileDepthIds ??= []), v.slice(PROFILE_DEPTH_IDS_SETTING.length));
     else if (v.startsWith(PROFILE_IGNORE_CAST_SETTING)) addName((settings.profileIgnoreCast ??= []), v.slice(PROFILE_IGNORE_CAST_SETTING.length));
     else if (v.startsWith(LONG_AS_TABLE_SETTING)) addName((settings.longAsTable ??= []), v.slice(LONG_AS_TABLE_SETTING.length));
+    else if (v.startsWith(TRANSPOSED_AS_TABLE_SETTING)) addName((settings.transposedAsTable ??= []), v.slice(TRANSPOSED_AS_TABLE_SETTING.length));
   }
   return settings;
 }
@@ -90,6 +96,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.profileDepthIds ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PROFILE_DEPTH_IDS_SETTING}${n}`, '', '', ''])),
       ...(settings.profileIgnoreCast ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PROFILE_IGNORE_CAST_SETTING}${n}`, '', '', ''])),
       ...(settings.longAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${LONG_AS_TABLE_SETTING}${n}`, '', '', ''])),
+      ...(settings.transposedAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TRANSPOSED_AS_TABLE_SETTING}${n}`, '', '', ''])),
     ].join('\n') + '\n'
   );
 }

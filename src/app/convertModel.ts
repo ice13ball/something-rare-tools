@@ -48,6 +48,8 @@ export interface SheetChoice {
   profileIgnoreCast: boolean;
   /** The user's tick "each distinct position is a station", for a profile sheet with no station column. Never automatic; starts unticked on every upload and is not kept in the companion file. */
   profilePosition: boolean;
+  /** The user's tick "read as a normal table" for a sheet that looks transposed (species or variables in rows). Never automatic; a companion file can pre-tick it. */
+  readAsTable: boolean;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -239,7 +241,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
@@ -255,10 +257,11 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   const marked = new Set(parsed.settings.profileSheets ?? []);
   const approved = new Set(parsed.settings.profileDepthIds ?? []);
   const castTicked = new Set(parsed.settings.profileIgnoreCast ?? []);
+  const asTable = new Set(parsed.settings.transposedAsTable ?? []);
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name) };
     }
   }
   return out;
@@ -279,6 +282,13 @@ export function profileSettingsOf(parsed: ConvertParseResult, choices: Record<st
     }
   }
   return { profileSheets, profileDepthIds, profileIgnoreCast };
+}
+
+/** The names of the sheets in use that look transposed and that the user chose to read as normal tables: what the companion file keeps (nothing but names). */
+export function transposedSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): string[] {
+  const out: string[] = [];
+  for (const f of parsed.files) for (const sh of f.sheets) if (f.transposedSheets?.[sh.name] !== undefined && choices[sheetKey(f.fileId, sh.name)]?.use === true && choices[sheetKey(f.fileId, sh.name)]?.readAsTable === true && !out.includes(sh.name)) out.push(sh.name);
+  return out;
 }
 
 /** A finding in words: the converter's own rules from their registry, the data-check rules (a date that cannot be read) from theirs. */

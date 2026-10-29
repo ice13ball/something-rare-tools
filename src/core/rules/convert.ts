@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { reasonsText } from '../recognize/layoutReasons';
 import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals } from '../i18n/plural';
 import { MAX_PAIRS } from '../convert/pivotLimits';
@@ -36,6 +37,7 @@ import type { RuleSpec } from './spec';
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
  *   CONV-LONG-UNSUPPORTED      parameterColumn, valueColumn, reason, count, max   a sheet in the long environmental layout (a parameter column and a value column, no taxon and no quantity column) that the converter does not read; sheet = the sheet; reason = one-parameter | too-many (absent: the sheet was not read as a long one for another reason), count = the distinct parameters / the (parameter, unit) pairs
+ *   CONV-SHEET-TRANSPOSED      reason           reason = a layoutReasons code (transposed | transposed-taxa): a sheet with the table turned (variables or species in rows), not read; blocks until it is turned or ticked "read as a normal table"
  *   CONV-LONG-READ             parameterColumn, valueColumn, rows, samples, columns   info: a long environmental sheet was read as one row per sample (core/convert/pivot.ts); rows = rows read, samples = rows made, columns = parameter columns made
  *   CONV-LONG-FLAG-COLUMNS     count, columns   info: quality-flag columns of a long sheet left out
  *   CONV-LONG-FLAG-PARAMETERS  count, names, rows   info: parameters of a long sheet that are quality flags, their rows left out
@@ -356,6 +358,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La feuille « {sheet} » est en format long : une ligne par paramètre (« {parameterColumn} », « {valueColumn} »), que le convertisseur ne lit pas. Une colonne par paramètre, l'unité dans l'en-tête (« Temp [°C] »), une ligne par échantillon, puis rechargez. Pour des espèces, marquez ci-dessus la colonne du taxon et celle du nombre.`,
     },
     technical: `{file}, {sheet}: a header names a parameter column ("{parameterColumn}") and a value column ("{valueColumn}") and the sheet has no taxon and no quantity column: one row per measured parameter. The converter writes nothing from this sheet; the export is blocked until it is reshaped to one column per parameter (unit in the header) or left out. reason: {reason} (one-parameter: fewer than two distinct parameters; too-many: more than {max} (parameter, unit) pairs; count: {count} distinct parameters or pairs; otherwise the sheet was not read as a long one for another reason).`,
+  },
+  {
+    id: 'CONV-SHEET-TRANSPOSED',
+    category: 'B',
+    severity: 'error',
+    params: ['reason'],
+    plain: {
+      pl: `Arkusz „{sheet}” nie został wczytany: {reason}. Wiersz 1 byłby czytany jako nagłówek. Obróć tabelę w arkuszu kalkulacyjnym (próbki w wierszach, gatunki lub zmienne w kolumnach) i wczytaj ją ponownie albo zaznacz przy tym arkuszu „Czytaj jako zwykłą tabelę”.`,
+      en: `Sheet "{sheet}" was not read: {reason}. Row 1 would be read as the header. Transpose the table in your spreadsheet (samples in rows, species or variables in columns) and load it again, or tick "Read as a normal table" for this sheet.`,
+      de: `Das Blatt „{sheet}“ wurde nicht gelesen: {reason}. Zeile 1 würde als Kopfzeile gelesen. Transponieren Sie die Tabelle in Ihrer Tabellenkalkulation (Proben in Zeilen, Arten oder Variablen in Spalten) und laden Sie sie neu, oder wählen Sie bei diesem Blatt „Als normale Tabelle lesen“.`,
+      fr: `La feuille « {sheet} » n'a pas été lue : {reason}. La ligne 1 serait lue comme en-tête. Transposez le tableau dans votre tableur (échantillons en lignes, espèces ou variables en colonnes) et rechargez-le, ou cochez « Lire comme un tableau normal » pour cette feuille.`,
+    },
+    technical: `{file}, {sheet}: {reason}. /check reports the same reading of variables in rows (IN-LAYOUT-UNSUPPORTED) and cannot read it; the converter also detects species in rows (first column Latin names, headers that are sample codes, numbers or presence marks in the cells; a normal wide sheet with species as headers is never flagged). The sheet is not converted and the export is blocked until the table is turned in the spreadsheet or the user ticks "Read as a normal table" for the sheet (a pre-tick from the companion file: transposedAsTable=<sheet>). A sheet that is a pivot of a long sheet, a profile sheet and a sheet read as it stands are not tested.`,
   },
   {
     id: 'CONV-LONG-READ',
@@ -1290,6 +1305,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-EML-MISSING' && typeof f.params.fields === 'string') {
     f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
   }
+  if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, lang) } };
   if (f.ruleId === 'CONV-NERC-UNKNOWN' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: shortList(quantityWhat(f.params.what, lang)) } };
   if (f.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: LEVEL_WHAT_WORDS[f.params.what]?.[lang] ?? f.params.what } };
   if (f.ruleId === 'CONV-EMOF-ORPHAN' && typeof f.params.kind === 'string') f = { ...f, params: { ...f.params, kind: KIND_WORDS[f.params.kind]?.[lang] ?? f.params.kind } };
@@ -1304,8 +1320,12 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   return fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
 }
 
+/** The reason code of CONV-SHEET-TRANSPOSED in words (the texts of recognize/layoutReasons.ts, shared with /check). */
+const transposedWords = (code: unknown, lang: Lang): string => reasonsText([{ code: code === 'transposed' ? 'transposed' : 'transposed-taxa' }], lang);
+
 /** The English technical detail line. */
 export function renderConvertTechnical(f: Finding): string {
   f = withDefaults(f);
+  if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, 'en') } };
   return fill(profileVariant(f)?.technical ?? getConvertRule(f.ruleId).technical, f);
 }

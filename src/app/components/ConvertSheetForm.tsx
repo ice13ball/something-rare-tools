@@ -20,6 +20,8 @@ export interface ConvertSheetFormProps {
   suggestedProfile: boolean;
   /** the sheet looks like a data dictionary (a glossary of columns): it started unticked, and the note says why */
   dictionary?: boolean;
+  /** the sheet looks transposed (species or variables in rows): the blocking message is in the list below, the tick "read as a normal table" is here */
+  transposed?: boolean;
   /** a column of this sheet is mapped as the sample code (a profile sheet's own level code) */
   hasCodeColumn: boolean;
   /** a column of this sheet is mapped as a pressure */
@@ -36,7 +38,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -58,6 +60,14 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
         <p className="muted" role="note">
           {t('convert.sheet.dictionary')}
         </p>
+      )}
+      {transposed === true && choice.use && (
+        <div className="choice-line">
+          <label className="inline-choice">
+            <input type="checkbox" checked={choice.readAsTable} onChange={(e) => onChange({ ...choice, readAsTable: e.target.checked })} />
+            <span>{t('convert.sheet.asTable')}</span>
+          </label>
+        </div>
       )}
       {choice.use && (
         <>
