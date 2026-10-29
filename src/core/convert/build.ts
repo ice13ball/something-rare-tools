@@ -685,12 +685,18 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // a sheet with no station column and the user's tick: each distinct position is a station, its text `<latitude>_<longitude>` as the two numbers are written in the sheet
   const positionStation = specs.station === undefined && sin.profile?.positionStation === true;
   const positionStations = new Set<string>();
+  // One coordinate of the position-station text: the written digits WITH the sign the reader gave the value (a hemisphere column makes an unsigned 70.1 into -70.1,
+  // and the south and the north of one position must not become the same station)
+  const positionPart = (raw: RawCell | undefined, value: number): string => {
+    const text = sourceNumberText(raw, dc, value) ?? (value < 0 ? (() => { const plain = sourceNumberText(raw, dc, -value); return plain === undefined ? undefined : `-${plain}`; })() : undefined);
+    if (text !== undefined) return text;
+    const written = String(raw ?? '').trim();
+    return value < 0 && !/^[-−–]|[SW]/i.test(written) ? `-${written}` : written;
+  };
   const stationOf = (row: RawRow, m: ReturnType<typeof parse>): string | undefined => {
     if (m.station !== undefined || !positionStation) return m.station;
     if (m.lat === undefined || m.lon === undefined || specs.lat === undefined || specs.lon === undefined) return undefined;
-    const lat = sourceNumberText(row.cells[specs.lat.index], dc, m.lat) ?? String(row.cells[specs.lat.index] ?? '').trim();
-    const lon = sourceNumberText(row.cells[specs.lon.index], dc, m.lon) ?? String(row.cells[specs.lon.index] ?? '').trim();
-    return `${lat}_${lon}`;
+    return `${positionPart(row.cells[specs.lat.index], m.lat)}_${positionPart(row.cells[specs.lon.index], m.lon)}`;
   };
   // the dates of each station's rows, read BEFORE the rows are given their IDs: a station that was visited on more than one date puts the date into the IDs that are made of the depth
   // (the same depth of two visits is not one level). The value comes from the data, never from the order of the rows.

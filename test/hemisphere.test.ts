@@ -4,6 +4,10 @@
 // Every value and column name below is invented.
 import { describe, expect, it } from 'vitest';
 import { buildDataset } from '../src/core/dataset';
+import { convert } from '../src/core/convert/build';
+import { proposeConvertColumns } from '../src/core/convert/recognize';
+import { readConvertFile } from '../src/core/convert/read';
+import { parseFile } from '../src/core/parse';
 import { proposeColumns } from '../src/core/recognize/columns';
 import { proposeLayout, proposeMappings } from '../src/core/recognize/layout';
 import type { ColumnProposal, Finding } from '../src/core/types';
@@ -105,9 +109,9 @@ describe('/check: proposals', () => {
     expect(ps[0].reasonCode).toBe('hemisphere');
   });
   it('a coordinate that carries its own signs is not paired (the letters would only contradict it)', () => {
-    const ps = proposeColumns(rawSheet(['Latitude', 'Lat NS', 'Longitude'], [[-32.7, 'S', 117.3], [33.5, 'N', 18.25]]), CTX);
+    const ps = proposeColumns(rawSheet(['Latitude', 'Lat NS', 'Longitude'], [[-32.7, 'S', 117.3], [-33.5, 'S', 18.25], [40, 'N', 1.5]]), CTX);
     expect(ps[1].role).toEqual({ kind: 'ignore' });
-    expect(ps[1].reasonCode).toBe('hemisphere');
+    expect(ps[1].reasonCode).toBe('hemisphere-signed');
   });
   it('a header that read as a coordinate with numeric values stays a coordinate', () => {
     const ps = proposeColumns(rawSheet(['Latitude N/S', 'Longitude'], [[32.7, 117.3], [33.5, 18.25]]), CTX);
@@ -142,8 +146,8 @@ describe('/check: applying the pairing', () => {
     expect(f[0]).toMatchObject({ field: 'Latitude', lines: [2, 4], severity: 'warning', params: { hemisphere: 'Lat Dir' } });
   });
   it('a filled value with an empty or unknown letter is one missing finding; the value stays as written', () => {
-    const { dataset, findings } = check(['Latitude,Lat Dir,Longitude,Lon Dir', '32.7,,117.3,E', '33.5,x,18.25,E', '1.5,N,7.0,E'].join('\n'));
-    expect(dataset.rows.map((r) => r.lat)).toEqual([32.7, 33.5, 1.5]);
+    const { dataset, findings } = check(['Latitude,Lat Dir,Longitude,Lon Dir', '32.7,,117.3,E', '33.5,x,18.25,E', '1.5,N,7.0,E', '2.5,S,8.0,E', '3.5,N,9.0,E'].join('\n'));
+    expect(dataset.rows.map((r) => r.lat)).toEqual([32.7, 33.5, 1.5, -2.5, 3.5]);
     const f = rule(findings, 'ROW-HEMISPHERE-MISSING');
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ field: 'Latitude', lines: [2, 3], severity: 'warning' });
@@ -200,5 +204,78 @@ describe('/convert: the two findings are accepted by the user, not blocking', ()
     const j = judge(out.findings);
     expect(j.acceptRules).toEqual(expect.arrayContaining(['ROW-HEMISPHERE-CONFLICT', 'ROW-HEMISPHERE-MISSING']));
     expect(j.blocking.filter((f) => f.ruleId.startsWith('ROW-HEMISPHERE'))).toEqual([]);
+  });
+});
+
+describe('review round 1: the guard, own letters, position-station, stale pairing, one letter column, recognised letters', () => {
+  const ps = (header: string[], rows: (string | number | null)[][]) => proposeColumns(rawSheet(header, rows), CTX);
+
+  it('placeholders for a missing value and one odd negative do not switch the pairing off; the per-cell finding reports the odd one', () => {
+    const rows: (string | number | null)[][] = [[32.7, 'S'], ['-33', 'S'], [40, 'S'], ['NA', 'S'], ['n.d.', 'S'], ['unknown', 'S'], ['-', 'S'], [null, 'S']];
+    expect(ps(['Latitude', 'Lat Dir'], rows)[1].role).toEqual({ kind: 'hemisphere', axis: 'latitude' });
+    const { dataset, findings } = check(['Latitude,Lat Dir,Longitude', '32.7,S,1.5', '-33,S,1.5', '40,S,1.5', 'NA,S,1.5'].join('\n'));
+    expect(dataset.rows.map((r) => r.lat)).toEqual([-32.7, -33, -40, undefined]);
+    expect(rule(findings, 'ROW-HEMISPHERE-CONFLICT')[0]).toMatchObject({ field: 'Latitude', lines: [3] });
+  });
+  it('a column that really carries signs or letters (most filled values) is not paired, and the reason says so', () => {
+    const signed = ps(['Latitude', 'Lat Dir'], [[-32.7, 'S'], [-33, 'S'], [40, 'N'], ['NA', 'N']]);
+    expect(signed[1].role).toEqual({ kind: 'ignore' });
+    expect(signed[1].reasonCode).toBe('hemisphere-signed');
+    expect(signed[1].reason).toBe('Latitude already carries signs or letters: the letter column is not applied');
+    const lettered = ps(['Latitude', 'Lat Dir'], [["32° 45' N", 'N'], ["33° 10' S", 'S'], [40, 'N']]);
+    expect(lettered[1].reasonCode).toBe('hemisphere-signed');
+  });
+  it('a degrees-minutes cell with its own letter keeps its value: an agreeing letter changes nothing, a disagreeing one is a conflict', () => {
+    expect(parseCoordinate(pairHemisphere("32°45'N", 'N', 'lat').cell, 'lat', false)).toMatchObject({ value: 32.75 });
+    expect(pairHemisphere("32°45'N", 'N', 'lat')).toEqual({ cell: "32°45'N" });
+    expect(parseCoordinate(pairHemisphere("32° 45' S", 'S', 'lat').cell, 'lat', false)).toMatchObject({ value: -32.75 });
+    expect(pairHemisphere("32° 45' S", 'N', 'lat')).toEqual({ cell: "32° 45' S", issue: 'conflict' });
+    expect(pairHemisphere('12°3\'4"S', 'S', 'lat')).toEqual({ cell: '12°3\'4"S' });
+    expect(pairHemisphere('12°3\'4"S', 'N', 'lat').issue).toBe('conflict');
+    expect(pairHemisphere('S 12° 3\' 4"', 'N', 'lat').issue).toBe('conflict');
+    const { dataset, findings } = checkForced(['Latitude,Lat Dir,Longitude', "32°45'N,N,1.5", "32° 45' S,S,1.5", "32° 45' S,N,1.5"].join('\n'), { 'Lat Dir': 'latitude' });
+    expect(dataset.rows.map((r) => r.lat)).toEqual([32.75, -32.75, -32.75]);
+    expect(rule(findings, 'ROW-NON-NUMERIC')).toEqual([]);
+    expect(rule(findings, 'ROW-HEMISPHERE-CONFLICT')[0]).toMatchObject({ lines: [4] });
+  });
+  it('the converter position-station is built from the signed values: north and south of one position are two stations', () => {
+    const text = 'Date,Latitude,Lat Dir,Longitude,Lon Dir,Depth_m,TEMP_C\n2020-05-01,70.1,N,20.2,E,5,4.1\n2020-05-01,70.1,S,20.2,E,5,3.9\n2020-05-01,70.1,S,20.2,W,5,3.5\n';
+    const file = readConvertFile(parseFile('ps.csv', new TextEncoder().encode(text)));
+    const columns = proposeConvertColumns(file.sheets[0], CTX).map((p) => ({
+      index: p.index,
+      header: p.header,
+      role: p.header === 'Lat Dir' ? ({ kind: 'hemisphere', axis: 'latitude' } as const) : p.header === 'Lon Dir' ? ({ kind: 'hemisphere', axis: 'longitude' } as const) : p.role,
+    }));
+    const r = convert({ sheets: [{ file, sheet: file.sheets[0].name, mapping: { sheet: file.sheets[0].name, columns }, shape: 'wide', profile: { depthIds: true, positionStation: true } }] });
+    expect(r.events.filter((e) => e.eventType === 'station').map((e) => e.id)).toEqual(['70.1_20.2', '-70.1_20.2', '-70.1_-20.2']);
+    expect(r.findings.filter((f) => f.ruleId === 'CONV-ID-DUPLICATE')).toEqual([]);
+  });
+  it('a remapped coordinate leaves no stale pairing: Beg Lat Dir does not sign End Latitude, and one finding names it', () => {
+    const csv = ['Begin Latitude,Beg Lat Dir,End Latitude,Longitude', '32.7,S,33.7,1.5', '10.5,N,11.5,1.5'].join('\n');
+    const file = textFile('sio.csv', csv);
+    const layout = proposeLayout(file);
+    const mappings = proposeMappings(file, layout);
+    expect(mappings[0].columns.find((c) => c.header === 'Beg Lat Dir')!.role).toEqual({ kind: 'hemisphere', axis: 'latitude' });
+    mappings[0].columns = mappings[0].columns.map((c) => (c.header === 'Begin Latitude' ? { ...c, role: { kind: 'ignore' as const } } : c.header === 'End Latitude' ? { ...c, role: { kind: 'latitude' as const } } : c));
+    const { dataset, findings } = buildDataset(file, layout, mappings, [], 'd');
+    expect(dataset.rows.map((r) => r.lat)).toEqual([33.7, 11.5]);
+    const f = rule(findings, 'ROW-HEMISPHERE-UNPAIRED');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ field: 'End Latitude', severity: 'warning', params: { hemisphere: 'Beg Lat Dir' } });
+    // and an agreeing pair raises nothing
+    expect(rule(check(CSV).findings, 'ROW-HEMISPHERE-UNPAIRED')).toEqual([]);
+  });
+  it('at most one letter column per mapped coordinate; the other is ambiguous', () => {
+    const p = ps(['Latitude', 'Lat Dir', 'Lat NS'], [[32.7, 'S', 'S'], [33.5, 'N', 'N']]);
+    expect(p[1].role).toEqual({ kind: 'hemisphere', axis: 'latitude' });
+    expect(p[2].role).toEqual({ kind: 'ignore' });
+    expect(p[2].reasonCode).toBe('hemisphere-ambiguous');
+  });
+  it('no proposal unless most filled values are recognised letters or words (Süd, Ost are not)', () => {
+    const de = ps(['Latitude', 'Lat Dir'], [[32.7, 'Süd'], [33.5, 'Nord']]);
+    expect(de[1].role).toEqual({ kind: 'ignore' });
+    expect(de[1].reasonCode).toBe('hemisphere');
+    const words = ps(['Latitude', 'Lat Dir'], [[32.7, 'South'], [33.5, 'north'], [34, null]]);
+    expect(words[1].role).toEqual({ kind: 'hemisphere', axis: 'latitude' });
   });
 });

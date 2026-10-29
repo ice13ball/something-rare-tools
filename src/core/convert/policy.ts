@@ -74,6 +74,7 @@ export const ACCEPT_RULES: readonly string[] = [
   // a coordinate and its hemisphere letter disagree or the letter is missing: the value is written as it stands, the user has seen it
   'ROW-HEMISPHERE-CONFLICT',
   'ROW-HEMISPHERE-MISSING',
+  'ROW-HEMISPHERE-UNPAIRED',
   'DWC-RECOMMENDED',
   'CONV-TEXT-IN-TAXON-CELL',
   'CONV-TAXON-SAME-EVENT',

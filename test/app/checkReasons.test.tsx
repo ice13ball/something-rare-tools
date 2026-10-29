@@ -118,6 +118,8 @@ function battery(): { sheet: RawSheet; long?: { parameterCol: number; valueCol: 
     // a hemisphere letter that names no mapped coordinate stays ignored; one of two positions with nothing to tell which is ambiguous
     S(['Lon Dir', 'Depth'], [['E', 10], ['W', 15]]),
     S(['Begin Latitude', 'End Latitude', 'Lat Dir'], [[54.5, 54.6, 'N'], [54.6, 54.7, 'N']]),
+    // a coordinate that carries its own signs: its letter column is not applied
+    S(['Latitude', 'Lat NS'], [[-32.7, 'S'], [-33, 'S']]),
     // only the end position of a tow
     S(['End Lat', 'End Lon'], [[54.5, 18.5], [54.6, 18.6]]),
     // long format: the parameter, unit and value columns are read through the layout

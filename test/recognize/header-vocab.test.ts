@@ -70,7 +70,7 @@ describe('hemisphere columns', () => {
     for (const [h, v] of [['Lon Dir', ['E', 'W', 'W']], ['Lat Dir', ['N', 'S', 'N']], ['Beg Lat Dir', ['N', 'N', 'N']], ['End Lon Dir', ['W', 'W', 'W']], ['Longitude Direction', ['W', 'E', 'W']], ['Latitude hemisphere', ['north', 'south', 'north']], ['Lat NS', ['N', 'S', 'N']], ['Lon EW', ['E', 'W', 'E']], ['Hemisphere', ['N', 'S', 'N']], ['Längengrad Richtung'.replace('Richtung', 'Dir'), ['O', 'W', 'W']]] as const) {
       const p = roleOf({ [h]: [...v], Latitude: LAT, Longitude: LON }, h);
       expect(['ignore', 'hemisphere'], h).toContain(p.role.kind);
-      expect(['hemisphere', 'hemisphere-pair', 'hemisphere-ambiguous'], h).toContain(p.reasonCode);
+      expect(['hemisphere', 'hemisphere-pair', 'hemisphere-ambiguous', 'hemisphere-signed'], h).toContain(p.reasonCode);
     }
   });
 

@@ -645,12 +645,38 @@ function letterAxis(rows: readonly RawRow[], col: number): 'latitude' | 'longitu
   return lat > 0 && lon === 0 ? 'latitude' : lon > 0 && lat === 0 ? 'longitude' : undefined;
 }
 
-/** Does a sampled value of the column already carry its own sign or letter? Then a hemisphere column beside it would only contradict it. */
-function holdsSignedValues(rows: readonly RawRow[], col: number): boolean {
-  return rows.some((r) => {
+/** Text that stands for a missing value without being one of the parser's NA tokens: '-', '?', 'unknown', 'n.d.'. */
+const PLACEHOLDER = /^\s*([-–—−?]|unknown|n\.?\s?d\.?|n\/?a)\s*$/i;
+const isFilled = (c: RawCell): boolean => !isBlank(c) && !(typeof c === 'string' && PLACEHOLDER.test(c));
+
+/**
+ * Does the coordinate column carry its own signs or hemisphere letters? Only when MOST of its filled values do (a minus sign before a number, or a
+ * letter N/S/E/W). Placeholders for a missing value never count, and a single negative among unsigned values is a typo the per-cell
+ * ROW-HEMISPHERE-CONFLICT reports, not a reason to leave the letters column unused.
+ */
+function carriesOwnSigns(rows: readonly RawRow[], col: number): boolean {
+  let filled = 0;
+  let signed = 0;
+  for (const r of rows) {
     const c = r.cells[col] ?? null;
-    return typeof c === 'number' ? c < 0 : typeof c === 'string' && /^\s*[-−–]|[NSEW]/i.test(c);
-  });
+    if (!isFilled(c)) continue;
+    filled++;
+    if (typeof c === 'number' ? c < 0 : typeof c === 'string' && /^\s*[-−–]\s*[\d.,]|^\s*[NSEW][\s°]*\d|[\d°'"′″]\s*[NSEW]\s*$/i.test(c)) signed++;
+  }
+  return filled > 0 && signed * 2 > filled;
+}
+
+/** Do MOST of the filled values of the column read as a hemisphere letter or word (N, s, East ...)? Süd, Nord, O, Ost do not, so such a column is not proposed. */
+function mostlyLetters(rows: readonly RawRow[], col: number): boolean {
+  let filled = 0;
+  let known = 0;
+  for (const r of rows) {
+    const c = r.cells[col] ?? null;
+    if (!isFilled(c)) continue;
+    filled++;
+    if (hemisphereLetter(c) !== undefined) known++;
+  }
+  return filled > 0 && known * 2 > filled;
 }
 
 /**
@@ -674,27 +700,36 @@ function pairHemisphereColumns(
       const axis = t.axis ?? v;
       return { e, axis: t.axis !== undefined && v !== undefined && t.axis !== v ? undefined : axis, bound: t.bound, named: t.axis !== undefined };
     });
+  const taken = new Set<number>(); // the coordinates that already have their letter column: at most one each
   for (const h of hemis) {
-    if (h.axis === undefined) continue;
+    if (h.axis === undefined || !mostlyLetters(rows, h.e.proposal.index)) continue;
     const slot = bySlot.get(h.axis) ?? [];
     const mappedAt = slot.find((i) => entries[i].proposal.role.kind === h.axis);
     if (mappedAt === undefined) continue;
     const mapped = entries[mappedAt].proposal;
-    if (holdsSignedValues(rows, mapped.index)) continue;
+    if (carriesOwnSigns(rows, mapped.index)) {
+      applyReason(h.e.proposal, why('hemisphere-signed', { name: mapped.cleanHeader }), []);
+      continue;
+    }
     const mappedBound = boundOf(mapped.header);
     let tied: boolean;
     if (h.bound !== undefined) tied = mappedBound === h.bound;
     else if (slot.length === 1) tied = h.named || Math.abs(h.e.proposal.index - mapped.index) === 1;
     else {
       const others = slot.filter((i) => i !== mappedAt);
-      const claimed = (i: number): boolean => {
+      const claimedByOther = (i: number): boolean => {
         const b = boundOf(entries[i].proposal.header);
         return b !== undefined && hemis.some((o) => o !== h && o.axis === h.axis && o.bound === b);
       };
-      tied = Math.abs(h.e.proposal.index - mapped.index) === 1 || others.every(claimed);
+      tied = Math.abs(h.e.proposal.index - mapped.index) === 1 || others.every(claimedByOther);
       if (!tied) applyReason(h.e.proposal, why('hemisphere-ambiguous', { name: mapped.cleanHeader }), []);
     }
     if (!tied) continue;
+    if (taken.has(mappedAt)) {
+      applyReason(h.e.proposal, why('hemisphere-ambiguous', { name: mapped.cleanHeader }), []);
+      continue;
+    }
+    taken.add(mappedAt);
     h.e.proposal.role = { kind: 'hemisphere', axis: h.axis };
     h.e.proposal.confidence = 'low';
     applyReason(h.e.proposal, why('hemisphere-pair', { name: mapped.cleanHeader }), []);

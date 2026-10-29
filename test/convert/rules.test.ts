@@ -82,8 +82,8 @@ describe('registry conventions', () => {
 });
 
 describe('not in any public listing before the reveal', () => {
-  it('the public registry does not know them: RULES still has its 93 rules and getRule / makeFinding throw on a CONV id', () => {
-    expect(RULES.length).toBe(93); // 91 + ROW-HEMISPHERE-CONFLICT and ROW-HEMISPHERE-MISSING
+  it('the public registry does not know them: RULES still has its 94 rules and getRule / makeFinding throw on a CONV id', () => {
+    expect(RULES.length).toBe(94); // 91 + the three ROW-HEMISPHERE-* rules
     expect(RULES.some((r) => r.id.startsWith('CONV-'))).toBe(false);
     expect(() => getRule('CONV-ID-DUPLICATE')).toThrow(/Unknown rule id/);
     expect(() => makeFinding('CONV-ID-DUPLICATE', {})).toThrow();

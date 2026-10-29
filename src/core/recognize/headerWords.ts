@@ -90,6 +90,15 @@ export function hemisphereTarget(key: string): { axis?: 'latitude' | 'longitude'
   return axis === undefined ? {} : { axis };
 }
 
+/**
+ * Does a hemisphere column's start / end word agree with the coordinate it is asked to sign? 'Beg Lat Dir' signs 'Begin Latitude' (and a plain
+ * 'Latitude' does not take it); a hemisphere header without such a word agrees with every coordinate. Both arguments are headerKeys.
+ */
+export function hemisphereBoundAgrees(hemisphereKey: string, coordinateKey: string): boolean {
+  const bound = hemisphereTarget(hemisphereKey).bound;
+  return bound === undefined || coordinateBound(coordinateKey)?.bound === bound;
+}
+
 // Tokens of an identifier name. A name is an identifier when EVERY word is one of these and at least one is not just 'collection' or a digit:
 // 'Catalog ID', 'Catalog #', 'Collection ID', 'Photo', 'GenBank No.' are; 'Ref temperature', 'Number of species' are not (a real word follows).
 const IDENTIFIER_TOKEN = /^(id|ids|no|nr|num|number|catalog|catalogue|accession|acc|reference|ref|image|photo|loan|gift|voucher|specimen|record|barcode|uuid|guid|genbank|gen ?b[a-z]{2,4}k|collection|\d+)$/;

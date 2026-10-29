@@ -77,6 +77,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-DM-COORDS': ['info', 'B'],
   'ROW-HEMISPHERE-CONFLICT': ['warning', 'B'],
   'ROW-HEMISPHERE-MISSING': ['warning', 'B'],
+  'ROW-HEMISPHERE-UNPAIRED': ['warning', 'B'],
   'ROW-ZERO-COORD': ['error', 'B'],
   'ROW-NO-COORD': ['warning', 'B'],
   'ROW-DEPTH-MIN-MAX': ['error', 'B'],
@@ -108,7 +109,7 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(93); // 91 + the two ROW-HEMISPHERE-* rules
+    expect(ids.length).toBe(94); // 91 + the three ROW-HEMISPHERE-* rules
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
