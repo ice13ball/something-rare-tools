@@ -246,7 +246,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
 }
 
 /**
- * The initial choices: every sheet used, the shape the overlay suggests (wide when it cannot tell), nothing declared. The profile mark and the approval of depth-based level
+ * The initial choices: every sheet used (except one that looks like a data dictionary: it starts unticked, with a note), the shape the overlay suggests (wide when it cannot tell), nothing declared. The profile mark and the approval of depth-based level
  * IDs start OFF; only a companion file of THIS drop that names the sheet pre-ticks them (the approval only on a sheet that is marked), and the suggestion of the overlay
  * never does.
  */
@@ -258,7 +258,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: true, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false };
     }
   }
   return out;

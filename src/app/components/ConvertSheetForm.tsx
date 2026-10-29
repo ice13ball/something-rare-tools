@@ -18,6 +18,8 @@ export interface ConvertSheetFormProps {
   hasEffortColumn: boolean;
   /** Stage 6: the overlay thinks the sheet looks like a profile / environment file (a suggestion only: the mark is the user's tick) */
   suggestedProfile: boolean;
+  /** the sheet looks like a data dictionary (a glossary of columns): it started unticked, and the note says why */
+  dictionary?: boolean;
   /** a column of this sheet is mapped as the sample code (a profile sheet's own level code) */
   hasCodeColumn: boolean;
   /** a column of this sheet is mapped as a pressure */
@@ -34,7 +36,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -52,6 +54,11 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
         </label>
         <InfoTip id="convertSheetUse" />
       </div>
+      {dictionary === true && (
+        <p className="muted" role="note">
+          {t('convert.sheet.dictionary')}
+        </p>
+      )}
       {choice.use && (
         <>
           <div className="convert-group">

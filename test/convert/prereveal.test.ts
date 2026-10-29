@@ -7,6 +7,8 @@ import { createDirectConvertEngine } from '../../src/worker/convert.handler';
 import { candidatesOf, initialChoices, requestOf, sheetKey, type ConvertState } from '../../src/app/convertModel';
 import type { ConvertParseResult } from '../../src/worker/convert.protocol';
 import { csvOf } from '../app/convertHelpers';
+import { dictionaryReason } from '../../src/core/convert/dictionary';
+import { readFileSync } from 'node:fs';
 import { fileOf, type Cell } from './helpers';
 import { renderPlain, renderTechnical, valuesAreTimes } from '../../src/core/report';
 import { makeFinding } from '../../src/core/rules/registry';
@@ -180,6 +182,44 @@ describe('item 4: the advice for a time-of-day column is about the time format',
   });
   it('the finding itself is the same as before: no new param, the rule id is kept', () => {
     expect(finding('10:00-12:00').params).toEqual({});
+  });
+});
+
+describe('item 5: a data-dictionary sheet starts unticked, with a note', () => {
+  const ctx = { decimalComma: false, date1904: false };
+  const reason = (header: string[], rows: Cell[][], name = 'S') => {
+    const f = fileOf(header, rows, name);
+    return dictionaryReason(f.sheets[0], proposeConvertColumns(f.sheets[0], ctx));
+  };
+  it('by the name of the sheet', () => {
+    for (const n of ['Metadata', 'README', 'Info', 'Description', 'Data dictionary', 'Legend', 'Notes', 'Opis']) expect(reason(['A', 'B'], [['x', 'y']], n), n).toBe('name');
+    expect(reason(['A', 'B'], [['x', 'y']], 'Seawater')).toBeUndefined();
+    expect(reason(['A', 'B'], [['x', 'y']], 'Measured_variables')).toBeUndefined();
+  });
+  it('by its headers: a column that names a column next to one that explains it, with mostly text under them', () => {
+    expect(reason(['column_name', 'description'], [['Depth_m', 'depth in metres'], ['TEMP_C', 'temperature']])).toBe('columns');
+    expect(reason(['Variable', 'Unit', 'Explanation'], [['PN', 'umol/l', 'particulate nitrogen'], ['Sal', 'psu', 'practical salinity']])).toBe('columns');
+    // numbers under the headers: a table of measurements, not a glossary
+    expect(reason(['name', 'comment', 'value'], [['a', 'x', 1], ['b', 'y', 2], ['c', 'z', 3]])).toBeUndefined();
+  });
+  it('a sheet with a position is data, whatever its name', () => {
+    expect(reason(['Station', 'Latitude', 'Longitude', 'Date', 'PN [µmol/l]'], [['A', 55, 3, '2099-01-01', 1], ['B', 56, 4, '2099-01-02', 2]], 'Info')).toBeUndefined();
+  });
+  it('the worker reports it and the page starts the sheet unticked; the data sheet next to it stays ticked and converts', async () => {
+    const engine = createDirectConvertEngine();
+    const parsed = await engine.parse([
+      { name: 'glossary.csv', bytes: enc(readFileSync('test/fixtures/convert-env/f11-docs-sheet.csv', 'utf8')), source: 'dropped' },
+      { name: 'data.csv', bytes: enc(csvOf(['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus'], [['A', 55, 3, '2099-01-01', 4]])), source: 'dropped' },
+    ]);
+    const [g, d] = parsed.files;
+    expect(g.dictionarySheets).toEqual({ 'glossary.csv': 'columns' });
+    expect(d.dictionarySheets).toBeUndefined();
+    const choices = initialChoices(parsed);
+    expect(choices[sheetKey(g.fileId, 'glossary.csv')].use).toBe(false);
+    expect(choices[sheetKey(d.fileId, 'data.csv')].use).toBe(true);
+    // the glossary is not in the request: nothing is read from it
+    const state: ConvertState = { parsed, mappings: {}, choices, options: {}, approved: {}, confirmed: {} };
+    expect(requestOf(state).sheets.map((x) => x.fileId)).toEqual([d.fileId]);
   });
 });
 

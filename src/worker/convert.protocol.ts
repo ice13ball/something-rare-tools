@@ -22,6 +22,11 @@ export interface ConvertFileSummary extends FileSummary {
    */
   suggestedProfiles: Record<string, boolean>;
   /**
+   * by sheet name, only for a sheet that looks like a data dictionary (a glossary of columns, or a sheet named Metadata / README / Info; core/convert/dictionary.ts): the page starts it UNTICKED,
+   * with a note saying why. The user may tick it.
+   */
+  dictionarySheets?: Record<string, 'name' | 'columns'>;
+  /**
    * by sheet name, only for a sheet that was a long environmental sheet (one row per measured parameter) and was READ as one row per sample (core/convert/pivot.ts): what was done.
    * The sheet in `sheets`, `mappings`, `proposals` and `samples` is the pivoted one, so the role table shows its columns like any other.
    */
