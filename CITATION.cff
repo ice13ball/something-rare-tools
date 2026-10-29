@@ -10,8 +10,10 @@ abstract: >-
   licence that the metadata sources of one dataset state (Zenodo, PANGAEA,
   GeoNetwork, DataCite). Collection review reads the metadata of a whole
   collection and produces a fix list of missing, unclear or contradictory
-  licences and empty metadata fields. Files dropped by a user are read in the
-  user's browser and never leave it.
+  licences and empty metadata fields. The Darwin Core converter turns a
+  spreadsheet of samples, in wide or long layout, into a Darwin Core Archive
+  (Event, Occurrence, extended MeasurementOrFact and EML) for OBIS. Files
+  dropped by a user are read in the user's browser and never leave it.
 type: software
 # `version`, `date-released` and the record's own `doi` are set at release time and must match the tag.
 license: AGPL-3.0-or-later
@@ -27,6 +29,7 @@ keywords:
   - licences
   - DataCite
   - Darwin Core
+  - OBIS
   - ISO 19139
   - GeoNetwork
   - Zenodo
