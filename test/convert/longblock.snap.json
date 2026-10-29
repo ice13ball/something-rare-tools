@@ -134,36 +134,18 @@
    {
     "file": "sheet.csv",
     "sheet": "S",
-    "params": {
-     "shape": "long"
-    },
-    "ruleId": "CONV-NO-TAXON",
-    "severity": "error"
-   },
-   {
-    "file": "sheet.csv",
-    "sheet": "S",
-    "params": {},
-    "ruleId": "CONV-NO-OCCURRENCES",
-    "severity": "error"
+    "ruleId": "CONV-TAXON-NO-QUANTITY",
+    "severity": "error",
+    "params": {}
    }
   ],
   "blocking": [
    {
     "file": "sheet.csv",
     "sheet": "S",
-    "params": {
-     "shape": "long"
-    },
-    "ruleId": "CONV-NO-TAXON",
-    "severity": "error"
-   },
-   {
-    "file": "sheet.csv",
-    "sheet": "S",
-    "params": {},
-    "ruleId": "CONV-NO-OCCURRENCES",
-    "severity": "error"
+    "ruleId": "CONV-TAXON-NO-QUANTITY",
+    "severity": "error",
+    "params": {}
    }
   ],
   "events": [],
@@ -1534,25 +1516,15 @@
   },
   "taxon-quantity-unit-value": {
    "blocking": [
-    "CONV-NO-TAXON",
-    "CONV-NO-OCCURRENCES"
+    "CONV-TAXON-NO-QUANTITY"
    ],
    "findings": [
     {
      "file": "sheet.csv",
      "sheet": "S",
-     "params": {
-      "shape": "long"
-     },
-     "ruleId": "CONV-NO-TAXON",
-     "severity": "error"
-    },
-    {
-     "file": "sheet.csv",
-     "sheet": "S",
-     "params": {},
-     "ruleId": "CONV-NO-OCCURRENCES",
-     "severity": "error"
+     "ruleId": "CONV-TAXON-NO-QUANTITY",
+     "severity": "error",
+     "params": {}
     }
    ],
    "files": {},
@@ -1560,25 +1532,15 @@
   },
   "taxon-quantity-unit-value+worms": {
    "blocking": [
-    "CONV-NO-TAXON",
-    "CONV-NO-OCCURRENCES"
+    "CONV-TAXON-NO-QUANTITY"
    ],
    "findings": [
     {
      "file": "sheet.csv",
      "sheet": "S",
-     "params": {
-      "shape": "long"
-     },
-     "ruleId": "CONV-NO-TAXON",
-     "severity": "error"
-    },
-    {
-     "file": "sheet.csv",
-     "sheet": "S",
-     "params": {},
-     "ruleId": "CONV-NO-OCCURRENCES",
-     "severity": "error"
+     "ruleId": "CONV-TAXON-NO-QUANTITY",
+     "severity": "error",
+     "params": {}
     }
    ],
    "files": {},
@@ -1586,25 +1548,15 @@
   },
   "scientificName-parameter-unit-value": {
    "blocking": [
-    "CONV-NO-TAXON",
-    "CONV-NO-OCCURRENCES"
+    "CONV-TAXON-NO-QUANTITY"
    ],
    "findings": [
     {
      "file": "sheet.csv",
      "sheet": "S",
-     "params": {
-      "shape": "long"
-     },
-     "ruleId": "CONV-NO-TAXON",
-     "severity": "error"
-    },
-    {
-     "file": "sheet.csv",
-     "sheet": "S",
-     "params": {},
-     "ruleId": "CONV-NO-OCCURRENCES",
-     "severity": "error"
+     "ruleId": "CONV-TAXON-NO-QUANTITY",
+     "severity": "error",
+     "params": {}
     }
    ],
    "files": {},
@@ -1612,25 +1564,15 @@
   },
   "scientificName-parameter-unit-value+worms": {
    "blocking": [
-    "CONV-NO-TAXON",
-    "CONV-NO-OCCURRENCES"
+    "CONV-TAXON-NO-QUANTITY"
    ],
    "findings": [
     {
      "file": "sheet.csv",
      "sheet": "S",
-     "params": {
-      "shape": "long"
-     },
-     "ruleId": "CONV-NO-TAXON",
-     "severity": "error"
-    },
-    {
-     "file": "sheet.csv",
-     "sheet": "S",
-     "params": {},
-     "ruleId": "CONV-NO-OCCURRENCES",
-     "severity": "error"
+     "ruleId": "CONV-TAXON-NO-QUANTITY",
+     "severity": "error",
+     "params": {}
     }
    ],
    "files": {},

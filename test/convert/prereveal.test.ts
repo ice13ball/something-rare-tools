@@ -170,12 +170,13 @@ describe('item 2, end to end: a wide sheet whose taxa carry stages, size classes
 });
 
 describe('item 3: a species list with no quantity column says plainly what the converter needs', () => {
-  it('the text of CONV-NO-TAXON names the quantity column and says presence-only lists are not written, in all four languages; the finding itself is unchanged', async () => {
+  it('a plain species list is CONV-SPECIES-LIST-NO-COUNTS (not CONV-NO-TAXON: the taxon column is set), with its text in all four languages', async () => {
     const csv = csvOf(['scientificName', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['Calanus finmarchicus', 55, 3, '2099-01-01'], ['Oithona similis', 56, 4, '2099-01-02']]);
     const v = await (await open('species-list.csv', csv)).run(undefined);
-    const f = v.findings.find((x) => x.ruleId === 'CONV-NO-TAXON')!;
-    expect(f.params).toEqual({ shape: 'long' });
-    const words: Record<string, RegExp> = { en: /quantity \(counts, density or biomass\).*does not yet write presence-only species lists/, pl: /ilości \(liczebność, zagęszczenie albo biomasa\).*list samej obecności gatunków na razie nie zapisuje/, de: /Menge \(Anzahlen, Dichte oder Biomasse\).*reine Anwesenheitslisten schreibt er noch nicht/, fr: /quantité \(effectifs, densité ou biomasse\).*n'écrit pas encore de listes de présence seule/ };
+    expect(v.findings.some((x) => x.ruleId === 'CONV-NO-TAXON')).toBe(false);
+    const f = v.findings.find((x) => x.ruleId === 'CONV-SPECIES-LIST-NO-COUNTS')!;
+    expect(f.params).toEqual({});
+    const words: Record<string, RegExp> = { en: /counts, density or biomass/, pl: /liczebnością, zagęszczeniem albo biomasą/, de: /Anzahlen, Dichte oder Biomasse/, fr: /effectifs, de densité ou de biomasse/ };
     for (const lang of LANGS) expect(renderConvertPlain(f, lang), lang).toMatch(words[lang]);
     expect(renderConvertTechnical(f)).toContain('presence-only');
   });

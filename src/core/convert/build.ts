@@ -1055,21 +1055,29 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const taxonNames = sin.shape === 'wide' ? taxonColumnNames(file, sheet, cols.taxonHeaders) : new Map<number, TaxonColumnName>();
     // a PANGAEA file whose parameter list could not be matched to its columns: its table-header abbreviations are the names, and that is said
     if (sin.shape === 'wide' && file.kind === 'pangaea' && cols.taxonHeaders.length > 0 && !pangaeaNamesUsed(file, sheet)) findings.push(makeConvertFinding('CONV-PANGAEA-NAMES-FALLBACK', { ...base }));
+    // a long sheet with a taxon column and NO quantity column never gets CONV-NO-TAXON (the taxon is there) nor the quantity declaration / missing occurrences, which would only repeat it:
+    // with no measured-variable column either it is a species list (CONV-SPECIES-LIST-NO-COUNTS); with other numbers in it, the quantity column is what is missing (CONV-TAXON-NO-QUANTITY)
+    const taxonNoQuantity = sin.shape === 'long' && cols.taxonCell !== undefined && cols.quantity === undefined;
+    const speciesList = taxonNoQuantity && !sin.mapping.columns.some((c) => c.role.kind === 'variable');
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
-    if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
+    if (speciesList) findings.push(makeConvertFinding('CONV-SPECIES-LIST-NO-COUNTS', { ...base }));
+    else if (taxonNoQuantity) findings.push(makeConvertFinding('CONV-TAXON-NO-QUANTITY', { ...base }));
+    else if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
 
     // quantity declaration
     const resolution = resolveQuantity(sin.quantity, { decimalComma: dc, ...(cols.effort?.unit === undefined ? {} : { columnEffortUnit: cols.effort.unit }) });
     let quantity: ResolvedQuantity | undefined;
     let missing: string[] = resolution.ok ? [] : [...resolution.missing];
     if (resolution.ok) quantity = resolution.quantity;
+    if (taxonNoQuantity) taxaWaitForQuantity = true; // its missing occurrences are no "environment-only upload" either
     if (sin.quantity?.effort?.source === 'column' && cols.effort === undefined) {
       missing = [...missing, 'effort column'];
       quantity = undefined;
     }
     if (!quantity || missing.length > 0) {
       if (missing.length === 0) missing = ['kind'];
-      findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
+      // a species list has no numbers to declare: CONV-SPECIES-LIST-NO-COUNTS already said what is missing
+      if (!taxonNoQuantity) findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
       quantity = undefined;
       // a sheet that HAS its taxon (and count) columns writes no occurrence only because the user has not said what the numbers are: that block already says what to do
       if (!missingTaxon) taxaWaitForQuantity = true;

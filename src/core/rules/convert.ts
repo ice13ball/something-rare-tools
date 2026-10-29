@@ -45,7 +45,9 @@ import type { RuleSpec } from './spec';
  *   CONV-LONG-KEY-VARIES       count, columns   warning: rows that share every position / identity column differ in these columns (count = such samples), so each difference is read as another sample
  *   CONV-LONG-DUPLICATE        (none)           field = the parameter column (header with unit), lines = the original lines of the repeated rows of ONE sample
  *   CONV-LONG-NO-PARAMETER     count            lines = the original lines that have a value and no parameter name
- *   CONV-NO-TAXON              shape            shape = wide | long
+ *   CONV-NO-TAXON              shape            shape = wide | long; no taxon column is marked (a long sheet with a taxon column and no quantity column is CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY)
+ *   CONV-TAXON-NO-QUANTITY     (none)           a long sheet with a taxon column, other numbers (measured variables) and no quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
+ *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: a presence-only species list, not written yet (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
  *   CONV-LICENCE-UNSET         (none)           no licence chosen
@@ -585,12 +587,38 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['shape'],
     plain: {
-      pl: `W tym arkuszu nie wskazano kolumn z taksonami albo z ilością. Konwerter potrzebuje taksonu (w arkuszu szerokim nagłówki kolumn, w długim kolumnę z nazwą) i ilości (liczebność, zagęszczenie albo biomasa); list samej obecności gatunków na razie nie zapisuje.`,
-      en: `No taxon columns, or no quantity column, are marked in this sheet. The converter needs a taxon (column headers in a wide sheet, a taxon column in a long one) and a quantity (counts, density or biomass); it does not yet write presence-only species lists.`,
-      de: `In diesem Blatt sind keine Taxon-Spalten oder keine Mengenspalte markiert. Der Konverter braucht ein Taxon (im breiten Blatt die Spaltenköpfe, im langen eine Namensspalte) und eine Menge (Anzahlen, Dichte oder Biomasse); reine Anwesenheitslisten schreibt er noch nicht.`,
-      fr: `Aucune colonne de taxon, ou de quantité, n'est marquée dans cette feuille. Le convertisseur a besoin d'un taxon (en-têtes de colonnes d'une feuille large, colonne de noms d'une feuille longue) et d'une quantité (effectifs, densité ou biomasse) ; il n'écrit pas encore de listes de présence seule.`,
+      pl: `W tym arkuszu nie wskazano kolumny z taksonami. Konwerter potrzebuje taksonu (w arkuszu szerokim nagłówków kolumn z liczebnością, w długim kolumny z nazwą) i ilości (liczebność, zagęszczenie albo biomasa).`,
+      en: `No taxon column is marked in this sheet. The converter needs a taxon (column headers with counts in a wide sheet, a taxon column in a long one) and a quantity (counts, density or biomass).`,
+      de: `In diesem Blatt ist keine Taxon-Spalte markiert. Der Konverter braucht ein Taxon (im breiten Blatt die Spaltenköpfe mit Anzahlen, im langen eine Namensspalte) und eine Menge (Anzahlen, Dichte oder Biomasse).`,
+      fr: `Aucune colonne de taxon n'est marquée dans cette feuille. Le convertisseur a besoin d'un taxon (en-têtes de colonnes d'effectifs dans une feuille large, colonne de noms dans une feuille longue) et d'une quantité (effectifs, densité ou biomasse).`,
     },
-    technical: `{file}, {sheet}: no column with the taxon role for a {shape} sheet (wide: taxon columns with header:true; long: a taxon column and a quantity column). A taxon column without a quantity column (a presence-only species list) is this case too: presence-only lists are not written yet.`,
+    technical: `{file}, {sheet}: no column with the taxon role for a {shape} sheet (wide: taxon columns with header:true; long: a taxon column and a quantity column). A long sheet that has a taxon column but no quantity column is CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY instead.`,
+  },
+  {
+    id: 'CONV-SPECIES-LIST-NO-COUNTS',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `Ten arkusz wymienia gatunki bez liczebności. Konwerter nie zapisuje jeszcze list samej obecności gatunków. Dodaj kolumnę z liczebnością, zagęszczeniem albo biomasą i powiedz, czym są te liczby.`,
+      en: `This sheet lists species without counts. The converter does not write presence-only lists yet. Add a column with counts, density or biomass and say what the numbers are.`,
+      de: `Dieses Blatt führt Arten ohne Anzahlen auf. Der Konverter schreibt noch keine reinen Anwesenheitslisten. Fügen Sie eine Spalte mit Anzahlen, Dichte oder Biomasse hinzu und geben Sie an, was die Zahlen sind.`,
+      fr: `Cette feuille liste des espèces sans effectifs. Le convertisseur n'écrit pas encore de listes de présence seule. Ajoutez une colonne d'effectifs, de densité ou de biomasse et indiquez ce que sont les nombres.`,
+    },
+    technical: `{file}, {sheet}: a long sheet has a taxon column and no quantity column (a presence-only species list). Presence-only lists are not written yet; the sheet is not converted. This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet.`,
+  },
+  {
+    id: 'CONV-TAXON-NO-QUANTITY',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `W tym arkuszu zaznaczono kolumnę z taksonami, ale nie ma kolumny z ilością. Zaznacz kolumnę z liczebnością, zagęszczeniem albo biomasą albo dodaj ją; list samej obecności gatunków konwerter na razie nie zapisuje.`,
+      en: `The taxon column is marked in this sheet, but there is no quantity column. Mark the column with counts, density or biomass, or add one; the converter does not write presence-only lists yet.`,
+      de: `In diesem Blatt ist die Taxon-Spalte markiert, aber es gibt keine Mengenspalte. Markieren Sie die Spalte mit Anzahlen, Dichte oder Biomasse oder fügen Sie eine hinzu; reine Anwesenheitslisten schreibt der Konverter noch nicht.`,
+      fr: `La colonne de taxon est marquée dans cette feuille, mais il n'y a pas de colonne de quantité. Marquez la colonne d'effectifs, de densité ou de biomasse, ou ajoutez-en une ; le convertisseur n'écrit pas encore de listes de présence seule.`,
+    },
+    technical: `{file}, {sheet}: a long sheet has a taxon column and other numeric or measured-variable columns, but no quantity column. Presence-only lists are not written yet; the sheet is not converted. This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet. A sheet with a taxon column and no numbers at all is CONV-SPECIES-LIST-NO-COUNTS.`,
   },
   {
     id: 'CONV-SUMMARY-ROW-SKIPPED',
@@ -616,7 +644,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Die Beschreibung des Datensatzes ist unvollständig oder unbrauchbar: {fields}. Das Archiv braucht diese Angaben (Titel, Zusammenfassung, Autoren, Kontakt, Institutionskürzel, Datensatzname); tragen Sie sie im Formular ein.`,
       fr: `La description du jeu de données est incomplète ou inutilisable : {fields}. L'archive a besoin de ces informations (titre, résumé, auteurs, contact, code d'institution, nom du jeu) ; remplissez-les dans le formulaire.`,
     },
-    technical: `Dataset description (eml.xml, and the datasetName and institutionCode columns of event.txt) is missing or unusable: {fields}. BioCheck reports an Event table without datasetName and institutionCode as an error (docs/research/qc-sources.md, stage 0 spike, Item 2); OBIS asks for title, citation, contact and abstract (manual.obis.org/eml.html).`,
+    technical: `Dataset description (eml.xml, and the datasetName and institutionCode columns of event.txt) is missing or unusable: {fields}. BioCheck reports an Event table without datasetName and institutionCode as an error (docs/research/qc-sources.md, research notes, Item 2); OBIS asks for title, citation, contact and abstract (manual.obis.org/eml.html).`,
   },
   {
     id: 'CONV-LICENCE-UNSET',
