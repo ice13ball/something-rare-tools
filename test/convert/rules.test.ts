@@ -19,7 +19,7 @@ describe('registry conventions', () => {
   it('has unique CONV-* ids, category B, and a severity of the three allowed', () => {
     const ids = CONVERT_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(65);
+    expect(ids.length).toBe(66);
     for (const r of CONVERT_RULES) {
       expect(r.id).toMatch(/^CONV-[A-Z]+(-[A-Z0-9]+)*$/);
       expect(r.category).toBe('B');
@@ -82,8 +82,8 @@ describe('registry conventions', () => {
 });
 
 describe('in the public registry since the reveal, and still out of /check', () => {
-  it('the public registry holds the 94 rules of the checks and every CONV-* rule, once each; getRule and makeFinding know them', () => {
-    expect(RULES.length).toBe(94 + CONVERT_RULES.length);
+  it('the public registry holds the 95 rules of the checks and every CONV-* rule, once each; getRule and makeFinding know them', () => {
+    expect(RULES.length).toBe(95 + CONVERT_RULES.length);
     expect(RULES.filter((r) => r.id.startsWith('CONV-')).map((r) => r.id)).toEqual(CONVERT_RULES.map((r) => r.id));
     expect(getRule('CONV-ID-DUPLICATE').severity).toBe(getConvertRule('CONV-ID-DUPLICATE').severity);
     expect(makeFinding('CONV-ID-DUPLICATE', {}).severity).toBe('error');

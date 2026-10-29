@@ -213,6 +213,36 @@ export function p01CodeOf(cleanHeader: string): { code: string; declared: boolea
   return { code: m[1], declared, hint };
 }
 
+/**
+ * The length of a code of each NERC collection a header can name with the explicit prefix `SDN:<collection>::<code>`. Only the collections whose codes all have one length are
+ * listed: P01 (eight, e.g. TEMPPR01) and P06 (four, e.g. UPAA; all 411 codes of the current P06 list were read on 2026-10-29). P02 is NOT here: its codes are mostly four characters
+ * but 18 of the current list have five, so a length would flag real codes.
+ */
+export const VOCAB_CODE_LENGTH: Readonly<Record<'P01' | 'P06', number>> = { P01: 8, P06: 4 };
+
+/** A code a header names with an explicit `SDN:<collection>::` prefix, of a shape that collection does not have. */
+export interface BadHeaderCode {
+  collection: 'P01' | 'P06';
+  code: string;
+  length: number;
+}
+
+const HEADER_CODE = /SDN:(P01|P06)::([^\s\][)<>,;"']*)/g;
+
+/**
+ * The codes of a header that carry the explicit prefix `SDN:P01::` or `SDN:P06::` and do not have the shape of the collection (exactly 8, resp. 4, upper-case letters and digits).
+ * Only the prefixed form counts: a bare word that merely looks like a code (TEMPERATURE) says nothing, and is never read here.
+ */
+export function badHeaderCodes(header: string): BadHeaderCode[] {
+  const out: BadHeaderCode[] = [];
+  for (const m of header.matchAll(HEADER_CODE)) {
+    const collection = m[1] as 'P01' | 'P06';
+    const length = VOCAB_CODE_LENGTH[collection];
+    if (!new RegExp(`^[A-Z0-9]{${length}}$`).test(m[2])) out.push({ collection, code: m[2], length });
+  }
+  return out;
+}
+
 /* ---------- canonical variables ---------- */
 
 export interface CanonicalVariable {

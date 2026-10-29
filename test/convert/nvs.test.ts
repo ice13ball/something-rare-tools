@@ -337,7 +337,16 @@ describe('the request', () => {
     // a code the service does not know: HTTP 404 from the concept page
     const m3 = nvsMock({ failFrom: 1, onlySparql: true });
     vi.stubGlobal('fetch', m3.fetch);
-    expect((await searchNvs('ZZZZZZZZ', 'P01', { signal: signal() })).failure).toEqual({ kind: 'http', status: 404 });
+    // reported as its own failure (not a service fault: trying again changes nothing), never an empty result that looks like "nothing found"
+    const nf = await searchNvs('ZZZZZZZZ', 'P01', { signal: signal() });
+    expect(nf.failure).toEqual({ kind: 'notFound' });
+    expect(nf.concepts).toEqual([]);
+    expect(nf.via).toBe('code');
+    // a 9-character code is not a P01 code at all: it never reaches the concept page, it is only a word for the search
+    const m4 = nvsMock({ failFrom: 1, onlySparql: true });
+    vi.stubGlobal('fetch', m4.fetch);
+    expect((await searchNvs('D13CMOP11', 'P01', { signal: signal() })).via).toBe('search');
+    expect(m4.calls.length).toBe(1);
   });
 
   it('a word is never taken for a code: "invented", "temp" and "upaa" get no second request when the search fails, in either collection', async () => {

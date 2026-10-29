@@ -274,7 +274,11 @@ function SearchRow({ p, col, kind, running }: { p: ConvertNercProps; col: NercCo
       {s?.status === 'stopped' && <p role="status">{t('convert.nvs.stopped')}</p>}
       {s?.status === 'failed' && (
         <p className="error-text" role="alert">
-          {s.failure.kind === 'http' ? t('convert.nvs.error.http', { status: s.failure.status }) : t(s.failure.kind === 'network' ? 'convert.nvs.error.network' : 'convert.nvs.error.format')}
+          {s.failure.kind === 'http'
+            ? t('convert.nvs.error.http', { status: s.failure.status })
+            : s.failure.kind === 'notFound'
+              ? t('convert.nvs.error.notFound', { word: s.word })
+              : t(s.failure.kind === 'network' ? 'convert.nvs.error.network' : 'convert.nvs.error.format')}
         </p>
       )}
       {s?.status === 'done' && (
