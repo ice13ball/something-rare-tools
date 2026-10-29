@@ -289,7 +289,7 @@ describe('proposed taxon columns are converted only after confirmation (M1)', ()
     expect(within(section).getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([false, false, false]);
     pick(T['convert.quantity.kind'], 'count');
     await settled('3 proposed taxon columns are not confirmed, so they are not converted.');
-    expect(summary().textContent).toContain('No taxon columns, or no quantity column, are marked');
+    expect(summary().textContent).toContain('No taxon column is marked');
     expect(summary().textContent).toContain('0 occurrences');
     // one column confirmed: only it is converted, and the note counts the rest
     fireEvent.click(within(section).getByLabelText('Confirm as a taxon: Calanus finmarchicus'));
