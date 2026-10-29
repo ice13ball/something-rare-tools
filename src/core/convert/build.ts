@@ -261,7 +261,8 @@ function replicateColumn(sheets: readonly ConvertSheetInput[], file: string, she
   if (rows.length < 2) return undefined;
   const found: string[] = [];
   for (const c of sin.mapping.columns) {
-    if (c.role.kind !== 'ignore' || c.header.trim() === '' || unitFromHeader(c.header).unit !== undefined || isQuantityHeader(c.header)) continue;
+    // an ignored column, or a numeric one the proposer took for a measured variable without a unit (a numeric Replicate column): for the HINT only, the role itself is the user's to give
+    if ((c.role.kind !== 'ignore' && !(c.role.kind === 'variable' && c.role.unit === undefined)) || c.header.trim() === '' || unitFromHeader(c.header).unit !== undefined || isQuantityHeader(c.header)) continue;
     if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
     const values = rows.map((r) => (isBlankCell(r.cells[c.index] ?? null) ? undefined : String(r.cells[c.index]).trim()));
     if (values.some((v) => v === undefined)) continue;

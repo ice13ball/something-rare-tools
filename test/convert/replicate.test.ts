@@ -124,6 +124,14 @@ describe('unique codes keep their IDs: the column stays ignored until the user c
   });
 });
 
+describe('a numeric Replicate column (a variable to the proposer) still gets the hint', () => {
+  it('long: the occurrence duplicate names it', () => {
+    const f = fileOf(['Sample ID', 'Station', 'Date', 'Replicate', 'Species', 'Count'], [['A-2_5', 'A-2', '2015-03-04', 1, 'Asterias rubens', 4], ['A-2_5', 'A-2', '2015-03-04', 2, 'Asterias rubens', 2]]);
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' })] });
+    expect(find(r.blocking, 'CONV-ID-DUPLICATE')[0].params.column).toBe('Replicate');
+  });
+});
+
 describe('a sheet without a replicate column is unchanged', () => {
   it('IDs are pinned', () => {
     const f = fileOf(['Sample', 'Station', 'Date', 'Species', 'Count'], [['A1', 'S1', '2020-01-01', 'Calanus finmarchicus', 3], ['A1', 'S1', '2020-01-01', 'Oithona similis', 4], ['A2', 'S1', '2020-01-02', 'Calanus finmarchicus', 5]]);

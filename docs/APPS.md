@@ -1235,7 +1235,10 @@ code" (the button above applies it).
   blank or a label too (a station `Max` with a real sample code is a station). A row with a date or a
   position of its own is a station and is kept silently. A row with neither is skipped and said
   (`CONV-SUMMARY-ROW-SKIPPED`) when its label is unambiguous (`Mean`, `SD`, ...) or it stands in a
-  block of two or more label rows in a row; a short ambiguous label (`n`, `SE`, `CV`, `Min`, `Max`,
+  block of two or more label rows in a row that holds at least one unambiguous label (two short codes side
+  by side, `N` and `SE`, `Min` and `Max`, are not a block); an unambiguous label in the sample-code
+  column with a date copied down (`St1 | Mean | 2020-01-01`) is a summary row too: skipped in a block,
+  else kept with the warning; a short ambiguous label (`n`, `SE`, `CV`, `Min`, `Max`,
   `Count`) on its own is **never skipped silently**: the row is kept as a sample and said
   (`CONV-SUMMARY-ROW-KEPT`, a warning to accept).
 - **Visits:** a code that repeats at **one** station on rows that differ in date (then time of

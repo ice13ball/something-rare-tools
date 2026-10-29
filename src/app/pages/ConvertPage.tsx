@@ -583,7 +583,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
     const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
     const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
-    const presenceOnly = parsed ? presenceSettingsOf(parsed, choices) : [];
+    const presenceOnly = parsed ? presenceSettingsOf(parsed, choices, mappings) : [];
     download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 

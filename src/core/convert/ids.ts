@@ -39,8 +39,9 @@ export const SUMMARY_LABEL = /^(total|suma|razem|summe|gesamt|somme)$/i;
  * sample code is blank or a label too (a sheet with neither column reads nothing). A station "Max" with a real sample code is a station; a sample code "Mean" under a real station
  * ("St1 | Mean | 2", a subtotal of a station) is a statistic. The label alone is not enough, because a station can be called "Max" or "N" or "E":
  *   - a row with a date or a position of its own is a station: kept, silently;
- *   - a row with neither, whose label is unambiguous (Mean, Average, Median, SD, StDev, Sum, Średnia, Mittelwert, Moyenne, ...) or that stands in a BLOCK of at least two label rows in a row:
- *     skipped, and said (CONV-SUMMARY-ROW-SKIPPED);
+ *   - a row with neither, whose label is unambiguous (Mean, Average, Median, SD, StDev, Sum, Średnia, Mittelwert, Moyenne, ...) or that stands in a BLOCK of at least two label rows in a row
+ *     of which at least one is unambiguous: skipped, and said (CONV-SUMMARY-ROW-SKIPPED);
+ *   - an unambiguous label in the sample-code column WITH a date or position (copied down): skipped in a block with another label, else kept and said;
  *   - a row with neither and a short ambiguous label (n, N, SE, CV, Min, Max, Count) on its own: kept, and said (CONV-SUMMARY-ROW-KEPT) - the user decides; it is never skipped silently.
  * The total words (SUMMARY_LABEL) are decided by the caller, as they always were: this function leaves them out of its answer.
  */
@@ -58,10 +59,10 @@ export function scanStatisticRows(rows: readonly RawRow[], sampleColumns: readon
     const c = r.cells[i] ?? null;
     return isBlankCell(c) ? undefined : typeof c === 'string' ? c.trim() : '';
   };
-  const labelOf = (r: RawRow): string | undefined => {
+  const labelOf = (r: RawRow): { text: string; fromSample: boolean } | undefined => {
     for (const i of sampleColumns) {
       const t = textOf(r, i);
-      if (t !== undefined && isLabel(t)) return t;
+      if (t !== undefined && isLabel(t)) return { text: t, fromSample: true };
     }
     // a label in the station column counts only when the sample code does not name a real sample
     if (sampleColumns.some((i) => {
@@ -70,19 +71,39 @@ export function scanStatisticRows(rows: readonly RawRow[], sampleColumns: readon
     })) return undefined;
     for (const i of stationColumns) {
       const t = textOf(r, i);
-      if (t !== undefined && isLabel(t)) return t;
+      if (t !== undefined && isLabel(t)) return { text: t, fromSample: false };
     }
     return undefined;
   };
+  const ambiguous = (t: string): boolean => AMBIGUOUS_STATISTIC.test(t);
   // the rows that hold something, in order: a blank row neither breaks nor makes a block
   const filled = rows.filter((r) => r.cells.some((c) => !isBlankCell(c ?? null)));
   const labels = filled.map(labelOf);
+  // a block is a run of label rows in a row; it is a STATISTICS block only if one of them is unambiguous (two short codes side by side, N and SE, Min and Max, are still just codes)
+  const blockOf = new Map<number, boolean>();
+  for (let i = 0; i < filled.length; ) {
+    if (labels[i] === undefined) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < filled.length && labels[j] !== undefined) j++;
+    const real = labels.slice(i, j).some((l) => !ambiguous(l!.text));
+    for (let k = i; k < j; k++) blockOf.set(k, real && j - i >= 2);
+    i = j;
+  }
   filled.forEach((r, i) => {
     const label = labels[i];
-    if (label === undefined || SUMMARY_LABEL.test(label)) return;
-    if (ownColumns.some((c) => !isBlankCell(r.cells[c] ?? null))) return;
-    const inBlock = labels[i - 1] !== undefined || labels[i + 1] !== undefined;
-    (inBlock || !AMBIGUOUS_STATISTIC.test(label) ? out.skipped : out.kept).set(r.line, label);
+    if (label === undefined || SUMMARY_LABEL.test(label.text)) return;
+    const inBlock = blockOf.get(i) === true;
+    const own = ownColumns.some((c) => !isBlankCell(r.cells[c] ?? null));
+    if (own) {
+      // a date or position copied down a station's subtotal ("St1 | Mean | 2020-01-01 | 2"): an UNAMBIGUOUS statistic in the sample-code column is still a summary row, skipped in a block
+      // with another statistic and otherwise asked about; a short code with a date is a station
+      if (label.fromSample && !ambiguous(label.text)) (inBlock ? out.skipped : out.kept).set(r.line, label.text);
+      return;
+    }
+    (inBlock || !ambiguous(label.text) ? out.skipped : out.kept).set(r.line, label.text);
   });
   return out;
 }
