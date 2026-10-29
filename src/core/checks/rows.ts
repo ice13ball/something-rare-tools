@@ -377,7 +377,10 @@ const MAX_YEAR = 2100;
 const YEAR = '(?<![\\p{L}\\p{N}])(19[0-9]{2}|20[0-9]{2}|2100)';
 const YEAR_END = '(19[0-9]{2}|20[0-9]{2}|2100)';
 const DASH = '[-\\u2010-\\u2015\\u2212]';
-const NOT_MORE = '(?![\\p{L}\\p{N}]|[-/.:]\\d|\\s*(?:km|mm|cm|m|dbar|db|hpa|mbar|ft)(?![\\p{L}\\p{N}]))';
+const NOT_MORE = '(?![\\p{L}\\p{N}]|[-/.:]\\d)';
+// a unit right after the end of a range makes it a range of numbers, not of years ("1950-2000 m"). Tested on the text after the match, CASE-SENSITIVELY (the word patterns above are
+// case-insensitive: "M/V Polarstern" is no metre), and "db" is left out ("db export" is a word, the unit of pressure is dbar).
+const UNIT_AFTER = /^\s*(?:km|mm|cm|m|dbar|hPa|hpa|mbar|ft)(?![\p{L}\p{N}])/u;
 const RANGE_DASH = new RegExp(`${YEAR}\\s*${DASH}\\s*${YEAR_END}${NOT_MORE}`, 'gu');
 const RANGE_SLASH = new RegExp(`${YEAR}/${YEAR_END}${NOT_MORE}`, 'gu');
 const RANGE_WORD = new RegExp(`${YEAR}[\\s_]+(?:to|until|till|through|bis|do|au|\\u00e0)[\\s_]+${YEAR_END}${NOT_MORE}`, 'giu');
@@ -395,11 +398,12 @@ function rangeYears(text: string): number[] {
   const add = (a: number, b: number): void => {
     if (b > a && b - a <= MAX_RANGE_SPAN) for (let y = a; y <= b; y++) out.push(y);
   };
-  for (const re of [RANGE_DASH, RANGE_SLASH, RANGE_WORD, RANGE_CUE, RANGE_BETWEEN]) for (const m of text.matchAll(re)) add(Number(m[1]), Number(m[2]));
+  const unitFollows = (m: RegExpMatchArray): boolean => UNIT_AFTER.test(text.slice((m.index ?? 0) + m[0].length));
+  for (const re of [RANGE_DASH, RANGE_SLASH, RANGE_WORD, RANGE_CUE, RANGE_BETWEEN]) for (const m of text.matchAll(re)) if (!unitFollows(m)) add(Number(m[1]), Number(m[2]));
   for (const m of text.matchAll(RANGE_SHORT)) {
     const start = Number(m[1]);
     const end2 = Number(m[2]);
-    if (end2 >= 13) add(start, start - (start % 100) + end2);
+    if (end2 >= 13 && !unitFollows(m)) add(start, start - (start % 100) + end2);
   }
   return out;
 }

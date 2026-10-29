@@ -28,6 +28,13 @@ const VARIABLE_TOKENS = new Set([
   'gpp', 'npp', 'ncp', 'cp',
   'o2', 'no3', 'no2', 'nh4', 'nh3', 'po4', 'sio4', 'sio2', 'h2s', 'co2', 'ch4', 'n2o',
   'chl', 'chla', 'chlorophyll', 'phaeo', 'phaeopigments', 'tss', 'spm', 'tsm', 'cdom', 'par', 'ph', 'eh',
+]);
+
+/**
+ * Plain English measurement words of a CTD or bottle file. Unlike the abbreviation tokens above they are checked AFTER the counting-unit test: a column of such a word that counts
+ * organisms ("Nitrogen fixers [cells/l]", "Light [ind]") may still be a species, and only a column without a counting unit is a variable.
+ */
+const MEASUREMENT_WORDS = new Set([
   // physical and optical sensor quantities of a CTD or bottle file: plain English words that the genus shape below would otherwise take for a taxon candidate (the repo holds no genus list to
   // check against; none of these is a genus name to the author's knowledge: they are ordinary English measurement words, not Latin names)
   'activity', 'fluorescence', 'turbidity', 'irradiance', 'transmission', 'transmittance', 'attenuation', 'beam', 'backscatter', 'backscattering', 'absorbance', 'absorption', 'radiance',
@@ -79,7 +86,9 @@ export function nameKind(header: string, abundance = false): NameKind {
   if (DESCRIPTOR.test(key)) return 'descriptor';
   const lead = asLetters.split(/[\s,]+/)[0].replace(/[.;]+$/, '');
   if (VARIABLE_TOKENS.has(key) || VARIABLE_TOKENS.has(lead) || VARIABLE_TOKENS.has(lead.replace(/[^a-z0-9]/g, '')) || ISOTOPE.test(lead.replace(/[^a-z0-9]/g, '')) || RATIO.test(lead)) return 'variable';
-  if (abundance || hasTaxonShape(asLetters)) return 'taxon';
+  if (abundance) return 'taxon';
+  if (MEASUREMENT_WORDS.has(key) || MEASUREMENT_WORDS.has(lead) || MEASUREMENT_WORDS.has(lead.replace(/[^a-z0-9]/g, ''))) return 'variable';
+  if (hasTaxonShape(asLetters)) return 'taxon';
   if (/[\d/:]/.test(asLetters)) return 'variable';
   const letters = raw.replace(/[^A-Za-z]/g, '');
   if (letters.length > 0 && letters.length <= 5 && letters === letters.toUpperCase() && !/\s/.test(raw.trim())) return 'variable';

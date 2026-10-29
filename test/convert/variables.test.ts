@@ -2,6 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Stage 5, Part B1 and B2: the measured-variable columns of a converted sheet become eMoF rows on the SAMPLE event, and a NERC identifier is written only for what the
 // user confirmed for that column. Synthetic data only.
+import { P01_CODE_BODY } from '../../src/core/recognize/headerCodes';
+import { p01CodeOf } from '../../src/core/recognize/vocab';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -337,6 +339,14 @@ describe('T11: /check\'s vocabulary is untouched', () => {
   it('src/core/recognize/vocab.ts (UNIT_VOCAB, P01_HINTS, the canonical variables) is the one of production (96994b5) except for ONE deliberate change: its P01 code pattern comes from recognize/headerCodes.ts (a first letter is no longer required, as 66 current P01 codes begin with a digit)', () => {
     const sha = createHash('sha256').update(readFileSync(join(__dirname, '..', '..', 'src', 'core', 'recognize', 'vocab.ts'))).digest('hex');
     expect(sha).toBe('ce50b292b3f5acaecb88c51918c8e7125e0fd02e9bac18f2d1e09a48dabad812');
+  });
+
+  it('the P01 pattern vocab.ts takes from recognize/headerCodes.ts is the vocabulary\'s own shape, and that file is pinned too', () => {
+    expect(P01_CODE_BODY).toBe('[A-Z0-9]{8}');
+    expect(p01CodeOf('SDN:P01::TEMPPR01')?.code).toBe('TEMPPR01');
+    expect(p01CodeOf('SDN:P01::TEMPPR011')).toBeUndefined();
+    const sha = createHash('sha256').update(readFileSync(join(__dirname, '..', '..', 'src', 'core', 'recognize', 'headerCodes.ts'))).digest('hex');
+    expect(sha).toBe('f1d2ff5412b575062b8d649b7abceeef08655347368faa9d9a49d8de9ba8f2bb');
   });
 });
 
