@@ -45,7 +45,9 @@ export const CHECK_REASONS = {
   'quality-flag': 'quality flag column',
   'end-position': 'end position of a tow or transect, not read: the position comes from "{name}"',
   'end-position-only': 'only the end position of a tow or transect is given: it is used as the position (check that this is what you want)',
-  'hemisphere': 'hemisphere letter for the coordinate column; the tool does not yet combine them, so check the signs of the coordinates',
+  'hemisphere': 'hemisphere letter for a coordinate column, but it cannot be tied to the mapped coordinate, so it is ignored; choose "Hemisphere" to pair it, or check the signs of the coordinates',
+  'hemisphere-pair': 'hemisphere letter for {name}: S and W make the value negative',
+  'hemisphere-ambiguous': 'hemisphere letter for a coordinate column, but it is not clear which of several positions it signs (the mapped one is "{name}"), so it is ignored; choose "Hemisphere" to pair it',
   identifier: 'identifier, not a measurement',
   abundance: 'abundance (number of specimens): not an environmental measurement',
   // another column won the slot ({name} is that column)

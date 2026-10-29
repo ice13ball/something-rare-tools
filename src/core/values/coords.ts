@@ -135,3 +135,47 @@ export function parseCoordinate(raw: RawCell, axis: 'lat' | 'lon', decimalComma:
   const decimals = Math.min(DECIMALS_CAP, Math.ceil(fracDigits(secText) + Math.log10(3600)));
   return finish(apply(deg + min / 60 + sec / 3600), decimals, 'dms', axis, raw);
 }
+
+/* ---------- hemisphere letters kept in a column of their own ---------- */
+
+const HEMISPHERE_WORDS: Readonly<Record<string, 'N' | 'S' | 'E' | 'W'>> = { n: 'N', s: 'S', e: 'E', w: 'W', north: 'N', south: 'S', east: 'E', west: 'W' };
+
+/** The hemisphere a cell names: N, S, E, W or the word North, South, East, West (any case, a trailing full stop allowed); undefined for anything else. */
+export function hemisphereLetter(raw: RawCell): 'N' | 'S' | 'E' | 'W' | undefined {
+  if (typeof raw !== 'string') return undefined;
+  return HEMISPHERE_WORDS[raw.trim().replace(/\.$/, '').toLowerCase()];
+}
+
+export interface HemispherePairing {
+  /** The cell to hand to parseCoordinate: the written value, made negative when the letter is S or W. */
+  cell: RawCell;
+  /** 'conflict': the value and the letter disagree (already negative, a letter of the other axis, or an own letter that says the opposite). 'missing': a filled value with no usable letter. The cell is then returned as written. */
+  issue?: 'conflict' | 'missing';
+}
+
+/**
+ * Combines an unsigned coordinate cell with the cell of its hemisphere column. S (latitude) and W (longitude) negate the value, N and E keep it;
+ * the value may be a decimal or degrees and minutes. A value that already carries a sign or a letter of its own is never negated a second time:
+ * a negative value (with any letter), a letter of the other axis or an own letter against the column's one is a 'conflict', and a blank or
+ * unknown letter is 'missing'; in all three the value is kept as written. The caller passes a filled coordinate cell.
+ */
+export function pairHemisphere(cell: RawCell, hemi: RawCell, axis: 'lat' | 'lon'): HemispherePairing {
+  const letter = hemisphereLetter(hemi);
+  if (letter === undefined) return { cell, issue: 'missing' };
+  if ((axis === 'lat' ? 'NS' : 'EW').indexOf(letter) < 0) return { cell, issue: 'conflict' };
+  const negative = letter === 'S' || letter === 'W';
+  if (typeof cell === 'number') {
+    if (cell < 0) return { cell, issue: 'conflict' };
+    return { cell: negative ? -cell : cell };
+  }
+  if (cell === null) return { cell };
+  const text = normaliseMarks(cell);
+  if (/^[-−–]/.test(text)) return { cell, issue: 'conflict' };
+  const own = /^([NSEW])\s*\d|\d\s*([NSEW])$/i.exec(text);
+  if (own) {
+    const ownLetter = (own[1] ?? own[2]).toUpperCase();
+    return ownLetter === letter ? { cell } : { cell, issue: 'conflict' };
+  }
+  const unsigned = text.replace(/^\+\s*/, '');
+  return { cell: negative ? `-${unsigned}` : unsigned };
+}

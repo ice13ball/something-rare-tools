@@ -104,7 +104,9 @@ const SHIP_DECLARED = {
  *   ROW-UNIT-MISSING      headers     column headers without a unit, comma-separated
  *   ROW-DEPTH-SIGN        header      the depth column header
  *   ROW-DM-COORDS         (none)      field = column, value = example text (once per column)
- *   ROW-ZERO-COORD        (none)      lines = rows with latitude and longitude both 0
+ *   ROW-HEMISPHERE-CONFLICT hemisphere  field = coordinate column, hemisphere = its hemisphere column, value = example as written, lines = rows
+ *   ROW-HEMISPHERE-MISSING  hemisphere  the same, for a filled value with an empty or unknown letter
+ *   ROW-ZERO-COORD        (none)    lines = rows with latitude and longitude both 0
  *   ROW-NO-COORD          count       lines = rows with a blank latitude or longitude cell, count = how many
  *   ROW-DEPTH-MIN-MAX     (none)      value = "min > max" of the first row
  *   ROW-DEPTH-RANGE       (none)      field = column, value = first value outside the range, lines = rows
@@ -464,6 +466,32 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Les coordonnées de la colonne « {field} » sont écrites en degrés et minutes (par ex. « {value} »). Elles ont été converties en degrés décimaux ; vérifiez-en quelques-unes.`,
     },
     technical: `{file} field {field} value '{value}': degree-minute(-second) text converted to decimal degrees.`,
+  },
+  {
+    id: 'ROW-HEMISPHERE-CONFLICT',
+    category: 'B',
+    severity: 'warning',
+    params: ['hemisphere'],
+    plain: {
+      pl: `W wierszach {lines} wartość w kolumnie „{field}” (np. „{value}”) nie zgadza się z literą półkuli z kolumny „{hemisphere}”: ma już znak minus albo własną literę, albo litera należy do drugiej osi. Wartość zostawiono tak, jak jest zapisana, bez ponownej zmiany znaku; popraw wiersze.`,
+      en: `In lines {lines} the value in column "{field}" (e.g. "{value}") disagrees with the hemisphere letter in column "{hemisphere}": it already has a minus sign or a letter of its own, or the letter belongs to the other axis. The value was kept as written and its sign was not changed again; correct these rows.`,
+      de: `In den Zeilen {lines} passt der Wert in der Spalte „{field}“ (z. B. „{value}“) nicht zum Hemisphärenbuchstaben in der Spalte „{hemisphere}“: Er hat bereits ein Minuszeichen oder einen eigenen Buchstaben, oder der Buchstabe gehört zur anderen Achse. Der Wert blieb wie geschrieben, das Vorzeichen wurde nicht noch einmal geändert; korrigieren Sie diese Zeilen.`,
+      fr: `Aux lignes {lines}, la valeur de la colonne « {field} » (par ex. « {value} ») ne concorde pas avec la lettre d'hémisphère de la colonne « {hemisphere} » : elle porte déjà un signe moins ou une lettre propre, ou la lettre appartient à l'autre axe. La valeur a été gardée telle qu'écrite et son signe n'a pas été changé une seconde fois ; corrigez ces lignes.`,
+    },
+    technical: `{file}:{lines} field {field} value '{value}': disagrees with the hemisphere letter in {hemisphere}; kept as written, not negated again.`,
+  },
+  {
+    id: 'ROW-HEMISPHERE-MISSING',
+    category: 'B',
+    severity: 'warning',
+    params: ['hemisphere'],
+    plain: {
+      pl: `W wierszach {lines} kolumna „{field}” ma wartość (np. „{value}”), ale kolumna półkuli „{hemisphere}” jest pusta albo ma coś innego niż N, S, E, W. Wartość zostawiono tak, jak jest zapisana, więc dla półkuli południowej lub zachodniej może mieć zły znak; uzupełnij literę.`,
+      en: `In lines {lines} column "{field}" has a value (e.g. "{value}") but the hemisphere column "{hemisphere}" is empty or holds something other than N, S, E, W. The value was kept as written, so it may have the wrong sign for the southern or western hemisphere; fill in the letter.`,
+      de: `In den Zeilen {lines} hat die Spalte „{field}“ einen Wert (z. B. „{value}“), aber die Hemisphärenspalte „{hemisphere}“ ist leer oder enthält etwas anderes als N, S, E, W. Der Wert blieb wie geschrieben und kann daher für die Süd- oder Westhalbkugel das falsche Vorzeichen haben; ergänzen Sie den Buchstaben.`,
+      fr: `Aux lignes {lines}, la colonne « {field} » a une valeur (par ex. « {value} ») mais la colonne d'hémisphère « {hemisphere} » est vide ou contient autre chose que N, S, E, W. La valeur a été gardée telle qu'écrite et peut donc avoir le mauvais signe pour l'hémisphère sud ou ouest ; complétez la lettre.`,
+    },
+    technical: `{file}:{lines} field {field} value '{value}': the hemisphere column {hemisphere} is empty or not N/S/E/W; kept as written.`,
   },
   {
     id: 'ROW-ZERO-COORD',

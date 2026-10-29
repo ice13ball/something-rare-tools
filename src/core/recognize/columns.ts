@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMapping, TablePlan } from '../types';
-import { parseCoordinate } from '../values/coords';
+import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { parseDate, parseTimeOfDay } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
-import { coordinateBound, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
+import { coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
 
 export interface ProposeContext {
@@ -633,6 +633,74 @@ function bareCoordinates(sheet: RawSheet, rows: readonly RawRow[], ctx: ProposeC
   return out;
 }
 
+/** The axis the letters of a column name: only N / S (and the words) is latitude, only E / W is longitude; undefined when both kinds, or neither, are present. */
+function letterAxis(rows: readonly RawRow[], col: number): 'latitude' | 'longitude' | undefined {
+  let lat = 0;
+  let lon = 0;
+  for (const r of rows) {
+    const letter = hemisphereLetter(r.cells[col] ?? null);
+    if (letter === 'N' || letter === 'S') lat++;
+    else if (letter === 'E' || letter === 'W') lon++;
+  }
+  return lat > 0 && lon === 0 ? 'latitude' : lon > 0 && lat === 0 ? 'longitude' : undefined;
+}
+
+/** Does a sampled value of the column already carry its own sign or letter? Then a hemisphere column beside it would only contradict it. */
+function holdsSignedValues(rows: readonly RawRow[], col: number): boolean {
+  return rows.some((r) => {
+    const c = r.cells[col] ?? null;
+    return typeof c === 'number' ? c < 0 : typeof c === 'string' && /^\s*[-−–]|[NSEW]/i.test(c);
+  });
+}
+
+/**
+ * A column of hemisphere letters that is tied to the coordinate it signs becomes the role `hemisphere` (low confidence); every other one stays ignored.
+ * It is tied to the MAPPED column of its axis when: the header names the axis (or the values do, only N/S or only E/W) AND the coordinate is unsigned AND
+ * the start / end word agrees ('Beg Lat Dir' signs 'Begin Latitude', never 'End Latitude'; 'End Lat Dir' therefore stays ignored while the end position is). A
+ * header without a start / end word signs the mapped one when it is the only coordinate of that axis, when it sits right beside it, or when the other
+ * coordinates of the axis each have a hemisphere column of their own. Otherwise the pairing is ambiguous and nothing is paired (the reason says so).
+ */
+function pairHemisphereColumns(
+  entries: readonly { proposal: ColumnProposal; cand?: { slot: string }; hemi?: true }[],
+  bySlot: ReadonlyMap<string, number[]>,
+  rows: readonly RawRow[],
+): void {
+  const boundOf = (header: string): 'start' | 'end' | undefined => coordinateBound(headerKey(unitFromHeader(header).name))?.bound;
+  const hemis = entries
+    .filter((e) => e.hemi)
+    .map((e) => {
+      const t = hemisphereTarget(headerKey(unitFromHeader(e.proposal.header).name));
+      const v = letterAxis(rows, e.proposal.index);
+      const axis = t.axis ?? v;
+      return { e, axis: t.axis !== undefined && v !== undefined && t.axis !== v ? undefined : axis, bound: t.bound, named: t.axis !== undefined };
+    });
+  for (const h of hemis) {
+    if (h.axis === undefined) continue;
+    const slot = bySlot.get(h.axis) ?? [];
+    const mappedAt = slot.find((i) => entries[i].proposal.role.kind === h.axis);
+    if (mappedAt === undefined) continue;
+    const mapped = entries[mappedAt].proposal;
+    if (holdsSignedValues(rows, mapped.index)) continue;
+    const mappedBound = boundOf(mapped.header);
+    let tied: boolean;
+    if (h.bound !== undefined) tied = mappedBound === h.bound;
+    else if (slot.length === 1) tied = h.named || Math.abs(h.e.proposal.index - mapped.index) === 1;
+    else {
+      const others = slot.filter((i) => i !== mappedAt);
+      const claimed = (i: number): boolean => {
+        const b = boundOf(entries[i].proposal.header);
+        return b !== undefined && hemis.some((o) => o !== h && o.axis === h.axis && o.bound === b);
+      };
+      tied = Math.abs(h.e.proposal.index - mapped.index) === 1 || others.every(claimed);
+      if (!tied) applyReason(h.e.proposal, why('hemisphere-ambiguous', { name: mapped.cleanHeader }), []);
+    }
+    if (!tied) continue;
+    h.e.proposal.role = { kind: 'hemisphere', axis: h.axis };
+    h.e.proposal.confidence = 'low';
+    applyReason(h.e.proposal, why('hemisphere-pair', { name: mapped.cleanHeader }), []);
+  }
+}
+
 /** Proposes a role for every column of a sheet, in column order. */
 export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProposal[] {
   const rows = sampleRows(sheet);
@@ -643,6 +711,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     proposal: ColumnProposal;
     cand?: Cand;
     elevation?: boolean;
+    /** A column of hemisphere letters: pairHemisphereColumns may tie it to the mapped coordinate. */
+    hemi?: true;
   }
   const dwcSheet = isDwcSheet(sheet.header);
   const bareCands = bareCoordinates(sheet, rows, ctx, longCols, dwcSheet);
@@ -664,7 +734,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     // 1. header names
     if (FLAG.test(key)) return ignore(why('quality-flag'));
     // a header that names a hemisphere letter ('Lon Dir', 'Lat NS'): the VALUES decide. Numbers keep the header's old reading (a coordinate, or a variable such as the ratio N:S)
-    if (isHemisphereHeader(key) && !isNumeric(numericStats(rows, index, ctx.decimalComma))) return ignore(why('hemisphere'), 'low');
+    if (isHemisphereHeader(key) && !isNumeric(numericStats(rows, index, ctx.decimalComma))) return { ...ignore(why('hemisphere'), 'low'), hemi: true };
 
     const dwc = dwcColumn(cleanHeader, dwcSheet);
     if (dwc && 'ignore' in dwc) return ignore(dwc.ignore);
@@ -699,7 +769,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
       p01Code = code.code; // declared by the file itself, not in our table
     }
 
-    if (candidate && (candidate.kind === 'latitude' || candidate.kind === 'longitude') && holdsOnlyHemisphereLetters(rows, index)) return ignore(why('hemisphere'), 'low');
+    if (candidate && (candidate.kind === 'latitude' || candidate.kind === 'longitude') && holdsOnlyHemisphereLetters(rows, index)) return { ...ignore(why('hemisphere'), 'low'), hemi: true };
 
     if (candidate) {
       return { proposal: { ...base, role: { kind: 'ignore' }, confidence: candidate.tier >= 3 ? 'low' : 'high', ...reasonOf(candidate.why) }, cand: candidate, elevation: candidate.elevation };
@@ -835,6 +905,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
       }
     }
   }
+
+  pairHemisphereColumns(entries, bySlot, rows);
 
   // a date column whose values carry a time of day is a datetime
   for (const e of entries) {

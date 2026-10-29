@@ -22,6 +22,12 @@ const en = {
   'tip.role.ignore': `the column is not part of any check, nor of the clean CSV.`,
   'tip.role.latitude': `the north–south position of the point.`,
   'tip.role.longitude': `the east–west position of the point.`,
+  'tip.role.hemisphere': `the letters N, S, E and W of a coordinate kept in a column of its own; S and W make the value of the latitude or longitude column negative.`,
+  'tip.hemisphere.does': `Joins a column of hemisphere letters to the latitude or longitude column it signs.`,
+  'tip.hemisphere.logic': `• The latitude or longitude column then holds unsigned numbers. The letter S (latitude) or W (longitude), or the word South or West, in any case, makes the value negative; N and E keep it.
+• It works on decimals and on degrees and minutes. A start and an end position pair one by one: a column of start letters signs the start position and one of end letters the end position; the end position is not read while a start position exists.
+• A value that already has a minus sign or a letter of its own, a letter of the other axis, or a filled value with an empty letter is left as written and reported, so a sign is never changed twice.
+• The tool proposes this only for a column of letters that names its coordinate or sits beside it, and says so with low confidence. Choose Ignore to read the numbers as they stand.`,
   'tip.role.datetime': `date and time in one column.`,
   'tip.role.date': `the date alone, without a time of day.`,
   'tip.role.time': `the time of day, combined with the date of the date column; without a date column it is not used.`,
@@ -482,6 +488,12 @@ const pl: Record<TipKey, string> = {
   'tip.role.ignore': `nie jest uwzględniana w żadnym sprawdzeniu ani w czystym CSV.`,
   'tip.role.latitude': `położenie punktu na osi północ–południe.`,
   'tip.role.longitude': `położenie punktu na osi wschód–zachód.`,
+  'tip.role.hemisphere': `litery N, S, E i W współrzędnej zapisane w osobnej kolumnie; S i W zmieniają wartość w kolumnie szerokości lub długości na ujemną.`,
+  'tip.hemisphere.does': `Łączy kolumnę z literami półkuli z kolumną szerokości albo długości, której znak ustala.`,
+  'tip.hemisphere.logic': `• Kolumna szerokości lub długości zawiera wtedy liczby bez znaku. Litera S (szerokość) lub W (długość), albo słowo South lub West, małymi lub wielkimi literami, zmienia wartość na ujemną; N i E zostawiają ją bez zmian.
+• Działa na liczbach dziesiętnych oraz na stopniach i minutach. Pozycja początkowa i końcowa łączą się parami: kolumna z literami początku znakuje pozycję początkową, a kolumna z literami końca końcową; pozycja końcowa nie jest czytana, dopóki jest początkowa.
+• Wartość, która ma już znak minus lub własną literę, litera z drugiej osi albo wypełniona wartość z pustą literą zostają zapisane tak, jak są, i są zgłaszane, więc znak nigdy nie zmienia się dwa razy.
+• Narzędzie proponuje to tylko dla kolumny z literami, która nazywa swoją współrzędną albo stoi obok niej, i mówi o tym z niską pewnością. Wybierz Pomiń, żeby czytać liczby takie, jakie są.`,
   'tip.role.datetime': `data i godzina w jednej kolumnie.`,
   'tip.role.date': `sama data, bez godziny.`,
   'tip.role.time': `godzina łączona z datą z kolumny daty; bez kolumny z datą nie jest używana.`,
@@ -940,6 +952,12 @@ const de: Record<TipKey, string> = {
   'tip.role.ignore': `die Spalte geht in keine Prüfung und nicht in die bereinigte CSV ein.`,
   'tip.role.latitude': `die Nord-Süd-Position des Punktes.`,
   'tip.role.longitude': `die Ost-West-Position des Punktes.`,
+  'tip.role.hemisphere': `die Buchstaben N, S, E und W einer Koordinate in einer eigenen Spalte; S und W machen den Wert der Breiten- oder Längenspalte negativ.`,
+  'tip.hemisphere.does': `Verbindet eine Spalte mit Hemisphärenbuchstaben mit der Breiten- oder Längenspalte, deren Vorzeichen sie bestimmt.`,
+  'tip.hemisphere.logic': `• Die Breiten- oder Längenspalte enthält dann Zahlen ohne Vorzeichen. Der Buchstabe S (Breite) oder W (Länge) oder das Wort South oder West, in beliebiger Schreibweise, macht den Wert negativ; N und E lassen ihn unverändert.
+• Es funktioniert mit Dezimalzahlen sowie mit Grad und Minuten. Anfangs- und Endposition werden paarweise verbunden: Eine Spalte mit Anfangsbuchstaben bestimmt die Anfangsposition, eine mit Endbuchstaben die Endposition; die Endposition wird nicht gelesen, solange es eine Anfangsposition gibt.
+• Ein Wert, der schon ein Minuszeichen oder einen eigenen Buchstaben hat, ein Buchstabe der anderen Achse oder ein ausgefüllter Wert mit leerem Buchstaben bleibt wie geschrieben und wird gemeldet, damit ein Vorzeichen nie zweimal geändert wird.
+• Das Werkzeug schlägt dies nur für eine Buchstabenspalte vor, die ihre Koordinate nennt oder daneben steht, und sagt das mit geringer Sicherheit. Wählen Sie Ignorieren, um die Zahlen so zu lesen, wie sie dastehen.`,
   'tip.role.datetime': `Datum und Uhrzeit in einer Spalte.`,
   'tip.role.date': `nur das Datum, ohne Uhrzeit.`,
   'tip.role.time': `die Uhrzeit, mit dem Datum der Datumsspalte verbunden; ohne Datumsspalte wird sie nicht verwendet.`,
@@ -1398,6 +1416,12 @@ const fr: Record<TipKey, string> = {
   'tip.role.ignore': `la colonne n'entre dans aucune vérification ni dans le CSV nettoyé.`,
   'tip.role.latitude': `la position nord–sud du point.`,
   'tip.role.longitude': `la position est–ouest du point.`,
+  'tip.role.hemisphere': `les lettres N, S, E et W d'une coordonnée écrites dans une colonne à part ; S et W rendent négative la valeur de la colonne de latitude ou de longitude.`,
+  'tip.hemisphere.does': `Associe une colonne de lettres d'hémisphère à la colonne de latitude ou de longitude dont elle donne le signe.`,
+  'tip.hemisphere.logic': `• La colonne de latitude ou de longitude contient alors des nombres sans signe. La lettre S (latitude) ou W (longitude), ou le mot South ou West, en majuscules ou en minuscules, rend la valeur négative ; N et E la laissent telle quelle.
+• Cela fonctionne avec des décimales et avec des degrés et minutes. Une position de début et une de fin sont associées une à une : une colonne de lettres de début donne le signe de la position de début et une colonne de lettres de fin celui de la position de fin ; la position de fin n'est pas lue tant qu'il existe une position de début.
+• Une valeur qui porte déjà un signe moins ou une lettre propre, une lettre de l'autre axe ou une valeur remplie avec une lettre vide est laissée telle qu'écrite et signalée, de sorte qu'un signe n'est jamais changé deux fois.
+• L'outil ne propose cela que pour une colonne de lettres qui nomme sa coordonnée ou qui est à côté, et le dit avec une confiance faible. Choisissez Ignorer pour lire les nombres tels quels.`,
   'tip.role.datetime': `la date et l'heure dans une même colonne.`,
   'tip.role.date': `la date seule, sans heure.`,
   'tip.role.time': `l'heure, associée à la date de la colonne de date ; sans colonne de date, elle n'est pas utilisée.`,
