@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import type { MapLib } from '../../src/app/components/MapPreview';
 import { initLang, setLang } from '../../src/app/i18n';
 import { InputPanel } from '../../src/app/components/InputPanel';
+import { MappingEditor } from '../../src/app/components/MappingEditor';
 import { CheckPage } from '../../src/app/pages/CheckPage';
 import { CollectionPage } from '../../src/app/pages/CollectionPage';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
@@ -117,6 +118,21 @@ describe('/check', () => {
     for (const k of ['downloads.cleanCsv', 'downloads.sidecar', 'downloads.iso', 'downloads.datacite', 'downloads.geojson'] as const) {
       expect(screen.getByRole('button', { name: UI.en[k] })).toBeTruthy();
     }
+  });
+});
+
+describe('the hemisphere role', () => {
+  it('the axis it signs carries its own ⓘ', () => {
+    render(
+      <MappingEditor
+        sheet="S"
+        proposals={[{ index: 0, header: 'Lat Dir', cleanHeader: 'Lat Dir', role: { kind: 'hemisphere', axis: 'latitude' }, confidence: 'low', reason: 'x' }]}
+        samples={[['N', 'S']]}
+        mapping={{ sheet: 'S', columns: [{ index: 0, header: 'Lat Dir', role: { kind: 'hemisphere', axis: 'latitude' } }] }}
+        onChange={() => {}}
+      />,
+    );
+    expectTips(['hemisphere']);
   });
 });
 
