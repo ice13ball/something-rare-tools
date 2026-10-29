@@ -19,7 +19,7 @@ describe('registry conventions', () => {
   it('has unique CONV-* ids, category B, and a severity of the three allowed', () => {
     const ids = CONVERT_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(54);
+    expect(ids.length).toBe(55);
     for (const r of CONVERT_RULES) {
       expect(r.id).toMatch(/^CONV-[A-Z]+(-[A-Z0-9]+)*$/);
       expect(r.category).toBe('B');

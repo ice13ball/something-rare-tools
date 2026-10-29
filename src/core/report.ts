@@ -97,8 +97,12 @@ function fill(template: string, f: Finding, lang?: Lang): string {
     value: f.value ?? '',
     lines: formatLines(f.lines),
   };
-  // plural tokens ({+name:one|other}, i18n/plural.ts) depend on a numeric param
-  const text = lang === undefined ? template : applyPlurals(lang, template, (name) => (Object.prototype.hasOwnProperty.call(f.params, name) ? Number(f.params[name]) : undefined));
+  // plural tokens ({+name:one|other}, i18n/plural.ts) depend on a numeric param; {+lines:...} on the number of listed lines
+  const pluralCount = (name: string): number | undefined => {
+    if (Object.prototype.hasOwnProperty.call(f.params, name)) return Number(f.params[name]);
+    return name === 'lines' && f.lines && f.lines.length > 0 ? new Set(f.lines).size : undefined;
+  };
+  const text = lang === undefined ? template : applyPlurals(lang, template, pluralCount);
   return text.replace(/\{([A-Za-z_][\w.]*)\}/g, (whole, name: string) => {
     if (name.startsWith('threshold.')) {
       const t = rule.thresholds?.find((x) => x.name === name.slice('threshold.'.length));

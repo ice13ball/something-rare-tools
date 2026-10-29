@@ -3,7 +3,7 @@
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
-import { p01CodeOf } from '../recognize/vocab';
+import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
@@ -891,10 +891,41 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
 /* ---------- the conversion ---------- */
 
-export function convert(input: ConvertInput): ConvertResult {
+/** The strict header names of a long environmental sheet (one row per measured parameter): headerKey of the header, diacritics folded. */
+const LONG_PARAMETER = new Set(['parameter', 'parameters', 'parametr', 'parametre', 'variable', 'determinand', 'analyte', 'measurement type', 'measurementtype']);
+const LONG_VALUE = new Set(['value', 'values', 'wartosc', 'wert', 'valeur', 'result', 'measurement value', 'measurementvalue']);
+
+/**
+ * The headers of a sheet in the long environmental layout (CONV-LONG-UNSUPPORTED): an explicit parameter column AND an explicit value column, and, in the converter's own
+ * reading (the confirmed mapping), no taxon column and no quantity column. A long biology sheet (taxon + count) is not this. Never the /check LayoutPlan.long heuristic.
+ */
+function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly string[]): { parameter: string; value: string } | undefined {
+  const parameterAt = header.findIndex((h) => LONG_PARAMETER.has(headerKey(h)));
+  const valueAt = header.findIndex((h) => LONG_VALUE.has(headerKey(h)));
+  if (parameterAt < 0 || valueAt < 0) return undefined;
+  const cols = colsOf(sin.mapping, header);
+  // the proposer reads the explicit "value" column of such a sheet as a species column (a number under a header): that reading is the very thing this finding refuses, so it does not count as a taxon
+  const own = (c: Spec): boolean => c.index === valueAt || c.index === parameterAt;
+  if (cols.taxonHeaders.some((c) => !own(c)) || (cols.taxonCell !== undefined && !own(cols.taxonCell)) || cols.quantity !== undefined) return undefined;
+  return { parameter: header[parameterAt].trim(), value: header[valueAt].trim() };
+}
+
+export function convert(rawInput: ConvertInput): ConvertResult {
+  // a sheet in the long environmental layout is not read at all: nothing of it is written, and the finding blocks the export
+  const longFindings: Finding[] = [];
+  const input: ConvertInput = {
+    ...rawInput,
+    sheets: rawInput.sheets.filter((sin) => {
+      const header = sin.file.sheets.find((x) => x.name === sin.sheet)?.header;
+      const long = header === undefined ? undefined : longEnvironmentalHeaders(sin, header);
+      if (long === undefined) return true;
+      longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value } }));
+      return false;
+    }),
+  };
   const opts = input.options ?? {};
   const fullList = opts.fullList === true;
-  const findings: Finding[] = [];
+  const findings: Finding[] = [...longFindings];
   const occurrences: OccRec[] = [];
   const measurements: MofIntent[] = [];
   const samples = new Map<string, SampleAcc>();
@@ -913,7 +944,7 @@ export function convert(input: ConvertInput): ConvertResult {
   // A finding that names a sheet is kept only for a sheet that is converted; one that names none (the whole file) is kept once per file.
   {
     const used = new Map<ParsedFile, Set<string>>();
-    for (const sin of input.sheets) (used.get(sin.file) ?? used.set(sin.file, new Set()).get(sin.file)!).add(sin.sheet);
+    for (const sin of rawInput.sheets) (used.get(sin.file) ?? used.set(sin.file, new Set()).get(sin.file)!).add(sin.sheet);
     for (const [file, sheets] of used) for (const f of file.findings) if (f.sheet === undefined || sheets.has(f.sheet)) findings.push(f);
   }
   // a column the header does not name (IN-HEADER-SHORT) must not give its internal name ("Column 7") to a variable or a taxon of the archive

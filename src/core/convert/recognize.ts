@@ -214,6 +214,16 @@ export type OverlayReason = keyof typeof OVERLAY_REASONS;
 
 type Claim = { role: ColumnRole; confidence: 'high' | 'low'; code: OverlayReason };
 
+/**
+ * IO PAN's underscore style glues the unit to the name ("O2_sat_%", "O2_saturation_%", "Oxygen_saturation_%", "O2_sat_pct"): oxygen saturation, a variable of its own with no concentration concept,
+ * like "O2 [%]". The unit is stated only when the header says it (a percent sign, pct, percent).
+ */
+function oxygenSaturationClaim(header: string): Claim | undefined {
+  const m = /^(?:o2|oxygen)[ _-]?(?:sat|saturation)(?:[ _-]?(%|pct|percent))?$/i.exec(header.trim());
+  if (m === null) return undefined;
+  return { role: { kind: 'variable', variable: 'oxygen saturation', ...(m[1] === undefined ? {} : { unit: '%', unitSource: 'header' as const }) }, confidence: 'high', code: 'oxygen-saturation' };
+}
+
 /** The Darwin Core terms the converter reads, by lower-cased term. */
 function dwcClaim(term: string): Claim | undefined {
   switch (term) {
@@ -398,6 +408,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
             : undefined;
         const named =
           seawaterDensity ??
+          oxygenSaturationClaim(p.header) ??
           variableClaim(hu.name, hu.unit) ??
           nameClaim(foldDiacritics(key), hu.unit) ??
           onlyEffortOrCode(bare === foldDiacritics(key) ? undefined : nameClaim(bare, hu.unit ?? bracketText(hu.name))) ??

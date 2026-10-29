@@ -1,0 +1,1368 @@
+{
+ "taxon-count": {
+  "ok": false,
+  "findings": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "lines": [
+     2,
+     3,
+     4
+    ],
+    "params": {
+     "count": 3,
+     "column": "none"
+    },
+    "ruleId": "CONV-SAMPLE-CODE-MISSING",
+    "severity": "error"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {},
+    "ruleId": "CONV-NO-OCCURRENCES",
+    "severity": "error"
+   }
+  ],
+  "blocking": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "lines": [
+     2,
+     3,
+     4
+    ],
+    "params": {
+     "count": 3,
+     "column": "none"
+    },
+    "ruleId": "CONV-SAMPLE-CODE-MISSING",
+    "severity": "error"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {},
+    "ruleId": "CONV-NO-OCCURRENCES",
+    "severity": "error"
+   }
+  ],
+  "events": [],
+  "occurrences": [],
+  "measurements": [],
+  "tree": {
+   "events": 0,
+   "cruises": 0,
+   "stations": 0,
+   "samples": 0,
+   "levels": 0,
+   "roots": 0,
+   "flattened": {
+    "station": false,
+    "cruise": false
+   },
+   "derivedDates": 0,
+   "derivedPositions": 0,
+   "derivedDepths": 0,
+   "samplesWithoutPosition": 0
+  },
+  "splits": [
+   {
+    "verbatim": "Calanus finmarchicus",
+    "proposed": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "split": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 2
+   },
+   {
+    "verbatim": "Oithona similis",
+    "proposed": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "split": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   }
+  ],
+  "nameLookup": {
+   "names": [],
+   "withSheetId": 0,
+   "applied": 0
+  },
+  "cruiseText": [],
+  "profile": {
+   "sheets": 0,
+   "levels": 0,
+   "stationsMatched": 0,
+   "stationsUnmatched": 0,
+   "unmatched": []
+  },
+  "stats": {
+   "samples": 0,
+   "levels": 0,
+   "occurrences": 0,
+   "present": 0,
+   "absent": 0,
+   "zerosSkipped": 0,
+   "textCells": 0,
+   "measurements": 0,
+   "nerc": {
+    "columns": 0,
+    "typeIds": 0,
+    "unitIds": 0,
+    "nvsIds": 0
+   }
+  }
+ },
+ "scientificName-parameter-unit-value": {
+  "ok": false,
+  "findings": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {
+     "shape": "long"
+    },
+    "ruleId": "CONV-NO-TAXON",
+    "severity": "error"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {},
+    "ruleId": "CONV-NO-OCCURRENCES",
+    "severity": "error"
+   }
+  ],
+  "blocking": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {
+     "shape": "long"
+    },
+    "ruleId": "CONV-NO-TAXON",
+    "severity": "error"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {},
+    "ruleId": "CONV-NO-OCCURRENCES",
+    "severity": "error"
+   }
+  ],
+  "events": [],
+  "occurrences": [],
+  "measurements": [],
+  "tree": {
+   "events": 0,
+   "cruises": 0,
+   "stations": 0,
+   "samples": 0,
+   "levels": 0,
+   "roots": 0,
+   "flattened": {
+    "station": false,
+    "cruise": false
+   },
+   "derivedDates": 0,
+   "derivedPositions": 0,
+   "derivedDepths": 0,
+   "samplesWithoutPosition": 0
+  },
+  "splits": [
+   {
+    "verbatim": "Calanus finmarchicus",
+    "proposed": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "split": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   },
+   {
+    "verbatim": "Oithona similis",
+    "proposed": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "split": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   }
+  ],
+  "nameLookup": {
+   "names": [],
+   "withSheetId": 0,
+   "applied": 0
+  },
+  "cruiseText": [],
+  "profile": {
+   "sheets": 0,
+   "levels": 0,
+   "stationsMatched": 0,
+   "stationsUnmatched": 0,
+   "unmatched": []
+  },
+  "stats": {
+   "samples": 0,
+   "levels": 0,
+   "occurrences": 0,
+   "present": 0,
+   "absent": 0,
+   "zerosSkipped": 0,
+   "textCells": 0,
+   "measurements": 0,
+   "nerc": {
+    "columns": 0,
+    "typeIds": 0,
+    "unitIds": 0,
+    "nvsIds": 0
+   }
+  }
+ },
+ "mapping-scientificName-parameter-unit-value": [
+  [
+   "scientificName",
+   {
+    "kind": "taxon"
+   }
+  ],
+  [
+   "parameter",
+   {
+    "kind": "ignore"
+   }
+  ],
+  [
+   "unit",
+   {
+    "kind": "ignore"
+   }
+  ],
+  [
+   "value",
+   {
+    "kind": "variable",
+    "variable": "value"
+   }
+  ]
+ ],
+ "L1": {
+  "ok": false,
+  "findings": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {
+     "missing": "kind"
+    },
+    "ruleId": "CONV-QUANTITY-UNDECLARED",
+    "severity": "error"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "ruleId": "CONV-DEVICE-MISSING",
+    "severity": "warning",
+    "params": {}
+   }
+  ],
+  "blocking": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {
+     "missing": "kind"
+    },
+    "ruleId": "CONV-QUANTITY-UNDECLARED",
+    "severity": "error"
+   }
+  ],
+  "events": [
+   {
+    "id": "E1",
+    "eventType": "sample",
+    "code": "E1",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2022-05-05",
+    "lat": 54.1,
+    "lon": 7.9,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "54.1",
+    "lonText": "7.9",
+    "depthMinText": "0",
+    "depthMaxText": "10",
+    "depthMin": 0,
+    "depthMax": 10,
+    "depthDecimals": 0,
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2
+    }
+   },
+   {
+    "id": "E2",
+    "eventType": "sample",
+    "code": "E2",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2022-05-06",
+    "lat": 54.3,
+    "lon": 8.1,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "54.3",
+    "lonText": "8.1",
+    "depthMinText": "0",
+    "depthMaxText": "10",
+    "depthMin": 0,
+    "depthMax": 10,
+    "depthDecimals": 0,
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4
+    }
+   }
+  ],
+  "occurrences": [
+   {
+    "id": "occ-001",
+    "eventId": "E1",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "scientificName"
+    },
+    "quantityText": "5"
+   },
+   {
+    "id": "occ-002",
+    "eventId": "E1",
+    "verbatimIdentification": "Oithona similis",
+    "scientificName": "Oithona similis",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "scientificName"
+    },
+    "quantityText": "11"
+   },
+   {
+    "id": "occ-003",
+    "eventId": "E2",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "scientificName"
+    },
+    "quantityText": "2"
+   }
+  ],
+  "measurements": [],
+  "tree": {
+   "events": 2,
+   "cruises": 0,
+   "stations": 0,
+   "samples": 2,
+   "levels": 0,
+   "roots": 2,
+   "flattened": {
+    "station": false,
+    "cruise": false
+   },
+   "derivedDates": 0,
+   "derivedPositions": 0,
+   "derivedDepths": 0,
+   "samplesWithoutPosition": 0
+  },
+  "splits": [
+   {
+    "verbatim": "Calanus finmarchicus",
+    "proposed": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "split": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 2
+   },
+   {
+    "verbatim": "Oithona similis",
+    "proposed": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "split": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   }
+  ],
+  "nameLookup": {
+   "names": [
+    "Calanus finmarchicus",
+    "Oithona similis"
+   ],
+   "withSheetId": 0,
+   "applied": 0
+  },
+  "cruiseText": [],
+  "profile": {
+   "sheets": 0,
+   "levels": 0,
+   "stationsMatched": 0,
+   "stationsUnmatched": 0,
+   "unmatched": []
+  },
+  "stats": {
+   "samples": 2,
+   "levels": 0,
+   "occurrences": 3,
+   "present": 3,
+   "absent": 0,
+   "zerosSkipped": 0,
+   "textCells": 0,
+   "measurements": 0,
+   "nerc": {
+    "columns": 0,
+    "typeIds": 0,
+    "unitIds": 0,
+    "nvsIds": 0
+   }
+  }
+ },
+ "L2": {
+  "ok": true,
+  "findings": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "ruleId": "CONV-DEVICE-MISSING",
+    "severity": "warning",
+    "params": {}
+   }
+  ],
+  "blocking": [],
+  "events": [
+   {
+    "id": "A",
+    "eventType": "station",
+    "code": "A",
+    "derived": {
+     "date": true,
+     "position": true,
+     "depth": true
+    },
+    "eventDate": "2021-08-01",
+    "lat": 70.1,
+    "lon": 20.2,
+    "latDecimals": 6,
+    "lonDecimals": 6,
+    "depthMin": 5,
+    "depthMax": 5,
+    "depthDecimals": 0
+   },
+   {
+    "id": "B",
+    "eventType": "station",
+    "code": "B",
+    "derived": {
+     "date": true,
+     "position": true,
+     "depth": true
+    },
+    "eventDate": "2021-08-02",
+    "lat": 70.5,
+    "lon": 20.9,
+    "latDecimals": 6,
+    "lonDecimals": 6,
+    "depthMin": 10,
+    "depthMax": 10,
+    "depthDecimals": 0
+   },
+   {
+    "id": "A1",
+    "eventType": "sample",
+    "code": "A1",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2021-08-01",
+    "lat": 70.1,
+    "lon": 20.2,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "70.1",
+    "lonText": "20.2",
+    "depthMinText": "5",
+    "depthMaxText": "5",
+    "depthMin": 5,
+    "depthMax": 5,
+    "depthDecimals": 0,
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2
+    },
+    "parentId": "A"
+   },
+   {
+    "id": "B1",
+    "eventType": "sample",
+    "code": "B1",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2021-08-02",
+    "lat": 70.5,
+    "lon": 20.9,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "70.5",
+    "lonText": "20.9",
+    "depthMinText": "10",
+    "depthMaxText": "10",
+    "depthMin": 10,
+    "depthMax": 10,
+    "depthDecimals": 0,
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 5
+    },
+    "parentId": "B"
+   }
+  ],
+  "occurrences": [
+   {
+    "id": "A1:Calanus finmarchicus:C2",
+    "eventId": "A1",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Species"
+    },
+    "lifeStage": "C2",
+    "quantityText": "4",
+    "individualCount": 4,
+    "organismQuantity": 4,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "A1:Calanus finmarchicus:C3",
+    "eventId": "A1",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "Species"
+    },
+    "lifeStage": "C3",
+    "quantityText": "6",
+    "individualCount": 6,
+    "organismQuantity": 6,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "A1:Oithona similis",
+    "eventId": "A1",
+    "verbatimIdentification": "Oithona similis",
+    "scientificName": "Oithona similis",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "Species"
+    },
+    "quantityText": "9",
+    "individualCount": 9,
+    "organismQuantity": 9,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "B1:Calanus finmarchicus:C2",
+    "eventId": "B1",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 5,
+     "column": "Species"
+    },
+    "lifeStage": "C2",
+    "quantityText": "1",
+    "individualCount": 1,
+    "organismQuantity": 1,
+    "organismQuantityType": "individuals"
+   }
+  ],
+  "measurements": [
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "A1:Calanus finmarchicus:C2"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "4",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Species"
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "A1:Calanus finmarchicus:C3"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "6",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "Species"
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "A1:Oithona similis"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "9",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "Species"
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "B1:Calanus finmarchicus:C2"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "1",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 5,
+     "column": "Species"
+    }
+   }
+  ],
+  "tree": {
+   "events": 4,
+   "cruises": 0,
+   "stations": 2,
+   "samples": 2,
+   "levels": 0,
+   "roots": 2,
+   "flattened": {
+    "station": false,
+    "cruise": false
+   },
+   "derivedDates": 2,
+   "derivedPositions": 2,
+   "derivedDepths": 2,
+   "samplesWithoutPosition": 0
+  },
+  "splits": [
+   {
+    "verbatim": "Calanus finmarchicus",
+    "proposed": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "split": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 3
+   },
+   {
+    "verbatim": "Oithona similis",
+    "proposed": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "split": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   }
+  ],
+  "nameLookup": {
+   "names": [
+    "Calanus finmarchicus",
+    "Oithona similis"
+   ],
+   "withSheetId": 0,
+   "applied": 0
+  },
+  "cruiseText": [],
+  "profile": {
+   "sheets": 0,
+   "levels": 0,
+   "stationsMatched": 0,
+   "stationsUnmatched": 0,
+   "unmatched": []
+  },
+  "stats": {
+   "samples": 2,
+   "levels": 0,
+   "occurrences": 4,
+   "present": 4,
+   "absent": 0,
+   "zerosSkipped": 0,
+   "textCells": 0,
+   "measurements": 4,
+   "nerc": {
+    "columns": 0,
+    "typeIds": 0,
+    "unitIds": 0,
+    "nvsIds": 0
+   }
+  }
+ },
+ "W1": {
+  "ok": false,
+  "findings": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "value": "Pseudocalanus sp.",
+    "params": {
+     "count": 1
+    },
+    "ruleId": "CONV-SPLIT-UNDECIDED",
+    "severity": "error"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "params": {
+     "count": 1
+    },
+    "ruleId": "CONV-NA-SKIPPED",
+    "severity": "info"
+   },
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "ruleId": "CONV-DEVICE-MISSING",
+    "severity": "warning",
+    "params": {}
+   }
+  ],
+  "blocking": [
+   {
+    "file": "sheet.csv",
+    "sheet": "S",
+    "value": "Pseudocalanus sp.",
+    "params": {
+     "count": 1
+    },
+    "ruleId": "CONV-SPLIT-UNDECIDED",
+    "severity": "error"
+   }
+  ],
+  "events": [
+   {
+    "id": "CR1",
+    "eventType": "cruise",
+    "code": "CR1",
+    "derived": {
+     "date": true,
+     "position": true,
+     "depth": true
+    },
+    "eventDate": "2023-06-14/2023-06-16",
+    "lat": 55.7,
+    "lon": 2.8,
+    "latDecimals": 6,
+    "lonDecimals": 6,
+    "coordinateUncertaintyInMeters": 29151,
+    "depthMin": 0,
+    "depthMax": 50,
+    "depthDecimals": 0
+   },
+   {
+    "id": "CR1:S1",
+    "eventType": "station",
+    "code": "S1",
+    "derived": {
+     "date": true,
+     "position": true,
+     "depth": true
+    },
+    "parentId": "CR1",
+    "eventDate": "2023-06-14",
+    "lat": 55.5,
+    "lon": 2.5,
+    "latDecimals": 6,
+    "lonDecimals": 6,
+    "depthMin": 0,
+    "depthMax": 50,
+    "depthDecimals": 0
+   },
+   {
+    "id": "CR1:S2",
+    "eventType": "station",
+    "code": "S2",
+    "derived": {
+     "date": true,
+     "position": true,
+     "depth": true
+    },
+    "parentId": "CR1",
+    "eventDate": "2023-06-16",
+    "lat": 55.9,
+    "lon": 3.1,
+    "latDecimals": 6,
+    "lonDecimals": 6,
+    "depthMin": 0,
+    "depthMax": 50,
+    "depthDecimals": 0
+   },
+   {
+    "id": "S1-a",
+    "eventType": "sample",
+    "code": "S1-a",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2023-06-14",
+    "lat": 55.5,
+    "lon": 2.5,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "55.5",
+    "lonText": "2.5",
+    "depthMinText": "0",
+    "depthMaxText": "25",
+    "depthMin": 0,
+    "depthMax": 25,
+    "depthDecimals": 0,
+    "sampleSizeValue": "12.3",
+    "sampleSizeUnit": "m3",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2
+    },
+    "parentId": "CR1:S1"
+   },
+   {
+    "id": "S1-b",
+    "eventType": "sample",
+    "code": "S1-b",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2023-06-14",
+    "lat": 55.5,
+    "lon": 2.5,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "55.5",
+    "lonText": "2.5",
+    "depthMinText": "25",
+    "depthMaxText": "50",
+    "depthMin": 25,
+    "depthMax": 50,
+    "depthDecimals": 0,
+    "sampleSizeValue": "12.1",
+    "sampleSizeUnit": "m3",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3
+    },
+    "parentId": "CR1:S1"
+   },
+   {
+    "id": "S2-a",
+    "eventType": "sample",
+    "code": "S2-a",
+    "derived": {
+     "date": false,
+     "position": false,
+     "depth": false
+    },
+    "eventDate": "2023-06-16",
+    "lat": 55.9,
+    "lon": 3.1,
+    "latDecimals": 1,
+    "lonDecimals": 1,
+    "latText": "55.9",
+    "lonText": "3.1",
+    "depthMinText": "0",
+    "depthMaxText": "50",
+    "depthMin": 0,
+    "depthMax": 50,
+    "depthDecimals": 0,
+    "sampleSizeValue": "13",
+    "sampleSizeUnit": "m3",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4
+    },
+    "parentId": "CR1:S2"
+   }
+  ],
+  "occurrences": [
+   {
+    "id": "S1-a:Calanus finmarchicus",
+    "eventId": "S1-a",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Calanus finmarchicus"
+    },
+    "quantityText": "10",
+    "individualCount": 10,
+    "organismQuantity": 10,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "S1-a:Oithona similis",
+    "eventId": "S1-a",
+    "verbatimIdentification": "Oithona similis",
+    "scientificName": "Oithona similis",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Oithona similis"
+    },
+    "quantityText": "5",
+    "individualCount": 5,
+    "organismQuantity": 5,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "S1-a:Pseudocalanus sp.",
+    "eventId": "S1-a",
+    "verbatimIdentification": "Pseudocalanus sp.",
+    "scientificName": "Pseudocalanus",
+    "occurrenceStatus": "absent",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Pseudocalanus sp."
+    },
+    "identificationQualifier": "sp.",
+    "quantityText": "0",
+    "individualCount": 0
+   },
+   {
+    "id": "S1-b:Calanus finmarchicus",
+    "eventId": "S1-b",
+    "verbatimIdentification": "Calanus finmarchicus",
+    "scientificName": "Calanus finmarchicus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "Calanus finmarchicus"
+    },
+    "quantityText": "7",
+    "individualCount": 7,
+    "organismQuantity": 7,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "S1-b:Pseudocalanus sp.",
+    "eventId": "S1-b",
+    "verbatimIdentification": "Pseudocalanus sp.",
+    "scientificName": "Pseudocalanus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "Pseudocalanus sp."
+    },
+    "identificationQualifier": "sp.",
+    "quantityText": "3",
+    "individualCount": 3,
+    "organismQuantity": 3,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "S2-a:Oithona similis",
+    "eventId": "S2-a",
+    "verbatimIdentification": "Oithona similis",
+    "scientificName": "Oithona similis",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "Oithona similis"
+    },
+    "quantityText": "4",
+    "individualCount": 4,
+    "organismQuantity": 4,
+    "organismQuantityType": "individuals"
+   },
+   {
+    "id": "S2-a:Pseudocalanus sp.",
+    "eventId": "S2-a",
+    "verbatimIdentification": "Pseudocalanus sp.",
+    "scientificName": "Pseudocalanus",
+    "occurrenceStatus": "present",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "Pseudocalanus sp."
+    },
+    "identificationQualifier": "sp.",
+    "quantityText": "1",
+    "individualCount": 1,
+    "organismQuantity": 1,
+    "organismQuantityType": "individuals"
+   }
+  ],
+  "measurements": [
+   {
+    "target": {
+     "kind": "event",
+     "id": "S1-a"
+    },
+    "role": "effort",
+    "measurementType": "Volume of sample from the water body",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/",
+    "measurementValue": "12.3",
+    "measurementUnit": "m3",
+    "measurementUnitId": "http://vocab.nerc.ac.uk/collection/P06/current/MCUB/",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "S1-a:Calanus finmarchicus"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "10",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Calanus finmarchicus"
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "S1-a:Oithona similis"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "5",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 2,
+     "column": "Oithona similis"
+    }
+   },
+   {
+    "target": {
+     "kind": "event",
+     "id": "S1-b"
+    },
+    "role": "effort",
+    "measurementType": "Volume of sample from the water body",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/",
+    "measurementValue": "12.1",
+    "measurementUnit": "m3",
+    "measurementUnitId": "http://vocab.nerc.ac.uk/collection/P06/current/MCUB/",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "S1-b:Calanus finmarchicus"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "7",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "Calanus finmarchicus"
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "S1-b:Pseudocalanus sp."
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "3",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 3,
+     "column": "Pseudocalanus sp."
+    }
+   },
+   {
+    "target": {
+     "kind": "event",
+     "id": "S2-a"
+    },
+    "role": "effort",
+    "measurementType": "Volume of sample from the water body",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/",
+    "measurementValue": "13",
+    "measurementUnit": "m3",
+    "measurementUnitId": "http://vocab.nerc.ac.uk/collection/P06/current/MCUB/",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "S2-a:Oithona similis"
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "4",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "Oithona similis"
+    }
+   },
+   {
+    "target": {
+     "kind": "occurrence",
+     "id": "S2-a:Pseudocalanus sp."
+    },
+    "role": "count",
+    "measurementType": "Count of biological entity specified elsewhere",
+    "measurementTypeId": "http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/",
+    "measurementValue": "1",
+    "source": {
+     "file": "sheet.csv",
+     "sheet": "S",
+     "line": 4,
+     "column": "Pseudocalanus sp."
+    }
+   }
+  ],
+  "tree": {
+   "events": 6,
+   "cruises": 1,
+   "stations": 2,
+   "samples": 3,
+   "levels": 0,
+   "roots": 1,
+   "flattened": {
+    "station": false,
+    "cruise": false
+   },
+   "derivedDates": 3,
+   "derivedPositions": 3,
+   "derivedDepths": 3,
+   "samplesWithoutPosition": 0,
+   "maxUncertaintyM": 29151
+  },
+  "splits": [
+   {
+    "verbatim": "Calanus finmarchicus",
+    "proposed": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "split": {
+     "verbatimIdentification": "Calanus finmarchicus",
+     "scientificName": "Calanus finmarchicus"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   },
+   {
+    "verbatim": "Oithona similis",
+    "proposed": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "split": {
+     "verbatimIdentification": "Oithona similis",
+     "scientificName": "Oithona similis"
+    },
+    "needsDecision": false,
+    "approved": false,
+    "uses": 1
+   },
+   {
+    "verbatim": "Pseudocalanus sp.",
+    "proposed": {
+     "verbatimIdentification": "Pseudocalanus sp.",
+     "scientificName": "Pseudocalanus",
+     "identificationQualifier": "sp."
+    },
+    "split": {
+     "verbatimIdentification": "Pseudocalanus sp.",
+     "scientificName": "Pseudocalanus",
+     "identificationQualifier": "sp."
+    },
+    "needsDecision": true,
+    "approved": false,
+    "uses": 1
+   }
+  ],
+  "nameLookup": {
+   "names": [
+    "Calanus finmarchicus",
+    "Oithona similis"
+   ],
+   "withSheetId": 0,
+   "applied": 0
+  },
+  "cruiseText": [],
+  "profile": {
+   "sheets": 0,
+   "levels": 0,
+   "stationsMatched": 0,
+   "stationsUnmatched": 0,
+   "unmatched": []
+  },
+  "stats": {
+   "samples": 3,
+   "levels": 0,
+   "occurrences": 7,
+   "present": 6,
+   "absent": 1,
+   "zerosSkipped": 0,
+   "textCells": 0,
+   "measurements": 9,
+   "nerc": {
+    "columns": 0,
+    "typeIds": 0,
+    "unitIds": 0,
+    "nvsIds": 0
+   }
+  }
+ }
+}

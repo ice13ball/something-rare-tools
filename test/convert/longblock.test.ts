@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+// CONV-LONG-UNSUPPORTED (a long environmental sheet is blocked, never misread), the IO PAN spellings of oxygen saturation, and the Polish number agreement of ROW-RAGGED.
+// Synthetic sheets only; the stations are invented.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { convert } from '../../src/core/convert/build';
+import { BLOCK_CONV_RULES, judge } from '../../src/core/convert/policy';
+import { VARIABLE_CONCEPTS } from '../../src/core/convert/vocab';
+import { renderPlain } from '../../src/core/report';
+import { makeFinding } from '../../src/core/rules/registry';
+import { makeConvertFinding, renderConvertPlain } from '../../src/core/rules/convert';
+import { L1_HEADER, L1_ROWS, L2_HEADER, L2_ROWS, W1_HEADER, W1_QUANTITY, W1_ROWS, fileOf, mappingOf, sheetInput } from './helpers';
+import type { Cell } from './helpers';
+
+const longRows = (): Cell[][] => [
+  ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'temperature', 'degC', 8.1],
+  ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'salinity', 'psu', 34.2],
+];
+const ids = (r: { findings: { ruleId: string }[] }) => r.findings.map((f) => f.ruleId);
+
+describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
+  const heads: [string, string[]][] = [
+    ['parameter, unit, value', ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'parameter', 'unit', 'value']],
+    ['Parameter, Unit, Value', ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value']],
+    ['parametr, jednostka, wartość', ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'parametr', 'jednostka', 'wartość']],
+    ['Parameter, Einheit, Wert', ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Einheit', 'Wert']],
+  ];
+  for (const [label, header] of heads) {
+    it(`blocks ${label} and writes nothing`, () => {
+      const file = fileOf(header, longRows());
+      const r = convert({ sheets: [sheetInput(file, { quantity: { kind: 'count' } })] });
+      const f = r.findings.filter((x) => x.ruleId === 'CONV-LONG-UNSUPPORTED');
+      expect(f).toHaveLength(1);
+      expect(f[0].sheet).toBe('S');
+      expect(f[0].params).toEqual({ parameterColumn: header[5], valueColumn: header[7] });
+      expect(judge(r.findings).blocking.map((x) => x.ruleId)).toContain('CONV-LONG-UNSUPPORTED');
+      expect(r.ok).toBe(false);
+      expect(r.events).toEqual([]);
+      expect(r.occurrences).toEqual([]);
+      expect(r.measurements).toEqual([]);
+      expect(r.stats.samples).toBe(0);
+    });
+  }
+
+  it('is blocked as a profile sheet too, and writes nothing', () => {
+    const file = fileOf(heads[1][1], longRows());
+    const r = convert({ sheets: [sheetInput(file, { profile: { positionStation: true } })] });
+    expect(ids(r)).toContain('CONV-LONG-UNSUPPORTED');
+    expect(r.events).toEqual([]);
+    expect(r.measurements).toEqual([]);
+  });
+
+  it('is raised per sheet that is converted: a sheet left out ("Convert this sheet" unticked) raises nothing', () => {
+    expect(ids(convert({ sheets: [] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+
+  it('is a registered blocking rule, in four languages, that names both columns and says what to do', () => {
+    expect(BLOCK_CONV_RULES).toContain('CONV-LONG-UNSUPPORTED');
+    const f = makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: 'a.csv', sheet: 'S', params: { parameterColumn: 'parametr', valueColumn: 'wartość' } });
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const t = renderConvertPlain(f, lang);
+      expect(t, lang).toContain('parametr');
+      expect(t, lang).toContain('wartość');
+      expect(t, lang).toContain('[°C]');
+      expect(t, lang).not.toMatch(/\{\w+\}/);
+    }
+    expect(renderConvertPlain(f, 'pl')).toContain('Arkusz „S”');
+    expect(renderConvertPlain(f, 'de')).toContain('Das Blatt „S“');
+    expect(renderConvertPlain(f, 'fr')).toContain('La feuille « S »');
+  });
+
+  it('does not fire on a wide sheet with an "Analysis" column', () => {
+    const file = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Analysis', 'Temperature'], [
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'CTD', 8.1],
+      ['ZL2', '2023-06-15', 55.6, 2.6, 5, 'CTD', 8.4],
+    ]);
+    const s = sheetInput(file, { profile: { positionStation: true } });
+    expect(s.mapping.columns.find((c) => c.header === 'Temperature')!.role).toMatchObject({ kind: 'variable', variable: 'temperature' });
+    expect(ids(convert({ sheets: [s] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+
+  it('does not fire on a taxon sheet that also has a Parameter and a Result column', () => {
+    const file = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count', 'Parameter', 'Result'], [
+      ['ZL1', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 4, 'temperature', 8.1],
+      ['ZL1', '2023-06-14', 55.5, 2.5, 'Oithona similis', 9, 'temperature', 8.1],
+    ]);
+    const s = sheetInput(file, { quantity: { kind: 'count' } });
+    expect(s.shape).toBe('long');
+    expect(ids(convert({ sheets: [s] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+});
+
+/* The converted output of long biology sheets is the output of origin/main: the snapshot was generated at origin/main (3880e43) by running this file there with LB_WRITE set. */
+const SNAP = new URL('./longblock.snap.json', import.meta.url);
+const bioCases = (): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  const taxonCount = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count'], [
+    ['ZL1', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 4],
+    ['ZL1', '2023-06-14', 55.5, 2.5, 'Oithona similis', 9],
+    ['ZL2', '2023-06-15', 55.6, 2.6, 'Calanus finmarchicus', 1],
+  ]);
+  out['taxon-count'] = convert({ sheets: [sheetInput(taxonCount, { quantity: { kind: 'count' } })], approvedSplits: {} });
+  const sciParam = fileOf(['scientificName', 'parameter', 'unit', 'value'], [
+    ['Calanus finmarchicus', 'abundance', 'ind/m3', 4],
+    ['Oithona similis', 'abundance', 'ind/m3', 9],
+  ]);
+  out['scientificName-parameter-unit-value'] = convert({ sheets: [sheetInput(sciParam, { quantity: { kind: 'density', unit: '#/m3' } })], approvedSplits: {} });
+  out['mapping-scientificName-parameter-unit-value'] = mappingOf(sciParam).columns.map((c) => [c.header, c.role]);
+  out['L1'] = convert({ sheets: [sheetInput(fileOf(L1_HEADER, L1_ROWS.map((r) => [...r])))], approvedSplits: {} });
+  out['L2'] = convert({ sheets: [sheetInput(fileOf(L2_HEADER, L2_ROWS.map((r) => [...r])), { quantity: { kind: 'count' } })], approvedSplits: {} });
+  out['W1'] = convert({ sheets: [sheetInput(fileOf(W1_HEADER, W1_ROWS.map((r) => [...r])), { quantity: W1_QUANTITY })], options: { fullList: true }, approvedSplits: {} });
+  return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+};
+
+describe('long biology sheets keep the output of origin/main', () => {
+  const now = bioCases();
+  if (process.env.LB_WRITE) writeFileSync(process.env.LB_WRITE, JSON.stringify(now, null, 1));
+  it('no CONV-LONG-UNSUPPORTED on any of them', () => {
+    for (const [k, v] of Object.entries(now)) expect(JSON.stringify(v), k).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+  it('identical to the snapshot generated at origin/main', () => {
+    if (process.env.LB_WRITE) return;
+    expect(now).toEqual(JSON.parse(readFileSync(SNAP, 'utf8')));
+  });
+  it('the taxon + count sheet really is long', () => {
+    const s = sheetInput(fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count'], [['ZL1', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', 4]]));
+    expect(s.shape).toBe('long');
+  });
+});
+
+describe('oxygen saturation in the IO PAN underscore style', () => {
+  const spellings = ['O2_sat_%', 'O2_sat', 'O2sat_%', 'O2_saturation_%', 'Oxygen_saturation_%', 'O2_sat_pct'];
+  const file = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'O2 [%]', ...spellings], [
+    ['ZL1', '2023-06-14', 55.5, 2.5, 5, 95, 96, 97, 98, 99, 100, 101],
+    ['ZL2', '2023-06-15', 55.6, 2.6, 5, 90, 91, 92, 93, 94, 95, 96],
+  ]);
+  const m = mappingOf(file);
+  const roleOf = (h: string) => m.columns.find((c) => c.header === h)!.role;
+  it('every spelling is a variable "oxygen saturation", never a taxon candidate, like "O2 [%]"', () => {
+    expect(roleOf('O2 [%]')).toMatchObject({ kind: 'variable', variable: 'oxygen saturation', unit: '%' });
+    for (const h of spellings) {
+      expect(roleOf(h), h).toMatchObject({ kind: 'variable', variable: 'oxygen saturation' });
+      if (h !== 'O2_sat') expect(roleOf(h), h).toMatchObject({ unit: '%' });
+    }
+    expect(m.columns.filter((c) => c.role.kind === 'taxon')).toEqual([]);
+  });
+  it('is offered the saturation concept only, no water-concentration concept', () => {
+    expect(VARIABLE_CONCEPTS['oxygen saturation'].map((c) => c.kind)).toEqual(['generic']);
+  });
+  it('a sheet with them converts with no CONV-NO-TAXON and no CONV-LONG-UNSUPPORTED', () => {
+    const r = convert({ sheets: [sheetInput(file, { profile: { positionStation: true } })] });
+    expect(ids(r)).not.toContain('CONV-LONG-UNSUPPORTED');
+    expect(ids(r)).not.toContain('CONV-NO-TAXON');
+  });
+});
+
+describe('ROW-RAGGED: number agreement', () => {
+  const text = (lines: number[], lang: 'pl' | 'en' | 'de' | 'fr') => renderPlain(makeFinding('ROW-RAGGED', { file: 'a.csv', sheet: 'S', lines, params: { expected: 8, found: 9 } }), lang);
+  it('Polish: one, few, many', () => {
+    expect(text([3], 'pl')).toMatch(/^Wiersz 3 ma inną liczbę wartości niż nagłówek \(oczekiwano 8, jest 9\)/);
+    expect(text([3], 'pl')).toContain('popraw ten wiersz');
+    expect(text([3, 5], 'pl')).toMatch(/^Wiersze 3, 5 mają inną liczbę/);
+    expect(text([3, 5, 7, 9], 'pl')).toMatch(/^Wiersze 3, 5, 7, 9 mają /);
+    expect(text([3, 5, 7, 9, 11], 'pl')).toMatch(/^Wiersze 3, 5, 7, 9, 11 mają /);
+    expect(text([3, 5], 'pl')).toContain('np. 9 w pierwszym');
+  });
+  it('en, de, fr: singular and plural', () => {
+    expect(text([3], 'en')).toMatch(/^Line 3 has a different number of values than the header \(expected 8, found 9\)\. .* fix this line .* did not change it\.$/);
+    expect(text([3, 5], 'en')).toMatch(/^Lines 3, 5 have a different number/);
+    expect(text([3], 'de')).toMatch(/^Die Zeile 3 hat eine andere Anzahl/);
+    expect(text([3, 5], 'de')).toMatch(/^Die Zeilen 3, 5 haben eine andere Anzahl/);
+    expect(text([3], 'fr')).toMatch(/^La ligne 3 a un nombre de valeurs différent de l'en-tête \(8 attendues, trouvées 9\)/);
+    expect(text([3, 5], 'fr')).toMatch(/^Les lignes 3, 5 ont un nombre/);
+    expect(text([3], 'fr')).toContain('corrigez-la');
+    expect(text([3, 5], 'fr')).toContain('ne les a pas modifiées');
+  });
+});

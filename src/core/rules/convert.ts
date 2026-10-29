@@ -35,6 +35,7 @@ import type { RuleSpec } from './spec';
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
+ *   CONV-LONG-UNSUPPORTED      parameterColumn, valueColumn   a sheet in the long environmental layout (a parameter column and a value column, no taxon and no quantity column); sheet = the sheet
  *   CONV-NO-TAXON              shape            shape = wide | long
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows
  *   CONV-EML-MISSING           fields           fields = codes of what the dataset description lacks (title, abstract, creator, contact name, contact email, institution code, dataset name)
@@ -316,6 +317,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La colonne « {field} » n'a pas de nom dans l'en-tête du fichier, et son nom irait dans l'archive comme nom d'une variable ou d'un taxon. Saisissez un nom pour la variable, ou choisissez un autre sens pour la colonne (par ex. « Ignorer »).`,
     },
     technical: `{file}, {sheet} field {field}: the header has no name for this column (IN-HEADER-SHORT; internal name "Column N"); it is mapped as a variable that keeps that name, or as a taxon whose header is the name. The export is blocked until the variable has a name or the column another role.`,
+  },
+  {
+    id: 'CONV-LONG-UNSUPPORTED',
+    category: 'B',
+    severity: 'error',
+    params: ['parameterColumn', 'valueColumn'],
+    plain: {
+      pl: `Arkusz „{sheet}” ma układ długi: wiersz na parametr (kolumny „{parameterColumn}” i „{valueColumn}”), którego konwerter jeszcze nie czyta. Zrób tabelę z kolumną na parametr, z jednostką w nagłówku (np. „Temp [°C]”), i wierszem na próbkę, wczytaj ją ponownie albo pomiń ten arkusz.`,
+      en: `Sheet "{sheet}" is in the long layout: a row per parameter (columns "{parameterColumn}" and "{valueColumn}"), which the converter cannot read yet. Reshape it to one column per parameter, with its unit in the header (e.g. "Temp [°C]"), and one row per sample, then load it again, or leave this sheet out.`,
+      de: `Das Blatt „{sheet}“ hat das lange Layout: eine Zeile je Parameter (Spalten „{parameterColumn}“ und „{valueColumn}“), das der Konverter noch nicht liest. Formen Sie es um: eine Spalte je Parameter, die Einheit in der Überschrift (z. B. „Temp [°C]“), eine Zeile je Probe, und laden Sie es erneut, oder lassen Sie das Blatt weg.`,
+      fr: `La feuille « {sheet} » est en format long : une ligne par paramètre (colonnes « {parameterColumn} » et « {valueColumn} »), que le convertisseur ne lit pas encore. Transformez-la : une colonne par paramètre, l'unité dans l'en-tête (par ex. « Temp [°C] »), une ligne par échantillon, puis rechargez-la, ou omettez cette feuille.`,
+    },
+    technical: `{file}, {sheet}: a header names a parameter column ("{parameterColumn}") and a value column ("{valueColumn}") and the sheet has no taxon and no quantity column: one row per measured parameter. The converter writes nothing from this sheet; the export is blocked until it is reshaped to one column per parameter (unit in the header) or left out.`,
   },
   {
     id: 'CONV-DEPTH-UNIT',

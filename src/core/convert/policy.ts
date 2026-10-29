@@ -38,6 +38,7 @@ export const BLOCK_INPUT_RULES: readonly string[] = ['IN-LAYOUT-UNSUPPORTED', 'I
 /** Blocking: the converter's own rules. (CONV-WORMS-UNDECIDED is raised from stage 4 on, after a WoRMS lookup.) */
 export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-COLUMN-UNNAMED',
+  'CONV-LONG-UNSUPPORTED',
   'CONV-QUANTITY-UNDECLARED',
   'CONV-COUNT-NOT-INTEGER',
   'CONV-NEGATIVE-QUANTITY',
