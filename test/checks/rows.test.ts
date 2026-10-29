@@ -273,6 +273,19 @@ describe('ROW-YEAR-OUTLIER: a year range names every year in it', () => {
     }
   });
 
+  it('the unit after a range is tested case-sensitively, and "db" is not one: "M/V" and "db export" after a range of years leave it a range', () => {
+    const data = rows(2, 10, { lat: 1, lon: 2, date: '2000-07-01' });
+    for (const title of ['Survey from 1994 to 2019 M/V Polarstern', 'Samples 1994-2019 db export', 'Survey between 1994 and 2019 Mm', 'Survey 1994-2019 Km']) {
+      const ds = dataset(data, { file: 'data.csv', label: 'data.csv', metadata: [record({ title })] });
+      expect(only(checkRows(ds), 'ROW-YEAR-OUTLIER'), title).toEqual([]);
+    }
+    // a lower-case unit still makes it a number range
+    for (const title of ['CTD casts from 1950 to 2000 m', 'levels between 1950 and 2000 dbar']) {
+      const ds = dataset(rows(2, 10, { lat: 1, lon: 2, date: '1975-07-01' }), { file: 'data.csv', label: 'data.csv', metadata: [record({ title })] });
+      expect(only(checkRows(ds), 'ROW-YEAR-OUTLIER'), title).toHaveLength(1);
+    }
+  });
+
   it('a season written 2019/20 is 2019 and 2020 (the same two-digit rule as 1994-95); 2019/08 is not', () => {
     expect(fires('season_2019_20.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2020-03-01' }))[0].params).toMatchObject({ declared: '2019' });
     expect(fires('season_2019-20.csv', undefined, rows(2, 10, { lat: 1, lon: 2, date: '2020-03-01' }))).toEqual([]);

@@ -129,5 +129,17 @@ describe('CONV-ENV-ONLY-SHEET', () => {
     const none = r.findings.find((x) => x.ruleId === 'CONV-NO-OCCURRENCES');
     expect(none?.params.zeros).toBe('yes');
   });
-});
 
+  it('a measurement word after a counting unit may still be a species; without one it is a variable', () => {
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Temperature [degC]', 'Nitrogen fixers [cells/l]', 'Light [ind]', 'Activity', 'Fluorescence [mg/m3]'];
+    const rows = [['E1', '2099-01-01', 55, 3, 5, 4.5, 3, 2, 9, 0.4], ['E1', '2099-01-01', 55, 3, 10, 4.2, 5, 1, 8, 0.5]];
+    const roles = Object.fromEntries(sheetInput(fileOf(header, rows)).mapping.columns.map((c) => [c.header, c.role.kind]));
+    expect(roles['Nitrogen fixers [cells/l]']).toBe('taxon');
+    expect(roles['Light [ind]']).toBe('taxon');
+    expect(roles['Activity']).toBe('variable');
+    expect(roles['Fluorescence [mg/m3]']).toBe('variable');
+    expect(nameKind('Nitrogen fixers [cells/l]', true)).toBe('taxon');
+    expect(nameKind('Light [ind]', true)).toBe('taxon');
+    expect(nameKind('Light')).toBe('variable');
+  });
+});
