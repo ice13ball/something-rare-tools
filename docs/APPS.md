@@ -338,8 +338,11 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    pobrania`, `Probenahmedatum`, `Datum der Probenahme`, `Date de prélèvement`,
    `Date d'échantillonnage`); a bare `Collected` counts only when the values read as
    dates. Text dates `06.12.2010` are read day first (2010-12-06).
-   **Place columns.** `Location`, `Locality`, `Place` (also `Ort`, `Lieu`, `Miejsce`,
-   `Lokalizacja`, …) are proposed as the **station** at tier 3 (low confidence), and only when the
+   **Place columns (converter only).** `Location`, `Locality`, `Place` (also `Ort`, `Lieu`, `Miejsce`,
+   `Lokalizacja`, …) are proposed as the **station** by the converter (`placeAsStation`; `/check`
+   does not, because its station checks treat a station as one fixed point and a Location is often a
+   region such as a sea, which would raise false `ROW-STATION-SPREAD` / `ROW-STATION-MOVED`
+   findings), at tier 3 (low confidence), and only when the
    filled values are short place names: at most 40 characters and 6 words, at least one value
    repeated, none a number, a date, a coordinate pair or a value with degrees, at least 80 % of the
    cells. A column of sentences, coordinates or all-different values stays ignored. A real

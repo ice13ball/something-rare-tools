@@ -15,6 +15,11 @@ export interface ProposeContext {
   long?: TablePlan['long'];
   /** The converter asks for abundance columns (Count, Individuals, ...) as they were before /check ignored them: it reads them as a quantity or a taxon candidate itself. */
   keepAbundance?: boolean;
+  /**
+   * The converter reads a place column (Location, Locality, Ort ...) with short repeated names as its station level. /check does not: there a station is a fixed point and ROW-STATION-SPREAD /
+   * ROW-STATION-MOVED test it as one, but a 'Location' is often a region ('North Sea') that holds many positions, so the station checks would be false alarms.
+   */
+  placeAsStation?: boolean;
 }
 
 /* ---------- header text ---------- */
@@ -594,7 +599,7 @@ function holdsPlaceNames(rows: readonly RawRow[], col: number): boolean {
 /** Do the sampled values back an ambiguous name? Blank columns never do. */
 function guardPasses(guard: NonNullable<Cand['guard']>, sheet: RawSheet, rows: readonly RawRow[], col: number, ctx: ProposeContext): boolean {
   const dateFormatted = sheet.dateFormatted?.[col] === true;
-  if (guard === 'place-values') return holdsPlaceNames(rows, col);
+  if (guard === 'place-values') return ctx.placeAsStation === true && holdsPlaceNames(rows, col);
   if (guard === 'not-plain-numbers') return dateFormatted || !isNumeric(numericStats(rows, col, ctx.decimalComma));
   let seen = 0;
   let good = 0;
