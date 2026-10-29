@@ -12,6 +12,7 @@ import { makeFinding } from '../../src/core/rules/registry';
 import { makeConvertFinding, renderConvertPlain } from '../../src/core/rules/convert';
 import { L1_HEADER, L1_ROWS, L2_HEADER, L2_ROWS, W1_HEADER, W1_QUANTITY, W1_ROWS, fileOf, mappingOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
+import type { ColumnRole } from '../../src/core/types';
 
 const longRows = (): Cell[][] => [
   ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'temperature', 'degC', 8.1],
@@ -78,6 +79,37 @@ describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
     const s = sheetInput(file, { profile: { positionStation: true } });
     expect(s.mapping.columns.find((c) => c.header === 'Temperature')!.role).toMatchObject({ kind: 'variable', variable: 'temperature' });
     expect(ids(convert({ sheets: [s] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+
+  it('does not fire on a wide sheet whose Variable / Result columns hold something else (a measured variable sits next to them)', () => {
+    const file = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Variable', 'Temperature', 'Result'], [
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'CR1', 8.1, 'ok'],
+      ['ZL2', '2023-06-15', 55.6, 2.6, 5, 'CR1', 8.4, 'ok'],
+    ]);
+    expect(ids(convert({ sheets: [sheetInput(file, { profile: { positionStation: true } })] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+    const file2 = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Salinity', 'Value'], [
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'CTD', 34.1, 'good'],
+      ['ZL2', '2023-06-15', 55.6, 2.6, 5, 'CTD', 34.3, 'good'],
+    ]);
+    expect(ids(convert({ sheets: [sheetInput(file2, { profile: { positionStation: true } })] }))).not.toContain('CONV-LONG-UNSUPPORTED');
+  });
+
+  it('goes away on the page when the user gives the parameter or the value column another role (ignore)', () => {
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'];
+    const asProposed = convert({ sheets: [sheetInput(fileOf(header, longRows()))] });
+    expect(ids(asProposed)).toContain('CONV-LONG-UNSUPPORTED');
+    const edits: Record<string, ColumnRole>[] = [{ Value: { kind: 'ignore' as const } }, { Parameter: { kind: 'sampleId' as const } }, { Value: { kind: 'ignore' as const }, Parameter: { kind: 'ignore' as const } }];
+    for (const edit of edits) {
+      expect(ids(convert({ sheets: [sheetInput(fileOf(header, longRows()), { edit })] })), JSON.stringify(edit)).not.toContain('CONV-LONG-UNSUPPORTED');
+    }
+  });
+
+  it('tells a long biology sheet with an unrecognised taxon column what to mark instead, in four languages', () => {
+    const f = makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: 'a.csv', sheet: 'S', params: { parameterColumn: 'Parameter', valueColumn: 'Value' } });
+    expect(renderConvertPlain(f, 'en')).toContain('mark the taxon column and the count');
+    expect(renderConvertPlain(f, 'pl')).toContain('zaznacz powyżej kolumnę taksonu');
+    expect(renderConvertPlain(f, 'de')).toContain('Taxon- und die Anzahlspalte');
+    expect(renderConvertPlain(f, 'fr')).toContain('la colonne du taxon');
   });
 
   it('does not fire on a taxon sheet that also has a Parameter and a Result column', () => {
@@ -159,18 +191,19 @@ describe('ROW-RAGGED: number agreement', () => {
   const text = (lines: number[], lang: 'pl' | 'en' | 'de' | 'fr') => renderPlain(makeFinding('ROW-RAGGED', { file: 'a.csv', sheet: 'S', lines, params: { expected: 8, found: 9 } }), lang);
   it('Polish: one, few, many', () => {
     expect(text([3], 'pl')).toMatch(/^Wiersz 3 ma inną liczbę wartości niż nagłówek \(oczekiwano 8, jest 9\)/);
-    expect(text([3], 'pl')).toContain('popraw ten wiersz');
+    expect(text([3], 'pl')).toContain('popraw ten wiersz w pliku źródłowym, narzędzie go nie zmieniło');
+    expect(text([3, 5], 'pl')).toContain('popraw te wiersze w pliku źródłowym, narzędzie ich nie zmieniło');
     expect(text([3, 5], 'pl')).toMatch(/^Wiersze 3, 5 mają inną liczbę/);
     expect(text([3, 5, 7, 9], 'pl')).toMatch(/^Wiersze 3, 5, 7, 9 mają /);
     expect(text([3, 5, 7, 9, 11], 'pl')).toMatch(/^Wiersze 3, 5, 7, 9, 11 mają /);
-    expect(text([3, 5], 'pl')).toContain('np. 9 w pierwszym');
+    expect(text([3, 5], 'pl')).toContain('np. 9 w pierwszym z nich');
   });
   it('en, de, fr: singular and plural', () => {
     expect(text([3], 'en')).toMatch(/^Line 3 has a different number of values than the header \(expected 8, found 9\)\. .* fix this line .* did not change it\.$/);
     expect(text([3, 5], 'en')).toMatch(/^Lines 3, 5 have a different number/);
     expect(text([3], 'de')).toMatch(/^Die Zeile 3 hat eine andere Anzahl/);
     expect(text([3, 5], 'de')).toMatch(/^Die Zeilen 3, 5 haben eine andere Anzahl/);
-    expect(text([3], 'fr')).toMatch(/^La ligne 3 a un nombre de valeurs différent de l'en-tête \(8 attendues, trouvées 9\)/);
+    expect(text([3], 'fr')).toMatch(/^La ligne 3 a un nombre de valeurs différent de l'en-tête \(8 attendues, 9 trouvées\)/);
     expect(text([3, 5], 'fr')).toMatch(/^Les lignes 3, 5 ont un nombre/);
     expect(text([3], 'fr')).toContain('corrigez-la');
     expect(text([3, 5], 'fr')).toContain('ne les a pas modifiées');
