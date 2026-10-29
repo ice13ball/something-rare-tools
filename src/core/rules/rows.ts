@@ -376,6 +376,13 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Les dates des lignes {lines} (par ex. « {value} ») n'ont pas pu être lues. Écrivez les dates sous la forme AAAA-MM-JJ.`,
     },
     technical: `{file}:{lines} field {field} value '{value}': date not parseable (ISO 8601, DD.MM.YYYY, unambiguous DD/MM/YYYY, YY-MM-DD or Excel serial).`,
+    plainTime: {
+      pl: `Nie udało się odczytać godzin w wierszach {lines} (np. „{value}”). Wpisz jedną godzinę w komórce, jako GG:MM (24 godziny), w UTC albo z podaną strefą czasową; przedział, np. 10:00-12:00, nie jest godziną.`,
+      en: `The times in lines {lines} (e.g. "{value}") could not be read. Write one time per cell as HH:MM (24 hours), in UTC or with the time zone stated; a range such as 10:00-12:00 is not a time of day.`,
+      de: `Die Uhrzeiten in den Zeilen {lines} (z. B. „{value}“) konnten nicht gelesen werden. Schreiben Sie eine Uhrzeit pro Zelle als HH:MM (24 Stunden), in UTC oder mit angegebener Zeitzone; ein Bereich wie 10:00-12:00 ist keine Uhrzeit.`,
+      fr: `Les heures des lignes {lines} (par ex. « {value} ») n'ont pas pu être lues. Écrivez une seule heure par cellule sous la forme HH:MM (24 heures), en UTC ou avec le fuseau horaire indiqué ; une plage comme 10:00-12:00 n'est pas une heure.`,
+    },
+    technicalTime: `{file}:{lines} field {field} value '{value}': time of day not parseable (one time per cell, HH:MM or HH:MM:SS, 24 hours; a range of times is not a time; state UTC or the time zone).`,
   },
   {
     id: 'ROW-DATE-MISSING',

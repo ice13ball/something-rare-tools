@@ -585,12 +585,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['shape'],
     plain: {
-      pl: `W tym arkuszu nie wskazano kolumn z taksonami albo z ilością. W arkuszu szerokim nagłówki kolumn są nazwami taksonów, w długim jest kolumna z nazwą taksonu i kolumna z ilością.`,
-      en: `No taxon columns, or no quantity column, are marked in this sheet. In a wide sheet the column headers are the taxon names; in a long sheet there is one column with the taxon and one with the quantity.`,
-      de: `In diesem Blatt sind keine Taxon-Spalten oder keine Mengenspalte markiert. In einem breiten Blatt sind die Spaltenköpfe die Taxonnamen; in einem langen Blatt gibt es eine Spalte mit dem Taxon und eine mit der Menge.`,
-      fr: `Aucune colonne de taxon, ou de quantité, n'est marquée dans cette feuille. Dans une feuille large, les en-têtes de colonnes sont les noms de taxons ; dans une feuille longue, une colonne porte le taxon et une autre la quantité.`,
+      pl: `W tym arkuszu nie wskazano kolumn z taksonami albo z ilością. Konwerter potrzebuje taksonu (w arkuszu szerokim nagłówki kolumn, w długim kolumnę z nazwą) i ilości (liczebność, zagęszczenie albo biomasa); list samej obecności gatunków na razie nie zapisuje.`,
+      en: `No taxon columns, or no quantity column, are marked in this sheet. The converter needs a taxon (column headers in a wide sheet, a taxon column in a long one) and a quantity (counts, density or biomass); it does not yet write presence-only species lists.`,
+      de: `In diesem Blatt sind keine Taxon-Spalten oder keine Mengenspalte markiert. Der Konverter braucht ein Taxon (im breiten Blatt die Spaltenköpfe, im langen eine Namensspalte) und eine Menge (Anzahlen, Dichte oder Biomasse); reine Anwesenheitslisten schreibt er noch nicht.`,
+      fr: `Aucune colonne de taxon, ou de quantité, n'est marquée dans cette feuille. Le convertisseur a besoin d'un taxon (en-têtes de colonnes d'une feuille large, colonne de noms d'une feuille longue) et d'une quantité (effectifs, densité ou biomasse) ; il n'écrit pas encore de listes de présence seule.`,
     },
-    technical: `{file}, {sheet}: no column with the taxon role for a {shape} sheet (wide: taxon columns with header:true; long: a taxon column and a quantity column).`,
+    technical: `{file}, {sheet}: no column with the taxon role for a {shape} sheet (wide: taxon columns with header:true; long: a taxon column and a quantity column). A taxon column without a quantity column (a presence-only species list) is this case too: presence-only lists are not written yet.`,
   },
   {
     id: 'CONV-SUMMARY-ROW-SKIPPED',

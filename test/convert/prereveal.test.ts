@@ -8,6 +8,10 @@ import { candidatesOf, initialChoices, requestOf, sheetKey, type ConvertState } 
 import type { ConvertParseResult } from '../../src/worker/convert.protocol';
 import { csvOf } from '../app/convertHelpers';
 import { fileOf, type Cell } from './helpers';
+import { renderPlain, renderTechnical, valuesAreTimes } from '../../src/core/report';
+import { makeFinding } from '../../src/core/rules/registry';
+import { renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
+import { LANGS } from '../../src/core/types';
 import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import { suggestConvertProfile } from '../../src/core/convert/recognize';
 
@@ -135,6 +139,47 @@ describe('item 7: sample descriptors are never a taxon', () => {
     const sheet = parsed.files[0].sheets[0];
     expect(sheet.rowCount).toBe(2);
     expect(sheet.header).toContain('Replicate');
+  });
+});
+
+describe('item 3: a species list with no quantity column says plainly what the converter needs', () => {
+  it('the text of CONV-NO-TAXON names the quantity column and says presence-only lists are not written, in all four languages; the finding itself is unchanged', async () => {
+    const csv = csvOf(['scientificName', 'decimalLatitude', 'decimalLongitude', 'eventDate'], [['Calanus finmarchicus', 55, 3, '2099-01-01'], ['Oithona similis', 56, 4, '2099-01-02']]);
+    const v = await (await open('species-list.csv', csv)).run(undefined);
+    const f = v.findings.find((x) => x.ruleId === 'CONV-NO-TAXON')!;
+    expect(f.params).toEqual({ shape: 'long' });
+    const words: Record<string, RegExp> = { en: /quantity \(counts, density or biomass\).*does not yet write presence-only species lists/, pl: /ilości \(liczebność, zagęszczenie albo biomasa\).*list samej obecności gatunków na razie nie zapisuje/, de: /Menge \(Anzahlen, Dichte oder Biomasse\).*reine Anwesenheitslisten schreibt er noch nicht/, fr: /quantité \(effectifs, densité ou biomasse\).*n'écrit pas encore de listes de présence seule/ };
+    for (const lang of LANGS) expect(renderConvertPlain(f, lang), lang).toMatch(words[lang]);
+    expect(renderConvertTechnical(f)).toContain('presence-only');
+  });
+});
+
+describe('item 4: the advice for a time-of-day column is about the time format', () => {
+  const finding = (value: string) => makeFinding('ROW-DATE-UNPARSEABLE', { file: 't.csv', sheet: 't', field: 'Time', value, lines: [2, 3] });
+  it('ranges of times are told apart from dates by their values', () => {
+    expect(valuesAreTimes('10:00-12:00, 14:30-15:00')).toBe(true);
+    expect(valuesAreTimes('1430-1500')).toBe(true);
+    expect(valuesAreTimes('10:00')).toBe(true);
+    expect(valuesAreTimes('2020-13-45')).toBe(false);
+    expect(valuesAreTimes('1999-2005')).toBe(false);
+    expect(valuesAreTimes('31.02.2020, 10:00-12:00')).toBe(false);
+    expect(valuesAreTimes('')).toBe(false);
+  });
+  it('a time column: HH:MM, one time, UTC or a stated zone, in every language; a date column keeps the date advice', () => {
+    const t = finding('10:00-12:00, 1430-1500');
+    expect(t.ruleId).toBe('ROW-DATE-UNPARSEABLE');
+    expect(renderPlain(t, 'en')).toMatch(/HH:MM.*UTC or with the time zone stated/);
+    expect(renderPlain(t, 'pl')).toMatch(/GG:MM.*UTC/);
+    expect(renderPlain(t, 'de')).toMatch(/HH:MM.*UTC/);
+    expect(renderPlain(t, 'fr')).toMatch(/HH:MM.*UTC/);
+    for (const lang of LANGS) expect(renderPlain(t, lang), lang).not.toMatch(/YYYY|RRRR|JJJJ|AAAA/);
+    expect(renderTechnical(t)).toContain('time of day not parseable');
+    const d = finding('2020-13-45');
+    expect(renderPlain(d, 'en')).toContain('Write dates as YYYY-MM-DD');
+    expect(renderTechnical(d)).toContain('date not parseable');
+  });
+  it('the finding itself is the same as before: no new param, the rule id is kept', () => {
+    expect(finding('10:00-12:00').params).toEqual({});
   });
 });
 
