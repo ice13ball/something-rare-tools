@@ -481,7 +481,7 @@ function reportVariables(varState: readonly VarState[], base: { file: string; sh
   for (const st of varState) {
     if (!st.written || !st.type || st.v.unit === undefined) continue;
     if (unitContradictsConcept(pickLabel(st.type), st.v.unit)) {
-      out.push(makeConvertFinding('CONV-NERC-UNIT-MISMATCH', { ...base, field: st.v.header, params: { column: st.v.header.trim(), code: st.type.id.split('/')[6], unit: st.v.unit } }));
+      out.push(makeConvertFinding('CONV-NERC-UNIT-MISMATCH', { ...base, field: st.v.header, params: { column: stripTypeSuffix(st.v.header), code: st.type.id.split('/')[6], unit: st.v.unit } }));
     }
   }
   for (const unit of noUnit) out.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit } }));
@@ -914,7 +914,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // a sheet marked as a profile file that gave no level at all: said plainly (a description of columns, a sheet with no station and no tick, an empty sheet)
   if (ctx.sites.length === levelsBefore) ctx.findings.push(makeConvertFinding('CONV-PROFILE-NOTHING-READ', { ...base, params: { rows: sheet.rows.length } }));
   // a pressure that was written with no unit: said, by column (a unit that is stated but is not decibars is said by CONV-UNIT-NO-P06 below)
-  if (pressureWritten && pressure && pressure.unit === undefined) ctx.findings.push(makeConvertFinding('CONV-PROFILE-PRESSURE-NO-UNIT', { ...base, field: pressure.header, params: { column: pressure.header.trim() } }));
+  if (pressureWritten && pressure && pressure.unit === undefined) ctx.findings.push(makeConvertFinding('CONV-PROFILE-PRESSURE-NO-UNIT', { ...base, field: pressure.header, params: { column: stripTypeSuffix(pressure.header) } }));
   // the pressure's unit has an identifier only when it is decibars: any other unit is written as given, and said
   pushAll(ctx.findings, reportVariables(varState, base, pressureWritten && pressure?.unit !== undefined && !isDecibar(pressure.unit) ? [pressure.unit] : [], ctx.nercStats));
   for (const e of noStation.entries()) ctx.findings.push(makeConvertFinding('CONV-PROFILE-NO-STATION', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));
@@ -1527,7 +1527,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     }
     // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
-      findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: cols.taxonId.header.trim() } }));
+      findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: stripTypeSuffix(cols.taxonId.header) } }));
     }
     pushAll(findings, collector.findings());
   }

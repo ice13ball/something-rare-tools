@@ -342,7 +342,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const occurrenceIdAt = new Set(wide ? sheet.header.flatMap((h, i) => (dwcTermOf(h) === 'occurrenceid' ? [i] : [])) : []);
   // "O2_ml_l": the shared reader knows a unit written after an underscore only for the units it lists, and millilitres per litre is not one of them. The shared proposer is asked as if the
   // header were "O2 [mL/L]" (the converter's own reading of it); the column keeps its own header.
-  const mlPerLAt = new Map<number, string>(sheet.header.flatMap((h, i) => { const m = /^(.*\S)[_ ]ml[_ ]l$/i.exec(h.trim()); return m ? [[i, `${m[1]} [mL/L]`] as [number, string]] : []; }));
+  const mlPerLAt = new Map<number, string>(sheet.header.flatMap((h, i) => { const m = /^(.*\S)[_ ]ml[_ ]l$/i.exec(stripTypeSuffix(h)); return m ? [[i, `${m[1]} [mL/L]`] as [number, string]] : []; }));
   const sedCtx = sedimentContext(sheet);
   // The shared proposer has ONE plain-depth slot, and the water depth of the site ("Water depth", "Station depth") can take it from the column that gives the depth of each row. When the sheet has
   // another vertical coordinate (what the proposer itself finds when the site-depth headers are left out), the proposer is asked without them, so that its own preference picks the real depth
@@ -401,7 +401,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         continue;
       }
     }
-    if (!dwc && APHIA_HEADERS.has(p.header.trim()) && holdsAphiaIds(sheet, p.index)) {
+    if (!dwc && APHIA_HEADERS.has(stripTypeSuffix(p.header)) && holdsAphiaIds(sheet, p.index)) {
       claims.set(p.index, { role: { kind: 'taxonId', aphia: true }, confidence: 'high', code: 'name-aphiaid' });
       continue;
     }
@@ -426,7 +426,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
             : undefined;
         const named =
           seawaterDensity ??
-          oxygenSaturationClaim(p.header) ??
+          oxygenSaturationClaim(stripTypeSuffix(p.header)) ??
           variableClaim(hu.name, hu.unit) ??
           nameClaim(foldDiacritics(key), hu.unit) ??
           onlyEffortOrCode(bare === foldDiacritics(key) ? undefined : nameClaim(bare, hu.unit ?? bracketText(hu.name))) ??
@@ -555,7 +555,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       continue;
     }
     // oxygen as a percentage is SATURATION: a variable of its own, never given a concentration concept (a concept that says "per unit volume" is another quantity)
-    if (p.role.kind === 'variable' && p.role.variable === 'oxygen' && ((p.role.unit !== undefined && isPercentUnit(p.role.unit)) || /saturation|sattigung|nasycenie/i.test(foldDiacritics(p.header)))) {
+    if (p.role.kind === 'variable' && p.role.variable === 'oxygen' && ((p.role.unit !== undefined && isPercentUnit(p.role.unit)) || /saturation|sattigung|nasycenie/i.test(foldDiacritics(stripTypeSuffix(p.header))))) {
       p.role = { ...p.role, variable: 'oxygen saturation' };
       why(p, 'oxygen-saturation');
       continue;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { isBlankCell } from '../recognize/columns';
+import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
 import { MAX_PAIRS } from './pivotLimits';
 import { headerKey } from '../recognize/vocab';
 import { makeConvertFinding } from '../rules/convert';
@@ -37,10 +37,10 @@ export interface LongColumns {
 
 /** The parameter, value and unit columns a header names (the first of each), or undefined without a parameter AND a value column. */
 export function longColumnsOf(header: readonly string[]): LongColumns | undefined {
-  const parameterAt = header.findIndex((h) => LONG_PARAMETER.has(headerKey(h)));
-  const valueAt = header.findIndex((h) => LONG_VALUE.has(headerKey(h)));
+  const parameterAt = header.findIndex((h) => LONG_PARAMETER.has(headerKey(stripTypeSuffix(h))));
+  const valueAt = header.findIndex((h) => LONG_VALUE.has(headerKey(stripTypeSuffix(h))));
   if (parameterAt < 0 || valueAt < 0) return undefined;
-  const u = header.findIndex((h, i) => i !== parameterAt && i !== valueAt && LONG_UNIT.has(headerKey(h)));
+  const u = header.findIndex((h, i) => i !== parameterAt && i !== valueAt && LONG_UNIT.has(headerKey(stripTypeSuffix(h))));
   return { parameterAt, valueAt, unitAt: u < 0 ? undefined : u };
 }
 

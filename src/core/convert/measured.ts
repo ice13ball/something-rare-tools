@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { stripTypeSuffix } from '../recognize/columns';
 import { foldDiacritics } from '../recognize/vocab';
 
 /*
@@ -46,9 +47,9 @@ const MEASUREMENT_WORDS = new Set([
 const ISOTOPE = /^[δd]\d{1,2}[a-z]{1,2}$/;
 const RATIO = /^[a-z]{1,3}[/:][a-z]{1,3}$/;
 
-/** The name part of a header: every trailing bracket group (a unit, a comment) cut off. */
+/** The name part of a header: the ODV / OPeNDAP type suffix (and the quotes around it) and every trailing bracket group (a unit, a comment) cut off. */
 export function namePart(header: string): string {
-  let t = header.trim();
+  let t = stripTypeSuffix(header);
   for (;;) {
     const next = t.replace(/\s*[[(][^[\]()]*[\])]\s*$/, '');
     if (next === t) return t;
