@@ -97,7 +97,7 @@ function holdsAphiaIds(sheet: RawSheet, index: number): boolean {
 }
 
 // "present" marks in a species column of a wide sheet: + x *
-const PRESENCE_MARK = /^(\+|x|\*)$/i;
+const PRESENCE_MARK = /^(\+|x|\*|✓|✔|☑|✅)$/i;
 
 /** The sampled cells of a column are only numbers and presence marks, with at least one mark: a species column the shared proposer took for text. */
 function holdsPresenceMarks(sheet: RawSheet, index: number, decimalComma: boolean): boolean {

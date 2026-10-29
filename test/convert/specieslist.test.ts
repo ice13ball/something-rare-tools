@@ -38,7 +38,7 @@ describe('a species list with no counts', () => {
   it('says what is missing in four languages, and not "environmental data"', async () => {
     const v = await run('list.csv', list, undefined);
     const f = v.findings.find((x) => x.ruleId === 'CONV-SPECIES-LIST-NO-COUNTS')!;
-    const words: Record<string, RegExp> = { en: /lists species without counts.*presence-only lists yet.*counts, density or biomass/, pl: /wymienia gatunki bez liczebności.*list samej obecności/, de: /Arten ohne Anzahlen.*reinen Anwesenheitslisten/, fr: /espèces sans effectifs.*listes de présence seule/ };
+    const words: Record<string, RegExp> = { en: /lists species without counts.*tick "This is a list of species found.*counts, density or biomass/, pl: /wymienia gatunki bez liczebności.*To jest lista znalezionych gatunków.*liczebnością/, de: /Arten ohne Anzahlen.*Dies ist eine Liste gefundener Arten/, fr: /espèces sans effectifs.*C'est une liste d'espèces trouvées/ };
     for (const lang of LANGS) {
       expect(renderConvertPlain(f, lang), lang).toMatch(words[lang]);
       expect(renderConvertPlain(f, lang), lang).not.toMatch(/environment|środowisk|Umwelt|environnement/i);

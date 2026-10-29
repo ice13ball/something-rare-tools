@@ -14,6 +14,7 @@ import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
+import { presenceMark } from './presence';
 import { transposedSheetReason } from './transposed';
 import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
@@ -74,6 +75,11 @@ export interface ConvertSheetInput {
   unconfirmedTaxa?: readonly number[];
   /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
   readAsTable?: boolean;
+  /**
+   * The user's tick for this sheet: "This is a list of species found (presence only, no counts)". Never automatic. A long sheet with a taxon column and no quantity column writes one
+   * occurrence per taxon row, occurrenceStatus present; a wide sheet reads its cells as marks (presence.ts). No organismQuantity is written and no quantity declaration is asked.
+   */
+  presenceOnly?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -1095,6 +1101,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // with no measured-variable column either it is a species list (CONV-SPECIES-LIST-NO-COUNTS); with other numbers in it, the quantity column is what is missing (CONV-TAXON-NO-QUANTITY)
     const taxonNoQuantity = sin.shape === 'long' && cols.taxonCell !== undefined && cols.quantity === undefined;
     const speciesList = taxonNoQuantity && !sin.mapping.columns.some((c) => c.role.kind === 'variable');
+    // the user's tick: this sheet lists the species found and nobody counted them (OBIS needs occurrenceStatus, not a quantity); it needs a taxon, and for a long sheet no quantity column
+    const presence = sin.presenceOnly === true && (sin.shape === 'wide' ? cols.taxonHeaders.length > 0 : cols.taxonCell !== undefined && cols.quantity === undefined);
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
     // a sheet with measured variables and NO taxon column (wide: no taxon header; long: no taxon cell column), NO quantity column and no unconfirmed taxon candidate (the user may still confirm one)
     // is environmental data only: one message instead of "no taxon", "kind of number" and "no occurrences". A mixed sheet keeps the messages above.
@@ -1106,6 +1114,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       // another sheet of the upload (not a profile file) that has a taxon column: the fix is to mark THIS sheet as a profile file, not to add species
       const taxaElsewhere = input.sheets.some((o) => o !== sin && o.profile === undefined && o.mapping.columns.some((c) => c.role.kind === 'taxon'));
       findings.push(makeConvertFinding('CONV-ENV-ONLY-SHEET', { ...base, ...(taxaElsewhere ? { params: { other: 'taxa' } } : {}) }));
+    } else if (presence) {
+      /* the user said so: no count to declare and nothing to block */
     } else if (speciesList) findings.push(makeConvertFinding('CONV-SPECIES-LIST-NO-COUNTS', { ...base }));
     else if (taxonNoQuantity) findings.push(makeConvertFinding('CONV-TAXON-NO-QUANTITY', { ...base }));
     else if (missingTaxon) findings.push(makeConvertFinding('CONV-NO-TAXON', { ...base, params: { shape: sin.shape } }));
@@ -1115,12 +1125,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     let quantity: ResolvedQuantity | undefined;
     let missing: string[] = resolution.ok ? [] : [...resolution.missing];
     if (resolution.ok) quantity = resolution.quantity;
-    if (taxonNoQuantity) taxaWaitForQuantity = true; // its missing occurrences are no "environment-only upload" either
+    if (taxonNoQuantity && !presence) taxaWaitForQuantity = true; // its missing occurrences are no "environment-only upload" either
     if (sin.quantity?.effort?.source === 'column' && cols.effort === undefined) {
       missing = [...missing, 'effort column'];
       quantity = undefined;
     }
-    if (!quantity || missing.length > 0) {
+    if (presence) {
+      quantity = undefined;
+    } else if (!quantity || missing.length > 0) {
       if (missing.length === 0) missing = ['kind'];
       // a species list has no numbers to declare: CONV-SPECIES-LIST-NO-COUNTS already said what is missing
       if (!taxonNoQuantity && !envOnly) findings.push(makeConvertFinding('CONV-QUANTITY-UNDECLARED', { ...base, params: { missing: missing.join(', ') } }));
@@ -1148,6 +1160,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const effortBad = new Lines();
     const summaries = new Lines();
     const keptStats = new Lines();
+    const presenceBad = new Lines();
     const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId, specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
     let zeros = 0;
     let naCells = 0;
@@ -1265,7 +1278,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const wideHasValue = cols.taxonHeaders.some((c) => !isBlankCell(row.cells[c.index] ?? null));
       const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
       // long: a row is a record when it has a taxon and a value (an empty value is "no record"); wide: a row with any species cell or a sample code
-      const longHasValue = cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
+      const longHasValue = presence ? true : cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
       const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && longHasValue;
       // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
       const summaryLabel = [code, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
@@ -1448,7 +1461,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           const n = taxonNames.get(c.index);
           cells.push({ verbatim: n?.verbatim ?? c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim(), ...(n === undefined ? {} : { idText: n.idText }), ...(n?.remark === undefined ? {} : { columnRemark: n.remark }) });
         }
-      } else if (cols.taxonCell && cols.quantity && taxonCellText !== undefined) {
+      } else if (cols.taxonCell && (cols.quantity || presence) && taxonCellText !== undefined) {
         const lifeStageCol = cols.lifeStage ? text(row.cells[cols.lifeStage.index]) : undefined;
         const qualifierCol = cols.qualifier ? text(row.cells[cols.qualifier.index]) : undefined;
         const userId = cols.occurrenceId ? text(row.cells[cols.occurrenceId.index]) : undefined;
@@ -1462,7 +1475,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (cols.occurrenceId) checkText(cols.occurrenceId.header, row.line, userId);
         cells.push({
           verbatim: taxonCellText,
-          raw: row.cells[cols.quantity.index] ?? null,
+          // a presence list has no quantity: every taxon row is a mark
+          raw: cols.quantity ? (row.cells[cols.quantity.index] ?? null) : 'x',
           column: cols.taxonCell.header,
           ...(userId === undefined ? {} : { userId }),
           ...(nameId === undefined ? {} : { nameId }),
@@ -1477,35 +1491,53 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         let status: 'present' | 'absent' = 'present';
         let value: number | undefined;
         let remarks: string | undefined;
-        if (p.status === 'missing') {
-          // a cell that says NA (not a blank one) is counted: it makes no record, and the user is told how many
-          if (typeof raw === 'string' && raw.trim() !== '') naCells++;
-          continue;
-        }
-        if (p.status === 'na-variant') {
-          collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
-          continue;
-        }
-        if (p.status === 'non-numeric') {
-          texts.add(fileName, sheet.name, field, row.line, p.token);
-          checkText(field, row.line, p.token);
-          remarks = p.token;
-          stats.textCells++;
-        } else {
-          value = p.value;
-          if (value < 0) {
-            negatives.add(fileName, sheet.name, field, row.line, String(raw).trim());
+        if (presence) {
+          const mark = presenceMark(raw, dc);
+          if (mark.kind === 'blank') continue;
+          if (mark.kind === 'unknown') {
+            presenceBad.add(fileName, sheet.name, field, row.line, mark.text);
             continue;
           }
-          if (value === 0) {
+          if (mark.kind === 'absent') {
+            // an absence only for a full species list; otherwise nothing is written (as a zero)
             if (!fullList) {
               zeros++;
               continue;
             }
             status = 'absent';
-          } else if (kind === 'count' && !Number.isInteger(value)) {
-            notInteger.add(fileName, sheet.name, field, row.line, String(raw).trim());
+          }
+        }
+        if (!presence) {
+          if (p.status === 'missing') {
+            // a cell that says NA (not a blank one) is counted: it makes no record, and the user is told how many
+            if (typeof raw === 'string' && raw.trim() !== '') naCells++;
             continue;
+          }
+          if (p.status === 'na-variant') {
+            collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
+            continue;
+          }
+          if (p.status === 'non-numeric') {
+            texts.add(fileName, sheet.name, field, row.line, p.token);
+            checkText(field, row.line, p.token);
+            remarks = p.token;
+            stats.textCells++;
+          } else {
+            value = p.value;
+            if (value < 0) {
+              negatives.add(fileName, sheet.name, field, row.line, String(raw).trim());
+              continue;
+            }
+            if (value === 0) {
+              if (!fullList) {
+                zeros++;
+                continue;
+              }
+              status = 'absent';
+            } else if (kind === 'count' && !Number.isInteger(value)) {
+              notInteger.add(fileName, sheet.name, field, row.line, String(raw).trim());
+              continue;
+            }
           }
         }
         const sp = splitOf(cell.verbatim);
@@ -1600,6 +1632,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     for (const e of effortBad.entries()) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of summaries.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     for (const e of keptStats.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+    for (const e of presenceBad.entries()) findings.push(makeConvertFinding('CONV-PRESENCE-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));
     if (zeros > 0) {
       stats.zerosSkipped += zeros;

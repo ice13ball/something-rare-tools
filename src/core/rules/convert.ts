@@ -48,8 +48,9 @@ import type { RuleSpec } from './spec';
  *   CONV-LONG-NO-PARAMETER     count            lines = the original lines that have a value and no parameter name
  *   CONV-NO-TAXON              shape            shape = wide | long; no taxon column is marked (a long sheet with a taxon column and no quantity column is CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY)
  *   CONV-TAXON-NO-QUANTITY     (none)           a long sheet with a taxon column, other numbers (measured variables) and no quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
- *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: a presence-only species list, not written yet (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
+ *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: offers the tick "list of species found" (presence only), else a quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-ENV-ONLY-SHEET        (none)           a sheet with measured variables and no taxon column, no quantity column and no unconfirmed taxon candidate: environmental data only (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
+ *   CONV-PRESENCE-VALUE        (none)           field = the column, value = the values, lines = rows: a cell of a presence-only wide sheet that is no mark (blocking)
  *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows; a Total word, or a statistics label (Mean, SD, Min, Max, n, ...) in the trailing block with no date or position of its own
  *   CONV-SUMMARY-ROW-KEPT      count            value = the labels, lines = rows: a statistics label in the middle of a sheet, with no date or position of its own, kept as a sample (warning, accept)
  *   CONV-ID-REVISIT            count, by        value = an example ID, lines = the rows; by = date | date, time | date, time, depth: a code repeated at one station on different visits got the visit in its ID (warning, accept)
@@ -105,6 +106,12 @@ const OBIS_OCCURRENCE = {
   label: 'OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)',
   url: 'https://manual.obis.org/format_occurrence.html',
   locator: '"(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"',
+};
+
+const OBIS_OCCURRENCE_STATUS = {
+  label: 'OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not',
+  url: 'https://manual.obis.org/format_occurrence.html',
+  locator: '"These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"',
 };
 
 const OBIS_NAME_MATCH = {
@@ -631,12 +638,27 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: [],
     plain: {
-      pl: `Ten arkusz wymienia gatunki bez liczebności. Konwerter nie zapisuje jeszcze list samej obecności gatunków. Dodaj kolumnę z liczebnością, zagęszczeniem albo biomasą i powiedz, czym są te liczby.`,
-      en: `This sheet lists species without counts. The converter does not write presence-only lists yet. Add a column with counts, density or biomass and say what the numbers are.`,
-      de: `Dieses Blatt führt Arten ohne Anzahlen auf. Der Konverter schreibt noch keine reinen Anwesenheitslisten. Fügen Sie eine Spalte mit Anzahlen, Dichte oder Biomasse hinzu und geben Sie an, was die Zahlen sind.`,
-      fr: `Cette feuille liste des espèces sans effectifs. Le convertisseur n'écrit pas encore de listes de présence seule. Ajoutez une colonne d'effectifs, de densité ou de biomasse et indiquez ce que sont les nombres.`,
+      pl: `Ten arkusz wymienia gatunki bez liczebności. Jeśli to lista znalezionych gatunków (sama obecność, nic nie liczono), zaznacz przy arkuszu „To jest lista znalezionych gatunków (sama obecność, bez liczebności)”. W przeciwnym razie dodaj kolumnę z liczebnością, zagęszczeniem albo biomasą i powiedz, czym są liczby.`,
+      en: `This sheet lists species without counts. If it is a list of species found (presence only, nothing counted), tick "This is a list of species found (presence only, no counts)" for the sheet. Otherwise add a column with counts, density or biomass and say what the numbers are.`,
+      de: `Dieses Blatt führt Arten ohne Anzahlen auf. Ist es eine Liste gefundener Arten (nur Anwesenheit, nichts gezählt), wählen Sie beim Blatt „Dies ist eine Liste gefundener Arten (nur Anwesenheit, ohne Anzahlen)“. Sonst fügen Sie eine Spalte mit Anzahlen, Dichte oder Biomasse hinzu und geben Sie an, was die Zahlen sind.`,
+      fr: `Cette feuille liste des espèces sans effectifs. S'il s'agit d'une liste d'espèces trouvées (présence seule, rien n'est compté), cochez pour la feuille « C'est une liste d'espèces trouvées (présence seule, sans effectifs) ». Sinon ajoutez une colonne d'effectifs, de densité ou de biomasse et indiquez ce que sont les nombres.`,
     },
-    technical: `{file}, {sheet}: a long sheet has a taxon column and no quantity column (a presence-only species list). Presence-only lists are not written yet; the sheet is not converted. This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet.`,
+    technical: `{file}, {sheet}: a long sheet has a taxon column and no quantity column (a presence-only species list). Nothing is written until the user either ticks "This is a list of species found" for the sheet (presenceOnly: one occurrence per taxon row, occurrenceStatus present, no organismQuantity and no organismQuantityType) or adds a quantity column and declares it. This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet.`,
+    citations: [OBIS_OCCURRENCE_STATUS],
+  },
+  {
+    id: 'CONV-PRESENCE-VALUE',
+    category: 'B',
+    severity: 'error',
+    params: [],
+    plain: {
+      pl: `Kolumna „{field}” ma {value} {+lineCount:w wierszu|w wierszach|w wierszach} {lines}, a na liście znalezionych gatunków komórka to znak (x, +, ✓, 1, tak) albo jest pusta. Wartość nie jest zgadywana. Jeśli to liczebności, odznacz „To jest lista znalezionych gatunków” i powiedz, czym są liczby; w przeciwnym razie popraw je.`,
+      en: `Column "{field}" holds {value} in {+lineCount:line|lines} {lines}, but in a list of species found a cell is a mark (x, +, ✓, 1, yes) or empty. The value is not guessed. If these are counts, untick "This is a list of species found" and say what the numbers are; otherwise correct them.`,
+      de: `Die Spalte „{field}“ enthält {value} in {+lineCount:der Zeile|den Zeilen} {lines}, aber in einer Liste gefundener Arten ist eine Zelle ein Zeichen (x, +, ✓, 1, ja) oder leer. Der Wert wird nicht geraten. Sind es Anzahlen, entfernen Sie das Häkchen bei „Dies ist eine Liste gefundener Arten“; sonst korrigieren Sie sie.`,
+      fr: `La colonne « {field} » contient {value} {+lineCount:à la ligne|aux lignes} {lines}, mais dans une liste d'espèces trouvées une cellule est un signe (x, +, ✓, 1, oui) ou vide. La valeur n'est pas devinée. S'il s'agit d'effectifs, décochez « C'est une liste d'espèces trouvées » ; sinon corrigez-les.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: in a sheet ticked as a presence-only species list, a wide cell is read as a mark: present (x X + * ✓ ✔ 1 yes y tak ja oui present obecny vorhanden présent), absent (0 - absent nieobecny abwesend no nie nein non; an absence only with the full-species-list tick, else nothing is written) or empty. Any other value ({value}: a number above 1, a negative number, other text) is not guessed; the sheet is not converted until it is corrected or the tick is removed.`,
+    citations: [OBIS_OCCURRENCE_STATUS],
   },
   {
     id: 'CONV-TAXON-NO-QUANTITY',
