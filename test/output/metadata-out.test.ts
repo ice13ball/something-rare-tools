@@ -47,9 +47,9 @@ describe('metadataDraft', () => {
     expect(metadataDraft([coarse], []).temporalExtent).toEqual({ start: '2021-01-01', end: '2022-02-28' });
   });
 
-  it('antimeridian crossers are plain min/max, no cleverness', () => {
+  it('antimeridian crossers get the short way round: west > east (details in antimeridian-bbox.test.ts)', () => {
     const d = metadataDraft([dataset([row(2, { lat: 0, lon: 179 }), row(3, { lat: 1, lon: -179 })])], []);
-    expect(d.bbox).toEqual({ west: -179, east: 179, south: 0, north: 1 });
+    expect(d.bbox).toEqual({ west: 179, east: -179, south: 0, north: 1 });
   });
 
   it('no dates and no points: no extent, no bbox', () => {
