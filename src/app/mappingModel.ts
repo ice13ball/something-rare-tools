@@ -2,7 +2,10 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Pure helpers behind the mapping table: changing the role of a column without ever inventing a unit.
 import type { UiKey } from '../core/i18n/ui';
+import { hemisphereTarget } from '../core/recognize/headerWords';
+import { headerKey } from '../core/recognize/vocab';
 import type { ColumnRole, ConverterRoleKind, SheetMapping } from '../core/types';
+import { hemisphereLetter } from '../core/values/coords';
 
 /** The kinds /check offers. The converter-only kinds (types.ts ConverterRole) are not among them: /check never proposes or lists them. */
 export type RoleKind = Exclude<ColumnRole['kind'], ConverterRoleKind>;
@@ -12,6 +15,7 @@ export const ROLE_KINDS: readonly RoleKind[] = [
   'ignore',
   'latitude',
   'longitude',
+  'hemisphere',
   'datetime',
   'date',
   'time',
@@ -42,6 +46,7 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
   'time',
   'latitude',
   'longitude',
+  'hemisphere',
   'depth',
   'depthBelowSeafloor',
   'pressure',
@@ -63,10 +68,23 @@ export const roleChoiceLabelKey = (c: RoleChoice): UiKey => `role.${c}` as UiKey
 export const roleChoiceOf = (role: ColumnRole): RoleChoice => (role.kind === 'taxon' && role.header === true ? 'taxonHeader' : role.kind);
 
 /** The role after the user picked `choice`. Every /check kind goes through changeRole, so its behaviour is the one it always had. */
-export function roleFromChoice(current: ColumnRole, proposed: ColumnRole, choice: RoleChoice, cleanHeader: string): ColumnRole {
+export function roleFromChoice(current: ColumnRole, proposed: ColumnRole, choice: RoleChoice, cleanHeader: string, samples: readonly string[] = []): ColumnRole {
   if (choice === 'taxonHeader') return proposed.kind === 'taxon' && proposed.header === true ? proposed : { kind: 'taxon', header: true };
   if (choice === 'taxon') return proposed.kind === 'taxon' && proposed.header !== true ? proposed : { kind: 'taxon' };
-  return changeRole(current, proposed, choice, cleanHeader);
+  return changeRole(current, proposed, choice, cleanHeader, samples);
+}
+
+/** The axis a column of hemisphere letters signs: the header says it ('Lon Dir'), else the letters do (E / W is longitude, N / S latitude), else latitude (the user can switch it). */
+export function hemisphereAxisOf(cleanHeader: string, samples: readonly string[]): 'latitude' | 'longitude' {
+  const named = hemisphereTarget(headerKey(cleanHeader)).axis;
+  if (named !== undefined) return named;
+  const letters = samples.map((s) => hemisphereLetter(s));
+  return letters.some((l) => l === 'E' || l === 'W') && !letters.some((l) => l === 'N' || l === 'S') ? 'longitude' : 'latitude';
+}
+
+/** The axis of a hemisphere role changed by the user; any other role is returned unchanged. */
+export function setHemisphereAxis(role: ColumnRole, axis: 'latitude' | 'longitude'): ColumnRole {
+  return role.kind === 'hemisphere' ? { kind: 'hemisphere', axis } : role;
 }
 
 /** Converter only: which end of a depth range a depth column is (undefined removes it). */
@@ -80,9 +98,11 @@ export function setBound(role: ColumnRole, bound: 'min' | 'max' | undefined): Co
  * The role after the user picked `kind` in the dropdown. Going back to the kind the tool proposed restores the
  * proposal as it was (unit and all); any other kind starts bare: no unit, depth direction unknown.
  */
-export function changeRole(_current: ColumnRole, proposed: ColumnRole, kind: RoleKind | ConverterRoleKind, cleanHeader: string): ColumnRole {
+export function changeRole(_current: ColumnRole, proposed: ColumnRole, kind: RoleKind | ConverterRoleKind, cleanHeader: string, samples: readonly string[] = []): ColumnRole {
   if (proposed.kind === kind) return proposed;
   switch (kind) {
+    case 'hemisphere':
+      return { kind: 'hemisphere', axis: hemisphereAxisOf(cleanHeader, samples) };
     case 'depth':
       return { kind: 'depth', positive: 'unknown' };
     case 'variable':

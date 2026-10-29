@@ -75,6 +75,21 @@ export function isHemisphereHeader(key: string): boolean {
   return false;
 }
 
+const HEMISPHERE_NOISE = /^(dir|direction|hemisphere|hemi|hem|polkula|hemisphare|hemisphaere|ns|ew|nsew|n|s|e|w)$/;
+
+/**
+ * What a hemisphere column's header says about the coordinate it signs: its axis ('Lon Dir', 'Latitude N/S', 'Beg Lat Dir') and the start or end word
+ * ('Beg Lat Dir' starts, 'End Lon Dir' ends). Either is undefined when the header does not say ('Hemisphere', 'NS', 'Lon Dir' has no bound).
+ */
+export function hemisphereTarget(key: string): { axis?: 'latitude' | 'longitude'; bound?: 'start' | 'end' } {
+  const rest = key.split(' ').filter((t) => t !== '' && !HEMISPHERE_NOISE.test(t)).join(' ');
+  if (rest === '') return {};
+  const cb = coordinateBound(rest);
+  if (cb) return { axis: cb.axis, bound: cb.bound };
+  const axis = axisOfWord(rest);
+  return axis === undefined ? {} : { axis };
+}
+
 // Tokens of an identifier name. A name is an identifier when EVERY word is one of these and at least one is not just 'collection' or a digit:
 // 'Catalog ID', 'Catalog #', 'Collection ID', 'Photo', 'GenBank No.' are; 'Ref temperature', 'Number of species' are not (a real word follows).
 const IDENTIFIER_TOKEN = /^(id|ids|no|nr|num|number|catalog|catalogue|accession|acc|reference|ref|image|photo|loan|gift|voucher|specimen|record|barcode|uuid|guid|genbank|gen ?b[a-z]{2,4}k|collection|\d+)$/;

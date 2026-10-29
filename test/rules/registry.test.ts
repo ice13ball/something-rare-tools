@@ -75,6 +75,8 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-UNIT-MISSING': ['warning', 'B'],
   'ROW-DEPTH-SIGN': ['info', 'B'],
   'ROW-DM-COORDS': ['info', 'B'],
+  'ROW-HEMISPHERE-CONFLICT': ['warning', 'B'],
+  'ROW-HEMISPHERE-MISSING': ['warning', 'B'],
   'ROW-ZERO-COORD': ['error', 'B'],
   'ROW-NO-COORD': ['warning', 'B'],
   'ROW-DEPTH-MIN-MAX': ['error', 'B'],

@@ -23,7 +23,7 @@ import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } fro
 import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
-import { parseCoordinate } from './values/coords';
+import { pairHemisphere, parseCoordinate } from './values/coords';
 import { combineDateTime, detectDayMonthOrder, parseDate, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
@@ -31,7 +31,7 @@ import { pushAll } from './util/arrays';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-DM-COORDS' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' |'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -82,6 +82,9 @@ export interface Spec {
 export interface Specs {
   lat?: Spec;
   lon?: Spec;
+  /** Columns of hemisphere letters for the mapped latitude / longitude column (S and W negate it). */
+  latHemi?: Spec;
+  lonHemi?: Spec;
   when?: Spec & { kind: 'date' | 'datetime' };
   time?: Spec;
   depth?: Spec & { positive: 'down' | 'up' | 'unknown' };
@@ -104,9 +107,13 @@ export function specsOf(mapping: SheetMapping): Specs {
       case 'longitude':
         s.lon ??= spec;
         break;
+      case 'hemisphere':
+        if (r.axis === 'latitude') s.latHemi ??= spec;
+        else s.lonHemi ??= spec;
+        break;
       case 'date':
       case 'datetime':
-        s.when ??= { ...spec, kind: r.kind };
+        s.when ??={ ...spec, kind: r.kind };
         break;
       case 'time':
         s.time ??= spec;
@@ -256,9 +263,16 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
   const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
   const dwcDepth = dwcDepthCols(sheet);
 
-  const coordinate = (row: RawRow, spec: Spec, axis: 'lat' | 'lon'): { value: number; decimals: number } | undefined => {
-    const cell = row.cells[spec.index] ?? null;
-    if (isBlankCell(cell)) return undefined;
+  const coordinate = (row: RawRow, spec: Spec, axis: 'lat' | 'lon', hemi?: Spec): { value: number; decimals: number } | undefined => {
+    const written = row.cells[spec.index] ?? null;
+    if (isBlankCell(written)) return undefined;
+    // an unsigned value and the letter of its hemisphere column: S and W make it negative (a disagreement keeps the value as written and is reported)
+    let cell = written;
+    if (hemi) {
+      const paired = pairHemisphere(written, row.cells[hemi.index] ?? null, axis);
+      cell = paired.cell;
+      if (paired.issue) c.add(paired.issue === 'conflict' ? 'ROW-HEMISPHERE-CONFLICT' : 'ROW-HEMISPHERE-MISSING', sheet.name, spec.header, row.line, String(written).trim(), true, { hemisphere: hemi.header });
+    }
     const r = parseCoordinate(cell, axis, dc);
     if (!('error' in r)) {
       if (r.form !== 'decimal') c.add('ROW-DM-COORDS', sheet.name, spec.header, row.line, String(cell).trim(), false);
@@ -268,7 +282,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
     // out of range or odd notation: keep a plain number as it is (the range rules report it), report the rest
     const p = parseNumber(cell, dc);
     if (p.status === 'ok') return { value: p.value, decimals: p.decimals };
-    reportBadNumber(c, sheet.name, spec.header, row.line, cell, dc);
+    reportBadNumber(c, sheet.name, spec.header, row.line, written, dc);
     return undefined;
   };
 
@@ -283,14 +297,14 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
       if ((latBlank || lonBlank) && !(latBlank && !lonBlank && na(specs.lon)) && !(lonBlank && !latBlank && na(specs.lat)) && holdsRecord(row, [specs.lat.index, specs.lon.index])) m.posBlank = latBlank && lonBlank ? 'both' : latBlank ? 'lat' : 'lon';
     }
     if (specs.lat) {
-      const r = coordinate(row, specs.lat, 'lat');
+      const r = coordinate(row, specs.lat, 'lat', specs.latHemi);
       if (r) {
         m.lat = r.value;
         m.latDecimals = r.decimals;
       }
     }
     if (specs.lon) {
-      const r = coordinate(row, specs.lon, 'lon');
+      const r = coordinate(row, specs.lon, 'lon', specs.lonHemi);
       if (r) {
         m.lon = r.value;
         m.lonDecimals = r.decimals;

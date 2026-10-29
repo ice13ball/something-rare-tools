@@ -103,6 +103,8 @@ export interface MetadataRecord {
 /* ---------- mapping and layout ---------- */
 export type ColumnRole =
   | { kind: 'latitude' } | { kind: 'longitude' }
+  /** A column of hemisphere letters (N/S, E/W or the words) for the mapped latitude or longitude column: S and W make that column's value negative. */
+  | { kind: 'hemisphere'; axis: 'latitude' | 'longitude' }
   | { kind: 'datetime' } | { kind: 'date' } | { kind: 'time' }
   | { kind: 'depth'; positive: 'down' | 'up' | 'unknown'; unit?: string; /** Converter only: which end of a depth range this column is. /check never sets it. */ bound?: 'min' | 'max' }
   | { kind: 'pressure'; unit?: string }

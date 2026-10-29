@@ -7,7 +7,7 @@ import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types'
 import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
-import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
+import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setHemisphereAxis, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
 import type { TipId } from '../tips';
 
 export interface MappingEditorProps {
@@ -103,6 +103,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
                         role={col.role}
                         roleKinds={roleKinds}
                         proposed={proposal?.role ?? { kind: 'ignore' }}
+                        samples={samples[col.index] ?? []}
                         cleanHeader={proposal?.cleanHeader ?? col.header}
                         reason={low && proposal ? reasonText(proposal) : undefined}
                         reasonTip={low && proposal?.reasonCode === 'summary-total' ? 'convertSummaryColumn' : undefined}
@@ -130,20 +131,23 @@ interface RoleCellProps {
   /** An ⓘ that explains the reason (the converter's "sum or total column"). */
   reasonTip?: TipId;
   roleKinds: readonly RoleChoice[];
+  /** The first values of the column as text: they tell which axis a column of hemisphere letters signs. */
+  samples: readonly string[];
   onRole: (role: ColumnRole) => void;
 }
 
-function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleKinds, onRole }: RoleCellProps): React.ReactElement {
+function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleKinds, samples, onRole }: RoleCellProps): React.ReactElement {
   const unit = roleUnit(role) ?? '';
   const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort' || role.kind === 'depthBelowSeafloor';
   const converter = roleKinds !== ROLE_KINDS;
   const boundId = useId();
+  const axisId = useId();
   return (
     <div className="role-cell">
       <select
         aria-label={`${label}: ${t('mapping.role')}`}
         value={roleChoiceOf(role)}
-        onChange={(e) => onRole(roleFromChoice(role, proposed, e.target.value as RoleChoice, cleanHeader))}
+        onChange={(e) => onRole(roleFromChoice(role, proposed, e.target.value as RoleChoice, cleanHeader, samples))}
       >
         {roleKinds.map((k) => (
           <option key={k} value={k}>
@@ -162,6 +166,17 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleK
           <span>{t('mapping.variable')}</span>
           <input type="text" list={DATALIST_ID} value={role.variable} autoComplete="off" spellCheck={false} onChange={(e) => onRole(setVariableName(role, e.target.value))} />
         </label>
+      )}
+      {role.kind === 'hemisphere' && (
+        <div className="inline-field">
+          <FieldLabel htmlFor={axisId} tip="hemisphere">
+            {t('mapping.hemisphere.axis')}
+          </FieldLabel>
+          <select id={axisId} value={role.axis} onChange={(e) => onRole(setHemisphereAxis(role, e.target.value as 'latitude' | 'longitude'))}>
+            <option value="latitude">{t('role.latitude')}</option>
+            <option value="longitude">{t('role.longitude')}</option>
+          </select>
+        </div>
       )}
       {role.kind === 'depth' && (
         <label className="inline-field">

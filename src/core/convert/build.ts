@@ -295,6 +295,9 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   const used = new Set<number>();
   const use = (s: { index: number } | undefined): void => void (s && used.add(s.index));
   for (const s of [specs.lat, specs.lon, specs.when, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
+  // a hemisphere column is read together with its coordinate (dataset.ts metaParser); without the coordinate it is read by nothing
+  if (specs.lat) use(specs.latHemi);
+  if (specs.lon) use(specs.lonHemi);
   if (sin.profile !== undefined) use(cols.pressure);
   else if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);

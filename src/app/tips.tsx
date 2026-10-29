@@ -89,6 +89,7 @@ export const ROLE_FEEDS: Record<RoleKind, readonly string[]> = {
   ignore: [],
   latitude: ['ROW-LAT-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
   longitude: ['ROW-LON-RANGE', 'ROW-LAT-EQ-LON', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
+  hemisphere: ['ROW-HEMISPHERE-CONFLICT', 'ROW-HEMISPHERE-MISSING'],
   datetime: WHEN_RULES,
   date: WHEN_RULES,
   time: ['ROW-DATE-UNPARSEABLE', 'ROW-TZ-UNKNOWN'],
@@ -151,6 +152,7 @@ const DEFS = {
   // /check — confirm step
   layout: { label: 'layout.title', rule: 'IN-LAYOUT-UNSUPPORTED' },
   roles: { label: 'mapping.role', values: { roles: rolesList } },
+  hemisphere: { label: 'role.hemisphere', rule: 'ROW-HEMISPHERE-CONFLICT' },
   encoding: { label: 'tip.encoding.label', rule: 'IN-ENCODING-FALLBACK' },
   singleCruise: {
     label: 'confirm.singleCruise',
