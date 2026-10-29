@@ -145,7 +145,7 @@ interface Cand {
   /** Every sampled value is blank; set after the columns are read. */
   empty?: boolean;
   /** The name alone is ambiguous (data, Zeit, ...): the column's values must back it, see guardPasses. */
-  guard?: 'date-values' | 'not-plain-numbers' | 'time-values';
+  guard?: 'date-values' | 'not-plain-numbers' | 'time-values' | 'place-values';
   /** Depth from/to (od/do, von/bis, de/a): which end of a range; two bounds compete for the one depth slot. */
   bound?: 'from' | 'to';
   /** The end of a tow or transect (End Latitude): loses the slot to the start position and is ignored; alone it is used, at low confidence. */
@@ -252,6 +252,10 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   if (/^(station( name| id| code| no| number| nr| label)?|stn( \w+)?|st|sta|site( id| name| code| no)?|event|label)$/.test(key)) {
     return { slot: 'station', tier: key === 'station' ? 0 : 1, kind: 'station', why: why('name-station') };
   }
+  // 'Location' / 'Locality' name a place: a station when the values are short repeated names (not coordinates, not sentences). Weak (tier 3, low confidence): any real Station column wins.
+  if (/^(location( name| id| code| no| number| label)?|locality( name| id| code)?|sampling (location|locality|place)|collection (location|locality|site)|place( name)?)$/.test(key)) {
+    return { slot: 'station', tier: 3, kind: 'station', why: why('name-station-place'), guard: 'place-values' };
+  }
   if (/^(sample( id| no| number| name| code| label)?|core( id| name| no| number)?|specimen( id)?|bottle( id| no| number)?|id)$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', why: why('name-sample') };
   }
@@ -319,6 +323,10 @@ function nameCandidateOther(key: string, hdr?: NameHeader): Cand | undefined {
   // station
   if (/^(stacja( nr| numer| nazwa| kod| id)?|(numer|nr|kod|nazwa|id) stacji|stanowisko( nr| numer| nazwa| kod)?)$/.test(key)) {
     return { slot: 'station', tier: key === 'stacja' ? 0 : 1, kind: 'station', why: why('name-station') };
+  }
+  // a place name in Polish, German and French: a station when the values are short repeated names; weak, a real station column wins (see nameCandidate)
+  if (/^(miejsce( poboru| pobrania| probkowania| badan| nr| nazwa)?|miejscowosc|lokalizacja|nazwa lokalizacji|nazwa miejsca|ort|ortsname|ortsangabe|fundort|probenahmeort|entnahmeort|lieu|lieu (de )?(prelevement|echantillonnage|collecte)|nom (du )?lieu|localite|localisation)$/.test(key)) {
+    return { slot: 'station', tier: 3, kind: 'station', why: why('name-station-place'), guard: 'place-values' };
   }
   if (/^(stations ?(nr|nummer|name|code|id|kennung)|stationsname|stationsnummer|stationsnr|messstation|standort( nr| name| id)?|probenahmestelle|station (nr|nummer|name|code|id|kennung))$/.test(key)) {
     return { slot: 'station', tier: 1, kind: 'station', why: why('name-station') };
@@ -555,9 +563,36 @@ function dmAxis(rows: readonly RawRow[], col: number, decimalComma: boolean): 'l
   return undefined;
 }
 
+const PLACE_MAX_CHARS = 40;
+const PLACE_MAX_WORDS = 6;
+
+/**
+ * Does the column hold place names: short text values (at most 40 characters and 6 words), at least one of them repeated, none a number, a coordinate or a date? A column of
+ * sentences, of coordinates, of numbers or of values that are all different (a free description or an identifier per row) is not a station. At least 80 % of the filled cells must qualify.
+ */
+function holdsPlaceNames(rows: readonly RawRow[], col: number): boolean {
+  let seen = 0;
+  let names = 0;
+  const distinct = new Set<string>();
+  for (const r of rows.slice(0, 500)) {
+    const c = r.cells[col] ?? null;
+    if (isBlank(c)) continue;
+    seen++;
+    if (typeof c !== 'string') continue;
+    const t = c.trim();
+    if (t.length > PLACE_MAX_CHARS || t.split(/\s+/).length > PLACE_MAX_WORDS) continue;
+    if (/[°º˚]|\d+[.,]\d+\D+\d+[.,]\d+/.test(t)) continue; // a coordinate pair or a value with degrees
+    if (parseNumber(t, false).status === 'ok' || !('error' in parseDate(t, { date1904: false, dateFormatted: false }))) continue;
+    names++;
+    distinct.add(t.toLowerCase());
+  }
+  return seen > 0 && names * 5 >= seen * 4 && distinct.size < names;
+}
+
 /** Do the sampled values back an ambiguous name? Blank columns never do. */
 function guardPasses(guard: NonNullable<Cand['guard']>, sheet: RawSheet, rows: readonly RawRow[], col: number, ctx: ProposeContext): boolean {
   const dateFormatted = sheet.dateFormatted?.[col] === true;
+  if (guard === 'place-values') return holdsPlaceNames(rows, col);
   if (guard === 'not-plain-numbers') return dateFormatted || !isNumeric(numericStats(rows, col, ctx.decimalComma));
   let seen = 0;
   let good = 0;

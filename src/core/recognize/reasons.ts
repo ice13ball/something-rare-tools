@@ -21,6 +21,7 @@ export const CHECK_REASONS = {
   'name-depth-end': 'name says depth ({name}: end of a depth range)',
   'name-cruise': 'name says cruise or expedition',
   'name-station': 'name says station, site or event',
+  'name-station-place': 'name says a place and the values are short repeated names, so it is read as the station (a real Station column would win; check that this is what you want)',
   'name-sample': 'name says sample or core identifier',
   'name-sample-probe': 'name says sample ("Probe" can also be a test or an instrument)',
   'name-pressure': 'name says pressure',
