@@ -325,7 +325,12 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    counts only with its `ł`. A depth header counts unless it names the depth of the site, the
    bottom or a Secchi or mixed-layer depth. Pressure is its own role: water pressure in a sea
    pressure unit; air, barometric, vapour, partial and gas pressures are not.
-6. **P01 codes** (`SDN:P01::CODE`) in a header, only when the name said nothing.
+6. **P01 codes** (`SDN:P01::CODE`) in a header, only when the name said nothing. A code after an
+   explicit `SDN:P01::` or `SDN:P06::` prefix that does not have the shape of its collection (P01: eight
+   upper-case letters and digits; P06: four) is not a code at all: no concept page exists (NVS answers 404)
+   and it is reported (`ROW-HEADER-CODE-SHAPE` on `/check`, `CONV-NERC-CODE-MALFORMED` on `/convert`). P02
+   has no fixed length (18 of its current codes have five characters, the rest four), so it is not checked.
+   Only the prefixed form is read: a bare word that looks like a code is never flagged.
 7. **A date-formatted xlsx column** becomes a date or datetime.
 8. **Values**, only when no name or code explained the column and the column is not numeric:
    degrees-and-minutes text with hemisphere letters (latitude or longitude by the letters), and
@@ -444,7 +449,7 @@ sources):
   that inherit a position from a parent event); non-numeric tokens and variants of a missing-value
   token in numeric columns; unparseable, missing, future ([ROW-DATE-FUTURE](rules.md#ROW-DATE-FUTURE),
   judged so that a date within a day of today in the furthest-ahead time zone is not "future"),
-  year-outlier and `YY-MM-DD` dates; unknown time zone; a missing unit; depth sign, range and
+  year-outlier ([ROW-YEAR-OUTLIER](rules.md#ROW-YEAR-OUTLIER): a year **range** in the title, file name or record title names every year in it) and `YY-MM-DD` dates; unknown time zone; a missing unit; depth sign, range and
   min above max; invisible characters inside a value; **the same station at positions that differ
   by a typed digit, exchanged axes or a sign** ([ROW-STATION-MOVED](rules.md#ROW-STATION-MOVED):
   as written far apart, but close and much closer once the candidate flip is applied) and a
@@ -702,6 +707,13 @@ On the report, citations are hidden under `LIC-*` findings (`NO_CITATIONS_IN_CHE
   **not supported** (3.4); the report says so.
 - Darwin Core: only the core is read; extension tables are not compared.
 - Long layouts keep the first value of a repeated (sample, parameter) pair.
+- Years named in a title, file name or record title are single years or **ranges**: `1994-2019` (hyphen,
+  en or em dash), `1994/2019`, `1994 to 2019` (also until, through, bis, do, au) and a pair after a cue
+  word (`in the period 1994_2019`, `from 1994 and 2019`) cover every year between. A two-digit end counts
+  only when it cannot be a month (`1994-95` is a range, `2019-08` is the year 2019, `2011-12` is 2011);
+  descending pairs, dates, and two years joined only by an underscore (`cruise_2015_2019`) are separate
+  years. The covered years only widen what is accepted: rows in a year outside them still raise
+  `ROW-YEAR-OUTLIER`.
 - The report does not check scientific validity, calibration, taxonomy or PDF content
   (`NOT_CHECKED`).
 - Cross-file checks treat the sheets of one workbook as one witness, not independent ones.
@@ -1227,7 +1239,11 @@ For each taxon cell (`convert/build.ts`):
 The same taxon twice in one event is warned (`CONV-TAXON-SAME-EVENT`). **Presence-only species
 lists** (a taxon column and no quantity column) are **not written yet**: one blocking finding says
 so (`CONV-SPECIES-LIST-NO-COUNTS`, or `CONV-TAXON-NO-QUANTITY` when there are other numeric
-columns) instead of three contradicting ones.
+columns) instead of three contradicting ones. A **sheet of environmental measurements only** (measured
+variables, and no taxon column, no quantity column and no unconfirmed taxon candidate) gets one
+blocking finding too, `CONV-ENV-ONLY-SHEET`, with a link to `/check`, in place of
+`CONV-NO-TAXON`, `CONV-QUANTITY-UNDECLARED` and `CONV-NO-OCCURRENCES`; a sheet marked as a profile file
+keeps `CONV-NO-OCCURRENCES`.
 
 ### 8.8 What blocks an export and why (`convert/policy.ts`, `convert/validate.ts`)
 
@@ -1364,7 +1380,9 @@ starts only from a column's own button, one at a time, no retry. `GET
 https://vocab.nerc.ac.uk/sparql/sparql?query=…` for the typed word in P01 (variable) or P06 (unit);
 the only fallback is one more request, for the concept page of a code, made only after the search has failed and when the typed text is
 exactly a concept code. Limits: `NVS_LIMIT` results (20), `NVS_MAX_CHARS` (80) and `NVS_MAX_WORDS`
-(4) for the typed text.
+(4) for the typed text. A typed code whose concept page answers 404 is reported as its own failure (the code
+does not exist; trying again does not help), not as an empty result. A code in a **header** is never sent to NVS;
+its shape is checked offline (3.3, `CONV-NERC-CODE-MALFORMED`, to accept: no identifier is written from it).
 
 ### Limits and known gaps (confirmed from code and rule texts)
 
@@ -1527,7 +1545,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, at commit
-**`36521bf`**. The total, **159 rules**, equals the number of rule rows in
+**`d188863`**. The total, **162 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1537,12 +1555,12 @@ regenerate it when rules change.
 | `IN-` | `input` | 27 | 12 / 9 / 6 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
 | `META-` | `A` | 7 | 1 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates. | None cited in the rule definitions (the rules are stated in their own text). |
-| `ROW-` | `B` | 32 | 6 / 16 / 10 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
+| `ROW-` | `B` | 33 | 6 / 17 / 10 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 65 | 33 / 21 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **159** | | | |
+| `CONV-` | `B` | 67 | 34 / 22 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **162** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1610,6 +1628,11 @@ Each item below is confirmed from code, a test, or a rule text.
 - The archive is limited to 100 MB, 150 MB per entry and in total, and 1000 entries.
 - A long environmental sheet with one parameter, or more than 200 (parameter, unit) pairs, is not
   read and blocks.
+- A sheet of environmental measurements only cannot be converted on its own: OBIS needs species
+  records, so it blocks with `CONV-ENV-ONLY-SHEET` (add a species sheet, or mark the sheet as a
+  profile file next to one; `/check` still reads such a file).
+- A code in a header is only checked for its shape (P01 and P06 after an explicit `SDN:` prefix),
+  never looked up; a well-shaped code that does not exist is not caught offline.
 - The only unit conversion is centimetres to metres for a depth below the seafloor; other units are
   written as declared, with no conversion; a depth column in another unit than metres blocks.
 - Only three licences can be written (CC0-1.0, CC-BY-4.0, CC-BY-NC-4.0).
