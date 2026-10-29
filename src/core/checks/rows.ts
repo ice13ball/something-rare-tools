@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
+import { badHeaderCodes } from '../recognize/vocab';
 import { makeFinding, threshold } from '../rules/registry';
 import { earliestUtcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
@@ -474,6 +475,15 @@ function unitMissing(ds: Dataset, out: Finding[]): void {
   out.push(makeFinding('ROW-UNIT-MISSING', { file: ds.file, params: { headers: shown } }));
 }
 
+/** A code after an explicit `SDN:P01::` or `SDN:P06::` prefix that is not of the shape of that collection: one finding per column and code. Bare header words are never read. */
+function headerCodeShape(ds: Dataset, out: Finding[]): void {
+  for (const v of ds.variables) {
+    for (const bad of badHeaderCodes(v.header)) {
+      out.push(makeFinding('ROW-HEADER-CODE-SHAPE', { file: ds.file, field: displayHeader(v.header).trim(), params: { column: displayHeader(v.header).trim(), code: bad.code, collection: bad.collection, length: bad.length } }));
+    }
+  }
+}
+
 function depthSign(ds: Dataset, out: Finding[]): void {
   if (ds.depthPositive !== 'unknown' || !ds.rows.some((r) => r.depth !== undefined)) return;
   const firstSheet = ds.rows.find((r) => r.depth !== undefined)!.sheet;
@@ -640,6 +650,7 @@ export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
     yearOutlier(ds, sheet, futureSet.size === 0 ? rows : rows.filter((r) => !futureSet.has(r)), declared, out);
   }
   unitMissing(ds, out);
+  headerCodeShape(ds, out);
   depthSign(ds, out);
   return out;
 }

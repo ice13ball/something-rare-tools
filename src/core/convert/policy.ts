@@ -84,6 +84,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-WORMS-NOT-MARINE',
   'CONV-NERC-UNKNOWN',
   'CONV-NERC-UNIT-MISMATCH',
+  // the header names a code of a shape the vocabulary does not have: the column is kept as a measured variable and nothing is written from the code
+  'CONV-NERC-CODE-MALFORMED',
   'CONV-UNIT-NO-P06',
   'CONV-COLUMN-NOT-EXPORTED',
   'CONV-NAMEID-MISSING',

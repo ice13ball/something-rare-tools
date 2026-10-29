@@ -4,7 +4,7 @@ import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals } from '../i18n/plural';
 import { MAX_PAIRS } from '../convert/pivotLimits';
 import { formatLines } from '../lines';
-import { CITE } from './citations';
+import { CITE, NVS_CODE_SHAPE } from './citations';
 import type { RuleSpec } from './spec';
 
 /*
@@ -28,6 +28,7 @@ import type { RuleSpec } from './spec';
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
  *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
+ *   CONV-NERC-CODE-MALFORMED   column, code, collection, length  the header names `SDN:<collection>::<code>` and the code is not of that collection's shape (8 for P01, 4 for P06)
  *   CONV-NERC-UNIT-MISMATCH    column, code, unit  the label of the confirmed concept (code) says per unit mass/volume against the unit of the column
  *   CONV-UNIT-NO-P06           unit             unit = the unit as declared
  *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states
@@ -299,6 +300,20 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     },
     technical: `{file}, {sheet} column {column}: the label of the confirmed P01 concept {code} states a dimension (per unit mass / dry weight / wet weight, or per unit volume) that contradicts the dimension of the unit "{unit}". The pair is the user's choice and is written as confirmed; nothing is converted.`,
     citations: [NERC_MANUAL],
+  },
+  {
+    id: 'CONV-NERC-CODE-MALFORMED',
+    category: 'B',
+    severity: 'warning',
+    params: ['column', 'code', 'collection', 'length'],
+    plain: {
+      pl: `Nagłówek „{column}”: kod {code} po „SDN:{collection}::” nie jest kodem {collection}, który ma dokładnie {length} wielkich liter i cyfr. W NVS nie ma takiego pojęcia. Sprawdź kod: literówka albo dodatkowy znak. Żaden identyfikator z niego nie jest zapisywany; kolumna zostaje mierzoną zmienną.`,
+      en: `Header "{column}": the code {code} after "SDN:{collection}::" is not a {collection} code, which has exactly {length} capital letters and digits. NVS has no such concept. Check the code for a typo or an extra character. No identifier is written from it; the column stays a measured variable.`,
+      de: `Kopfzeile „{column}“: Der Code {code} nach „SDN:{collection}::“ ist kein {collection}-Code, der genau {length} Großbuchstaben und Ziffern hat. NVS kennt keinen solchen Begriff. Prüfen Sie den Code auf einen Tippfehler oder ein überzähliges Zeichen. Daraus wird keine Kennung geschrieben; die Spalte bleibt eine Messgröße.`,
+      fr: `En-tête « {column} » : le code {code} après « SDN:{collection}:: » n'est pas un code {collection}, qui compte exactement {length} majuscules et chiffres. NVS n'a pas ce concept. Vérifiez le code : faute de frappe ou caractère en trop. Aucun identifiant n'en est écrit ; la colonne reste une variable mesurée.`,
+    },
+    technical: `{file}, {sheet} column {column}: the code "{code}" after the explicit prefix SDN:{collection}:: is not of the shape of a {collection} code ({length} upper-case letters and digits); no concept page exists (NVS: 404). The column stays a measured variable, no measurementTypeID / measurementUnitID is written from the code; one is written only when the user confirms a concept for the column.`,
+    citations: [NERC_MANUAL, NVS_CODE_SHAPE],
   },
   {
     id: 'CONV-UNIT-NO-P06',

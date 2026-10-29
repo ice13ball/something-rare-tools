@@ -6,6 +6,14 @@ import type { Citation, Threshold } from '../types';
  * Sources of every number and scientific basis used by the rules. All copied from
  * docs/research/qc-sources.md (section "Decisions" fixes which numbers are used).
  */
+/** The shape of a NERC code (ROW-HEADER-CODE-SHAPE, and CONV-NERC-CODE-MALFORMED in the converter). Both lengths were read on the vocabulary itself on 2026-10-29. */
+export const NVS_CODE_SHAPE: Citation = {
+  label: 'NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29',
+  url: 'https://vocab.nerc.ac.uk/collection/P06/current/',
+  locator:
+    'Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (e.g. TEMPPR01); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.',
+};
+
 const ARGO_CTD = {
   label: 'Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)',
   url: 'https://archimer.ifremer.fr/doc/00228/33951/32470.pdf',

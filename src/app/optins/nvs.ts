@@ -37,7 +37,8 @@ export function nvsConceptUrl(code: string, collection: NvsCollection): string |
 }
 
 /** Why a search stopped before an answer. `network` covers a refused connection, an offline browser and a CORS failure: the page cannot tell them apart. */
-export type NvsFailure = { kind: 'network' } | { kind: 'http'; status: number } | { kind: 'format' };
+/** `notFound`: the concept page of a typed code answered 404, i.e. NVS has no concept with that code (a wrong code, not a service fault: asking again changes nothing). */
+export type NvsFailure = { kind: 'network' } | { kind: 'http'; status: number } | { kind: 'format' } | { kind: 'notFound' };
 
 export interface NvsRun {
   /** The concepts found (empty = the service answered with none). */
@@ -102,7 +103,11 @@ async function search(typed: string, collection: NvsCollection, opts: NvsSearchO
   const uri = code === undefined ? undefined : conceptUri(collection, code);
   if (codeUrl === undefined || uri === undefined) return { concepts: [], via: 'search', failure, aborted: false };
   const second = await get(codeUrl, undefined, opts.signal);
-  if (!second.ok) return second.aborted ? { concepts: [], via: 'code', aborted: true } : { concepts: [], via: 'code', failure: second.failure, aborted: false };
+  if (!second.ok) {
+    if (second.aborted) return { concepts: [], via: 'code', aborted: true };
+    const notFound = second.failure.kind === 'http' && second.failure.status === 404;
+    return { concepts: [], via: 'code', failure: notFound ? { kind: 'notFound' } : second.failure, aborted: false };
+  }
   const concept = readConceptJsonLd(second.body, uri, collection);
   return concept ? { concepts: [concept], via: 'code', aborted: false } : { concepts: [], via: 'code', failure: { kind: 'format' }, aborted: false };
 }

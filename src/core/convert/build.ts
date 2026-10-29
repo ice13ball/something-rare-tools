@@ -3,7 +3,7 @@
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
-import { headerKey, p01CodeOf } from '../recognize/vocab';
+import { badHeaderCodes, headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
@@ -469,6 +469,13 @@ function reportVariables(varState: readonly VarState[], base: { file: string; sh
   }
   for (const u of extraNoUnit) if (!noUnit.includes(u)) noUnit.push(u);
   if (noType.length > 0) out.push(makeConvertFinding('CONV-NERC-UNKNOWN', { ...base, params: { what: noType.join(', ') } }));
+  // a code the header names with `SDN:P01::` / `SDN:P06::` that is not of the shape of its collection (no concept page exists): said once per column and code; nothing is written from it
+  for (const st of varState) {
+    if (!st.written) continue;
+    for (const bad of badHeaderCodes(st.v.header)) {
+      out.push(makeConvertFinding('CONV-NERC-CODE-MALFORMED', { ...base, field: st.v.header, params: { column: st.v.header.trim(), code: bad.code, collection: bad.collection, length: bad.length } }));
+    }
+  }
   // a confirmed concept whose label says "per unit mass" (or volume) for a column whose unit is per volume (or mass): said once per column, the pair is the user's
   for (const st of varState) {
     if (!st.written || !st.type || st.v.unit === undefined) continue;

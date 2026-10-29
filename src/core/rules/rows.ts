@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { CITE, th } from './citations';
+import { CITE, NVS_CODE_SHAPE, th } from './citations';
 import type { RuleSpec } from './spec';
 
 /** The two cited limits; ROW-SHIP-SPEED and ROW-SHIP-SPEED-PAIR share the first, so a message can never disagree with the check. */
@@ -102,6 +102,7 @@ const SHIP_DECLARED = {
  *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
  *   ROW-UNIT-MISSING      headers     column headers without a unit, comma-separated
+ *   ROW-HEADER-CODE-SHAPE column, code, collection, length   column = the header; code = what follows `SDN:<collection>::`; collection = P01 or P06; length = characters such a code has (8 or 4)
  *   ROW-DEPTH-SIGN        header      the depth column header
  *   ROW-DM-COORDS         (none)      field = column, value = example text (once per column)
  *   ROW-HEMISPHERE-CONFLICT hemisphere  field = coordinate column, hemisphere = its hemisphere column, value = example as written, lines = rows
@@ -448,6 +449,20 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Aucune unité n'est indiquée pour : {headers}. Ajoutez l'unité dans l'en-tête de chaque colonne, par ex. « DIC [µmol/kg] ».`,
     },
     technical: `{file}: no unit in the header or in the metadata for column(s) {headers}.`,
+  },
+  {
+    id: 'ROW-HEADER-CODE-SHAPE',
+    category: 'B',
+    severity: 'warning',
+    params: ['column', 'code', 'collection', 'length'],
+    plain: {
+      pl: `Nagłówek „{column}”: kod {code} po „SDN:{collection}::” nie jest kodem {collection}, który ma dokładnie {length} wielkich liter i cyfr. W NVS nie ma takiego pojęcia (odpowiedź 404). Sprawdź kod: literówka albo dodatkowy znak.`,
+      en: `Header "{column}": the code {code} after "SDN:{collection}::" is not a {collection} code, which has exactly {length} capital letters and digits. NVS has no such concept (it answers 404). Check the code for a typo or an extra character.`,
+      de: `Kopfzeile „{column}“: Der Code {code} nach „SDN:{collection}::“ ist kein {collection}-Code, der genau {length} Großbuchstaben und Ziffern hat. NVS kennt keinen solchen Begriff (Antwort 404). Prüfen Sie den Code auf einen Tippfehler oder ein überzähliges Zeichen.`,
+      fr: `En-tête « {column} » : le code {code} après « SDN:{collection}:: » n'est pas un code {collection}, qui compte exactement {length} majuscules et chiffres. NVS n'a pas ce concept (réponse 404). Vérifiez le code : faute de frappe ou caractère en trop.`,
+    },
+    technical: `{file}, column {column}: the code "{code}" after the explicit prefix SDN:{collection}:: is not of the shape of a {collection} code ({length} upper-case letters and digits); the concept page does not exist (NVS: 404). Only the prefixed form is checked; a bare word is never read as a code.`,
+    citations: [NVS_CODE_SHAPE],
   },
   {
     id: 'ROW-DEPTH-SIGN',
