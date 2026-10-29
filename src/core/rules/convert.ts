@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals } from '../i18n/plural';
+import { MAX_PAIRS } from '../convert/pivotLimits';
 import { formatLines } from '../report';
 import { CITE } from './citations';
 import type { RuleSpec } from './spec';
@@ -1190,7 +1191,11 @@ function shortList(text: string): string {
   return items.length <= SHOWN_ITEMS ? text : `${items.slice(0, SHOWN_ITEMS).join(', ')}, …`;
 }
 
+/** A finding of CONV-LONG-UNSUPPORTED without a reason (the sheet was not read for another cause) still names every placeholder of its text. */
+const withDefaults = (f: Finding): Finding => (f.ruleId === 'CONV-LONG-UNSUPPORTED' ? { ...f, params: { reason: 'other', count: 0, max: MAX_PAIRS, ...f.params } } : f);
+
 export function renderConvertPlain(f: Finding, lang: Lang): string {
+  f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
   if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
@@ -1222,5 +1227,6 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
 
 /** The English technical detail line. */
 export function renderConvertTechnical(f: Finding): string {
+  f = withDefaults(f);
   return fill(profileVariant(f)?.technical ?? getConvertRule(f.ruleId).technical, f);
 }

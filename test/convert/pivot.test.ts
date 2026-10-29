@@ -253,7 +253,7 @@ describe('a column that varies per measurement splits one sample, and the user c
     ['ZL1', '2023-06-14', 55.5, 2.5, 10, 'Temperature', 'degC', 7.9, 'checked'],
     ['ZL1', '2023-06-14', 55.5, 2.5, 10, 'Salinity', 'PSU', 34.4, 'late sample'],
   ];
-  const conv = (choices: Record<string, { describes?: string[] }> = {}) => {
+  const conv = (choices: Record<string, { describes?: number[] }> = {}) => {
     const file = pivotConvertFile(fileOf(header, rows()), choices);
     return { file, r: convert({ sheets: [sheetInput(file, { profile: { depthIds: true } })] }) };
   };
@@ -264,17 +264,17 @@ describe('a column that varies per measurement splits one sample, and the user c
     const f = r.findings.find((x) => x.ruleId === 'CONV-LONG-KEY-VARIES');
     expect(f?.params).toMatchObject({ columns: 'Comment', count: 2 });
     for (const lang of LANGS) expect(renderConvertPlain(f!, lang), lang).toContain('Comment');
-    expect(file.sheets[0].pivot?.keyOptions).toEqual([{ header: 'Comment', describes: false }]);
+    expect(file.sheets[0].pivot?.keyOptions).toEqual([{ index: 8, header: 'Comment', describes: false }]);
     expect(ids(r)).toContain('CONV-ID-DUPLICATE');
   });
 
   it('marking it as describing the measurement removes it from the key: one sample per station and depth, its values dropped and said, no ID collision', () => {
-    const { file, r } = conv({ S: { describes: ['Comment'] } });
+    const { file, r } = conv({ S: { describes: [8] } });
     const sh = file.sheets[0];
     expect(sh.header).not.toContain('Comment');
     expect(sh.rows).toHaveLength(2);
     expect(sh.pivot?.dropped).toEqual(['Comment']);
-    expect(sh.pivot?.keyOptions).toEqual([{ header: 'Comment', describes: true }]);
+    expect(sh.pivot?.keyOptions).toEqual([{ index: 8, header: 'Comment', describes: true }]);
     expect(ids(r)).toContain('CONV-LONG-DROPPED');
     expect(ids(r)).not.toContain('CONV-LONG-KEY-VARIES');
     expect(ids(r)).not.toContain('CONV-ID-DUPLICATE');
@@ -283,9 +283,22 @@ describe('a column that varies per measurement splits one sample, and the user c
   });
 
   it('a position or identity column is never offered, and a column that is not in the sheet is ignored', () => {
-    const { file } = conv({ S: { describes: ['Station', 'Depth_m', 'Nope'] } });
+    const { file } = conv({ S: { describes: [0, 4, 99] } });
     expect(file.sheets[0].header.slice(0, 5)).toEqual(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m']);
     expect(file.sheets[0].pivot?.keyOptions.map((o) => o.header)).toEqual(['Comment']);
+  });
+
+  it('two key columns with the same header are told apart by their position: ticking one leaves the other in the key', () => {
+    const h = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value', 'Comment', 'Comment'];
+    const r2: Cell[][] = [
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'Temperature', 'degC', 8.1, 'a', 'x'],
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'Salinity', 'PSU', 34.2, 'b', 'y'],
+    ];
+    const file = pivotConvertFile(fileOf(h, r2), { S: { describes: [8] } });
+    const sh = file.sheets[0];
+    expect(sh.pivot?.keyOptions).toEqual([{ index: 8, header: 'Comment', describes: true }, { index: 9, header: 'Comment', describes: false }]);
+    expect(sh.header.filter((x) => x === 'Comment')).toHaveLength(1);
+    expect(sh.rows).toHaveLength(2);
   });
 
   it('the sheet read as a normal table (off) is left as it is, and the block of production applies to it', () => {
@@ -315,6 +328,37 @@ describe('the worker: the companion file pre-ticks "read as a normal table"', ()
     const back = h.handle({ type: 'pivotChoice', fileId: ticked.files[0].fileId, sheet: 'long.csv', off: false, describes: [] }) as Parsed['files'][number];
     expect(back.pivots?.['long.csv']).toBeDefined();
     expect(back.pivotOff).toBeUndefined();
+  });
+});
+
+describe('the worker checks what pivotChoice sends', () => {
+  it('anything but whole numbers in describes is ignored, off is only true, and a sheet named __proto__ works', async () => {
+    const { createConvertHandler } = await import('../../src/worker/convert.handler');
+    const { csvOf } = await import('../app/convertHelpers');
+    type Parsed = import('../../src/worker/convert.protocol').ConvertParseResult;
+    const h = createConvertHandler();
+    const csv = csvOf(['Station', 'Depth_m', 'Parameter', 'Value', 'Comment'], [['ZL1', 5, 'Temperature', 8.1, 'a'], ['ZL1', 5, 'Salinity', 34, 'b']]);
+    const p = h.handle({ type: 'parse', files: [{ name: '__proto__', bytes: new TextEncoder().encode(csv), source: 'dropped' }] }) as Parsed;
+    const f = p.files[0];
+    const name = f.sheets[0].name;
+    const ask = (describes: unknown, off: unknown = false) => h.handle({ type: 'pivotChoice', fileId: f.fileId, sheet: name, off, describes } as never) as Parsed['files'][number];
+    for (const bad of ['Comment', null, { 0: 4 }, ['Comment'], [1.5, -1, NaN, '4']]) expect(ask(bad).pivots?.[name]?.dropped, JSON.stringify(bad)).toEqual([]);
+    expect(ask([], 'yes').pivots).toBeDefined();
+    expect(ask([4]).pivots?.[name]?.dropped).toEqual(['Comment']);
+    expect(ask([], true).pivotOff).toEqual([name]);
+    expect(ask([]).pivots?.[name]).toBeDefined();
+  });
+});
+
+describe('the technical text of CONV-LONG-UNSUPPORTED never shows a placeholder', () => {
+  it('with and without a reason', async () => {
+    const { renderConvertTechnical } = await import('../../src/core/rules/convert');
+    const all: Record<string, string | number>[] = [{ parameterColumn: 'p', valueColumn: 'v' }, { parameterColumn: 'p', valueColumn: 'v', reason: 'one-parameter', count: 1 }, { parameterColumn: 'p', valueColumn: 'v', reason: 'too-many', count: 300, max: 200 }];
+    for (const params of all) {
+      const f = makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: 'a.csv', sheet: 'S', params });
+      expect(renderConvertTechnical(f), JSON.stringify(params)).not.toMatch(/\{[A-Za-z]/);
+      for (const lang of LANGS) expect(renderConvertPlain(f, lang)).not.toMatch(/\{[A-Za-z]/);
+    }
   });
 });
 

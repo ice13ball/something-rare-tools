@@ -140,7 +140,7 @@ export interface ConvertProtocol {
   convert: { req: { body: ConvertRequestBody }; res: ConvertView };
   proposeCodes: { req: { fileId: string; sheet: string; mapping: SheetMapping }; res: CodeProposalView | null };
   /** The user's choice about a long environmental sheet: read it as a normal table (`off`), and which key columns describe the measurement, not the sample. The file is read again; the answer is its new summary. */
-  pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: string[] }; res: ConvertFileSummary };
+  pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
 }
 
@@ -159,6 +159,6 @@ export interface ConvertEngine {
   parse(files: InputFile[]): Promise<ConvertParseResult>;
   convert(body: ConvertRequestBody): Promise<ConvertView>;
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping): Promise<CodeProposalView | null>;
-  pivotChoice(fileId: string, sheet: string, off: boolean, describes: string[]): Promise<ConvertFileSummary>;
+  pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
 }

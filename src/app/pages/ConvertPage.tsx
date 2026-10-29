@@ -126,6 +126,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [nvsWords, setNvsWords] = useState<Record<string, string>>({});
   const [nvsSearches, setNvsSearches] = useState<Record<string, NvsSearchView>>({});
   const [nvsBusy, setNvsBusy] = useState<string | null>(null);
+  // a pivotChoice request is in flight: its checkboxes wait, so that two quick ticks cannot race
+  const [pivotBusy, setPivotBusy] = useState(false);
   const nvsAbort = useRef<AbortController | null>(null);
   const nvsRun = useRef(0);
   // the description fields the user typed in, cleared or chose a value for: a new drop never overwrites them (core/convert/metadata.ts refreshPrefill)
@@ -279,8 +281,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
    * The user's choice about a long environmental sheet (read it as a normal table; key columns that describe the measurement). The worker reads the sheet again; its columns may change, so the
    * roles, the sheet's decisions and everything keyed by its column indexes start again for that sheet. Nothing else is touched.
    */
-  const pivotChoice = async (fileId: string, sheet: string, off: boolean, describes: string[]): Promise<void> => {
-    if (!parsed) return;
+  const pivotChoice = async (fileId: string, sheet: string, off: boolean, describes: number[]): Promise<void> => {
+    if (!parsed || pivotBusy) return;
+    setPivotBusy(true);
     try {
       const f = await engine.pivotChoice(fileId, sheet, off, describes);
       const mapping = f.mappings.find((m) => m.sheet === sheet);
@@ -292,9 +295,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       if (fresh) setChoices((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: fresh }));
       setConfirmed((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       setNercPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      // what was typed or found for a column of the sheet belongs to the column it was typed for, which may be another one now
+      setNvsWords((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      setNvsSearches((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       setCodesDone({});
     } catch (e) {
       setConvertError(messageOf(e));
+    } finally {
+      setPivotBusy(false);
     }
   };
 
@@ -650,7 +658,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     ))}
                     <div className="choice-line">
                       <label className="inline-choice">
-                        <input type="checkbox" checked={false} onChange={() => void pivotChoice(f.fileId, sheetName, true, [])} />
+                        <input type="checkbox" checked={false} disabled={pivotBusy} onChange={() => void pivotChoice(f.fileId, sheetName, true, [])} />
                         <span>{t('convert.pivot.off')}</span>
                       </label>
                       <InfoTip id="convertPivotOff" />
@@ -663,13 +671,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                         </div>
                         <ul>
                           {note.keyOptions.map((o) => (
-                            <li key={o.header}>
+                            <li key={o.index}>
                               <label className="inline-choice">
                                 <input
                                   type="checkbox"
                                   checked={o.describes}
+                                  disabled={pivotBusy}
                                   aria-label={t('convert.pivot.describes.one', { column: o.header })}
-                                  onChange={(e) => void pivotChoice(f.fileId, sheetName, false, note.keyOptions.filter((k) => (k.header === o.header ? e.target.checked : k.describes)).map((k) => k.header))}
+                                  onChange={(e) => void pivotChoice(f.fileId, sheetName, false, note.keyOptions.filter((k) => (k.index === o.index ? e.target.checked : k.describes)).map((k) => k.index))}
                                 />
                                 <span>
                                   <code>{o.header}</code>
@@ -688,7 +697,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     <p>{t('convert.pivot.offNote')}</p>
                     <div className="choice-line">
                       <label className="inline-choice">
-                        <input type="checkbox" checked onChange={() => void pivotChoice(f.fileId, sheetName, false, [])} />
+                        <input type="checkbox" checked disabled={pivotBusy} onChange={() => void pivotChoice(f.fileId, sheetName, false, [])} />
                         <span>{t('convert.pivot.off')}</span>
                       </label>
                       <InfoTip id="convertPivotOff" />
