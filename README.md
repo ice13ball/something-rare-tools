@@ -4,7 +4,8 @@ Browser-first tools for marine datasets, served at https://tools.something-rare.
 a licence check, a collection review and a spreadsheet to Darwin Core Archive converter. Drop CSV/Excel
 files (or point at a public record); the tools propose a column mapping, run declarative rules that cite
 the source of every threshold, show a plain-language report and a map, and export a clean CSV, GeoJSON,
-metadata drafts or a Darwin Core Archive for OBIS. Files you drop are read in your browser and never leave it.
+metadata drafts or a Darwin Core Archive for OBIS. Files you drop are read in your browser and are never uploaded; what else can leave the browser is listed in
+[`docs/APPS.md`](docs/APPS.md#2-what-leaves-your-browser).
 
 ## What is in here
 
@@ -24,9 +25,11 @@ The full description of every application and its logic is in [`docs/APPS.md`](d
 rules the checks apply are listed in [`docs/rules.md`](docs/rules.md).
 
 The repository has two parts: a Vite + React front end (all checks run in the browser) and a small
-Express server (`server/`). The server serves the built pages and one proxy, `POST /api/fetch`, which the
-pages use when you point at a public record (Zenodo, PANGAEA, GBIF, DataCite, Dataverse, GeoNetwork and
-similar). It only contacts hosts on an allowlist. Files you drop never reach the server.
+Express server (`server/`). The server serves the built pages and two routes that fetch for the pages,
+`POST /api/fetch` (the "server mode" fallback for pointing at a public record: Zenodo, PANGAEA, GBIF, DataCite,
+Dataverse, GeoNetwork and similar, offered when a host does not allow your browser to read it directly; the
+default is that your browser fetches the record itself) and `POST /api/csw` (the collection review's way to
+CSW catalogues). Both only contact hosts on an allowlist. Files you drop never reach the server.
 
 ## Run it on your own computer
 
@@ -41,14 +44,17 @@ them (Docker: no daemon was available). If one no longer matches its source, tru
 |---|---|---|
 | For | working on the code (hot reload) | using the tools, as the public site runs them |
 | URL | http://localhost:5173 | http://localhost:8080 |
-| `/api/fetch` (pointing at a public record) | **not served** (404) | served |
+| `/api/fetch` and `/api/csw` (server-mode fetching, catalogues in the collection review) | **not served** (404) | served |
 | Security headers (CSP etc.) | none | sent |
 | Pages | open them with a trailing slash: `/check/`, `/convert/` | `/check`, `/convert` |
 
-In development mode only Vite runs; the Express server does not. Checking dropped files works, but
-fetching a public record does not. To use that, run the production build.
-In dev mode a path without the trailing slash (for example `/check`) answers with the home page,
-not an error, so use `/check/`.
+In development mode only Vite runs; the Express server does not. Checking dropped files works, and so does
+pointing at a public record in the default browser mode, wherever the data host allows requests from your
+browser (CORS). What is missing is the server-mode fallback for hosts that do not (`/api/fetch`) and the
+catalogue route of the collection review (`/api/csw`). To use those, run the production build.
+In dev mode a path without the trailing slash (for example `/check`) answers with the home page, not an
+error, so use `/check/`; the header menu links have no trailing slash, so in dev mode they land on the home
+page too.
 
 ### Prerequisites
 
@@ -207,7 +213,7 @@ Open http://localhost:8080. Stop with `Ctrl+C` (the container is removed because
 terminal: `docker ps`, then `docker stop <container id>`. The container listens on port 8080 inside; the first
 number in `-p` is the port on your computer, for example `-p 3000:8080` for http://localhost:3000.
 Remove the image when you are done: `docker rmi abyssal-tools`. The container runs the production server, so
-`/api/fetch` works.
+`/api/fetch` and `/api/csw` work.
 
 ## Development commands
 
@@ -250,8 +256,10 @@ uses it, so the scripts themselves run unchanged on Windows.
 - **Port in use** (`EADDRINUSE`, or the page is a different application): another program holds the port.
   For the production server pick another one: `PORT=3000 npm start` (PowerShell and cmd: see the table above).
   Vite (`npm run dev`) should take the next free port and print it; read its `Local:` line.
-- **Pointing at a public record fails in `npm run dev`**: expected; `/api/fetch` exists only in the
-  production server. Use `npm run build` and `npm start`.
+- **Pointing at a public record fails in `npm run dev`**: in the default browser mode it works where the data
+  host allows requests from your browser; a host that does not is reported, and the server-mode button
+  needs `/api/fetch`, which exists only in the production server. Use `npm run build` and `npm start`.
+  The collection review's catalogues (`/api/csw`) need the production server too.
 - **`/check` shows the home page in dev mode**: use `/check/` with the trailing slash.
 - **`npm start` fails because `dist-server/server/index.js` or `dist/` is missing**: run `npm run build` first.
 - **Line endings (Windows)**: the repository stores its text files with LF endings and has no
@@ -302,7 +310,7 @@ the code, but not present a derivative as Abyssal Claims or Abyssal Claims Tools
 
 | Use | What the AGPL asks |
 |---|---|
-| Use the public site | nothing; files you drop never leave your browser |
+| Use the public site | nothing; files you drop are never uploaded |
 | Run it unmodified, internally or publicly | keep the licence and notices; offering the source to users is the simple way to stay safe |
 | Modify it for internal staff only | offer the modified source to those users; no public release needed |
 | Modify it and run it publicly | publish your changes under the AGPL; the footer source link must point to your version |

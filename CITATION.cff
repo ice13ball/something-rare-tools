@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use these tools, please cite the Zenodo software record of Abyssal Claims Tools."
+message: "If you use these tools, please cite the Zenodo records of Abyssal Claims Tools once they are published; until then cite https://tools.something-rare.com."
 title: "Abyssal Claims Tools: browser-based checks of marine data files, metadata and licences"
 abstract: >-
   Web tools that check marine datasets before they are published or reused.
@@ -13,7 +13,7 @@ abstract: >-
   licences and empty metadata fields. The Darwin Core converter turns a
   spreadsheet of samples, in wide or long layout, into a Darwin Core Archive
   (Event, Occurrence, extended MeasurementOrFact and EML) for OBIS. Files
-  dropped by a user are read in the user's browser and never leave it.
+  dropped by a user are read in the user's browser and are never uploaded.
 type: software
 # `version`, `date-released` and the record's own `doi` are set at release time and must match the tag.
 license: AGPL-3.0-or-later
