@@ -145,13 +145,13 @@ function detectLong(sheet: RawSheet, proposals: readonly ColumnProposal[], decim
 
 /* ---------- per sheet ---------- */
 
-function analyse(file: ParsedFile, sheet: RawSheet): SheetInfo {
+function analyse(file: ParsedFile, sheet: RawSheet, skipTransposed = false): SheetInfo {
   const ctx = ctxOf(file);
   const empty: SheetInfo = { sheet, proposals: [], hasPosition: false, nVars: 0, isData: false };
   if (sheet.rows.length === 0) return empty;
 
   let proposals = proposeColumns(sheet, ctx);
-  const unsupported = transposedReason(sheet, file.decimalComma) ?? headerRowsReason(sheet, file.decimalComma);
+  const unsupported = (skipTransposed ? undefined : transposedReason(sheet, file.decimalComma)) ?? headerRowsReason(sheet, file.decimalComma);
   if (unsupported) return { ...empty, proposals, unsupported };
 
   const long = detectLong(sheet, proposals, file.decimalComma);
@@ -223,9 +223,9 @@ function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandi
  * Proposes how the sheets of a file fit together (see the layout kinds above). Never throws; a layout the tool cannot
  * read is described in plain words in `unsupported` (and the tables it could still read, if any, stay in `tables`).
  */
-export function proposeLayout(file: ParsedFile): LayoutPlan {
+export function proposeLayout(file: ParsedFile, opts: { skipTransposed?: boolean } = {}): LayoutPlan {
   if (file.sheets.length === 0) return { tables: [], joins: [], unsupported: reasonsText([{ code: 'no-table' }], 'en'), unsupportedReasons: [{ code: 'no-table' }] };
-  const infos = file.sheets.map((s) => analyse(file, s));
+  const infos = file.sheets.map((s) => analyse(file, s, opts.skipTransposed === true));
   const several = file.sheets.length > 1;
   const reasons: LayoutReason[] = infos.filter((i) => i.unsupported).map((i) => (several ? { code: i.unsupported!, sheet: i.sheet.name } : { code: i.unsupported! }));
 
