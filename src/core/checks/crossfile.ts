@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { unitDimension } from '../recognize/vocab';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import type { DataRow, Dataset, Finding, NumericCell, Variable } from '../types';
 import { minOf, maxOf } from '../util/arrays';
 

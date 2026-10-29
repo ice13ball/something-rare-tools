@@ -3,7 +3,7 @@
 // The collection run: pages from a source adapter, the shared rules on every record that was READ, bounded counts and samples, the
 // fix-list CSV in ~1 MB parts, and a checkpoint after every page so a closed tab or a refusal loses nothing. In memory (and in the
 // saved run) there are only counters, <= 50 samples per rule, the cursor and small plans: nothing grows with the number of records.
-import { getRule } from '../rules/registry';
+import { getRule } from '../rules/registryCheck';
 import type { Finding, Severity } from '../types';
 import { GAP_NOTICES, isGapNotice, stopFromError, stopFromFailure } from './stop';
 import { StopSignal, makeNetContext, realClock, type Clock, type Net, type NetContext } from './net';

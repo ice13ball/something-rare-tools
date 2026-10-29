@@ -5,7 +5,7 @@
 // credential is ever sent.
 import { dataverseName, isDataverseHost, LINKED_FILE_MAX_BYTES } from '../../../config/dataverse';
 import { doiOfPersistentId, parseDataverseVersion, type DataverseFile } from '../metadata/dataverse';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import type { Finding, LoadedRecord, MetadataRecord } from '../types';
 import { attempt, decodeUtf8, extensionOf, hostNotAllowed, inaccessible, isDataFile, isReadme, noDataFile, ok2xx } from './common';
 import { lookupDatacite } from './datacite';

@@ -3,7 +3,7 @@
 
 import { dwcTermOf } from '../recognize/columns';
 import { parseDate } from '../values/dates';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import type { Finding, ParsedFile, RawCell, RawSheet } from '../types';
 import { pushAll } from '../util/arrays';
 

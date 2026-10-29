@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { analyseLicences, shownOf, type Contradiction } from '../licence/analyse';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import type { Finding, MetadataRecord, MetadataSource } from '../types';
 
 /** `otherRest` is an optional marker read by renderPlain (plainOtherRest): leftover of another string of the statement, with a clause of its own. */

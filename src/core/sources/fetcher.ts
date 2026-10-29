@@ -5,7 +5,7 @@
 import { isAllowedHost } from '../../../config/hosts';
 import { IPT_MAX_BYTES, isArchiveUrl, isIptHost } from '../../../config/ipt';
 import type { Finding } from '../types';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 
 export interface FetchResult {
   status: number;

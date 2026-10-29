@@ -5,7 +5,7 @@
 // term local names it lists, never the file's own header row (which is skipped as `ignoreHeaderLines`).
 // Never throws: every refusal is a parse-level Finding, so the page cannot be broken by a hostile archive.
 import type { Finding, ParsedFile, RawRow } from '../types';
-import { makeFinding } from '../rules/registry';
+import { makeFinding } from '../rules/registryCheck';
 import { decodeText } from '../values/encoding';
 import { elementChildren, parseXml } from '../metadata/xml';
 import { tokenizeCsv } from './csv';

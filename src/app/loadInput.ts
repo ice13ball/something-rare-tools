@@ -3,7 +3,7 @@
 // Step 3 of the flow: dropped files -> bytes (File.arrayBuffer, they never leave the browser), a link -> record ->
 // files, one status line per file. Download problems the user can act on become findings (host only) and the
 // loading goes on with the rest. Parsing is NOT done here: the worker does it.
-import { makeFinding } from '../core/rules/registry';
+import { makeFinding } from '../core/rules/registryCheck';
 import { LINKED_FILE_MAX_BYTES } from '../../config/dataverse';
 import { fetchErrorFinding, FileFetchError, ProxyFetchError, type Fetcher } from '../core/sources/fetcher';
 import { fetchFile, loadRecord, resolveInput } from '../core/sources';

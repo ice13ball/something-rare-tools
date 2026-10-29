@@ -135,9 +135,10 @@ describe('phone layout', () => {
 describe('/check is untouched by stage 1b', () => {
   // sha256 of the files at fb314bb (production): the /check worker, its protocol, client and engine, and the page of /check
   // handler.ts re-pinned when its two push(...x) became pushAll (a worker's stack overflowed on 100k findings; no behaviour changed)
+  // handler.ts re-pinned when its one import moved from rules/registry to rules/registryCheck (the /check bundle no longer carries the converter's rule texts; no behaviour changed)
   // handler.ts and protocol.ts re-pinned for IN-HEADER-SHORT: SheetSummary carries `unnamedFrom` (an optional field; nothing else changed)
   const PINNED: Record<string, string> = {
-    'src/worker/handler.ts': '5e004a37190ee70d22ffe460ab54a68748ef0d364e2ef759cef54f201121aa68',
+    'src/worker/handler.ts': '414f2d460a51dc40ce6b855bf09dd5533f9b61b7c4d25c91cff0dd59d3b2f0ce',
     'src/worker/protocol.ts': '8a9f354e667cf8911883b08923ec6b5cad24918e1f488d0086e21acbba7264bd',
     'src/worker/check.worker.ts': '939f9dffbf820c049b07b86a0797939d3e39c0d02237d1ca7c724eb17e10832e',
     'src/worker/client.ts': '29deb911bb375ebcceb27d8fce132b4fdc8c0d37ed27b247fa8e3f3f9c0f1acf',

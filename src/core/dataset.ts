@@ -18,7 +18,7 @@ import type {
   Variable,
 } from './types';
 import { checkRawTable } from './checks/dwc';
-import { makeFinding } from './rules/registry';
+import { makeFinding } from './rules/registryCheck';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { hemisphereBoundAgrees } from './recognize/headerWords';
 import { splitLayout } from './recognize/layout';

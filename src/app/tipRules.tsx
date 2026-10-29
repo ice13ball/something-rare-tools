@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
 import { SHIP_SPEED_MIN_SEPARATION_KM } from '../core/checks/constants';
-import { getRule } from '../core/rules/registry';
+import { getRule } from '../core/rules/registryCheck';
 import type { Lang } from '../core/types';
 import { withUnit, type TipValues } from './tips';
 
