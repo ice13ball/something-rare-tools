@@ -507,7 +507,7 @@ sources):
   cruises and decades in collection exports, so rows of one name are compared only **within one cruise** (a row with a
   cruise value), otherwise **within one calendar year (UTC)**; a year- or month-precision date joins its year, and a blank cruise
   cell in a sheet with a cruise column falls back to the year. Rows with neither cruise nor date are a group of their own that
-  nothing anchors: there only the note `ROW-STATION-SPREAD` is given (never the warning), and `ROW-STATION-MOVED` only for
+  nothing anchors: there a far spread keeps the warning `ROW-STATION-SPREAD-FAR` for a proper name ("Axial Seamount") and is only the note `ROW-STATION-SPREAD` for a generic station label (a station-like word with an optional number or letter: "Sta. 1", "Site 2", "Dive 9", "Float", "Stacja 3"; `GENERIC_LABEL`), and `ROW-STATION-MOVED` only for
   exchanged axes or a sign. The typed-digit pattern needs the shifted coordinate written with at least `TYPED_DIGIT_MIN_DECIMALS`
   (2) decimals in both positions, because whole-degree positions differ by whole degrees by coincidence; inside one cruise one decimal is enough, unless it is .0 or .5. Placeholder names (unspecified, not specified, unknown, n/a,
   none, no station, `-`, `?`, and Polish, German and French equivalents) are skipped; positions on land
