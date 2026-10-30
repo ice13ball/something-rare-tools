@@ -3,7 +3,7 @@
 import type { Finding, ParsedFile, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registryCheck';
 import type { DecodedText } from '../values/encoding';
-import { encodingFinding, extendShortHeader, raggedFinding } from './shared';
+import { encodingFinding, extendShortHeader, foldStatisticSubheader, raggedFinding } from './shared';
 
 export interface CsvRecord {
   /** physical line where the record STARTS (a quoted field with newlines belongs to its first line) */
@@ -178,11 +178,17 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
     body = body.map((r) => ({ line: r.line, cells: r.cells.slice(0, -1) }));
   }
 
-  const rows: RawRow[] = body.map((r) => ({ line: r.line, cells: r.cells, fieldCount: r.cells.length }));
+  let rows: RawRow[] = body.map((r) => ({ line: r.line, cells: r.cells, fieldCount: r.cells.length }));
+  // a second header row of statistic labels (mean, st.dev.) is part of the header, not a data row
+  const fold = foldStatisticSubheader(header, rows);
+  if (fold) {
+    header = fold.header;
+    rows = fold.rows;
+  }
   file.decimalComma = looksDecimalComma(delim, body.map((r) => r.cells));
   if (file.decimalComma) findings.push(makeFinding('IN-DECIMAL-COMMA', { file: fileName }));
 
-  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows };
+  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows, ...(fold ? { subHeaderLine: fold.line } : {}) };
   const shortHeader = extendShortHeader(fileName, fileName, header, rows, file.decimalComma);
   if (shortHeader?.kind === 'trim') {
     // fields past the header are empty in every row: the rows end with a delimiter. Drop them; rows with and without it are both regular.

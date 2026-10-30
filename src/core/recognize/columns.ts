@@ -5,7 +5,7 @@ import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { parseDate, parseTimeOfDay } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
-import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName } from './headerWords';
+import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
 
 export interface ProposeContext {
@@ -872,7 +872,9 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     }
 
     const st = numericStats(rows, index, ctx.decimalComma);
-    const canonical = variableKey ?? canonicalFromKey(key);
+    // a spread or an extreme of a variable ('Temperature st.dev.', 'Salinity max') is not the variable itself: it keeps its own name, so that two columns never claim one variable
+    const stat = statisticOfName(key);
+    const canonical = variableKey ?? (stat?.statistic === true ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
 
     // 4. values: degrees + minutes with hemisphere letters, ISO dates (only when no name or code explained the column)
     if (canonical === undefined && !isNumeric(st)) {

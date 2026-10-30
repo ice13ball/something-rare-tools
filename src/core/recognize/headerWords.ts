@@ -149,3 +149,17 @@ const ABUNDANCE_NAME =
 
 /** Is this header (headerKey) an abundance, a number of specimens? The converter reads such a column as a quantity. */
 export const isAbundanceName = (key: string): boolean => ABUNDANCE_NAME.test(key);
+
+const STATISTIC_NAME_TAIL = / (st dev|stdev|std|sd|se|sem|cv|min|max|minimum|maximum|median|n)$/;
+const MEAN_NAME_TAIL = / (mean|average|avg)$/;
+
+/**
+ * A header key that names a statistic of a variable ('temperature st dev', 'salinity max', 'oxygen n') as { base, statistic: true }; 'temperature mean' as { base, statistic: false }
+ * (the mean IS the variable); undefined for any other key. A spread or an extreme is not the variable itself and keeps its own name, so two columns never claim one variable.
+ */
+export function statisticOfName(key: string): { base: string; statistic: boolean } | undefined {
+  const s = STATISTIC_NAME_TAIL.exec(key);
+  if (s) return { base: key.slice(0, s.index), statistic: true };
+  const m = MEAN_NAME_TAIL.exec(key);
+  return m ? { base: key.slice(0, m.index), statistic: false } : undefined;
+}

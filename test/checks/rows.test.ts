@@ -368,3 +368,10 @@ describe('rules owned by the dataset builder', () => {
     expect(fs.filter((f) => own.includes(f.ruleId))).toEqual([]);
   });
 });
+
+describe('ROW-UNIT-MISSING and the spread of a dimensionless variable', () => {
+  it('"Salinity st.dev." asks for no unit (like Salinity); "Density st.dev." and "Foo sd" do', () => {
+    const ds = dataset([], { variables: [variable('Salinity st.dev.'), variable('Salinity mean', { canonical: 'salinity' }), variable('Density st.dev.'), variable('Foo sd')] });
+    expect(only(checkRows(ds), 'ROW-UNIT-MISSING')[0].params.headers).toBe('Density st.dev., Foo sd');
+  });
+});

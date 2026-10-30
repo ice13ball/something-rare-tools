@@ -2,7 +2,10 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
+import { unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
+import { statisticOfName } from '../recognize/headerWords';
+import { canonicalFromKey, headerKey } from '../recognize/vocab';
 import { makeFinding, threshold } from '../rules/registryCheck';
 import { earliestUtcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
@@ -472,13 +475,21 @@ const UNITLESS_CANONICAL = new Set(['salinity', 'pH']);
 const unitStated = (v: Variable): boolean => v.unit !== undefined && v.unitSource !== 'p01';
 
 /** A column that OPeNDAP itself declares as text ("Activity<String>") is a label or code, not a measurement: no unit is expected. */
+/** 'Salinity st.dev.' is the spread of a dimensionless variable: it states no unit either, and asking for one would be the same false alarm. */
+const unitlessSpread = (v: Variable): boolean => {
+  const key = headerKey(unitFromHeader(v.header).name);
+  const stat = statisticOfName(key);
+  const base = stat === undefined ? undefined : canonicalFromKey(stat.base);
+  return base !== undefined && UNITLESS_CANONICAL.has(base);
+};
+
 const declaredText = (v: Variable): boolean => /<String>$/.test(v.header);
 
 /** OPeNDAP type suffix removed for display: "TCO2KG02<Float32>" -> "TCO2KG02". */
 const displayHeader = (h: string): string => h.replace(/<[A-Za-z0-9]+>$/, '');
 
 function unitMissing(ds: Dataset, out: Finding[]): void {
-  const headers = ds.variables.filter((v) => !unitStated(v) && !declaredText(v) && !(v.canonical !== undefined && UNITLESS_CANONICAL.has(v.canonical))).map((v) => displayHeader(v.header));
+  const headers = ds.variables.filter((v) => !unitStated(v) && !declaredText(v) && !unitlessSpread(v) && !(v.canonical !== undefined && UNITLESS_CANONICAL.has(v.canonical))).map((v) => displayHeader(v.header));
   if (headers.length === 0) return;
   const shown = headers.slice(0, MAX_HEADERS).join(', ') + (headers.length > MAX_HEADERS ? `, …+${headers.length - MAX_HEADERS}` : '');
   out.push(makeFinding('ROW-UNIT-MISSING', { file: ds.file, params: { headers: shown } }));
