@@ -351,6 +351,15 @@ describe('station findings on collection exports: generic names are grouped by c
     expect(stationIds(checkRows(dataset([...at(2, 3, -50, -60, 'Expeditor Bay'), ...at(5, 2, -36.5, -30.5, 'Expeditor Bay')])))).toEqual(['ROW-STATION-SPREAD-FAR']);
   });
 
+  it('an expedition label stays the note when its rows are dated in one year or one cruise (a route is not anchored to one place)', () => {
+    const dated = dataset([...at(2, 3, -50, -60, 'Java-South Africa Exped.', '1960-03-01'), ...at(5, 2, -36.5, -30.5, 'Java-South Africa Exped.', '1960-03-20')]);
+    expect(stationIds(checkRows(dated))).toEqual(['ROW-STATION-SPREAD']);
+    const cruise = dataset([...at(2, 3, -50, -60, 'Atlantic Cruise', '1960-03-01', 'C1'), ...at(5, 2, -36.5, -30.5, 'Atlantic Cruise', '1960-03-20', 'C1')]);
+    expect(stationIds(checkRows(cruise))).toEqual(['ROW-STATION-SPREAD']);
+    // a generic label dated in one year is anchored and keeps the warning
+    expect(stationIds(checkRows(dataset([...at(2, 3, -50, -60, 'Sta. 1', '1960-03-01'), ...at(5, 2, -36.5, -30.5, 'Sta. 1', '1960-03-20')])))).toEqual(['ROW-STATION-SPREAD-FAR']);
+  });
+
   it('with no cruise and no date a far spread is only the note', () => {
     const far = dataset([...at(2, 3, -50, -60, 'Sta. 1'), ...at(5, 2, -36.5, -30.5, 'Sta. 1')]);
     expect(stationIds(checkRows(far))).toEqual(['ROW-STATION-SPREAD']);
