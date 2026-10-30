@@ -331,6 +331,18 @@ describe('station findings on collection exports: generic names are grouped by c
     expect(stationIds(checkRows(typed))).toEqual(['ROW-STATION-SPREAD']);
   });
 
+  it('with no cruise and no date a proper name keeps the FAR warning; a generic station label gets the note', () => {
+    const named = dataset([...at(2, 3, 45.9, -130.0, 'Axial Seamount'), ...at(5, 2, -41.0, 129.6, 'Axial Seamount')]);
+    expect(stationIds(checkRows(named))).toEqual(['ROW-STATION-SPREAD-FAR']);
+    expect(checkRows(named).find((f) => f.ruleId === 'ROW-STATION-SPREAD-FAR')!.severity).toBe('warning');
+    for (const label of ['Sta. 1', 'Site 2', 'Dive 9', 'Float', 'Stacja 3', 'Stelle A', 'Station 12b', 'St 4', 'Poste 7', 'Transect 1']) {
+      const generic = dataset([...at(2, 3, -50, -60, label), ...at(5, 2, -36.5, -30.5, label)]);
+      expect(stationIds(checkRows(generic)), label).toEqual(['ROW-STATION-SPREAD']);
+    }
+    // a name that only starts like a label is a name
+    expect(stationIds(checkRows(dataset([...at(2, 3, -50, -60, 'Station Papa'), ...at(5, 2, -36.5, -30.5, 'Station Papa')])))).toEqual(['ROW-STATION-SPREAD-FAR']);
+  });
+
   it('with no cruise and no date a far spread is only the note', () => {
     const far = dataset([...at(2, 3, -50, -60, 'Sta. 1'), ...at(5, 2, -36.5, -30.5, 'Sta. 1')]);
     expect(stationIds(checkRows(far))).toEqual(['ROW-STATION-SPREAD']);

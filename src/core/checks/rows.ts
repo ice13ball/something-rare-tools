@@ -302,6 +302,23 @@ const GENERIC_STATION = new RegExp(
   'i',
 );
 
+/**
+ * A generic station LABEL: a station-like word with an optional number or letter ("Sta. 1", "Site 2", "Dive 9", "Float", "Stacja 3", "Stelle A"). Such a name
+ * repeats across unrelated places, so with nothing to anchor it (no cruise, no date) a far spread is only the note; a proper name ("Axial Seamount") is one place
+ * and keeps the warning.
+ */
+const GENERIC_LABEL = new RegExp(
+  '^(?:' +
+    [
+      'station|sta|stn|st|site|dive|cast|haul|tow|trawl|grab|core|sample|float|buoy|point|plot|transect',
+      'stacja|stanowisko|próba|próbka|punkt|nurkowanie|połów|rdzeń|boja|transekt',
+      'stelle|probe|tauchgang|fang|kern|boje|punkt|messpunkt',
+      'poste|plongée|trait|carotte|échantillon|bouée|point|transect',
+    ].join('|') +
+    ')\\.?(?:[\\s._-]*(?:\\d+[a-z]?|[a-z]))?$',
+  'i',
+);
+
 function widest(positions: readonly Pos[]): number {
   const n = positions.length;
   let ps: readonly Pos[] = positions;
@@ -374,7 +391,7 @@ function stationGroup(ds: Dataset, sheet: string, station: string, srows: DataRo
     const shown = real.slice(0, MAX_DATES + 2);
     const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
     const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
-    out.push(makeFinding(anchored && spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
+    out.push(makeFinding((anchored || !GENERIC_LABEL.test(station.trim())) && spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
     return;
   }
   const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
