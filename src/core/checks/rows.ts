@@ -397,7 +397,9 @@ function stationGroup(ds: Dataset, sheet: string, station: string, srows: DataRo
     const shown = real.slice(0, MAX_DATES + 2);
     const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
     const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
-    out.push(makeFinding((anchored || !(GENERIC_LABEL.test(station.trim()) || EXPEDITION_LABEL.test(station.trim()))) && spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
+    // an expedition label names a route, dated or not; a generic label only says nothing when nothing anchors it
+    const far = spread > FAR_KM && !EXPEDITION_LABEL.test(station.trim()) && (anchored || !GENERIC_LABEL.test(station.trim()));
+    out.push(makeFinding(far ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
     return;
   }
   const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
