@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { stripTypeSuffix } from '../recognize/columns';
+import { hasBinomialBeforeStatistic, hasCentralStatisticToken, hasSpreadToken } from '../summaryLabels';
 import { foldDiacritics } from '../recognize/vocab';
 
 /*
@@ -111,6 +112,12 @@ export function nameKind(header: string, abundance = false): NameKind {
   if (DESCRIPTOR.test(key)) return 'descriptor';
   const lead = asLetters.split(/[\s,]+/)[0].replace(/[.;]+$/, '');
   if (VARIABLE_TOKENS.has(key) || VARIABLE_TOKENS.has(lead) || VARIABLE_TOKENS.has(lead.replace(/[^a-z0-9]/g, '')) || ISOTOPE.test(lead.replace(/[^a-z0-9]/g, '')) || RATIO.test(lead)) return 'variable';
+  // A statistic in the header is a summary of a variable, never a taxon ("Macrofauna.biomass mean/st.dev. (gDW m-2)") ... except that the MEAN of a count of organisms is the
+  // mean abundance of a species ("Calanus finmarchicus mean [ind/m3]"): with an organism unit a central statistic alone stays a taxon candidate (own reason, 'taxon-mean'),
+  // so a sheet of species means keeps its occurrences. A spread (SD, st.dev.) is never an abundance.
+  if (hasSpreadToken(raw)) return 'variable';
+  // (a binomial name before the mean keeps it a species mean whatever the unit: "Calanus hyperboreus mean [mg C/m3]")
+  if (hasCentralStatisticToken(raw) && !abundance && !hasBinomialBeforeStatistic(raw)) return 'variable';
   if (abundance) return 'taxon';
   if (MEASUREMENT_WORDS.has(key) || MEASUREMENT_WORDS.has(lead) || MEASUREMENT_WORDS.has(lead.replace(/[^a-z0-9]/g, ''))) return 'variable';
   if (hasTaxonShape(asLetters)) return 'taxon';

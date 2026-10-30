@@ -23,7 +23,7 @@ describe('ROW-ZERO-COORD', () => {
     const f = checkRows(ds);
     expect(only(f, 'ROW-ZERO-COORD')).toHaveLength(1);
     expect(only(f, 'ROW-ZERO-COORD')[0]).toMatchObject({ severity: 'error', lines: [3, 4] });
-    expect(only(f, 'ROW-LAT-EQ-LON').flatMap((x) => x.lines ?? [])).toEqual([5]);
+    expect(only(f, 'ROW-LAT-EQ-LON-COARSE').flatMap((x) => x.lines ?? [])).toEqual([5]); // one isolated 7.5, 7.5
   });
 
   it('a zero in one coordinate only is not (0, 0)', () => {

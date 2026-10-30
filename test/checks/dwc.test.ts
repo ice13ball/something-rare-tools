@@ -414,7 +414,7 @@ describe('overlaps of the new rules with the old ones', () => {
   it('(0, 0) is ROW-ZERO-COORD only: not ROW-LAT-EQ-LON, not a station spread, not a ship speed or a bbox point', () => {
     const f = run('s.csv', sheet('S1,2020-05-01,60.5,5.25,7.1', 'S1,2020-05-02,0,0,7.2', 'S1,2020-05-03,60.5,5.25,7.3', 'S2,2020-05-04,12.5,12.5,7.4'));
     expect(only(f, 'ROW-ZERO-COORD').map((x) => x.lines)).toEqual([[3]]);
-    expect(only(f, 'ROW-LAT-EQ-LON').map((x) => x.lines)).toEqual([[5]]); // 12.5, 12.5 is still lat = lon
+    expect(only(f, 'ROW-LAT-EQ-LON-COARSE').map((x) => x.lines)).toEqual([[5]]); // 12.5, 12.5 is still lat = lon (one row, a half degree: a note)
     expect(ids(f)).not.toContain('ROW-STATION-SPREAD');
     expect(ids(f)).not.toContain('ROW-STATION-SPREAD-FAR');
     expect(ids(f)).not.toContain('ROW-STATION-MOVED');

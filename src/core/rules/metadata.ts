@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { CITE } from './citations';
 import type { RuleSpec } from './spec';
 
 /*
@@ -15,6 +16,7 @@ import type { RuleSpec } from './spec';
  *                             lines = those rows; value = one example position, "lat, lon"
  *   META-VARIABLE-MISSING     term              the abstract term found (e.g. "dissolved silica")
  *   META-NO-DATES             (none)
+ *   META-NO-POSITIONS         (none)
  */
 export const METADATA_RULES: readonly RuleSpec[] = [
   {
@@ -115,5 +117,19 @@ export const METADATA_RULES: readonly RuleSpec[] = [
       fr: `Ni les données ni les métadonnées ne contiennent de date. Ajoutez la date de prélèvement dans le tableau ou une période dans les métadonnées.`,
     },
     technical: `{file}: no row has a date and no record has a temporal extent or collection date.`,
+  },
+  {
+    id: 'META-NO-POSITIONS',
+    category: 'A',
+    severity: 'error',
+    params: [],
+    citations: [CITE.obisManualLocation],
+    plain: {
+      pl: `Ani dane, ani metadane nie zawierają żadnej pozycji. Dodaj do tabeli kolumny szerokości i długości geograficznej w stopniach dziesiętnych: OBIS wymaga decimalLatitude i decimalLongitude przy każdym rekordzie, a sam obszar geograficzny w metadanych ich nie zastępuje.`,
+      en: `Neither the data nor the metadata contain any position. Add latitude and longitude columns in decimal degrees to the table: OBIS needs decimalLatitude and decimalLongitude for every record, and a geographic bounding box in the metadata alone does not replace them.`,
+      de: `Weder die Daten noch die Metadaten enthalten eine Position. Ergänzen Sie in der Tabelle Spalten für Breite und Länge in Dezimalgrad: OBIS verlangt decimalLatitude und decimalLongitude für jeden Datensatz, eine geografische Umrandung allein in den Metadaten ersetzt sie nicht.`,
+      fr: `Ni les données ni les métadonnées ne contiennent de position. Ajoutez au tableau des colonnes de latitude et de longitude en degrés décimaux : OBIS exige decimalLatitude et decimalLongitude pour chaque enregistrement, et une emprise géographique dans les métadonnées seule ne les remplace pas.`,
+    },
+    technical: `{file}: no latitude or longitude column is mapped, no row has a position and no record has a bounding box. OBIS requires decimalLatitude and decimalLongitude as the minimum location terms of every record; a bounding box in the metadata is not a substitute for them.`,
   },
 ];

@@ -119,7 +119,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
   }
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
-  if (rule.plainTime && valuesAreTimes(f.value)) texts = rule.plainTime;
+  if (rule.plainTime && (f.params.role === 'time' || valuesAreTimes(f.value))) texts = rule.plainTime;
   // The layout reason is the English phrase in `reason`; the codes in `reasons` are rendered in the reader's language.
   const reasons = f.ruleId === 'IN-LAYOUT-UNSUPPORTED' ? decodeReasons(f.params.reasons) : undefined;
   if (reasons) f = { ...f, params: { ...f.params, reason: reasonsText(reasons, lang) } };
@@ -135,5 +135,5 @@ export function renderPlain(f: Finding, lang: Lang): string {
 /** The English technical detail line (file, lines, field, value, parameters). */
 export function renderTechnical(f: Finding): string {
   const rule = getRule(f.ruleId);
-  return fill(rule.technicalTime !== undefined && valuesAreTimes(f.value) ? rule.technicalTime : rule.technical, f);
+  return fill(rule.technicalTime !== undefined && (f.params.role === 'time' || valuesAreTimes(f.value)) ? rule.technicalTime : rule.technical, f);
 }

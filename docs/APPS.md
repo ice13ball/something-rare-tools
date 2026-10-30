@@ -283,7 +283,7 @@ text column is never guessed to be a serial. Calendar dates are validated (`2021
 unparseable). All arithmetic is on UTC milliseconds, so the machine's time zone cannot move a
 date. A time with no zone stays "unknown" (`ROW-TZ-UNKNOWN`), except that a date or time column whose
 header names UTC or GMT (`UTC_HEADER`, `dataset.ts`) is read as UTC and raises no such finding; a separate time column is combined
-with a day-precision date (`combineDateTime`).
+with a day-precision date (`combineDateTime`). A time column may hold a **range**: `1600-1730`, `16:00-17:30` or several, `0530-0700, 1600-1730` (`parseTimeRange`, `values/dates.ts`). The time of the event is the **start** of the first range (a dash between two times is a range first, never a zone offset: `10:00-11:30` is 10:00; an offset needs `+`, `Z` or seconds; a column of year ranges of which at least one is impossible as a time, such as `1995-2000` (minute 95), is not a time column and is not read as times, while evening ranges such as `1930-2000` are times); the end and any further range are checked but **ignored** (no interval is written from a time column). A bare `1600` is not read (it may be a year). An unreadable value in a time column is `ROW-DATE-UNPARSEABLE` with `params.role = time`, worded as a time (example `16:30`) and never as a date.
 
 **Coordinates** (`values/coords.ts`, `parseCoordinate`). Accepted: decimals; degrees with decimal
 minutes; degrees, minutes, seconds; hemisphere letters N, S, E, W before or after (S and W
@@ -449,7 +449,8 @@ cannot drift from the rule that cites it. The tool's **own choices** are named c
 code, not rule thresholds: `SPREAD_KM` (10) and `FAR_KM` (1000) in `checks/rows.ts` (the rules
 `ROW-STATION-SPREAD` and `ROW-STATION-SPREAD-FAR` have no thresholds), `SHIP_SPEED_MIN_SEPARATION_KM`
 (10, `checks/constants.ts`), `MIXED_SHARE`, `MIXED_MIN` and `MIN_EVENTS` in `checks/speed.ts`,
-`SIGN_FLIP_KM`, `SIGN_FLIP_MIN_KM` and `SIGN_FLIP_RATIO` in `checks/rows.ts`, `ON_LAND_MIN_KM` (50),
+`SIGN_FLIP_KM`, `SIGN_FLIP_MIN_KM` and `SIGN_FLIP_RATIO` in `checks/rows.ts`, `TYPED_DIGIT_MIN_DECIMALS` (2, `checks/rows.ts`), `LAT_EQ_LON_MIN_ROWS` (5) and
+`LAT_EQ_LON_MIN_SHARE` (0.2) in `checks/rows.ts` (agreed with a data specialist, not published), `ON_LAND_MIN_KM` (50),
 `ON_LAND_NEAR_MIN_KM` (10) and `COAST_BUFFER_KM` (5) in `geo/land.ts`, and `DWC_MIN_TERMS` (3) in
 `checks/dwc.ts`. A **finding** is an instance of a rule on a file, sheet,
 lines, field and value (`makeFinding`).
@@ -486,7 +487,13 @@ sources):
 - **Rows** (`checks/rows.ts`): latitude and longitude ranges
   ([ROW-LAT-RANGE](rules.md#ROW-LAT-RANGE), [ROW-LON-RANGE](rules.md#ROW-LON-RANGE)); both zero
   ([ROW-ZERO-COORD](rules.md#ROW-ZERO-COORD)); latitude equal to longitude
-  ([ROW-LAT-EQ-LON](rules.md#ROW-LAT-EQ-LON)); rows without a position while others have one
+  ([ROW-LAT-EQ-LON](rules.md#ROW-LAT-EQ-LON), an **error** only when at least `LAT_EQ_LON_MIN_ROWS` (5) rows
+  have them equal **and** either they are at least `LAT_EQ_LON_MIN_SHARE` (a fifth) of the rows with a position or at least 5 of them
+  share one value with two or more written decimals that is not a multiple of 0.25 (a column copied for one station), which is
+  what a duplicated column looks like (`ROW-LAT-EQ-LON-ISOLATED` must be ticked in /convert); below that, each such row is a warning
+  [ROW-LAT-EQ-LON-ISOLATED](rules.md#ROW-LAT-EQ-LON-ISOLATED), or a note
+  [ROW-LAT-EQ-LON-COARSE](rules.md#ROW-LAT-EQ-LON-COARSE) when the value is a whole or half degree, because one
+  legitimate coarse position such as -65, -65 on the Antarctic Peninsula must not be an error); rows without a position while others have one
   ([ROW-NO-COORD](rules.md#ROW-NO-COORD), which skips blank trailing rows, summary rows and rows
   that inherit a position from a parent event); non-numeric tokens and variants of a missing-value
   token in numeric columns; unparseable, missing, future ([ROW-DATE-FUTURE](rules.md#ROW-DATE-FUTURE),
@@ -496,7 +503,14 @@ sources):
   by a typed digit, exchanged axes or a sign** ([ROW-STATION-MOVED](rules.md#ROW-STATION-MOVED):
   as written far apart, but close and much closer once the candidate flip is applied) and a
   station spread over a long distance ([ROW-STATION-SPREAD](rules.md#ROW-STATION-SPREAD),
-  [ROW-STATION-SPREAD-FAR](rules.md#ROW-STATION-SPREAD-FAR)); positions on land
+  [ROW-STATION-SPREAD-FAR](rules.md#ROW-STATION-SPREAD-FAR)). Generic names ("Sta. 1", "Dive 9", "Float") repeat across
+  cruises and decades in collection exports, so rows of one name are compared only **within one cruise** (a row with a
+  cruise value), otherwise **within one calendar year (UTC)**; a year- or month-precision date joins its year, and a blank cruise
+  cell in a sheet with a cruise column falls back to the year. Rows with neither cruise nor date are a group of their own that
+  nothing anchors: there only the note `ROW-STATION-SPREAD` is given (never the warning), and `ROW-STATION-MOVED` only for
+  exchanged axes or a sign. The typed-digit pattern needs the shifted coordinate written with at least `TYPED_DIGIT_MIN_DECIMALS`
+  (2) decimals in both positions, because whole-degree positions differ by whole degrees by coincidence; inside one cruise one decimal is enough, unless it is .0 or .5. Placeholder names (unspecified, not specified, unknown, n/a,
+  none, no station, `-`, `?`, and Polish, German and French equivalents) are skipped; positions on land
   ([ROW-ON-LAND](rules.md#ROW-ON-LAND), [ROW-ON-LAND-NEAR](rules.md#ROW-ON-LAND-NEAR)).
 - **Land mask** (`geo/land.ts`): a grid of 0.05° cells built from Natural Earth 1:10m land, minor
   islands and lakes (public domain). A cell speaks only when all of it is far from the coast:
@@ -540,7 +554,10 @@ sources):
   union); variables named in the abstract against the dataset's variables (word-boundary match,
   diacritics folded, short acronyms case-sensitive, and a modifier such as "sensor" or
   "fluorescence" after or before a term means the term is not promised as a column); no date
-  anywhere ([META-NO-DATES](rules.md#META-NO-DATES)).
+  anywhere ([META-NO-DATES](rules.md#META-NO-DATES)); and, the same way, no position anywhere
+  ([META-NO-POSITIONS](rules.md#META-NO-POSITIONS), an error, cited to the OBIS Manual: `decimalLatitude` and
+  `decimalLongitude` are the minimally required location terms): no latitude or longitude column is mapped, no row
+  has a position and no record has a bounding box. A position in the metadata only is left to the rules that compare data with metadata.
 - **Across files** (`checks/crossfile.ts`; a dataset is one table, so a three-sheet workbook is
   three datasets): matched samples (same station or position, same depth, same day) that look
   duplicated; the same station dated differently with at least two equal shared variables; station
@@ -1140,7 +1157,7 @@ column a variable. The overlay decides on the **name part** of the header (unit 
 brackets cut off), in this order (`nameKind`, `convert/measured.ts`):
 
 1. a **sample descriptor** (Replicate, Cast, Bottle, Niskin, Station no, …) is ignored;
-2. a **known variable token or formula** (PN, Ntot, d15N, C/N, GPP, Chl a, …) is a variable;
+2. a **known variable token or formula** (PN, Ntot, d15N, C/N, GPP, Chl a, …) is a variable; so is a name that carries an unambiguous **statistic word as a token of its own** (SD, st.dev., std, standard deviation, and mean, average, median, with the Polish, German and French words, diacritics folded: `summaryLabels.ts`): `Macrofauna.biomass mean/st.dev. (gDW m-2)` is never a taxon candidate (n, se, cv, min, max, sum are not in that list). With an **organism unit**, or with a binomial name before it (`Calanus hyperboreus mean [mg C/m3]`), a central statistic alone stays a taxon candidate (a species mean; reason `taxon-mean`); a spread never is, and neither is a quantity word (`Zooplankton biomass mean`);
 3. a **taxon shape** is a taxon candidate: a genus-like first word of three or more letters
    (whatever follows, an epithet, `sp.`, `cf.`, a stage code such as C1-C3 or CIV-CVI, a size class
    such as `0-1 cm`, a morphospecies number), several genera joined by a slash, or an abbreviated
@@ -1296,7 +1313,7 @@ code" (the button above applies it).
   code reused on every visit of a station). The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
   new code column last, for the user to check and drop again); a missing code blocks
-  (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`); rows of one sample that
+  (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
   `SUMMARY_LABEL`, `convert/ids.ts`) are skipped and said (`CONV-SUMMARY-ROW-SKIPPED`). **Statistics
@@ -1596,6 +1613,16 @@ days; `/og.jpg`, `/og.webp`, `/favicon.svg`, `/consent-default.js`, `/not-found.
 target). Routing is case-sensitive and strict. Anything else is a 404 page rendered in the
 language of `?lang=` or `Accept-Language` (`notFound.ts`).
 
+**Compression** (`compression` 1.8.2, a runtime dependency, in `createApp` right after the security headers).
+Responses the middleware calls compressible (html, js, css, json, svg, xml, txt) leave **brotli** (preferred) or
+**gzip** (level 6) when the client sends `Accept-Encoding`, with `Vary: Accept-Encoding`; images, fonts and archives
+pass untouched, and so does anything under 1 KB. Brotli runs at **quality 4** (Node's default, 11, would cost seconds per
+request on the 800 kB styles chunk); there is no cache, each request compresses again. **Never under `/api/`**
+(`/api/fetch` and `/api/csw` stream upstream bodies and are not wrapped at all). A request with a `Range` header
+is answered uncompressed, so a byte range is the range of the file; HEAD is answered with the plain file's headers.
+The security headers, `Cache-Control` (immutable assets, `no-cache` pages) and the CSP are set before and are unchanged.
+Measured on a local build, `/check` JS and CSS: 1 260 617 B plain, 398 588 B gzip, 392 618 B brotli.
+
 **Headers on every response** (`securityHeaders`, `server/headers.ts`): a Content-Security-Policy
 per page path (2); `X-Content-Type-Options: nosniff`; `Referrer-Policy:
 strict-origin-when-cross-origin`; `Strict-Transport-Security: max-age=31536000`; `Permissions-Policy`
@@ -1709,7 +1736,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-29**. The total, **168 rules**, equals the number of rule rows in
+**2026-10-30**. The total, **171 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1718,13 +1745,13 @@ regenerate it when rules change.
 |---|---|---|---|---|---|
 | `IN-` | `input` | 27 | 12 / 9 / 6 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
-| `META-` | `A` | 7 | 1 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates. | None cited in the rule definitions (the rules are stated in their own text). |
-| `ROW-` | `B` | 33 | 6 / 17 / 10 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
+| `META-` | `A` | 8 | 2 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates, no positions. | The OBIS Manual (`META-NO-POSITIONS`: `decimalLatitude` and `decimalLongitude` are the minimally required location terms); the other rules are stated in their own text. |
+| `ROW-` | `B` | 35 | 6 / 18 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
 | `CONV-` | `B` | 73 | 37 / 25 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **168** | | | |
+| **Total** | | **171** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1743,6 +1770,9 @@ Each item below is confirmed from code, a test, or a rule text.
   (listed in 3.5): the 10 km "one place" size of the ship-speed check and `ROW-STATION-SPREAD`, the
   1000 km of `ROW-STATION-SPREAD-FAR` (its technical text says so), the land-mask distances, the
   number of terms that make a table Darwin Core. Of these, only `ROW-STATION-SPREAD-FAR` says so in its rule text.
+- `ROW-STATION-MOVED` and `ROW-STATION-SPREAD*` compare rows only within a cruise or a calendar year: the same station
+  revisited in another year, in a file with no cruise column, is not compared (a digit error there goes unseen), and a typed-digit error in a coordinate written with fewer than two decimals is not found.
+- Compression is done per request (no cache of compressed bodies) and brotli is at quality 4, so it is only a little smaller than gzip; precompressing at build time would shrink it further.
 - No page claims data is publication-ready; reports list what they do not check.
 - Server counters (rate limits, daily budgets) are in memory and per server instance.
 

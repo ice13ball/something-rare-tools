@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMapping, TablePlan } from '../types';
 import { hemisphereLetter, parseCoordinate } from '../values/coords';
-import { parseDate, parseTimeOfDay } from '../values/dates';
+import { cellsAreYearRanges, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
 import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
@@ -603,11 +603,13 @@ function guardPasses(guard: NonNullable<Cand['guard']>, sheet: RawSheet, rows: r
   if (guard === 'not-plain-numbers') return dateFormatted || !isNumeric(numericStats(rows, col, ctx.decimalComma));
   let seen = 0;
   let good = 0;
+  // a column of year ranges ("1995-2000") is not a column of times, even when some cells read as times
+  if (guard === 'time-values' && cellsAreYearRanges(rows.slice(0, 200).map((r) => r.cells[col] ?? null).filter((c) => !isBlank(c)))) return false;
   for (const r of rows.slice(0, 200)) {
     const c = r.cells[col] ?? null;
     if (isBlank(c)) continue;
     seen++;
-    if (guard === 'time-values' ? !('error' in parseTimeOfDay(c)) : !('error' in parseDate(c, { date1904: ctx.date1904, dateFormatted: false }))) good++;
+    if (guard === 'time-values' ? !('error' in parseTimeCell(c)) : !('error' in parseDate(c, { date1904: ctx.date1904, dateFormatted: false }))) good++;
   }
   if (guard === 'date-values' && dateFormatted) return true;
   return seen > 0 && good * 2 >= seen;

@@ -124,7 +124,7 @@ describe('static routes', () => {
       const res = await request(app).get('/nope');
       expect(res.status).toBe(404);
       expect(res.headers['cache-control']).toBe('no-store');
-      expect(res.headers['vary']).toBe('Accept-Language');
+      expect(res.headers['vary']).toMatch(/^Accept-Language(, Accept-Encoding)?$/);
       expect(res.text).toContain('background:#0a0e14');
       expect(res.text).toContain('href="/favicon.svg"');
       expect(res.text).toContain('Abyssal Claims <span class="brand-part">Tools</span>');

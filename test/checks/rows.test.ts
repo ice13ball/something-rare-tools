@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { checkRows } from '../../src/core/checks/rows';
+import { renderPlain } from '../../src/core/report';
 import type { Finding } from '../../src/core/types';
 import { dataset, record, row, rows, variable } from './rows.helpers';
 
@@ -47,6 +48,67 @@ describe('ROW-LAT-EQ-LON', () => {
     expect(f[0]).toMatchObject({ severity: 'error', lines: range(57, 83), value: '76.9' });
   });
 
+  const eqIds = (fs: Finding[]) => fs.filter((f) => f.ruleId.startsWith('ROW-LAT-EQ-LON')).map((f) => [f.ruleId, f.severity, f.lines]);
+
+  it('a one-row file at 10 / 10 is a note, not an error', () => {
+    expect(eqIds(checkRows(dataset([row({ line: 2, lat: 10, lon: 10 })])))).toEqual([['ROW-LAT-EQ-LON-COARSE', 'info', [2]]]);
+  });
+
+  it('3 isolated -65 / -65 rows among 100 are a note (whole degrees), not an error', () => {
+    const ds = dataset([...rows(2, 97, { lat: 54.1, lon: 10.2 }), row({ line: 99, lat: -65, lon: -65 }), row({ line: 100, lat: -65, lon: -65 }), row({ line: 101, lat: -65, lon: -65 })]);
+    expect(eqIds(checkRows(ds))).toEqual([['ROW-LAT-EQ-LON-COARSE', 'info', [99, 100, 101]]]);
+  });
+
+  it('isolated rows with a finer value are a warning; whole and half degrees stay a note in the same file', () => {
+    const ds = dataset([...rows(2, 20, { lat: 54.1, lon: 10.2 }), row({ line: 30, lat: 12.34, lon: 12.34 }), row({ line: 31, lat: -65.5, lon: -65.5 })]);
+    expect(eqIds(checkRows(ds))).toEqual([['ROW-LAT-EQ-LON-ISOLATED', 'warning', [30]], ['ROW-LAT-EQ-LON-COARSE', 'info', [31]]]);
+  });
+
+  it('30 of 100 rows with lat == lon is the error, with all 30 lines', () => {
+    const ds = dataset([...rows(2, 70, { lat: 54.1, lon: 10.2 }), ...rows(72, 30, { lat: -65, lon: -65 })]);
+    const f = checkRows(ds).filter((x) => x.ruleId.startsWith('ROW-LAT-EQ-LON'));
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ ruleId: 'ROW-LAT-EQ-LON', severity: 'error', lines: range(72, 101) });
+  });
+
+  it('4 of 4 rows is not the error (fewer than 5 rows); 5 of 5 is', () => {
+    expect(eqIds(checkRows(dataset(rows(2, 4, { lat: 33.3, lon: 33.3 }))))).toEqual([['ROW-LAT-EQ-LON-ISOLATED', 'warning', [2, 3, 4, 5]]]);
+    expect(eqIds(checkRows(dataset(rows(2, 5, { lat: 33.3, lon: 33.3 }))))[0]).toEqual(['ROW-LAT-EQ-LON', 'error', range(2, 6)]);
+  });
+
+  it('a copied column confined to one station (27 rows of 41.376 among 400) is the error, worded as a repeated value', () => {
+    const ds = dataset([...rows(2, 373, { lat: 54.1, lon: 10.2 }), ...rows(400, 27, { lat: 41.376, lon: 41.376 })]);
+    const f = checkRows(ds).filter((x) => x.ruleId.startsWith('ROW-LAT-EQ-LON'));
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ ruleId: 'ROW-LAT-EQ-LON', severity: 'error', params: { repeated: 27 } });
+    expect(renderPlain(f[0], 'en')).toContain('repeats in 27 rows');
+    expect(renderPlain(f[0], 'en')).not.toContain('a fifth');
+  });
+
+  it('the repeated-value path needs two written decimals and a value that is not a quarter degree', () => {
+    for (const [v, dec] of [[76.9, 1], [76.25, 2], [76.5, 1], [-65, 0]] as const) {
+      const ds = dataset([...rows(2, 95, { lat: 54.1, lon: 10.2 }), ...rows(97, 6, { lat: v, lon: v, latDecimals: dec, lonDecimals: dec })]);
+      expect(eqIds(checkRows(ds)).map((x) => x[1]), String(v)).not.toContain('error');
+    }
+  });
+
+  it('the share path words the error with the fifth, in four languages', () => {
+    const f = checkRows(dataset([...rows(2, 6, { lat: 54.1, lon: 10.2 }), ...rows(8, 6, { lat: 33.3, lon: 33.3 })])).find((x) => x.ruleId === 'ROW-LAT-EQ-LON')!;
+    expect(f.params).toEqual({ share: 'yes' });
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderPlain(f, lang).length).toBeGreaterThan(60);
+  });
+
+  it('5 equal rows among 100 are under a fifth: not the error', () => {
+    const ds = dataset([...rows(2, 95, { lat: 54.1, lon: 10.2 }), ...rows(97, 5, { lat: 33.3, lon: 33.3 })]);
+    expect(eqIds(checkRows(ds)).map((x) => x[0])).toEqual(['ROW-LAT-EQ-LON-ISOLATED']);
+    // 5 rows of 33.3 repeat one value with two or more decimals only when they have them: 33.3 has one
+  });
+
+  it('3 isolated non-coarse rows among 100 are a warning', () => {
+    const ds = dataset([...rows(2, 97, { lat: 54.1, lon: 10.2 }), ...rows(99, 3, { lat: 41.37, lon: 41.37 })]);
+    expect(eqIds(checkRows(ds))).toEqual([['ROW-LAT-EQ-LON-ISOLATED', 'warning', [99, 100, 101]]]);
+  });
+
   it('does not fire when only one coordinate is present or they differ', () => {
     const fs = checkRows(dataset([row({ line: 2, lat: 5 }), row({ line: 3, lon: 5 }), row({ line: 4, lat: 5, lon: 5.1 })]));
     expect(only(fs, 'ROW-LAT-EQ-LON')).toEqual([]);
@@ -56,22 +118,22 @@ describe('ROW-LAT-EQ-LON', () => {
 describe('ROW-STATION-MOVED', () => {
   const moved = () =>
     dataset([
-      ...rows(2, 9, { lat: 77.0, latDecimals: 1, lon: 15.5, station: 'ST5', date: '2021-08-24' }),
-      ...rows(11, 14, { lat: 77.0, latDecimals: 1, lon: 16.5, station: 'ST5', date: '2021-07-25' }),
+      ...rows(2, 9, { lat: 77.0, latDecimals: 1, lon: 15.52, station: 'ST5', date: '2021-08-24' }),
+      ...rows(11, 14, { lat: 77.0, latDecimals: 1, lon: 16.52, station: 'ST5', date: '2021-08-25' }),
     ]);
 
-  it('flags a typed digit (lon 15.5 vs 16.5) with the minority rows and a positions text', () => {
+  it('flags a typed digit (lon 15.52 vs 16.52) with the minority rows and a positions text', () => {
     const f = only(checkRows(moved()), 'ROW-STATION-MOVED');
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ severity: 'warning', value: 'ST5', lines: range(2, 10) });
     expect(f[0].params.station).toBe('ST5');
-    expect(f[0].params.positions).toBe('15.5 E, 77.0 N (9 rows, 2021-08-24); 16.5 E, 77.0 N (14 rows, 2021-07-25)');
+    expect(f[0].params.positions).toBe('15.52 E, 77.0 N (9 rows, 2021-08-24); 16.52 E, 77.0 N (14 rows, 2021-08-25)');
   });
 
   it('flags a typed digit even when the other axis was re-measured at different decimals (54.3215 vs 54.321111)', () => {
     const ds = dataset([
-      ...rows(2, 9, { lat: 54.321111, lon: 12.345, station: 'ST5' }),
-      ...rows(11, 14, { lat: 54.3215, lon: 13.345, station: 'ST5' }),
+      ...rows(2, 9, { lat: 54.321111, lon: 12.345, date: '2021-05-01', station: 'ST5' }),
+      ...rows(11, 14, { lat: 54.3215, lon: 13.345, date: '2021-05-01', station: 'ST5' }),
     ]);
     const f = only(checkRows(ds), 'ROW-STATION-MOVED');
     expect(f).toHaveLength(1);
@@ -79,42 +141,42 @@ describe('ROW-STATION-MOVED', () => {
   });
 
   it('flags latitude and longitude exchanged between two positions', () => {
-    const ds = dataset([...rows(2, 3, { lat: 54.25, lon: 10.75, station: 'ST1' }), ...rows(5, 8, { lat: 10.75, lon: 54.25, station: 'ST1' })]);
+    const ds = dataset([...rows(2, 3, { lat: 54.25, lon: 10.75, date: '2021-05-01', station: 'ST1' }), ...rows(5, 8, { lat: 10.75, lon: 54.25, date: '2021-05-01', station: 'ST1' })]);
     const f = only(checkRows(ds), 'ROW-STATION-MOVED');
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual(range(2, 4));
   });
 
   it('is silent for a tiny shift that is neither a digit nor a swap (15.5000 vs 15.5003)', () => {
-    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5, latDecimals: 4, lonDecimals: 4, station: 'ST5' }), ...rows(6, 4, { lat: 77.0, lon: 15.5003, station: 'ST5' })]);
+    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5, latDecimals: 4, lonDecimals: 4, date: '2021-05-01', station: 'ST5' }), ...rows(6, 4, { lat: 77.0, lon: 15.5003, date: '2021-05-01', station: 'ST5' })]);
     expect(only(checkRows(ds), 'ROW-STATION-MOVED')).toEqual([]);
   });
 
   it('is silent for a distance that is not a whole number of degrees (no distance threshold exists)', () => {
-    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5, station: 'ST5' }), ...rows(6, 4, { lat: 77.0, lon: 16.0, station: 'ST5' })]);
+    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5, date: '2021-05-01', station: 'ST5' }), ...rows(6, 4, { lat: 77.0, lon: 16.0, date: '2021-05-01', station: 'ST5' })]);
     expect(only(checkRows(ds), 'ROW-STATION-MOVED')).toEqual([]);
   });
 
   it('compares at the coarser precision: 15.5 and 15.53 are one position', () => {
-    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5, station: 'ST5' }), ...rows(6, 4, { lat: 77.0, lon: 15.53, station: 'ST5' })]);
+    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5, date: '2021-05-01', station: 'ST5' }), ...rows(6, 4, { lat: 77.0, lon: 15.53, date: '2021-05-01', station: 'ST5' })]);
     expect(only(checkRows(ds), 'ROW-STATION-MOVED')).toEqual([]);
   });
 
   it('ignores rows without a station and positions that agree', () => {
-    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5 }), ...rows(6, 4, { lat: 77.0, lon: 16.5 }), ...rows(10, 3, { lat: 1, lon: 2, station: 'ST1' })]);
+    const ds = dataset([...rows(2, 4, { lat: 77.0, lon: 15.5 }), ...rows(6, 4, { lat: 77.0, lon: 16.5 }), ...rows(10, 3, { lat: 1, lon: 2, date: '2021-05-01', station: 'ST1' })]);
     expect(only(checkRows(ds), 'ROW-STATION-MOVED')).toEqual([]);
   });
 
   it('does not duplicate ROW-LAT-EQ-LON: a position with lat === lon is left to that rule', () => {
-    const ds = dataset([...rows(2, 5, { lat: 54.987, lon: 54.987, station: 'ST4' }), ...rows(7, 6, { lat: 54.987, lon: 12.987, station: 'ST4' })]);
+    const ds = dataset([...rows(2, 5, { lat: 54.987, lon: 54.987, date: '2021-05-01', station: 'ST4' }), ...rows(7, 6, { lat: 54.987, lon: 12.987, date: '2021-05-01', station: 'ST4' })]);
     const fs = checkRows(ds);
     expect(only(fs, 'ROW-STATION-MOVED')).toEqual([]);
     expect(only(fs, 'ROW-LAT-EQ-LON')).toHaveLength(1);
   });
 
   it('lists at most 3 dates per position', () => {
-    const a = ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04'].flatMap((d, i) => rows(2 + i, 1, { lat: 77.0, lon: 15.5, station: 'ST5', date: d }));
-    const ds = dataset([...a, ...rows(10, 9, { lat: 77.0, lon: 16.5, station: 'ST5', date: '2021-02-01' })]);
+    const a = ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04'].flatMap((d, i) => rows(2 + i, 1, { lat: 77.0, lon: 15.52, station: 'ST5', date: d }));
+    const ds = dataset([...a, ...rows(10, 9, { lat: 77.0, lon: 16.52, station: 'ST5', date: '2021-01-02' })]);
     const f = only(checkRows(ds), 'ROW-STATION-MOVED')[0];
     expect(String(f.params.positions)).toContain('(4 rows, 2021-01-01, 2021-01-02, 2021-01-03, …)');
   });

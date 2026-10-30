@@ -155,7 +155,31 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   // the Occurrence table's own recommended-term finding is only the empty scientificNameID column, which CONV-NAMEID-MISSING says in the converter's words
   // An EMPTY Occurrence table (an upload with no taxon: CONV-NO-OCCURRENCES says so) is not checked: "eventDate, decimalLatitude, decimalLongitude are missing" would send the user to fill a table that
   // has no row. With no occurrence the archive is refused whatever the table holds.
-  if (judged.occurrences.length > 0) pushAll(out, checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter((f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID')));
+  // A repeated occurrenceID the conversion already reported (CONV-ID-DUPLICATE, kind occurrence: in the sheet's terms, with the advice to merge the rows or tell
+  // them apart) is the same defect as the output table's DWC-OCCURRENCEID-DUPLICATE, whose generic "give every record its own identifier" would say it a second time.
+  // Only when ALL its repeated IDs are among the ones CONV-ID-DUPLICATE named: a repeat the sheet's report did not name (made by the output step) is still said.
+  // (the IDs are the conversion's own list, kept out of the finding's params; a finding is the evidence that the report was made)
+  const saidIds = new Set(stage1.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'occurrence') ? (ds.repeatedOccurrenceIds ?? []) : []);
+  const idColumn = tables.occurrence.columns.findIndex((c) => c.header === 'occurrenceID');
+  const repeatedIds = new Set<string>();
+  if (idColumn >= 0) {
+    const seen = new Set<string>();
+    for (const row of tables.occurrence.rows) {
+      const id = row[idColumn];
+      if (id === '' || id === undefined) continue;
+      if (seen.has(id)) repeatedIds.add(id);
+      seen.add(id);
+    }
+  }
+  const occurrenceDuplicateSaid = repeatedIds.size > 0 && [...repeatedIds].every((id) => saidIds.has(id));
+  if (judged.occurrences.length > 0) {
+    pushAll(
+      out,
+      checkRawTable(fileOf(tables.occurrence, 'Occurrence'), sheetOf(tables.occurrence), []).filter(
+        (f) => !(f.ruleId === 'DWC-RECOMMENDED' && f.params.terms === 'scientificNameID') && !(occurrenceDuplicateSaid && f.ruleId === 'DWC-OCCURRENCEID-DUPLICATE'),
+      ),
+    );
+  }
   const noId = judged.occurrences.filter((o) => o.identification.scientificNameId === undefined).length;
   if (noId > 0) out.push(makeConvertFinding('CONV-NAMEID-MISSING', { file: tables.occurrence.name, sheet: tables.occurrence.name, params: { count: noId } }));
   // BioCheck: no measurementTypeID among its BODCeffort codes in the whole eMoF table (R/checkdataset.R 562-566, inside the eMoF block that starts at line 457): a warning, to accept

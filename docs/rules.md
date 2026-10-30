@@ -52,10 +52,13 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | META-POINT-OUTSIDE-BBOX | warning | A | — | —<a id="META-POINT-OUTSIDE-BBOX"></a> |
 | META-VARIABLE-MISSING | warning | A | — | —<a id="META-VARIABLE-MISSING"></a> |
 | META-NO-DATES | error | A | — | —<a id="META-NO-DATES"></a> |
+| META-NO-POSITIONS | error | A | — | [OBIS Manual, "Darwin Core" (iobis/manual darwin_core.md; manual.obis.org; read 2026-10-30)](https://manual.obis.org/darwin_core.html), "Location information can be documented in many DwC terms, but decimalLatitude and decimalLongitude are the minimally required terms"; "OBIS currently has seven required and one strongly recommended DwC term: occurrenceID, eventDate, decimalLongitude, decimalLatitude, scientificName, occurrenceStatus, basisOfRecord, scientificNameID"<a id="META-NO-POSITIONS"></a> |
 | ROW-LAT-RANGE | error | B | latitude.min = -90 degrees<br>latitude.max = 90 degrees | [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 3 "Impossible location test", p.11<br>[GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44<a id="ROW-LAT-RANGE"></a> |
 | ROW-LON-RANGE | error | B | longitude.min = -180 degrees<br>longitude.max = 180 degrees | [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 3 "Impossible location test", p.11<br>[GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44<a id="ROW-LON-RANGE"></a> |
 | ROW-LON-360 | info | B | — | [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44<a id="ROW-LON-360"></a> |
 | ROW-LAT-EQ-LON | error | B | — | —<a id="ROW-LAT-EQ-LON"></a> |
+| ROW-LAT-EQ-LON-ISOLATED | warning | B | — | —<a id="ROW-LAT-EQ-LON-ISOLATED"></a> |
+| ROW-LAT-EQ-LON-COARSE | info | B | — | —<a id="ROW-LAT-EQ-LON-COARSE"></a> |
 | ROW-RAGGED | error | B | — | —<a id="ROW-RAGGED"></a> |
 | ROW-NON-NUMERIC | warning | B | — | —<a id="ROW-NON-NUMERIC"></a> |
 | ROW-NA-VARIANT | warning | B | — | —<a id="ROW-NA-VARIANT"></a> |

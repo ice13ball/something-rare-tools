@@ -82,8 +82,8 @@ describe('registry conventions', () => {
 });
 
 describe('in the public registry since the reveal, and still out of /check', () => {
-  it('the public registry holds the 95 rules of the checks and every CONV-* rule, once each; getRule and makeFinding know them', () => {
-    expect(RULES.length).toBe(95 + CONVERT_RULES.length);
+  it('the public registry holds the 98 rules of the checks and every CONV-* rule, once each; getRule and makeFinding know them', () => {
+    expect(RULES.length).toBe(98 + CONVERT_RULES.length);
     expect(RULES.filter((r) => r.id.startsWith('CONV-')).map((r) => r.id)).toEqual(CONVERT_RULES.map((r) => r.id));
     expect(getRule('CONV-ID-DUPLICATE').severity).toBe(getConvertRule('CONV-ID-DUPLICATE').severity);
     expect(makeFinding('CONV-ID-DUPLICATE', {}).severity).toBe('error');

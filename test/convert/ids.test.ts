@@ -5,9 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import { proposeSampleCodes } from '../../src/core/convert/ids';
 import { RULES } from '../../src/core/rules/registry';
+import { toDataset } from '../../src/core/convert/model';
+import { validateTables } from '../../src/core/convert/validate';
 import { guardText } from '../../src/core/output/csv';
 import type { Finding } from '../../src/core/types';
 import { textFile } from '../helpers/files';
+import { META, TODAY } from './exportHelpers';
 import { fileOf, mappingOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
@@ -396,5 +399,38 @@ describe('duplicates across files are reported at every place (M4)', () => {
     const d = find(convert({ sheets: [s] }).blocking, 'CONV-ID-DUPLICATE');
     expect(d).toHaveLength(1);
     expect(d[0]).toMatchObject({ lines: [2, 3, 4, 5], params: { count: 2 } });
+  });
+});
+
+describe('a repeated occurrenceID is reported once', () => {
+  it("CONV-ID-DUPLICATE (the sheet's words) and the output table's DWC-OCCURRENCEID-DUPLICATE are not both given for the same repeat", () => {
+    const header = ['occurrenceID', 'eventID', 'scientificName', 'individualCount', 'Latitude', 'Longitude', 'Date'];
+    const rows: Cell[][] = [['o1', 'e1', 'Calanus finmarchicus', 1, 55.5, 2.5, '2020-05-01'], ['o1', 'e1', 'Calanus finmarchicus', 1, 55.5, 2.5, '2020-05-01'], ['o2', 'e1', 'Oithona similis', 2, 55.5, 2.5, '2020-05-01']];
+    const r = convert({ sheets: [sheetInput(fileOf(header, rows), { quantity: { kind: 'count' } })] });
+    expect(find(r.findings, 'CONV-ID-DUPLICATE').filter((f) => f.params.kind === 'occurrence')).toHaveLength(1);
+    const ds = toDataset(r, META, { fullList: false, prefixStation: false, worms: false, nvs: false });
+    expect(find(validateTables(ds, r.findings, { today: TODAY }), 'DWC-OCCURRENCEID-DUPLICATE')).toEqual([]);
+    // when nothing said it before, the output table's check still stands
+    expect(find(validateTables(ds, [], { today: TODAY }), 'DWC-OCCURRENCEID-DUPLICATE')).toHaveLength(1);
+  });
+});
+
+describe('a repeated occurrenceID is reported once: only when every repeated ID was named', () => {
+  const header = ['occurrenceID', 'eventID', 'scientificName', 'individualCount', 'Latitude', 'Longitude', 'Date'];
+  const row = (id: string, name: string): Cell[] => [id, 'e1', name, 1, 55.5, 2.5, '2020-05-01'];
+  const r = convert({ sheets: [sheetInput(fileOf(header, [row('o1', 'Calanus finmarchicus'), row('o1', 'Calanus finmarchicus'), row('o2', 'Oithona similis'), row('o2', 'Oithona similis'), row('o3', 'Acartia longiremis')]), { quantity: { kind: 'count' } })] });
+  const ds = toDataset(r, META, { fullList: false, prefixStation: false, worms: false, nvs: false });
+
+  it('the conversion keeps every repeated ID outside the finding (small params), and the output check is silent', () => {
+    const said = find(r.findings, 'CONV-ID-DUPLICATE').filter((f) => f.params.kind === 'occurrence');
+    expect(said).toHaveLength(1);
+    expect(said[0].params.ids).toBeUndefined();
+    expect([...(r.repeatedOccurrenceIds ?? [])].sort()).toEqual(['o1', 'o2']);
+    expect(find(validateTables(ds, r.findings, { today: TODAY }), 'DWC-OCCURRENCEID-DUPLICATE')).toEqual([]);
+  });
+
+  it('when the report named only some of the repeated IDs, the output check still says the rest', () => {
+    const partialDs = { ...ds, repeatedOccurrenceIds: ['o1'] };
+    expect(find(validateTables(partialDs, r.findings, { today: TODAY }), 'DWC-OCCURRENCEID-DUPLICATE')).toHaveLength(1);
   });
 });
