@@ -342,8 +342,26 @@ describe('parseTimeRange / parseTimeCell', () => {
     }
   });
 
-  it('rejects what is not a range of times, and a lone 4-figure number (it may be a year)', () => {
-    for (const raw of ['1600', '2560-2600', '1600-', '1600-1730-1800', 'noon', '1999-2005x', '']) expect('error' in parseTimeCell(raw), raw).toBe(true);
+  it('reads a plain HHMM, one trailing period, a cut range end and periods after several ranges (time column)', () => {
+    for (const [raw, text] of [['1800', '18:00'], ['1130', '11:30'], ['0530', '05:30'], ['0000', '00:00'], ['2359', '23:59'], ['1930', '19:30'], ['0530-0700.', '05:30'], ['1800.', '18:00'], ['16:00.', '16:00'], ['16:00 .', '16:00'],
+      ['10:00-11:3', '10:00'], ['1600-17', '16:00'], ['10:00-11:', '10:00'], ['0530-0700., 1600-1700.', '05:30'], ['0530-0700.,1600-1700.', '05:30']] as const) {
+      expect(parseTimeCell(raw), raw).toMatchObject({ text });
+    }
+  });
+
+  it('does not read HHMM beyond 2359 or minutes above 59, nor two periods', () => {
+    for (const raw of ['2400', '1860', '2500', '1800..', '0530-0760.', '..']) expect('error' in parseTimeCell(raw), raw).toBe(true);
+  });
+
+  it('a plain HHMM or HHMM. in a DATE column is not a time', () => {
+    for (const raw of ['1800', '1130', '0530', '1800.']) {
+      const d = parseDate(raw, { date1904: false, dateFormatted: false });
+      expect('error' in d || (d.precision !== 'minute' && d.precision !== 'second' && !d.iso.includes('T')), raw).toBe(true);
+    }
+  });
+
+  it('rejects what is not a range of times', () => {
+    for (const raw of ['2560-2600', '1600-', '1600-1730-1800', 'noon', '1999-2005x', '']) expect('error' in parseTimeCell(raw), raw).toBe(true);
   });
 
   it('combineDateTime takes the start of a range', () => {

@@ -303,6 +303,12 @@ const GENERIC_STATION = new RegExp(
 );
 
 /**
+ * An expedition / cruise LABEL used as the station ("Java-South Africa Exped.", "Expedition 12", "Wyprawa 2", "Expedición", "Expédition"): it names a route, not a place, so a
+ * far spread is expected and is only the note, like a generic label.
+ */
+const EXPEDITION_LABEL = /(?:^|[\s._-])(?:exped(?:ition|ición|icion)?|expédition|cruise|wyprawa|wyprawy|wyprawie)(?:$|[\s._0-9-])/i;
+
+/**
  * A generic station LABEL: a station-like word with an optional number or letter ("Sta. 1", "Site 2", "Dive 9", "Float", "Stacja 3", "Stelle A"). Such a name
  * repeats across unrelated places, so with nothing to anchor it (no cruise, no date) a far spread is only the note; a proper name ("Axial Seamount") is one place
  * and keeps the warning.
@@ -391,7 +397,7 @@ function stationGroup(ds: Dataset, sheet: string, station: string, srows: DataRo
     const shown = real.slice(0, MAX_DATES + 2);
     const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
     const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
-    out.push(makeFinding((anchored || !GENERIC_LABEL.test(station.trim())) && spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
+    out.push(makeFinding((anchored || !(GENERIC_LABEL.test(station.trim()) || EXPEDITION_LABEL.test(station.trim()))) && spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
     return;
   }
   const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');

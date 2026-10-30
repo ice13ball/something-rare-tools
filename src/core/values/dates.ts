@@ -130,25 +130,39 @@ export function parseTimeOfDay(raw: RawCell): TimeOfDay | DateError {
 /** One end of a time range: "1600", "930", "16:00" (hours 0-23, minutes 0-59). */
 const RANGE_END_RE = /^(\d{1,2}):?(\d{2})$/;
 const RANGE_SPLIT_RE = /\s*[-\u2013\u2014]\s*|\s+to\s+/i;
+/** A range end cut short when the text was typed or copied: "11:3" (minutes cut), "11:" (minutes gone), or, after a start written without a colon, "17" (hours only). */
+const CUT_END_COLON_RE = /^\d{1,2}:\d?$/;
+const CUT_END_HOURS_RE = /^\d{2}$/;
+/** One trailing period, with the spaces around it, is typing noise ("1800.", "0530-0700.", "16:00 ."): removed once. */
+function stripTrailingPeriod(text: string): string {
+  const t = text.replace(/\s*\.\s*$/, '');
+  return t === '' ? text : t;
+}
 
 /**
  * A time column often holds the time a sampling took, as a range: "1600-1730", "0530-0700", "16:00-17:30", or several ranges of one
  * event, "0530-0700, 1600-1730". The time of the EVENT is the START of the first range (here 16:00 for "1600-1730"); the end of a
  * range, and any further range, is read to check the cell but then IGNORED: the Dataset has one time per row, and the end is not
- * carried into the date (no eventDate interval is written from a time column). A bare "1600" without a dash is not read here: a
- * lone 4-digit number may be a year. Anything else is an error, so a malformed range is still reported as unreadable TIME.
+ * carried into the date (no eventDate interval is written from a time column). A bare "1600" is read by parseTimeCell (time columns
+ * only), not here. A range end cut short ("10:00-11:3", "1600-17") is ignored; one trailing period per range ("0530-0700.") is dropped. Anything else is an error, so a malformed range is still reported as unreadable TIME.
  */
 export function parseTimeRange(raw: RawCell): TimeOfDay | DateError {
   if (typeof raw !== 'string') return fail(raw === null ? '' : String(raw));
-  const segments = raw.trim().split(/\s*[,;]\s*/);
+  const segments = raw.trim().split(/\s*[,;]\s*/).map(stripTrailingPeriod);
   let start: TimeOfDay | undefined;
   for (const seg of segments) {
     const parts = seg.split(RANGE_SPLIT_RE);
     if (parts.length !== 2) return fail(raw);
     const times: TimeOfDay[] = [];
-    for (const part of parts) {
-      const m = RANGE_END_RE.exec(part.trim());
-      if (!m) return fail(raw);
+    for (const [i, part] of parts.entries()) {
+      const text = part.trim();
+      const m = RANGE_END_RE.exec(text);
+      if (!m) {
+        // a CUT end is ignored (only the start is used): "10:00-11:3", "1600-17"; the start itself must be a whole time
+        const cut = i === 1 && (CUT_END_COLON_RE.test(text) || (CUT_END_HOURS_RE.test(text) && !parts[0].includes(':')));
+        if (cut && times.length === 1) continue;
+        return fail(raw);
+      }
       const t = parseTimeOfDay(`${m[1]}:${m[2]}`);
       if ('error' in t) return fail(raw);
       times.push(t);
@@ -165,7 +179,16 @@ export function parseTimeRange(raw: RawCell): TimeOfDay | DateError {
  */
 export function parseTimeCell(raw: RawCell): TimeOfDay | DateError {
   const range = parseTimeRange(raw);
-  return 'error' in range ? parseTimeOfDay(raw) : range;
+  if (!('error' in range)) return range;
+  const text = typeof raw === 'string' ? stripTrailingPeriod(raw.trim()) : raw;
+  // plain HHMM ("1800", "0530"): a time in a time column, never read in a date column (this function is only called for the time role)
+  const hhmm = typeof text === 'string' ? /^(\d{2})(\d{2})$/.exec(text) : null;
+  if (hhmm) {
+    const t = parseTimeOfDay(`${hhmm[1]}:${hhmm[2]}`);
+    return 'error' in t ? fail(String(raw)) : t;
+  }
+  const one = parseTimeOfDay(text);
+  return 'error' in one && typeof raw === 'string' ? fail(raw) : one;
 }
 
 /** A cell that is two years joined by a dash ("2001-2005"); it may also be two valid times ("2005-2040" is 20:05 to 20:40). */

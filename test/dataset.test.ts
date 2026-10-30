@@ -392,6 +392,18 @@ describe('buildDataset: a time column with time ranges', () => {
     expect(dataset.rows[0].datetime?.end).toBeUndefined();
   });
 
+  it('plain HHMM, a trailing period and a cut range end are read in the time column', () => {
+    const { dataset, findings } = build(csv('1800', '0530-0700.', '10:00-11:3', '0530-0700., 1600-1700.'));
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    expect(dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2021-07-21T18:00Z', '2021-07-22T05:30Z', '2021-07-23T10:00Z', '2021-07-24T05:30Z']);
+  });
+
+  it('the same HHMM values in the DATE column are not turned into times', () => {
+    const f = textFile('d.csv', 'Station,Lat,Lon,Date,DIC_umol_kg\nST1,70,10,1800,2100\nST2,70,10,1130,2100\n');
+    const { dataset } = build(f);
+    for (const r of dataset.rows) expect(r.datetime?.iso ?? '').not.toContain('T');
+  });
+
   it('an unreadable time is reported as a TIME with a time example, never with date advice, in four languages', () => {
     const f = byRule(build(csv('1600-1730', '25:99-26:00', 'noon')).findings, 'ROW-DATE-UNPARSEABLE');
     expect(f).toHaveLength(1);

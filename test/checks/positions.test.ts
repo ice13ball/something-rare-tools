@@ -343,6 +343,14 @@ describe('station findings on collection exports: generic names are grouped by c
     expect(stationIds(checkRows(dataset([...at(2, 3, -50, -60, 'Station Papa'), ...at(5, 2, -36.5, -30.5, 'Station Papa')])))).toEqual(['ROW-STATION-SPREAD-FAR']);
   });
 
+  it('an expedition / cruise label is a route: the far spread is only the note, a proper name keeps the warning', () => {
+    for (const label of ['Java-South Africa Exped.', 'Southern Expedition', 'Expedition 12', 'Expedición', 'Wyprawa 2', 'Expedition', 'Expédition Tara', 'Atlantic Cruise']) {
+      const route = dataset([...at(2, 3, -50, -60, label), ...at(5, 2, -36.5, -30.5, label)]);
+      expect(stationIds(checkRows(route)), label).toEqual(['ROW-STATION-SPREAD']);
+    }
+    expect(stationIds(checkRows(dataset([...at(2, 3, -50, -60, 'Expeditor Bay'), ...at(5, 2, -36.5, -30.5, 'Expeditor Bay')])))).toEqual(['ROW-STATION-SPREAD-FAR']);
+  });
+
   it('with no cruise and no date a far spread is only the note', () => {
     const far = dataset([...at(2, 3, -50, -60, 'Sta. 1'), ...at(5, 2, -36.5, -30.5, 'Sta. 1')]);
     expect(stationIds(checkRows(far))).toEqual(['ROW-STATION-SPREAD']);
