@@ -21,7 +21,7 @@ import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
 import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
 import type { NercDecisions, NercPick } from './nerc';
-import { biomassKindConcept, parseTypedNumber, resolveQuantity } from './quantity';
+import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
@@ -1673,18 +1673,23 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               continue;
             }
             const concept = biomassKindConcept(b.basis);
-            const unitText = unitFromHeader(b.header).unitText;
+            const hu = unitFromHeader(b.header);
+            const unitText = hu.unitText;
+            const unit = biomassUnit(unitText);
+            // two biomass columns of one kind (or both open) would write the same measurementType twice: the column name tells them apart
+            const clash = cols.biomass.filter((x) => x.basis === b.basis).length > 1;
             const sizeValue = acc.site.sampleSizeValue;
             const sizeUnit = quantity?.effort?.unit;
             if (concept === undefined) biomassNoKind.add(fileName, sheet.name, b.header, row.line);
             measurements.push({
               target: { kind: 'occurrence', id },
               role: 'biomass',
-              measurementType: concept?.label ?? 'biomass',
+              measurementType: `${concept?.label ?? 'biomass'}${clash ? ` (${hu.name || b.header.trim()})` : ''}`,
               ...(concept ? { measurementTypeId: concept.uri } : {}),
               measurementValue: valueText(bcell, dc),
               ...(unitText === undefined ? {} : { measurementUnit: unitText }),
-              ...(sizeValue !== undefined && sizeUnit !== undefined ? { measurementRemarks: `per sample of ${sizeValue} ${sizeUnit}` } : {}),
+              ...(unit.id ? { measurementUnitId: unit.id.uri } : {}),
+              ...(sizeValue !== undefined && sizeUnit !== undefined && !unit.perUnit ? { measurementRemarks: `per sample of ${sizeValue} ${sizeUnit}` } : {}),
               source: { ...occSource, column: b.header },
             });
           }
@@ -1919,7 +1924,9 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const rep = replicateColumn(input.sheets, w.file, w.sheet, w.groups);
       const sin = input.sheets.find((x) => x.file.fileName === w.file && x.sheet === w.sheet);
       // a long sheet repeats an occurrenceID only for rows of the same sample (and replicate, when the sheet has that role) with the same taxon: said as that, with the number of rows
-      const sameTaxon = rep === undefined && sin?.shape === 'long' && sin.profile === undefined;
+      // (not when the sheet gives the occurrenceIDs itself: then the repeated value is the user's, and no row is known to be the same sample and taxon)
+      const userIds = sin?.mapping.columns.some((c) => c.role.kind === 'occurrenceId') === true;
+      const sameTaxon = rep === undefined && sin?.shape === 'long' && sin.profile === undefined && !userIds;
       const hasReplicate = sin?.mapping.columns.some((c) => c.role.kind === 'replicate') === true;
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
@@ -1932,6 +1939,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             count: w.ids.length,
             hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.',
             ...(rep === undefined ? {} : { column: rep.column, ...(rep.separated < rep.total ? { remaining: rep.total - rep.separated, separated: rep.separated } : {}) }),
+            ...(rep === undefined && userIds && sin?.shape === 'long' ? { userId: 'yes' } : {}),
             ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}) } : {}),
           },
         }),

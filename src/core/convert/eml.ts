@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { smallestLonInterval } from '../geo/lonInterval';
 import { escapeXml } from '../output/draft';
 import { slugOf } from './dwca';
 import type { DatasetMetadata, LicenceId } from './metadata';
@@ -84,24 +85,6 @@ function datesOf(eventDate: string): { begin?: string; end?: string } {
   return { ...(begin === undefined ? {} : { begin }), ...(end === undefined ? {} : { end }) };
 }
 
-/** The longitudes' smallest bounding arc: the plain min/max, or, across the antimeridian, west > east. */
-function lonBounds(lons: number[]): { west: number; east: number } {
-  const sorted = [...lons].sort((a, b) => a - b);
-  let gap = 0;
-  let at = 0;
-  for (let i = 1; i < sorted.length; i++) {
-    const g = sorted[i] - sorted[i - 1];
-    if (g > gap) {
-      gap = g;
-      at = i;
-    }
-  }
-  const wrapGap = sorted[0] + 360 - sorted[sorted.length - 1];
-  // the biggest empty stretch decides: when it lies between the last and the first longitude the plain range is the smallest arc
-  if (wrapGap >= gap) return { west: sorted[0], east: sorted[sorted.length - 1] };
-  return { west: sorted[at], east: sorted[at - 1] };
-}
-
 /** Bounding box, date range and distinct scientific names of a dataset. */
 export function coverageOf(ds: Pick<ConvertedDataset, 'events' | 'occurrences'>): Coverage {
   const lats: number[] = [];
@@ -120,7 +103,7 @@ export function coverageOf(ds: Pick<ConvertedDataset, 'events' | 'occurrences'>)
     }
   }
   const out: Coverage = { taxa: [...new Set(ds.occurrences.map((o) => o.identification.scientificName))].sort() };
-  if (lats.length > 0) out.bbox = { ...lonBounds(lons), north: maxOf(lats), south: minOf(lats) };
+  if (lats.length > 0) out.bbox = { ...smallestLonInterval(lons), north: maxOf(lats), south: minOf(lats) };
   if (begin !== undefined && end !== undefined) out.dates = { begin, end };
   return out;
 }

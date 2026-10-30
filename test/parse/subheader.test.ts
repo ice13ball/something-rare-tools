@@ -9,6 +9,7 @@ import { proposeConvertMapping } from '../../src/core/convert/recognize';
 import { proposeColumns } from '../../src/core/recognize/columns';
 import { parseFile } from '../../src/core/parse';
 import { foldStatisticSubheader } from '../../src/core/parse/shared';
+import { rawSheet } from '../helpers/files';
 
 /** A workbook whose header cells B1:C1 and D1:E1 are merged ranges (the second cell of each is empty) with mean / st.dev. in row 2. */
 function mergedWorkbook(): Uint8Array {
@@ -86,11 +87,46 @@ describe('what is not a second header row', () => {
 
 describe('a statistic of a variable is not the variable', () => {
   const p = (header: string) => proposeColumns(parseFile('t.csv', new TextEncoder().encode(`${header},Other\n1.5,2\n2.5,3\n`)).sheets[0], { decimalComma: false, date1904: false })[0];
-  it('"T mean (°C)" is the temperature; "T st.dev. (°C)", "Salinity max", "Oxygen n" keep their own names', () => {
+  it('"T mean (°C)", "Temperature min", "pH min" are the variable; "T st.dev. (°C)" and "Oxygen n" keep their own names', () => {
     expect(p('T mean (°C)').role).toMatchObject({ kind: 'variable', variable: 'temperature', unit: '°C' });
     expect(p('Salinity mean').role).toMatchObject({ kind: 'variable', variable: 'salinity' });
     expect(p('T st.dev. (°C)').role).toMatchObject({ kind: 'variable', variable: 'T st.dev.', unit: '°C' });
-    expect(p('Salinity max').role).toMatchObject({ kind: 'variable', variable: 'Salinity max' });
+    // an extreme is the same quantity: it keeps its canonical variable, so its range checks still apply
+    expect(p('Salinity max').role).toMatchObject({ kind: 'variable', variable: 'salinity' });
+    expect(p('Temperature min').role).toMatchObject({ kind: 'variable', variable: 'temperature' });
+    expect(p('Water temperature maximum').role).toMatchObject({ kind: 'variable', variable: 'temperature' });
+    expect(p('pH min').role).toMatchObject({ kind: 'variable', variable: 'pH' });
     expect(p('Oxygen n').role).toMatchObject({ kind: 'variable', variable: 'Oxygen n' });
+  });
+});
+
+describe('review fixes: real column letters, ambiguous label rows, the depth trap, the EML box', () => {
+  const rowsOf = (...cells: (string | number | null)[][]) => cells.map((c, i) => ({ line: i + 2, cells: c, fieldCount: c.length }));
+
+  it('a real header "C" or "B" over a label is never replaced (carbon is not nitrogen)', () => {
+    const csv = 'Sample,N,C\n,mean,mean\nS1,1.5,2.5\nS2,1.6,2.6\n';
+    const s = parseFile('a.csv', new TextEncoder().encode(csv)).sheets[0];
+    expect(s.header).toEqual(['Sample', 'N mean', 'C mean']);
+    const csv2 = 'A,B,C,D\n,mean,sd,n\n1,2,3,4\n5,6,7,8\n';
+    expect(parseFile('b.csv', new TextEncoder().encode(csv2)).sheets[0].header).toEqual(['A', 'B mean', 'C sd', 'D n']);
+  });
+
+  it('a truly empty cell is filled from its merge or from the left; in a CSV only from the left', () => {
+    const csv = 'Sample,Temp,,Sal,\n,mean,sd,mean,sd\nS1,4.5,0.2,35,0.1\nS2,4.6,0.3,35.1,0.2\n';
+    expect(parseFile('c.csv', new TextEncoder().encode(csv)).sheets[0].header).toEqual(['Sample', 'Temp mean', 'Temp sd', 'Sal mean', 'Sal sd']);
+  });
+
+  it('a row of only ambiguous labels (N, count, total, min, max) is data', () => {
+    const header = ['Sample', 'A', 'B'];
+    expect(foldStatisticSubheader(header, rowsOf([null, 'N', 'N']))).toBeUndefined();
+    expect(foldStatisticSubheader(header, rowsOf([null, 'count', 'total']))).toBeUndefined();
+    expect(foldStatisticSubheader(header, rowsOf([null, 'min', 'max']))).toBeUndefined();
+    expect(foldStatisticSubheader(header, rowsOf([null, 'mean', 'n']))?.header).toEqual(['Sample', 'A mean', 'B n']);
+  });
+
+  it('"Depth corrected" is still a depth; "Depth-integrated chlorophyll" is not', () => {
+    const p = (h: string) => proposeColumns(rawSheet([h, 'X'], [[5, 1], [10, 2]]), { decimalComma: false, date1904: false })[0].role.kind;
+    expect(p('Depth corrected')).toBe('depth');
+    expect(p('Depth-integrated chlorophyll')).not.toBe('depth');
   });
 });

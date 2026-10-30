@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The metadata draft's bounding box across the antimeridian: the smallest interval of longitudes, west > east when it crosses 180. Synthetic points only.
 import { describe, expect, it } from 'vitest';
+import { coverageOf } from '../../src/core/convert/eml';
 import { parseDataciteXml } from '../../src/core/metadata/datacite';
 import { parseIso19139 } from '../../src/core/metadata/iso19139';
 import { draftToDataciteXml } from '../../src/core/output/datacite';
@@ -53,5 +54,18 @@ describe('the draft', () => {
     expect(dc).toContain('<westBoundLongitude>178</westBoundLongitude>');
     expect(dc).toContain('<eastBoundLongitude>-179</eastBoundLongitude>');
     expect(parseDataciteXml(dc, 'dc').bbox).toMatchObject({ west: 178, east: -179 });
+  });
+});
+
+describe('the bounding box of the EML and of the metadata draft is one function', () => {
+  it('[-170, -50, 60, 170] is -170..170 in both (wider than 180 either way keeps the plain bounds)', () => {
+    expect(smallestLonInterval([-170, -50, 60, 170])).toEqual({ west: -170, east: 170 });
+  });
+  it('the EML coverage of data across the antimeridian is west > east, like the draft', () => {
+    const ev = (lon: number, i: number) => ({ id: `E${i}`, type: 'sample' as const, position: { lat: 10 + i, lon } });
+    const cov = coverageOf({ events: [178, 179, -179].map(ev) as never, occurrences: [] });
+    expect(cov.bbox).toMatchObject({ west: 178, east: -179 });
+    const wide = coverageOf({ events: [-170, -50, 60, 170].map(ev) as never, occurrences: [] });
+    expect(wide.bbox).toMatchObject({ west: -170, east: 170 });
   });
 });

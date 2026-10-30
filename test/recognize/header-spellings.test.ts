@@ -46,7 +46,7 @@ describe('misspelled latitude and longitude', () => {
 describe('prefix traps: a name that merely starts with Lat / Long / Depth', () => {
   const NOT_POSITION = [
     'Long term mean', 'Long-term mean', 'Long term average', 'Long_term_average', 'Longterm', 'Long-term trend [%]', 'Long-line catch', 'Long axis [mm]', 'Long distance',
-    'Lat bound mean', 'Lateral line', 'Latency [ms]', 'Lat of station', 'Lon bar',
+    'Lat bound mean', 'Lateral line', 'Latency [ms]', 'Lat of station',
   ];
   it.each(NOT_POSITION)('%s is not a coordinate', (h) => {
     const p = of({ [h]: OTHER, Y: LAT }, h);
@@ -80,3 +80,18 @@ describe('prefix traps: a name that merely starts with Lat / Long / Depth', () =
     expect(of({ 'Depth-integrated chlorophyll': OTHER, Depth: [5, 10, 15, 20] }, 'Depth').role.kind).toBe('depth');
   });
 });
+
+describe('every continuation of Lat / Lon / Long is still a coordinate on main (parity), except the few words that make another name', () => {
+  const LAT = ['Lat WGS 84', 'Lat (WGS 84)', 'Lat GPS', 'Lat_GPS', 'Lat ETRS89', 'Lat NAD83', 'Lat 1', 'lat_2', 'Lat dd.mm', 'Lat ddmm', 'Lat deg min sec', 'Lat decdeg', 'Lat_DecDeg', 'Lat in degrees', 'Lat_y', 'Lat Y', 'lat_ini', 'Lat mid', 'Lat mean', 'Lat station', 'Lat sample', 'Lat corrected', 'Lat actual', 'Lat target', 'Lat planned', 'Lat_obs', 'Lat min', 'Lat max'];
+  const LON = ['Lon GPS', 'Long GPS', 'Lon 1', 'long_2', 'Long dd mm', 'Long_x', 'Lon X', 'Lon (x)', 'Lon 0-360', 'Lon_0_360'];
+  it.each(LAT)('%s is latitude, high confidence', (h) => {
+    const p = of({ [h]: LAT_V, Longitude: LON_V }, h);
+    expect([p.role.kind, p.confidence], h).toEqual(['latitude', 'high']);
+  });
+  it.each(LON)('%s is longitude, high confidence', (h) => {
+    const p = of({ [h]: LON_V, Latitude: LAT_V }, h);
+    expect([p.role.kind, p.confidence], h).toEqual(['longitude', 'high']);
+  });
+});
+const LAT_V = [54.5, 54.6, 54.7, 54.8];
+const LON_V = [18.5, 18.6, 18.7, 18.8];
