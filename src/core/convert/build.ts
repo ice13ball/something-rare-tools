@@ -1677,14 +1677,18 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             const unitText = hu.unitText;
             const unit = biomassUnit(unitText);
             // two biomass columns of one kind (or both open) would write the same measurementType twice: the column name tells them apart
-            const clash = cols.biomass.filter((x) => x.basis === b.basis).length > 1;
+            const same = cols.biomass.filter((x) => x.basis === b.basis);
+            const clash = same.length > 1;
+            // the name without the unit tells them apart; when two columns differ only by the unit ("Biomass [g m-2]", "Biomass [kg]") the whole header does
+            const names = same.map((x) => unitFromHeader(x.header).name || x.header.trim());
+            const tag = new Set(names).size < names.length ? b.header.trim() : hu.name || b.header.trim();
             const sizeValue = acc.site.sampleSizeValue;
             const sizeUnit = quantity?.effort?.unit;
             if (concept === undefined) biomassNoKind.add(fileName, sheet.name, b.header, row.line);
             measurements.push({
               target: { kind: 'occurrence', id },
               role: 'biomass',
-              measurementType: `${concept?.label ?? 'biomass'}${clash ? ` (${hu.name || b.header.trim()})` : ''}`,
+              measurementType: `${concept?.label ?? 'biomass'}${clash ? ` (${tag})` : ''}`,
               ...(concept ? { measurementTypeId: concept.uri } : {}),
               measurementValue: valueText(bcell, dc),
               ...(unitText === undefined ? {} : { measurementUnit: unitText }),

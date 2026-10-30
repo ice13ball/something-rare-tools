@@ -173,6 +173,12 @@ describe('review fixes: units, clashes, per-area units, repeated user occurrence
     expect(one(['Dry weight [g]'], [1.5]).measurements.find((x) => x.role === 'biomass')?.measurementType).toBe('Dry weight biomass');
   });
 
+  it('two columns that differ only by the unit are told apart by the whole header', () => {
+    const f = fileOf([...header, 'Biomass [g m-2]', 'Biomass [kg]'], [['S1', 'A', '2015-03-04', 'Asterias rubens', 3, 1.5, 9]]);
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long', edit: { 'Biomass [g m-2]': { kind: 'biomass', basis: 'dry' }, 'Biomass [kg]': { kind: 'biomass', basis: 'dry' } } })] });
+    expect(r.measurements.filter((x) => x.role === 'biomass').map((x) => x.measurementType)).toEqual(['Dry weight biomass (Biomass [g m-2])', 'Dry weight biomass (Biomass [kg])']);
+  });
+
   it('no "per sample of" remark when the unit already says per area', () => {
     const h = ['Sample ID', 'Station', 'Date', 'Species', 'Abundance', 'Area sampled [m2]'];
     const run2 = (unit: string) => convert({ sheets: [sheetInput(fileOf([...h, `Wet weight [${unit}]`], [['S1', 'A', '2015-03-04', 'Asterias rubens', 3, 0.0625, 7.5]]), { quantity: { kind: 'count', effort: { source: 'column' } }, shape: 'long' })] });
