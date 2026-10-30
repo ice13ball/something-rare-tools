@@ -25,7 +25,7 @@ const AXIS_GLUED = /^(begin|beg|start|starting|initial|end|stop|final)(lat|lon|l
 const ABBREVIATED_AXIS: Readonly<Record<string, 'latitude' | 'longitude'>> = { lat: 'latitude', lon: 'longitude', long: 'longitude', lng: 'longitude' };
 // What may NOT follow an abbreviated axis word. 'Lat' / 'Lon' / 'Long' / 'Lng' followed by anything else is a coordinate, as it always was ('Lat WGS 84', 'Lat GPS', 'Lat 1', 'Lon X',
 // 'Lat mean', 'Lat station', 'Lat dd.mm'): the words below make another name of it: 'Long term mean', 'Long-line catch', 'Long axis', 'Long distance', 'Lat bound', 'Lat of station'.
-const NOT_A_COORDINATE_TAIL = new Set(['term', 'terms', 'line', 'lines', 'axis', 'distance', 'bound', 'bounds', 'of']);
+const NOT_A_COORDINATE_TAIL = new Set(['term', 'terms', 'line', 'lines', 'axis', 'distance', 'bound', 'bounds', 'of', 'wave', 'lived', 'name', 'description', 'range', 'period']);
 
 /**
  * The axis an abbreviated name ('Lat', 'Lon', 'Long', 'Lng') stands for, with whatever follows it except the words that make it another name (term, line, axis, distance, bound, of);

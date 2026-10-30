@@ -45,7 +45,7 @@ describe('misspelled latitude and longitude', () => {
 
 describe('prefix traps: a name that merely starts with Lat / Long / Depth', () => {
   const NOT_POSITION = [
-    'Long term mean', 'Long-term mean', 'Long term average', 'Long_term_average', 'Longterm', 'Long-term trend [%]', 'Long-line catch', 'Long axis [mm]', 'Long distance',
+    'Long term mean', 'Long-term mean', 'Long term average', 'Long_term_average', 'Longterm', 'Long-term trend [%]', 'Long-line catch', 'Long axis [mm]', 'Long distance', 'Long-wave radiation [W/m2]', 'Long wave', 'Long-lived', 'Long name', 'Long description', 'Long range', 'Long period',
     'Lat bound mean', 'Lateral line', 'Latency [ms]', 'Lat of station',
   ];
   it.each(NOT_POSITION)('%s is not a coordinate', (h) => {
