@@ -3,7 +3,7 @@
 import * as XLSX from 'xlsx';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registryCheck';
-import { ParseError } from './shared';
+import { ParseError, foldStatisticSubheader } from './shared';
 
 type Grid = Map<number, Map<number, XLSX.CellObject>>;
 
@@ -96,10 +96,27 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): RawSheet | undefined {
     }
     rows.push({ line: r + 1, cells: out, fieldCount: out.length });
   }
+  // a second header row of statistic labels (mean, st.dev.) is part of the header; a header cell that is merged with the one to its left reads as that cell's text
+  const merges = ws['!merges'] ?? [];
+  const mergedText = (c: number): string | undefined => {
+    const m = merges.find((x) => x.s.r <= headerRow && headerRow <= x.e.r && x.s.c < c && c <= x.e.c);
+    const v = m === undefined ? null : cellValue(hCells.get(m.s.c));
+    return v === null ? undefined : String(v);
+  };
+  const fold = foldStatisticSubheader(header, rows, mergedText);
+  if (fold) {
+    header.splice(0, header.length, ...fold.header);
+    rows.splice(0, 1);
+    while (numeric.length < header.length) {
+      numeric.push(0);
+      dated.push(0);
+      timed.push(0);
+    }
+  }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one
   const timeFormatted = header.map((_, c) => dateFormatted[c] && timed[c] * 2 > dated[c]);
-  return { name, header, headerLine: headerRow + 1, rows, dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
+  return { name, header, headerLine: headerRow + 1, rows, ...(fold ? { subHeaderLine: fold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
 }
 
 /** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */

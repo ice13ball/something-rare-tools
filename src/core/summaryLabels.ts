@@ -11,6 +11,8 @@
 const EN = 'totals?|grand total|sub-?total|sum|mean|average|avg|median|min(?:imum)?|max(?:imum)?|st(?:an)?d(?:ard)?\\.? ?dev(?:iation)?|stdev|sd|count';
 const MORE = [
   'se|sem|cv|n',
+  // short forms of the standard deviation ("st.dev.", "st dev", "std"): only in the converter's list, /check keeps reading exactly the English words it always read
+  'st\\.? ?dev\\.?|std\\.?',
   // pl
   'średnia|mediana|odchylenie(?: \\(?standardowe\\)?)?|odch\\.? ?st(?:and)?\\.?|maksimum|maks\\.?|liczba|suma',
   // de

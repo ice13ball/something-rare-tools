@@ -209,6 +209,22 @@ every field past the header is empty in every row (a trailing delimiter), nothin
 nothing is reported. If the first data row reads like a header (all text above rows with numbers)
 no extension is made.
 
+**A second header row of statistic labels** (`foldStatisticSubheader`, `parse/shared.ts`; CSV and
+workbooks, so /check and /convert read the same). A row directly under the header whose filled cells are
+ALL statistic labels (`mean`, `st.dev.`, `sd`, `min`, `max` ... the list of `summaryLabels.ts`, at least two
+of them, no number) is part of the header: `OM (%)` over `mean` and `st.dev.` becomes `OM mean (%)` and
+`OM st.dev. (%)` (the label goes before a trailing unit so that the unit is still read). A header cell that
+is empty above a label takes the text of its merged range (a workbook's `!merges`) or of the cell on its
+left; a repository export that wrote the spreadsheet column letter there is treated the same. When a
+label has no header above it, nothing is folded. The row is not data (no more `ROW-NON-NUMERIC` for it)
+and `RawSheet.subHeaderLine` keeps its line. A name ending in a spread or extreme (`st.dev.`, `sd`, `se`,
+`min`, `max`, `median`, `n`) is never read as the canonical variable (`T st.dev.` is not the
+temperature) and keeps its own name; `mean` / `average` is the variable (`T mean` is the temperature);
+the spread of a dimensionless variable (`Salinity st.dev.`) asks for no unit, like the variable. On
+/convert a `st.dev.` column is therefore a measured variable named after its variable plus `st.dev.`
+(`measurementType` "OM st.dev."); the converter has no pattern that carries a spread as an attribute of
+the mean, and none was invented.
+
 **Workbooks** (`parse/xlsx.ts`). Row numbers are Excel row numbers; columns stay aligned to
 column A. The header is the first row with at least two non-empty text cells (else two non-empty
 cells, else the first non-empty row). Formula cells are never evaluated (the cached value is
