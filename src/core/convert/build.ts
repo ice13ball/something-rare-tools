@@ -253,27 +253,40 @@ function raggedLines(file: ParsedFile, sheet: string): ReadonlySet<number> {
 }
 
 /** Lines and an example per (sheet, field): the shape of every "these rows" finding. */
+/** The share of the repeated-ID groups a column must tell apart for the hint "use it as the replicate" (and at least two groups when there are several). */
+export const REPLICATE_HINT_SHARE = 0.8;
+
 /**
- * Rows that make the same ID and differ in exactly ONE column that the mapping ignores: that column probably numbers replicates or sub-samples of one sample (a frame, a quadrat), and the
- * advice is to give it the role "replicate" instead of "change a code". Its header, or undefined when no single ignored column tells ALL the rows apart. A column that is a measurement
- * (a unit in its header) or a quantity is expected to differ between replicates and does not count; a blank cell does not tell rows apart.
+ * Rows that make the same ID, in groups (the lines of one repeated ID each), and a column that the mapping ignores and that tells the rows of MOST groups apart: that column probably numbers
+ * replicates or sub-samples of one sample (a frame, a quadrat), and the advice is to give it the role "replicate" instead of "change a code". A group is told apart when every row of it has a
+ * filled, different value in the column. The column is offered when it tells apart at least 80 % of the groups and at least two of them (a single group needs it to tell that one apart): a real
+ * duplicate left in the source (the same sample, replicate and taxon twice) must not hide the offer for the other 56 groups of 57; the message says how many groups would remain. A column that
+ * is a measurement (a unit in its header) or a quantity is expected to differ between replicates and does not count. When two columns tell the same most groups apart, none is offered.
  */
-function replicateColumn(sheets: readonly ConvertSheetInput[], file: string, sheetName: string, lines: readonly number[]): string | undefined {
+function replicateColumn(sheets: readonly ConvertSheetInput[], file: string, sheetName: string, groups: readonly (readonly number[])[]): { column: string; separated: number; total: number } | undefined {
   const sin = sheets.find((s) => s.file.fileName === file && s.sheet === sheetName);
   const sheet = sin?.file.sheets.find((x) => x.name === sheetName);
   if (sin === undefined || sheet === undefined || sin.profile !== undefined) return undefined;
-  const rows = sheet.rows.filter((r) => lines.includes(r.line));
-  if (rows.length < 2) return undefined;
-  const found: string[] = [];
+  const byLine = new Map(sheet.rows.map((r) => [r.line, r] as const));
+  const usable = groups.map((g) => g.flatMap((l) => (byLine.get(l) === undefined ? [] : [byLine.get(l)!]))).filter((rows) => rows.length >= 2);
+  if (usable.length === 0) return undefined;
+  const need = usable.length === 1 ? 1 : Math.max(2, Math.ceil(usable.length * REPLICATE_HINT_SHARE));
+  const found: { column: string; separated: number }[] = [];
   for (const c of sin.mapping.columns) {
     // an ignored column, or a numeric one the proposer took for a measured variable without a unit (a numeric Replicate column): for the HINT only, the role itself is the user's to give
     if ((c.role.kind !== 'ignore' && !(c.role.kind === 'variable' && c.role.unit === undefined)) || c.header.trim() === '' || unitFromHeader(c.header).unit !== undefined || isQuantityHeader(c.header)) continue;
     if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
-    const values = rows.map((r) => (isBlankCell(r.cells[c.index] ?? null) ? undefined : String(r.cells[c.index]).trim()));
-    if (values.some((v) => v === undefined)) continue;
-    if (new Set(values).size === values.length) found.push(c.header.trim());
+    let separated = 0;
+    for (const rows of usable) {
+      const values = rows.map((r) => (isBlankCell(r.cells[c.index] ?? null) ? undefined : String(r.cells[c.index]).trim()));
+      if (!values.some((v) => v === undefined) && new Set(values).size === values.length) separated++;
+    }
+    if (separated >= need) found.push({ column: c.header.trim(), separated });
   }
-  return found.length === 1 ? found[0] : undefined;
+  if (found.length === 0) return undefined;
+  const best = Math.max(...found.map((f) => f.separated));
+  const top = found.filter((f) => f.separated === best);
+  return top.length === 1 ? { column: top[0].column, separated: best, total: usable.length } : undefined;
 }
 
 /** The column indexes of the given specs that exist. */
@@ -1878,38 +1891,49 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   }
   for (const [id, places] of dups) {
     for (const w of places.values()) {
-      const column = replicateColumn(input.sheets, w.file, w.sheet, [...w.lines]);
+      const rep = replicateColumn(input.sheets, w.file, w.sheet, [[...w.lines]]);
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
           file: w.file,
           sheet: w.sheet,
           value: id,
           lines: [...w.lines],
-          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(column === undefined ? {} : { column }) },
+          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }) },
         }),
       );
     }
   }
   if (repeatedOcc.size > 0) {
     // one finding per file and sheet: the repeated IDs that stand there and the lines of each, whichever file the other copy is in
-    const byWhere = new Map<string, { file: string; sheet: string; ids: string[]; lines: number[] }>();
+    const byWhere = new Map<string, { file: string; sheet: string; ids: string[]; lines: number[]; groups: number[][] }>();
     for (const [id, places] of repeatedOcc) {
       for (const [k, p] of places) {
         let w = byWhere.get(k);
-        if (!w) byWhere.set(k, (w = { file: p.file, sheet: p.sheet, ids: [], lines: [] }));
+        if (!w) byWhere.set(k, (w = { file: p.file, sheet: p.sheet, ids: [], lines: [], groups: [] }));
         w.ids.push(id);
+        w.groups.push([...p.lines]);
         for (const l of p.lines) w.lines.push(l);
       }
     }
     for (const w of byWhere.values()) {
-      const column = replicateColumn(input.sheets, w.file, w.sheet, w.lines);
+      const rep = replicateColumn(input.sheets, w.file, w.sheet, w.groups);
+      const sin = input.sheets.find((x) => x.file.fileName === w.file && x.sheet === w.sheet);
+      // a long sheet repeats an occurrenceID only for rows of the same sample (and replicate, when the sheet has that role) with the same taxon: said as that, with the number of rows
+      const sameTaxon = rep === undefined && sin?.shape === 'long' && sin.profile === undefined;
+      const hasReplicate = sin?.mapping.columns.some((c) => c.role.kind === 'replicate') === true;
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
           file: w.file,
           sheet: w.sheet,
           value: w.ids[0],
           lines: w.lines,
-          params: { kind: 'occurrence', count: w.ids.length, hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.', ...(column === undefined ? {} : { column }) },
+          params: {
+            kind: 'occurrence',
+            count: w.ids.length,
+            hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.',
+            ...(rep === undefined ? {} : { column: rep.column, ...(rep.separated < rep.total ? { remaining: rep.total - rep.separated, separated: rep.separated } : {}) }),
+            ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}) } : {}),
+          },
         }),
       );
     }

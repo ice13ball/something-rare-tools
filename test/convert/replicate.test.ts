@@ -140,3 +140,53 @@ describe('a sheet without a replicate column is unchanged', () => {
     expect(r.occurrences.map((o) => o.id)).toEqual(['A1:Calanus finmarchicus', 'A1:Oithona similis', 'A2:Calanus finmarchicus']);
   });
 });
+
+describe('a replicate column that tells MOST repeated IDs apart is offered, with the number that would remain', () => {
+  // five samples with the same taxon on frames A, B, C (five groups the Frame column tells apart) and one sample that has the same taxon on the same frame twice (a real duplicate in the source)
+  const shape = (): Cell[][] => {
+    const rows: Cell[][] = [];
+    for (let i = 1; i <= 5; i++) for (const frame of ['A', 'B', 'C']) rows.push([`S${i}`, 'Stn', '2015-03-04', 5, frame, 'Asterias rubens', 3, 10]);
+    rows.push(['S6', 'Stn', '2015-03-04', 5, 'A', 'Ophiura ophiura', 2, 8], ['S6', 'Stn', '2015-03-04', 5, 'A', 'Ophiura ophiura', 4, 9]);
+    return rows;
+  };
+  const noRole = (rows: Cell[][]) => convert({ sheets: [sheetInput(fileOf(HEADER, rows), { quantity: { kind: 'count' }, shape: 'long' })] });
+
+  it('before the role: the button is there (Frame tells 5 of 6 groups apart), and the text says 1 group would remain', () => {
+    const d = find(noRole(shape()).blocking, 'CONV-ID-DUPLICATE');
+    expect(d).toHaveLength(1);
+    expect(d[0].params).toMatchObject({ kind: 'occurrence', count: 6, column: 'Frame', remaining: 1, separated: 5 });
+    const text = renderConvertPlain(d[0], 'en');
+    expect(text).toMatch(/tells the rows apart in 5 of 6/);
+    expect(text).toMatch(/1 group of rows with the same sample, replicate and taxon would remain/);
+    expect(renderConvertPlain(d[0], 'pl')).toMatch(/Zostanie 1 grupa wierszy/);
+  });
+
+  it('after the role: exactly one duplicate finding, with the new advice and the lines of the two rows', () => {
+    const r = run(HEADER, shape());
+    const d = find(r.blocking, 'CONV-ID-DUPLICATE');
+    expect(d).toHaveLength(1);
+    expect(d[0].lines).toEqual([17, 18]);
+    expect(d[0].params).toMatchObject({ kind: 'occurrence', sameTaxon: 'yes', replicate: 'yes', rows: 2, count: 1 });
+    expect(d[0].params.column).toBeUndefined();
+    const en = renderConvertPlain(d[0], 'en');
+    expect(en).toMatch(/Same sample, same replicate and same taxon in 2 rows: merge them into one row, or tell them apart/);
+    expect(en).not.toMatch(/change the repeated code|prefix/);
+    for (const lang of ['pl', 'de', 'fr'] as const) expect(renderConvertPlain(d[0], lang)).not.toMatch(/\{|\}/);
+    expect(renderConvertPlain(d[0], 'pl')).toMatch(/w 2 wierszach/);
+  });
+
+  it('a sheet without a replicate role says "same sample and same taxon"', () => {
+    const f = fileOf(['Sample ID', 'Station', 'Date', 'Species', 'Abundance'], [['S1', 'Stn', '2015-03-04', 'Asterias rubens', 3], ['S1', 'Stn', '2015-03-04', 'Asterias rubens', 4]]);
+    const d = find(convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' })] }).blocking, 'CONV-ID-DUPLICATE')[0];
+    expect(d.params).toMatchObject({ sameTaxon: 'yes', rows: 2 });
+    expect(d.params.replicate).toBeUndefined();
+    expect(renderConvertPlain(d, 'en')).toMatch(/Same sample and same taxon in 2 rows/);
+  });
+
+  it('a column that tells apart less than 80 % of the groups is not offered', () => {
+    const rows: Cell[][] = [];
+    for (let i = 1; i <= 2; i++) for (const frame of ['A', 'B']) rows.push([`S${i}`, 'Stn', '2015-03-04', 5, frame, 'Asterias rubens', 3, 10]);
+    for (let i = 3; i <= 5; i++) rows.push([`S${i}`, 'Stn', '2015-03-04', 5, 'A', 'Asterias rubens', 3, 10], [`S${i}`, 'Stn', '2015-03-04', 5, 'A', 'Asterias rubens', 4, 11]);
+    expect(find(noRole(rows).blocking, 'CONV-ID-DUPLICATE')[0].params.column).toBeUndefined();
+  });
+});

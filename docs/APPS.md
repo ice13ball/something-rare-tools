@@ -1083,9 +1083,14 @@ roles (`occurrenceID`, `eventID` as the sample code, `scientificName`, `individu
 `organismQuantity`, `organismQuantityType`, minimum/maximum depth, `lifeStage`,
 `identificationQualifier`). The role **Replicate / sub-sample** is never applied by the tool on its own, because it
 changes the IDs: a column called `Frame`, `Quadrat`, `Replicate`, `Core` and so on stays ignored.
-Only when sample IDs collide and exactly one ignored column tells the colliding rows apart does the
+Only when IDs collide and one ignored column tells MOST of the colliding groups apart (at least 80 % of
+the groups and at least two; every row of a group needs a filled, different value) does the
 `CONV-ID-DUPLICATE` message name that column and the page offer a button, **Use "<column>" as
-replicate / sub-sample**; pressing it is the user's confirmation. The role can also be chosen in the
+replicate / sub-sample**; the message says how many groups the column tells apart and how many
+would remain (a real duplicate in the source must not hide the offer for the other 56 groups of 57).
+Pressing the button is the user's confirmation. A long sheet's remaining or unexplained occurrence duplicates
+are said as what they are: the same sample (and replicate) and the same taxon in N rows, to merge or tell
+apart with an occurrenceID or life stage column; the station-prefix advice is for sample codes only. The role can also be chosen in the
 role list at any time.
 
 **Biomass next to a count.** On a long sheet that has a taxon column and a count / abundance

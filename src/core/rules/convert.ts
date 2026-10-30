@@ -1259,6 +1259,35 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". The rows differ in the ignored column "{column}" (the only ignored column, apart from measurements and quantities, whose values tell all of them apart). If it numbers replicates or sub-samples of one sample, give it the role "Replicate / sub-sample": a replicate event is <sample eventID>:<value>, under the sample, and the occurrences hang on it.`,
   },
+  // CONV-ID-DUPLICATE where the ignored column tells MOST of the repeated IDs apart (`separated` of `count`): the replicate role is offered, and the rest are said
+  'CONV-ID-DUPLICATE:replicate-partial': {
+    plain: {
+      pl: `Ten sam identyfikator powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Pominięta kolumna „{column}” rozróżnia wiersze w {separated} z {count} przypadków; jeśli numeruje powtórzenia lub podpróbki (ramka, kwadrat), nadaj jej rolę „Powtórzenie / podpróbka”. {+remaining:Zostanie|Zostaną|Zostanie} {remaining} {+remaining:grupa|grupy|grup} wierszy z tą samą próbką, powtórzeniem i taksonem: scal je albo rozróżnij.`,
+      en: `The same identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). The ignored column "{column}" tells the rows apart in {separated} of {count}: if it numbers replicates or sub-samples (frame, quadrat), give it the role "Replicate / sub-sample". {remaining} {+remaining:group|groups} of rows with the same sample, replicate and taxon would remain: merge them or tell them apart.`,
+      de: `Dieselbe Kennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Die ignorierte Spalte „{column}“ unterscheidet die Zeilen in {separated} von {count}: Nummeriert sie Replikate oder Teilproben (Rahmen, Quadrat), geben Sie ihr die Rolle „Replikat / Teilprobe“. {remaining} {+remaining:Gruppe|Gruppen} mit gleicher Probe, gleichem Replikat und Taxon {+remaining:bliebe|blieben}: zusammenführen oder unterscheiden.`,
+      fr: `Le même identifiant est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). La colonne ignorée « {column} » distingue les lignes dans {separated} cas sur {count} : si elle numérote des réplicats ou sous-échantillons (cadre, quadrat), donnez-lui le rôle « Réplicat / sous-échantillon ». {remaining} {+remaining:groupe resterait|groupes resteraient} (même échantillon, réplicat et taxon) : fusionnez-les ou distinguez-les.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". The ignored column "{column}" tells the rows apart in {separated} of them (at least 80 % and at least two groups); giving it the role "Replicate / sub-sample" would leave {remaining} group(s) with the same sample, replicate and taxon, which are real duplicates of the source.`,
+  },
+  // CONV-ID-DUPLICATE of a long sheet that no ignored column explains: the rows are the same sample and taxon (and replicate)
+  'CONV-ID-DUPLICATE:same-taxon': {
+    plain: {
+      pl: `Ten sam identyfikator występowania powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Ta sama próbka i ten sam takson w {rows} {+rows:wierszu|wierszach|wierszach}: scal je w jeden wiersz albo je rozróżnij (kolumna z identyfikatorem występowania lub stadium życia).`,
+      en: `The same occurrence identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Same sample and same taxon in {rows} rows: merge them into one row, or tell them apart (a column with an occurrenceID or a life stage).`,
+      de: `Dieselbe Vorkommenskennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Dieselbe Probe und dasselbe Taxon in {rows} Zeilen: führen Sie sie zu einer Zeile zusammen oder unterscheiden Sie sie (eine Spalte mit occurrenceID oder Lebensstadium).`,
+      fr: `Le même identifiant d'occurrence est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Même échantillon et même taxon dans {rows} lignes : fusionnez-les en une ligne ou distinguez-les (une colonne avec un occurrenceID ou un stade de vie).`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}": {rows} rows of the example have the same sample (event) and the same taxon, and no ignored column tells them apart. Merge the rows or give them an occurrenceID or life stage column.`,
+  },
+  'CONV-ID-DUPLICATE:same-taxon-replicate': {
+    plain: {
+      pl: `Ten sam identyfikator występowania powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Ta sama próbka, to samo powtórzenie i ten sam takson w {rows} {+rows:wierszu|wierszach|wierszach}: scal je w jeden wiersz albo je rozróżnij (kolumna z identyfikatorem występowania lub stadium życia).`,
+      en: `The same occurrence identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Same sample, same replicate and same taxon in {rows} rows: merge them into one row, or tell them apart (a column with an occurrenceID or a life stage).`,
+      de: `Dieselbe Vorkommenskennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Dieselbe Probe, dasselbe Replikat und dasselbe Taxon in {rows} Zeilen: führen Sie sie zu einer Zeile zusammen oder unterscheiden Sie sie (eine Spalte mit occurrenceID oder Lebensstadium).`,
+      fr: `Le même identifiant d'occurrence est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Même échantillon, même réplicat et même taxon dans {rows} lignes : fusionnez-les en une ligne ou distinguez-les (une colonne avec un occurrenceID ou un stade de vie).`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}": {rows} rows of the example have the same sample, the same replicate and the same taxon, and no ignored column tells them apart. Merge the rows or give them an occurrenceID or life stage column.`,
+  },
   'CONV-SEAFLOOR-SIGNS:tie': {
     plain: {
       pl: `Kolumna „{field}” ma tyle samo liczb dodatnich co ujemnych. Przy kierunku „{direction}” {count} {+count:liczba dodatnia jest zapisywana|liczby dodatnie są zapisywane|liczb dodatnich jest zapisywanych} jako położenie {side} dnem ({+lineCount:wiersz|wiersze|wierszy} {lines}). Sprawdź, czy kierunek jest właściwy.`,
@@ -1317,7 +1346,10 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];
-  if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:replicate'];
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') {
+    return PROFILE_VARIANTS[Number(f.params.remaining) > 0 ? 'CONV-ID-DUPLICATE:replicate-partial' : 'CONV-ID-DUPLICATE:replicate'];
+  }
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.sameTaxon === 'yes') return PROFILE_VARIANTS[f.params.replicate === 'yes' ? 'CONV-ID-DUPLICATE:same-taxon-replicate' : 'CONV-ID-DUPLICATE:same-taxon'];
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];
