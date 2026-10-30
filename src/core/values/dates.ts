@@ -127,6 +127,62 @@ export function parseTimeOfDay(raw: RawCell): TimeOfDay | DateError {
   return t;
 }
 
+/** One end of a time range: "1600", "930", "16:00" (hours 0-23, minutes 0-59). */
+const RANGE_END_RE = /^(\d{1,2}):?(\d{2})$/;
+const RANGE_SPLIT_RE = /\s*[-\u2013\u2014]\s*|\s+to\s+/i;
+
+/**
+ * A time column often holds the time a sampling took, as a range: "1600-1730", "0530-0700", "16:00-17:30", or several ranges of one
+ * event, "0530-0700, 1600-1730". The time of the EVENT is the START of the first range (here 16:00 for "1600-1730"); the end of a
+ * range, and any further range, is read to check the cell but then IGNORED: the Dataset has one time per row, and the end is not
+ * carried into the date (no eventDate interval is written from a time column). A bare "1600" without a dash is not read here: a
+ * lone 4-digit number may be a year. Anything else is an error, so a malformed range is still reported as unreadable TIME.
+ */
+export function parseTimeRange(raw: RawCell): TimeOfDay | DateError {
+  if (typeof raw !== 'string') return fail(raw === null ? '' : String(raw));
+  const segments = raw.trim().split(/\s*[,;]\s*/);
+  let start: TimeOfDay | undefined;
+  for (const seg of segments) {
+    const parts = seg.split(RANGE_SPLIT_RE);
+    if (parts.length !== 2) return fail(raw);
+    const times: TimeOfDay[] = [];
+    for (const part of parts) {
+      const m = RANGE_END_RE.exec(part.trim());
+      if (!m) return fail(raw);
+      const t = parseTimeOfDay(`${m[1]}:${m[2]}`);
+      if ('error' in t) return fail(raw);
+      times.push(t);
+    }
+    start ??= times[0];
+  }
+  return start ?? fail(raw);
+}
+
+/**
+ * Time of day of a TIME COLUMN cell: a time range first (parseTimeRange), else parseTimeOfDay. The range comes FIRST because "10:00-11:30" also fits
+ * "10:00" with the zone offset -11:30 (11.5 hours off); in a time column a dash between two times is a range. An offset is still read when it has a "+",
+ * a "Z" or seconds ("10:00:00-05:00"), or is not a time itself ("10:00-11").
+ */
+export function parseTimeCell(raw: RawCell): TimeOfDay | DateError {
+  const range = parseTimeRange(raw);
+  return 'error' in range ? parseTimeOfDay(raw) : range;
+}
+
+/** A cell that is two years joined by a dash ("2001-2005"); it may also be two valid times ("2005-2040" is 20:05 to 20:40). */
+export function isYearRange(raw: RawCell): boolean {
+  return typeof raw === 'string' && /^(?:19|20)\d{2}\s*[-\u2013\u2014]\s*(?:19|20)\d{2}$/.test(raw.trim());
+}
+
+/**
+ * Do the (non-blank) cells of a column that is called a time hold year ranges, not times? Mostly year-range cells AND at least one of them impossible as a
+ * time ("1995-2000": minute 95). A column in which every such cell is a valid range of times ("1930-2000", "1945-2015": tows from 19:30 to 20:00) stays a time
+ * column, because its header says time and the evening hours look like years only by chance.
+ */
+export function cellsAreYearRanges(cells: readonly RawCell[]): boolean {
+  const years = cells.filter(isYearRange);
+  return years.length > 0 && years.length * 2 > cells.length && years.some((c) => 'error' in parseTimeRange(c));
+}
+
 function build(y: number, mo: number, d: number, time?: TimeOfDay, ambiguity?: 'yy-mm-dd'): ParsedDate {
   const out: ParsedDate = {
     iso: `${pad4(y)}-${pad2(mo)}-${pad2(d)}${time ? 'T' + time.text : ''}`,
@@ -280,7 +336,7 @@ export function detectDayMonthOrder(cells: readonly RawCell[]): DayMonthOrder {
 export function combineDateTime(d: ParsedDate, time: RawCell): ParsedDate {
   if (d.precision !== 'day') return d;
   if (time === null || (typeof time === 'string' && time.trim() === '')) return d;
-  const t = parseTimeOfDay(time);
+  const t = parseTimeCell(time);
   if ('error' in t) return d;
   return { ...d, iso: `${d.iso}T${t.text}`, precision: t.ss === undefined ? 'minute' : 'second', tz: t.tz };
 }

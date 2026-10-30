@@ -73,6 +73,8 @@ export const ACCEPT_RULES: readonly string[] = [
   // the header had fewer names than the rows have values: the tool cannot know where names are missing, so values may sit under another column's name (/check: a warning)
   'IN-HEADER-SHORT',
   'ROW-NON-NUMERIC',
+  // latitude = longitude on a small share of the rows: the user decides that it is a coincidence (the error, a copied column, blocks)
+  'ROW-LAT-EQ-LON-ISOLATED',
   'ROW-INVISIBLE-CHAR',
   'ROW-DATE-FUTURE',
   'ROW-DEPTH-RANGE',

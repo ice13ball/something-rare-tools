@@ -17,6 +17,7 @@ export interface RowSpec {
   lonDecimals?: number;
   date?: string;
   station?: string;
+  cruise?: string;
   depth?: number;
   sheet?: string;
 }
@@ -36,6 +37,7 @@ export function row(s: RowSpec): DataRow {
     r.dateRaw = s.date;
   }
   if (s.station !== undefined) r.station = s.station;
+  if (s.cruise !== undefined) r.cruise = s.cruise;
   if (s.depth !== undefined) r.depth = s.depth;
   return r;
 }

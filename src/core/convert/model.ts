@@ -188,6 +188,8 @@ export interface ConvertResult {
   nameLookup: { names: string[]; withSheetId: number; applied: number };
   /** Cruise codes whose level was flattened away: they belong in the dataset text (title / abstract). */
   cruiseText: string[];
+  /** Every occurrenceID that CONV-ID-DUPLICATE named as repeated; kept here and not in the finding, so the finding stays small. */
+  repeatedOccurrenceIds?: string[];
   stats: ConvertStats;
   /** The profile files (stage 6). */
   profile: ProfileSummary;
@@ -274,6 +276,8 @@ export interface ConvertedDataset {
   metadata: DatasetMetadata;
   /** The decisions the companion file keeps. */
   decisions: ConvertSettings;
+  /** Every occurrenceID the conversion reported as repeated (CONV-ID-DUPLICATE): the output table's own duplicate check says nothing more about them. */
+  repeatedOccurrenceIds?: string[];
 }
 
 /**
@@ -281,7 +285,7 @@ export interface ConvertedDataset {
  * unknown keeps the id of its own target, so the cross-table check (CONV-EMOF-ORPHAN) can name it. The measurementType text is the preferred
  * label of the NERC concept, or, when no concept is verified, the declared meaning (CONV-NERC-UNKNOWN says the id is missing).
  */
-export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
+export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements' | 'repeatedOccurrenceIds'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
   const events: ModelEvent[] = result.events.map((e) => {
     const m: ModelEvent = { id: e.id, type: e.eventType };
     if (e.parentId !== undefined) m.parentId = e.parentId;
@@ -342,5 +346,5 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
     if (x.measurementRemarks !== undefined) m.remarks = x.measurementRemarks;
     return m;
   });
-  return { events, occurrences, measurements, metadata, decisions };
+  return { events, occurrences, measurements, metadata, decisions, ...(result.repeatedOccurrenceIds === undefined ? {} : { repeatedOccurrenceIds: result.repeatedOccurrenceIds }) };
 }

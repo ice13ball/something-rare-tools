@@ -3,6 +3,8 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { constants as zlibConstants } from 'node:zlib';
+import compression from 'compression';
 import express, { type ErrorRequestHandler, type Express, type Request, type Response } from 'express';
 import { isCatalogueUrl } from '../config/catalogues.js';
 import { DATA_HOSTS } from '../config/hosts.js';
@@ -153,6 +155,18 @@ export function createApp(opts: AppOptions): Express {
   // `trust proxy` is intentionally left unset: only the rate limiter reads X-Forwarded-For, by design.
 
   app.use(securityHeaders({ noindex, pageConnect: opts.pageConnect }));
+
+  // Text responses (html, js, css, json, svg, xml, txt: whatever compression's filter calls compressible) leave gzip- or brotli-compressed;
+  // images, fonts and archives are already compressed and pass untouched. Compression adds Vary: Accept-Encoding itself. NEVER under
+  // /api/: /api/fetch and /api/csw stream their upstream bodies and must not be buffered or re-encoded. A Range request is not compressed
+  // (a byte range of a compressed body is not what the client asked for). Brotli quality 4, not Node's default 11: this runs per request.
+  const compress = compression({
+    threshold: 1024,
+    level: 6,
+    brotli: { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 } },
+    filter: (req, res) => req.headers.range === undefined && compression.filter(req, res),
+  });
+  app.use((req, res, next) => (req.path.startsWith('/api/') ? next() : compress(req, res, next)));
 
   const sendHtml = (page: Buffer) => (_req: Request, res: Response): void => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

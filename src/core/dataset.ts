@@ -25,7 +25,7 @@ import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { pairHemisphere, parseCoordinate } from './values/coords';
-import { combineDateTime, detectDayMonthOrder, parseDate, parseTimeOfDay } from './values/dates';
+import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, parseDate, parseTimeCell, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -260,6 +260,9 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
   const dateCache = new Map<string, ParsedDate | DateError>();
   const whenUtc = opts.whenUtc === true || (specs.when ? UTC_HEADER.test(specs.when.header) : false);
   const timeUtc = specs.time ? UTC_HEADER.test(specs.time.header) : false;
+  // a "time" column whose values are mostly two years joined by a dash ("2001-2005") is not a column of times: no range is read from it (20:01-20:05 would be absurd)
+  const timeCells = specs.time ? sheet.rows.map((r) => r.cells[specs.time!.index] ?? null).filter((x) => !isBlankCell(x)) : [];
+  const timeIsYears = cellsAreYearRanges(timeCells);
   // D?M/YYYY order is a property of the column, not of a cell: decided once from every cell of the date column
   const whenIndex = specs.when?.index;
   // Darwin Core: where eventDate is empty, the same row's year / month / day columns give the date
@@ -355,7 +358,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
           if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
           const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           if (specs.time && !isBlankCell(timeCell)) {
-            if ('error' in parseTimeOfDay(timeCell)) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim());
+            if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeCell(timeCell))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
             else {
               date = combineDateTime(date, timeCell);
               tzField = specs.time.header;

@@ -381,3 +381,72 @@ describe('buildDataset: performance', () => {
     expect(ms).toBeLessThan(3000);
   });
 });
+
+describe('buildDataset: a time column with time ranges', () => {
+  const csv = (...times: string[]) => textFile('t.csv', ['Station,Lat,Lon,Date,Collection Time [UTC],DIC_umol_kg', ...times.map((t, i) => `ST${i + 1},70,10,2021-07-2${i + 1},"${t}",2100`)].join('\n') + '\n');
+
+  it('HHMM-HHMM, HH:MM-HH:MM and several ranges are read; the event time is the START, the end is ignored', () => {
+    const { dataset, findings } = build(csv('1600-1730', '0530-0700', '16:00-17:30', '0530-0700, 1600-1730'));
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    expect(dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2021-07-21T16:00Z', '2021-07-22T05:30Z', '2021-07-23T16:00Z', '2021-07-24T05:30Z']);
+    expect(dataset.rows[0].datetime?.end).toBeUndefined();
+  });
+
+  it('an unreadable time is reported as a TIME with a time example, never with date advice, in four languages', () => {
+    const f = byRule(build(csv('1600-1730', '25:99-26:00', 'noon')).findings, 'ROW-DATE-UNPARSEABLE');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ field: 'Collection Time [UTC]', lines: [3, 4], params: { role: 'time' } });
+    const words: Record<string, RegExp> = { en: /time/i, pl: /godzin/i, de: /Uhrzeit/, fr: /heure/ };
+    const examples: Record<string, string> = { en: '16:30', pl: '16:30', de: '16:30', fr: '16:30' };
+    for (const lang of LANGS) {
+      const text = renderPlain(f[0], lang);
+      expect(text, lang).toMatch(words[lang]);
+      expect(text, lang).toContain(examples[lang]);
+      expect(text, lang).not.toMatch(/YYYY|RRRR|JJJJ|AAAA/);
+    }
+  });
+
+  it('under a [UTC] header the start of "10:00-11:30" is 10:00Z, not a zone offset', () => {
+    const { dataset, findings } = build(csv('10:00-11:30', '08:00-09:00'));
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    expect(dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2021-07-21T10:00Z', '2021-07-22T08:00Z']);
+  });
+
+  it('a "time" column of year ranges ("2001-2005") is not read as times (the column is not recognised as one)', () => {
+    const f = textFile('t.csv', 'Station,Lat,Lon,Date,Zeit,DIC_umol_kg\nST1,70,10,2021-07-21,2001-2005,2100\nST2,71,11,2021-07-22,1990-1995,2110\n');
+    const { dataset, findings } = build(f);
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]); // the column is not taken for a time column at all, so the years are not reported as unreadable times
+    expect(dataset.rows[0].datetime?.iso).toBe('2021-07-21');
+    expect(dataset.rows[0].datetime?.iso).toBe('2021-07-21');
+  });
+
+  it('a time column of evening ranges that look like years ("1930-2000", "2005-2040", "1945-2015") is read as times', () => {
+    const f = textFile('t.csv', 'Station,Lat,Lon,Date,Time [UTC],DIC_umol_kg\nST1,70,10,2021-07-21,1930-2000,2100\nST2,71,11,2021-07-22,2005-2040,2110\nST3,71,11,2021-07-23,1945-2015,2110\n');
+    const { dataset, findings } = build(f);
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    expect(dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2021-07-21T19:30Z', '2021-07-22T20:05Z', '2021-07-23T19:45Z']);
+  });
+
+  it('a column of year ranges of which one is impossible as a time ("1995-2000": minute 95) is not read as times', () => {
+    const f = textFile('t.csv', 'Station,Lat,Lon,Date,Zeit,DIC_umol_kg\nST1,70,10,2021-07-21,1930-2000,2100\nST2,71,11,2021-07-22,1995-2000,2110\n');
+    const { dataset, findings } = build(f);
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    expect(dataset.rows[0].datetime?.iso).toBe('2021-07-21');
+  });
+
+  it('the unreadable-time wording is singular for one line and plural for several, in four languages', () => {
+    const one = byRule(build(csv('1600-1730', 'noon')).findings, 'ROW-DATE-UNPARSEABLE')[0];
+    const many = byRule(build(csv('noon', 'late', '1600-1730')).findings, 'ROW-DATE-UNPARSEABLE')[0];
+    const sing: Record<string, RegExp> = { en: /^The time in line 3/, pl: /godziny w wierszu 3/, de: /^Die Uhrzeit in Zeile 3 .*konnte /, fr: /^L'heure de la ligne 3 .*n'a pas pu être lue/ };
+    const plur: Record<string, RegExp> = { en: /^The times in lines 2/, pl: /godzin w wierszach 2/, de: /^Die Uhrzeiten in den Zeilen 2–3 .*konnten /, fr: /^Les heures des lignes 2–3 .*n'ont pas pu être lues/ };
+    for (const lang of LANGS) {
+      expect(renderPlain(one, lang), lang).toMatch(sing[lang]);
+      expect(renderPlain(many, lang), lang).toMatch(plur[lang]);
+    }
+  });
+
+  it('a date that is unreadable keeps its date advice', () => {
+    const f = byRule(build(textFile('t.csv', 'Station,Lat,Lon,Date,DIC_umol_kg\nST1,70,10,soon,2100\n')).findings, 'ROW-DATE-UNPARSEABLE');
+    expect(renderPlain(f[0], 'en')).toContain('YYYY-MM-DD');
+  });
+});

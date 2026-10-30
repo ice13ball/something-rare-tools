@@ -6,6 +6,8 @@ import type { Dataset, Finding, MetadataRecord } from '../../src/core/types';
 import { unitFromHeader } from '../../src/core/recognize/columns';
 import { canonicalFromKey, headerKey } from '../../src/core/recognize/vocab';
 import { makeDataset, makeRecord } from '../helpers/build';
+import { renderPlain } from '../../src/core/report';
+import { getRule } from '../../src/core/rules/registryCheck';
 
 const only = (f: Finding[], id: string) => f.filter((x) => x.ruleId === id);
 const withMeta = (ds: Dataset, ...records: MetadataRecord[]): Dataset => ({ ...ds, metadata: records });
@@ -243,5 +245,39 @@ describe('META-VARIABLE-MISSING: modifier before the term, and plurals', () => {
       expect(f, h).not.toContain('nitrates');
     }
     expect(only(checkMetadataVsData(withMeta(makeDataset([{}], [{ key: 'q', header: 'q', canonical: 'salinity' }]), r)), 'META-VARIABLE-MISSING').map((x) => x.params.term)).toContain('nitrates');
+  });
+});
+
+describe('META-NO-POSITIONS', () => {
+  const lat = { index: 0, header: 'Latitude', role: { kind: 'latitude' as const } };
+  const mapped = (ds: Dataset): Dataset => ({ ...ds, mappings: [{ sheet: 'data.csv', columns: [lat] }] });
+
+  it('error when no column is mapped, no row has a position and no record has a bounding box', () => {
+    const f = only(checkMetadataVsData(withMeta(makeDataset([{}, {}]), makeRecord('zenodo'))), 'META-NO-POSITIONS');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ severity: 'error', file: 'data.csv' });
+  });
+
+  it('not when a row has a position, or a latitude / longitude column is mapped (blank or unreadable cells are other rules)', () => {
+    expect(only(checkMetadataVsData(makeDataset([{}, { lat: 50, lon: 5 }])), 'META-NO-POSITIONS')).toEqual([]);
+    expect(only(checkMetadataVsData(mapped(makeDataset([{}, {}]))), 'META-NO-POSITIONS')).toEqual([]);
+    expect(only(checkMetadataVsData(makeDataset([{ posBlank: 'both' }])), 'META-NO-POSITIONS')).toEqual([]);
+  });
+
+  it('not when the position is in the metadata only (the data-against-metadata rules apply then)', () => {
+    const rec = makeRecord('iso19139', { bbox: { west: 1, east: 2, south: 50, north: 51 } });
+    expect(only(checkMetadataVsData(withMeta(makeDataset([{}]), rec)), 'META-NO-POSITIONS')).toEqual([]);
+  });
+
+  it('a dataset without rows, or an unsupported layout, is not reported (as META-NO-DATES)', () => {
+    expect(only(checkMetadataVsData(makeDataset([])), 'META-NO-POSITIONS')).toEqual([]);
+    expect(only(checkMetadataVsData(makeDataset([{}], [], { layout: { tables: [], joins: [], unsupported: 'x' } as Dataset['layout'] })), 'META-NO-POSITIONS')).toEqual([]);
+  });
+
+  it('is worded in four languages and cites the OBIS Manual', () => {
+    const f = checkMetadataVsData(makeDataset([{}]))[0];
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderPlain(only(checkMetadataVsData(makeDataset([{}])), 'META-NO-POSITIONS')[0], lang).length).toBeGreaterThan(30);
+    expect(f).toBeDefined();
+    expect(getRule('META-NO-POSITIONS').citations?.[0].url).toContain('manual.obis.org');
   });
 });

@@ -171,7 +171,21 @@ function noDates(ds: Dataset): Finding[] {
   return rowDate || metaDate ? [] : [makeFinding('META-NO-DATES', { file: ds.file })];
 }
 
+/**
+ * META-NO-POSITIONS, the twin of META-NO-DATES (same scoping: a table with rows and a supported layout). It fires only when nothing
+ * anywhere is a position: no latitude / longitude column is mapped (a column whose cells are blank or unreadable is still a column,
+ * ROW-NO-COORD / ROW-NON-NUMERIC / DWC-TERM-EMPTY say so), no row has a position, and no record has a bounding box (a point is a
+ * degenerate box). A position in the metadata only is left to the data-against-metadata rules.
+ */
+function noPositions(ds: Dataset): Finding[] {
+  if (ds.rows.length === 0 || ds.layout.unsupported) return [];
+  const mapped = ds.mappings.some((m) => m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude'));
+  const rowPos = ds.rows.some((r) => r.lat !== undefined || r.lon !== undefined || r.posBlank !== undefined);
+  const metaPos = ds.metadata.some((r) => r.bbox !== undefined);
+  return mapped || rowPos || metaPos ? [] : [makeFinding('META-NO-POSITIONS', { file: ds.file })];
+}
+
 /** Category A — metadata extents, abstract and dates compared with the data (Task 7). */
 export function checkMetadataVsData(ds: Dataset): Finding[] {
-  return [...noDates(ds), ...dateOutsideExtent(ds), ...pointOutsideBbox(ds), ...variableMissing(ds)];
+  return [...noDates(ds), ...noPositions(ds), ...dateOutsideExtent(ds), ...pointOutsideBbox(ds), ...variableMissing(ds)];
 }

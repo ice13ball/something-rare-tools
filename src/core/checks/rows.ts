@@ -7,7 +7,7 @@ import { badHeaderCodes } from '../recognize/headerCodes';
 import { statisticOfName } from '../recognize/headerWords';
 import { canonicalFromKey, headerKey } from '../recognize/vocab';
 import { makeFinding, threshold } from '../rules/registryCheck';
-import { earliestUtcDayOf } from '../values/dates';
+import { earliestUtcDayOf, utcDayOf } from '../values/dates';
 import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
 import { minOf, pushAll } from '../util/arrays';
 
@@ -96,10 +96,50 @@ function positionRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding
   const zero = rows.filter((r) => r.lat === 0 && r.lon === 0);
   if (zero.length > 0) out.push(makeFinding('ROW-ZERO-COORD', { file: ds.file, sheet, lines: zero.map((r) => r.line) }));
   const same = rows.filter((r) => r.lat !== undefined && r.lon !== undefined && r.lat === r.lon && r.lat !== 0);
-  if (same.length > 0) {
-    out.push(makeFinding('ROW-LAT-EQ-LON', { file: ds.file, sheet, lines: same.map((r) => r.line), value: fmt(same[0].lat!, same[0].latDecimals) }));
+  if (same.length === 0) return;
+  const positioned = rows.filter((r) => r.lat !== undefined && r.lon !== undefined).length;
+  if (same.length >= LAT_EQ_LON_MIN_ROWS) {
+    const share = same.length >= LAT_EQ_LON_MIN_SHARE * positioned;
+    const repeated = repeatedEqualValue(same);
+    if (share || repeated > 0) {
+      const params: Record<string, string | number> = share ? { share: 'yes' } : { repeated };
+      out.push(makeFinding('ROW-LAT-EQ-LON', { file: ds.file, sheet, lines: same.map((r) => r.line), value: fmt(same[0].lat!, same[0].latDecimals), params }));
+      return;
+    }
+  }
+  // too few, or too small a share, to be a duplicated column: each row alone is a coincidence to look at (round value: a note)
+  for (const [id, group] of [['ROW-LAT-EQ-LON-ISOLATED', same.filter((r) => !isCoarse(r.lat!))], ['ROW-LAT-EQ-LON-COARSE', same.filter((r) => isCoarse(r.lat!))]] as const) {
+    if (group.length > 0) out.push(makeFinding(id, { file: ds.file, sheet, lines: group.map((r) => r.line), value: fmt(group[0].lat!, group[0].latDecimals) }));
   }
 }
+
+/*
+ * ROW-LAT-EQ-LON: a duplicated column puts latitude = longitude on MANY rows; one legitimate coarse position can do it on one
+ * (-65, -65 is on the Antarctic Peninsula). The error needs at least LAT_EQ_LON_MIN_ROWS such rows AND a LAT_EQ_LON_MIN_SHARE
+ * share of the rows that have a position (a fifth: far above chance, far below a whole copied column). Both numbers are the tool's
+ * own choice, agreed with a data specialist, not published thresholds (the share can also be replaced by a repeated value, see repeatedEqualValue). Below that, ROW-LAT-EQ-LON-ISOLATED (warning), or
+ * ROW-LAT-EQ-LON-COARSE (note) when the value is a whole or half degree: positions that coarse are common in historical and
+ * museum data and equal values are then no surprise, while a value with a finer decimal being equal by chance is unlikely.
+ */
+export const LAT_EQ_LON_MIN_ROWS = 5;
+export const LAT_EQ_LON_MIN_SHARE = 0.2;
+/**
+ * A copied column confined to ONE station (a depth profile of 27 rows, among 400) is under a fifth of the rows yet is no coincidence: the same value, with at
+ * least two written decimals and not a multiple of 0.25 (a quarter degree is a grid value, where equal values are natural), repeated in at least
+ * LAT_EQ_LON_MIN_ROWS rows. Returns the size of the largest such group, or 0.
+ */
+function repeatedEqualValue(same: readonly DataRow[]): number {
+  const counts = new Map<number, number>();
+  for (const r of same) {
+    const v = r.lat!;
+    if (Number.isInteger(v * 4)) continue;
+    if (writtenDecimals(v, r.latDecimals ?? decimalsOfNumber(v)) < 2) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  const best = Math.max(0, ...counts.values());
+  return best >= LAT_EQ_LON_MIN_ROWS ? best : 0;
+}
+const isCoarse = (v: number): boolean => Number.isInteger(v * 2);
 
 /* ---------- ROW-STATION-MOVED ---------- */
 
@@ -135,11 +175,17 @@ const samePosition = (p: Pos, q: Pos) => sameLat(p, q) && sameLon(p, q);
  * deliberate and is not a distance tolerance: repeated occupations of one station rarely repeat the same decimals on the
  * other axis, so equality there would miss exactly the case this pattern exists for.
  */
-function typedDigit(p: Pos, q: Pos): boolean {
+function typedDigit(p: Pos, q: Pos, inCruise = false): boolean {
   const sameWholeDegree = (a: number, b: number) => Math.trunc(a) === Math.trunc(b);
-  if (integerShift(p.lon, p.lonDec, q.lon, q.lonDec) && sameWholeDegree(p.lat, q.lat)) return true;
-  return integerShift(p.lat, p.latDec, q.lat, q.latDec) && sameWholeDegree(p.lon, q.lon);
+  // The shifted coordinate must be written with at least TYPED_DIGIT_MIN_DECIMALS decimals in both positions: whole-degree positions ("Sta. 1" at 44 / -63 and
+  // 44 / -60) differ by whole degrees by coincidence, while a value such as 16.505 against 15.505 has the digits of a measurement, and a wrong digit in it is a typo.
+  // Two decimals is the tool's own choice (about 1 km), not a published value.
+  // Inside one cruise the same name is much more likely one place, so one decimal is enough there (15.3 against 16.3), unless it is .0 or .5, a whole or half degree.
+  const digits = (v: number, dec: number): boolean => dec >= TYPED_DIGIT_MIN_DECIMALS || (inCruise && dec >= 1 && !Number.isInteger(v * 2));
+  if (digits(p.lon, p.lonDec) && digits(q.lon, q.lonDec) && integerShift(p.lon, p.lonDec, q.lon, q.lonDec) && sameWholeDegree(p.lat, q.lat)) return true;
+  return digits(p.lat, p.latDec) && digits(q.lat, q.latDec) && integerShift(p.lat, p.latDec, q.lat, q.latDec) && sameWholeDegree(p.lon, q.lon);
 }
+export const TYPED_DIGIT_MIN_DECIMALS = 2;
 
 /** Pattern (b): the two positions are each other with latitude and longitude exchanged. */
 function exchanged(p: Pos, q: Pos): boolean {
@@ -230,7 +276,31 @@ const firstLine = (p: Pos): number => minOf(p.rows.map((r) => r.line));
 const SPREAD_KM = 10;
 const FAR_KM = 1000;
 const MAX_SPREAD_POSITIONS = 200;
-const GENERIC_STATION = /\((general|unknown|various)\)|^(general|unknown|n\/?a|none|various|multiple|several|misc(ellaneous)?|other|not recorded|-+|\?+)$/i;
+/*
+ * Generic names ("Sta. 1", "Dive 9", "Site 2", "Float") repeat across unrelated cruises and decades in a collection export, so one name is not one
+ * place. Rows of one name are compared only within one CRUISE (a row with a cruise value), otherwise within one CALENDAR YEAR (UTC; a year- or
+ * month-precision date joins its year). A station worked in one year (a series of visits, a digit typed wrongly in one of them) stays together; the
+ * same name in 1980 and 1986 does not. Rows with no cruise and no date form one group that nothing anchors (see stationGroup). The calendar year is
+ * the tool's own choice, not a published value.
+ */
+
+/**
+ * Station "names" that say there is no station: skipped by ROW-STATION-MOVED and ROW-STATION-SPREAD, never grouped. English,
+ * Polish, German and French; "-" and "?" alone. A name such as "Sta. 1", "Dive 9" or "Float" is NOT here: it is a real, reused
+ * name, handled by grouping (see stationGroups).
+ */
+const GENERIC_STATION = new RegExp(
+  '\\((general|unknown|various)\\)|^(' +
+    [
+      'general|unknown|unspecified|not specified|unnamed|unassigned|undefined|null|none|no station|no data|nodata|not given|not recorded|not applicable|not available|various|multiple|several|misc(ellaneous)?|other|tbd|n\\/?a|n\\.a\\.?|nan',
+      'nieokreślon[aey]|nieznan[aey]|brak|brak danych|brak stacji|bez nazwy|nie dotyczy|nie podano|nieustalon[aey]',
+      'unbekannt|keine angabe|nicht angegeben|nicht bekannt|keine station|ohne|k\\.? ?a\\.?|nicht zutreffend',
+      'inconnu(e)?|non spécifié(e)?|non précisé(e)?|non renseigné(e)?|non indiqué(e)?|sans nom|aucun(e)?|pas de station|n\\/d|non applicable',
+      '-+|\\?+|_+',
+    ].join('|') +
+    ')$',
+  'i',
+);
 
 function widest(positions: readonly Pos[]): number {
   const n = positions.length;
@@ -246,52 +316,72 @@ function widest(positions: readonly Pos[]): number {
   return best;
 }
 
+/**
+ * The rows of one station name split into the groups that may be compared with each other, each with whether something anchors it (a cruise or a
+ * year). A row with a cruise value goes to its cruise (a blank cruise cell is not a cruise: such a row falls back to the year, so a sheet with a
+ * cruise column is not pooled across decades by its blanks); else to its UTC calendar year; a row with neither is in one group of its own, unanchored.
+ */
+function stationGroups(srows: DataRow[]): { rows: DataRow[]; anchored: boolean; cruise: boolean }[] {
+  const by = new Map<string, { rows: DataRow[]; anchored: boolean; cruise: boolean }>();
+  for (const r of srows) {
+    const key = r.cruise !== undefined && r.cruise !== '' ? `c:${r.cruise}` : r.datetime ? `y:${utcDayOf(r.datetime).slice(0, 4)}` : 'u';
+    const g = by.get(key);
+    if (g) g.rows.push(r);
+    else by.set(key, { rows: [r], anchored: key !== 'u', cruise: key.startsWith('c:') });
+  }
+  return [...by.values()];
+}
+
 function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
-  const byStation = new Map<string, DataRow[]>();
+  const byName = new Map<string, DataRow[]>();
   for (const r of rows) {
-    if (r.station === undefined || r.station === '') continue;
-    const list = byStation.get(r.station);
+    if (r.station === undefined || r.station === '' || GENERIC_STATION.test(r.station.trim())) continue;
+    const list = byName.get(r.station);
     if (list) list.push(r);
-    else byStation.set(r.station, [r]);
+    else byName.set(r.station, [r]);
   }
-  for (const [station, srows] of byStation) {
-    const positions = positionsOf(srows);
-    if (positions.length < 2) continue;
-    const track = positions.length > MAX_STATION_POSITIONS;
-    const involved = new Set<Pos>();
-    const minority = new Set<DataRow>();
-    const flipped = new Set<'lat' | 'lon'>();
-    for (let i = 0; i < (track ? 0 : positions.length); i++) {
-      for (let j = i + 1; j < positions.length; j++) {
-        const p = positions[i];
-        const q = positions[j];
-        if (p.lat === p.lon || q.lat === q.lon) continue;
-        const axis = flippedAxis(p, q);
-        if (!typedDigit(p, q) && !exchanged(p, q) && axis === undefined) continue;
-        if (axis) flipped.add(axis);
-        involved.add(p).add(q);
-        const small = q.rows.length < p.rows.length ? q : p.rows.length < q.rows.length ? p : firstLine(p) < firstLine(q) ? q : p;
-        for (const r of small.rows) minority.add(r);
-      }
-    }
-    if (involved.size === 0) {
-      if (GENERIC_STATION.test(station.trim())) continue;
-      const real = positions.filter((p) => p.lat !== p.lon);
-      if (real.length < 2) continue;
-      const spread = widest(real);
-      if (spread <= SPREAD_KM) continue;
-      const shown = real.slice(0, MAX_DATES + 2);
-      const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
-      const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
-      out.push(makeFinding(spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
-      continue;
-    }
-    const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
-    const params: Record<string, string> = { station, positions: text };
-    if (flipped.has('lon')) params.signLon = 'yes';
-    if (flipped.has('lat')) params.signLat = 'yes';
-    out.push(makeFinding('ROW-STATION-MOVED', { file: ds.file, sheet, value: station, lines: [...minority].map((r) => r.line), params }));
+  for (const [station, nameRows] of byName) {
+    for (const g of stationGroups(nameRows)) stationGroup(ds, sheet, station, g.rows, g.anchored, g.cruise, out);
   }
+}
+
+function stationGroup(ds: Dataset, sheet: string, station: string, srows: DataRow[], anchored: boolean, inCruise: boolean, out: Finding[]): void {
+  const positions = positionsOf(srows);
+  if (positions.length < 2) return;
+  const track = positions.length > MAX_STATION_POSITIONS;
+  const involved = new Set<Pos>();
+  const minority = new Set<DataRow>();
+  const flipped = new Set<'lat' | 'lon'>();
+  for (let i = 0; i < (track ? 0 : positions.length); i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      const p = positions[i];
+      const q = positions[j];
+      if (p.lat === p.lon || q.lat === q.lon) continue;
+      const axis = flippedAxis(p, q);
+      // no cruise and no date: nothing tells two occupations of the name apart, and a whole-degree shift then proves nothing; exchanged axes and a sign still do
+      if (!(anchored && typedDigit(p, q, inCruise)) && !exchanged(p, q) && axis === undefined) continue;
+      if (axis) flipped.add(axis);
+      involved.add(p).add(q);
+      const small = q.rows.length < p.rows.length ? q : p.rows.length < q.rows.length ? p : firstLine(p) < firstLine(q) ? q : p;
+      for (const r of small.rows) minority.add(r);
+    }
+  }
+  if (involved.size === 0) {
+    const real = positions.filter((p) => p.lat !== p.lon);
+    if (real.length < 2) return;
+    const spread = widest(real);
+    if (spread <= SPREAD_KM) return;
+    const shown = real.slice(0, MAX_DATES + 2);
+    const text = shown.map(positionText).join('; ') + (real.length > shown.length ? `; …+${real.length - shown.length}` : '');
+    const params: Record<string, string | number> = { station, km: Math.round(spread), positions: text };
+    out.push(makeFinding(anchored && spread > FAR_KM ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
+    return;
+  }
+  const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
+  const params: Record<string, string> = { station, positions: text };
+  if (flipped.has('lon')) params.signLon = 'yes';
+  if (flipped.has('lat')) params.signLat = 'yes';
+  out.push(makeFinding('ROW-STATION-MOVED', { file: ds.file, sheet, value: station, lines: [...minority].map((r) => r.line), params }));
 }
 
 /* ---------- ROW-ON-LAND ---------- */

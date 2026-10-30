@@ -5,6 +5,7 @@ import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
 import { isPercentUnit, verifiedConcept } from './nerc';
+import { hasCentralStatisticToken } from '../summaryLabels';
 import { isMeasurementWord, nameKind } from './measured';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
@@ -196,6 +197,7 @@ export const OVERLAY_REASONS = {
   'eventid-used': 'the Darwin Core eventID column is used as the sample code',
   'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
+  'taxon-mean': 'its header reads as the mean of a count of organisms (a species mean): its header may be a taxon; confirm it, or mark the column as a variable if it is a summary column',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
   'measured-name': 'the name is a measured variable (a nutrient, a pigment, an isotope ratio, a rate), not a species: it stays a variable, and nothing is written for it as a taxon',
   'measured-word': 'the name is a physical or optical measurement word (e.g. temperature, fluorescence, turbidity), not a species: it stays a variable, and nothing is written for it as a taxon',
@@ -648,7 +650,8 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       } else {
         p.role = { kind: 'taxon', header: true };
         p.confidence = 'low';
-        why(p, 'taxon-numeric');
+        if (hasCentralStatisticToken(p.header)) why(p, 'taxon-mean');
+        else why(p, 'taxon-numeric');
       }
     }
   }

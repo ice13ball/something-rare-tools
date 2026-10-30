@@ -9,6 +9,7 @@ import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import { translate } from '../../src/core/i18n/ui';
 import { renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { LANGS } from '../../src/core/types';
+import { isAbundanceUnit } from '../../src/core/convert/vocab';
 import { fileOf, sheetInput } from './helpers';
 
 const ids = (r: { findings: { ruleId: string }[] }): string[] => r.findings.map((f) => f.ruleId);
@@ -181,5 +182,53 @@ describe('the column reason of a plain measurement word', () => {
       expect(t, lang).toMatch(words[lang]);
       expect(t, lang).not.toBe(translate(lang, 'convert.reason.measured-name'));
     }
+  });
+});
+
+describe('a statistic word in a header', () => {
+  it('"Macrofauna.biomass mean/st.dev. (gDW m-2)" and its kin are variables: a biomass unit is not an organism count', () => {
+    for (const h of ['Macrofauna.biomass mean/st.dev. (gDW m-2)', 'Macrofauna.biomass mean (gDW m-2)', 'Macrofauna.biomass st.dev. (gDW m-2)', 'Zooplankton biomass SD [mg/m3]', 'Biomass average (g/m2)', 'Biomass median [g/m2]', 'Zooplankton.biomass sd', 'Biomasa średnia [g/m2]', 'Biomasse écart-type [g/m2]', 'Biomasse médiane [g/m2]']) {
+      expect(nameKind(h), h).toBe('variable');
+    }
+  });
+
+  it('with an organism unit a species MEAN stays a taxon candidate, a spread or a mean with a spread is a variable', () => {
+    for (const h of ['Calanus finmarchicus mean [ind/m3]', 'Calanus finmarchicus average [ind/m3]', 'Calanus finmarchicus median [ind/m3]', 'Calanus finmarchicus średnia [ind/m3]', 'Calanus finmarchicus Mittelwert [ind/m3]']) {
+      expect(nameKind(h, true), h).toBe('taxon');
+    }
+    for (const h of ['Calanus finmarchicus SD [ind/m3]', 'Calanus finmarchicus st.dev. [ind/m3]', 'Calanus finmarchicus std [ind/m3]', 'Calanus finmarchicus écart-type [ind/m3]', 'Calanus finmarchicus mean/st.dev. [ind/m3]']) {
+      expect(nameKind(h, true), h).toBe('variable');
+    }
+    // a binomial name before the mean keeps it a taxon candidate whatever the unit; no binomial and no organism unit: a variable
+    expect(nameKind('Calanus hyperboreus mean [mg C/m3]', false)).toBe('taxon');
+    expect(nameKind('C. hyperboreus average [mg C/m3]', false)).toBe('taxon');
+    expect(nameKind('Calanus hyperboreus SD [mg C/m3]', false)).toBe('variable');
+    expect(nameKind('Zooplankton biomass mean [mg C/m3]', false)).toBe('variable');
+    expect(nameKind('Macrofauna.biomass mean (gDW m-2)', false)).toBe('variable');
+    expect(nameKind('Biomass mean [mg/m3]', false)).toBe('variable');
+  });
+
+  it('taxa stay taxa: a stage code, a size class, a plain abundance header, a name that only contains the letters', () => {
+    for (const h of ['Calanus finmarchicus C5 [ind/m3]', 'Oithona similis C1-C3', 'Nitrogen fixers [cells/l]', 'Pseudocalanus acuspes', 'Calanus finmarchicus', 'Meandrina meandrites', 'Acartia/Centropages']) {
+      expect(nameKind(h, h.includes('[')), h).toBe('taxon');
+    }
+  });
+
+  it('a wide sheet: the folded biomass header is a variable, the species and the species mean are taxon columns (the mean with its own reason)', () => {
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Macrofauna.biomass mean/st.dev. (gDW m-2)', 'Calanus finmarchicus C5 [ind/m3]', 'Oithona similis mean [ind/m3]', 'Oithona similis SD [ind/m3]'];
+    const rows = [['E1', '2099-01-01', 55, 3, 4.5, 3, 2.5, 0.4], ['E2', '2099-01-02', 56, 3, 4.2, 5, 3.5, 0.6]];
+    const cols = sheetInput(fileOf(header, rows)).mapping.columns;
+    const role = (h: string) => cols.find((c) => c.header === h)?.role.kind;
+    expect(role('Macrofauna.biomass mean/st.dev. (gDW m-2)')).toBe('variable');
+    expect(role('Calanus finmarchicus C5 [ind/m3]')).toBe('taxon');
+    expect(role('Oithona similis mean [ind/m3]')).toBe('taxon');
+    expect(role('Oithona similis SD [ind/m3]')).toBe('variable');
+  });
+});
+
+describe('gDW m-2 is a biomass unit, not an organism count', () => {
+  it('isAbundanceUnit', () => {
+    expect(isAbundanceUnit('gDW m-2')).toBe(false);
+    expect(isAbundanceUnit('ind/m3')).toBe(true);
   });
 });

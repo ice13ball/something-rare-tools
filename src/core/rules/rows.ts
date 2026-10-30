@@ -102,7 +102,8 @@ const SHIP_DECLARED = {
  *   ROW-LAT-RANGE         (none)      lines/field/value = the rows, the column, one example; bounds come from thresholds
  *   ROW-LON-RANGE         (none)      same
  *   ROW-LON-360           (none)      lines/field/value = rows given on a 0-360 scale (info)
- *   ROW-LAT-EQ-LON        (none)      lines = all rows with lat === lon; value = the shared value
+ *   ROW-LAT-EQ-LON        (none)      lines = all rows with lat === lon; value = the shared value (error: >= 5 rows and >= 20 % of rows with a position)
+ *   ROW-LAT-EQ-LON-ISOLATED / -COARSE  the same below that count or share: warning, or note when the value is a whole or half degree
  *   ROW-RAGGED            expected, found   header field count and the field count of the FIRST listed line
  *   ROW-NON-NUMERIC       (none)      field = column, value = example token, lines = rows
  *   ROW-NA-VARIANT        (none)      field = column, value = example token (e.g. NANA), lines = rows
@@ -200,7 +201,53 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `In den Zeilen {lines} sind Breite und Länge identisch ({value}). Vermutlich wurde eine Spalte in die andere kopiert; tragen Sie die richtigen Werte ein.`,
       fr: `Aux lignes {lines}, la latitude et la longitude sont identiques ({value}). Une colonne a probablement été copiée dans l'autre ; saisissez les bonnes valeurs.`,
     },
-    technical: `{file}:{lines} latitude equals longitude exactly (value '{value}').`,
+    plainIf: [
+      {
+        param: 'share',
+        plain: {
+          pl: `To co najmniej 5 wierszy i co piąty wiersz z pozycją.`,
+          en: `That is at least 5 rows and a fifth of the rows with a position.`,
+          de: `Das sind mindestens 5 Zeilen und ein Fünftel der Zeilen mit Position.`,
+          fr: `Cela fait au moins 5 lignes et un cinquième des lignes avec position.`,
+        },
+      },
+      {
+        param: 'repeated',
+        plain: {
+          pl: `Ta sama wartość powtarza się w {repeated} wierszach i ma dwa miejsca po przecinku lub więcej, jak przy skopiowaniu pozycji jednej stacji do obu kolumn.`,
+          en: `The same value repeats in {repeated} rows and has two or more decimals, as when the position of one station was copied into both columns.`,
+          de: `Derselbe Wert wiederholt sich in {repeated} Zeilen und hat zwei oder mehr Dezimalstellen, wie wenn die Position einer Station in beide Spalten kopiert wurde.`,
+          fr: `La même valeur se répète sur {repeated} lignes et compte au moins deux décimales, comme si la position d'une station avait été copiée dans les deux colonnes.`,
+        },
+      },
+    ],
+    technical: `{file}:{lines} latitude equals longitude exactly (value '{value}') in at least 5 rows and either at least 20 % of the rows with a position or at least 5 rows sharing one value with two or more written decimals that is not a multiple of 0.25 (the tool's own choice; otherwise ROW-LAT-EQ-LON-ISOLATED or ROW-LAT-EQ-LON-COARSE).`,
+  },
+  {
+    id: 'ROW-LAT-EQ-LON-ISOLATED',
+    category: 'B',
+    severity: 'warning',
+    params: [],
+    plain: {
+      pl: `W {+lines:wierszu|wierszach} {lines} szerokość i długość geograficzna są identyczne ({value}). To niewielki odsetek wierszy z pozycją, więc może to być zbieg okoliczności, ale wpisanie tej samej liczby w obie kolumny to też częsta pomyłka. Sprawdź tę pozycję.`,
+      en: `In {+lines:line|lines} {lines} latitude and longitude are identical ({value}). This is a small share of the rows with a position, so it may be a coincidence, but typing the same number into both columns is also a common slip. Check this position.`,
+      de: `In {+lines:Zeile|Zeilen} {lines} sind Breite und Länge identisch ({value}). Das ist ein kleiner Anteil der Zeilen mit Position, also kann es Zufall sein; dieselbe Zahl in beide Spalten zu tippen ist aber auch ein häufiger Fehler. Prüfen Sie diese Position.`,
+      fr: `{+lines:À la ligne|Aux lignes} {lines}, la latitude et la longitude sont identiques ({value}). C'est une petite part des lignes avec position, ce peut être une coïncidence, mais saisir le même nombre dans les deux colonnes est aussi une erreur courante. Vérifiez cette position.`,
+    },
+    technical: `{file}:{lines} latitude equals longitude exactly (value '{value}', finer than a half degree) in a small share of the rows with a position (fewer than 5 rows, or under 20 % and without 5 rows of one repeated value); a duplicated column would be ROW-LAT-EQ-LON.`,
+  },
+  {
+    id: 'ROW-LAT-EQ-LON-COARSE',
+    category: 'B',
+    severity: 'info',
+    params: [],
+    plain: {
+      pl: `W {+lines:wierszu|wierszach} {lines} szerokość i długość geograficzna są identyczne ({value}). To pozycja zaokrąglona do całego lub pół stopnia, częsta w danych historycznych, więc może być prawidłowa (np. -65 i -65 to Półwysep Antarktyczny). Sprawdź tylko, czy liczba nie została wpisana dwa razy.`,
+      en: `In {+lines:line|lines} {lines} latitude and longitude are identical ({value}). This position is rounded to a whole or half degree, as is common in historical data, so it may be right (for example -65 and -65 is the Antarctic Peninsula). Just check that the number was not typed twice.`,
+      de: `In {+lines:Zeile|Zeilen} {lines} sind Breite und Länge identisch ({value}). Die Position ist auf ein ganzes oder halbes Grad gerundet, wie in historischen Daten üblich, und kann stimmen (z. B. -65 und -65: Antarktische Halbinsel). Prüfen Sie nur, ob die Zahl doppelt getippt wurde.`,
+      fr: `{+lines:À la ligne|Aux lignes} {lines}, la latitude et la longitude sont identiques ({value}). Cette position est arrondie au degré entier ou au demi-degré, comme souvent dans les données historiques, et peut être juste (par ex. -65 et -65 : péninsule Antarctique). Vérifiez seulement que le nombre n'a pas été saisi deux fois.`,
+    },
+    technical: `{file}:{lines} latitude equals longitude exactly (value '{value}', a whole or half degree) in fewer than 5 rows or fewer than 20 % of the rows with a position; a duplicated column would be ROW-LAT-EQ-LON.`,
   },
   {
     id: 'ROW-RAGGED',
@@ -285,7 +332,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Station {station} hat Positionen, die bis zu {km} km auseinanderliegen ({positions}). Eine Station ist meist ein Ort, und 10 km sind weit mehr als der Positionsfehler eines Schiffs auf Station. Steht der Name für ein Gebiet, einen Transekt oder eine Fahrt, ignorieren Sie diesen Hinweis.`,
       fr: `La station {station} a des positions distantes de {km} km au plus ({positions}). Une station correspond d'habitude à un seul lieu, et 10 km dépassent de loin l'erreur de position d'un navire en station. Si ce nom désigne une zone, un transect ou une campagne, ignorez cette remarque.`,
     },
-    technical: `{file} station {station}: positions up to {km} km apart (more than 10 km; great-circle distance) at {positions}.`,
+    technical: `{file} station {station}: positions up to {km} km apart (more than 10 km; great-circle distance) at {positions}. Rows of one name are compared only within one cruise (a cruise value) or, without one, within one calendar year (UTC); rows with neither get the note ROW-STATION-SPREAD and, for exchanged axes or a sign, ROW-STATION-MOVED, but not the typed-digit pattern. Placeholder names (unknown, not specified, n/a ...) are skipped.`,
   },
   {
     id: 'ROW-STATION-SPREAD-FAR',
@@ -298,7 +345,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Station {station} hat Positionen, die bis zu {km} km auseinanderliegen, mehr als 1000 km ({positions}). Eine Station ist meist ein Ort, das ist also fast sicher eine falsche Position (Vorzeichen, Ziffer, vertauschte Achsen), kein Gebiet. Prüfen Sie, welche Position stimmt.`,
       fr: `La station {station} a des positions distantes de {km} km au plus, soit plus de 1000 km ({positions}). Une station correspond d'habitude à un seul lieu : c'est presque certainement une position erronée (signe, chiffre, axes inversés), pas une zone. Vérifiez quelle position est la bonne.`,
     },
-    technical: `{file} station {station}: positions up to {km} km apart (more than 1000 km; great-circle distance) at {positions}. The 10 to 1000 km case is the note ROW-STATION-SPREAD; 1000 km is a stated choice, not a published threshold.`,
+    technical: `{file} station {station}: positions up to {km} km apart (more than 1000 km; great-circle distance) at {positions}. The 10 to 1000 km case is the note ROW-STATION-SPREAD; 1000 km is a stated choice, not a published threshold. Rows of one name are compared only within one cruise (a cruise value) or, without one, within one calendar year (UTC); rows with neither get the note ROW-STATION-SPREAD and, for exchanged axes or a sign, ROW-STATION-MOVED, but not the typed-digit pattern. Placeholder names (unknown, not specified, n/a ...) are skipped.`,
   },
   {
     id: 'ROW-ON-LAND-NEAR',
@@ -401,12 +448,12 @@ export const ROW_RULES: readonly RuleSpec[] = [
     },
     technical: `{file}:{lines} field {field} value '{value}': date not parseable (ISO 8601, DD.MM.YYYY, unambiguous DD/MM/YYYY, YY-MM-DD or Excel serial).`,
     plainTime: {
-      pl: `Nie udało się odczytać godzin w wierszach {lines} (np. „{value}”). Wpisz jedną godzinę w komórce, jako GG:MM (24 godziny), w UTC albo z podaną strefą czasową; przedział, np. 10:00-12:00, nie jest godziną.`,
-      en: `The times in lines {lines} (e.g. "{value}") could not be read. Write one time per cell as HH:MM (24 hours), in UTC or with the time zone stated; a range such as 10:00-12:00 is not a time of day.`,
-      de: `Die Uhrzeiten in den Zeilen {lines} (z. B. „{value}“) konnten nicht gelesen werden. Schreiben Sie eine Uhrzeit pro Zelle als HH:MM (24 Stunden), in UTC oder mit angegebener Zeitzone; ein Bereich wie 10:00-12:00 ist keine Uhrzeit.`,
-      fr: `Les heures des lignes {lines} (par ex. « {value} ») n'ont pas pu être lues. Écrivez une seule heure par cellule sous la forme HH:MM (24 heures), en UTC ou avec le fuseau horaire indiqué ; une plage comme 10:00-12:00 n'est pas une heure.`,
+      pl: `Nie udało się odczytać {+lines:godziny|godzin} {+lines:w wierszu|w wierszach} {lines} (np. „{value}”). Wpisz godzinę jako GG:MM (24 godziny), np. 16:30, w UTC albo z podaną strefą czasową; przedział, np. 16:00-17:30 lub 1600-1730, jest odczytywany jako jego początek.`,
+      en: `{+lines:The time|The times} in {+lines:line|lines} {lines} (e.g. "{value}") could not be read. Write the time as HH:MM (24 hours), for example 16:30, in UTC or with the time zone stated; a range such as 16:00-17:30 or 1600-1730 is read as its start.`,
+      de: `{+lines:Die Uhrzeit in Zeile|Die Uhrzeiten in den Zeilen} {lines} (z. B. „{value}“) {+lines:konnte|konnten} nicht gelesen werden. Schreiben Sie die Uhrzeit als HH:MM (24 Stunden), z. B. 16:30, in UTC oder mit angegebener Zeitzone; ein Bereich wie 16:00-17:30 oder 1600-1730 wird als sein Beginn gelesen.`,
+      fr: `{+lines:L'heure de la ligne|Les heures des lignes} {lines} (par ex. « {value} ») {+lines:n'a pas pu être lue|n'ont pas pu être lues}. Écrivez l'heure sous la forme HH:MM (24 heures), par ex. 16:30, en UTC ou avec le fuseau horaire indiqué ; une plage comme 16:00-17:30 ou 1600-1730 est lue comme son début.`,
     },
-    technicalTime: `{file}:{lines} field {field} value '{value}': time of day not parseable (one time per cell, HH:MM or HH:MM:SS, 24 hours; a range of times is not a time; state UTC or the time zone).`,
+    technicalTime: `{file}:{lines} field {field} value '{value}': time of day not parseable (HH:MM or HH:MM:SS, 24 hours; a range HHMM-HHMM or HH:MM-HH:MM, also several separated by commas, is read as the start of its first range and the end is ignored; state UTC or the time zone).`,
   },
   {
     id: 'ROW-DATE-MISSING',

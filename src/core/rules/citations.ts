@@ -135,6 +135,10 @@ const OBIS_MANUAL_FORMAT = {
   label: 'OBIS Manual, "Common format issues" (iobis/manual common_formatissues.md; manual.obis.org)',
   url: 'https://manual.obis.org/common_formatissues.html',
 };
+const OBIS_MANUAL_DWC = {
+  label: 'OBIS Manual, "Darwin Core" (iobis/manual darwin_core.md; manual.obis.org; read 2026-10-30)',
+  url: 'https://manual.obis.org/darwin_core.html',
+};
 const OBIS_MANUAL_QC = {
   label: 'OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)',
   url: 'https://manual.obis.org/common_qc.html',
@@ -225,6 +229,7 @@ export const CITE = {
   biocheckParentEvent: cite(BIOCHECK, 'Integrity checks: "if the parentEventID field is populated, it must be populated with an existing eventID from the eventID field. Adding to the parentEventID field something different than an existing eventID is incoherent."'),
   gbifParentLineage: cite(GBIF_ISSUES, 'OccurrenceIssue value PARENT_EVENT_INFINITE_LINEAGE (a loop in the eventID / parentEventID hierarchy)'),
   biocheckOccurrenceId: cite(BIOCHECK, 'Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."'),
+  obisManualLocation: cite(OBIS_MANUAL_DWC, '"Location information can be documented in many DwC terms, but decimalLatitude and decimalLongitude are the minimally required terms"; "OBIS currently has seven required and one strongly recommended DwC term: occurrenceID, eventDate, decimalLongitude, decimalLatitude, scientificName, occurrenceStatus, basisOfRecord, scientificNameID"'),
   obisHiddenChars: cite(OBIS_MANUAL_QC, '"Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"'),
   ccNameAndLink: cite(CC_ATTRIBUTION, 'section on licence attribution: "We recommend that you name and provide a link to the license, e.g., CC BY 4.0 ( http://creativecommons.org/licenses/by/4.0 ) for a work licensed under CC BY 4.0."'),
 };

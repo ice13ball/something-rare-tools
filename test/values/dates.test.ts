@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import type { ParsedDate } from '../../src/core/types';
-import { combineDateTime, detectDayMonthOrder, excelSerialToDate, parseDate, parseTimeOfDay } from '../../src/core/values/dates';
+import { combineDateTime, detectDayMonthOrder, excelSerialToDate, parseDate, cellsAreYearRanges, parseTimeCell, parseTimeOfDay } from '../../src/core/values/dates';
 
 const OPTS = { date1904: false, dateFormatted: false };
 const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number; order?: 'dmy' | 'mdy' | 'conflict' } = {}): ParsedDate => {
@@ -304,5 +304,49 @@ describe('parseTimeOfDay / combineDateTime', () => {
     expect(combineDateTime(dt, '10:30')).toEqual(dt);
     const month = ok('2021-07');
     expect(combineDateTime(month, '10:30')).toEqual(month);
+  });
+});
+
+describe('parseTimeCell: a dash between two times is a range, not a zone offset', () => {
+  it('"10:00-11:30" is 10:00 with no offset; so are the other ends up to 14', () => {
+    for (const raw of ['10:00-11:30', '08:00-09:00', '06:00-07:30', '0800-0900', '10:00-14:00', '10:00 – 11:30']) {
+      const t = parseTimeCell(raw);
+      expect('error' in t, raw).toBe(false);
+      expect(t, raw).toMatchObject({ tz: 'unknown' });
+    }
+    expect(parseTimeCell('10:00-11:30')).toMatchObject({ hh: 10, mm: 0, text: '10:00' });
+    expect(combineDateTime({ iso: '2021-07-21', year: 2021, precision: 'day', tz: 'unknown' }, '10:00-11:30')).toMatchObject({ iso: '2021-07-21T10:00', tz: 'unknown' });
+  });
+
+  it('a real offset is still an offset: with a plus sign, Z, seconds, or a bare hour', () => {
+    expect(parseTimeCell('10:00+02:00')).toMatchObject({ tz: 'offset', text: '10:00+02:00' });
+    expect(parseTimeCell('10:00Z')).toMatchObject({ tz: 'utc' });
+    expect(parseTimeCell('10:00:00-05:00')).toMatchObject({ tz: 'offset', text: '10:00:00-05:00' });
+    expect(parseTimeCell('10:00-11')).toMatchObject({ tz: 'offset' });
+  });
+});
+
+describe('cellsAreYearRanges', () => {
+  it('needs mostly year ranges and at least one impossible as a time', () => {
+    expect(cellsAreYearRanges(['2001-2005', '1995-2000', '1990-1995'])).toBe(true);
+    expect(cellsAreYearRanges(['1930-2000', '2005-2040', '1945-2015'])).toBe(false);
+    expect(cellsAreYearRanges(['1995-2000', '10:00', '11:00', '12:00'])).toBe(false);
+    expect(cellsAreYearRanges(['10:00-11:00', '12:00'])).toBe(false);
+  });
+});
+
+describe('parseTimeRange / parseTimeCell', () => {
+  it('reads HHMM-HHMM, HH:MM-HH:MM and several ranges as the start of the first range', () => {
+    for (const [raw, text] of [['1600-1730', '16:00'], ['0530-0700', '05:30'], ['16:00-17:30', '16:00'], ['0530-0700, 1600-1730', '05:30'], ['930-1015', '09:30'], ['16:00 – 17:30', '16:00']] as const) {
+      expect(parseTimeCell(raw), raw).toMatchObject({ text });
+    }
+  });
+
+  it('rejects what is not a range of times, and a lone 4-figure number (it may be a year)', () => {
+    for (const raw of ['1600', '2560-2600', '1600-', '1600-1730-1800', 'noon', '1999-2005x', '']) expect('error' in parseTimeCell(raw), raw).toBe(true);
+  });
+
+  it('combineDateTime takes the start of a range', () => {
+    expect(combineDateTime({ iso: '2021-07-25', year: 2021, precision: 'day', tz: 'unknown' }, '1600-1730')).toMatchObject({ iso: '2021-07-25T16:00', precision: 'minute' });
   });
 });

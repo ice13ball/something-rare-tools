@@ -2094,6 +2094,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     splits,
     nameLookup,
     cruiseText: tree.cruiseText,
+    // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
+    ...(repeatedOcc.size > 0 ? { repeatedOccurrenceIds: [...repeatedOcc.keys()] } : {}),
     profile: {
       sheets: profileSheets.length,
       levels: profile.sites.length,

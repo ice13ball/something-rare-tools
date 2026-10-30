@@ -53,10 +53,13 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'META-POINT-OUTSIDE-BBOX': ['warning', 'A'],
   'META-VARIABLE-MISSING': ['warning', 'A'],
   'META-NO-DATES': ['error', 'A'],
+  'META-NO-POSITIONS': ['error', 'A'],
   'ROW-LAT-RANGE': ['error', 'B'],
   'ROW-LON-RANGE': ['error', 'B'],
   'ROW-LON-360': ['info', 'B'],
   'ROW-LAT-EQ-LON': ['error', 'B'],
+  'ROW-LAT-EQ-LON-ISOLATED': ['warning', 'B'],
+  'ROW-LAT-EQ-LON-COARSE': ['info', 'B'],
   'ROW-RAGGED': ['error', 'B'],
   'ROW-NON-NUMERIC': ['warning', 'B'],
   'ROW-NA-VARIANT': ['warning', 'B'],
@@ -111,9 +114,9 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // the 95 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
-    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(95);
-    expect(ids.length).toBe(95 + CONVERT_RULES.length);
+    // the 98 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
+    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(98);
+    expect(ids.length).toBe(98 + CONVERT_RULES.length);
     expect([...ids.filter((id) => !id.startsWith('CONV-'))].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES.filter((x) => !x.id.startsWith('CONV-'))) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -138,7 +141,7 @@ describe('rule table', () => {
     expect(idsOf(lic).every((id) => id.startsWith('LIC-'))).toBe(true);
     expect(idsOf(meta).every((id) => id.startsWith('META-'))).toBe(true);
     expect(idsOf(lic).length).toBe(11);
-    expect(idsOf(meta).length).toBe(7);
+    expect(idsOf(meta).length).toBe(8);
   });
 });
 
