@@ -12,6 +12,7 @@ import { biomassBasisOf, readConvertSettings, writeConvertSidecar } from '../../
 import { judge } from '../../src/core/convert/policy';
 import { parseFile } from '../../src/core/parse';
 import type { ColumnRole, Finding } from '../../src/core/types';
+import { renderConvertPlain } from '../../src/core/rules/convert';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
@@ -68,7 +69,7 @@ describe('the measurement', () => {
     expect(m.map((x) => x.target)).toEqual(r.occurrences.map((o) => ({ kind: 'occurrence', id: o.id })));
     expect(m.map((x) => x.measurementValue)).toEqual(['226.5', '124', '36']);
     expect(m.every((x) => x.measurementUnit === 'g')).toBe(true);
-    expect(m.every((x) => x.measurementUnitId === undefined)).toBe(true);
+    expect(m.every((x) => x.measurementUnitId === 'http://vocab.nerc.ac.uk/collection/P06/current/UGRM/')).toBe(true);
   });
 
   it('kind unset: measurementType "biomass", no measurementTypeID, and one warning that asks (accept policy)', () => {
@@ -144,5 +145,50 @@ describe('the companion file remembers the kind', () => {
     expect(biomassBasisOf([{ sheet: 'S', columns: [{ role: { kind: 'biomass', basis: 'wet' as const } }, { role: { kind: 'biomass', basis: 'dry' as const } }] }])).toEqual([]);
     const csv = writeConvertSidecar({}) + '"(setting)","biomassBasis=heavy:S","","",""\n';
     expect(readConvertSettings(parseFile('c.csv', new TextEncoder().encode(csv)))?.biomassBasis).toBeUndefined();
+  });
+});
+
+describe('review fixes: units, clashes, per-area units, repeated user occurrenceID', () => {
+  const header = ['Sample ID', 'Station', 'Date', 'Species', 'Abundance'];
+  const one = (extraHeader: string[], extraRow: Cell[], quantity: object = { kind: 'count' }) =>
+    convert({ sheets: [sheetInput(fileOf([...header, ...extraHeader], [['S1', 'A', '2015-03-04', 'Asterias rubens', 3, ...extraRow]]), { quantity: quantity as never, shape: 'long' })] });
+
+  it('the unit gets its P06 id when the table knows it: g, mg, kg, g/m2; an unknown unit gets none', () => {
+    const id = (unit: string) => one([`Dry weight [${unit}]`], [1.5]).measurements.find((x) => x.role === 'biomass')?.measurementUnitId?.split('/').slice(-2)[0];
+    expect(id('g')).toBe('UGRM');
+    expect(id('mg')).toBe('MGRM');
+    expect(id('kg')).toBe('KGXX');
+    expect(id('g/m2')).toBe('UGMS');
+    expect(id('pounds')).toBeUndefined();
+  });
+
+  it('two biomass columns of one kind get distinct measurementType text; one column keeps the plain label', () => {
+    const two = (basis?: 'dry') => {
+      const role = basis === undefined ? { kind: 'biomass' as const } : { kind: 'biomass' as const, basis };
+      const f = fileOf([...header, 'Mass A [g]', 'Mass B [mg]'], [['S1', 'A', '2015-03-04', 'Asterias rubens', 3, 1.5, 900]]);
+      return convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long', edit: { 'Mass A [g]': role, 'Mass B [mg]': role } })] }).measurements.filter((x) => x.role === 'biomass').map((x) => x.measurementType);
+    };
+    expect(two('dry')).toEqual(['Dry weight biomass (Mass A)', 'Dry weight biomass (Mass B)']);
+    expect(two()).toEqual(['biomass (Mass A)', 'biomass (Mass B)']);
+    expect(one(['Dry weight [g]'], [1.5]).measurements.find((x) => x.role === 'biomass')?.measurementType).toBe('Dry weight biomass');
+  });
+
+  it('no "per sample of" remark when the unit already says per area', () => {
+    const h = ['Sample ID', 'Station', 'Date', 'Species', 'Abundance', 'Area sampled [m2]'];
+    const run2 = (unit: string) => convert({ sheets: [sheetInput(fileOf([...h, `Wet weight [${unit}]`], [['S1', 'A', '2015-03-04', 'Asterias rubens', 3, 0.0625, 7.5]]), { quantity: { kind: 'count', effort: { source: 'column' } }, shape: 'long' })] });
+    expect(run2('g').measurements.find((x) => x.role === 'biomass')?.measurementRemarks).toBe('per sample of 0.0625 m2');
+    expect(run2('g/m2').measurements.find((x) => x.role === 'biomass')?.measurementRemarks).toBeUndefined();
+  });
+
+  it('a repeated value in the user\'s own occurrenceID column is said as that, not as "same sample, same taxon"', () => {
+    const f = fileOf(['occurrenceID', 'Sample ID', 'Station', 'Date', 'Species', 'Abundance'], [['occ-1', 'S1', 'A', '2015-03-04', 'Asterias rubens', 3], ['occ-1', 'S2', 'A', '2015-03-05', 'Ophiura ophiura', 2]]);
+    const d = find(convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' })] }).blocking, 'CONV-ID-DUPLICATE');
+    expect(d).toHaveLength(1);
+    expect(d[0].params).toMatchObject({ userId: 'yes' });
+    expect(d[0].params.sameTaxon).toBeUndefined();
+    const en = renderConvertPlain(d[0], 'en');
+    expect(en).toMatch(/occurrenceID column repeats a value/);
+    expect(en).not.toMatch(/Same sample/);
+    for (const lang of ['pl', 'de', 'fr'] as const) expect(renderConvertPlain(d[0], lang)).not.toMatch(/\{|\}/);
   });
 });

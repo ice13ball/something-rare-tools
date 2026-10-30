@@ -912,3 +912,17 @@ Each opened as `https://vocab.nerc.ac.uk/collection/<C>/current/<CODE>/?_profile
 - The ID of a level made of a depth in the sediment is `<station>:<number as written><cm|m>bsf` (`cmbsf`, `mbsf` are the usual abbreviations of centimetres and metres below the seafloor).
 - A ragged row (ROW-RAGGED, raised by the parser) blocks the sheet and is not converted: its values are shifted against the header.
 - A P01 code declared in a header (`SDN:P01::CODE`): a code the converter has verified is proposed first; a well-formed one (eight upper-case letters and digits) it has not verified is offered as "declared by the file" and written only after the user chose it, and the worker checks that the column's header declares exactly that code; a malformed one stays a measured variable with a note.
+
+
+## Biomass concepts (converter, 2026-10-30)
+
+Opened on 2026-10-30 in the NERC Vocabulary Server (SPARQL on the English prefLabel; owl:deprecated = false). The P01 biomass concepts SDBIOL03/04/05/07/08/09 are all "per unit area of the bed" or "per unit volume of the water body", so none of them states a mass in a sample or frame; the S06 parameter concepts state the kind of mass and nothing about a denominator.
+
+| Concept | Code | Label |
+|---|---|---|
+| S06 | S0600088 | Wet weight biomass |
+| S06 | S0600087 | Dry weight biomass |
+| S06 | S0600086 | Ash-free dry weight biomass |
+| P06 | UGRM | Grams |
+| P06 | MGRM | Milligrams |
+| P06 | KGXX | Kilograms |

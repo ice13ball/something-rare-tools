@@ -212,14 +212,14 @@ no extension is made.
 **A second header row of statistic labels** (`foldStatisticSubheader`, `parse/shared.ts`; CSV and
 workbooks, so /check and /convert read the same). A row directly under the header whose filled cells are
 ALL statistic labels (`mean`, `st.dev.`, `sd`, `min`, `max` ... the list of `summaryLabels.ts`, at least two
-of them, no number) is part of the header: `OM (%)` over `mean` and `st.dev.` becomes `OM mean (%)` and
+of them, at least one that is not also an ordinary code or total such as N, count, min, max, total; no number) is part of the header: `OM (%)` over `mean` and `st.dev.` becomes `OM mean (%)` and
 `OM st.dev. (%)` (the label goes before a trailing unit so that the unit is still read). A header cell that
 is empty above a label takes the text of its merged range (a workbook's `!merges`) or of the cell on its
-left; a repository export that wrote the spreadsheet column letter there is treated the same. When a
+left. A header that is not empty is never replaced, a single letter included. When a
 label has no header above it, nothing is folded. The row is not data (no more `ROW-NON-NUMERIC` for it)
-and `RawSheet.subHeaderLine` keeps its line. A name ending in a spread or extreme (`st.dev.`, `sd`, `se`,
-`min`, `max`, `median`, `n`) is never read as the canonical variable (`T st.dev.` is not the
-temperature) and keeps its own name; `mean` / `average` is the variable (`T mean` is the temperature);
+and `RawSheet.subHeaderLine` keeps its line. A name ending in a spread or a count (`st.dev.`, `sd`, `se`,
+`cv`, `n`) is never read as the canonical variable (`T st.dev.` is not the
+temperature) and keeps its own name; `mean`, `average`, `min`, `max`, `median` are the same quantity and keep the variable (`T mean`, `Temperature min`, `pH min`), so its range checks still apply;
 the spread of a dimensionless variable (`Salinity st.dev.`) asks for no unit, like the variable. On
 /convert a `st.dev.` column is therefore a measured variable named after its variable plus `st.dev.`
 (`measurementType` "OM st.dev."); the converter has no pattern that carries a spread as an attribute of
@@ -340,13 +340,13 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    is present too, and then at low confidence; a unit that is not degrees rules the word out; `DL`
    counts only with its `ł`. A depth header counts unless it names the depth of the site, the
    bottom or a Secchi or mixed-layer depth, or a measurement made over a range of depths
-   (`Depth-integrated chlorophyll`, `Depth averaged temperature`, `integrated over depth`); a
+   (`Depth-integrated chlorophyll`, `Depth averaged temperature`, `integrated over depth`; `Depth corrected` is still a depth); a
    bare `Mean depth` is still a depth.
-   **Whole-token abbreviations.** `Lat`, `Lon`, `Long`, `Lng` name a coordinate only as the whole
-   name or when nothing but a unit, a degree notation, a datum, a hemisphere letter or word, or a
-   start / end word follows (`Long [deg]`, `Long E`, `Lat dd`, `Lon WGS84`); any other word after
-   them (`Long term mean`, `Long-term trend`, `Long-line catch`, `Long axis`) means it is not a
-   coordinate. The full words accept the common misspellings seen in real files
+   **Whole-token abbreviations.** `Lat`, `Lon`, `Long`, `Lng` followed by anything are a coordinate
+   (`Lat WGS 84`, `Lat GPS`, `Lat 1`, `Lon X`, `Lon 0-360`, `Lat mean`, `Lat station`, `Lat dd.mm`), as they
+   always were, except when one of a few words makes it another name: `term`, `line`, `axis`,
+   `distance`, `bound`, `of` (`Long term mean`, `Long-term trend`, `Long-line catch`, `Long axis`,
+   `Lat of station`). `Lateral` and `Latency` are single words and never match. The full words accept the common misspellings seen in real files
    (`Longtitude`, `Longitute`, `Lontitude`, `Longditude`, `Lattitude`, `Latidude`).
    **Dates of collection.** Besides `Date`, `Sampling date`, `Sample date`, `Collection date`:
    `Date of collection / sampling / observation / measurement / survey`, `Date sampled`, `Date
@@ -740,7 +740,7 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
   shows the values with the names of the GeoNetwork editor sections and copy buttons. **Known gap:**
   the draft's bounding box is the plain minimum and maximum of the longitudes of rows within
   ±180°. **Across the antimeridian** the draft writes the smallest interval of longitudes
-  (`smallestLonInterval`, `output/draft.ts`): points at 178, 179, -179, -178 give west 178, east -178,
+  (`smallestLonInterval`, `geo/lonInterval.ts`, the same function for the EML coverage of /convert): points at 178, 179, -179, -178 give west 178, east -178,
   i.e. west greater than east, which ISO 19115 `EX_GeographicBoundingBox`, EML, GeoJSON (RFC 7946
   section 5.2) and DataCite `geoLocationBox` (each bound -180..180, no order required) allow, and which the check
   [META-POINT-OUTSIDE-BBOX](rules.md#META-POINT-OUTSIDE-BBOX) already reads as crossing. The short way
@@ -1123,7 +1123,12 @@ all per unit area or volume, so none of them says "a mass in this sample"). **Th
 role list has "Biomass / weight (kind not chosen)" and one entry per kind; until a kind is chosen no
 `measurementTypeID` is written and `CONV-BIOMASS-KIND-UNSET` (warning, needs acceptance) says which
 column. A sample size declared for the sheet appears only in `measurementRemarks`
-(`per sample of 0.0625 m2`, column written only when used); nothing is divided. The companion file keeps
+(`per sample of 0.0625 m2`, column written only when used, and not when the unit is already per area or
+volume); nothing is divided. `measurementUnitID` is written when the unit is g, mg, kg (P06 UGRM, MGRM,
+KGXX) or a per-area / per-volume mass the rate table knows. Two biomass columns of one kind (or both
+with the kind open) get the column name in `measurementType`, so no two columns write the same type.
+A row whose count is 0 is not converted unless the species list is declared full (CONV-ZERO-SKIPPED), and
+a biomass value on such a row goes with it. The companion file keeps
 the kind as `biomassBasis=<wet|dry|afdw>:<sheet>` (a sheet whose biomass columns agree on one kind) and a
 dropped companion pre-picks it for columns whose header leaves it open. Without a count column a
 `Biomass` header is still the sheet's quantity (the kind of number is then declared as before), and on a

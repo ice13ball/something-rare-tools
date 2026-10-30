@@ -67,6 +67,13 @@ export const P06 = {
   um: p06('UMIC', 'Micrometres (microns)'),
 } as const;
 
+/** The plain mass units of a biomass column (P06; opened 2026-10-30 in the NVS, owl:deprecated = false; docs/research/qc-sources.md, "Biomass concepts"). Kept apart from P06 above, which is the spike's list. */
+export const P06_MASS = {
+  gram: p06('UGRM', 'Grams'),
+  milligram: p06('MGRM', 'Milligrams'),
+  kilogram: p06('KGXX', 'Kilograms'),
+} as const;
+
 /**
  * The pressure of a profile file (stage 6). Both concepts were opened on 2026-10-25 as
  * the JSON-LD profile of the concept page, as for every code of this file (docs/research/qc-sources.md, "Converter (/convert) - stage 6 verification"): HTTP 200, no redirect,

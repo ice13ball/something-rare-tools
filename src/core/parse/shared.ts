@@ -4,7 +4,7 @@ import type { Finding, RawCell, RawRow } from '../types';
 import { makeFinding } from '../rules/registryCheck';
 import type { DecodedText } from '../values/encoding';
 import { parseNumber } from '../values/numbers';
-import { STATISTIC_LABEL } from '../summaryLabels';
+import { AMBIGUOUS_STATISTIC, STATISTIC_LABEL } from '../summaryLabels';
 
 /**
  * Thrown by parseFile when a file cannot be read at all (corrupt workbook, malformed XML or JSON, JSON that is
@@ -129,7 +129,7 @@ export interface SubheaderFold {
 /**
  * A row directly under the header whose filled cells are ALL statistic labels (mean, st.dev., sd, min, max ... STATISTIC_LABEL, at least two of them) is a second header row of the
  * table, not data: "OM (%)" over "mean" and "st.dev." names two columns, "OM mean (%)" and "OM st.dev. (%)" (the label goes before a trailing unit so that the unit is still read).
- * A header cell that is empty above a label takes the header of the cell on its left (a title written across two columns), or the text `fill(column)` gives (an xlsx merged range).
+ * A header cell that is EMPTY above a label takes the text `fill(column)` gives (an xlsx merged range) or the header of the cell on its left (a title written across two columns); a header that is not empty is never replaced.
  * Returns undefined when the first row is not such a row, or when a label has no header above it to belong to (then nothing is changed).
  */
 export function foldStatisticSubheader(header: readonly string[], rows: readonly RawRow[], fill?: (column: number) => string | undefined): SubheaderFold | undefined {
@@ -142,14 +142,13 @@ export function foldStatisticSubheader(header: readonly string[], rows: readonly
     if (typeof v !== 'string' || !STATISTIC_LABEL.test(v.trim())) return undefined;
     labels.set(c, v.trim());
   }
-  if (labels.size < 2) return undefined;
+  // at least one label that is not also an ordinary code or a total (N, count, min, max, total, sum): a row of those alone is data, as the summary-row policy has it
+  if (labels.size < 2 || ![...labels.values()].some((l) => !AMBIGUOUS_STATISTIC.test(l) && !/^(?:totals?|grand total|sub-?total|sum|suma|summe|somme)[:.]?$/i.test(l))) return undefined;
   const width = Math.max(header.length, Math.max(...labels.keys()) + 1);
   const out: string[] = [];
   const top: string[] = [];
   for (let c = 0; c < width; c++) {
     let t = (header[c] ?? '').trim();
-    // a repository export may write the spreadsheet column letter ("C") where a merged header cell was empty: over a label, next to a labelled column, that is no name
-    if (t !== '' && labels.has(c) && c > 0 && labels.has(c - 1) && t.toUpperCase() === columnLetters(c)) t = '';
     if (t === '' && labels.has(c)) t = (fill?.(c) ?? '').trim() || (c > 0 ? top[c - 1] : '');
     top.push(t);
   }
@@ -164,15 +163,4 @@ export function foldStatisticSubheader(header: readonly string[], rows: readonly
     out.push(m && m[1] !== '' ? `${m[1]} ${label} ${m[2]}` : `${top[c]} ${label}`);
   }
   return { header: out, rows: rows.slice(1), line: first.line };
-}
-
-/** The spreadsheet letters of a zero-based column index (0 -> A, 26 -> AA). */
-function columnLetters(index: number): string {
-  let n = index;
-  let out = '';
-  do {
-    out = String.fromCharCode(65 + (n % 26)) + out;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
-  return out;
 }

@@ -1279,6 +1279,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}": {rows} rows of the example have the same sample (event) and the same taxon, and no ignored column tells them apart. Merge the rows or give them an occurrenceID or life stage column.`,
   },
+  // CONV-ID-DUPLICATE of a long sheet whose occurrenceIDs are the user's own column: the column repeats a value
+  'CONV-ID-DUPLICATE:user-id': {
+    plain: {
+      pl: `Kolumna z identyfikatorami występowań powtarza tę samą wartość, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: popraw powtórzone wartości albo usuń kolumnę z rolą identyfikatora, aby konwerter utworzył je sam.`,
+      en: `The occurrenceID column repeats a value, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique: correct the repeated values, or remove the identifier role from the column so that the converter makes the IDs itself.`,
+      de: `Die occurrenceID-Spalte wiederholt einen Wert, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: Korrigieren Sie die wiederholten Werte oder nehmen Sie der Spalte die Kennungsrolle, damit der Konverter die Kennungen selbst bildet.`,
+      fr: `La colonne des occurrenceID répète une valeur, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : corrigez les valeurs répétées ou retirez le rôle d'identifiant de la colonne pour que le convertisseur crée lui-même les identifiants.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". The sheet's occurrenceIDs come from its own column (role occurrenceID), so rows with the same value are not known to be the same sample and taxon.`,
+  },
   'CONV-ID-DUPLICATE:same-taxon-replicate': {
     plain: {
       pl: `Ten sam identyfikator występowania powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Ta sama próbka, to samo powtórzenie i ten sam takson w {rows} {+rows:wierszu|wierszach|wierszach}: scal je w jeden wiersz albo je rozróżnij (kolumna z identyfikatorem występowania lub stadium życia).`,
@@ -1349,6 +1359,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') {
     return PROFILE_VARIANTS[Number(f.params.remaining) > 0 ? 'CONV-ID-DUPLICATE:replicate-partial' : 'CONV-ID-DUPLICATE:replicate'];
   }
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.userId === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:user-id'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.sameTaxon === 'yes') return PROFILE_VARIANTS[f.params.replicate === 'yes' ? 'CONV-ID-DUPLICATE:same-taxon-replicate' : 'CONV-ID-DUPLICATE:same-taxon'];
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];

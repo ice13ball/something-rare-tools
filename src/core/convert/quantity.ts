@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { P01, P06, S06, type NercTerm } from './vocab';
+import { P01, P06, P06_MASS, S06, type NercTerm } from './vocab';
 import { pushAll } from '../util/arrays';
 
 /*
@@ -45,6 +45,19 @@ export interface QuantityDeclaration {
 /** The concept of a biomass column that is a mass per sample (no per area / volume claimed), by the kind the user chose or the header names; undefined while the kind is open. */
 export function biomassKindConcept(basis: BiomassBasis | undefined): NercTerm | undefined {
   return basis === 'wet' ? S06.wetWeightBiomass : basis === 'dry' ? S06.dryWeightBiomass : basis === 'afdw' ? S06.afdwBiomass : undefined;
+}
+
+/**
+ * The unit of a biomass column read from its header unit: the P06 concept when it is one the table knows (g, mg, kg; g/m2, g/m3, mg/m2, mg/m3 through the rate table), and whether the
+ * unit already says "per area" or "per volume" (then a declared sample size adds nothing and is not repeated in the remarks). Nothing is converted.
+ */
+export function biomassUnit(text: string | undefined): { id?: NercTerm; perUnit: boolean } {
+  if (text === undefined) return { perUnit: false };
+  const rate = parseRateUnit(text);
+  if (rate) return { ...(rate.p06 ? { id: rate.p06 } : {}), perUnit: true };
+  const k = text.toLowerCase().replace(/[\s.]/g, '');
+  const id = k === 'g' ? P06_MASS.gram : k === 'mg' ? P06_MASS.milligram : k === 'kg' ? P06_MASS.kilogram : undefined;
+  return { ...(id ? { id } : {}), perUnit: false };
 }
 
 /* ---------- units ---------- */

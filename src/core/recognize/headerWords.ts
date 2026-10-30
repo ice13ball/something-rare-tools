@@ -23,19 +23,19 @@ const AXIS_TAIL = /( (dd|deg|degs|degrees|decimal|dec|wgs84))+$/;
 const AXIS_GLUED = /^(begin|beg|start|starting|initial|end|stop|final)(lat|lon|long|lng|latitude|longitude)$|^(lat|lon|long|lng|latitude|longitude)(begin|beg|start|end|stop|final)$/;
 
 const ABBREVIATED_AXIS: Readonly<Record<string, 'latitude' | 'longitude'>> = { lat: 'latitude', lon: 'longitude', long: 'longitude', lng: 'longitude' };
-// What may follow an abbreviated axis word and still name the coordinate: a degree notation, a datum, a hemisphere letter or word, a start / end word.
-// 'Long term mean', 'Long-line catch', 'Lat of station', 'Long axis' are NOT coordinates: 'long' / 'lat' are whole-token abbreviations only here.
-const ABBREVIATED_TAIL = /^(dd|dm|ddm|dms|deg|degs|degree|degrees|decimal|dec|min|wgs84|wgs|n|s|e|w|o|north|south|east|west|ost|nord|sud|hemisphere|hemi|hem|dir|direction|ns|ew)$/;
+// What may NOT follow an abbreviated axis word. 'Lat' / 'Lon' / 'Long' / 'Lng' followed by anything else is a coordinate, as it always was ('Lat WGS 84', 'Lat GPS', 'Lat 1', 'Lon X',
+// 'Lat mean', 'Lat station', 'Lat dd.mm'): the words below make another name of it: 'Long term mean', 'Long-line catch', 'Long axis', 'Long distance', 'Lat bound', 'Lat of station'.
+const NOT_A_COORDINATE_TAIL = new Set(['term', 'terms', 'line', 'lines', 'axis', 'distance', 'bound', 'bounds', 'of']);
 
 /**
- * The axis an abbreviated name ('Lat', 'Lon', 'Long', 'Lng') stands for, with a tail that is only a unit, a datum, a hemisphere or a start / end word
- * ('Long E', 'Lat deg', 'Lon dd', 'Lat start'); undefined when other words follow ('Long term mean', 'Long line', 'Lat bound mean'). The key is a headerKey.
+ * The axis an abbreviated name ('Lat', 'Lon', 'Long', 'Lng') stands for, with whatever follows it except the words that make it another name (term, line, axis, distance, bound, of);
+ * undefined for those ('Long term mean', 'Long-line catch'). The key is a headerKey.
  */
 export function abbreviatedAxis(key: string): 'latitude' | 'longitude' | undefined {
   const tokens = key.split(' ').filter((t) => t !== '');
   const axis = ABBREVIATED_AXIS[tokens[0] ?? ''];
   if (axis === undefined) return undefined;
-  return tokens.slice(1).every((t) => ABBREVIATED_TAIL.test(t) || START_WORDS.has(t) || END_WORDS.has(t)) ? axis : undefined;
+  return tokens.slice(1).some((t) => NOT_A_COORDINATE_TAIL.has(t)) ? undefined : axis;
 }
 
 /** The axis a header word names ('lat', 'Latitude', 'Szerokość geogr.', 'Breitengrad'), undefined for anything else. */
@@ -150,12 +150,13 @@ const ABUNDANCE_NAME =
 /** Is this header (headerKey) an abundance, a number of specimens? The converter reads such a column as a quantity. */
 export const isAbundanceName = (key: string): boolean => ABUNDANCE_NAME.test(key);
 
-const STATISTIC_NAME_TAIL = / (st dev|stdev|std|sd|se|sem|cv|min|max|minimum|maximum|median|n)$/;
-const MEAN_NAME_TAIL = / (mean|average|avg)$/;
+const STATISTIC_NAME_TAIL = / (st dev|stdev|std|sd|se|sem|cv|n)$/;
+const MEAN_NAME_TAIL = / (mean|average|avg|min|max|minimum|maximum|median)$/;
 
 /**
- * A header key that names a statistic of a variable ('temperature st dev', 'salinity max', 'oxygen n') as { base, statistic: true }; 'temperature mean' as { base, statistic: false }
- * (the mean IS the variable); undefined for any other key. A spread or an extreme is not the variable itself and keeps its own name, so two columns never claim one variable.
+ * A header key that names a spread or a count of a variable ('temperature st dev', 'oxygen n') as { base, statistic: true }; 'temperature mean', 'salinity max', 'ph min', 'temperature median'
+ * as { base, statistic: false } (the same physical quantity: the variable's range checks apply to it); undefined for any other key. A spread is not the variable itself and keeps its own
+ * name, so it never claims the variable's slot.
  */
 export function statisticOfName(key: string): { base: string; statistic: boolean } | undefined {
   const s = STATISTIC_NAME_TAIL.exec(key);

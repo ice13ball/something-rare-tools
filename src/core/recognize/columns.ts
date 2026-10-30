@@ -208,7 +208,7 @@ const SITE_DEPTH =
   /\b(site|bottom|seafloor|seabed|sea floor|sounding|total|maximum|max)\b.*\bdepth\b|\bdepth\b.*\b(of the site|of the station|of the bottom|of the seafloor|of the sea floor)\b|\bdepth (at|of) (the )?(site|station|bottom)\b/;
 // 'Depth-integrated chlorophyll', 'Depth averaged temperature', 'Integrated over depth': the depth word qualifies a measurement made over a depth range, it is not the depth of the sample.
 // A bare 'Mean depth' / 'Average depth' IS a depth (the middle of the sampled layer) and stays one.
-const DEPTH_QUALIFIER = /\bdepth (integrated|integral|averaged|weighted|resolved|dependent|corrected|normali[sz]ed|specific)\b|\b(integrated|averaged|integral) (over|across|through|within|by) (the )?(water )?(column|depth)\b|\b(over|across) (the )?depth\b/;
+const DEPTH_QUALIFIER = /\bdepth (integrated|integral|averaged|weighted)\b|\b(integrated|averaged|integral) (over|across|through|within|by) (the )?(water )?(column|depth)\b|\b(over|across) (the )?depth\b/;
 const OTHER_DEPTH = /\b(secchi|mixed layer|mld|euphotic|photic|thermocline|chlorophyll max|compensation)\b/;
 const FLAG = /^(qf|qc|flag)( |$)|( flag| flags| qf| qc)$|^quality( flag| control| code)?( |$)/;
 
