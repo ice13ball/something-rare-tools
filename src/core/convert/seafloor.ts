@@ -12,9 +12,9 @@ import { foldDiacritics, headerKey } from '../recognize/vocab';
  * taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value." So the water depth of the site is the
  * plain depth (minimum/maximumDepthInMeters) and the depth in the sediment is a NEGATIVE distance in metres.
  *
- * The one unit conversion. A depth below the seafloor in centimetres is written in metres by moving the decimal point two places, done ON THE TEXT of the cell: no float, no rounding, every digit
- * kept ("0.5" cm is "-0.005", "12.30" cm is "-0.1230"). A depth in metres is only given its sign. This is the only unit conversion the converter makes anywhere; any other unit is refused
- * (CONV-SEAFLOOR-UNIT) and the depth column of a plain depth is never rescaled (CONV-DEPTH-UNIT).
+ * A unit conversion. A depth below the seafloor in centimetres is written in metres by moving the decimal point two places, done ON THE TEXT of the cell: no float, no rounding, every digit
+ * kept ("0.5" cm is "-0.005", "12.30" cm is "-0.1230"). A depth in metres is only given its sign. The other unit conversion is a PLAIN depth in fathoms, feet or km (recognize/depthUnit.ts, CONV-DEPTH-CONVERTED); any other unit of this column is refused
+ * (CONV-SEAFLOOR-UNIT) and a plain depth in cm is refused with advice to use this role (CONV-DEPTH-UNIT).
  *
  * A single column is one depth of the sample: minimum = maximum. (The two Darwin Core terms are "lesser" and "greater" distance, and the example above lists the top as the minimum, so a pair
  * of top and bottom columns would have to settle an inconsistency of the standard; that is not read here.)

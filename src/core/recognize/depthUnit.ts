@@ -3,13 +3,14 @@
 
 /**
  * The unit of a depth column. Darwin Core minimumDepthInMeters / maximumDepthInMeters are metres, so a depth in another unit must never reach them
- * unconverted. Only units with an EXACT definition in metres are converted (international fathom 1.8288 m, international foot 0.3048 m, kilometre,
- * centimetre); any other unit stays a block (CONV-DEPTH-UNIT). The recogniser keeps the unit on the role, /check and /convert read it from there.
+ * unconverted. Only units with an EXACT definition in metres are converted (international fathom 1.8288 m, international foot 0.3048 m, kilometre); any other
+ * non-metre unit blocks (CONV-DEPTH-UNIT). A centimetre depth is NOT converted: on a plain depth column it is far more likely a depth in a sediment core, which has its own
+ * role and its own advice. The unit is read from the header whatever role chose the column (build.ts colsOf), so a page path cannot skip it.
  */
 
 export interface DepthUnitFactor {
-  /** The name the findings print. */
-  name: 'fathom' | 'foot' | 'kilometre' | 'centimetre';
+  /** The symbol the findings print ("1 fm = 1.8288 m"). */
+  symbol: 'fm' | 'ft' | 'km';
   /** The factor to metres as the exact decimal text. */
   factor: string;
   /** numerator / 10^denominatorDigits is the factor. */
@@ -17,44 +18,28 @@ export interface DepthUnitFactor {
   denominatorDigits: number;
 }
 
-const FATHOM: DepthUnitFactor = { name: 'fathom', factor: '1.8288', numerator: 18288n, denominatorDigits: 4 };
-const FOOT: DepthUnitFactor = { name: 'foot', factor: '0.3048', numerator: 3048n, denominatorDigits: 4 };
-const KILOMETRE: DepthUnitFactor = { name: 'kilometre', factor: '1000', numerator: 1000n, denominatorDigits: 0 };
-const CENTIMETRE: DepthUnitFactor = { name: 'centimetre', factor: '0.01', numerator: 1n, denominatorDigits: 2 };
+const FATHOM: DepthUnitFactor = { symbol: 'fm', factor: '1.8288', numerator: 18288n, denominatorDigits: 4 };
+const FOOT: DepthUnitFactor = { symbol: 'ft', factor: '0.3048', numerator: 3048n, denominatorDigits: 4 };
+const KILOMETRE: DepthUnitFactor = { symbol: 'km', factor: '1000', numerator: 1000n, denominatorDigits: 0 };
 
 const FACTORS = new Map<string, DepthUnitFactor>([
-  ['fm', FATHOM],
-  ['fms', FATHOM],
-  ['fth', FATHOM],
-  ['fthm', FATHOM],
-  ['fthms', FATHOM],
-  ['ftm', FATHOM],
-  ['fathom', FATHOM],
-  ['fathoms', FATHOM],
-  ['ft', FOOT],
-  ['feet', FOOT],
-  ['foot', FOOT],
-  ['km', KILOMETRE],
-  ['kilometre', KILOMETRE],
-  ['kilometres', KILOMETRE],
-  ['kilometer', KILOMETRE],
-  ['kilometers', KILOMETRE],
-  ['cm', CENTIMETRE],
-  ['centimetre', CENTIMETRE],
-  ['centimetres', CENTIMETRE],
-  ['centimeter', CENTIMETRE],
-  ['centimeters', CENTIMETRE],
+  ...['fm', 'fms', 'fth', 'fths', 'fthm', 'fthms', 'ftm', 'ftms', 'fathom', 'fathoms'].map((k) => [k, FATHOM] as const),
+  ...['ft', 'fts', 'feet', 'foot'].map((k) => [k, FOOT] as const),
+  ...['km', 'kilometre', 'kilometres', 'kilometer', 'kilometers'].map((k) => [k, KILOMETRE] as const),
 ]);
 
 const METRES = new Set(['m', 'metre', 'metres', 'meter', 'meters']);
 
 /**
- * Abbreviations of a LENGTH unit a depth column may carry in its name that are NOT converted: they are ambiguous or rare ('f' is feet or fathoms, 'dm' / 'mm' /
- * 'yd' / 'mi' / 'nm' are decimetre, millimetre, yard, mile, nautical mile or nanometre). On a depth header they are a unit, never metres, so the column blocks until its unit is said.
+ * Length units a depth column may carry that are NOT converted: ambiguous ('f' is feet or fathoms) or without a use here. A depth header that states one of them is a depth in that unit,
+ * never metres, so the column blocks until its unit is said. (cm and mm stay here: a centimetre depth is usually a sediment depth.)
  */
-const AMBIGUOUS = new Set(['f', 'fa', 'fat', 'dm', 'mm', 'yd', 'yds', 'mi', 'nm', 'nmi']);
+const BLOCKING = new Set(['f', 'fa', 'fat', 'cm', 'mm', 'dm', 'centimetre', 'centimetres', 'centimeter', 'centimeters', 'millimetre', 'millimetres', 'decimetre', 'yd', 'yds', 'yard', 'yards', 'in', 'inch', 'inches', 'mi', 'mile', 'miles', 'nm', 'nmi']);
+/** Words that follow the unit in a name without being part of it ('Depth_ft_max'). */
+const BOUND_WORDS = new Set(['min', 'max', 'minimum', 'maximum', 'top', 'bottom', 'upper', 'lower', 'start', 'end', 'from', 'to', 'begin', 'beg']);
+const DEPTH_WORD = /^(?:.*depth|tiefe|glebokosc|głębokość|profondeur|profundidad|sounding)$/i;
 
-const clean = (unit: string): string => unit.trim().toLowerCase().replace(/\./g, '');
+const clean = (unit: string): string => unit.trim().toLowerCase().replace(/[.\s]/g, '');
 
 /** Is this unit text metres? */
 export const isMetreUnit = (unit: string): boolean => METRES.has(clean(unit));
@@ -64,22 +49,40 @@ export function depthUnitFactor(unit: string | undefined): DepthUnitFactor | und
   return unit === undefined ? undefined : FACTORS.get(clean(unit));
 }
 
+const isUnit = (k: string): boolean => METRES.has(k) || FACTORS.has(k) || BLOCKING.has(k);
+
 /**
- * The unit a depth header states in its NAME, without brackets: 'Depth_fm', 'depth_ft_max', 'Depth feet', 'min_depth_km'. Only the tokens AFTER the depth word are read, and a
- * token is a unit only when it is a unit abbreviation ('depth_mean', 'Depth_flag', 'depth_from', 'Depth_min' are not). Returns the token as written, or undefined.
+ * The unit a header states for its depth, in whatever form: in brackets ('Depth (fth)', 'Depth [km]'), after any separator ('Depth_ft', 'Depth, ft', 'Depth-ft', 'Depth/ft', 'Depth.ft',
+ * 'Depth feet'), before the depth word ('ft_depth'), or a header that is the unit word ('Fathoms'). A unit is a token that ENDS the name (only a bound word may follow: 'Depth_ft_max') and does
+ * not follow a number ('Depth at 10 km' is no unit; 'Depth_km_offshore' neither). Two different units in one name ('depth_m_ft') are returned joined ('m/ft'): no exact factor, so the column
+ * blocks. A name that states no unit returns undefined ('depth_mean', 'Depth_flag', 'depth_from'). The unit is returned as written.
  */
 export function depthSuffixUnit(header: string): string | undefined {
-  const tokens = header
-    .trim()
-    .split(/[\s_]+/)
-    .filter((t) => t !== '');
-  const at = tokens.findIndex((t) => /^(depth|tiefe|glebokosc|głębokość|profondeur|profundidad)$/i.test(t) || /depth$/i.test(t));
-  if (at < 0) return undefined;
-  for (const t of tokens.slice(at + 1)) {
-    const k = clean(t);
-    if (FACTORS.has(k) || AMBIGUOUS.has(k)) return t;
+  let name = header.trim();
+  // a bracket group at the end: a unit, or a remark ('(CTD)') that is cut off
+  const group = /[[(]([^[\]()]*)[\])]\s*$/.exec(name);
+  if (group) {
+    const k = clean(group[1]);
+    if (isUnit(k)) return group[1].trim().replace(/\.$/, '');
+    name = name.slice(0, group.index).trim();
   }
-  return undefined;
+  const tokens = name.split(/[^\p{L}\p{N}µ]+/u).filter((t) => t !== '');
+  // the end of the name: drop trailing bound words
+  let end = tokens.length;
+  while (end > 1 && BOUND_WORDS.has(tokens[end - 1].toLowerCase())) end--;
+  const last = tokens[end - 1];
+  const found: string[] = [];
+  if (last !== undefined && isUnit(clean(last)) && !(end >= 2 && /^\d+$/.test(tokens[end - 2]))) {
+    // a lone 'in' / 'f' after other words is the word ('depth in situ' has no unit at its end, but 'depth in' would); a unit needs a depth-like word or to stand alone
+    found.push(last);
+  } else if (tokens.length >= 2 && isUnit(clean(tokens[0])) && tokens.slice(1).some((t) => DEPTH_WORD.test(t))) {
+    found.push(tokens[0]);
+  }
+  if (found.length === 0) return undefined;
+  // a second, different unit among the other words is a conflict ('depth_m_ft')
+  const others = tokens.slice(0, end - 1).filter((t) => isUnit(clean(t)) && clean(t) !== 'in' && clean(t) !== 'f' && clean(t) !== clean(found[0]));
+  if (others.length > 0) return [...others, found[0]].map((t) => t.replace(/\.$/, '')).join('/');
+  return found[0].replace(/\.$/, '');
 }
 
 /**

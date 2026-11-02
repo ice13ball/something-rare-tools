@@ -250,22 +250,29 @@ function derive(node: Node): void {
   let dec: number | undefined;
   let verbatimMin: string | undefined;
   let verbatimMax: string | undefined;
+  let textMin: string | undefined;
+  let textMax: string | undefined;
   for (const k of kids) {
     const lo = k.rec.depthMin;
     const hi = k.rec.depthMax;
     if (lo !== undefined && (minD === undefined || lo < minD)) {
       minD = lo;
       verbatimMin = k.rec.depthVerbatim?.min;
+      // a converted depth keeps the text it was written with, so a parent is written like its child (30.48, not 30.4800)
+      textMin = k.rec.depthVerbatim === undefined ? undefined : k.rec.depthMinText;
     }
     if (hi !== undefined && (maxD === undefined || hi > maxD)) {
       maxD = hi;
       verbatimMax = k.rec.depthVerbatim?.max;
+      textMax = k.rec.depthVerbatim === undefined ? undefined : k.rec.depthMaxText;
     }
     const d = k.rec.depthDecimals;
     if (d !== undefined && (dec === undefined || d > dec)) dec = d;
   }
   if (minD !== undefined) rec.depthMin = minD;
   if (maxD !== undefined) rec.depthMax = maxD;
+  if (textMin !== undefined) rec.depthMinText = textMin;
+  if (textMax !== undefined) rec.depthMaxText = textMax;
   if (verbatimMin !== undefined || verbatimMax !== undefined) rec.depthVerbatim = { ...(verbatimMin === undefined ? {} : { min: verbatimMin }), ...(verbatimMax === undefined ? {} : { max: verbatimMax }) };
   if (minD !== undefined || maxD !== undefined) {
     rec.derived.depth = true;

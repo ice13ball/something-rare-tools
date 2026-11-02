@@ -27,6 +27,8 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
  *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column of a wide sheet: no record, no lines (info); with rows = yes (a long sheet) count = rows with a taxon and an empty / NA quantity and no other value, lines = those rows (info)
  *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
+ *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept)
+ *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -36,7 +38,7 @@ import type { RuleSpec } from './spec';
  *   CONV-NERC-UNIT-MISMATCH    column, code, unit  the label of the confirmed concept (code) says per unit mass/volume against the unit of the column
  *   CONV-UNIT-NO-P06           unit             unit = the unit as declared
  *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states (not metres, no exact factor: blocks)
- *   CONV-DEPTH-CONVERTED       unit, factor, example   field = depth column, unit = its unit (fathom, foot, km, cm), factor = the exact factor to metres, example = the first value and its result (warning, accept; the original is verbatimDepth)
+ *   CONV-DEPTH-CONVERTED       unit, symbol, factor, example   field = depth column, unit = its unit as written (fathom, foot, km), symbol = fm | ft | km, factor = the exact factor to metres, example = the first value and its result (warning, accept; the original is verbatimDepth)
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
@@ -284,17 +286,43 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     citations: [OBIS_OCCURRENCE_STATUS],
   },
   {
+    id: 'CONV-BIOMASS-UNIT-UNCLEAR',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `Nazwa kolumny wagi „{field}” zawiera jednostkę masy, ale reszta („{value}”) nie jest zrozumiała, więc jednostka pozostaje pusta ({+lineCount:wiersz|wiersze|wierszy} {lines}). Wpisz jednostkę w nawiasie w nagłówku, np. [kg/km2].`,
+      en: `The name of weight column "{field}" holds a mass unit, but the rest ("{value}") is not understood, so the unit is left empty ({+lineCount:line|lines} {lines}). Put the unit in brackets in the header, e.g. [kg/km2].`,
+      de: `Der Name der Gewichtsspalte „{field}“ enthält eine Masseneinheit, der Rest („{value}“) wird aber nicht verstanden, die Einheit bleibt daher leer ({+lineCount:Zeile|Zeilen} {lines}). Schreiben Sie die Einheit in Klammern in den Spaltenkopf, z. B. [kg/km2].`,
+      fr: `Le nom de la colonne de poids « {field} » contient une unité de masse, mais le reste (« {value} ») n'est pas compris : l'unité reste vide ({+lineCount:ligne|lignes} {lines}). Mettez l'unité entre crochets dans l'en-tête, p. ex. [kg/km2].`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} biomass value(s) of a column whose name holds a mass unit followed by words that are not a per-area / per-volume part or a kind of mass ("{value}"). A partial unit would change the meaning of the number, so measurementUnit is left empty.`,
+  },
+  {
+    id: 'CONV-TAXON-EMPTY-ROW',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} liczbę lub wagę, ale pustą nazwę taksonu w „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie ma do czego jej przypisać, więc nie jest przekształcana. Wpisz nazwę taksonu albo usuń {+count:ten wiersz|te wiersze|te wiersze}.`,
+      en: `{count} {+count:row has|rows have} a number or a weight but an empty taxon name in "{field}" ({+lineCount:line|lines} {lines}). There is nothing to attach it to, so {+count:it is|they are} not converted. Type the taxon name or delete {+count:the row|the rows}.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} eine Zahl oder ein Gewicht, aber keinen Taxonnamen in „{field}“ ({+lineCount:Zeile|Zeilen} {lines}). Es gibt nichts, dem sie zugeordnet werden kann, daher wird nichts umgewandelt. Tragen Sie den Namen ein oder löschen Sie {+count:die Zeile|die Zeilen}.`,
+      fr: `{count} {+count:ligne a|lignes ont} un nombre ou un poids mais pas de nom de taxon dans « {field} » ({+lineCount:ligne|lignes} {lines}). Rien n'y est rattaché : non converti. Saisissez le nom du taxon ou supprimez {+count:la ligne|les lignes}.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity or a biomass value and no taxon name; no occurrence can be written for them and they are not converted.`,
+  },
+  {
     id: 'CONV-ZERO-WITH-BIOMASS',
     category: 'B',
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} ilość 0 i jednocześnie wagę większą od zera ({+lineCount:wiersz|wiersze|wierszy} {lines}). To się wyklucza. Wiersz czytany jest jako zero (waga nie jest zapisana). Sprawdź, która z dwóch wartości jest błędna.`,
-      en: `{count} {+count:row has|rows have} a quantity of 0 and a weight above zero ({+lineCount:line|lines} {lines}). The two contradict each other. The row is read as the zero it says (the weight is not written). Check which of the two values is wrong.`,
-      de: `{count} {+count:Zeile hat|Zeilen haben} die Menge 0 und ein Gewicht über null ({+lineCount:Zeile|Zeilen} {lines}). Das widerspricht sich. Die Zeile wird als die angegebene Null gelesen (das Gewicht wird nicht geschrieben). Prüfen Sie, welcher Wert falsch ist.`,
-      fr: `{count} {+count:ligne a|lignes ont} une quantité de 0 et un poids supérieur à zéro ({+lineCount:ligne|lignes} {lines}). C'est contradictoire. La ligne est lue comme le zéro indiqué (le poids n'est pas écrit). Vérifiez laquelle des deux valeurs est fausse.`,
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} ilość 0 i wagę większą od zera ({+lineCount:wiersz|wiersze|wierszy} {lines}). To się wyklucza. Pominięto je: ani obecne, ani nieobecne (także przy pełnej liście gatunków). Sprawdź, która wartość jest błędna.`,
+      en: `{count} {+count:row has|rows have} a quantity of 0 and a weight above zero ({+lineCount:line|lines} {lines}). These contradict each other. Left out: neither present nor absent (also with the full species list ticked). Check which value is wrong.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} die Menge 0 und ein Gewicht über null ({+lineCount:Zeile|Zeilen} {lines}). Das widerspricht sich. Ausgelassen: weder vorhanden noch abwesend (auch bei vollständiger Artenliste). Prüfen Sie, welcher Wert falsch ist.`,
+      fr: `{count} {+count:ligne a|lignes ont} une quantité de 0 et un poids supérieur à zéro ({+lineCount:ligne|lignes} {lines}). C'est contradictoire. Omis : ni présence ni absence (même avec la liste complète). Vérifiez quelle valeur est fausse.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity of 0 and a biomass value above zero. The row is handled as the zero (skipped, or occurrenceStatus absent with the full species list ticked) and its biomass is not written; neither value is kept silently.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity of 0 and a biomass value above zero. The row is left out whatever the full-list tick says: occurrenceStatus absent for a contradicted zero would be a false absence, and present would invent a count. Its biomass is not written; neither value is kept silently.`,
   },
   {
     id: 'CONV-SAMPLE-PER-ROW',
@@ -302,10 +330,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['events', 'occurrences', 'ratio', 'shared'],
     plain: {
-      pl: `Arkusz „{sheet}” ma {events} zdarzeń próbek na {occurrences} wystąpień ({ratio}), a {shared} z nich dzieli stację, datę i głębokość z innym. Wiersz to jeden takson, więc próbkę chyba rozbito na zdarzenie na wiersz (inny kod w każdym wierszu). Użyj kodu, który nazywa próbkę.`,
-      en: `Sheet "{sheet}" has {events} sample events for {occurrences} occurrences ({ratio}), and {shared} of them share station, date and depth with another. A row is one taxon, so a sample was probably split into an event per row (a different code on every row). Use a code that names the sample.`,
-      de: `Das Blatt „{sheet}“ hat {events} Probenereignisse für {occurrences} Vorkommen ({ratio}); {shared} davon teilen Station, Datum und Tiefe mit einem anderen. Eine Zeile ist ein Taxon: die Probe wurde wohl in ein Ereignis je Zeile zerlegt (anderer Code je Zeile). Verwenden Sie einen Code, der die Probe benennt.`,
-      fr: `La feuille « {sheet} » a {events} événements d'échantillon pour {occurrences} occurrences ({ratio}), dont {shared} partagent station, date et profondeur avec un autre. Une ligne est un taxon : l'échantillon a sans doute été coupé en un événement par ligne (code différent à chaque ligne). Utilisez un code qui nomme l'échantillon.`,
+      pl: `Arkusz „{sheet}” ma {events} {+events:zdarzenie próbki|zdarzenia próbek|zdarzeń próbek} na {occurrences} {+occurrences:wystąpienie|wystąpienia|wystąpień} ({ratio}); {shared} dzieli stację, datę i głębokość z innym. Wiersz to jeden takson, więc próbkę chyba rozbito na wiersze (inny kod w każdym). Użyj kodu nazywającego próbkę.`,
+      en: `Sheet "{sheet}" has {events} sample {+events:event|events} for {occurrences} {+occurrences:occurrence|occurrences} ({ratio}); {shared} share station, date and depth with another. A row is one taxon, so a sample was probably split into rows (a different code on each). Use a code that names the sample.`,
+      de: `Das Blatt „{sheet}“ hat {events} {+events:Probenereignis|Probenereignisse} für {occurrences} Vorkommen ({ratio}); {shared} teilen Station, Datum und Tiefe mit einem anderen. Eine Zeile ist ein Taxon: die Probe wurde wohl in Zeilen zerlegt (anderer Code je Zeile). Verwenden Sie einen Code, der die Probe benennt.`,
+      fr: `La feuille « {sheet} » a {events} {+events:événement d'échantillon|événements d'échantillon} pour {occurrences} {+occurrences:occurrence|occurrences} ({ratio}) ; {shared} partagent station, date et profondeur. Une ligne est un taxon : l'échantillon a sans doute été coupé en lignes. Utilisez un code qui nomme l'échantillon.`,
     },
     technical: `{file}, {sheet}: {events} sample events for {occurrences} occurrences of a long sheet ({ratio}; at least 30 occurrences and events of at least 80% of them), and {shared} of the events share station, date and depth with another event (at least half do). A sample is one event with its taxa as occurrences; one event per taxon row means the sample codes name rows. Checked on the output, whoever wrote the codes.`,
     citations: [OBIS_OCCURRENCE],
@@ -542,26 +570,26 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['unit'],
     plain: {
-      pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter przelicza tylko sążnie (fm), stopy (ft), km i cm. Podaj metry albo popraw jednostkę kolumny w tabeli ról. Głębokość w osadzie: wybierz znaczenie „Głębokość w osadzie”.`,
-      en: `Depth column "{field}" states the unit "{unit}". Darwin Core needs metres, and the converter converts only fathoms (fm), feet (ft), km and cm. Give metres or correct the unit of the column in the role table. A depth in sediment: choose the meaning "Depth below seafloor".`,
-      de: `Die Tiefenspalte „{field}“ nennt die Einheit „{unit}“. Darwin Core verlangt Meter; der Konverter rechnet nur Faden (fm), Fuß (ft), km und cm um. Geben Sie Meter an oder korrigieren Sie die Einheit in der Rollentabelle. Tiefe im Sediment: Bedeutung „Tiefe unter dem Meeresboden“ wählen.`,
-      fr: `La colonne de profondeur « {field} » indique l'unité « {unit} ». Darwin Core exige des mètres ; le convertisseur ne convertit que les brasses (fm), pieds (ft), km et cm. Donnez des mètres ou corrigez l'unité dans le tableau des rôles. Profondeur dans un sédiment : choisissez « Profondeur sous le fond ».`,
+      pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter przelicza tylko sążnie (fm), stopy (ft) i km. Podaj metry albo popraw jednostkę kolumny w tabeli ról. Głębokość w osadzie (często w cm): wybierz znaczenie „Głębokość w osadzie”.`,
+      en: `Depth column "{field}" states the unit "{unit}". Darwin Core needs metres, and the converter converts only fathoms (fm), feet (ft) and km. Give metres or correct the unit of the column in the role table. A depth in sediment (often in cm): choose the meaning "Depth below seafloor".`,
+      de: `Die Tiefenspalte „{field}“ nennt die Einheit „{unit}“. Darwin Core verlangt Meter; der Konverter rechnet nur Faden (fm), Fuß (ft) und km um. Geben Sie Meter an oder korrigieren Sie die Einheit in der Rollentabelle. Tiefe im Sediment (oft in cm): Bedeutung „Tiefe unter dem Meeresboden“ wählen.`,
+      fr: `La colonne de profondeur « {field} » indique l'unité « {unit} ». Darwin Core exige des mètres ; le convertisseur ne convertit que les brasses (fm), pieds (ft) et km. Donnez des mètres ou corrigez l'unité dans le tableau des rôles. Profondeur dans un sédiment (souvent en cm) : choisissez « Profondeur sous le fond ».`,
     },
-    technical: `{file}, {sheet} field {field}: depth unit "{unit}" is not metres and has no exact factor here; minimumDepthInMeters and maximumDepthInMeters are in metres. Fathom, foot, km and cm are converted (CONV-DEPTH-CONVERTED). A depth below the seafloor in cm or m has its own role (CONV-SEAFLOOR-UNIT, CONV-SEAFLOOR-VALUE).`,
+    technical: `{file}, {sheet} field {field}: depth unit "{unit}" is not metres and has no exact factor here; minimumDepthInMeters and maximumDepthInMeters are in metres. Fathom, foot and km are converted (CONV-DEPTH-CONVERTED); a centimetre depth is usually a sediment depth and blocks. A depth below the seafloor in cm or m has its own role (CONV-SEAFLOOR-UNIT, CONV-SEAFLOOR-VALUE).`,
     citations: [DWC_DEPTH],
   },
   {
     id: 'CONV-DEPTH-CONVERTED',
     category: 'B',
     severity: 'warning',
-    params: ['unit', 'factor', 'example'],
+    params: ['unit', 'symbol', 'factor', 'example'],
     plain: {
-      pl: `Kolumna głębokości „{field}” jest w jednostce „{unit}”, więc konwerter przeliczył ją na metry (1 {unit} = {factor} m, współczynnik dokładny), np. {example}. Oryginalny zapis jest w kolumnie verbatimDepth. Sprawdź, czy jednostka z nagłówka jest właściwa, i potwierdź przeliczenie.`,
-      en: `Depth column "{field}" is in "{unit}", so the converter converted it to metres (1 {unit} = {factor} m, an exact factor), for example {example}. The original is kept in the verbatimDepth column. Check that the unit in the header is right and accept the conversion.`,
-      de: `Die Tiefenspalte „{field}“ ist in „{unit}“ angegeben, deshalb hat der Konverter sie in Meter umgerechnet (1 {unit} = {factor} m, genauer Faktor), zum Beispiel {example}. Das Original steht in der Spalte verbatimDepth. Prüfen Sie, ob die Einheit im Spaltenkopf stimmt, und bestätigen Sie die Umrechnung.`,
-      fr: `La colonne de profondeur « {field} » est en « {unit} » : le convertisseur l'a convertie en mètres (1 {unit} = {factor} m, facteur exact), par exemple {example}. L'original est conservé dans la colonne verbatimDepth. Vérifiez que l'unité de l'en-tête est la bonne et acceptez la conversion.`,
+      pl: `Kolumna głębokości „{field}” jest w jednostce „{unit}”, więc konwerter przeliczył ją na metry (1 {symbol} = {factor} m, współczynnik dokładny), np. {example}. Oryginalny zapis jest w kolumnie verbatimDepth. Sprawdź, czy jednostka z nagłówka jest właściwa, i potwierdź przeliczenie.`,
+      en: `Depth column "{field}" is in "{unit}", so the converter converted it to metres (1 {symbol} = {factor} m, an exact factor), for example {example}. The original is kept in the verbatimDepth column. Check that the unit in the header is right and accept the conversion.`,
+      de: `Die Tiefenspalte „{field}“ ist in „{unit}“ angegeben, deshalb hat der Konverter sie in Meter umgerechnet (1 {symbol} = {factor} m, genauer Faktor), zum Beispiel {example}. Das Original steht in der Spalte verbatimDepth. Prüfen Sie, ob die Einheit im Spaltenkopf stimmt, und bestätigen Sie die Umrechnung.`,
+      fr: `La colonne de profondeur « {field} » est en « {unit} » : le convertisseur l'a convertie en mètres (1 {symbol} = {factor} m, facteur exact), par exemple {example}. L'original est conservé dans la colonne verbatimDepth. Vérifiez que l'unité de l'en-tête est la bonne et acceptez la conversion.`,
     },
-    technical: `{file}, {sheet} field {field}: depth in "{unit}" multiplied by the exact factor {factor} (decimal arithmetic on the digits of the cell) into minimumDepthInMeters / maximumDepthInMeters; the cell as written, with its unit, is verbatimDepth. Example: {example}.`,
+    technical: `{file}, {sheet} field {field}: depth in "{unit}" multiplied by the exact factor {factor} (1 {symbol}) (decimal arithmetic on the digits of the cell) into minimumDepthInMeters / maximumDepthInMeters; the cell as written, with its unit, is verbatimDepth. Example: {example}.`,
     citations: [DWC_DEPTH],
   },
   {
@@ -1314,6 +1342,26 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a taxon and an empty or missing-data quantity (and no biomass value above zero), so no occurrence is written. Rows read + zeros skipped + these rows + rows kept without a count = the rows that have a taxon.`,
   },
+  // CONV-NA-SKIPPED of a long sheet whose rows have a number in another quantity-named column
+  'CONV-NA-SKIPPED:rows-columns': {
+    plain: {
+      pl: `{count} {+count:wiersz z gatunkiem nie ma|wiersze z gatunkiem nie mają|wierszy z gatunkiem nie ma} ilości w kolumnie „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie powstał z {+count:niego|nich|nich} rekord. Te wiersze mają za to liczby w: {columns}. Jeśli to ilość, oznacz tę kolumnę jako ilość.`,
+      en: `{count} {+count:row with a species has|rows with a species have} no quantity in column "{field}" ({+lineCount:line|lines} {lines}). No record is made from {+count:it|them}. These rows do have numbers in: {columns}. If that is the quantity, mark that column as the quantity.`,
+      de: `{count} {+count:Zeile mit einer Art hat|Zeilen mit einer Art haben} keine Menge in der Spalte „{field}“ ({+lineCount:Zeile|Zeilen} {lines}). Daraus entsteht kein Datensatz. Diese Zeilen haben aber Zahlen in: {columns}. Ist das die Menge, ordnen Sie diese Spalte als Menge zu.`,
+      fr: `{count} {+count:ligne avec une espèce n'a|lignes avec une espèce n'ont} pas de quantité dans la colonne « {field} » ({+lineCount:ligne|lignes} {lines}). Aucun enregistrement n'en est tiré. Ces lignes ont en revanche des nombres dans : {columns}. Si c'est la quantité, indiquez cette colonne comme quantité.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a taxon and an empty or missing-data quantity, so no occurrence is written; other quantity-named columns are filled on them ({columns}).`,
+  },
+  // the whole quantity column is empty
+  'CONV-NA-SKIPPED:rows-empty': {
+    plain: {
+      pl: `Kolumna „{field}” jest pusta we wszystkich {count} wierszach z gatunkiem ({+lineCount:wiersz|wiersze|wierszy} {lines}), więc nic się z niej nie zapisuje. Liczby są w: {columns}. Oznacz tę kolumnę jako ilość.`,
+      en: `Column "{field}" is empty in all {count} rows with a species ({+lineCount:line|lines} {lines}), so nothing is written from it. The numbers are in: {columns}. Mark that column as the quantity.`,
+      de: `Die Spalte „{field}“ ist in allen {count} Zeilen mit einer Art leer ({+lineCount:Zeile|Zeilen} {lines}), daraus wird also nichts geschrieben. Die Zahlen stehen in: {columns}. Ordnen Sie diese Spalte als Menge zu.`,
+      fr: `La colonne « {field} » est vide dans les {count} lignes avec une espèce ({+lineCount:ligne|lignes} {lines}) : rien n'en est écrit. Les nombres sont dans : {columns}. Indiquez cette colonne comme quantité.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: the quantity column is empty on all {count} rows that have a taxon; other quantity-named columns are filled ({columns}).`,
+  },
   // CONV-ZERO-SKIPPED of a presence-only list: the cells are marks (0, -, absent), not zeros
   'CONV-ZERO-SKIPPED:presence': {
     plain: {
@@ -1430,7 +1478,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
-  if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS['CONV-NA-SKIPPED:rows'];
+  if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS[f.params.empty === 'yes' && typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-empty' : typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-columns' : 'CONV-NA-SKIPPED:rows'];
   if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') {
     return PROFILE_VARIANTS[Number(f.params.remaining) > 0 ? 'CONV-ID-DUPLICATE:replicate-partial' : 'CONV-ID-DUPLICATE:replicate'];

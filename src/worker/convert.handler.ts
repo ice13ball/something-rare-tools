@@ -339,7 +339,7 @@ export function createConvertHandler(): ConvertHandler {
     if (!sheet) return null;
     // the shape the user chose on the page decides how the codes are made: a long sheet gets one code per sample, a wide one per row
     const shape = req.shape ?? suggestConvertShape(req.mapping.columns) ?? 'wide';
-    const p = proposeSampleCodes(h.parsed, sheet, req.mapping, shape);
+    const p = proposeSampleCodes(h.parsed, sheet, req.mapping, shape, req.extra ?? []);
     return p ? { fileName: h.parsed.fileName, header: p.header, rows: p.codes.filter((c) => c !== '').length, csv: p.csv, ...(p.grouping === undefined ? {} : { grouping: p.grouping }), ...(p.refusal === undefined ? {} : { refusal: p.refusal }) } : null;
   }
 

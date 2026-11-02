@@ -37,7 +37,7 @@ export function stripTypeSuffix(h: string): string {
 const SINGLE_TOKEN_EXTRA_UNITS = new Set(['cm', 'mm']);
 
 /** Is this text, found in round brackets, a unit ('m', 'µmol L-1', 'kg m-3') and not a remark ('at 25ºC')? */
-const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰', 'ft', 'feet', 'foot', 'fm', 'fathom', 'fathoms']);
+const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰']);
 function looksLikeUnit(text: string): boolean {
   const t = text.trim();
   if (normaliseUnit(t) !== undefined || SIMPLE_UNITS.has(t.toLowerCase())) return true;
@@ -969,7 +969,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
           break;
         case 'depth': {
           // a unit written in the NAME without brackets ('Depth_fm', 'Depth feet') is kept on the role: dropping it made a fathom depth read as metres
-          const unit = hu.unit ?? depthSuffixUnit(e.proposal.header) ?? code?.hint?.unit;
+          const unit = depthSuffixUnit(e.proposal.header) ?? hu.unit ?? code?.hint?.unit;
           if (c.dwcDepth) {
             e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
             break;

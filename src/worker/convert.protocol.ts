@@ -144,16 +144,27 @@ export interface CodeProposalView {
   /** The user's sheet as CSV with the new code column last. */
   csv: string;
   /** A long sheet: the rows were grouped into samples, one code per group; the page shows this BEFORE the file is offered. Absent for a wide sheet (one code per row). */
-  grouping?: { samples: number; rows: number; by: { part: 'cruise' | 'station' | 'date' | 'time' | 'depth' | 'replicate' | 'position' | 'column'; header: string }[]; repeats: number };
-  /** A long sheet that cannot be grouped: no file is offered (csv is empty). */
-  refusal?: { reason: 'no-columns' | 'taxon-repeats'; rows: number; repeats?: number };
+  grouping?: {
+    samples: number;
+    rows: number;
+    by: { part: 'cruise' | 'station' | 'date' | 'time' | 'depth' | 'replicate' | 'position' | 'column'; header: string }[];
+    /** Columns added to the key beyond the mapped roles, and why. */
+    added: { header: string; why: 'name' | 'chosen' | 'position' }[];
+    repeats: number;
+    /** Rows with an empty cell in a column of the key. */
+    blanks: number;
+    /** Almost every row became a sample of its own. */
+    nearlyRows: boolean;
+  };
+  /** A long sheet that cannot be grouped: no file is offered (csv is empty). `candidates` are columns that would remove the repeats; the user may pick one. */
+  refusal?: { reason: 'no-columns' | 'taxon-repeats'; rows: number; repeats?: number; candidates?: { index: number; header: string; repeats: number; groups: number }[] };
 }
 
 export interface ConvertProtocol {
   reset: { req: Record<never, never>; res: null };
   parse: { req: { files: InputFile[] }; res: ConvertParseResult };
   convert: { req: { body: ConvertRequestBody }; res: ConvertView };
-  proposeCodes: { req: { fileId: string; sheet: string; mapping: SheetMapping; shape?: ConvertShape }; res: CodeProposalView | null };
+  proposeCodes: { req: { fileId: string; sheet: string; mapping: SheetMapping; shape?: ConvertShape; extra?: number[] }; res: CodeProposalView | null };
   /** The user's choice about a long environmental sheet: read it as a normal table (`off`), and which key columns describe the measurement, not the sample. The file is read again; the answer is its new summary. */
   pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
@@ -173,7 +184,7 @@ export interface ConvertEngine {
   reset(): Promise<void>;
   parse(files: InputFile[]): Promise<ConvertParseResult>;
   convert(body: ConvertRequestBody): Promise<ConvertView>;
-  proposeCodes(fileId: string, sheet: string, mapping: SheetMapping, shape?: ConvertShape): Promise<CodeProposalView | null>;
+  proposeCodes(fileId: string, sheet: string, mapping: SheetMapping, shape?: ConvertShape, extra?: number[]): Promise<CodeProposalView | null>;
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
 }

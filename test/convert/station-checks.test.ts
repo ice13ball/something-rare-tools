@@ -5,7 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import { checkStationRows } from '../../src/core/checks/rows';
 import { judge, policyOf } from '../../src/core/convert/policy';
-import { exportSheet } from './exportHelpers';
+import { exportSheet, exportSheets } from './exportHelpers';
+import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
 const H = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];
@@ -57,5 +58,15 @@ describe('station checks in /convert', () => {
   it('one position per station, however many rows: nothing', async () => {
     const e = await exportSheet(H, [row('a', 55, 3), row('b', 55, 3, '2020-06-02'), row('c', 55, 3, '2020-06-03')], q);
     expect(ids(e).some((id) => id.startsWith('ROW-STATION-'))).toBe(false);
+  });
+
+  it('the same station on two sheets with a flipped sign is found across the upload, in the lines of each sheet', async () => {
+    const a = sheetInput(fileOf(H, [row('a', 64.6012, 50.9623), row('b', 64.6013, 50.9621, '2020-06-02')], 'A', { fileName: 'one.csv' }), { quantity: { kind: 'count' } });
+    const b = sheetInput(fileOf(H, [row('c', 64.6011, -50.9625, '2020-06-03')], 'B', { fileName: 'two.csv' }), { quantity: { kind: 'count' } });
+    const e = await exportSheets([a, b]);
+    const f = e.findings.filter((x) => x.ruleId === 'ROW-STATION-MOVED');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ sheet: 'B', file: 'two.csv', lines: [2] });
+    expect(f[0].params.signLon).toBe('yes');
   });
 });

@@ -1142,9 +1142,12 @@ role list has "Biomass / weight (kind not chosen)" and one entry per kind; until
 column. A sample size declared for the sheet appears only in `measurementRemarks`
 (`per sample of 0.0625 m2`, column written only when used, and not when the unit is already per area or
 volume); nothing is divided. `measurementUnitID` is written when the unit is g, mg, kg (P06 UGRM, MGRM,
-KGXX) or a per-area / per-volume mass the rate table knows. The unit is the one of the header
-(`Weight [g]`, `Weight (kg)`) or, when there is none, the one mass unit that stands as a word of the name
-(`weight_kg_total`, `wt_mg`, `Weight_g`: `massUnitInName`); it is never dropped. Two biomass columns of one kind (or both
+KGXX) or a per-area / per-volume mass the rate table knows. The unit is the one of a bracket
+(`Weight [g]`, `Weight (kg)`) or, when there is none, the mass unit that stands as a word of the name **read whole**
+(`biomassNameUnit`): `weight_kg_total` is `kg`, `biomass_kg_km2` is `kg/km2`, `wet_weight_mg_m3` is `mg/m3`. The
+P06 id is written only when the table knows that exact unit; a unit with none is written whole and said
+(`CONV-UNIT-NO-P06`); when a mass unit is followed by words that are neither a per-area / per-volume part nor a kind of
+mass, **no partial unit is written**, `measurementUnit` is empty and `CONV-BIOMASS-UNIT-UNCLEAR` says so. Two biomass columns of one kind (or both
 with the kind open) get the column name in `measurementType`, so no two columns write the same type.
 A row whose count is 0 is not converted unless the species list is declared full (CONV-ZERO-SKIPPED), and
 a biomass value on such a row goes with it (the two contradict each other, so the rows are listed:
@@ -1182,10 +1185,10 @@ Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it 
 same individuals twice (`Totalia sp.` is a genus and stays). On a **long** sheet the name is not the
 last word: an all-taxa total repeats one value on every row of a sample, so the values are compared
 (`valuesRepeatWithinSample`: the rows are grouped by the columns with a sample role and by any still
-ignored text column that is not a function of the taxon, such as a tow number). A column whose values
+ignored or variable column of few distinct values that is not a function of the taxon, such as a tow number, numeric or not). A column whose values
 differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
 biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
-when the sheet has none; else it stays ignored, with a reason that says what to decide), with its own reason
+when the sheet has none and the name says no size and the unit counts organisms ('Total length [mm]', 'Total depth' are not quantities); else it stays ignored, with a reason that says what to decide). The same judgement applies to a column the name already claimed as biomass ('Total weight (kg)'): constant within a sample, it is a total and starts ignored, with its own reason
 (`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). It is never proposed as a measured
 variable, because a variable is written once per sample and values that differ between the rows of a sample
 would conflict. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
@@ -1327,18 +1330,25 @@ code" (the button above applies it).
   new code column last, for the user to check and drop again). **A wide sheet** gets one code per row
   (`<station>-<n>`). **A long sheet** (a row is a taxon) gets **one code per sample**: the rows are grouped
   by the columns that define a sample, read from the mapped roles (cruise, station, date and time, depth,
-  replicate; the position only when nothing else is mapped) and, only while a taxon still repeats inside a
-  group, by one or two more columns (a cast, haul or net number that has no role) that make the repeats
-  few without making every row its own group (`convert/sampleGroups.ts`; a column with a different value
-  on more than half of the rows is a row identifier and is not used). The page **shows the grouping before
-  the file is offered**: "450 samples from 53,608 rows, grouped by station + date + depth", with the
-  number of rows in which a taxon still repeats inside a group (possible replicates the key cannot tell
-  apart, tolerated up to 1% of the rows). A long sheet with nothing to group on, or in which a taxon still
-  repeats in more than 1% of the rows with every grouping tried, gets no proposal and a message saying why:
-  merging real replicates silently is worse than asking for a code column. Whoever wrote the codes, the
-  **output** of a long sheet is checked: 30 or more occurrences, sample events for at least 80% of them
-  and at least half of the events sharing station, date and depth with another event is one sample split
-  into an event per taxon row (`CONV-SAMPLE-PER-ROW`, a warning to accept, naming the ratio); a missing code blocks
+  replicate; the position when nothing else is mapped, and **also when positions differ inside a group**, because
+  rows of one sample that disagree on position block the conversion). Numbers are compared as numbers (`10` and
+  `10.0` are one depth). While a taxon still repeats inside a group, one more column is added **by itself only when
+  its name says cast, haul, tow, net, replicate or deployment** (whole words) and it at least halves the repeats
+  without making every row its own group. Any other column (`Sex`, `Size_class`, `Notes`, `Sorter`, `Mesh`,
+  `Length_mm` ...) would split one sample into several, so it is never picked by the tool: when repeats above 1% of
+  the rows remain, the proposal is refused, the columns that would remove the repeats are **named**, and the user
+  picks one in the preview (`extra`; it is then said to be added because the user chose it).
+  The page **shows the grouping before the file is offered**
+  (`convert/sampleGroups.ts`): "450 samples from 53,608 rows, grouped by station + date + depth", each column
+  added beyond the roles and why, the rows in which a taxon still repeats inside a group (possible replicates the key
+  cannot tell apart, tolerated up to 1%), the rows with an empty cell in a column of the key (grouped together), and a
+  warning when almost every row became a sample (a column of the key may hold a value per row). A long sheet with
+  nothing to group on gets no proposal and a message saying why: merging real replicates silently is worse than
+  asking for a code column. Whoever wrote the codes, the **output** of a long sheet is checked: 30 or more
+  occurrences, sample events for at least 80% of them and at least half of the events sharing station, date and
+  time, depth and position with another event **whose taxa differ** (a taxon seen again at the same place is another
+  sample, not another row of one) is one sample split into an event per taxon row (`CONV-SAMPLE-PER-ROW`, a warning
+  to accept, naming the ratio); a missing code blocks
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
@@ -1403,16 +1413,26 @@ code" (the button above applies it).
   `minimum`/`maximumDistanceAboveSurfaceInMeters`, as the Darwin Core and OBIS manuals describe. A
   depth in centimetres is moved to metres by shifting the decimal point **in the text** (no float,
   no rounding); any other unit of that column is refused (`CONV-SEAFLOOR-UNIT`).
-- **A plain depth in another unit** (`convert/build.ts` `depthReader`, `recognize/depthUnit.ts`): a unit
-  written in the header (`Depth [km]`, `Depth (ft)`, or a suffix `Depth_fm`, `depth_ft_max`, `Depth feet`) is kept
-  on the role. Only a unit with an exact definition in metres is converted, by decimal arithmetic on the digits of
-  the cell (international fathom 1.8288, foot 0.3048, kilometre 1000, centimetre 0.01), and the cell as written,
-  with its unit, goes to `verbatimDepth` of the event (a station or cruise derived from converted samples carries
-  the originals of its extremes). The user is told with `CONV-DEPTH-CONVERTED` (a warning to accept) naming column,
-  factor and the first value. Any other unit (millimetre, decimetre, yard, `f`, `dbar`, a word) blocks with
-  `CONV-DEPTH-UNIT`; a plain `Depth`, `Depth [m]` or `depth_m` stays metres with no finding, and qualifiers
-  (`depth_mean`, `Depth_min`, `depth_from`, `Depth_flag`) are never read as units. `/check` reads the same unit from the
-  role and does not judge the range of a depth in another unit (`ROW-DEPTH-RANGE`).
+- **A plain depth in another unit** (`convert/build.ts` `depthReader`, `recognize/depthUnit.ts`): the unit a
+  header states is read in every form: in brackets (`Depth [km]`, `Depth (fth)`, `(ft.)`), after any separator
+  (`Depth_fm`, `Depth, ft`, `Depth-ft`, `Depth/ft`, `Depth.ft`, `depth_ft_max`, `Depth feet`), before the depth
+  word (`ft_depth`) or as the whole header (`Fathoms`). A unit must END the name (only a min/max word may follow)
+  and must not follow a number, so `Depth at 10 km` and `Depth_km_offshore` have none; two different units in one
+  name (`depth_m_ft`) are a conflict and block. It is read at the build level whoever chose the role, so a depth
+  picked by hand (`Sounding (fm)`, `MaxDepth_ft`) is converted too; a unit typed on the role wins. Only a unit with
+  an exact definition in metres is converted, by decimal arithmetic on the digits of the cell (international
+  fathom 1.8288 with `fm fms fth ftm fathom(s)`, foot 0.3048 with `ft feet foot`, kilometre 1000), and the cell
+  as written, with its unit, goes to `verbatimDepth` of the event (a station or cruise derived from converted
+  samples carries the originals of its extremes and is written like its child). The user is told with
+  `CONV-DEPTH-CONVERTED` (a warning to accept) naming column, factor and the first value as it is written.
+  Any other unit (`cm`, `mm`, `dm`, yards, inches, miles, `f`, `dbar`, a word) blocks with `CONV-DEPTH-UNIT`;
+  a centimetre depth is not converted because on a plain depth column it is usually a depth in a sediment core
+  (the message points to the role "Depth below seafloor"). A plain `Depth`, `Depth [m]` or `depth_m` stays metres
+  with no finding, and qualifiers (`depth_mean`, `Depth_min`, `depth_from`, `Depth_flag`) are never read as
+  units. `/check` reads the same unit from the header and does not judge the range of a depth in another unit
+  (`ROW-DEPTH-RANGE`). `verbatimDepth` is a Darwin Core term (it is in the GBIF Event term list). The OBIS Manual's Darwin Core page
+  (manual.obis.org/darwin_core.html, read 2026-11-02) does not mention it, and says that "only columns using Darwin Core terms as headers will be recognized": it is
+  a standard term, written for the reader, and OBIS neither requires nor documents it.
 
 ### 8.7 Occurrences, zeros and what a cell becomes
 
@@ -1424,7 +1444,10 @@ For each taxon cell (`convert/build.ts`):
   in the same row it stays as an occurrence with status present, **no** `individualCount` or `organismQuantity`
   (the count is not made up) and its biomass measurement (`CONV-QUANTITY-BLANK-KEPT`, a warning to accept, with
   the lines); with nothing else it makes no record and is counted and listed by line (`CONV-NA-SKIPPED`
-  with `rows`). A measured variable does not keep a row, because it is written once per sample and says
+  with `rows`; it names the other quantity-named columns that are filled on those rows and says when the whole column
+  is empty, so numbers that sit in another column are not missed). A row with a **number or a weight and no taxon
+  name** is not converted and is said (`CONV-TAXON-EMPTY-ROW`). A quantity that is text (`trace`, `<1`) keeps the
+  weight of its row. A measured variable does not keep a row, because it is written once per sample and says
   nothing about the taxon. Rows with a taxon = occurrences + zeros skipped + rows counted as NA
   (`stats.occurrences`, `zerosSkipped`, `naSkipped`);
 - a **negative number** is not converted and blocks (`CONV-NEGATIVE-QUANTITY`);
@@ -1432,8 +1455,9 @@ For each taxon cell (`convert/build.ts`):
   (kept only in the companion file), and then it becomes `occurrenceStatus` **absent**
   (`individualCount` 0 for counts, no measurement row); an empty or NA cell never becomes a record. A
   zero with a **biomass value above zero** in the same long row is contradictory: it is handled as the
-  zero it says (its weight is not written) and the rows are listed (`CONV-ZERO-WITH-BIOMASS`, a warning to
-  accept), so neither value is kept silently;
+  zero it says: **left out, never written as absent whatever the full-list tick says** (a false absence), its weight
+  is not written and the rows are listed (`CONV-ZERO-WITH-BIOMASS`, a warning to accept), so neither value is kept
+  silently;
 - a **non-integer** in a declared count blocks (`CONV-COUNT-NOT-INTEGER`);
 - a **text cell** (`+`, `x`) becomes an occurrence with status present, no quantity, and the text
   in `occurrenceRemarks`, as a warning to accept (`CONV-TEXT-IN-TAXON-CELL`);
@@ -1498,7 +1522,8 @@ nobody judged must not let a bad archive through) and is only shown otherwise.
 station is a parent event, and every `eventID` is its own "station" there), so `ROW-STATION-MOVED`,
 `ROW-STATION-SPREAD` and `ROW-STATION-SPREAD-FAR` are raised by the same function `/check` runs
 (`checkStationRows`, `checks/rows.ts`) on the rows of each sheet the converter reads, with the user's
-mapping (station, position, date, cruise), and are said in the sheet's lines. The output-table run of
+mapping (station, position, date, cruise), and are said in the sheet's lines; when several sheets have station rows,
+the rows of all of them are also checked together, because they build the same parent station. The output-table run of
 these three is dropped, so none is said twice. Without this a station whose rows carry both signs of a
 longitude was written with a derived centre and an uncertainty of thousands of kilometres and no finding,
 while `/check` reported it on the same data. No new threshold was added.
@@ -1537,7 +1562,7 @@ Files are UTF-8, tab-separated, `\n` line ends, one header line, no enclosure; a
 inside a value is **refused, never replaced**. Values are written **from their source text** (a
 coordinate with its own decimals, a depth with its own, a quantity as the cell said it with a decimal
 comma turned into a point); **nothing is rescaled** except the declared units named in 8.6 (a depth below the
-seafloor in centimetres, a plain depth in fathoms, feet, kilometres or centimetres, which also writes `verbatimDepth`). The other exceptions are computed values: a derived
+seafloor in centimetres, a plain depth in fathoms, feet or kilometres, which also writes `verbatimDepth`). The other exceptions are computed values: a derived
 parent position is rounded to 6 decimals (`round6`, `DERIVED_DECIMALS` in `events.ts`), and a
 coordinate read from degrees and minutes is written as decimal degrees at the precision of its
 text. **`meta.xml`** declares the Event
@@ -1792,7 +1817,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **175 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **177 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1806,8 +1831,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 77 | 37 / 29 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **175** | | | |
+| `CONV-` | `B` | 79 | 37 / 31 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **177** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1890,7 +1915,7 @@ Each item below is confirmed from code, a test, or a rule text.
 - A code in a header is only checked for its shape (P01 and P06 after an explicit `SDN:` prefix),
   never looked up; a well-shaped code that does not exist is not caught offline.
 - The only unit conversions are depths: centimetres to metres for a depth below the seafloor, and fathoms,
-  feet, kilometres and centimetres to metres for a plain depth (exact factors, original in `verbatimDepth`);
+  feet and kilometres to metres for a plain depth (exact factors, original in `verbatimDepth`);
   other units are written as declared, with no conversion, and a depth column in any other unit than metres blocks.
   A depth unit is read from the header only (brackets, or a suffix of the depth word); a depth in feet whose unit sits
   only in the sheet name or the metadata is read as metres.

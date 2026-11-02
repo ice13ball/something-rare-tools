@@ -3,7 +3,7 @@
 // A depth in another unit than metres never reaches minimumDepthInMeters unconverted: a unit with an exact factor is converted and kept in verbatimDepth
 // (CONV-DEPTH-CONVERTED, accepted by the user), any other unit blocks (CONV-DEPTH-UNIT). Every value is invented.
 import { describe, expect, it } from 'vitest';
-import { convertDepthText, depthSuffixUnit, depthUnitFactor } from '../../src/core/recognize/depthUnit';
+import { convertDepthText, depthSuffixUnit, depthUnitFactor, isMetreUnit } from '../../src/core/recognize/depthUnit';
 import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import { unitFromHeader } from '../../src/core/recognize/columns';
 import { judge, policyOf } from '../../src/core/convert/policy';
@@ -23,33 +23,45 @@ const roleOf = (h: string[], name: string) => {
 
 describe('the unit of a depth header', () => {
   it('keeps the unit written as a suffix, in brackets or as a word', () => {
-    for (const [h, unit] of [['Depth_fm', 'Depth_fm'], ['depth_ft', 'depth_ft'], ['Depth fathoms', 'Depth fathoms'], ['Depth feet', 'Depth feet'], ['Depth_km', 'Depth_km'], ['Depth (ft)', 'Depth (ft)'], ['Depth [km]', 'Depth [km]'], ['Depth_cm', 'Depth_cm']] as const) {
+    for (const [h, unit] of [['Depth_fm', 'Depth_fm'], ['depth_ft', 'depth_ft'], ['Depth fathoms', 'Depth fathoms'], ['Depth feet', 'Depth feet'], ['Depth_km', 'Depth_km'], ['Depth (ft)', 'Depth (ft)'], ['Depth [km]', 'Depth [km]']] as const) {
       void unit;
       const p = roleOf(header(h), h);
       expect(p.role.kind === 'depth' || p.role.kind === 'depthBelowSeafloor', h).toBe(true);
       expect(p.role.kind === 'depth' ? p.role.unit : 'x', h).toBeDefined();
     }
-    expect(unitFromHeader('Depth (ft)').unit).toBe('ft');
+    expect(unitFromHeader('Depth (ft)').unit).toBeUndefined();
+    expect(depthSuffixUnit('Depth (ft)')).toBe('ft');
     expect(depthSuffixUnit('Depth_fm')).toBe('fm');
     expect(depthSuffixUnit('Depth_min_fm')).toBe('fm');
     expect(depthSuffixUnit('min_depth_km')).toBe('km');
   });
 
   it('metres stay metres with no unit problem; qualifiers are not units', () => {
-    for (const h of ['Depth', 'Depth [m]', 'depth_m', 'Depth (m)', 'depth_mean', 'Depth_min', 'depth_from', 'Depth_flag', 'Depth_qc', 'Depth_to', 'depth_sd', 'Depth_id']) {
+    for (const h of ['Depth', 'Depth [m]x', 'depth_mean', 'Depth_min', 'depth_from', 'Depth_flag', 'Depth_qc', 'Depth_to', 'depth_sd', 'Depth_id', 'Depth at 10 km', 'Depth_km_offshore', 'Depth in situ']) {
       expect(depthSuffixUnit(h), h).toBeUndefined();
     }
+    for (const h of ['Depth (m)', 'depth_m', 'Depth [m]']) expect(depthSuffixUnit(h), h).toBe(h.includes('[') ? 'm' : h.includes('(') ? 'm' : 'm');
     expect(depthUnitFactor('m')).toBeUndefined();
     expect(depthUnitFactor('dbar')).toBeUndefined();
     const p = roleOf(header('Depth [m]'), 'Depth [m]');
     expect(p.role).toMatchObject({ kind: 'depth', unit: 'm' });
   });
 
+  it('reads the unit in every form a header writes it, and a conflicting pair as a blocking unit', () => {
+    const converted = ['Depth, ft', 'Depth (fth)', 'Depth (fms)', 'Depth (ftm)', 'Depth (ft.)', 'Depth-ft', 'Depth/ft', 'Depth.ft', 'ft_depth', 'fm_depth', 'Depth_fm_max', 'Sounding (fm)', 'Sounding_fm', 'Fathoms', 'MaxDepth_ft', 'Depth feet', 'Depth [km]'];
+    for (const h of converted) expect(depthUnitFactor(depthSuffixUnit(h)), h).toBeDefined();
+    const blocking = ['Depth (f)', 'Depth (yd)', 'Depth (yards)', 'Depth (mi)', 'Depth (dm)', 'Depth_in', 'depth_yards', 'Depth_cm', 'Depth (cm)', 'depth_m_ft', 'Depth_ft_m'];
+    for (const h of blocking) {
+      const u = depthSuffixUnit(h);
+      expect(u, h).toBeDefined();
+      expect(depthUnitFactor(u) === undefined && !isMetreUnit(u!), h).toBe(true);
+    }
+  });
+
   it('converts the digits exactly', () => {
     expect(convertDepthText('31.5', depthUnitFactor('fm')!)).toBe('57.6072');
     expect(convertDepthText('100', depthUnitFactor('ft')!)).toBe('30.48');
     expect(convertDepthText('1.25', depthUnitFactor('km')!)).toBe('1250');
-    expect(convertDepthText('250', depthUnitFactor('cm')!)).toBe('2.5');
     expect(convertDepthText('0', depthUnitFactor('fm')!)).toBe('0');
     expect(convertDepthText('-2', depthUnitFactor('ft')!)).toBe('-0.6096');
     expect(convertDepthText('.5', depthUnitFactor('fm')!)).toBe('0.9144');
@@ -62,7 +74,6 @@ describe('a depth in another unit through the export', () => {
     ['Depth_fm', 31.5, '57.6072', '31.5 fm'],
     ['Depth_ft', 100, '30.48', '100 ft'],
     ['Depth [km]', 1.2, '1200', '1.2 km'],
-    ['Depth (cm)', 250, '2.5', '250 cm'],
     ['Depth fathoms', 10, '18.288', '10 fathoms'],
     ['Depth feet', 10, '3.048', '10 feet'],
   ];
@@ -71,7 +82,7 @@ describe('a depth in another unit through the export', () => {
       const e = await exportSheet(header(h), ROWS([[v]]), { quantity: Q });
       const f = e.findings.filter((x) => x.ruleId === 'CONV-DEPTH-CONVERTED');
       expect(f).toHaveLength(1);
-      expect(f[0].params.example).toBe(`${verbatim} = ${metres} m`);
+      expect(f[0].params.example).toMatch(new RegExp(`^${v} (fm|ft|km) = ${metres} m$`));
       expect(policyOf(f[0])).toBe('accept');
       expect(e.findings.some((x) => x.ruleId === 'CONV-DEPTH-UNIT')).toBe(false);
       expect(judge(e.findings).blocking).toEqual([]);
@@ -133,6 +144,35 @@ describe('a depth in another unit through the export', () => {
     expect(e.findings.filter((x) => x.ruleId.startsWith('CONV-DEPTH'))).toEqual([]);
   });
 
+  it('a depth role picked by hand reads the unit from the header at the build level', async () => {
+    for (const [h, v, metres] of [['Sounding (fm)', 31.5, '57.6072'], ['Sounding_fm', 31.5, '57.6072'], ['MaxDepth_ft', 100, '30.48'], ['Fathoms', 10, '18.288']] as [string, number, string][]) {
+      const e = await exportSheet(header(h), ROWS([[v]]), { quantity: Q, edit: { [h]: { kind: 'depth', positive: 'down' } } });
+      expect(e.dataset.events.find((x) => x.type === 'sample')!.depth, h).toMatchObject({ minText: metres });
+      expect(e.findings.some((x) => x.ruleId === 'CONV-DEPTH-CONVERTED'), h).toBe(true);
+    }
+    const blocked = await exportSheet(header('Depth_in'), ROWS([[31.5]]), { quantity: Q, edit: { Depth_in: { kind: 'depth', positive: 'down' } } });
+    expect(blocked.findings.some((x) => x.ruleId === 'CONV-DEPTH-UNIT')).toBe(true);
+  });
+
+  it('a centimetre depth blocks with the sediment advice instead of being converted', async () => {
+    const e = await exportSheet(header('Depth (cm)'), ROWS([[250]]), { quantity: Q });
+    expect(e.findings.some((x) => x.ruleId === 'CONV-DEPTH-UNIT' && x.params.unit === 'cm')).toBe(true);
+    expect(e.findings.some((x) => x.ruleId === 'CONV-DEPTH-CONVERTED')).toBe(false);
+    expect(e.files).toEqual([]);
+  });
+
+  it('writes the example as written (sign turned for an upward depth), keeps the cell text, and a parent is written like its child', async () => {
+    const up = await exportSheet(header('Depth_fm'), ROWS([[-10]]), { quantity: Q, edit: { Depth_fm: { kind: 'depth', positive: 'up', unit: 'fm' } } });
+    expect(up.findings.find((x) => x.ruleId === 'CONV-DEPTH-CONVERTED')!.params.example).toBe('-10 fm = 18.288 m');
+    const sci = await exportSheet(header('Depth_ft'), ROWS([['1e2']]), { quantity: Q });
+    expect(sci.dataset.events.find((x) => x.type === 'sample')!.depth!.verbatim).toBe('1e2 ft');
+    const two = await exportSheet(header('Depth_ft'), ROWS([[100], [100]]), { quantity: Q });
+    const station = two.dataset.events.find((x) => x.type === 'station')!;
+    expect(station.depth).toMatchObject({ minText: '30.48', maxText: '30.48' });
+    const none = await exportSheet(header('Depth_ft'), ROWS([[null]]), { quantity: Q });
+    expect(none.findings.some((x) => x.ruleId === 'CONV-DEPTH-CONVERTED')).toBe(false);
+  });
+
   it('the depth below the seafloor in cm keeps its own role', () => {
     const sheet = rawSheet(['Station', 'Depth (cm)', 'Cl'], [['A', 5, 100]], 'Porewater');
     expect(proposeConvertColumns(sheet, { decimalComma: false, date1904: false })[1].role).toMatchObject({ kind: 'depthBelowSeafloor', unit: 'cm' });
@@ -146,6 +186,7 @@ describe('a depth in another unit through the export', () => {
       expect(t, lang).toContain('Depth_fm');
       expect(t, lang).toContain('1.8288');
       expect(t, lang).toContain('31.5 fm = 57.6072 m');
+      expect(t, lang).not.toContain('fathoms');
       expect(t, lang).not.toMatch(/\{[a-z+]/);
     }
   });

@@ -8,7 +8,7 @@ export function makeConvertEngine(send: <K extends ConvertRequestType>(req: Extr
     reset: () => send({ type: 'reset' }).then(() => undefined),
     parse: (files) => send({ type: 'parse', files }),
     convert: (body) => send({ type: 'convert', body }),
-    proposeCodes: (fileId, sheet, mapping, shape) => send({ type: 'proposeCodes', fileId, sheet, mapping, ...(shape === undefined ? {} : { shape }) }),
+    proposeCodes: (fileId, sheet, mapping, shape, extra) => send({ type: 'proposeCodes', fileId, sheet, mapping, ...(shape === undefined ? {} : { shape }), ...(extra === undefined ? {} : { extra }) }),
     pivotChoice: (fileId, sheet, off, describes) => send({ type: 'pivotChoice', fileId, sheet, off, describes }),
     export: (body) => send({ type: 'export', export: body }),
   };

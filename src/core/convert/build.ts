@@ -6,7 +6,7 @@ import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
-import { convertDepthText, depthUnitFactor, isMetreUnit } from '../recognize/depthUnit';
+import { convertDepthText, depthSuffixUnit, depthUnitFactor, isMetreUnit } from '../recognize/depthUnit';
 import type { DepthUnitFactor } from '../recognize/depthUnit';
 import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
@@ -29,7 +29,7 @@ import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } fr
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
-import { massUnitInName } from './totalColumns';
+import { biomassNameUnit } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { seafloorMetres, seafloorUnitOf } from './seafloor';
@@ -216,7 +216,9 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         c.pressure ??= { ...spec, ...(r.unit === undefined || r.unit.trim() === '' ? {} : { unit: r.unit.trim() }) };
         break;
       case 'depth': {
-        const d = { ...spec, positive: r.positive, ...(r.unit === undefined ? {} : { unit: r.unit }) };
+        // the unit is read from the header whoever chose the role (a depth picked by hand has a bare role); a unit stated on the role wins
+        const unit = r.unit !== undefined && r.unit.trim() !== '' ? r.unit : depthSuffixUnit(m.header);
+        const d = { ...spec, positive: r.positive, ...(unit === undefined ? {} : { unit }) };
         if (r.bound === 'min') c.depthMin ??= d;
         else if (r.bound === 'max') c.depthMax ??= d;
         else c.depthPlain ??= d;
@@ -398,18 +400,80 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
 export const SPLIT_MIN_OCCURRENCES = 30;
 export const SPLIT_RATIO = 0.8;
 export const SPLIT_SHARED = 0.5;
-export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: number): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
+export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: number, taxaOf: (eventId: string) => readonly string[] = () => []): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
   const parents = new Map<string, SampleSite>();
   for (const s of sites) if (!parents.has(s.parentSample?.id ?? s.id)) parents.set(s.parentSample?.id ?? s.id, s);
   const events = parents.size;
   if (occurrenceCount < SPLIT_MIN_OCCURRENCES || events < SPLIT_RATIO * occurrenceCount) return undefined;
-  const byPlace = new Map<string, number>();
-  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.depthMin ?? '', s.depthMax ?? ''].join('\u0001');
-  for (const s of parents.values()) byPlace.set(placeOf(s), (byPlace.get(placeOf(s)) ?? 0) + 1);
+  // events at one PLACE: station, date and time, depth and position. Several events at a place are one sample cut into rows only when their taxa DIFFER (a taxon seen again at the same
+  // place is another sample, a replicate or another sighting, not another row of the same one)
+  const byPlace = new Map<string, SampleSite[]>();
+  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.depthMin ?? '', s.depthMax ?? '', s.lat ?? '', s.lon ?? ''].join('\u0001');
+  for (const s of parents.values()) {
+    const k = placeOf(s);
+    const list = byPlace.get(k);
+    if (list) list.push(s);
+    else byPlace.set(k, [s]);
+  }
   let shared = 0;
-  for (const n of byPlace.values()) if (n > 1) shared += n;
+  for (const list of byPlace.values()) {
+    if (list.length < 2) continue;
+    const seen = new Set<string>();
+    let repeated = false;
+    for (const s of list) {
+      for (const t of new Set(taxaOf(s.id))) {
+        if (seen.has(t)) repeated = true;
+        seen.add(t);
+      }
+    }
+    if (!repeated) shared += list.length;
+  }
   if (shared < SPLIT_SHARED * events) return undefined;
   return { events, occurrences: occurrenceCount, ratio: `${Math.round((100 * events) / occurrenceCount)}%`, shared };
+}
+
+interface StationSheet {
+  file: string;
+  sheet: string;
+  rows: DataRow[];
+}
+
+const SHEET_LINE_STEP = 10_000_000;
+
+/**
+ * The station checks of /check for the whole upload: each sheet on its own, and, when more than one sheet has station rows, the rows of all of them together, so that a station written
+ * with a flipped sign on one sheet and not on the other is found (they build the same parent station). A finding of the joint pass is split back into the lines of each sheet, and one that a
+ * sheet already has on its own is not said twice.
+ */
+function stationFindingsOf(sheets: readonly StationSheet[]): Finding[] {
+  const out: Finding[] = [];
+  const said = new Set<string>();
+  for (const sh of sheets) {
+    for (const f of checkStationRows(sh.file, sh.sheet, sh.rows)) {
+      out.push(f);
+      said.add(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.sheet}`);
+    }
+  }
+  const withRows = sheets.filter((sh) => sh.rows.length > 0);
+  if (withRows.length < 2) return out;
+  const joint = withRows.flatMap((sh, i) => sh.rows.map((r) => ({ ...r, line: i * SHEET_LINE_STEP + r.line })));
+  for (const f of checkStationRows(withRows[0].file, withRows[0].sheet, joint)) {
+    const bySheet = new Map<number, number[]>();
+    for (const l of f.lines ?? []) {
+      const i = Math.floor(l / SHEET_LINE_STEP);
+      bySheet.set(i, [...(bySheet.get(i) ?? []), l - i * SHEET_LINE_STEP]);
+    }
+    if (bySheet.size === 0) {
+      if (!withRows.some((sh) => said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.sheet}`))) out.push(f);
+      continue;
+    }
+    for (const [i, lines] of bySheet) {
+      const sh = withRows[i];
+      if (said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.sheet}`)) continue;
+      out.push({ ...f, file: sh.file, sheet: sh.sheet, lines });
+    }
+  }
+  return out;
 }
 
 /** The row of an accepted sheet line as the station checks of /check read it (station, cruise, position, date). */
@@ -473,7 +537,7 @@ function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: s
       if (p.status === 'ok') {
         const factor = nonMetreDepth(d)?.factor;
         const written = sourceNumberText(cell, dc, p.value);
-        const verbatim = converting ? { verbatim: `${written ?? String(p.value)} ${nonMetreDepth(d)?.unit ?? 'm'}` } : {};
+        const verbatim = converting ? { verbatim: `${typeof cell === 'string' ? cell.trim() : String(cell)} ${nonMetreDepth(d)?.unit ?? 'm'}` } : {};
         if (factor !== undefined) {
           const exact = written === undefined ? undefined : convertDepthText(written, factor);
           const metres = exact === undefined ? Number((p.value * Number(factor.factor)).toFixed(6)) : Number(exact);
@@ -522,17 +586,21 @@ function depthUnitFindings(cols: Cols, rows: readonly RawRow[], dc: boolean, bas
       out.push(makeConvertFinding('CONV-DEPTH-UNIT', { ...base, field: d.header, params: { unit: nm.unit } }));
       continue;
     }
-    let example = '';
+    // the example is what is written: the first value of the column, its result in metres with the sign the role gives it
+    let example: string | undefined;
     for (const r of rows) {
       const cell = r.cells[d.index] ?? null;
       if (isBlankCell(cell)) continue;
       const p = parseNumber(cell, dc);
       if (p.status !== 'ok') continue;
       const written = sourceNumberText(cell, dc, p.value) ?? String(p.value);
-      example = `${written} ${nm.unit} = ${convertDepthText(written, nm.factor) ?? String(Number((p.value * Number(nm.factor.factor)).toFixed(6)))} m`;
+      const exact = convertDepthText(written, nm.factor) ?? String(Number((p.value * Number(nm.factor.factor)).toFixed(6)));
+      example = `${written} ${nm.factor.symbol} = ${d.positive === 'up' ? negateText(exact) : exact} m`;
       break;
     }
-    out.push(makeConvertFinding('CONV-DEPTH-CONVERTED', { ...base, field: d.header, params: { unit: nm.unit, factor: nm.factor.factor, example } }));
+    // a column with no number in it converts nothing: nothing to accept
+    if (example === undefined) continue;
+    out.push(makeConvertFinding('CONV-DEPTH-CONVERTED', { ...base, field: d.header, params: { unit: nm.unit, symbol: nm.factor.symbol, factor: nm.factor.factor, example } }));
   }
   return out;
 }
@@ -707,6 +775,8 @@ export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'
 
 /** The state the profile sheets share with the biology pass: the samples (for ID collisions and the station match) and what the profile rows add. */
 interface ProfileContext {
+  /** The station rows of every sheet read, for the station checks (made once per upload, across the sheets that build the same station). */
+  stationSheets: StationSheet[];
   samples: ReadonlyMap<string, SampleAcc>;
   findings: Finding[];
   measurements: MofIntent[];
@@ -1079,7 +1149,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
   pushAll(ctx.findings, seafloorOf.findings());
   // the station checks of /check on the input rows: the output has no station name to compare (the station is a parent event)
-  pushAll(ctx.findings, checkStationRows(fileName, sheet.name, stationRows));
+  ctx.stationSheets.push({ file: fileName, sheet: sheet.name, rows: stationRows });
   for (const e of noSiteDepth.entries()) ctx.findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
   if (positionStations.size > 0) ctx.findings.push(makeConvertFinding('CONV-STATION-FROM-POSITION', { ...base, value: [...positionStations][0], params: { count: positionStations.size } }));
   // a sheet marked as a profile file that gave no level at all: said plainly (a description of columns, a sheet with no station and no tick, an empty sheet)
@@ -1166,6 +1236,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   const occurrences: OccRec[] = [];
   const measurements: MofIntent[] = [];
   const samples = new Map<string, SampleAcc>();
+  const stationSheets: StationSheet[] = [];
   const dups = new Map<string, Places>(); // repeated eventIDs
   const firstOcc = new Map<string, { file: string; sheet: string; line: number }>();
   const repeatedOcc = new Map<string, Places>(); // repeated occurrenceIDs
@@ -1320,6 +1391,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const stationRows: DataRow[] = [];
     const blankKept = new Lines();
     const zeroBiomass = new Lines();
+    const noTaxon = new Lines();
+    // other quantity-named columns that are filled on the rows counted as NA (a count column empty while the numbers sit in another)
+    const naOther = new Map<string, number>();
+    const biomassUnitUnclear = new Lines();
+    const biomassNoP06 = new Set<string>();
     const checkText = (field: string, line: number, value: string | undefined): void => {
       if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
     };
@@ -1461,11 +1537,20 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
       const keptLabel = statRows.kept.get(row.line);
       if (keptLabel !== undefined) keptStats.add(fileName, sheet.name, 'sample', row.line, keptLabel);
+      // a row with a number and no taxon name is not converted and is said (it would vanish silently): a count or a weight with nothing to attach it to
+      if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined && cols.quantity !== undefined && taxonCellText === undefined && (!isBlankCell(row.cells[cols.quantity.index] ?? null) || rowHasBiomass(row))) {
+        noTaxon.add(fileName, sheet.name, cols.taxonCell.header, row.line);
+        continue;
+      }
       if (!relevant) {
         // a row with a taxon and nothing to record: counted and listed, never silently dropped (a wide sheet's empty cell is the normal sparse matrix and is not counted)
         if (quantityBlank) {
           const raw = row.cells[cols.quantity?.index ?? 0] ?? null;
           naRows.add(fileName, sheet.name, cols.quantity?.header ?? '', row.line, typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : 'empty');
+          for (const c of sin.mapping.columns) {
+            if (c.index === cols.quantity?.index || (c.role.kind !== 'ignore' && c.role.kind !== 'variable' && c.role.kind !== 'biomass') || !isQuantityHeader(c.header)) continue;
+            if (!isBlankCell(row.cells[c.index] ?? null)) naOther.set(c.header.trim(), (naOther.get(c.header.trim()) ?? 0) + 1);
+          }
         }
         continue;
       }
@@ -1723,7 +1808,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             }
             if (value === 0) {
               // a count of 0 with a weight is contradictory: it is treated as the zero it says (the weight is not written) and the rows are listed, so that neither is kept silently
-              if (sin.shape === 'long' && cols.taxonCell !== undefined && rowHasBiomass(row)) zeroBiomass.add(fileName, sheet.name, field, row.line);
+              if (sin.shape === 'long' && cols.taxonCell !== undefined && rowHasBiomass(row)) {
+                // a count of 0 with a mass above zero contradicts itself: never written as absent (a false absence), left out whatever the full-list tick says, and listed
+                zeroBiomass.add(fileName, sheet.name, field, row.line);
+                continue;
+              }
               if (!fullList) {
                 zeros++;
                 continue;
@@ -1789,7 +1878,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         }
         // biomass / weight columns next to the quantity: one eMoF row of THIS occurrence per column, the value as written and the unit of the header, never converted. The kind of mass
         // (wet, dry, ash-free dry) decides the concept; while it is open no measurementTypeID is written (CONV-BIOMASS-KIND-UNSET). A sample size, when declared, is only said in the remarks.
-        if (status === 'present' && (value !== undefined || biomassOnly) && sin.shape === 'long' && cols.taxonCell !== undefined) {
+        if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined) {
           for (const b of cols.biomass) {
             const bcell = row.cells[b.index] ?? null;
             const bp = parseNumber(bcell, dc);
@@ -1805,8 +1894,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             const concept = biomassKindConcept(b.basis);
             const hu = unitFromHeader(b.header);
             // the unit of the header, else a mass unit written as a word of the name ("weight_kg_total", "wt_mg"): the kg is in the header and must not be lost
-            const unitText = hu.unitText ?? massUnitInName(b.header);
+            // WHOLE (kg/km2 stays kg per km2); a name whose unit is not understood in full leaves the unit empty and is said, never a partial unit
+            const bracketed = /[[(][^[\]()]+[\])]\s*$/.test(stripTypeSuffix(b.header));
+            const fromName = bracketed ? {} : biomassNameUnit(b.header);
+            const unitText = fromName.unit ?? (fromName.unclear !== undefined ? undefined : hu.unitText);
+            if (fromName.unclear !== undefined) biomassUnitUnclear.add(fileName, sheet.name, b.header, row.line, fromName.unclear);
             const unit = biomassUnit(unitText);
+            if (unitText !== undefined && unit.id === undefined) biomassNoP06.add(unitText);
             // two biomass columns of one kind (or both open) would write the same measurementType twice: the column name tells them apart
             const same = cols.biomass.filter((x) => x.basis === b.basis);
             const clash = same.length > 1;
@@ -1850,7 +1944,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     pushAll(findings, reportVariables(varState, base, [], nercStats));
     pushAll(findings, seafloorOf.findings());
     // the station checks of /check on the input rows (a station spanning hemispheres, a sign or digit typed wrongly): the output has no station name to compare, the station is a parent event
-    pushAll(findings, checkStationRows(fileName, sheet.name, stationRows));
+    stationSheets.push({ file: fileName, sheet: sheet.name, rows: stationRows });
     for (const e of noSiteDepth.entries()) findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
 
     // sample-level conflicts of long sheets
@@ -1883,12 +1977,19 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));
     for (const e of naRows.entries()) {
       stats.naSkipped += e.lines.length;
-      findings.push(makeConvertFinding('CONV-NA-SKIPPED', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length, rows: 'yes' } }));
+      const quantityIndex = cols.quantity?.index;
+      const wholeColumnEmpty = quantityIndex !== undefined && sheet.rows.every((r) => isBlankCell(r.cells[quantityIndex] ?? null));
+      const others = [...naOther].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([h, n]) => `${h} (${n})`).join(', ');
+      findings.push(makeConvertFinding('CONV-NA-SKIPPED', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length, rows: 'yes', ...(others === '' ? {} : { columns: others }), ...(wholeColumnEmpty ? { empty: 'yes' } : {}) } }));
     }
     for (const e of blankKept.entries()) {
       stats.blankKept += e.lines.length;
       findings.push(makeConvertFinding('CONV-QUANTITY-BLANK-KEPT', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     }
+    for (const e of noTaxon.entries()) findings.push(makeConvertFinding('CONV-TAXON-EMPTY-ROW', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
+    for (const e of biomassUnitUnclear.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const u of biomassNoP06) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: u } }));
+    for (const e of zeroBiomass.entries()) stats.zerosSkipped += e.lines.length;
     for (const e of zeroBiomass.entries()) findings.push(makeConvertFinding('CONV-ZERO-WITH-BIOMASS', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (presenceSkipped > 0) {
       stats.zerosSkipped += presenceSkipped;
@@ -1900,7 +2001,16 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     }
     // the OUTPUT of a long sheet, whoever wrote the sample codes: a sample event for almost every occurrence, and several of them at one station, date and depth, is one sample split into one event per taxon row
     if (sin.shape === 'long' && sin.profile === undefined && cols.taxonCell !== undefined) {
-      const split = sampleSplitOf([...samples.values()].filter((a) => a.sheetKey === sheetKey).map((a) => a.site), occurrences.length - occurrencesBefore);
+      const taxaByEvent = new Map<string, string[]>();
+      const sheetSites = [...samples.values()].filter((a) => a.sheetKey === sheetKey).map((a) => a.site);
+      const parentOf = new Map(sheetSites.map((st) => [st.id, st.parentSample?.id ?? st.id]));
+      for (const o of occurrences.slice(occurrencesBefore)) {
+        const owner = parentOf.get(o.eventId) ?? o.eventId;
+        const list = taxaByEvent.get(owner);
+        if (list) list.push(o.scientificName);
+        else taxaByEvent.set(owner, [o.scientificName]);
+      }
+      const split = sampleSplitOf(sheetSites, occurrences.length - occurrencesBefore, (id) => taxaByEvent.get(id) ?? []);
       if (split !== undefined) findings.push(makeConvertFinding('CONV-SAMPLE-PER-ROW', { ...base, params: { events: split.events, occurrences: split.occurrences, ratio: split.ratio, shared: split.shared } }));
     }
     if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));
@@ -1927,6 +2037,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     bioStations: new Set([...samples.values()].flatMap((a) => (a.site.stationCode === undefined ? [] : [stationEventId(a.site.cruiseCode, a.site.stationCode)]))),
     levels: new Map(),
     levelById: new Map(),
+    stationSheets,
     levelDups: new Map(),
     flattenStation: opts.flatten?.station === true,
     sites: [],
@@ -2212,6 +2323,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }),
     );
   }
+
+  pushAll(findings, stationFindingsOf(stationSheets));
 
   // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
   // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).

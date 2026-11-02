@@ -75,10 +75,35 @@ describe('a long sheet with blank or NaN quantities', () => {
     expect(f[0].lines).toEqual([8]);
     expect(policyOf(f[0])).toBe('accept');
     expect(e.dataset.occurrences.map((o) => o.identification.verbatim)).not.toContain('Centropages typicus');
+    // with the full-list tick the contradicted zero is still NOT written as absent (a false absence): left out, listed, and counted
     const full = await run(ROWS, { fullList: true });
-    const absent = full.dataset.occurrences.find((o) => o.identification.verbatim === 'Centropages typicus')!;
-    expect(absent.status).toBe('absent');
-    expect(full.dataset.measurements.some((m) => m.occurrenceId === absent.id)).toBe(false);
+    expect(full.dataset.occurrences.some((o) => o.identification.verbatim === 'Centropages typicus')).toBe(false);
+    expect(find(full, 'CONV-ZERO-WITH-BIOMASS')[0].lines).toEqual([8]);
+    expect(full.dataset.occurrences.find((o) => o.identification.verbatim === 'Temora longicornis')!.status).toBe('absent');
+    expect(full.result.stats.occurrences + full.result.stats.zerosSkipped + full.result.stats.naSkipped).toBe(ROWS.length);
+  });
+
+  it('a text quantity (trace, <1) keeps its weight', async () => {
+    const e = await run([row('s1', 'Calanus finmarchicus', 'trace', 5), row('s1', 'Oithona similis', '<1', 2)]);
+    expect(e.dataset.occurrences.map((o) => o.status)).toEqual(['present', 'present']);
+    expect(e.dataset.measurements.filter((m) => m.type.toLowerCase().includes('weight')).map((m) => m.value)).toEqual(['5', '2']);
+  });
+
+  it('a row with a count or a weight and no taxon name is said, not dropped silently', async () => {
+    const e = await run([row('s1', 'Calanus finmarchicus', 4, 1), ['S1', 's1', '2023-06-14', 55.5, 2.5, null, 3, null], ['S1', 's1', '2023-06-14', 55.5, 2.5, null, null, 2.5]]);
+    const f = find(e, 'CONV-TAXON-EMPTY-ROW');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([3, 4]);
+    expect(policyOf(f[0])).toBe('accept');
+  });
+
+  it('names the other quantity-named column that is filled on the rows counted as NA, and says when the whole column is empty', async () => {
+    const header = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count', 'Abundance'];
+    const rows: Cell[][] = [['S1', 's1', '2023-06-14', 55.5, 2.5, 'Calanus finmarchicus', null, 4], ['S1', 's1', '2023-06-14', 55.5, 2.5, 'Oithona similis', null, 7]];
+    const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Count: { kind: 'quantity' }, Abundance: { kind: 'ignore' } } });
+    const f = find(e, 'CONV-NA-SKIPPED')[0];
+    expect(f.params).toMatchObject({ columns: 'Abundance (2)', empty: 'yes' });
+    expect(renderConvertPlain(f, 'en')).toContain('empty in all 2 rows');
   });
 
   it('a measured variable alone does not keep a row: it is written once per sample and says nothing about the taxon', async () => {

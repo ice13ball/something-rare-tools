@@ -46,6 +46,7 @@ describe('codes of a long sheet', () => {
     const p = propose(header, rows, 'long', { Cast: { kind: 'ignore' } });
     expect(p.grouping).toMatchObject({ samples: 3, rows: 15, repeats: 0 });
     expect(p.grouping!.by.map((b) => [b.part, b.header])).toEqual([['station', 'Station'], ['date', 'Date'], ['depth', 'Depth_m'], ['column', 'Cast']]);
+    expect(p.grouping!.added).toEqual([{ header: 'Cast', why: 'name' }]);
   });
 
   it('a column that is an identifier of the row is not used to split samples, and the proposal is refused when a taxon repeats', () => {
@@ -89,6 +90,50 @@ describe('codes of a long sheet', () => {
   });
 });
 
+describe('extra grouping columns are never picked by themselves', () => {
+  const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Sex', 'Species', 'Count'];
+  // two samples, each with the same taxa seen as females and males
+  const sexRows = (): Cell[][] => ['A', 'B'].flatMap((st) => TAXA.slice(0, 3).flatMap((sp) => ['F', 'M'].map((sx) => [st, '2023-06-10', 55, 2.5, 10, sx, sp, 2] as Cell[])));
+
+  it.each(['Sex', 'Size_class', 'Notes', 'Comment', 'Sorter', 'Mesh'])('%s is not added: the tool refuses and names it, and the user picks it', (name) => {
+    const h = header.map((x) => (x === 'Sex' ? name : x));
+    const p = propose(h, sexRows(), 'long', { [name]: { kind: 'ignore' } });
+    expect(p.refusal?.reason).toBe('taxon-repeats');
+    expect(p.refusal!.candidates!.map((c) => c.header)).toContain(name);
+    expect(p.csv).toBe('');
+    // picked in the preview: the proposal is made and says the column was added because it was chosen
+    const file = fileOf(h, sexRows());
+    const idx = h.indexOf(name);
+    const chosen = proposeSampleCodes(file, file.sheets[0], mappingOf(file, { [name]: { kind: 'ignore' } }), 'long', [idx])!;
+    expect(chosen.grouping).toMatchObject({ samples: 4, repeats: 0 });
+    expect(chosen.grouping!.added).toEqual([{ header: name, why: 'chosen' }]);
+  });
+
+  it('one repeat in many rows does not pull in a Notes column', () => {
+    const rows = longRows(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'], [0, 25, 50, 75]).map((r) => [...r, 'x'] as Cell[]);
+    rows.push(['A', '2023-06-10', 55, 2.5, 0, 'Calanus finmarchicus', 9, 'y']);
+    const p = propose([...H, 'Notes'], rows, 'long', { Notes: { kind: 'ignore' } });
+    expect(p.grouping).toMatchObject({ samples: 40, repeats: 1 });
+    expect(p.grouping!.added).toEqual([]);
+  });
+
+  it('positions that differ inside a date-only key are part of the key, and said', () => {
+    const rows: Cell[][] = [];
+    [55, 56, 57].forEach((lat, i) => TAXA.slice(0, 3).forEach((sp) => rows.push(['2023-06-10', lat, 2.5 + i, sp, 3])));
+    const p = propose(['Date', 'Latitude', 'Longitude', 'Species', 'Count'], rows, 'long');
+    expect(p.grouping).toMatchObject({ samples: 3 });
+    expect(p.grouping!.added.map((a) => a.why)).toEqual(['position', 'position']);
+  });
+
+  it('10 and 10.0 are one depth; empty cells are counted; a near one-row-per-sample key is flagged', () => {
+    const rows: Cell[][] = [['A', '2023-06-10', 55, 2.5, 10, 'Calanus finmarchicus', 2], ['A', '2023-06-10', 55, 2.5, '10.0', 'Oithona similis', 2], ['B', '2023-06-10', 55, 2.5, null, 'Calanus finmarchicus', 1]];
+    const p = propose(H, rows, 'long');
+    expect(p.grouping).toMatchObject({ samples: 2, blanks: 1, nearlyRows: false });
+    const many: Cell[][] = Array.from({ length: 40 }, (_, i) => ['A', `2023-06-10T10:${String(i).padStart(2, '0')}:00`, 55, 2.5, 10, TAXA[i % 5], 1]);
+    expect(propose(H, many, 'long').grouping!.nearlyRows).toBe(true);
+  });
+});
+
 describe('CONV-SAMPLE-PER-ROW: one sample split into an event per taxon row', () => {
   const headerWithCode = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Species', 'Count'];
   const withRowCodes = (stations: string[], depths: number[]): Cell[][] => longRows(stations, depths).map((r, i) => [r[0], `code-${i + 1}`, ...r.slice(1)]);
@@ -122,5 +167,15 @@ describe('CONV-SAMPLE-PER-ROW: one sample split into an event per taxon row', ()
     const wide = await exportSheet(W1_HEADER, W1_ROWS, { quantity: { kind: 'count', effort: { source: 'column' } } });
     expect(wide.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
     expect(sampleSplitOf([], 0)).toBeUndefined();
+  });
+
+  it('does not fire when the taxon repeats at the same place, or the events differ in time or position', async () => {
+    const one = (i: number, extra: Partial<Record<'time' | 'lat', string | number>>): Cell[] => ['S1', `k${i}`, extra.time === undefined ? '2023-06-10' : `2023-06-10T${extra.time}`, extra.lat ?? 55, 2.5, 10, 'Calanus finmarchicus', 1];
+    const times = await exportSheet(headerWithCode, Array.from({ length: 40 }, (_, i) => one(i, { time: `10:${String(i).padStart(2, '0')}:00` })), q);
+    expect(times.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
+    const positions = await exportSheet(['Sample', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Species', 'Count'], Array.from({ length: 40 }, (_, i) => [`k${i}`, '2023-06-10', 55 + i / 100, 2.5, 10, 'Calanus finmarchicus', 1] as Cell[]), q);
+    expect(positions.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
+    const sameDive = await exportSheet(headerWithCode, Array.from({ length: 40 }, (_, i) => one(i, {})), q);
+    expect(sameDive.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
   });
 });

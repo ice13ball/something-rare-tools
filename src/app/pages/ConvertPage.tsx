@@ -333,12 +333,12 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setCodesDone((prev) => ({ ...prev, [key]: name }));
     setCodesPreview((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
   };
-  const proposeCodes = async (fileId: string, sheet: string): Promise<void> => {
+  const proposeCodes = async (fileId: string, sheet: string, extra?: number[]): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
     if (!mapping) return;
     try {
       const shape = choices[sheetKey(fileId, sheet)]?.shape;
-      const p = await engine.proposeCodes(fileId, sheet, mapping, shape);
+      const p = await engine.proposeCodes(fileId, sheet, mapping, shape, extra);
       const key = sheetKey(fileId, sheet);
       if (!p) {
         setCodesDone((prev) => ({ ...prev, [key]: null }));
@@ -911,7 +911,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     <button type="button" className="button" onClick={() => void proposeCodes(c.fileId, c.sheet)}>
                       {t('convert.codes.propose')}
                     </button>
-                    {codesPreview[key] !== undefined && codesPreview[key].sig === codesSig(c.fileId, c.sheet) ? <CodesPreview p={codesPreview[key].p} onDownload={() => offerCodes(c.fileId, c.sheet, codesPreview[key].p)} /> : null}
+                    {codesPreview[key] !== undefined && codesPreview[key].sig === codesSig(c.fileId, c.sheet) ? <CodesPreview p={codesPreview[key].p} onDownload={() => offerCodes(c.fileId, c.sheet, codesPreview[key].p)} onPick={(index) => void proposeCodes(c.fileId, c.sheet, [index])} /> : null}
                     {codesDone[key] ? <p role="status">{t('convert.codes.done', { name: codesDone[key] as string })}</p> : null}
                     {codesDone[key] === null ? <p role="status">{t('convert.codes.none')}</p> : null}
                   </div>
@@ -1112,14 +1112,29 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   );
 }
 
-/** The preview of a long sheet's code proposal: "450 samples from 53,608 rows, grouped by station + date + depth", or why nothing is proposed. */
-function CodesPreview({ p, onDownload }: { p: CodeProposalView; onDownload: () => void }): React.ReactElement | null {
+/** The preview of a long sheet's code proposal: "450 samples from 53,608 rows, grouped by station + date + depth", what was added and why, or why nothing is proposed. */
+function CodesPreview({ p, onDownload, onPick }: { p: CodeProposalView; onDownload: () => void; onPick: (index: number) => void }): React.ReactElement | null {
   const { lang } = useLang();
   if (p.refusal !== undefined) {
+    const candidates = p.refusal.candidates ?? [];
     return (
-      <p role="status" className="warning">
-        {p.refusal.reason === 'no-columns' ? t('convert.codes.refused.none') : t('convert.codes.refused.repeats', { repeats: formatNumber(p.refusal.repeats ?? 0, lang), rows: formatNumber(p.refusal.rows, lang) })}
-      </p>
+      <div role="status" className="warning">
+        <p>{p.refusal.reason === 'no-columns' ? t('convert.codes.refused.none') : t('convert.codes.refused.repeats', { repeats: formatNumber(p.refusal.repeats ?? 0, lang), rows: formatNumber(p.refusal.rows, lang) })}</p>
+        {candidates.length > 0 ? (
+          <>
+            <p>{t('convert.codes.pick')}</p>
+            <ul>
+              {candidates.map((c) => (
+                <li key={c.index}>
+                  <button type="button" className="button" onClick={() => onPick(c.index)}>
+                    {t('convert.codes.candidate', { name: c.header, samples: c.groups, repeats: c.repeats })}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
     );
   }
   if (p.grouping === undefined) return null;
@@ -1127,7 +1142,12 @@ function CodesPreview({ p, onDownload }: { p: CodeProposalView; onDownload: () =
   return (
     <div role="status">
       <p>{t('convert.codes.preview', { samples: p.grouping.samples, rows: formatNumber(p.grouping.rows, lang), by })}</p>
+      {p.grouping.added.map((a) => (
+        <p key={`${a.why}-${a.header}`}>{t(`convert.codes.added.${a.why}`, { name: a.header })}</p>
+      ))}
       {p.grouping.repeats > 0 ? <p className="warning">{t('convert.codes.repeats', { repeats: p.grouping.repeats })}</p> : null}
+      {p.grouping.blanks > 0 ? <p className="warning">{t('convert.codes.blanks', { blanks: p.grouping.blanks })}</p> : null}
+      {p.grouping.nearlyRows ? <p className="warning">{t('convert.codes.perRow')}</p> : null}
       <button type="button" className="button" onClick={onDownload}>
         {t('convert.codes.download')}
       </button>

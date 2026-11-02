@@ -11,16 +11,50 @@ import { parseNumber } from '../values/numbers';
 
 const MASS_UNITS = new Set(['kg', 'g', 'mg']);
 export const massUnitOf = (unit: string | undefined): string | undefined => (unit !== undefined && MASS_UNITS.has(unit.trim().toLowerCase()) ? unit.trim().toLowerCase() : undefined);
+/** A unit text whose numerator is a mass: 'kg', 'g/m2', 'mg m-3', 'kg/km2'. */
+export const isMassUnitText = (unit: string | undefined): boolean => unit !== undefined && /^(kg|g|mg)(?:$|[\s/])/i.test(unit.trim());
 
-/** A mass unit written as a word of the NAME ("weight_kg_total", "wt_mg", "biomass g"): the one mass unit among its words, or undefined when there is none or there are two different ones. */
-export function massUnitInName(header: string): string | undefined {
-  const found = new Set(
-    stripTypeSuffix(header)
-      .split(/[\s_]+/)
-      .map((w) => w.toLowerCase())
-      .filter((w) => MASS_UNITS.has(w)),
-  );
-  return found.size === 1 ? [...found][0] : undefined;
+// what may follow a mass unit in a biomass column NAME without being part of the unit: a kind of mass or a word that says what the number is of
+const AFTER_UNIT = new Set(['total', 'wet', 'dry', 'ww', 'dw', 'afdw', 'weight', 'wt', 'mass', 'biomass', 'catch', 'tow', 'haul', 'sample', 'taxon', 'species', 'fresh']);
+const DENOMINATOR = /^(m2|m3|km2|km3|cm2|cm3|ha|l|ml|m-2|m-3|km-2|m\^2|m\^3|m²|m³|km²)$/i;
+
+/**
+ * The unit written in the NAME of a biomass column that has no bracket: the mass unit and, when it is followed by one, its per-area / per-volume part, WHOLE ('biomass_kg_km2' is
+ * 'kg/km2', 'wet_weight_mg_m3' is 'mg/m3', 'weight_kg_total' is 'kg'). Only a unit read in full is returned; when a mass unit is there but what follows it is not understood
+ * (or two different mass units are), `unclear` holds the words and no unit is returned: a partial unit ('kg' for 'kg per km2') would change the meaning of the number.
+ */
+export function biomassNameUnit(header: string): { unit?: string; unclear?: string } {
+  const tokens = stripTypeSuffix(header)
+    .split(/[\s_]+/)
+    .filter((t) => t !== '');
+  const at = tokens.findIndex((t) => MASS_UNITS.has(t.toLowerCase()));
+  if (at < 0) return {};
+  const mass = tokens[at].toLowerCase();
+  if (tokens.some((t, i) => i !== at && MASS_UNITS.has(t.toLowerCase()) && t.toLowerCase() !== mass)) return { unclear: tokens.join(' ') };
+  const rest = tokens.slice(at + 1).map((t) => t.toLowerCase());
+  if (rest[0] === 'per') rest.shift();
+  let denominator: string | undefined;
+  if (rest[0] !== undefined && DENOMINATOR.test(rest[0])) denominator = rest.shift();
+  else if (rest[0] === 'm' && /^[23]$/.test(rest[1] ?? '')) {
+    denominator = `m${rest[1]}`;
+    rest.splice(0, 2);
+  }
+  const unknown = rest.filter((t) => !AFTER_UNIT.has(t) && !/^\d+$/.test(t));
+  if (unknown.length > 0) return { unclear: tokens.slice(at).join(' ') };
+  const den = denominator?.replace('^', '').replace('²', '2').replace('³', '3').replace(/^(m|km)-(\d)$/, '$1$2');
+  return { unit: den === undefined ? mass : `${mass}/${den}` };
+}
+
+/** A mass unit written as a word of the NAME: the whole unit, or undefined (none, or not understood). */
+export const massUnitInName = (header: string): string | undefined => biomassNameUnit(header).unit;
+
+/** Words of a header that say a SIZE or a place, not a count: a column named so is not the quantity of a row ('Total length', 'Total depth'). */
+const SIZE_WORDS = new Set(['length', 'len', 'width', 'height', 'depth', 'diameter', 'size', 'thickness', 'temperature', 'salinity', 'volume', 'area', 'distance', 'age', 'duration', 'time']);
+export function isSizeLikeHeader(header: string): boolean {
+  return stripTypeSuffix(header)
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((w) => SIZE_WORDS.has(w));
 }
 
 /** The columns that make a row part of a sample: where and when it was taken. */
@@ -32,14 +66,15 @@ const SAMPLE_KEY_KINDS = new Set(['sampleId', 'station', 'cruise', 'date', 'date
  */
 export function valuesRepeatWithinSample(sheet: RawSheet, base: readonly ColumnProposal[], index: number, decimalComma: boolean): 'constant' | 'varies' | 'unknown' {
   const key = base.filter((q) => SAMPLE_KEY_KINDS.has(q.role.kind) && q.index !== index).map((q) => q.index);
-  // a text column that is still ignored (a tow or haul number the converter has no role for) separates the samples too, unless it only describes the taxon (a species code, a common name):
+  // a column that is still ignored (a tow or haul number the converter has no role for) separates the samples too, unless it only describes the taxon (a species code, a common name):
   // a column that is a function of the taxon column is not a sample column
   const taxon = base.find((q) => q.role.kind === 'taxon' && q.role.header !== true)?.index;
   if (taxon !== undefined) {
     for (const q of base) {
-      if (q.role.kind !== 'ignore' || q.index === index || key.includes(q.index)) continue;
+      if ((q.role.kind !== 'ignore' && q.role.kind !== 'variable') || q.index === index || key.includes(q.index)) continue;
       const values = sheet.rows.map((r) => r.cells[q.index] ?? null).filter((c) => !isBlankCell(c));
-      if (values.length === 0 || values.filter((c) => parseNumber(c, decimalComma).status === 'ok').length * 2 > values.length) continue;
+      // a tow or haul number may be a number: an ignored column of few distinct values (not a per-row measurement) separates samples
+      if (values.length === 0 || new Set(values.map((c) => String(c).trim())).size * 2 > values.length) continue;
       const byTaxon = new Map<string, Set<string>>();
       for (const r of sheet.rows) {
         const t = String(r.cells[taxon] ?? '').trim();

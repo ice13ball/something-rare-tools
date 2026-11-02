@@ -4,7 +4,7 @@
 // (weight_kg_total, wt_mg) survives to measurementUnit with its P06 id. Every value is invented.
 import { describe, expect, it } from 'vitest';
 import { proposeConvertColumns } from '../../src/core/convert/recognize';
-import { massUnitInName, valuesRepeatWithinSample } from '../../src/core/convert/totalColumns';
+import { biomassNameUnit, massUnitInName, valuesRepeatWithinSample } from '../../src/core/convert/totalColumns';
 import { P06_MASS } from '../../src/core/convert/vocab';
 import { rawSheet } from '../helpers/files';
 import { exportSheet } from './exportHelpers';
@@ -111,3 +111,62 @@ describe('the unit of a biomass column written in its name', () => {
     expect(m.every((x) => x.unitId === term.uri)).toBe(true);
   });
 });
+
+describe('the unit of a biomass column is read whole', () => {
+  it('keeps the per-area / per-volume part, and reads no partial unit', () => {
+    expect(biomassNameUnit('biomass_kg_km2')).toEqual({ unit: 'kg/km2' });
+    expect(biomassNameUnit('biomass_g_m2')).toEqual({ unit: 'g/m2' });
+    expect(biomassNameUnit('wet_weight_mg_m3')).toEqual({ unit: 'mg/m3' });
+    expect(biomassNameUnit('weight_kg_per_m2')).toEqual({ unit: 'kg/m2' });
+    expect(biomassNameUnit('weight_kg_total')).toEqual({ unit: 'kg' });
+    expect(biomassNameUnit('biomass_kg_foo').unit).toBeUndefined();
+    expect(biomassNameUnit('biomass_kg_foo').unclear).toBe('kg foo');
+    expect(biomassNameUnit('weight_kg_g').unit).toBeUndefined();
+  });
+
+  const H = ['Station', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];
+  const rows: Cell[][] = [['S1', '2023-06-14', 55.5, 2.5, 'Gadus morhua', 3, 1.5], ['S1', '2023-06-14', 55.5, 2.5, 'Clupea harengus', 2, 0.5]];
+  const run = (name: string) => exportSheet([...H, name], rows, { quantity: { kind: 'count' }, shape: 'long', edit: { Station: { kind: 'sampleId' }, [name]: { kind: 'biomass', basis: 'wet' } } });
+
+  it('writes the whole unit, with the P06 only when the table knows that exact unit', async () => {
+    const km2 = await run('biomass_kg_km2');
+    expect(km2.dataset.measurements.filter((m) => m.type.includes('weight')).map((m) => [m.unit, m.unitId])).toEqual([['kg/km2', undefined], ['kg/km2', undefined]]);
+    expect(km2.findings.some((f) => f.ruleId === 'CONV-UNIT-NO-P06' && f.params.unit === 'kg/km2')).toBe(true);
+    const g = await run('biomass_g_m2');
+    expect(g.dataset.measurements.find((m) => m.type.includes('weight'))!.unit).toBe('g/m2');
+    const mg = await run('wet_weight_mg_m3');
+    expect(mg.dataset.measurements.find((m) => m.type.includes('weight'))!.unit).toBe('mg/m3');
+  });
+
+  it('leaves the unit empty and says so when the rest of the name is not understood', async () => {
+    const e = await run('biomass_kg_foo');
+    expect(e.dataset.measurements.filter((m) => m.type.includes('weight')).every((m) => m.unit === undefined)).toBe(true);
+    const f = e.findings.find((x) => x.ruleId === 'CONV-BIOMASS-UNIT-UNCLEAR')!;
+    expect(f).toBeDefined();
+    expect(f.value).toBe('kg foo');
+  });
+});
+
+describe('an all-taxa total is judged by the same grouping, on both paths', () => {
+  const TOW: Cell[][] = [[1, 'Gadus morhua', 4, 1], [1, 'Merluccius merluccius', 4, 2], [2, 'Gadus morhua', 4.5, 3], [2, 'Clupea harengus', 4.5, 7]];
+  it('a numeric tow number separates the samples: a constant total_catch_kg stays ignored', () => {
+    const p = proposals(['TowNo', 'taxa', 'total_catch_kg', 'n'], TOW).find((x) => x.header === 'total_catch_kg')!;
+    expect(p.role).toEqual({ kind: 'ignore' });
+    expect(p.reasonCode).toBe('summary-total');
+  });
+  it('a name-claimed biomass column that is constant within a sample is a total too', () => {
+    const rows: Cell[][] = [[1, 'Gadus morhua', 4, 12, 'a'], [1, 'Merluccius merluccius', 4, 12, 'b'], [2, 'Gadus morhua', 4.5, 9, 'c'], [2, 'Clupea harengus', 3, 9, 'd']];
+    const p = proposals(['TowNo', 'taxa', 'Abundance', 'Total weight (kg)', 'tag'], rows).find((x) => x.header === 'Total weight (kg)')!;
+    expect(p.role).toEqual({ kind: 'ignore' });
+    expect(p.reasonCode).toBe('summary-total');
+    const varying = proposals(['TowNo', 'taxa', 'Abundance', 'Total weight (kg)', 'tag'], [[1, 'Gadus morhua', 4, 12, 'a'], [1, 'Merluccius merluccius', 4, 11, 'b'], [2, 'Gadus morhua', 4.5, 9, 'c'], [2, 'Clupea harengus', 3, 8, 'd']]).find((x) => x.header === 'Total weight (kg)')!;
+    expect(varying.role.kind).toBe('biomass');
+  });
+  it('a size or a number with another unit is no quantity', () => {
+    for (const name of ['Total length [mm]', 'Total depth', 'Total length']) {
+      const p = proposals(['TowNo', 'taxa', name, 'tag'], TOW.map((r, i) => [r[0], r[1], 10 + i * 3, 'x'])).find((x) => x.header === name)!;
+      expect(p.role.kind, name).not.toBe('quantity');
+    }
+  });
+});
+

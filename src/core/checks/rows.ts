@@ -3,6 +3,7 @@
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
 import { unitFromHeader } from '../recognize/columns';
+import { depthSuffixUnit, isMetreUnit } from '../recognize/depthUnit';
 import { badHeaderCodes } from '../recognize/headerCodes';
 import { statisticOfName } from '../recognize/headerWords';
 import { canonicalFromKey, headerKey } from '../recognize/vocab';
@@ -693,7 +694,6 @@ function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): v
 /* ---------- ROW-DEPTH-MIN-MAX, ROW-DEPTH-RANGE ---------- */
 
 const METRE = /^(m|meters?|metres?)$/i;
-const NON_METRE_HEADER = /(^|[^a-z])(ft|feet|foot|fathoms?|fm|fth|ftm|cm|mm|km)([^a-z]|$)/i;
 
 /** The depth role of a sheet's mapping (convention and unit), when the dataset carries one. */
 function depthRole(ds: Dataset, sheet: string): { positive: 'down' | 'up' | 'unknown'; unit?: string } {
@@ -732,7 +732,8 @@ function depthRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[])
   const role = depthRole(ds, sheet);
   if (role.unit !== undefined && !METRE.test(role.unit)) return;
   // a depth in feet, fathoms, cm, mm or km written in the header only ("Depth (ft)", "depth_ft") is not metres: the bounds do not apply
-  if (NON_METRE_HEADER.test(headerOf(ds, sheet, 'depth') ?? '')) return;
+  const stated = depthSuffixUnit(headerOf(ds, sheet, 'depth') ?? '');
+  if (stated !== undefined && !isMetreUnit(stated)) return;
   const sign = role.positive === 'up' ? -1 : 1;
   const bad = rows.filter((r) => r.depth !== undefined && outside(sign * r.depth));
   if (bad.length > 0) out.push(makeFinding('ROW-DEPTH-RANGE', { file: ds.file, sheet, lines: bad.map((r) => r.line), field: headerOf(ds, sheet, 'depth') ?? 'depth', value: String(bad[0].depth) }));

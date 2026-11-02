@@ -79,10 +79,10 @@ describe('blocking', () => {
     expect(find(convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] }).blocking, 'CONV-NO-TAXON')).toHaveLength(1);
   });
 
-  it('a depth in a unit with no exact factor blocks (a centimetre, foot, fathom or km depth is converted: depth-units.test.ts)', () => {
-    const f = fileOf(['Sample', 'Station', 'Depth [mm]', 'Calanus finmarchicus'], [['A', 'S', 500, 3]]);
+  it('a depth in another unit blocks (nothing is rescaled; a foot, fathom or km depth is converted: depth-units.test.ts)', () => {
+    const f = fileOf(['Sample', 'Station', 'Depth [cm]', 'Calanus finmarchicus'], [['A', 'S', 500, 3]]);
     const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] });
-    expect(find(r.blocking, 'CONV-DEPTH-UNIT')[0]).toMatchObject({ field: 'Depth [mm]', params: { unit: 'mm' } });
+    expect(find(r.blocking, 'CONV-DEPTH-UNIT')[0]).toMatchObject({ field: 'Depth [cm]', params: { unit: 'cm' } });
   });
 });
 

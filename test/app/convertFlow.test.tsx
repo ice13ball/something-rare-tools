@@ -198,6 +198,19 @@ describe('the sample code step of a long sheet', () => {
     expect(within(section).getAllByRole('status').map((x) => x.textContent).join(' ')).toContain('long-with-codes.csv');
   });
 
+  it('names the columns that would remove the repeats, and groups by the one the user picks (never one of its own choice)', async () => {
+    const sexRows = ['A', 'B'].flatMap((st, i) => TAXA.flatMap((sp) => ['F', 'M'].map((sx) => [st, `2023-06-${10 + i}`, 55, 2.5, 10, sx, sp, 2])));
+    const { download } = await load([{ name: 'sex.csv', text: csvOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Sex', 'Species', 'Count'], sexRows) }]);
+    pick(T['convert.quantity.kind'], 'count');
+    const section = (await screen.findByRole('heading', { name: T['convert.codes.title'] })).closest('section') as HTMLElement;
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.propose'] }));
+    await waitFor(() => expect(section.textContent).toContain('No codes proposed'));
+    expect(download).not.toHaveBeenCalled();
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Sex"/ }));
+    await waitFor(() => expect(section.textContent).toContain('4 samples from 12 rows'));
+    expect(section.textContent).toContain('you chose it');
+  });
+
   it('says why when the rows cannot be grouped, and offers no file', async () => {
     const { download } = await load([{ name: 'bare.csv', text: csvOf(['Species', 'Count'], [['Calanus finmarchicus', 3], ['Oithona similis', 2]]) }]);
     pick(T['convert.quantity.kind'], 'count');

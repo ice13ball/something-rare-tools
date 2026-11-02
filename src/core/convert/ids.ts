@@ -7,7 +7,7 @@ import { guardTextReversible } from '../output/csv';
 import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { groupLongSheet } from './sampleGroups';
-import type { GroupPart } from './sampleGroups';
+import type { AddedColumn, GroupPart } from './sampleGroups';
 
 /*
  * Identifiers of the converter.
@@ -169,9 +169,9 @@ export interface SampleCodeProposal {
   /** The user's sheet as CSV with the new code column LAST. The original cells are not touched. */
   csv: string;
   /** A LONG sheet: its rows were grouped into samples (one code per group) by these columns; absent for a wide sheet (one code per row). */
-  grouping?: { samples: number; rows: number; by: { part: GroupPart; header: string }[]; repeats: number };
-  /** A long sheet that could not be grouped: nothing is proposed (codes and csv are empty). */
-  refusal?: { reason: 'no-columns' | 'taxon-repeats'; rows: number; repeats?: number };
+  grouping?: { samples: number; rows: number; by: { part: GroupPart; header: string }[]; added: AddedColumn[]; repeats: number; blanks: number; nearlyRows: boolean };
+  /** A long sheet that could not be grouped: nothing is proposed (codes and csv are empty). `candidates` are the columns that would remove the repeats, for the user to pick. */
+  refusal?: { reason: 'no-columns' | 'taxon-repeats'; rows: number; repeats?: number; candidates?: { index: number; header: string; repeats: number; groups: number }[] };
 }
 
 const cleanCode = (s: string): string => s.trim().replace(/[\t\r\n]+/g, ' ');
@@ -227,7 +227,7 @@ function cellText(raw: RawCell | undefined, kind: 'plain' | 'date' | 'time', dat
  * ';' for a decimal-comma source and ',' otherwise, so the file is read back exactly as the sheet was. Returns undefined when the mapping already has
  * a sample code column: the converter does not overwrite or fill the user's codes.
  */
-export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { date1904?: boolean }, sheet: RawSheet, mapping: SheetMapping, shape: 'wide' | 'long' = 'wide'): SampleCodeProposal | undefined {
+export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { date1904?: boolean }, sheet: RawSheet, mapping: SheetMapping, shape: 'wide' | 'long' = 'wide', extra: readonly number[] = []): SampleCodeProposal | undefined {
   if (mapping.columns.some((c) => c.role.kind === 'sampleId')) return undefined;
   const stationCol = mapping.columns.find((c) => c.role.kind === 'station')?.index;
   const used = new Set<string>();
@@ -236,9 +236,9 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
   // a LONG sheet (a row is a taxon): one code per sample, found from the columns that define a sample; a sheet that cannot be grouped gets no proposal. A wide sheet, and a sheet with no taxon
   // column, keep one code per row.
   const long = shape === 'long' && mapping.columns.some((c) => c.role.kind === 'taxon' && c.role.header !== true);
-  const grouping = long ? groupLongSheet(sheet, mapping) : undefined;
+  const grouping = long ? groupLongSheet(sheet, mapping, dc, extra) : undefined;
   if (grouping !== undefined && !grouping.ok) {
-    return { header: '', codes: [], csv: '', refusal: { reason: grouping.reason, rows: grouping.rows, ...(grouping.repeats === undefined ? {} : { repeats: grouping.repeats }) } };
+    return { header: '', codes: [], csv: '', refusal: { reason: grouping.reason, rows: grouping.rows, ...(grouping.repeats === undefined ? {} : { repeats: grouping.repeats }), ...(grouping.candidates === undefined ? {} : { candidates: grouping.candidates }) } };
   }
   const codeOfGroup = new Map<number, string>();
   const codes = sheet.rows.map((row, i) => {
@@ -280,6 +280,6 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
     header,
     codes,
     csv: lines.join('\n') + '\n',
-    ...(grouping?.ok === true ? { grouping: { samples: grouping.groups, rows: grouping.rows, by: grouping.by.map((b) => ({ part: b.part, header: b.header })), repeats: grouping.repeats } } : {}),
+    ...(grouping?.ok === true ? { grouping: { samples: grouping.groups, rows: grouping.rows, by: grouping.by.map((b) => ({ part: b.part, header: b.header })), added: grouping.added, repeats: grouping.repeats, blanks: grouping.blanks, nearlyRows: grouping.nearlyRows } } : {}),
   };
 }
