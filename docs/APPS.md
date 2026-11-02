@@ -1186,7 +1186,7 @@ KGXX) or a per-area / per-volume mass the rate table knows. The unit is the one 
 written as the header wrote it, without an id. The
 P06 id is written only when the table knows that exact unit; a unit with none is written whole and said
 (`CONV-UNIT-NO-P06`); when a mass unit is followed by words that are neither a per-area / per-volume part nor a kind of
-mass, **no partial unit is written**, `measurementUnit` is empty and `CONV-BIOMASS-UNIT-UNCLEAR` says so. Two biomass columns of one kind (or both
+mass, **no partial unit is written**, `measurementUnit` is empty and `CONV-BIOMASS-UNIT-UNCLEAR` says so. A header with **no unit at all** (`Biomass`, `Wet weight`, `Weight`) is the same finding in its own words: it names the column and the number of values, the unit stays empty and the warning has to be accepted. Two biomass columns of one kind (or both
 with the kind open) get the column name in `measurementType`, so no two columns write the same type.
 A row whose count is 0 is not converted unless the species list is declared full (CONV-ZERO-SKIPPED), and
 a biomass value on such a row goes with it (the two contradict each other, so the rows are listed:
@@ -2004,8 +2004,7 @@ Each item below is confirmed from code, a test, or a rule text.
 - `CONV-SAMPLE-PER-ROW` is a heuristic with known limits: a station with sightings of 25 or more taxa at one fixed position
   (ROV dives) can fire; a true split whose revisits have no date stays silent; events more than occurrences count as
   evidence alone only when the events are at least 80% of the sheet's taxon rows and there are two taxa or more.
-- A biomass column named `Biomass` or `Wet weight` with no unit anywhere in its header writes no `measurementUnit`
-  (nothing is guessed); the unit has to be in the header.
+- A biomass column named `Biomass`, `Wet weight` or `Weight` with no unit anywhere in its header still writes no `measurementUnit` (nothing is guessed; the unit has to be in the header), but it is no longer silent: `CONV-BIOMASS-UNIT-UNCLEAR` (its variant for a header with no unit at all) names the column and the number of values and has to be accepted before the export.
 - Rows that are **identical in every column** (a row copied twice) are not a repeated total: `CONV-ID-DUPLICATE` asks to merge them first, and its advice to tell the rows apart by an occurrenceID or a life stage would count each copy. A sheet that repeats totals takes such copies once with the others (`CONV-QUANTITY-REPEATED-ONCE`); in a sheet that does not (a file with thousands of exact copies and no size class), only the sheet's own care helps.
 - `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` count the cells of a time column that the date parser reads as a full date (ISO, `YYYY/MM/DD`,
   `DD.MM.YYYY`, `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial in a column the workbook formats as a date; a plain number such as 63000 or 43200 is a time)

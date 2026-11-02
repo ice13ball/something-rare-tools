@@ -27,7 +27,7 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
  *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column of a wide sheet: no record, no lines (info); with rows = yes (a long sheet) count = rows with a taxon and an empty / NA quantity and no other value, lines = those rows (info)
  *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
- *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept)
+ *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept); with none = yes the header holds no unit at all (variant, value empty): count = the values written with no unit
  *   CONV-QUANTITY-REPEATED     columns, differs, count, of   a long sheet whose quantity or weight column is a per-taxon total repeated on the size-class rows of a sample (repeatedTotal.ts): field = the first column, columns = every repeated column, differs = the column that tells the rows apart, count = groups that repeat it, of = groups that have two or more values, value = an example, lines = every row of the groups; optional alternative = a column with a number of its own on each row (variant), disagree = yes (the groups whose rows disagree after the user chose "once"; variant). Blocks
  *   CONV-QUANTITY-REPEATED-ONCE columns, differs, count, groups   the user chose one occurrence per sample and taxon: lines = the rows not converted (count), groups = the groups taken once; optional lost = per-organism columns not written (warning, accept)
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
@@ -1461,6 +1461,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines} field {field}: with "one occurrence per sample and taxon" chosen, {count} group(s) of rows have different values in the repeated column(s) {columns}, or another quantity or weight column with numbers of its own; they are not taken once, and the export stays blocked.`,
   },
+  // CONV-BIOMASS-UNIT-UNCLEAR of a weight column whose header holds no unit at all
+  'CONV-BIOMASS-UNIT-UNCLEAR:none': {
+    plain: {
+      pl: `Kolumna wagi „{field}” nie ma jednostki w nagłówku, więc jednostka pozostaje pusta w {count} {+count:wartości|wartościach|wartościach} ({+lineCount:wiersz|wiersze|wierszy} {lines}). Liczba bez jednostki nie mówi, czy to gramy, czy kilogramy. Wpisz jednostkę w nawiasie w nagłówku, np. [g].`,
+      en: `Weight column "{field}" has no unit in its header, so the unit is left empty in {count} {+count:value|values} ({+lineCount:line|lines} {lines}). A number without a unit does not say whether it is grams or kilograms. Put the unit in brackets in the header, e.g. [g].`,
+      de: `Die Gewichtsspalte „{field}“ hat keine Einheit im Kopf, die Einheit bleibt daher in {count} {+count:Wert|Werten} leer ({+lineCount:Zeile|Zeilen} {lines}). Eine Zahl ohne Einheit sagt nicht, ob es Gramm oder Kilogramm sind. Schreiben Sie die Einheit in Klammern in den Spaltenkopf, z. B. [g].`,
+      fr: `La colonne de poids « {field} » n'a pas d'unité dans son en-tête : l'unité reste vide pour {count} {+count:valeur|valeurs} ({+lineCount:ligne|lignes} {lines}). Un nombre sans unité ne dit pas s'il s'agit de grammes ou de kilogrammes. Mettez l'unité entre crochets dans l'en-tête, p. ex. [g].`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} biomass value(s) of a column whose header holds no unit, neither in brackets nor as a word of the name. A unit is never guessed, so measurementUnit is left empty; the value is written as given.`,
+  },
   // CONV-NA-SKIPPED of a long sheet: rows (a taxon and no quantity), listed by line
   'CONV-NA-SKIPPED:rows': {
     plain: {
@@ -1608,6 +1618,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS[f.params.empty === 'yes' && typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-empty' : typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-columns' : 'CONV-NA-SKIPPED:rows'];
+  if (f.ruleId === 'CONV-BIOMASS-UNIT-UNCLEAR' && f.params.none === 'yes') return PROFILE_VARIANTS['CONV-BIOMASS-UNIT-UNCLEAR:none'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:disagree'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && typeof f.params.alternative === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:alternative'];
   if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];

@@ -121,7 +121,7 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-ZERO-WITH-BIOMASS',
   // a long sheet with an event for almost every row: one sample probably split by a code that names the row
   'CONV-SAMPLE-PER-ROW',
-  // the unit in the name of a biomass column is not understood in full: measurementUnit is left empty
+  // the unit in the name of a biomass column is not understood in full, or the header has none: measurementUnit is left empty
   'CONV-BIOMASS-UNIT-UNCLEAR',
   // the user chose one occurrence per sample and taxon for a repeated total: the later rows of the groups are not converted
   'CONV-QUANTITY-REPEATED-ONCE',

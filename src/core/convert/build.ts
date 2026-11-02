@@ -1513,6 +1513,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // other quantity-named columns that are filled on the rows counted as NA (a count column empty while the numbers sit in another)
     const naOther = new Map<string, number>();
     const biomassUnitUnclear = new Lines();
+    // a biomass / weight column with no unit anywhere in its header: measurementUnit stays empty (nothing is guessed), and every such value is said
+    const biomassUnitNone = new Lines();
     const biomassNoP06 = new Set<string>();
     const checkText = (field: string, line: number, value: string | undefined): void => {
       if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
@@ -2041,6 +2043,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             const fromName = bracketed ? {} : biomassNameUnit(b.header);
             const unitText = fromName.unit ?? (fromName.unclear !== undefined ? undefined : hu.unitText);
             if (fromName.unclear !== undefined) biomassUnitUnclear.add(fileName, sheet.name, b.header, row.line, fromName.unclear);
+            else if (unitText === undefined) biomassUnitNone.add(fileName, sheet.name, b.header, row.line);
             const unit = biomassUnit(unitText);
             if (unitText !== undefined && unit.id === undefined) biomassNoP06.add(unitText);
             // two biomass columns of one kind (or both open) would write the same measurementType twice: the column name tells them apart
@@ -2207,6 +2210,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         );
       }
     }
+    for (const e of biomassUnitNone.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length, none: 'yes' } }));
     for (const u of biomassNoP06) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: u } }));
     for (const e of zeroBiomass.entries()) stats.zerosSkipped += e.lines.length;
     for (const e of zeroBiomass.entries()) findings.push(makeConvertFinding('CONV-ZERO-WITH-BIOMASS', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
