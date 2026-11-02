@@ -228,6 +228,44 @@ describe('the sample code step of a long sheet', () => {
     expect(within(section).queryByRole('button', { name: T['convert.codes.clear'] })).toBeNull();
   });
 
+  it('the whole route: no code column, "Propose codes", the picked columns, the file taken from the download and uploaded as the new input maps its new column as the sample code and builds one sample per group, with no CONV-SAMPLE-PER-ROW', async () => {
+    const rows = ['A', 'B'].flatMap((st, i) => TAXA.flatMap((sp) => ['F', 'M'].flatMap((sx) => ['s', 'l'].map((sz) => [st, `2023-06-${10 + i}`, 55, 2.5, 10, sx, sz, sp, 2]))));
+    const download = vi.fn();
+    await load([{ name: 'route.csv', text: csvOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Sex', 'Size_class', 'Species', 'Count'], rows) }], download);
+    pick(T['convert.quantity.kind'], 'count');
+    // without codes every row is its own sample: the sheet is blocked or warned about, the proposal refuses to guess
+    const section = (await screen.findByRole('heading', { name: T['convert.codes.title'] })).closest('section') as HTMLElement;
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.propose'] }));
+    // the candidate-column buttons: the picks accumulate, Clear resets them, and they are picked again
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Sex"/ }));
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Size_class"/ }));
+    await waitFor(() => expect(section.textContent).toContain('8 samples from 24 rows'));
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.clear'] }));
+    await waitFor(() => expect(section.textContent).toContain('No codes proposed'));
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Sex"/ }));
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Size_class"/ }));
+    await waitFor(() => expect(section.textContent).toContain('8 samples from 24 rows'));
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.download'] }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const [csv, name] = download.mock.calls[0] as [string, string];
+    expect(name).toBe('route-with-codes.csv');
+    expect(csv.split('\n')[0].endsWith(',sample_code')).toBe(true);
+    // the produced file is the new input
+    cleanup();
+    await load([{ name, text: csv }]);
+    // the new column is the sample code by its name alone
+    expect((screen.getByLabelText('sample_code: Meaning') as HTMLSelectElement).value).toBe('sampleId');
+    pick(T['convert.quantity.kind'], 'count');
+    const approve = await screen.findAllByRole('button', { name: /^Approve \d+ shown/ }).catch(() => []);
+    if (approve.length > 0) fireEvent.click(approve[0]);
+    await settled('24 occurrences');
+    // 8 samples under 2 stations: 10 events, not 24 (no sample is split by the code of its row)
+    expect(summary().textContent).toContain('10 events');
+    expect(summary().textContent).not.toContain('almost one row each');
+    expect(screen.queryByText(/CONV-SAMPLE-PER-ROW/)).toBeNull();
+    await waitFor(() => expect(summary().textContent).not.toContain(T['convert.summary.blocked']));
+  });
+
   it('says why when the rows cannot be grouped, and offers no file', async () => {
     const { download } = await load([{ name: 'bare.csv', text: csvOf(['Species', 'Count'], [['Calanus finmarchicus', 3], ['Oithona similis', 2]]) }]);
     pick(T['convert.quantity.kind'], 'count');
