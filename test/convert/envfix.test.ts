@@ -854,7 +854,7 @@ describe('review fixes of the third round', () => {
     ['Sampling depth [m]', 'A:5m'],
     ['Sample depth [m]', 'A:5m'],
     ['Bottle depth [m]', 'A:5m'],
-    ['Depth sediment [m]', 'A:5m'],
+    ['Depth layer [m]', 'A:5m'],
     ['SDN:P01::ADEPZZ01<Float32>', 'A:5m'],
   ];
 

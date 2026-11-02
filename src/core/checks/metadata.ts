@@ -199,7 +199,7 @@ function noDates(ds: Dataset, all: readonly Dataset[]): Finding[] {
   const rowDate = ds.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== ''));
   // DataCite 'Collected' dates are parsed into temporalExtent; publication/issued dates are never kept.
   const metaDate = ds.metadata.some((r) => r.temporalExtent && (r.temporalExtent.start || r.temporalExtent.end));
-  return rowDate || metaDate ? [] : [makeFinding('META-NO-DATES', { file: ds.file, ...sheetOf(ds) })];
+  return rowDate || metaDate ? [] : [makeFinding('META-NO-DATES', { file: ds.file, ...sheetOf(ds), ...(ds.joinLost === undefined ? {} : { params: { joinSheet: ds.joinLost } }) })];
 }
 
 /**

@@ -22,7 +22,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, totalOnceSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, totalOnceSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -293,12 +293,12 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     changeMapping(file.fileId, { ...mapping, columns: mapping.columns.map((c) => (c.index === column.index ? { ...c, role: { kind: 'replicate' as const } } : c)) });
   };
 
-  // CONV-QUANTITY-REPEATED: the user chooses one occurrence per sample and taxon; the conversion runs again with the sheet's tick
-  const useTotalOnce = (f: Finding): void => {
+  // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
-    setChoices((prev) => (prev[key] === undefined ? prev : { ...prev, [key]: { ...prev[key], totalOnce: true } }));
+    setChoices((prev) => (prev[key] === undefined ? prev : { ...prev, [key]: { ...prev[key], [choice]: true } }));
   };
 
   /**
@@ -629,10 +629,12 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
     const presenceOnly = parsed ? presenceSettingsOf(parsed, choices, mappings) : [];
     const totalOnce = parsed ? totalOnceSettingsOf(parsed, choices) : [];
+    const realCounts = parsed ? sheetFlagSettingsOf(parsed, choices, 'realCounts') : [];
+    const dropCopies = parsed ? sheetFlagSettingsOf(parsed, choices, 'dropCopies') : [];
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(totalOnce.length > 0 ? { totalOnce } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(totalOnce.length > 0 ? { totalOnce } : {}), ...(realCounts.length > 0 ? { realCounts } : {}), ...(dropCopies.length > 0 ? { dropCopies } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1049,7 +1051,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
                   </p>
                 )}
-                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onUseTotalOnce={useTotalOnce} />
+                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onChoose={chooseForSheet} />
                 {(judged.acceptRules.length > 0 || unconfirmed.length > 0) && (
                   <div className="convert-accept">
                     <HeadingTip tip="convertAccept">
@@ -1191,7 +1193,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onUseTotalOnce }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onUseTotalOnce?: (f: Finding) => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1207,11 +1209,22 @@ function FindingItems({ findings, onUseReplicate, onUseTotalOnce }: { findings: 
               </button>
             </>
           )}
-          {f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree !== 'yes' && onUseTotalOnce !== undefined && (
+          {f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree !== 'yes' && onChoose !== undefined && (
             <>
               {' '}
-              <button type="button" className="button" onClick={() => onUseTotalOnce(f)}>
-                {t('convert.finding.totalOnce')}
+              <button type="button" className="button" onClick={() => onChoose(f, 'totalOnce')}>
+                {t(f.params.weight === 'yes' ? 'convert.finding.weightOnce' : 'convert.finding.totalOnce')}
+              </button>{' '}
+              <button type="button" className="button" onClick={() => onChoose(f, 'realCounts')}>
+                {t('convert.finding.realCounts')}
+              </button>
+            </>
+          )}
+          {f.ruleId === 'CONV-ROW-COPIES' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" onClick={() => onChoose(f, 'dropCopies')}>
+                {t('convert.finding.dropCopies', { count: f.params.count as number })}
               </button>
             </>
           )}
@@ -1227,12 +1240,12 @@ function FindingItems({ findings, onUseReplicate, onUseTotalOnce }: { findings: 
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onUseTotalOnce }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onUseTotalOnce?: (f: Finding) => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onUseTotalOnce === undefined ? {} : { onUseTotalOnce })} />
+      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onChoose === undefined ? {} : { onChoose })} />
     </div>
   );
 }

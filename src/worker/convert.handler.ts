@@ -140,6 +140,8 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.transposedAsTable ?? []) if (!(settings.transposedAsTable ??= []).includes(n)) settings.transposedAsTable.push(n);
         for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
         for (const n of s.totalOnce ?? []) if (!(settings.totalOnce ??= []).includes(n)) settings.totalOnce.push(n);
+        for (const n of s.realCounts ?? []) if (!(settings.realCounts ??= []).includes(n)) settings.realCounts.push(n);
+        for (const n of s.dropCopies ?? []) if (!(settings.dropCopies ??= []).includes(n)) settings.dropCopies.push(n);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
@@ -261,6 +263,8 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
       ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
       ...(s.totalOnce === true ? { totalOnce: true } : {}),
+      ...(s.realCounts === true ? { realCounts: true } : {}),
+      ...(s.dropCopies === true ? { dropCopies: true } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
@@ -279,6 +283,8 @@ export function createConvertHandler(): ConvertHandler {
     const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
     const presenceOnly = [...new Set(body.sheets.filter((s) => s.presenceOnly === true).map((s) => s.sheet))];
     const totalOnce = [...new Set(body.sheets.filter((s) => s.totalOnce === true).map((s) => s.sheet))];
+    const realCounts = [...new Set(body.sheets.filter((s) => s.realCounts === true).map((s) => s.sheet))];
+    const dropCopies = [...new Set(body.sheets.filter((s) => s.dropCopies === true).map((s) => s.sheet))];
     const biomassBasis = biomassBasisOf(body.sheets.map((s) => s.mapping));
     return {
       fullList: body.options.fullList === true,
@@ -292,6 +298,8 @@ export function createConvertHandler(): ConvertHandler {
       ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
       ...(presenceOnly.length > 0 ? { presenceOnly } : {}),
       ...(totalOnce.length > 0 ? { totalOnce } : {}),
+      ...(realCounts.length > 0 ? { realCounts } : {}),
+      ...(dropCopies.length > 0 ? { dropCopies } : {}),
       ...(biomassBasis.length > 0 ? { biomassBasis } : {}),
     };
   };

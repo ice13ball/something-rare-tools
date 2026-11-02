@@ -34,7 +34,7 @@ describe('Year, Month and Day columns are one date', () => {
     expect(r.Month.role).toEqual({ kind: 'datePart', part: 'month' });
     expect(r.Day.role).toEqual({ kind: 'datePart', part: 'day' });
     expect(r.Year.confidence).toBe('high');
-    expect(r.Year.reasonCode).toBe('date-parts-names');
+    expect(r.Year.reasonCode).toBe('date-parts-year');
     expect(r.Station.role.kind).not.toBe('datePart');
   });
 
@@ -47,12 +47,31 @@ describe('Year, Month and Day columns are one date', () => {
     }
   });
 
-  it('adjacent columns in the order year, month, day are a set by place, at low confidence', () => {
-    const r = roles(['A', 'B', 'C', 'Station', 'Latitude', 'Longitude', 'Temperature [degC]'], rows([[1998, 9, 17], [1998, 10, 2], [1999, 1, 30], [1999, 3, 5]]));
-    expect(r.A.role).toEqual({ kind: 'datePart', part: 'year' });
-    expect(r.C.role).toEqual({ kind: 'datePart', part: 'day' });
-    expect(r.A.confidence).toBe('low');
-    expect(r.A.reasonCode).toBe('date-parts-position');
+  it('never by position: numbers that fit are not a date (Year beside Quarter/Haul, Net/Tow, Transect/Quadrat, Season/Plot, two species, Temperature/Salinity)', () => {
+    const body = (a: number[], b: number[]): Cell[][] => a.map((x, i) => [2001 + (i % 3), x, b[i], `S${i}`, 49.4, 0.2]);
+    const q = [1, 2, 3, 4, 1, 2, 3, 4], h = [1, 3, 5, 7, 2, 4, 6, 8];
+    for (const names of [['Year', 'Quarter', 'Haul'], ['Year', 'Net', 'Tow'], ['Year', 'Transect', 'Quadrat'], ['Year', 'Season', 'Plot'], ['Year', 'Calanus finmarchicus', 'Oithona similis'], ['Year', 'Temperature', 'Salinity'], ['A', 'B', 'C']]) {
+      const r = roles([...names, 'Station', 'Latitude', 'Longitude'], body(q, h));
+      for (const n of names) expect(r[n].role.kind, names.join('/') + ' ' + n).not.toBe('datePart');
+    }
+    // the dataset gets no invented date either
+    const { dataset: ds } = dataset('Year,Quarter,Haul,Station,Latitude,Longitude\n2001,1,1,S1,49.4,0.2\n2002,2,3,S2,49.5,0.2\n2003,3,5,S3,49.6,0.2');
+    expect(ds.rows.map((r) => r.datetime?.iso)).toEqual(['2001', '2002', '2003'].map(() => undefined));
+  });
+
+  it('mm and dd count only beside yyyy; a Year with a month column that does not say month is not a date', () => {
+    const three = rows([[1998, 9, 17], [1998, 10, 2], [1999, 1, 30]]);
+    expect(roles(['Year', 'mm', 'dd', 'Station', 'Latitude', 'Longitude', 'Temperature [degC]'], three).mm.role.kind).not.toBe('datePart');
+    expect(roles(['yyyy', 'mm', 'dd', 'Station', 'Latitude', 'Longitude', 'Temperature [degC]'], three).mm.role).toEqual({ kind: 'datePart', part: 'month' });
+  });
+
+  it('a Tag column of text is not the day: the date is what Year and Month make; month names are read', () => {
+    const r = roles(['Year', 'Month', 'Tag', 'Station', 'Latitude', 'Longitude'], [[1998, 'Sep', 'a', 'S1', 49.4, 0.2], [1998, 'Oct', 'b', 'S2', 49.5, 0.2], [1999, 'wrz', 'c', 'S3', 49.6, 0.2], [1999, 'Okt', 'd', 'S4', 49.6, 0.2]]);
+    expect(r.Year.role).toEqual({ kind: 'datePart', part: 'year' });
+    expect(r.Month.role).toEqual({ kind: 'datePart', part: 'month' });
+    expect(r.Tag.role.kind).not.toBe('datePart');
+    const { dataset: ds } = dataset('Year,Month,Station,Latitude,Longitude\n1998,Sep,S1,49.4,0.2\n1998,Sept.,S2,49.5,0.2\n1999,mars,S3,49.6,0.2');
+    expect(ds.rows.map((x) => x.datetime?.iso)).toEqual(['1998-09', '1998-09', '1999-03']);
   });
 
   it('does not fire on a lone Year, on code columns or on a non-date triple', () => {
@@ -66,6 +85,20 @@ describe('Year, Month and Day columns are one date', () => {
     expect(notDates.Year.role.kind === 'datePart' || notDates.Year.role.kind === 'variable').toBe(true);
     const counts = roles(['Count', 'Size', 'Age', 'Latitude', 'Longitude'], [[1998, 40, 3, 49.4, 0.2], [1950, 12, 20, 49.5, 0.2], [1700, 7, 9, 49.6, 0.2]]);
     expect(counts.Count.role.kind).not.toBe('datePart');
+  });
+
+  it('an empty Date column beside the parts: the parts give the dates; a half-filled one: the parts fill the rows it leaves blank', () => {
+    const empty = dataset('Date,Year,Month,Day,Station,Latitude,Longitude\n,1998,9,17,S1,49.4,0.2\n,1998,10,2,S2,49.5,0.2');
+    expect(empty.dataset.rows.map((x) => x.datetime?.iso)).toEqual(['1998-09-17', '1998-10-02']);
+    const half = dataset('Date,Year,Month,Day,Station,Latitude,Longitude\n2001-05-05,1998,9,17,S1,49.4,0.2\n,1998,10,2,S2,49.5,0.2');
+    expect(half.dataset.rows.map((x) => x.datetime?.iso)).toEqual(['2001-05-05', '1998-10-02']);
+  });
+
+  it('bad Day cells do not drop the Day for the other rows; each bad cell is reported', () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `1998,${(i % 12) + 1},${i % 3 === 0 ? 'x' : String(i + 1)},S${i},49.4,0.2`);
+    const { dataset: ds, findings } = dataset(['Year,Month,Day,Station,Latitude,Longitude', ...lines].join('\n'));
+    expect(ds.rows.filter((x) => x.datetime?.precision === 'day')).toHaveLength(6);
+    expect(findings.find((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE')!.lines).toHaveLength(4);
   });
 
   it('a real Date column beside them wins: nothing is marked', () => {

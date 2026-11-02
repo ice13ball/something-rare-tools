@@ -29,6 +29,8 @@ const FACTORS = new Map<string, DepthUnitFactor>([
 ]);
 
 const METRES = new Set(['m', 'metre', 'metres', 'meter', 'meters']);
+/** Metres above sea level (PANGAEA's ELEVATION [m a.s.l.]): metres, counted upwards. After `clean`: 'm a.s.l.' is 'masl'. */
+const METRES_ASL = new Set(['masl', 'mamsl', 'mabovesealevel', 'mabovemeansealevel']);
 
 /**
  * Length units a depth column may carry that are NOT converted: ambiguous ('f' is feet or fathoms) or without a use here. A depth header that states one of them is a depth in that unit,
@@ -42,7 +44,7 @@ const DEPTH_WORD = /^(?:.*depth|tiefe|glebokosc|głębokość|profondeur|profund
 const clean = (unit: string): string => unit.trim().toLowerCase().replace(/[.\s]/g, '');
 
 /** Is this unit text metres? */
-export const isMetreUnit = (unit: string): boolean => METRES.has(clean(unit));
+export const isMetreUnit = (unit: string): boolean => METRES.has(clean(unit)) || METRES_ASL.has(clean(unit));
 
 /** The exact factor of a unit that is converted to metres, or undefined (metres, or a unit that is not converted). */
 export function depthUnitFactor(unit: string | undefined): DepthUnitFactor | undefined {
@@ -68,6 +70,7 @@ export function depthSuffixUnit(header: string): string | undefined {
   const group = /[[(]([^[\]()]*)[\])]\s*$/.exec(name);
   if (group) {
     const k = clean(group[1]);
+    if (METRES_ASL.has(k)) return 'm';
     if (isUnit(k)) return group[1].trim().replace(/\.$/, '');
   }
   const tokens = name

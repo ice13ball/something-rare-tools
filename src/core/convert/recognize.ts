@@ -10,6 +10,7 @@ import { isPercentUnit, verifiedConcept } from './nerc';
 import { hasCentralStatisticToken } from '../summaryLabels';
 import { isMeasurementWord, nameKind } from './measured';
 import { holdsOneFractionalValue, holdsYears, isGeometryUnit, isPlainCountUnit, latinNameShare } from './columnValues';
+import { isDepthBoundKey } from '../recognize/geocodes';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitFromHeader, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -229,6 +230,8 @@ export const OVERLAY_REASONS = {
   'summary-total-biomass': 'its name says total, but on a long sheet its values differ between the rows of one sample (a weight of each taxon, not the sum of the sample): proposed as a biomass measurement of each occurrence, in the unit of its name; choose its kind (wet, dry or ash-free dry mass)',
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
   'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres, and a negative number counted downwards (above the seafloor) as a positive one',
+  'elevation-asl': 'elevation or altitude in metres above sea level: a negative value is a depth of that many metres below the surface, so the sign is turned; a positive value is above the sea and is written as a negative depth (check it)',
+  'seafloor-depth-axis': 'a depth top or bottom in a sheet that has a depth in the sediment: the same axis, read as the depth below the seafloor (never as the depth of the water)',
   'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
   'seafloor-depth-negative': 'most numbers of this depth below the seafloor are negative: read as counted upwards from the seafloor (negative = below, positive = above), and the sign is kept; change the direction if it is wrong',
   'pressure-unit': 'a column in decibars is a pressure, not a species and not a variable of its own',
@@ -410,7 +413,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   if (asked0 !== undefined && !asked0.proposals.some((q) => isVerticalProposal(q, siteAt))) asked0 = undefined;
   const base = (asked0 ?? askedWith(false)).proposals;
   const qualityAt = new Set<number>();
-  const seafloorAt = new Map<number, 'seafloor-depth-name' | 'seafloor-depth-cm'>();
+  const seafloorAt = new Map<number, 'seafloor-depth-name' | 'seafloor-depth-cm' | 'seafloor-depth-axis'>();
   const siteDepthAt = new Set<number>();
   const plainAreaAt = new Set<number>();
   const claims = new Map<number, Claim>();
@@ -437,6 +440,11 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const depthUnit = depthUnitOfHeader(p.header, hu.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined));
       if (isSeafloorName(nameWithComment(p.header))) {
         seafloorAt.set(p.index, 'seafloor-depth-name');
+        continue;
+      }
+      // a depth top / bottom in a sheet that has a depth in the sediment is the same axis
+      if (seafloorPre && isDepthBoundKey(headerKey(foldDiacritics(nameWithComment(p.header))))) {
+        seafloorAt.set(p.index, 'seafloor-depth-axis');
         continue;
       }
       if (sedCtx && isPlainDepthName(nameWithComment(p.header)) && seafloorUnitOf(depthUnit) === 'cm') {
@@ -571,6 +579,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       p.confidence = up || seafloorCode === 'seafloor-depth-cm' ? 'low' : 'high'; // a guess from the sheet's context or the data shows its reason
       if (up) why(p, 'seafloor-depth-negative');
       else if (seafloorCode === 'seafloor-depth-cm') why(p, 'seafloor-depth-cm');
+      else if (seafloorCode === 'seafloor-depth-axis') why(p, 'seafloor-depth-axis');
       else why(p, 'seafloor-depth-name');
       continue;
     }
@@ -854,6 +863,10 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         why(q, 'area-not-effort');
       }
     }
+  }
+  // elevation or altitude read as a depth: what the converter does with its sign, and why, is said on the column (the shared reason only says "positive up")
+  for (const q of base) {
+    if (q.role.kind === 'depth' && q.reasonCode === 'name-elevation') why(q, 'elevation-asl');
   }
   return base;
 }

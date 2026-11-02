@@ -78,6 +78,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-DATE-MISSING | info | B | — | —<a id="ROW-DATE-MISSING"></a> |
 | ROW-YEAR-OUTLIER | warning | B | — | —<a id="ROW-YEAR-OUTLIER"></a> |
 | ROW-JOIN-AMBIGUOUS | warning | B | — | —<a id="ROW-JOIN-AMBIGUOUS"></a> |
+| ROW-JOIN-KEY-BLANK | warning | B | — | —<a id="ROW-JOIN-KEY-BLANK"></a> |
 | ROW-DATE-YYMMDD | info | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
 | ROW-TZ-UNKNOWN | info | B | — | —<a id="ROW-TZ-UNKNOWN"></a> |
 | ROW-UNIT-MISSING | warning | B | — | —<a id="ROW-UNIT-MISSING"></a> |
@@ -124,6 +125,9 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-BIOMASS-UNIT-UNCLEAR | warning | B | — | —<a id="CONV-BIOMASS-UNIT-UNCLEAR"></a> |
 | CONV-QUANTITY-REPEATED | error | B | — | —<a id="CONV-QUANTITY-REPEATED"></a> |
 | CONV-QUANTITY-REPEATED-ONCE | warning | B | — | —<a id="CONV-QUANTITY-REPEATED-ONCE"></a> |
+| CONV-ROW-COPIES | error | B | — | —<a id="CONV-ROW-COPIES"></a> |
+| CONV-ROW-COPIES-DROPPED | warning | B | — | —<a id="CONV-ROW-COPIES-DROPPED"></a> |
+| CONV-QUANTITY-SAME-IN-SAMPLE | warning | B | — | —<a id="CONV-QUANTITY-SAME-IN-SAMPLE"></a> |
 | CONV-TAXON-EMPTY-ROW | warning | B | — | —<a id="CONV-TAXON-EMPTY-ROW"></a> |
 | CONV-TIME-HOLDS-DATES | error | B | — | —<a id="CONV-TIME-HOLDS-DATES"></a> |
 | CONV-TIME-SOME-DATES | warning | B | — | —<a id="CONV-TIME-SOME-DATES"></a> |

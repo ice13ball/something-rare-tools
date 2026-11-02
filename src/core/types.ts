@@ -236,6 +236,8 @@ export interface Dataset {
   depthPositive: 'down' | 'up' | 'unknown';
   /** The source file wrote decimals with a comma. Only then may the clean CSV swap the comma for a dot. */
   decimalComma?: boolean;
+  /** The sheet a join left rows without a position or date for (its key matches several rows that differ): META-NO-DATES / META-NO-POSITIONS name it as the likely cause. */
+  joinLost?: string;
 }
 
 /* ---------- findings and rules ---------- */

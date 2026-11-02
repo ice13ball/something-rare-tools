@@ -135,6 +135,15 @@ export const METADATA_RULES: readonly RuleSpec[] = [
           fr: `Cela concerne la feuille : {sheetOne}.`,
         },
       },
+      {
+        param: 'joinSheet',
+        plain: {
+          pl: `Możliwa przyczyna: łączenie z arkuszem „{joinSheet}” nie dało dat (klucz pasuje tam do różnych wierszy; zob. ostrzeżenie o kluczu).`,
+          en: `Likely cause: the join with sheet "{joinSheet}" gave no dates (its key matches rows that differ; see the warning about the key).`,
+          de: `Wahrscheinliche Ursache: die Verknüpfung mit Blatt „{joinSheet}“ lieferte keine Daten (der Schlüssel passt auf abweichende Zeilen; siehe Warnung).`,
+          fr: `Cause probable : la liaison avec la feuille « {joinSheet} » n'a donné aucune date (la clé y correspond à des lignes différentes ; voir l'avertissement).`,
+        },
+      },
     ],
     technical: `{file}: no row has a date and no record has a temporal extent or collection date.`,
   },

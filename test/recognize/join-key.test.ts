@@ -6,6 +6,7 @@ import { buildDatasets } from '../../src/core/dataset';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import { describeLayout, setJoinKey } from '../../src/app/layoutModel';
 import { renderPlain } from '../../src/core/report';
+import { checkMetadataVsData } from '../../src/core/checks/metadata';
 import { LANGS } from '../../src/core/types';
 import { translate } from '../../src/core/i18n/ui';
 import { xlsxFile } from '../helpers/files';
@@ -142,5 +143,82 @@ describe('a join key identifies one row of the right sheet', () => {
     const next = setJoinKey(layout, 0, 'left', 1);
     expect(next.joins[0].extraKeys).toBeUndefined();
     expect(next.joins[0].leftKey).toBe(1);
+  });
+});
+
+describe('which key (M1/M2): uniqueness first, then the composite, then the header', () => {
+  it('Cruise,Stn against Cruise,Station takes Station (unique), not Cruise (equal header, repeated)', () => {
+    const station = [['Cruise', 'Station', 'Date', 'Latitude', 'Longitude'], ['C1', 'S1', '2020-06-01', 70.1, 15.2], ['C1', 'S2', '2020-06-02', 60.2, 5.4], ['C1', 'S3', '2020-06-03', 50.3, -5.6]];
+    const data = [['Cruise', 'Stn', 'Temperature [degC]'], ['C1', 'S1', 4.5], ['C1', 'S2', 5.5], ['C1', 'S3', 6.5]];
+    const { layout, datasets } = run({ Station: station, Data: data });
+    expect(layout.joins).toEqual([{ left: 'Data', right: 'Station', leftKey: 1, rightKey: 1 }]);
+    expect(datasets[0].rows.map((r) => r.lat)).toEqual([70.1, 60.2, 50.3]);
+  });
+
+  it('Cruise,Stn against Cruise,Station with the station repeated in two cruises: the composite resolves (C1,S2) to 60.2', () => {
+    const data = [['Cruise', 'Stn', 'Temperature [degC]'], ['C1', 'S1', 4.5], ['C1', 'S2', 5.5], ['C2', 'S1', 6.5], ['C2', 'S2', 7.5]];
+    const { layout, datasets } = run({ Station: TWO_CRUISES, Data: data });
+    expect(layout.joins[0].extraKeys).toEqual([{ leftKey: 1, rightKey: 1 }]);
+    expect(datasets[0].rows.map((r) => r.lat)).toEqual([70.1, 60.2, 40.1, 30.2]);
+  });
+
+  it('Sample against Sample ID', () => {
+    const cores = [['Sample ID', 'Latitude', 'Longitude', 'Date'], ['A', 70.1, 15.2, '2020-06-01'], ['B', 60.2, 5.4, '2020-06-02']];
+    const meas = [['Sample', 'Temperature [degC]'], ['A', 4.5], ['B', 5.5]];
+    const { layout, datasets } = run({ cores, meas });
+    expect(layout.joins).toEqual([{ left: 'meas', right: 'cores', leftKey: 0, rightKey: 0 }]);
+    expect(datasets[0].rows.map((r) => r.lat)).toEqual([70.1, 60.2]);
+  });
+
+  it('with three sheets, Stations wins over Cruises', () => {
+    const cruises = [['Cruise', 'Latitude', 'Longitude', 'Date'], ['C1', 70.0, 15.0, '2020-06-01'], ['C2', 40.0, 1.0, '2021-06-01']];
+    const stations = [['Station', 'Cruise', 'Latitude', 'Longitude', 'Date'], ['S1', 'C1', 70.1, 15.2, '2020-06-01'], ['S2', 'C1', 60.2, 5.4, '2020-06-02'], ['S3', 'C2', 40.1, 1.2, '2021-06-01']];
+    const data = [['Cruise', 'Station', 'Temperature [degC]'], ['C1', 'S1', 4.5], ['C1', 'S2', 5.5], ['C2', 'S3', 6.5]];
+    const { layout, datasets } = run({ Cruises: cruises, Stations: stations, Data: data });
+    expect(layout.joins[0].right).toBe('Stations');
+    expect(datasets.flatMap((d) => d.rows).filter((r) => r.sheet === 'Data').map((r) => r.lat)).toEqual([70.1, 60.2, 40.1]);
+  });
+});
+
+describe('the lookup (M3, M4 and the LOW items)', () => {
+  it('rows that differ only in depth lend position and date, and no depth', () => {
+    const station = [['Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]'], ['S1', '2020-06-01', 70.1, 15.2, 10], ['S1', '2020-06-01', 70.1, 15.2, 20], ['S2', '2020-06-02', 50.3, -5.6, 30]];
+    const data = [['Station', 'Temperature [degC]'], ['S1', 4.5], ['S2', 5.5]];
+    const { datasets, findings } = run({ Station: station, Data: data });
+    expect(datasets[0].rows.map((r) => [r.lat, r.depth])).toEqual([[70.1, undefined], [50.3, 30]]);
+    expect(findings.filter((f) => f.ruleId === 'ROW-JOIN-AMBIGUOUS')).toEqual([]);
+  });
+
+  it('after an ambiguous join META-NO-DATES names the sheet and the cause', () => {
+    const station = [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', '2020-06-01', 70.1, 15.2], ['S1', '2020-07-01', 60.2, 5.4]];
+    const data = [['Station', 'Temperature [degC]'], ['S1', 4.5]];
+    const { datasets } = run({ Station: station, Data: data });
+    const f = checkMetadataVsData(datasets[0]).filter((x) => x.ruleId === 'META-NO-DATES');
+    expect(f).toHaveLength(1);
+    for (const lang of LANGS) expect(renderPlain(f[0], lang)).toContain('Station');
+    expect(renderPlain(f[0], 'en')).toMatch(/join/i);
+  });
+
+  it('the messages have no plural token left over, and a composite key example reads "C1 + S1"', () => {
+    const station = [['Cruise', 'Station', 'Date', 'Latitude', 'Longitude'], ['C1', 'S1', '2020-06-01', 70.1, 15.2], ['C1', 'S1', '2020-06-01', 70.9, 15.9], ['C1', 'S2', '2020-06-02', 60.2, 5.4], ['C2', 'S1', '2021-06-01', 40.1, 1.2]];
+    const data = [['Cruise', 'Station', 'Temperature [degC]'], ['C1', 'S1', 4.5], ['C1', 'S2', 5.5]];
+    const { findings } = run({ Station: station, Data: data });
+    const f = findings.filter((x) => x.ruleId === 'ROW-JOIN-AMBIGUOUS');
+    expect(f).toHaveLength(1);
+    expect(f[0].value).toBe('C1 + S1');
+    for (const lang of LANGS) {
+      const text = renderPlain(f[0], lang);
+      expect(text).not.toMatch(/[{}]|\["/);
+      expect(text).toContain('C1 + S1');
+    }
+  });
+
+  it('a blank part of the key on a row with no position of its own is said', () => {
+    const data = [['Station', 'Temperature [degC]', 'Salinity'], ['S1', 4.5, 35], [null, 5.5, 35.1]];
+    const station = [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', '2020-06-01', 70.1, 15.2], ['S2', '2020-06-02', 50.3, -5.6]];
+    const { findings } = run({ Station: station, Data: data as never });
+    const f = findings.filter((x) => x.ruleId === 'ROW-JOIN-KEY-BLANK');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([3]);
   });
 });

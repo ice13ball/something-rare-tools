@@ -55,6 +55,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-ID-DUPLICATE',
   // a per-taxon total repeated on the size-class rows of a sample: the export would count it once per size class
   'CONV-QUANTITY-REPEATED',
+  // rows that are exact copies of another row: the sum counts each copy
+  'CONV-ROW-COPIES',
   'CONV-TAB-IN-VALUE',
   'CONV-EMOF-ORPHAN',
   'CONV-EMOF-EVENT-MISMATCH',
@@ -125,6 +127,9 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-BIOMASS-UNIT-UNCLEAR',
   // the user chose one occurrence per sample and taxon for a repeated total: the later rows of the groups are not converted
   'CONV-QUANTITY-REPEATED-ONCE',
+  // the same quantity above 1 on rows of one sample and taxon that differ in something; the copies the user dropped
+  'CONV-QUANTITY-SAME-IN-SAMPLE',
+  'CONV-ROW-COPIES-DROPPED',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written

@@ -125,6 +125,7 @@ const SHIP_DECLARED = {
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
  *   ROW-YEAR-OUTLIER      years, declared  years = years of the flagged rows; declared = years named in label/file name/title/extent
  *   ROW-JOIN-AMBIGUOUS    right   field = the key (columns joined with " + "), value = an example key, lines = the rows of the measurement sheet that could not be placed; right = the sheet that holds several rows of that key with different positions or dates
+ *   ROW-JOIN-KEY-BLANK    right   field = the key (columns joined with " + "), lines = the rows whose key has a blank part and that have no position of their own; right = the sheet that would give it
  *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
  *   ROW-UNIT-MISSING      headers     column headers without a unit, comma-separated
@@ -502,12 +503,25 @@ export const ROW_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['right'],
     plain: {
-      pl: `{+lineCount:Wiersz|Wiersze|Wiersze} {lines} nie dostało pozycji ani daty z arkusza „{right}”: klucz „{field}” (np. {value}) pasuje tam do kilku wierszy o różnych pozycjach lub datach, więc żaden nie został wzięty (nie zgadujemy pierwszego).`,
-      en: `{+lineCount:Line|Lines} {lines} got no position or date from sheet "{right}": the key "{field}" (e.g. {value}) matches several rows there that differ in position or date, so none was taken (the first is not guessed).`,
-      de: `{+lineCount:Zeile|Zeilen} {lines} erhielten keine Position und kein Datum aus Blatt „{right}“: der Schlüssel „{field}“ (z. B. {value}) passt dort auf mehrere Zeilen mit verschiedener Position oder verschiedenem Datum, daher wurde keine genommen (die erste wird nicht geraten).`,
-      fr: `{+lineCount:La ligne|Les lignes} {lines} n'ont reçu ni position ni date de la feuille « {right} » : la clé « {field} » (p. ex. {value}) y correspond à plusieurs lignes de position ou de date différentes ; aucune n'a été prise (la première n'est pas devinée).`,
+      pl: `Wiersze arkusza „{sheet}” (wiersze: {lines}) nie dostały pozycji ani daty z arkusza „{right}”: klucz „{field}” (np. {value}) pasuje tam do kilku wierszy o różnych pozycjach lub datach, więc żaden nie został wzięty (pierwszego nie zgadujemy).`,
+      en: `Rows of sheet "{sheet}" (lines: {lines}) got no position or date from sheet "{right}": the key "{field}" (e.g. {value}) matches several rows there that differ in position or date, so none was taken (the first is not guessed).`,
+      de: `Zeilen des Blatts „{sheet}“ (Zeilen: {lines}) erhielten keine Position und kein Datum aus Blatt „{right}“: der Schlüssel „{field}“ (z. B. {value}) passt dort auf mehrere Zeilen mit verschiedener Position oder verschiedenem Datum, daher wurde keine genommen (die erste wird nicht geraten).`,
+      fr: `Les lignes de la feuille « {sheet} » (lignes : {lines}) n'ont reçu ni position ni date de la feuille « {right} » : la clé « {field} » (p. ex. {value}) y correspond à plusieurs lignes de position ou de date différentes ; aucune n'a été prise (la première n'est pas devinée).`,
     },
     technical: `{file}, {sheet}:{lines} key {field} (example value {value}): the key matches several rows of sheet {right} that differ in position or date, so the rows get no position and no date from it; the first matching row is never taken. Join on a key that identifies one row (a composite key such as Cruise + Station is tried by the layout).`,
+  },
+  {
+    id: 'ROW-JOIN-KEY-BLANK',
+    category: 'B',
+    severity: 'warning',
+    params: ['right'],
+    plain: {
+      pl: `W arkuszu „{sheet}” (wiersze: {lines}) klucz „{field}” jest pusty, więc z arkusza „{right}” nie można było wziąć pozycji ani daty. Uzupełnij klucz w tych wierszach.`,
+      en: `In sheet "{sheet}" (lines: {lines}) the key "{field}" is blank, so no position or date could be taken from sheet "{right}". Fill in the key on those rows.`,
+      de: `Im Blatt „{sheet}“ (Zeilen: {lines}) ist der Schlüssel „{field}“ leer, daher konnten aus Blatt „{right}“ keine Position und kein Datum übernommen werden. Ergänzen Sie den Schlüssel in diesen Zeilen.`,
+      fr: `Dans la feuille « {sheet} » (lignes : {lines}) la clé « {field} » est vide : aucune position ni date n'a pu être prise dans la feuille « {right} ». Renseignez la clé sur ces lignes.`,
+    },
+    technical: `{file}, {sheet}:{lines} key {field}: a part of the join key is blank on rows that have no position of their own, so the row of sheet {right} cannot be found and the rows keep no position and no date from it.`,
   },
   {
     id: 'ROW-DATE-YYMMDD',

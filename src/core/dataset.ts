@@ -21,6 +21,7 @@ import { checkRawTable } from './checks/dwc';
 import { makeFinding } from './rules/registryCheck';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { hemisphereBoundAgrees } from './recognize/headerWords';
+import { monthOf } from './recognize/dateParts';
 import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
@@ -33,7 +34,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-JOIN-AMBIGUOUS' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -242,8 +243,8 @@ export function composeDateParts(row: RawRow, parts: { year?: Spec; month?: Spec
   const p2 = (n: number): string => String(n).padStart(2, '0');
   const yy = String(y).padStart(4, '0');
   if (texts[1] === '') return texts[2] === '' ? { iso: yy, year: y, precision: 'year', tz: 'unknown' } : { error: shown };
-  const mo = wholeNumber(cell(parts.month));
-  if (mo === undefined || mo < 1 || mo > 12) return { error: shown };
+  const mo = monthOf(cell(parts.month));
+  if (mo === undefined) return { error: shown };
   if (texts[2] === '') return { iso: `${yy}-${p2(mo)}`, year: y, precision: 'month', tz: 'unknown' };
   const d = wholeNumber(cell(parts.day));
   const dim = new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), mo, 0)).getUTCDate();
@@ -435,8 +436,8 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
         }
       }
     }
-    // no date column: the date of the row from its Year, Month and Day columns (a date column beside them wins)
-    if (!specs.when && specs.dateParts?.year !== undefined) {
+    // no date on this row (no date column, or its cell is blank): the date of the row from its Year, Month and Day columns; a date that is there wins
+    if (m.datetime === undefined && m.dateRaw === undefined && specs.dateParts?.year !== undefined) {
       const got = composeDateParts(row, specs.dateParts);
       if (got !== undefined && 'error' in got) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.dateParts.year.header, row.line, got.error);
       else if (got !== undefined) {
@@ -552,8 +553,11 @@ function mappingFor(file: ParsedFile, mappings: readonly SheetMapping[], sheet: 
 }
 
 interface Lookup {
-  /** The right row of each key value; 'ambiguous' when several right rows hold the key and differ in position or date (none of them is taken). */
-  rowsByKey: Map<string, RawRow | 'ambiguous'>;
+  /**
+   * The right row of each key value. 'ambiguous': several right rows hold the key and differ in position or date (none of them is taken). `depthless`: they agree on position and date and
+   * differ only in depth (the position and date are lent, no depth).
+   */
+  rowsByKey: Map<string, { row: RawRow; depthless: boolean } | 'ambiguous'>;
   meta: (row: RawRow) => Meta;
   cache: Map<RawRow, Meta>;
   /** The key columns of the measurement sheet, in the order of the right key columns. */
@@ -565,14 +569,19 @@ interface Lookup {
   collector: Collector;
 }
 
-const keyOf = (row: RawRow, cols: readonly number[]): string | undefined => {
+/** The parts of a row's key, or undefined when one of them is blank. */
+const keyPartsOf = (row: RawRow, cols: readonly number[]): string[] | undefined => {
   const parts: string[] = [];
   for (const i of cols) {
     const v = str(row.cells[i] ?? null);
     if (v === undefined) return undefined;
     parts.push(v);
   }
-  return parts.length === 1 ? parts[0] : JSON.stringify(parts);
+  return parts;
+};
+const keyOf = (row: RawRow, cols: readonly number[]): string | undefined => {
+  const parts = keyPartsOf(row, cols);
+  return parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
 };
 
 function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, mappings: readonly SheetMapping[], c: Collector): Lookup | undefined {
@@ -585,40 +594,58 @@ function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, map
   const rightKeys = [join.rightKey, ...(join.extraKeys ?? []).map((e) => e.rightKey)];
   const specs = specsOf(mappingFor(file, mappings, sheet));
   const meta = metaParser(file, sheet, specs, c);
-  // a key that several right rows hold is a key only when those rows say the same about position and date ("rows that truly repeat identically are fine"); otherwise no row is taken
+  // a key that several right rows hold is a key only when those rows say the same about position and date ("rows that truly repeat identically are fine"); otherwise no row is taken.
+  // Rows that differ only in depth lend their position and date, and no depth.
   const quiet = metaParser(file, sheet, specs, new Collector(file.fileName));
   const placeOf = (r: RawRow): string => {
     const m = quiet(r);
     return JSON.stringify([m.lat ?? null, m.lon ?? null, m.datetime?.iso ?? null]);
   };
-  const rowsByKey = new Map<string, RawRow | 'ambiguous'>();
+  const depthOf = (r: RawRow): string => {
+    const m = quiet(r);
+    return JSON.stringify([m.depth ?? null, m.depthMin ?? null, m.depthMax ?? null]);
+  };
+  const rowsByKey = new Map<string, { row: RawRow; depthless: boolean } | 'ambiguous'>();
   const places = new Map<string, string>();
+  const depths = new Map<string, string>();
   for (const r of sheet.rows) {
     const k = keyOf(r, rightKeys);
     if (k === undefined) continue;
     const first = rowsByKey.get(k);
     if (first === undefined) {
-      rowsByKey.set(k, r);
+      rowsByKey.set(k, { row: r, depthless: false });
       continue;
     }
     if (first === 'ambiguous') continue;
-    if (!places.has(k)) places.set(k, placeOf(first));
+    if (!places.has(k)) {
+      places.set(k, placeOf(first.row));
+      depths.set(k, depthOf(first.row));
+    }
     if (placeOf(r) !== places.get(k)) rowsByKey.set(k, 'ambiguous');
+    else if (depthOf(r) !== depths.get(k)) rowsByKey.set(k, { row: first.row, depthless: true });
   }
   const header = (cols: readonly number[], s: RawSheet | undefined): string => cols.map((i) => s?.header[i] ?? `#${i + 1}`).join(' + ');
   return { rowsByKey, meta, cache: new Map(), leftKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
 }
 
+const DEPTH_FIELDS: (keyof Meta)[] = ['depth', 'depthDecimals', 'depthMin', 'depthMax'];
+
 function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
   if (!lookup) return base;
-  const k = keyOf(row, lookup.leftKeys);
+  const parts = keyPartsOf(row, lookup.leftKeys);
+  const k = parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
   const hit = k === undefined ? undefined : lookup.rowsByKey.get(k);
+  if (k === undefined && base.lat === undefined && holdsRecord(row, lookup.leftKeys)) {
+    // a blank cell in the key: no row of the other sheet can be found, and the row would be left without a position in silence
+    lookup.collector.add('ROW-JOIN-KEY-BLANK', lookup.sheetName, lookup.keyName, row.line, undefined, true, { right: lookup.rightName });
+  }
   if (hit === 'ambiguous') {
-    lookup.collector.add('ROW-JOIN-AMBIGUOUS', lookup.sheetName, lookup.keyName, row.line, k, true, { right: lookup.rightName });
+    lookup.collector.add('ROW-JOIN-AMBIGUOUS', lookup.sheetName, lookup.keyName, row.line, parts === undefined ? k : parts.join(' + '), true, { right: lookup.rightName });
   } else if (hit) {
-    let lm = lookup.cache.get(hit);
-    if (!lm) lookup.cache.set(hit, (lm = lookup.meta(hit)));
+    let lm = lookup.cache.get(hit.row);
+    if (!lm) lookup.cache.set(hit.row, (lm = lookup.meta(hit.row)));
     for (const f of META_FIELDS) {
+      if (hit.depthless && DEPTH_FIELDS.includes(f)) continue;
       if (base[f] === undefined && lm[f] !== undefined) (base as Record<string, unknown>)[f] = lm[f];
     }
   }
@@ -833,6 +860,8 @@ export function buildDataset(
 
   fillUnitsFromMetadata(variables, metadata);
   pushAll(findings, collector.findings());
+  // a join that left rows without a position or date (the key matches several rows of the other sheet): META-NO-DATES / META-NO-POSITIONS of this table name the cause
+  const joinLost = findings.find((f) => f.ruleId === 'ROW-JOIN-AMBIGUOUS')?.params.right;
 
   const used = usedSheets
     .map((name) => file.sheets.find((s) => s.name === name))
@@ -844,7 +873,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}) };
   return { dataset, findings };
 }
 

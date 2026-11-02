@@ -5,7 +5,7 @@ import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, isPlausibleSerial, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { depthUnitOfHeader } from './depthUnit';
-import { geocodeOfKey } from './geocodes';
+import { geocodeOfKey, isDepthBoundKey, isSedimentDepthKey } from './geocodes';
 import { findDateParts } from './dateParts';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
 import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
@@ -885,6 +885,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     hemi?: true;
   }
   const dwcSheet = isDwcSheet(sheet.header);
+  // the sheet has a depth in a sediment core: a depth top / bottom beside it is the same axis, never the depth of the water
+  const sedimentSheet = sheet.header.some((h) => isSedimentDepthKey(headerKey(unitFromHeader(h).name)));
   const bareCands = bareCoordinates(sheet, rows, ctx, longCols, dwcSheet);
   const entries: Entry[] = sheet.header.map((header, index): Entry => {
     const cleanHeader = stripTypeSuffix(header);
@@ -909,11 +911,15 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     const dwc = dwcColumn(cleanHeader, dwcSheet);
     if (dwc && 'ignore' in dwc) return ignore(dwc.ignore);
     let cand = dwc ? dwc.cand : (nameCandidate(key, { unitText: hu.unitText, cleanHeader }) ?? bareCands.get(index));
-    // a PANGAEA geocode for a depth in a sediment core, soil or ice is not the depth of the water: no depth slot, a measured value with its reason (geocodes.ts)
+    // a depth in a sediment core, soil or ice (PANGAEA's geocodes and the same words in other names) is not the depth of the water: no depth slot, a measured value with its reason
+    // (geocodes.ts). In a sheet that has a sediment depth, a depth top / bottom is the same axis.
     const geocode = dwc ? undefined : geocodeOfKey(key);
-    const geocodeReason: Why | undefined =
-      geocode?.effect === 'sediment-depth'
-        ? why('geocode-sediment', { name: hu.name.trim() })
+    const sedimentWord = dwc === undefined && isSedimentDepthKey(key);
+    const sedimentAxis = dwc === undefined && !sedimentWord && sedimentSheet && isDepthBoundKey(key);
+    const geocodeReason: Why | undefined = sedimentWord || geocode?.effect === 'sediment-depth'
+      ? why('geocode-sediment', { name: hu.name.trim() })
+      : sedimentAxis
+        ? why('sediment-axis', { name: hu.name.trim() })
         : geocode?.effect === 'not-water-depth'
           ? key.includes('ice')
             ? why('geocode-ice', { name: hu.name.trim() })
@@ -1109,14 +1115,15 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
 
   // a date written in Year, Month and Day columns (no date column beside them): the three are the date of the row, found from names and values together (dateParts.ts)
   {
-    const found = findDateParts(entries.map((e) => e.proposal), rows);
+    // (a Darwin Core sheet has its own year / month / day handling under eventDate: dataset.ts dwcDateParts)
+    const found = dwcSheet ? undefined : findDateParts(entries.map((e) => e.proposal), rows);
     if (found !== undefined) {
       for (const e of entries) {
         const hit = found.parts.get(e.proposal.index);
         if (hit === undefined) continue;
         e.proposal.role = { kind: 'datePart', part: hit.part };
-        e.proposal.confidence = hit.byName ? 'high' : 'low';
-        Object.assign(e.proposal, reasonOf(hit.byName ? why('date-parts-names', { part: hit.part }) : why('date-parts-position', { part: hit.part })));
+        e.proposal.confidence = 'high';
+        Object.assign(e.proposal, reasonOf(hit.part === 'year' ? why('date-parts-year') : hit.part === 'month' ? why('date-parts-month') : why('date-parts-day')));
       }
     }
   }

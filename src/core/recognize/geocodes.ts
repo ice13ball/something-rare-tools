@@ -71,6 +71,19 @@ for (const g of PANGAEA_GEOCODES) {
   if (g.short !== undefined) BY_KEY.set(headerKey(g.short), g);
 }
 
+/**
+ * A depth in a sediment core or rock, by name (the header without its unit, through headerKey): PANGAEA's `Depth sed`, `DEPTH, sediment/rock`, `Depth sediment`, `Depth sed top`, `Depth core`,
+ * `Sediment depth`, `Core depth`. One reading on /check and /convert.
+ */
+export function isSedimentDepthKey(key: string): boolean {
+  return /^(?:depth (?:sed|sediment|core)(?: (?:rock|experiment|top|bot|bottom|min|max))*|(?:sediment|core) depth(?: (?:top|bot|bottom|min|max))*)$/.test(key);
+}
+
+/** A depth bound (`Depth top`, `Depth bot`, `Depth, top/min`, `Depth, bottom/max`): the same axis as a sediment depth in a sheet that has one. */
+export function isDepthBoundKey(key: string): boolean {
+  return /^depth (?:top|bot|bottom|min|max)(?: (?:min|max))?$/.test(key);
+}
+
 /** The geocode a header names (the header without its unit, through headerKey), or undefined. Exact names only: "Depth sed" is one, "Depth of sedimentation" is not. */
 export function geocodeOfKey(key: string): Geocode | undefined {
   return BY_KEY.get(key);

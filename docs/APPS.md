@@ -428,21 +428,10 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
 *Geocode* (wiki.pangaea.de/wiki/Geocode, version `oldid=17007` of 2026-06-11): `DEPTH, water`, `DEPTH, water, experiment`, `DEPTH, sediment/rock`, `DEPTH, sediment, experiment`, `DEPTH, soil`,
 `DEPTH, ice/snow`, `ELEVATION`, `ALTITUDE`, `HEIGHT above ground`, and the relative `DISTANCE`, `POINT DISTANCE from start`, `SECTION, height`, `ORDINAL NUMBER`; the table in the code keeps these names with the
 abbreviation PANGAEA prints in the column header (`Depth water`, `Depth sed`, `Depth ice/snow`, `Depth soil`, `Elevation`, `Altitude`; the first three pairs are confirmed in the golden files' own
-parameter lists). Only a **water** depth is read as the depth of the sample. `Depth sed` / `DEPTH, sediment/rock` is a depth in a core: on `/convert` it takes the role *depth below the seafloor* (a negative distance
-in metres, `CONV-SEAFLOOR-*`), and on both pages it never reaches the depth slot (`/check`'s `ROW-DEPTH-*` rules do not see it). `Depth ice/snow` and `Depth soil` are not water depths either; they are kept as **measured values** of
-the sample (nothing is lost, and the reason `geocode-ice` / `geocode-soil` says why they are not the depth). `Elevation` and `Altitude` keep the sign logic of the proposer (positive up). `Depth, top/min` and
-`Depth, bottom/max`, which the page does not list (they are ordinary parameters, the two ends of a layer), keep their range handling.
+parameter lists). Only a **water** depth is read as the depth of the sample. A depth in a sediment core is the same thing on both pages whatever it is called: `Depth sed`, `DEPTH, sediment/rock`, `Depth sediment`, `Depth sed top`, `Depth core`, `Sediment depth`, `Core depth`. On `/convert` it takes the role *depth below the seafloor* (a negative distance in metres, `CONV-SEAFLOOR-*`); on both pages it never reaches the depth slot. In a sheet that has such a column, **a `Depth top` / `Depth bot` / `Depth, top/min` / `Depth, bottom/max` is the same axis**: seafloor role on `/convert` (the second and third are listed as columns not exported), a measured value with the reason `sediment-axis` on `/check`, never `minimumDepthInMeters`. `Depth ice/snow` and `Depth soil` are not water depths either; they are kept as **measured values** of
+the sample (nothing is lost, and the reason `geocode-ice` / `geocode-soil` says why). `Elevation` and `Altitude` keep the sign logic of the proposer (positive up); on `/convert` `m a.s.l.` is metres, a negative value is a depth of that many metres (the sign is turned), a positive value is above the sea and is written as a negative depth, and the column's reason says so. Without a sediment depth, `Depth top` / `Depth bot` stay a water depth range.
 
-**A date in Year, Month and Day columns** (`src/core/recognize/dateParts.ts`, shared by `/check` and `/convert`; the role `datePart`, shown as *Year / Month / Day (of a date in separate columns)*). Found from the
-cell values and the position together, never from a header alone: whole numbers from 1700 to next year (year), 1 to 12 (month) and 1 to 31 (day). A set is the year column with a month column (and a day column when there
-is one); a **lone Year is not a date** and nothing is marked. It is a set **by name** when the headers say so in English, Polish, German or French (`Year`/`Rok`/`Jahr`/`Année`, `Month`/`Miesiąc`/`Monat`/`Mois`,
-`Day`/`Dzień`/`Tag`/`Jour`, with an optional sample / sampling / collection / start word) and at least 95 % of the filled cells fit (the rest are reported row by row), or **by place** when the three columns
-stand next to each other as year, month, day, none has a unit in its header or looks like an id or count, the month and the day take at least two values and the combination is a real calendar date on at least 90 %
-of the rows (the day column is required: a year beside one small-number column is a count far too often). By place alone the proposal is at low confidence. A **real Date column beside the set wins** and nothing is marked
-(a contradiction between the two is another check's job). `dataset.ts` composes the date of each row: a missing day is a **month** (`1998-09`), a missing month is a **year** (`1998`), a day is never made up;
-an impossible date (`1998,2,30`, a month 13, a day without a month) is **not shifted**: it is `ROW-DATE-UNPARSEABLE` on its line (blocking in `/convert`). A time column beside a full date is combined with it. The
-columns are not measured variables and not taxon candidates, so `META-NO-DATES` stays silent and "No unit is given for: Year, Month, Day" is gone. If the user gives the Year column the role *Date* while a month
-column is a date part, the Year column is read as the year of that date (the day is not lost). Hour and Minute columns are **not** read.
+**A date in Year, Month and Day columns** (`src/core/recognize/dateParts.ts`, shared by `/check` and `/convert`; the role `datePart`, shown as *Year / Month / Day (of a date in separate columns)*). Found by **name** and **values** together, never by position (columns that stand next to each other are not a date because their numbers fit: `Year, Quarter, Haul`, `Year, Net, Tow` and `Year` beside two species columns all fit). The headers must say so in English, Polish, German or French (`Year`/`Rok`/`Jahr`/`Année`, `Month`/`Miesiąc`/`Monat`/`Mois`, `Day`/`Dzień`/`Tag`/`Jour`, with an optional sample / sampling / collection / start word); `yyyy`, `mm` and `dd` count, but `mm` and `dd` (which can be millimetres) only beside a `yyyy`. Values: a year is a whole number from 1700 to next year on nearly every row; a month is 1 to 12 or a month name (`Sep`, `wrz`, `mars`, `Okt`); a day is 1 to 31. A column that says month or day but holds other values (a `Tag` of text) does not count. A lone Year is not a date. A **completely filled Date column wins** and nothing is marked; a Date column with blanks leaves the parts to the rows it does not fill (a contradiction between the two is another check's job). `dataset.ts` composes the date of each row: a missing day is a **month** (`1998-09`), a missing month is a **year** (`1998`), a day is never made up; an impossible date (`1998,2,30`, a month 13, a day without a month) is **not shifted**: it is `ROW-DATE-UNPARSEABLE` on its line (blocking in `/convert`), and a bad Day cell costs only its own row its day. A time column beside a full date is combined with it. A Darwin Core sheet keeps its own year / month / day handling under `eventDate`. The columns are not measured variables and not taxon candidates, so `META-NO-DATES` stays silent. If the user gives the Year column the role *Date* while a month column is a date part, the Year column is read as the year of that date. Hour and Minute columns are **not** read.
 
 ### 3.4 Recognising the layout
 
@@ -462,26 +451,15 @@ could still read stay in the plan.
   `findJoin` accepts a pair of key columns (station, sample id, cruise, or an ignored column) when
   **every key value of the measurement sheet exists in the lookup sheet** and either the cleaned
   headers are equal, or the lookup column is unique and the measurement column is a strong key
-  kind; header equality scores 2, a strong kind scores 1; the best score wins. **A key must identify one
-  row of the lookup sheet**: among candidates of the same score the one whose lookup column holds each
-  value once wins (the order of the columns decides nothing: `Cruise` no longer beats `Station` because it
-  stands first), and when no single column is unique the columns the two sheets share by name
-  (`Cruise` + `Station`) are tried **together** as a composite key, taken when it is unique or when fewer rows of the lookup sheet share their key than with the single column (`LayoutPlan.joins[].extraKeys`; the
-  layout sentence names every column, "where the columns “Cruise + Station” together equal ...", and a key
-  the user picks by hand replaces it). A lookup sheet with no measurements of its own is not a table in
-  the plan.
-- **Transposed** (parameters in rows, samples in columns): detected when column A holds at least
-  two labels that read as known column names, none of the other header cells does, and at least
-  half the cells right of A are numbers. **Not supported**: reported as `IN-LAYOUT-UNSUPPORTED`
-  with the reason.
-- **Header problems** that are also unsupported: more than half of three or more header cells
-  empty (`header-empty`); a first row of units under the header, in at least two numeric columns
-  (`header-units`); a header row of footnote markers (at least 80 % of at least 5 names are a letter, a short list of
-  letters or NA) above a row of words, where the real names are on the next line (`header-footnote`; /convert does not
-  test for it); no table, no rows, or no data sheet at all.
-- Sheets with neither a position nor a measurement (legends, notes) are left out of the plan.
-- The sheets of a wide workbook that do not depend on each other become separate datasets
-  (`splitLayout`), so their depth units, dates and variables are never mixed.
+  kind. **A key must identify one row of the lookup sheet**, and that ranks first: a unique lookup
+  column beats a repeated one whatever the order of the columns or the headers (`Stn` against
+  `Station` takes `Station` when `Cruise` repeats; `Sample` against `Sample ID`), then a header
+  the two sheets share and a strong kind, then the finer key (with a cruise sheet and a station
+  sheet, the stations). When no single column is unique the columns the two sheets share by name or
+  by meaning (`Cruise` + `Station`) are tried **together** as a composite key, taken when it is
+  unique or when fewer rows of the lookup sheet share their key than with the single column
+  (`LayoutPlan.joins[].extraKeys`; the layout sentence names every column, and a key the user picks
+  by hand replaces it). A lookup sheet with no measurements of its own is not a table in the plan.
 
 `/convert` does not use this plan: it reads each sheet as one table and has its own handling of
 long environmental sheets (8.4).
@@ -779,7 +757,9 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
   position or date, **none is taken** and `ROW-JOIN-AMBIGUOUS` names the key, the lookup sheet and the
   rows that got nothing; rows that repeat the same position and date are one row. `/convert` reads no
   join at all (each sheet stands on its own), so a position in one sheet is never lent to another
-  (`test/convert/no-joins.test.ts`).
+  (`test/convert/no-joins.test.ts`). Rows that differ only in depth lend their position and date and **no depth**, and say nothing (limit, §14).
+  A blank part of the key on a row with no position of its own is `ROW-JOIN-KEY-BLANK`; after an
+  ambiguous join `META-NO-DATES` names the sheet as the likely cause.
 - **Variable keys** are the column headers (prefixed with the sheet name when several tables are
   built, numbered on a clash); a variable with no unit in the header can take the unit from a
   metadata record (`unitSource: 'metadata'`).
@@ -1609,19 +1589,10 @@ nutrient / pigment / isotope ratio / rate one (`measured-name`), which stays for
 The converter reads every header without its ODV / OPeNDAP type suffix (`Activity<String>`, `"Latitude<Float32>"`) and the quotes
 around it, for kind, unit, vocabulary hints, taxon names and the text shown to the user, as `/check` does.
 
-**A total repeated on the size-class rows** (`convert/repeatedTotal.ts`). Some long sheets write the catch of a species in a haul on every row of its size classes (`s1, Solea solea, 8, 40` and
-`s1, Solea solea, 9, 40`). Read as it stands, the sheet's sum is the total multiplied by the number of size classes, and the old advice of `CONV-ID-DUPLICATE` (give the rows an occurrenceID or a life stage)
-wrote exactly those numbers (on a real file: 1,136,459 animals for a true 679,208). The pattern is read from the **values**: rows are grouped by the columns that say which sample it is (sample code, station, cruise,
-replicate, date, time, position, depth) and by taxon, life stage, qualifier and taxon ID; a group of two or more rows that differ in some other column and that hold a value above zero in the quantity or a weight
-column *repeats* that column when every value is the same (a count of 1 is not evidence: single animals are legitimate). The finding fires for a column when **at least 4 groups** repeat it, they are **at least 80 %**
-of the groups that have two or more such values, and the repeated values are not all one number. Four groups keep one or two coincidences (two size classes each truly holding 4 animals) from firing; 80 % keeps a
-genuine table of counts, which coincides in some groups by chance, from firing at all, while a repeated total repeats in (nearly) every group. The column that tells the rows apart must hold a value on every row of the group and must not be an identifier of the row (a column with a different value on nearly every row of the sheet): a record copied twice, one copy with a field blank, is not two size classes. An occurrenceID column does not switch the check off.
-It is `CONV-QUANTITY-REPEATED` (error, blocks): it names the column(s), the column that tells the rows apart and the number of groups, says the value looks like a total repeated on size-class rows, and does
-**not** offer the occurrenceID advice (the duplicate-identifier finding is withheld for those rows). It points to two ways out: mark a column that holds a number for each size class as the quantity (named when the
-sheet has one), or the button **write one occurrence per sample and taxon, with this total taken once**. That choice is the sheet's `totalOnce` tick (a checkbox on the sheet while it is on, kept in the
-companion file as `totalOnce=<sheet>`, a pre-tick only). With it, the first row of each group carries the total and the later rows are not converted; `CONV-QUANTITY-REPEATED-ONCE` (warning, to accept) says how many rows were left out and that the per-organism columns that
-differ between them (a size) are not written on the occurrence. A group whose rows **disagree** (another number on one size class, or another count or weight column with numbers of its own) is not taken once:
-`CONV-QUANTITY-REPEATED` stays, with the lines of those groups.
+**A quantity written again on rows that are not new animals** (`convert/repeatedTotal.ts`). Some long sheets write the catch of a species in a haul on every row of its size classes (`s1, Solea solea, 8, 40` and `s1, Solea solea, 9, 40`). Read as it stands, the sheet's sum is the total multiplied by the number of size classes, and the old advice of `CONV-ID-DUPLICATE` (give the rows an occurrenceID or a life stage) wrote exactly those numbers. Everything is read from the **values**. Rows are grouped by the columns that say which sample it is (sample code, station, cruise, replicate, date, time, position, depth) and by taxon, life stage, qualifier and taxon ID. A column *repeats* in a group of n rows that all carry the same value v; for a count v must be at least n (a total shared by n different size classes cannot be less than n: `1,1,1` and `3,3,3,3` are not a total, and `1,2,2,1` repeats nothing; such a group is not evidence). The column that tells the rows apart has a value on every row of the group and is not an identifier of the row. Three outcomes:
+- **Block** `CONV-QUANTITY-REPEATED` (error): for a column when at least **4 groups** repeat it, they are at least **50 %** of the groups that are evidence, and the repeated values are not all one number. Half is the line between the two readings that is hardest to argue with: a total repeated on size classes repeats in nearly every group of its table, counts that coincide by chance coincide in a minority; below half the tool warns (next) instead of blocking, so a genuine table is not blocked and a table with some repeated totals is not silent. An occurrenceID column does not switch the check off, and the occurrenceID advice is withheld. It names the column, the column that tells the rows apart and, when the sheet has one, a column with a count of its own on each row. Ways out: mark that count column as the quantity; the button **write one occurrence per sample and taxon, the total taken once** (`totalOnce=<sheet>` in the companion file); or the button **these are real counts** (`realCounts=<sheet>`, nothing is looked for in the sheet). Take-once acts only on the column that itself repeats. A repeated *quantity*: the first row of each group carries it, the later rows are not converted, and nothing per row is written from the first row (the size and any variable that differs within the group are listed as not written in `CONV-QUANTITY-REPEATED-ONCE`); a variable of the sample that differs within a group still gives `CONV-SAMPLE-CONFLICT`. A repeated *weight beside a count of its own on each row* (the block then says: ignore the weight column, or write it once): the counts stay on every row, and the weight is written once per group on the first row, labelled in `measurementRemarks` as the total of the taxon. A group below the threshold, or whose values differ, stays as separate rows with their own values. A group whose quantity repeats but whose other weight or count column has numbers of its own cannot be taken once and stays blocked.
+- **Warning** `CONV-QUANTITY-SAME-IN-SAMPLE` (accept): everywhere else, rows of one sample and taxon with the same quantity above 1 that differ in anything (a blank size, a stage, a sex, a size that is different on every row, a code per size class) are never silent, whatever the number of groups. The text gives both sums ("written as N records, total X; if the value is the species' total, it would be Y") and the lines, and the duplicate-identifier finding for those rows no longer advises an occurrenceID or a life stage. The looser group of this warning leaves out replicate, life stage, qualifier and taxon ID, so marking the size as one of them does not clear it.
+- **Exact copies** `CONV-ROW-COPIES` (error): rows identical in every column but a per-row identifier (an occurrenceID, or a column the tool does not read that differs on nearly every row), with a quantity above 1 (identical single specimens are not copies). It says the sum with and without them and withholds "tell apart"; the button **drop the copies** (`dropCopies=<sheet>`) converts one row of each and says so in `CONV-ROW-COPIES-DROPPED` (accept). A row-number occurrenceID does not clear it.
 
 ### 8.8 What blocks an export and why (`convert/policy.ts`, `convert/validate.ts`)
 
@@ -1945,7 +1916,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **189 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **193 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1955,12 +1926,12 @@ regenerate it when rules change.
 | `IN-` | `input` | 30 | 12 / 11 / 7 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, a PANGAEA table's position and date taken from its Event(s) block, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
 | `META-` | `A` | 8 | 2 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates, no positions. | The OBIS Manual (`META-NO-POSITIONS`: `decimalLatitude` and `decimalLongitude` are the minimally required location terms); the other rules are stated in their own text. |
-| `ROW-` | `B` | 37 | 6 / 20 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
+| `ROW-` | `B` | 38 | 6 / 21 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 86 | 39 / 33 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **189** | | | |
+| `CONV-` | `B` | 89 | 40 / 35 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **193** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -2027,7 +1998,9 @@ Each item below is confirmed from code, a test, or a rule text.
   (ROV dives) can fire; a true split whose revisits have no date stays silent; events more than occurrences count as
   evidence alone only when the events are at least 80% of the sheet's taxon rows and there are two taxa or more.
 - A biomass column named `Biomass`, `Wet weight` or `Weight` with no unit anywhere in its header still writes no `measurementUnit` (nothing is guessed; the unit has to be in the header), but it is no longer silent: `CONV-BIOMASS-UNIT-UNCLEAR` (its variant for a header with no unit at all) names the column and the number of values and has to be accepted before the export.
-- Rows that are **identical in every column** (a row copied twice) are not a repeated total: `CONV-ID-DUPLICATE` asks to merge them first, and its advice to tell the rows apart by an occurrenceID or a life stage would count each copy. A sheet that repeats totals takes such copies once with the others (`CONV-QUANTITY-REPEATED-ONCE`); in a sheet that does not (a file with thousands of exact copies and no size class), only the sheet's own care helps.
+- Exact copies of a row are found only when the quantity is above 1 and every column but a per-row identifier is the same; `CONV-ROW-COPIES` is the only advice for them, and it does not look at rows that differ in anything (those are `CONV-QUANTITY-SAME-IN-SAMPLE` at best). Repeated totals, same quantities and copies are all read from the values with fixed lines (4 groups, half of the groups, a value at least the number of rows); a sheet whose size classes are real counts that happen to coincide is told so and has the button *these are real counts*. A following design makes the user declare what a row is and what identifies a sample, with these checks as contradictions.
+- A join lends position and date but no depth when the lookup rows of a key differ only in depth, and says nothing about it. A positive elevation (above sea level) is written as a negative depth.
+- `Hour` and `Minute` columns of a date in parts are not read.
 - `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` count the cells of a time column that the date parser reads as a full date (ISO, `YYYY/MM/DD`,
   `DD.MM.YYYY`, `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial in a column the workbook formats as a date; a plain number such as 63000 or 43200 is a time)
   and, since the last round, the cells that look like a date but that no reader reads: `20030117 0830`, `Jan 17 2003`, `01/17/2003 8:30 AM`. These are not read (no AM/PM, no month names, no

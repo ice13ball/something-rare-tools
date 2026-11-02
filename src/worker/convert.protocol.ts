@@ -81,6 +81,10 @@ export interface ConvertSheetRequest {
   presenceOnly?: boolean;
   /** The user's choice "write one occurrence per sample and taxon" for a per-taxon total repeated on size-class rows (only the boolean true counts). */
   totalOnce?: boolean;
+  /** The user's choice "these are real counts" (only the boolean true counts). */
+  realCounts?: boolean;
+  /** The user's choice "drop the exact copies of rows" (only the boolean true counts). */
+  dropCopies?: boolean;
 }
 
 export interface ConvertRequestBody {

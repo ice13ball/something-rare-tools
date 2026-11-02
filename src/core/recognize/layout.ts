@@ -209,6 +209,8 @@ interface JoinCandidate {
   score: number;
   /** The right key column holds each value once: it identifies one row of the right sheet. */
   unique: boolean;
+  /** How many different key values the right column has: of two keys that are both unique, the finer one (stations, not cruises). */
+  fine: number;
   extraKeys?: { leftKey: number; rightKey: number }[];
 }
 
@@ -231,7 +233,9 @@ function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandi
   const consumed = new Set<number>(meas.long ? [meas.long.parameterCol, meas.long.valueCol, ...(meas.long.unitCol === undefined ? [] : [meas.long.unitCol])] : []);
   let best: JoinCandidate | undefined;
   /** Per right sheet: the key pairs the two sheets share by name, each of which covers every left value. */
-  const shared = new Map<SheetInfo, { leftKey: number; rightKey: number }[]>();
+  const shared = new Map<SheetInfo, { leftKey: number; rightKey: number; named: boolean }[]>();
+  /** Uniqueness on the right ranks first, then the score (a header the two sheets share, a strong kind), then the finer key. */
+  const better = (a: JoinCandidate, b: JoinCandidate): boolean => (a.unique !== b.unique ? a.unique : a.score !== b.score ? a.score > b.score : a.fine > b.fine);
   for (const coord of coordSheets) {
     if (coord === meas) continue;
     for (const mp of meas.proposals) {
@@ -251,16 +255,24 @@ function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandi
         if (!subset) continue;
         const headerEq = cleanKey(mp.header) === cleanKey(cp.header);
         const strong = STRONG_KEY_KINDS.has(mp.role.kind);
+        // the columns the two sheets share by name, or by meaning (Stn and Station are both the station), are the parts of a composite key
+        if (headerEq || (strong && mp.role.kind === cp.role.kind)) (shared.get(coord) ?? shared.set(coord, []).get(coord)!).push({ leftKey: mp.index, rightKey: cp.index, named: headerEq });
         if (!headerEq && !(c.unique && strong)) continue;
-        if (headerEq) (shared.get(coord) ?? shared.set(coord, []).get(coord)!).push({ leftKey: mp.index, rightKey: cp.index });
         const score = (headerEq ? 2 : 0) + (strong ? 1 : 0);
-        if (!best || score > best.score || (score === best.score && c.unique && !best.unique)) best = { right: coord, leftKey: mp.index, rightKey: cp.index, score, unique: c.unique };
+        const cand: JoinCandidate = { right: coord, leftKey: mp.index, rightKey: cp.index, score, unique: c.unique, fine: c.values.size };
+        if (!best || better(cand, best)) best = cand;
       }
     }
   }
   if (best === undefined || best.unique) return best;
   // no single column identifies a row of the right sheet: the shared key columns together may
-  const pairs = shared.get(best.right) ?? [];
+  // one partner for each left column (the one with the same header first)
+  const pairs: { leftKey: number; rightKey: number; named: boolean }[] = [];
+  for (const q of shared.get(best.right) ?? []) {
+    const at = pairs.findIndex((x) => x.leftKey === q.leftKey);
+    if (at < 0) pairs.push(q);
+    else if (q.named && !pairs[at].named) pairs[at] = q;
+  }
   if (pairs.length < 2) return best;
   const leftCols = pairs.map((q) => q.leftKey);
   const rightCols = pairs.map((q) => q.rightKey);
@@ -283,7 +295,7 @@ function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandi
   }
   const composite = dupRows(rightTuples.values());
   if (composite !== 0 && composite >= dupRows(single.values())) return best;
-  return { ...best, leftKey: pairs[0].leftKey, rightKey: pairs[0].rightKey, unique: composite === 0, extraKeys: pairs.slice(1) };
+  return { ...best, leftKey: pairs[0].leftKey, rightKey: pairs[0].rightKey, unique: composite === 0, extraKeys: pairs.slice(1).map((q) => ({ leftKey: q.leftKey, rightKey: q.rightKey })) };
 }
 
 /* ---------- public ---------- */

@@ -31,7 +31,7 @@ import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } fr
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
-import { detectRepeatedTotals } from './repeatedTotal';
+import { analyseRepeats } from './repeatedTotal';
 import { biomassNameUnit, isTaxonAttribute, isTotalHeader, valuesRepeatWithinSample } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
@@ -93,6 +93,10 @@ export interface ConvertSheetInput {
    * total taken once. Rows of a group that disagree stay blocked. Never automatic; a sheet without that pattern ignores it.
    */
   totalOnce?: boolean;
+  /** The user's choice on CONV-QUANTITY-REPEATED: "these are real counts". Nothing is looked for in the sheet (repeatedTotal.ts). */
+  realCounts?: boolean;
+  /** The user's choice on CONV-ROW-COPIES: the rows that are exact copies of another row are not converted. */
+  dropCopies?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -1353,6 +1357,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   const repeatedOcc = new Map<string, Places>(); // repeated occurrenceIDs
   // the lines of a sheet in a group whose total is repeated on its size classes (CONV-QUANTITY-REPEATED says it; the advice for a plain duplicate would mislead there), by file and sheet
   const repeatedAffected = new Map<string, Set<number>>();
+  // the lines of rows with the same quantity above 1 in one sample and taxon (CONV-QUANTITY-SAME-IN-SAMPLE says it; the advice to tell the rows apart would count each of them), by file and sheet
+  const sameValueLines = new Map<string, Set<number>>();
   // where each occurrence stands, for the findings about one taxon written twice in a sample: the column (wide) or the line (long)
   const refOf = new Map<OccRec, string>();
   const stats = { zerosSkipped: 0, naSkipped: 0, blankKept: 0, textCells: 0, present: 0, absent: 0 };
@@ -1581,13 +1587,25 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     };
 
     const ragged = raggedLines(file, sheet.name);
-    // a total repeated on the rows of a taxon's size classes (repeatedTotal.ts): read from the values before any row is written
-    const repeated =
+    // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
+    const analysis =
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? detectRepeatedTotals({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind })
-        : undefined;
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: sin.realCounts === true, dropCopies: sin.dropCopies === true })
+        : {};
+    const repeated = analysis.total;
+    const sameValue = analysis.same;
+    const copies = analysis.copies;
     const takeOnce = repeated !== undefined && sin.totalOnce === true;
-    if (repeated !== undefined) repeatedAffected.set(`${fileName}\u0000${sheet.name}`, repeated.affected);
+    const dropCopies = copies !== undefined && sin.dropCopies === true;
+    // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
+    const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(dropCopies ? copies.copyLines : [])]);
+    {
+      const k = `${fileName}\u0000${sheet.name}`;
+      // the plain duplicate-identifier advice and the same-taxon warning give way to the finding that names the real defect of these rows
+      const hide = new Set<number>([...(repeated !== undefined && !takeOnce ? repeated.affected : []), ...(copies !== undefined ? copies.lines : [])]);
+      if (hide.size > 0) repeatedAffected.set(k, hide);
+      if (sameValue !== undefined) sameValueLines.set(k, new Set(sameValue.lines));
+    }
 
     // Visits (CONV-ID-REVISIT): a code that repeats at ONE station on rows that differ in date (then time, then depth for a wide sheet) is one sample per visit, not a duplicate. The ID of such a
     // visit is `<station eventID>:<date>[T<time>][:<depth>m]:<code>` (the shape of the profile levels); every other ID is exactly as before. Read from the data BEFORE the rows get their IDs, never from
@@ -1647,8 +1665,6 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     for (const row of sheet.rows) {
       if (ragged.has(row.line)) continue;
-      // the user chose to take a repeated total once: the later rows of a size-class group are the same total again, not converted
-      if (takeOnce && repeated?.skip.has(row.line)) continue;
       const m = parse(row);
       const code = m.sampleId;
       const stationText = m.station;
@@ -1872,6 +1888,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         });
       }
 
+      // a repeat of a total taken once, or a copy that is dropped: nothing of the row is an occurrence (the sample above has had what it carries)
+      if (notConverted.has(row.line)) continue;
       /* ---- the occurrences of this row ---- */
       const cells: { verbatim: string; raw: unknown; column: string; idText?: string; columnRemark?: string; userId?: string; lifeStageCol?: string; qualifierCol?: string; nameId?: string }[] = [];
       if (sin.shape === 'wide') {
@@ -2025,6 +2043,9 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined) {
           for (const b of cols.biomass) {
             const bcell = row.cells[b.index] ?? null;
+            // a weight that is a total repeated on size classes, taken once: written on the first row of each group only, and said to be the total of the taxon
+            const reducedWeight = takeOnce && repeated.columns.some((c) => c.index === b.index);
+            if (reducedWeight && repeated.omitWeight.has(row.line)) continue;
             const bp = parseNumber(bcell, dc);
             if (bp.status === 'missing') continue;
             if (bp.status === 'na-variant') {
@@ -2063,13 +2084,19 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               measurementValue: valueText(bcell, dc),
               ...(unitText === undefined ? {} : { measurementUnit: unitText }),
               ...(unit.id ? { measurementUnitId: unit.id.uri } : {}),
-              ...(sizeValue !== undefined && sizeUnit !== undefined && !unit.perUnit ? { measurementRemarks: `per sample of ${sizeValue} ${sizeUnit}` } : {}),
+              ...(() => {
+                const parts = [
+                  ...(sizeValue !== undefined && sizeUnit !== undefined && !unit.perUnit ? [`per sample of ${sizeValue} ${sizeUnit}`] : []),
+                  ...(reducedWeight && repeated.first.has(row.line) ? ['total for the taxon in the sample, repeated on every row of the source and written once'] : []),
+                ];
+                return parts.length === 0 ? {} : { measurementRemarks: parts.join('; ') };
+              })(),
               source: { ...occSource, column: b.header },
             });
           }
         }
         // a measured variable whose value belongs to the occurrence of this row (a length of each fish): one eMoF row of THIS occurrence, the value and the unit as given
-        if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined) {
+        if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined && !(takeOnce && repeated.quantityRepeats && repeated.first.has(row.line))) {
           for (const st of occState) {
             const v = st.v;
             const vcell = row.cells[v.index] ?? null;
@@ -2190,10 +2217,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     for (const e of biomassUnitUnclear.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     if (repeated !== undefined) {
       const columns = repeated.columns.map((c) => c.header).join(', ');
-      const common = { columns, differs: repeated.differs };
+      const common = { columns, differs: repeated.differs, ...(repeated.quantityRepeats ? {} : { weight: 'yes' }) };
       if (takeOnce) {
-        if (repeated.skip.size > 0) {
-          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...repeated.skip].sort((a, b) => a - b), params: { ...common, count: repeated.skip.size, groups: repeated.collapsedGroups, ...(repeated.lostColumns.length > 0 ? { lost: repeated.lostColumns.join(', ') } : {}) } }));
+        const left = repeated.quantityRepeats ? repeated.skip : repeated.omitWeight;
+        if (left.size > 0) {
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...left].sort((a, b) => a - b), params: { ...common, count: left.size, groups: repeated.collapsedGroups, lost: repeated.lostColumns.join(', ') || repeated.differs } }));
         }
         if (repeated.disagree.length > 0) {
           findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes' } }));
@@ -2209,6 +2237,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           }),
         );
       }
+    }
+    if (copies !== undefined) {
+      const params = { count: copies.copyLines.length, withCopies: copies.withCopies, withoutCopies: copies.withoutCopies };
+      findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
+    }
+    if (sameValue !== undefined) {
+      findings.push(makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', { ...base, field: sameValue.column, lines: sameValue.lines, params: { groups: sameValue.groups, records: sameValue.records, written: sameValue.written, asTotal: sameValue.asTotal } }));
     }
     for (const e of biomassUnitNone.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length, none: 'yes' } }));
     for (const u of biomassNoP06) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: u } }));
@@ -2441,7 +2476,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.',
             ...(rep === undefined ? {} : { column: rep.column, ...(rep.separated < rep.total ? { remaining: rep.total - rep.separated, separated: rep.separated } : {}) }),
             ...(rep === undefined && userIds && sin?.shape === 'long' ? { userId: 'yes' } : {}),
-            ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}) } : {}),
+            ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}), ...(w.groups[0]?.every((l) => sameValueLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { sameValue: 'yes' } : {}) } : {}),
           },
         }),
       );
@@ -2540,7 +2575,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
    */
   const sameTaxon = new Map<string, { file: string; sheet: string; name: string; refs: string[]; ids: Set<string>; lines: number[]; verbatim: string[] }>();
   for (const o of occurrences) {
-    if (repeatedAffected.get(`${o.source.file}\u0000${o.source.sheet}`)?.has(o.source.line)) continue;
+    if (repeatedAffected.get(`${o.source.file}\u0000${o.source.sheet}`)?.has(o.source.line) || sameValueLines.get(`${o.source.file}\u0000${o.source.sheet}`)?.has(o.source.line)) continue;
     const key = JSON.stringify([o.eventId, o.scientificNameId !== undefined ? `id:${o.scientificNameId}` : `name:${o.scientificName}`, o.lifeStage ?? '', o.identificationQualifier ?? '', o.sex ?? '']);
     const g = sameTaxon.get(key);
     const ref = refOf.get(o) ?? `line ${o.source.line}`;
