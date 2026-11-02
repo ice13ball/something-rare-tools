@@ -130,6 +130,8 @@ export const ACCEPT_RULES: readonly string[] = [
   // the same quantity above 1 on rows of one sample and taxon that differ in something; the copies the user dropped
   'CONV-QUANTITY-SAME-IN-SAMPLE',
   'CONV-ROW-COPIES-DROPPED',
+  // identical rows with a count of 1: copies, or specimens that look the same; both sums are shown
+  'CONV-ROW-COPIES-SPECIMENS',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written

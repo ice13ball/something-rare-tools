@@ -10,6 +10,7 @@
  *   GOLDEN_DIFF_MODE=compare GOLDEN_DIFF_BEFORE=/tmp/before.json GOLDEN_DIFF_AFTER=/tmp/after.json \
  *     npx vitest run --config vitest.golden-diff.config.ts
  *
+ * dump     (every dataset also carries its row and value counts, `rows` and `values`: a change that loses measurements shows as a count that falls)
  * dump     For every folder under the golden directory writes, into GOLDEN_DIFF_OUT:
  *            - `input:<folder>/<id>`  for each input of the folder's expected.json (or inputs.json): the column mappings
  *                                     and the layout of every dataset the app builds from it, and every finding of runChecks;
@@ -53,7 +54,8 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
   const { decodeLandMask } = await load<typeof import('../src/core/geo/land')>('src/core/geo/land.ts');
   const { parseFile } = await load<typeof import('../src/core/parse')>('src/core/parse/index.ts');
   const { proposeColumns } = await load<typeof import('../src/core/recognize/columns')>('src/core/recognize/columns.ts');
-  const { proposeLayout } = await load<typeof import('../src/core/recognize/layout')>('src/core/recognize/layout.ts');
+  const { proposeLayout, proposeMappings } = await load<typeof import('../src/core/recognize/layout')>('src/core/recognize/layout.ts');
+  const { buildDatasets } = await load<typeof import('../src/core/dataset')>('src/core/dataset.ts');
   const { runInput } = await load<typeof import('../test/golden/pipeline')>('test/golden/pipeline.ts');
   const land = decodeLandMask(new Uint8Array(gunzipSync(readFileSync(join(repo, 'src', 'core', 'geo', 'land-mask.bin')))));
 
@@ -79,7 +81,7 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         const r = await runInput(input, dir);
         const checked = runChecks({ datasets: r.datasets, records: r.records, parseFindings: r.parseFindings }, { land });
         result[key] = {
-          datasets: r.datasets.map((d) => ({ id: d.id, mappings: d.mappings, layout: d.layout })),
+          datasets: r.datasets.map((d) => ({ id: d.id, mappings: d.mappings, layout: d.layout, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0) })),
           findings: checked.findings,
         };
       } catch (e) {
@@ -103,7 +105,16 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
       try {
         const bytes = new Uint8Array(readFileSync(f));
         const file = parseFile(f.split('/').pop() as string, bytes);
+        // what the app builds from the file as it proposes it: the rows and the values of every dataset (a change that drops measurements shows here)
+        let built: { label: string; rows: number; values: number }[] | undefined;
+        try {
+          const layout0 = proposeLayout(file);
+          built = buildDatasets(file, layout0, proposeMappings(file, layout0), [], 'x').datasets.map((d) => ({ label: d.label, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0) }));
+        } catch {
+          built = undefined;
+        }
         result[key] = {
+          ...(built === undefined ? {} : { built }),
           layout: proposeLayout(file),
           sheets: file.sheets.map((s) => ({
             sheet: s.name,

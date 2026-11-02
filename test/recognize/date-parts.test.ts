@@ -87,6 +87,12 @@ describe('Year, Month and Day columns are one date', () => {
     expect(counts.Count.role.kind).not.toBe('datePart');
   });
 
+  it('Tag with values up to 28 is the day only beside Jahr and Monat', () => {
+    const body = [[1998, 'Sep', 17, 'S1', 49.4, 0.2], [1998, 'Oct', 2, 'S2', 49.5, 0.2], [1999, 'Mar', 28, 'S3', 49.6, 0.2], [1999, 'Apr', 5, 'S4', 49.6, 0.2]];
+    expect(roles(['Year', 'Month', 'Tag', 'Station', 'Latitude', 'Longitude'], body).Tag.role.kind).not.toBe('datePart');
+    expect(roles(['Jahr', 'Monat', 'Tag', 'Station', 'Latitude', 'Longitude'], body.map((r) => [r[0], 9, r[2], r[3], r[4], r[5]])).Tag.role).toEqual({ kind: 'datePart', part: 'day' });
+  });
+
   it('an empty Date column beside the parts: the parts give the dates; a half-filled one: the parts fill the rows it leaves blank', () => {
     const empty = dataset('Date,Year,Month,Day,Station,Latitude,Longitude\n,1998,9,17,S1,49.4,0.2\n,1998,10,2,S2,49.5,0.2');
     expect(empty.dataset.rows.map((x) => x.datetime?.iso)).toEqual(['1998-09-17', '1998-10-02']);

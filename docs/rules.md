@@ -127,6 +127,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-QUANTITY-REPEATED-ONCE | warning | B | — | —<a id="CONV-QUANTITY-REPEATED-ONCE"></a> |
 | CONV-ROW-COPIES | error | B | — | —<a id="CONV-ROW-COPIES"></a> |
 | CONV-ROW-COPIES-DROPPED | warning | B | — | —<a id="CONV-ROW-COPIES-DROPPED"></a> |
+| CONV-ROW-COPIES-SPECIMENS | warning | B | — | —<a id="CONV-ROW-COPIES-SPECIMENS"></a> |
 | CONV-QUANTITY-SAME-IN-SAMPLE | warning | B | — | —<a id="CONV-QUANTITY-SAME-IN-SAMPLE"></a> |
 | CONV-TAXON-EMPTY-ROW | warning | B | — | —<a id="CONV-TAXON-EMPTY-ROW"></a> |
 | CONV-TIME-HOLDS-DATES | error | B | — | —<a id="CONV-TIME-HOLDS-DATES"></a> |

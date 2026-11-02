@@ -22,6 +22,7 @@ import { makeFinding } from './rules/registryCheck';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { hemisphereBoundAgrees } from './recognize/headerWords';
 import { monthOf } from './recognize/dateParts';
+import { isVerticalCoordinateKey } from './recognize/geocodes';
 import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
@@ -635,7 +636,7 @@ function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
   const parts = keyPartsOf(row, lookup.leftKeys);
   const k = parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
   const hit = k === undefined ? undefined : lookup.rowsByKey.get(k);
-  if (k === undefined && base.lat === undefined && holdsRecord(row, lookup.leftKeys)) {
+  if (k === undefined && base.lat === undefined && row.cells.some((cell, i) => !lookup.leftKeys.includes(i) && !isBlankCell(cell))) {
     // a blank cell in the key: no row of the other sheet can be found, and the row would be left without a position in silence
     lookup.collector.add('ROW-JOIN-KEY-BLANK', lookup.sheetName, lookup.keyName, row.line, undefined, true, { right: lookup.rightName });
   }
@@ -737,6 +738,11 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const keyCols = [specs.sampleId, specs.station, specs.cruise, specs.depth, specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon]
     .filter((s): s is Spec => s !== undefined && !skip.has(s.index))
     .map((s) => s.index);
+  // A column that places the measurement vertically but is not the depth slot (a sediment depth, an ice depth, a depth bottom: recognize/geocodes.ts) is part of the row too: two levels of one core are
+  // two rows, not one row whose later values are dropped.
+  sheet.header.forEach((h, i) => {
+    if (!skip.has(i) && !keyCols.includes(i) && isVerticalCoordinateKey(headerKey(unitFromHeader(h).name))) keyCols.push(i);
+  });
 
   // units per parameter, from the unit column (or from the parameter text itself, 'DIC [umol/kg]')
   const unitsOf = new Map<string, Set<string>>();

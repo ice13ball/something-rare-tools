@@ -77,6 +77,8 @@ export interface SameValue {
   asTotal: number;
   /** The column. */
   column: string;
+  /** A second column (the weight) that repeats on rows of one sample and taxon too: its own two sums. */
+  also?: { column: string; written: number; asTotal: number };
 }
 
 /** Rows that are exact copies of another row (all columns but a per-row identifier). */
@@ -95,6 +97,8 @@ export interface RepeatAnalysis {
   total?: RepeatedTotal;
   same?: SameValue;
   copies?: RowCopies;
+  /** Rows identical in every column but a per-row identifier whose quantity is 1: copies, or separate specimens that look the same (a finding to accept, never a block). */
+  specimenCopies?: RowCopies;
 }
 
 interface Candidate {
@@ -187,6 +191,33 @@ export function analyseRepeats(args: {
       if (!copySet.has(r.line)) withoutCopies += v;
     }
     copies = { copyLines: copyLines.sort((a, b) => a - b), lines: copyClassLines.sort((a, b) => a - b), withCopies, withoutCopies, column: quantity?.header.trim() ?? candidates[0].header };
+  }
+  // identical rows with a count of 1: a specimen table looks exactly like this, so they are said (both sums), never blocked
+  const isSpecimen = (row: RawRow): boolean => {
+    const v = qIndex === undefined ? undefined : value(row, qIndex);
+    return countKind && v !== undefined && v > 0 && v <= 1;
+  };
+  let specimenCopies: RowCopies | undefined;
+  {
+    const small: number[] = [];
+    const smallClass: number[] = [];
+    for (const g of classes.values()) {
+      if (g.length < 2 || !isSpecimen(g[0])) continue;
+      for (const r of g) smallClass.push(r.line);
+      for (const r of g.slice(1)) small.push(r.line);
+    }
+    if (small.length > 0 && qIndex !== undefined) {
+      const set = new Set(small);
+      let withCopies = 0;
+      let withoutCopies = 0;
+      for (const r of rowsIn) {
+        const v = value(r, qIndex);
+        if (v === undefined || v < 0) continue;
+        withCopies += v;
+        if (!set.has(r.line)) withoutCopies += v;
+      }
+      specimenCopies = { copyLines: small.sort((a, b) => a - b), lines: smallClass.sort((a, b) => a - b), withCopies, withoutCopies, column: quantity?.header.trim() ?? '' };
+    }
   }
   const dropped = new Set(args.dropCopies === true ? copyLines : []);
 
@@ -322,30 +353,43 @@ export function analyseRepeats(args: {
     };
   }
 
-  /* ---- the warning: the same quantity above 1 on rows of one sample and taxon that differ in anything ---- */
+  /* ---- the warning: the same quantity (or weight) on rows of one sample and taxon that differ in anything ---- */
   let same: SameValue | undefined;
-  if (qIndex !== undefined) {
-    const lines: number[] = [];
-    let groups = 0;
-    let records = 0;
-    let written = 0;
-    let asTotal = 0;
-    const q = candidates[0];
-    for (const g of loose) {
-      if (differingAny(g).length === 0) continue; // identical rows are copies (above), not rows that differ
-      const vs = g.map((r) => value(r, qIndex));
-      const v = vs[0];
-      // the same quantity above 1 on every row of the group that has one; a group the block already stands for is not said twice
-      const items = g.filter((_, i) => vs[i] !== undefined && (vs[i] as number) > 0);
-      if (items.length < 2 || v === undefined || v <= 1 || !items.every((r) => value(r, qIndex) === v)) continue;
-      if (total?.quantityRepeats === true && items.every((r) => coveredLines.has(r.line))) continue;
-      groups++;
-      records += items.length;
-      written += v * items.length;
-      asTotal += v;
-      for (const r of items) lines.push(r.line);
+  {
+    interface Seen { column: string; groups: number; records: number; written: number; asTotal: number; lines: number[] }
+    const seen: Seen[] = [];
+    for (const c of candidates) {
+      const r: Seen = { column: c.header, groups: 0, records: 0, written: 0, asTotal: 0, lines: [] };
+      const firedHere = total?.columns.some((x) => x.index === c.index) === true;
+      for (const g of loose) {
+        if (differingAny(g).length === 0) continue; // identical rows are copies (above), not rows that differ
+        const items = g.map((row) => ({ row, v: value(row, c.index) })).filter((x): x is { row: RawRow; v: number } => x.v !== undefined && x.v > 0);
+        if (items.length < 2) continue;
+        const v = items[0].v;
+        // a count of 1 is a specimen; the exclusion is for counts only (a density or a weight of 1 repeated on stage rows is a repeat like any other)
+        if (!items.every((x) => x.v === v) || (c.kind === 'quantity' && countKind && v <= 1)) continue;
+        // a group the block already stands for is not said twice
+        if (firedHere && items.every((x) => coveredLines.has(x.row.line))) continue;
+        r.groups++;
+        r.records += items.length;
+        r.written += v * items.length;
+        r.asTotal += v;
+        for (const x of items) r.lines.push(x.row.line);
+      }
+      if (r.groups > 0) seen.push(r);
     }
-    if (groups > 0) same = { lines: lines.sort((a, b) => a - b), groups, records, written, asTotal, column: q.kind === 'quantity' ? q.header : '' };
+    if (seen.length > 0) {
+      const [main, other] = seen;
+      same = {
+        lines: [...new Set(seen.flatMap((x) => x.lines))].sort((x, y) => x - y),
+        groups: main.groups,
+        records: main.records,
+        written: main.written,
+        asTotal: main.asTotal,
+        column: main.column,
+        ...(other === undefined ? {} : { also: { column: other.column, written: other.written, asTotal: other.asTotal } }),
+      };
+    }
   }
   // copies the block's groups already take once are not said twice
   if (copies !== undefined && total !== undefined) {
@@ -353,5 +397,5 @@ export function analyseRepeats(args: {
     if (rest.length === 0) copies = undefined;
     else copies = { ...copies, copyLines: rest, lines: copies.lines.filter((l) => !total!.affected.has(l) || rest.includes(l)) };
   }
-  return { ...(total === undefined ? {} : { total }), ...(same === undefined ? {} : { same }), ...(copies === undefined ? {} : { copies }) };
+  return { ...(total === undefined ? {} : { total }), ...(same === undefined ? {} : { same }), ...(copies === undefined ? {} : { copies }), ...(specimenCopies === undefined ? {} : { specimenCopies }) };
 }

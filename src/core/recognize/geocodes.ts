@@ -84,6 +84,14 @@ export function isDepthBoundKey(key: string): boolean {
   return /^depth (?:top|bot|bottom|min|max)(?: (?:min|max))?$/.test(key);
 }
 
+/**
+ * A column that places a measurement vertically or along an object, whatever role the tool gave it (a sediment depth is a measured value in /check, not the depth slot): in a long sheet it is
+ * part of what makes one row, so two levels of one core are two rows. Any geocode of the table above, any sediment word, and a depth top / bottom.
+ */
+export function isVerticalCoordinateKey(key: string): boolean {
+  return geocodeOfKey(key) !== undefined || isSedimentDepthKey(key) || isDepthBoundKey(key);
+}
+
 /** The geocode a header names (the header without its unit, through headerKey), or undefined. Exact names only: "Depth sed" is one, "Depth of sedimentation" is not. */
 export function geocodeOfKey(key: string): Geocode | undefined {
   return BY_KEY.get(key);

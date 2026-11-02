@@ -99,8 +99,10 @@ export function findDateParts(proposals: readonly ColumnProposal[], rows: readon
   const y = find(YEAR_NAME, isYear) ?? abbreviated;
   // mm and dd can be millimetres: only beside a year called yyyy
   const m = find(MONTH_NAME, isMonth) ?? (abbreviated !== undefined ? find(/^mm$/, isMonth) : undefined);
-  const d = find(DAY_NAME, isDay) ?? (abbreviated !== undefined ? find(/^dd$/, isDay) : undefined);
+  let d = find(DAY_NAME, isDay) ?? (abbreviated !== undefined ? find(/^dd$/, isDay) : undefined);
   if (y === undefined || m === undefined) return undefined;
+  // "Tag" is also a tag, a label: it is the day only beside Jahr and Monat
+  if (d !== undefined && /(?:^|\s)tag$/.test(d.key) && !(/(?:^|\s)jahr$/.test(y.key) && /(?:^|\s)monat$/.test(m.key))) d = undefined;
   // the combination has to be a real date on at least half of the rows that have a year
   let seen = 0;
   let good = 0;

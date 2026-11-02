@@ -213,6 +213,13 @@ describe('the lookup (M3, M4 and the LOW items)', () => {
     }
   });
 
+  it('a blank key on a row that has a single value is said too', () => {
+    const data = [['Station', 'Temperature [degC]'], ['S1', 4.5], [null, 5.5]];
+    const station = [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', '2020-06-01', 70.1, 15.2], ['S2', '2020-06-02', 50.3, -5.6]];
+    const { findings } = run({ Station: station, Data: data as never });
+    expect(findings.filter((x) => x.ruleId === 'ROW-JOIN-KEY-BLANK')).toHaveLength(1);
+  });
+
   it('a blank part of the key on a row with no position of its own is said', () => {
     const data = [['Station', 'Temperature [degC]', 'Salinity'], ['S1', 4.5, 35], [null, 5.5, 35.1]];
     const station = [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', '2020-06-01', 70.1, 15.2], ['S2', '2020-06-02', 50.3, -5.6]];

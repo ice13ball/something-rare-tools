@@ -30,6 +30,7 @@ import type { RuleSpec } from './spec';
  *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept); with none = yes the header holds no unit at all (variant, value empty): count = the values written with no unit
  *   CONV-QUANTITY-REPEATED     columns, differs, count, of   a long sheet whose quantity or weight column is a per-taxon total repeated on the size-class rows of a sample (repeatedTotal.ts): field = the first column, columns = every repeated column, differs = the column that tells the rows apart, count = groups that repeat it, of = groups that have two or more values, value = an example, lines = every row of the groups; optional alternative = a column with a number of its own on each row (variant), disagree = yes (the groups whose rows disagree after the user chose "once"; variant). Blocks
  *   CONV-ROW-COPIES            count, withCopies, withoutCopies   rows that are exact copies of an earlier row (all columns but a per-row identifier), quantity above 1; lines = the copies; blocks until dropped (error)
+ *   CONV-ROW-COPIES-SPECIMENS  count, withCopies, withoutCopies   identical rows with a count of 1 (a specimen table looks the same): both sums, a warning to accept, never a block
  *   CONV-ROW-COPIES-DROPPED    count, withCopies, withoutCopies   the user dropped them (warning, accept)
  *   CONV-QUANTITY-SAME-IN-SAMPLE groups, records, written, asTotal   rows of one sample and taxon with the same quantity above 1 that differ in anything: written as records / as the species' total (warning, accept)
  *   CONV-QUANTITY-REPEATED-ONCE columns, differs, count, groups   the user chose one occurrence per sample and taxon: lines = the rows not converted (count), groups = the groups taken once; optional lost = per-organism columns not written (warning, accept)
@@ -353,12 +354,25 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count', 'withCopies', 'withoutCopies'],
     plain: {
-      pl: `Zgodnie z wyborem pominięto {count} {+count:dokładną kopię|dokładne kopie|dokładnych kopii} wierszy ({+lineCount:wiersz|wiersze|wierszy} {lines}). Ilość: {withoutCopies} zamiast {withCopies}. Sprawdź, że to były kopie.`,
-      en: `As you chose, {count} exact {+count:copy|copies} of rows {+count:was|were} left out ({+lineCount:line|lines} {lines}). The quantity is {withoutCopies} instead of {withCopies}. Check that they were copies.`,
-      de: `Wie gewählt, {+count:wurde|wurden} {count} exakte {+count:Kopie|Kopien} von Zeilen ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Die Menge ist {withoutCopies} statt {withCopies}. Prüfen Sie, ob es Kopien waren.`,
-      fr: `Comme choisi, {count} {+count:copie exacte|copies exactes} de lignes {+count:a été écartée|ont été écartées} ({+lineCount:ligne|lignes} {lines}). La quantité est {withoutCopies} au lieu de {withCopies}. Vérifiez que c'étaient des copies.`,
+      pl: `Zgodnie z wyborem pominięto {count} {+count:dokładną kopię|dokładne kopie|dokładnych kopii} wierszy ({+lineCount:wiersz|wiersze|wierszy} {lines}). Sprawdź, że to były kopie.`,
+      en: `As you chose, {count} exact {+count:copy|copies} of rows {+count:was|were} left out ({+lineCount:line|lines} {lines}). Check that they were copies.`,
+      de: `Wie gewählt, {+count:wurde|wurden} {count} exakte {+count:Kopie|Kopien} von Zeilen ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Prüfen Sie, ob es Kopien waren.`,
+      fr: `Comme choisi, {count} {+count:copie exacte|copies exactes} de lignes {+count:a été écartée|ont été écartées} ({+lineCount:ligne|lignes} {lines}). Vérifiez que c'étaient des copies.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: the user chose to drop the rows that are exact copies of an earlier row (every column but a per-row identifier); {count} row(s) are not converted, the sum of the quantity is {withoutCopies} instead of {withCopies}.`,
+    technical: `{file}, {sheet}:{lines} field {field}: the user chose to drop the rows that are exact copies of an earlier row (every column but a per-row identifier); {count} row(s) are not converted (the sum of the quantity of the sheet was {withCopies} with them and {withoutCopies} without them, before any other rule skips a row).`,
+  },
+  {
+    id: 'CONV-ROW-COPIES-SPECIMENS',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'withCopies', 'withoutCopies'],
+    plain: {
+      pl: `{count} {+count:wiersz jest identyczny|wiersze są identyczne|wierszy jest identycznych} z innym, z liczebnością 1 ({+lineCount:wiersz|wiersze|wierszy} {lines}). Jako osobne osobniki dają {withCopies}; jeśli to kopie, byłoby {withoutCopies}. Tabela osobników wygląda tak samo, więc nic nie blokuje: sprawdź, co to jest.`,
+      en: `{count} {+count:row is|rows are} identical to another row, with a count of 1 ({+lineCount:line|lines} {lines}). As separate specimens the quantity is {withCopies}; if they are copies it would be {withoutCopies}. A table of specimens looks exactly like this, so nothing is blocked: check which it is.`,
+      de: `{count} {+count:Zeile ist|Zeilen sind} mit einer anderen identisch, mit der Anzahl 1 ({+lineCount:Zeile|Zeilen} {lines}). Als getrennte Individuen ergibt das {withCopies}; sind es Kopien, wären es {withoutCopies}. Eine Tabelle von Individuen sieht genauso aus, daher wird nichts blockiert: prüfen Sie, was es ist.`,
+      fr: `{count} {+count:ligne est identique|lignes sont identiques} à une autre, avec un effectif de 1 ({+lineCount:ligne|lignes} {lines}). Comme individus distincts la quantité fait {withCopies} ; si ce sont des copies, ce serait {withoutCopies}. Un tableau d'individus a exactement cet aspect : rien n'est bloqué, vérifiez ce que c'est.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier, with a count of 1. Written as separate records the sum of the quantity is {withCopies}; if they are copies of one record it would be {withoutCopies}. A specimen table looks the same, so this is a warning to accept and never a block.`,
   },
   {
     id: 'CONV-QUANTITY-SAME-IN-SAMPLE',
@@ -366,7 +380,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['groups', 'records', 'written', 'asTotal'],
     plain: {
-      pl: `{records} wierszy tej samej próbki i tego samego gatunku ({groups} {+groups:grupa|grupy|grup}) ma tę samą ilość powyżej 1 ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisane jako {records} rekordów dają {written}; jeśli to suma gatunku, byłoby {asTotal}. Sprawdź, co to jest.`,
+      pl: `{records} {+records:wiersz|wiersze|wierszy} tej samej próbki i tego samego gatunku ({groups} {+groups:grupa|grupy|grup}) ma tę samą ilość powyżej 1 ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisane jako {records} {+records:rekord|rekordy|rekordów} dają {written}; jeśli to suma gatunku, byłoby {asTotal}. Sprawdź to.`,
       en: `{records} rows of the same sample and taxon ({groups} {+groups:group|groups}) carry the same quantity above 1 ({+lineCount:line|lines} {lines}). Written as {records} records, the total is {written}; if the value is the species' total, it would be {asTotal}. Check which it is.`,
       de: `{records} Zeilen derselben Probe und desselben Taxons ({groups} {+groups:Gruppe|Gruppen}) tragen dieselbe Menge über 1 ({+lineCount:Zeile|Zeilen} {lines}). Als {records} Datensätze geschrieben ergibt das {written}; ist der Wert die Summe der Art, wären es {asTotal}. Prüfen Sie, was es ist.`,
       fr: `{records} lignes du même échantillon et du même taxon ({groups} {+groups:groupe|groupes}) portent la même quantité supérieure à 1 ({+lineCount:ligne|lignes} {lines}). Écrites comme {records} enregistrements, elles font {written} ; si la valeur est le total de l'espèce, ce serait {asTotal}. Vérifiez ce que c'est.`,
@@ -1543,6 +1557,36 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}": {rows} rows of the example have the same sample and taxon and the same quantity above 1 (CONV-QUANTITY-SAME-IN-SAMPLE says what the number may be). An occurrenceID or a life stage would write the first sum, so it is not advised.`,
   },
+  // CONV-QUANTITY-SAME-IN-SAMPLE where the repeated value is a WEIGHT
+  'CONV-QUANTITY-SAME-IN-SAMPLE:weight': {
+    plain: {
+      pl: `{records} {+records:wiersz|wiersze|wierszy} tej samej próbki i tego samego gatunku ({groups} {+groups:grupa|grupy|grup}) ma tę samą wagę w „{column}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisana przy każdym wierszu daje {written}; jeśli to waga całego gatunku, byłoby {asTotal}. Sprawdź, co to jest.`,
+      en: `{records} rows of the same sample and taxon ({groups} {+groups:group|groups}) carry the same weight in "{column}" ({+lineCount:line|lines} {lines}). Written on every row it adds up to {written}; if it is the weight of the whole species, it would be {asTotal}. Check which it is.`,
+      de: `{records} Zeilen derselben Probe und desselben Taxons ({groups} {+groups:Gruppe|Gruppen}) tragen dasselbe Gewicht in „{column}“ ({+lineCount:Zeile|Zeilen} {lines}). In jeder Zeile geschrieben ergibt das {written}; ist es das Gewicht der ganzen Art, wären es {asTotal}. Prüfen Sie, was es ist.`,
+      fr: `{records} lignes du même échantillon et du même taxon ({groups} {+groups:groupe|groupes}) portent le même poids dans « {column} » ({+lineCount:ligne|lignes} {lines}). Écrit sur chaque ligne il fait {written} ; si c'est le poids de toute l'espèce, ce serait {asTotal}. Vérifiez ce que c'est.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {records} rows in {groups} group(s) of one sample and taxon, which differ in some other column, carry the same weight in {column}. Written on every row the sum is {written}; if the value is a per-taxon total repeated on each row it would be {asTotal}. Shown whatever the number of groups, and never with the advice to tell the rows apart.`,
+  },
+  // CONV-QUANTITY-SAME-IN-SAMPLE where a weight repeats beside the quantity
+  'CONV-QUANTITY-SAME-IN-SAMPLE:also': {
+    plain: {
+      pl: `{records} {+records:wiersz|wiersze|wierszy} tej samej próbki i tego samego gatunku ({groups} {+groups:grupa|grupy|grup}) ma tę samą ilość powyżej 1 ({+lineCount:wiersz|wiersze|wierszy} {lines}): jako {records} {+records:rekord|rekordy|rekordów} daje {written}, a jeśli to suma gatunku, {asTotal}. Powtarza się też waga w „{alsoColumn}”: {alsoWritten}, a jako suma {alsoAsTotal}. Sprawdź, co to jest.`,
+      en: `{records} rows of the same sample and taxon ({groups} {+groups:group|groups}) carry the same quantity above 1 ({+lineCount:line|lines} {lines}): as {records} records it is {written}, and {asTotal} if it is the species' total. The weight in "{alsoColumn}" repeats too: {alsoWritten}, or {alsoAsTotal} as a total. Check which it is.`,
+      de: `{records} Zeilen derselben Probe und desselben Taxons ({groups} {+groups:Gruppe|Gruppen}) tragen dieselbe Menge über 1 ({+lineCount:Zeile|Zeilen} {lines}): als {records} Datensätze {written}, als Summe der Art {asTotal}. Auch das Gewicht in „{alsoColumn}“ wiederholt sich: {alsoWritten}, als Summe {alsoAsTotal}. Prüfen Sie, was es ist.`,
+      fr: `{records} lignes du même échantillon et du même taxon ({groups} {+groups:groupe|groupes}) portent la même quantité supérieure à 1 ({+lineCount:ligne|lignes} {lines}) : comme {records} enregistrements {written}, et {asTotal} si c'est le total de l'espèce. Le poids de « {alsoColumn} » se répète aussi : {alsoWritten}, ou {alsoAsTotal} comme total. Vérifiez ce que c'est.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {records} rows in {groups} group(s) of one sample and taxon carry the same quantity above 1 in {column} (sum {written}, or {asTotal} as a total) and the same weight in {alsoColumn} (sum {alsoWritten}, or {alsoAsTotal} as a total).`,
+  },
+  // CONV-ID-DUPLICATE of rows that are identical in every column and carry a count of 1
+  'CONV-ID-DUPLICATE:copies': {
+    plain: {
+      pl: `Ten sam identyfikator występowania powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Te wiersze są identyczne we wszystkich kolumnach: jeśli to ten sam rekord zapisany dwa razy, usuń kopie; jeśli to osobne osobniki, każdy potrzebuje własnego identyfikatora występowania.`,
+      en: `The same occurrence identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). These rows are identical in every column: if they are one record written twice, remove the copies; if they are separate specimens, each needs its own occurrenceID.`,
+      de: `Dieselbe Vorkommenskennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Diese Zeilen sind in jeder Spalte identisch: ist es ein Datensatz, der zweimal geschrieben wurde, entfernen Sie die Kopien; sind es getrennte Individuen, braucht jedes seine eigene occurrenceID.`,
+      fr: `Le même identifiant d'occurrence est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Ces lignes sont identiques dans toutes les colonnes : si c'est un enregistrement écrit deux fois, supprimez les copies ; si ce sont des individus distincts, chacun a besoin de son propre occurrenceID.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}": the rows are identical in every column but a per-row identifier and carry a count of 1 (CONV-ROW-COPIES-SPECIMENS gives both sums). One record twice, or separate specimens: the advice depends on which, and says so.`,
+  },
   // CONV-NA-SKIPPED of a long sheet: rows (a taxon and no quantity), listed by line
   'CONV-NA-SKIPPED:rows': {
     plain: {
@@ -1694,6 +1738,9 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:disagree'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:weight'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED-ONCE:weight'];
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.copyLike === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:copies'];
+  if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:weight'];
+  if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && typeof f.params.alsoColumn === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:also'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.sameValue === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:same-value'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && typeof f.params.alternative === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:alternative'];
   if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];

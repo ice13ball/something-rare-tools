@@ -1359,6 +1359,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   const repeatedAffected = new Map<string, Set<number>>();
   // the lines of rows with the same quantity above 1 in one sample and taxon (CONV-QUANTITY-SAME-IN-SAMPLE says it; the advice to tell the rows apart would count each of them), by file and sheet
   const sameValueLines = new Map<string, Set<number>>();
+  // the lines of identical rows with a count of 1 (CONV-ROW-COPIES-SPECIMENS says it; the duplicate-identifier advice must not tell the rows apart as if they were certainly separate animals)
+  const copyLikeLines = new Map<string, Set<number>>();
   // where each occurrence stands, for the findings about one taxon written twice in a sample: the column (wide) or the line (long)
   const refOf = new Map<OccRec, string>();
   const stats = { zerosSkipped: 0, naSkipped: 0, blankKept: 0, textCells: 0, present: 0, absent: 0 };
@@ -1595,6 +1597,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const repeated = analysis.total;
     const sameValue = analysis.same;
     const copies = analysis.copies;
+    const specimenCopies = analysis.specimenCopies;
     const takeOnce = repeated !== undefined && sin.totalOnce === true;
     const dropCopies = copies !== undefined && sin.dropCopies === true;
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
@@ -1605,6 +1608,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const hide = new Set<number>([...(repeated !== undefined && !takeOnce ? repeated.affected : []), ...(copies !== undefined ? copies.lines : [])]);
       if (hide.size > 0) repeatedAffected.set(k, hide);
       if (sameValue !== undefined) sameValueLines.set(k, new Set(sameValue.lines));
+      if (specimenCopies !== undefined) copyLikeLines.set(k, new Set(specimenCopies.lines));
     }
 
     // Visits (CONV-ID-REVISIT): a code that repeats at ONE station on rows that differ in date (then time, then depth for a wide sheet) is one sample per visit, not a duplicate. The ID of such a
@@ -2238,12 +2242,31 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         );
       }
     }
+    const round = (n: number): number => Math.round(n * 1000) / 1000;
     if (copies !== undefined) {
-      const params = { count: copies.copyLines.length, withCopies: copies.withCopies, withoutCopies: copies.withoutCopies };
+      const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies) };
       findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
     }
+    if (specimenCopies !== undefined) {
+      findings.push(makeConvertFinding('CONV-ROW-COPIES-SPECIMENS', { ...base, field: specimenCopies.column, lines: specimenCopies.copyLines, params: { count: specimenCopies.copyLines.length, withCopies: round(specimenCopies.withCopies), withoutCopies: round(specimenCopies.withoutCopies) } }));
+    }
     if (sameValue !== undefined) {
-      findings.push(makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', { ...base, field: sameValue.column, lines: sameValue.lines, params: { groups: sameValue.groups, records: sameValue.records, written: sameValue.written, asTotal: sameValue.asTotal } }));
+      findings.push(
+        makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', {
+          ...base,
+          field: sameValue.column,
+          lines: sameValue.lines,
+          params: {
+            groups: sameValue.groups,
+            records: sameValue.records,
+            written: round(sameValue.written),
+            asTotal: round(sameValue.asTotal),
+            column: sameValue.column,
+            ...(sameValue.also === undefined ? {} : { alsoColumn: sameValue.also.column, alsoWritten: round(sameValue.also.written), alsoAsTotal: round(sameValue.also.asTotal) }),
+            ...(sameValue.column !== (sin.mapping.columns.find((c) => c.role.kind === 'quantity')?.header.trim() ?? '') ? { weight: 'yes' } : {}),
+          },
+        }),
+      );
     }
     for (const e of biomassUnitNone.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length, none: 'yes' } }));
     for (const u of biomassNoP06) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: u } }));
@@ -2476,7 +2499,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.',
             ...(rep === undefined ? {} : { column: rep.column, ...(rep.separated < rep.total ? { remaining: rep.total - rep.separated, separated: rep.separated } : {}) }),
             ...(rep === undefined && userIds && sin?.shape === 'long' ? { userId: 'yes' } : {}),
-            ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}), ...(w.groups[0]?.every((l) => sameValueLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { sameValue: 'yes' } : {}) } : {}),
+            ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}), ...(w.groups[0]?.every((l) => sameValueLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { sameValue: 'yes' } : {}), ...(w.groups[0]?.every((l) => copyLikeLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { copyLike: 'yes' } : {}) } : {}),
           },
         }),
       );
