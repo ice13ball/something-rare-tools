@@ -74,6 +74,7 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
  *                         speed.ts (ship speed); crossfile.ts 499 (position swap) and 548 (position conflict), both with a station
  *   date / datetime       one slot in dataset.ts specsOf (`when`): dataset.ts 304 (unparseable), rows.ts dateMissing 351, yearOutlier 401,
  *                         dateFuture 568; speed.ts; crossfile.ts 278 (date conflict, with a station)
+ *   dateYear/Month/Day    the three columns of a date in separate columns are combined into the same `when` reading (dataset.ts metaParser): the same rules as date
  *   time                  dataset.ts 311 and 319 only, and only beside a date column (it is combined with it)
  *   depth                 rows.ts depthSign 442, depthRules 515; crossfile.ts 92 (duplicate samples match on depth)
  *   station               dwc.ts 345 (invisible character); rows.ts stationMoved 244, noCoord 467; crossfile.ts 90-97 (duplicate samples), 278, 307 (alias), 366-548
@@ -86,13 +87,16 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
  * test/app/infotip-sources.test.tsx checks that every id exists in the registry; the lists themselves are checked by reading, as above.
  */
 const WHEN_RULES = ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-MISSING', 'ROW-YEAR-OUTLIER', 'ROW-DATE-FUTURE', 'ROW-SHIP-SPEED', 'XF-DATE-CONFLICT'] as const;
-export const ROLE_FEEDS: Record<RoleKind, readonly string[]> = {
+export const ROLE_FEEDS: Record<RoleKind | 'dateYear' | 'dateMonth' | 'dateDay', readonly string[]> = {
   ignore: [],
   latitude: ['ROW-LAT-RANGE', 'ROW-LAT-EQ-LON', 'ROW-LAT-EQ-LON-ISOLATED', 'ROW-LAT-EQ-LON-COARSE', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
   longitude: ['ROW-LON-RANGE', 'ROW-LAT-EQ-LON', 'ROW-LAT-EQ-LON-ISOLATED', 'ROW-LAT-EQ-LON-COARSE', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],
   hemisphere: ['ROW-HEMISPHERE-CONFLICT', 'ROW-HEMISPHERE-MISSING', 'ROW-HEMISPHERE-UNPAIRED'],
   datetime: WHEN_RULES,
   date: WHEN_RULES,
+  dateYear: WHEN_RULES,
+  dateMonth: WHEN_RULES,
+  dateDay: WHEN_RULES,
   time: ['ROW-DATE-UNPARSEABLE', 'ROW-TZ-UNKNOWN'],
   depth: ['ROW-DEPTH-SIGN', 'ROW-DEPTH-RANGE', 'XF-DUPLICATE-SAMPLES'],
   pressure: [],

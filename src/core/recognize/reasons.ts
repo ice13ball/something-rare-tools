@@ -21,6 +21,8 @@ export const CHECK_REASONS = {
   'geocode-sediment': '"{name}" is the PANGAEA geocode for a depth in a sediment core or rock, not the depth of the water: it is not read as the depth of the sample',
   'geocode-soil': '"{name}" is the PANGAEA geocode for a depth in soil, not the depth of the water: it is not read as the depth of the sample',
   'geocode-ice': '"{name}" is the PANGAEA geocode for a depth in sea ice or snow, not the depth of the water: it is not read as the depth of the sample',
+  'date-parts-names': 'name and values say {part}: the year, month and day columns are combined into the date of the row (a missing day is a month, a missing month a year)',
+  'date-parts-position': 'the values fit {part} and the columns stand next to each other as year, month, day: combined into the date of the row (check that this is what you want)',
   'name-depth-start': 'name says depth ({name}: start of a depth range)',
   'name-depth-end': 'name says depth ({name}: end of a depth range)',
   'name-cruise': 'name says cruise or expedition',

@@ -89,6 +89,8 @@ export interface Specs {
   lonHemi?: Spec;
   when?: Spec & { kind: 'date' | 'datetime' };
   time?: Spec;
+  /** The columns of a date written as year, month and day (role datePart): combined into the date of the row when no date column is mapped. */
+  dateParts?: { year?: Spec; month?: Spec; day?: Spec };
   depth?: Spec & { positive: 'down' | 'up' | 'unknown' };
   station?: Spec;
   cruise?: Spec;
@@ -119,6 +121,9 @@ export function specsOf(mapping: SheetMapping): Specs {
         break;
       case 'time':
         s.time ??= spec;
+        break;
+      case 'datePart':
+        ((s.dateParts ??= {})[r.part] ??= spec);
         break;
       case 'depth':
         s.depth ??= { ...spec, positive: r.positive };
@@ -222,6 +227,30 @@ function composeYmd(row: RawRow, cols: { year: number; month?: number; day?: num
   return { iso: `${yy}-${p2(mo)}-${p2(d)}`, year: y, precision: 'day', tz: 'unknown' };
 }
 
+/**
+ * The date of a row from Year, Month and Day columns (role datePart): a year alone is a year, a year and a month a month, all three a day; a missing part is never made up. A cell that is
+ * not a whole number in range, a day that the month does not have (1998-2-30) and a day or month without the part above it are not shifted into a date: `error` carries the text for
+ * ROW-DATE-UNPARSEABLE. A row with no part at all has no date (undefined).
+ */
+export function composeDateParts(row: RawRow, parts: { year?: Spec; month?: Spec; day?: Spec }): ParsedDate | { error: string } | undefined {
+  const cell = (s: Spec | undefined): RawCell => (s === undefined ? null : (row.cells[s.index] ?? null));
+  const texts = [parts.year, parts.month, parts.day].map((s) => (isBlankCell(cell(s)) ? '' : String(cell(s)).trim()));
+  const shown = texts.filter((t) => t !== '').join('-');
+  if (texts.every((t) => t === '')) return undefined;
+  const y = wholeNumber(cell(parts.year));
+  if (texts[0] === '' || y === undefined || y < 1) return { error: shown };
+  const p2 = (n: number): string => String(n).padStart(2, '0');
+  const yy = String(y).padStart(4, '0');
+  if (texts[1] === '') return texts[2] === '' ? { iso: yy, year: y, precision: 'year', tz: 'unknown' } : { error: shown };
+  const mo = wholeNumber(cell(parts.month));
+  if (mo === undefined || mo < 1 || mo > 12) return { error: shown };
+  if (texts[2] === '') return { iso: `${yy}-${p2(mo)}`, year: y, precision: 'month', tz: 'unknown' };
+  const d = wholeNumber(cell(parts.day));
+  const dim = new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), mo, 0)).getUTCDate();
+  if (d === undefined || d < 1 || d > dim) return { error: shown };
+  return { iso: `${yy}-${p2(mo)}-${p2(d)}`, year: y, precision: 'day', tz: 'unknown' };
+}
+
 /** Header columns of the Darwin Core minimum and maximum depth, wherever the mapping put the single depth slot: min > max needs both. */
 function dwcDepthCols(sheet: RawSheet): { min?: Spec; max?: Spec } {
   const find = (term: string): Spec | undefined => {
@@ -255,8 +284,19 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
  * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
  * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
  */
-export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: Collector, opts: { whenUtc?: boolean } = {}): (row: RawRow) => Meta {
+export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean } = {}): (row: RawRow) => Meta {
   const dc = file.decimalComma;
+  // "Year" chosen as the date while a month (and day) column is mapped as part of a date: the Year column IS the year of that date, so the combination is read and the day is not lost
+  // (a date column whose cells are all whole years, beside a datePart month column)
+  const specs: Specs = (() => {
+    const w = specsIn.when;
+    if (w === undefined || specsIn.dateParts === undefined || specsIn.dateParts.year !== undefined || specsIn.dateParts.month === undefined) return specsIn;
+    const cells = sheet.rows.map((r) => r.cells[w.index] ?? null).filter((x) => !isBlankCell(x));
+    const years = cells.filter((x) => wholeNumber(x) !== undefined && wholeNumber(x)! >= 1700).length;
+    if (cells.length === 0 || years < cells.length * 0.9) return specsIn;
+    const { when: _when, ...rest } = specsIn;
+    return { ...rest, dateParts: { ...specsIn.dateParts, year: { index: w.index, header: w.header } } };
+  })();
   const dateCache = new Map<string, ParsedDate | DateError>();
   const whenUtc = opts.whenUtc === true || (specs.when ? UTC_HEADER.test(specs.when.header) : false);
   const timeUtc = specs.time ? UTC_HEADER.test(specs.time.header) : false;
@@ -393,6 +433,26 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
           }
           m.datetime = date;
         }
+      }
+    }
+    // no date column: the date of the row from its Year, Month and Day columns (a date column beside them wins)
+    if (!specs.when && specs.dateParts?.year !== undefined) {
+      const got = composeDateParts(row, specs.dateParts);
+      if (got !== undefined && 'error' in got) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.dateParts.year.header, row.line, got.error);
+      else if (got !== undefined) {
+        let date: ParsedDate = got;
+        m.dateRaw = got.iso;
+        const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
+        if (specs.time && !isBlankCell(timeCell) && date.precision === 'day') {
+          const tOrder = timeOrder === 'unknown' ? undefined : timeOrder;
+          if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso, tOrder))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
+          else {
+            date = combineDateTime(date, timeCell, tOrder);
+            if (timeUtc) date = { ...date, tz: 'utc', iso: `${date.iso}Z` };
+            else if (date.tz === 'unknown') c.add('ROW-TZ-UNKNOWN', sheet.name, specs.time.header, row.line, undefined, false);
+          }
+        }
+        m.datetime = date;
       }
     }
     if (specs.depth) {
@@ -607,7 +667,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const dc = file.decimalComma;
   const parse = metaParser(file, sheet, specs, c);
   const skip = new Set(longColumns(plan));
-  const keyCols = [specs.sampleId, specs.station, specs.cruise, specs.depth, specs.when, specs.time, specs.lat, specs.lon]
+  const keyCols = [specs.sampleId, specs.station, specs.cruise, specs.depth, specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon]
     .filter((s): s is Spec => s !== undefined && !skip.has(s.index))
     .map((s) => s.index);
 

@@ -433,6 +433,17 @@ in metres, `CONV-SEAFLOOR-*`), and on both pages it never reaches the depth slot
 the sample (nothing is lost, and the reason `geocode-ice` / `geocode-soil` says why they are not the depth). `Elevation` and `Altitude` keep the sign logic of the proposer (positive up). `Depth, top/min` and
 `Depth, bottom/max`, which the page does not list (they are ordinary parameters, the two ends of a layer), keep their range handling.
 
+**A date in Year, Month and Day columns** (`src/core/recognize/dateParts.ts`, shared by `/check` and `/convert`; the role `datePart`, shown as *Year / Month / Day (of a date in separate columns)*). Found from the
+cell values and the position together, never from a header alone: whole numbers from 1700 to next year (year), 1 to 12 (month) and 1 to 31 (day). A set is the year column with a month column (and a day column when there
+is one); a **lone Year is not a date** and nothing is marked. It is a set **by name** when the headers say so in English, Polish, German or French (`Year`/`Rok`/`Jahr`/`Année`, `Month`/`Miesiąc`/`Monat`/`Mois`,
+`Day`/`Dzień`/`Tag`/`Jour`, with an optional sample / sampling / collection / start word) and at least 95 % of the filled cells fit (the rest are reported row by row), or **by place** when the three columns
+stand next to each other as year, month, day, none has a unit in its header or looks like an id or count, the month and the day take at least two values and the combination is a real calendar date on at least 90 %
+of the rows (the day column is required: a year beside one small-number column is a count far too often). By place alone the proposal is at low confidence. A **real Date column beside the set wins** and nothing is marked
+(a contradiction between the two is another check's job). `dataset.ts` composes the date of each row: a missing day is a **month** (`1998-09`), a missing month is a **year** (`1998`), a day is never made up;
+an impossible date (`1998,2,30`, a month 13, a day without a month) is **not shifted**: it is `ROW-DATE-UNPARSEABLE` on its line (blocking in `/convert`). A time column beside a full date is combined with it. The
+columns are not measured variables and not taxon candidates, so `META-NO-DATES` stays silent and "No unit is given for: Year, Month, Day" is gone. If the user gives the Year column the role *Date* while a month
+column is a date part, the Year column is read as the year of that date (the day is not lost). Hour and Minute columns are **not** read.
+
 ### 3.4 Recognising the layout
 
 `proposeLayout(file)` in `src/core/recognize/layout.ts` describes how the sheets of a file fit

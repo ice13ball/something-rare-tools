@@ -6,6 +6,7 @@ import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, isPlausibl
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { depthUnitOfHeader } from './depthUnit';
 import { geocodeOfKey } from './geocodes';
+import { findDateParts } from './dateParts';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
 import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
@@ -1103,6 +1104,20 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     const r = e.proposal.role;
     if (r.kind === 'date' && hasTimeOfDay(rows, e.proposal.index, ctx, sheet.dateFormatted?.[e.proposal.index] === true)) {
       e.proposal.role = { kind: 'datetime' };
+    }
+  }
+
+  // a date written in Year, Month and Day columns (no date column beside them): the three are the date of the row, found from names and values together (dateParts.ts)
+  {
+    const found = findDateParts(entries.map((e) => e.proposal), rows);
+    if (found !== undefined) {
+      for (const e of entries) {
+        const hit = found.parts.get(e.proposal.index);
+        if (hit === undefined) continue;
+        e.proposal.role = { kind: 'datePart', part: hit.part };
+        e.proposal.confidence = hit.byName ? 'high' : 'low';
+        Object.assign(e.proposal, reasonOf(hit.byName ? why('date-parts-names', { part: hit.part }) : why('date-parts-position', { part: hit.part })));
+      }
     }
   }
 

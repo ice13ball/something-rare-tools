@@ -85,13 +85,13 @@ const blank = (c: RawCell | undefined): boolean => c === null || c === undefined
 const BASE_PARTS: { kinds: readonly string[]; part: GroupPart }[] = [
   { kinds: ['cruise'], part: 'cruise' },
   { kinds: ['station'], part: 'station' },
-  { kinds: ['date', 'datetime'], part: 'date' },
+  { kinds: ['date', 'datetime', 'datePart'], part: 'date' },
   { kinds: ['time'], part: 'time' },
   { kinds: ['depth'], part: 'depth' },
   { kinds: ['replicate'], part: 'replicate' },
 ];
 /** Roles that never define a sample: what is measured of a taxon, who the taxon is, or what the sample IS the identifier of. */
-const NOT_A_KEY = new Set(['taxon', 'quantity', 'quantityType', 'lifeStage', 'qualifier', 'occurrenceId', 'taxonId', 'biomass', 'effort', 'sampleId', 'pressure', 'depthBelowSeafloor', 'depth', 'station', 'cruise', 'date', 'datetime', 'time', 'replicate']);
+const NOT_A_KEY = new Set(['taxon', 'quantity', 'quantityType', 'lifeStage', 'qualifier', 'occurrenceId', 'taxonId', 'biomass', 'effort', 'sampleId', 'pressure', 'depthBelowSeafloor', 'depth', 'station', 'cruise', 'date', 'datetime', 'datePart', 'time', 'replicate']);
 
 /**
  * Groups the data rows of a long sheet into samples. `extra` are columns the user chose to add to the key.

@@ -8,16 +8,22 @@ import type { ColumnRole, ConverterRoleKind, SheetMapping } from '../core/types'
 import { hemisphereLetter } from '../core/values/coords';
 
 /** The kinds /check offers. The converter-only kinds (types.ts ConverterRole) are not among them: /check never proposes or lists them. */
-export type RoleKind = Exclude<ColumnRole['kind'], ConverterRoleKind>;
+export type RoleKind = Exclude<ColumnRole['kind'], ConverterRoleKind | 'datePart'>;
+/** The three entries of the dropdown for the role `datePart`: the year, the month and the day of a date written in separate columns. */
+export type DatePartChoice = 'dateYear' | 'dateMonth' | 'dateDay';
+const DATE_PART_OF = { dateYear: 'year', dateMonth: 'month', dateDay: 'day' } as const;
 
 /** Order of the role dropdown. */
-export const ROLE_KINDS: readonly RoleKind[] = [
+export const ROLE_KINDS: readonly (RoleKind | DatePartChoice)[] = [
   'ignore',
   'latitude',
   'longitude',
   'hemisphere',
   'datetime',
   'date',
+  'dateYear',
+  'dateMonth',
+  'dateDay',
   'time',
   'depth',
   'pressure',
@@ -27,13 +33,13 @@ export const ROLE_KINDS: readonly RoleKind[] = [
   'variable',
 ];
 
-export const roleLabelKey = (kind: RoleKind): UiKey => `role.${kind}` as UiKey;
+export const roleLabelKey = (kind: RoleKind | DatePartChoice): UiKey => `role.${kind}` as UiKey;
 
 /**
  * An entry of the role dropdown. /check offers the RoleKind list; /convert offers CONVERT_ROLE_CHOICES: the same kinds plus the converter roles, and
  * 'taxonHeader' for a wide sheet's species column (role taxon with header: true), which is a choice of its own so the user sees what it means.
  */
-export type RoleChoice = RoleKind | ConverterRoleKind | 'taxonHeader' | 'biomassWet' | 'biomassDry' | 'biomassAfdw';
+export type RoleChoice = RoleKind | DatePartChoice | ConverterRoleKind | 'taxonHeader' | 'biomassWet' | 'biomassDry' | 'biomassAfdw';
 
 /** The kind of mass each biomass entry of the dropdown stands for; plain 'biomass' leaves it open (the converter then asks). */
 const BIOMASS_CHOICES = { biomassWet: 'wet', biomassDry: 'dry', biomassAfdw: 'afdw' } as const;
@@ -45,6 +51,9 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
   'station',
   'cruise',
   'date',
+  'dateYear',
+  'dateMonth',
+  'dateDay',
   'datetime',
   'time',
   'latitude',
@@ -74,10 +83,11 @@ export const roleChoiceLabelKey = (c: RoleChoice): UiKey => `role.${c}` as UiKey
 
 /** The dropdown entry that stands for a role. */
 export const roleChoiceOf = (role: ColumnRole): RoleChoice =>
-  role.kind === 'taxon' && role.header === true ? 'taxonHeader' : role.kind === 'biomass' ? (role.basis === 'wet' ? 'biomassWet' : role.basis === 'dry' ? 'biomassDry' : role.basis === 'afdw' ? 'biomassAfdw' : 'biomass') : role.kind;
+  role.kind === 'datePart' ? (role.part === 'year' ? 'dateYear' : role.part === 'month' ? 'dateMonth' : 'dateDay') : role.kind === 'taxon' && role.header === true ? 'taxonHeader' : role.kind === 'biomass' ? (role.basis === 'wet' ? 'biomassWet' : role.basis === 'dry' ? 'biomassDry' : role.basis === 'afdw' ? 'biomassAfdw' : 'biomass') : role.kind;
 
 /** The role after the user picked `choice`. Every /check kind goes through changeRole, so its behaviour is the one it always had. */
 export function roleFromChoice(current: ColumnRole, proposed: ColumnRole, choice: RoleChoice, cleanHeader: string, samples: readonly string[] = []): ColumnRole {
+  if (choice === 'dateYear' || choice === 'dateMonth' || choice === 'dateDay') return proposed.kind === 'datePart' && proposed.part === DATE_PART_OF[choice] ? proposed : { kind: 'datePart', part: DATE_PART_OF[choice] };
   if (choice === 'taxonHeader') return proposed.kind === 'taxon' && proposed.header === true ? proposed : { kind: 'taxon', header: true };
   if (choice === 'biomassWet' || choice === 'biomassDry' || choice === 'biomassAfdw') return { kind: 'biomass', basis: BIOMASS_CHOICES[choice] };
   if (choice === 'biomass') return proposed.kind === 'biomass' && proposed.basis === undefined ? proposed : { kind: 'biomass' };

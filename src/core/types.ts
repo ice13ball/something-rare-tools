@@ -147,6 +147,8 @@ export type ColumnRole =
   | { kind: 'pressure'; unit?: string }
   | { kind: 'station' } | { kind: 'cruise' } | { kind: 'sampleId' }
   | { kind: 'variable'; variable: string; unit?: string; unitSource?: 'header' | 'p01' | 'metadata' | 'user'; p01?: string; /** Converter only: on a long sheet the value belongs to the OCCURRENCE of its row (a length of each fish), not to the sample event: it differs between the rows of a sample, as a biomass does. /check never sets it. */ perOccurrence?: true }
+  /** One part of a date written in separate columns (Year, Month, Day): combined into the date of the row (recognize/dateParts.ts, dataset.ts). */
+  | { kind: 'datePart'; part: 'year' | 'month' | 'day' }
   | { kind: 'ignore' }
   | ConverterRole;
 /**

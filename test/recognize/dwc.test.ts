@@ -103,7 +103,8 @@ describe('ordinary headers are not read as Darwin Core', () => {
   });
   it('year, month, day, id, locality in a non-DwC sheet keep their old handling', () => {
     const p = props(['year', 'month', 'day', 'id', 'locality', 'temp'], [['2008', '5', '1', 'a', 'Bay', '4.5']]);
-    expect(p.map((x) => x.role.kind)).toEqual(['variable', 'variable', 'variable', 'sampleId', 'ignore', 'variable']);
+    // the three are now the year, month and day of one date (recognize/dateParts.ts); they are still not read as Darwin Core terms
+    expect(p.map((x) => x.role.kind)).toEqual(['datePart', 'datePart', 'datePart', 'sampleId', 'ignore', 'variable']);
     expect(p[0].reason).not.toMatch(/Darwin/);
   });
 });

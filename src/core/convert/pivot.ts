@@ -102,7 +102,7 @@ export interface PivotChoice {
 }
 
 /** The meanings that tell where and when a sample is (its position and identity): a column with any other meaning may vary per measurement. */
-const IDENTITY_KINDS = new Set(['latitude', 'longitude', 'datetime', 'date', 'time', 'depth', 'pressure', 'station', 'cruise', 'sampleId', 'depthBelowSeafloor']);
+const IDENTITY_KINDS = new Set(['latitude', 'longitude', 'datetime', 'date', 'datePart', 'time', 'depth', 'pressure', 'station', 'cruise', 'sampleId', 'depthBelowSeafloor']);
 
 /** Reads one sheet: pivoted, left alone (not a long sheet) or blocked (a long sheet that cannot be read safely). `choice.off` is the caller's business (see pivotConvertFile). */
 export function readLongSheet(file: ParsedFile, sheet: RawSheet, choice: PivotChoice = {}): LongVerdict {

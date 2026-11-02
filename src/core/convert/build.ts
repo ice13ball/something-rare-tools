@@ -400,7 +400,7 @@ const sameNumber = (a: number | undefined, b: number | undefined): boolean => a 
 function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
   const used = new Set<number>();
   const use = (s: { index: number } | undefined): void => void (s && used.add(s.index));
-  for (const s of [specs.lat, specs.lon, specs.when, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
+  for (const s of [specs.lat, specs.lon, specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
   // a hemisphere column is read together with its coordinate (dataset.ts metaParser); without the coordinate it is read by nothing
   if (specs.lat) use(specs.latHemi);
   if (specs.lon) use(specs.lonHemi);
@@ -552,7 +552,7 @@ function stationFindingsOf(sheets: readonly StationSheet[], farIds: ReadonlySet<
  * or an epoch are times. `count` are the cells that hold a date, `lines` their lines, `filled` all the filled cells. Dates written in a form the parser does not read ("20030117 0830", "Jan 17 2003", "01/17/2003 8:30 AM") are counted too, so that they are not lost in silence ("2003/01/17" is read).
  */
 function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number; filled: number; lines: number[] } | undefined {
-  if (specs.time === undefined || specs.when !== undefined) return undefined;
+  if (specs.time === undefined || specs.when !== undefined || specs.dateParts?.year !== undefined) return undefined;
   const index = specs.time.index;
   const formatted = sheet.dateFormatted?.[index] === true;
   const cells = sheet.rows.map((r) => r.cells[index] ?? null);
@@ -1034,7 +1034,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const tabs = new Lines();
   const summaries = new Lines();
   const keptStats = new Lines();
-  const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
+  const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon));
   const checkText = (field: string, line: number, value: string | undefined): void => {
     if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
   };
@@ -1495,7 +1495,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const summaries = new Lines();
     const keptStats = new Lines();
     const presenceBad = new Lines();
-    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.time, specs.lat, specs.lon));
+    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon));
     let zeros = 0;
     let presenceSkipped = 0;
     let naCells = 0;
@@ -1749,7 +1749,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (acc.effortText !== effort) differs('sample size');
       } else {
         const site: SampleSite = { id: eventId, code: replicate ?? code, source };
-        const whenText = [specs.when, specs.time].map((sp) => (sp === undefined ? '' : String(row.cells[sp.index] ?? '').trim())).join('|');
+        const whenText = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time].map((sp) => (sp === undefined ? '' : String(row.cells[sp.index] ?? '').trim())).join('|');
         if (whenText !== '|') site.whenText = whenText;
         if (replicate !== undefined) {
           site.eventType = 'replicate';

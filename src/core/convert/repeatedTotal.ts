@@ -85,7 +85,7 @@ export function detectRepeatedTotals(args: {
     ...roles.filter((c) => c.role.kind === 'biomass').map((c) => ({ index: c.index, header: c.header, kind: 'biomass' as const })),
   ];
   if (candidates.length === 0) return undefined;
-  const KEY_KINDS = new Set(['sampleId', 'station', 'cruise', 'replicate', 'date', 'datetime', 'time', 'latitude', 'longitude', 'depth', 'pressure', 'hemisphere', 'taxon', 'lifeStage', 'qualifier', 'taxonId']);
+  const KEY_KINDS = new Set(['sampleId', 'station', 'cruise', 'replicate', 'date', 'datetime', 'datePart', 'time', 'latitude', 'longitude', 'depth', 'pressure', 'hemisphere', 'taxon', 'lifeStage', 'qualifier', 'taxonId']);
   const keyColumns = roles.filter((c) => KEY_KINDS.has(c.role.kind) && !(c.role.kind === 'taxon' && c.role.header === true)).map((c) => c.index);
   const candidateIndexes = new Set(candidates.map((c) => c.index));
   const occurrenceId = roles.find((c) => c.role.kind === 'occurrenceId')?.index;
