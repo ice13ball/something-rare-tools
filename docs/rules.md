@@ -115,6 +115,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-TEXT-IN-TAXON-CELL | warning | B | — | —<a id="CONV-TEXT-IN-TAXON-CELL"></a> |
 | CONV-TAXON-SAME-EVENT | warning | B | — | —<a id="CONV-TAXON-SAME-EVENT"></a> |
 | CONV-NA-SKIPPED | info | B | — | —<a id="CONV-NA-SKIPPED"></a> |
+| CONV-QUANTITY-BLANK-KEPT | warning | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not](https://manual.obis.org/format_occurrence.html), "These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"<a id="CONV-QUANTITY-BLANK-KEPT"></a> |
+| CONV-ZERO-WITH-BIOMASS | warning | B | — | —<a id="CONV-ZERO-WITH-BIOMASS"></a> |
 | CONV-ZERO-SKIPPED | info | B | — | [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")<a id="CONV-ZERO-SKIPPED"></a> |
 | CONV-SAMPLE-CONFLICT | error | B | — | —<a id="CONV-SAMPLE-CONFLICT"></a> |
 | CONV-NERC-UNKNOWN | warning | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-NERC-UNKNOWN"></a> |

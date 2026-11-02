@@ -118,6 +118,8 @@
    "present": 0,
    "absent": 0,
    "zerosSkipped": 0,
+   "naSkipped": 0,
+   "blankKept": 0,
    "textCells": 0,
    "measurements": 0,
    "nerc": {
@@ -217,6 +219,8 @@
    "present": 0,
    "absent": 0,
    "zerosSkipped": 0,
+   "naSkipped": 0,
+   "blankKept": 0,
    "textCells": 0,
    "measurements": 0,
    "nerc": {
@@ -455,6 +459,8 @@
    "present": 3,
    "absent": 0,
    "zerosSkipped": 0,
+   "naSkipped": 0,
+   "blankKept": 0,
    "textCells": 0,
    "measurements": 0,
    "nerc": {
@@ -779,6 +785,8 @@
    "present": 4,
    "absent": 0,
    "zerosSkipped": 0,
+   "naSkipped": 0,
+   "blankKept": 0,
    "textCells": 0,
    "measurements": 4,
    "nerc": {
@@ -1337,6 +1345,8 @@
    "present": 6,
    "absent": 1,
    "zerosSkipped": 0,
+   "naSkipped": 0,
+   "blankKept": 0,
    "textCells": 0,
    "measurements": 9,
    "nerc": {

@@ -145,6 +145,10 @@ export interface ConvertStats {
   present: number;
   absent: number;
   zerosSkipped: number;
+  /** Rows of a long sheet with a taxon and a blank / NA quantity and no other value: no record, reported (CONV-NA-SKIPPED). (the NA cells of a wide sheet are CONV-NA-SKIPPED without lines and are not in this count). */
+  naSkipped: number;
+  /** Rows of a long sheet with a blank / NA quantity but a biomass value: kept as a presence record with no count (CONV-QUANTITY-BLANK-KEPT). */
+  blankKept: number;
   textCells: number;
   measurements: number;
   /**

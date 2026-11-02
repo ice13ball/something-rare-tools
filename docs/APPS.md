@@ -1392,12 +1392,22 @@ code" (the button above applies it).
 
 For each taxon cell (`convert/build.ts`):
 
-- an **empty cell** makes no record; an **NA token** makes no record and is counted
-  (`CONV-NA-SKIPPED`); an NA variant is reported as on `/check`;
+- an **empty cell** of a wide sheet makes no record; an **NA token** makes no record and is counted
+  (`CONV-NA-SKIPPED`); an NA variant is reported as on `/check`. In a **long** sheet a row has a taxon, so
+  a row whose quantity is empty, `NA` or `NaN` is never dropped silently: with a **biomass value above zero**
+  in the same row it stays as an occurrence with status present, **no** `individualCount` or `organismQuantity`
+  (the count is not made up) and its biomass measurement (`CONV-QUANTITY-BLANK-KEPT`, a warning to accept, with
+  the lines); with nothing else it makes no record and is counted and listed by line (`CONV-NA-SKIPPED`
+  with `rows`). A measured variable does not keep a row, because it is written once per sample and says
+  nothing about the taxon. Rows with a taxon = occurrences + zeros skipped + rows counted as NA
+  (`stats.occurrences`, `zerosSkipped`, `naSkipped`);
 - a **negative number** is not converted and blocks (`CONV-NEGATIVE-QUANTITY`);
 - **zero**: not converted and counted unless the user ticked **"this is a full species list"**
   (kept only in the companion file), and then it becomes `occurrenceStatus` **absent**
-  (`individualCount` 0 for counts, no measurement row); an empty or NA cell never becomes a record;
+  (`individualCount` 0 for counts, no measurement row); an empty or NA cell never becomes a record. A
+  zero with a **biomass value above zero** in the same long row is contradictory: it is handled as the
+  zero it says (its weight is not written) and the rows are listed (`CONV-ZERO-WITH-BIOMASS`, a warning to
+  accept), so neither value is kept silently;
 - a **non-integer** in a declared count blocks (`CONV-COUNT-NOT-INTEGER`);
 - a **text cell** (`+`, `x`) becomes an occurrence with status present, no quantity, and the text
   in `occurrenceRemarks`, as a warning to accept (`CONV-TEXT-IN-TAXON-CELL`);
@@ -1746,7 +1756,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **172 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **174 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1760,8 +1770,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 74 | 37 / 26 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **172** | | | |
+| `CONV-` | `B` | 76 | 37 / 28 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **174** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

@@ -1125,7 +1125,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   const repeatedOcc = new Map<string, Places>(); // repeated occurrenceIDs
   // where each occurrence stands, for the findings about one taxon written twice in a sample: the column (wide) or the line (long)
   const refOf = new Map<OccRec, string>();
-  const stats = { zerosSkipped: 0, textCells: 0, present: 0, absent: 0 };
+  const stats = { zerosSkipped: 0, naSkipped: 0, blankKept: 0, textCells: 0, present: 0, absent: 0 };
   // measured variables: the columns written, and the identifiers that were written for them (never a name or a label)
   const nercStats = { columns: 0, typeIds: 0, unitIds: 0, nvsIds: 0 };
   let sheetKeyN = 0;
@@ -1268,6 +1268,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     let zeros = 0;
     let presenceSkipped = 0;
     let naCells = 0;
+    // a long sheet's rows with a taxon and no quantity: with nothing else they are counted and listed; with a biomass value they stay as an occurrence with no count; a zero with a biomass value is contradictory
+    const naRows = new Lines();
+    const blankKept = new Lines();
+    const zeroBiomass = new Lines();
     const checkText = (field: string, line: number, value: string | undefined): void => {
       if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
     };
@@ -1375,6 +1379,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
     }
 
+    // a biomass column of a long sheet holds a real value (a number above zero) in this row
+    const rowHasBiomass = (row: RawRow): boolean =>
+      cols.biomass.some((b) => {
+        const bp = parseNumber(row.cells[b.index] ?? null, dc);
+        return bp.status === 'ok' && bp.value > 0;
+      });
+
     for (const row of sheet.rows) {
       if (ragged.has(row.line)) continue;
       const m = parse(row);
@@ -1384,7 +1395,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
       // long: a row is a record when it has a taxon and a value (an empty value is "no record"); wide: a row with any species cell or a sample code
       const longHasValue = presence ? true : cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
-      const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && longHasValue;
+      // a long row with a taxon and a blank / NA quantity: a real (positive) biomass value is a measurement of that taxon, so the row stays as an occurrence with no count; nothing else is evidence of the taxon
+      // (a measured variable is written once per sample, not per taxon, and says nothing about this one)
+      const quantityBlank = sin.shape === 'long' && !presence && cols.quantity !== undefined && cols.taxonCell !== undefined && taxonCellText !== undefined && !longHasValue;
+      const biomassOnly = quantityBlank && rowHasBiomass(row);
+      const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly);
       // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
       const summaryLabel = [code, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
       if (summaryLabel !== undefined) {
@@ -1398,7 +1413,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
       const keptLabel = statRows.kept.get(row.line);
       if (keptLabel !== undefined) keptStats.add(fileName, sheet.name, 'sample', row.line, keptLabel);
-      if (!relevant) continue;
+      if (!relevant) {
+        // a row with a taxon and nothing to record: counted and listed, never silently dropped (a wide sheet's empty cell is the normal sparse matrix and is not counted)
+        if (quantityBlank) {
+          const raw = row.cells[cols.quantity?.index ?? 0] ?? null;
+          naRows.add(fileName, sheet.name, cols.quantity?.header ?? '', row.line, typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : 'empty');
+        }
+        continue;
+      }
       if (code === undefined) {
         noCode.add(fileName, sheet.name, cols.sampleId?.header ?? '', row.line);
         continue;
@@ -1626,16 +1648,20 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           }
         }
         if (!presence) {
-          if (p.status === 'missing') {
+          if (p.status === 'missing' && biomassOnly) {
+            // no count, a biomass value: the taxon was there (present); the count is not invented
+            blankKept.add(fileName, sheet.name, field, row.line);
+          } else if (p.status === 'missing') {
             // a cell that says NA (not a blank one) is counted: it makes no record, and the user is told how many
             if (typeof raw === 'string' && raw.trim() !== '') naCells++;
             continue;
-          }
-          if (p.status === 'na-variant') {
+          } else if (p.status === 'na-variant') {
             collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
             continue;
           }
-          if (p.status === 'non-numeric') {
+          if (p.status === 'missing') {
+            /* a biomass-only row: no count to read */
+          } else if (p.status === 'non-numeric') {
             texts.add(fileName, sheet.name, field, row.line, p.token);
             checkText(field, row.line, p.token);
             remarks = p.token;
@@ -1647,6 +1673,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               continue;
             }
             if (value === 0) {
+              // a count of 0 with a weight is contradictory: it is treated as the zero it says (the weight is not written) and the rows are listed, so that neither is kept silently
+              if (sin.shape === 'long' && cols.taxonCell !== undefined && rowHasBiomass(row)) zeroBiomass.add(fileName, sheet.name, field, row.line);
               if (!fullList) {
                 zeros++;
                 continue;
@@ -1712,7 +1740,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         }
         // biomass / weight columns next to the quantity: one eMoF row of THIS occurrence per column, the value as written and the unit of the header, never converted. The kind of mass
         // (wet, dry, ash-free dry) decides the concept; while it is open no measurementTypeID is written (CONV-BIOMASS-KIND-UNSET). A sample size, when declared, is only said in the remarks.
-        if (status === 'present' && value !== undefined && sin.shape === 'long' && cols.taxonCell !== undefined) {
+        if (status === 'present' && (value !== undefined || biomassOnly) && sin.shape === 'long' && cols.taxonCell !== undefined) {
           for (const b of cols.biomass) {
             const bcell = row.cells[b.index] ?? null;
             const bp = parseNumber(bcell, dc);
@@ -1801,6 +1829,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     for (const e of keptStats.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     for (const e of presenceBad.entries()) findings.push(makeConvertFinding('CONV-PRESENCE-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));
+    for (const e of naRows.entries()) {
+      stats.naSkipped += e.lines.length;
+      findings.push(makeConvertFinding('CONV-NA-SKIPPED', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length, rows: 'yes' } }));
+    }
+    for (const e of blankKept.entries()) {
+      stats.blankKept += e.lines.length;
+      findings.push(makeConvertFinding('CONV-QUANTITY-BLANK-KEPT', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
+    }
+    for (const e of zeroBiomass.entries()) findings.push(makeConvertFinding('CONV-ZERO-WITH-BIOMASS', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (presenceSkipped > 0) {
       stats.zerosSkipped += presenceSkipped;
       findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: presenceSkipped, marks: 'yes' } }));
@@ -2156,7 +2193,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       stationsUnmatched: profile.unmatched.size,
       unmatched: [...profile.unmatched].slice(0, UNMATCHED_SHOWN),
     },
-    stats: { samples: samples.size, levels: profile.sites.length, occurrences: occurrences.length, present: stats.present, absent: stats.absent, zerosSkipped: stats.zerosSkipped, textCells: stats.textCells, measurements: measurements.length, nerc: nercStats },
+    stats: { samples: samples.size, levels: profile.sites.length, occurrences: occurrences.length, present: stats.present, absent: stats.absent, zerosSkipped: stats.zerosSkipped, naSkipped: stats.naSkipped, blankKept: stats.blankKept, textCells: stats.textCells, measurements: measurements.length, nerc: nercStats },
   };
 }
 

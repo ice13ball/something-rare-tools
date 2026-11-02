@@ -112,6 +112,9 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-SEAFLOOR-NO-SITE-DEPTH',
   // a depth column in fathoms, feet, km or cm was converted to metres with an exact factor; the original is in verbatimDepth
   'CONV-DEPTH-CONVERTED',
+  // a long row with a taxon, no count and a biomass value: kept as present with no count; a quantity of 0 next to a weight above zero: read as the zero
+  'CONV-QUANTITY-BLANK-KEPT',
+  'CONV-ZERO-WITH-BIOMASS',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */

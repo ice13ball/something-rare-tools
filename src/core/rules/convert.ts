@@ -25,7 +25,9 @@ import type { RuleSpec } from './spec';
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
  *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
- *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column: no record, no finding about their rows (info)
+ *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column of a wide sheet: no record, no lines (info); with rows = yes (a long sheet) count = rows with a taxon and an empty / NA quantity and no other value, lines = those rows (info)
+ *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
+ *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
  *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
@@ -265,6 +267,33 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:cellule marquée|cellules marquées} « NA » (non disponible) dans des colonnes de taxon ou de quantité {+count:a été ignorée|ont été ignorées}. Une telle cellule ne crée aucun enregistrement, comme une cellule vide : pas de données n'est ni un zéro ni une présence.`,
     },
     technical: `{file}, {sheet}: {count} cell(s) of a taxon or quantity column hold NA (or a similar "not available" token) and were not converted: no occurrence is written, as for an empty cell. Only a numeric 0 can become occurrenceStatus absent, and only with the full species list ticked.`,
+  },
+  {
+    id: 'CONV-QUANTITY-BLANK-KEPT',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} wagę, ale pustą lub „NA” ilość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisano {+count:go|je|je} jako obecność bez liczebności; liczby nie wymyślono. Jeśli „NA” znaczy „nie analizowano”, usuń {+count:ten wiersz|te wiersze|te wiersze}.`,
+      en: `{count} {+count:row has|rows have} a weight but a blank or "NA" quantity ({+lineCount:line|lines} {lines}). {+count:It is|They are} written as present with no count; no number is invented. If "NA" means "not analysed", delete {+count:the row|the rows}.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} ein Gewicht, aber eine leere oder „NA“-Menge ({+lineCount:Zeile|Zeilen} {lines}). Sie {+count:wird|werden} als vorhanden ohne Anzahl geschrieben; keine Zahl wird erfunden. Bedeutet „NA“ „nicht analysiert“, löschen Sie {+count:die Zeile|die Zeilen}.`,
+      fr: `{count} {+count:ligne a|lignes ont} un poids mais une quantité vide ou « NA » ({+lineCount:ligne|lignes} {lines}). Écrit comme présence sans effectif ; aucun nombre n'est inventé. Si « NA » signifie « non analysé », supprimez {+count:la ligne|les lignes}.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a taxon, no quantity (empty or a missing-data token) and a biomass value above zero. Each is written as an occurrence with occurrenceStatus present, no individualCount or organismQuantity, and its biomass measurement: the weight shows the taxon was in the sample, the missing count is not made up. A measured variable is not read as evidence, because it is written once per sample.`,
+    citations: [OBIS_OCCURRENCE_STATUS],
+  },
+  {
+    id: 'CONV-ZERO-WITH-BIOMASS',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} ilość 0 i jednocześnie wagę większą od zera ({+lineCount:wiersz|wiersze|wierszy} {lines}). To się wyklucza. Wiersz czytany jest jako zero (waga nie jest zapisana). Sprawdź, która z dwóch wartości jest błędna.`,
+      en: `{count} {+count:row has|rows have} a quantity of 0 and a weight above zero ({+lineCount:line|lines} {lines}). The two contradict each other. The row is read as the zero it says (the weight is not written). Check which of the two values is wrong.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} die Menge 0 und ein Gewicht über null ({+lineCount:Zeile|Zeilen} {lines}). Das widerspricht sich. Die Zeile wird als die angegebene Null gelesen (das Gewicht wird nicht geschrieben). Prüfen Sie, welcher Wert falsch ist.`,
+      fr: `{count} {+count:ligne a|lignes ont} une quantité de 0 et un poids supérieur à zéro ({+lineCount:ligne|lignes} {lines}). C'est contradictoire. La ligne est lue comme le zéro indiqué (le poids n'est pas écrit). Vérifiez laquelle des deux valeurs est fausse.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity of 0 and a biomass value above zero. The row is handled as the zero (skipped, or occurrenceStatus absent with the full species list ticked) and its biomass is not written; neither value is kept silently.`,
   },
   {
     id: 'CONV-ZERO-SKIPPED',
@@ -1260,6 +1289,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
+  // CONV-NA-SKIPPED of a long sheet: rows (a taxon and no quantity), listed by line
+  'CONV-NA-SKIPPED:rows': {
+    plain: {
+      pl: `{count} {+count:wiersz z gatunkiem nie ma|wiersze z gatunkiem nie mają|wierszy z gatunkiem nie ma} ilości: komórka jest pusta albo ma „NA” lub „NaN” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie powstał z {+count:niego|nich|nich} rekord: brak danych nie jest zerem ani obecnością. Wiersze są wymienione, nic nie znika po cichu.`,
+      en: `{count} {+count:row with a species has|rows with a species have} no quantity: the cell is empty or says "NA" or "NaN" ({+lineCount:line|lines} {lines}). No record is made from {+count:it|them}: no data is neither a zero nor a presence. The rows are listed here, so nothing disappears silently.`,
+      de: `{count} {+count:Zeile mit einer Art hat|Zeilen mit einer Art haben} keine Menge: die Zelle ist leer oder enthält „NA“ oder „NaN“ ({+lineCount:Zeile|Zeilen} {lines}). Daraus entsteht kein Datensatz: keine Daten sind weder Null noch Anwesenheit. Die Zeilen sind hier aufgeführt, nichts verschwindet stillschweigend.`,
+      fr: `{count} {+count:ligne avec une espèce n'a|lignes avec une espèce n'ont} pas de quantité : la cellule est vide ou indique « NA » ou « NaN » ({+lineCount:ligne|lignes} {lines}). Aucun enregistrement n'en est tiré : pas de données n'est ni un zéro ni une présence. Les lignes sont listées ici, rien ne disparaît en silence.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a taxon and an empty or missing-data quantity (and no biomass value above zero), so no occurrence is written. Rows read + zeros skipped + these rows + rows kept without a count = the rows that have a taxon.`,
+  },
   // CONV-ZERO-SKIPPED of a presence-only list: the cells are marks (0, -, absent), not zeros
   'CONV-ZERO-SKIPPED:presence': {
     plain: {
@@ -1376,6 +1415,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS['CONV-NA-SKIPPED:rows'];
   if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') {
     return PROFILE_VARIANTS[Number(f.params.remaining) > 0 ? 'CONV-ID-DUPLICATE:replicate-partial' : 'CONV-ID-DUPLICATE:replicate'];
