@@ -1479,7 +1479,17 @@ nobody judged must not let a bad archive through) and is only shown otherwise.
   vocabulary ids, a missing sampling device, an unmatched profile station, a licence that differs
   from the one the dropped metadata state. See `ACCEPT_RULES`.
 - **Only shown**, never blocks, never asks: the prefixes `CHEM-`, `ROW-SHIP-SPEED`, `ROW-ON-LAND`,
-  `ROW-STATION-`, `XF-`, `META-`, `LIC-` (`SHOW_ONLY_PREFIXES`).
+  `XF-`, `META-`, `LIC-` (`SHOW_ONLY_PREFIXES`) and the note `ROW-STATION-SPREAD` (a transect legitimately
+  spans more than 10 km). `ROW-STATION-MOVED` and `ROW-STATION-SPREAD-FAR` need an acceptance.
+
+**The station checks run on the input rows.** The Event table has no station name to compare (the
+station is a parent event, and every `eventID` is its own "station" there), so `ROW-STATION-MOVED`,
+`ROW-STATION-SPREAD` and `ROW-STATION-SPREAD-FAR` are raised by the same function `/check` runs
+(`checkStationRows`, `checks/rows.ts`) on the rows of each sheet the converter reads, with the user's
+mapping (station, position, date, cruise), and are said in the sheet's lines. The output-table run of
+these three is dropped, so none is said twice. Without this a station whose rows carry both signs of a
+longitude was written with a derived centre and an uncertainty of thousands of kilometres and no finding,
+while `/check` reported it on the same data. No new threshold was added.
 
 The tables are validated by the same code `/check` uses: the Event table as a synthetic Darwin
 Core Archive with an Event core through `buildDatasets` and `runChecks`; the Occurrence table through

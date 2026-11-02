@@ -355,7 +355,7 @@ function stationGroups(srows: DataRow[]): { rows: DataRow[]; anchored: boolean; 
   return [...by.values()];
 }
 
-function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
+function stationMoved(ds: Pick<Dataset, 'file'>, sheet: string, rows: DataRow[], out: Finding[]): void {
   const byName = new Map<string, DataRow[]>();
   for (const r of rows) {
     if (r.station === undefined || r.station === '' || GENERIC_STATION.test(r.station.trim())) continue;
@@ -368,7 +368,7 @@ function stationMoved(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[
   }
 }
 
-function stationGroup(ds: Dataset, sheet: string, station: string, srows: DataRow[], anchored: boolean, inCruise: boolean, out: Finding[]): void {
+function stationGroup(ds: Pick<Dataset, 'file'>, sheet: string, station: string, srows: DataRow[], anchored: boolean, inCruise: boolean, out: Finding[]): void {
   const positions = positionsOf(srows);
   if (positions.length < 2) return;
   const track = positions.length > MAX_STATION_POSITIONS;
@@ -407,6 +407,16 @@ function stationGroup(ds: Dataset, sheet: string, station: string, srows: DataRo
   if (flipped.has('lon')) params.signLon = 'yes';
   if (flipped.has('lat')) params.signLat = 'yes';
   out.push(makeFinding('ROW-STATION-MOVED', { file: ds.file, sheet, value: station, lines: [...minority].map((r) => r.line), params }));
+}
+
+/**
+ * The station checks (ROW-STATION-MOVED, ROW-STATION-SPREAD, ROW-STATION-SPREAD-FAR) on the rows of one sheet. /check runs them inside checkRows; the converter runs them on the rows of
+ * its INPUT sheet with the user's mapping (station, position, date, cruise), because its output table has no station name to compare: the station is a parent event there.
+ */
+export function checkStationRows(file: string, sheet: string, rows: DataRow[]): Finding[] {
+  const out: Finding[] = [];
+  stationMoved({ file }, sheet, rows, out);
+  return out;
 }
 
 /* ---------- ROW-ON-LAND ---------- */

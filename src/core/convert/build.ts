@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { checkStationRows } from '../checks/rows';
 import { Collector, metaParser, specsOf } from '../dataset';
+import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
@@ -9,7 +11,7 @@ import type { DepthUnitFactor } from '../recognize/depthUnit';
 import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
-import type { Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
+import type { DataRow, Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
@@ -407,6 +409,23 @@ export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: num
   for (const n of byPlace.values()) if (n > 1) shared += n;
   if (shared < SPLIT_SHARED * events) return undefined;
   return { events, occurrences: occurrenceCount, ratio: `${Math.round((100 * events) / occurrenceCount)}%`, shared };
+}
+
+/** The row of an accepted sheet line as the station checks of /check read it (station, cruise, position, date). */
+function stationRowOf(file: string, sheet: string, line: number, m: Meta, station: string, cruise: string | undefined): DataRow {
+  return {
+    file,
+    sheet,
+    line,
+    station,
+    ...(cruise === undefined ? {} : { cruise }),
+    ...(m.lat === undefined ? {} : { lat: m.lat }),
+    ...(m.lon === undefined ? {} : { lon: m.lon }),
+    ...(m.latDecimals === undefined ? {} : { latDecimals: m.latDecimals }),
+    ...(m.lonDecimals === undefined ? {} : { lonDecimals: m.lonDecimals }),
+    ...(m.datetime === undefined ? {} : { datetime: m.datetime }),
+    values: {},
+  };
 }
 
 /** The spreadsheet letters of a zero-based column index (0 -> A, 26 -> AA). */
@@ -828,6 +847,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
   ctx.findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
   const noStation = new Lines();
+  const stationRows: DataRow[] = [];
   const noCode = new Lines();
   const tabs = new Lines();
   const summaries = new Lines();
@@ -929,6 +949,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     const cruise = cruiseText === '' ? undefined : cruiseText;
     if (specs.station) checkText(specs.station.header, row.line, stationText);
     if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
+    stationRows.push(stationRowOf(fileName, sheet.name, row.line, m, stationText, cruise));
     const stationId = stationEventId(cruise, stationText);
     if (positionStation && specs.station === undefined) positionStations.add(stationId);
     // the level's own code: the code column, or (only with the user's approval, and only without a code column) the depth in the sediment as written with its unit, else the depth as
@@ -1056,6 +1077,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   }
 
   pushAll(ctx.findings, seafloorOf.findings());
+  // the station checks of /check on the input rows: the output has no station name to compare (the station is a parent event)
+  pushAll(ctx.findings, checkStationRows(fileName, sheet.name, stationRows));
   for (const e of noSiteDepth.entries()) ctx.findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
   if (positionStations.size > 0) ctx.findings.push(makeConvertFinding('CONV-STATION-FROM-POSITION', { ...base, value: [...positionStations][0], params: { count: positionStations.size } }));
   // a sheet marked as a profile file that gave no level at all: said plainly (a description of columns, a sheet with no station and no tick, an empty sheet)
@@ -1293,6 +1316,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     let naCells = 0;
     // a long sheet's rows with a taxon and no quantity: with nothing else they are counted and listed; with a biomass value they stay as an occurrence with no count; a zero with a biomass value is contradictory
     const naRows = new Lines();
+    const stationRows: DataRow[] = [];
     const blankKept = new Lines();
     const zeroBiomass = new Lines();
     const checkText = (field: string, line: number, value: string | undefined): void => {
@@ -1450,6 +1474,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
       const cruiseText = m.cruise ?? sin.cruise?.trim();
       const cruise = cruiseText === '' ? undefined : cruiseText;
+      if (stationText !== undefined) stationRows.push(stationRowOf(fileName, sheet.name, row.line, m, stationText, cruise));
       if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
       if (specs.station && stationText !== undefined) checkText(specs.station.header, row.line, stationText);
       if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
@@ -1822,6 +1847,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     pushAll(findings, reportVariables(varState, base, [], nercStats));
     pushAll(findings, seafloorOf.findings());
+    // the station checks of /check on the input rows (a station spanning hemispheres, a sign or digit typed wrongly): the output has no station name to compare, the station is a parent event
+    pushAll(findings, checkStationRows(fileName, sheet.name, stationRows));
     for (const e of noSiteDepth.entries()) findings.push(makeConvertFinding('CONV-SEAFLOOR-NO-SITE-DEPTH', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
 
     // sample-level conflicts of long sheets

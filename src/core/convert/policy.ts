@@ -117,10 +117,14 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-ZERO-WITH-BIOMASS',
   // a long sheet with an event for almost every row: one sample probably split by a code that names the row
   'CONV-SAMPLE-PER-ROW',
+  // a station whose positions differ by a typed digit, exchanged axes or a flipped sign, or that spans more than 1000 km: made on the input rows, so a parent station of the archive is not written with a position and an uncertainty that no one has seen
+  // (the plain ROW-STATION-SPREAD, 10 km, is a note: a transect legitimately spans more, and it is only shown)
+  'ROW-STATION-MOVED',
+  'ROW-STATION-SPREAD-FAR',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */
-export const SHOW_ONLY_PREFIXES: readonly string[] = ['CHEM-', 'ROW-SHIP-SPEED', 'ROW-ON-LAND', 'ROW-STATION-', 'XF-', 'META-', 'LIC-'];
+export const SHOW_ONLY_PREFIXES: readonly string[] = ['CHEM-', 'ROW-SHIP-SPEED', 'ROW-ON-LAND', 'XF-', 'META-', 'LIC-'];
 
 /** Rules the plan lists but a later stage raises: in the lists above so the policy is complete, not yet in the registry. Each is registered with its stage. (The WoRMS rules came with stage 4, the profile rules with stage 6: none is left.) */
 export const LATER_STAGE_RULES: readonly string[] = [];
