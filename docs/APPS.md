@@ -1142,10 +1142,13 @@ role list has "Biomass / weight (kind not chosen)" and one entry per kind; until
 column. A sample size declared for the sheet appears only in `measurementRemarks`
 (`per sample of 0.0625 m2`, column written only when used, and not when the unit is already per area or
 volume); nothing is divided. `measurementUnitID` is written when the unit is g, mg, kg (P06 UGRM, MGRM,
-KGXX) or a per-area / per-volume mass the rate table knows. Two biomass columns of one kind (or both
+KGXX) or a per-area / per-volume mass the rate table knows. The unit is the one of the header
+(`Weight [g]`, `Weight (kg)`) or, when there is none, the one mass unit that stands as a word of the name
+(`weight_kg_total`, `wt_mg`, `Weight_g`: `massUnitInName`); it is never dropped. Two biomass columns of one kind (or both
 with the kind open) get the column name in `measurementType`, so no two columns write the same type.
 A row whose count is 0 is not converted unless the species list is declared full (CONV-ZERO-SKIPPED), and
-a biomass value on such a row goes with it. The companion file keeps
+a biomass value on such a row goes with it (the two contradict each other, so the rows are listed:
+`CONV-ZERO-WITH-BIOMASS`). The companion file keeps
 the kind as `biomassBasis=<wet|dry|afdw>:<sheet>` (a sheet whose biomass columns agree on one kind) and a
 dropped companion pre-picks it for columns whose header leaves it open. Without a count column a
 `Biomass` header is still the sheet's quantity (the kind of number is then declared as before), and on a
@@ -1176,7 +1179,16 @@ Unconfirmed candidates are left out, and leaving them out has to be accepted
 
 Other overlay decisions: a **summary column** (a header starting with or holding Total, Suma,
 Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it would count the
-same individuals twice (`Totalia sp.` is a genus and stays); a **quality-flag** column
+same individuals twice (`Totalia sp.` is a genus and stays). On a **long** sheet the name is not the
+last word: an all-taxa total repeats one value on every row of a sample, so the values are compared
+(`valuesRepeatWithinSample`: the rows are grouped by the columns with a sample role and by any still
+ignored text column that is not a function of the taxon, such as a tow number). A column whose values
+differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
+biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
+when the sheet has none; else it stays ignored, with a reason that says what to decide), with its own reason
+(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). It is never proposed as a measured
+variable, because a variable is written once per sample and values that differ between the rows of a sample
+would conflict. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
 (`QV:ODV:…`, `Q_`/`QC_`/`QF_` prefixes, `_QC`/`_flag` suffixes, and `Q`/`QC`/`QF` + a space or
 hyphen + the name of a sibling column) is never a measurement or a taxon (`isQualityHeader`); a
 column of presence marks (`+`, `x`) next to counts is a species column too; a column in
@@ -1756,7 +1768,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 | Workers | `src/worker/` |
 | Reading files | `src/core/parse/` |
 | Numbers, dates, coordinates, encoding | `src/core/values/` |
-| Column and layout recognition | `src/core/recognize/` (`columns.ts`, `layout.ts`, `vocab.ts`, `headerWords.ts`, `reasons.ts`) |
+| Column and layout recognition | `src/core/recognize/` (`columns.ts`, `layout.ts`, `vocab.ts`, `headerWords.ts`, `reasons.ts`, `depthUnit.ts`) |
 | Typed rows | `src/core/dataset.ts` |
 | Checks | `src/core/checks/` (`run.ts`, `rows.ts`, `speed.ts`, `crossfile.ts`, `chemistry.ts`, `metadata.ts`, `licence.ts`, `dwc.ts`) |
 | Rule definitions, citations, registry | `src/core/rules/` (`registry.ts` the full registry, `registryCheck.ts` without the converter's rules, per-category files, `citations.ts`) |

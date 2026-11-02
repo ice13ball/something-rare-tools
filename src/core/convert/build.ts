@@ -29,6 +29,7 @@ import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } fr
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
+import { massUnitInName } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { seafloorMetres, seafloorUnitOf } from './seafloor';
@@ -1803,7 +1804,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             }
             const concept = biomassKindConcept(b.basis);
             const hu = unitFromHeader(b.header);
-            const unitText = hu.unitText;
+            // the unit of the header, else a mass unit written as a word of the name ("weight_kg_total", "wt_mg"): the kg is in the header and must not be lost
+            const unitText = hu.unitText ?? massUnitInName(b.header);
             const unit = biomassUnit(unitText);
             // two biomass columns of one kind (or both open) would write the same measurementType twice: the column name tells them apart
             const same = cols.biomass.filter((x) => x.basis === b.basis);

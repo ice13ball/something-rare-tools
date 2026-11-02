@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { depthSuffixUnit } from '../recognize/depthUnit';
+import { massUnitInName, massUnitOf, valuesRepeatWithinSample } from './totalColumns';
 import { dwcTermOf, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
@@ -205,6 +206,9 @@ export const OVERLAY_REASONS = {
   'sample-descriptor': 'the name describes the sample (replicate, cast, bottle, haul, core, ...), not a measurement and not a species: ignored (give it a meaning if it is one)',
   'unnamed-column': 'column without a name in the header: give it a meaning',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
+  'summary-total-varies': 'its name says total, but on a long sheet its values differ between the rows of one sample, so it is not an all-taxa total; the sheet already has a quantity column, so it stays ignored until you give it a meaning (a weight of each row, say)',
+  'summary-total-quantity': 'its name says total, but on a long sheet its values differ between the rows of one sample, so it is not an all-taxa total: proposed as the quantity of each row, check what it is',
+  'summary-total-biomass': 'its name says total, but on a long sheet its values differ between the rows of one sample (a weight of each taxon, not the sum of the sample): proposed as a biomass measurement of each occurrence, in the unit of its name; choose its kind (wet, dry or ash-free dry mass)',
   'quality-column': 'name says a quality flag or a quality column, which is not a measurement: ignored',
   'seafloor-depth-name': 'name says depth below the seafloor (in the sediment): written as a negative distance in metres, and a negative number counted downwards (above the seafloor) as a positive one',
   'seafloor-depth-cm': 'a depth in centimetres on a sheet about pore water or sediment: read as the depth below the seafloor',
@@ -473,6 +477,8 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   const seenQuantity = new Set<number>();
+  // the sum / total columns that were ignored by their name: re-judged by their values on a long sheet (below)
+  const summaryColumns = new Set<number>();
   // a biomass or weight column next to a count column of a long sheet is a measurement of the occurrence, not a second quantity
   const biomassKey = (h: string): string => foldDiacritics(headerKey(unitFromHeader(h).name));
   const hasCount = [...claims.entries()].some(([i, c]) => c.role.kind === 'quantity' && !BIOMASS_STRONG.test(biomassKey(sheet.header[i] ?? '')));
@@ -617,6 +623,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     // so converting it would count the same individuals twice. It starts as ignored, with its reason; the user can still give it another meaning,
     // and then it is their decision. A column of presence marks keeps the shared role (ignore); the page says why it is not a taxon candidate.
     if (summaryHeader && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
+      summaryColumns.add(p.index);
       p.role = { kind: 'ignore' };
       p.confidence = 'low';
       why(p, 'summary-total');
@@ -654,6 +661,23 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         if (hasCentralStatisticToken(p.header)) why(p, 'taxon-mean');
         else why(p, 'taxon-numeric');
       }
+    }
+  }
+  // a column NAMED like a total on a LONG sheet is decided by its values, not by its name: an all-taxa total repeats the same value on every row of a sample; a column whose values differ
+  // between the rows of a sample (a weight of each taxon) hides real data when it starts as ignored, so it gets a visible low-confidence proposal. Nothing can be judged without
+  // sample columns or without a sample of more than one row: it then stays ignored.
+  if (hasLongTaxon) {
+    for (const index of summaryColumns) {
+      const q = base[index];
+      if (q === undefined || q.reasonCode !== 'summary-total' || valuesRepeatWithinSample(sheet, base, index, ctx.decimalComma) !== 'varies') continue;
+      const hu = unitFromHeader(q.header);
+      const mass = massUnitOf(hu.unitText ?? massUnitInName(q.header));
+      // a mass is a measurement of each occurrence; a number with no mass unit is the quantity of each row when the sheet has no other, else it stays ignored (a measured variable is
+      // written once per sample, so values that differ between the rows of a sample would conflict) and the reason says what to decide
+      const hasQuantity = base.some((o) => o.role.kind === 'quantity');
+      q.role = mass !== undefined ? { kind: 'biomass' } : hasQuantity ? { kind: 'ignore' } : { kind: 'quantity' };
+      q.confidence = 'low';
+      why(q, mass !== undefined ? 'summary-total-biomass' : hasQuantity ? 'summary-total-varies' : 'summary-total-quantity');
     }
   }
   // a plain "Area" on a sheet that has no taxon, quantity or occurrence ID is a place name or an extent, not a sampled area (a header that says sampled or swept area stays an effort)
