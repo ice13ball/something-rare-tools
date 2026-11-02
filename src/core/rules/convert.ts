@@ -34,7 +34,7 @@ import type { RuleSpec } from './spec';
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
- *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows
+ *   CONV-SAMPLE-CONFLICT       what, count      what = the attribute that differs; value = a sample code; lines = its rows; optional organism = the first measured column that differs and could be a value of each organism (never a descriptor of the sample such as Tow)
  *   CONV-NERC-UNKNOWN          what             what = the quantity that has no verified NERC concept
  *   CONV-NERC-CODE-MALFORMED   column, code, collection, length  the header names `SDN:<collection>::<code>` and the code is not of that collection's shape (8 for P01, 4 for P06)
  *   CONV-NERC-UNIT-MISMATCH    column, code, unit  the label of the confirmed concept (code) says per unit mass/volume against the unit of the column
@@ -387,11 +387,22 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['what', 'count'],
     plain: {
-      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) różnią się: {what}. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach; jeśli to wartość każdego osobnika, zaznacz „każdego osobnika” przy kolumnie.`,
-      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in: {what}. A sample is one event, so these values must be the same in all its rows; if it is a value of each organism, tick "of each organism" on the column.`,
-      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in: {what}. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein; ist es ein Wert je Organismus, haken Sie bei der Spalte „jedes Organismus“ an.`,
-      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par : {what}. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes ; si c'est une valeur de chaque organisme, cochez « de chaque organisme » sur la colonne.`,
+      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) różnią się: {what}. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach`,
+      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in: {what}. A sample is one event, so these values must be the same in all its rows`,
+      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in: {what}. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein`,
+      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par : {what}. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes `,
     },
+    plainIf: [
+      {
+        param: 'organism',
+        plain: {
+          pl: `Jeśli kolumna „{organism}” to wartość każdego osobnika, zaznacz przy niej „każdego osobnika”.`,
+          en: `If column "{organism}" is a value of each organism, tick "of each organism" on it.`,
+          de: `Ist die Spalte „{organism}“ ein Wert je Organismus, haken Sie bei ihr „jedes Organismus“ an.`,
+          fr: `Si la colonne « {organism} » est une valeur de chaque organisme, cochez « de chaque organisme » sur elle.`,
+        },
+      },
+    ],
     technical: `{file}, {sheet}:{lines}: rows of sample "{value}" differ in {what} ({count} sample(s) affected). The first row is not silently preferred.`,
   },
   {
@@ -1613,7 +1624,13 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   }
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.used === 'string') f = { ...f, params: { ...f.params, used: f.params.used.split(', ').map((w) => USED_WORDS[w]?.[lang] ?? w).join(', ') } };
   const variant = profileVariant(f);
-  return fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
+  let text = fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
+  // sentences that follow when their param is set (CONV-SAMPLE-CONFLICT: the offer of the tick "of each organism", only for a column that can be one)
+  for (const extra of rule.plainIf ?? []) {
+    const v = f.params[extra.param];
+    if (v !== undefined && v !== '') text = `${text} ${fill(extra.plain[lang] || extra.plain.en, f, lang)}`;
+  }
+  return text;
 }
 
 /** What a visit's ID holds (CONV-ID-REVISIT carries date | time | depth, comma separated, in `by`). */

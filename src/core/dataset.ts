@@ -366,7 +366,9 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
             // (a local date beside a UTC time on the next day); one without a zone gives its time of day when it falls on the day of the row
             const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }) });
             const dayGap = (a: string, b: string): number => Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
-            const farApart = full !== undefined && date.precision !== 'year' && date.precision !== 'month' && dayGap(date.iso, full.iso) > 1;
+            // compared at the date's own precision: a year-only or month-only date is contradicted by another year or month, a day by more than a day
+            const own = date.precision === 'year' ? 4 : date.precision === 'month' ? 7 : 10;
+            const farApart = full !== undefined && (own < 10 ? full.iso.slice(0, own) !== date.iso.slice(0, own) : dayGap(date.iso, full.iso) > 1);
             if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown' && farApart) {
               // a zone-stated time a month away from the date column is two different days, not a local date beside a UTC time: neither is dropped in silence
               c.add('ROW-TIME-OTHER-DAY', sheet.name, tField, row.line, String(timeCell).trim(), true);

@@ -70,6 +70,8 @@ export function createConvertHandler(): ConvertHandler {
   let licenceSource: LicenceSource = { ids: [], disagree: false };
   // the kind of mass a companion file of this drop gave the biomass columns of a sheet, by sheet name: a pre-pick for columns the header leaves open
   let biomassPick = new Map<string, 'wet' | 'dry' | 'afdw'>();
+  // the ticks "of each organism" a companion file of this drop sets or takes back, by sheet and column header
+  let occurrencePick = new Map<string, Map<string, boolean>>();
 
   const held = (fileId: string): Held => {
     const h = files.get(fileId);
@@ -103,11 +105,17 @@ export function createConvertHandler(): ConvertHandler {
     // the sheets a companion file of this drop says are read as normal tables (a pre-tick, by sheet name): known before any file is pivoted, whatever the order of the files
     const asTable = new Set<string>();
     biomassPick = new Map();
+    occurrencePick = new Map();
     for (const parsed of parsedAll) {
       if (parsed.kind === 'metadata') continue;
       const cs = readConvertSettings(parsed);
       for (const n of cs?.longAsTable ?? []) asTable.add(n);
       for (const b of cs?.biomassBasis ?? []) if (!biomassPick.has(b.sheet)) biomassPick.set(b.sheet, b.basis);
+      for (const o of cs?.perOccurrence ?? []) {
+        const m = occurrencePick.get(o.sheet) ?? new Map<string, boolean>();
+        if (!m.has(o.header)) m.set(o.header, o.on);
+        occurrencePick.set(o.sheet, m);
+      }
     }
     for (const parsed of parsedAll) {
       if (parsed.kind === 'metadata') {
@@ -132,6 +140,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.transposedAsTable ?? []) if (!(settings.transposedAsTable ??= []).includes(n)) settings.transposedAsTable.push(n);
         for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
+        for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
       }
       if (!isTable(parsed)) {
@@ -182,8 +191,18 @@ export function createConvertHandler(): ConvertHandler {
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
         const pick = biomassPick.get(sheet.name);
         if (pick !== undefined) for (const q of p) if (q.role.kind === 'biomass' && q.role.basis === undefined) q.role = { kind: 'biomass', basis: pick };
+        // the ticks "of each organism" of a companion file: only on a measured-variable column, and the proposal itself keeps what the tool proposed (the mapping carries the pick)
+        const occ = occurrencePick.get(sheet.name);
         proposals[sheet.name] = p;
         const m = toMapping(sheet, p);
+        if (occ !== undefined) {
+          m.columns = m.columns.map((c) => {
+            const on = occ.get(c.header);
+            if (on === undefined || c.role.kind !== 'variable') return c;
+            const { perOccurrence: _p, ...rest } = c.role;
+            return { ...c, role: on ? { ...rest, perOccurrence: true as const } : rest };
+          });
+        }
         mappings.push(m);
         shapes[sheet.name] = suggestConvertShape(m.columns);
         profiles[sheet.name] = suggestConvertProfile(p);

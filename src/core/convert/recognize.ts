@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { depthUnitOfHeader } from '../recognize/depthUnit';
-import { biomassNameUnit, distinctnessWithinSamples, isMassUnitText, isOrganismSizeHeader, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
+import { biomassNameUnit, distinctnessWithinSamples, isFunctionOfTaxon, isMassUnitText, isOrganismSizeHeader, isSamplingOrEnvironmentHeader, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
 import { dwcTermOf, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
@@ -216,7 +216,8 @@ export const OVERLAY_REASONS = {
   'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
   'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
   'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
-  'value-per-occurrence': 'its values differ between the rows of a sample and look like a value of each organism (a size word or a unit of length of that scale, or nearly every row of a sample with a value of its own): a measurement of each occurrence, as a biomass is; if the rows of one sample are casts or typos, untick "of each organism" and fix the sample code; single specimens of one taxon in a sample also need an occurrence ID or a life-stage column, or the export is blocked (CONV-ID-DUPLICATE)',
+  'value-per-occurrence': 'its values differ between the rows of a sample and look like a value of each organism (a size word or a unit of length of that scale, no word of the gear or the surroundings, and at least half of the values different inside the samples): a measurement of each occurrence, as a biomass is; if the rows of one sample are casts or typos, untick "of each organism" and fix the sample code; single specimens of one taxon in a sample also need an occurrence ID or a life-stage column, or the export is blocked (CONV-ID-DUPLICATE)',
+  'taxon-attribute': 'its value is the same for every row of one taxon (a species code, a serial number, a trophic level): an attribute of the taxon, not a measurement of the sample or of the organism, so it is ignored (give it a meaning if it is one)',
   'size-variable': 'its name says total, but it is a size or a length with a unit that does not count organisms: a measured variable of the sample, not a sum of individuals',
   'unit-effort': 'its unit is a volume or an area, which no species is counted in: read as the sampling effort',
   'unit-variable': 'its unit measures a length, a time, a speed or a temperature, which no species is counted in: a measured variable, not a species',
@@ -498,8 +499,17 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   // individuals ('Ind [#]') does so when it is the only one (several are species columns of a wide sheet), and then the numeric genus-shaped columns veto
   const namedQuantity = base.some((q) => claims.get(q.index)?.role.kind === 'quantity' || claims.get(q.index)?.role.kind === 'biomass');
   const longEvidence = namedQuantity || base.filter(countColumn).length === 1;
-  const speciesColumns = base.some((q) => q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && !claims.has(q.index) && !countColumn(q) && nameKind(q.header, isAbundanceUnit(unitFromHeader(q.header).unit) || isAbundanceUnit(unitFromHeader(q.header).unitText)) === 'taxon');
-  if (numberedColumns < 5 && longEvidence && (namedQuantity || !speciesColumns) && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
+  // the numeric columns that look like species of a wide sheet: genus-shaped names, not a code, an identifier, a descriptor or a word of the sampling ('species_code', 'Mesh', 'Transect')
+  const speciesLike = base.filter((q) => {
+    if (q.role.kind !== 'variable' || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined || claims.has(q.index) || countColumn(q)) return false;
+    if (isSamplingOrEnvironmentHeader(q.header) || /(?:^|[^a-z])(?:code|id|no|nr|number|tsn|aphia)$/i.test(unitFromHeader(q.header).name.trim())) return false;
+    return nameKind(q.header, isAbundanceUnit(unitFromHeader(q.header).unit) || isAbundanceUnit(unitFromHeader(q.header).unitText)) === 'taxon';
+  });
+  const binomialHeaders = speciesLike.filter((q) => /^(?:[A-Z][a-z]{2,}|[A-Z]\.)\s+[a-z]{3,}/.test(unitFromHeader(q.header).name.trim())).length;
+  // with a quantity named by its header a sheet is long, unless it has species columns of its own: two binomial headers, or three genus-shaped numeric columns, make it wide (a 'Dominant species' text
+  // column beside 'Abundance', 'Calanus', 'Oithona', 'Acartia' is a note on a wide sheet); one species code or one mesh does not. With only a count unit as evidence one species-like column is enough.
+  const wideLike = namedQuantity ? binomialHeaders >= 2 || speciesLike.length >= 3 : speciesLike.length >= 1;
+  if (numberedColumns < 5 && longEvidence && !wideLike && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
     const latin = base.filter((q) => q.role.kind === 'ignore' && q.reasonCode === 'text-column' && !looksLikeDwcTerm(q.header, sheet.header) && !claims.has(q.index) && latinNameShare(sheet, q.index) > 0);
     if (latin.length > 0) claims.set(latin[0].index, { role: { kind: 'taxon' }, confidence: 'low', code: 'values-latin-names' });
   }
@@ -774,22 +784,35 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       why(q, mass ? 'summary-total-biomass' : hasQuantity || !countLike ? 'summary-total-varies' : 'summary-total-quantity');
     }
   }
-  // a measured variable that a long sheet gives to each organism belongs to the occurrence, as a biomass does. It is moved only on evidence that it IS a value of each organism, because a value that
+  // a column that is a function of the taxon (a species code, a serial number, a trophic level) is an attribute of the taxon, not a measurement of the sample or of the organism: it is ignored, with
+  // its reason shown, instead of being written on the sample or on the occurrences
+  const taxonAt = base.find((q) => q.role.kind === 'taxon' && q.role.header !== true)?.index;
+  if (hasLongTaxon && taxonAt !== undefined) {
+    for (const q of base) {
+      if (q.role.kind !== 'variable' || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined || nameKind(q.header, true) === 'descriptor') continue;
+      if (!isFunctionOfTaxon(sheet, taxonAt, q.index, valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma))) continue;
+      q.role = { kind: 'ignore' };
+      q.confidence = 'low';
+      why(q, 'taxon-attribute');
+    }
+  }
+  // a measured variable that a long sheet gives to each organism belongs to the occurrence, as a biomass does. It is moved only on evidence that it IS the size of an organism, because a value that
   // differs inside one sample is otherwise the one signal of a wrong sample code, of two casts under one code, or of a typo (CONV-SAMPLE-CONFLICT), and that signal must stay:
-  //   - the name says the size of an organism (length, width, height, diameter, size, thickness), or its unit is a length of the scale of organisms (µm, mm, cm), and the values differ; or
-  //   - the values are nearly all different inside the samples (on average three quarters of the rows of a sample hold a value of their own: L1 ... L10 of each stage), which two casts
-  //     (two values on eight rows), a typo (one value among threes) and a repeated reading never are.
-  // A recognised variable (temperature ...), a descriptor of the sample (Tow, Haul, Cast) and anything else that differs inside a sample keeps blocking, with the column named. The user can move
-  // a column by hand (the tick "of each organism" on its role). The decision is taken from the sample columns the proposal sees.
+  //   - the name says the size of an organism (length, width, height, diameter, size, thickness) or its unit is a length of that scale (µm, mm, cm), and
+  //   - no word of the sampling or of the surroundings stands in the name (mesh, net, core, tow, wire, transect, secchi, sediment, grain, ice, wave, precip, above, mouth, depth ...), and
+  //   - at least half of the values inside the samples are different (a floor: a length of each organism is nearly never repeated, a setting of the gear nearly always is), and
+  //   - the values differ between the rows of a sample at all.
+  // A recognised variable (temperature ...), a descriptor of the sample (Tow, Haul, Cast) and anything else that differs inside a sample keeps blocking, with the column named. The user can move a
+  // column by hand (the tick "of each organism" on its role). The decision is taken from the sample columns the proposal sees.
   if (hasLongTaxon && base.some((o) => o.role.kind === 'quantity' || o.role.kind === 'biomass')) {
     for (const q of base) {
       if (q.role.kind !== 'variable' || q.role.perOccurrence === true || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined) continue;
-      if (nameKind(q.header, true) === 'descriptor') continue;
-      if (valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) !== 'varies') continue;
+      if (nameKind(q.header, true) === 'descriptor' || isSamplingOrEnvironmentHeader(q.header)) continue;
       const u = unitFromHeader(q.header);
       const organismScale = /^(?:um|mm|cm)$/.test(foldUnit(u.unit ?? u.unitText ?? ''));
-      const nearlyAllDistinct = (distinctnessWithinSamples(sheet, base, q.index, ctx.decimalComma) ?? 0) >= 0.75;
-      if (!(isOrganismSizeHeader(q.header) || organismScale || nearlyAllDistinct)) continue;
+      if (!(isOrganismSizeHeader(q.header) || organismScale)) continue;
+      if (valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) !== 'varies') continue;
+      if ((distinctnessWithinSamples(sheet, base, q.index, ctx.decimalComma) ?? 0) < 0.5) continue;
       q.role = { ...q.role, perOccurrence: true };
       q.confidence = 'low';
       why(q, 'value-per-occurrence');

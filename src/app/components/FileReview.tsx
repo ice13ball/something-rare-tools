@@ -20,10 +20,12 @@ export interface FileReviewProps {
   /** The role dropdown and the tip of its header; /check's own by default. */
   roleKinds?: readonly RoleChoice[];
   rolesTip?: TipId;
+  /** /convert: is the sheet read as a long one? The tick "of each organism" of a measured variable is offered only then (on a wide sheet the column would not be written). */
+  isLong?: (sheet: string) => boolean;
 }
 
 /** One file of the confirmation step: its layout, then the column table of every sheet the layout reads. */
-export function FileReview({ file, layout, mappings, proposals, onLayout, onMapping, roleKinds, rolesTip }: FileReviewProps): React.ReactElement {
+export function FileReview({ file, layout, mappings, proposals, onLayout, onMapping, roleKinds, rolesTip, isLong }: FileReviewProps): React.ReactElement {
   useLang();
   return (
     <section className="file-review">
@@ -48,6 +50,7 @@ export function FileReview({ file, layout, mappings, proposals, onLayout, onMapp
             {...(unnamedFrom === undefined ? {} : { unnamedFrom })}
             {...(roleKinds ? { roleKinds } : {})}
             {...(rolesTip ? { rolesTip } : {})}
+            {...(isLong ? { longSheet: isLong(m.sheet) } : {})}
             onChange={onMapping}
           />
         );

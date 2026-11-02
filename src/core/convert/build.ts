@@ -5,6 +5,7 @@ import { detectDayMonthOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
+import { nameKind } from './measured';
 import { headerComment, isBlankCell, isStatisticComment, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
 import { convertDepthText, depthUnitFactor, depthUnitOfHeader, isMetreUnit } from '../recognize/depthUnit';
@@ -2096,7 +2097,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // sample-level conflicts of long sheets
     for (const a of samples.values()) {
       if (a.sheetKey !== sheetKey || a.conflicts.size === 0) continue;
-      findings.push(makeConvertFinding('CONV-SAMPLE-CONFLICT', { ...base, value: a.site.code, lines: a.lines, params: { what: [...a.conflicts].join(', '), count: 1 } }));
+      {
+        // the tick "of each organism" is offered for a measured column that is no descriptor of the sample (a Tow, a Haul or a Cast differs between samples, never between organisms)
+        const organism = [...a.conflicts].map((w) => /^measured value \((.*)\)$/.exec(w)?.[1]).find((h) => h !== undefined && nameKind(h, true) !== 'descriptor');
+        findings.push(makeConvertFinding('CONV-SAMPLE-CONFLICT', { ...base, value: a.site.code, lines: a.lines, params: { what: [...a.conflicts].join(', '), count: 1, ...(organism === undefined ? {} : { organism }) } }));
+      }
     }
     if (visitGroups.length > 0) {
       findings.push(makeConvertFinding('CONV-ID-REVISIT', { ...base, value: visitGroups[0].id, lines: visitGroups.flatMap((g) => g.lines).sort((a, b) => a - b), params: { count: visitGroups.length, by: VISIT_PARTS.filter((p) => visitParts.has(p)).join(', ') } }));

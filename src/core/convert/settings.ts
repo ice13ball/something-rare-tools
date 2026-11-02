@@ -27,6 +27,8 @@ import type { ParsedFile } from '../types';
  *   presenceOnly=<sheet>  the sheet of that name was ticked "This is a list of species found (presence only, no counts)". A PRE-TICK only; the user can undo it on the page. A sheet name, never a value.
  *   biomassBasis=<basis>:<sheet>  the biomass / weight columns of the sheet of that name were given the kind of mass <basis> (wet | dry | afdw). A PRE-PICK only: it sets that kind on the biomass
  *                     columns of a sheet of the same name that have none, and the user can change it on the page. A basis word and a sheet name, never a value.
+ *   perOccurrence=<on|off>:<sheet>:<column>  the tick "of each organism" of a measured-variable column of a long sheet: on = ticked, off = the tool proposed it ticked and the user took it back. A PRE-PICK only: it
+ *                     sets the tick on the column of that header in a sheet of the same name (a sheet name has no colon; the header is the rest of the line), and the user can change it on the page.
  * An unknown name or value is ignored.
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
@@ -40,6 +42,7 @@ export const LONG_AS_TABLE_SETTING = 'longAsTable=';
 export const TRANSPOSED_AS_TABLE_SETTING = 'transposedAsTable=';
 export const PRESENCE_ONLY_SETTING = 'presenceOnly=';
 export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
+export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
 export const MAX_SETTING_SHEETS = 100;
 export const MAX_SETTING_NAME = 255;
@@ -65,6 +68,8 @@ export interface ConvertSettings {
   presenceOnly?: string[];
   /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
   biomassBasis?: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[];
+  /** The ticks "of each organism" the user set (on) or took back (off), by sheet and column header. Only present when there is at least one. A pre-pick only. */
+  perOccurrence?: { sheet: string; header: string; on: boolean }[];
 }
 
 /** The biomass kind each sheet's columns were given: one entry per sheet whose biomass columns that state a kind all agree on it (a sheet with a wet and a dry column keeps nothing). */
@@ -74,6 +79,26 @@ export function biomassBasisOf(mappings: readonly { sheet: string; columns: read
     const kinds = new Set(m.columns.flatMap((c) => (c.role.kind === 'biomass' && c.role.basis !== undefined ? [c.role.basis] : [])));
     const [basis] = [...kinds];
     if (kinds.size === 1 && basis !== undefined && !out.some((o) => o.sheet === m.sheet)) out.push({ sheet: m.sheet, basis });
+  }
+  return out;
+}
+
+/**
+ * The ticks "of each organism" that differ from what the tool proposed: `on` for a variable column that is ticked while its proposal was not, `off` for one the tool proposed ticked and the user
+ * took back. A column the tool and the user agree on is not written (a re-upload proposes it the same way).
+ */
+export function perOccurrenceOf(
+  mappings: readonly { sheet: string; columns: readonly { index: number; header: string; role: { kind: string; perOccurrence?: true } }[] }[],
+  proposals: Readonly<Record<string, readonly { index: number; role: { kind: string; perOccurrence?: true } }[]>>,
+): { sheet: string; header: string; on: boolean }[] {
+  const out: { sheet: string; header: string; on: boolean }[] = [];
+  for (const m of mappings) {
+    for (const c of m.columns) {
+      if (c.role.kind !== 'variable' || c.header === '' || m.sheet.includes(':') || out.length >= MAX_SETTING_SHEETS) continue;
+      const proposed = proposals[m.sheet]?.find((p) => p.index === c.index)?.role.perOccurrence === true;
+      const now = c.role.perOccurrence === true;
+      if (now !== proposed) out.push({ sheet: m.sheet, header: c.header, on: now });
+    }
   }
   return out;
 }
@@ -103,6 +128,9 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const basis = rest.slice(0, rest.indexOf(':'));
       const sheet = rest.slice(rest.indexOf(':') + 1);
       if ((basis === 'wet' || basis === 'dry' || basis === 'afdw') && rest.includes(':') && sheet !== '' && sheet.length <= MAX_SETTING_NAME && (settings.biomassBasis ??= []).length < MAX_SETTING_SHEETS && !settings.biomassBasis.some((b) => b.sheet === sheet)) settings.biomassBasis.push({ sheet, basis });
+    } else if (v.startsWith(PER_OCCURRENCE_SETTING)) {
+      const m = /^(on|off):([^:]+):(.+)$/.exec(v.slice(PER_OCCURRENCE_SETTING.length));
+      if (m !== null && m[3].length <= MAX_SETTING_NAME && m[2].length <= MAX_SETTING_NAME && (settings.perOccurrence ??= []).length < MAX_SETTING_SHEETS) settings.perOccurrence.push({ sheet: m[2], header: m[3], on: m[1] === 'on' });
     } else if (v.startsWith(TRANSPOSED_AS_TABLE_SETTING)) addName((settings.transposedAsTable ??= []), v.slice(TRANSPOSED_AS_TABLE_SETTING.length));
   }
   return settings;
@@ -124,6 +152,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.longAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${LONG_AS_TABLE_SETTING}${n}`, '', '', ''])),
       ...(settings.transposedAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TRANSPOSED_AS_TABLE_SETTING}${n}`, '', '', ''])),
       ...(settings.biomassBasis ?? []).filter((b) => b.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((b) => line([SETTING_ROW, `${BIOMASS_BASIS_SETTING}${b.basis}:${b.sheet}`, '', '', ''])),
+      ...(settings.perOccurrence ?? []).filter((o) => o.header.length <= MAX_SETTING_NAME && o.sheet.length <= MAX_SETTING_NAME && !o.sheet.includes(':')).slice(0, MAX_SETTING_SHEETS).map((o) => line([SETTING_ROW, `${PER_OCCURRENCE_SETTING}${o.on ? 'on' : 'off'}:${o.sheet}:${o.header}`, '', '', ''])),
       ...(settings.presenceOnly ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PRESENCE_ONLY_SETTING}${n}`, '', '', ''])),
     ].join('\n') + '\n'
   );

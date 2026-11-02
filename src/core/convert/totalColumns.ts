@@ -159,3 +159,47 @@ export function isTotalHeader(header: string): boolean {
     .split(/[^\p{L}\p{N}]+/u)
     .some((w) => ['total', 'suma', 'razem', 'gesamt', 'summe', 'somme', 'sum'].includes(w));
 }
+
+/**
+ * Words of a header that name how, where or with what a sample was taken, or the surroundings it was taken in (a mesh, a net, a core, a tow, a wire, a transect, ice, waves, rain, the water
+ * above the bottom ...). A size, a length or a value in millimetres with one of them is a property of the sampling or of the place, never the size of an organism: it is not moved to
+ * the occurrences and it is no species column.
+ */
+const SAMPLING_WORDS = new Set([
+  'mesh', 'net', 'nets', 'core', 'cores', 'tow', 'trawl', 'wire', 'transect', 'secchi', 'sediment', 'grain', 'ice', 'wave', 'waves', 'mouth', 'above', 'below', 'bottom', 'depth', 'water', 'air', 'wind',
+  'sea', 'surface', 'haul', 'cast', 'station', 'site', 'gear', 'ship', 'vessel', 'dredge', 'grab', 'quadrat', 'plot', 'rain', 'snow', 'swell', 'tide', 'current', 'flow', 'speed', 'warp', 'door', 'doors',
+]);
+export function isSamplingOrEnvironmentHeader(header: string): boolean {
+  const words = stripTypeSuffix(header)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w !== '');
+  return words.some((w) => SAMPLING_WORDS.has(w) || w.startsWith('precip'));
+}
+
+/**
+ * Is the column a function of the taxon column: every taxon that is listed more than once has ONE value in it, the column has at least two different values, and it is not constant inside the
+ * samples either (a column constant inside every sample is a value of the sample that happens to follow the taxa, not an attribute of the taxon)? A species code, a taxonomic serial number, a trophic
+ * level. `sampleVerdict` is valuesRepeatWithinSample's answer for the column.
+ */
+export function isFunctionOfTaxon(sheet: RawSheet, taxonIndex: number, index: number, sampleVerdict: 'constant' | 'varies' | 'unknown'): boolean {
+  if (sampleVerdict === 'constant') return false;
+  const byTaxon = new Map<string, { values: Set<string>; n: number }>();
+  const all = new Set<string>();
+  for (const r of sheet.rows) {
+    const t = String(r.cells[taxonIndex] ?? '').trim();
+    const c = r.cells[index] ?? null;
+    if (t === '' || isBlankCell(c)) continue;
+    const v = String(c).trim();
+    all.add(v);
+    const e = byTaxon.get(t);
+    if (e === undefined) byTaxon.set(t, { values: new Set([v]), n: 1 });
+    else {
+      e.values.add(v);
+      e.n++;
+    }
+  }
+  const repeated = [...byTaxon.values()].filter((e) => e.n > 1);
+  return all.size >= 2 && repeated.length > 0 && [...byTaxon.values()].every((e) => e.values.size === 1);
+}

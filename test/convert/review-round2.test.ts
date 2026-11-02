@@ -59,10 +59,11 @@ describe('HIGH: a value that differs inside one sample keeps blocking, unless it
     for (const lang of LANGS) expect(renderConvertPlain(f, lang), lang).toContain('L1 (µm)');
   });
 
-  it('a column whose values are nearly all different inside the samples moves without a size word or a length unit', () => {
+  it('a column whose values are nearly all different inside the samples is NOT moved by that alone (no size word, no length unit): it blocks and the tick is the way', () => {
     const { roles, c } = run(['Spine count'], (i) => [20 + 3 * i]);
-    expect(roles.find((r) => r.header === 'Spine count')!.role).toMatchObject({ perOccurrence: true });
-    expect(conflict(c)).toEqual([]);
+    const role = roles.find((r) => r.header === 'Spine count')!.role;
+    expect(role.kind === 'variable' && role.perOccurrence).toBeFalsy();
+    expect(conflict(c)).toHaveLength(1);
   });
 
   it('the tick "of each organism" can be taken back: the column blocks again', () => {

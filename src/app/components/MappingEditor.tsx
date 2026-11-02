@@ -24,6 +24,8 @@ export interface MappingEditorProps {
   roleKinds?: readonly RoleChoice[];
   /** The ⓘ of the role column header. Default: the /check one. */
   rolesTip?: TipId;
+  /** /convert: the sheet is read as a long one (the tick "of each organism" is offered only then). */
+  longSheet?: boolean;
   onChange: (mapping: SheetMapping) => void;
 }
 
@@ -49,7 +51,7 @@ const CANONICAL_KEYS: readonly string[] = CANONICAL_VARIABLES.map((c) => c.key);
  * highlighted), and for a measured variable its name and unit. The unit box starts from the proposal only: a column with no
  * stated unit stays empty. ⛔ Never fills in a unit nobody stated.
  */
-export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumns, unnamedFrom, roleKinds = ROLE_KINDS, rolesTip = 'roles', onChange }: MappingEditorProps): React.ReactElement {
+export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumns, unnamedFrom, roleKinds = ROLE_KINDS, rolesTip = 'roles', longSheet = false, onChange }: MappingEditorProps): React.ReactElement {
   useLang();
   return (
     <section className="mapping-editor" aria-label={t('mapping.title', { sheet })}>
@@ -102,6 +104,7 @@ export function MappingEditor({ sheet, proposals, samples, mapping, layoutColumn
                         label={label}
                         role={col.role}
                         roleKinds={roleKinds}
+                        longSheet={longSheet}
                         proposed={proposal?.role ?? { kind: 'ignore' }}
                         samples={samples[col.index] ?? []}
                         cleanHeader={proposal?.cleanHeader ?? col.header}
@@ -131,12 +134,13 @@ interface RoleCellProps {
   /** An ⓘ that explains the reason (the converter's "sum or total column"). */
   reasonTip?: TipId;
   roleKinds: readonly RoleChoice[];
+  longSheet: boolean;
   /** The first values of the column as text: they tell which axis a column of hemisphere letters signs. */
   samples: readonly string[];
   onRole: (role: ColumnRole) => void;
 }
 
-function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleKinds, samples, onRole }: RoleCellProps): React.ReactElement {
+function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleKinds, longSheet, samples, onRole }: RoleCellProps): React.ReactElement {
   const unit = roleUnit(role) ?? '';
   const hasUnit = role.kind === 'variable' || role.kind === 'depth' || role.kind === 'pressure' || role.kind === 'effort' || role.kind === 'depthBelowSeafloor';
   const converter = roleKinds !== ROLE_KINDS;
@@ -167,7 +171,7 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleK
           <input type="text" list={DATALIST_ID} value={role.variable} autoComplete="off" spellCheck={false} onChange={(e) => onRole(setVariableName(role, e.target.value))} />
         </label>
       )}
-      {converter && role.kind === 'variable' && (
+      {converter && longSheet && role.kind === 'variable' && (
         <label className="inline-field">
           <input type="checkbox" checked={role.perOccurrence === true} onChange={(e) => onRole(setPerOccurrence(role, e.target.checked))} />
           <span>{t('mapping.perOccurrence')}</span>
