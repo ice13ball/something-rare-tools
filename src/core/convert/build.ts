@@ -2247,26 +2247,68 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies) };
       findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
     }
-    if (specimenCopies !== undefined) {
-      findings.push(makeConvertFinding('CONV-ROW-COPIES-SPECIMENS', { ...base, field: specimenCopies.column, lines: specimenCopies.copyLines, params: { count: specimenCopies.copyLines.length, withCopies: round(specimenCopies.withCopies), withoutCopies: round(specimenCopies.withoutCopies) } }));
-    }
-    if (sameValue !== undefined) {
-      findings.push(
-        makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', {
-          ...base,
-          field: sameValue.column,
-          lines: sameValue.lines,
-          params: {
-            groups: sameValue.groups,
-            records: sameValue.records,
-            written: round(sameValue.written),
-            asTotal: round(sameValue.asTotal),
-            column: sameValue.column,
-            ...(sameValue.also === undefined ? {} : { alsoColumn: sameValue.also.column, alsoWritten: round(sameValue.also.written), alsoAsTotal: round(sameValue.also.asTotal) }),
-            ...(sameValue.column !== (sin.mapping.columns.find((c) => c.role.kind === 'quantity')?.header.trim() ?? '') ? { weight: 'yes' } : {}),
-          },
-        }),
-      );
+    // The sums of the two warnings below are those of the archive: what the occurrences and measurements of THIS sheet really carry after the user's choices (rows taken once or dropped are
+    // not there, a row whose quantity or weight is never written adds nothing), never a sum over the source rows.
+    // (no sums while the kind of the numbers is not declared: nothing is written then, the declaration is asked first)
+    if (kind !== undefined && (specimenCopies !== undefined || sameValue !== undefined)) {
+      const quantityAt = new Map<number, number>();
+      const weightAt = new Map<string, Map<number, number>>();
+      for (const o of occurrences.slice(occurrencesBefore)) quantityAt.set(o.source.line, (quantityAt.get(o.source.line) ?? 0) + (kind === 'count' ? (o.individualCount ?? 0) : 0));
+      for (const m of measurements) {
+        if (m.source.file !== fileName || m.source.sheet !== sheet.name || m.target.kind !== 'occurrence') continue;
+        const v = Number(m.measurementValue);
+        if (!Number.isFinite(v)) continue;
+        if (m.role === 'biomass' && m.source.column !== undefined) {
+          const per = weightAt.get(m.source.column) ?? weightAt.set(m.source.column, new Map()).get(m.source.column)!;
+          per.set(m.source.line, (per.get(m.source.line) ?? 0) + v);
+        } else if (kind !== undefined && kind !== 'count' && m.role === kind) quantityAt.set(m.source.line, (quantityAt.get(m.source.line) ?? 0) + v);
+      }
+      if (specimenCopies !== undefined) {
+        const written = specimenCopies.copyLines.filter((l) => quantityAt.has(l));
+        let withCopies = 0;
+        for (const v of quantityAt.values()) withCopies += v;
+        const copiesSum = written.reduce((n, l) => n + (quantityAt.get(l) ?? 0), 0);
+        if (written.length > 0) findings.push(makeConvertFinding('CONV-ROW-COPIES-SPECIMENS', { ...base, field: specimenCopies.column, lines: written, params: { count: written.length, withCopies: round(withCopies), withoutCopies: round(withCopies - copiesSum) } }));
+      }
+      if (sameValue !== undefined) {
+        const per = sameValue.detail.map((d) => {
+          const at = d.kind === 'quantity' ? quantityAt : (weightAt.get(d.column) ?? new Map<number, number>());
+          let groups = 0;
+          let records = 0;
+          let written = 0;
+          let asTotal = 0;
+          const lines: number[] = [];
+          for (const g of d.groups) {
+            const there = g.lines.filter((l) => at.has(l));
+            if (there.length < 2) continue;
+            groups++;
+            records += there.length;
+            written += there.reduce((n, l) => n + (at.get(l) ?? 0), 0);
+            asTotal += g.v;
+            lines.push(...there);
+          }
+          return { column: d.column, kind: d.kind, groups, records, written, asTotal, lines };
+        }).filter((x) => x.groups > 0);
+        if (per.length > 0) {
+          const [main, other] = per;
+          findings.push(
+            makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', {
+              ...base,
+              field: main.column,
+              lines: [...new Set(per.flatMap((x) => x.lines))].sort((x, y) => x - y),
+              params: {
+                groups: main.groups,
+                records: main.records,
+                written: round(main.written),
+                asTotal: round(main.asTotal),
+                column: main.column,
+                ...(other === undefined ? {} : { alsoColumn: other.column, alsoWritten: round(other.written), alsoAsTotal: round(other.asTotal) }),
+                ...(main.kind === 'biomass' ? { weight: 'yes' } : {}),
+              },
+            }),
+          );
+        }
+      }
     }
     for (const e of biomassUnitNone.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length, none: 'yes' } }));
     for (const u of biomassNoP06) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: u } }));

@@ -77,6 +77,11 @@ export interface SameValue {
   asTotal: number;
   /** The column. */
   column: string;
+  /**
+   * The groups each column repeats in, with the repeated value: build.ts recomputes the sums from what the archive really writes (after the user's choices, and without rows whose quantity or
+   * weight is never written), so the message cannot disagree with the archive.
+   */
+  detail: { column: string; kind: 'quantity' | 'biomass'; groups: { lines: number[]; v: number }[] }[];
   /** A second column (the weight) that repeats on rows of one sample and taxon too: its own two sums. */
   also?: { column: string; written: number; asTotal: number };
 }
@@ -356,10 +361,10 @@ export function analyseRepeats(args: {
   /* ---- the warning: the same quantity (or weight) on rows of one sample and taxon that differ in anything ---- */
   let same: SameValue | undefined;
   {
-    interface Seen { column: string; groups: number; records: number; written: number; asTotal: number; lines: number[] }
+    interface Seen { column: string; kind: 'quantity' | 'biomass'; groups: number; records: number; written: number; asTotal: number; lines: number[]; detail: { lines: number[]; v: number }[] }
     const seen: Seen[] = [];
     for (const c of candidates) {
-      const r: Seen = { column: c.header, groups: 0, records: 0, written: 0, asTotal: 0, lines: [] };
+      const r: Seen = { column: c.header, kind: c.kind, groups: 0, records: 0, written: 0, asTotal: 0, lines: [], detail: [] };
       const firedHere = total?.columns.some((x) => x.index === c.index) === true;
       for (const g of loose) {
         if (differingAny(g).length === 0) continue; // identical rows are copies (above), not rows that differ
@@ -375,6 +380,7 @@ export function analyseRepeats(args: {
         r.written += v * items.length;
         r.asTotal += v;
         for (const x of items) r.lines.push(x.row.line);
+        r.detail.push({ lines: items.map((x) => x.row.line), v });
       }
       if (r.groups > 0) seen.push(r);
     }
@@ -387,6 +393,7 @@ export function analyseRepeats(args: {
         written: main.written,
         asTotal: main.asTotal,
         column: main.column,
+        detail: seen.map((x) => ({ column: x.column, kind: x.kind, groups: x.detail })),
         ...(other === undefined ? {} : { also: { column: other.column, written: other.written, asTotal: other.asTotal } }),
       };
     }

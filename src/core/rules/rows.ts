@@ -125,6 +125,7 @@ const SHIP_DECLARED = {
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
  *   ROW-YEAR-OUTLIER      years, declared  years = years of the flagged rows; declared = years named in label/file name/title/extent
  *   ROW-JOIN-AMBIGUOUS    right   field = the key (columns joined with " + "), value = an example key, lines = the rows of the measurement sheet that could not be placed; right = the sheet that holds several rows of that key with different positions or dates
+ *   ROW-LONG-VALUE-SKIPPED count   field = one parameter as an example, lines = the rows whose value was not read: another row of a long sheet has the same key and parameter with a different value (count = such values)
  *   ROW-JOIN-KEY-BLANK    right   field = the key (columns joined with " + "), lines = the rows whose key has a blank part and that have no position of their own; right = the sheet that would give it
  *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
@@ -509,6 +510,19 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Les lignes de la feuille « {sheet} » (lignes : {lines}) n'ont reçu ni position ni date de la feuille « {right} » : la clé « {field} » (p. ex. {value}) y correspond à plusieurs lignes de position ou de date différentes ; aucune n'a été prise (la première n'est pas devinée).`,
     },
     technical: `{file}, {sheet}:{lines} key {field} (example value {value}): the key matches several rows of sheet {right} that differ in position or date, so the rows get no position and no date from it; the first matching row is never taken. Join on a key that identifies one row (a composite key such as Cruise + Station is tried by the layout).`,
+  },
+  {
+    id: 'ROW-LONG-VALUE-SKIPPED',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `Nieodczytane wartości w „{sheet}”: {count} ({+lineCount:wiersz|wiersze|wierszy} {lines}). Inny wiersz ma ten sam klucz i parametr (np. „{field}”) z inną wartością; sprawdzono tylko pierwszą. Kolumna rozróżniająca wiersze (ciśnienie, powtórzenie) nie jest częścią ich tożsamości.`,
+      en: `{count} {+count:value was|values were} not read in "{sheet}" ({+lineCount:line|lines} {lines}): another row has the same key and parameter (e.g. "{field}") with a different value; only the first is kept and checked. A column that tells these rows apart (a pressure, a replicate) is not part of their identity.`,
+      de: `{count} {+count:Wert wurde|Werte wurden} in „{sheet}“ nicht gelesen ({+lineCount:Zeile|Zeilen} {lines}): eine andere Zeile hat denselben Schlüssel und Parameter (z. B. „{field}“) mit anderem Wert; nur der erste bleibt. Eine Spalte, die diese Zeilen unterscheidet (Druck, Replikat), gehört nicht zu ihrer Identität.`,
+      fr: `Valeurs non lues dans « {sheet} » : {count} ({+lineCount:ligne|lignes} {lines}). Une autre ligne a la même clé et le même paramètre (ex. « {field} ») avec une autre valeur ; seule la première est gardée. Une colonne qui distingue ces lignes (pression, réplicat) ne fait pas partie de leur identité.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: in a long sheet (parameter and value columns) {count} value(s) differ from the value already kept for the same key (sample, position, date, depth) and parameter; only the first value of a pair is read and nothing is averaged. Values equal to the kept one are not counted. Which column told the rows apart is not guessed: it is not part of the row's key.`,
   },
   {
     id: 'ROW-JOIN-KEY-BLANK',

@@ -252,9 +252,10 @@ describe('buildDataset: long', () => {
     expect(r.dataset.variables).toEqual(dataset.variables);
   });
 
-  it('a duplicate (sample, parameter) keeps the first value, nothing is averaged, nothing new is reported', () => {
+  it('a duplicate (sample, parameter) keeps the first value, nothing is averaged; the value that differs is said (ROW-LONG-VALUE-SKIPPED)', () => {
     expect(dataset.rows[2].values.Cx).toMatchObject({ value: 1.1, line: 6 });
-    expect(findings.map((x) => x.ruleId)).toEqual(['ROW-NON-NUMERIC']);
+    expect(findings.map((x) => x.ruleId).sort()).toEqual(['ROW-LONG-VALUE-SKIPPED', 'ROW-NON-NUMERIC']);
+    expect(findings.find((x) => x.ruleId === 'ROW-LONG-VALUE-SKIPPED')).toMatchObject({ field: 'Cx', params: { count: 1 } });
   });
 
   it('a non-numeric value is reported against its parameter, with its line', () => {

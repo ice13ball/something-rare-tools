@@ -103,3 +103,53 @@ describe('the texts', () => {
     expect(UI.en['convert.status.text']).not.toMatch(/This archive/);
   });
 });
+
+describe('the sums in the messages are the sums of the archive (after the choices, without rows that are never written)', () => {
+  const written = (r: ReturnType<typeof run>): number => r.occurrences.reduce((n, o) => n + (o.individualCount ?? 0), 0);
+  const writtenWeight = (r: ReturnType<typeof run>): number => r.measurements.filter((m) => m.role === 'biomass').reduce((n, m) => n + Number(m.measurementValue), 0);
+  const withFlags = (rows: Cell[][], flags: { totalOnce?: boolean; dropCopies?: boolean }) =>
+    convert({ sheets: [sheetInput(fileOf(HEADER, rows, 'S', { fileName: 'catch.csv' }), { shape: 'long', quantity: { kind: 'count' }, edit: EDIT, ...flags })] });
+
+  it('specimen copies with "drop the copies": the sums are those of the archive', () => {
+    const rows: Cell[][] = [];
+    for (let s = 1; s <= 6; s++) for (let c = 0; c < 2; c++) rows.push([`s${s}`, '2020-06-01', 49.4 + s / 100, 0.2, 'Solea solea', 'L', 1, 5, `r${rows.length}`]);
+    for (let s = 1; s <= 3; s++) for (let c = 0; c < 2; c++) rows.push([`c${s}`, '2020-06-01', 48.4 + s / 100, 0.2, 'Solea solea', 'L', 4, 9, `r${rows.length}`]);
+    const r = withFlags(rows, { dropCopies: true });
+    const f = ids(r, 'CONV-ROW-COPIES-SPECIMENS');
+    expect(f).toHaveLength(1);
+    expect(f[0].params.withCopies).toBe(written(r));
+    expect(f[0].params.withoutCopies).toBe(written(r) - Number(f[0].params.count));
+    expect(written(r)).toBe(6 * 2 + 3 * 4);
+  });
+
+  it('a repeated total taken once together with dropped copies: the specimen sums are those of the archive', () => {
+    const rows: Cell[][] = [];
+    for (let s = 1; s <= 8; s++) for (let c = 0; c < 3; c++) rows.push([`t${s}`, '2020-06-01', 49.4 + s / 100, 0.2, 'Solea solea', `size${c}`, 30 + s, 100 + s, `r${rows.length}`]);
+    for (let s = 1; s <= 4; s++) for (let c = 0; c < 2; c++) rows.push([`p${s}`, '2020-06-01', 47.4 + s / 100, 0.2, 'Solea solea', 'L', 1, 5, `r${rows.length}`]);
+    for (let s = 1; s <= 2; s++) for (let c = 0; c < 2; c++) rows.push([`q${s}`, '2020-06-01', 46.4 + s / 100, 0.2, 'Solea solea', 'L', 6, 9, `r${rows.length}`]);
+    const r = withFlags(rows, { totalOnce: true, dropCopies: true });
+    const f = ids(r, 'CONV-ROW-COPIES-SPECIMENS');
+    expect(f).toHaveLength(1);
+    expect(f[0].params.withCopies).toBe(written(r));
+    expect(written(r)).toBe(Array.from({ length: 8 }, (_, i) => 31 + i).reduce((n, v) => n + v, 0) + 4 * 2 + 2 * 6);
+  });
+
+  it('a weight on a row whose count is zero (never written) is not in the weight sum', () => {
+    const rows: Cell[][] = [];
+    for (let s = 1; s <= 2; s++) for (const c of [5, 0, 7]) rows.push([`s${s}`, '2020-06-01', 49.4 + s / 100, 0.2, 'Solea solea', `stage${c}`, c, 100, `r${rows.length}`]);
+    const r = run(rows);
+    const f = ids(r, 'CONV-QUANTITY-SAME-IN-SAMPLE');
+    expect(f).toHaveLength(1);
+    expect(f[0].params).toMatchObject({ column: 'Weight', weight: 'yes' });
+    expect(f[0].params.written).toBe(writtenWeight(r));
+    expect(f[0].params.written).toBe(400);
+    expect(f[0].params.records).toBe(4);
+  });
+
+  it('the count sums stay exact, and the text does not say "above 1" (a density of 1 is covered)', () => {
+    const r = run(stages(2, () => 12, () => 250));
+    const f = ids(r, 'CONV-QUANTITY-SAME-IN-SAMPLE')[0];
+    expect(f.params.written).toBe(written(r));
+    for (const lang of LANGS) expect(renderConvertPlain(f, lang)).not.toMatch(/above 1|powyżej 1|über 1|supérieure à 1/);
+  });
+});

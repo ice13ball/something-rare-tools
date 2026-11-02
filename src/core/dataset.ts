@@ -35,7 +35,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -767,6 +767,8 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const variables = new Map<string, Variable>();
   const groups = new Map<string, DataRow>();
   const rows: DataRow[] = [];
+  const skippedDiffer: number[] = [];
+  let skippedExample: string | undefined;
   for (const r of sheet.rows) {
     const param = str(r.cells[plan.parameterCol] ?? null);
     if (param === undefined) continue;
@@ -790,9 +792,24 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       }
       variables.set(key, v);
     }
-    if (row.values[key] !== undefined) continue; // duplicate (sample, parameter): the first one stays, nothing is averaged
+    const kept = row.values[key];
+    if (kept !== undefined) {
+      // duplicate (sample, parameter): the first one stays, nothing is averaged. A value that differs from the kept one was not read: said once at the end (ROW-LONG-VALUE-SKIPPED)
+      const raw = r.cells[plan.valueCol] ?? null;
+      if (!isBlankCell(raw)) {
+        const a = parseNumber(raw, dc);
+        const b = parseNumber(kept.raw, dc);
+        const same = a.status === 'ok' && b.status === 'ok' ? a.value === b.value : String(raw).trim() === String(kept.raw ?? '').trim();
+        if (!same) {
+          skippedDiffer.push(r.line);
+          skippedExample ??= param;
+        }
+      }
+      continue;
+    }
     row.values[key] = numericCell(r.cells[plan.valueCol] ?? null, r.line, param, sheet.name, dc, c);
   }
+  for (const line of skippedDiffer) c.add('ROW-LONG-VALUE-SKIPPED', sheet.name, skippedExample ?? '', line, undefined, true, { count: skippedDiffer.length });
   return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [] };
 }
 
