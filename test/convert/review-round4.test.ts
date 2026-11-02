@@ -53,6 +53,15 @@ describe('HIGH: a taxon attribute is never a column with a unit or a size word',
   });
 });
 
+describe('the list of ignored attributes holds numeric columns only', () => {
+  it('a text column of ranks is not listed, a numeric code is', () => {
+    const rows = N(8, (i) => [`s${i < 4 ? 1 : 2}`, '2023-06-14', 55, 2.5, TAXA[i % 4], i + 1, 'Genus', 1000 + 37 * (i % 4)]);
+    const file = fileOf([...HEAD, 'Rank', 'species_code'], rows);
+    const c = convert({ sheets: [sheetInput(file, { quantity: { kind: 'count' } })], options: {} });
+    expect(c.findings.find((f) => f.ruleId === 'CONV-TAXON-ATTRIBUTE-IGNORED')?.params.columns).toBe('species_code');
+  });
+});
+
 describe('MEDIUM: Replicate, Tow, Haul and Cast on a long sheet', () => {
   const sheet = (h: string, v: (i: number) => Cell) => {
     const rows = N(4, (i) => ['K1', '2023-06-14', 55, 2.5, TAXA[i % 2], i + 1, v(i)]);

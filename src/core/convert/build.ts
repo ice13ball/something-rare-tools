@@ -2101,7 +2101,12 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const asProposals = sin.mapping.columns.map((c) => ({ ...c, cleanHeader: c.header, confidence: 'high' as const, reason: '' }));
       const taxonAt = cols.taxonCell.index;
       const attrs = sin.mapping.columns
-        .filter((c) => c.role.kind === 'ignore' && c.index !== taxonAt && sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null)))
+        .filter((c) => {
+          // only a NUMERIC column is a candidate (a text column - a rank, a common name - is ignored as text and is no measurement lost)
+          if (c.role.kind !== 'ignore' || c.index === taxonAt) return false;
+          const vals = sheet.rows.map((r) => r.cells[c.index] ?? null).filter((v) => !isBlankCell(v));
+          return vals.length > 0 && vals.every((v) => parseNumber(v, dc).status === 'ok');
+        })
         .filter((c) => isTaxonAttribute(sheet, taxonAt, c.index, c.header, valuesRepeatWithinSample(sheet, asProposals, c.index, dc)))
         .map((c) => c.header.trim());
       if (attrs.length > 0) findings.push(makeConvertFinding('CONV-TAXON-ATTRIBUTE-IGNORED', { ...base, params: { count: attrs.length, columns: attrs.join(', ') } }));
