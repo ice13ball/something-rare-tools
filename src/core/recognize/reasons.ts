@@ -35,7 +35,8 @@ export const CHECK_REASONS = {
   // from the values
   'excel-date': 'date-formatted Excel column',
   'values-degmin': 'values are degrees and minutes with hemisphere letters',
-  'values-iso-dates': 'values are ISO dates',
+  'values-iso-dates': 'values are dates',
+  'time-holds-datetimes': 'name says time, but the cells are full dates with a time of day and no other column is the date: read as date and time',
   'numeric-unrecognised': 'numeric column with an unrecognised name',
   'text-column': 'text column (comments, methods, flags, references or empty)',
   'bare-latitude': '"{name}" can also be a width or a length; the values fit latitude and a longitude column is present',

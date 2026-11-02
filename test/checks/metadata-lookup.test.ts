@@ -6,7 +6,7 @@ import { checkMetadataVsData } from '../../src/core/checks/metadata';
 import type { Dataset } from '../../src/core/types';
 import { makeDataset } from '../helpers/build';
 
-type Rows = Parameters<typeof makeDataset>[0];
+type Rows = NonNullable<Parameters<typeof makeDataset>[0]>;
 const cell = (n: number, line: number) => ({ raw: String(n), line, value: n, status: 'ok' as const });
 const sheetDs = (sheet: string, rows: Rows): Dataset => {
   const ds = makeDataset(rows, [], { file: 'book.xlsx', label: `book.xlsx (${sheet})`, id: sheet });

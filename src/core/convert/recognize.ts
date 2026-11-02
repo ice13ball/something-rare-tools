@@ -9,6 +9,7 @@ import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDeci
 import { isPercentUnit, verifiedConcept } from './nerc';
 import { hasCentralStatisticToken } from '../summaryLabels';
 import { isMeasurementWord, nameKind } from './measured';
+import { holdsOneFractionalValue, holdsYears, isGeometryUnit, isPlainCountUnit, latinNameShare } from './columnValues';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitFromHeader, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -42,7 +43,8 @@ const QUANTITY_STANDALONE = /^(count|counts|anzahl|nombre|comptage)$/;
 const QUANTITY_PHRASE_COUNT = /^(liczba osobnikow|liczba os|anzahl individuen|nombre d individus)$/;
 const QUANTITY_PHRASE_DENSITY = /^(individuendichte)$/;
 const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zageszczenie|liczebnosc|biomass|biomasa|biomasse)( .*)?$/;
-const EFFORT_VOLUME = /^(volume filtered|volume sampled|sampled volume|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
+// (the plankton data bases abbreviate the same two words: 'Vol filt', 'Samp vol', 'volfilt'; any other abbreviation is decided by the unit of the column, see isGeometryUnit)
+const EFFORT_VOLUME = /^(volume filtered|filtered volume|vol filtered|vol filt|volfilt|volume sampled|sampled volume|sample volume|sampling volume|samp vol|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
 const EFFORT_AREA = /^(area|area sampled|sampled area|swept area|area swept|powierzchnia|flache|surface|surface echantillonnee)$/;
 // a plain "Area" is a place name on a sheet with no taxa; only a header that says sampled or swept is an effort there
 const PLAIN_AREA = /^(area|powierzchnia|flache|surface)$/;
@@ -84,8 +86,8 @@ function depthBoundOfName(key: string): 'min' | 'max' | undefined {
   return undefined;
 }
 
-/** The three spellings of a WoRMS AphiaID header, exactly (no other header is read as one). */
-const APHIA_HEADERS = new Set(['AphiaID', 'aphia_id', 'Aphia ID']);
+/** A header that holds one of the three spellings of the WoRMS Aphia ID, whole, as it stands or in a bracket ("AphiaID", "aphia_id", "Reg spec no (WoRMS Aphia ID)"); the cells must also be whole numbers (holdsAphiaIds). Other spellings and cases are not read as one. */
+const APHIA_HEADER = /(?:^|[\s([])(?:AphiaID|aphia_id|Aphia ID)(?=$|[\s)\]])/;
 
 /** Every filled cell of the column is a positive whole number, and there is at least one. */
 function holdsAphiaIds(sheet: RawSheet, index: number): boolean {
@@ -205,6 +207,12 @@ export const OVERLAY_REASONS = {
   'measured-word': 'the name is a physical or optical measurement word (e.g. temperature, fluorescence, turbidity), not a species: it stays a variable, and nothing is written for it as a taxon',
   'sample-descriptor': 'the name describes the sample (replicate, cast, bottle, haul, core, ...), not a measurement and not a species: ignored (give it a meaning if it is one)',
   'unnamed-column': 'column without a name in the header: give it a meaning',
+  'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
+  'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
+  'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
+  'unit-effort': 'its unit is a volume or an area, which no species is counted in: read as the sampling effort',
+  'unit-variable': 'its unit measures a length, a time, a speed or a temperature, which no species is counted in: a measured variable, not a species',
+  'count-unit-quantity': 'a number counted in individuals next to a column of taxon names: the count of each row',
   'summary-total': 'a sum or total column: converting it would count the same individuals twice, so it starts as ignored (choose another meaning if it is not one)',
   'summary-total-varies': 'its name says total, but on a long sheet its values differ between the rows of one sample, so it is not an all-taxa total; it is not proposed as a quantity either (the sheet already has one, or it is a size or has a unit that does not count organisms), so it stays ignored until you give it a meaning',
   'summary-total-quantity': 'its name says total, but on a long sheet its values differ between the rows of one sample, so it is not an all-taxa total: proposed as the quantity of each row, check what it is',
@@ -345,6 +353,9 @@ function isMeasurementUnit(kind: 'taxon' | 'unknown' | 'variable' | 'descriptor'
   return kind === 'unknown' && text !== undefined && !isAbundanceUnit(text) && !isAbundanceUnit(unit);
 }
 
+/** The header without its unit and bracket text: the name of a variable the converter makes of the column. */
+const namePartOf = (header: string): string => unitFromHeader(header).name.replace(/\s*[[(][^[\]()]*[\])]\s*$/, '').trim() || header;
+
 const why = (p: ColumnProposal, code: OverlayReason): void => {
   p.reason = OVERLAY_REASONS[code];
   p.reasonCode = code;
@@ -427,7 +438,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         continue;
       }
     }
-    if (!dwc && APHIA_HEADERS.has(stripTypeSuffix(p.header)) && holdsAphiaIds(sheet, p.index)) {
+    if (!dwc && APHIA_HEADER.test(stripTypeSuffix(p.header)) && holdsAphiaIds(sheet, p.index)) {
       claims.set(p.index, { role: { kind: 'taxonId', aphia: true }, confidence: 'high', code: 'name-aphiaid' });
       continue;
     }
@@ -439,7 +450,8 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     if (term === 'minimumdepthinmeters') bounds.set(p.index, 'min');
     else if (term === 'maximumdepthinmeters') bounds.set(p.index, 'max');
     else {
-      const bound = depthBoundOfName(foldDiacritics(key));
+      // (a camel-case name is read as its words: DepthSampleStart = depth, sample, start)
+      const bound = depthBoundOfName(foldDiacritics(headerKey(hu.name.replace(/([a-z0-9])([A-Z])/g, '$1 $2'))));
       if (bound !== undefined) bounds.set(p.index, bound);
       else {
         // the name as it stands, then without a trailing bracket group of any text ("Volume filtered (m3)", "Sample label (Multinet number)"); a bracket text
@@ -465,6 +477,16 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     }
   }
 
+  // a column of Latin binomials is the taxon of a long sheet, whatever its header says ('Scientific name', 'SpName'): decided by the cells. One such column is read with the confidence of the
+  // cells; several (a host and a parasite, a predator and its prey) are not told apart: the leftmost is offered, with low confidence, and the others stay as they are.
+  if (![...claims.values()].some((c) => c.role.kind === 'taxon')) {
+    const latin = base.filter((q) => q.role.kind === 'ignore' && q.reasonCode === 'text-column' && !claims.has(q.index) && latinNameShare(sheet, q.index) > 0);
+    if (latin.length > 0) {
+      const lead = latin[0];
+      claims.set(lead.index, { role: { kind: 'taxon' }, confidence: latin.length === 1 && latinNameShare(sheet, lead.index) >= 0.95 ? 'high' : 'low', code: 'values-latin-names' });
+    }
+  }
+
   // depth: the winner of the shared slot says which direction the sheet counts
   const sharedDepth = base.find((p) => p.role.kind === 'depth' && p.role.bound === undefined)?.role;
   const sheetPositive = sharedDepth && sharedDepth.kind === 'depth' ? sharedDepth.positive : 'unknown';
@@ -476,6 +498,11 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const otherDepth = base.some((q) => !siteDepthAt.has(q.index) && !seafloorAt.has(q.index) && (q.role.kind === 'depth' || q.role.kind === 'pressure' || bounds.has(q.index) || pressureByUnit.has(q.index)));
   let siteDepthTaken = false;
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
+  // a number counted in individuals ("Ind [#]", "Count [n]") next to a column of taxon names: the count of each row, when no column is named as one
+  if (hasLongTaxon && ![...claims.values()].some((c) => c.role.kind === 'quantity')) {
+    const q = base.find((o) => o.role.kind === 'variable' && !claims.has(o.index) && !isCanonicalKey(o.role.variable) && isPlainCountUnit(foldUnit(unitFromHeader(o.header).unit ?? unitFromHeader(o.header).unitText ?? '')));
+    if (q !== undefined) claims.set(q.index, { role: { kind: 'quantity' }, confidence: 'low', code: 'count-unit-quantity' });
+  }
   const seenQuantity = new Set<number>();
   // a biomass or weight column next to a count column of a long sheet is a measurement of the occurrence, not a second quantity
   const biomassKey = (h: string): string => foldDiacritics(headerKey(unitFromHeader(h).name));
@@ -641,7 +668,25 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     if (!summaryHeader && !hasLongTaxon && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
       // the NAME decides (core/convert/measured.ts), never the unit alone: a species of a wide sheet may carry a biomass unit ("Calanus finmarchicus [mg C/m3]")
       const kind = nameKind(p.header, isAbundanceUnit(hdr.unit) || isAbundanceUnit(hdr.unitText));
-      if (kind === 'descriptor') {
+      const unitFolded = foldUnit(hdr.unit ?? hdr.unitText ?? '');
+      // what the VALUES and the UNIT rule out (a false variable loses occurrences, so only what no species column can be): a column of years, one fractional value on every row, a unit of
+      // length, volume, area, time or temperature. A genus name with none of these stays a candidate, whatever its unit: "Calanus", "Acartia".
+      if (kind !== 'descriptor' && kind !== 'variable' && holdsYears(sheet, p.index, ctx.decimalComma)) {
+        p.role = { kind: 'ignore' };
+        p.confidence = 'low';
+        why(p, 'year-values');
+      } else if (kind !== 'descriptor' && kind !== 'variable' && unitFolded !== '' && isGeometryUnit(unitFolded)) {
+        const unit = hdr.unit ?? hdr.unitText;
+        const space = /^(?:l|ml|dl|cl|dm3|cm3|m3|m2|cm2|km2|ha)$/.test(unitFolded);
+        p.role = space ? { kind: 'effort', ...(unit === undefined ? {} : { unit }) } : { kind: 'variable', variable: namePartOf(p.header), ...(unit === undefined ? {} : { unit, unitSource: 'header' as const }) };
+        p.confidence = 'low';
+        if (space) why(p, 'unit-effort');
+        else why(p, 'unit-variable');
+      } else if (kind !== 'descriptor' && kind !== 'variable' && holdsOneFractionalValue(sheet, p.index, ctx.decimalComma)) {
+        p.role = { kind: 'ignore' };
+        p.confidence = 'low';
+        why(p, 'constant-value');
+      } else if (kind === 'descriptor') {
         p.role = { kind: 'ignore' };
         p.confidence = 'low';
         why(p, 'sample-descriptor');

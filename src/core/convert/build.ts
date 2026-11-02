@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { checkStationRows } from '../checks/rows';
-import { detectDayMonthOrder, parseDate } from '../values/dates';
+import { detectDayMonthOrder, isEpochPlaceholder, parseDate } from '../values/dates';
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
@@ -507,8 +507,6 @@ function stationFindingsOf(sheets: readonly StationSheet[], farIds: ReadonlySet<
   return out;
 }
 
-/** A date that is a placeholder for "no date" in a spreadsheet or an epoch ("1899-12-30 12:30:00" is the time 12:30): such a cell is a time, not a date. */
-const EPOCH_PLACEHOLDER = /^\s*(?:(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01-01)|(?:3[01][./-]12[./-]1899|0?[01][./-]0?[01][./-]1900|0?1[./-]0?1[./-](?:1904|1970))|(?:12[./-]3[01][./-]1899))(?:[T\s]|$)/;
 
 /**
  * A column the sheet reads as a TIME of day whose cells hold full dates ("2003-01-17T00:00:00Z", "17.01.2003 08:30", a spreadsheet serial 37638.35), while no column is the date: every event
@@ -534,7 +532,7 @@ function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>)
       if (formatted && c >= 1) lines.push(r.line);
       return;
     }
-    if (EPOCH_PLACEHOLDER.test(c as string)) return;
+    if (isEpochPlaceholder(c)) return;
     const d = parseDate(c, { date1904: false, dateFormatted: false, ...(order === 'unknown' ? {} : { order }) });
     if (!('error' in d) && d.precision !== 'year') lines.push(r.line);
   });

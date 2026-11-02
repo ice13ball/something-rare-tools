@@ -149,9 +149,13 @@ describe('a long sheet with blank or NaN quantities', () => {
     expect(renderConvertPlain(find(e, 'CONV-QUANTITY-BLANK-KEPT')[0], 'pl')).toContain('2 wiersze mają');
   });
 
-  it('a time column that holds full dates, with no date column, blocks instead of losing the date', async () => {
+  it('a time column of full datetimes is read as date and time by itself; chosen as a time, with no date column, it blocks instead of losing the date', async () => {
     const header = ['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'];
-    const e = await exportSheet(header, [['S1', 's1', '2003-01-17T00:00:00Z', 55.5, 2.5, 'Calanus finmarchicus', 4], ['S1', 's2', '2003-01-18T00:00:00Z', 55.5, 2.5, 'Oithona similis', 2]], { quantity: { kind: 'count' } });
+    const both = [['S1', 's1', '2003-01-17T00:00:00Z', 55.5, 2.5, 'Calanus finmarchicus', 4], ['S1', 's2', '2003-01-18T00:00:00Z', 55.5, 2.5, 'Oithona similis', 2]] as Cell[][];
+    const byName = await exportSheet(header, both, { quantity: { kind: 'count' } });
+    expect(find(byName, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
+    expect(byName.result.events.some((ev) => ev.eventDate?.startsWith('2003-01-17'))).toBe(true);
+    const e = await exportSheet(header, both, { quantity: { kind: 'count' }, edit: { time: { kind: 'time' } } });
     const f = find(e, 'CONV-TIME-HOLDS-DATES');
     expect(f).toHaveLength(1);
     expect(f[0].params.count).toBe(2);
@@ -162,7 +166,7 @@ describe('a long sheet with blank or NaN quantities', () => {
   });
 
   const timeCase = (cells: Cell[]) =>
-    exportSheet(['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'], cells.map((c, i) => ['S1', `s${i}`, c, 55.5, 2.5, 'Calanus finmarchicus', 4] as Cell[]), { quantity: { kind: 'count' } });
+    exportSheet(['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'], cells.map((c, i) => ['S1', `s${i}`, c, 55.5, 2.5, 'Calanus finmarchicus', 4] as Cell[]), { quantity: { kind: 'count' }, edit: { time: { kind: 'time' } } });
 
   it.each([['17/01/2003 08:30'], ['17.01.2003'], ['2003-01-17T08:30:00Z'], ['2003-01-17 08:30']])('a time column of dates (%s) blocks', async (cell) => {
     const e = await timeCase([cell, cell]);

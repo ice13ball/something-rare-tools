@@ -88,6 +88,8 @@ function battery(): { sheet: RawSheet; place?: true; long?: { parameterCol: numb
       [54.5, 18.5, '2020-05-12', '10:30', 12, 'C1', 'S1', 'A-1', 35.1, 'ok', 1, 'x', 3.3],
       [54.6, 18.6, '2020-05-13', '11:30', 14, 'C1', 'S2', 'A-2', 35.2, 'ok', 1, 'y', 3.4],
     ]),
+    // a column named time that holds full datetimes, with no date column of its own
+    S(['time', 'Mystery'], [['2003-01-17T00:00:00Z', 1], ['2003-01-18T00:00:00Z', 2]]),
     S(['Date and time', 'Elevation', 'Probe', 'Pressure [dbar]'], [['2020-05-12 10:30', 12, 'P-1', 5], ['2020-05-13 11:30', 14, 'P-2', 6]]),
     // Polish: a marked latitude, a depth range (two bounds), a prefix + próby sample id
     S(['Szerokość [°N]', 'Długość [°E]', 'Głębokość od', 'Głębokość do', 'Kod próby'], [[54.5, 18.5, 0, 10, 'A-1'], [54.6, 18.6, 5, 15, 'A-2']]),

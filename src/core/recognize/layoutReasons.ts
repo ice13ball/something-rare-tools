@@ -4,7 +4,7 @@
 // must never end up inside a Polish, German or French sentence). Pure.
 import type { Lang } from '../types';
 
-export type LayoutReasonCode = 'transposed' | 'transposed-taxa' | 'header-empty' | 'header-units' | 'no-table' | 'no-rows' | 'no-data-sheet';
+export type LayoutReasonCode = 'transposed' | 'transposed-taxa' | 'header-empty' | 'header-units' | 'header-footnote' | 'no-table' | 'no-rows' | 'no-data-sheet';
 export interface LayoutReason { code: LayoutReasonCode; sheet?: string }
 
 const TEXT: Record<LayoutReasonCode, Record<Lang, string>> = {
@@ -32,6 +32,12 @@ const TEXT: Record<LayoutReasonCode, Record<Lang, string>> = {
     pl: 'nagłówek obejmuje kilka wierszy (pierwszy wiersz danych zawiera jednostki)',
     de: 'die Kopfzeile erstreckt sich über mehrere Zeilen (die erste Datenzeile enthält Einheiten)',
     fr: "l'en-tête s'étend sur plusieurs lignes (la première ligne de données contient des unités)",
+  },
+  'header-footnote': {
+    en: 'the row above the column names holds footnote markers (a, b, NA ...), and the real names are on the next row',
+    pl: 'wiersz nad nazwami kolumn zawiera znaczniki przypisów (a, b, NA ...), a właściwe nazwy są w następnym wierszu',
+    de: 'die Zeile über den Spaltennamen enthält Fußnotenmarken (a, b, NA ...), die eigentlichen Namen stehen in der nächsten Zeile',
+    fr: "la ligne au-dessus des noms de colonnes contient des renvois de notes (a, b, NA ...), les vrais noms sont sur la ligne suivante",
   },
   'no-table': {
     en: 'the file contains no table',

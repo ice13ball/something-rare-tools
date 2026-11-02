@@ -393,3 +393,10 @@ export function earliestUtcDayOf(d: ParsedDate): string {
   if (!Number.isFinite(wall)) return utcDayOf(d);
   return new Date(wall - LATEST_ZONE_MS).toISOString().slice(0, 10);
 }
+
+/**
+ * A date that is a placeholder for "no date" in a spreadsheet or an epoch ("1899-12-30 12:30:00" is the time 12:30): such a cell is a time, not a date.
+ * The day-first and month-first spellings of the same days are listed too.
+ */
+const EPOCH_PLACEHOLDER = /^\s*(?:(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01-01)|(?:3[01][./-]12[./-]1899|0?[01][./-]0?[01][./-]1900|0?1[./-]0?1[./-](?:1904|1970))|(?:12[./-]3[01][./-]1899))(?:[T\s]|$)/;
+export const isEpochPlaceholder = (raw: RawCell): boolean => typeof raw === 'string' && EPOCH_PLACEHOLDER.test(raw);

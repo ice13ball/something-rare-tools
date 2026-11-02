@@ -357,7 +357,13 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    (`Lat WGS 84`, `Lat GPS`, `Lat 1`, `Lon X`, `Lon 0-360`, `Lat mean`, `Lat station`, `Lat dd.mm`), as they
    always were, except when one of a few words makes it another name: `term`, `line`, `axis`,
    `distance`, `bound`, `of` (`Long term mean`, `Long-term trend`, `Long-line catch`, `Long axis`,
-   `Lat of station`). `Lateral` and `Latency` are single words and never match. The full words accept the common misspellings seen in real files
+   `Lat of station`). `Lateral` and `Latency` are single words and never match.
+   **From the values** (tier 3, low confidence): a text column of which at least 90 % of the cells (all of them below 10 cells)
+   are full dates the parser reads is the date when no other column is (ISO, day.month.year, year/month/day, and a day/month
+   order only when the column itself decides it; the placeholder dates of a spreadsheet or an epoch do not count). A column named
+   `time` whose cells are full dates with a time of day and which has no date column beside it is the date and time of the row
+   (`time-holds-datetimes`; beside a date column it stays a time). `NA` is "not available", not sodium: sodium is `Na`, or `NA`
+   with a unit in its header. The full words accept the common misspellings seen in real files
    (`Longtitude`, `Longitute`, `Lontitude`, `Longditude`, `Lattitude`, `Latidude`).
    **Dates of collection.** Besides `Date`, `Sampling date`, `Sample date`, `Collection date`:
    `Date of collection / sampling / observation / measurement / survey`, `Date sampled`, `Date
@@ -441,7 +447,9 @@ could still read stay in the plan.
   with the reason.
 - **Header problems** that are also unsupported: more than half of three or more header cells
   empty (`header-empty`); a first row of units under the header, in at least two numeric columns
-  (`header-units`); no table, no rows, or no data sheet at all.
+  (`header-units`); a header row of footnote markers (at least 80 % of at least 5 names are a letter, a short list of
+  letters or NA) above a row of words, where the real names are on the next line (`header-footnote`; /convert does not
+  test for it); no table, no rows, or no data sheet at all.
 - Sheets with neither a position nor a measurement (legends, notes) are left out of the plan.
 - The sheets of a wide workbook that do not depend on each other become separate datasets
   (`splitLayout`), so their depth units, dates and variables are never mixed.
@@ -1195,6 +1203,21 @@ variable loses occurrences. **Taxon candidates from a wide sheet start at low co
 be confirmed in bulk**; a column the user turns into a taxon by hand needs no confirmation.
 Unconfirmed candidates are left out, and leaving them out has to be accepted
 (the page's own acceptance, not a rule).
+
+What the **values and the unit** rule out is decided before the name (`convert/columnValues.ts`), because they
+need no list of header words: a column whose cells are all whole years (1800-2100, at least 3 rows, within 120
+years) is ignored (`year-values`); one value that is not a whole number on every row (a core diameter) is ignored
+(`constant-value`; a constant 0 or 1 is a legitimate species column and stays); a unit of length, time, speed or
+temperature makes it a measured variable, a unit of volume or area the sampling effort (`unit-variable`,
+`unit-effort`; masses and every "per" unit are not listed, a species may carry them). A camel-case name is read as
+its words: `CoreDiameter`, `DepthStart` (a size word in a name of several words is a measurement) and
+`DepthSampleStart` / `DepthSampleEnd` are the top and bottom of a depth range. A column of Latin binomials
+(`latinNameShare`: at least 80 % of at least 3 cells start with a genus and an epithet that ends like a Latin
+one, two of them different) is the taxon of the sheet under any header (`values-latin-names`); two such columns
+are not told apart, the leftmost is offered at low confidence. A header that holds `AphiaID`, `aphia_id` or
+`Aphia ID` whole, also inside a bracket, over whole numbers is the taxon ID; on a long sheet a numeric column whose
+unit only counts individuals (`#`, `n`, `ind`) and that no name made a quantity is offered as the quantity
+(`count-unit-quantity`). `Calanus`, `Acartia` and every other genus name stay candidates.
 
 Other overlay decisions: a **summary column** (a header starting with or holding Total, Suma,
 Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it would count the

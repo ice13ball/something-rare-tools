@@ -37,6 +37,8 @@ const VARIABLE_TOKENS = new Set([
  * organisms ("Nitrogen fixers [cells/l]", "Light [ind]") may still be a species, and only a column without a counting unit is a variable.
  */
 const MEASUREMENT_WORDS = new Set([
+  // sizes of the sample or of the site (these never name a genus): 'DepthStart', 'CoreDiameter', 'Water depth'
+  'depth', 'diameter', 'length', 'width', 'height', 'thickness', 'volume', 'area', 'distance',
   // physical and optical sensor quantities of a CTD or bottle file: plain English words that the genus shape below would otherwise take for a taxon candidate (the repo holds no genus list to
   // check against; none of these is a genus name to the author's knowledge: they are ordinary English measurement words, not Latin names)
   'activity', 'fluorescence', 'turbidity', 'irradiance', 'transmission', 'transmittance', 'attenuation', 'beam', 'backscatter', 'backscattering', 'absorbance', 'absorption', 'radiance',
@@ -49,6 +51,7 @@ const MEASUREMENT_WORDS = new Set([
  * alkalinity, pigments) are left out on purpose: they keep the nutrient / pigment / isotope ratio / rate reason.
  */
 const PHYSICAL_WORDS = new Set([
+  'depth', 'diameter', 'length', 'width', 'height', 'thickness', 'volume', 'area', 'distance',
   'activity', 'fluorescence', 'turbidity', 'irradiance', 'transmission', 'transmittance', 'attenuation', 'beam', 'backscatter', 'backscattering', 'absorbance', 'absorption', 'radiance',
   'extinction', 'conductivity', 'conductance', 'salinity', 'temperature', 'density', 'pressure', 'secchi', 'sigma', 'visibility', 'light',
 ]);
@@ -66,6 +69,9 @@ export function namePart(header: string): string {
     t = next;
   }
 }
+
+/** Words of a size or a volume of the sample ('Core diameter', 'Water depth', 'DepthStart'): a name of several words with one of them is a measurement, not a genus and an epithet. */
+const SIZE_WORDS: ReadonlySet<string> = new Set(['depth', 'diameter', 'length', 'width', 'height', 'thickness', 'volume', 'area', 'distance']);
 
 /** One genus-like word: 3+ characters, letters with an internal "-", "_" or "." ("Pseudo-nitzschia", "Macoma_balthica"), a trailing full stop allowed. */
 const GENUS_WORD = /^[a-z][a-z._-]+[a-z.]$/;
@@ -111,6 +117,9 @@ export function nameKind(header: string, abundance = false): NameKind {
   if (key === '') return 'unknown';
   if (DESCRIPTOR.test(key)) return 'descriptor';
   const lead = asLetters.split(/[\s,]+/)[0].replace(/[.;]+$/, '');
+  // a camel-case name is read as its words: 'CoreDiameter' = core, diameter; 'DepthStart' = depth, start (the measurement word may be any word of a name that is no genus)
+  const camelWords = raw.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[\s,_-]+/);
+  if (camelWords.length > 1 && !abundance && camelWords.some((w) => SIZE_WORDS.has(w))) return 'variable';
   if (VARIABLE_TOKENS.has(key) || VARIABLE_TOKENS.has(lead) || VARIABLE_TOKENS.has(lead.replace(/[^a-z0-9]/g, '')) || ISOTOPE.test(lead.replace(/[^a-z0-9]/g, '')) || RATIO.test(lead)) return 'variable';
   // A statistic in the header is a summary of a variable, never a taxon ("Macrofauna.biomass mean/st.dev. (gDW m-2)") ... except that the MEAN of a count of organisms is the
   // mean abundance of a species ("Calanus finmarchicus mean [ind/m3]"): with an organism unit a central statistic alone stays a taxon candidate (own reason, 'taxon-mean'),

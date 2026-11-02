@@ -65,12 +65,34 @@ export function transposedReason(sheet: RawSheet, decimalComma: boolean): Layout
   return 'transposed';
 }
 
+/**
+ * A row of footnote markers where the header should be: most of its cells are a single letter, a short list of letters ("a,c") or NA, and the row below holds words (the real column names).
+ * The names above them would be read as the columns' names and the words below as data (false ROW-NON-NUMERIC on every column). Decided from the structure, not from any name.
+ */
+const FOOTNOTE_MARKER = /^(?:[a-z](?:\s*,\s*[a-z])*|NA|n\/a)$/i;
+function footnoteMarkerRow(sheet: RawSheet, cols: number): boolean {
+  if (cols < 6 || sheet.rows.length < 2) return false;
+  const named = sheet.header.slice(0, cols).map((h) => h.trim()).filter((h) => h !== '');
+  if (named.length < 5 || named.filter((h) => FOOTNOTE_MARKER.test(h)).length * 5 < named.length * 4) return false;
+  const first = sheet.rows[0];
+  let filled = 0;
+  let words = 0;
+  for (let i = 0; i < cols; i++) {
+    const c = first.cells[i] ?? null;
+    if (isBlankCell(c)) continue;
+    filled++;
+    if (typeof c === 'string' && /[A-Za-z]{4,}/.test(c)) words++;
+  }
+  return filled >= 3 && words * 2 > filled;
+}
+
 function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
   // the names the tool added (IN-HEADER-SHORT) are not the file's: only the file's own header says whether it is empty
   const cols = sheet.unnamedFrom ?? sheet.header.length;
   if (cols >= 3 && sheet.header.slice(0, cols).filter((h) => h.trim() === '').length * 2 > cols) {
     return 'header-empty';
   }
+  if (footnoteMarkerRow(sheet, cols)) return 'header-footnote';
   if (sheet.rows.length >= 2) {
     const first = sheet.rows[0];
     let unitCells = 0;

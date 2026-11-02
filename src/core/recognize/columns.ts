@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMapping, TablePlan } from '../types';
 import { hemisphereLetter, parseCoordinate } from '../values/coords';
-import { cellsAreYearRanges, parseDate, parseTimeCell } from '../values/dates';
+import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { depthUnitOfHeader } from './depthUnit';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
@@ -571,6 +571,28 @@ function dmAxis(rows: readonly RawRow[], col: number, decimalComma: boolean): 'l
   return undefined;
 }
 
+/** A calendar date written out in full (not a year or a month alone): ISO with dashes, day.month.year, day/month/year or year/month/day. */
+const DATE_SHAPE = /\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{4}|\d{4}[./]\d{1,2}[./]\d{1,2}/;
+
+/**
+ * How many of the text cells of a column (the first 200) are full dates the date parser reads. A day/month order that the column itself decides is applied, an ambiguous one is not guessed
+ * (those cells do not count). The placeholder dates of a spreadsheet or an epoch are times, not dates.
+ */
+function dateShare(rows: readonly RawRow[], col: number, ctx: ProposeContext): { seen: number; good: number; withTime: boolean } {
+  const cells = rows.slice(0, 200).map((r) => r.cells[col] ?? null).filter((c): c is string => typeof c === 'string' && !isBlank(c));
+  const order = detectDayMonthOrder(cells);
+  let good = 0;
+  let withTime = false;
+  for (const c of cells) {
+    if (!DATE_SHAPE.test(c) || isEpochPlaceholder(c)) continue;
+    const d = parseDate(c, { date1904: ctx.date1904, dateFormatted: false, ...(order === 'unknown' ? {} : { order }) });
+    if ('error' in d || d.precision === 'year' || d.precision === 'month') continue;
+    good++;
+    if (d.precision === 'minute' || d.precision === 'second') withTime = true;
+  }
+  return { seen: cells.length, good, withTime };
+}
+
 const PLACE_MAX_CHARS = 40;
 const PLACE_MAX_WORDS = 6;
 
@@ -787,6 +809,15 @@ function pairHemisphereColumns(
   }
 }
 
+/**
+ * 'NA' is far more often "not available" than sodium. Sodium keeps the chemical spelling 'Na', and a column that is written 'NA' or 'na' is sodium only when its header states a
+ * unit (a concentration): a column of notes, flags or footnote marks has none. Decided on the header as written (the vocabulary matches the folded key, which has lost the case).
+ */
+function isAmbiguousNa(hu: HeaderUnit): boolean {
+  const name = hu.name.trim();
+  return /^na$/i.test(name) && name !== 'Na' && hu.unit === undefined;
+}
+
 /** Proposes a role for every column of a sheet, in column order. */
 export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProposal[] {
   const rows = sampleRows(sheet);
@@ -877,7 +908,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     const st = numericStats(rows, index, ctx.decimalComma);
     // a spread or an extreme of a variable ('Temperature st.dev.', 'Salinity max') is not the variable itself: it keeps its own name, so that two columns never claim one variable
     const stat = statisticOfName(key);
-    const canonical = variableKey ?? (stat?.statistic === true ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
+    const canonical = variableKey ?? (stat?.statistic === true || isAmbiguousNa(hu) ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
 
     // 4. values: degrees + minutes with hemisphere letters, ISO dates (only when no name or code explained the column)
     if (canonical === undefined && !isNumeric(st)) {
@@ -886,18 +917,10 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
         const c: Cand = { slot: axis === 'lat' ? 'latitude' : 'longitude', tier: 3, kind: axis === 'lat' ? 'latitude' : 'longitude', why: why('values-degmin') };
         return { proposal: { ...base, role: { kind: 'ignore' }, confidence: 'low', ...reasonOf(c.why) }, cand: c };
       }
-      let isoDates = 0;
-      let seen = 0;
-      for (const r of rows.slice(0, 200)) {
-        const c = r.cells[index] ?? null;
-        if (typeof c !== 'string' || isBlank(c)) continue;
-        seen++;
-        const d = parseDate(c, { date1904: ctx.date1904, dateFormatted: false });
-        if (!('error' in d) && d.precision !== 'year' && d.precision !== 'month' && /\d{2,4}-\d{2}-\d{2}/.test(c)) isoDates++;
-      }
-      if (seen > 0 && isoDates === seen) {
-        const t = hasTimeOfDay(rows, index, ctx, false);
-        const c: Cand = { slot: 'when', tier: 3, kind: t ? 'datetime' : 'date', why: why('values-iso-dates') };
+      const share = dateShare(rows, index, ctx);
+      // a date column with a stray cell or two (a units row, a note) is still a date column; ROW-DATE-UNPARSEABLE names the cells that do not read
+      if (share.seen > 0 && (share.good === share.seen || (share.seen >= 10 && share.good * 10 >= share.seen * 9))) {
+        const c: Cand = { slot: 'when', tier: 3, kind: share.withTime ? 'datetime' : 'date', why: why('values-iso-dates') };
         return { proposal: { ...base, role: { kind: 'ignore' }, confidence: 'low', ...reasonOf(c.why) }, cand: c };
       }
       return ignore(why('text-column'), 'high');
@@ -996,6 +1019,19 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
   }
 
   pairHemisphereColumns(entries, bySlot, rows);
+
+  // a column NAMED time whose cells are full dates with a time of day ("2003-01-17T00:00:00Z") is the date and time of the row, when no other column is: left as a time
+  // it would leave the sheet without a date. With a date column beside it, it stays a time (the time of day is read from it, dataset.ts).
+  if (!entries.some((e) => e.proposal.role.kind === 'date' || e.proposal.role.kind === 'datetime')) {
+    for (const e of entries) {
+      if (e.proposal.role.kind !== 'time' || e.cand?.guard !== undefined) continue;
+      const share = dateShare(rows, e.proposal.index, ctx);
+      if (share.seen > 0 && share.good * 2 > share.seen && share.withTime) {
+        e.proposal.role = { kind: 'datetime' };
+        applyReason(e.proposal, why('time-holds-datetimes'), []);
+      }
+    }
+  }
 
   // a date column whose values carry a time of day is a datetime
   for (const e of entries) {

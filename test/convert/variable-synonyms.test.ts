@@ -266,12 +266,14 @@ const mismatches = (e: Awaited<ReturnType<typeof run>>) => e.findings.filter((f)
 
 describe('Polish headers of a wide sheet are variables, and the concept the user confirms is written', () => {
   it('the recogniser keeps the Polish measured-variable headers as variables (not taxon candidates), and still takes an unknown numeric header for a taxon', () => {
-    const file = fileOf([...W1_HEADER, 'Temperatura [°C]', 'Suma azotanów i azotynów [µmol/L]', 'temperatura powietrza [°C]', 'Zasolenie [PSU]'], [[...W1_ROWS[0], 7.2, 8.1, 9.5, 34.8]]);
+    const file = fileOf([...W1_HEADER, 'Temperatura [°C]', 'Suma azotanów i azotynów [µmol/L]', 'temperatura powietrza [°C]', 'Zasolenie [PSU]', 'Nowy takson'], [[...W1_ROWS[0], 7.2, 8.1, 9.5, 34.8, 3]]);
     const roles = Object.fromEntries(mappingOf(file).columns.map((c) => [c.header, c.role]));
     expect(roles['Temperatura [°C]']).toMatchObject({ kind: 'variable', variable: 'Temperatura', unit: '°C' });
     expect(roles['Zasolenie [PSU]']).toMatchObject({ kind: 'variable', variable: 'Zasolenie' });
     expect(roles['Suma azotanów i azotynów [µmol/L]']).toMatchObject({ kind: 'variable' }); // a "sum" header, but a measured variable: not ignored as a total
-    expect(roles['temperatura powietrza [°C]']).toMatchObject({ kind: 'taxon', header: true });
+    // an unknown name with a unit of temperature is a measurement whatever the name: no species is counted in °C (the unit decides, not the name)
+    expect(roles['temperatura powietrza [°C]']).toMatchObject({ kind: 'variable', unit: '°C' });
+    expect(roles['Nowy takson']).toMatchObject({ kind: 'taxon', header: true });
   });
 
   it('a confirmed concept for a Polish column is written for that column; nothing is written for the others', async () => {
