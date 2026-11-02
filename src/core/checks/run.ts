@@ -63,7 +63,7 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
   }
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   for (const ds of session.datasets) {
-    pushAll(findings, checkMetadataVsData(ds));
+    pushAll(findings, checkMetadataVsData(ds, session.datasets));
     pushAll(findings, checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today }));
     pushAll(findings, checkChemistry(ds));
   }

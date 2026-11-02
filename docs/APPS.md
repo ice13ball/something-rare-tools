@@ -558,6 +558,10 @@ sources):
   ([META-NO-POSITIONS](rules.md#META-NO-POSITIONS), an error, cited to the OBIS Manual: `decimalLatitude` and
   `decimalLongitude` are the minimally required location terms): no latitude or longitude column is mapped, no row
   has a position and no record has a bounding box. A position in the metadata only is left to the rules that compare data with metadata.
+  Both are judged per table and name the sheet when the file has several. A table that holds no
+  measurement (no variable column with numbers on two or more rows: a one-row gear or coordinate-system sheet)
+  does not raise them while another table of the session does hold measurements; a table with measurements
+  that lacks them still does, whatever a lookup sheet elsewhere holds. When no table holds measurements, each is judged on its own.
 - **Across files** (`checks/crossfile.ts`; a dataset is one table, so a three-sheet workbook is
   three datasets): matched samples (same station or position, same depth, same day) that look
   duplicated; the same station dated differently with at least two equal shared variables; station

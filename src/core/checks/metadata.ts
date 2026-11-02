@@ -162,13 +162,42 @@ function variableMissing(ds: Dataset): Finding[] {
   return out;
 }
 
-function noDates(ds: Dataset): Finding[] {
-  if (ds.rows.length === 0 || ds.layout.unsupported) return [];
+/**
+ * A table that holds measurements: at least one variable column with numbers on two or more rows. A one-row sheet (a gear, a
+ * coordinate system, a country: a lookup) has at most one number per column, so it holds none.
+ */
+function holdsMeasurements(ds: Dataset): boolean {
+  const seen = new Map<string, number>();
+  for (const r of ds.rows) {
+    for (const key in r.values) {
+      if (r.values[key].status !== 'ok') continue;
+      const n = (seen.get(key) ?? 0) + 1;
+      if (n >= 2) return true;
+      seen.set(key, n);
+    }
+  }
+  return false;
+}
+
+/**
+ * META-NO-DATES / META-NO-POSITIONS speak for a table that holds the measurements. A lookup table of the same session (it holds none,
+ * while another table does) is not what the dates and positions are for; a table with measurements that lacks them is still reported,
+ * whatever the other tables hold. When no table of the session holds measurements, every table is judged as before.
+ */
+function isLookupBesideData(ds: Dataset, all: readonly Dataset[]): boolean {
+  return !holdsMeasurements(ds) && all.some((o) => o !== ds && !o.layout.unsupported && holdsMeasurements(o));
+}
+
+/** The sheet a finding of this table is about, when the file has several (the label is then `file (sheet)`). */
+const sheetOf = (ds: Dataset): { sheet?: string } => (ds.label !== ds.file && ds.rows[0] ? { sheet: ds.rows[0].sheet } : {});
+
+function noDates(ds: Dataset, all: readonly Dataset[]): Finding[] {
+  if (ds.rows.length === 0 || ds.layout.unsupported || isLookupBesideData(ds, all)) return [];
   // A raw date cell that did not parse still means the table has a date column (ROW-DATE-UNPARSEABLE reports it).
   const rowDate = ds.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== ''));
   // DataCite 'Collected' dates are parsed into temporalExtent; publication/issued dates are never kept.
   const metaDate = ds.metadata.some((r) => r.temporalExtent && (r.temporalExtent.start || r.temporalExtent.end));
-  return rowDate || metaDate ? [] : [makeFinding('META-NO-DATES', { file: ds.file })];
+  return rowDate || metaDate ? [] : [makeFinding('META-NO-DATES', { file: ds.file, ...sheetOf(ds) })];
 }
 
 /**
@@ -177,15 +206,15 @@ function noDates(ds: Dataset): Finding[] {
  * ROW-NO-COORD / ROW-NON-NUMERIC / DWC-TERM-EMPTY say so), no row has a position, and no record has a bounding box (a point is a
  * degenerate box). A position in the metadata only is left to the data-against-metadata rules.
  */
-function noPositions(ds: Dataset): Finding[] {
-  if (ds.rows.length === 0 || ds.layout.unsupported) return [];
+function noPositions(ds: Dataset, all: readonly Dataset[]): Finding[] {
+  if (ds.rows.length === 0 || ds.layout.unsupported || isLookupBesideData(ds, all)) return [];
   const mapped = ds.mappings.some((m) => m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude'));
   const rowPos = ds.rows.some((r) => r.lat !== undefined || r.lon !== undefined || r.posBlank !== undefined);
   const metaPos = ds.metadata.some((r) => r.bbox !== undefined);
-  return mapped || rowPos || metaPos ? [] : [makeFinding('META-NO-POSITIONS', { file: ds.file })];
+  return mapped || rowPos || metaPos ? [] : [makeFinding('META-NO-POSITIONS', { file: ds.file, ...sheetOf(ds) })];
 }
 
 /** Category A — metadata extents, abstract and dates compared with the data (Task 7). */
-export function checkMetadataVsData(ds: Dataset): Finding[] {
-  return [...noDates(ds), ...noPositions(ds), ...dateOutsideExtent(ds), ...pointOutsideBbox(ds), ...variableMissing(ds)];
+export function checkMetadataVsData(ds: Dataset, all: readonly Dataset[] = [ds]): Finding[] {
+  return [...noDates(ds, all), ...noPositions(ds, all), ...dateOutsideExtent(ds), ...pointOutsideBbox(ds), ...variableMissing(ds)];
 }
