@@ -134,6 +134,27 @@ describe('extra grouping columns are never picked by themselves', () => {
   });
 });
 
+describe('event words in a column name', () => {
+  const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Cast', 'Species', 'Count'];
+  const rows = (): Cell[][] => [1, 2].flatMap((c) => TAXA.slice(0, 3).map((sp) => ['A', '2023-06-10', 55, 2.5, 10, c, sp, 2] as Cell[]));
+  it.each(['Cast', 'Cast_no', 'Haul_ID', 'TowNo', 'Net 2', 'deployment'])('%s is added by name', (name) => {
+    const h = header.map((x) => (x === 'Cast' ? name : x));
+    const p = propose(h, rows(), 'long', { [name]: { kind: 'ignore' } });
+    expect(p.grouping?.added).toEqual([{ header: name, why: 'name' }]);
+  });
+  it.each(['Tow_notes', 'Net_comment', 'Haul_flag'])('%s is not an event column: the proposal is refused and names it', (name) => {
+    const h = header.map((x) => (x === 'Cast' ? name : x));
+    const p = propose(h, rows(), 'long', { [name]: { kind: 'ignore' } });
+    expect(p.refusal?.reason).toBe('taxon-repeats');
+    expect(p.refusal!.candidates!.map((c) => c.header)).toContain(name);
+  });
+  it('a typed position in one row of a station and date does not split the sample', () => {
+    const r = rows().map((x, i) => (i === 1 ? [...x.slice(0, 2), 55.5, ...x.slice(3)] : x));
+    const p = propose(header, r, 'long', { Cast: { kind: 'ignore' } });
+    expect(p.grouping!.by.some((b) => b.part === 'position')).toBe(false);
+  });
+});
+
 describe('CONV-SAMPLE-PER-ROW: one sample split into an event per taxon row', () => {
   const headerWithCode = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Species', 'Count'];
   const withRowCodes = (stations: string[], depths: number[]): Cell[][] => longRows(stations, depths).map((r, i) => [r[0], `code-${i + 1}`, ...r.slice(1)]);
@@ -177,5 +198,34 @@ describe('CONV-SAMPLE-PER-ROW: one sample split into an event per taxon row', ()
     expect(positions.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
     const sameDive = await exportSheet(headerWithCode, Array.from({ length: 40 }, (_, i) => one(i, {})), q);
     expect(sameDive.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
+  });
+
+  const named = (i: number): string => `Taxon number ${i}`;
+  const b08Header = ['Station', 'time', 'Depth_m', 'Latitude', 'Longitude', 'Volume filtered [m3]', 'Species', 'Abundance', 'Sample'];
+  const density = { quantity: { kind: 'density' as const, unit: '#/m3', effort: { source: 'column' as const } } };
+
+  it('fires on the natural path: a time column that gives no date, an effort column, a density, a code on every row, most rows zero', async () => {
+    const rows: Cell[][] = [];
+    let n = 0;
+    for (const st of ['A', 'B', 'C']) for (const t of ['2003-01-17T00:00:00Z', '2003-01-18T00:00:00Z']) for (let i = 0; i < 25; i++) rows.push([st, t, 10, 55, 2.5, 30.5, named(i), i < 6 ? 4 + i : 0, `r${++n}`]);
+    const e = await exportSheet(b08Header, rows, density);
+    const f = e.findings.filter((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW');
+    expect(f).toHaveLength(1);
+    expect(e.result.stats.samples).toBe(150);
+    expect(Number(f[0].params.events)).toBeGreaterThan(Number(f[0].params.occurrences));
+  });
+
+  it('fires when one taxon is listed twice per sample (two stages) or the revisits have no date', async () => {
+    const stages: Cell[][] = [];
+    let n = 0;
+    for (const [k, st] of Array.from({ length: 20 }, (_, i) => `S${i}`).entries()) for (const stage of ['c1', 'c2'].map((x) => x)) stages.push([st, `2003-01-1${(k % 5) + 1}`, 10, 55, 2.5, 30.5, 'Calanus finmarchicus', 3, `r${++n}`]);
+    const e = await exportSheet(b08Header, stages, density);
+    expect(e.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(true);
+    // one station, no date, two visits told apart by nothing but the code on each row
+    const visits: Cell[][] = [];
+    n = 0;
+    for (let v = 0; v < 2; v++) for (let i = 0; i < 20; i++) visits.push(['A', null, 10, 55, 2.5, 30.5, named(i), 2, `r${++n}`]);
+    const nodate = await exportSheet(b08Header, visits, density);
+    expect(nodate.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(true);
   });
 });

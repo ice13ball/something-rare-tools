@@ -452,6 +452,8 @@ describe('a cast number at the end of a station label', () => {
     // an exact match is checked too (the tick is not what makes the check)
     const exact = run([bio([['XX1/006-1', 'n1', '2099-01-01', 71, 10.5, 0, 25, 3]]), ctd([['XX1/006-1', '2099-01-01', 71.5, 10.5, 2, -1.6]], false)]);
     expect(exact.findings.some((x) => x.ruleId === 'CONV-PROFILE-STATION-FAR')).toBe(true);
+    // the same fact is not said twice: the station spread across the two sheets is that far pair
+    expect(exact.findings.some((x) => x.ruleId.startsWith('ROW-STATION-SPREAD'))).toBe(false);
     // the biology station's own samples without a position give nothing to compare with
     const nopos = run([sheetInput(fileOf(['Station', 'Sample', 'Date', 'Depth top [m]', 'Depth bot [m]', 'Ctenophora'], [['XX1/006-6', 'n1', '2099-01-01', 0, 25, 3]], 'B', { fileName: 'b.csv' }), { quantity: QUANTITY }), ctd(CTD, true)]);
     expect(nopos.findings.some((x) => x.ruleId === 'CONV-PROFILE-STATION-FAR')).toBe(false);

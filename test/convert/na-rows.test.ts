@@ -143,4 +143,16 @@ describe('a long sheet with blank or NaN quantities', () => {
     expect(renderConvertPlain(find(e, 'CONV-NA-SKIPPED')[0], 'pl')).toContain('3 wiersze z gatunkiem nie mają');
     expect(renderConvertPlain(find(e, 'CONV-QUANTITY-BLANK-KEPT')[0], 'pl')).toContain('2 wiersze mają');
   });
+
+  it('a time column that holds full dates, with no date column, blocks instead of losing the date', async () => {
+    const header = ['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'];
+    const e = await exportSheet(header, [['S1', 's1', '2003-01-17T00:00:00Z', 55.5, 2.5, 'Calanus finmarchicus', 4], ['S1', 's2', '2003-01-18T00:00:00Z', 55.5, 2.5, 'Oithona similis', 2]], { quantity: { kind: 'count' } });
+    const f = find(e, 'CONV-TIME-HOLDS-DATES');
+    expect(f).toHaveLength(1);
+    expect(f[0].params.count).toBe(2);
+    expect(policyOf(f[0])).toBe('block');
+    // read as a date and time, the finding is gone
+    const ok = await exportSheet(header, [['S1', 's1', '2003-01-17T00:00:00Z', 55.5, 2.5, 'Calanus finmarchicus', 4]], { quantity: { kind: 'count' }, edit: { time: { kind: 'datetime' } } });
+    expect(find(ok, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
+  });
 });

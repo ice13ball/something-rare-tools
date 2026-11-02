@@ -8,8 +8,8 @@ import { parseNumber } from '../values/numbers';
  * taxon its own sample. The rows of one sample share the columns that define a sample: the station, the cruise, the date and time, the depth, the replicate, and in some files a
  * cast / haul / net number that no role names. The key is built from the MAPPED roles first. Then:
  *
- *   - a position is added when positions differ inside a group (rows of one sample that disagree on position block the conversion anyway);
- *   - a column is added by itself only when a taxon still repeats inside a group AND its name says cast, haul, tow, net, replicate or deployment (whole words) AND it at least halves
+ *   - a position is added when the key has no station and positions differ inside a group (rows of one sample that disagree on position block the conversion anyway);
+ *   - a column is added by itself only when a taxon still repeats inside a group AND its name says cast, haul, tow, net, replicate or deployment (the whole name, or with a number or id marker) AND it at least halves
  *     the repeats without making every row its own group. Any other column (Sex, Size_class, Notes, Sorter, Mesh, Length_mm ...) splits samples that are one: the tool never picks
  *     one by itself. When repeats remain, it refuses and NAMES the columns that would remove them, and the user picks one (`extra`).
  *
@@ -69,13 +69,15 @@ const MAX_CANDIDATES = 5;
 
 /** Header words that name a sampling event inside a station and date: the one kind of extra column added without being asked. */
 const EVENT_WORDS = new Set(['cast', 'haul', 'tow', 'net', 'replicate', 'rep', 'deployment']);
+// what may follow the word without being another word: a number or an id marker ('Cast_no', 'Haul ID', 'TowNo', 'Net 2')
+const ID_SUFFIX = new Set(['no', 'nr', 'num', 'number', 'id', 'n']);
 function namesEvent(header: string): boolean {
   const words = header
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .toLowerCase()
-    .split(/[^\p{L}]+/u)
-    .filter((w) => w !== '');
-  return words.some((w) => EVENT_WORDS.has(w));
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w !== '' && !/^\d+$/.test(w) && !ID_SUFFIX.has(w));
+  return words.length === 1 && EVENT_WORDS.has(words[0]);
 }
 
 const blank = (c: RawCell | undefined): boolean => c === null || c === undefined || String(c).trim() === '';
@@ -137,7 +139,8 @@ export function groupLongSheet(sheet: RawSheet, mapping: SheetMapping, decimalCo
   let key: GroupKeyColumn[] = [...base];
   const added: AddedColumn[] = [];
   // a position when positions differ inside a group of the key: such rows would block the conversion as one sample
-  if (!key.some((k) => k.part === 'position') && position.length > 0) {
+  // (only when the key has no station: a typed position in one row of a station and date would otherwise split the sample, and the station checks say it better)
+  if (!key.some((k) => k.part === 'position' || k.part === 'station') && position.length > 0) {
     const first = new Map<string, string>();
     let differs = false;
     for (let r = 0; r < rows.length && !differs; r++) {
@@ -193,7 +196,7 @@ export function groupLongSheet(sheet: RawSheet, mapping: SheetMapping, decimalCo
     const candidates: GroupCandidate[] = [];
     for (const c of usable()) {
       const t = trial(c);
-      if (t !== undefined && t.repeats <= m.repeats / 2) candidates.push({ index: c.index, header: c.header, repeats: t.repeats, groups: t.groups });
+      if (t !== undefined && t.repeats < m.repeats) candidates.push({ index: c.index, header: c.header, repeats: t.repeats, groups: t.groups });
     }
     candidates.sort((a, b) => a.repeats - b.repeats || a.groups - b.groups || a.index - b.index);
     return { ok: false, reason: 'taxon-repeats', repeats: m.repeats, rows: filledCount, ...(candidates.length === 0 ? {} : { candidates: candidates.slice(0, MAX_CANDIDATES) }) };

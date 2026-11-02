@@ -69,4 +69,14 @@ describe('station checks in /convert', () => {
     expect(f[0]).toMatchObject({ sheet: 'B', file: 'two.csv', lines: [2] });
     expect(f[0].params.signLon).toBe('yes');
   });
+
+  it('a spread across the sheets that hold the station is said on those sheets, not on the first', async () => {
+    const a = sheetInput(fileOf(H, [['S0', 's0', '2020-06-01', 55, 3, 'Calanus finmarchicus', 2]], 'A', { fileName: 'a.csv' }), { quantity: { kind: 'count' } });
+    const b = sheetInput(fileOf(H, [['S9', 's1', '2020-06-01', 10, 20, 'Calanus finmarchicus', 2]], 'B', { fileName: 'b.csv' }), { quantity: { kind: 'count' } });
+    const c = sheetInput(fileOf(H, [['S9', 's2', '2020-06-02', 30, 20, 'Calanus finmarchicus', 2]], 'C', { fileName: 'c.csv' }), { quantity: { kind: 'count' } });
+    const e = await exportSheets([a, b, c]);
+    const f = e.findings.filter((x) => x.ruleId === 'ROW-STATION-SPREAD-FAR');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ value: 'S9', file: 'b.csv', sheet: 'B, C' });
+  });
 });

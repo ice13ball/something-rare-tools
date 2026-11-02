@@ -1144,7 +1144,8 @@ column. A sample size declared for the sheet appears only in `measurementRemarks
 volume); nothing is divided. `measurementUnitID` is written when the unit is g, mg, kg (P06 UGRM, MGRM,
 KGXX) or a per-area / per-volume mass the rate table knows. The unit is the one of a bracket
 (`Weight [g]`, `Weight (kg)`) or, when there is none, the mass unit that stands as a word of the name **read whole**
-(`biomassNameUnit`): `weight_kg_total` is `kg`, `biomass_kg_km2` is `kg/km2`, `wet_weight_mg_m3` is `mg/m3`. The
+(`biomassNameUnit`): `weight_kg_total` is `kg`, `biomass_kg_km2` is `kg/km2`, `wet_weight_mg_m3` is `mg/m3`, `biomass_g/m2` is `g/m2`; a mass unit the P06 table does not know (`ug`, `lb`, `gC`) is
+written as the header wrote it, without an id. The
 P06 id is written only when the table knows that exact unit; a unit with none is written whole and said
 (`CONV-UNIT-NO-P06`); when a mass unit is followed by words that are neither a per-area / per-volume part nor a kind of
 mass, **no partial unit is written**, `measurementUnit` is empty and `CONV-BIOMASS-UNIT-UNCLEAR` says so. Two biomass columns of one kind (or both
@@ -1330,14 +1331,18 @@ code" (the button above applies it).
   new code column last, for the user to check and drop again). **A wide sheet** gets one code per row
   (`<station>-<n>`). **A long sheet** (a row is a taxon) gets **one code per sample**: the rows are grouped
   by the columns that define a sample, read from the mapped roles (cruise, station, date and time, depth,
-  replicate; the position when nothing else is mapped, and **also when positions differ inside a group**, because
-  rows of one sample that disagree on position block the conversion). Numbers are compared as numbers (`10` and
+  replicate; the position when nothing else is mapped, and **also when the key has no station and positions differ
+  inside a group**, because rows of one sample that disagree on position block the conversion; with a station, a typed
+  position in one row is left to the station checks). Numbers are compared as numbers (`10` and
   `10.0` are one depth). While a taxon still repeats inside a group, one more column is added **by itself only when
-  its name says cast, haul, tow, net, replicate or deployment** (whole words) and it at least halves the repeats
+  its whole name says cast, haul, tow, net, replicate or deployment** (with a number or an id marker: `Cast_no`,
+  `TowNo`; `Tow_notes`, `Net_comment` and `Haul_flag` are not event columns) and it at least halves the repeats
+  
   without making every row its own group. Any other column (`Sex`, `Size_class`, `Notes`, `Sorter`, `Mesh`,
   `Length_mm` ...) would split one sample into several, so it is never picked by the tool: when repeats above 1% of
   the rows remain, the proposal is refused, the columns that would remove the repeats are **named**, and the user
-  picks one in the preview (`extra`; it is then said to be added because the user chose it).
+  picks one in the preview (`extra`; it is then said to be added because the user chose it). Picks accumulate, so two
+  columns can be combined, and a button clears them.
   The page **shows the grouping before the file is offered**
   (`convert/sampleGroups.ts`): "450 samples from 53,608 rows, grouped by station + date + depth", each column
   added beyond the roles and why, the rows in which a taxon still repeats inside a group (possible replicates the key
@@ -1348,7 +1353,9 @@ code" (the button above applies it).
   occurrences, sample events for at least 80% of them and at least half of the events sharing station, date and
   time, depth and position with another event **whose taxa differ** (a taxon seen again at the same place is another
   sample, not another row of one) is one sample split into an event per taxon row (`CONV-SAMPLE-PER-ROW`, a warning
-  to accept, naming the ratio); a missing code blocks
+  to accept, naming the ratio). The time is taken as written, so a time column that gives no date still tells visits apart; a
+  place counts when few of its events repeat a taxon of an earlier one; and **more sample events than occurrences**
+  (events made for rows that give none) is evidence alone; a missing code blocks
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
@@ -1416,9 +1423,12 @@ code" (the button above applies it).
 - **A plain depth in another unit** (`convert/build.ts` `depthReader`, `recognize/depthUnit.ts`): the unit a
   header states is read in every form: in brackets (`Depth [km]`, `Depth (fth)`, `(ft.)`), after any separator
   (`Depth_fm`, `Depth, ft`, `Depth-ft`, `Depth/ft`, `Depth.ft`, `depth_ft_max`, `Depth feet`), before the depth
-  word (`ft_depth`) or as the whole header (`Fathoms`). A unit must END the name (only a min/max word may follow)
-  and must not follow a number, so `Depth at 10 km` and `Depth_km_offshore` have none; two different units in one
-  name (`depth_m_ft`) are a conflict and block. It is read at the build level whoever chose the role, so a depth
+  word (`ft_depth`) or as the whole header (`Fathoms`). Converting is for
+  the exact forms only: the unit ends the name, or only a bound or statistic word follows it (`Depth_ft_max`,
+  `Depth_fm_mean`, `depth_ft_avg`). A unit with any other word after it (`Depth_ft_corrected`, `Depth ft sonar`,
+  `Depth (ft) sonar`, `Depth_ft_1`, `depth_cm_bsf`, `Depth_km_offshore`) blocks, and the message shows what the header said;
+  a unit that follows a number (`Depth at 10 km`) is none; two different units in one name (`depth_m_ft`,
+  `Depth (m or ft)`) are a conflict and block. camelCase is split (`depthFt`). It is read at the build level whoever chose the role, so a depth
   picked by hand (`Sounding (fm)`, `MaxDepth_ft`) is converted too; a unit typed on the role wins. Only a unit with
   an exact definition in metres is converted, by decimal arithmetic on the digits of the cell (international
   fathom 1.8288 with `fm fms fth ftm fathom(s)`, foot 0.3048 with `ft feet foot`, kilometre 1000), and the cell
@@ -1446,7 +1456,8 @@ For each taxon cell (`convert/build.ts`):
   the lines); with nothing else it makes no record and is counted and listed by line (`CONV-NA-SKIPPED`
   with `rows`; it names the other quantity-named columns that are filled on those rows and says when the whole column
   is empty, so numbers that sit in another column are not missed). A row with a **number or a weight and no taxon
-  name** is not converted and is said (`CONV-TAXON-EMPTY-ROW`). A quantity that is text (`trace`, `<1`) keeps the
+  name** is not converted and is said (`CONV-TAXON-EMPTY-ROW`). A **time column whose cells hold full dates while no column is
+  the date** blocks (`CONV-TIME-HOLDS-DATES`): the events would have no `eventDate` and the date in the file would be lost. A quantity that is text (`trace`, `<1`) keeps the
   weight of its row. A measured variable does not keep a row, because it is written once per sample and says
   nothing about the taxon. Rows with a taxon = occurrences + zeros skipped + rows counted as NA
   (`stats.occurrences`, `zerosSkipped`, `naSkipped`);
@@ -1817,7 +1828,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **177 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **178 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1831,8 +1842,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 79 | 37 / 31 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **177** | | | |
+| `CONV-` | `B` | 80 | 38 / 31 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **178** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

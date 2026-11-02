@@ -105,6 +105,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [working, setWorking] = useState(false);
   const [codesDone, setCodesDone] = useState<Record<string, string | null>>({});
   // a long sheet's proposal is SHOWN before it is offered (how many samples, grouped by what), or refused; it is valid only for the roles and shape it was made for
+  // the columns the user picked to add to the grouping of a sheet (valid for the roles and shape they were picked for)
+  const [codesExtra, setCodesExtra] = useState<Record<string, { sig: string; indexes: number[] }>>({});
   const [codesPreview, setCodesPreview] = useState<Record<string, { p: CodeProposalView; sig: string }>>({});
   const [filesChosen, setFilesChosen] = useState(0);
   const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
@@ -188,6 +190,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setView(null);
     setCodesDone({});
     setCodesPreview({});
+    setCodesExtra({});
     setApproved({});
     setDrafts({});
     setConfirmed({});
@@ -313,6 +316,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setNvsSearches((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       setCodesDone({});
       setCodesPreview({});
+      setCodesExtra({});
     } catch (e) {
       setConvertError(messageOf(e));
     } finally {
@@ -332,6 +336,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     download(p.csv, name, 'text/csv');
     setCodesDone((prev) => ({ ...prev, [key]: name }));
     setCodesPreview((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
+  };
+  const pickedFor = (fileId: string, sheet: string): number[] => {
+    const e = codesExtra[sheetKey(fileId, sheet)];
+    return e !== undefined && e.sig === codesSig(fileId, sheet) ? e.indexes : [];
+  };
+  /** Adds a column to the picks of a sheet (they accumulate, so two columns can be combined) or clears them, and proposes again. */
+  const pickCodes = (fileId: string, sheet: string, index: number | null): void => {
+    const indexes = index === null ? [] : [...new Set([...pickedFor(fileId, sheet), index])];
+    setCodesExtra((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: { sig: codesSig(fileId, sheet), indexes } }));
+    void proposeCodes(fileId, sheet, indexes);
   };
   const proposeCodes = async (fileId: string, sheet: string, extra?: number[]): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
@@ -911,7 +925,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     <button type="button" className="button" onClick={() => void proposeCodes(c.fileId, c.sheet)}>
                       {t('convert.codes.propose')}
                     </button>
-                    {codesPreview[key] !== undefined && codesPreview[key].sig === codesSig(c.fileId, c.sheet) ? <CodesPreview p={codesPreview[key].p} onDownload={() => offerCodes(c.fileId, c.sheet, codesPreview[key].p)} onPick={(index) => void proposeCodes(c.fileId, c.sheet, [index])} /> : null}
+                    {codesPreview[key] !== undefined && codesPreview[key].sig === codesSig(c.fileId, c.sheet) ? <CodesPreview p={codesPreview[key].p} onDownload={() => offerCodes(c.fileId, c.sheet, codesPreview[key].p)} onPick={(index) => pickCodes(c.fileId, c.sheet, index)} onClear={pickedFor(c.fileId, c.sheet).length > 0 ? () => pickCodes(c.fileId, c.sheet, null) : undefined} /> : null}
                     {codesDone[key] ? <p role="status">{t('convert.codes.done', { name: codesDone[key] as string })}</p> : null}
                     {codesDone[key] === null ? <p role="status">{t('convert.codes.none')}</p> : null}
                   </div>
@@ -1113,7 +1127,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
 }
 
 /** The preview of a long sheet's code proposal: "450 samples from 53,608 rows, grouped by station + date + depth", what was added and why, or why nothing is proposed. */
-function CodesPreview({ p, onDownload, onPick }: { p: CodeProposalView; onDownload: () => void; onPick: (index: number) => void }): React.ReactElement | null {
+function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView; onDownload: () => void; onPick: (index: number) => void; onClear?: (() => void) | undefined }): React.ReactElement | null {
   const { lang } = useLang();
   if (p.refusal !== undefined) {
     const candidates = p.refusal.candidates ?? [];
@@ -1134,6 +1148,11 @@ function CodesPreview({ p, onDownload, onPick }: { p: CodeProposalView; onDownlo
             </ul>
           </>
         ) : null}
+        {onClear ? (
+          <button type="button" className="button" onClick={onClear}>
+            {t('convert.codes.clear')}
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -1151,6 +1170,11 @@ function CodesPreview({ p, onDownload, onPick }: { p: CodeProposalView; onDownlo
       <button type="button" className="button" onClick={onDownload}>
         {t('convert.codes.download')}
       </button>
+      {onClear ? (
+        <button type="button" className="button" onClick={onClear}>
+          {t('convert.codes.clear')}
+        </button>
+      ) : null}
     </div>
   );
 }

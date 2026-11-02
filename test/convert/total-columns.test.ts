@@ -122,6 +122,11 @@ describe('the unit of a biomass column is read whole', () => {
     expect(biomassNameUnit('biomass_kg_foo').unit).toBeUndefined();
     expect(biomassNameUnit('biomass_kg_foo').unclear).toBe('kg foo');
     expect(biomassNameUnit('weight_kg_g').unit).toBeUndefined();
+    expect(biomassNameUnit('biomass_g/m2')).toEqual({ unit: 'g/m2' });
+    expect(biomassNameUnit('biomass_gC_m2')).toEqual({ unit: 'gC/m2' });
+    expect(biomassNameUnit('weight_lb')).toEqual({ unit: 'lb' });
+    expect(biomassNameUnit('biomass_ug')).toEqual({ unit: 'ug' });
+    expect(biomassNameUnit('biomass_g/foo').unclear).toBe('g/foo');
   });
 
   const H = ['Station', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];

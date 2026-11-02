@@ -6,7 +6,7 @@ import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
-import { convertDepthText, depthSuffixUnit, depthUnitFactor, isMetreUnit } from '../recognize/depthUnit';
+import { convertDepthText, depthUnitFactor, depthUnitOfHeader, isMetreUnit } from '../recognize/depthUnit';
 import type { DepthUnitFactor } from '../recognize/depthUnit';
 import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
@@ -29,7 +29,7 @@ import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } fr
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
-import { biomassNameUnit } from './totalColumns';
+import { biomassNameUnit, isTotalHeader } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { seafloorMetres, seafloorUnitOf } from './seafloor';
@@ -217,7 +217,7 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         break;
       case 'depth': {
         // the unit is read from the header whoever chose the role (a depth picked by hand has a bare role); a unit stated on the role wins
-        const unit = r.unit !== undefined && r.unit.trim() !== '' ? r.unit : depthSuffixUnit(m.header);
+        const unit = r.unit !== undefined && r.unit.trim() !== '' ? r.unit : depthUnitOfHeader(m.header);
         const d = { ...spec, positive: r.positive, ...(unit === undefined ? {} : { unit }) };
         if (r.bound === 'min') c.depthMin ??= d;
         else if (r.bound === 'max') c.depthMax ??= d;
@@ -400,35 +400,38 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
 export const SPLIT_MIN_OCCURRENCES = 30;
 export const SPLIT_RATIO = 0.8;
 export const SPLIT_SHARED = 0.5;
+/** In a place of several events, the events whose taxon already stood in an earlier event of the place: at most this share for the place to count as one sample cut into rows. */
+export const SPLIT_REPEAT_SHARE = 0.5;
 export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: number, taxaOf: (eventId: string) => readonly string[] = () => []): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
   const parents = new Map<string, SampleSite>();
   for (const s of sites) if (!parents.has(s.parentSample?.id ?? s.id)) parents.set(s.parentSample?.id ?? s.id, s);
   const events = parents.size;
   if (occurrenceCount < SPLIT_MIN_OCCURRENCES || events < SPLIT_RATIO * occurrenceCount) return undefined;
-  // events at one PLACE: station, date and time, depth and position. Several events at a place are one sample cut into rows only when their taxa DIFFER (a taxon seen again at the same
-  // place is another sample, a replicate or another sighting, not another row of the same one)
+  // events at one PLACE: station, date, the time as written (a time column that gives no date still tells visits apart), depth and position
   const byPlace = new Map<string, SampleSite[]>();
-  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.depthMin ?? '', s.depthMax ?? '', s.lat ?? '', s.lon ?? ''].join('\u0001');
+  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.whenText ?? '', s.depthMin ?? '', s.depthMax ?? '', s.lat ?? '', s.lon ?? ''].join('\u0001');
   for (const s of parents.values()) {
     const k = placeOf(s);
     const list = byPlace.get(k);
     if (list) list.push(s);
     else byPlace.set(k, [s]);
   }
+  // several events at a place are one sample cut into rows when few of them repeat a taxon of an earlier one (a taxon seen again at the same place is more likely another sample)
   let shared = 0;
   for (const list of byPlace.values()) {
     if (list.length < 2) continue;
     const seen = new Set<string>();
-    let repeated = false;
+    let repeated = 0;
     for (const s of list) {
-      for (const t of new Set(taxaOf(s.id))) {
-        if (seen.has(t)) repeated = true;
-        seen.add(t);
-      }
+      const taxa = new Set(taxaOf(s.id));
+      if ([...taxa].some((t) => seen.has(t))) repeated++;
+      for (const t of taxa) seen.add(t);
     }
-    if (!repeated) shared += list.length;
+    if (repeated <= SPLIT_REPEAT_SHARE * list.length) shared += list.length;
   }
-  if (shared < SPLIT_SHARED * events) return undefined;
+  // more sample events than occurrences is strong evidence alone: events were made for rows that give no occurrence (zeros left out), one per row
+  const strong = events > occurrenceCount;
+  if (!strong && shared < SPLIT_SHARED * events) return undefined;
   return { events, occurrences: occurrenceCount, ratio: `${Math.round((100 * events) / occurrenceCount)}%`, shared };
 }
 
@@ -451,7 +454,7 @@ function stationFindingsOf(sheets: readonly StationSheet[]): Finding[] {
   for (const sh of sheets) {
     for (const f of checkStationRows(sh.file, sh.sheet, sh.rows)) {
       out.push(f);
-      said.add(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.sheet}`);
+      said.add(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.file}\u0000${sh.sheet}`);
     }
   }
   const withRows = sheets.filter((sh) => sh.rows.length > 0);
@@ -464,16 +467,37 @@ function stationFindingsOf(sheets: readonly StationSheet[]): Finding[] {
       bySheet.set(i, [...(bySheet.get(i) ?? []), l - i * SHEET_LINE_STEP]);
     }
     if (bySheet.size === 0) {
-      if (!withRows.some((sh) => said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.sheet}`))) out.push(f);
+      // a spread has no lines: it is said once, on the sheets that hold the station
+      const holding = withRows.filter((sh) => sh.rows.some((r) => r.station === f.value));
+      if (holding.length === 0 || holding.some((sh) => said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.file}\u0000${sh.sheet}`))) continue;
+      out.push({ ...f, file: holding[0].file, sheet: holding.map((sh) => sh.sheet).join(', ') });
       continue;
     }
     for (const [i, lines] of bySheet) {
       const sh = withRows[i];
-      if (said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.sheet}`)) continue;
+      if (said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.file}\u0000${sh.sheet}`)) continue;
       out.push({ ...f, file: sh.file, sheet: sh.sheet, lines });
     }
   }
   return out;
+}
+
+/**
+ * A column the sheet reads as a TIME of day whose cells hold full dates ("2003-01-17T00:00:00Z"), while no column is the date: every event would be written without eventDate and the date
+ * that is in the file would be lost silently. Returns the column header and how many cells hold a date, or undefined.
+ */
+function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number } | undefined {
+  if (specs.time === undefined || specs.when !== undefined) return undefined;
+  const index = specs.time.index;
+  let filled = 0;
+  let dates = 0;
+  for (const r of sheet.rows) {
+    const c = r.cells[index] ?? null;
+    if (isBlankCell(c)) continue;
+    filled++;
+    if (typeof c === 'string' && /^\s*\d{4}-\d{2}-\d{2}(?:[T\s]|$)/.test(c)) dates++;
+  }
+  return filled > 0 && dates * 2 >= filled ? { header: specs.time.header, count: dates } : undefined;
 }
 
 /** The row of an accepted sheet line as the station checks of /check read it (station, cruise, position, date). */
@@ -919,6 +943,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   ctx.findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
   const noStation = new Lines();
   const stationRows: DataRow[] = [];
+  const timeDates = timeColumnWithDates(sheet, specs);
+  if (timeDates !== undefined) ctx.findings.push(makeConvertFinding('CONV-TIME-HOLDS-DATES', { ...base, field: timeDates.header, params: { count: timeDates.count } }));
   const noCode = new Lines();
   const tabs = new Lines();
   const summaries = new Lines();
@@ -1389,6 +1415,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // a long sheet's rows with a taxon and no quantity: with nothing else they are counted and listed; with a biomass value they stay as an occurrence with no count; a zero with a biomass value is contradictory
     const naRows = new Lines();
     const stationRows: DataRow[] = [];
+    const timeDates = timeColumnWithDates(sheet, specs);
+    if (timeDates !== undefined) findings.push(makeConvertFinding('CONV-TIME-HOLDS-DATES', { ...base, field: timeDates.header, params: { count: timeDates.count } }));
     const blankKept = new Lines();
     const zeroBiomass = new Lines();
     const noTaxon = new Lines();
@@ -1548,7 +1576,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           const raw = row.cells[cols.quantity?.index ?? 0] ?? null;
           naRows.add(fileName, sheet.name, cols.quantity?.header ?? '', row.line, typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : 'empty');
           for (const c of sin.mapping.columns) {
-            if (c.index === cols.quantity?.index || (c.role.kind !== 'ignore' && c.role.kind !== 'variable' && c.role.kind !== 'biomass') || !isQuantityHeader(c.header)) continue;
+            if (c.index === cols.quantity?.index || (c.role.kind !== 'ignore' && c.role.kind !== 'variable' && c.role.kind !== 'biomass') || !(isQuantityHeader(c.header) || isTotalHeader(c.header))) continue;
             if (!isBlankCell(row.cells[c.index] ?? null)) naOther.set(c.header.trim(), (naOther.get(c.header.trim()) ?? 0) + 1);
           }
         }
@@ -1607,6 +1635,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (acc.effortText !== effort) differs('sample size');
       } else {
         const site: SampleSite = { id: eventId, code: replicate ?? code, source };
+        const whenText = [specs.when, specs.time].map((sp) => (sp === undefined ? '' : String(row.cells[sp.index] ?? '').trim())).join('|');
+        if (whenText !== '|') site.whenText = whenText;
         if (replicate !== undefined) {
           site.eventType = 'replicate';
           site.parentSample = { id: sampleEventId, code };
@@ -2324,7 +2354,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     );
   }
 
-  pushAll(findings, stationFindingsOf(stationSheets));
+  // a station far from its biology station (CONV-PROFILE-STATION-FAR) is the same fact as a station spread across the sheets: said once
+  const farStations = new Set(
+    findings
+      .filter((f) => f.ruleId === 'CONV-PROFILE-STATION-FAR')
+      .flatMap((f) => String(f.params.names ?? '').split('; '))
+      .flatMap((pair) => pair.replace(/ \(\d+ km\)$/, '').split(' <-> '))
+      .map((name) => name.split(':').pop() as string),
+  );
+  pushAll(findings, stationFindingsOf(stationSheets).filter((f) => !(f.ruleId.startsWith('ROW-STATION-SPREAD') && farStations.has(String(f.value)))));
 
   // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
   // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).

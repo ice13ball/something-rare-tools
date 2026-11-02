@@ -10,6 +10,9 @@ import { parseNumber } from '../values/numbers';
  */
 
 const MASS_UNITS = new Set(['kg', 'g', 'mg']);
+// mass units a biomass NAME may carry that the P06 table does not know: written whole, with no id, and said
+const OTHER_MASS = new Set(['ug', 'µg', 'lb', 'lbs', 'oz', 'gc', 'mgc', 'kgc']);
+const isMassWord = (w: string): boolean => MASS_UNITS.has(w) || OTHER_MASS.has(w);
 export const massUnitOf = (unit: string | undefined): string | undefined => (unit !== undefined && MASS_UNITS.has(unit.trim().toLowerCase()) ? unit.trim().toLowerCase() : undefined);
 /** A unit text whose numerator is a mass: 'kg', 'g/m2', 'mg m-3', 'kg/km2'. */
 export const isMassUnitText = (unit: string | undefined): boolean => unit !== undefined && /^(kg|g|mg)(?:$|[\s/])/i.test(unit.trim());
@@ -27,17 +30,30 @@ export function biomassNameUnit(header: string): { unit?: string; unclear?: stri
   const tokens = stripTypeSuffix(header)
     .split(/[\s_]+/)
     .filter((t) => t !== '');
-  const at = tokens.findIndex((t) => MASS_UNITS.has(t.toLowerCase()));
+  // a word with its own per-area part ('g/m2', 'kg/km2') or a bare mass word
+  const split = (t: string): { mass: string; den?: string } | undefined => {
+    const lower = t.toLowerCase();
+    // kg, g and mg are written in lower case; any other mass unit as the header wrote it (gC stays gC)
+    const as = (w: string, original: string): string => (MASS_UNITS.has(w) ? w : original);
+    if (isMassWord(lower)) return { mass: as(lower, t) };
+    const m = /^([^/]+)\/(.+)$/.exec(t);
+    return m !== null && isMassWord(m[1].toLowerCase()) ? { mass: as(m[1].toLowerCase(), m[1]), den: m[2].toLowerCase() } : undefined;
+  };
+  const at = tokens.findIndex((t) => split(t) !== undefined);
   if (at < 0) return {};
-  const mass = tokens[at].toLowerCase();
-  if (tokens.some((t, i) => i !== at && MASS_UNITS.has(t.toLowerCase()) && t.toLowerCase() !== mass)) return { unclear: tokens.join(' ') };
+  const first = split(tokens[at]) as { mass: string; den?: string };
+  const mass = first.mass;
+  if (tokens.some((t, i) => i !== at && split(t) !== undefined && split(t)?.mass !== mass)) return { unclear: tokens.join(' ') };
   const rest = tokens.slice(at + 1).map((t) => t.toLowerCase());
-  if (rest[0] === 'per') rest.shift();
-  let denominator: string | undefined;
-  if (rest[0] !== undefined && DENOMINATOR.test(rest[0])) denominator = rest.shift();
-  else if (rest[0] === 'm' && /^[23]$/.test(rest[1] ?? '')) {
-    denominator = `m${rest[1]}`;
-    rest.splice(0, 2);
+  let denominator = first.den;
+  if (denominator !== undefined && !DENOMINATOR.test(denominator)) return { unclear: tokens.slice(at).join(' ') };
+  if (denominator === undefined) {
+    if (rest[0] === 'per') rest.shift();
+    if (rest[0] !== undefined && DENOMINATOR.test(rest[0])) denominator = rest.shift();
+    else if (rest[0] === 'm' && /^[23]$/.test(rest[1] ?? '')) {
+      denominator = `m${rest[1]}`;
+      rest.splice(0, 2);
+    }
   }
   const unknown = rest.filter((t) => !AFTER_UNIT.has(t) && !/^\d+$/.test(t));
   if (unknown.length > 0) return { unclear: tokens.slice(at).join(' ') };
@@ -104,4 +120,12 @@ export function valuesRepeatWithinSample(sheet: RawSheet, base: readonly ColumnP
   const multi = [...groups.values()].filter((g) => g.n > 1);
   if (multi.length === 0) return 'unknown';
   return multi.filter((g) => g.same).length * 2 >= multi.length ? 'constant' : 'varies';
+}
+
+/** A header that says total or sum as one of its words ('Total', 'Razem', 'weight_kg_total'). */
+export function isTotalHeader(header: string): boolean {
+  return stripTypeSuffix(header)
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((w) => ['total', 'suma', 'razem', 'gesamt', 'summe', 'somme', 'sum'].includes(w));
 }

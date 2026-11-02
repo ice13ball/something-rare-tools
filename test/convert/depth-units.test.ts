@@ -37,7 +37,7 @@ describe('the unit of a depth header', () => {
   });
 
   it('metres stay metres with no unit problem; qualifiers are not units', () => {
-    for (const h of ['Depth', 'Depth [m]x', 'depth_mean', 'Depth_min', 'depth_from', 'Depth_flag', 'Depth_qc', 'Depth_to', 'depth_sd', 'Depth_id', 'Depth at 10 km', 'Depth_km_offshore', 'Depth in situ']) {
+    for (const h of ['Depth', 'depth_mean', 'Depth_min', 'depth_from', 'Depth_flag', 'Depth_qc', 'Depth_to', 'depth_sd', 'Depth_id', 'Depth at 10 km', 'Depth in situ']) {
       expect(depthSuffixUnit(h), h).toBeUndefined();
     }
     for (const h of ['Depth (m)', 'depth_m', 'Depth [m]']) expect(depthSuffixUnit(h), h).toBe(h.includes('[') ? 'm' : h.includes('(') ? 'm' : 'm');
@@ -50,6 +50,17 @@ describe('the unit of a depth header', () => {
   it('reads the unit in every form a header writes it, and a conflicting pair as a blocking unit', () => {
     const converted = ['Depth, ft', 'Depth (fth)', 'Depth (fms)', 'Depth (ftm)', 'Depth (ft.)', 'Depth-ft', 'Depth/ft', 'Depth.ft', 'ft_depth', 'fm_depth', 'Depth_fm_max', 'Sounding (fm)', 'Sounding_fm', 'Fathoms', 'MaxDepth_ft', 'Depth feet', 'Depth [km]'];
     for (const h of converted) expect(depthUnitFactor(depthSuffixUnit(h)), h).toBeDefined();
+    const midName = ['Depth_fm_bin', 'Depth_ft_corrected', 'Depth_fm_est', 'Depth_ft_1', 'Depth ft sonar', 'Depth (ft) sonar', 'Depth [ft] sonar', 'Depth (m or ft)', 'Depth_km_offshore', 'depth_cm_bsf', 'Bathy (fathoms) raw'];
+    for (const h of midName) {
+      const u = depthSuffixUnit(h);
+      expect(u, h).toBeDefined();
+      expect(depthUnitFactor(u) === undefined && !isMetreUnit(u!), h).toBe(true);
+    }
+    expect(depthSuffixUnit('depth_cm_bsf')).toBe('cm bsf');
+    expect(depthSuffixUnit('Depth_cm<Float32>')).toBe('cm');
+    expect(depthSuffixUnit('"Depth_ft<Float32>"')).toBe('ft');
+    for (const h of ['Depth_fm_mean', 'depth_ft_avg', 'Depth_fathom_range', 'depthFt', 'Tiefe (Faden)', 'Sounding_fm_mean']) expect(depthUnitFactor(depthSuffixUnit(h)), h).toBeDefined();
+    expect(depthSuffixUnit('Depth_m_corrected')).toBe('m');
     const blocking = ['Depth (f)', 'Depth (yd)', 'Depth (yards)', 'Depth (mi)', 'Depth (dm)', 'Depth_in', 'depth_yards', 'Depth_cm', 'Depth (cm)', 'depth_m_ft', 'Depth_ft_m'];
     for (const h of blocking) {
       const u = depthSuffixUnit(h);

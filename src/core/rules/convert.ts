@@ -4,7 +4,7 @@ import { reasonsText } from '../recognize/layoutReasons';
 import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals } from '../i18n/plural';
 import { MAX_PAIRS } from '../convert/pivotLimits';
-import { formatLines } from '../lines';
+import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
 import type { RuleSpec } from './spec';
 
@@ -29,6 +29,7 @@ import type { RuleSpec } from './spec';
  *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
  *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept)
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
+ *   CONV-TIME-HOLDS-DATES      count            field = the time column, count = its cells that hold a full date, while no column is the date: blocks (the events would have no eventDate)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -310,6 +311,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:ligne a|lignes ont} un nombre ou un poids mais pas de nom de taxon dans « {field} » ({+lineCount:ligne|lignes} {lines}). Rien n'y est rattaché : non converti. Saisissez le nom du taxon ou supprimez {+count:la ligne|les lignes}.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity or a biomass value and no taxon name; no occurrence can be written for them and they are not converted.`,
+  },
+  {
+    id: 'CONV-TIME-HOLDS-DATES',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `Kolumna „{field}” jest czytana jako godzina, ale {count} {+count:komórka zawiera|komórki zawierają|komórek zawiera} pełną datę, a żadna kolumna nie jest datą. Zdarzenia nie miałyby eventDate i data z pliku przepadłaby. Wybierz dla niej znaczenie „Data i godzina”.`,
+      en: `Column "{field}" is read as a time of day, but {count} {+count:cell holds|cells hold} a full date, and no column is the date. The events would have no eventDate and the date in the file would be lost. Give the column the meaning "Date and time".`,
+      de: `Die Spalte „{field}“ wird als Uhrzeit gelesen, aber {count} {+count:Zelle enthält|Zellen enthalten} ein volles Datum, und keine Spalte ist das Datum. Die Ereignisse hätten kein eventDate, das Datum der Datei ginge verloren. Geben Sie der Spalte die Bedeutung „Datum und Uhrzeit“.`,
+      fr: `La colonne « {field} » est lue comme une heure, mais {count} {+count:cellule contient|cellules contiennent} une date complète, et aucune colonne n'est la date. Les événements n'auraient pas d'eventDate et la date du fichier serait perdue. Donnez à la colonne le sens « Date et heure ».`,
+    },
+    technical: `{file}, {sheet} field {field}: the sheet has a time column and no date column, and {count} cell(s) of the time column hold a date (YYYY-MM-DD...). No eventDate would be written. A date that is in the file is never dropped silently, so the export is blocked until the column is read as a date and time.`,
   },
   {
     id: 'CONV-ZERO-WITH-BIOMASS',
@@ -1513,7 +1527,7 @@ function stationList(text: string): string {
 }
 
 function fill(template: string, f: Finding, lang?: Lang): string {
-  const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines) };
+  const generic: Record<string, string> = { file: f.file ?? '', sheet: f.sheet ?? '', field: f.field ?? '', value: f.value ?? '', lines: formatLines(f.lines, MAX_LINE_RANGES) };
   // plural tokens ({+count:one|other}, i18n/plural.ts) depend on a numeric param; the English technical line has none
   // {+lineCount:...} depends on how many distinct lines the finding names ("wiersz 7", but "wiersze 7–9")
   const lineCount = f.lines && f.lines.length > 0 ? new Set(f.lines).size : undefined;

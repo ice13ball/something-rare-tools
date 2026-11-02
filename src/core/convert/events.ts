@@ -41,6 +41,8 @@ export const DERIVED_DECIMALS = 6;
 export interface SampleSite {
   /** The final eventID. */
   id: string;
+  /** The date and time cells of the first row as written (a time column that gives no date still tells visits apart); not written anywhere, used by the check for one event per taxon row. */
+  whenText?: string;
   /** The user's sample code. */
   code: string;
   stationCode?: string;

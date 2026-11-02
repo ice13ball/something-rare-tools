@@ -211,6 +211,23 @@ describe('the sample code step of a long sheet', () => {
     expect(section.textContent).toContain('you chose it');
   });
 
+  it('picked columns accumulate (Sex and then Size_class), and can be cleared', async () => {
+    const rows = ['A', 'B'].flatMap((st, i) => TAXA.flatMap((sp) => ['F', 'M'].flatMap((sx) => ['s', 'l'].map((sz) => [st, `2023-06-${10 + i}`, 55, 2.5, 10, sx, sz, sp, 2]))));
+    await load([{ name: 'two.csv', text: csvOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Sex', 'Size_class', 'Species', 'Count'], rows) }]);
+    pick(T['convert.quantity.kind'], 'count');
+    const section = (await screen.findByRole('heading', { name: T['convert.codes.title'] })).closest('section') as HTMLElement;
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.propose'] }));
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Sex"/ }));
+    // Sex alone is not enough: the refusal comes back and now offers Size_class
+    fireEvent.click(await within(section).findByRole('button', { name: /Group also by "Size_class"/ }));
+    await waitFor(() => expect(section.textContent).toContain('8 samples from 24 rows'));
+    expect(section.textContent).toContain('"Sex"');
+    expect(section.textContent).toContain('"Size_class"');
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.clear'] }));
+    await waitFor(() => expect(section.textContent).toContain('No codes proposed'));
+    expect(within(section).queryByRole('button', { name: T['convert.codes.clear'] })).toBeNull();
+  });
+
   it('says why when the rows cannot be grouped, and offers no file', async () => {
     const { download } = await load([{ name: 'bare.csv', text: csvOf(['Species', 'Count'], [['Calanus finmarchicus', 3], ['Oithona similis', 2]]) }]);
     pick(T['convert.quantity.kind'], 'count');

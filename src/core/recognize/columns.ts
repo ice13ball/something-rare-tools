@@ -4,7 +4,7 @@ import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMappin
 import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { cellsAreYearRanges, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
-import { depthSuffixUnit } from './depthUnit';
+import { depthUnitOfHeader } from './depthUnit';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
 import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
@@ -969,7 +969,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
           break;
         case 'depth': {
           // a unit written in the NAME without brackets ('Depth_fm', 'Depth feet') is kept on the role: dropping it made a fathom depth read as metres
-          const unit = depthSuffixUnit(e.proposal.header) ?? hu.unit ?? code?.hint?.unit;
+          const unit = depthUnitOfHeader(e.proposal.header, hu.unit) ?? code?.hint?.unit;
           if (c.dwcDepth) {
             e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
             break;
