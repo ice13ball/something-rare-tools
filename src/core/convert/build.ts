@@ -1428,6 +1428,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const fileName = file.fileName;
     const sheetKey = `${fileName}\u0000${sheet.name}\u0000${sheetKeyN++}`;
     const occurrencesBefore = occurrences.length;
+    const measurementsBefore = measurements.length;
     const dc = file.decimalComma;
     const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
     const collector = new Collector(fileName);
@@ -2254,11 +2255,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const quantityAt = new Map<number, number>();
       const weightAt = new Map<string, Map<number, number>>();
       for (const o of occurrences.slice(occurrencesBefore)) quantityAt.set(o.source.line, (quantityAt.get(o.source.line) ?? 0) + (kind === 'count' ? (o.individualCount ?? 0) : 0));
-      for (const m of measurements) {
-        if (m.source.file !== fileName || m.source.sheet !== sheet.name || m.target.kind !== 'occurrence') continue;
+      // only what THIS sheet wrote (a second file may carry the same name), and a measurement is a weight only when its column is one of the sheet's biomass columns (a quantity declared as
+      // biomass is written under the taxon column and is the quantity)
+      const biomassHeaders = new Set(cols.biomass.map((x) => x.header));
+      for (const m of measurements.slice(measurementsBefore)) {
+        if (m.target.kind !== 'occurrence') continue;
         const v = Number(m.measurementValue);
         if (!Number.isFinite(v)) continue;
-        if (m.role === 'biomass' && m.source.column !== undefined) {
+        if (m.role === 'biomass' && m.source.column !== undefined && biomassHeaders.has(m.source.column)) {
           const per = weightAt.get(m.source.column) ?? weightAt.set(m.source.column, new Map()).get(m.source.column)!;
           per.set(m.source.line, (per.get(m.source.line) ?? 0) + v);
         } else if (kind !== undefined && kind !== 'count' && m.role === kind) quantityAt.set(m.source.line, (quantityAt.get(m.source.line) ?? 0) + v);

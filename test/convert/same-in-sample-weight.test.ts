@@ -153,3 +153,47 @@ describe('the sums in the messages are the sums of the archive (after the choice
     for (const lang of LANGS) expect(renderConvertPlain(f, lang)).not.toMatch(/above 1|powyżej 1|über 1|supérieure à 1/);
   });
 });
+
+describe('sums of a quantity declared as biomass, and of two dropped files with the same name', () => {
+  const rowsOf = (samples: number, qty: number, weight: number, tag = 'a'): Cell[][] => {
+    const rows: Cell[][] = [];
+    for (let s = 1; s <= samples; s++) for (let c = 0; c < 3; c++) rows.push([`${tag}${s}`, '2020-06-01', 49.4 + s / 100, 0.2, 'Solea solea', `stage${c}`, qty, weight, `${tag}r${rows.length}`]);
+    return rows;
+  };
+  const input = (rows: Cell[][], quantity: object, edit: Record<string, ColumnRole> = EDIT) => sheetInput(fileOf(HEADER, rows, 'S', { fileName: 'same.csv' }), { shape: 'long', quantity: quantity as never, edit });
+  const sumOf = (r: ReturnType<typeof convert>, pick: (m: ReturnType<typeof convert>['measurements'][number]) => boolean): number => r.measurements.filter(pick).reduce((n, m) => n + Number(m.measurementValue), 0);
+
+  it('kind biomass: the quantity sum is the quantity written (1.89), not 0', () => {
+    const r = convert({ sheets: [input(rowsOf(3, 0.21, 100), { kind: 'biomass', unit: 'g', basis: 'wet', per: 'area', medium: 'bed' }, { ...EDIT, Weight: { kind: 'ignore' } })] });
+    const f = r.findings.filter((x) => x.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE');
+    expect(f).toHaveLength(1);
+    const written = sumOf(r, (m) => m.role === 'biomass');
+    expect(written).toBeCloseTo(1.89, 6);
+    expect(f[0].params.written).toBe(Math.round(written * 1000) / 1000);
+    expect(f[0].params.records).toBe(9);
+  });
+
+  it('kind biomass with a weight column beside it: each sum is its own column\'s', () => {
+    const r = convert({ sheets: [input(rowsOf(3, 6, 101), { kind: 'biomass', unit: 'g', basis: 'wet', per: 'area', medium: 'bed' })] });
+    const f = r.findings.filter((x) => x.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE');
+    expect(f).toHaveLength(1);
+    const q = sumOf(r, (m) => m.role === 'biomass' && m.source.column === 'Species');
+    const w = sumOf(r, (m) => m.role === 'biomass' && m.source.column === 'Weight');
+    expect(f[0].params.written).toBe(q);
+    expect(f[0].params.alsoWritten).toBe(w);
+    expect(q).toBe(54);
+  });
+
+  it('two dropped files with the same name: each sum is that sheet\'s own (weight and a non-count quantity)', () => {
+    const a = input(rowsOf(2, 4, 100, 'a'), { kind: 'density', unit: '#/m3' });
+    const b = input(rowsOf(2, 4, 600, 'b'), { kind: 'density', unit: '#/m3' });
+    const r = convert({ sheets: [a, b] });
+    const f = r.findings.filter((x) => x.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE');
+    expect(f).toHaveLength(2);
+    // the second sheet's weights are 6 rows x 600, the first's 6 rows x 100; the density 6 rows x 4 each
+    const second = f[1].params;
+    expect(second.alsoWritten).toBe(3600);
+    expect(f[0].params.alsoWritten).toBe(600);
+    expect(second.written).toBe(24);
+  });
+});
