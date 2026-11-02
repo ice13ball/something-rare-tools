@@ -100,11 +100,14 @@ describe('the time of day of a time column', () => {
     expect(findings.filter((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE')).toEqual([]);
     expect(dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2011-10-05T20:00:00Z', '2011-10-06T21:15:00Z', '2011-10-07T08:30']);
   });
-  it('/check: a time cell of another day than its row is reported, never silently cut', () => {
-    const text = 'Station,Date,Time,Temp\nS1,2011-10-05,2011-10-09T20:00:00Z,4.1\nS1,2011-10-06,21:15,4.2\n';
+  it('/check: a time cell of another day than its row is reported as that (no zone), never silently cut; with a zone it is the instant of the event', () => {
+    const text = 'Station,Date,Time,Temp\nS1,2011-10-05,2011-10-09T20:00,4.1\nS1,2011-10-06,21:15,4.2\nS2,2011-10-05,2011-10-06T00:30:00Z,4.3\n';
     const file = parseFile('t2.csv', new TextEncoder().encode(text));
-    const { findings } = buildDataset(file, proposeLayout(file), [], [], 'x');
-    expect(findings.filter((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE').map((f) => f.value)).toEqual(['2011-10-09T20:00:00Z']);
+    const { dataset, findings } = buildDataset(file, proposeLayout(file), [], [], 'x');
+    expect(findings.filter((f) => f.ruleId === 'ROW-TIME-OTHER-DAY').map((f) => f.value)).toEqual(['2011-10-09T20:00']);
+    expect(findings.some((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE')).toBe(false);
+    // the UTC instant is the datetime of the third row, although the local date column says the day before
+    expect(dataset.rows[2].datetime?.iso).toBe('2011-10-06T00:30:00Z');
   });
 });
 

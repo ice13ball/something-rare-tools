@@ -62,11 +62,21 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
     }
   }
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  const sheetFindings = new Map<string, { f: Finding; sheets: string[] }>();
   for (const ds of session.datasets) {
-    pushAll(findings, checkMetadataVsData(ds, session.datasets));
+    // META-NO-DATES / META-NO-POSITIONS of the sheets of one file are ONE finding that lists the sheets (the same sentence five times says nothing more than once)
+    for (const f of checkMetadataVsData(ds, session.datasets)) {
+      if ((f.ruleId === 'META-NO-DATES' || f.ruleId === 'META-NO-POSITIONS') && f.sheet !== undefined) {
+        const key = `${f.ruleId}\u0000${f.file ?? ''}`;
+        const at = sheetFindings.get(key);
+        if (at === undefined) sheetFindings.set(key, { f, sheets: [f.sheet] });
+        else if (!at.sheets.includes(f.sheet)) at.sheets.push(f.sheet);
+      } else findings.push(f);
+    }
     pushAll(findings, checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today }));
     pushAll(findings, checkChemistry(ds));
   }
+  for (const { f, sheets } of sheetFindings.values()) findings.push({ ...f, sheet: sheets.join(', '), params: { ...f.params, sheets: sheets.join(', ') } });
   if (session.datasets.length > 1) pushAll(findings, checkCrossFile(session.datasets));
   const speed = checkShipSpeed(session.datasets, { singleCruise: opts.singleCruise === true });
   pushAll(findings, speed.findings);

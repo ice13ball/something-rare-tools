@@ -146,7 +146,7 @@ export type ColumnRole =
   | { kind: 'depth'; positive: 'down' | 'up' | 'unknown'; unit?: string; /** Converter only: which end of a depth range this column is. /check never sets it. */ bound?: 'min' | 'max' }
   | { kind: 'pressure'; unit?: string }
   | { kind: 'station' } | { kind: 'cruise' } | { kind: 'sampleId' }
-  | { kind: 'variable'; variable: string; unit?: string; unitSource?: 'header' | 'p01' | 'metadata' | 'user'; p01?: string }
+  | { kind: 'variable'; variable: string; unit?: string; unitSource?: 'header' | 'p01' | 'metadata' | 'user'; p01?: string; /** Converter only: on a long sheet the value belongs to the OCCURRENCE of its row (a length of each fish), not to the sample event: it differs between the rows of a sample, as a biomass does. /check never sets it. */ perOccurrence?: true }
   | { kind: 'ignore' }
   | ConverterRole;
 /**

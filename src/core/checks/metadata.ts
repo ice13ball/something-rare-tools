@@ -163,10 +163,11 @@ function variableMissing(ds: Dataset): Finding[] {
 }
 
 /**
- * A table that holds measurements: at least one variable column with numbers on two or more rows. A one-row sheet (a gear, a
- * coordinate system, a country: a lookup) has at most one number per column, so it holds none.
+ * A table that holds measurements: a variable column the tool recognises as a measured quantity (temperature, salinity, ...), or at least one variable column with numbers on two or more
+ * rows. A one-row sheet that only has unrecognised numbers (a gear, a coordinate system, a country) holds none.
  */
 function holdsMeasurements(ds: Dataset): boolean {
+  if (ds.variables.some((v) => v.canonical !== undefined)) return true;
   const seen = new Map<string, number>();
   for (const r of ds.rows) {
     for (const key in r.values) {
@@ -180,12 +181,13 @@ function holdsMeasurements(ds: Dataset): boolean {
 }
 
 /**
- * META-NO-DATES / META-NO-POSITIONS speak for a table that holds the measurements. A lookup table of the same session (it holds none,
- * while another table does) is not what the dates and positions are for; a table with measurements that lacks them is still reported,
- * whatever the other tables hold. When no table of the session holds measurements, every table is judged as before.
+ * META-NO-DATES / META-NO-POSITIONS speak for a table that holds the measurements. A lookup table of THE SAME FILE (it holds none, while another sheet of that file does) is not what the dates and
+ * positions are for; a table with measurements that lacks them is still reported, whatever the other tables hold, and a separate file is never a lookup of another. When no sheet of the file
+ * holds measurements, every sheet is judged as before. Known limit: a lookup sheet of several rows with numbers in a column (a four-row gear list with a mesh size) holds "measurements" by
+ * this test and still fires.
  */
 function isLookupBesideData(ds: Dataset, all: readonly Dataset[]): boolean {
-  return !holdsMeasurements(ds) && all.some((o) => o !== ds && !o.layout.unsupported && holdsMeasurements(o));
+  return !holdsMeasurements(ds) && all.some((o) => o !== ds && o.file === ds.file && !o.layout.unsupported && holdsMeasurements(o));
 }
 
 /** The sheet a finding of this table is about, when the file has several (the label is then `file (sheet)`). */

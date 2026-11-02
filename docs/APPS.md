@@ -294,7 +294,7 @@ text column is never guessed to be a serial. Calendar dates are validated (`2021
 unparseable). All arithmetic is on UTC milliseconds, so the machine's time zone cannot move a
 date. A time with no zone stays "unknown" (`ROW-TZ-UNKNOWN`), except that a date or time column whose
 header names UTC or GMT (`UTC_HEADER`, `dataset.ts`) is read as UTC and raises no such finding; a separate time column is combined
-with a day-precision date (`combineDateTime`). A time column may hold a **range**: `1600-1730`, `16:00-17:30` or several, `0530-0700, 1600-1730` (`parseTimeRange`, `values/dates.ts`). The time of the event is the **start** of the first range (a dash between two times is a range first, never a zone offset: `10:00-11:30` is 10:00; an offset needs `+`, `Z` or seconds; a column of year ranges of which at least one is impossible as a time, such as `1995-2000` (minute 95), is not a time column and is not read as times, while evening ranges such as `1930-2000` are times); the end and any further range are checked but **ignored** (no interval is written from a time column). A bare four-digit `HHMM` (`1800`, `0530`; 0000-2359, minutes up to 59) is read as a time **in a time column only** (never in a date or datetime column); one trailing period (`0530-0700.`, `1800.`, `16:00.`) is dropped, also after each of several ranges; a range end cut short (`10:00-11:3`, `1600-17`) is ignored, no finding. The year-range guard above is unchanged. A time column may also hold a full datetime (`2011-10-05T20:00:00Z`, `2003/01/17 08:30`, a spreadsheet placeholder such as `1899-12-30 12:30`): beside a date column its time part is read (`parseTimeColumnCell`), provided its day is the row's day or a placeholder (another day is `ROW-DATE-UNPARSEABLE`, never silently cut); with no date column beside it, a column named time whose cells are such datetimes is the date and time (3.3). An unreadable value in a time column is `ROW-DATE-UNPARSEABLE` with `params.role = time`, worded as a time (example `16:30`) and never as a date.
+with a day-precision date (`combineDateTime`). A time column may hold a **range**: `1600-1730`, `16:00-17:30` or several, `0530-0700, 1600-1730` (`parseTimeRange`, `values/dates.ts`). The time of the event is the **start** of the first range (a dash between two times is a range first, never a zone offset: `10:00-11:30` is 10:00; an offset needs `+`, `Z` or seconds; a column of year ranges of which at least one is impossible as a time, such as `1995-2000` (minute 95), is not a time column and is not read as times, while evening ranges such as `1930-2000` are times); the end and any further range are checked but **ignored** (no interval is written from a time column). A bare four-digit `HHMM` (`1800`, `0530`; 0000-2359, minutes up to 59) is read as a time **in a time column only** (never in a date or datetime column); one trailing period (`0530-0700.`, `1800.`, `16:00.`) is dropped, also after each of several ranges; a range end cut short (`10:00-11:3`, `1600-17`) is ignored, no finding. The year-range guard above is unchanged. A time column may also hold a full datetime (`2011-10-05T20:00:00Z`, `2003/01/17 08:30`, a spreadsheet placeholder such as `1899-12-30 12:30`): beside a date column its time part is read (`parseTimeColumnCell`), provided its day is the row's day or a placeholder. A cell that states a **zone** (`…T20:00:00Z`) is the instant of the event and wins over a date that states none, even on another day; one without a zone on another day is `ROW-TIME-OTHER-DAY` (blocks in /convert), never silently cut. The serial of a time column formatted as a date and time is read the same way. In a column that is the date a year outside 1700 and next year is reported (`1215`). With no date column beside it, a column named time whose cells are such datetimes is the date and time (3.3). An unreadable value in a time column is `ROW-DATE-UNPARSEABLE` with `params.role = time`, worded as a time (example `16:30`) and never as a date.
 
 **Coordinates** (`values/coords.ts`, `parseCoordinate`). Accepted: decimals; degrees with decimal
 minutes; degrees, minutes, seconds; hemisphere letters N, S, E, W before or after (S and W
@@ -365,7 +365,8 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    order only when the column itself decides it; the placeholder dates of a spreadsheet or an epoch do not count). A column named
    `time` whose cells are full dates with a time of day and which has no date column beside it is the date and time of the row
    (`time-holds-datetimes`; beside a date column it stays a time). `NA` is "not available", not sodium: sodium is `Na`, or `NA`
-   with a unit in its header. The full words accept the common misspellings seen in real files
+   with a unit in its header, or `NA`/`na` with at least two other major ions (calcium, magnesium, potassium, chloride, sulphate) among the
+   columns. A column named `time` of full dates alone is the date; the serial of a date-formatted Excel column counts like a text date. The full words accept the common misspellings seen in real files
    (`Longtitude`, `Longitute`, `Lontitude`, `Longditude`, `Lattitude`, `Latidude`).
    **Dates of collection.** Besides `Date`, `Sampling date`, `Sample date`, `Collection date`:
    `Date of collection / sampling / observation / measurement / survey`, `Date sampled`, `Date
@@ -579,10 +580,13 @@ sources):
   ([META-NO-POSITIONS](rules.md#META-NO-POSITIONS), an error, cited to the OBIS Manual: `decimalLatitude` and
   `decimalLongitude` are the minimally required location terms): no latitude or longitude column is mapped, no row
   has a position and no record has a bounding box. A position in the metadata only is left to the rules that compare data with metadata.
-  Both are judged per table and name the sheet when the file has several. A table that holds no
-  measurement (no variable column with numbers on two or more rows: a one-row gear or coordinate-system sheet)
-  does not raise them while another table of the session does hold measurements; a table with measurements
-  that lacks them still does, whatever a lookup sheet elsewhere holds. When no table holds measurements, each is judged on its own.
+  Both are judged per table. The sheets of one file that lack the date (or the position) are **one finding** that lists them
+  (`sheets`; the sentence is not repeated once per sheet). A table that holds no measurement (it has no recognised measured
+  variable and no variable column with numbers on two or more rows: a one-row gear or coordinate-system sheet) does not raise them
+  while another table **of the same file** holds measurements; a separate file is never a lookup of another. A table with
+  measurements that lacks them still raises them, whatever a lookup sheet elsewhere holds, and when no table of the file holds
+  measurements each is judged on its own. Known limit: a lookup sheet of several rows with numbers in a column (a four-row
+  `Gear, Mesh size` list) counts as holding measurements by this test and still raises them.
 - **Across files** (`checks/crossfile.ts`; a dataset is one table, so a three-sheet workbook is
   three datasets): matched samples (same station or position, same depth, same day) that look
   duplicated; the same station dated differently with at least two equal shared variables; station
@@ -1207,19 +1211,27 @@ Unconfirmed candidates are left out, and leaving them out has to be accepted
 (the page's own acceptance, not a rule).
 
 What the **values and the unit** rule out is decided before the name (`convert/columnValues.ts`), because they
-need no list of header words: a column whose cells are all whole years (1800-2100, at least 3 rows, within 120
-years) is ignored (`year-values`); one value that is not a whole number on every row (a core diameter) is ignored
-(`constant-value`; a constant 0 or 1 is a legitimate species column and stays); a unit of length, time, speed or
-temperature makes it a measured variable, a unit of volume or area the sampling effort (`unit-variable`,
-`unit-effort`; masses and every "per" unit are not listed, a species may carry them). A camel-case name is read as
+need no list of header words, and only where no species column can look so. A column of whole years (1800-2100 within 120
+years, at least 3 rows) is ignored (`year-values`) only when it is filled on every row, has no abundance unit, and its
+name is not shaped like a taxon or says year (`Year`, `SampleYear`); one value that is not a whole number
+(a core diameter) on every row (`constant-value`) only with no abundance unit and on a name that is not shaped like a taxon.
+Blank cells defeat both rules (they are rows the rule did not see), so `Oithona similis [ind/m3]` that is 1.25 on three
+rows and blank on the rest, `Calanus [ind/m3]` of 1900, 1950, 2000 and a genus column of 0.5 on every row stay candidates.
+A unit written in **square** brackets that measures a length, time, speed or temperature makes the column a measured variable,
+one of volume or area the sampling effort (`unit-variable`, `unit-effort`; masses and every "per" unit are not listed, and a lone
+`m` on a taxon-shaped name is never metres: `Calanus (m)`, `Calanus_m`, `Calanus [m]` are males). A camel-case name is read as
 its words: `CoreDiameter`, `DepthStart` (a size word in a name of several words is a measurement) and
-`DepthSampleStart` / `DepthSampleEnd` are the top and bottom of a depth range. A column of Latin binomials
-(`latinNameShare`: at least 80 % of at least 3 cells start with a genus and an epithet that ends like a Latin
-one, two of them different) is the taxon of the sheet under any header (`values-latin-names`); two such columns
-are not told apart, the leftmost is offered at low confidence. A header that holds `AphiaID`, `aphia_id` or
+`DepthSampleStart` / `DepthSampleEnd` are the top and bottom of a depth range. The comment of PANGAEA's `name [unit] (comment)`
+reaches the depth-range, seafloor, site-depth, statistic and total tests (`Depth [m] (top)`, `(below seafloor)`, `Temp [deg C] (std dev)`,
+`(total)`), and two columns that share a variable name are told apart in the measurement type by their comments (`temperature (CTD)`,
+`temperature (bottle)`). A column of Latin binomials (`latinNameShare`: at least 80 % of at least 3 cells, three different, start with a genus and an
+epithet that ends like a Latin one) is offered as the taxon of the sheet (`values-latin-names`), **always at low confidence and only when the
+sheet is long by its other columns**: a quantity, a biomass or a number counted in individuals stands beside it, no genus-shaped
+numeric column does (a wide sheet with a `Dominant species` text column stays wide), it is no Darwin Core term and the sheet is not a table of
+numbered columns; two such columns are not told apart, the leftmost is offered. A header that holds `AphiaID`, `aphia_id` or
 `Aphia ID` whole, also inside a bracket, over whole numbers is the taxon ID; on a long sheet a numeric column whose
 unit only counts individuals (`#`, `n`, `ind`) and that no name made a quantity is offered as the quantity
-(`count-unit-quantity`). `Calanus`, `Acartia` and every other genus name stay candidates.
+(`count-unit-quantity`; a descriptor of the sample such as `Hauls [#]` or `Replicates [n]` is never the count). `Calanus`, `Acartia` and every other genus name stay candidates unless the cells show a year column, a constant fraction or a length unit as above.
 
 Other overlay decisions: a **summary column** (a header starting with or holding Total, Suma,
 Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it would count the
@@ -1230,11 +1242,11 @@ ignored or variable column of few distinct values that is not a function of the 
 differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
 biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
 when the sheet has none and the name says no size and the unit counts organisms ('Total length [mm]', 'Total depth' are not quantities); else it stays ignored, with a reason that says what to decide). The same judgement applies to a column the name already claimed as biomass ('Total weight (kg)'): constant within a sample, it is a total and starts ignored, with its own reason
-(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). It is not proposed as a measured
-variable either, because a variable is written once per sample and values that differ between the rows of a sample
-would conflict, with one exception: a size or a length word with a unit that counts no organisms and no mass (`Total length [mm]`, long
-sheet or wide; `size-variable`, low confidence) is a measured variable with its unit. On a long sheet where that length differs between the rows
-of a sample (a length of each fish) the conflict is then shown and blocks (`CONV-SAMPLE-CONFLICT`), never dropped in silence. `Total depth` is the water
+(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A size or a length (`Total length`, `Mean Length (µm)`, with or without a unit) is
+decided from the values like a total (`valuesRepeatWithinSample`): the same value on all the rows of a sample is a measured variable of
+the sample event (`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass); a value that differs
+between the rows of a sample (a length of each fish) is a measurement of each **occurrence**, written like a biomass (`perOccurrence`,
+`size-per-occurrence`), so it does not conflict. Any other measured variable that differs inside a sample still blocks as `CONV-SAMPLE-CONFLICT`, which names the column. `Total depth` is the water
 depth of the site (`isSiteDepthName`, like `Total water depth`): the depth of the rows when no other column gives one, otherwise not written. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
 (`QV:ODV:…`, `Q_`/`QC_`/`QF_` prefixes, `_QC`/`_flag` suffixes, and `Q`/`QC`/`QF` + a space or
 hyphen + the name of a sibling column) is never a measurement or a taxon (`isQualityHeader`); a
@@ -1875,7 +1887,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **182 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **183 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1885,12 +1897,12 @@ regenerate it when rules change.
 | `IN-` | `input` | 30 | 12 / 11 / 7 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, a PANGAEA table's position and date taken from its Event(s) block, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
 | `META-` | `A` | 8 | 2 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates, no positions. | The OBIS Manual (`META-NO-POSITIONS`: `decimalLatitude` and `decimalLongitude` are the minimally required location terms); the other rules are stated in their own text. |
-| `ROW-` | `B` | 35 | 6 / 18 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
+| `ROW-` | `B` | 36 | 6 / 19 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
 | `CONV-` | `B` | 81 | 38 / 32 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **182** | | | |
+| **Total** | | **183** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

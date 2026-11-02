@@ -15,8 +15,8 @@ import type { RuleSpec } from './spec';
  *   META-POINT-OUTSIDE-BBOX   west, east, south, north, count   bbox as in the record; count = rows outside;
  *                             lines = those rows; value = one example position, "lat, lon"
  *   META-VARIABLE-MISSING     term              the abstract term found (e.g. "dissolved silica")
- *   META-NO-DATES             (none)
- *   META-NO-POSITIONS         (none)
+ *   META-NO-DATES             (none)           optional sheets = the sheets of the file that lack a date (one finding for all of them)
+ *   META-NO-POSITIONS         (none)           optional sheets, as META-NO-DATES
  */
 export const METADATA_RULES: readonly RuleSpec[] = [
   {
@@ -116,6 +116,17 @@ export const METADATA_RULES: readonly RuleSpec[] = [
       de: `Weder die Daten noch die Metadaten enthalten ein Datum. Ergänzen Sie das Probenahmedatum in der Tabelle oder einen Zeitraum in den Metadaten.`,
       fr: `Ni les données ni les métadonnées ne contiennent de date. Ajoutez la date de prélèvement dans le tableau ou une période dans les métadonnées.`,
     },
+    plainIf: [
+      {
+        param: 'sheets',
+        plain: {
+          pl: `Dotyczy arkuszy: {sheets}.`,
+          en: `This is about the sheets: {sheets}.`,
+          de: `Es betrifft die Blätter: {sheets}.`,
+          fr: `Cela concerne les feuilles : {sheets}.`,
+        },
+      },
+    ],
     technical: `{file}: no row has a date and no record has a temporal extent or collection date.`,
   },
   {
@@ -130,6 +141,17 @@ export const METADATA_RULES: readonly RuleSpec[] = [
       de: `Weder die Daten noch die Metadaten enthalten eine Position. Ergänzen Sie in der Tabelle Spalten für Breite und Länge in Dezimalgrad: OBIS verlangt decimalLatitude und decimalLongitude für jeden Datensatz, eine geografische Umrandung allein in den Metadaten ersetzt sie nicht.`,
       fr: `Ni les données ni les métadonnées ne contiennent de position. Ajoutez au tableau des colonnes de latitude et de longitude en degrés décimaux : OBIS exige decimalLatitude et decimalLongitude pour chaque enregistrement, et une emprise géographique dans les métadonnées seule ne les remplace pas.`,
     },
+    plainIf: [
+      {
+        param: 'sheets',
+        plain: {
+          pl: `Dotyczy arkuszy: {sheets}.`,
+          en: `This is about the sheets: {sheets}.`,
+          de: `Es betrifft die Blätter: {sheets}.`,
+          fr: `Cela concerne les feuilles : {sheets}.`,
+        },
+      },
+    ],
     technical: `{file}: no latitude or longitude column is mapped, no row has a position and no record has a bounding box. OBIS requires decimalLatitude and decimalLongitude as the minimum location terms of every record; a bounding box in the metadata is not a substitute for them.`,
   },
 ];

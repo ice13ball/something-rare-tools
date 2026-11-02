@@ -287,6 +287,8 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
   if (YEAR_RE.test(s)) {
     const y = Number(s);
     if (opts.dateFormatted || y < 1) return fail(raw);
+    // in a column that is the date a year is a year of observation: 1215 or 3004 is a mistyped cell, reported, never written into eventDate
+    if (opts.datumColumn && (y < 1700 || y > (opts.currentYear ?? new Date().getUTCFullYear()) + 1)) return fail(raw);
     return { iso: pad4(y), year: y, precision: 'year', tz: 'unknown' };
   }
 
@@ -444,4 +446,15 @@ const DATE_LOOKING = new RegExp(`^(?:\\d{8}(?:\\s+\\d{3,4})?|\\d{1,2}[/.-]\\d{1,
  */
 export function looksLikeUnreadDate(raw: RawCell): boolean {
   return typeof raw === 'string' && DATE_LOOKING.test(raw.trim());
+}
+
+/**
+ * The full date and time of a cell of a TIME column: a text datetime, or the serial of a column the workbook formats as a date, when it holds a time of day (a plain time, a date alone and a
+ * spreadsheet placeholder are not this: undefined). The caller decides what to do with the zone.
+ */
+export function fullDatetimeOfTimeCell(raw: RawCell, o: { date1904: boolean; dateFormatted: boolean; order?: Exclude<DayMonthOrder, 'unknown'> }): ParsedDate | undefined {
+  if (raw === null || isEpochPlaceholder(raw)) return undefined;
+  if (typeof raw === 'number' && !(o.dateFormatted && raw >= 1)) return undefined;
+  const d = parseDate(raw, { date1904: o.date1904, dateFormatted: o.dateFormatted, ...(o.order === undefined ? {} : { order: o.order }) });
+  return 'error' in d || (d.precision !== 'minute' && d.precision !== 'second') ? undefined : d;
 }

@@ -21,7 +21,7 @@ import { foldDiacritics } from '../recognize/vocab';
 export type NameKind = 'descriptor' | 'variable' | 'taxon' | 'unknown';
 
 /** Columns that tell samples of one station apart (and are no measurement and no species). Compared on the folded name: "Replicate no", "Niskin", "Station no". */
-const DESCRIPTOR = /^(?:(?:replicate|replikat|rep|cast|bottle|niskin|niskin bottle|run|haul|tow|subsample|core|section|slice|frame)(?: no| nr| num| number| id| n)?|(?:station|sample|stn)(?: no| nr| num| number))$/;
+const DESCRIPTOR = /^(?:(?:replicates?|replikat(?:e|s)?|reps?|casts?|bottles?|niskin|niskin bottles?|runs?|hauls?|tows?|subsamples?|cores?|sections?|slices?|frames?)(?: no| nr| num| number| id| n)?|(?:station|sample|stn)s?(?: no| nr| num| number))$/;
 
 /** Variable tokens and formulas; the whole folded name or its leading word is compared. */
 const VARIABLE_TOKENS = new Set([

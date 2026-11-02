@@ -209,11 +209,13 @@ describe('a long sheet with blank or NaN quantities', () => {
       XLSX.utils.book_append_sheet(wb, ws, 'S');
       return parseXlsx(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })), 'x.xlsx');
     };
-    const run = async (file: ParsedFile) => {
-      const input = sheetInput(file, { quantity: { kind: 'count' } });
+    const run = async (file: ParsedFile, asTime = false) => {
+      const input = sheetInput(file, { quantity: { kind: 'count' }, ...(asTime ? { edit: { time: { kind: 'time' as const } } } : {}) });
       return convert({ sheets: [input] });
     };
-    const formatted = await run(book('yyyy-mm-dd hh:mm'));
+    // a column the workbook formats as a date and time is the date and time by itself; chosen as a time, with no date column, it blocks
+    expect((await run(book('yyyy-mm-dd hh:mm'))).findings.some((f) => f.ruleId === 'CONV-TIME-HOLDS-DATES')).toBe(false);
+    const formatted = await run(book('yyyy-mm-dd hh:mm'), true);
     expect(find({ findings: formatted.findings } as never, 'CONV-TIME-HOLDS-DATES')).toHaveLength(1);
     const plain = await run(book(undefined));
     expect(plain.findings.some((f) => f.ruleId === 'CONV-TIME-HOLDS-DATES')).toBe(false);

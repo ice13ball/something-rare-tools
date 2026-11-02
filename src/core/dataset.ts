@@ -25,7 +25,7 @@ import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { pairHemisphere, parseCoordinate } from './values/coords';
-import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
+import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, fullDatetimeOfTimeCell, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -33,7 +33,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -358,13 +358,26 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
           let date: ParsedDate = d;
           let tzField = specs.when.header;
           if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
-          const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
+          let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           if (specs.time && !isBlankCell(timeCell)) {
             const tOrder = timeOrder === 'unknown' ? undefined : timeOrder;
-            if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
-            else {
-              date = combineDateTime(date, timeCell, tOrder);
-              tzField = specs.time.header;
+            const tField = specs.time.header;
+            // the time column holds a full datetime (a text one, or the serial of a date-formatted column): a zone-stated one is the instant of the event and wins over a date (or a local datetime) that states no zone
+            // (a local date beside a UTC time on the next day); one without a zone gives its time of day when it falls on the day of the row
+            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }) });
+            if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown') {
+              date = full;
+              tzField = tField;
+            } else {
+              if (full !== undefined && typeof timeCell === 'number') timeCell = full.iso;
+              if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder))) {
+                // a full datetime of another day than the row's date cannot be cut to its time of day: said as what it is, not as an unreadable time
+                if (full !== undefined) c.add('ROW-TIME-OTHER-DAY', sheet.name, tField, row.line, String(timeCell).trim(), true);
+                else c.add('ROW-DATE-UNPARSEABLE', sheet.name, tField, row.line, String(timeCell).trim(), true, { role: 'time' });
+              } else {
+                date = combineDateTime(date, timeCell, tOrder);
+                tzField = tField;
+              }
             }
           }
           if ((date.precision === 'minute' || date.precision === 'second') && date.tz === 'unknown') {

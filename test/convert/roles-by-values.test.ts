@@ -20,7 +20,7 @@ describe('a column of Latin binomials is the taxon of a long sheet, under any he
     it(`under "${header}"`, () => {
       const r = rolesOf(['Station', header, 'Count'], N(6, (i) => ['S1', names[i], i + 1]));
       expect(r[header].role).toEqual({ kind: 'taxon' });
-      expect(r[header].confidence).toBe('high');
+      expect(r[header].confidence).toBe('low');
       expect(r[header].reasonCode).toBe('values-latin-names');
     });
   }

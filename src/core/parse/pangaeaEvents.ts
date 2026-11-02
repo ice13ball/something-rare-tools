@@ -113,15 +113,17 @@ export function lendEventColumns(file: ParsedFile, sheet: RawSheet, events: read
     };
   } else {
     const usable = events.filter((e) => (needPos && e.lat !== undefined) || (needDate && e.date !== undefined));
-    return usable.length === 0 ? [] : [makeFinding('IN-PANGAEA-EVENT-NOT-USED', { ...base, params: { events: events.length, several: events.length } })];
+    if (usable.length === 0) return needPos && events.some((e) => e.track) ? [makeFinding('IN-PANGAEA-EVENT-NOT-USED', { ...base, params: { events: events.length, track: events.length } })] : [];
+    return [makeFinding('IN-PANGAEA-EVENT-NOT-USED', { ...base, params: { events: events.length, several: events.length } })];
   }
 
   const single = events.length === 1 ? events[0] : undefined;
   const wantPos = needPos && events.some((e) => e.lat !== undefined);
   const wantDate = needDate && events.some((e) => e.date !== undefined);
   const findings: Finding[] = [];
-  if (single && needPos && single.track && !wantPos) {
-    findings.push(makeFinding('IN-PANGAEA-EVENT-NOT-USED', { ...base, params: { events: 1, track: 1 } }));
+  // tracks only (a trawl: start differs from end): no event has a point, and the finding says why, with one event or several
+  if (needPos && !wantPos && events.some((e) => e.track)) {
+    findings.push(makeFinding('IN-PANGAEA-EVENT-NOT-USED', { ...base, params: { events: events.length, track: events.length } }));
   }
   if (!wantPos && !wantDate) return findings;
 

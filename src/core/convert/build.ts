@@ -5,7 +5,7 @@ import { detectDayMonthOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
-import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
+import { headerComment, isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
 import { convertDepthText, depthUnitFactor, depthUnitOfHeader, isMetreUnit } from '../recognize/depthUnit';
 import type { DepthUnitFactor } from '../recognize/depthUnit';
@@ -157,11 +157,13 @@ interface Cols {
   /** Measured-variable columns with a name: each becomes one eMoF row per sample event (stage 5). `name` is the variable as the column's role gives it, `unit` as given. */
   /** Biomass / weight columns next to the quantity column of a long sheet: one eMoF row per occurrence and column (as given, never converted). `basis` = the kind of mass, when known. */
   biomass: (Spec & { basis?: 'wet' | 'dry' | 'afdw' })[];
+  /** Measured-variable columns whose value belongs to the OCCURRENCE of a long sheet's row (role.perOccurrence): one eMoF row of the occurrence per column, the value and the unit as given. */
+  occVars: (Spec & { name: string; unit?: string })[];
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
 
 function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): Cols {
-  const c: Cols = { taxonHeaders: [], variables: [], biomass: [] };
+  const c: Cols = { taxonHeaders: [], variables: [], biomass: [], occVars: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
     const r = m.role;
@@ -207,6 +209,10 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         // written only for the code the column's own header holds
         const own = header?.[m.index];
         const declared = own === undefined ? undefined : p01CodeOf(stripTypeSuffix(own))?.code;
+        if (name !== '' && r.perOccurrence === true) {
+          c.occVars.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }) });
+          break;
+        }
         if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(declared === undefined ? {} : { p01: declared }) });
         break;
       }
@@ -229,6 +235,14 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
       }
       default:
         break;
+    }
+  }
+  // two variable columns of one name ('Temp [deg C] (CTD)', 'Temp [deg C] (bottle)') would write the same measurementType twice: the comment of the header (else the header) tells them apart
+  for (const group of [c.variables, c.occVars]) {
+    const count = new Map<string, number>();
+    for (const v of group) count.set(v.name, (count.get(v.name) ?? 0) + 1);
+    for (const v of group) {
+      if ((count.get(v.name) ?? 0) > 1) v.name = `${v.name} (${headerComment(v.header) ?? v.header.trim()})`;
     }
   }
   return c;
@@ -373,7 +387,7 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   for (const v of cols.variables) use(v);
   use(cols.replicate);
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
-  if (sin.profile === undefined && sin.shape === 'long' && cols.quantity !== undefined && cols.taxonCell !== undefined) for (const b of cols.biomass) use(b);
+  if (sin.profile === undefined && sin.shape === 'long' && cols.quantity !== undefined && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
   use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
@@ -1797,7 +1811,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         const before = acc.varValues.get(v.index);
         if (before !== undefined) {
           // a long sheet repeats the sample on every row: the same value is the same measurement, another value is two values for one sample
-          if (before !== written) acc.conflicts.add('measured value');
+          if (before !== written) acc.conflicts.add(`measured value (${v.header.trim()})`);
           continue;
         }
         acc.varValues.set(v.index, written);
@@ -2006,6 +2020,30 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               ...(unit.id ? { measurementUnitId: unit.id.uri } : {}),
               ...(sizeValue !== undefined && sizeUnit !== undefined && !unit.perUnit ? { measurementRemarks: `per sample of ${sizeValue} ${sizeUnit}` } : {}),
               source: { ...occSource, column: b.header },
+            });
+          }
+        }
+        // a measured variable whose value belongs to the occurrence of this row (a length of each fish): one eMoF row of THIS occurrence, the value and the unit as given
+        if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined) {
+          for (const v of cols.occVars) {
+            const vcell = row.cells[v.index] ?? null;
+            const vp = parseNumber(vcell, dc);
+            if (vp.status === 'missing') continue;
+            if (vp.status === 'na-variant') {
+              collector.add('ROW-NA-VARIANT', sheet.name, v.header, row.line, vp.token);
+              continue;
+            }
+            if (vp.status === 'non-numeric') {
+              collector.add('ROW-NON-NUMERIC', sheet.name, v.header, row.line, vp.token);
+              continue;
+            }
+            measurements.push({
+              target: { kind: 'occurrence', id },
+              role: 'variable',
+              measurementType: v.name,
+              measurementValue: valueText(vcell, dc),
+              ...(v.unit === undefined ? {} : { measurementUnit: v.unit }),
+              source: { ...occSource, column: v.header },
             });
           }
         }

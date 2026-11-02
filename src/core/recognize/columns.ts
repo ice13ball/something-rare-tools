@@ -37,7 +37,7 @@ export function stripTypeSuffix(h: string): string {
 const SINGLE_TOKEN_EXTRA_UNITS = new Set(['cm', 'mm']);
 
 /** Is this text, found in round brackets, a unit ('m', 'µmol L-1', 'kg m-3') and not a remark ('at 25ºC')? */
-const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰']);
+const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'µm', 'μm', 'um', 'nm', 'g', 'kg', 'mg', '%', '‰']);
 /** A date format written in a bracket ('YYYYMMDD', 'DD/MM/YYYY', 'yyyy-mm-dd hh:mm'): it states how the dates are written, so it goes with the name like a unit does. */
 const DATE_FORMAT_TEXT = /^(?=.*y{2})(?=.*d)[ymdhst\-/.: ]+$/i;
 function looksLikeUnit(text: string): boolean {
@@ -55,6 +55,25 @@ export interface HeaderUnit {
   /** The unit text exactly as the header wrote it (also the time-zone marker of 'Time [UTC]'). */
   unitText?: string;
 }
+
+/**
+ * The comment of PANGAEA's 'name [unit] (comment)': the round bracket after a square-bracket unit, without the brackets; undefined for any other header. unitFromHeader leaves it out of the name, so
+ * a test that must see it ('(top)', '(bottom)', '(below seafloor)', '(std dev)', '(total)') asks for it here.
+ */
+export function headerComment(h: string): string | undefined {
+  const m = /^(.*\S)\s*\[[^[\]]+\]\s*\((.*)\)$/.exec(stripTypeSuffix(h).replace(/\s*\([^()]*\.\.\.\)\s*$/, '').trim());
+  return m === null || m[2].trim() === '' ? undefined : m[2].trim();
+}
+
+/** The name of a header with its comment: what a test that wants the whole wording of a PANGAEA parameter reads ('Depth sed (top/bottom)'). */
+export function nameWithComment(h: string): string {
+  const name = unitFromHeader(h).name;
+  const c = headerComment(h);
+  return c === undefined ? name : `${name} ${c}`;
+}
+
+/** A comment that says the column is a spread or a count of the variable, not the variable ('Temp [deg C] (std dev)', 'Chl [µg/l] (SD of 3)'). */
+const STATISTIC_COMMENT = /(?:^| )(?:st dev|std dev|stdev|std|sd|sem|se|cv|standard deviation|standard error|variance)(?: |$)/;
 
 const trimName = (s: string): string => s.replace(/[\s_]+$/, '').replace(/^[\s_]+/, '');
 
@@ -395,6 +414,15 @@ function dwcHeader(header: string): { term: string; prefixed: boolean } | undefi
   return /^[A-Za-z]+$/.test(t) ? { term: t, prefixed } : undefined;
 }
 
+/**
+ * Does the header look like a Darwin Core term: a dwc: prefix or a term URI, a camelCase identifier (samplingProtocol, verbatimLocality, scientificName), or a plain word on a sheet that is a
+ * Darwin Core table? (dwcTermOf alone answers for ANY single word, so it cannot tell.)
+ */
+export function looksLikeDwcTerm(header: string, sheetHeader: readonly string[]): boolean {
+  const h = stripTypeSuffix(header).trim();
+  return dwcHeader(h)?.prefixed === true || /^[a-z]+(?:[A-Z][A-Za-z0-9]*)+$/.test(h) || (/^[A-Za-z]+$/.test(h) && isDwcSheet(sheetHeader));
+}
+
 /** The lower-cased DwC term a header names (prefix removed), for the dataset builder. */
 export function dwcTermOf(header: string): string | undefined {
   return dwcHeader(stripTypeSuffix(header))?.term.toLowerCase();
@@ -427,7 +455,7 @@ const DWC_MARKERS = new Set([
 ]);
 
 /** Is this sheet a Darwin Core table: does any header name a distinctive DwC term, or carry a dwc: prefix? */
-function isDwcSheet(headers: readonly string[]): boolean {
+export function isDwcSheet(headers: readonly string[]): boolean {
   return headers.some((h) => {
     const d = dwcHeader(stripTypeSuffix(h));
     return d !== undefined && (d.prefixed || DWC_MARKERS.has(d.term.toLowerCase()));
@@ -586,19 +614,29 @@ const DATE_SHAPE = /\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{4}|\d{4}[./]\d{
  * How many of the text cells of a column (the first 200) are full dates the date parser reads. A day/month order that the column itself decides is applied, an ambiguous one is not guessed
  * (those cells do not count). The placeholder dates of a spreadsheet or an epoch are times, not dates.
  */
-function dateShare(rows: readonly RawRow[], col: number, ctx: ProposeContext): { seen: number; good: number; withTime: boolean } {
-  const cells = rows.slice(0, 200).map((r) => r.cells[col] ?? null).filter((c): c is string => typeof c === 'string' && !isBlank(c));
+function dateShare(rows: readonly RawRow[], col: number, ctx: ProposeContext, formatted = false): { seen: number; good: number; withTime: boolean } {
+  const all = rows.slice(0, 200).map((r) => r.cells[col] ?? null).filter((c): c is string | number => !isBlank(c) && c !== null);
+  const cells = all.filter((c): c is string => typeof c === 'string');
   const order = detectDayMonthOrder(cells);
   let good = 0;
   let withTime = false;
-  for (const c of cells) {
+  for (const c of all) {
+    // the serial of a column the workbook formats as a date (an Excel 'Time' column set to a date-time format); a plain number is never a date
+    if (typeof c === 'number') {
+      if (!formatted || c < 1) continue;
+      const d = parseDate(c, { date1904: ctx.date1904, dateFormatted: true });
+      if ('error' in d) continue;
+      good++;
+      if (d.precision === 'minute' || d.precision === 'second') withTime = true;
+      continue;
+    }
     if (!DATE_SHAPE.test(c) || isEpochPlaceholder(c)) continue;
     const d = parseDate(c, { date1904: ctx.date1904, dateFormatted: false, ...(order === 'unknown' ? {} : { order }) });
     if ('error' in d || d.precision === 'year' || d.precision === 'month') continue;
     good++;
     if (d.precision === 'minute' || d.precision === 'second') withTime = true;
   }
-  return { seen: cells.length, good, withTime };
+  return { seen: all.filter((c) => typeof c === 'string' || formatted).length, good, withTime };
 }
 
 const PLACE_MAX_CHARS = 40;
@@ -821,9 +859,12 @@ function pairHemisphereColumns(
  * 'NA' is far more often "not available" than sodium. Sodium keeps the chemical spelling 'Na', and a column that is written 'NA' or 'na' is sodium only when its header states a
  * unit (a concentration): a column of notes, flags or footnote marks has none. Decided on the header as written (the vocabulary matches the folded key, which has lost the case).
  */
-function isAmbiguousNa(hu: HeaderUnit): boolean {
+function isAmbiguousNa(hu: HeaderUnit, header: readonly string[], index: number): boolean {
   const name = hu.name.trim();
-  return /^na$/i.test(name) && name !== 'Na' && hu.unit === undefined;
+  if (!/^na$/i.test(name) || name === 'Na' || hu.unit !== undefined) return false;
+  // structure: with two or more other major ions beside it (CA, MG, K, CL, SO4 ...) the column is one of a table of ions, sodium whatever the case
+  const ions = header.filter((h, i) => i !== index && ['calcium', 'magnesium', 'potassium', 'chloride', 'sulphate'].includes(canonicalFromKey(headerKey(unitFromHeader(h).name)) ?? '')).length;
+  return ions < 2;
 }
 
 /** Proposes a role for every column of a sheet, in column order. */
@@ -915,8 +956,9 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
 
     const st = numericStats(rows, index, ctx.decimalComma);
     // a spread or an extreme of a variable ('Temperature st.dev.', 'Salinity max') is not the variable itself: it keeps its own name, so that two columns never claim one variable
-    const stat = statisticOfName(key);
-    const canonical = variableKey ?? (stat?.statistic === true || isAmbiguousNa(hu) ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
+    const commentText = headerComment(header);
+    const stat = commentText !== undefined && STATISTIC_COMMENT.test(headerKey(commentText)) ? { base: key, statistic: true } : statisticOfName(key);
+    const canonical = variableKey ?? (stat?.statistic === true || isAmbiguousNa(hu, sheet.header, index) ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
 
     // 4. values: degrees + minutes with hemisphere letters, ISO dates (only when no name or code explained the column)
     if (canonical === undefined && !isNumeric(st)) {
@@ -1033,9 +1075,10 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
   if (!entries.some((e) => e.proposal.role.kind === 'date' || e.proposal.role.kind === 'datetime')) {
     for (const e of entries) {
       if (e.proposal.role.kind !== 'time' || e.cand?.guard !== undefined) continue;
-      const share = dateShare(rows, e.proposal.index, ctx);
-      if (share.seen > 0 && share.good * 2 > share.seen && share.withTime) {
-        e.proposal.role = { kind: 'datetime' };
+      const share = dateShare(rows, e.proposal.index, ctx, sheet.dateFormatted?.[e.proposal.index] === true && sheet.timeFormatted?.[e.proposal.index] !== true);
+      if (share.seen > 0 && share.good * 2 > share.seen) {
+        // full dates with a time of day: date and time; dates alone: the date (a column named time that holds days is the date of the row)
+        e.proposal.role = { kind: share.withTime ? 'datetime' : 'date' };
         applyReason(e.proposal, why('time-holds-datetimes'), []);
       }
     }

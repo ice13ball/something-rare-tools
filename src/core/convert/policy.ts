@@ -29,6 +29,8 @@ export const BLOCK_OUTPUT_RULES: readonly string[] = [
   'ROW-LON-RANGE',
   'ROW-DEPTH-MIN-MAX',
   'ROW-DATE-UNPARSEABLE',
+  // a time column cell that names another day than the date of its row: the time cannot be cut out of it, so the event would be written with a wrong time
+  'ROW-TIME-OTHER-DAY',
   'ROW-NO-COORD',
 ];
 

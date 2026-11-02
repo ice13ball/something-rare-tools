@@ -121,6 +121,7 @@ const SHIP_DECLARED = {
  *   (these two)           signLon, signLat  optional: "row (x→-x)" (with signLonCount, signLatCount) of the cases where reversing that coordinate's sign alone makes the hops plausible
  *   ROW-SHIP-SPEED-PAIR   count, cases   count = pairs; cases = "first→second: km, h, ≥kn"; declared as above
  *   ROW-DATE-UNPARSEABLE  (none)      field = column, value = example, lines = rows
+ *   ROW-TIME-OTHER-DAY    (none)      field = the time column, value = example, lines = rows whose time cell is a full date and time on another day than the date column and names no time zone
  *   ROW-DATE-MISSING      count, percent   rows without a date, and their share of all rows (number, 0-100)
  *   ROW-YEAR-OUTLIER      years, declared  years = years of the flagged rows; declared = years named in label/file name/title/extent
  *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
@@ -454,6 +455,19 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `{+lines:L'heure de la ligne|Les heures des lignes} {lines} (par ex. « {value} ») {+lines:n'a pas pu être lue|n'ont pas pu être lues}. Écrivez l'heure sous la forme HH:MM (24 heures), par ex. 16:30 (1630 et 16:30. sont aussi lus), en UTC ou avec le fuseau horaire indiqué ; une plage comme 16:00-17:30 ou 1600-1730 est lue comme son début.`,
     },
     technicalTime: `{file}:{lines} field {field} value '{value}': time of day not parseable (HH:MM or HH:MM:SS, 24 hours; a range HHMM-HHMM or HH:MM-HH:MM, also several separated by commas, is read as the start of its first range and the end is ignored; state UTC or the time zone).`,
+  },
+  {
+    id: 'ROW-TIME-OTHER-DAY',
+    category: 'B',
+    severity: 'warning',
+    params: [],
+    plain: {
+      pl: `W wierszach {lines} kolumna godziny (np. „{value}”) podaje pełną datę z godziną, ale inny dzień niż kolumna daty, a bez strefy czasowej. Godziny nie da się z tego wyciąć: wpisz datę i godzinę w jednej kolumnie ze strefą (np. 2011-10-05T20:00:00Z) albo godzinę samą.`,
+      en: `In lines {lines} the time column (e.g. "{value}") holds a full date and time, but a different day than the date column, and no time zone. The time of day cannot be cut out of it: write date and time in one column with a zone (e.g. 2011-10-05T20:00:00Z), or the time of day alone.`,
+      de: `In den Zeilen {lines} enthält die Uhrzeitspalte (z. B. „{value}“) ein volles Datum mit Uhrzeit, aber einen anderen Tag als die Datumsspalte und keine Zeitzone. Die Uhrzeit lässt sich nicht herauslösen: Schreiben Sie Datum und Uhrzeit mit Zone in eine Spalte (z. B. 2011-10-05T20:00:00Z) oder nur die Uhrzeit.`,
+      fr: `Aux lignes {lines}, la colonne d'heure (par ex. « {value} ») contient une date et une heure complètes, mais un autre jour que la colonne de date, et aucun fuseau. L'heure ne peut pas en être extraite : écrivez la date et l'heure avec un fuseau dans une colonne (par ex. 2011-10-05T20:00:00Z), ou l'heure seule.`,
+    },
+    technical: `{file}:{lines} field {field} value '{value}': the time column holds a full datetime of another day than the date column of the row and states no zone; the time of day is not taken from it (a datetime with a zone is read as the event's instant instead).`,
   },
   {
     id: 'ROW-DATE-MISSING',

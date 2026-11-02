@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { depthUnitOfHeader } from '../recognize/depthUnit';
 import { biomassNameUnit, isMassUnitText, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
-import { dwcTermOf, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
+import { dwcTermOf, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
@@ -216,6 +216,7 @@ export const OVERLAY_REASONS = {
   'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
   'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
   'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
+  'size-per-occurrence': 'a size or a length whose values differ between the rows of a sample (a length of each organism): a measurement of each occurrence, as a biomass is, not of the sample',
   'size-variable': 'its name says total, but it is a size or a length with a unit that does not count organisms: a measured variable of the sample, not a sum of individuals',
   'unit-effort': 'its unit is a volume or an area, which no species is counted in: read as the sampling effort',
   'unit-variable': 'its unit measures a length, a time, a speed or a temperature, which no species is counted in: a measured variable, not a species',
@@ -392,10 +393,10 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   // another vertical coordinate (what the proposer itself finds when the site-depth headers are left out), the proposer is asked without them, so that its own preference picks the real depth
   // column (name tier, then the leftmost); the site depth is then ignored by the rule below. A sediment sheet is not masked (there the site depth is the depth by design), and neither is a sheet
   // whose only other "depth" is an elevation or an altitude (the converter has no role for it).
-  const siteAt = new Set(sheet.header.flatMap((h, i) => (dwcTermOf(h) === undefined && isSiteDepthName(unitFromHeader(h).name) ? [i] : [])));
+  const siteAt = new Set(sheet.header.flatMap((h, i) => (dwcTermOf(h) === undefined && isSiteDepthName(nameWithComment(h)) ? [i] : [])));
   const seafloorPre = sheet.header.some((h) => {
     const hu = unitFromHeader(h);
-    return dwcTermOf(h) === undefined && (isSeafloorName(hu.name) || (sedCtx && isPlainDepthName(hu.name) && seafloorUnitOf(hu.unit) === 'cm'));
+    return dwcTermOf(h) === undefined && (isSeafloorName(nameWithComment(h)) || (sedCtx && isPlainDepthName(nameWithComment(h)) && seafloorUnitOf(hu.unit) === 'cm'));
   });
   const rewritten = occurrenceIdAt.size > 0 || mlPerLAt.size > 0;
   const askedWith = (maskSite: boolean): { proposals: ColumnProposal[] } => {
@@ -432,15 +433,15 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         continue;
       }
       const depthUnit = depthUnitOfHeader(p.header, hu.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined));
-      if (isSeafloorName(hu.name)) {
+      if (isSeafloorName(nameWithComment(p.header))) {
         seafloorAt.set(p.index, 'seafloor-depth-name');
         continue;
       }
-      if (sedCtx && isPlainDepthName(hu.name) && seafloorUnitOf(depthUnit) === 'cm') {
+      if (sedCtx && isPlainDepthName(nameWithComment(p.header)) && seafloorUnitOf(depthUnit) === 'cm') {
         seafloorAt.set(p.index, 'seafloor-depth-cm');
         continue;
       }
-      if (isSiteDepthName(hu.name)) {
+      if (isSiteDepthName(nameWithComment(p.header))) {
         siteDepthAt.add(p.index);
         continue;
       }
@@ -458,7 +459,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     else if (term === 'maximumdepthinmeters') bounds.set(p.index, 'max');
     else {
       // (a camel-case name is read as its words: DepthSampleStart = depth, sample, start)
-      const bound = depthBoundOfName(foldDiacritics(headerKey(hu.name.replace(/([a-z0-9])([A-Z])/g, '$1 $2'))));
+      const bound = depthBoundOfName(foldDiacritics(headerKey(nameWithComment(p.header).replace(/([a-z0-9])([A-Z])/g, '$1 $2'))));
       if (bound !== undefined) bounds.set(p.index, bound);
       else {
         // the name as it stands, then without a trailing bracket group of any text ("Volume filtered (m3)", "Sample label (Multinet number)"); a bracket text
@@ -484,16 +485,20 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     }
   }
 
-  // a column of Latin binomials is the taxon of a long sheet, whatever its header says ('Scientific name', 'SpName'): decided by the cells. One such column is read with the confidence of the
-  // cells; several (a host and a parasite, a predator and its prey) are not told apart: the leftmost is offered, with low confidence, and the others stay as they are.
-  // (a sheet whose columns are mostly numbered, 1, 2, 3 ..., is a table of samples in columns with the species in its rows: not a long sheet, the transposed test judges it)
+  // a column of Latin binomials is the taxon of a long sheet, whatever its header says ('Scientific name', 'SpName'): decided by the cells, and only when the sheet is long by its other columns.
+  // It is never claimed (a) on a Darwin Core term, (b) beside genus-shaped numeric columns (a wide sheet whose species are columns, with a 'Dominant species' text column), (c) without a column
+  // that counts or measures the organisms of each row (a quantity, a biomass, a number counted in individuals), (d) on a table of samples in numbered columns. Several such columns (a host
+  // and a parasite) are not told apart: the leftmost is offered. The cells alone never make it high confidence.
   const numberedColumns = sheet.header.filter((h) => /^\s*\d+(?:\.\d+)?\s*$/.test(h)).length;
-  if (numberedColumns < 5 && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
-    const latin = base.filter((q) => q.role.kind === 'ignore' && q.reasonCode === 'text-column' && !claims.has(q.index) && latinNameShare(sheet, q.index) > 0);
-    if (latin.length > 0) {
-      const lead = latin[0];
-      claims.set(lead.index, { role: { kind: 'taxon' }, confidence: latin.length === 1 && latinNameShare(sheet, lead.index) >= 0.95 ? 'high' : 'low', code: 'values-latin-names' });
-    }
+  const countColumn = (q: ColumnProposal): boolean => {
+    const u = unitFromHeader(q.header);
+    return q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && isPlainCountUnit(foldUnit(u.unit ?? u.unitText ?? '')) && nameKind(q.header, true) !== 'descriptor';
+  };
+  const longEvidence = base.some((q) => claims.get(q.index)?.role.kind === 'quantity' || claims.get(q.index)?.role.kind === 'biomass' || countColumn(q));
+  const speciesColumns = base.some((q) => q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && !claims.has(q.index) && !countColumn(q) && nameKind(q.header, isAbundanceUnit(unitFromHeader(q.header).unit) || isAbundanceUnit(unitFromHeader(q.header).unitText)) === 'taxon');
+  if (numberedColumns < 5 && longEvidence && !speciesColumns && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
+    const latin = base.filter((q) => q.role.kind === 'ignore' && q.reasonCode === 'text-column' && !looksLikeDwcTerm(q.header, sheet.header) && !claims.has(q.index) && latinNameShare(sheet, q.index) > 0);
+    if (latin.length > 0) claims.set(latin[0].index, { role: { kind: 'taxon' }, confidence: 'low', code: 'values-latin-names' });
   }
 
   // depth: the winner of the shared slot says which direction the sheet counts
@@ -509,7 +514,9 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const hasLongTaxon = [...claims.values()].some((c) => c.role.kind === 'taxon');
   // a number counted in individuals ("Ind [#]", "Count [n]") next to a column of taxon names: the count of each row, when no column is named as one
   if (hasLongTaxon && ![...claims.values()].some((c) => c.role.kind === 'quantity')) {
-    const q = base.find((o) => o.role.kind === 'variable' && !claims.has(o.index) && !isCanonicalKey(o.role.variable) && isPlainCountUnit(foldUnit(unitFromHeader(o.header).unit ?? unitFromHeader(o.header).unitText ?? '')));
+    const counts = base.filter((o) => o.role.kind === 'variable' && !claims.has(o.index) && !isCanonicalKey(o.role.variable) && isPlainCountUnit(foldUnit(unitFromHeader(o.header).unit ?? unitFromHeader(o.header).unitText ?? '')) && nameKind(o.header, true) !== 'descriptor');
+    // a name that says individuals or a count first; a descriptor of the sample ('Hauls [#]', 'Replicates [n]') is never the count
+    const q = counts.find((o) => /\b(ind|indiv|individuals?|count|counts|specimens?|abundance|number)\b/.test(headerKey(unitFromHeader(o.header).name))) ?? counts[0];
     if (q !== undefined) claims.set(q.index, { role: { kind: 'quantity' }, confidence: 'low', code: 'count-unit-quantity' });
   }
   const seenQuantity = new Set<number>();
@@ -686,20 +693,26 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       // the NAME decides (core/convert/measured.ts), never the unit alone: a species of a wide sheet may carry a biomass unit ("Calanus finmarchicus [mg C/m3]")
       const kind = nameKind(p.header, isAbundanceUnit(hdr.unit) || isAbundanceUnit(hdr.unitText));
       const unitFolded = foldUnit(hdr.unit ?? hdr.unitText ?? '');
-      // what the VALUES and the UNIT rule out (a false variable loses occurrences, so only what no species column can be): a column of years, one fractional value on every row, a unit of
-      // length, volume, area, time or temperature. A genus name with none of these stays a candidate, whatever its unit: "Calanus", "Acartia".
-      if (kind !== 'descriptor' && kind !== 'variable' && holdsYears(sheet, p.index, ctx.decimalComma)) {
+      const abundance = isAbundanceUnit(hdr.unit) || isAbundanceUnit(hdr.unitText);
+      // a unit written in SQUARE brackets is a unit; '(m)' and '_m' on a name can be 'male' ('Calanus finmarchicus (m)', 'Calanus_m'), and a lone 'm' on a genus-shaped name is never taken for metres
+      const squareUnit = /\[[^[\]]+\]/.test(stripTypeSuffix(p.header));
+      const geometry = squareUnit && unitFolded !== '' && isGeometryUnit(unitFolded) && (kind === 'unknown' || unitFolded !== 'm');
+      // what the VALUES and the UNIT rule out (a false variable loses occurrences, so only what no species column can be). Values are read only on a column that is filled on EVERY row, never with
+      // an abundance unit, and a one-value rule never on a name that is shaped like a taxon; the years rule on a name that is not, or that says year ('SampleYear', 'Year'). A genus name with
+      // none of these stays a candidate, whatever its unit: 'Calanus', 'Acartia', 'Calanus [ind/m3]'.
+      const yearName = nameWithComment(p.header).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z]+/).some((w) => w === 'year' || w === 'years' || w === 'yr');
+      if (kind !== 'descriptor' && kind !== 'variable' && !abundance && (kind !== 'taxon' || yearName) && holdsYears(sheet, p.index, ctx.decimalComma)) {
         p.role = { kind: 'ignore' };
         p.confidence = 'low';
         why(p, 'year-values');
-      } else if (kind !== 'descriptor' && kind !== 'variable' && unitFolded !== '' && isGeometryUnit(unitFolded)) {
+      } else if (kind !== 'descriptor' && kind !== 'variable' && geometry) {
         const unit = hdr.unit ?? hdr.unitText;
         const space = /^(?:l|ml|dl|cl|dm3|cm3|m3|m2|cm2|km2|ha)$/.test(unitFolded);
         p.role = space ? { kind: 'effort', ...(unit === undefined ? {} : { unit }) } : { kind: 'variable', variable: namePartOf(p.header), ...(unit === undefined ? {} : { unit, unitSource: 'header' as const }) };
         p.confidence = 'low';
         if (space) why(p, 'unit-effort');
         else why(p, 'unit-variable');
-      } else if (kind !== 'descriptor' && kind !== 'variable' && holdsOneFractionalValue(sheet, p.index, ctx.decimalComma)) {
+      } else if (kind !== 'descriptor' && kind !== 'variable' && kind !== 'taxon' && !abundance && holdsOneFractionalValue(sheet, p.index, ctx.decimalComma)) {
         p.role = { kind: 'ignore' };
         p.confidence = 'low';
         why(p, 'constant-value');
@@ -746,9 +759,28 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       // organisms, or whose name says a size ('Total length', 'Total depth'), is no quantity.
       const hasQuantity = base.some((o) => o.role.kind === 'quantity');
       const countLike = (hu.unitText === undefined || isAbundanceUnit(hu.unitText)) && !isSizeLikeHeader(q.header);
+      // a size ('Total length') whose values differ between the rows of a sample is a measurement of each organism: an occurrence variable, with its unit when it has one
+      if (!mass && isSizeLikeHeader(q.header)) {
+        q.role = { kind: 'variable', variable: namePartOf(q.header), ...(hu.unit === undefined && hu.unitText === undefined ? {} : { unit: hu.unit ?? hu.unitText, unitSource: 'header' as const }), perOccurrence: true };
+        q.confidence = 'low';
+        why(q, 'size-per-occurrence');
+        continue;
+      }
       q.role = mass ? { kind: 'biomass' } : hasQuantity || !countLike ? { kind: 'ignore' } : { kind: 'quantity' };
       q.confidence = 'low';
       why(q, mass ? 'summary-total-biomass' : hasQuantity || !countLike ? 'summary-total-varies' : 'summary-total-quantity');
+    }
+  }
+  // a size or a length that a long sheet gives to each organism (it differs between the rows of one sample) belongs to the occurrence, as a biomass does; one that is the same on all the rows
+  // of a sample is a variable of the sample. Decided from the values (`valuesRepeatWithinSample`), never from the name alone; with nothing to compare it stays a variable of the sample.
+  if (hasLongTaxon) {
+    for (const q of base) {
+      if (q.role.kind !== 'variable' || q.role.perOccurrence === true || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined) continue;
+      if (q.reasonCode !== 'size-variable' && !isSizeLikeHeader(q.header)) continue;
+      if (valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) !== 'varies') continue;
+      q.role = { ...q.role, perOccurrence: true };
+      q.confidence = 'low';
+      why(q, 'size-per-occurrence');
     }
   }
   // a plain "Area" on a sheet that has no taxon, quantity or occurrence ID is a place name or an extent, not a sampled area (a header that says sampled or swept area stays an effort)

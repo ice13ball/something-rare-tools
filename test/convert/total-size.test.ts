@@ -13,7 +13,7 @@ const NAMES = ['Gadus morhua', 'Acartia sp.', 'Oithona similis', 'Calanus cf. gl
 
 describe('Total length and Total depth', () => {
   const longHeader = ['Station', 'Depth', 'Scientific name', 'Count', 'Total length [mm]', 'Total depth [m]'];
-  const longRows = N(4, (i) => ['S1', 10, NAMES[i], i + 1, 100 + 7 * i, 55]);
+  const longRows = N(4, (i) => ['S1', 10, NAMES[i], i + 1, 100, 55]);
 
   it('a size word with a unit that does not count organisms is a measured variable with its unit, on a long sheet and on a wide one', () => {
     const long = rolesOf(longHeader, longRows);

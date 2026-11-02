@@ -11,6 +11,8 @@ import { parseNumber } from '../values/numbers';
 const MAX_ROWS = 500;
 const blank = (c: RawCell): boolean => c === null || (typeof c === 'string' && c.trim() === '');
 const cellsOf = (sheet: RawSheet, index: number): RawCell[] => sheet.rows.slice(0, MAX_ROWS).map((r) => r.cells[index] ?? null).filter((c) => !blank(c));
+/** Is the column filled on EVERY row (of the first 500)? A column with blanks is not "one value on every row" and not "every cell a year": its blanks are rows the rule did not see. */
+const filledEverywhere = (sheet: RawSheet, index: number): boolean => cellsOf(sheet, index).length === Math.min(sheet.rows.length, MAX_ROWS);
 
 /**
  * A Latin binomial at the start of a cell: a genus (capital, 3+ letters, an optional subgenus in brackets), then an epithet of 3+ lower-case letters, or "sp." / "spp." / "indet.", with an
@@ -40,13 +42,13 @@ export function latinNameShare(sheet: RawSheet, index: number): number {
   const hits = cells.filter(isBinomialCell);
   const distinct = new Set(hits.map((c) => String(c).trim().toLowerCase()));
   const share = hits.length / cells.length;
-  return share >= 0.8 && distinct.size >= 2 ? share : 0;
+  return share >= 0.8 && distinct.size >= 3 ? share : 0;
 }
 
 /** Every filled cell is a whole number from 1800 to 2100 within a span of 120 years, and there are at least 3 of them: a column of years. A column of counts rarely stays inside that band. */
 export function holdsYears(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
   const cells = cellsOf(sheet, index);
-  if (cells.length < 3) return false;
+  if (cells.length < 3 || !filledEverywhere(sheet, index)) return false;
   let lo = Infinity;
   let hi = -Infinity;
   for (const c of cells) {
@@ -64,7 +66,7 @@ export function holdsYears(sheet: RawSheet, index: number, decimalComma: boolean
  */
 export function holdsOneFractionalValue(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
   const cells = cellsOf(sheet, index);
-  if (cells.length < 3) return false;
+  if (cells.length < 3 || !filledEverywhere(sheet, index)) return false;
   const first = parseNumber(cells[0], decimalComma);
   if (first.status !== 'ok' || Number.isInteger(first.value)) return false;
   return cells.every((c) => {

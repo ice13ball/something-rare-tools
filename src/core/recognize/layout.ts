@@ -92,7 +92,6 @@ function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonC
   if (cols >= 3 && sheet.header.slice(0, cols).filter((h) => h.trim() === '').length * 2 > cols) {
     return 'header-empty';
   }
-  if (footnoteMarkerRow(sheet, cols)) return 'header-footnote';
   if (sheet.rows.length >= 2) {
     const first = sheet.rows[0];
     let unitCells = 0;
@@ -110,6 +109,8 @@ function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonC
     }
     if (unitCells >= 2) return 'header-units';
   }
+  // (units first: 'z, T, S, O, N, P' over a row of units is a header of short names, not footnote marks)
+  if (footnoteMarkerRow(sheet, cols)) return 'header-footnote';
   return undefined;
 }
 
