@@ -56,7 +56,7 @@ export interface HeaderUnit {
 const trimName = (s: string): string => s.replace(/[\s_]+$/, '').replace(/^[\s_]+/, '');
 
 /**
- * Splits a header into name and unit. Understood: 'name [unit]', 'name (unit)' (only when the bracket text is a
+ * Splits a header into name and unit. Understood: 'name [unit]', 'name [unit] (comment)', 'name (unit)' (only when the bracket text is a
  * unit), 'name_umol_kg' / 'name_mg_l' / 'Depth_m', 'DIC umol/kg', and the PANGAEA form 'name [unit] (description ...)'
  * whose truncated description is dropped. The unit is normalised to a UNIT_VOCAB label or left as written; it is
  * never invented (a header without a unit returns none).
@@ -75,6 +75,11 @@ export function unitFromHeader(h: string): HeaderUnit {
   if (bounded && trimName(bounded[1]) !== '' && (s.includes('[') || looksLikeUnit(bounded[2]))) return done(`${bounded[1]} ${bounded[3]}`, bounded[2]);
 
   let m = /^(.*\S)\s*\[([^[\]]+)\]$/.exec(s);
+  if (m && trimName(m[1]) !== '') return done(m[1], m[2]);
+
+  // PANGAEA's own form 'name [unit] (comment)': a round bracket after a square-bracket unit is the comment of the parameter ('Temp [deg C] (CTD)', 'Calanoida [#/m**3] (size fraction > 300 µm)'),
+  // never a second unit. The unit and the name before it are read; the comment stays in the header the page shows.
+  m = /^(.*\S)\s*\[([^[\]]+)\]\s*\(.*\)$/.exec(s);
   if (m && trimName(m[1]) !== '') return done(m[1], m[2]);
 
   m = /^(.*\S)\s*\(([^()]+)\)$/.exec(s);

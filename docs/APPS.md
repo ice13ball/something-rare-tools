@@ -353,6 +353,8 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
    bottom or a Secchi or mixed-layer depth, or a measurement made over a range of depths
    (`Depth-integrated chlorophyll`, `Depth averaged temperature`, `integrated over depth`; `Depth corrected` is still a depth); a
    bare `Mean depth` is still a depth.
+   **PANGAEA's `name [unit] (comment)`** (`Temp [deg C] (CTD)`, `Calanoida [#/m**3] (size fraction > 300 µm)`): a round bracket after a
+   square-bracket unit is the comment, not a second unit; the name and the unit are read and the header the page shows stays whole.
    **Whole-token abbreviations.** `Lat`, `Lon`, `Long`, `Lng` followed by anything are a coordinate
    (`Lat WGS 84`, `Lat GPS`, `Lat 1`, `Lon X`, `Lon 0-360`, `Lat mean`, `Lat station`, `Lat dd.mm`), as they
    always were, except when one of a few words makes it another name: `term`, `line`, `axis`,
