@@ -31,7 +31,7 @@ import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } fr
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
-import { biomassNameUnit, isTotalHeader } from './totalColumns';
+import { biomassNameUnit, isTaxonAttribute, isTotalHeader, valuesRepeatWithinSample } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { SEDIMENT_CONTEXT, seafloorMetres, seafloorUnitOf } from './seafloor';
@@ -254,6 +254,15 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
     }
   }
   return c;
+}
+
+/**
+ * A column ticked "of each organism" is written on the occurrences of a LONG sheet that has a taxon column. On a wide sheet (or a profile sheet) there is no occurrence per row: the column is
+ * written as an ordinary variable of the sample instead of being dropped.
+ */
+function demoteOccurrenceVars(cols: Cols, sin: ConvertSheetInput): Cols {
+  if ((sin.shape === 'long' && sin.profile === undefined && cols.taxonCell !== undefined) || cols.occVars.length === 0) return cols;
+  return { ...cols, variables: [...cols.variables, ...cols.occVars], occVars: [] };
 }
 
 /**
@@ -1000,7 +1009,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   if (!sheet) return;
   const fileName = file.fileName;
   const dc = file.decimalComma;
-  const cols = colsOf(sin.mapping, sheet.header);
+  const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
   const collector = new Collector(fileName);
   const specs = specsOf(sin.mapping);
   const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
@@ -1404,7 +1413,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const sheetKey = `${fileName}\u0000${sheet.name}\u0000${sheetKeyN++}`;
     const occurrencesBefore = occurrences.length;
     const dc = file.decimalComma;
-    const cols = colsOf(sin.mapping, sheet.header);
+    const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
     const collector = new Collector(fileName);
     const specs = specsOf(sin.mapping);
     const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
@@ -2087,6 +2096,16 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     pushAll(findings, reportVariables([...varState, ...occState], base, [], nercStats));
     // the columns that were written on the occurrences of the rows, said once (the user can undo it by the tick "of each organism" on the column's role)
+    // the columns of a long sheet that are a function of the taxon and were left out (a species code, a trophic level): said once, so that nothing is dropped in silence
+    if (sin.shape === 'long' && cols.taxonCell !== undefined) {
+      const asProposals = sin.mapping.columns.map((c) => ({ ...c, cleanHeader: c.header, confidence: 'high' as const, reason: '' }));
+      const taxonAt = cols.taxonCell.index;
+      const attrs = sin.mapping.columns
+        .filter((c) => c.role.kind === 'ignore' && c.index !== taxonAt && sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null)))
+        .filter((c) => isTaxonAttribute(sheet, taxonAt, c.index, c.header, valuesRepeatWithinSample(sheet, asProposals, c.index, dc)))
+        .map((c) => c.header.trim());
+      if (attrs.length > 0) findings.push(makeConvertFinding('CONV-TAXON-ATTRIBUTE-IGNORED', { ...base, params: { count: attrs.length, columns: attrs.join(', ') } }));
+    }
     const moved = occState.filter((st) => st.written).map((st) => st.v.header.trim());
     if (moved.length > 0) findings.push(makeConvertFinding('CONV-VALUE-PER-OCCURRENCE', { ...base, params: { count: moved.length, columns: moved.join(', ') } }));
     pushAll(findings, seafloorOf.findings());

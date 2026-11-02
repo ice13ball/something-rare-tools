@@ -3,7 +3,7 @@
 import { foldUnit } from './vocab';
 import { isPlainCountUnit } from './columnValues';
 import { nameKind } from './measured';
-import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
+import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import type { ColumnProposal, RawSheet } from '../types';
 import { parseNumber } from '../values/numbers';
 
@@ -95,14 +95,26 @@ export function distinctnessWithinSamples(sheet: RawSheet, base: readonly Column
   return withinSample(sheet, base, index, decimalComma).distinct;
 }
 
-/** Words of a header that name the size of an organism: a column with one of them that differs within a sample is the size of each organism. */
-const ORGANISM_SIZE_WORDS = new Set(['length', 'len', 'width', 'height', 'diameter', 'size', 'thickness', 'girth']);
+/**
+ * Does the header name the size of an organism, by a POSITIVE list: a bare `length`, `width`, `height`, `size` or `diameter`; one of them behind an organism qualifier (total, fork, standard,
+ * body, shell, carapace, prosome, mean); or TL, FL, SL, L1 ... L10. And its unit is a length (µm, mm, cm, m) or it has none. `Sieve size`, `Filter pore size`, `Beam width`, `Layer thickness`, `Particle
+ * size`, `Rainfall`, `Transparency`, `Bag length`, `Frame size` are none of these: a size of the gear or of the surroundings is not matched by any list of words that would have to name it first.
+ */
+const SIZE_NOUNS = new Set(['length', 'width', 'height', 'size', 'diameter']);
+const ORGANISM_QUALIFIERS = new Set(['total', 'fork', 'standard', 'body', 'shell', 'carapace', 'prosome', 'mean']);
 export function isOrganismSizeHeader(header: string): boolean {
-  return stripTypeSuffix(header)
+  const hu = unitFromHeader(header);
+  const unit = foldUnit(hu.unit ?? hu.unitText ?? '');
+  if (unit !== '' && !/^(?:um|mm|cm|m)$/.test(unit)) return false;
+  const name = hu.name.trim();
+  if (/^(?:TL|FL|SL|L\d+)$/i.test(name)) return true;
+  const words = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
-    .some((w) => ORGANISM_SIZE_WORDS.has(w));
+    .filter((w) => w !== '');
+  if (words.length === 1) return SIZE_NOUNS.has(words[0]);
+  return words.some((w, i) => SIZE_NOUNS.has(w) && i > 0 && ORGANISM_QUALIFIERS.has(words[i - 1]));
 }
 
 function withinSample(sheet: RawSheet, base: readonly ColumnProposal[], index: number, decimalComma: boolean): { verdict: 'constant' | 'varies' | 'unknown'; distinct?: number } {
@@ -179,12 +191,22 @@ export function isSamplingOrEnvironmentHeader(header: string): boolean {
 }
 
 /**
- * Is the column a function of the taxon column: every taxon that is listed more than once has ONE value in it, the column has at least two different values, and it is not constant inside the
- * samples either (a column constant inside every sample is a value of the sample that happens to follow the taxa, not an attribute of the taxon)? A species code, a taxonomic serial number, a trophic
- * level. `sampleVerdict` is valuesRepeatWithinSample's answer for the column.
+ * Is the column an ATTRIBUTE of the taxon (a species code, a serial number, a trophic level)? It must be a function of the taxon column (every taxon that is listed more than once has ONE value in it,
+ * at least two values overall) and not constant inside the samples (a value of the sample that happens to follow the taxa is not an attribute of the taxon), and then
+ *   - the name says code, id, tsn, key, serial or trophic, or
+ *   - at least half of the taxa are listed more than once (and at least three of them are) and the column has no unit.
+ * A column with a unit or a size word is never one: a length, a cover or a content that happens to be the same for the repeated taxa is a measurement, and its conflict must stay visible.
  */
-export function isFunctionOfTaxon(sheet: RawSheet, taxonIndex: number, index: number, sampleVerdict: 'constant' | 'varies' | 'unknown'): boolean {
+const ATTRIBUTE_WORDS = new Set(['code', 'id', 'tsn', 'key', 'serial', 'trophic']);
+export function isTaxonAttribute(sheet: RawSheet, taxonIndex: number, index: number, header: string, sampleVerdict: 'constant' | 'varies' | 'unknown'): boolean {
   if (sampleVerdict === 'constant') return false;
+  const hu = unitFromHeader(header);
+  if (hu.unit !== undefined || hu.unitText !== undefined || isSizeLikeHeader(header) || isOrganismSizeHeader(header)) return false;
+  const named = stripTypeSuffix(hu.name)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((w) => ATTRIBUTE_WORDS.has(w));
   const byTaxon = new Map<string, { values: Set<string>; n: number }>();
   const all = new Set<string>();
   for (const r of sheet.rows) {
@@ -201,5 +223,6 @@ export function isFunctionOfTaxon(sheet: RawSheet, taxonIndex: number, index: nu
     }
   }
   const repeated = [...byTaxon.values()].filter((e) => e.n > 1);
-  return all.size >= 2 && repeated.length > 0 && [...byTaxon.values()].every((e) => e.values.size === 1);
+  if (!(all.size >= 2 && repeated.length > 0 && [...byTaxon.values()].every((e) => e.values.size === 1))) return false;
+  return named || (repeated.length >= 3 && repeated.length * 2 >= byTaxon.size);
 }

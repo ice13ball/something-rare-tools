@@ -71,6 +71,7 @@ import type { RuleSpec } from './spec';
  *   CONV-EMOF-EVENT-MISMATCH   count            value = an example occurrenceID
  *   CONV-EMOF-VALUE-EMPTY      count            lines = rows of the eMoF table
  *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
+ *   CONV-TAXON-ATTRIBUTE-IGNORED count, columns  columns of a long sheet whose value is the same for every row of one taxon (a code, an id, a serial number, a trophic level): ignored, not written (info)
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
@@ -387,10 +388,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['what', 'count'],
     plain: {
-      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) różnią się: {what}. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach`,
-      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in: {what}. A sample is one event, so these values must be the same in all its rows`,
-      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in: {what}. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein`,
-      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par : {what}. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes `,
+      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) różnią się: {what}. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
+      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in: {what}. A sample is one event, so these values must be the same in all its rows.`,
+      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in: {what}. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein.`,
+      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par : {what}. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes.`,
     },
     plainIf: [
       {
@@ -404,6 +405,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       },
     ],
     technical: `{file}, {sheet}:{lines}: rows of sample "{value}" differ in {what} ({count} sample(s) affected). The first row is not silently preferred.`,
+  },
+  {
+    id: 'CONV-TAXON-ATTRIBUTE-IGNORED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} dla każdego taksonu zawsze tę samą wartość, więc to cechy taksonu (np. kod gatunku), a nie pomiary, i nie zostały zapisane: {columns}. Jeśli któraś jest pomiarem, nadaj jej znaczenie.`,
+      en: `{count} {+count:column has|columns have} the same value for every row of one taxon, so {+count:it is an attribute|they are attributes} of the taxon (a species code, say), not {+count:a measurement|measurements}, and {+count:was|were} not written: {columns}. If one is a measurement, give it a meaning.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} für jede Zeile eines Taxons denselben Wert, ist also eine Eigenschaft des Taxons (z. B. ein Artcode), keine Messung, und wurde nicht geschrieben: {columns}. Ist eine davon eine Messung, geben Sie ihr eine Bedeutung.`,
+      fr: `{count} {+count:colonne a|colonnes ont} la même valeur pour chaque ligne d'un taxon : un attribut du taxon (un code d'espèce, par ex.), pas une mesure, donc non écrit : {columns}. Si l'une est une mesure, donnez-lui un sens.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) ignored because their value is a function of the taxon column (name says code, id, tsn, key, serial or trophic, or most taxa are listed more than once; no unit): {columns}.`,
   },
   {
     id: 'CONV-VALUE-PER-OCCURRENCE',
@@ -1622,6 +1636,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     const items = f.params.names.split('; ');
     f = { ...f, params: { ...f.params, names: items.length <= 4 ? items.join('; ') : `${items.slice(0, 4).join('; ')}; … (+${items.length - 4})` } };
   }
+  if (f.ruleId === 'CONV-SAMPLE-CONFLICT' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: conflictWords(f.params.what, lang) } };
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.used === 'string') f = { ...f, params: { ...f.params, used: f.params.used.split(', ').map((w) => USED_WORDS[w]?.[lang] ?? w).join(', ') } };
   const variant = profileVariant(f);
   let text = fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
@@ -1632,6 +1647,25 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   }
   return text;
 }
+
+
+/** The attributes CONV-SAMPLE-CONFLICT lists in `what` (date, position, depth, depth below seafloor, sample size, measured value (column)), in the reader's language. */
+const CONFLICT_WORDS: Record<string, Record<Lang, string>> = {
+  date: { en: 'date', pl: 'data', de: 'Datum', fr: 'date' },
+  position: { en: 'position', pl: 'pozycja', de: 'Position', fr: 'position' },
+  depth: { en: 'depth', pl: 'głębokość', de: 'Tiefe', fr: 'profondeur' },
+  'depth below seafloor': { en: 'depth below seafloor', pl: 'głębokość pod dnem', de: 'Tiefe unter dem Meeresboden', fr: 'profondeur sous le fond' },
+  'sample size': { en: 'sample size', pl: 'wielkość próby', de: 'Probengröße', fr: "taille de l'échantillon" },
+  'measured value': { en: 'measured value', pl: 'wartość zmierzona', de: 'Messwert', fr: 'valeur mesurée' },
+};
+const conflictWords = (what: unknown, lang: Lang): string =>
+  String(what)
+    .split(/, (?=(?:date|position|depth below seafloor|depth|sample size|measured value)(?: \(|,|$))/)
+    .map((w) => {
+      const m = /^(date|position|depth below seafloor|depth|sample size|measured value)(.*)$/s.exec(w);
+      return m === null ? w : `${CONFLICT_WORDS[m[1]]?.[lang] ?? m[1]}${m[2]}`;
+    })
+    .join(', ');
 
 /** What a visit's ID holds (CONV-ID-REVISIT carries date | time | depth, comma separated, in `by`). */
 const VISIT_WORDS: Record<string, Record<Lang, string>> = {

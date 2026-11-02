@@ -1226,7 +1226,7 @@ reaches the depth-range, seafloor, site-depth, statistic and total tests (`Depth
 `(total)`), and two columns that share a variable name are told apart in the measurement type by their comments (`temperature (CTD)`,
 `temperature (bottle)`). A column of Latin binomials (`latinNameShare`: at least 80 % of at least 3 cells, three different, start with a genus and an
 epithet that ends like a Latin one) is offered as the taxon of the sheet (`values-latin-names`), **always at low confidence and only when the
-sheet is long by its other columns**: a quantity or a biomass named by its header stands beside it and the sheet has no species columns of its own (two binomial headers, or three genus-shaped numeric columns that are no code, identifier or word of the sampling, make it wide: `Dominant species` beside `Abundance`, `Calanus`, `Oithona`, `Acartia` stays wide; one `species_code`, `Mesh` or `Transect` does not veto), or a single
+sheet is long by its other columns**: a quantity or a biomass named by its header stands beside it and the sheet has no species columns of its own (one binomial header, or two genus-shaped numeric columns that are no code, identifier or word of the sampling, make it wide: `Dominant species` beside `Abundance`, `Calanus`, `Oithona` stays wide; one `species_code`, `Mesh` or `Transect` does not veto), or a single
 column counted in individuals does and no genus-shaped numeric column does (several columns in `[#]` are species), it is no Darwin Core term and the sheet is not a table of
 numbered columns; two such columns are not told apart, the leftmost is offered. A header that holds `AphiaID`, `aphia_id` or
 `Aphia ID` whole, also inside a bracket, over whole numbers is the taxon ID; on a long sheet a numeric column whose
@@ -1242,19 +1242,24 @@ ignored or variable column of few distinct values that is not a function of the 
 differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
 biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
 when the sheet has none and the name says no size and the unit counts organisms ('Total length [mm]', 'Total depth' are not quantities); else it stays ignored, with a reason that says what to decide). The same judgement applies to a column the name already claimed as biomass ('Total weight (kg)'): constant within a sample, it is a total and starts ignored, with its own reason
-(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A column that is a **function of the taxon** (every taxon listed more than once has one value in it, at least two values overall, and the column is not constant inside the samples: a species
-code, a serial number, a trophic level) is an attribute of the taxon and is ignored with its reason (`taxon-attribute`), never written as a measurement. A measured variable that is not a
-recognised one is moved to the **occurrence** of its row (like a biomass: `perOccurrence`, `value-per-occurrence`, and one info finding `CONV-VALUE-PER-OCCURRENCE` that lists the columns) only
-as the size of an organism, on a long sheet that has a quantity or a biomass: the name says a size (length, width, height, diameter, size, thickness) or the unit is a length of that scale (µm, mm, cm),
-**and** no word of the gear or the surroundings stands in the name (mesh, net, core, tow, trawl, wire, transect, secchi, sediment, grain, ice, wave, precip, above, mouth, depth, bottom, water ... see
-`isSamplingOrEnvironmentHeader`), **and** the values differ between the rows of a sample, **and** at least half of the values inside the samples are different (a length of each organism is nearly
-never repeated, a setting of the gear nearly always is). `Mesh size [µm]`, `Net diameter [cm]`, `Height above bottom [m]`, `Wave height [m]`, `Precip [mm]` and every noisy measurement (`Oxy sat`, `Turb`)
-therefore keep blocking as `CONV-SAMPLE-CONFLICT`; `L1 ... L10 (µm)`, `Mean Length (µm)` and a varying `Total length [mm]` move. The same value on all rows of a sample is a variable of the sample event
-(`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass). `CONV-SAMPLE-CONFLICT` names the column, and offers the tick for a measured column that is
-no descriptor of the sample (never for `Tow`, `Haul`, `Cast`). The role of a variable carries the tick "of each organism" on a **long** sheet (hidden on a wide one, where the column would not be written); the
-companion file keeps what differs from the proposal (`perOccurrence=on|off:<sheet>:<column>`, a pre-pick on a re-upload). A recognised variable (temperature, salinity ...) and a descriptor of the sample are never moved. The
+(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A column that is an **attribute of the taxon** (a function of the taxon column: every taxon listed more than once has one value in it, at least two values overall,
+not constant inside the samples) is ignored with its reason (`taxon-attribute`) and said once (`CONV-TAXON-ATTRIBUTE-IGNORED` lists the columns), never written as a measurement, but only when it has
+**no unit and no size word** and either its name says code, id, tsn, key, serial or trophic, or at least half of the taxa (and at least three) are listed more than once: a length, a cover or a content
+that happens to be the same for the repeated taxa is a measurement and its conflict stays visible. A **descriptor of the sample on a long sheet** (`Replicate`, `Rep`, `Tow`, `Haul`, `Cast`) is not a
+variable: one that says replicate, over a sample code that does NOT tell its rows apart (the same code has several values), is proposed as the **replicate role** at low confidence
+(`replicate-name`: each value is an event under the sample); every other one is ignored (`sample-descriptor`). Where the code already separates the rows a replicate column is never proposed as a role, so
+the event IDs of a sheet with unique codes are those of the sheet without the column; the button of the role stays the way to use it. A measured variable that is not a recognised one is moved to the
+**occurrence** of its row (like a biomass: `perOccurrence`, `value-per-occurrence`, and one info finding `CONV-VALUE-PER-OCCURRENCE` that lists the columns) only as the size of an organism, by a **positive list**
+(`isOrganismSizeHeader`): a bare `length`, `width`, `height`, `size` or `diameter`; one of them behind `total`, `fork`, `standard`, `body`, `shell`, `carapace`, `prosome` or `mean`; or `TL`, `FL`, `SL`, `L1 ... L10`;
+with a length unit (µm, mm, cm, m) or none; on a long sheet that has a quantity or a biomass; when its values differ between the rows of a sample and at least half of the values inside the samples are different
+(a length of each organism is nearly never repeated). `Sieve size`, `Filter pore size`, `Beam width`, `Layer thickness`, `Particle size`, `Rainfall`, `Transparency`, `Bag length`, `Frame size`, `Mesh size [µm]`,
+`Height above bottom [m]` and every noisy measurement therefore keep blocking as `CONV-SAMPLE-CONFLICT`; `L1 ... L10 (µm)`, `Mean Length (µm)`, `TL`, `Prosome length` and a varying `Total length [mm]` move. The same
+value on all rows of a sample is a variable of the sample event (`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass). `CONV-SAMPLE-CONFLICT` lists what differs
+in the reader's language, names the column, and offers the tick for a measured column that is no descriptor of the sample. The role of a variable carries the tick "of each organism" on a **long** sheet (hidden on a wide
+one; a tick that arrives on a wide sheet from a proposal or a companion file writes the column as a variable of the sample, it is not dropped); the companion file keeps what differs from the proposal
+(`perOccurrence=on|off:<sheet>:<column>`, a pre-pick on a re-upload; a sheet name with a colon is not saved). A recognised variable (temperature, salinity ...) and a descriptor of the sample are never moved. The
 occurrence rows get the same identifiers, prompts (`CONV-NERC-UNKNOWN`, `CONV-UNIT-NO-P06`) and picks as the event rows. The decision is taken from the sample columns the proposal sees; a column the user later
-makes the sample code is not seen by it, so check the tick then. `Total depth` is the water
+makes the sample code is not seen by it, so check the tick then. A `species_code` on a sheet with one sample blocks as before. `Total depth` is the water
 depth of the site (`isSiteDepthName`, like `Total water depth`): the depth of the rows when no other column gives one, otherwise not written. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
 (`QV:ODV:…`, `Q_`/`QC_`/`QF_` prefixes, `_QC`/`_flag` suffixes, and `Q`/`QC`/`QF` + a space or
 hyphen + the name of a sibling column) is never a measurement or a taxon (`isQualityHeader`); a
@@ -1895,7 +1900,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **184 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **185 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1909,8 +1914,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 82 | 38 / 32 / 12 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **184** | | | |
+| `CONV-` | `B` | 83 | 38 / 32 / 13 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **185** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
