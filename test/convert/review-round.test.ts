@@ -131,6 +131,16 @@ describe('LENGTH: a length that differs within a sample belongs to the occurrenc
     expect(on.every((m) => m.target.kind === 'occurrence')).toBe(true);
     expect(on[0].measurementUnit ?? 'none', JSON.stringify(p.role)).toBe(unit ?? 'none');
   });
+  it('size-class columns with a unit and repeated values (L1 (µm), L2 (µm)) do not split the samples: all of them are measurements of each occurrence, and the sheet converts', () => {
+    const head2 = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count', 'L1 (µm)', 'L2 (µm)', 'Mean Length (µm)'];
+    const rows2 = N(8, (i) => ['S1', i < 4 ? 's1' : 's2', '2023-06-14', 55, 2, ['Calanus finmarchicus', 'Oithona similis', 'Acartia sp.', 'Pseudocalanus sp.'][i % 4], i + 1, 100 + 10 * (i % 2), 200 + 10 * (i % 2), 150 + 5 * i]);
+    const file = fileOf(head2, rows2);
+    const props = proposeConvertColumns(file.sheets[0], CTX);
+    for (const h of ['L1 (µm)', 'L2 (µm)', 'Mean Length (µm)']) expect(props.find((x) => x.header === h)!.role, h).toMatchObject({ kind: 'variable', perOccurrence: true });
+    const c = convert({ sheets: [sheetInput(file, { quantity: { kind: 'count' } })], options: {} });
+    expect(c.findings.some((f) => f.ruleId === 'CONV-SAMPLE-CONFLICT')).toBe(false);
+    expect(c.measurements.filter((m) => m.role === 'variable' && m.target.kind === 'occurrence')).toHaveLength(24);
+  });
   it('the same value on all the rows of a sample is a variable of the sample event', () => {
     const file = fileOf([...head, 'Total length [mm]'], rows((i) => (i < 3 ? 120 : 130)));
     const p = proposeConvertColumns(file.sheets[0], CTX).find((x) => x.header === 'Total length [mm]')!;

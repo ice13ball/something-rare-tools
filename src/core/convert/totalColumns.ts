@@ -88,6 +88,8 @@ export function valuesRepeatWithinSample(sheet: RawSheet, base: readonly ColumnP
   if (taxon !== undefined) {
     for (const q of base) {
       if ((q.role.kind !== 'ignore' && q.role.kind !== 'variable') || q.index === index || key.includes(q.index)) continue;
+      // a column with a unit is a measurement ('L1 (µm)', 'Area net (m2)'), not a tow or haul number: it does not separate samples
+      if (q.role.kind === 'variable' && q.role.unit !== undefined) continue;
       const values = sheet.rows.map((r) => r.cells[q.index] ?? null).filter((c) => !isBlankCell(c));
       // a tow or haul number may be a number: an ignored column of few distinct values (not a per-row measurement) separates samples
       if (values.length === 0 || new Set(values.map((c) => String(c).trim())).size * 2 > values.length) continue;

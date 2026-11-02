@@ -216,7 +216,7 @@ export const OVERLAY_REASONS = {
   'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
   'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
   'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
-  'size-per-occurrence': 'a size or a length whose values differ between the rows of a sample (a length of each organism): a measurement of each occurrence, as a biomass is, not of the sample',
+  'value-per-occurrence': 'its values differ between the rows of a sample (a length or a size of each organism, a size class): a measurement of each occurrence, as a biomass is, not of the sample',
   'size-variable': 'its name says total, but it is a size or a length with a unit that does not count organisms: a measured variable of the sample, not a sum of individuals',
   'unit-effort': 'its unit is a volume or an area, which no species is counted in: read as the sampling effort',
   'unit-variable': 'its unit measures a length, a time, a speed or a temperature, which no species is counted in: a measured variable, not a species',
@@ -763,7 +763,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       if (!mass && isSizeLikeHeader(q.header)) {
         q.role = { kind: 'variable', variable: namePartOf(q.header), ...(hu.unit === undefined && hu.unitText === undefined ? {} : { unit: hu.unit ?? hu.unitText, unitSource: 'header' as const }), perOccurrence: true };
         q.confidence = 'low';
-        why(q, 'size-per-occurrence');
+        why(q, 'value-per-occurrence');
         continue;
       }
       q.role = mass ? { kind: 'biomass' } : hasQuantity || !countLike ? { kind: 'ignore' } : { kind: 'quantity' };
@@ -771,16 +771,17 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       why(q, mass ? 'summary-total-biomass' : hasQuantity || !countLike ? 'summary-total-varies' : 'summary-total-quantity');
     }
   }
-  // a size or a length that a long sheet gives to each organism (it differs between the rows of one sample) belongs to the occurrence, as a biomass does; one that is the same on all the rows
-  // of a sample is a variable of the sample. Decided from the values (`valuesRepeatWithinSample`), never from the name alone; with nothing to compare it stays a variable of the sample.
-  if (hasLongTaxon) {
+  // a measured variable that a long sheet gives to each organism (its values differ between the rows of one sample: a length, a size class) belongs to the occurrence, as a biomass does; one that is
+  // the same on all the rows of a sample is a variable of the sample. Decided from the values (`valuesRepeatWithinSample`), never from the name; with nothing to compare it stays a variable of
+  // the sample. A recognised variable (temperature, salinity ...) is never moved: a value of the sample that differs inside it is a conflict the user must see. The occurrences must carry a
+  // quantity, as a biomass does, or the column would not be read.
+  if (hasLongTaxon && base.some((o) => o.role.kind === 'quantity' || o.role.kind === 'biomass')) {
     for (const q of base) {
       if (q.role.kind !== 'variable' || q.role.perOccurrence === true || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined) continue;
-      if (q.reasonCode !== 'size-variable' && !isSizeLikeHeader(q.header)) continue;
       if (valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) !== 'varies') continue;
       q.role = { ...q.role, perOccurrence: true };
       q.confidence = 'low';
-      why(q, 'size-per-occurrence');
+      why(q, 'value-per-occurrence');
     }
   }
   // a plain "Area" on a sheet that has no taxon, quantity or occurrence ID is a place name or an extent, not a sampled area (a header that says sampled or swept area stays an effort)

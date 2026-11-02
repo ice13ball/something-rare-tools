@@ -1242,11 +1242,13 @@ ignored or variable column of few distinct values that is not a function of the 
 differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
 biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
 when the sheet has none and the name says no size and the unit counts organisms ('Total length [mm]', 'Total depth' are not quantities); else it stays ignored, with a reason that says what to decide). The same judgement applies to a column the name already claimed as biomass ('Total weight (kg)'): constant within a sample, it is a total and starts ignored, with its own reason
-(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A size or a length (`Total length`, `Mean Length (µm)`, with or without a unit) is
-decided from the values like a total (`valuesRepeatWithinSample`): the same value on all the rows of a sample is a measured variable of
-the sample event (`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass); a value that differs
-between the rows of a sample (a length of each fish) is a measurement of each **occurrence**, written like a biomass (`perOccurrence`,
-`size-per-occurrence`), so it does not conflict. Any other measured variable that differs inside a sample still blocks as `CONV-SAMPLE-CONFLICT`, which names the column. `Total depth` is the water
+(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A measured variable that is not a recognised one (a `Total length`, a `Mean Length (µm)`, a size class `L1 (µm)`) is
+decided from the values like a total (`valuesRepeatWithinSample`) on a long sheet that has a quantity or a biomass: the same value on all the
+rows of a sample is a measured variable of the sample event (`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass);
+a value that differs between the rows of a sample (a length of each fish) is a measurement of each **occurrence**, written like a biomass
+(`perOccurrence`, `value-per-occurrence`), so it does not conflict. A recognised variable (temperature, salinity, ...) that differs inside a sample still blocks
+as `CONV-SAMPLE-CONFLICT`, which names the column. The decision is taken from the sample columns the proposal sees; a column the user later makes the
+sample code is not seen by it (the role can be changed by hand). `Total depth` is the water
 depth of the site (`isSiteDepthName`, like `Total water depth`): the depth of the rows when no other column gives one, otherwise not written. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
 (`QV:ODV:…`, `Q_`/`QC_`/`QF_` prefixes, `_QC`/`_flag` suffixes, and `Q`/`QC`/`QF` + a space or
 hyphen + the name of a sibling column) is never a measurement or a taxon (`isQualityHeader`); a
