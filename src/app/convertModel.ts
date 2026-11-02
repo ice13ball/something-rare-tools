@@ -52,6 +52,8 @@ export interface SheetChoice {
   readAsTable: boolean;
   /** The user's tick "this is a list of species found (presence only, no counts)": no quantity is asked, the cells are marks. Never automatic; off by default; a companion file can pre-tick it. */
   presenceOnly: boolean;
+  /** The user's choice, made on CONV-QUANTITY-REPEATED: write one occurrence per sample and taxon, the repeated total taken once. Never automatic; a companion file can pre-tick it. */
+  totalOnce: boolean;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -243,7 +245,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
@@ -261,10 +263,11 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   const castTicked = new Set(parsed.settings.profileIgnoreCast ?? []);
   const asTable = new Set(parsed.settings.transposedAsTable ?? []);
   const presence = new Set(parsed.settings.presenceOnly ?? []);
+  const once = new Set(parsed.settings.totalOnce ?? []);
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: once.has(sh.name) };
     }
   }
   return out;
@@ -303,6 +306,13 @@ export function presenceSettingsOf(parsed: ConvertParseResult, choices: Record<s
     const hidden = (mappings[f.fileId] ?? f.mappings).find((m) => m.sheet === sh.name)?.columns.some((col) => col.role.kind === 'quantity') === true;
     if (c?.use === true && c.presenceOnly && !c.profile && !hidden && !out.includes(sh.name)) out.push(sh.name);
   }
+  return out;
+}
+
+/** The names of the sheets in use whose repeated per-taxon total the user chose to write once per sample and taxon: what the companion file keeps (nothing but names). */
+export function totalOnceSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): string[] {
+  const out: string[] = [];
+  for (const f of parsed.files) for (const sh of f.sheets) if (choices[sheetKey(f.fileId, sh.name)]?.use === true && choices[sheetKey(f.fileId, sh.name)]?.totalOnce === true && !out.includes(sh.name)) out.push(sh.name);
   return out;
 }
 

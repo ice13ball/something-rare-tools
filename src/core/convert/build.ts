@@ -31,6 +31,7 @@ import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } fr
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
+import { detectRepeatedTotals } from './repeatedTotal';
 import { biomassNameUnit, isTaxonAttribute, isTotalHeader, valuesRepeatWithinSample } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
@@ -87,6 +88,11 @@ export interface ConvertSheetInput {
    * occurrence per taxon row, occurrenceStatus present; a wide sheet reads its cells as marks (presence.ts). No organismQuantity is written and no quantity declaration is asked.
    */
   presenceOnly?: boolean;
+  /**
+   * The user's choice for a long sheet whose quantity (or weight) is a per-taxon TOTAL repeated on the rows of its size classes (CONV-QUANTITY-REPEATED): write one occurrence per sample and taxon, with that
+   * total taken once. Rows of a group that disagree stay blocked. Never automatic; a sheet without that pattern ignores it.
+   */
+  totalOnce?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -1345,6 +1351,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   const dups = new Map<string, Places>(); // repeated eventIDs
   const firstOcc = new Map<string, { file: string; sheet: string; line: number }>();
   const repeatedOcc = new Map<string, Places>(); // repeated occurrenceIDs
+  // the lines of a sheet in a group whose total is repeated on its size classes (CONV-QUANTITY-REPEATED says it; the advice for a plain duplicate would mislead there), by file and sheet
+  const repeatedAffected = new Map<string, Set<number>>();
   // where each occurrence stands, for the findings about one taxon written twice in a sample: the column (wide) or the line (long)
   const refOf = new Map<OccRec, string>();
   const stats = { zerosSkipped: 0, naSkipped: 0, blankKept: 0, textCells: 0, present: 0, absent: 0 };
@@ -1571,6 +1579,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     };
 
     const ragged = raggedLines(file, sheet.name);
+    // a total repeated on the rows of a taxon's size classes (repeatedTotal.ts): read from the values before any row is written
+    const repeated =
+      sin.shape === 'long' && !presence && cols.taxonCell !== undefined
+        ? detectRepeatedTotals({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind })
+        : undefined;
+    const takeOnce = repeated !== undefined && sin.totalOnce === true;
+    if (repeated !== undefined) repeatedAffected.set(`${fileName}\u0000${sheet.name}`, repeated.affected);
 
     // Visits (CONV-ID-REVISIT): a code that repeats at ONE station on rows that differ in date (then time, then depth for a wide sheet) is one sample per visit, not a duplicate. The ID of such a
     // visit is `<station eventID>:<date>[T<time>][:<depth>m]:<code>` (the shape of the profile levels); every other ID is exactly as before. Read from the data BEFORE the rows get their IDs, never from
@@ -1630,6 +1645,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     for (const row of sheet.rows) {
       if (ragged.has(row.line)) continue;
+      // the user chose to take a repeated total once: the later rows of a size-class group are the same total again, not converted
+      if (takeOnce && repeated?.skip.has(row.line)) continue;
       const m = parse(row);
       const code = m.sampleId;
       const stationText = m.station;
@@ -2168,6 +2185,28 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     }
     for (const e of noTaxon.entries()) findings.push(makeConvertFinding('CONV-TAXON-EMPTY-ROW', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     for (const e of biomassUnitUnclear.entries()) findings.push(makeConvertFinding('CONV-BIOMASS-UNIT-UNCLEAR', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    if (repeated !== undefined) {
+      const columns = repeated.columns.map((c) => c.header).join(', ');
+      const common = { columns, differs: repeated.differs };
+      if (takeOnce) {
+        if (repeated.skip.size > 0) {
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...repeated.skip].sort((a, b) => a - b), params: { ...common, count: repeated.skip.size, groups: repeated.collapsedGroups, ...(repeated.lostColumns.length > 0 ? { lost: repeated.lostColumns.join(', ') } : {}) } }));
+        }
+        if (repeated.disagree.length > 0) {
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes' } }));
+        }
+      } else {
+        findings.push(
+          makeConvertFinding('CONV-QUANTITY-REPEATED', {
+            ...base,
+            field: repeated.columns[0].header,
+            value: repeated.example,
+            lines: [...repeated.affected].sort((a, b) => a - b),
+            params: { ...common, count: repeated.groups, of: repeated.of, ...(repeated.alternative === undefined ? {} : { alternative: repeated.alternative }) },
+          }),
+        );
+      }
+    }
     for (const u of biomassNoP06) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: u } }));
     for (const e of zeroBiomass.entries()) stats.zerosSkipped += e.lines.length;
     for (const e of zeroBiomass.entries()) findings.push(makeConvertFinding('CONV-ZERO-WITH-BIOMASS', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
@@ -2351,6 +2390,21 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       );
     }
   }
+  // a repeated total (CONV-QUANTITY-REPEATED) is the defect of those rows: the plain duplicate-identifier advice (give them an occurrenceID or a life stage) would write the inflated numbers
+  const hiddenIds: string[] = [];
+  if (repeatedAffected.size > 0) {
+    for (const [id, places] of [...repeatedOcc]) {
+      let touched = false;
+      for (const [k, p] of [...places]) {
+        const hide = repeatedAffected.get(k);
+        if (hide === undefined) continue;
+        for (const l of [...p.lines]) if (hide.has(l)) (p.lines.delete(l), (touched = true));
+        if (p.lines.size === 0) places.delete(k);
+      }
+      if (touched) hiddenIds.push(id);
+      if ([...places.values()].reduce((n, p) => n + p.lines.size, 0) < 2) repeatedOcc.delete(id);
+    }
+  }
   if (repeatedOcc.size > 0) {
     // one finding per file and sheet: the repeated IDs that stand there and the lines of each, whichever file the other copy is in
     const byWhere = new Map<string, { file: string; sheet: string; ids: string[]; lines: number[]; groups: number[][] }>();
@@ -2482,6 +2536,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
    */
   const sameTaxon = new Map<string, { file: string; sheet: string; name: string; refs: string[]; ids: Set<string>; lines: number[]; verbatim: string[] }>();
   for (const o of occurrences) {
+    if (repeatedAffected.get(`${o.source.file}\u0000${o.source.sheet}`)?.has(o.source.line)) continue;
     const key = JSON.stringify([o.eventId, o.scientificNameId !== undefined ? `id:${o.scientificNameId}` : `name:${o.scientificName}`, o.lifeStage ?? '', o.identificationQualifier ?? '', o.sex ?? '']);
     const g = sameTaxon.get(key);
     const ref = refOf.get(o) ?? `line ${o.source.line}`;
@@ -2542,7 +2597,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     nameLookup,
     cruiseText: tree.cruiseText,
     // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
-    ...(repeatedOcc.size > 0 ? { repeatedOccurrenceIds: [...repeatedOcc.keys()] } : {}),
+    ...(repeatedOcc.size > 0 || hiddenIds.length > 0 ? { repeatedOccurrenceIds: [...new Set([...repeatedOcc.keys(), ...hiddenIds])] } : {}),
     profile: {
       sheets: profileSheets.length,
       levels: profile.sites.length,

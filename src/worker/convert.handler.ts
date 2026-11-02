@@ -139,6 +139,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.longAsTable ?? []) if (!(settings.longAsTable ??= []).includes(n)) settings.longAsTable.push(n);
         for (const n of s.transposedAsTable ?? []) if (!(settings.transposedAsTable ??= []).includes(n)) settings.transposedAsTable.push(n);
         for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
+        for (const n of s.totalOnce ?? []) if (!(settings.totalOnce ??= []).includes(n)) settings.totalOnce.push(n);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
@@ -259,6 +260,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
       ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
+      ...(s.totalOnce === true ? { totalOnce: true } : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
@@ -276,6 +278,7 @@ export function createConvertHandler(): ConvertHandler {
     const longAsTable = [...new Set(body.sheets.filter((s) => files.get(s.fileId)?.choices[s.sheet]?.off === true).map((s) => s.sheet))];
     const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
     const presenceOnly = [...new Set(body.sheets.filter((s) => s.presenceOnly === true).map((s) => s.sheet))];
+    const totalOnce = [...new Set(body.sheets.filter((s) => s.totalOnce === true).map((s) => s.sheet))];
     const biomassBasis = biomassBasisOf(body.sheets.map((s) => s.mapping));
     return {
       fullList: body.options.fullList === true,
@@ -288,6 +291,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(longAsTable.length > 0 ? { longAsTable } : {}),
       ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
       ...(presenceOnly.length > 0 ? { presenceOnly } : {}),
+      ...(totalOnce.length > 0 ? { totalOnce } : {}),
       ...(biomassBasis.length > 0 ? { biomassBasis } : {}),
     };
   };

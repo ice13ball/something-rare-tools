@@ -53,6 +53,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-PROFILE-NO-STATION',
   'CONV-PROFILE-LEVEL-INCOMPLETE',
   'CONV-ID-DUPLICATE',
+  // a per-taxon total repeated on the size-class rows of a sample: the export would count it once per size class
+  'CONV-QUANTITY-REPEATED',
   'CONV-TAB-IN-VALUE',
   'CONV-EMOF-ORPHAN',
   'CONV-EMOF-EVENT-MISMATCH',
@@ -121,6 +123,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-SAMPLE-PER-ROW',
   // the unit in the name of a biomass column is not understood in full: measurementUnit is left empty
   'CONV-BIOMASS-UNIT-UNCLEAR',
+  // the user chose one occurrence per sample and taxon for a repeated total: the later rows of the groups are not converted
+  'CONV-QUANTITY-REPEATED-ONCE',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written

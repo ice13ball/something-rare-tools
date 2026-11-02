@@ -28,6 +28,8 @@ import type { RuleSpec } from './spec';
  *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column of a wide sheet: no record, no lines (info); with rows = yes (a long sheet) count = rows with a taxon and an empty / NA quantity and no other value, lines = those rows (info)
  *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
  *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept)
+ *   CONV-QUANTITY-REPEATED     columns, differs, count, of   a long sheet whose quantity or weight column is a per-taxon total repeated on the size-class rows of a sample (repeatedTotal.ts): field = the first column, columns = every repeated column, differs = the column that tells the rows apart, count = groups that repeat it, of = groups that have two or more values, value = an example, lines = every row of the groups; optional alternative = a column with a number of its own on each row (variant), disagree = yes (the groups whose rows disagree after the user chose "once"; variant). Blocks
+ *   CONV-QUANTITY-REPEATED-ONCE columns, differs, count, groups   the user chose one occurrence per sample and taxon: lines = the rows not converted (count), groups = the groups taken once; optional lost = per-organism columns not written (warning, accept)
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
  *   CONV-TIME-HOLDS-DATES      count            field = the time column, count = its cells that hold a full date, while no column is the date: blocks (the events would have no eventDate)
  *   CONV-TIME-SOME-DATES       count            field = the time column, lines = its cells that hold a full date, fewer than half of the filled ones: those dates would be lost (warning, accept)
@@ -302,6 +304,32 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Le nom de la colonne de poids « {field} » contient une unité de masse, mais le reste (« {value} ») n'est pas compris : l'unité reste vide ({+lineCount:ligne|lignes} {lines}). Mettez l'unité entre crochets dans l'en-tête, p. ex. [kg/km2].`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} biomass value(s) of a column whose name holds a mass unit followed by words that are not a per-area / per-volume part or a kind of mass ("{value}"). A partial unit would change the meaning of the number, so measurementUnit is left empty.`,
+  },
+  {
+    id: 'CONV-QUANTITY-REPEATED',
+    category: 'B',
+    severity: 'error',
+    params: ['columns', 'differs', 'count', 'of'],
+    plain: {
+      pl: `„{columns}” to chyba suma dla gatunku w próbce, powtórzona w wierszach klas wielkości ({count} z {of} grup, różnice w „{differs}”; {+lineCount:wiersz|wiersze|wierszy} {lines}). Policzona tak jak jest, byłaby zawyżona. Zapisz jedno występowanie na próbkę i takson (przycisk) albo wskaż jako ilość kolumnę z liczbą każdej klasy.`,
+      en: `"{columns}" looks like a total for the taxon in a sample, repeated on the size-class rows ({count} of {of} groups, differences in "{differs}"; {+lineCount:line|lines} {lines}). Counted as it is, it would be inflated. Write one occurrence per sample and taxon (button), or mark a column with each class's number as the quantity.`,
+      de: `„{columns}“ ist wohl eine Summe je Taxon und Probe, in Größenklassenzeilen wiederholt ({count} von {of} Gruppen, Unterschied in „{differs}“; {+lineCount:Zeile|Zeilen} {lines}). So gezählt: überhöht. Schreiben Sie ein Vorkommen je Probe und Taxon (Schaltfläche) oder ordnen Sie eine Spalte mit der Zahl je Klasse als Menge zu.`,
+      fr: `« {columns} » ressemble à un total par taxon et échantillon, répété sur les lignes de classes ({count} groupes sur {of}, écart dans « {differs} » ; {+lineCount:ligne|lignes} {lines}). Compté ainsi : gonflé. Écrivez une occurrence par échantillon et taxon (bouton) ou indiquez comme quantité une colonne avec le nombre par classe.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: the value of {columns} is the same on every row of {count} of {of} groups of rows that share sample, taxon, life stage and qualifier and differ in "{differs}" (a repeated per-taxon total: at least 4 groups, at least 80 % of the groups that have two or more values above zero, and not one value alone; a count of 1 is not counted). The sum written from such a sheet would be the total times the number of size classes. The advice for a duplicate identifier (an occurrenceID or a life stage) is withheld: it would write those numbers. Blocks until the user either writes one occurrence per sample and taxon (the choice is kept in the companion file) or marks a per-size-class column as the quantity.`,
+  },
+  {
+    id: 'CONV-QUANTITY-REPEATED-ONCE',
+    category: 'B',
+    severity: 'warning',
+    params: ['columns', 'differs', 'count', 'groups'],
+    plain: {
+      pl: `Jak wybrano, suma w „{columns}” jest zapisana raz na próbkę i takson ({groups} {+groups:grupa|grupy|grup}); pominięto {count} {+count:powtórzony wiersz|powtórzone wiersze|powtórzonych wierszy} ({+lineCount:wiersz|wiersze|wierszy} {lines}). Wartości z „{differs}” nie są zapisane przy występowaniu. Sprawdź, że suma się zgadza.`,
+      en: `As you chose, the total in "{columns}" is written once per sample and taxon ({groups} {+groups:group|groups}); {count} repeated {+count:row was|rows were} left out ({+lineCount:line|lines} {lines}). The values of "{differs}" are not written on the occurrence. Check that the sum is the one you expect.`,
+      de: `Wie gewählt, wird die Summe in „{columns}“ je Probe und Taxon einmal geschrieben ({groups} {+groups:Gruppe|Gruppen}); {count} wiederholte {+count:Zeile wurde|Zeilen wurden} ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Die Werte aus „{differs}“ werden nicht am Vorkommen geschrieben. Prüfen Sie, ob die Summe stimmt.`,
+      fr: `Comme choisi, le total de « {columns} » est écrit une fois par échantillon et taxon ({groups} {+groups:groupe|groupes}) ; {count} {+count:ligne répétée ignorée|lignes répétées ignorées} ({+lineCount:ligne|lignes} {lines}). Les valeurs de « {differs} » ne sont pas écrites sur l'occurrence. Vérifiez la somme.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: the user chose to write one occurrence per sample and taxon where {columns} repeats a total on size-class rows ({groups} groups); {count} later row(s) of those groups, whose repeated values equal those of the first row of their group, are not converted. The rows differ in "{differs}"; per-organism columns that differ between them are not written on the occurrence. Rows of a group whose values disagree are not taken once (CONV-QUANTITY-REPEATED).`,
   },
   {
     id: 'CONV-TAXON-EMPTY-ROW',
@@ -1413,6 +1441,26 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}" (made of: {used}). {hint}`,
   },
+  // CONV-QUANTITY-REPEATED where the sheet has a column with its own number on every row (the count of each size class): the quantity the user would pick instead
+  'CONV-QUANTITY-REPEATED:alternative': {
+    plain: {
+      pl: `„{columns}” to chyba suma dla gatunku w próbce, powtórzona w wierszach klas wielkości ({count} z {of} grup, różnice w „{differs}”; {+lineCount:wiersz|wiersze|wierszy} {lines}). Kolumna „{alternative}” ma własną liczbę w każdym wierszu: jeśli to liczba osobników klasy, wskaż ją jako ilość. Albo zapisz jedno występowanie na próbkę i takson z sumą (przycisk).`,
+      en: `"{columns}" looks like a total for the taxon in a sample, repeated on the size-class rows ({count} of {of} groups, differences in "{differs}"; {+lineCount:line|lines} {lines}). The column "{alternative}" has its own number on each row: if that is the number of animals of the class, mark it as the quantity. Or write one occurrence per sample and taxon with the total (button).`,
+      de: `„{columns}“ ist wohl eine Summe je Taxon und Probe, in Größenklassenzeilen wiederholt ({count} von {of} Gruppen, Unterschied in „{differs}“; {+lineCount:Zeile|Zeilen} {lines}). Die Spalte „{alternative}“ hat in jeder Zeile eine eigene Zahl: ist das die Zahl der Tiere der Klasse, ordnen Sie sie als Menge zu. Oder schreiben Sie ein Vorkommen je Probe und Taxon mit der Summe (Schaltfläche).`,
+      fr: `« {columns} » ressemble à un total par taxon et échantillon, répété sur les lignes de classes ({count} groupes sur {of}, écart dans « {differs} » ; {+lineCount:ligne|lignes} {lines}). La colonne « {alternative} » a son propre nombre sur chaque ligne : si c'est le nombre d'individus de la classe, indiquez-la comme quantité. Ou écrivez une occurrence par échantillon et taxon avec le total (bouton).`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: the value of {columns} is the same on every row of {count} of {of} groups of rows that share sample and taxon and differ in "{differs}"; the column "{alternative}" has a number of its own on the rows of the groups and may be the count of each size class (mark it as the quantity), else write one occurrence per sample and taxon. The advice for a duplicate identifier is withheld.`,
+  },
+  // CONV-QUANTITY-REPEATED after the user chose "once": the groups whose rows do not agree
+  'CONV-QUANTITY-REPEATED:disagree': {
+    plain: {
+      pl: `{count} {+count:grupa wierszy|grupy wierszy|grup wierszy} tej samej próbki i gatunku nie zgadza się co do sumy w „{columns}” ({+lineCount:wiersz|wiersze|wierszy} {lines}): wartości się różnią albo inna kolumna z ilością lub wagą ma własne liczby. Takich wierszy nie można zapisać jako jednej sumy. Popraw wartości w arkuszu albo wskaż właściwą kolumnę z ilością.`,
+      en: `{count} {+count:group|groups} of rows with the same sample and taxon disagree on the total in "{columns}" ({+lineCount:line|lines} {lines}): the values differ, or another quantity or weight column holds numbers of its own. Such rows cannot be written as one total. Correct the values in the sheet, or mark the right quantity column.`,
+      de: `{count} {+count:Gruppe|Gruppen} von Zeilen mit derselben Probe und demselben Taxon {+count:stimmt|stimmen} in der Summe von „{columns}“ nicht überein ({+lineCount:Zeile|Zeilen} {lines}): die Werte unterscheiden sich, oder eine andere Mengen- oder Gewichtsspalte hat eigene Zahlen. Das lässt sich nicht als eine Summe schreiben. Korrigieren Sie die Werte oder ordnen Sie die richtige Mengenspalte zu.`,
+      fr: `{count} {+count:groupe|groupes} de lignes du même échantillon et taxon ne s'accordent pas sur le total de « {columns} » ({+lineCount:ligne|lignes} {lines}) : les valeurs diffèrent, ou une autre colonne de quantité ou de poids a ses propres nombres. Cela ne peut pas être écrit comme un seul total. Corrigez les valeurs ou indiquez la bonne colonne de quantité.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: with "one occurrence per sample and taxon" chosen, {count} group(s) of rows have different values in the repeated column(s) {columns}, or another quantity or weight column with numbers of its own; they are not taken once, and the export stays blocked.`,
+  },
   // CONV-NA-SKIPPED of a long sheet: rows (a taxon and no quantity), listed by line
   'CONV-NA-SKIPPED:rows': {
     plain: {
@@ -1560,6 +1608,8 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS[f.params.empty === 'yes' && typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-empty' : typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-columns' : 'CONV-NA-SKIPPED:rows'];
+  if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:disagree'];
+  if (f.ruleId === 'CONV-QUANTITY-REPEATED' && typeof f.params.alternative === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:alternative'];
   if (f.ruleId === 'CONV-ZERO-SKIPPED' && f.params.marks === 'yes') return PROFILE_VARIANTS['CONV-ZERO-SKIPPED:presence'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '') {
     return PROFILE_VARIANTS[Number(f.params.remaining) > 0 ? 'CONV-ID-DUPLICATE:replicate-partial' : 'CONV-ID-DUPLICATE:replicate'];

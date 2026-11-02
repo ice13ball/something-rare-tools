@@ -1578,6 +1578,20 @@ nutrient / pigment / isotope ratio / rate one (`measured-name`), which stays for
 The converter reads every header without its ODV / OPeNDAP type suffix (`Activity<String>`, `"Latitude<Float32>"`) and the quotes
 around it, for kind, unit, vocabulary hints, taxon names and the text shown to the user, as `/check` does.
 
+**A total repeated on the size-class rows** (`convert/repeatedTotal.ts`). Some long sheets write the catch of a species in a haul on every row of its size classes (`s1, Solea solea, 8, 40` and
+`s1, Solea solea, 9, 40`). Read as it stands, the sheet's sum is the total multiplied by the number of size classes, and the old advice of `CONV-ID-DUPLICATE` (give the rows an occurrenceID or a life stage)
+wrote exactly those numbers (on a real file: 1,136,459 animals for a true 679,208). The pattern is read from the **values**: rows are grouped by the columns that say which sample it is (sample code, station, cruise,
+replicate, date, time, position, depth) and by taxon, life stage, qualifier and taxon ID; a group of two or more rows that differ in some other column and that hold a value above zero in the quantity or a weight
+column *repeats* that column when every value is the same (a count of 1 is not evidence: single animals are legitimate). The finding fires for a column when **at least 4 groups** repeat it, they are **at least 80 %**
+of the groups that have two or more such values, and the repeated values are not all one number. Four groups keep one or two coincidences (two size classes each truly holding 4 animals) from firing; 80 % keeps a
+genuine table of counts, which coincides in some groups by chance, from firing at all, while a repeated total repeats in (nearly) every group. The column that tells the rows apart must hold a value on every row of the group and must not be an identifier of the row (a column with a different value on nearly every row of the sheet): a record copied twice, one copy with a field blank, is not two size classes. An occurrenceID column does not switch the check off.
+It is `CONV-QUANTITY-REPEATED` (error, blocks): it names the column(s), the column that tells the rows apart and the number of groups, says the value looks like a total repeated on size-class rows, and does
+**not** offer the occurrenceID advice (the duplicate-identifier finding is withheld for those rows). It points to two ways out: mark a column that holds a number for each size class as the quantity (named when the
+sheet has one), or the button **write one occurrence per sample and taxon, with this total taken once**. That choice is the sheet's `totalOnce` tick (a checkbox on the sheet while it is on, kept in the
+companion file as `totalOnce=<sheet>`, a pre-tick only). With it, the first row of each group carries the total and the later rows are not converted; `CONV-QUANTITY-REPEATED-ONCE` (warning, to accept) says how many rows were left out and that the per-organism columns that
+differ between them (a size) are not written on the occurrence. A group whose rows **disagree** (another number on one size class, or another count or weight column with numbers of its own) is not taken once:
+`CONV-QUANTITY-REPEATED` stays, with the lines of those groups.
+
 ### 8.8 What blocks an export and why (`convert/policy.ts`, `convert/validate.ts`)
 
 Severity alone is not the policy. Each finding is **blocking**, **needs an acceptance**, or **only
@@ -1900,7 +1914,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **186 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **188 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1914,8 +1928,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 84 | 38 / 32 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **186** | | | |
+| `CONV-` | `B` | 86 | 39 / 33 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **188** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1983,6 +1997,7 @@ Each item below is confirmed from code, a test, or a rule text.
   evidence alone only when the events are at least 80% of the sheet's taxon rows and there are two taxa or more.
 - A biomass column named `Biomass` or `Wet weight` with no unit anywhere in its header writes no `measurementUnit`
   (nothing is guessed); the unit has to be in the header.
+- Rows that are **identical in every column** (a row copied twice) are not a repeated total: `CONV-ID-DUPLICATE` asks to merge them first, and its advice to tell the rows apart by an occurrenceID or a life stage would count each copy. A sheet that repeats totals takes such copies once with the others (`CONV-QUANTITY-REPEATED-ONCE`); in a sheet that does not (a file with thousands of exact copies and no size class), only the sheet's own care helps.
 - `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` count the cells of a time column that the date parser reads as a full date (ISO, `YYYY/MM/DD`,
   `DD.MM.YYYY`, `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial in a column the workbook formats as a date; a plain number such as 63000 or 43200 is a time)
   and, since the last round, the cells that look like a date but that no reader reads: `20030117 0830`, `Jan 17 2003`, `01/17/2003 8:30 AM`. These are not read (no AM/PM, no month names, no

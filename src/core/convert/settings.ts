@@ -25,6 +25,8 @@ import type { ParsedFile } from '../types';
  *   transposedAsTable=<sheet>  the sheet of that name looked transposed (species or variables in rows; core/convert/transposed.ts) and the user chose to read it as a normal table. A PRE-TICK only,
  *                     undone on the page. A sheet name, never a value.
  *   presenceOnly=<sheet>  the sheet of that name was ticked "This is a list of species found (presence only, no counts)". A PRE-TICK only; the user can undo it on the page. A sheet name, never a value.
+ *   totalOnce=<sheet>  the sheet of that name repeats a per-taxon total on the rows of its size classes (CONV-QUANTITY-REPEATED) and the user chose to write one occurrence per sample and taxon. A PRE-TICK only; the user can undo it on the page,
+ *                     and a sheet without that pattern ignores it. A sheet name, never a value.
  *   biomassBasis=<basis>:<sheet>  the biomass / weight columns of the sheet of that name were given the kind of mass <basis> (wet | dry | afdw). A PRE-PICK only: it sets that kind on the biomass
  *                     columns of a sheet of the same name that have none, and the user can change it on the page. A basis word and a sheet name, never a value.
  *   perOccurrence=<on|off>:<sheet>:<column>  the tick "of each organism" of a measured-variable column of a long sheet: on = ticked, off = the tool proposed it ticked and the user took it back. A PRE-PICK only: it
@@ -41,6 +43,7 @@ export const PROFILE_IGNORE_CAST_SETTING = 'profileIgnoreCast=';
 export const LONG_AS_TABLE_SETTING = 'longAsTable=';
 export const TRANSPOSED_AS_TABLE_SETTING = 'transposedAsTable=';
 export const PRESENCE_ONLY_SETTING = 'presenceOnly=';
+export const TOTAL_ONCE_SETTING = 'totalOnce=';
 export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
@@ -66,6 +69,8 @@ export interface ConvertSettings {
   transposedAsTable?: string[];
   /** The sheets the user ticked as presence-only species lists, by sheet name. Only present when there is at least one. A pre-tick only. */
   presenceOnly?: string[];
+  /** The sheets whose repeated per-taxon total the user chose to write once per sample and taxon, by sheet name. Only present when there is at least one. A pre-tick only. */
+  totalOnce?: string[];
   /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
   biomassBasis?: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[];
   /** The ticks "of each organism" the user set (on) or took back (off), by sheet and column header. Only present when there is at least one. A pre-pick only. */
@@ -123,6 +128,7 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v.startsWith(PROFILE_IGNORE_CAST_SETTING)) addName((settings.profileIgnoreCast ??= []), v.slice(PROFILE_IGNORE_CAST_SETTING.length));
     else if (v.startsWith(LONG_AS_TABLE_SETTING)) addName((settings.longAsTable ??= []), v.slice(LONG_AS_TABLE_SETTING.length));
     else if (v.startsWith(PRESENCE_ONLY_SETTING)) addName((settings.presenceOnly ??= []), v.slice(PRESENCE_ONLY_SETTING.length));
+    else if (v.startsWith(TOTAL_ONCE_SETTING)) addName((settings.totalOnce ??= []), v.slice(TOTAL_ONCE_SETTING.length));
     else if (v.startsWith(BIOMASS_BASIS_SETTING)) {
       const rest = v.slice(BIOMASS_BASIS_SETTING.length);
       const basis = rest.slice(0, rest.indexOf(':'));
@@ -153,6 +159,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.transposedAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TRANSPOSED_AS_TABLE_SETTING}${n}`, '', '', ''])),
       ...(settings.biomassBasis ?? []).filter((b) => b.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((b) => line([SETTING_ROW, `${BIOMASS_BASIS_SETTING}${b.basis}:${b.sheet}`, '', '', ''])),
       ...(settings.perOccurrence ?? []).filter((o) => o.header.length <= MAX_SETTING_NAME && o.sheet.length <= MAX_SETTING_NAME && !o.sheet.includes(':')).slice(0, MAX_SETTING_SHEETS).map((o) => line([SETTING_ROW, `${PER_OCCURRENCE_SETTING}${o.on ? 'on' : 'off'}:${o.sheet}:${o.header}`, '', '', ''])),
+      ...(settings.totalOnce ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TOTAL_ONCE_SETTING}${n}`, '', '', ''])),
       ...(settings.presenceOnly ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PRESENCE_ONLY_SETTING}${n}`, '', '', ''])),
     ].join('\n') + '\n'
   );

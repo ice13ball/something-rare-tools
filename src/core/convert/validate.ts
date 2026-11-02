@@ -161,7 +161,7 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   // them apart) is the same defect as the output table's DWC-OCCURRENCEID-DUPLICATE, whose generic "give every record its own identifier" would say it a second time.
   // Only when ALL its repeated IDs are among the ones CONV-ID-DUPLICATE named: a repeat the sheet's report did not name (made by the output step) is still said.
   // (the IDs are the conversion's own list, kept out of the finding's params; a finding is the evidence that the report was made)
-  const saidIds = new Set(stage1.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'occurrence') ? (ds.repeatedOccurrenceIds ?? []) : []);
+  const saidIds = new Set(stage1.some((f) => (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'occurrence') || f.ruleId === 'CONV-QUANTITY-REPEATED') ? (ds.repeatedOccurrenceIds ?? []) : []);
   const idColumn = tables.occurrence.columns.findIndex((c) => c.header === 'occurrenceID');
   const repeatedIds = new Set<string>();
   if (idColumn >= 0) {

@@ -121,6 +121,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-NA-SKIPPED | info | B | — | —<a id="CONV-NA-SKIPPED"></a> |
 | CONV-QUANTITY-BLANK-KEPT | warning | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not](https://manual.obis.org/format_occurrence.html), "These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"<a id="CONV-QUANTITY-BLANK-KEPT"></a> |
 | CONV-BIOMASS-UNIT-UNCLEAR | warning | B | — | —<a id="CONV-BIOMASS-UNIT-UNCLEAR"></a> |
+| CONV-QUANTITY-REPEATED | error | B | — | —<a id="CONV-QUANTITY-REPEATED"></a> |
+| CONV-QUANTITY-REPEATED-ONCE | warning | B | — | —<a id="CONV-QUANTITY-REPEATED-ONCE"></a> |
 | CONV-TAXON-EMPTY-ROW | warning | B | — | —<a id="CONV-TAXON-EMPTY-ROW"></a> |
 | CONV-TIME-HOLDS-DATES | error | B | — | —<a id="CONV-TIME-HOLDS-DATES"></a> |
 | CONV-TIME-SOME-DATES | warning | B | — | —<a id="CONV-TIME-SOME-DATES"></a> |

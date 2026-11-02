@@ -179,6 +179,17 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             </div>
             )}
 
+            {choice.totalOnce && (
+            <div className="convert-group">
+              <div className="choice-line">
+                <label className="inline-choice">
+                  <input type="checkbox" checked={choice.totalOnce} onChange={(e) => onChange({ ...choice, totalOnce: e.target.checked })} />
+                  <span>{t('convert.sheet.totalOnce')}</span>
+                </label>
+              </div>
+            </div>
+            )}
+
             {(!choice.presenceOnly || hasQuantityColumn === true) && (
             <div className="convert-group">
               <h4>{t('convert.quantity.title')}</h4>

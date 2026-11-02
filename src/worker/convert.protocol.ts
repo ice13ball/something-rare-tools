@@ -79,6 +79,8 @@ export interface ConvertSheetRequest {
   readAsTable?: boolean;
   /** The user's tick "this is a list of species found (presence only, no counts)" for the sheet (only the boolean true counts). */
   presenceOnly?: boolean;
+  /** The user's choice "write one occurrence per sample and taxon" for a per-taxon total repeated on size-class rows (only the boolean true counts). */
+  totalOnce?: boolean;
 }
 
 export interface ConvertRequestBody {
