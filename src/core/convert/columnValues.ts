@@ -19,9 +19,9 @@ const cellsOf = (sheet: RawSheet, index: number): RawCell[] => sheet.rows.slice(
 const BINOMIAL = /^[A-Z][a-z]{2,}(?:\s+\([A-Z][a-z]+\))?\s+(?:(?:cf|aff)\.\s+)?(?:([a-z]{3,})|sp{1,2}\.|indet\.)(?![A-Za-z])/;
 /**
  * The endings a Latin epithet takes (-us, -um, -is, -ii, -ae, -ensis, -ica, -ata, ...). Two ordinary English words are not told apart from an epithet by their shape alone ("Muddy sand", "Surface water",
- * "Baltic sea"), so a cell counts only when its epithet ends like one; an ending in -a needs 5 letters ("sea", "area" and "data" do not count).
+ * "Baltic sea"), so a cell counts only when its epithet ends like one; an ending in -a needs 5 letters ("sea", "area" and "data" do not count), one in -i 4 ("scotti", "tokarevi").
  */
-const EPITHET_END = /(?:us|um|is|ii|ae|ei|ensis|icus|ica|ata|atus|alis|ilis|osa|osus|ella|ellus|inus|ina|ana|anus|oides|ides|eri|ori|oni|ani|ens|ans|[a-z]{4}a)$/;
+const EPITHET_END = /(?:us|um|is|ii|ae|ei|ensis|icus|ica|ata|atus|alis|ilis|osa|osus|ella|ellus|inus|ina|ana|anus|oides|ides|eri|ori|oni|ani|ens|ans|orum|arum|ceps|ops|pes|[a-z]{3}i|[a-z]{4}a)$/;
 
 function isBinomialCell(c: RawCell): boolean {
   if (typeof c !== 'string') return false;

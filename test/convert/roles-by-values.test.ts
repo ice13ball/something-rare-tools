@@ -156,3 +156,21 @@ describe('NA is "not available" unless the header says it is sodium', () => {
     expect(var0('na')).not.toMatchObject({ variable: 'sodium' });
   });
 });
+
+describe('three things the file-by-file run on real data showed', () => {
+  it('epithets in -i (scotti, tokarevi) count as Latin; a comment that says total keeps a PANGAEA total column out of the species', () => {
+    const r = rolesOf(['Station', 'Scientific name', 'Count'], N(4, (i) => ['S1', ['Trematomus scotti (Boulenger, 1907)', 'Trematomus tokarevi Andriashev, 1978', 'Pogonophryne scotti Regan, 1914', 'Akarotaxis nudiceps  (Waite, 1916)'][i], i + 1]));
+    expect(r['Scientific name'].role).toEqual({ kind: 'taxon' });
+    const w = rolesOf(['Station', 'Calanus [#/m**3] (size fraction > 300 µm)', 'Zoopl [#/m**3] (total)'], N(4, (i) => ['S1', i, 10 + i]));
+    expect(w['Zoopl [#/m**3] (total)'].role.kind).toBe('ignore');
+    expect(w['Zoopl [#/m**3] (total)'].reasonCode).toBe('summary-total');
+    expect(w['Calanus [#/m**3] (size fraction > 300 µm)'].role).toEqual({ kind: 'taxon', header: true });
+  });
+
+  it('a table of samples in numbered columns, with the species in its rows, is not read as a long sheet', () => {
+    const header = ['sp.', '1', '2', '3', '4', '5', '6'];
+    const names = ['Gadus morhua', 'Acartia longiremis', 'Oithona similis', 'Calanus finmarchicus'];
+    const r = rolesOf(header, N(4, (i) => [names[i], 0, 1, 2, 3, 4, 5]));
+    expect(r['sp.'].role.kind).toBe('ignore');
+  });
+});

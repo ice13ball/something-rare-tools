@@ -57,6 +57,12 @@ const isSeawaterDensityUnit = (unit: string | undefined): boolean => unit !== un
 // or holds total / suma / razem / gesamt as a separate word ("Total copepods", "Abundance, total", "Razem Copepoda"). "Totalia sp." is a genus and stays.
 const SUMMARY_FIRST = new Set(['total', 'suma', 'razem', 'summe', 'gesamt', 'somme', 'sum']);
 const SUMMARY_ANYWHERE = new Set(['total', 'suma', 'razem', 'gesamt']);
+/** The name of a header for the total/sum test: its name and, in PANGAEA's 'name [unit] (comment)', the comment too ('Zoopl [#/m**3] (total)' is a total whatever the unit reader cuts off). */
+function summaryText(header: string): string {
+  const m = /^(.*\S)\s*\[[^[\]]+\]\s*(\(.*\))$/.exec(stripTypeSuffix(header));
+  const name = unitFromHeader(header).name.trim();
+  return m === null ? name : `${name} ${m[2]}`;
+}
 function isSummaryHeader(rawName: string): boolean {
   const name = rawName.trim();
   if (/^[σΣ]/.test(name)) return true;
@@ -480,7 +486,9 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
 
   // a column of Latin binomials is the taxon of a long sheet, whatever its header says ('Scientific name', 'SpName'): decided by the cells. One such column is read with the confidence of the
   // cells; several (a host and a parasite, a predator and its prey) are not told apart: the leftmost is offered, with low confidence, and the others stay as they are.
-  if (![...claims.values()].some((c) => c.role.kind === 'taxon')) {
+  // (a sheet whose columns are mostly numbered, 1, 2, 3 ..., is a table of samples in columns with the species in its rows: not a long sheet, the transposed test judges it)
+  const numberedColumns = sheet.header.filter((h) => /^\s*\d+(?:\.\d+)?\s*$/.test(h)).length;
+  if (numberedColumns < 5 && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
     const latin = base.filter((q) => q.role.kind === 'ignore' && q.reasonCode === 'text-column' && !claims.has(q.index) && latinNameShare(sheet, q.index) > 0);
     if (latin.length > 0) {
       const lead = latin[0];
@@ -643,8 +651,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       }
     }
     // wide sheet: a column of presence marks (+, x) next to counts is a species column too; the shared proposer read it as text
-    const headerName = unitFromHeader(p.header).name.trim();
-    const summaryHeader = isSummaryHeader(headerName);
+    const summaryHeader = isSummaryHeader(summaryText(p.header));
     // a sum or total column that the shared proposer took for a measured variable (and that is not a standard variable): it adds up other columns,
     // so converting it would count the same individuals twice. It starts as ignored, with its reason; the user can still give it another meaning,
     // and then it is their decision. A column of presence marks keeps the shared role (ignore); the page says why it is not a taxon candidate.
@@ -720,7 +727,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   // sample columns or without a sample of more than one row: it then stays ignored.
   if (hasLongTaxon) {
     for (const q of base) {
-      const named = isSummaryHeader(unitFromHeader(q.header).name.trim());
+      const named = isSummaryHeader(summaryText(q.header));
       if (!named) continue;
       const verdict = q.reasonCode === 'summary-total' || q.role.kind === 'biomass' ? valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) : 'unknown';
       // a biomass column that the name claimed ('Total weight (kg)') but whose value repeats on every row of a sample is the weight of the whole sample
