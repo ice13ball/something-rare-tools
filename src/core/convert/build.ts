@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { checkStationRows } from '../checks/rows';
+import { detectDayMonthOrder, parseDate } from '../values/dates';
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
@@ -402,7 +403,12 @@ export const SPLIT_RATIO = 0.8;
 export const SPLIT_SHARED = 0.5;
 /** In a place of several events, the events whose taxon already stood in an earlier event of the place: at most this share for the place to count as one sample cut into rows. */
 export const SPLIT_REPEAT_SHARE = 0.5;
-export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: number, taxaOf: (eventId: string) => readonly string[] = () => []): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
+export function sampleSplitOf(
+  sites: readonly SampleSite[],
+  occurrenceCount: number,
+  taxaOf: (eventId: string) => readonly string[] = () => [],
+  rows?: { taxonRows: number; distinctTaxa: number },
+): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
   const parents = new Map<string, SampleSite>();
   for (const s of sites) if (!parents.has(s.parentSample?.id ?? s.id)) parents.set(s.parentSample?.id ?? s.id, s);
   const events = parents.size;
@@ -423,14 +429,18 @@ export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: num
     const seen = new Set<string>();
     let repeated = 0;
     for (const s of list) {
-      const taxa = new Set(taxaOf(s.id));
+      // the taxa are kept by the sample (a replicate belongs to its parent)
+      const taxa = new Set(taxaOf(s.parentSample?.id ?? s.id));
       if ([...taxa].some((t) => seen.has(t))) repeated++;
       for (const t of taxa) seen.add(t);
     }
-    if (repeated <= SPLIT_REPEAT_SHARE * list.length) shared += list.length;
+    // the first event of a place cannot repeat, so the share is taken of the others: two tows of one species at one place are two samples, not one cut into two rows
+    // or the place holds several events AND several taxa: with about one occurrence per event, events with their own codes that together make up a list of taxa are rows of one sample
+    if (repeated <= SPLIT_REPEAT_SHARE * (list.length - 1) || (list.length >= 3 && seen.size >= 3)) shared += list.length;
   }
   // more sample events than occurrences is strong evidence alone: events were made for rows that give no occurrence (zeros left out), one per row
-  const strong = events > occurrenceCount;
+  // (only when the events are nearly one per taxon row of a sheet of several taxa: a sheet of correct codes with most values zero has more events than occurrences too)
+  const strong = events > occurrenceCount && rows !== undefined && rows.distinctTaxa >= 2 && events >= SPLIT_RATIO * rows.taxonRows;
   if (!strong && shared < SPLIT_SHARED * events) return undefined;
   return { events, occurrences: occurrenceCount, ratio: `${Math.round((100 * events) / occurrenceCount)}%`, shared };
 }
@@ -448,7 +458,7 @@ const SHEET_LINE_STEP = 10_000_000;
  * with a flipped sign on one sheet and not on the other is found (they build the same parent station). A finding of the joint pass is split back into the lines of each sheet, and one that a
  * sheet already has on its own is not said twice.
  */
-function stationFindingsOf(sheets: readonly StationSheet[]): Finding[] {
+function stationFindingsOf(sheets: readonly StationSheet[], farIds: ReadonlySet<string> = new Set()): Finding[] {
   const out: Finding[] = [];
   const said = new Set<string>();
   for (const sh of sheets) {
@@ -470,7 +480,14 @@ function stationFindingsOf(sheets: readonly StationSheet[]): Finding[] {
       // a spread has no lines: it is said once, on the sheets that hold the station
       const holding = withRows.filter((sh) => sh.rows.some((r) => r.station === f.value));
       if (holding.length === 0 || holding.some((sh) => said.has(`${f.ruleId}\u0000${f.value ?? ''}\u0000${sh.file}\u0000${sh.sheet}`))) continue;
-      out.push({ ...f, file: holding[0].file, sheet: holding.map((sh) => sh.sheet).join(', ') });
+      // a station far from its biology station (CONV-PROFILE-STATION-FAR) is the same fact as a spread across the sheets: matched by the station's event ID (cruise and station), and only
+      // for this joint finding, never for a sheet's own spread (a different fact)
+      const ids = holding.flatMap((sh) => sh.rows.filter((r) => r.station === f.value).map((r) => stationEventId(r.cruise, r.station as string)));
+      if (f.ruleId.startsWith('ROW-STATION-SPREAD') && ids.some((id) => farIds.has(id))) continue;
+      // sheets of the same name are told apart by their file
+      const names = holding.map((sh) => sh.sheet);
+      const clash = new Set(names).size < names.length;
+      out.push({ ...f, file: [...new Set(holding.map((sh) => sh.file))].join(', '), sheet: holding.map((sh) => (clash ? `${sh.file}: ${sh.sheet}` : sh.sheet)).join(', ') });
       continue;
     }
     for (const [i, lines] of bySheet) {
@@ -482,22 +499,43 @@ function stationFindingsOf(sheets: readonly StationSheet[]): Finding[] {
   return out;
 }
 
+/** A date that is a placeholder for "no date" in a spreadsheet or an epoch ("1899-12-30 12:30:00" is the time 12:30): such a cell is a time, not a date. */
+const EPOCH_PLACEHOLDER = /^\s*(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01-01)(?:[T\s]|$)/;
+
 /**
- * A column the sheet reads as a TIME of day whose cells hold full dates ("2003-01-17T00:00:00Z"), while no column is the date: every event would be written without eventDate and the date
- * that is in the file would be lost silently. Returns the column header and how many cells hold a date, or undefined.
+ * A column the sheet reads as a TIME of day whose cells hold full dates ("2003-01-17T00:00:00Z", "17.01.2003 08:30", a spreadsheet serial 37638.35), while no column is the date: every event
+ * would be written without eventDate and the date that is in the file would be lost silently. A cell counts as a date when the date parser reads it (ISO, DD.MM.YYYY, D/M/YYYY and
+ * M/D/YYYY when one part decides the order, with or without a time; a year alone is not a date) or when it is a serial number of the 1954-2118 range; the placeholder dates of a spreadsheet
+ * or an epoch are times. `count` are the cells that hold a date, `lines` their lines, `filled` all the filled cells. Formats the parser does not read ("2003/01/17", "20030117 0830", "Jan 17 2003",
+ * a 12-hour "8:30 AM" time after a date) are not claimed: they stay unread.
  */
-function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number } | undefined {
+function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number; filled: number; lines: number[] } | undefined {
   if (specs.time === undefined || specs.when !== undefined) return undefined;
   const index = specs.time.index;
+  const cells = sheet.rows.map((r) => r.cells[index] ?? null);
+  const order = detectDayMonthOrder(cells);
+  const lines: number[] = [];
   let filled = 0;
-  let dates = 0;
-  for (const r of sheet.rows) {
-    const c = r.cells[index] ?? null;
-    if (isBlankCell(c)) continue;
+  sheet.rows.forEach((r, i) => {
+    const c = cells[i];
+    if (isBlankCell(c)) return;
     filled++;
-    if (typeof c === 'string' && /^\s*\d{4}-\d{2}-\d{2}(?:[T\s]|$)/.test(c)) dates++;
-  }
-  return filled > 0 && dates * 2 >= filled ? { header: specs.time.header, count: dates } : undefined;
+    if (typeof c === 'number') {
+      if (c >= 20000 && c <= 80000) lines.push(r.line);
+      return;
+    }
+    if (EPOCH_PLACEHOLDER.test(c as string)) return;
+    const d = parseDate(c, { date1904: false, dateFormatted: false, ...(order === 'unknown' ? {} : { order }) });
+    if (!('error' in d) && d.precision !== 'year') lines.push(r.line);
+  });
+  return lines.length > 0 ? { header: specs.time.header, count: lines.length, filled, lines } : undefined;
+}
+
+/** At least half of the filled cells of the time column hold a date: blocks; fewer: the cells that do are listed (their date would be lost). */
+function timeDatesFinding(t: { header: string; count: number; filled: number; lines: number[] }, base: { file: string; sheet: string }): Finding {
+  return t.count * 2 >= t.filled
+    ? makeConvertFinding('CONV-TIME-HOLDS-DATES', { ...base, field: t.header, params: { count: t.count } })
+    : makeConvertFinding('CONV-TIME-SOME-DATES', { ...base, field: t.header, lines: t.lines, params: { count: t.count } });
 }
 
 /** The row of an accepted sheet line as the station checks of /check read it (station, cruise, position, date). */
@@ -944,7 +982,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const noStation = new Lines();
   const stationRows: DataRow[] = [];
   const timeDates = timeColumnWithDates(sheet, specs);
-  if (timeDates !== undefined) ctx.findings.push(makeConvertFinding('CONV-TIME-HOLDS-DATES', { ...base, field: timeDates.header, params: { count: timeDates.count } }));
+  if (timeDates !== undefined) ctx.findings.push(timeDatesFinding(timeDates, base));
   const noCode = new Lines();
   const tabs = new Lines();
   const summaries = new Lines();
@@ -1416,10 +1454,12 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const naRows = new Lines();
     const stationRows: DataRow[] = [];
     const timeDates = timeColumnWithDates(sheet, specs);
-    if (timeDates !== undefined) findings.push(makeConvertFinding('CONV-TIME-HOLDS-DATES', { ...base, field: timeDates.header, params: { count: timeDates.count } }));
+    if (timeDates !== undefined) findings.push(timeDatesFinding(timeDates, base));
     const blankKept = new Lines();
     const zeroBiomass = new Lines();
     const noTaxon = new Lines();
+    let taxonRowCount = 0;
+    const distinctTaxaSeen = new Set<string>();
     // other quantity-named columns that are filled on the rows counted as NA (a count column empty while the numbers sit in another)
     const naOther = new Map<string, number>();
     const biomassUnitUnclear = new Lines();
@@ -1549,6 +1589,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const longHasValue = presence ? true : cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
       // a long row with a taxon and a blank / NA quantity: a real (positive) biomass value is a measurement of that taxon, so the row stays as an occurrence with no count; nothing else is evidence of the taxon
       // (a measured variable is written once per sample, not per taxon, and says nothing about this one)
+      if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined && taxonCellText !== undefined) {
+        taxonRowCount++;
+        distinctTaxaSeen.add(taxonCellText.toLowerCase());
+      }
       const quantityBlank = sin.shape === 'long' && !presence && cols.quantity !== undefined && cols.taxonCell !== undefined && taxonCellText !== undefined && !longHasValue;
       const biomassOnly = quantityBlank && rowHasBiomass(row);
       const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly);
@@ -2037,10 +2081,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       for (const o of occurrences.slice(occurrencesBefore)) {
         const owner = parentOf.get(o.eventId) ?? o.eventId;
         const list = taxaByEvent.get(owner);
-        if (list) list.push(o.scientificName);
-        else taxaByEvent.set(owner, [o.scientificName]);
+        const taxonKey = `${o.scientificName}|${o.lifeStage ?? ''}|${o.sex ?? ''}`;
+        if (list) list.push(taxonKey);
+        else taxaByEvent.set(owner, [taxonKey]);
       }
-      const split = sampleSplitOf(sheetSites, occurrences.length - occurrencesBefore, (id) => taxaByEvent.get(id) ?? []);
+      const split = sampleSplitOf(sheetSites, occurrences.length - occurrencesBefore, (id) => taxaByEvent.get(id) ?? [], { taxonRows: taxonRowCount, distinctTaxa: distinctTaxaSeen.size });
       if (split !== undefined) findings.push(makeConvertFinding('CONV-SAMPLE-PER-ROW', { ...base, params: { events: split.events, occurrences: split.occurrences, ratio: split.ratio, shared: split.shared } }));
     }
     if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));
@@ -2354,15 +2399,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     );
   }
 
-  // a station far from its biology station (CONV-PROFILE-STATION-FAR) is the same fact as a station spread across the sheets: said once
-  const farStations = new Set(
+  const farIds = new Set(
     findings
       .filter((f) => f.ruleId === 'CONV-PROFILE-STATION-FAR')
       .flatMap((f) => String(f.params.names ?? '').split('; '))
-      .flatMap((pair) => pair.replace(/ \(\d+ km\)$/, '').split(' <-> '))
-      .map((name) => name.split(':').pop() as string),
+      .flatMap((pair) => pair.replace(/ \(\d+ km\)$/, '').split(' <-> ')),
   );
-  pushAll(findings, stationFindingsOf(stationSheets).filter((f) => !(f.ruleId.startsWith('ROW-STATION-SPREAD') && farStations.has(String(f.value)))));
+  pushAll(findings, stationFindingsOf(stationSheets, farIds));
 
   // An upload that has no taxon anywhere (a CTD or environmental file alone) would give an archive with no occurrence: OBIS publishes species records. Said here, in these words, instead
   // of letting the empty Occurrence table be reported as missing terms (validate.ts leaves an empty Occurrence table alone).

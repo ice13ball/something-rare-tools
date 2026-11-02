@@ -121,6 +121,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-BIOMASS-UNIT-UNCLEAR',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
+  // a few cells of a time column hold a date that will not be written
+  'CONV-TIME-SOME-DATES',
   // a station whose positions differ by a typed digit, exchanged axes or a flipped sign, or that spans more than 1000 km: made on the input rows, so a parent station of the archive is not written with a position and an uncertainty that no one has seen
   // (the plain ROW-STATION-SPREAD, 10 km, is a note: a transect legitimately spans more, and it is only shown)
   'ROW-STATION-MOVED',

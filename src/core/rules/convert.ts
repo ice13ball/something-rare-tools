@@ -30,6 +30,7 @@ import type { RuleSpec } from './spec';
  *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept)
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
  *   CONV-TIME-HOLDS-DATES      count            field = the time column, count = its cells that hold a full date, while no column is the date: blocks (the events would have no eventDate)
+ *   CONV-TIME-SOME-DATES       count            field = the time column, lines = its cells that hold a full date, fewer than half of the filled ones: those dates would be lost (warning, accept)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -324,6 +325,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La colonne « {field} » est lue comme une heure, mais {count} {+count:cellule contient|cellules contiennent} une date complète, et aucune colonne n'est la date. Les événements n'auraient pas d'eventDate et la date du fichier serait perdue. Donnez à la colonne le sens « Date et heure ».`,
     },
     technical: `{file}, {sheet} field {field}: the sheet has a time column and no date column, and {count} cell(s) of the time column hold a date (YYYY-MM-DD...). No eventDate would be written. A date that is in the file is never dropped silently, so the export is blocked until the column is read as a date and time.`,
+  },
+  {
+    id: 'CONV-TIME-SOME-DATES',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `W kolumnie godziny „{field}” {count} {+count:komórka zawiera|komórki zawierają|komórek zawiera} pełną datę ({+lineCount:wiersz|wiersze|wierszy} {lines}), a żadna kolumna nie jest datą. Te daty nie trafią do eventDate. Jeśli to daty zdarzeń, nadaj kolumnie znaczenie „Data i godzina”.`,
+      en: `In time column "{field}", {count} {+count:cell holds|cells hold} a full date ({+lineCount:line|lines} {lines}), and no column is the date. These dates will not reach eventDate. If they are the dates of the events, give the column the meaning "Date and time".`,
+      de: `In der Uhrzeitspalte „{field}“ {+count:enthält|enthalten} {count} {+count:Zelle|Zellen} ein volles Datum ({+lineCount:Zeile|Zeilen} {lines}), und keine Spalte ist das Datum. Diese Daten gelangen nicht in eventDate. Sind es die Ereignisdaten, geben Sie der Spalte die Bedeutung „Datum und Uhrzeit“.`,
+      fr: `Dans la colonne d'heure « {field} », {count} {+count:cellule contient|cellules contiennent} une date complète ({+lineCount:ligne|lignes} {lines}), et aucune colonne n'est la date. Ces dates n'iront pas dans eventDate. Si ce sont les dates des événements, donnez à la colonne le sens « Date et heure ».`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} cell(s) of the time column hold a date the date parser reads (fewer than half of the filled cells: with half or more the export is blocked, CONV-TIME-HOLDS-DATES). Placeholder dates of a spreadsheet or an epoch (1899-12-30, 1970-01-01) are times and are not counted.`,
   },
   {
     id: 'CONV-ZERO-WITH-BIOMASS',

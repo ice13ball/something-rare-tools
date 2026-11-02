@@ -922,7 +922,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 return (
                   <div key={key} className="notice" role="note">
                     <p>{t('convert.codes.text', { sheet: c.sheet, file: f?.fileName ?? '' })}</p>
-                    <button type="button" className="button" onClick={() => void proposeCodes(c.fileId, c.sheet)}>
+                    <button type="button" className="button" onClick={() => pickCodes(c.fileId, c.sheet, null)}>
                       {t('convert.codes.propose')}
                     </button>
                     {codesPreview[key] !== undefined && codesPreview[key].sig === codesSig(c.fileId, c.sheet) ? <CodesPreview p={codesPreview[key].p} onDownload={() => offerCodes(c.fileId, c.sheet, codesPreview[key].p)} onPick={(index) => pickCodes(c.fileId, c.sheet, index)} onClear={pickedFor(c.fileId, c.sheet).length > 0 ? () => pickCodes(c.fileId, c.sheet, null) : undefined} /> : null}

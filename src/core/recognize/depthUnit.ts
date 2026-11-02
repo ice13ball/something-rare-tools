@@ -74,7 +74,10 @@ export function depthSuffixUnit(header: string): string | undefined {
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .split(/[^\p{L}\p{N}µ]+/u)
     .filter((t) => t !== '');
-  const afterNumber = (i: number): boolean => i > 0 && /^\d+$/.test(tokens[i - 1]);
+  // 'Depth at 10 km', 'Depth offshore 5 km': a number after such a word is a distance in the name, not a unit of the depth. A number directly before the unit after the depth word
+  // ('Depth 30 ft', 'Depth_100_ft') is a value written into the name: the unit is the unit, and the column blocks (see below)
+  const PREPOSITIONS = new Set(['at', 'to', 'from', 'of', 'within', 'over', 'under', 'near', 'than', 'about', 'approx', 'beyond', 'offshore', 'off', 'around', 'up', 'less', 'more']);
+  const afterNumber = (i: number): boolean => i > 1 && /^\d+$/.test(tokens[i - 1]) && PREPOSITIONS.has(tokens[i - 2].toLowerCase());
   // 'in' and 'f' are also ordinary words / letters: a unit only as the last word of the name
   const weak = (t: string): boolean => ['in', 'f', 'fa', 'fat'].includes(clean(t));
   const units = tokens.map((t, i) => isUnit(clean(t)) && !afterNumber(i) && !(weak(t) && i !== tokens.length - 1));
@@ -92,6 +95,8 @@ export function depthSuffixUnit(header: string): string | undefined {
   }
   // the unit before the depth word ('ft_depth', 'fm_depth_max')
   if (u === 0 && tokens.length >= 2 && tokens.slice(1).some((t) => DEPTH_WORD.test(t)) && tokens.slice(1).every((t) => DEPTH_WORD.test(t) || BOUND_WORDS.has(t.toLowerCase()))) return tokens[0];
+  // a number written into the name right before the unit ('Depth 30 ft'): a value, not a unit; no exact factor
+  if (u > 0 && /^\d+$/.test(tokens[u - 1])) return `${tokens[u - 1]} ${tokens[u]}`;
   const tail = tokens.slice(u + 1);
   const others = tokens.slice(0, u).filter((t, i) => units[i] && !weak(t) && clean(t) !== clean(tokens[u]));
   if (others.length > 0) return [...others, tokens[u]].join('/');

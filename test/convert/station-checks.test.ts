@@ -77,6 +77,22 @@ describe('station checks in /convert', () => {
     const e = await exportSheets([a, b, c]);
     const f = e.findings.filter((x) => x.ruleId === 'ROW-STATION-SPREAD-FAR');
     expect(f).toHaveLength(1);
-    expect(f[0]).toMatchObject({ value: 'S9', file: 'b.csv', sheet: 'B, C' });
+    expect(f[0]).toMatchObject({ value: 'S9', file: 'b.csv, c.csv', sheet: 'B, C' });
+  });
+
+  it('sheets of the same name are told apart by their file', async () => {
+    const a = sheetInput(fileOf(H, [['S9', 's1', '2020-06-01', 10, 20, 'Calanus finmarchicus', 2]], 'S', { fileName: 'x.csv' }), { quantity: { kind: 'count' } });
+    const b = sheetInput(fileOf(H, [['S9', 's2', '2020-06-02', 30, 20, 'Calanus finmarchicus', 2]], 'S', { fileName: 'y.csv' }), { quantity: { kind: 'count' } });
+    const f = (await exportSheets([a, b])).findings.filter((x) => x.ruleId === 'ROW-STATION-SPREAD-FAR');
+    expect(f).toHaveLength(1);
+    expect(f[0].sheet).toBe('x.csv: S, y.csv: S');
+  });
+
+  it("a sheet's own spread is never hidden by the far-profile message (a different fact)", async () => {
+    const bio = sheetInput(fileOf(H, [['S1', 's1', '2020-06-01', 55, 3, 'Calanus finmarchicus', 2], ['S1', 's2', '2020-06-02', 20, 3, 'Calanus finmarchicus', 2]], 'B', { fileName: 'b.csv' }), { quantity: { kind: 'count' } });
+    const ctd = sheetInput(fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Temperature [°C]'], [['S1', '2020-06-01', 5, 3, 2, -1.6]], 'C', { fileName: 'c.csv' }), { profile: { depthIds: true } });
+    const e = await exportSheets([bio, ctd]);
+    const far = e.findings.filter((x) => x.ruleId === 'ROW-STATION-SPREAD-FAR');
+    expect(far.some((x) => x.sheet === 'B')).toBe(true);
   });
 });

@@ -1354,8 +1354,10 @@ code" (the button above applies it).
   time, depth and position with another event **whose taxa differ** (a taxon seen again at the same place is another
   sample, not another row of one) is one sample split into an event per taxon row (`CONV-SAMPLE-PER-ROW`, a warning
   to accept, naming the ratio). The time is taken as written, so a time column that gives no date still tells visits apart; a
-  place counts when few of its events repeat a taxon of an earlier one; and **more sample events than occurrences**
-  (events made for rows that give none) is evidence alone; a missing code blocks
+  place counts when at most half of its events AFTER THE FIRST repeat a taxon (with its life stage and sex) of an earlier one, so
+  two tows of one species at one place are two samples, or when the place holds three events or more and three taxa or more; and **more sample events than occurrences** (events made for rows that
+  give none) is evidence alone, but only when the events are at least 80% of the sheet's taxon rows and the sheet has two taxa
+  or more (correct codes on a sheet of mostly zeros have more events than occurrences too); a missing code blocks
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
@@ -1427,7 +1429,8 @@ code" (the button above applies it).
   the exact forms only: the unit ends the name, or only a bound or statistic word follows it (`Depth_ft_max`,
   `Depth_fm_mean`, `depth_ft_avg`). A unit with any other word after it (`Depth_ft_corrected`, `Depth ft sonar`,
   `Depth (ft) sonar`, `Depth_ft_1`, `depth_cm_bsf`, `Depth_km_offshore`) blocks, and the message shows what the header said;
-  a unit that follows a number (`Depth at 10 km`) is none; two different units in one name (`depth_m_ft`,
+  a unit that follows a number after `at`, `offshore` and the like (`Depth at 10 km`) is none, a number written right before the unit
+  (`Depth 30 ft`, `Depth_100_ft`) is a value in the name and blocks; two different units in one name (`depth_m_ft`,
   `Depth (m or ft)`) are a conflict and block. camelCase is split (`depthFt`). It is read at the build level whoever chose the role, so a depth
   picked by hand (`Sounding (fm)`, `MaxDepth_ft`) is converted too; a unit typed on the role wins. Only a unit with
   an exact definition in metres is converted, by decimal arithmetic on the digits of the cell (international
@@ -1437,7 +1440,7 @@ code" (the button above applies it).
   `CONV-DEPTH-CONVERTED` (a warning to accept) naming column, factor and the first value as it is written.
   Any other unit (`cm`, `mm`, `dm`, yards, inches, miles, `f`, `dbar`, a word) blocks with `CONV-DEPTH-UNIT`;
   a centimetre depth is not converted because on a plain depth column it is usually a depth in a sediment core
-  (the message points to the role "Depth below seafloor"). A plain `Depth`, `Depth [m]` or `depth_m` stays metres
+  (the message points to the role "Depth below seafloor"; `depth_cm_bsf` and `Depth (cm) below seafloor` are read as that role, with the unit cm). A plain `Depth`, `Depth [m]` or `depth_m` stays metres
   with no finding, and qualifiers (`depth_mean`, `Depth_min`, `depth_from`, `Depth_flag`) are never read as
   units. `/check` reads the same unit from the header and does not judge the range of a depth in another unit
   (`ROW-DEPTH-RANGE`). `verbatimDepth` is a Darwin Core term (it is in the GBIF Event term list). The OBIS Manual's Darwin Core page
@@ -1457,7 +1460,8 @@ For each taxon cell (`convert/build.ts`):
   with `rows`; it names the other quantity-named columns that are filled on those rows and says when the whole column
   is empty, so numbers that sit in another column are not missed). A row with a **number or a weight and no taxon
   name** is not converted and is said (`CONV-TAXON-EMPTY-ROW`). A **time column whose cells hold full dates while no column is
-  the date** blocks (`CONV-TIME-HOLDS-DATES`): the events would have no `eventDate` and the date in the file would be lost. A quantity that is text (`trace`, `<1`) keeps the
+  the date** blocks when half or more of its cells do (`CONV-TIME-HOLDS-DATES`): the events would have no `eventDate` and the date in
+  the file would be lost; fewer are listed by line (`CONV-TIME-SOME-DATES`, to accept). A quantity that is text (`trace`, `<1`) keeps the
   weight of its row. A measured variable does not keep a row, because it is written once per sample and says
   nothing about the taxon. Rows with a taxon = occurrences + zeros skipped + rows counted as NA
   (`stats.occurrences`, `zerosSkipped`, `naSkipped`);
@@ -1828,7 +1832,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **178 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **179 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1842,8 +1846,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 80 | 38 / 31 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **178** | | | |
+| `CONV-` | `B` | 81 | 38 / 32 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **179** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1902,6 +1906,17 @@ Each item below is confirmed from code, a test, or a rule text.
 - A run with unread pages is finished but not complete, and its fix list says so.
 
 **`/convert`**
+
+- `CONV-SAMPLE-PER-ROW` is a heuristic with known limits: a station with sightings of 25 or more taxa at one fixed position
+  (ROV dives) can fire; a true split whose revisits have no date stays silent; events more than occurrences count as
+  evidence alone only when the events are at least 80% of the sheet's taxon rows and there are two taxa or more.
+- A biomass column named `Biomass` or `Wet weight` with no unit anywhere in its header writes no `measurementUnit`
+  (nothing is guessed); the unit has to be in the header.
+- `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` claim only what the date parser reads (ISO, `DD.MM.YYYY`,
+  `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial between 20000 and 80000). Left unread,
+  and therefore silent: `2003/01/17 08:30`, `20030117 0830`, `Jan 17 2003`, `01/17/2003 8:30 AM`. Placeholder dates
+  (`1899-12-30`, `1970-01-01`) are not dates, and they are not read as times either (a time column holding them still has
+  no time written).
 
 - A replicate level exists only for a column with the role Replicate / sub-sample; a profile sheet
   does not read that role (its replicate column is ignored without a word), and a sample's replicates

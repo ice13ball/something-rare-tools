@@ -9,7 +9,7 @@ import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDeci
 import { isPercentUnit, verifiedConcept } from './nerc';
 import { hasCentralStatisticToken } from '../summaryLabels';
 import { isMeasurementWord, nameKind } from './measured';
-import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitOf } from './seafloor';
+import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitFromHeader, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 
@@ -506,7 +506,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const hdr = unitFromHeader(p.header);
     const seafloorCode = seafloorAt.get(p.index);
     if (seafloorCode !== undefined) {
-      const unit = depthUnitOfHeader(p.header, hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined));
+      const unit = seafloorUnitFromHeader(p.header) ?? depthUnitOfHeader(p.header, hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined));
       // the direction the numbers count, read from the DATA and shown as a proposal the user can change: all numbers at or below zero (and some below) means they count upwards from the
       // seafloor, so a depth below it is negative; anything else is the usual depth below (positive)
       const up = countsUpwards(sheet, p.index, ctx.decimalComma);

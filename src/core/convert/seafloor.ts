@@ -118,3 +118,15 @@ export function isSiteDepthName(name: string): boolean {
   const k = headerKey(foldDiacritics(name));
   return SITE_DEPTH_NAME.some((r) => r.test(k));
 }
+
+/**
+ * The unit of a depth-below-seafloor header, read from its WORDS ('depth_cm_bsf', 'Depth (cm) below seafloor', 'Pore water depth m'): the first centimetre or metre word. The
+ * depth reader would call 'cm bsf' a unit; here 'bsf' / 'below seafloor' is the meaning, and the unit is cm.
+ */
+export function seafloorUnitFromHeader(header: string): SeafloorUnit | undefined {
+  for (const w of header.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    const u = seafloorUnitOf(w) ?? (/^cmbsf$/.test(w) ? 'cm' : /^mbsf$/.test(w) ? 'm' : undefined);
+    if (u !== undefined) return u;
+  }
+  return undefined;
+}

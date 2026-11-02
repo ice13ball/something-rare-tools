@@ -155,4 +155,31 @@ describe('a long sheet with blank or NaN quantities', () => {
     const ok = await exportSheet(header, [['S1', 's1', '2003-01-17T00:00:00Z', 55.5, 2.5, 'Calanus finmarchicus', 4]], { quantity: { kind: 'count' }, edit: { time: { kind: 'datetime' } } });
     expect(find(ok, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
   });
+
+  const timeCase = (cells: Cell[]) =>
+    exportSheet(['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'], cells.map((c, i) => ['S1', `s${i}`, c, 55.5, 2.5, 'Calanus finmarchicus', 4] as Cell[]), { quantity: { kind: 'count' } });
+
+  it.each([['17/01/2003 08:30'], ['17.01.2003'], ['2003-01-17T08:30:00Z'], [37638.35], ['2003-01-17 08:30']])('a time column of dates (%s) blocks', async (cell) => {
+    const e = await timeCase([cell, cell]);
+    expect(find(e, 'CONV-TIME-HOLDS-DATES')).toHaveLength(1);
+  });
+
+  it('epoch and spreadsheet placeholders are times, not dates', async () => {
+    const e = await timeCase(['1899-12-30 12:30:00', '1970-01-01 12:30:00', '1899-12-31 08:00:00']);
+    expect(find(e, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
+    expect(find(e, 'CONV-TIME-SOME-DATES')).toEqual([]);
+  });
+
+  it('a few dates among times are listed by line (warning), not blocked', async () => {
+    const e = await timeCase(['08:30', '09:30', '10:30', '2003-01-17T08:30:00Z', '11:30']);
+    expect(find(e, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
+    const f = find(e, 'CONV-TIME-SOME-DATES');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([5]);
+    expect(policyOf(f[0])).toBe('accept');
+  });
+
+  it('formats the date parser does not read are not claimed (they stay unread)', async () => {
+    for (const cell of ['2003/01/17 08:30', '20030117 0830', 'Jan 17 2003', '01/17/2003 8:30 AM']) expect(find(await timeCase([cell, cell]), 'CONV-TIME-HOLDS-DATES'), cell).toEqual([]);
+  });
 });

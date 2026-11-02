@@ -215,17 +215,33 @@ describe('CONV-SAMPLE-PER-ROW: one sample split into an event per taxon row', ()
     expect(Number(f[0].params.events)).toBeGreaterThan(Number(f[0].params.occurrences));
   });
 
-  it('fires when one taxon is listed twice per sample (two stages) or the revisits have no date', async () => {
+  it('fires when one taxon is listed twice per sample in two stages', async () => {
+    const stageHeader = ['Station', 'time', 'Depth_m', 'Latitude', 'Longitude', 'Volume filtered [m3]', 'Species', 'Stage', 'Abundance', 'Sample'];
     const stages: Cell[][] = [];
     let n = 0;
-    for (const [k, st] of Array.from({ length: 20 }, (_, i) => `S${i}`).entries()) for (const stage of ['c1', 'c2'].map((x) => x)) stages.push([st, `2003-01-1${(k % 5) + 1}`, 10, 55, 2.5, 30.5, 'Calanus finmarchicus', 3, `r${++n}`]);
-    const e = await exportSheet(b08Header, stages, density);
+    for (const [k, st] of Array.from({ length: 20 }, (_, i) => `S${i}`).entries()) for (const stage of ['c1', 'c2']) stages.push([st, `2003-01-1${(k % 5) + 1}`, 10, 55, 2.5, 30.5, 'Calanus finmarchicus', stage, 3, `r${++n}`]);
+    const e = await exportSheet(stageHeader, stages, density);
     expect(e.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(true);
-    // one station, no date, two visits told apart by nothing but the code on each row
+    // (accepted limit, docs/APPS.md section 14: a true split whose revisits have no date stays silent)
+  });
+
+  it('stays silent on correct codes: many visits of few taxa with most values zero; one target species with half zeros; paired tows', async () => {
+    // 8 taxa x 60 visits, most values zero: more events than occurrences, but a sample is 8 rows
     const visits: Cell[][] = [];
-    n = 0;
-    for (let v = 0; v < 2; v++) for (let i = 0; i < 20; i++) visits.push(['A', null, 10, 55, 2.5, 30.5, named(i), 2, `r${++n}`]);
-    const nodate = await exportSheet(b08Header, visits, density);
-    expect(nodate.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(true);
+    for (let v = 0; v < 60; v++) for (let i = 0; i < 8; i++) visits.push(['A', `2003-01-${String((v % 28) + 1).padStart(2, '0')}`, 10, 55, 2.5, 30.5, named(i), (v + i) % 5 === 0 ? 3 : 0, `v${v}`]);
+    expect((await exportSheet(b08Header, visits, density)).findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
+    // one target species over 100 tows, half zero
+    const tows: Cell[][] = Array.from({ length: 100 }, (_, i) => [`T${i}`, `2003-01-${String((i % 28) + 1).padStart(2, '0')}`, 10, 55 + i / 100, 2.5, 30.5, 'Calanus finmarchicus', i % 2 === 0 ? 3 : 0, `t${i}`]);
+    expect((await exportSheet(b08Header, tows, density)).findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
+    // paired tows of one species at one station and date, one code each
+    const paired: Cell[][] = Array.from({ length: 60 }, (_, i) => [`S${Math.floor(i / 2)}`, `2003-01-${String((Math.floor(i / 2) % 28) + 1).padStart(2, '0')}`, 10, 55, 2.5, 30.5, 'Calanus finmarchicus', 3, `p${i}`]);
+    expect((await exportSheet(b08Header, paired, density)).findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
+  });
+
+  it('a replicate column does not make one species fire', async () => {
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Replicate', 'Species', 'Count'];
+    const rows: Cell[][] = Array.from({ length: 40 }, (_, i) => [`S${Math.floor(i / 2)}`, `2023-06-${String((Math.floor(i / 2) % 28) + 1).padStart(2, '0')}`, 55, 2.5, 10, (i % 2) + 1, 'Calanus finmarchicus', 3]);
+    const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Station: { kind: 'station' } } });
+    expect(e.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
   });
 });

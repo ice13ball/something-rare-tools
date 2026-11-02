@@ -119,6 +119,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-BIOMASS-UNIT-UNCLEAR | warning | B | — | —<a id="CONV-BIOMASS-UNIT-UNCLEAR"></a> |
 | CONV-TAXON-EMPTY-ROW | warning | B | — | —<a id="CONV-TAXON-EMPTY-ROW"></a> |
 | CONV-TIME-HOLDS-DATES | error | B | — | —<a id="CONV-TIME-HOLDS-DATES"></a> |
+| CONV-TIME-SOME-DATES | warning | B | — | —<a id="CONV-TIME-SOME-DATES"></a> |
 | CONV-ZERO-WITH-BIOMASS | warning | B | — | —<a id="CONV-ZERO-WITH-BIOMASS"></a> |
 | CONV-SAMPLE-PER-ROW | warning | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)](https://manual.obis.org/format_occurrence.html), "(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"<a id="CONV-SAMPLE-PER-ROW"></a> |
 | CONV-ZERO-SKIPPED | info | B | — | [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")<a id="CONV-ZERO-SKIPPED"></a> |

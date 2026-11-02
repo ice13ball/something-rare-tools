@@ -50,7 +50,7 @@ describe('the unit of a depth header', () => {
   it('reads the unit in every form a header writes it, and a conflicting pair as a blocking unit', () => {
     const converted = ['Depth, ft', 'Depth (fth)', 'Depth (fms)', 'Depth (ftm)', 'Depth (ft.)', 'Depth-ft', 'Depth/ft', 'Depth.ft', 'ft_depth', 'fm_depth', 'Depth_fm_max', 'Sounding (fm)', 'Sounding_fm', 'Fathoms', 'MaxDepth_ft', 'Depth feet', 'Depth [km]'];
     for (const h of converted) expect(depthUnitFactor(depthSuffixUnit(h)), h).toBeDefined();
-    const midName = ['Depth_fm_bin', 'Depth_ft_corrected', 'Depth_fm_est', 'Depth_ft_1', 'Depth ft sonar', 'Depth (ft) sonar', 'Depth [ft] sonar', 'Depth (m or ft)', 'Depth_km_offshore', 'depth_cm_bsf', 'Bathy (fathoms) raw'];
+    const midName = ['Depth 30 ft', 'Depth_100_ft', 'Depth_fm_bin', 'Depth_ft_corrected', 'Depth_fm_est', 'Depth_ft_1', 'Depth ft sonar', 'Depth (ft) sonar', 'Depth [ft] sonar', 'Depth (m or ft)', 'Depth_km_offshore', 'depth_cm_bsf', 'Bathy (fathoms) raw'];
     for (const h of midName) {
       const u = depthSuffixUnit(h);
       expect(u, h).toBeDefined();
@@ -199,6 +199,13 @@ describe('a depth in another unit through the export', () => {
       expect(t, lang).toContain('31.5 fm = 57.6072 m');
       expect(t, lang).not.toContain('fathoms');
       expect(t, lang).not.toMatch(/\{[a-z+]/);
+    }
+  });
+
+  it('a centimetre depth below the seafloor is read as the seafloor case, with its unit', () => {
+    for (const h of ['depth_cm_bsf', 'Depth (cm) below seafloor']) {
+      const sheet = rawSheet(['Station', h, 'Cl'], [['A', 5, 100]]);
+      expect(proposeConvertColumns(sheet, { decimalComma: false, date1904: false })[1].role, h).toMatchObject({ kind: 'depthBelowSeafloor', unit: 'cm' });
     }
   });
 });
