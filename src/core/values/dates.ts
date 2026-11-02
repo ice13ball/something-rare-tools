@@ -452,9 +452,12 @@ export function looksLikeUnreadDate(raw: RawCell): boolean {
  * The full date and time of a cell of a TIME column: a text datetime, or the serial of a column the workbook formats as a date, when it holds a time of day (a plain time, a date alone and a
  * spreadsheet placeholder are not this: undefined). The caller decides what to do with the zone.
  */
+/** A spreadsheet serial that stands for a date between 1954 and 2118 (the range a sampling date can have): 1.5 or 12 are times and durations, not dates. */
+export const isPlausibleSerial = (n: number): boolean => n >= 20000 && n <= 80000;
+
 export function fullDatetimeOfTimeCell(raw: RawCell, o: { date1904: boolean; dateFormatted: boolean; order?: Exclude<DayMonthOrder, 'unknown'> }): ParsedDate | undefined {
   if (raw === null || isEpochPlaceholder(raw)) return undefined;
-  if (typeof raw === 'number' && !(o.dateFormatted && raw >= 1)) return undefined;
+  if (typeof raw === 'number' && !(o.dateFormatted && isPlausibleSerial(raw))) return undefined;
   const d = parseDate(raw, { date1904: o.date1904, dateFormatted: o.dateFormatted, ...(o.order === undefined ? {} : { order: o.order }) });
   return 'error' in d || (d.precision !== 'minute' && d.precision !== 'second') ? undefined : d;
 }

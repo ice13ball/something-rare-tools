@@ -365,7 +365,12 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
             // the time column holds a full datetime (a text one, or the serial of a date-formatted column): a zone-stated one is the instant of the event and wins over a date (or a local datetime) that states no zone
             // (a local date beside a UTC time on the next day); one without a zone gives its time of day when it falls on the day of the row
             const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }) });
-            if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown') {
+            const dayGap = (a: string, b: string): number => Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
+            const farApart = full !== undefined && date.precision !== 'year' && date.precision !== 'month' && dayGap(date.iso, full.iso) > 1;
+            if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown' && farApart) {
+              // a zone-stated time a month away from the date column is two different days, not a local date beside a UTC time: neither is dropped in silence
+              c.add('ROW-TIME-OTHER-DAY', sheet.name, tField, row.line, String(timeCell).trim(), true);
+            } else if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown') {
               date = full;
               tzField = tField;
             } else {

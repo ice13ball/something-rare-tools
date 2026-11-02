@@ -8,6 +8,10 @@ import { renderConvertPlain } from '../../src/core/rules/convert';
 import { LANGS } from '../../src/core/types';
 import type { ColumnRole } from '../../src/core/types';
 import { rawSheet } from '../helpers/files';
+import { buildDataset } from '../../src/core/dataset';
+import { parseFile } from '../../src/core/parse';
+import { proposeLayout } from '../../src/core/recognize/layout';
+import { proposeColumns } from '../../src/core/recognize/columns';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
@@ -132,5 +136,37 @@ describe('MEDIUM: a named quantity beside a Latin column means long, numeric cod
   it('several columns counted in [#] are species columns of a wide sheet, not the quantity of a long one', () => {
     const r = Object.fromEntries(proposeConvertColumns(rawSheet(['Station', 'Notes', 'Calanus [#]', 'Acartia [#]'], names.map((n, i) => ['S1', n, i, 2])), CTX).map((p) => [p.header, p]));
     expect(r.Notes.role.kind).toBe('ignore');
+  });
+});
+
+describe('MEDIUM: a zone-stated time does not silently override a date it contradicts', () => {
+  it('Date 2011-08-05 with Time 2011-10-06T20:00:00Z is reported and the date is kept; one day apart is the instant', () => {
+    const t = 'Station,Date,Time,Temp\nS1,2011-08-05,2011-10-06T20:00:00Z,4.1\nS1,2011-08-05,2011-08-06T01:00:00Z,4.2\n';
+    const file = parseFile('t.csv', new TextEncoder().encode(t));
+    const { dataset, findings } = buildDataset(file, proposeLayout(file), [], [], 'x');
+    expect(findings.filter((f) => f.ruleId === 'ROW-TIME-OTHER-DAY').map((f) => f.value)).toEqual(['2011-10-06T20:00:00Z']);
+    expect(dataset.rows[0].datetime?.iso.startsWith('2011-08-05')).toBe(true);
+    expect(dataset.rows[1].datetime?.iso).toBe('2011-08-06T01:00:00Z');
+  });
+});
+
+describe('MEDIUM: NA among ions needs numbers and two different ions', () => {
+  const roleOf = (header: string[], cell: (i: number) => Cell) => proposeColumns(rawSheet(header, Array.from({ length: 4 }, (_, i) => header.map((h) => (h === 'NA' ? cell(i) : i + 1)))), CTX).find((p) => p.header === 'NA')!.role;
+  it('text cells beside ions are not sodium', () => {
+    expect(roleOf(['Ca', 'Mg', 'NA'], () => 'flag')).not.toMatchObject({ variable: 'sodium' });
+    expect(roleOf(['Ca', 'Mg', 'NA'], () => 'x')).not.toMatchObject({ variable: 'sodium' });
+  });
+  it('the same ion twice counts once', () => {
+    expect(roleOf(['k', 'k', 'NA'], (i) => i)).not.toMatchObject({ variable: 'sodium' });
+  });
+  it('numbers beside two different ions are sodium', () => {
+    expect(roleOf(['Ca', 'Mg', 'NA'], (i) => i + 5)).toMatchObject({ variable: 'sodium' });
+  });
+});
+
+describe('LOW: a date-formatted Excel serial of 1.5 is a time, not 1899-12-31', () => {
+  it('no date column: the column is not read as a date and time', () => {
+    const r = Object.fromEntries(proposeColumns(rawSheet(['Station', 'Time', 'x'], [['S1', 1.5, 1], ['S1', 1.25, 2], ['S1', 2.5, 3]], 'S', [false, true, false]), CTX).map((p) => [p.header, p]));
+    expect(r.Time.role).toEqual({ kind: 'time' });
   });
 });

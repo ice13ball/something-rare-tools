@@ -462,12 +462,12 @@ export const ROW_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: [],
     plain: {
-      pl: `W wierszach {lines} kolumna godziny (np. „{value}”) podaje pełną datę z godziną, ale inny dzień niż kolumna daty, a bez strefy czasowej. Godziny nie da się z tego wyciąć: wpisz datę i godzinę w jednej kolumnie ze strefą (np. 2011-10-05T20:00:00Z) albo godzinę samą.`,
-      en: `In lines {lines} the time column (e.g. "{value}") holds a full date and time, but a different day than the date column, and no time zone. The time of day cannot be cut out of it: write date and time in one column with a zone (e.g. 2011-10-05T20:00:00Z), or the time of day alone.`,
-      de: `In den Zeilen {lines} enthält die Uhrzeitspalte (z. B. „{value}“) ein volles Datum mit Uhrzeit, aber einen anderen Tag als die Datumsspalte und keine Zeitzone. Die Uhrzeit lässt sich nicht herauslösen: Schreiben Sie Datum und Uhrzeit mit Zone in eine Spalte (z. B. 2011-10-05T20:00:00Z) oder nur die Uhrzeit.`,
-      fr: `Aux lignes {lines}, la colonne d'heure (par ex. « {value} ») contient une date et une heure complètes, mais un autre jour que la colonne de date, et aucun fuseau. L'heure ne peut pas en être extraite : écrivez la date et l'heure avec un fuseau dans une colonne (par ex. 2011-10-05T20:00:00Z), ou l'heure seule.`,
+      pl: `W wierszach {lines} kolumna godziny (np. „{value}”) podaje pełną datę z godziną z innego dnia niż kolumna daty (bez strefy czasowej każdy inny dzień, ze strefą ponad dobę różnicy). Godziny nie da się z tego wziąć: sprawdź, która data jest dobra, albo wpisz godzinę samą.`,
+      en: `In lines {lines} the time column (e.g. "{value}") holds a full date and time of another day than the date column (any other day without a time zone, more than a day apart with one). The time cannot be taken from it: check which date is right, or write the time of day alone.`,
+      de: `In den Zeilen {lines} enthält die Uhrzeitspalte (z. B. „{value}“) ein volles Datum mit Uhrzeit eines anderen Tages als die Datumsspalte (ohne Zeitzone jeder andere Tag, mit Zone mehr als ein Tag Abstand). Die Uhrzeit lässt sich nicht übernehmen: Prüfen Sie, welches Datum stimmt, oder schreiben Sie nur die Uhrzeit.`,
+      fr: `Aux lignes {lines}, la colonne d'heure (par ex. « {value} ») contient une date et une heure complètes d'un autre jour que la colonne de date (sans fuseau tout autre jour, avec un fuseau plus d'un jour d'écart). L'heure ne peut pas en être prise : vérifiez quelle date est juste, ou écrivez l'heure seule.`,
     },
-    technical: `{file}:{lines} field {field} value '{value}': the time column holds a full datetime of another day than the date column of the row and states no zone; the time of day is not taken from it (a datetime with a zone is read as the event's instant instead).`,
+    technical: `{file}:{lines} field {field} value '{value}': the time column holds a full datetime of another day than the date column of the row (any other day without a zone, more than one day apart with one); the time of day is not taken from it (a datetime with a zone within a day of the date is read as the event's instant instead).`,
   },
   {
     id: 'ROW-DATE-MISSING',

@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMapping, TablePlan } from '../types';
 import { hemisphereLetter, parseCoordinate } from '../values/coords';
-import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, parseDate, parseTimeCell } from '../values/dates';
+import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, isPlausibleSerial, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { depthUnitOfHeader } from './depthUnit';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
@@ -624,7 +624,7 @@ function dateShare(rows: readonly RawRow[], col: number, ctx: ProposeContext, fo
   for (const c of all) {
     // the serial of a column the workbook formats as a date (an Excel 'Time' column set to a date-time format); a plain number is never a date
     if (typeof c === 'number') {
-      if (!formatted || c < 1) continue;
+      if (!formatted || !isPlausibleSerial(c)) continue;
       const d = parseDate(c, { date1904: ctx.date1904, dateFormatted: true });
       if ('error' in d) continue;
       good++;
@@ -860,12 +860,13 @@ function pairHemisphereColumns(
  * 'NA' is far more often "not available" than sodium. Sodium keeps the chemical spelling 'Na', and a column that is written 'NA' or 'na' is sodium only when its header states a
  * unit (a concentration): a column of notes, flags or footnote marks has none. Decided on the header as written (the vocabulary matches the folded key, which has lost the case).
  */
-function isAmbiguousNa(hu: HeaderUnit, header: readonly string[], index: number): boolean {
+function isAmbiguousNa(hu: HeaderUnit, header: readonly string[], index: number, rows: readonly RawRow[], decimalComma: boolean): boolean {
   const name = hu.name.trim();
   if (!/^na$/i.test(name) || name === 'Na' || hu.unit !== undefined) return false;
-  // structure: with two or more other major ions beside it (CA, MG, K, CL, SO4 ...) the column is one of a table of ions, sodium whatever the case
-  const ions = header.filter((h, i) => i !== index && ['calcium', 'magnesium', 'potassium', 'chloride', 'sulphate'].includes(canonicalFromKey(headerKey(unitFromHeader(h).name)) ?? '')).length;
-  return ions < 2;
+  // structure: sodium when the column holds numbers and at least two DIFFERENT other major ions (calcium, magnesium, potassium, chloride, sulphate) stand among the columns (CA, MG, K, CL);
+  // a column of notes or flags beside ions is still "not available", and the same ion written twice counts once
+  const ions = new Set(header.flatMap((h, i) => (i === index ? [] : [canonicalFromKey(headerKey(unitFromHeader(h).name)) ?? ''])).filter((c) => ['calcium', 'magnesium', 'potassium', 'chloride', 'sulphate'].includes(c)));
+  return !(ions.size >= 2 && isNumeric(numericStats(rows, index, decimalComma)));
 }
 
 /** Proposes a role for every column of a sheet, in column order. */
@@ -959,7 +960,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     // a spread or an extreme of a variable ('Temperature st.dev.', 'Salinity max') is not the variable itself: it keeps its own name, so that two columns never claim one variable
     const commentText = headerComment(header);
     const stat = commentText !== undefined && STATISTIC_COMMENT.test(headerKey(commentText)) ? { base: key, statistic: true } : statisticOfName(key);
-    const canonical = variableKey ?? (stat?.statistic === true || isAmbiguousNa(hu, sheet.header, index) ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
+    const canonical = variableKey ?? (stat?.statistic === true || isAmbiguousNa(hu, sheet.header, index, rows, ctx.decimalComma) ? undefined : canonicalFromKey(stat === undefined ? key : stat.base));
 
     // 4. values: degrees + minutes with hemisphere letters, ISO dates (only when no name or code explained the column)
     if (canonical === undefined && !isNumeric(st)) {
