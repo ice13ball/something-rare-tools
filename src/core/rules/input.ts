@@ -27,6 +27,9 @@ import type { RuleSpec } from './spec';
  *   IN-DECIMAL-COMMA        (none)
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
  *   IN-DATE1904             (none)
+ *   IN-PANGAEA-EVENT-USED   columns, events, count   a PANGAEA table without position/date columns got Latitude, Longitude and/or Date/Time from its Event(s) header block (columns = the names added, events = how many events the block lists, count = rows filled)
+ *   IN-PANGAEA-EVENT-NOT-USED events    the block was not used; optional several (= events) = several events and no Event column to match them, track = the one event's position is a track
+ *   IN-PANGAEA-EVENT-UNMATCHED count    rows (lines) whose Event cell matches no event of the block that has a position or date: nothing borrowed
  *   IN-DWCA-NOT-ARCHIVE     (none)
  *   IN-DWCA-UNSUPPORTED-CORE core    local name of the core rowType (e.g. Taxon), or the raw rowType when it has none
  *   IN-DWCA-UNREADABLE      reason   language-neutral code (ZIP-ENCRYPTED, ZIP-BOMB, DWCA-META-INVALID, ...)
@@ -351,6 +354,65 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `Ce fichier Excel utilise l'ancien système de dates 1904 (les dates diffèrent de 1462 jours par rapport au système habituel). Les dates ont été converties en conséquence ; vérifiez-en quelques-unes.`,
     },
     technical: `{file}: workbook date1904 flag is set; serial dates converted with epoch 1904-01-01 (1462 days offset from the 1900 system).`,
+  },
+  {
+    id: 'IN-PANGAEA-EVENT-USED',
+    category: 'input',
+    severity: 'info',
+    params: ['columns', 'events', 'count'],
+    plain: {
+      pl: `Tabela nie ma własnej pozycji ani daty dla tych wierszy, więc użyto bloku Event(s) z nagłówka pliku: dodano kolumny {columns} ({count} {+count:wiersz|wiersze|wierszy}). Jedno zdarzenie dotyczy każdego wiersza; przy kilku wiersz bierze zdarzenie z kolumny Event. Sprawdź wartości.`,
+      en: `The table has no position or date of its own for these rows, so the Event(s) block of the file header was used: columns {columns} were added ({count} {+count:row|rows}). One event applies to every row; with several, each row takes the event named in its Event column. Check the values.`,
+      de: `Die Tabelle hat für diese Zeilen keine eigene Position oder kein eigenes Datum, daher wurde der Event(s)-Block des Dateikopfs verwendet: Spalten {columns} wurden ergänzt ({count} {+count:Zeile|Zeilen}). Ein Ereignis gilt für jede Zeile; bei mehreren nimmt jede Zeile das in ihrer Spalte Event genannte. Prüfen Sie die Werte.`,
+      fr: `Le tableau n'a pas de position ou de date propre pour ces lignes ; le bloc Event(s) de l'en-tête du fichier a donc servi : colonnes {columns} ajoutées ({count} {+count:ligne|lignes}). Un seul événement vaut pour chaque ligne ; avec plusieurs, chaque ligne prend celui que nomme sa colonne Event. Vérifiez les valeurs.`,
+    },
+    technical: `{file} sheet {sheet}: columns {columns} added from the Event(s) header block ({events} event(s)) for {count} row(s) that had no position or date of their own.`,
+  },
+  {
+    id: 'IN-PANGAEA-EVENT-NOT-USED',
+    category: 'input',
+    severity: 'warning',
+    params: ['events'],
+    plain: {
+      pl: `Blok Event(s) w nagłówku pliku podaje pozycję lub datę, ale nie skopiowano ich do tabeli, a tabela nie ma własnych.`,
+      en: `The Event(s) block in the file header gives a position or date, but none was copied into the table, and the table has none of its own.`,
+      de: `Der Event(s)-Block im Dateikopf nennt eine Position oder ein Datum, aber nichts davon wurde in die Tabelle übernommen, und die Tabelle hat keine eigenen.`,
+      fr: `Le bloc Event(s) de l'en-tête du fichier donne une position ou une date, mais rien n'en a été copié dans le tableau, et le tableau n'en a pas en propre.`,
+    },
+    plainIf: [
+      {
+        param: 'several',
+        plain: {
+          pl: `Blok wymienia {several} {+several:zdarzenie|zdarzenia|zdarzeń}, a tabela nie ma kolumny Event, więc nie wiadomo, który wiersz do którego należy. Dodaj kolumnę Event albo pozycję i datę.`,
+          en: `The block lists {several} {+several:event|events} and the table has no Event column, so it is unknown which row belongs to which. Add an Event column, or position and date columns.`,
+          de: `Der Block nennt {several} {+several:Ereignis|Ereignisse}, und die Tabelle hat keine Spalte Event, daher ist unklar, welche Zeile wozu gehört. Ergänzen Sie eine Spalte Event oder Position und Datum.`,
+          fr: `Le bloc énumère {several} {+several:événement|événements} et le tableau n'a pas de colonne Event : on ne sait pas quelle ligne va avec lequel. Ajoutez une colonne Event, ou la position et la date.`,
+        },
+      },
+      {
+        param: 'track',
+        plain: {
+          pl: `Pozycja zdarzenia to trasa (początek i koniec się różnią), a nie punkt, więc nie jest pozycją próbki. Dodaj do tabeli kolumny pozycji.`,
+          en: `The position of the event is a track (the start and the end differ), not a point, so it is not the position of a sample. Add position columns to the table.`,
+          de: `Die Position des Ereignisses ist eine Strecke (Anfang und Ende unterscheiden sich), kein Punkt, also nicht die Position einer Probe. Ergänzen Sie Positionsspalten in der Tabelle.`,
+          fr: `La position de l'événement est un trajet (le début et la fin diffèrent), pas un point : ce n'est pas la position d'un échantillon. Ajoutez des colonnes de position au tableau.`,
+        },
+      },
+    ],
+    technical: `{file} sheet {sheet}: Event(s) header block with {events} event(s) not copied into the table (no Event column for several events, or the position is a track).`,
+  },
+  {
+    id: 'IN-PANGAEA-EVENT-UNMATCHED',
+    category: 'input',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `{count} {+count:wiersz nie ma|wiersze nie mają|wierszy nie ma} zdarzenia w bloku Event(s) z nagłówka pliku: komórka Event jest pusta, wskazuje zdarzenie, którego tam nie ma, albo zdarzenie nie ma pozycji ani daty. Nic stamtąd nie wzięto dla tych wierszy. Uzupełnij je w tabeli.`,
+      en: `{count} {+count:row has|rows have} no event in the Event(s) block of the file header: the Event cell is empty, names an event that is not listed there, or the event has no position or date. Nothing was taken from the block for these rows. Fill them in the table.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} kein Ereignis im Event(s)-Block des Dateikopfs: Die Zelle Event ist leer, nennt ein dort nicht aufgeführtes Ereignis, oder das Ereignis hat keine Position oder kein Datum. Für diese Zeilen wurde nichts aus dem Block übernommen. Ergänzen Sie sie in der Tabelle.`,
+      fr: `{count} {+count:ligne n'a|lignes n'ont} aucun événement dans le bloc Event(s) de l'en-tête du fichier : la cellule Event est vide, nomme un événement qui n'y figure pas, ou l'événement n'a ni position ni date. Rien n'a été pris dans le bloc pour ces lignes. Complétez-les dans le tableau.`,
+    },
+    technical: `{file} sheet {sheet}:{lines} {count} row(s) whose Event cell matches no event of the Event(s) header block that has a position or date; nothing was borrowed for them.`,
   },
   {
     id: 'IN-DWCA-NOT-ARCHIVE',

@@ -77,7 +77,7 @@ const startsWithShort = (header: string, short: string): boolean => {
 function parametersOf(file: ParsedFile, sheet: RawSheet) {
   if (file.kind !== 'pangaea') return undefined;
   const params = file.pangaeaParameters;
-  if (params === undefined || params.length !== sheet.header.length) return undefined;
+  if (params === undefined || params.length !== sheet.header.length - (file.eventColumns ?? 0)) return undefined;
   return params.every((p, i) => p.short !== undefined && startsWithShort(sheet.header[i] ?? '', p.short)) ? params : undefined;
 }
 

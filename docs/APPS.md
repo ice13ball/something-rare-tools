@@ -234,6 +234,17 @@ read, because SheetJS never returns on some damaged zips.
 
 **PANGAEA textfiles** (`parse/pangaea.ts`). The header block becomes embedded metadata (citation,
 licence, coverage, parameters in column order); the first line after it is the table header.
+The `Event(s):` block (`parse/pangaeaEvents.ts`) gives each event its position and time. A table that has no
+position column of its own gets `Latitude` and `Longitude`, and one that has no date column gets `Date/Time`, added at
+the right with the block's text as written, for /check and /convert alike, and `IN-PANGAEA-EVENT-USED` says so. One
+event applies to every row; with several events the table's `Event` column is matched exactly (the alias in brackets
+is not part of the name), and a row whose event is empty, unlisted, listed twice or without a point or date
+borrows nothing and is reported (`IN-PANGAEA-EVENT-UNMATCHED`); with several events and no `Event` column nothing is
+borrowed (`IN-PANGAEA-EVENT-NOT-USED`). A position is a point (`LATITUDE`/`LONGITUDE`, or a START equal to its END); a
+track is not borrowed. The date is `DATE/TIME`, or START when it equals END, else the interval START/END. The
+`ELEVATION` is the level of the sea floor, not the depth of a sample, and is not borrowed. A column or a value the
+table has is never overwritten. When no table of a /check run has a position in any row, the report lists
+`notChecked.noPositions`.
 
 **Darwin Core Archives** (`parse/dwca.ts`, limits in `parse/zip.ts`). `meta.xml` must name an
 Occurrence or Event core with exactly one file (a different core gives
@@ -1836,14 +1847,14 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **179 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **182 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
 
 | Prefix | Category in the registry | Rules | Error / Warning / Info | What it covers | Main sources it cites (as named in the rule definitions) |
 |---|---|---|---|---|---|
-| `IN-` | `input` | 27 | 12 / 9 / 6 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
+| `IN-` | `input` | 30 | 12 / 11 / 7 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, a PANGAEA table's position and date taken from its Event(s) block, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
 | `META-` | `A` | 8 | 2 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates, no positions. | The OBIS Manual (`META-NO-POSITIONS`: `decimalLatitude` and `decimalLongitude` are the minimally required location terms); the other rules are stated in their own text. |
 | `ROW-` | `B` | 35 | 6 / 18 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
@@ -1851,7 +1862,7 @@ regenerate it when rules change.
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
 | `CONV-` | `B` | 81 | 38 / 32 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **179** | | | |
+| **Total** | | **182** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

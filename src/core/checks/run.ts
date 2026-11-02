@@ -73,6 +73,9 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
   const report = buildReport(findings);
   unshiftAll(report.notChecked, speed.notChecked);
   if (opts.land === null) report.notChecked.unshift('notChecked.landMask');
+  // rows were read and none has a position: every position check was skipped, and the report says so (never a silent 0 points)
+  const withRows = session.datasets.filter((d) => d.rows.length > 0 && !d.layout.unsupported);
+  if (withRows.length > 0 && !withRows.some((d) => d.rows.some((r) => r.lat !== undefined && r.lon !== undefined))) report.notChecked.unshift('notChecked.noPositions');
   if (session.datasets.some(oxygenRangeSkipped)) report.notChecked.unshift('notChecked.oxygenUnit');
   // a Darwin Core Archive was read: its extension tables were not (the core only), so their eventIDs were not compared with the core's
   if (session.parseFindings.some((f) => f.ruleId === 'IN-DWCA-VERSION')) report.notChecked.unshift('notChecked.dwcExtensions');

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { pushAll } from '../util/arrays';
 import type { Finding, LicenceStatement, MetadataRecord, ParsedFile, RawRow } from '../types';
 import { buildStatement } from '../metadata/licence';
 import type { DecodedText } from '../values/encoding';
+import { lendEventColumns, readEvents } from './pangaeaEvents';
 import { encodingFinding, raggedFinding, splitPhysicalLines } from './shared';
 
 const KEY_LINE = /^([A-Za-z][A-Za-z() \/]*):\t(.*)$/;
@@ -120,6 +122,7 @@ export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<
 
   const end = lines.findIndex((l, i) => i > 0 && l.trim().endsWith('*/'));
   const blockLines = lines.slice(1, end < 0 ? lines.length : end);
+  const block = readBlock(blockLines);
   const file: ParsedFile = {
     fileName,
     kind: 'pangaea',
@@ -127,7 +130,7 @@ export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<
     date1904: false,
     decimalComma: false,
     encoding: decoded?.encoding ?? 'utf-8',
-    embeddedMetadata: metadataOf(readBlock(blockLines), fileName),
+    embeddedMetadata: metadataOf(block, fileName),
     findings,
   };
   if (end < 0) return file;
@@ -147,5 +150,7 @@ export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<
   file.sheets.push({ name: fileName, header, headerLine: h + 1, rows });
   const rag = raggedFinding(fileName, fileName, header.length, rows);
   if (rag) findings.push(rag);
+  // the position and date of the Event(s) block, for a table that has none of its own
+  pushAll(findings, lendEventColumns(file, file.sheets[0], readEvents(block.get('Event(s)'))));
   return file;
 }

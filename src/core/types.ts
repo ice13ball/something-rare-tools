@@ -70,6 +70,8 @@ export interface ParsedFile {
   findings: Finding[];          // parse-level findings (ragged rows, encoding fallback, …)
   /** Set only by the converter's reading path (core/convert/read.ts), never by the shared parsers: the parameters of a PANGAEA header block with their abbreviations and comments. */
   pangaeaParameters?: PangaeaParameter[];
+  /** PANGAEA: how many columns (Latitude, Longitude, Date/Time) the parser added at the right of the table from the header's Event(s) block (parse/pangaeaEvents.ts); the parameter list stands for the columns before them. */
+  eventColumns?: number;
   /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
   dwca?: { core: 'Occurrence' | 'Event'; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
 }

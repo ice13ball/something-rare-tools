@@ -28,6 +28,9 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | IN-DECIMAL-COMMA | info | input | — | —<a id="IN-DECIMAL-COMMA"></a> |
 | IN-HEADER-SHORT | warning | input | — | —<a id="IN-HEADER-SHORT"></a> |
 | IN-DATE1904 | info | input | — | [Microsoft Support, Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487), 1900 and 1904 date systems; "The difference between the two date systems is 1,462 days."<a id="IN-DATE1904"></a> |
+| IN-PANGAEA-EVENT-USED | info | input | — | —<a id="IN-PANGAEA-EVENT-USED"></a> |
+| IN-PANGAEA-EVENT-NOT-USED | warning | input | — | —<a id="IN-PANGAEA-EVENT-NOT-USED"></a> |
+| IN-PANGAEA-EVENT-UNMATCHED | warning | input | — | —<a id="IN-PANGAEA-EVENT-UNMATCHED"></a> |
 | IN-DWCA-NOT-ARCHIVE | error | input | — | —<a id="IN-DWCA-NOT-ARCHIVE"></a> |
 | IN-DWCA-UNSUPPORTED-CORE | error | input | — | —<a id="IN-DWCA-UNSUPPORTED-CORE"></a> |
 | IN-DWCA-UNREADABLE | error | input | — | —<a id="IN-DWCA-UNREADABLE"></a> |
