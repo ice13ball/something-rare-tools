@@ -424,6 +424,15 @@ Only a sample of the rows is read: at most 1000, spread evenly (`sampleRows`).
     cannot leave a stale pairing.
 12. A date column whose values carry a time of day becomes a datetime.
 
+**PANGAEA's vertical geocodes** (`src/core/recognize/geocodes.ts`, shared by `/check` and `/convert`). A PANGAEA table names its sample depth with one of the geocodes of the wiki page
+*Geocode* (wiki.pangaea.de/wiki/Geocode, version `oldid=17007` of 2026-06-11): `DEPTH, water`, `DEPTH, water, experiment`, `DEPTH, sediment/rock`, `DEPTH, sediment, experiment`, `DEPTH, soil`,
+`DEPTH, ice/snow`, `ELEVATION`, `ALTITUDE`, `HEIGHT above ground`, and the relative `DISTANCE`, `POINT DISTANCE from start`, `SECTION, height`, `ORDINAL NUMBER`; the table in the code keeps these names with the
+abbreviation PANGAEA prints in the column header (`Depth water`, `Depth sed`, `Depth ice/snow`, `Depth soil`, `Elevation`, `Altitude`; the first three pairs are confirmed in the golden files' own
+parameter lists). Only a **water** depth is read as the depth of the sample. `Depth sed` / `DEPTH, sediment/rock` is a depth in a core: on `/convert` it takes the role *depth below the seafloor* (a negative distance
+in metres, `CONV-SEAFLOOR-*`), and on both pages it never reaches the depth slot (`/check`'s `ROW-DEPTH-*` rules do not see it). `Depth ice/snow` and `Depth soil` are not water depths either; they are kept as **measured values** of
+the sample (nothing is lost, and the reason `geocode-ice` / `geocode-soil` says why they are not the depth). `Elevation` and `Altitude` keep the sign logic of the proposer (positive up). `Depth, top/min` and
+`Depth, bottom/max`, which the page does not list (they are ordinary parameters, the two ends of a layer), keep their range handling.
+
 ### 3.4 Recognising the layout
 
 `proposeLayout(file)` in `src/core/recognize/layout.ts` describes how the sheets of a file fit

@@ -18,6 +18,10 @@ const ARGO_CTD = {
   label: 'Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)',
   url: 'https://archimer.ifremer.fr/doc/00228/33951/32470.pdf',
 };
+const PANGAEA_GEOCODE = {
+  label: 'PANGAEA Wiki, "Geocode" (page version oldid=17007, last edited 2026-06-11; read 2026-11-02)',
+  url: 'https://wiki.pangaea.de/wiki/Geocode',
+};
 const ARGO_DOXY = {
   label: 'Argo Quality Control Manual for Dissolved Oxygen Concentration, v2.2 (15 Oct 2025)',
   url: 'https://archimer.ifremer.fr/doc/00354/46542/123086.pdf',
@@ -162,6 +166,8 @@ const th = (name: string, value: number, unit: string, citation: Citation): Thre
 export const CITE = {
   // position test: Argo Test 3 "Impossible location test"
   argoLocation: cite(ARGO_CTD, 'section 2.1.2, Test 3 "Impossible location test", p.11'),
+  // PANGAEA geocodes (recognize/geocodes.ts): a depth in a sediment core is a depth in the sediment, not the depth of the water
+  pangaeaSedimentDepth: cite(PANGAEA_GEOCODE, 'section "Third spatial dimension (Depth/Height) (z)": "DEPTH, sediment/rock [m] for geological, geochemistry, biogeochemisty, paleontological, geophysical measurements and samples. Describing the specific sampling depth in the sediment core"; "DEPTH, water [m] ... This GEOCODE describes the water depth in which the measurement or sample was collected"'),
   // ROW-ON-LAND: the published test, and the land map it uses here (verified 2026-10-23 in the opened PDF)
   argoLand: cite(ARGO_CTD, 'section 2.1.2, Test 4 "Position on land test", p.11'),
   naturalEarthLand: { label: 'Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)', url: 'https://www.naturalearthdata.com/downloads/10m-physical-vectors/', locator: 'layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py' },

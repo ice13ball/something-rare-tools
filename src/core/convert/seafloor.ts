@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { geocodeOfKey } from '../recognize/geocodes';
 import { foldDiacritics, headerKey } from '../recognize/vocab';
 
 /*
@@ -92,6 +93,8 @@ const SEAFLOOR_NAME = [
 /** The converter's name test for a header WITHOUT its unit. */
 export function isSeafloorName(name: string): boolean {
   const k = headerKey(foldDiacritics(name));
+  // PANGAEA's geocode for a depth in a sediment core or rock ("DEPTH, sediment/rock", "Depth sed"): never the depth of the water (recognize/geocodes.ts)
+  if (geocodeOfKey(k)?.effect === 'sediment-depth') return true;
   return SEAFLOOR_NAME.some((r) => r.test(k));
 }
 

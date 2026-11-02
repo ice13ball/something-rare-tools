@@ -124,6 +124,8 @@ function battery(): { sheet: RawSheet; place?: true; long?: { parameterCol: numb
     S(['Latitude', 'Lat NS'], [[-32.7, 'S'], [-33, 'S']]),
     // only the end position of a tow
     S(['End Lat', 'End Lon'], [[54.5, 18.5], [54.6, 18.6]]),
+    // PANGAEA geocodes for a depth that is not the water depth
+    S(['Depth sed [m]', 'Depth ice/snow [m]', 'Depth soil [m]', 'Depth water [m]'], [[0.5, 0.1, 0.2, 5], [1.5, 0.2, 0.3, 6]]),
     // a place column with short repeated names is the station when the converter asks for it
     { ...S(['Location', 'Temp'], [['North bay', 4.5], ['North bay', 4.6], ['Rocky point', 5.1]]), place: true as const },
     // long format: the parameter, unit and value columns are read through the layout

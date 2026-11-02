@@ -755,7 +755,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La profondeur sous le fond de la colonne « {field} » figure {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) sans la profondeur d'eau du site. Darwin Core mesure alors depuis la référence d'altitude, pas depuis le fond. Ajoutez la profondeur d'eau du site en mètres (sens « Profondeur »).`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) have a depth below the seafloor and no minimumDepthInMeters / maximumDepthInMeters. Reference surface of minimumDistanceAboveSurfaceInMeters: "If depth measures are given, the reference surface is the location given by the depth, otherwise ... the elevation" (Darwin Core).`,
-    citations: [OBIS_DARWIN_CORE],
+    citations: [OBIS_DARWIN_CORE, CITE.pangaeaSedimentDepth],
   },
   {
     id: 'CONV-NO-OCCURRENCES',

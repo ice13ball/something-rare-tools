@@ -5,6 +5,7 @@ import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, isPlausibleSerial, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
 import { depthUnitOfHeader } from './depthUnit';
+import { geocodeOfKey } from './geocodes';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
 import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
@@ -907,6 +908,17 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     const dwc = dwcColumn(cleanHeader, dwcSheet);
     if (dwc && 'ignore' in dwc) return ignore(dwc.ignore);
     let cand = dwc ? dwc.cand : (nameCandidate(key, { unitText: hu.unitText, cleanHeader }) ?? bareCands.get(index));
+    // a PANGAEA geocode for a depth in a sediment core, soil or ice is not the depth of the water: no depth slot, a measured value with its reason (geocodes.ts)
+    const geocode = dwc ? undefined : geocodeOfKey(key);
+    const geocodeReason: Why | undefined =
+      geocode?.effect === 'sediment-depth'
+        ? why('geocode-sediment', { name: hu.name.trim() })
+        : geocode?.effect === 'not-water-depth'
+          ? key.includes('ice')
+            ? why('geocode-ice', { name: hu.name.trim() })
+            : why('geocode-soil', { name: hu.name.trim() })
+          : undefined;
+    if (geocodeReason !== undefined) cand = undefined;
     if (cand?.guard && !guardPasses(cand.guard, sheet, rows, index, ctx)) cand = undefined; // an ambiguous name the values do not back
     if (cand?.fitAxis && !valuesFitAxis(rows, index, cand.kind === 'longitude' ? 'longitude' : 'latitude', ctx.decimalComma)) cand = undefined;
     let candidate: Cand | undefined = cand;
@@ -992,7 +1004,7 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
       ...(unit === undefined ? {} : { unit, unitSource }),
       ...(p01Code === undefined ? {} : { p01: p01Code }),
     };
-    const w = reasonExtra ?? (canonical ? why('name-variable', { variable: canonical }) : why('numeric-unrecognised'));
+    const w = geocodeReason ?? reasonExtra ?? (canonical ? why('name-variable', { variable: canonical }) : why('numeric-unrecognised'));
     return { proposal: { ...base, role, confidence: canonical ? 'high' : 'low', ...reasonOf(w) } };
   });
 

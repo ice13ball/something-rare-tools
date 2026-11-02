@@ -17,6 +17,10 @@ export const CHECK_REASONS = {
   'name-time': 'name says time of day',
   'name-elevation': 'name says elevation (positive up)',
   'name-depth': 'name says depth',
+  // PANGAEA's geocodes for a depth that is not the water depth (recognize/geocodes.ts): the column is a measured value of the sample, never minimumDepthInMeters
+  'geocode-sediment': '"{name}" is the PANGAEA geocode for a depth in a sediment core or rock, not the depth of the water: it is not read as the depth of the sample',
+  'geocode-soil': '"{name}" is the PANGAEA geocode for a depth in soil, not the depth of the water: it is not read as the depth of the sample',
+  'geocode-ice': '"{name}" is the PANGAEA geocode for a depth in sea ice or snow, not the depth of the water: it is not read as the depth of the sample',
   'name-depth-start': 'name says depth ({name}: start of a depth range)',
   'name-depth-end': 'name says depth ({name}: end of a depth range)',
   'name-cruise': 'name says cruise or expedition',
