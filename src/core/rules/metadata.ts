@@ -15,7 +15,7 @@ import type { RuleSpec } from './spec';
  *   META-POINT-OUTSIDE-BBOX   west, east, south, north, count   bbox as in the record; count = rows outside;
  *                             lines = those rows; value = one example position, "lat, lon"
  *   META-VARIABLE-MISSING     term              the abstract term found (e.g. "dissolved silica")
- *   META-NO-DATES             (none)           optional sheets = the sheets of the file that lack a date (one finding for all of them)
+ *   META-NO-DATES             (none)           optional sheets (several, listed up to ten and counted after) or sheetOne (one) = the sheets of the file that lack a date (one finding for all of them)
  *   META-NO-POSITIONS         (none)           optional sheets, as META-NO-DATES
  */
 export const METADATA_RULES: readonly RuleSpec[] = [
@@ -126,6 +126,15 @@ export const METADATA_RULES: readonly RuleSpec[] = [
           fr: `Cela concerne les feuilles : {sheets}.`,
         },
       },
+      {
+        param: 'sheetOne',
+        plain: {
+          pl: `Dotyczy arkusza: {sheetOne}.`,
+          en: `This is about the sheet: {sheetOne}.`,
+          de: `Es betrifft das Blatt: {sheetOne}.`,
+          fr: `Cela concerne la feuille : {sheetOne}.`,
+        },
+      },
     ],
     technical: `{file}: no row has a date and no record has a temporal extent or collection date.`,
   },
@@ -149,6 +158,15 @@ export const METADATA_RULES: readonly RuleSpec[] = [
           en: `This is about the sheets: {sheets}.`,
           de: `Es betrifft die Blätter: {sheets}.`,
           fr: `Cela concerne les feuilles : {sheets}.`,
+        },
+      },
+      {
+        param: 'sheetOne',
+        plain: {
+          pl: `Dotyczy arkusza: {sheetOne}.`,
+          en: `This is about the sheet: {sheetOne}.`,
+          de: `Es betrifft das Blatt: {sheetOne}.`,
+          fr: `Cela concerne la feuille : {sheetOne}.`,
         },
       },
     ],

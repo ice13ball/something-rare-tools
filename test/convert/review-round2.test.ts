@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import { renderConvertPlain } from '../../src/core/rules/convert';
+import { runChecks } from '../../src/core/checks/run';
+import { renderPlain } from '../../src/core/report';
+import { makeDataset } from '../helpers/build';
 import { LANGS } from '../../src/core/types';
 import type { ColumnRole } from '../../src/core/types';
 import { rawSheet } from '../helpers/files';
@@ -168,5 +171,27 @@ describe('LOW: a date-formatted Excel serial of 1.5 is a time, not 1899-12-31', 
   it('no date column: the column is not read as a date and time', () => {
     const r = Object.fromEntries(proposeColumns(rawSheet(['Station', 'Time', 'x'], [['S1', 1.5, 1], ['S1', 1.25, 2], ['S1', 2.5, 3]], 'S', [false, true, false]), CTX).map((p) => [p.header, p]));
     expect(r.Time.role).toEqual({ kind: 'time' });
+  });
+});
+
+describe('LOW: the sheets of META-NO-POSITIONS are counted after ten, and one sheet is named as that', () => {
+  const sheetsDs = (names: string[]) =>
+    names.map((n) => {
+      const cell = (v: number, line: number) => ({ raw: String(v), line, value: v, status: 'ok' as const });
+      const ds = makeDataset(Array.from({ length: 3 }, (_, i) => ({ datetime: '2020-01-01', values: { C: cell(i + 1, i + 2) } })), [], { file: 'book.xlsx', label: `book.xlsx (${n})`, id: n });
+      for (const r of ds.rows) r.sheet = n;
+      return ds;
+    });
+  const finding = (names: string[]) => runChecks({ datasets: sheetsDs(names), records: [], parseFindings: [] }, { today: '2099-01-01' }).findings.filter((f) => f.ruleId === 'META-NO-POSITIONS');
+  it('forty sheets: ten names and the rest counted', () => {
+    const f = finding(Array.from({ length: 40 }, (_, i) => `Sheet${i + 1}`));
+    expect(f).toHaveLength(1);
+    expect(f[0].sheet).toBe('Sheet1, Sheet2, Sheet3, Sheet4, Sheet5, Sheet6, Sheet7, Sheet8, Sheet9, Sheet10 (+30)');
+    expect(renderPlain(f[0], 'en')).not.toContain('Sheet11');
+  });
+  it('one sheet reads "the sheet: X" in four languages', () => {
+    const f = finding(['Only']);
+    expect(renderPlain(f[0], 'en')).toContain('the sheet: Only');
+    for (const l of LANGS) expect(renderPlain(f[0], l), l).toContain('Only');
   });
 });

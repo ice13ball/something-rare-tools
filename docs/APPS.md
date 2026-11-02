@@ -1928,6 +1928,9 @@ Each item below is confirmed from code, a test, or a rule text.
   (listed in 3.5): the 10 km "one place" size of the ship-speed check and `ROW-STATION-SPREAD`, the
   1000 km of `ROW-STATION-SPREAD-FAR` (its technical text says so), the land-mask distances, the
   number of terms that make a table Darwin Core. Of these, only `ROW-STATION-SPREAD-FAR` says so in its rule text.
+- Roles found by cells stay **proposals**, at low confidence, with their reason shown: a text column of Latin-looking words beside a named count (`Method` = `Visual census ...`, `Mare nostrum`) can be offered as the taxon, and `Dominant species` beside an `Abundance` column reads as a long sheet. The user sees the reason and changes the role; no further rule is added, because it would tune to the examples.
+- Several single specimens of one taxon in one sample, written on the occurrences (`value-per-occurrence`), still need an occurrence ID or a life-stage column: without one `CONV-ID-DUPLICATE` blocks, as it does for any repeated taxon in a sample.
+- The sheets of a finding that lists many are shown up to ten and counted after (`A, B ... (+30)`).
 - `ROW-STATION-MOVED` and `ROW-STATION-SPREAD*` compare rows only within a cruise or a calendar year: the same station
   revisited in another year, in a file with no cruise column, is not compared (a digit error there goes unseen), and a typed-digit error in a coordinate written with fewer than two decimals is not found.
 - Compression is done per request (no cache of compressed bodies) and brotli is at quality 4, so it is only a little smaller than gzip; precompressing at build time would shrink it further.

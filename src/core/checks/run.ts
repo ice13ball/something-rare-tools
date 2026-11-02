@@ -76,7 +76,11 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
     pushAll(findings, checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today }));
     pushAll(findings, checkChemistry(ds));
   }
-  for (const { f, sheets } of sheetFindings.values()) findings.push({ ...f, sheet: sheets.join(', '), params: { ...f.params, sheets: sheets.join(', ') } });
+  for (const { f, sheets } of sheetFindings.values()) {
+    // one sheet is named as that; many are listed up to ten and counted after ("A, B, ... (+30)"), so that forty sheets are not forty names in a sentence
+    const shown = sheets.length > 10 ? `${sheets.slice(0, 10).join(', ')} (+${sheets.length - 10})` : sheets.join(', ');
+    findings.push({ ...f, sheet: shown, params: { ...f.params, ...(sheets.length === 1 ? { sheetOne: shown } : { sheets: shown }) } });
+  }
   if (session.datasets.length > 1) pushAll(findings, checkCrossFile(session.datasets));
   const speed = checkShipSpeed(session.datasets, { singleCruise: opts.singleCruise === true });
   pushAll(findings, speed.findings);
