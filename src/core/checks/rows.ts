@@ -683,7 +683,7 @@ function noCoord(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): v
 /* ---------- ROW-DEPTH-MIN-MAX, ROW-DEPTH-RANGE ---------- */
 
 const METRE = /^(m|meters?|metres?)$/i;
-const NON_METRE_HEADER = /(^|[^a-z])(ft|feet|foot|fathoms?|cm|mm|km)([^a-z]|$)/i;
+const NON_METRE_HEADER = /(^|[^a-z])(ft|feet|foot|fathoms?|fm|fth|ftm|cm|mm|km)([^a-z]|$)/i;
 
 /** The depth role of a sheet's mapping (convention and unit), when the dataset carries one. */
 function depthRole(ds: Dataset, sheet: string): { positive: 'down' | 'up' | 'unknown'; unit?: string } {

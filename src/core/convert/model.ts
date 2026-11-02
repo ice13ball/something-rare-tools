@@ -48,6 +48,8 @@ export interface EventRec {
   lonText?: string;
   depthMinText?: string;
   depthMaxText?: string;
+  /** The depth as the sheet wrote it, with its unit ('31.5 fm'), when the column was converted to metres: written as verbatimDepth. */
+  depthVerbatim?: { min?: string; max?: string };
   /** coordinateUncertaintyInMeters of a derived position: whole metres, rounded up. */
   coordinateUncertaintyInMeters?: number;
   depthMin?: number;
@@ -235,7 +237,7 @@ export interface ModelEvent {
   type: EventType;
   date?: string;
   position?: { lat: number; lon: number; latDecimals?: number; lonDecimals?: number; latText?: string; lonText?: string; derived?: boolean; uncertaintyM?: number };
-  depth?: { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string };
+  depth?: { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string; verbatim?: string };
   /** minimum = maximumDistanceAboveSurfaceInMeters (a negative number in metres, as text): the depth below the seafloor of a sediment or porewater sample. */
   distance?: string;
   effort?: Effort;
@@ -285,6 +287,13 @@ export interface ConvertedDataset {
  * unknown keeps the id of its own target, so the cross-table check (CONV-EMOF-ORPHAN) can name it. The measurementType text is the preferred
  * label of the NERC concept, or, when no concept is verified, the declared meaning (CONV-NERC-UNKNOWN says the id is missing).
  */
+/** verbatimDepth: the depth as the sheet wrote it, with its unit ("31.5 fm", "10 fm - 20 fm"); undefined when no column was converted. */
+export function verbatimDepthText(v: { min?: string; max?: string } | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  if (v.min !== undefined && v.max !== undefined) return v.min === v.max ? v.min : `${v.min} - ${v.max}`;
+  return v.min ?? v.max;
+}
+
 export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements' | 'repeatedOccurrenceIds'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
   const events: ModelEvent[] = result.events.map((e) => {
     const m: ModelEvent = { id: e.id, type: e.eventType };
@@ -306,6 +315,8 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
       if (e.depthDecimals !== undefined) m.depth.decimals = e.depthDecimals;
       if (e.depthMinText !== undefined) m.depth.minText = e.depthMinText;
       if (e.depthMaxText !== undefined) m.depth.maxText = e.depthMaxText;
+      const verbatim = verbatimDepthText(e.depthVerbatim);
+      if (verbatim !== undefined) m.depth.verbatim = verbatim;
     }
     if (e.distanceText !== undefined) m.distance = e.distanceText;
     if (e.sampleSizeValue !== undefined && e.sampleSizeUnit !== undefined) m.effort = { value: e.sampleSizeValue, unit: e.sampleSizeUnit };

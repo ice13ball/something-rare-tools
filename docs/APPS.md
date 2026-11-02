@@ -1376,8 +1376,17 @@ code" (the button above applies it).
   depth (`minimum/maximumDepthInMeters`); the depth in the sediment is a **negative**
   `minimum`/`maximumDistanceAboveSurfaceInMeters`, as the Darwin Core and OBIS manuals describe. A
   depth in centimetres is moved to metres by shifting the decimal point **in the text** (no float,
-  no rounding). This is the **only unit conversion the converter makes anywhere**; any other unit is
-  refused (`CONV-SEAFLOOR-UNIT`), and a plain depth column is never rescaled (`CONV-DEPTH-UNIT`).
+  no rounding); any other unit of that column is refused (`CONV-SEAFLOOR-UNIT`).
+- **A plain depth in another unit** (`convert/build.ts` `depthReader`, `recognize/depthUnit.ts`): a unit
+  written in the header (`Depth [km]`, `Depth (ft)`, or a suffix `Depth_fm`, `depth_ft_max`, `Depth feet`) is kept
+  on the role. Only a unit with an exact definition in metres is converted, by decimal arithmetic on the digits of
+  the cell (international fathom 1.8288, foot 0.3048, kilometre 1000, centimetre 0.01), and the cell as written,
+  with its unit, goes to `verbatimDepth` of the event (a station or cruise derived from converted samples carries
+  the originals of its extremes). The user is told with `CONV-DEPTH-CONVERTED` (a warning to accept) naming column,
+  factor and the first value. Any other unit (millimetre, decimetre, yard, `f`, `dbar`, a word) blocks with
+  `CONV-DEPTH-UNIT`; a plain `Depth`, `Depth [m]` or `depth_m` stays metres with no finding, and qualifiers
+  (`depth_mean`, `Depth_min`, `depth_from`, `Depth_flag`) are never read as units. `/check` reads the same unit from the
+  role and does not judge the range of a depth in another unit (`ROW-DEPTH-RANGE`).
 
 ### 8.7 Occurrences, zeros and what a cell becomes
 
@@ -1481,7 +1490,8 @@ measured-variable column**.
 Files are UTF-8, tab-separated, `\n` line ends, one header line, no enclosure; a tab or line break
 inside a value is **refused, never replaced**. Values are written **from their source text** (a
 coordinate with its own decimals, a depth with its own, a quantity as the cell said it with a decimal
-comma turned into a point); **nothing is rescaled**. The exceptions are computed values: a derived
+comma turned into a point); **nothing is rescaled** except the declared units named in 8.6 (a depth below the
+seafloor in centimetres, a plain depth in fathoms, feet, kilometres or centimetres, which also writes `verbatimDepth`). The other exceptions are computed values: a derived
 parent position is rounded to 6 decimals (`round6`, `DERIVED_DECIMALS` in `events.ts`), and a
 coordinate read from degrees and minutes is written as decimal degrees at the precision of its
 text. **`meta.xml`** declares the Event
@@ -1736,7 +1746,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-10-30**. The total, **171 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **172 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1750,8 +1760,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 73 | 37 / 25 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **171** | | | |
+| `CONV-` | `B` | 74 | 37 / 26 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **172** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -1833,8 +1843,11 @@ Each item below is confirmed from code, a test, or a rule text.
   unlisted word still becomes a taxon candidate that the user must confirm or leave.
 - A code in a header is only checked for its shape (P01 and P06 after an explicit `SDN:` prefix),
   never looked up; a well-shaped code that does not exist is not caught offline.
-- The only unit conversion is centimetres to metres for a depth below the seafloor; other units are
-  written as declared, with no conversion; a depth column in another unit than metres blocks.
+- The only unit conversions are depths: centimetres to metres for a depth below the seafloor, and fathoms,
+  feet, kilometres and centimetres to metres for a plain depth (exact factors, original in `verbatimDepth`);
+  other units are written as declared, with no conversion, and a depth column in any other unit than metres blocks.
+  A depth unit is read from the header only (brackets, or a suffix of the depth word); a depth in feet whose unit sits
+  only in the sheet name or the metadata is read as metres.
 - Only three licences can be written (CC0-1.0, CC-BY-4.0, CC-BY-NC-4.0).
 - NERC identifiers are written only from the short verified list or from a user-confirmed NVS
   result; everything else leaves the id empty with a warning to accept.

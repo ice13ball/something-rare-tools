@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { depthSuffixUnit } from '../recognize/depthUnit';
 import { dwcTermOf, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
@@ -408,7 +409,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         qualityAt.add(p.index);
         continue;
       }
-      const depthUnit = hu.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+      const depthUnit = hu.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined) ?? depthSuffixUnit(p.header);
       if (isSeafloorName(hu.name)) {
         seafloorAt.set(p.index, 'seafloor-depth-name');
         continue;
@@ -501,7 +502,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const hdr = unitFromHeader(p.header);
     const seafloorCode = seafloorAt.get(p.index);
     if (seafloorCode !== undefined) {
-      const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+      const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined) ?? depthSuffixUnit(p.header);
       // the direction the numbers count, read from the DATA and shown as a proposal the user can change: all numbers at or below zero (and some below) means they count upwards from the
       // seafloor, so a depth below it is negative; anything else is the usual depth below (positive)
       const up = countsUpwards(sheet, p.index, ctx.decimalComma);
@@ -513,7 +514,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       continue;
     }
     if (siteDepthAt.has(p.index)) {
-      const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined);
+      const unit = hdr.unit ?? (p.role.kind === 'depth' ? p.role.unit : undefined) ?? depthSuffixUnit(p.header);
       if (seafloorAt.size > 0) {
         // a sediment or porewater sheet: the water depth of the site is the depth of its samples (min / maxDepthInMeters)
         p.role = { kind: 'depth', positive: 'down', ...(unit === undefined ? {} : { unit }) };
@@ -539,7 +540,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const hu = unitFromHeader(p.header);
       const dwcDepth = dwcTermOf(p.header) === 'minimumdepthinmeters' || dwcTermOf(p.header) === 'maximumdepthinmeters';
       const was = p.role.kind === 'depth' ? p.role : undefined;
-      const unit = dwcDepth ? 'm' : (was?.unit ?? hu.unit);
+      const unit = dwcDepth ? 'm' : (was?.unit ?? hu.unit ?? depthSuffixUnit(p.header));
       p.role = { kind: 'depth', positive: dwcDepth ? 'down' : (was?.positive ?? sheetPositive), ...(unit === undefined ? {} : { unit }), bound };
       p.confidence = 'high';
       why(p, `depth-${bound}-${dwcDepth ? 'dwc' : 'name'}` as OverlayReason);

@@ -55,6 +55,8 @@ export interface SampleSite {
   lonText?: string;
   depthMinText?: string;
   depthMaxText?: string;
+  /** The depth as the sheet wrote it, with its unit, when the column was converted to metres: verbatimDepth. */
+  depthVerbatim?: { min?: string; max?: string };
   depthMin?: number;
   depthMax?: number;
   depthDecimals?: number;
@@ -246,16 +248,25 @@ function derive(node: Node): void {
   let minD: number | undefined;
   let maxD: number | undefined;
   let dec: number | undefined;
+  let verbatimMin: string | undefined;
+  let verbatimMax: string | undefined;
   for (const k of kids) {
     const lo = k.rec.depthMin;
     const hi = k.rec.depthMax;
-    if (lo !== undefined && (minD === undefined || lo < minD)) minD = lo;
-    if (hi !== undefined && (maxD === undefined || hi > maxD)) maxD = hi;
+    if (lo !== undefined && (minD === undefined || lo < minD)) {
+      minD = lo;
+      verbatimMin = k.rec.depthVerbatim?.min;
+    }
+    if (hi !== undefined && (maxD === undefined || hi > maxD)) {
+      maxD = hi;
+      verbatimMax = k.rec.depthVerbatim?.max;
+    }
     const d = k.rec.depthDecimals;
     if (d !== undefined && (dec === undefined || d > dec)) dec = d;
   }
   if (minD !== undefined) rec.depthMin = minD;
   if (maxD !== undefined) rec.depthMax = maxD;
+  if (verbatimMin !== undefined || verbatimMax !== undefined) rec.depthVerbatim = { ...(verbatimMin === undefined ? {} : { min: verbatimMin }), ...(verbatimMax === undefined ? {} : { max: verbatimMax }) };
   if (minD !== undefined || maxD !== undefined) {
     rec.derived.depth = true;
     if (dec !== undefined) rec.depthDecimals = dec;
@@ -334,6 +345,7 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
     }
     if (s.depthMinText !== undefined) rec.depthMinText = s.depthMinText;
     if (s.depthMaxText !== undefined) rec.depthMaxText = s.depthMaxText;
+    if (s.depthVerbatim !== undefined) rec.depthVerbatim = s.depthVerbatim;
     if (s.depthMin !== undefined) rec.depthMin = s.depthMin;
     if (s.depthMax !== undefined) rec.depthMax = s.depthMax;
     if (s.depthDecimals !== undefined) rec.depthDecimals = s.depthDecimals;

@@ -66,7 +66,7 @@ describe('ROW-DEPTH-RANGE: the bounds of obis-qc, positive down, in metres', () 
 
   it('a depth written in feet, fathoms or kilometres in its header is not judged as metres', () => {
     const named = (header: string): Dataset => dataset([row({ line: 2, depth: 20000 }), row({ line: 3, depth: 5 })], { mappings: [{ sheet: 'a.csv', columns: [{ index: 0, header, role: { kind: 'depth' as const, positive: 'down' as const } }] }] });
-    for (const h of ['Depth (ft)', 'depth_ft', 'Depth [feet]', 'depth_fathoms', 'Depth km']) expect(only(checkRows(named(h)), 'ROW-DEPTH-RANGE'), h).toEqual([]);
+    for (const h of ['Depth (ft)', 'depth_ft', 'Depth [feet]', 'depth_fathoms', 'Depth km', 'Depth_fm', 'Depth fm', 'depth_min_fm']) expect(only(checkRows(named(h)), 'ROW-DEPTH-RANGE'), h).toEqual([]);
     expect(only(checkRows(named('Depth water [m]')), 'ROW-DEPTH-RANGE')).toHaveLength(1);
     expect(only(checkRows(named('Depth')), 'ROW-DEPTH-RANGE')).toHaveLength(1);
   });

@@ -66,6 +66,8 @@ const EVENT_COLUMNS: { col: Column; always: boolean }[] = [
   { col: dwc('coordinateUncertaintyInMeters'), always: false },
   { col: dwc('minimumDepthInMeters'), always: false },
   { col: dwc('maximumDepthInMeters'), always: false },
+  // the depth as the sheet wrote it, when its unit was converted to metres
+  { col: dwc('verbatimDepth'), always: false },
   { col: dwc('minimumDistanceAboveSurfaceInMeters'), always: false },
   { col: dwc('maximumDistanceAboveSurfaceInMeters'), always: false },
   { col: dwc('sampleSizeValue'), always: false },
@@ -141,6 +143,7 @@ function eventRow(e: ModelEvent, datasetName: string, institutionCode: string): 
     p ? num(p.uncertaintyM) : '',
     depthText(e.depth?.min, e.depth?.decimals, e.depth?.minText),
     depthText(e.depth?.max, e.depth?.decimals, e.depth?.maxText),
+    e.depth?.verbatim ?? '',
     e.distance ?? '',
     e.distance ?? '',
     e.effort?.value ?? '',

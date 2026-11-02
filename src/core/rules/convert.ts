@@ -32,7 +32,8 @@ import type { RuleSpec } from './spec';
  *   CONV-NERC-CODE-MALFORMED   column, code, collection, length  the header names `SDN:<collection>::<code>` and the code is not of that collection's shape (8 for P01, 4 for P06)
  *   CONV-NERC-UNIT-MISMATCH    column, code, unit  the label of the confirmed concept (code) says per unit mass/volume against the unit of the column
  *   CONV-UNIT-NO-P06           unit             unit = the unit as declared
- *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states
+ *   CONV-DEPTH-UNIT            unit             field = depth column, unit = the unit it states (not metres, no exact factor: blocks)
+ *   CONV-DEPTH-CONVERTED       unit, factor, example   field = depth column, unit = its unit (fathom, foot, km, cm), factor = the exact factor to metres, example = the first value and its result (warning, accept; the original is verbatimDepth)
  *   CONV-EFFORT-INVALID        count            field = column, value = an example, lines = rows (a sample size column)
  *   CONV-EFFORT-VALUE-INVALID  reason           value = the typed sample size; reason = not-a-number | not-positive | ambiguous | thousands
  *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
@@ -103,6 +104,11 @@ const OBIS_DARWIN_CORE = {
   label: 'OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)',
   url: 'https://manual.obis.org/darwin_core.html',
   locator: '"This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."',
+};
+const DWC_DEPTH = {
+  label: 'Darwin Core term list (dwc.tdwg.org/terms: minimumDepthInMeters, maximumDepthInMeters, verbatimDepth)',
+  url: 'https://dwc.tdwg.org/terms/#dwc:minimumDepthInMeters',
+  locator: '"The lesser depth of a range of depth below the local surface, in meters." / verbatimDepth: "The original description of the depth below the local surface."',
 };
 const OBIS_OCCURRENCE = {
   label: 'OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)',
@@ -492,12 +498,27 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['unit'],
     plain: {
-      pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter nie przelicza kolumny głębokości: podaj metry. Dla głębokości w osadzie lub wodzie porowej wybierz znaczenie „Głębokość w osadzie”: zapisze ją jako ujemną odległość w metrach.`,
-      en: `Depth column "{field}" states the unit "{unit}". Darwin Core needs metres and the converter does not rescale a depth column: give metres. For a depth below the seafloor of a sediment or porewater sample, choose the meaning "Depth below seafloor": it is written as a negative distance in metres.`,
-      de: `Die Tiefenspalte „{field}“ nennt die Einheit „{unit}“. Darwin Core verlangt Meter; eine Tiefenspalte wird nicht umgerechnet: geben Sie Meter an. Für die Tiefe unter dem Meeresboden einer Sediment- oder Porenwasserprobe wählen Sie die Bedeutung „Tiefe unter dem Meeresboden“ (negative Entfernung in Metern).`,
-      fr: `La colonne de profondeur « {field} » indique l'unité « {unit} ». Darwin Core exige des mètres ; une colonne de profondeur n'est pas convertie : donnez des mètres. Pour la profondeur sous le fond d'un échantillon de sédiment ou d'eau interstitielle, choisissez « Profondeur sous le fond » (distance négative en mètres).`,
+      pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter przelicza tylko sążnie (fm), stopy (ft), km i cm. Podaj metry albo popraw jednostkę kolumny w tabeli ról. Głębokość w osadzie: wybierz znaczenie „Głębokość w osadzie”.`,
+      en: `Depth column "{field}" states the unit "{unit}". Darwin Core needs metres, and the converter converts only fathoms (fm), feet (ft), km and cm. Give metres or correct the unit of the column in the role table. A depth in sediment: choose the meaning "Depth below seafloor".`,
+      de: `Die Tiefenspalte „{field}“ nennt die Einheit „{unit}“. Darwin Core verlangt Meter; der Konverter rechnet nur Faden (fm), Fuß (ft), km und cm um. Geben Sie Meter an oder korrigieren Sie die Einheit in der Rollentabelle. Tiefe im Sediment: Bedeutung „Tiefe unter dem Meeresboden“ wählen.`,
+      fr: `La colonne de profondeur « {field} » indique l'unité « {unit} ». Darwin Core exige des mètres ; le convertisseur ne convertit que les brasses (fm), pieds (ft), km et cm. Donnez des mètres ou corrigez l'unité dans le tableau des rôles. Profondeur dans un sédiment : choisissez « Profondeur sous le fond ».`,
     },
-    technical: `{file}, {sheet} field {field}: depth unit "{unit}" is not metres; minimumDepthInMeters and maximumDepthInMeters are in metres and a depth column is never rescaled. A depth below the seafloor in cm or m has its own role (CONV-SEAFLOOR-UNIT, CONV-SEAFLOOR-VALUE).`,
+    technical: `{file}, {sheet} field {field}: depth unit "{unit}" is not metres and has no exact factor here; minimumDepthInMeters and maximumDepthInMeters are in metres. Fathom, foot, km and cm are converted (CONV-DEPTH-CONVERTED). A depth below the seafloor in cm or m has its own role (CONV-SEAFLOOR-UNIT, CONV-SEAFLOOR-VALUE).`,
+    citations: [DWC_DEPTH],
+  },
+  {
+    id: 'CONV-DEPTH-CONVERTED',
+    category: 'B',
+    severity: 'warning',
+    params: ['unit', 'factor', 'example'],
+    plain: {
+      pl: `Kolumna głębokości „{field}” jest w jednostce „{unit}”, więc konwerter przeliczył ją na metry (1 {unit} = {factor} m, współczynnik dokładny), np. {example}. Oryginalny zapis jest w kolumnie verbatimDepth. Sprawdź, czy jednostka z nagłówka jest właściwa, i potwierdź przeliczenie.`,
+      en: `Depth column "{field}" is in "{unit}", so the converter converted it to metres (1 {unit} = {factor} m, an exact factor), for example {example}. The original is kept in the verbatimDepth column. Check that the unit in the header is right and accept the conversion.`,
+      de: `Die Tiefenspalte „{field}“ ist in „{unit}“ angegeben, deshalb hat der Konverter sie in Meter umgerechnet (1 {unit} = {factor} m, genauer Faktor), zum Beispiel {example}. Das Original steht in der Spalte verbatimDepth. Prüfen Sie, ob die Einheit im Spaltenkopf stimmt, und bestätigen Sie die Umrechnung.`,
+      fr: `La colonne de profondeur « {field} » est en « {unit} » : le convertisseur l'a convertie en mètres (1 {unit} = {factor} m, facteur exact), par exemple {example}. L'original est conservé dans la colonne verbatimDepth. Vérifiez que l'unité de l'en-tête est la bonne et acceptez la conversion.`,
+    },
+    technical: `{file}, {sheet} field {field}: depth in "{unit}" multiplied by the exact factor {factor} (decimal arithmetic on the digits of the cell) into minimumDepthInMeters / maximumDepthInMeters; the cell as written, with its unit, is verbatimDepth. Example: {example}.`,
+    citations: [DWC_DEPTH],
   },
   {
     id: 'CONV-SEAFLOOR-UNIT',

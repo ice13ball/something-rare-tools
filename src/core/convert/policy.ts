@@ -110,6 +110,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-LICENCE-DIFFERS',
   'CONV-NO-SAMPLING-DESCRIPTOR',
   'CONV-SEAFLOOR-NO-SITE-DEPTH',
+  // a depth column in fathoms, feet, km or cm was converted to metres with an exact factor; the original is in verbatimDepth
+  'CONV-DEPTH-CONVERTED',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */

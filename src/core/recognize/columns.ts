@@ -4,6 +4,7 @@ import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMappin
 import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { cellsAreYearRanges, parseDate, parseTimeCell } from '../values/dates';
 import { NA_TOKENS, parseNumber } from '../values/numbers';
+import { depthSuffixUnit } from './depthUnit';
 import { p01Why, why, type ReasonCode, type Why } from './reasons';
 import { LATITUDE_SPELLING, LONGITUDE_SPELLING, abbreviatedAxis, coordinateBound, hemisphereTarget, isAbundanceName, isHemisphereHeader, isIdentifierName, statisticOfName } from './headerWords';
 import { canonicalFromKey, headerKey, isUnitAlias, normaliseUnit, p01CodeOf } from './vocab';
@@ -36,7 +37,7 @@ export function stripTypeSuffix(h: string): string {
 const SINGLE_TOKEN_EXTRA_UNITS = new Set(['cm', 'mm']);
 
 /** Is this text, found in round brackets, a unit ('m', 'µmol L-1', 'kg m-3') and not a remark ('at 25ºC')? */
-const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰']);
+const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰', 'ft', 'feet', 'foot', 'fm', 'fathom', 'fathoms']);
 function looksLikeUnit(text: string): boolean {
   const t = text.trim();
   if (normaliseUnit(t) !== undefined || SIMPLE_UNITS.has(t.toLowerCase())) return true;
@@ -967,7 +968,8 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
           }
           break;
         case 'depth': {
-          const unit = hu.unit ?? code?.hint?.unit;
+          // a unit written in the NAME without brackets ('Depth_fm', 'Depth feet') is kept on the role: dropping it made a fathom depth read as metres
+          const unit = hu.unit ?? depthSuffixUnit(e.proposal.header) ?? code?.hint?.unit;
           if (c.dwcDepth) {
             e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
             break;

@@ -4,6 +4,8 @@ import { Collector, metaParser, specsOf } from '../dataset';
 import type { Spec } from '../dataset';
 import { isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
+import { convertDepthText, depthUnitFactor, isMetreUnit } from '../recognize/depthUnit';
+import type { DepthUnitFactor } from '../recognize/depthUnit';
 import { headerKey, p01CodeOf } from '../recognize/vocab';
 import { valueText } from '../output/csv';
 import { makeConvertFinding } from '../rules/convert';
@@ -224,8 +226,6 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
   return c;
 }
 
-const METRES = /^(m|meters?|metres?)$/i;
-
 /**
  * PANGAEA writes its Date/Time column in UTC: "Date/Time of sampling/measurement provided in ISO format (YYYY-MM-DDThh:mm:ss) and in UTC. An additional column with
  * local date/time may be provided" (https://wiki.pangaea.de/wiki/Data_submission, section "Data"; and https://wiki.pangaea.de/wiki/Event: "Date/Time is provided as ISO-format
@@ -405,17 +405,43 @@ interface DepthRead {
   decimals?: number;
   minText?: string;
   maxText?: string;
+  /** The depth as the sheet wrote it, with its unit ("31.5 fm"): present only when a column of the sheet is converted to metres (verbatimDepth). */
+  verbatim?: { min?: string; max?: string };
 }
+type DepthCol = NonNullable<Cols['depthMin']>;
+/** The depth columns the reader uses: a pair of bounds, or one bound alone, or the plain column. */
+function usedDepthColumns(cols: Cols): DepthCol[] {
+  if (cols.depthMin && cols.depthMax) return [cols.depthMin, cols.depthMax];
+  if (!cols.depthPlain && (cols.depthMin || cols.depthMax)) return [(cols.depthMin ?? cols.depthMax) as DepthCol];
+  return cols.depthPlain ? [cols.depthPlain] : [];
+}
+/** The unit text a depth column states other than metres, with the exact factor to metres when the converter knows one. */
+const nonMetreDepth = (d: DepthCol | undefined): { unit: string; factor: DepthUnitFactor | undefined } | undefined =>
+  d?.unit === undefined || d.unit.trim() === '' || isMetreUnit(d.unit) ? undefined : { unit: d.unit.trim(), factor: depthUnitFactor(d.unit) };
+const negateText = (t: string): string => (t.startsWith('-') ? t.slice(1) : /[1-9]/.test(t) ? `-${t}` : t);
+
 function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: string): (row: RawRow) => DepthRead {
+  // a depth column in a unit with an exact factor is converted to metres and the original is kept in verbatimDepth; every other unit is blocked (CONV-DEPTH-UNIT) before this reads a value
+  const converting = usedDepthColumns(cols).some((d) => nonMetreDepth(d)?.factor !== undefined);
   return (row: RawRow): DepthRead => {
-    const read = (d: NonNullable<Cols['depthMin']>): { v: number; decimals: number; text?: string } | undefined => {
+    const read = (d: DepthCol): { v: number; decimals: number; text?: string; verbatim?: string } | undefined => {
       const cell = row.cells[d.index] ?? null;
       if (isBlankCell(cell)) return undefined;
       const p = parseNumber(cell, dc);
       if (p.status === 'ok') {
+        const factor = nonMetreDepth(d)?.factor;
+        const written = sourceNumberText(cell, dc, p.value);
+        const verbatim = converting ? { verbatim: `${written ?? String(p.value)} ${nonMetreDepth(d)?.unit ?? 'm'}` } : {};
+        if (factor !== undefined) {
+          const exact = written === undefined ? undefined : convertDepthText(written, factor);
+          const metres = exact === undefined ? Number((p.value * Number(factor.factor)).toFixed(6)) : Number(exact);
+          const v = d.positive === 'up' ? (metres === 0 ? 0 : -metres) : metres;
+          const text = exact === undefined ? undefined : d.positive === 'up' ? negateText(exact) : exact;
+          return { v, decimals: p.decimals + factor.denominatorDigits, ...(text === undefined ? {} : { text }), ...verbatim };
+        }
         const v = d.positive === 'up' ? (p.value === 0 ? 0 : -p.value) : p.value;
         const text = sourceNumberText(cell, dc, v);
-        return { v, decimals: p.decimals, ...(text === undefined ? {} : { text }) };
+        return { v, decimals: p.decimals, ...(text === undefined ? {} : { text }), ...verbatim };
       }
       if (p.status === 'non-numeric') collector.add('ROW-NON-NUMERIC', sheetName, d.header, row.line, p.token);
       else if (p.status === 'na-variant') collector.add('ROW-NA-VARIANT', sheetName, d.header, row.line, p.token);
@@ -425,19 +451,48 @@ function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: s
       const lo = read(cols.depthMin);
       const hi = read(cols.depthMax);
       const decimals = Math.max(lo?.decimals ?? 0, hi?.decimals ?? 0);
-      return { ...(lo ? { min: lo.v } : {}), ...(hi ? { max: hi.v } : {}), ...(lo || hi ? { decimals } : {}), ...(lo?.text === undefined ? {} : { minText: lo.text }), ...(hi?.text === undefined ? {} : { maxText: hi.text }) };
+      const verbatim = lo?.verbatim !== undefined || hi?.verbatim !== undefined ? { verbatim: { ...(lo?.verbatim === undefined ? {} : { min: lo.verbatim }), ...(hi?.verbatim === undefined ? {} : { max: hi.verbatim }) } } : {};
+      return { ...(lo ? { min: lo.v } : {}), ...(hi ? { max: hi.v } : {}), ...(lo || hi ? { decimals } : {}), ...(lo?.text === undefined ? {} : { minText: lo.text }), ...(hi?.text === undefined ? {} : { maxText: hi.text }), ...verbatim };
     }
     // one plain depth column: min = max. A sheet with only ONE BOUND (only a top, or only a bottom) writes that end and no other: the other end is never made up
     if (!cols.depthPlain && (cols.depthMin || cols.depthMax)) {
       const isMin = cols.depthMin !== undefined;
-      const b = read((isMin ? cols.depthMin : cols.depthMax) as NonNullable<Cols['depthMin']>);
+      const b = read((isMin ? cols.depthMin : cols.depthMax) as DepthCol);
       if (!b) return {};
-      return { ...(isMin ? { min: b.v } : { max: b.v }), decimals: b.decimals, ...(b.text === undefined ? {} : isMin ? { minText: b.text } : { maxText: b.text }) };
+      return { ...(isMin ? { min: b.v } : { max: b.v }), decimals: b.decimals, ...(b.text === undefined ? {} : isMin ? { minText: b.text } : { maxText: b.text }), ...(b.verbatim === undefined ? {} : { verbatim: isMin ? { min: b.verbatim } : { max: b.verbatim } }) };
     }
     const only = cols.depthPlain;
     const one = only ? read(only) : undefined;
-    return one ? { min: one.v, max: one.v, decimals: one.decimals, ...(one.text === undefined ? {} : { minText: one.text, maxText: one.text }) } : {};
+    return one ? { min: one.v, max: one.v, decimals: one.decimals, ...(one.text === undefined ? {} : { minText: one.text, maxText: one.text }), ...(one.verbatim === undefined ? {} : { verbatim: { min: one.verbatim, max: one.verbatim } }) } : {};
   };
+}
+
+/**
+ * The depth-unit findings of a sheet: a unit the converter converts (an exact factor) is said as CONV-DEPTH-CONVERTED with the first value of the column as an example; any other unit
+ * that is not metres blocks (CONV-DEPTH-UNIT).
+ */
+function depthUnitFindings(cols: Cols, rows: readonly RawRow[], dc: boolean, base: { file: string; sheet: string }): Finding[] {
+  const out: Finding[] = [];
+  for (const d of [cols.depthMin, cols.depthMax, cols.depthPlain]) {
+    const nm = nonMetreDepth(d);
+    if (d === undefined || nm === undefined) continue;
+    if (nm.factor === undefined) {
+      out.push(makeConvertFinding('CONV-DEPTH-UNIT', { ...base, field: d.header, params: { unit: nm.unit } }));
+      continue;
+    }
+    let example = '';
+    for (const r of rows) {
+      const cell = r.cells[d.index] ?? null;
+      if (isBlankCell(cell)) continue;
+      const p = parseNumber(cell, dc);
+      if (p.status !== 'ok') continue;
+      const written = sourceNumberText(cell, dc, p.value) ?? String(p.value);
+      example = `${written} ${nm.unit} = ${convertDepthText(written, nm.factor) ?? String(Number((p.value * Number(nm.factor.factor)).toFixed(6)))} m`;
+      break;
+    }
+    out.push(makeConvertFinding('CONV-DEPTH-CONVERTED', { ...base, field: d.header, params: { unit: nm.unit, factor: nm.factor.factor, example } }));
+  }
+  return out;
 }
 
 /** The depth below the seafloor of one row: the distance above the surface in metres as text (negative below), and the number as written with its unit (for a level ID). */
@@ -749,9 +804,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const noSiteDepth = new Lines();
   const levelsBefore = ctx.sites.length;
 
-  for (const d of [cols.depthMin, cols.depthMax, cols.depthPlain]) {
-    if (d?.unit !== undefined && !METRES.test(d.unit.trim())) ctx.findings.push(makeConvertFinding('CONV-DEPTH-UNIT', { ...base, field: d.header, params: { unit: d.unit } }));
-  }
+  ctx.findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
   const noStation = new Lines();
   const noCode = new Lines();
   const tabs = new Lines();
@@ -936,6 +989,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     if (depth.decimals !== undefined) site.depthDecimals = depth.decimals;
     if (depth.minText !== undefined) site.depthMinText = depth.minText;
     if (depth.maxText !== undefined) site.depthMaxText = depth.maxText;
+    if (depth.verbatim !== undefined) site.depthVerbatim = depth.verbatim;
     if (sf !== undefined) site.distanceText = sf.text;
     ctx.sites.push(site);
     // the first position of a matched station, for the distance check
@@ -1197,9 +1251,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const kind = quantity?.kind;
 
     // depth columns: units must be metres
-    for (const d of [cols.depthMin, cols.depthMax, cols.depthPlain]) {
-      if (d?.unit !== undefined && !METRES.test(d.unit.trim())) findings.push(makeConvertFinding('CONV-DEPTH-UNIT', { ...base, field: d.header, params: { unit: d.unit } }));
-    }
+    findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
 
     const tabs = new Lines();
     const noCode = new Lines();
@@ -1421,6 +1473,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (depth.decimals !== undefined) site.depthDecimals = depth.decimals;
         if (depth.minText !== undefined) site.depthMinText = depth.minText;
         if (depth.maxText !== undefined) site.depthMaxText = depth.maxText;
+        if (depth.verbatim !== undefined) site.depthVerbatim = depth.verbatim;
         if (sf !== undefined) site.distanceText = sf.text;
         if (effort !== undefined && quantity?.effort) {
           site.sampleSizeValue = effort;
