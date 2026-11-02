@@ -6,14 +6,19 @@ import { describe, expect, it } from 'vitest';
 import { policyOf } from '../../src/core/convert/policy';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import type { ColumnRole, Lang } from '../../src/core/types';
+import * as XLSX from 'xlsx';
+import { convert } from '../../src/core/convert/build';
+import { parseXlsx } from '../../src/core/parse/xlsx';
+import type { ParsedFile } from '../../src/core/types';
 import { exportSheet } from './exportHelpers';
+import { sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
 const H = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Abundance', 'Weight [g]'];
 const row = (sample: string, sp: string, abundance: Cell, weight: Cell): Cell[] => ['S1', sample, '2023-06-14', 55.5, 2.5, sp, abundance, weight];
 const EDIT: Record<string, ColumnRole> = { 'Weight [g]': { kind: 'biomass', basis: 'wet' } };
 const run = (rows: Cell[][], extra: Partial<Parameters<typeof exportSheet>[2]> = {}) => exportSheet(H, rows, { quantity: { kind: 'count' }, edit: EDIT, ...extra });
-const find = (e: Awaited<ReturnType<typeof run>>, id: string) => e.findings.filter((f) => f.ruleId === id);
+const find = (e: { findings: { ruleId: string; params: Record<string, unknown>; lines?: number[]; field?: string }[] }, id: string) => e.findings.filter((f) => f.ruleId === id) as import('../../src/core/types').Finding[];
 
 const ROWS: Cell[][] = [
   row('s1', 'Calanus finmarchicus', 4, 1.5), // 2
@@ -159,13 +164,13 @@ describe('a long sheet with blank or NaN quantities', () => {
   const timeCase = (cells: Cell[]) =>
     exportSheet(['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'], cells.map((c, i) => ['S1', `s${i}`, c, 55.5, 2.5, 'Calanus finmarchicus', 4] as Cell[]), { quantity: { kind: 'count' } });
 
-  it.each([['17/01/2003 08:30'], ['17.01.2003'], ['2003-01-17T08:30:00Z'], [37638.35], ['2003-01-17 08:30']])('a time column of dates (%s) blocks', async (cell) => {
+  it.each([['17/01/2003 08:30'], ['17.01.2003'], ['2003-01-17T08:30:00Z'], ['2003-01-17 08:30']])('a time column of dates (%s) blocks', async (cell) => {
     const e = await timeCase([cell, cell]);
     expect(find(e, 'CONV-TIME-HOLDS-DATES')).toHaveLength(1);
   });
 
-  it('epoch and spreadsheet placeholders are times, not dates', async () => {
-    const e = await timeCase(['1899-12-30 12:30:00', '1970-01-01 12:30:00', '1899-12-31 08:00:00']);
+  it('epoch and spreadsheet placeholders are times, not dates (ISO and day-first)', async () => {
+    const e = await timeCase(['1899-12-30 12:30:00', '1970-01-01 12:30:00', '1899-12-31 08:00:00', '30/12/1899 12:30', '30.12.1899 12:30', '12/30/1899 12:30']);
     expect(find(e, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
     expect(find(e, 'CONV-TIME-SOME-DATES')).toEqual([]);
   });
@@ -181,5 +186,29 @@ describe('a long sheet with blank or NaN quantities', () => {
 
   it('formats the date parser does not read are not claimed (they stay unread)', async () => {
     for (const cell of ['2003/01/17 08:30', '20030117 0830', 'Jan 17 2003', '01/17/2003 8:30 AM']) expect(find(await timeCase([cell, cell]), 'CONV-TIME-HOLDS-DATES'), cell).toEqual([]);
+  });
+
+  it('plain numbers are times (63000, 73000 as HHMMSS, 43200 as seconds of the day), not dates', async () => {
+    const e = await timeCase([63000, 73000, 43200]);
+    expect(find(e, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
+    expect(find(e, 'CONV-TIME-SOME-DATES')).toEqual([]);
+  });
+
+  it('a serial number counts as a date only in a column the workbook formats as a date (a generated xlsx, end to end)', async () => {
+    const book = (z: string | undefined): ParsedFile => {
+      const ws = XLSX.utils.aoa_to_sheet([['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count']]);
+      [37638.35, 37639.35].forEach((v, i) => XLSX.utils.sheet_add_aoa(ws, [['S1', `s${i}`, { t: 'n', v, ...(z === undefined ? {} : { z }) }, 55.5, 2.5, 'Calanus finmarchicus', 4]] as never, { origin: `A${i + 2}` }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'S');
+      return parseXlsx(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })), 'x.xlsx');
+    };
+    const run = async (file: ParsedFile) => {
+      const input = sheetInput(file, { quantity: { kind: 'count' } });
+      return convert({ sheets: [input] });
+    };
+    const formatted = await run(book('yyyy-mm-dd hh:mm'));
+    expect(find({ findings: formatted.findings } as never, 'CONV-TIME-HOLDS-DATES')).toHaveLength(1);
+    const plain = await run(book(undefined));
+    expect(plain.findings.some((f) => f.ruleId === 'CONV-TIME-HOLDS-DATES')).toBe(false);
   });
 });

@@ -33,7 +33,7 @@ import { isQuantityHeader, proposeConvertMapping } from './recognize';
 import { biomassNameUnit, isTotalHeader } from './totalColumns';
 import type { ConvertShape } from './recognize';
 import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
-import { seafloorMetres, seafloorUnitOf } from './seafloor';
+import { SEDIMENT_CONTEXT, seafloorMetres, seafloorUnitOf } from './seafloor';
 import type { SeafloorDirection, SeafloorUnit } from './seafloor';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
 import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
@@ -218,7 +218,9 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         break;
       case 'depth': {
         // the unit is read from the header whoever chose the role (a depth picked by hand has a bare role); a unit stated on the role wins
-        const unit = r.unit !== undefined && r.unit.trim() !== '' ? r.unit : depthUnitOfHeader(m.header);
+        const stated = r.unit !== undefined && r.unit.trim() !== '' ? r.unit : depthUnitOfHeader(m.header);
+        // a converted unit on a header that talks of sediment or a core ('sediment depth km') makes no sense as a water depth: it blocks instead
+        const unit = stated !== undefined && depthUnitFactor(stated) !== undefined && SEDIMENT_CONTEXT.test(m.header) ? `${stated} (sediment)` : stated;
         const d = { ...spec, positive: r.positive, ...(unit === undefined ? {} : { unit }) };
         if (r.bound === 'min') c.depthMin ??= d;
         else if (r.bound === 'max') c.depthMax ??= d;
@@ -407,15 +409,22 @@ export function sampleSplitOf(
   sites: readonly SampleSite[],
   occurrenceCount: number,
   taxaOf: (eventId: string) => readonly string[] = () => [],
-  rows?: { taxonRows: number; distinctTaxa: number },
+  rows?: { taxonRows: number; distinctTaxa: number; rowsOf: (eventId: string) => number },
 ): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
   const parents = new Map<string, SampleSite>();
   for (const s of sites) if (!parents.has(s.parentSample?.id ?? s.id)) parents.set(s.parentSample?.id ?? s.id, s);
   const events = parents.size;
   if (occurrenceCount < SPLIT_MIN_OCCURRENCES || events < SPLIT_RATIO * occurrenceCount) return undefined;
+  // a sample cut into rows has ONE taxon row per event (zeros included); a design of correct codes has a list of taxa per event (a fixed list, a few taxa per grab). At least 90% of the events
+  // must hold exactly one row for the check to speak at all.
+  if (rows !== undefined) {
+    let single = 0;
+    for (const id of parents.keys()) if (rows.rowsOf(id) === 1) single++;
+    if (single < 0.9 * events) return undefined;
+  }
   // events at one PLACE: station, date, the time as written (a time column that gives no date still tells visits apart), depth and position
   const byPlace = new Map<string, SampleSite[]>();
-  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.whenText ?? '', s.depthMin ?? '', s.depthMax ?? '', s.lat ?? '', s.lon ?? ''].join('\u0001');
+  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.whenText ?? '', s.depthMin ?? '', s.depthMax ?? '', s.lat ?? '', s.lon ?? '', s.eventType === 'replicate' ? s.code : ''].join('\u0001');
   for (const s of parents.values()) {
     const k = placeOf(s);
     const list = byPlace.get(k);
@@ -435,8 +444,7 @@ export function sampleSplitOf(
       for (const t of taxa) seen.add(t);
     }
     // the first event of a place cannot repeat, so the share is taken of the others: two tows of one species at one place are two samples, not one cut into two rows
-    // or the place holds several events AND several taxa: with about one occurrence per event, events with their own codes that together make up a list of taxa are rows of one sample
-    if (repeated <= SPLIT_REPEAT_SHARE * (list.length - 1) || (list.length >= 3 && seen.size >= 3)) shared += list.length;
+    if (repeated <= SPLIT_REPEAT_SHARE * (list.length - 1)) shared += list.length;
   }
   // more sample events than occurrences is strong evidence alone: events were made for rows that give no occurrence (zeros left out), one per row
   // (only when the events are nearly one per taxon row of a sheet of several taxa: a sheet of correct codes with most values zero has more events than occurrences too)
@@ -500,7 +508,7 @@ function stationFindingsOf(sheets: readonly StationSheet[], farIds: ReadonlySet<
 }
 
 /** A date that is a placeholder for "no date" in a spreadsheet or an epoch ("1899-12-30 12:30:00" is the time 12:30): such a cell is a time, not a date. */
-const EPOCH_PLACEHOLDER = /^\s*(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01-01)(?:[T\s]|$)/;
+const EPOCH_PLACEHOLDER = /^\s*(?:(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01-01)|(?:3[01][./-]12[./-]1899|0?[01][./-]0?[01][./-]1900|0?1[./-]0?1[./-](?:1904|1970))|(?:12[./-]3[01][./-]1899))(?:[T\s]|$)/;
 
 /**
  * A column the sheet reads as a TIME of day whose cells hold full dates ("2003-01-17T00:00:00Z", "17.01.2003 08:30", a spreadsheet serial 37638.35), while no column is the date: every event
@@ -512,6 +520,7 @@ const EPOCH_PLACEHOLDER = /^\s*(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01
 function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number; filled: number; lines: number[] } | undefined {
   if (specs.time === undefined || specs.when !== undefined) return undefined;
   const index = specs.time.index;
+  const formatted = sheet.dateFormatted?.[index] === true;
   const cells = sheet.rows.map((r) => r.cells[index] ?? null);
   const order = detectDayMonthOrder(cells);
   const lines: number[] = [];
@@ -521,7 +530,8 @@ function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>)
     if (isBlankCell(c)) return;
     filled++;
     if (typeof c === 'number') {
-      if (c >= 20000 && c <= 80000) lines.push(r.line);
+      // a serial with a date part, in a column the workbook formats as a date; a plain number (63000, HHMMSS, seconds of the day) is a time
+      if (formatted && c >= 1) lines.push(r.line);
       return;
     }
     if (EPOCH_PLACEHOLDER.test(c as string)) return;
@@ -1459,6 +1469,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const zeroBiomass = new Lines();
     const noTaxon = new Lines();
     let taxonRowCount = 0;
+    const rowsPerEvent = new Map<string, number>();
     const distinctTaxaSeen = new Set<string>();
     // other quantity-named columns that are filled on the rows counted as NA (a count column empty while the numbers sit in another)
     const naOther = new Map<string, number>();
@@ -1647,6 +1658,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
       if (cols.replicate) checkText(cols.replicate.header, row.line, replicate);
       const eventId = replicate === undefined ? sampleEventId : `${sampleEventId}:${replicate}`;
+      if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined) rowsPerEvent.set(sampleEventId, (rowsPerEvent.get(sampleEventId) ?? 0) + 1);
       const depth = depthOf(row);
       const sf = seafloorOf.read(row);
       if (sf !== undefined && depth.min === undefined && depth.max === undefined) noSiteDepth.add(fileName, sheet.name, cols.seafloor?.header ?? '', row.line);
@@ -2085,7 +2097,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (list) list.push(taxonKey);
         else taxaByEvent.set(owner, [taxonKey]);
       }
-      const split = sampleSplitOf(sheetSites, occurrences.length - occurrencesBefore, (id) => taxaByEvent.get(id) ?? [], { taxonRows: taxonRowCount, distinctTaxa: distinctTaxaSeen.size });
+      const split = sampleSplitOf(sheetSites, occurrences.length - occurrencesBefore, (id) => taxaByEvent.get(id) ?? [], { taxonRows: taxonRowCount, distinctTaxa: distinctTaxaSeen.size, rowsOf: (id) => rowsPerEvent.get(id) ?? 0 });
       if (split !== undefined) findings.push(makeConvertFinding('CONV-SAMPLE-PER-ROW', { ...base, params: { events: split.events, occurrences: split.occurrences, ratio: split.ratio, shared: split.shared } }));
     }
     if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));

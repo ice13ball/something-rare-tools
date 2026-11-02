@@ -1355,7 +1355,7 @@ code" (the button above applies it).
   sample, not another row of one) is one sample split into an event per taxon row (`CONV-SAMPLE-PER-ROW`, a warning
   to accept, naming the ratio). The time is taken as written, so a time column that gives no date still tells visits apart; a
   place counts when at most half of its events AFTER THE FIRST repeat a taxon (with its life stage and sex) of an earlier one, so
-  two tows of one species at one place are two samples, or when the place holds three events or more and three taxa or more; and **more sample events than occurrences** (events made for rows that
+  two tows of one species at one place are two samples; the check speaks only when at least 90% of the events hold exactly ONE taxon row (zeros included): a design of correct codes has a list of taxa per event (a fixed list of 8 taxa per grab, 1 to 2 taxa per core) and is not tested. The replicate value is part of the place, so with a replicate column mapped the replicates of a station are separate places. Where every event is one row with a distinct taxon (three grabs with one taxon each, museum lots, an ROV with 25 taxa), the sheet cannot be told from a sample cut into rows: the message says so ("if these are real replicates, accept this"). **More sample events than occurrences** (events made for rows that
   give none) is evidence alone, but only when the events are at least 80% of the sheet's taxon rows and the sheet has two taxa
   or more (correct codes on a sheet of mostly zeros have more events than occurrences too); a missing code blocks
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
@@ -1913,7 +1913,7 @@ Each item below is confirmed from code, a test, or a rule text.
 - A biomass column named `Biomass` or `Wet weight` with no unit anywhere in its header writes no `measurementUnit`
   (nothing is guessed); the unit has to be in the header.
 - `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` claim only what the date parser reads (ISO, `DD.MM.YYYY`,
-  `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial between 20000 and 80000). Left unread,
+  `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial in a column the workbook formats as a date (a plain number such as 63000 or 43200 is a time)). Left unread,
   and therefore silent: `2003/01/17 08:30`, `20030117 0830`, `Jan 17 2003`, `01/17/2003 8:30 AM`. Placeholder dates
   (`1899-12-30`, `1970-01-01`) are not dates, and they are not read as times either (a time column holding them still has
   no time written).

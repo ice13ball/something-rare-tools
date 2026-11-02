@@ -61,6 +61,7 @@ describe('the unit of a depth header', () => {
     expect(depthSuffixUnit('"Depth_ft<Float32>"')).toBe('ft');
     for (const h of ['Depth_fm_mean', 'depth_ft_avg', 'Depth_fathom_range', 'depthFt', 'Tiefe (Faden)', 'Sounding_fm_mean']) expect(depthUnitFactor(depthSuffixUnit(h)), h).toBeDefined();
     expect(depthSuffixUnit('Depth_m_corrected')).toBe('m');
+    for (const h of ['Depth 5 m', 'Depth_2_m']) expect(depthSuffixUnit(h), h).toBe('m');
     const blocking = ['Depth (f)', 'Depth (yd)', 'Depth (yards)', 'Depth (mi)', 'Depth (dm)', 'Depth_in', 'depth_yards', 'Depth_cm', 'Depth (cm)', 'depth_m_ft', 'Depth_ft_m'];
     for (const h of blocking) {
       const u = depthSuffixUnit(h);
@@ -207,5 +208,11 @@ describe('a depth in another unit through the export', () => {
       const sheet = rawSheet(['Station', h, 'Cl'], [['A', 5, 100]]);
       expect(proposeConvertColumns(sheet, { decimalComma: false, date1904: false })[1].role, h).toMatchObject({ kind: 'depthBelowSeafloor', unit: 'cm' });
     }
+  });
+
+  it('a converted unit on a sediment header blocks instead of converting as a water depth', async () => {
+    const e = await exportSheet(header('sediment depth km'), ROWS([[10]]), { quantity: Q, edit: { 'sediment depth km': { kind: 'depth', positive: 'down' } } });
+    expect(e.findings.some((x) => x.ruleId === 'CONV-DEPTH-UNIT')).toBe(true);
+    expect(e.findings.some((x) => x.ruleId === 'CONV-DEPTH-CONVERTED')).toBe(false);
   });
 });

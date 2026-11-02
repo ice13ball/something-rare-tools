@@ -244,4 +244,39 @@ describe('CONV-SAMPLE-PER-ROW: one sample split into an event per taxon row', ()
     const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Station: { kind: 'station' } } });
     expect(e.findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW')).toBe(false);
   });
+
+  const fires = async (header: string[], rows: Cell[][], extra: Partial<Parameters<typeof exportSheet>[2]> = {}): Promise<boolean> =>
+    (await exportSheet(header, rows, { quantity: { kind: 'count' }, ...extra })).findings.some((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW');
+  const H2 = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Sample', 'Species', 'Count'];
+
+  it('stays silent on real replicate designs with correct codes (a list of taxa per event)', async () => {
+    // 3 grabs, a fixed list of 8 taxa, one above zero per grab
+    const fixed: Cell[][] = [];
+    for (let g = 0; g < 12; g++) for (let i = 0; i < 8; i++) fixed.push([`S${Math.floor(g / 3)}`, `2023-06-${10 + Math.floor(g / 3)}`, 55, 2.5, 10, `g${g}`, named(i), i === g % 8 ? 3 : 0]);
+    expect(await fires(H2, fixed, { fullList: true })).toBe(false);
+    // 3 grabs or 5 cores with about 1.2 taxa each
+    const sparse: Cell[][] = [];
+    for (let g = 0; g < 30; g++) for (let i = 0; i < (g % 5 === 0 ? 2 : 1); i++) sparse.push(['S1', '2023-06-10', 55, 2.5, 10, `c${g}`, named((g + i) % 4), 2]);
+    expect(await fires(H2, sparse)).toBe(false);
+    // 4 sieve fractions, one taxon each, monitoring with no date mapped
+    const sieve: Cell[][] = Array.from({ length: 40 }, (_, i) => ['S1', null, 55, 2.5, 10, `f${i}`, 'Calanus finmarchicus', 2]);
+    expect(await fires(H2, sieve)).toBe(false);
+    // ROV: 5 taxa over 40 sightings at one position
+    const rov: Cell[][] = Array.from({ length: 40 }, (_, i) => ['D1', '2023-06-10', 55, 2.5, 100, `o${i}`, named(i % 5), 1]);
+    expect(await fires(H2, rov)).toBe(false);
+  });
+
+  it('fires on b10sc-shaped per-row codes when the replicate column is mapped (the replicate value is part of the place)', async () => {
+    const header = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Replicate', 'Sample', 'Species', 'Count'];
+    const rows: Cell[][] = [];
+    let n = 0;
+    for (let st = 0; st < 6; st++) for (let rep = 1; rep <= 3; rep++) for (let i = 0; i < 6; i++) rows.push([`S${st}`, '2023-06-10', 55, 2.5, 10, rep, `r${++n}`, named(i), 2]);
+    expect(await fires(header, rows, { edit: { Replicate: { kind: 'replicate' } } })).toBe(true);
+  });
+
+  it('says "if these are real replicates, accept this"', async () => {
+    const rows: Cell[][] = Array.from({ length: 40 }, (_, i) => [`S${i}`, '2023-06-10', 55, 2.5, 10, `x${i}`, named(i), 1]);
+    const f = (await exportSheet(H2, rows, { quantity: { kind: 'count' } })).findings.find((x) => x.ruleId === 'CONV-SAMPLE-PER-ROW');
+    if (f !== undefined) expect(renderConvertPlain(f, 'en')).toContain('If these are real replicates, accept this');
+  });
 });

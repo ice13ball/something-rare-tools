@@ -96,7 +96,7 @@ export function depthSuffixUnit(header: string): string | undefined {
   // the unit before the depth word ('ft_depth', 'fm_depth_max')
   if (u === 0 && tokens.length >= 2 && tokens.slice(1).some((t) => DEPTH_WORD.test(t)) && tokens.slice(1).every((t) => DEPTH_WORD.test(t) || BOUND_WORDS.has(t.toLowerCase()))) return tokens[0];
   // a number written into the name right before the unit ('Depth 30 ft'): a value, not a unit; no exact factor
-  if (u > 0 && /^\d+$/.test(tokens[u - 1])) return `${tokens[u - 1]} ${tokens[u]}`;
+  if (u > 0 && /^\d+$/.test(tokens[u - 1]) && !METRES.has(clean(tokens[u]))) return `${tokens[u - 1]} ${tokens[u]}`;
   const tail = tokens.slice(u + 1);
   const others = tokens.slice(0, u).filter((t, i) => units[i] && !weak(t) && clean(t) !== clean(tokens[u]));
   if (others.length > 0) return [...others, tokens[u]].join('/');
