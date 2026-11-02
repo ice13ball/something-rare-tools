@@ -26,6 +26,7 @@ import type { RuleSpec } from './spec';
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
  *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
  *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column of a wide sheet: no record, no lines (info); with rows = yes (a long sheet) count = rows with a taxon and an empty / NA quantity and no other value, lines = those rows (info)
+ *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -294,6 +295,20 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:ligne a|lignes ont} une quantité de 0 et un poids supérieur à zéro ({+lineCount:ligne|lignes} {lines}). C'est contradictoire. La ligne est lue comme le zéro indiqué (le poids n'est pas écrit). Vérifiez laquelle des deux valeurs est fausse.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity of 0 and a biomass value above zero. The row is handled as the zero (skipped, or occurrenceStatus absent with the full species list ticked) and its biomass is not written; neither value is kept silently.`,
+  },
+  {
+    id: 'CONV-SAMPLE-PER-ROW',
+    category: 'B',
+    severity: 'warning',
+    params: ['events', 'occurrences', 'ratio', 'shared'],
+    plain: {
+      pl: `Arkusz „{sheet}” ma {events} zdarzeń próbek na {occurrences} wystąpień ({ratio}), a {shared} z nich dzieli stację, datę i głębokość z innym. Wiersz to jeden takson, więc próbkę chyba rozbito na zdarzenie na wiersz (inny kod w każdym wierszu). Użyj kodu, który nazywa próbkę.`,
+      en: `Sheet "{sheet}" has {events} sample events for {occurrences} occurrences ({ratio}), and {shared} of them share station, date and depth with another. A row is one taxon, so a sample was probably split into an event per row (a different code on every row). Use a code that names the sample.`,
+      de: `Das Blatt „{sheet}“ hat {events} Probenereignisse für {occurrences} Vorkommen ({ratio}); {shared} davon teilen Station, Datum und Tiefe mit einem anderen. Eine Zeile ist ein Taxon: die Probe wurde wohl in ein Ereignis je Zeile zerlegt (anderer Code je Zeile). Verwenden Sie einen Code, der die Probe benennt.`,
+      fr: `La feuille « {sheet} » a {events} événements d'échantillon pour {occurrences} occurrences ({ratio}), dont {shared} partagent station, date et profondeur avec un autre. Une ligne est un taxon : l'échantillon a sans doute été coupé en un événement par ligne (code différent à chaque ligne). Utilisez un code qui nomme l'échantillon.`,
+    },
+    technical: `{file}, {sheet}: {events} sample events for {occurrences} occurrences of a long sheet ({ratio}; at least 30 occurrences and events of at least 80% of them), and {shared} of the events share station, date and depth with another event (at least half do). A sample is one event with its taxa as occurrences; one event per taxon row means the sample codes name rows. Checked on the output, whoever wrote the codes.`,
+    citations: [OBIS_OCCURRENCE],
   },
   {
     id: 'CONV-ZERO-SKIPPED',

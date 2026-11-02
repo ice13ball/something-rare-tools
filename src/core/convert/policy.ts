@@ -115,6 +115,8 @@ export const ACCEPT_RULES: readonly string[] = [
   // a long row with a taxon, no count and a biomass value: kept as present with no count; a quantity of 0 next to a weight above zero: read as the zero
   'CONV-QUANTITY-BLANK-KEPT',
   'CONV-ZERO-WITH-BIOMASS',
+  // a long sheet with an event for almost every row: one sample probably split by a code that names the row
+  'CONV-SAMPLE-PER-ROW',
 ];
 
 /** Never blocks, never asks: shown only. Prefixes of rule ids. */

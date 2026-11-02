@@ -1312,7 +1312,21 @@ code" (the button above applies it).
   when there is one. **A sample's id is never derived from depth, row order or a WoRMS name** (one exception below: a
   code reused on every visit of a station). The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
-  new code column last, for the user to check and drop again); a missing code blocks
+  new code column last, for the user to check and drop again). **A wide sheet** gets one code per row
+  (`<station>-<n>`). **A long sheet** (a row is a taxon) gets **one code per sample**: the rows are grouped
+  by the columns that define a sample, read from the mapped roles (cruise, station, date and time, depth,
+  replicate; the position only when nothing else is mapped) and, only while a taxon still repeats inside a
+  group, by one or two more columns (a cast, haul or net number that has no role) that make the repeats
+  few without making every row its own group (`convert/sampleGroups.ts`; a column with a different value
+  on more than half of the rows is a row identifier and is not used). The page **shows the grouping before
+  the file is offered**: "450 samples from 53,608 rows, grouped by station + date + depth", with the
+  number of rows in which a taxon still repeats inside a group (possible replicates the key cannot tell
+  apart, tolerated up to 1% of the rows). A long sheet with nothing to group on, or in which a taxon still
+  repeats in more than 1% of the rows with every grouping tried, gets no proposal and a message saying why:
+  merging real replicates silently is worse than asking for a code column. Whoever wrote the codes, the
+  **output** of a long sheet is checked: 30 or more occurrences, sample events for at least 80% of them
+  and at least half of the events sharing station, date and depth with another event is one sample split
+  into an event per taxon row (`CONV-SAMPLE-PER-ROW`, a warning to accept, naming the ratio); a missing code blocks
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
@@ -1756,7 +1770,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **174 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **175 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1770,8 +1784,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 76 | 37 / 28 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **174** | | | |
+| `CONV-` | `B` | 77 | 37 / 29 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **175** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

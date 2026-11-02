@@ -6,6 +6,8 @@ import { AMBIGUOUS_STATISTIC, STATISTIC_LABEL } from '../summaryLabels';
 import { guardTextReversible } from '../output/csv';
 import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
 import { parseNumber } from '../values/numbers';
+import { groupLongSheet } from './sampleGroups';
+import type { GroupPart } from './sampleGroups';
 
 /*
  * Identifiers of the converter.
@@ -166,6 +168,10 @@ export interface SampleCodeProposal {
   codes: string[];
   /** The user's sheet as CSV with the new code column LAST. The original cells are not touched. */
   csv: string;
+  /** A LONG sheet: its rows were grouped into samples (one code per group) by these columns; absent for a wide sheet (one code per row). */
+  grouping?: { samples: number; rows: number; by: { part: GroupPart; header: string }[]; repeats: number };
+  /** A long sheet that could not be grouped: nothing is proposed (codes and csv are empty). */
+  refusal?: { reason: 'no-columns' | 'taxon-repeats'; rows: number; repeats?: number };
 }
 
 const cleanCode = (s: string): string => s.trim().replace(/[\t\r\n]+/g, ' ');
@@ -213,20 +219,35 @@ function cellText(raw: RawCell | undefined, kind: 'plain' | 'date' | 'time', dat
 }
 
 /**
+ * (A LONG sheet, where a row is a taxon, gets one code per SAMPLE instead: the rows are grouped by the columns that define a sample (sampleGroups.ts), the n counts the groups of the
+ * station, and a sheet that cannot be grouped gets no proposal at all. A wide sheet is as described below, byte for byte.)
  * Q1: a sheet WITHOUT a sample code gets codes proposed ONCE, deterministically: `<station>-<n>`, n counting the rows of that station in sheet
  * order from 1 (`sample-<n>` for rows with no station), unique across the sheet; a code that would start like a formula becomes `S<row number>`. Returns the sheet as CSV with a new last column of codes; the
  * user checks it and uploads that file; the ID then comes from the user's own code. The cells are copied as text (see cellText), the delimiter is
  * ';' for a decimal-comma source and ',' otherwise, so the file is read back exactly as the sheet was. Returns undefined when the mapping already has
  * a sample code column: the converter does not overwrite or fill the user's codes.
  */
-export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { date1904?: boolean }, sheet: RawSheet, mapping: SheetMapping): SampleCodeProposal | undefined {
+export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { date1904?: boolean }, sheet: RawSheet, mapping: SheetMapping, shape: 'wide' | 'long' = 'wide'): SampleCodeProposal | undefined {
   if (mapping.columns.some((c) => c.role.kind === 'sampleId')) return undefined;
   const stationCol = mapping.columns.find((c) => c.role.kind === 'station')?.index;
   const used = new Set<string>();
   const perStation = new Map<string, number>();
   const dc = file.decimalComma;
+  // a LONG sheet (a row is a taxon): one code per sample, found from the columns that define a sample; a sheet that cannot be grouped gets no proposal. A wide sheet, and a sheet with no taxon
+  // column, keep one code per row.
+  const long = shape === 'long' && mapping.columns.some((c) => c.role.kind === 'taxon' && c.role.header !== true);
+  const grouping = long ? groupLongSheet(sheet, mapping) : undefined;
+  if (grouping !== undefined && !grouping.ok) {
+    return { header: '', codes: [], csv: '', refusal: { reason: grouping.reason, rows: grouping.rows, ...(grouping.repeats === undefined ? {} : { repeats: grouping.repeats }) } };
+  }
+  const codeOfGroup = new Map<number, string>();
   const codes = sheet.rows.map((row, i) => {
     if (row.cells.every((c) => c === null || String(c).trim() === '')) return '';
+    if (grouping?.ok === true) {
+      const g = grouping.groupOf[i];
+      const known = codeOfGroup.get(g);
+      if (known !== undefined) return known;
+    }
     const station = stationCol === undefined ? '' : cleanCode(String(row.cells[stationCol] ?? ''));
     const stem = station === '' ? 'sample' : station;
     let n = (perStation.get(stem) ?? 0) + 1;
@@ -240,6 +261,7 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
       while (used.has(code)) code = `S${i + 1}-${++k}`;
     } else perStation.set(stem, n);
     used.add(code);
+    if (grouping?.ok === true) codeOfGroup.set(grouping.groupOf[i], code);
     return code;
   });
   const taken = new Set(sheet.header.map((h) => h.trim().toLowerCase()));
@@ -254,5 +276,10 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
     line([...sheet.header.map((h) => guardCell(h, dc)), header]),
     ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], sheet.timeFormatted?.[k] === true ? 'time' : sheet.dateFormatted?.[k] === true ? 'date' : 'plain', date1904, dc)), guardCell(codes[i], dc)])),
   ];
-  return { header, codes, csv: lines.join('\n') + '\n' };
+  return {
+    header,
+    codes,
+    csv: lines.join('\n') + '\n',
+    ...(grouping?.ok === true ? { grouping: { samples: grouping.groups, rows: grouping.rows, by: grouping.by.map((b) => ({ part: b.part, header: b.header })), repeats: grouping.repeats } } : {}),
+  };
 }

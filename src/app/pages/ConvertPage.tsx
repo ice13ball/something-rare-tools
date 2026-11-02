@@ -10,7 +10,8 @@ import type { UiKey } from '../../core/i18n/ui';
 import type { Finding, SheetMapping } from '../../core/types';
 import { track } from '../analytics';
 import { getConvertEngine } from '../../worker/convert.client';
-import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
+import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
+import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
@@ -103,6 +104,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [view, setView] = useState<ConvertView | null>(null);
   const [working, setWorking] = useState(false);
   const [codesDone, setCodesDone] = useState<Record<string, string | null>>({});
+  // a long sheet's proposal is SHOWN before it is offered (how many samples, grouped by what), or refused; it is valid only for the roles and shape it was made for
+  const [codesPreview, setCodesPreview] = useState<Record<string, { p: CodeProposalView; sig: string }>>({});
   const [filesChosen, setFilesChosen] = useState(0);
   const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
   // rule id -> the fingerprint of its findings when the user ticked it (nothing is stored beyond this page state)
@@ -184,6 +187,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setParsed(null);
     setView(null);
     setCodesDone({});
+    setCodesPreview({});
     setApproved({});
     setDrafts({});
     setConfirmed({});
@@ -308,6 +312,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setNvsWords((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       setNvsSearches((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       setCodesDone({});
+      setCodesPreview({});
     } catch (e) {
       setConvertError(messageOf(e));
     } finally {
@@ -315,20 +320,37 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     }
   };
 
+  /** What a code proposal was made for: the shape and the roles. A proposal shown for other roles is stale and not shown. */
+  const codesSig = (fileId: string, sheet: string): string => {
+    const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
+    return JSON.stringify([choices[sheetKey(fileId, sheet)]?.shape ?? null, mapping?.columns.map((c) => [c.index, c.role]) ?? null]);
+  };
+  const offerCodes = (fileId: string, sheet: string, p: CodeProposalView): void => {
+    const key = sheetKey(fileId, sheet);
+    const f = files.find((x) => x.fileId === fileId);
+    const name = codesFileName(f?.fileName ?? p.fileName, sheet, f?.sheets.length ?? 1);
+    download(p.csv, name, 'text/csv');
+    setCodesDone((prev) => ({ ...prev, [key]: name }));
+    setCodesPreview((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
+  };
   const proposeCodes = async (fileId: string, sheet: string): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
     if (!mapping) return;
     try {
-      const p = await engine.proposeCodes(fileId, sheet, mapping);
+      const shape = choices[sheetKey(fileId, sheet)]?.shape;
+      const p = await engine.proposeCodes(fileId, sheet, mapping, shape);
       const key = sheetKey(fileId, sheet);
       if (!p) {
         setCodesDone((prev) => ({ ...prev, [key]: null }));
         return;
       }
-      const f = files.find((x) => x.fileId === fileId);
-      const name = codesFileName(f?.fileName ?? p.fileName, sheet, f?.sheets.length ?? 1);
-      download(p.csv, name, 'text/csv');
-      setCodesDone((prev) => ({ ...prev, [key]: name }));
+      // a long sheet: say how the rows were grouped, or why they could not be, and download only when the user asks for the file
+      if (p.grouping !== undefined || p.refusal !== undefined) {
+        setCodesDone((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
+        setCodesPreview((prev) => ({ ...prev, [key]: { p, sig: codesSig(fileId, sheet) } }));
+        return;
+      }
+      offerCodes(fileId, sheet, p);
     } catch (e) {
       setProblem(messageOf(e));
     }
@@ -889,6 +911,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     <button type="button" className="button" onClick={() => void proposeCodes(c.fileId, c.sheet)}>
                       {t('convert.codes.propose')}
                     </button>
+                    {codesPreview[key] !== undefined && codesPreview[key].sig === codesSig(c.fileId, c.sheet) ? <CodesPreview p={codesPreview[key].p} onDownload={() => offerCodes(c.fileId, c.sheet, codesPreview[key].p)} /> : null}
                     {codesDone[key] ? <p role="status">{t('convert.codes.done', { name: codesDone[key] as string })}</p> : null}
                     {codesDone[key] === null ? <p role="status">{t('convert.codes.none')}</p> : null}
                   </div>
@@ -1086,6 +1109,29 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         </>
       )}
     </Layout>
+  );
+}
+
+/** The preview of a long sheet's code proposal: "450 samples from 53,608 rows, grouped by station + date + depth", or why nothing is proposed. */
+function CodesPreview({ p, onDownload }: { p: CodeProposalView; onDownload: () => void }): React.ReactElement | null {
+  const { lang } = useLang();
+  if (p.refusal !== undefined) {
+    return (
+      <p role="status" className="warning">
+        {p.refusal.reason === 'no-columns' ? t('convert.codes.refused.none') : t('convert.codes.refused.repeats', { repeats: formatNumber(p.refusal.repeats ?? 0, lang), rows: formatNumber(p.refusal.rows, lang) })}
+      </p>
+    );
+  }
+  if (p.grouping === undefined) return null;
+  const by = p.grouping.by.map((b) => (b.part === 'column' ? `"${b.header}"` : t(`convert.codes.by.${b.part}`))).join(' + ');
+  return (
+    <div role="status">
+      <p>{t('convert.codes.preview', { samples: p.grouping.samples, rows: formatNumber(p.grouping.rows, lang), by })}</p>
+      {p.grouping.repeats > 0 ? <p className="warning">{t('convert.codes.repeats', { repeats: p.grouping.repeats })}</p> : null}
+      <button type="button" className="button" onClick={onDownload}>
+        {t('convert.codes.download')}
+      </button>
+    </div>
   );
 }
 

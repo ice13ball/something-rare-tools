@@ -387,6 +387,28 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   return [...named, ...left];
 }
 
+/**
+ * A long sheet whose sample events are close to its occurrences: at least SPLIT_MIN_OCCURRENCES occurrences, events of at least SPLIT_RATIO of them, and at least SPLIT_SHARED of the events
+ * sharing station, date and depth with another event. One taxon per sample is possible (a sheet of one species caught per haul), but then the events differ in station, date or depth; events that
+ * repeat all three are rows of one sample. A replicate is counted as the sample it belongs to, so a sheet of replicates is not a split.
+ */
+export const SPLIT_MIN_OCCURRENCES = 30;
+export const SPLIT_RATIO = 0.8;
+export const SPLIT_SHARED = 0.5;
+export function sampleSplitOf(sites: readonly SampleSite[], occurrenceCount: number): { events: number; occurrences: number; ratio: string; shared: number } | undefined {
+  const parents = new Map<string, SampleSite>();
+  for (const s of sites) if (!parents.has(s.parentSample?.id ?? s.id)) parents.set(s.parentSample?.id ?? s.id, s);
+  const events = parents.size;
+  if (occurrenceCount < SPLIT_MIN_OCCURRENCES || events < SPLIT_RATIO * occurrenceCount) return undefined;
+  const byPlace = new Map<string, number>();
+  const placeOf = (s: SampleSite): string => [s.cruiseCode ?? '', s.stationCode ?? '', s.date?.iso ?? '', s.depthMin ?? '', s.depthMax ?? ''].join('\u0001');
+  for (const s of parents.values()) byPlace.set(placeOf(s), (byPlace.get(placeOf(s)) ?? 0) + 1);
+  let shared = 0;
+  for (const n of byPlace.values()) if (n > 1) shared += n;
+  if (shared < SPLIT_SHARED * events) return undefined;
+  return { events, occurrences: occurrenceCount, ratio: `${Math.round((100 * events) / occurrenceCount)}%`, shared };
+}
+
 /** The spreadsheet letters of a zero-based column index (0 -> A, 26 -> AA). */
 function columnLetters(index: number): string {
   let n = index;
@@ -1189,6 +1211,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (!sheet) continue;
     const fileName = file.fileName;
     const sheetKey = `${fileName}\u0000${sheet.name}\u0000${sheetKeyN++}`;
+    const occurrencesBefore = occurrences.length;
     const dc = file.decimalComma;
     const cols = colsOf(sin.mapping, sheet.header);
     const collector = new Collector(fileName);
@@ -1333,6 +1356,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // Visits (CONV-ID-REVISIT): a code that repeats at ONE station on rows that differ in date (then time, then depth for a wide sheet) is one sample per visit, not a duplicate. The ID of such a
     // visit is `<station eventID>:<date>[T<time>][:<depth>m]:<code>` (the shape of the profile levels); every other ID is exactly as before. Read from the data BEFORE the rows get their IDs, never from
     // the order of the rows. Identical rows stay a real duplicate.
+    // a biomass column of a long sheet holds a real value (a number above zero) in this row
+    const rowHasBiomass = (row: RawRow): boolean =>
+      cols.biomass.some((b) => {
+        const bp = parseNumber(row.cells[b.index] ?? null, dc);
+        return bp.status === 'ok' && bp.value > 0;
+      });
+
     const visitIds = new Map<number, string>();
     const visitParts = new Set<string>();
     const visitGroups: { id: string; lines: number[] }[] = [];
@@ -1346,7 +1376,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (code === undefined || [code, m.station].some((v) => v !== undefined && SUMMARY_LABEL.test(v))) continue;
         if (cols.replicate && text(row.cells[cols.replicate.index]) === undefined) continue;
         const stationText = m.station;
-        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && (presence || (cols.quantity !== undefined && !isBlankCell(row.cells[cols.quantity.index] ?? null)));
+        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && (presence || (cols.quantity !== undefined && (!isBlankCell(row.cells[cols.quantity.index] ?? null) || rowHasBiomass(row))));
         if (!filled) continue;
         const cruiseText = m.cruise ?? sin.cruise?.trim();
         const stationId = stationText === undefined ? undefined : stationEventId(cruiseText === '' ? undefined : cruiseText, stationText);
@@ -1378,13 +1408,6 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (lines.length > 0) visitGroups.push({ id: visitIds.get(lines[0])!, lines });
       }
     }
-
-    // a biomass column of a long sheet holds a real value (a number above zero) in this row
-    const rowHasBiomass = (row: RawRow): boolean =>
-      cols.biomass.some((b) => {
-        const bp = parseNumber(row.cells[b.index] ?? null, dc);
-        return bp.status === 'ok' && bp.value > 0;
-      });
 
     for (const row of sheet.rows) {
       if (ragged.has(row.line)) continue;
@@ -1845,6 +1868,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (zeros > 0) {
       stats.zerosSkipped += zeros;
       findings.push(makeConvertFinding('CONV-ZERO-SKIPPED', { ...base, params: { count: zeros } }));
+    }
+    // the OUTPUT of a long sheet, whoever wrote the sample codes: a sample event for almost every occurrence, and several of them at one station, date and depth, is one sample split into one event per taxon row
+    if (sin.shape === 'long' && sin.profile === undefined && cols.taxonCell !== undefined) {
+      const split = sampleSplitOf([...samples.values()].filter((a) => a.sheetKey === sheetKey).map((a) => a.site), occurrences.length - occurrencesBefore);
+      if (split !== undefined) findings.push(makeConvertFinding('CONV-SAMPLE-PER-ROW', { ...base, params: { events: split.events, occurrences: split.occurrences, ratio: split.ratio, shared: split.shared } }));
     }
     if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));
     // every column the user gave a meaning that this conversion does not read, in this configuration, is said and has to be accepted: nothing is dropped silently

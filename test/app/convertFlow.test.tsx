@@ -11,7 +11,7 @@ import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { UI } from '../../src/core/i18n/ui';
 import { createDirectConvertEngine } from '../../src/worker/convert.handler';
 import { dataciteXml } from '../convert/metaFixtures';
-import { COLLISION_CSV, L1_CSV, L2_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV, W2_CSV, chooseFiles } from './convertHelpers';
+import { COLLISION_CSV, L1_CSV, L2_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV, W2_CSV, chooseFiles, csvOf } from './convertHelpers';
 
 // every test drives the whole page through a real worker handler in jsdom: the heaviest ones (W1, the four languages, the error test) took 5 s alone and timed out under the load of the full suite
 vi.setConfig({ testTimeout: 30_000 });
@@ -173,6 +173,39 @@ describe('the sample code step', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Approve \d+ shown/ }));
     await settled(T['convert.summary.none']);
     expect(summary().textContent).toContain('6 occurrences');
+  });
+});
+
+describe('the sample code step of a long sheet', () => {
+  const TAXA = ['Calanus finmarchicus', 'Oithona similis', 'Pseudocalanus sp.'];
+  const rows = ['A', 'B', 'C', 'D'].flatMap((st, i) => [0, 25].flatMap((d) => TAXA.map((sp, k) => [st, `2023-06-${10 + i}`, 55 + i, 2.5, d, sp, 1 + k])));
+  const LONG_CSV = csvOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Species', 'Count'], rows);
+
+  it('shows how many samples the rows make and what they are grouped by BEFORE anything is downloaded, then downloads one code per sample', async () => {
+    const { download } = await load([{ name: 'long.csv', text: LONG_CSV }]);
+    pick(T['convert.quantity.kind'], 'count');
+    const section = (await screen.findByRole('heading', { name: T['convert.codes.title'] })).closest('section') as HTMLElement;
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.propose'] }));
+    await waitFor(() => expect(section.textContent).toContain('8 samples from 24 rows, grouped by station + date + depth'));
+    expect(download).not.toHaveBeenCalled();
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.download'] }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const [csv, name] = download.mock.calls[0] as [string, string];
+    expect(name).toBe('long-with-codes.csv');
+    const codes = csv.trim().split('\n').slice(1).map((l) => l.split(',').pop());
+    expect(new Set(codes).size).toBe(8);
+    expect(codes.slice(0, 3)).toEqual(['A-1', 'A-1', 'A-1']);
+    expect(within(section).getAllByRole('status').map((x) => x.textContent).join(' ')).toContain('long-with-codes.csv');
+  });
+
+  it('says why when the rows cannot be grouped, and offers no file', async () => {
+    const { download } = await load([{ name: 'bare.csv', text: csvOf(['Species', 'Count'], [['Calanus finmarchicus', 3], ['Oithona similis', 2]]) }]);
+    pick(T['convert.quantity.kind'], 'count');
+    const section = (await screen.findByRole('heading', { name: T['convert.codes.title'] })).closest('section') as HTMLElement;
+    fireEvent.click(within(section).getByRole('button', { name: T['convert.codes.propose'] }));
+    await waitFor(() => expect(section.textContent).toContain('No codes proposed'));
+    expect(within(section).queryByRole('button', { name: T['convert.codes.download'] })).toBeNull();
+    expect(download).not.toHaveBeenCalled();
   });
 });
 
