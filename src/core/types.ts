@@ -195,7 +195,11 @@ export interface SheetMapping { sheet: string; columns: { index: number; header:
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }
 export interface LayoutPlan {
   tables: TablePlan[];
-  joins: { left: string; right: string; leftKey: number; rightKey: number }[];   // sheet names + column indices
+  /**
+   * Sheet names + column indices. `leftKey` / `rightKey` is the key; `extraKeys` (only present for a COMPOSITE key) are the further pairs that must all be equal
+   * (Cruise + Station, when neither column alone identifies one row of the right sheet).
+   */
+  joins: { left: string; right: string; leftKey: number; rightKey: number; extraKeys?: { leftKey: number; rightKey: number }[] }[];
   unsupported?: string;         // plain English description of a layout the tool cannot handle (technical line, tests)
   /** The same reasons as language-neutral codes; every language renders from these (recognize/layoutReasons.ts). */
   unsupportedReasons?: { code: 'transposed' | 'transposed-taxa' | 'header-empty' | 'header-units' | 'header-footnote' | 'no-table' | 'no-rows' | 'no-data-sheet'; sheet?: string }[];

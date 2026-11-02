@@ -77,6 +77,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-TIME-OTHER-DAY | warning | B | — | —<a id="ROW-TIME-OTHER-DAY"></a> |
 | ROW-DATE-MISSING | info | B | — | —<a id="ROW-DATE-MISSING"></a> |
 | ROW-YEAR-OUTLIER | warning | B | — | —<a id="ROW-YEAR-OUTLIER"></a> |
+| ROW-JOIN-AMBIGUOUS | warning | B | — | —<a id="ROW-JOIN-AMBIGUOUS"></a> |
 | ROW-DATE-YYMMDD | info | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
 | ROW-TZ-UNKNOWN | info | B | — | —<a id="ROW-TZ-UNKNOWN"></a> |
 | ROW-UNIT-MISSING | warning | B | — | —<a id="ROW-UNIT-MISSING"></a> |

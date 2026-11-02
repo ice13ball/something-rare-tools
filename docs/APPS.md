@@ -462,8 +462,14 @@ could still read stay in the plan.
   `findJoin` accepts a pair of key columns (station, sample id, cruise, or an ignored column) when
   **every key value of the measurement sheet exists in the lookup sheet** and either the cleaned
   headers are equal, or the lookup column is unique and the measurement column is a strong key
-  kind; header equality scores 2, a strong kind scores 1; the best score wins. A lookup sheet with
-  no measurements of its own is not a table in the plan.
+  kind; header equality scores 2, a strong kind scores 1; the best score wins. **A key must identify one
+  row of the lookup sheet**: among candidates of the same score the one whose lookup column holds each
+  value once wins (the order of the columns decides nothing: `Cruise` no longer beats `Station` because it
+  stands first), and when no single column is unique the columns the two sheets share by name
+  (`Cruise` + `Station`) are tried **together** as a composite key, taken when it is unique or when fewer rows of the lookup sheet share their key than with the single column (`LayoutPlan.joins[].extraKeys`; the
+  layout sentence names every column, "where the columns “Cruise + Station” together equal ...", and a key
+  the user picks by hand replaces it). A lookup sheet with no measurements of its own is not a table in
+  the plan.
 - **Transposed** (parameters in rows, samples in columns): detected when column A holds at least
   two labels that read as known column names, none of the other header cells does, and at least
   half the cells right of A are numbers. **Not supported**: reported as `IN-LAYOUT-UNSUPPORTED`
@@ -769,6 +775,11 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
   numbers, a repeated (sample, parameter) keeps the first value; units per parameter come from the
   unit column or from the parameter text (`DIC [umol/kg]`). **Join**: position, date and station
   come from the lookup sheet; when the data names no station, the sample id is the station.
+  A key that still maps to several lookup rows is never resolved to the first one: when those rows differ in
+  position or date, **none is taken** and `ROW-JOIN-AMBIGUOUS` names the key, the lookup sheet and the
+  rows that got nothing; rows that repeat the same position and date are one row. `/convert` reads no
+  join at all (each sheet stands on its own), so a position in one sheet is never lent to another
+  (`test/convert/no-joins.test.ts`).
 - **Variable keys** are the column headers (prefixed with the sheet name when several tables are
   built, numbered on a clash); a variable with no unit in the header can take the unit from a
   metadata record (`unitSource: 'metadata'`).
@@ -1934,7 +1945,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **188 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **189 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1944,12 +1955,12 @@ regenerate it when rules change.
 | `IN-` | `input` | 30 | 12 / 11 / 7 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, a PANGAEA table's position and date taken from its Event(s) block, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
 | `META-` | `A` | 8 | 2 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates, no positions. | The OBIS Manual (`META-NO-POSITIONS`: `decimalLatitude` and `decimalLongitude` are the minimally required location terms); the other rules are stated in their own text. |
-| `ROW-` | `B` | 36 | 6 / 19 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
+| `ROW-` | `B` | 37 | 6 / 20 / 11 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
 | `CONV-` | `B` | 86 | 39 / 33 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **188** | | | |
+| **Total** | | **189** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

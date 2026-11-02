@@ -33,7 +33,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-JOIN-AMBIGUOUS' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -552,30 +552,70 @@ function mappingFor(file: ParsedFile, mappings: readonly SheetMapping[], sheet: 
 }
 
 interface Lookup {
-  rowsByKey: Map<string, RawRow>;
+  /** The right row of each key value; 'ambiguous' when several right rows hold the key and differ in position or date (none of them is taken). */
+  rowsByKey: Map<string, RawRow | 'ambiguous'>;
   meta: (row: RawRow) => Meta;
   cache: Map<RawRow, Meta>;
-  leftKey: number;
+  /** The key columns of the measurement sheet, in the order of the right key columns. */
+  leftKeys: number[];
+  /** What the key is called in a message: the left key headers joined with " + ". */
+  keyName: string;
+  sheetName: string;
+  rightName: string;
+  collector: Collector;
 }
+
+const keyOf = (row: RawRow, cols: readonly number[]): string | undefined => {
+  const parts: string[] = [];
+  for (const i of cols) {
+    const v = str(row.cells[i] ?? null);
+    if (v === undefined) return undefined;
+    parts.push(v);
+  }
+  return parts.length === 1 ? parts[0] : JSON.stringify(parts);
+};
 
 function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, mappings: readonly SheetMapping[], c: Collector): Lookup | undefined {
   const join = layout.joins.find((j) => j.left === sheetName);
   if (!join) return undefined;
   const sheet = file.sheets.find((s) => s.name === join.right);
   if (!sheet) return undefined;
-  const rowsByKey = new Map<string, RawRow>();
+  const leftSheet = file.sheets.find((s) => s.name === sheetName);
+  const leftKeys = [join.leftKey, ...(join.extraKeys ?? []).map((e) => e.leftKey)];
+  const rightKeys = [join.rightKey, ...(join.extraKeys ?? []).map((e) => e.rightKey)];
+  const specs = specsOf(mappingFor(file, mappings, sheet));
+  const meta = metaParser(file, sheet, specs, c);
+  // a key that several right rows hold is a key only when those rows say the same about position and date ("rows that truly repeat identically are fine"); otherwise no row is taken
+  const quiet = metaParser(file, sheet, specs, new Collector(file.fileName));
+  const placeOf = (r: RawRow): string => {
+    const m = quiet(r);
+    return JSON.stringify([m.lat ?? null, m.lon ?? null, m.datetime?.iso ?? null]);
+  };
+  const rowsByKey = new Map<string, RawRow | 'ambiguous'>();
+  const places = new Map<string, string>();
   for (const r of sheet.rows) {
-    const k = str(r.cells[join.rightKey] ?? null);
-    if (k !== undefined && !rowsByKey.has(k)) rowsByKey.set(k, r);
+    const k = keyOf(r, rightKeys);
+    if (k === undefined) continue;
+    const first = rowsByKey.get(k);
+    if (first === undefined) {
+      rowsByKey.set(k, r);
+      continue;
+    }
+    if (first === 'ambiguous') continue;
+    if (!places.has(k)) places.set(k, placeOf(first));
+    if (placeOf(r) !== places.get(k)) rowsByKey.set(k, 'ambiguous');
   }
-  return { rowsByKey, meta: metaParser(file, sheet, specsOf(mappingFor(file, mappings, sheet)), c), cache: new Map(), leftKey: join.leftKey };
+  const header = (cols: readonly number[], s: RawSheet | undefined): string => cols.map((i) => s?.header[i] ?? `#${i + 1}`).join(' + ');
+  return { rowsByKey, meta, cache: new Map(), leftKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
 }
 
 function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
   if (!lookup) return base;
-  const k = str(row.cells[lookup.leftKey] ?? null);
+  const k = keyOf(row, lookup.leftKeys);
   const hit = k === undefined ? undefined : lookup.rowsByKey.get(k);
-  if (hit) {
+  if (hit === 'ambiguous') {
+    lookup.collector.add('ROW-JOIN-AMBIGUOUS', lookup.sheetName, lookup.keyName, row.line, k, true, { right: lookup.rightName });
+  } else if (hit) {
     let lm = lookup.cache.get(hit);
     if (!lm) lookup.cache.set(hit, (lm = lookup.meta(hit)));
     for (const f of META_FIELDS) {

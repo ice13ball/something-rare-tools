@@ -35,16 +35,27 @@ export function describeLayout(plan: LayoutPlan, sheets: readonly SheetSummary[]
     }
   }
   for (const j of plan.joins) {
+    // a composite key (Cruise + Station): the sentence names every column of it
+    const lefts = [j.leftKey, ...(j.extraKeys ?? []).map((e) => e.leftKey)].map((c) => headerAt(sheets, j.left, c));
+    const rights = [j.rightKey, ...(j.extraKeys ?? []).map((e) => e.rightKey)].map((c) => headerAt(sheets, j.right, c));
     out.push({
-      key: 'layout.join',
-      params: { left: j.left, right: j.right, leftKey: headerAt(sheets, j.left, j.leftKey), rightKey: headerAt(sheets, j.right, j.rightKey) },
+      key: j.extraKeys === undefined ? 'layout.join' : 'layout.joinMany',
+      params: { left: j.left, right: j.right, leftKey: lefts.join(' + '), rightKey: rights.join(' + ') },
     });
   }
   return out;
 }
 
 export function setJoinKey(plan: LayoutPlan, joinIndex: number, side: 'left' | 'right', col: number): LayoutPlan {
-  return { ...plan, joins: plan.joins.map((j, i) => (i !== joinIndex ? j : side === 'left' ? { ...j, leftKey: col } : { ...j, rightKey: col })) };
+  // the user picks ONE key column here: a composite key given by the tool is replaced by it
+  return {
+    ...plan,
+    joins: plan.joins.map((j, i) => {
+      if (i !== joinIndex) return j;
+      const { extraKeys: _extra, ...single } = j;
+      return side === 'left' ? { ...single, leftKey: col } : { ...single, rightKey: col };
+    }),
+  };
 }
 
 type LongPlan = NonNullable<TablePlan['long']>;
