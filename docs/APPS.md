@@ -1230,9 +1230,12 @@ ignored or variable column of few distinct values that is not a function of the 
 differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
 biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
 when the sheet has none and the name says no size and the unit counts organisms ('Total length [mm]', 'Total depth' are not quantities); else it stays ignored, with a reason that says what to decide). The same judgement applies to a column the name already claimed as biomass ('Total weight (kg)'): constant within a sample, it is a total and starts ignored, with its own reason
-(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). It is never proposed as a measured
-variable, because a variable is written once per sample and values that differ between the rows of a sample
-would conflict. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
+(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). It is not proposed as a measured
+variable either, because a variable is written once per sample and values that differ between the rows of a sample
+would conflict, with one exception: a size or a length word with a unit that counts no organisms and no mass (`Total length [mm]`, long
+sheet or wide; `size-variable`, low confidence) is a measured variable with its unit. On a long sheet where that length differs between the rows
+of a sample (a length of each fish) the conflict is then shown and blocks (`CONV-SAMPLE-CONFLICT`), never dropped in silence. `Total depth` is the water
+depth of the site (`isSiteDepthName`, like `Total water depth`): the depth of the rows when no other column gives one, otherwise not written. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
 (`QV:ODV:…`, `Q_`/`QC_`/`QF_` prefixes, `_QC`/`_flag` suffixes, and `Q`/`QC`/`QF` + a space or
 hyphen + the name of a sibling column) is never a measurement or a taxon (`isQualityHeader`); a
 column of presence marks (`+`, `x`) next to counts is a species column too; a column in

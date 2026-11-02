@@ -210,6 +210,7 @@ export const OVERLAY_REASONS = {
   'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
   'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
   'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
+  'size-variable': 'its name says total, but it is a size or a length with a unit that does not count organisms: a measured variable of the sample, not a sum of individuals',
   'unit-effort': 'its unit is a volume or an area, which no species is counted in: read as the sampling effort',
   'unit-variable': 'its unit measures a length, a time, a speed or a temperature, which no species is counted in: a measured variable, not a species',
   'count-unit-quantity': 'a number counted in individuals next to a column of taxon names: the count of each row',
@@ -648,6 +649,15 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     // so converting it would count the same individuals twice. It starts as ignored, with its reason; the user can still give it another meaning,
     // and then it is their decision. A column of presence marks keeps the shared role (ignore); the page says why it is not a taxon candidate.
     if (summaryHeader && p.role.kind === 'variable' && !isCanonicalKey(p.role.variable) && (conceptVariable(p.role.variable) === undefined || isAbundanceUnit(p.role.unit)) && p.role.p01 === undefined) {
+      // 'Total length [mm]': a size or a length word with a unit that does not count organisms is a measurement of the sample or the animal, not a sum of individuals: a measured variable with
+      // its unit (low confidence, so the page shows why), on long and wide sheets alike. A size word with NO unit is still a total until the values or the user say otherwise.
+      const sizeUnit = hdr.unit ?? hdr.unitText;
+      if (isSizeLikeHeader(p.header) && sizeUnit !== undefined && !isAbundanceUnit(sizeUnit) && !isPlainCountUnit(foldUnit(sizeUnit)) && !isMassUnitText(hdr.unitText)) {
+        p.role = { kind: 'variable', variable: namePartOf(p.header), unit: sizeUnit, unitSource: 'header' };
+        p.confidence = 'low';
+        why(p, 'size-variable');
+        continue;
+      }
       p.role = { kind: 'ignore' };
       p.confidence = 'low';
       why(p, 'summary-total');
