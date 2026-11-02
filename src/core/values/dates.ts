@@ -25,6 +25,11 @@ export interface ParseDateOptions {
   order?: Exclude<DayMonthOrder, 'unknown'>;
   /** full year used for the YY-MM-DD pivot; defaults to the current UTC year (tests pin it) */
   currentYear?: number;
+  /**
+   * The cell is in a column that IS the date (the role, never the guess of a header): eight digits are a date written YYYYMMDD (ISO 8601 basic form, validated: month and day must exist), as text or
+   * as a whole number, and a whole number of four digits is a year, as the text '2000' is. Absent: both stay unparseable (an eight-digit ID or a measurement is not a date).
+   */
+  datumColumn?: boolean;
 }
 
 const MS_DAY = 86_400_000;
@@ -231,6 +236,9 @@ const YY_RE = /^(\d{2})-(\d{2})-(\d{2})$/;
 const DOT_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(.+))?$/;
 const SLASH_RE = /^(\d{1,2})([/-])(\d{1,2})\2(\d{4})(?:\s+(.+))?$/;
 const YEAR_RE = /^\d{4}$/;
+const COMPACT_RE = /^\d{8}$/;
+/** year first, then month and day with slashes or dots: the order is certain whatever the column holds ('2003/01/17', '2003.1.17 08:30') */
+const YMD_RE = /^(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?:\s+(.+))?$/;
 
 /**
  * Parses a date cell.
@@ -238,6 +246,7 @@ const YEAR_RE = /^\d{4}$/;
  * - ISO 8601: 'YYYY-MM-DD', 'YYYY-MM', 'YYYY-MM-DD[T ]HH:MM[:SS[.f]][Z|+HH[:MM]]' (an offset is kept, not converted).
  * - 'YY-MM-DD' (exactly two digits each, dashes): year = 2000+YY when YY <= (current two-digit year + 1), else
  *   1900+YY; always flagged ambiguity 'yy-mm-dd'.
+ * - 'YYYY/MM/DD' and 'YYYY.MM.DD' (year first: the order is certain), with an optional time.
  * - 'DD.MM.YYYY' (day first by convention), 'DD/MM/YYYY' or 'MM/DD/YYYY' (also with '-') ONLY when one part > 12
  *   decides the order (identical parts are also unambiguous), or when the caller passes the column's `order`
  *   (see detectDayMonthOrder); otherwise unparseable. A trailing ' HH:MM[:SS]' is allowed.
@@ -257,6 +266,7 @@ function completeIntervalEnd(start: string, end: string): string | undefined {
 export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | DateError {
   if (raw === null) return fail('');
   if (typeof raw === 'number') {
+    if (opts.datumColumn && !opts.dateFormatted && Number.isInteger(raw)) return parseDate(String(raw), opts);
     if (!opts.dateFormatted || !Number.isFinite(raw) || raw < 0) return fail(String(raw));
     try {
       return excelSerialToDate(raw, opts.date1904);
@@ -266,6 +276,13 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
   }
   const s = raw.trim();
   if (s === '') return fail(raw);
+
+  if (opts.datumColumn && COMPACT_RE.test(s)) {
+    const y = Number(s.slice(0, 4));
+    const mo = Number(s.slice(4, 6));
+    const d = Number(s.slice(6, 8));
+    return validYmd(y, mo, d) ? build(y, mo, d) : fail(raw);
+  }
 
   if (YEAR_RE.test(s)) {
     const y = Number(s);
@@ -313,6 +330,9 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
   m = DOT_RE.exec(s);
   if (m) return withTime(Number(m[3]), Number(m[2]), Number(m[1]), m[4], raw);
 
+  m = YMD_RE.exec(s);
+  if (m) return withTime(Number(m[1]), Number(m[3]), Number(m[4]), m[5], raw);
+
   m = SLASH_RE.exec(s);
   if (m) {
     const a = Number(m[1]);
@@ -356,10 +376,10 @@ export function detectDayMonthOrder(cells: readonly RawCell[]): DayMonthOrder {
  * be parsed (use parseTimeOfDay if the caller must report that), or when `d` is not day-precision.
  * The time's own tz ('utc' / 'offset') wins; the date's ambiguity flag is kept.
  */
-export function combineDateTime(d: ParsedDate, time: RawCell): ParsedDate {
+export function combineDateTime(d: ParsedDate, time: RawCell, order?: Exclude<DayMonthOrder, 'unknown'>): ParsedDate {
   if (d.precision !== 'day') return d;
   if (time === null || (typeof time === 'string' && time.trim() === '')) return d;
-  const t = parseTimeCell(time);
+  const t = parseTimeColumnCell(time, d.iso.slice(0, 10), order);
   if ('error' in t) return d;
   return { ...d, iso: `${d.iso}T${t.text}`, precision: t.ss === undefined ? 'minute' : 'second', tz: t.tz };
 }
@@ -400,3 +420,28 @@ export function earliestUtcDayOf(d: ParsedDate): string {
  */
 const EPOCH_PLACEHOLDER = /^\s*(?:(?:1899-12-3[01]|1900-01-0[01]|1904-01-01|1970-01-01)|(?:3[01][./-]12[./-]1899|0?[01][./-]0?[01][./-]1900|0?1[./-]0?1[./-](?:1904|1970))|(?:12[./-]3[01][./-]1899))(?:[T\s]|$)/;
 export const isEpochPlaceholder = (raw: RawCell): boolean => typeof raw === 'string' && EPOCH_PLACEHOLDER.test(raw);
+
+/**
+ * The time of day of a cell of a TIME column (parseTimeCell), and, when the cell is not a time, the time part of a full date with a time of day: '2011-10-05T20:00:00Z', '2003/01/17 08:30', '1899-12-30 12:30'
+ * (a spreadsheet's placeholder date is a time). The date part of such a cell is not read as a date, so it must be the day of the row (`rowDay`, YYYY-MM-DD) or a placeholder: a cell that
+ * names another day than its row is unreadable, never silently cut. `order` is the column's day/month order, when its cells decide one. A cell that holds no time of day is an error.
+ */
+export function parseTimeColumnCell(raw: RawCell, rowDay?: string, order?: Exclude<DayMonthOrder, 'unknown'>): TimeOfDay | DateError {
+  const t = parseTimeCell(raw);
+  if (!('error' in t) || typeof raw !== 'string') return t;
+  const d = parseDate(raw, { date1904: false, dateFormatted: false, ...(order === undefined ? {} : { order }) });
+  if ('error' in d || (d.precision !== 'minute' && d.precision !== 'second')) return t;
+  if (!isEpochPlaceholder(raw) && rowDay !== undefined && d.iso.slice(0, 10) !== rowDay) return t;
+  const part = parseTimeOfDay(d.iso.slice(11));
+  return 'error' in part ? t : part;
+}
+
+const MONTH_NAME = '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+const DATE_LOOKING = new RegExp(`^(?:\\d{8}(?:\\s+\\d{3,4})?|\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4}\\b.*|${MONTH_NAME}\\.?\\s+\\d{1,2}\\b.*|\\d{1,2}\\s+${MONTH_NAME}\\b.*)$`, 'i');
+/**
+ * Does a cell that no reader reads (not a time, not a date) look like a date written out: eight digits and an optional time ('20030117 0830'), day, month and year with a 12-hour clock or an
+ * ambiguous order ('01/17/2003 8:30 AM'), or a month name ('Jan 17 2003')? Used to say that such a cell is not lost silently; the cell is not read.
+ */
+export function looksLikeUnreadDate(raw: RawCell): boolean {
+  return typeof raw === 'string' && DATE_LOOKING.test(raw.trim());
+}

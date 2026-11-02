@@ -188,8 +188,11 @@ describe('a long sheet with blank or NaN quantities', () => {
     expect(policyOf(f[0])).toBe('accept');
   });
 
-  it('formats the date parser does not read are not claimed (they stay unread)', async () => {
-    for (const cell of ['2003/01/17 08:30', '20030117 0830', 'Jan 17 2003', '01/17/2003 8:30 AM']) expect(find(await timeCase([cell, cell]), 'CONV-TIME-HOLDS-DATES'), cell).toEqual([]);
+  it('a time column of dates written in a form no reader reads is said, not lost in silence; 2003/01/17 is read as a date and time', async () => {
+    for (const cell of ['20030117 0830', 'Jan 17 2003', '01/17/2003 8:30 AM']) expect(find(await timeCase([cell, cell]), 'CONV-TIME-HOLDS-DATES'), cell).toHaveLength(1);
+    const read = await exportSheet(['Station', 'Sample', 'time', 'Latitude', 'Longitude', 'Species', 'Count'], ['2003/01/17 08:30', '2003/01/18 09:30'].map((c, i) => ['S1', `s${i}`, c, 55.5, 2.5, 'Calanus finmarchicus', 4] as Cell[]), { quantity: { kind: 'count' } });
+    expect(find(read, 'CONV-TIME-HOLDS-DATES')).toEqual([]);
+    expect(read.result.events.some((ev) => ev.eventDate?.startsWith('2003-01-17'))).toBe(true);
   });
 
   it('plain numbers are times (63000, 73000 as HHMMSS, 43200 as seconds of the day), not dates', async () => {

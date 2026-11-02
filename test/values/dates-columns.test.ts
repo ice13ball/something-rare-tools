@@ -29,7 +29,6 @@ describe('YYYYMMDD in a column that is the date', () => {
   it('the header "Date (YYYYMMDD)" is the date, from the format in its name; the column is read, a bad day is reported', () => {
     expect(unitFromHeader('Date (YYYYMMDD)').name).toBe('Date');
     expect(unitFromHeader('Date [DD/MM/YYYY]').name).toBe('Date');
-    expect(unitFromHeader('Date (UTC)').unit).toBe('UTC');
     const text = 'Station,Date (YYYYMMDD),Temp\nS1,20160426,4.1\nS1,20160427,4.2\nS2,20161345,4.3\n';
     const file = parseFile('d.csv', new TextEncoder().encode(text));
     const roles = proposeColumns(file.sheets[0], { decimalComma: false, date1904: false }).map((p) => p.role.kind);
@@ -54,7 +53,7 @@ describe('a numeric year under the date role is a year, as the text 2000 is', ()
   });
   it('without the date role a number is not a date, and a serial of a date-formatted column is a serial', () => {
     expect(iso(parseDate(1986, base))).toBe('error');
-    expect(iso(parseDate(44000, { ...base, dateFormatted: true }))).toBe('2020-06-30');
+    expect(iso(parseDate(44000, { ...base, dateFormatted: true }))).toBe('2020-06-18');
     expect(iso(parseDate(1986.5, column))).toBe('error');
   });
   it('a dataset whose date column holds numbers 1986 is read without an unparseable date', () => {

@@ -38,8 +38,11 @@ const SINGLE_TOKEN_EXTRA_UNITS = new Set(['cm', 'mm']);
 
 /** Is this text, found in round brackets, a unit ('m', 'µmol L-1', 'kg m-3') and not a remark ('at 25ºC')? */
 const SIMPLE_UNITS = new Set(['cm', 'mm', 'km', 'g', 'kg', 'mg', '%', '‰']);
+/** A date format written in a bracket ('YYYYMMDD', 'DD/MM/YYYY', 'yyyy-mm-dd hh:mm'): it states how the dates are written, so it goes with the name like a unit does. */
+const DATE_FORMAT_TEXT = /^(?=.*y{2})(?=.*d)[ymdhst\-/.: ]+$/i;
 function looksLikeUnit(text: string): boolean {
   const t = text.trim();
+  if (DATE_FORMAT_TEXT.test(t)) return true;
   if (normaliseUnit(t) !== undefined || SIMPLE_UNITS.has(t.toLowerCase())) return true;
   return /\//.test(t) || /[A-Za-zµμ]-\d$/.test(t) || /\*\*\d/.test(t);
 }

@@ -25,7 +25,7 @@ import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { pairHemisphere, parseCoordinate } from './values/coords';
-import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, parseDate, parseTimeCell, parseTimeOfDay } from './values/dates';
+import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -268,6 +268,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
   // Darwin Core: where eventDate is empty, the same row's year / month / day columns give the date
   const dwcParts = specs.when && dwcTermOf(specs.when.header) === 'eventdate' ? dwcDateParts(sheet) : undefined;
   const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
+  const timeOrder = specs.time ? detectDayMonthOrder(timeCells) : 'unknown';
   const dwcDepth = dwcDepthCols(sheet);
 
   // a hemisphere column signs its coordinate only while their start / end words agree with the CURRENT mapping (a user who moved the latitude from the
@@ -346,6 +347,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
           d = parseDate(cell, {
             date1904: file.date1904,
             dateFormatted: sheet.dateFormatted?.[specs.when.index] === true,
+            datumColumn: true,
             ...(whenOrder === 'unknown' ? {} : { order: whenOrder }),
           });
           dateCache.set(cacheKey, d);
@@ -358,9 +360,10 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specs: Specs, c: C
           if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
           const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           if (specs.time && !isBlankCell(timeCell)) {
-            if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeCell(timeCell))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
+            const tOrder = timeOrder === 'unknown' ? undefined : timeOrder;
+            if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
             else {
-              date = combineDateTime(date, timeCell);
+              date = combineDateTime(date, timeCell, tOrder);
               tzField = specs.time.header;
             }
           }

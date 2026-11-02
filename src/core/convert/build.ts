@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { checkStationRows } from '../checks/rows';
-import { detectDayMonthOrder, isEpochPlaceholder, parseDate } from '../values/dates';
+import { detectDayMonthOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate } from '../values/dates';
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
@@ -512,8 +512,7 @@ function stationFindingsOf(sheets: readonly StationSheet[], farIds: ReadonlySet<
  * A column the sheet reads as a TIME of day whose cells hold full dates ("2003-01-17T00:00:00Z", "17.01.2003 08:30", a spreadsheet serial 37638.35), while no column is the date: every event
  * would be written without eventDate and the date that is in the file would be lost silently. A cell counts as a date when the date parser reads it (ISO, DD.MM.YYYY, D/M/YYYY and
  * M/D/YYYY when one part decides the order, with or without a time; a year alone is not a date) or when it is a serial number of the 1954-2118 range; the placeholder dates of a spreadsheet
- * or an epoch are times. `count` are the cells that hold a date, `lines` their lines, `filled` all the filled cells. Formats the parser does not read ("2003/01/17", "20030117 0830", "Jan 17 2003",
- * a 12-hour "8:30 AM" time after a date) are not claimed: they stay unread.
+ * or an epoch are times. `count` are the cells that hold a date, `lines` their lines, `filled` all the filled cells. Dates written in a form the parser does not read ("20030117 0830", "Jan 17 2003", "01/17/2003 8:30 AM") are counted too, so that they are not lost in silence ("2003/01/17" is read).
  */
 function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number; filled: number; lines: number[] } | undefined {
   if (specs.time === undefined || specs.when !== undefined) return undefined;
@@ -535,6 +534,9 @@ function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>)
     if (isEpochPlaceholder(c)) return;
     const d = parseDate(c, { date1904: false, dateFormatted: false, ...(order === 'unknown' ? {} : { order }) });
     if (!('error' in d) && d.precision !== 'year') lines.push(r.line);
+    // a date written out that no reader reads ('20030117 0830', 'Jan 17 2003', '01/17/2003 8:30 AM'): said here, not lost in silence. As a date and time it is then named by
+    // ROW-DATE-UNPARSEABLE, with the cells that do not read; no day/month order is guessed for it
+    else if ('error' in d && looksLikeUnreadDate(c)) lines.push(r.line);
   });
   return lines.length > 0 ? { header: specs.time.header, count: lines.length, filled, lines } : undefined;
 }

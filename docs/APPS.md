@@ -283,18 +283,18 @@ guessed). The number of decimals is counted from the text, never from the parsed
 
 **Dates** (`values/dates.ts`, `parseDate`). Accepted: ISO 8601 (`YYYY`, `YYYY-MM`, `YYYY-MM-DD`,
 with `T` or a space and a time, `Z` or an offset kept as written); `DD.MM.YYYY` (day first by
-convention); `DD/MM/YYYY` or `MM/DD/YYYY` (also with `-`) **only** when one part above 12 decides
+convention); `YYYY/MM/DD` and `YYYY.MM.DD` (year first, so the order is certain); `DD/MM/YYYY` or `MM/DD/YYYY` (also with `-`) **only** when one part above 12 decides
 the order, or when the column's order is decided by `detectDayMonthOrder` from all cells of the
 column (a column that mixes unambiguous DD/MM and MM/DD cells is `conflict` and every such date
 that differs in its parts is unparseable); `YY-MM-DD` (century inferred, always flagged
 `ROW-DATE-YYMMDD`); an ISO interval `start/end` (the start is the date; the end must parse and not
-precede the start); a bare 4-digit year string. An Excel serial is read as a date **only** when the
+precede the start); a bare 4-digit year string. In a column that **is** the date (its role, `datumColumn`; never by a guess from the header or the cells) eight digits are `YYYYMMDD` (text or a whole number, validated: month and day must exist) and a whole four-digit number is a year, as the text `2000` is; eight digits anywhere else stay an ID. A header that states the format in a bracket (`Date (YYYYMMDD)`, `Date [DD/MM/YYYY]`) is the name `Date` with the format as its unit text. An Excel serial is read as a date **only** when the
 most of the column's numeric cells are date-formatted (`dateFormatted` is a per-column flag of the sheet), and the 1900 or 1904 system is applied; a number in a
 text column is never guessed to be a serial. Calendar dates are validated (`2021-02-30` is
 unparseable). All arithmetic is on UTC milliseconds, so the machine's time zone cannot move a
 date. A time with no zone stays "unknown" (`ROW-TZ-UNKNOWN`), except that a date or time column whose
 header names UTC or GMT (`UTC_HEADER`, `dataset.ts`) is read as UTC and raises no such finding; a separate time column is combined
-with a day-precision date (`combineDateTime`). A time column may hold a **range**: `1600-1730`, `16:00-17:30` or several, `0530-0700, 1600-1730` (`parseTimeRange`, `values/dates.ts`). The time of the event is the **start** of the first range (a dash between two times is a range first, never a zone offset: `10:00-11:30` is 10:00; an offset needs `+`, `Z` or seconds; a column of year ranges of which at least one is impossible as a time, such as `1995-2000` (minute 95), is not a time column and is not read as times, while evening ranges such as `1930-2000` are times); the end and any further range are checked but **ignored** (no interval is written from a time column). A bare four-digit `HHMM` (`1800`, `0530`; 0000-2359, minutes up to 59) is read as a time **in a time column only** (never in a date or datetime column); one trailing period (`0530-0700.`, `1800.`, `16:00.`) is dropped, also after each of several ranges; a range end cut short (`10:00-11:3`, `1600-17`) is ignored, no finding. The year-range guard above is unchanged. An unreadable value in a time column is `ROW-DATE-UNPARSEABLE` with `params.role = time`, worded as a time (example `16:30`) and never as a date.
+with a day-precision date (`combineDateTime`). A time column may hold a **range**: `1600-1730`, `16:00-17:30` or several, `0530-0700, 1600-1730` (`parseTimeRange`, `values/dates.ts`). The time of the event is the **start** of the first range (a dash between two times is a range first, never a zone offset: `10:00-11:30` is 10:00; an offset needs `+`, `Z` or seconds; a column of year ranges of which at least one is impossible as a time, such as `1995-2000` (minute 95), is not a time column and is not read as times, while evening ranges such as `1930-2000` are times); the end and any further range are checked but **ignored** (no interval is written from a time column). A bare four-digit `HHMM` (`1800`, `0530`; 0000-2359, minutes up to 59) is read as a time **in a time column only** (never in a date or datetime column); one trailing period (`0530-0700.`, `1800.`, `16:00.`) is dropped, also after each of several ranges; a range end cut short (`10:00-11:3`, `1600-17`) is ignored, no finding. The year-range guard above is unchanged. A time column may also hold a full datetime (`2011-10-05T20:00:00Z`, `2003/01/17 08:30`, a spreadsheet placeholder such as `1899-12-30 12:30`): beside a date column its time part is read (`parseTimeColumnCell`), provided its day is the row's day or a placeholder (another day is `ROW-DATE-UNPARSEABLE`, never silently cut); with no date column beside it, a column named time whose cells are such datetimes is the date and time (3.3). An unreadable value in a time column is `ROW-DATE-UNPARSEABLE` with `params.role = time`, worded as a time (example `16:30`) and never as a date.
 
 **Coordinates** (`values/coords.ts`, `parseCoordinate`). Accepted: decimals; degrees with decimal
 minutes; degrees, minutes, seconds; hemisphere letters N, S, E, W before or after (S and W
@@ -1952,11 +1952,11 @@ Each item below is confirmed from code, a test, or a rule text.
   evidence alone only when the events are at least 80% of the sheet's taxon rows and there are two taxa or more.
 - A biomass column named `Biomass` or `Wet weight` with no unit anywhere in its header writes no `measurementUnit`
   (nothing is guessed); the unit has to be in the header.
-- `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` claim only what the date parser reads (ISO, `DD.MM.YYYY`,
-  `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial in a column the workbook formats as a date (a plain number such as 63000 or 43200 is a time)). Left unread,
-  and therefore silent: `2003/01/17 08:30`, `20030117 0830`, `Jan 17 2003`, `01/17/2003 8:30 AM`. Placeholder dates
-  (`1899-12-30`, `1970-01-01`) are not dates, and they are not read as times either (a time column holding them still has
-  no time written).
+- `CONV-TIME-HOLDS-DATES` and `CONV-TIME-SOME-DATES` count the cells of a time column that the date parser reads as a full date (ISO, `YYYY/MM/DD`,
+  `DD.MM.YYYY`, `D/M/YYYY` with one deciding part, with or without `HH:MM`, and a spreadsheet serial in a column the workbook formats as a date; a plain number such as 63000 or 43200 is a time)
+  and, since the last round, the cells that look like a date but that no reader reads: `20030117 0830`, `Jan 17 2003`, `01/17/2003 8:30 AM`. These are not read (no AM/PM, no month names, no
+  guessed day/month order), but they are said, not lost in silence; as "Date and time" they are then named by `ROW-DATE-UNPARSEABLE`. A column of such cells that the proposer reads as date and time by
+  itself (full ISO datetimes, `2003/01/17 08:30`) raises neither. Placeholder dates (`1899-12-30`, `1970-01-01`) are not dates: their time part is the time.
 
 - A replicate level exists only for a column with the role Replicate / sub-sample; a profile sheet
   does not read that role (its replicate column is ignored without a word), and a sample's replicates

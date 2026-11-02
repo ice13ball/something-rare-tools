@@ -446,7 +446,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Daten in den Zeilen {lines} (z. B. „{value}“) konnten nicht gelesen werden. Schreiben Sie Daten als JJJJ-MM-TT.`,
       fr: `Les dates des lignes {lines} (par ex. « {value} ») n'ont pas pu être lues. Écrivez les dates sous la forme AAAA-MM-JJ.`,
     },
-    technical: `{file}:{lines} field {field} value '{value}': date not parseable (ISO 8601, DD.MM.YYYY, unambiguous DD/MM/YYYY, YY-MM-DD or Excel serial).`,
+    technical: `{file}:{lines} field {field} value '{value}': date not parseable (ISO 8601, YYYY/MM/DD, DD.MM.YYYY, unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial).`,
     plainTime: {
       pl: `Nie udało się odczytać {+lines:godziny|godzin} {+lines:w wierszu|w wierszach} {lines} (np. „{value}”). Wpisz godzinę jako GG:MM (24 godziny), np. 16:30 (czytane są też 1630 i 16:30.), w UTC albo z podaną strefą czasową; przedział, np. 16:00-17:30 lub 1600-1730, jest odczytywany jako jego początek.`,
       en: `{+lines:The time|The times} in {+lines:line|lines} {lines} (e.g. "{value}") could not be read. Write the time as HH:MM (24 hours), for example 16:30 (1630 and 16:30. are read too), in UTC or with the time zone stated; a range such as 16:00-17:30 or 1600-1730 is read as its start.`,
