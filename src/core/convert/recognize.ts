@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { depthUnitOfHeader } from '../recognize/depthUnit';
 import { biomassNameUnit, distinctnessWithinSamples, isTaxonAttribute, isMassUnitText, isOrganismSizeHeader, isSamplingOrEnvironmentHeader, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
-import { dwcTermOf, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
+import { dwcTermOf, isBlankCell, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
@@ -710,7 +710,9 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const abundance = isAbundanceUnit(hdr.unit) || isAbundanceUnit(hdr.unitText);
       // a unit written in SQUARE brackets is a unit; '(m)' and '_m' on a name can be 'male' ('Calanus finmarchicus (m)', 'Calanus_m'), and a lone 'm' on a genus-shaped name is never taken for metres
       const squareUnit = /\[[^[\]]+\]/.test(stripTypeSuffix(p.header));
-      const geometry = squareUnit && unitFolded !== '' && isGeometryUnit(unitFolded) && (kind === 'unknown' || unitFolded !== 'm');
+      // a volume or an area unit makes the column the sampling effort only on a name that is no taxon shape at all ('Zostera marina [m2]', 'Posidonia oceanica [ha]' are species with a cover)
+      const spaceUnit = /^(?:l|ml|dl|cl|dm3|cm3|m3|m2|cm2|km2|ha)$/.test(unitFolded);
+      const geometry = squareUnit && unitFolded !== '' && isGeometryUnit(unitFolded) && (kind === 'unknown' || unitFolded !== 'm') && (!spaceUnit || kind === 'unknown');
       // what the VALUES and the UNIT rule out (a false variable loses occurrences, so only what no species column can be). Values are read only on a column that is filled on EVERY row, never with
       // an abundance unit, and a one-value rule never on a name that is shaped like a taxon; the years rule on a name that is not, or that says year ('SampleYear', 'Year'). A genus name with
       // none of these stays a candidate, whatever its unit: 'Calanus', 'Acartia', 'Calanus [ind/m3]'.
@@ -791,8 +793,18 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   if (hasLongTaxon) {
     for (const q of base) {
       if (q.role.kind !== 'variable' || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined || nameKind(q.header, true) !== 'descriptor') continue;
-      const replicateName = /^(?:replicates?|reps?|replikat(?:e|s)?)(?: no| nr| num| number| id| n)?$/.test(foldDiacritics(headerKey(unitFromHeader(q.header).name)));
-      if (replicateName && valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) === 'varies') {
+      const nameKey = foldDiacritics(headerKey(unitFromHeader(q.header).name));
+      // the plural ('Replicates', 'Reps') can hold "found in N replicates" for one taxon: it stays a variable and blocks when it differs inside a sample
+      if (/^(?:replicates|reps)\b/.test(nameKey)) continue;
+      const replicateName = /^(?:replicate|rep|replikat(?:e)?)(?: no| nr| num| number| id| n)?$/.test(nameKey);
+      // the role only where every value of the column holds at least two rows (a column that is different on every row would make an event of each row)
+      const counts = new Map<string, number>();
+      for (const r of sheet.rows) {
+        const c = r.cells[q.index] ?? null;
+        if (!isBlankCell(c)) counts.set(String(c).trim(), (counts.get(String(c).trim()) ?? 0) + 1);
+      }
+      const eachTwice = counts.size > 0 && [...counts.values()].every((n) => n >= 2);
+      if (replicateName && eachTwice && valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) === 'varies') {
         q.role = { kind: 'replicate' };
         q.confidence = 'low';
         why(q, 'replicate-name');

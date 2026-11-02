@@ -120,8 +120,8 @@ describe('numeric columns that no species column can be are not taxon candidates
   });
 
   it('a column with a unit of length, area or temperature is no species, whatever its name', () => {
-    const q = rolesOf(['Station', 'Swept [km2]', 'Fork length [mm]', 'Water [°C]', 'Calanus [ind/m3]'], N(4, (i) => ['S1', 1.5 + i, 100 + i, 4 + i / 10, i]));
-    expect(q['Swept [km2]'].role).toMatchObject({ kind: 'effort', unit: 'km2' });
+    const q = rolesOf(['Station', 'Swept area [km2]', 'Fork length [mm]', 'Water [°C]', 'Calanus [ind/m3]'], N(4, (i) => ['S1', 1.5 + i, 100 + i, 4 + i / 10, i]));
+    expect(q['Swept area [km2]'].role).toMatchObject({ kind: 'effort', unit: 'km2' });
     expect(q['Fork length [mm]'].role).toMatchObject({ kind: 'variable', unit: 'mm' });
     expect(q['Water [°C]'].role.kind).toBe('variable');
     expect(q['Calanus [ind/m3]'].role).toEqual({ kind: 'taxon', header: true });

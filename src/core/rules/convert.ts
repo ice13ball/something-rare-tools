@@ -71,6 +71,7 @@ import type { RuleSpec } from './spec';
  *   CONV-EMOF-EVENT-MISMATCH   count            value = an example occurrenceID
  *   CONV-EMOF-VALUE-EMPTY      count            lines = rows of the eMoF table
  *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
+ *   CONV-REPLICATE-EVENTS      column, count    field = the replicate column, count = the replicate events it makes (info)
  *   CONV-TAXON-ATTRIBUTE-IGNORED count, columns  columns of a long sheet whose value is the same for every row of one taxon (a code, an id, a serial number, a trophic level): ignored, not written (info)
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
@@ -407,6 +408,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}:{lines}: rows of sample "{value}" differ in {what} ({count} sample(s) affected). The first row is not silently preferred.`,
   },
   {
+    id: 'CONV-REPLICATE-EVENTS',
+    category: 'B',
+    severity: 'info',
+    params: ['column', 'count'],
+    plain: {
+      pl: `Kolumna „{column}” jest odczytana jako numer replikatu: {count} {+count:zdarzenie|zdarzenia|zdarzeń} replikatu {+count:powstaje|powstają|powstaje} pod próbami. Jeśli to nie replikaty, zmień jej znaczenie.`,
+      en: `Column "{column}" is read as the replicate number: it makes {count} replicate {+count:event|events} under the samples. If these are not replicates, change its meaning.`,
+      de: `Die Spalte „{column}“ wird als Replikatnummer gelesen: Sie ergibt {count} Replikat-{+count:Ereignis|Ereignisse} unter den Proben. Sind es keine Replikate, ändern Sie ihre Bedeutung.`,
+      fr: `La colonne « {column} » est lue comme le numéro de réplicat : elle crée {count} {+count:événement|événements} de réplicat sous les échantillons. Si ce ne sont pas des réplicats, changez son sens.`,
+    },
+    technical: `{file}, {sheet} field {field}: the replicate column "{column}" makes {count} replicate event(s) under the sample events.`,
+  },
+  {
     id: 'CONV-TAXON-ATTRIBUTE-IGNORED',
     category: 'B',
     severity: 'info',
@@ -414,8 +428,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     plain: {
       pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} dla każdego taksonu zawsze tę samą wartość, więc to cechy taksonu (np. kod gatunku), a nie pomiary, i nie zostały zapisane: {columns}. Jeśli któraś jest pomiarem, nadaj jej znaczenie.`,
       en: `{count} {+count:column has|columns have} the same value for every row of one taxon, so {+count:it is an attribute|they are attributes} of the taxon (a species code, say), not {+count:a measurement|measurements}, and {+count:was|were} not written: {columns}. If one is a measurement, give it a meaning.`,
-      de: `{count} {+count:Spalte hat|Spalten haben} für jede Zeile eines Taxons denselben Wert, ist also eine Eigenschaft des Taxons (z. B. ein Artcode), keine Messung, und wurde nicht geschrieben: {columns}. Ist eine davon eine Messung, geben Sie ihr eine Bedeutung.`,
-      fr: `{count} {+count:colonne a|colonnes ont} la même valeur pour chaque ligne d'un taxon : un attribut du taxon (un code d'espèce, par ex.), pas une mesure, donc non écrit : {columns}. Si l'une est une mesure, donnez-lui un sens.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} für jede Zeile eines Taxons denselben Wert, {+count:ist also eine Eigenschaft|sind also Eigenschaften} des Taxons (z. B. Artcode), {+count:keine Messung|keine Messungen}, und {+count:wurde|wurden} nicht geschrieben: {columns}. Ist eine davon eine Messung, geben Sie ihr eine Bedeutung.`,
+      fr: `{count} {+count:colonne a|colonnes ont} la même valeur pour chaque ligne d'un taxon : {+count:un attribut du taxon|des attributs du taxon} (un code d'espèce, par ex.), {+count:pas une mesure|pas des mesures}, donc non {+count:écrit|écrits} : {columns}. Si l'une est une mesure, donnez-lui un sens.`,
     },
     technical: `{file}, {sheet}: {count} column(s) ignored because their value is a function of the taxon column (name says code, id, tsn, key, serial or trophic, or most taxa are listed more than once; no unit): {columns}.`,
   },

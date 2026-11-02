@@ -2111,6 +2111,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         .map((c) => c.header.trim());
       if (attrs.length > 0) findings.push(makeConvertFinding('CONV-TAXON-ATTRIBUTE-IGNORED', { ...base, params: { count: attrs.length, columns: attrs.join(', ') } }));
     }
+    // the replicate column makes events under the samples: its column and their number are said (a replicate role is the user's, or the tool's low-confidence proposal; both are shown)
+    if (cols.replicate !== undefined) {
+      const replicateEvents = [...samples.values()].filter((a) => a.sheetKey === sheetKey && a.site.eventType === 'replicate').length;
+      if (replicateEvents > 0) findings.push(makeConvertFinding('CONV-REPLICATE-EVENTS', { ...base, field: cols.replicate.header, params: { column: cols.replicate.header.trim(), count: replicateEvents } }));
+    }
     const moved = occState.filter((st) => st.written).map((st) => st.v.header.trim());
     if (moved.length > 0) findings.push(makeConvertFinding('CONV-VALUE-PER-OCCURRENCE', { ...base, params: { count: moved.length, columns: moved.join(', ') } }));
     pushAll(findings, seafloorOf.findings());

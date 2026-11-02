@@ -128,6 +128,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-SAMPLE-PER-ROW | warning | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)](https://manual.obis.org/format_occurrence.html), "(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"<a id="CONV-SAMPLE-PER-ROW"></a> |
 | CONV-ZERO-SKIPPED | info | B | — | [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")<a id="CONV-ZERO-SKIPPED"></a> |
 | CONV-SAMPLE-CONFLICT | error | B | — | —<a id="CONV-SAMPLE-CONFLICT"></a> |
+| CONV-REPLICATE-EVENTS | info | B | — | —<a id="CONV-REPLICATE-EVENTS"></a> |
 | CONV-TAXON-ATTRIBUTE-IGNORED | info | B | — | —<a id="CONV-TAXON-ATTRIBUTE-IGNORED"></a> |
 | CONV-VALUE-PER-OCCURRENCE | info | B | — | —<a id="CONV-VALUE-PER-OCCURRENCE"></a> |
 | CONV-NERC-UNKNOWN | warning | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-NERC-UNKNOWN"></a> |

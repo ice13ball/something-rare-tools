@@ -1246,8 +1246,8 @@ when the sheet has none and the name says no size and the unit counts organisms 
 not constant inside the samples) is ignored with its reason (`taxon-attribute`) and said once (`CONV-TAXON-ATTRIBUTE-IGNORED` lists the columns), never written as a measurement, but only when it has
 **no unit and no size word** and either its name says code, id, tsn, key, serial or trophic, or at least half of the taxa (and at least three) are listed more than once: a length, a cover or a content
 that happens to be the same for the repeated taxa is a measurement and its conflict stays visible. A **descriptor of the sample on a long sheet** (`Replicate`, `Rep`, `Tow`, `Haul`, `Cast`) is not a
-variable: one that says replicate, over a sample code that does NOT tell its rows apart (the same code has several values), is proposed as the **replicate role** at low confidence
-(`replicate-name`: each value is an event under the sample); every other one is ignored (`sample-descriptor`). Where the code already separates the rows a replicate column is never proposed as a role, so
+variable: one that says replicate, over a sample code that does NOT tell its rows apart (the same code has several values), is proposed as the **replicate role** at low confidence, only when every value of the column holds at least two rows
+(`replicate-name`: each value is an event under the sample; `CONV-REPLICATE-EVENTS` names the column and the number of events it makes; the plural `Replicates` stays a variable); every other one is ignored (`sample-descriptor`). Where the code already separates the rows a replicate column is never proposed as a role, so
 the event IDs of a sheet with unique codes are those of the sheet without the column; the button of the role stays the way to use it. A measured variable that is not a recognised one is moved to the
 **occurrence** of its row (like a biomass: `perOccurrence`, `value-per-occurrence`, and one info finding `CONV-VALUE-PER-OCCURRENCE` that lists the columns) only as the size of an organism, by a **positive list**
 (`isOrganismSizeHeader`): a bare `length`, `width`, `height`, `size` or `diameter`; one of them behind `total`, `fork`, `standard`, `body`, `shell`, `carapace`, `prosome` or `mean`; or `TL`, `FL`, `SL`, `L1 ... L10`;
@@ -1900,7 +1900,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **185 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **186 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1914,8 +1914,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 83 | 38 / 32 / 13 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **185** | | | |
+| `CONV-` | `B` | 84 | 38 / 32 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **186** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

@@ -125,7 +125,7 @@ describe('unique codes keep their IDs: the column stays ignored until the user c
 });
 
 describe('a numeric Replicate column over a code that does not tell its rows apart', () => {
-  const f = fileOf(['Sample ID', 'Station', 'Date', 'Replicate', 'Species', 'Count'], [['A-2_5', 'A-2', '2015-03-04', 1, 'Asterias rubens', 4], ['A-2_5', 'A-2', '2015-03-04', 2, 'Asterias rubens', 2]]);
+  const f = fileOf(['Sample ID', 'Station', 'Date', 'Replicate', 'Species', 'Count'], [['A-2_5', 'A-2', '2015-03-04', 1, 'Asterias rubens', 4], ['A-2_5', 'A-2', '2015-03-04', 1, 'Ophiura ophiura', 3], ['A-2_5', 'A-2', '2015-03-04', 2, 'Asterias rubens', 2], ['A-2_5', 'A-2', '2015-03-04', 2, 'Ophiura ophiura', 5]]);
   it('long: the replicate role is proposed (low confidence) and the sample has two replicate events, nothing blocks and no eMoF row is made of it', () => {
     const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' })] });
     expect(find(r.blocking, 'CONV-ID-DUPLICATE')).toEqual([]);
@@ -133,7 +133,7 @@ describe('a numeric Replicate column over a code that does not tell its rows apa
     expect(r.events.filter((e) => e.eventType === 'replicate')).toHaveLength(2);
     expect(r.measurements.filter((m) => m.role === 'variable')).toEqual([]);
   });
-  it('long: taken as a plain variable by hand, the occurrence duplicate still names it', () => {
+  it('long: taken as a plain variable by hand, a repeated taxon in the sample still blocks and names it', () => {
     const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long', edit: { Replicate: { kind: 'variable', variable: 'Replicate' } } })] });
     expect(find(r.blocking, 'CONV-ID-DUPLICATE')[0].params.column).toBe('Replicate');
   });

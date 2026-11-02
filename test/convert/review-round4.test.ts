@@ -162,3 +162,49 @@ describe('LOW: the sentences end, and a tick on a wide sheet does not drop the c
     expect(rows[0].target.kind).toBe('event');
   });
 });
+
+describe('final: an area unit on a species is a cover, the replicate role says what it makes', () => {
+  it.each(['Zostera marina [m2]', 'Zostera marina [cm2]', 'Posidonia oceanica [ha]'])('%s stays a species column (no effort, no lost occurrence)', (h) => {
+    const r = rolesOf(['Station', h, 'Oithona similis'], N(4, (i) => ['S1', 5 + i, 2]));
+    expect(r[h].role).toEqual({ kind: 'taxon', header: true });
+  });
+  it.each(['Zostera [cm]', 'Calanus finmarchicus [mm]', 'Calanus [h]'])('%s stays an event measurement, as accepted', (h) => {
+    const r = rolesOf(['Station', h, 'Oithona similis'], N(4, (i) => ['S1', 5 + i, 2]));
+    expect(r[h].role).toMatchObject({ kind: 'variable' });
+  });
+  it('a volume or an area on a name that is no taxon shape is still the effort', () => {
+    const r = rolesOf(['Station', 'Swept area [km2]', 'Calanus'], N(4, (i) => ['S1', 1.5 + i, 2]));
+    expect(r['Swept area [km2]'].role).toMatchObject({ kind: 'effort' });
+  });
+
+  const long = (h: string, v: (i: number) => Cell) => {
+    const rows = N(8, (i) => ['K1', '2023-06-14', 55, 2.5, TAXA[i % 4], i + 1, v(i)]);
+    const file = fileOf([...HEAD, h], rows);
+    return { file, role: proposeConvertColumns(file.sheets[0], CTX).find((p) => p.header === h)!, run: () => convert({ sheets: [sheetInput(file, { quantity: { kind: 'count' } })], options: {} }) };
+  };
+  it('Rep with two rows for each value is the replicate role and the info finding names the column and the events', () => {
+    const { role, run } = long('Rep', (i) => 1 + Math.floor(i / 4));
+    expect(role.role).toEqual({ kind: 'replicate' });
+    const f = run().findings.find((x) => x.ruleId === 'CONV-REPLICATE-EVENTS')!;
+    expect(f.params).toMatchObject({ column: 'Rep', count: 2 });
+    expect(f.severity).toBe('info');
+    for (const l of LANGS) expect(renderConvertPlain(f, l), l).toContain('Rep');
+  });
+  it('Rep that is different on every row does not make eight replicate events', () => {
+    const { role, run } = long('Rep', (i) => i + 1);
+    expect(role.role.kind).toBe('ignore');
+    expect(run().events.filter((e) => e.eventType === 'replicate')).toEqual([]);
+  });
+  it('plural Replicates stays a variable and blocks when it differs inside a sample', () => {
+    const { role, run } = long('Replicates', (i) => 1 + (i % 3));
+    expect(role.role.kind).toBe('variable');
+    expect(conflicts(run())).toHaveLength(1);
+  });
+  it('the German and French attribute sentences take the plural', () => {
+    const f = { ruleId: 'CONV-TAXON-ATTRIBUTE-IGNORED', severity: 'info' as const, params: { count: 2, columns: 'a, b' }, file: 'x', sheet: 's' };
+    expect(renderConvertPlain(f, 'de')).toContain('sind also Eigenschaften');
+    expect(renderConvertPlain(f, 'de')).toContain('wurden nicht geschrieben');
+    expect(renderConvertPlain(f, 'fr')).toContain('des attributs du taxon');
+    expect(renderConvertPlain({ ...f, params: { count: 1, columns: 'a' } }, 'de')).toContain('ist also eine Eigenschaft');
+  });
+});
