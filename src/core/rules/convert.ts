@@ -71,6 +71,7 @@ import type { RuleSpec } from './spec';
  *   CONV-EMOF-EVENT-MISMATCH   count            value = an example occurrenceID
  *   CONV-EMOF-VALUE-EMPTY      count            lines = rows of the eMoF table
  *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
+ *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
  *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
@@ -386,12 +387,25 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['what', 'count'],
     plain: {
-      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) mają różne wartości daty, pozycji, głębokości, wielkości próby lub zmierzonej wielkości. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
-      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in date, position, depth, sample size or a measured value. A sample is one event, so these values must be the same in all its rows.`,
-      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in Datum, Position, Tiefe, Probengröße oder einem Messwert. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein.`,
-      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par la date, la position, la profondeur, la taille ou une valeur mesurée. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes.`,
+      pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) różnią się: {what}. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach; jeśli to wartość każdego osobnika, zaznacz „każdego osobnika” przy kolumnie.`,
+      en: `The rows of sample "{value}" ({+lineCount:line|lines} {lines}) differ in: {what}. A sample is one event, so these values must be the same in all its rows; if it is a value of each organism, tick "of each organism" on the column.`,
+      de: `Die Zeilen der Probe „{value}“ ({+lineCount:Zeile|Zeilen} {lines}) unterscheiden sich in: {what}. Eine Probe ist ein Ereignis, daher müssen diese Werte in allen ihren Zeilen gleich sein; ist es ein Wert je Organismus, haken Sie bei der Spalte „jedes Organismus“ an.`,
+      fr: `Les lignes de l'échantillon « {value} » ({+lineCount:ligne|lignes} {lines}) diffèrent par : {what}. Un échantillon est un seul événement : ces valeurs doivent être identiques sur toutes ses lignes ; si c'est une valeur de chaque organisme, cochez « de chaque organisme » sur la colonne.`,
     },
     technical: `{file}, {sheet}:{lines}: rows of sample "{value}" differ in {what} ({count} sample(s) affected). The first row is not silently preferred.`,
+  },
+  {
+    id: 'CONV-VALUE-PER-OCCURRENCE',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:kolumna jest zapisana|kolumny są zapisane|kolumn jest zapisanych} przy wystąpieniach wierszy, a nie przy próbce: {columns}. Ich wartości różnią się w próbce jak wartości pojedynczych osobników. Jeśli to dwie próbki pod jednym kodem, odznacz „każdego osobnika” przy kolumnie i popraw kod.`,
+      en: `{count} {+count:column is|columns are} written on the occurrences of the rows, not on the sample: {columns}. Their values differ inside a sample like the values of single organisms. If the rows are really two samples under one code, untick "of each organism" on the column and fix the sample code.`,
+      de: `{count} {+count:Spalte wird|Spalten werden} bei den Vorkommen der Zeilen geschrieben, nicht bei der Probe: {columns}. Ihre Werte unterscheiden sich in einer Probe wie die einzelner Organismen. Sind es zwei Proben unter einem Code, entfernen Sie bei der Spalte „jedes Organismus“ und korrigieren Sie den Code.`,
+      fr: `{count} {+count:colonne est écrite|colonnes sont écrites} sur les occurrences des lignes et non sur l'échantillon : {columns}. Leurs valeurs diffèrent dans un échantillon comme celles d'organismes isolés. S'il s'agit de deux échantillons sous un même code, décochez « de chaque organisme » et corrigez le code.`,
+    },
+    technical: `{file}, {sheet}: {count} measured-variable column(s) written as an eMoF row of the occurrence of each row, not of the sample event: {columns}.`,
   },
   {
     id: 'CONV-NERC-UNKNOWN',

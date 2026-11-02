@@ -73,6 +73,7 @@ export function nameWithComment(h: string): string {
 }
 
 /** A comment that says the column is a spread or a count of the variable, not the variable ('Temp [deg C] (std dev)', 'Chl [µg/l] (SD of 3)'). */
+export const isStatisticComment = (comment: string): boolean => STATISTIC_COMMENT.test(headerKey(comment));
 const STATISTIC_COMMENT = /(?:^| )(?:st dev|std dev|stdev|std|sd|sem|se|cv|standard deviation|standard error|variance)(?: |$)/;
 
 const trimName = (s: string): string => s.replace(/[\s_]+$/, '').replace(/^[\s_]+/, '');

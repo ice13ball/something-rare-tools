@@ -1242,13 +1242,18 @@ ignored or variable column of few distinct values that is not a function of the 
 differ between the rows of a sample is not a total: it gets a visible low-confidence proposal (a
 biomass measurement of each occurrence when a mass unit stands in its name; else the quantity of each row
 when the sheet has none and the name says no size and the unit counts organisms ('Total length [mm]', 'Total depth' are not quantities); else it stays ignored, with a reason that says what to decide). The same judgement applies to a column the name already claimed as biomass ('Total weight (kg)'): constant within a sample, it is a total and starts ignored, with its own reason
-(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A measured variable that is not a recognised one (a `Total length`, a `Mean Length (µm)`, a size class `L1 (µm)`) is
-decided from the values like a total (`valuesRepeatWithinSample`) on a long sheet that has a quantity or a biomass: the same value on all the
-rows of a sample is a measured variable of the sample event (`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass);
-a value that differs between the rows of a sample (a length of each fish) is a measurement of each **occurrence**, written like a biomass
-(`perOccurrence`, `value-per-occurrence`), so it does not conflict. A recognised variable (temperature, salinity, ...) that differs inside a sample still blocks
-as `CONV-SAMPLE-CONFLICT`, which names the column. The decision is taken from the sample columns the proposal sees; a column the user later makes the
-sample code is not seen by it (the role can be changed by hand). `Total depth` is the water
+(`summary-total-biomass`, `summary-total-quantity`, `summary-total-varies`). A measured variable that is not a recognised one is moved to the **occurrence** of its row (like a biomass: `perOccurrence`,
+`value-per-occurrence`, and one info finding `CONV-VALUE-PER-OCCURRENCE` that lists the columns) only on evidence that it is a value of
+each organism, on a long sheet that has a quantity or a biomass, when its values differ between the rows of a sample (`valuesRepeatWithinSample`) and
+(a) the name says the size of an organism (length, width, height, diameter, size, thickness) or its unit is a length of that scale (µm, mm, cm), or (b) the values
+are nearly all different inside the samples (on average at least three quarters of the rows of a sample hold a value of their own: `L1 ... L10` of each stage; two
+casts under one code give two values on eight rows, a typo one value among threes). The same value on all rows of a sample is a variable of the sample event
+(`size-variable`, low confidence, when the name says total and the unit counts no organisms and no mass). Everything else that differs inside a sample
+(a Secchi depth written for two casts, a bottom temperature, an unrecognised rate) keeps blocking as `CONV-SAMPLE-CONFLICT`, which names the column in its sentence;
+a recognised variable (temperature, salinity ...) and a descriptor of the sample (Tow, Haul, Cast) are never moved. The role of a variable carries the tick "of each
+organism", which moves or returns a column by hand. A column with a unit and a name that is no descriptor does not separate samples; a count unit or a descriptor
+name does. The occurrence rows get the same identifiers, prompts (`CONV-NERC-UNKNOWN`, `CONV-UNIT-NO-P06`) and picks as the event rows. The decision is taken from the sample
+columns the proposal sees; a column the user later makes the sample code is not seen by it, so check the tick then. `Total depth` is the water
 depth of the site (`isSiteDepthName`, like `Total water depth`): the depth of the rows when no other column gives one, otherwise not written. With no sample column, or only one row per sample, nothing can be judged and it stays ignored; a **quality-flag** column
 (`QV:ODV:…`, `Q_`/`QC_`/`QF_` prefixes, `_QC`/`_flag` suffixes, and `Q`/`QC`/`QF` + a space or
 hyphen + the name of a sibling column) is never a measurement or a taxon (`isQualityHeader`); a
@@ -1889,7 +1894,7 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
 assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **183 rules**, equals the number of rule rows in
+**2026-11-02** (recomputed after the depth-unit, long-sheet and station fixes). The total, **184 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -1903,8 +1908,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 8 | 6 / 2 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 81 | 38 / 32 / 11 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **183** | | | |
+| `CONV-` | `B` | 82 | 38 / 32 / 12 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **184** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.

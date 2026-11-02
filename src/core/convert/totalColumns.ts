@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { foldUnit } from './vocab';
+import { isPlainCountUnit } from './columnValues';
+import { nameKind } from './measured';
 import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
 import type { ColumnProposal, RawSheet } from '../types';
 import { parseNumber } from '../values/numbers';
@@ -81,6 +84,28 @@ const SAMPLE_KEY_KINDS = new Set(['sampleId', 'station', 'cruise', 'date', 'date
  * 'constant' when at least half of the samples of more than one row hold one value; 'varies' otherwise; 'unknown' without a sample column, a sample of more than one row, or a number.
  */
 export function valuesRepeatWithinSample(sheet: RawSheet, base: readonly ColumnProposal[], index: number, decimalComma: boolean): 'constant' | 'varies' | 'unknown' {
+  return withinSample(sheet, base, index, decimalComma).verdict;
+}
+
+/**
+ * How distinct the values of a column are INSIDE the samples that have more than one row: the mean over those samples of (different values / rows). A length of each organism is nearly
+ * always different (L1, L2 ... of a copepod stage: close to 1); a Secchi depth written twice for two casts under one code has 2 values on 8 rows (0.25). `undefined` when no sample has two rows.
+ */
+export function distinctnessWithinSamples(sheet: RawSheet, base: readonly ColumnProposal[], index: number, decimalComma: boolean): number | undefined {
+  return withinSample(sheet, base, index, decimalComma).distinct;
+}
+
+/** Words of a header that name the size of an organism: a column with one of them that differs within a sample is the size of each organism. */
+const ORGANISM_SIZE_WORDS = new Set(['length', 'len', 'width', 'height', 'diameter', 'size', 'thickness', 'girth']);
+export function isOrganismSizeHeader(header: string): boolean {
+  return stripTypeSuffix(header)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((w) => ORGANISM_SIZE_WORDS.has(w));
+}
+
+function withinSample(sheet: RawSheet, base: readonly ColumnProposal[], index: number, decimalComma: boolean): { verdict: 'constant' | 'varies' | 'unknown'; distinct?: number } {
   const key = base.filter((q) => SAMPLE_KEY_KINDS.has(q.role.kind) && q.index !== index).map((q) => q.index);
   // a column that is still ignored (a tow or haul number the converter has no role for) separates the samples too, unless it only describes the taxon (a species code, a common name):
   // a column that is a function of the taxon column is not a sample column
@@ -89,7 +114,8 @@ export function valuesRepeatWithinSample(sheet: RawSheet, base: readonly ColumnP
     for (const q of base) {
       if ((q.role.kind !== 'ignore' && q.role.kind !== 'variable') || q.index === index || key.includes(q.index)) continue;
       // a column with a unit is a measurement ('L1 (µm)', 'Area net (m2)'), not a tow or haul number: it does not separate samples
-      if (q.role.kind === 'variable' && q.role.unit !== undefined) continue;
+      // (a count unit or a name of a descriptor of the sample - Tow, Haul, Cast - still separates samples)
+      if (q.role.kind === 'variable' && q.role.unit !== undefined && !isPlainCountUnit(foldUnit(q.role.unit)) && nameKind(q.header, true) !== 'descriptor') continue;
       const values = sheet.rows.map((r) => r.cells[q.index] ?? null).filter((c) => !isBlankCell(c));
       // a tow or haul number may be a number: an ignored column of few distinct values (not a per-row measurement) separates samples
       if (values.length === 0 || new Set(values.map((c) => String(c).trim())).size * 2 > values.length) continue;
@@ -105,23 +131,25 @@ export function valuesRepeatWithinSample(sheet: RawSheet, base: readonly ColumnP
       key.push(q.index);
     }
   }
-  if (key.length === 0) return 'unknown';
-  const groups = new Map<string, { first: number; same: boolean; n: number }>();
+  if (key.length === 0) return { verdict: 'unknown' };
+  const groups = new Map<string, { first: number; same: boolean; n: number; values: Set<number> }>();
   for (const r of sheet.rows) {
     const cell = r.cells[index] ?? null;
     const p = parseNumber(cell, decimalComma);
     if (p.status !== 'ok') continue;
     const k = key.map((i) => String(r.cells[i] ?? '').trim()).join('\u0001');
     const g = groups.get(k);
-    if (g === undefined) groups.set(k, { first: p.value, same: true, n: 1 });
+    if (g === undefined) groups.set(k, { first: p.value, same: true, n: 1, values: new Set([p.value]) });
     else {
       g.n++;
+      g.values.add(p.value);
       if (p.value !== g.first) g.same = false;
     }
   }
   const multi = [...groups.values()].filter((g) => g.n > 1);
-  if (multi.length === 0) return 'unknown';
-  return multi.filter((g) => g.same).length * 2 >= multi.length ? 'constant' : 'varies';
+  if (multi.length === 0) return { verdict: 'unknown' };
+  const distinct = multi.reduce((a, g) => a + g.values.size / g.n, 0) / multi.length;
+  return { verdict: multi.filter((g) => g.same).length * 2 >= multi.length ? 'constant' : 'varies', distinct };
 }
 
 /** A header that says total or sum as one of its words ('Total', 'Razem', 'weight_kg_total'). */

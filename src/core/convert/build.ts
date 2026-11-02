@@ -5,7 +5,7 @@ import { detectDayMonthOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
-import { headerComment, isBlankCell, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
+import { headerComment, isBlankCell, isStatisticComment, stripTypeSuffix, unitFromHeader } from '../recognize/columns';
 import { badHeaderCodes } from '../recognize/headerCodes';
 import { convertDepthText, depthUnitFactor, depthUnitOfHeader, isMetreUnit } from '../recognize/depthUnit';
 import type { DepthUnitFactor } from '../recognize/depthUnit';
@@ -158,7 +158,7 @@ interface Cols {
   /** Biomass / weight columns next to the quantity column of a long sheet: one eMoF row per occurrence and column (as given, never converted). `basis` = the kind of mass, when known. */
   biomass: (Spec & { basis?: 'wet' | 'dry' | 'afdw' })[];
   /** Measured-variable columns whose value belongs to the OCCURRENCE of a long sheet's row (role.perOccurrence): one eMoF row of the occurrence per column, the value and the unit as given. */
-  occVars: (Spec & { name: string; unit?: string })[];
+  occVars: (Spec & { name: string; unit?: string; p01?: string })[];
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
 
@@ -210,7 +210,7 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
         const own = header?.[m.index];
         const declared = own === undefined ? undefined : p01CodeOf(stripTypeSuffix(own))?.code;
         if (name !== '' && r.perOccurrence === true) {
-          c.occVars.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }) });
+          c.occVars.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(declared === undefined ? {} : { p01: declared }) });
           break;
         }
         if (name !== '') c.variables.push({ ...spec, name, ...(unit === undefined || unit === '' ? {} : { unit }), ...(declared === undefined ? {} : { p01: declared }) });
@@ -238,6 +238,13 @@ function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): C
     }
   }
   // two variable columns of one name ('Temp [deg C] (CTD)', 'Temp [deg C] (bottle)') would write the same measurementType twice: the comment of the header (else the header) tells them apart
+  // a variable whose comment says it is a spread or a count of the variable ('Temp [deg C] (std dev)') keeps that in its type: it is not the temperature
+  for (const group of [c.variables, c.occVars]) {
+    for (const v of group) {
+      const cm = headerComment(v.header);
+      if (cm !== undefined && isStatisticComment(cm) && !v.name.includes(cm)) v.name = `${v.name} (${cm})`;
+    }
+  }
   for (const group of [c.variables, c.occVars]) {
     const count = new Map<string, number>();
     for (const v of group) count.set(v.name, (count.get(v.name) ?? 0) + 1);
@@ -1518,6 +1525,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       return { v, type: d.type, unit: unitPickFor(v.unit, d), written: false };
     });
 
+    // the measured variables whose value belongs to the occurrence of the row: the same identifiers, picks and units as an event variable
+    const occState = cols.occVars.map((v) => {
+      const d = readDecision(sin.nerc, v.index, v.p01);
+      checkText(v.header, sheet.headerLine, v.name);
+      checkText(v.header, sheet.headerLine, v.unit);
+      return { v, type: d.type, unit: unitPickFor(v.unit, d), written: false };
+    });
+
     const depthOf = depthReader(cols, dc, collector, sheet.name);
     const seafloorOf = seafloorReader(cols, dc, collector, base);
     const noSiteDepth = new Lines();
@@ -2025,7 +2040,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         }
         // a measured variable whose value belongs to the occurrence of this row (a length of each fish): one eMoF row of THIS occurrence, the value and the unit as given
         if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined) {
-          for (const v of cols.occVars) {
+          for (const st of occState) {
+            const v = st.v;
             const vcell = row.cells[v.index] ?? null;
             const vp = parseNumber(vcell, dc);
             if (vp.status === 'missing') continue;
@@ -2037,12 +2053,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               collector.add('ROW-NON-NUMERIC', sheet.name, v.header, row.line, vp.token);
               continue;
             }
+            st.written = true;
             measurements.push({
               target: { kind: 'occurrence', id },
               role: 'variable',
-              measurementType: v.name,
+              measurementType: measurementTypeText(st.type, v.name),
+              ...(st.type ? { measurementTypeId: st.type.id } : {}),
               measurementValue: valueText(vcell, dc),
-              ...(v.unit === undefined ? {} : { measurementUnit: v.unit }),
+              ...(v.unit === undefined ? (st.unit ? { measurementUnit: 'Dimensionless' } : {}) : { measurementUnit: v.unit }),
+              ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
               source: { ...occSource, column: v.header },
             });
           }
@@ -2065,7 +2084,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
     }
 
-    pushAll(findings, reportVariables(varState, base, [], nercStats));
+    pushAll(findings, reportVariables([...varState, ...occState], base, [], nercStats));
+    // the columns that were written on the occurrences of the rows, said once (the user can undo it by the tick "of each organism" on the column's role)
+    const moved = occState.filter((st) => st.written).map((st) => st.v.header.trim());
+    if (moved.length > 0) findings.push(makeConvertFinding('CONV-VALUE-PER-OCCURRENCE', { ...base, params: { count: moved.length, columns: moved.join(', ') } }));
     pushAll(findings, seafloorOf.findings());
     // the station checks of /check on the input rows (a station spanning hemispheres, a sign or digit typed wrongly): the output has no station name to compare, the station is a parent event
     stationSheets.push({ file: fileName, sheet: sheet.name, rows: stationRows });

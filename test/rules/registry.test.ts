@@ -129,7 +129,7 @@ describe('rule table', () => {
   });
 
   it('CONV-* rules are the converter\'s and nothing under checks raises one', () => {
-    expect(CONVERT_RULES.length).toBe(81);
+    expect(CONVERT_RULES.length).toBe(82);
     expect(RULES.filter((r) => r.id.startsWith('CONV-')).map((r) => r.id)).toEqual(CONVERT_RULES.map((r) => r.id));
   });
 

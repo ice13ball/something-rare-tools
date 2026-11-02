@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { depthUnitOfHeader } from '../recognize/depthUnit';
-import { biomassNameUnit, isMassUnitText, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
+import { biomassNameUnit, distinctnessWithinSamples, isMassUnitText, isOrganismSizeHeader, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
 import { dwcTermOf, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
@@ -216,7 +216,7 @@ export const OVERLAY_REASONS = {
   'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
   'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
   'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
-  'value-per-occurrence': 'its values differ between the rows of a sample (a length or a size of each organism, a size class): a measurement of each occurrence, as a biomass is, not of the sample',
+  'value-per-occurrence': 'its values differ between the rows of a sample and look like a value of each organism (a size word or a unit of length of that scale, or nearly every row of a sample with a value of its own): a measurement of each occurrence, as a biomass is; if the rows of one sample are casts or typos, untick "of each organism" and fix the sample code',
   'size-variable': 'its name says total, but it is a size or a length with a unit that does not count organisms: a measured variable of the sample, not a sum of individuals',
   'unit-effort': 'its unit is a volume or an area, which no species is counted in: read as the sampling effort',
   'unit-variable': 'its unit measures a length, a time, a speed or a temperature, which no species is counted in: a measured variable, not a species',
@@ -760,7 +760,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const hasQuantity = base.some((o) => o.role.kind === 'quantity');
       const countLike = (hu.unitText === undefined || isAbundanceUnit(hu.unitText)) && !isSizeLikeHeader(q.header);
       // a size ('Total length') whose values differ between the rows of a sample is a measurement of each organism: an occurrence variable, with its unit when it has one
-      if (!mass && isSizeLikeHeader(q.header)) {
+      if (!mass && isOrganismSizeHeader(q.header)) {
         q.role = { kind: 'variable', variable: namePartOf(q.header), ...(hu.unit === undefined && hu.unitText === undefined ? {} : { unit: hu.unit ?? hu.unitText, unitSource: 'header' as const }), perOccurrence: true };
         q.confidence = 'low';
         why(q, 'value-per-occurrence');
@@ -771,14 +771,22 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       why(q, mass ? 'summary-total-biomass' : hasQuantity || !countLike ? 'summary-total-varies' : 'summary-total-quantity');
     }
   }
-  // a measured variable that a long sheet gives to each organism (its values differ between the rows of one sample: a length, a size class) belongs to the occurrence, as a biomass does; one that is
-  // the same on all the rows of a sample is a variable of the sample. Decided from the values (`valuesRepeatWithinSample`), never from the name; with nothing to compare it stays a variable of
-  // the sample. A recognised variable (temperature, salinity ...) is never moved: a value of the sample that differs inside it is a conflict the user must see. The occurrences must carry a
-  // quantity, as a biomass does, or the column would not be read.
+  // a measured variable that a long sheet gives to each organism belongs to the occurrence, as a biomass does. It is moved only on evidence that it IS a value of each organism, because a value that
+  // differs inside one sample is otherwise the one signal of a wrong sample code, of two casts under one code, or of a typo (CONV-SAMPLE-CONFLICT), and that signal must stay:
+  //   - the name says the size of an organism (length, width, height, diameter, size, thickness), or its unit is a length of the scale of organisms (µm, mm, cm), and the values differ; or
+  //   - the values are nearly all different inside the samples (on average three quarters of the rows of a sample hold a value of their own: L1 ... L10 of each stage), which two casts
+  //     (two values on eight rows), a typo (one value among threes) and a repeated reading never are.
+  // A recognised variable (temperature ...), a descriptor of the sample (Tow, Haul, Cast) and anything else that differs inside a sample keeps blocking, with the column named. The user can move
+  // a column by hand (the tick "of each organism" on its role). The decision is taken from the sample columns the proposal sees.
   if (hasLongTaxon && base.some((o) => o.role.kind === 'quantity' || o.role.kind === 'biomass')) {
     for (const q of base) {
       if (q.role.kind !== 'variable' || q.role.perOccurrence === true || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined) continue;
+      if (nameKind(q.header, true) === 'descriptor') continue;
       if (valuesRepeatWithinSample(sheet, base, q.index, ctx.decimalComma) !== 'varies') continue;
+      const u = unitFromHeader(q.header);
+      const organismScale = /^(?:um|mm|cm)$/.test(foldUnit(u.unit ?? u.unitText ?? ''));
+      const nearlyAllDistinct = (distinctnessWithinSamples(sheet, base, q.index, ctx.decimalComma) ?? 0) >= 0.75;
+      if (!(isOrganismSizeHeader(q.header) || organismScale || nearlyAllDistinct)) continue;
       q.role = { ...q.role, perOccurrence: true };
       q.confidence = 'low';
       why(q, 'value-per-occurrence');

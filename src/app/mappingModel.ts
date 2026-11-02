@@ -153,6 +153,13 @@ export function setVariableName(role: ColumnRole, name: string): ColumnRole {
   return role.kind === 'variable' ? { ...role, variable: name } : role;
 }
 
+/** The tick "of each organism" of a measured variable (converter, long sheets): its value is written on the occurrence of the row, not on the sample event. */
+export function setPerOccurrence(role: ColumnRole, on: boolean): ColumnRole {
+  if (role.kind !== 'variable') return role;
+  const { perOccurrence: _p, ...rest } = role;
+  return on ? { ...rest, perOccurrence: true } : rest;
+}
+
 export function setPositive(role: ColumnRole, positive: 'down' | 'up' | 'unknown'): ColumnRole {
   if (role.kind === 'depthBelowSeafloor') {
     // the depth below the seafloor counts down or up; "not stated" is the default (down)

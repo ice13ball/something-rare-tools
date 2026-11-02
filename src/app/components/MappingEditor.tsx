@@ -7,7 +7,7 @@ import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types'
 import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
-import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setHemisphereAxis, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
+import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setHemisphereAxis, setPerOccurrence, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
 import type { TipId } from '../tips';
 
 export interface MappingEditorProps {
@@ -165,6 +165,12 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleK
         <label className="inline-field">
           <span>{t('mapping.variable')}</span>
           <input type="text" list={DATALIST_ID} value={role.variable} autoComplete="off" spellCheck={false} onChange={(e) => onRole(setVariableName(role, e.target.value))} />
+        </label>
+      )}
+      {converter && role.kind === 'variable' && (
+        <label className="inline-field">
+          <input type="checkbox" checked={role.perOccurrence === true} onChange={(e) => onRole(setPerOccurrence(role, e.target.checked))} />
+          <span>{t('mapping.perOccurrence')}</span>
         </label>
       )}
       {role.kind === 'hemisphere' && (
