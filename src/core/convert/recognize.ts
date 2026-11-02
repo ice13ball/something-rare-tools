@@ -494,9 +494,12 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     const u = unitFromHeader(q.header);
     return q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && isPlainCountUnit(foldUnit(u.unit ?? u.unitText ?? '')) && nameKind(q.header, true) !== 'descriptor';
   };
-  const longEvidence = base.some((q) => claims.get(q.index)?.role.kind === 'quantity' || claims.get(q.index)?.role.kind === 'biomass' || countColumn(q));
+  // a quantity or a biomass named by its header makes the sheet long whatever numeric columns stand beside it (a species code, a mesh, a transect number); a column that only counts in
+  // individuals ('Ind [#]') does so when it is the only one (several are species columns of a wide sheet), and then the numeric genus-shaped columns veto
+  const namedQuantity = base.some((q) => claims.get(q.index)?.role.kind === 'quantity' || claims.get(q.index)?.role.kind === 'biomass');
+  const longEvidence = namedQuantity || base.filter(countColumn).length === 1;
   const speciesColumns = base.some((q) => q.role.kind === 'variable' && !isCanonicalKey(q.role.variable) && q.role.p01 === undefined && !claims.has(q.index) && !countColumn(q) && nameKind(q.header, isAbundanceUnit(unitFromHeader(q.header).unit) || isAbundanceUnit(unitFromHeader(q.header).unitText)) === 'taxon');
-  if (numberedColumns < 5 && longEvidence && !speciesColumns && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
+  if (numberedColumns < 5 && longEvidence && (namedQuantity || !speciesColumns) && ![...claims.values()].some((c) => c.role.kind === 'taxon')) {
     const latin = base.filter((q) => q.role.kind === 'ignore' && q.reasonCode === 'text-column' && !looksLikeDwcTerm(q.header, sheet.header) && !claims.has(q.index) && latinNameShare(sheet, q.index) > 0);
     if (latin.length > 0) claims.set(latin[0].index, { role: { kind: 'taxon' }, confidence: 'low', code: 'values-latin-names' });
   }

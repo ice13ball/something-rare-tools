@@ -116,3 +116,21 @@ describe('docs of what stays a low-confidence proposal', () => {
     if (r.Method.role.kind === 'taxon') expect(r.Method.confidence).toBe('low');
   });
 });
+
+describe('MEDIUM: a named quantity beside a Latin column means long, numeric codes notwithstanding', () => {
+  const names = ['Gadus morhua Linnaeus, 1758', 'Pleuragramma antarctica Boulenger, 1902', 'Trematomus scotti (Boulenger, 1907)', 'Acartia longiremis', 'Oithona similis', 'Calanus finmarchicus'];
+  it('SpName beside species_code, Mesh, Transect and a Count', () => {
+    const r = Object.fromEntries(proposeConvertColumns(rawSheet(['Station', 'SpName', 'species_code', 'Mesh', 'Transect', 'Count'], names.map((n, i) => ['S1', n, 100 + i, 500, 1 + (i % 2), i + 1])), CTX).map((p) => [p.header, p]));
+    expect(r.SpName.role).toEqual({ kind: 'taxon' });
+    expect(r.SpName.confidence).toBe('low');
+  });
+  it('a wide sheet with a Dominant species column and no named quantity stays wide', () => {
+    const r = Object.fromEntries(proposeConvertColumns(rawSheet(['Station', 'Dominant species', 'species_code', 'Calanus', 'Acartia'], names.map((n, i) => ['S1', n, 100 + i, i, 2])), CTX).map((p) => [p.header, p]));
+    expect(r['Dominant species'].role.kind).toBe('ignore');
+    expect(r.Calanus.role).toEqual({ kind: 'taxon', header: true });
+  });
+  it('several columns counted in [#] are species columns of a wide sheet, not the quantity of a long one', () => {
+    const r = Object.fromEntries(proposeConvertColumns(rawSheet(['Station', 'Notes', 'Calanus [#]', 'Acartia [#]'], names.map((n, i) => ['S1', n, i, 2])), CTX).map((p) => [p.header, p]));
+    expect(r.Notes.role.kind).toBe('ignore');
+  });
+});

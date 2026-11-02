@@ -1226,8 +1226,8 @@ reaches the depth-range, seafloor, site-depth, statistic and total tests (`Depth
 `(total)`), and two columns that share a variable name are told apart in the measurement type by their comments (`temperature (CTD)`,
 `temperature (bottle)`). A column of Latin binomials (`latinNameShare`: at least 80 % of at least 3 cells, three different, start with a genus and an
 epithet that ends like a Latin one) is offered as the taxon of the sheet (`values-latin-names`), **always at low confidence and only when the
-sheet is long by its other columns**: a quantity, a biomass or a number counted in individuals stands beside it, no genus-shaped
-numeric column does (a wide sheet with a `Dominant species` text column stays wide), it is no Darwin Core term and the sheet is not a table of
+sheet is long by its other columns**: a quantity or a biomass named by its header stands beside it (numeric codes such as a species code, a mesh or a transect then do not matter), or a single
+column counted in individuals does and no genus-shaped numeric column does (a wide sheet with a `Dominant species` text column and no named quantity stays wide; several columns in `[#]` are species), it is no Darwin Core term and the sheet is not a table of
 numbered columns; two such columns are not told apart, the leftmost is offered. A header that holds `AphiaID`, `aphia_id` or
 `Aphia ID` whole, also inside a bracket, over whole numbers is the taxon ID; on a long sheet a numeric column whose
 unit only counts individuals (`#`, `n`, `ind`) and that no name made a quantity is offered as the quantity
