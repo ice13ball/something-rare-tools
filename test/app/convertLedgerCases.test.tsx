@@ -92,7 +92,7 @@ describe('2. a long row with a number and no taxon is never "nothing to record"'
   });
 
   it('a row with nothing in it is still "nothing to record"', () => {
-    const l = convert({ sheets: [sheetInput(fileOf(header, [...rows, [...fr('c'), null, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
+    const l = convert({ sheets: [sheetInput(fileOf(header, [...rows, ['c', null, null, null, null, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
     expect(reasonOf(l, 4)).toBe('nothing-to-record');
   });
 });
@@ -208,5 +208,50 @@ describe('long lists of columns are cut at 50, with a way to see them all', () =
     expect(button).toBeDefined();
     fireEvent.click(button);
     expect(container.querySelectorAll('li').length).toBeGreaterThanOrEqual(80);
+  });
+});
+
+describe('round 2: what the panel says', () => {
+  const H = ['Station', 'Date', 'Latitude', 'Longitude', 'Parameter', 'Value', 'Unit'];
+  const longRows = (params: [string, number, string | null][]): Cell[][] => ['S1', 'S2'].flatMap((st) => params.map(([p, v, u]): Cell[] => [st, '2020-06-01', 49.4, 0.2, p, v, u]));
+  const pivoted = (rows: Cell[][], edit: Record<string, ColumnRole> = {}) => convert({ sheets: [sheetInput(pivotConvertFile(fileOf(H, rows, 'Long'), {}), { shape: 'wide', quantity: { kind: 'count' }, edit: { Station: { kind: 'sampleId' }, ...edit } })], options: {} });
+
+  it('a pivot with Parameter = Depth: no fault, no "do not publish"', () => {
+    const text = panel(pivoted(longRows([['Temperature', 11, 'C'], ['Depth', 5, 'm'], ['Salinity', 34, 'PSU']])).ledger);
+    expect(text).not.toContain('fault of the converter');
+    expect(text).not.toContain('do not publish');
+    expect(text).toContain(SENTENCE);
+  });
+
+  it('a pivot of species: the lines written are the occurrences, never "0 with a record"', () => {
+    const r = pivoted(longRows([['Calanus finmarchicus', 4, null], ['Oithona similis', 7, null]]), { 'Calanus finmarchicus': { kind: 'taxon', header: true }, 'Oithona similis': { kind: 'taxon', header: true } });
+    expect(r.occurrences).toHaveLength(4);
+    const text = panel(r.ledger);
+    expect(text).toContain('In the sheet, 4 rows: 4 with a record');
+    expect(text).not.toMatch(/: 0 with a record/);
+    expect(text).not.toContain('fault of the converter');
+  });
+
+  it('a taxon with a weight and no quantity column: the page says there is no quantity column, not that there is no taxon', () => {
+    const l = convert({ sheets: [sheetInput(fileOf([...base, 'Species', 'Weight [g]'], [[...fr('a'), 'Solea solea', 2.5]]), { shape: 'long', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, 'Weight [g]': { kind: 'biomass', basis: 'wet' } } })], options: {} }).ledger;
+    const text = panel(l);
+    expect(text).toContain('no quantity column');
+    expect(text).not.toContain('no taxon');
+    expect(text).not.toContain(SENTENCE);
+  });
+
+  it('a row with only a position: it is named, and the sentence is not said', () => {
+    const l = convert({ sheets: [sheetInput(fileOf([...base, 'Species', 'Count'], [[...fr('a'), 'Solea solea', 3], [null, null, 49.4, 0.2, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } } })], options: {} }).ledger;
+    const text = panel(l);
+    expect(text).toContain('rows with a number but no taxon');
+    expect(text).not.toContain(SENTENCE);
+    expect(text).not.toContain('rows with nothing to record');
+  });
+
+  it('wide rows that wrote only an event: the count is shown while the export is stopped too, as "would"', () => {
+    const l = convert({ sheets: [sheetInput(fileOf([...base, 'Calanus finmarchicus'], [[...fr('a'), 3], [...fr('b'), 0]]), { shape: 'wide', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' } } })], options: {} }).ledger;
+    expect(panel(l, false)).toContain('1 row wrote an event or a measurement and no occurrence');
+    cleanup();
+    expect(panel(l, true)).toContain('1 row would write an event or a measurement and no occurrence');
   });
 });

@@ -28,7 +28,7 @@ function Tally({ tally, line, blocked }: { tally: LedgerTally; line: 'rows' | 'c
         ))}
         .
       </p>
-      {tally.writtenNoOccurrence !== undefined && tally.writtenNoOccurrence > 0 && !blocked && <p className="muted">{t('convert.ledger.noOccurrence', { count: tally.writtenNoOccurrence })}</p>}
+      {tally.writtenNoOccurrence !== undefined && tally.writtenNoOccurrence > 0 && <p className="muted">{t(blocked ? 'convert.ledger.noOccurrenceWould' : 'convert.ledger.noOccurrence', { count: tally.writtenNoOccurrence })}</p>}
       {tally.unexplained > 0 && (
         <p className="notice" role="note">
           {t('convert.ledger.unexplained', { count: tally.unexplained })}

@@ -121,13 +121,13 @@ describe('ledger: long sheets', () => {
     const r = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} });
     const l = r.ledger[0];
     expectRowsAgree(l, r, 3);
-    // the third row opens the event of sample b: it wrote an event and no occurrence, and says so; the zero and its weight are in the column lines
-    expect(l.rows.written).toBe(3);
-    expect(l.rows.writtenNoOccurrence).toBe(1);
+    // the third row opens the event of sample b but its taxon, count and weight are not in the archive: not written, with the event it did write said beside the reason
+    expect(l.rows.written).toBe(2);
     expect(l.rows.writtenWithoutNumber).toBe(1);
+    expect(l.rows.writtenNoOccurrence).toBeUndefined();
     expect(l.columns.find((c) => c.header === 'Count')!.skipped).toEqual([{ reason: 'zero-with-biomass', count: 1, sum: 0 }]);
-    expect(l.lines).toContainEqual(expect.objectContaining({ line: 4, fate: 'written', wrote: expect.arrayContaining(['event']), chain: ['zero-with-biomass'] }));
-    expect(l.rows.written - l.rows.writtenNoOccurrence! - l.rows.writtenWithoutNumber!).toBe(r.occurrences.filter((o) => o.quantityText !== undefined).length);
+    expect(l.lines).toContainEqual({ line: 4, fate: 'zero-with-biomass', chain: ['zero-with-biomass'], wrote: expect.arrayContaining(['event']) });
+    expect(l.rows.written - l.rows.writtenWithoutNumber!).toBe(r.occurrences.filter((o) => o.quantityText !== undefined).length);
   });
 
   it('a total taken once: the repeats are in the ledger as repeat-total, and the sum written is the collapsed one', () => {
@@ -483,7 +483,7 @@ describe('ledger: the fate of every line, as data (what the list of rows not wri
     const rows: Cell[][] = [['a', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['Total', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['a', '2020-06-01', 49.4, 0.2, 'Gadus morhua', -2], ['b', '2020-06-01', 49.4, 0.2, null, null]];
     const l = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
     const unwritten = l.lines.filter((x) => x.fate !== 'written');
-    expect(unwritten.map((x) => [x.line, x.fate])).toEqual([[3, 'summary-row'], [4, 'negative'], [5, 'nothing-to-record']]);
+    expect(unwritten.map((x) => [x.line, x.fate])).toEqual([[3, 'summary-row'], [4, 'negative'], [5, 'value-no-taxon']]);
     expect(unwritten.length).toBe(l.rows.skipped.reduce((n, s) => n + s.count, 0) + l.rows.unexplained);
     expect(l.rows.source).toBe(l.rows.written + unwritten.length);
   });

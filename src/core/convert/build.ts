@@ -898,6 +898,8 @@ export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'
 /** The state the profile sheets share with the biology pass: the samples (for ID collisions and the station match) and what the profile rows add. */
 interface ProfileContext {
   ledger: SheetLedger[];
+  /** Position of a sheet in the list handed to convert() (the ledger keeps it so that the handler can reach the original rows of the sheet). */
+  inputIndexOf: (sin: ConvertSheetInput) => number;
   /** The station rows of every sheet read, for the station checks (made once per upload, across the sheets that build the same station). */
   stationSheets: StationSheet[];
   samples: ReadonlyMap<string, SampleAcc>;
@@ -1290,6 +1292,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
       file: fileName,
       sheet,
       kind: 'profile',
+      inputIndex: ctx.inputIndexOf(sin),
       mapping: sin.mapping,
       decimalComma: dc,
       fate,
@@ -1382,18 +1385,18 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file, sin.mapping.columns);
         if (turned !== undefined) {
           longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
-          if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet));
+          if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet, rawInput.sheets.indexOf(sin)));
           return false;
         }
         // a row of units under the header that the parser could not fold (an unknown word or text under some of the units; the very row /check refuses as a header over several rows) is said as what it is, not read as a data row (CONV-TEXT-IN-TAXON-CELL lists)
         const unitsRow = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true || sheet.pivot !== undefined ? undefined : firstRowIsUnits(sheet, sin.file.decimalComma);
         if (unitsRow === undefined) return true;
         longFindings.push(makeConvertFinding('CONV-SHEET-UNITS-ROW', { file: sin.file.fileName, sheet: sin.sheet, lines: [unitsRow.line], params: { line: unitsRow.line } }));
-        if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet));
+        if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet, rawInput.sheets.indexOf(sin)));
         return false;
       }
       const longSheet = sin.file.sheets.find((x) => x.name === sin.sheet);
-      if (longSheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, longSheet));
+      if (longSheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, longSheet, rawInput.sheets.indexOf(sin)));
       longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count, ...(long.reason.reason === 'too-many' ? { max: MAX_PAIRS } : {}) }) } }));
       return false;
     }),
@@ -1679,7 +1682,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       });
 
     // a number in a column that is read as a value (a variable, a weight, a quantity, a taxon column): a row that holds one is never "nothing to record"
-    const valueColumns = sin.mapping.columns.filter((c) => ['variable', 'biomass', 'quantity', 'taxon', 'effort'].includes(c.role.kind)).map((c) => c.index);
+    const valueColumns = sin.mapping.columns.filter((c) => ['variable', 'biomass', 'quantity', 'taxon', 'effort', 'latitude', 'longitude', 'depth', 'depthBelowSeafloor', 'pressure'].includes(c.role.kind)).map((c) => c.index);
     const rowHasValue = (row: RawRow): boolean => valueColumns.some((i) => parseNumber(row.cells[i] ?? null, dc).status === 'ok');
 
     const visitIds = new Map<number, string>();
@@ -1781,7 +1784,11 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             if (!isBlankCell(row.cells[c.index] ?? null)) naOther.set(c.header.trim(), (naOther.get(c.header.trim()) ?? 0) + 1);
           }
           fate.row(row.line, 'quantity-blank');
-        } else fate.row(row.line, rowHasValue(row) ? (sin.shape === 'wide' ? 'no-code' : 'value-no-taxon') : 'nothing-to-record');
+        } else {
+          // a row that holds a number (a value, a weight, a position, a depth) is never "nothing to record": it says which part is missing
+          const holds = rowHasValue(row);
+          fate.row(row.line, !holds ? 'nothing-to-record' : sin.shape === 'wide' ? 'no-code' : taxonCellText !== undefined && cols.quantity === undefined && !presence ? 'taxon-no-quantity' : 'value-no-taxon');
+        }
         continue;
       }
       if (code === undefined) {
@@ -2254,6 +2261,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           file: fileName,
           sheet,
           kind: sin.shape,
+          inputIndex: rawInput.sheets.indexOf(sin),
           mapping: sin.mapping,
           decimalComma: dc,
           fate,
@@ -2490,6 +2498,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     levelById: new Map(),
     stationSheets,
     ledger,
+    inputIndexOf: (sin) => rawInput.sheets.indexOf(sin),
     levelDups: new Map(),
     flattenStation: opts.flatten?.station === true,
     sites: [],
