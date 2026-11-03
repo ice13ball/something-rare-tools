@@ -21,43 +21,43 @@ const build = (text: string) => {
 };
 
 describe('ROW-LONG-VALUE-SKIPPED', () => {
-  for (const level of ['Pressure [dbar]', 'Replicate', 'Cast', 'Layer', 'Size class', 'Time point', 'Bottom depth [cm]']) {
-    it(`${level}: 18 source values, 6 kept, 12 said`, () => {
-      const { dataset, findings } = build(sheet(level));
-      // (a level column that is a key, like a depth, would keep all 18; these are not part of the row's identity)
-      const kept = dataset.rows.flatMap((r) => Object.values(r.values)).length;
-      const f = findings.filter((x) => x.ruleId === 'ROW-LONG-VALUE-SKIPPED');
-      if (kept === 18) {
-        expect(f).toHaveLength(0);
-        return;
-      }
-      expect(kept).toBe(6);
-      expect(f).toHaveLength(1);
-      expect(f[0].params.count).toBe(12);
-      expect(f[0].lines).toHaveLength(12);
-      expect(['Corg', 'Ntot', 'Ptot']).toContain(f[0].field);
-      for (const lang of LANGS) {
-        const text = renderPlain(f[0], lang);
-        expect(text).toContain('12');
-        expect(text).not.toMatch(/[{}]/);
-      }
-    });
-  }
+  // nothing but the value tells the rows apart: the first one stays and the rest are said
+  const bare = (dup = false): string => {
+    const lines = ['Station,Latitude,Longitude,Date,Parameter,Value'];
+    for (const s of ['S1', 'S2']) for (const p of ['Corg', 'Ntot', 'Ptot']) for (const l of [1, 2, 3]) lines.push(`${s},49.4,0.2,2020-06-01,${p},${dup ? 7 : l + s.length + p.length}`);
+    return lines.join('\n');
+  };
 
-  it('Pressure and Replicate really are the cases (the findings fire)', () => {
+  it('18 source values, 6 kept, 12 said', () => {
+    const { dataset, findings } = build(bare());
+    expect(dataset.rows.flatMap((r) => Object.values(r.values))).toHaveLength(6);
+    const f = findings.filter((x) => x.ruleId === 'ROW-LONG-VALUE-SKIPPED');
+    expect(f).toHaveLength(1);
+    expect(f[0].params.count).toBe(12);
+    expect(f[0].lines).toHaveLength(12);
+    expect(['Corg', 'Ntot', 'Ptot']).toContain(f[0].field);
+    for (const lang of LANGS) {
+      const text = renderPlain(f[0], lang);
+      expect(text).toContain('12');
+      expect(text).not.toMatch(/[{}]/);
+    }
+  });
+
+  it('a level column now keeps all 18 values and says nothing skipped (ROW-LONG-KEY-EXTENDED instead)', () => {
     for (const level of ['Pressure [dbar]', 'Replicate']) {
-      const { findings } = build(sheet(level));
-      expect(findings.some((x) => x.ruleId === 'ROW-LONG-VALUE-SKIPPED'), level).toBe(true);
+      const { dataset, findings } = build(sheet(level));
+      expect(dataset.rows.flatMap((r) => Object.values(r.values))).toHaveLength(18);
+      expect(findings.some((x) => x.ruleId === 'ROW-LONG-VALUE-SKIPPED'), level).toBe(false);
     }
   });
 
   it('exact duplicates (the same value again) do not fire', () => {
-    const { findings } = build(sheet('Replicate', true));
+    const { findings } = build(bare(true));
     expect(findings.filter((x) => x.ruleId === 'ROW-LONG-VALUE-SKIPPED')).toEqual([]);
   });
 
   it('the kept value and the row counts are as before: the first one stays', () => {
-    const { dataset } = build(sheet('Replicate'));
+    const { dataset } = build(bare());
     expect(dataset.rows).toHaveLength(2);
     expect(Object.values(dataset.rows[0].values).map((v) => v.raw)).toEqual(['7', '7', '7']);
   });

@@ -35,7 +35,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -731,6 +731,114 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [] };
 }
 
+/** Does the value cell `raw` differ from the value already kept (`keptRaw`)? A blank cell never differs; numbers compare as numbers, anything else as trimmed text. */
+function longValueDiffers(raw: RawCell, keptRaw: RawCell | undefined, dc: boolean): boolean {
+  if (isBlankCell(raw)) return false;
+  const a = parseNumber(raw, dc);
+  const b = parseNumber(keptRaw ?? null, dc);
+  const same = a.status === 'ok' && b.status === 'ok' ? a.value === b.value : String(raw).trim() === String(keptRaw ?? '').trim();
+  return !same;
+}
+
+/**
+ * Columns that must join the row key of a long sheet so that no two rows with the same key and parameter hold different values. Returns the added column indexes, in the order chosen
+ * (greedy: the column that resolves the most colliding (key, parameter) groups, ties by fewest distinct values, then by column order; no header is looked at). A column is taken only when it
+ * fully resolves at least one group together with those already taken. A sheet with no differing collision costs one scan and returns [].
+ */
+export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long']>, keyCols: number[], dc: boolean): number[] {
+  const rows = sheet.rows;
+  const unitOf = (r: RawRow, param: string): string => {
+    const fromCol = plan.unitCol === undefined ? undefined : str(r.cells[plan.unitCol] ?? null);
+    const t = fromCol ?? unitFromHeader(param).unitText;
+    return t === undefined ? '' : (normaliseUnit(t) ?? t);
+  };
+  const keys: (string | undefined)[] = new Array(rows.length);
+  const idOf: (string | undefined)[] = new Array(rows.length);
+  const first = new Map<string, number>();
+  const colliding = new Set<string>();
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const param = str(r.cells[plan.parameterCol] ?? null);
+    if (param === undefined) continue;
+    const id = JSON.stringify(keyCols.map((c) => str(r.cells[c] ?? null) ?? ''));
+    const k = id + '\u0000' + param + '\u0000' + unitOf(r, param);
+    keys[i] = k;
+    idOf[i] = id;
+    const f = first.get(k);
+    if (f === undefined) first.set(k, i);
+    else if (!colliding.has(k) && longValueDiffers(r.cells[plan.valueCol] ?? null, rows[f].cells[plan.valueCol] ?? null, dc)) colliding.add(k);
+  }
+  if (colliding.size === 0) return [];
+
+  const members = new Map<string, number[]>();
+  for (let i = 0; i < rows.length; i++) {
+    const k = keys[i];
+    if (k === undefined || !colliding.has(k)) continue;
+    const list = members.get(k);
+    if (list) list.push(i);
+    else members.set(k, [i]);
+  }
+  let remaining = [...members.values()];
+  const skip = new Set<number>([...longColumns(plan), ...keyCols]);
+  const candidatesAll = sheet.header.map((_, i) => i).filter((i) => !skip.has(i));
+  const cell = (i: number, c: number): string => str(rows[i].cells[c] ?? null) ?? '';
+  const valueOf = (i: number): RawCell => rows[i].cells[plan.valueCol] ?? null;
+  /** True when, within the group, no two rows that agree on `cols` hold different values. */
+  const resolves = (group: number[], cols: number[]): boolean => {
+    const rep = new Map<string, number>();
+    for (const i of group) {
+      const id = cols.length === 1 ? cell(i, cols[0]) : JSON.stringify(cols.map((c) => cell(i, c)));
+      const j = rep.get(id);
+      if (j === undefined) rep.set(id, i);
+      else if (longValueDiffers(valueOf(i), valueOf(j), dc)) return false;
+    }
+    return true;
+  };
+  // A column is a false separator, and never joins the key, when it is unique on every row of the sheet (a record id, a note) or when it varies inside a row group that has no collision at all
+  // (a quality flag differs per value, a real replicate or level is the same for all parameters of one measurement).
+  const collidingIds = new Set<string>();
+  for (let i = 0; i < rows.length; i++) if (keys[i] !== undefined && colliding.has(keys[i]!)) collidingIds.add(idOf[i]!);
+  const falseSeparator = (c: number): boolean => {
+    const all = new Set<string>();
+    const perId = new Map<string, string>();
+    let n = 0;
+    let splits = false;
+    for (let i = 0; i < rows.length; i++) {
+      const id = idOf[i];
+      if (id === undefined) continue;
+      n++;
+      const v = cell(i, c);
+      all.add(v);
+      if (!splits && !collidingIds.has(id)) {
+        const seen = perId.get(id);
+        if (seen === undefined) perId.set(id, v);
+        else if (seen !== v) splits = true;
+      }
+    }
+    return all.size === n || splits;
+  };
+  const candidates = candidatesAll.filter((c) => !falseSeparator(c));
+  const chosen: number[] = [];
+  while (remaining.length > 0) {
+    let best: { c: number; count: number; distinct: number } | undefined;
+    for (const c of candidates) {
+      if (chosen.includes(c)) continue;
+      const cols = [...chosen, c];
+      let count = 0;
+      for (const g of remaining) if (resolves(g, cols)) count++;
+      if (count === 0) continue;
+      const seen = new Set<string>();
+      for (const g of remaining) for (const i of g) seen.add(cell(i, c));
+      if (!best || count > best.count || (count === best.count && seen.size < best.distinct)) best = { c, count, distinct: seen.size };
+    }
+    if (!best) break;
+    chosen.push(best.c);
+    const cols = [...chosen];
+    remaining = remaining.filter((g) => !resolves(g, cols));
+  }
+  return chosen;
+}
+
 function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector): Built {
   const dc = file.decimalComma;
   const parse = metaParser(file, sheet, specs, c);
@@ -743,6 +851,13 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   sheet.header.forEach((h, i) => {
     if (!skip.has(i) && !keyCols.includes(i) && isVerticalCoordinateKey(headerKey(unitFromHeader(h).name))) keyCols.push(i);
   });
+
+  // A column that tells colliding rows apart (a pressure, a replicate, a cast, a layer) joins the key, so every value is read: said once (ROW-LONG-KEY-EXTENDED)
+  const added = extendLongKey(sheet, plan, keyCols, dc);
+  if (added.length > 0) {
+    keyCols.push(...added);
+    c.add('ROW-LONG-KEY-EXTENDED', sheet.name, '', 0, undefined, false, { columns: added.map((i) => sheet.header[i]).join(', ') });
+  }
 
   // units per parameter, from the unit column (or from the parameter text itself, 'DIC [umol/kg]')
   const unitsOf = new Map<string, Set<string>>();
@@ -795,15 +910,9 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     const kept = row.values[key];
     if (kept !== undefined) {
       // duplicate (sample, parameter): the first one stays, nothing is averaged. A value that differs from the kept one was not read: said once at the end (ROW-LONG-VALUE-SKIPPED)
-      const raw = r.cells[plan.valueCol] ?? null;
-      if (!isBlankCell(raw)) {
-        const a = parseNumber(raw, dc);
-        const b = parseNumber(kept.raw, dc);
-        const same = a.status === 'ok' && b.status === 'ok' ? a.value === b.value : String(raw).trim() === String(kept.raw ?? '').trim();
-        if (!same) {
-          skippedDiffer.push(r.line);
-          skippedExample ??= param;
-        }
+      if (longValueDiffers(r.cells[plan.valueCol] ?? null, kept.raw, dc)) {
+        skippedDiffer.push(r.line);
+        skippedExample ??= param;
       }
       continue;
     }
