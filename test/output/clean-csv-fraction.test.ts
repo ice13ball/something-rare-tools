@@ -2,7 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // /check keeps a real fraction of a second of an Excel date or time cell, to the millisecond, in the clean CSV; /convert's reading is not touched. Every file here is invented.
 import { describe, expect, it } from 'vitest';
-import { buildDataset } from '../../src/core/dataset';
+import { buildDataset, buildDatasets } from '../../src/core/dataset';
+import { excelSerialToDate } from '../../src/core/values/dates';
 import { toCleanCsv } from '../../src/core/output/csv';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import type { ParsedFile } from '../../src/core/types';
@@ -124,5 +125,95 @@ describe('one column, consistently: the evidence of the whole column decides', (
     const timed = xlsxFile('t.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ...S5.map((secs, i) => ['S1', 49.4, 0.2 + i / 100, { t: 'n', v: T, z: 'yyyy-mm-dd' }, { t: 'n', v: Number((secs / 86400).toPrecision(15)), z: 'hh:mm:ss' }, 11 + i])] as never });
     expect(dateOf(timed)).toEqual(E5);
     expect(dateOf(long(S5.map((x) => dt(xl(x), PLAIN))))).toEqual(E5);
+  });
+});
+
+describe('the note counts the cells that were read, once per column', () => {
+  const PLAIN = 'yyyy-mm-dd hh:mm:ss';
+  const ROUNDED = /^date cells rounded to the second/;
+  const notesOfFile = (file: ParsedFile): string[] => {
+    const layout = proposeLayout(file);
+    const ds = buildDataset(file, layout, proposeMappings(file, layout), [], 'd').dataset;
+    return textFile('o.csv', toCleanCsv(ds).sidecar).sheets[0].rows.map((r) => r.cells.map((c) => String(c ?? ''))).filter((r) => r[0] === '(note)').map((r) => r[1]).filter((n) => ROUNDED.test(n));
+  };
+  const time = (v: number, z = 'hh:mm') => ({ t: 'n' as const, v, z });
+  const day = { t: 'n' as const, v: T, z: 'yyyy-mm-dd' };
+  const longKey = (cells: object[]) => xlsxFile('k.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Time', 'Parameter', 'Value'], ...cells.flatMap((c, i) => ['Corg', 'Ntot'].map((p) => ['S1', 49.4, 0.2, c, p, i + 1]))] as never });
+
+  it('a long key Time with 0.5 and 0.500001: the second stays the raw number, nothing is rounded, no note', () => {
+    expect(notesOfFile(longKey([time(0.5), time(0.500001)]))).toEqual([]);
+  });
+
+  it('a long key Time with two rounded values (0.7 and 0.8 ms off): one entry for the column, 2 cells, up to 1 ms', () => {
+    const f = longKey([time(0.5), time(0.5 + 0.0007 / 86400), time(0.5 + 0.0008 / 86400), time(0.75)]);
+    expect(notesOfFile(f)).toEqual(['date cells rounded to the second: Time (2 cells, up to 1 ms)']);
+  });
+
+  it('a wide Time with no date column is not read: no note', () => {
+    const f = xlsxFile('w.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Time', 'Temp [°C]'], ['S1', 49.4, 0.2, time(0.33333), 11], ['S1', 49.5, 0.3, time(0.33333), 12]] as never });
+    expect(notesOfFile(f)).toEqual([]);
+  });
+
+  it('a [h]:mm duration (36.2345), a Time on a row with no date, and a Time beside a Date that has its own time are not read: no note for the Time', () => {
+    const dur = xlsxFile('w.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ['S1', 49.4, 0.2, day, time(36.2345, '[h]:mm'), 11], ['S1', 49.5, 0.3, day, time(36.2345, '[h]:mm'), 12]] as never });
+    expect(notesOfFile(dur)).toEqual([]);
+    const nodate = xlsxFile('w.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ['S1', 49.4, 0.2, day, time(0.5), 11], ['S1', 49.5, 0.3, null, time(0.33333), 12]] as never });
+    expect(notesOfFile(nodate)).toEqual([]);
+    const own = xlsxFile('w.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ['S1', 49.4, 0.2, dt(43983.33333, PLAIN), time(0.33333), 11], ['S1', 49.5, 0.3, dt(43984.5, PLAIN), time(0.5), 12]] as never });
+    expect(notesOfFile(own)).toEqual(['date cells rounded to the second: Date (1 cell, up to 288 ms)']);
+  });
+
+  it('a Time column in General format (0.33333) beside a date is read: 1 cell, up to 288 ms', () => {
+    const f = xlsxFile('w.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ['S1', 49.4, 0.2, day, 0.33333, 11], ['S1', 49.5, 0.3, day, 0.5, 12]] as never });
+    expect(notesOfFile(f)).toEqual(['date cells rounded to the second: Time (1 cell, up to 288 ms)']);
+  });
+
+  it('a long sheet counts the cells of the rows that were read, not the rows with a blank parameter', () => {
+    const rows: (string | number | object | null)[][] = [['Station', 'Latitude', 'Longitude', 'Date', 'Parameter', 'Value']];
+    for (const [st, v] of [['S1', 43983.33333], ['S2', 43984.33333]] as const) {
+      for (const p of ['Corg', 'Ntot']) rows.push([st, 49.4, 0.2, dt(v, PLAIN), p, 1]);
+      for (let k = 0; k < 3; k++) rows.push([st, 49.4, 0.2, dt(v, PLAIN), null, null]);
+    }
+    expect(notesOfFile(xlsxFile('l.xlsx', { S: rows as never }))).toEqual(['date cells rounded to the second: Date (2 cells, up to 288 ms)']);
+  });
+
+  it('a lookup sheet that lends a date gets the note too', () => {
+    const file = xlsxFile('book.xlsx', {
+      Station: [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', dt(43983.33333, PLAIN), 70.1, 15.2], ['S2', dt(43984.5 + 0.002 / 86400, PLAIN), 60.2, 5.4]] as never,
+      Data: [['Station', 'Temperature [degC]'], ['S1', 4.5], ['S2', 5.5]] as never,
+    });
+    const layout = proposeLayout(file);
+    const ds = buildDatasets(file, layout, proposeMappings(file, layout), [], 'd').datasets[0];
+    const notes = textFile('o.csv', toCleanCsv(ds).sidecar).sheets[0].rows.map((r) => r.cells.map((c) => String(c ?? ''))).filter((r) => r[0] === '(note)').map((r) => r[1]).filter((n) => ROUNDED.test(n));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatch(/Date \(2 cells, up to 288 ms\)/);
+  });
+});
+
+describe('the evidence of a column is not turned on by a long fill-down', () => {
+  const PLAIN = 'yyyy-mm-dd hh:mm:ss';
+  it('36,000 rows of =A+5/1440 and of =A+1/86400 read cell by cell (the 5 ms rule), as before; the column is not shown', () => {
+    for (const step of [5 / 1440, 1 / 86400]) {
+      const cells: object[] = [];
+      const expected: string[] = [];
+      let v = 43983.25;
+      for (let i = 0; i < 36_000; i++) { v += step; cells.push({ t: 'n', v, z: PLAIN }); expected.push(excelSerialToDate(v, false, true).iso); }
+      expect(dateOf(wide(cells))).toEqual(expected);
+    }
+  }, 120_000);
+
+  it('random real milliseconds turn the column on: every cell is kept to the millisecond, the 108 ms multiples too', () => {
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const cells: object[] = [];
+    const expected: string[] = [];
+    for (let i = 0; i < 300; i++) {
+      const ms = Math.floor(rnd() * 86_400_000);
+      const v = Number((43983 + ms / 86_400_000).toPrecision(15));
+      cells.push({ t: 'n', v, z: PLAIN });
+      expected.push(excelSerialToDate(v, false, 'shown').iso);
+    }
+    expect(dateOf(wide(cells))).toEqual(expected);
+    expect(expected.some((x) => /\.\d{3}$/.test(x))).toBe(true);
   });
 });

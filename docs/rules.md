@@ -82,7 +82,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-JOIN-AMBIGUOUS | warning | B | — | —<a id="ROW-JOIN-AMBIGUOUS"></a> |
 | ROW-LONG-VALUE-SKIPPED | warning | B | — | —<a id="ROW-LONG-VALUE-SKIPPED"></a> |
 | ROW-LONG-KEY-EXTENDED | info | B | — | —<a id="ROW-LONG-KEY-EXTENDED"></a> |
-| ROW-KEY-IGNORED | warning | B | — | —<a id="ROW-KEY-IGNORED"></a> |
+| ROW-KEY-IGNORED | info | B | — | —<a id="ROW-KEY-IGNORED"></a> |
 | ROW-JOIN-KEY-BLANK | warning | B | — | —<a id="ROW-JOIN-KEY-BLANK"></a> |
 | ROW-DATE-YYMMDD | info | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
 | ROW-TZ-UNKNOWN | info | B | — | —<a id="ROW-TZ-UNKNOWN"></a> |

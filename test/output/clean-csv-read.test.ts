@@ -243,7 +243,7 @@ describe('a key column the person set to ignore is not written; one that is igno
     const t = two('Pressure [dbar]', '10.50', '20.00');
     const f = ids(t, (m) => setRole(m, 'Pressure [dbar]', { kind: 'ignore' }));
     expect(f).toHaveLength(1);
-    expect(f[0].severity).toBe('warning');
+    expect(f[0].severity).toBe('info');
     expect(f[0].params).toEqual({ columns: 'Pressure [dbar]', count: 1 });
     expect(f[0].lines?.length).toBeGreaterThan(0);
     // written (not ignored by the person): nothing looks alike
@@ -520,7 +520,7 @@ describe('round 3: one column of the row-key sentence reads naturally in pl and 
 });
 
 describe('ROW-KEY-IGNORED reads naturally in four languages, with one column and with several', () => {
-  const f = (count: number, columns: string) => ({ ruleId: 'ROW-KEY-IGNORED', severity: 'warning', sheet: 'S', lines: [3, 5], params: { columns, count } }) as never;
+  const f = (count: number, columns: string) => ({ ruleId: 'ROW-KEY-IGNORED', severity: 'info', sheet: 'S', lines: [3, 5], params: { columns, count } }) as never;
 
   it('one column', () => {
     expect(renderPlain(f(1, 'Pressure'), 'en')).toContain('look alike in the identifying columns of the clean CSV. The column you set to ignore (Pressure) differs between them and is not written');
@@ -558,7 +558,7 @@ describe('ROW-KEY-IGNORED on a wide sheet', () => {
   it('a sediment depth the person set to ignore, differing between rows that look alike: said once, with the column', () => {
     const f = ids(sed, (m) => setRole(m, 'Sediment depth [cm]', { kind: 'ignore' }));
     expect(f).toHaveLength(1);
-    expect(f[0].severity).toBe('warning');
+    expect(f[0].severity).toBe('info');
     expect(f[0].params).toEqual({ columns: 'Sediment depth [cm]', count: 1 });
     expect(f[0].lines).toEqual([2, 3]);
   });

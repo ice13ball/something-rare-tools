@@ -85,7 +85,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-JOIN-KEY-BLANK': ['warning', 'B'],
   'ROW-LONG-VALUE-SKIPPED': ['warning', 'B'],
   'ROW-LONG-KEY-EXTENDED': ['info', 'B'],
-  'ROW-KEY-IGNORED': ['warning', 'B'],
+  'ROW-KEY-IGNORED': ['info', 'B'],
   'ROW-TZ-UNKNOWN': ['info', 'B'],
   'ROW-UNIT-MISSING': ['warning', 'B'],
   'ROW-HEADER-CODE-SHAPE': ['warning', 'B'],

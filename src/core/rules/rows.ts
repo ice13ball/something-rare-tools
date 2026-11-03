@@ -544,7 +544,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
   {
     id: 'ROW-KEY-IGNORED',
     category: 'B',
-    severity: 'warning',
+    severity: 'info',
     params: ['columns', 'count'],
     plain: {
       pl: `W „{sheet}” te wiersze (np. {+lines:wiersz|wiersze|wierszy} {lines}) wyglądają w czystym CSV tak samo w kolumnach identyfikujących. {+count:Kolumna ustawiona|Kolumny ustawione|Kolumny ustawione} na „ignoruj” ({columns}) {+count:różni|różnią|różnią} je i {+count:nie jest zapisywana|nie są zapisywane|nie są zapisywane}. Ich pozostałe zmierzone wartości są w pliku i w czystym CSV.`,
