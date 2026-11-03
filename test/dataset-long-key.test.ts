@@ -8,6 +8,7 @@ import { pivotConvertFile } from '../src/core/convert/pivot';
 import { proposeLayout, proposeMappings } from '../src/core/recognize/layout';
 import { renderPlain } from '../src/core/report';
 import { LANGS } from '../src/core/types';
+import { getRule } from '../src/core/rules/registry';
 import { createDirectEngine } from '../src/worker/handler';
 import { fileOf } from './convert/helpers';
 import { textFile } from './helpers/files';
@@ -225,10 +226,117 @@ describe('the review cases: a column joins the key only when it is safe', () => 
     expect(skipped(r)).toHaveLength(1);
   });
 
-  it('two acceptable columns that separate the same keys with the same number of values: neither is taken', () => {
-    const r = build(csv('Replicate,Rep copy,Parameter,Value', both([['1', 'a', 'Corg', '1'], ['2', 'b', 'Corg', '2']])));
+  it('two acceptable columns that split the rows identically (t1: a Replicate and its label) are one choice: the first is taken', () => {
+    const rows: string[][] = [];
+    for (const st of ['S1', 'S2']) for (const r of [1, 2]) rows.push([st, String(r), `rep${r}`, 'Corg', String(1 + r)], [st, String(r), `rep${r}`, 'Ntot', String(5 + r)]);
+    const r = build(csv('Replicate,Label,Parameter,Value', rows));
+    expect(extended(r)[0].params.columns).toBe('Replicate');
+    expect(read(r)).toBe(8);
+    expect(skipped(r)).toEqual([]);
+  });
+
+  it('q1b and q2: a QC that splits the rows differently from a Replicate with the same count leaves the choice open: neither is taken', async () => {
+    const qc = (bottles: Record<string, [string, string]>): string[][] =>
+      ['S1', 'S2'].flatMap((st) => [[st, '0', bottles[st][0], DIC, '2300'], [st, '1', bottles[st][0], TA, '2400'], [st, '1', bottles[st][1], DIC, '2000'], [st, '0', bottles[st][1], TA, '2100']]);
+    for (const bottles of [{ S1: ['A1', 'A2'], S2: ['B1', 'B2'] }, { S1: ['1', '2'], S2: ['1', '3'] }] as Record<string, [string, string]>[]) {
+      const t = csv('QC,Replicate,Parameter,Value', qc(bottles));
+      const r = build(t);
+      expect(extended(r)).toEqual([]);
+      expect(skipped(r)).toHaveLength(1);
+      expect(await check(t)).not.toContain('CHEM-DIC-GT-TA');
+    }
+  });
+
+  it('q2c: the Replicate alone, with labels 1,2 in one station and 1,3 in the other, is taken', () => {
+    const rows = ['S1', 'S2'].flatMap((st) => (st === 'S1' ? ['1', '2'] : ['1', '3']).flatMap((rep) => [[st, rep, DIC, String(2300 + Number(rep))], [st, rep, TA, String(2400 + Number(rep))]]));
+    const r = build(csv('Replicate,Parameter,Value', rows));
+    expect(extended(r)[0].params.columns).toBe('Replicate');
+    expect(read(r)).toBe(8);
+  });
+
+  it('q3: a balanced flag with nothing else to choose from joins the key (accepted limit): the finding names it', () => {
+    const rows = ['S1', 'S2'].flatMap((st) => [[st, '0', DIC, '2300'], [st, '1', TA, '2400'], [st, '1', DIC, '2000'], [st, '0', TA, '2100']]);
+    const r = build(csv('QC,Parameter,Value', rows));
+    expect(extended(r)[0].params.columns).toBe('QC');
+    expect(skipped(r)).toEqual([]);
+  });
+
+  it('mixed sheet: a parameter measured at one replicate only does not stop the Replicate (nested parameter sets)', () => {
+    const r = build(csv('Replicate,Parameter,Value', [['S1', '1', 'Corg', '1'], ['S1', '2', 'Corg', '2'], ['S1', '1', 'Ntot', '5']]));
+    expect(read(r)).toBe(3);
+    expect(extended(r)).toHaveLength(1);
+    expect(skipped(r)).toEqual([]);
+  });
+
+  /** samples x 3 replicates x [Temperature, Salinity, Nitrate, Chl-a]; `drop` removes rows. */
+  const samples = (n: number, drop: (s: number, rep: number, p: string) => boolean): string => {
+    const rows: string[][] = [];
+    for (let s = 0; s < n; s++) for (const rep of [1, 2, 3]) for (const p of ['Temperature [degC]', 'Salinity [PSU]', 'Nitrate [umol/l]', 'Chl-a [ug/l]']) if (!drop(s, rep, p)) rows.push([`P${s}`, String(rep), p, String(10 + s * 0.01 + rep * 0.05 + p.length * 0.001)]);
+    return csv('Replicate,Parameter,Value', rows);
+  };
+
+  it('r1, r3, r4: one parameter missing at a replicate (or never in some samples) does not make the sheet lose values', () => {
+    const cases: [string, (s: number, rep: number, p: string) => boolean, number][] = [
+      ['r1 Chl-a once in two samples', (s, rep, p) => p.startsWith('Chl') && (s === 1 || s === 4) && rep > 1, 6 * 12 - 4],
+      ['r3 Chl-a never in two samples', (s, _rep, p) => p.startsWith('Chl') && (s === 1 || s === 4), 6 * 12 - 6],
+      ['r4 one row missing', (s, rep, p) => s === 4 && rep === 3 && p.startsWith('Chl'), 6 * 12 - 1],
+    ];
+    for (const [name, drop, want] of cases) {
+      const r = build(samples(6, drop));
+      expect(read(r), name).toBe(want);
+      expect(skipped(r), name).toEqual([]);
+      expect(extended(r)[0].params.columns, name).toBe('Replicate');
+    }
+  });
+
+  it('r5: one row missing of 6,000 still reads 5,999 values', () => {
+    const r = build(samples(500, (s, rep, p) => s === 123 && rep === 3 && p.startsWith('Chl')));
+    expect(read(r)).toBe(5999);
+    expect(skipped(r)).toEqual([]);
+  });
+
+  it('s1, s2, s3: the extension and the skipped warning read consistently side by side', () => {
+    const s1 = build(csv('Replicate,Parameter,Value', [['S1', '1', 'Corg', '1'], ['S1', '2', 'Corg', '2'], ['S2', '1', 'Corg', '7'], ['S2', '1', 'Corg', '8']]));
+    expect(extended(s1)).toHaveLength(1);
+    expect(skipped(s1)[0].params.count).toBe(1);
+    const s2 = build(csv('Method,Parameter,Value', [['S1', 'A', 'Corg', '1'], ['S1', 'A', 'Corg', '2'], ['S2', 'A', 'Corg', '4'], ['S2', 'B', 'Corg', '5']]));
+    expect(extended(s2)[0].params.columns).toBe('Method');
+    expect(skipped(s2)[0].params.count).toBe(1);
+    const s3 = build(csv('Replicate,Parameter,Value', both([['1', 'Corg', '1.1'], ['1', 'Ntot', '2.1'], ['2', 'Corg', '1.2'], ['2', 'Ntot', '2.2']]).concat([['S3', '1', 'Corg', '5'], ['S3', '1', 'Corg', '6'], ['S3', '1', 'Ntot', '7']])));
+    expect(extended(s3)).toHaveLength(1);
+    expect(skipped(s3)[0].params.count).toBe(1);
+    for (const r of [s1, s2, s3]) for (const lang of LANGS) {
+      const e = renderPlain(extended(r)[0], lang);
+      expect(e).not.toMatch(/[{}]/);
+      expect(renderPlain(skipped(r)[0], lang)).not.toMatch(/[{}]/);
+    }
+  });
+
+  it('the extended finding never claims completeness, in any language, and lists some of the rows it concerns', () => {
+    const r = build(csv('Replicate,Parameter,Value', both([['1', 'Corg', '1'], ['2', 'Corg', '2']])));
+    const f = extended(r)[0];
+    expect(f.lines?.length).toBeGreaterThan(0);
+    expect(f.lines!.length).toBeLessThanOrEqual(20);
+    for (const lang of LANGS) {
+      const text = renderPlain(f, lang);
+      expect(text).not.toMatch(/[{}]/);
+      expect(text).not.toMatch(/every value|alle Werte|toutes les valeurs|wszystkie/i);
+      expect(text).toContain('Replicate');
+    }
+    expect(getRule('ROW-LONG-KEY-EXTENDED').technical).not.toMatch(/no value is dropped|every value/i);
+  });
+
+  it('u2: a blank kept value gives way to the first value after it: the 5 is read, nothing is said', () => {
+    const r = build(csv('Parameter,Value', [['S1', 'Corg', ''], ['S1', 'Corg', '5'], ['S1', 'Ntot', '6']]));
+    expect(r.dataset.rows[0].values.Corg.value).toBe(5);
+    expect(skipped(r)).toEqual([]);
     expect(extended(r)).toEqual([]);
-    expect(skipped(r)).toHaveLength(1);
+  });
+
+  it('u1: a blank value in one replicate does not hide the 5 in the next', () => {
+    const r = build(csv('Replicate,Parameter,Value', [['S1', '1', 'Corg', ''], ['S1', '1', 'Ntot', '3'], ['S1', '2', 'Corg', '5'], ['S1', '2', 'Ntot', '6']]));
+    expect(skipped(r)).toEqual([]);
+    expect(Object.values(r.dataset.rows.map((x) => x.values.Corg?.value)).filter((v) => v === 5)).toHaveLength(1);
   });
 
   it('the texts are singular for one column and plural for several, in four languages', () => {

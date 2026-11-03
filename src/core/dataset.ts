@@ -768,17 +768,18 @@ function longVariables(sheet: RawSheet, plan: NonNullable<TablePlan['long']>): {
 
 /**
  * Columns that must join the row key of a long sheet so that no two rows with the same key and parameter hold different values. Returns the added column indexes, or [] when none can be
- * used safely. A sheet with no differing collision costs one scan and returns [].
+ * used safely. A sheet with no differing collision costs one scan and returns []. `concerned`, when given, receives the source lines (at most 20, ascending) of rows in the collisions the columns resolve.
  *
  * A candidate column (outside the key and the parameter, unit and value columns, with a header) is acceptable only when
  *  - it is not unique on every row of the sheet (a record id, a note), and
- *  - in every key where it varies, each resulting row holds the same parameters as every other row of that key (rows keep the measurements of one thing together: a replicate, a level, a
- *    cast; a running number or a per-value flag cuts one measurement into rows of different parameters and is refused).
- * Among the acceptable ones, greedy: the column that fully resolves the most colliding (key, parameter) groups together with those already taken, ties by fewest distinct values. A tie on both
- * between two acceptable columns means nothing says which one is meant: neither is taken. When a collision in a key the chosen columns vary in stays unresolved, none is taken. Columns that
- * only separate the rows jointly (a cruise and a station, both needed) are not found.
+ *  - in every key where it varies, the parameter sets of the resulting rows are nested (for any two, one contains the other): rows keep the measurements of one thing together, a replicate
+ *    may lack a parameter, but a running number or a per-value flag cuts a measurement into rows of disjoint parameters and is refused.
+ * Among the acceptable ones, greedy: the column that fully resolves the most colliding (key, parameter) groups together with those already taken. Two candidates with the same count that split
+ * the rows identically are one choice (the first is taken); two that split them differently leave the choice open and neither is taken. A balanced flag with no other candidate (a QC 0/1
+ * on every pair) cannot be told from a replicate without guessing and joins the key; the finding names it. When a collision in a key the chosen columns vary in stays unresolved, none is taken.
+ * Columns that only separate the rows jointly (a cruise and a station, both needed) are not found.
  */
-export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long']>, keyCols: number[], dc: boolean, paramKey?: (r: RawRow, param: string) => string): number[] {
+export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long']>, keyCols: number[], dc: boolean, paramKey?: (r: RawRow, param: string) => string, concerned?: number[]): number[] {
   const rows = sheet.rows;
   const keyOfParam = paramKey ?? longVariables(sheet, plan).baseKey;
   const keys: (string | undefined)[] = new Array(rows.length);
@@ -796,7 +797,10 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
     idOf[i] = id;
     const f = first.get(k);
     if (f === undefined) first.set(k, i);
-    else if (!colliding.has(k) && longValueDiffers(r.cells[plan.valueCol] ?? null, rows[f].cells[plan.valueCol] ?? null, dc)) colliding.add(k);
+    else if (isBlankCell(rows[f].cells[plan.valueCol] ?? null)) {
+      // a blank kept value gives way to the first value after it (buildLong does the same)
+      if (!isBlankCell(r.cells[plan.valueCol] ?? null)) first.set(k, i);
+    } else if (!colliding.has(k) && longValueDiffers(r.cells[plan.valueCol] ?? null, rows[f].cells[plan.valueCol] ?? null, dc)) colliding.add(k);
   }
   if (colliding.size === 0) return [];
 
@@ -821,18 +825,20 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   const cell = (i: number, c: number): string => str(rows[i].cells[c] ?? null) ?? '';
   const valueOf = (i: number): RawCell => rows[i].cells[plan.valueCol] ?? null;
   const classOf = (i: number, cols: number[]): string => (cols.length === 1 ? cell(i, cols[0]) : JSON.stringify(cols.map((c) => cell(i, c))));
-  /** True when, within the group, no two rows that agree on `cols` hold different values. */
+  /** True when, within the group, no two rows that agree on `cols` hold different values (a blank value gives way to the first value after it, as in buildLong). */
   const resolves = (group: number[], cols: number[]): boolean => {
     const rep = new Map<string, number>();
     for (const i of group) {
       const id = classOf(i, cols);
       const j = rep.get(id);
       if (j === undefined) rep.set(id, i);
-      else if (longValueDiffers(valueOf(i), valueOf(j), dc)) return false;
+      else if (isBlankCell(valueOf(j))) {
+        if (!isBlankCell(valueOf(i))) rep.set(id, i);
+      } else if (longValueDiffers(valueOf(i), valueOf(j), dc)) return false;
     }
     return true;
   };
-  /** In every key where `cols` vary, each resulting row holds the same parameters as every other. */
+  /** In every key where `cols` vary, the parameter sets of the resulting rows are nested: for any two, one contains the other. */
   const keepsMeasurementsTogether = (cols: number[]): boolean => {
     for (const list of rowsOfId.values()) {
       const params = new Map<string, Set<string>>();
@@ -843,14 +849,22 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
         else params.set(cls, new Set([paramOf(i)]));
       }
       if (params.size < 2) continue;
-      let want: string | undefined;
-      for (const set of params.values()) {
-        const sig = [...set].sort().join('\u0001');
-        if (want === undefined) want = sig;
-        else if (sig !== want) return false;
-      }
+      const sets = [...params.values()].sort((x, y) => x.size - y.size);
+      for (let k = 0; k + 1 < sets.length; k++) for (const p of sets[k]) if (!sets[k + 1].has(p)) return false;
     }
     return true;
+  };
+  /** The partition of the rows `cols` make, as a string: two column sets split the rows identically exactly when these are equal. */
+  const partitionOf = (cols: number[]): string => {
+    const label = new Map<string, number>();
+    const out: number[] = [];
+    for (const list of rowsOfId.values()) for (const i of list) {
+      const k = idOf[i]! + '\u0000' + classOf(i, cols);
+      let l = label.get(k);
+      if (l === undefined) label.set(k, (l = label.size));
+      out.push(i, l);
+    }
+    return out.join(',');
   };
   const isUnique = (c: number): boolean => {
     const all = new Set<string>();
@@ -861,24 +875,26 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
 
   const chosen: number[] = [];
   while (remaining.length > 0) {
-    let best: { c: number; count: number; distinct: number } | undefined;
-    let tied = false;
+    let top: number[] = [];
+    let topCount = 0;
     for (const c of candidates) {
       if (chosen.includes(c)) continue;
       const cols = [...chosen, c];
       let count = 0;
       for (const g of remaining) if (resolves(g, cols)) count++;
       if (count === 0 || !keepsMeasurementsTogether(cols)) continue;
-      const seen = new Set<string>();
-      for (const g of remaining) for (const i of g) seen.add(cell(i, c));
-      if (!best || count > best.count || (count === best.count && seen.size < best.distinct)) {
-        best = { c, count, distinct: seen.size };
-        tied = false;
-      } else if (count === best.count && seen.size === best.distinct) tied = true;
+      if (count > topCount) {
+        topCount = count;
+        top = [c];
+      } else if (count === topCount) top.push(c);
     }
-    if (!best) break;
-    if (tied) return [];
-    chosen.push(best.c);
+    if (top.length === 0) break;
+    if (top.length > 1) {
+      // the same count: columns that split the rows identically are one choice (the first); columns that split them differently leave it open, and nothing is taken
+      const sig = partitionOf([...chosen, top[0]]);
+      if (top.some((c) => partitionOf([...chosen, c]) !== sig)) return [];
+    }
+    chosen.push(top[0]);
     const cols = [...chosen];
     remaining = remaining.filter((g) => !resolves(g, cols));
   }
@@ -887,6 +903,12 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   for (const g of remaining) {
     const list = rowsOfId.get(idOf[g[0]]!)!;
     if (new Set(list.map((i) => classOf(i, chosen))).size > 1) return [];
+  }
+  if (concerned) {
+    const left = new Set(remaining);
+    const lines: number[] = [];
+    for (const g of members.values()) if (!left.has(g)) for (const i of g) lines.push(rows[i].line);
+    concerned.push(...[...new Set(lines)].sort((x, y) => x - y).slice(0, 20));
   }
   return chosen;
 }
@@ -909,10 +931,12 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const varKey = (r: RawRow, param: string): string => (namespace ? `${sheet.name}!${baseKey(r, param)}` : baseKey(r, param));
 
   // A column that tells colliding rows apart (a pressure, a replicate, a cast, a layer) joins the key, so every value is read: said once (ROW-LONG-KEY-EXTENDED)
-  const added = extendLongKey(sheet, plan, keyCols, dc, baseKey);
+  const concerned: number[] = [];
+  const added = extendLongKey(sheet, plan, keyCols, dc, baseKey, concerned);
   if (added.length > 0) {
     keyCols.push(...added);
-    c.add('ROW-LONG-KEY-EXTENDED', sheet.name, '', 0, undefined, false, { columns: added.map((i) => sheet.header[i]).join(', '), count: added.length });
+    const params = { columns: added.map((i) => sheet.header[i]).join(', '), count: added.length };
+    for (const line of concerned) c.add('ROW-LONG-KEY-EXTENDED', sheet.name, '', line, undefined, true, params);
   }
 
   const variables = new Map<string, Variable>();
@@ -944,6 +968,11 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       variables.set(key, v);
     }
     const kept = row.values[key];
+    if (kept !== undefined && isBlankCell(kept.raw) && !isBlankCell(r.cells[plan.valueCol] ?? null)) {
+      // a blank kept value gives way to the first value after it
+      row.values[key] = numericCell(r.cells[plan.valueCol] ?? null, r.line, param, sheet.name, dc, c);
+      continue;
+    }
     if (kept !== undefined) {
       // duplicate (sample, parameter): the first one stays, nothing is averaged. A value that differs from the kept one was not read: said once at the end (ROW-LONG-VALUE-SKIPPED)
       if (longValueDiffers(r.cells[plan.valueCol] ?? null, kept.raw, dc)) {
