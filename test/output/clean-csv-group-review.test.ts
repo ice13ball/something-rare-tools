@@ -8,6 +8,7 @@ import { toCleanCsv } from '../../src/core/output/csv';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import type { ColumnRole, ParsedFile, SheetMapping } from '../../src/core/types';
 import { dateCell, textFile, xlsxFile } from '../helpers/files';
+import { dataset, row } from './ds';
 
 function build(file: ParsedFile, edit?: (m: SheetMapping[]) => void) {
   const layout = proposeLayout(file);
@@ -59,8 +60,8 @@ describe('one bad cell does not change the shape of an ordinary long sheet', () 
     expect(out.header.filter((h) => /^(date|latitude|depth)/i.test(h))).toEqual(['date [ISO 8601]', 'latitude [degrees_north]', 'depth [m]']);
     expect(out.rows).toHaveLength(good.rows.length);
     const n = notes(bad.sidecar).join('|');
-    expect(n).toMatch(/only partly in this file: .*Date \(3 of 4 cells\)/);
-    expect(n).toMatch(/Latitude \(3 of 4 cells\)/);
+    expect(n).toMatch(/only partly in this file: .*Date \(3 of 4 rows\)/);
+    expect(n).toMatch(/Latitude \(3 of 4 rows\)/);
     expect(n).not.toContain('not in this file');
   });
 
@@ -73,15 +74,20 @@ describe('one bad cell does not change the shape of an ordinary long sheet', () 
   });
 });
 
-describe('header names are unique whatever their case', () => {
-  it('a variable called DEPTH beside the depth column is Depth_2, never a second Depth', () => {
-    const t = ['Station,Latitude,Longitude,Date,Depth,DEPTH,Temp [°C]', 'S1,49.4,0.2,2020-06-01,5,6,11.2', 'S2,49.5,0.3,2020-06-02,7,8,10.4'].join('\n');
-    const out = csv(t, (m) => {
-      for (const c of m[0].columns) if (c.header === 'DEPTH') c.role = { kind: 'variable', variable: 'DEPTH' } as ColumnRole;
-    });
-    const { header } = parse(out.csv);
-    expect(header.map((h) => h.toLowerCase()).length).toBe(new Set(header.map((h) => h.toLowerCase())).size);
-    expect(header).toContain('DEPTH_2');
+describe('header names: exact for the fixed columns and variables, caseless only for a column added beside them', () => {
+  it('Temp, temp and TEMP stay three columns, Co [ug/l] and CO [ug/l] stay as they are: what a828f6c wrote', () => {
+    const t = ['Station,Latitude,Longitude,Date,Temp,temp,TEMP,Co [ug/l],CO [ug/l]', 'S1,49.4,0.2,2020-06-01,1,2,3,4,5'].join('\n');
+    const out = csv(t);
+    const names = ['station', 'date [ISO 8601]', 'latitude [degrees_north]', 'longitude [degrees_east]', 'depth', 'Temp', 'temp', 'TEMP', 'Co [µg/L]', 'CO [µg/L]'];
+    expect(parse(out.csv).header).toEqual(names);
+    expect(parse(out.sidecar).rows.filter((r) => r[0] !== '(note)').map((r) => r[1])).toEqual(names);
+  });
+
+  it('a column added beside them is caseless: Depth beside depth is Depth_2', () => {
+    const ds = dataset([row(2, { depth: 5, keyCells: { Depth: '1.5' } })], [], { extraKeyColumns: [{ header: 'Depth', index: 4, sheet: 'a.csv', id: 'Depth', kind: 'key' }] });
+    const { header, rows } = parse(toCleanCsv(ds).csv);
+    expect(header).toEqual(['date [ISO 8601]', 'latitude [degrees_north]', 'longitude [degrees_east]', 'depth', 'Depth_2']);
+    expect(rows[0].slice(3)).toEqual(['5', '1.5']);
   });
 });
 
@@ -117,3 +123,54 @@ describe('Excel date and time cells of a key column are written as the date and 
     expect(rows.map((r) => r[at])).toEqual(['2020-03-04', '2020-03-10', '2020-03-04', '2020-03-10']);
   });
 });
+
+describe('an Excel number is converted only when nothing can be lost; otherwise the raw number stays', () => {
+  const cell = (v: number, z?: string) => (z ? { t: 'n' as const, v, z } : { t: 'n' as const, v });
+  /** A long sheet whose rows are told apart only by one column: `Time` (no date on the sheet), or `Sampling date 2` beside a constant `Date`. */
+  const keyColumn = (cells: object[], opts: { date1904?: boolean; beside?: boolean } = {}): string[] => {
+    const head = opts.beside ? 'Sampling date 2' : 'Time';
+    const rows: (string | number | object)[][] = [opts.beside ? ['Station', 'Latitude', 'Longitude', 'Date', head, 'Parameter', 'Value'] : ['Station', 'Latitude', 'Longitude', head, 'Parameter', 'Value']];
+    cells.forEach((c, i) => ['Corg', 'Ntot', 'Ptot'].forEach((p) => rows.push(opts.beside ? ['S1', 49.4, 0.2, dateCell(opts.date1904 ? 42432 : 43894), c, p, i + p.length / 10] : ['S1', 49.4, 0.2, c, p, i + p.length / 10])));
+    const file = xlsxFile('b.xlsx', { S: rows as never }, opts.date1904 ? ({ Workbook: { WBProps: { date1904: true } } } as never) : undefined);
+    const { header, rows: out } = parse(toCleanCsv(build(file)).csv);
+    return out.map((r) => r[header.indexOf(head)]);
+  };
+  const timeColumn = (cells: object[]): string[] => keyColumn(cells);
+  const dateColumn = (cells: object[], date1904 = false): string[] => keyColumn(cells, { beside: true, date1904 });
+
+  it('[h]:mm cells 0.5, 1.5 and 36.25: only the time of day is a time; the others stay numbers, so no two rows become one', () => {
+    const got = timeColumn([cell(0.5, '[h]:mm'), cell(1.5, '[h]:mm'), cell(36.25, '[h]:mm')]);
+    expect(got).toEqual(['12:00', '1.5', '36.25']);
+  });
+
+  it('a full datetime shown as hh:mm keeps its day: 43900.5 and 43901.5 stay numbers', () => {
+    expect(timeColumn([cell(43900.5, 'hh:mm'), cell(43901.5, 'hh:mm')])).toEqual(['43900.5', '43901.5']);
+  });
+
+  it('43900 formatted yyyy-mm-dd inside a mostly time-formatted column is the date, and the times beside it are not read as dates', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.75, 'hh:mm'), cell(43900, 'yyyy-mm-dd')])).toEqual(['0.5', '0.75', '2020-03-10']);
+  });
+
+  it('a General 5 in a mostly date-formatted column keeps every cell a number (it is not 1900-01-04)', () => {
+    expect(dateColumn([cell(43900, 'yyyy-mm-dd'), cell(43901, 'yyyy-mm-dd'), cell(5)])).toEqual(['43900', '43901', '5']);
+  });
+
+  it('General 5 and 3 in a mostly hh:mm column stay 5 and 3, never two 00:00', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.75, 'hh:mm'), cell(5), cell(3)])).toEqual(['0.5', '0.75', '5', '3']);
+  });
+
+  it('a column in which every cell is a time of day, a column in which every cell is a plausible date, and a 1904 workbook are still converted', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.75, 'hh:mm')])).toEqual(['12:00', '18:00']);
+    expect(dateColumn([cell(43900, 'yyyy-mm-dd'), cell(43906, 'yyyy-mm-dd')])).toEqual(['2020-03-10', '2020-03-16']);
+    expect(dateColumn([cell(42438, 'yyyy-mm-dd'), cell(42444, 'yyyy-mm-dd')], true)).toEqual(['2020-03-10', '2020-03-16']);
+  });
+
+  it('the parser flags: dateFormatted stays the majority flag, dateAll and timeAll say every numeric cell', () => {
+    const f = xlsxFile('b.xlsx', { S: [['A', 'B'], [cell(0.5, 'hh:mm'), cell(43900, 'yyyy-mm-dd')], [cell(0.75, 'hh:mm'), cell(43901, 'yyyy-mm-dd')], [cell(5), cell(43902, 'yyyy-mm-dd')]] as never });
+    const sh = f.sheets[0];
+    expect(sh.dateFormatted).toEqual([true, true]);
+    expect(sh.dateAll).toEqual([false, true]);
+    expect(sh.timeAll).toBeUndefined();
+  });
+});
+

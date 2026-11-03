@@ -111,13 +111,18 @@ function depthUnit(ds: Dataset): string | undefined {
 
 class Namer {
   private readonly used = new Set<string>();
-  /** `name [unit]` or `name`; a repeated full header gets `_2`, `_3`, ... on the name part. */
-  take(name: string, unit?: string): string {
+  private readonly usedLower = new Set<string>();
+  /**
+   * `name [unit]` or `name`; a repeated full header gets `_2`, `_3`, ... on the name part. The fixed columns and the variables match exactly, as they always did (`Temp`, `temp` and `TEMP` stay three
+   * columns). A column added beside them (`caseless`) must not match ANY earlier header in any case: `Depth` beside `depth` is `Depth_2`.
+   */
+  take(name: string, unit?: string, opts: { caseless?: boolean } = {}): string {
     const head = (n: string) => (unit ? `${n} [${unit}]` : n);
     let h = head(name);
-    // header uniqueness ignores case: a spreadsheet and most readers take `Depth` and `depth` for one name
-    for (let i = 2; this.used.has(h.toLowerCase()); i++) h = head(`${name}_${i}`);
-    this.used.add(h.toLowerCase());
+    const taken = (x: string): boolean => (opts.caseless === true ? this.usedLower.has(x.toLowerCase()) : this.used.has(x));
+    for (let i = 2; taken(h); i++) h = head(`${name}_${i}`);
+    this.used.add(h);
+    this.usedLower.add(h.toLowerCase());
     return h;
   }
 }
@@ -136,8 +141,8 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
 
   type Col = { header: string; get: (r: DataRow) => string };
   const cols: Col[] = [];
-  const add = (name: string, unit: string | undefined, get: (r: DataRow) => string, sidecar: [string, string, string]) => {
-    const header = namer.take(name, unit);
+  const add = (name: string, unit: string | undefined, get: (r: DataRow) => string, sidecar: [string, string, string], caseless = false) => {
+    const header = namer.take(name, unit, { caseless });
     cols.push({ header, get });
     side.push([sidecar[0], header, unit ?? '', sidecar[1], sidecar[2]]);
   };
@@ -179,7 +184,7 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
     const hu = unitFromHeader(e.header);
     const unit = e.kind === 'pressure' ? (e.unit ?? hu.unitText) : hu.unitText;
     const swap = e.numeric === true && ds.decimalComma === true;
-    add(hu.name || e.header, unit, (r) => valueText(r.keyCells?.[e.id], swap), [e.header, unit !== undefined && hu.unitText !== undefined ? 'header' : '', '']);
+    add(hu.name || e.header, unit, (r) => valueText(r.keyCells?.[e.id], swap), [e.header, unit !== undefined && hu.unitText !== undefined ? 'header' : '', ''], true);
   }
 
   for (const v of ds.variables) {
@@ -199,7 +204,8 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
     const mine = left.filter((c) => c.sheet === sheet);
     // a column no cell of which was used is not in the file; one some cells of which were used is only partly in it, with the counts
     const none = mine.filter((c) => c.partial === undefined).map(nameOf);
-    const part = mine.filter((c) => c.partial !== undefined).map((c) => `${nameOf(c)} (${c.partial!.used} of ${c.partial!.filled} cells)`);
+    // the unit of the count: cells of a wide sheet, output rows of a long sheet, joined cells of a lookup sheet
+    const part = mine.filter((c) => c.partial !== undefined).map((c) => `${nameOf(c)} (${c.partial!.used} of ${c.partial!.filled} ${c.partial!.unit ?? 'cells'})`);
     if (none.length > 0) notes.push(`source columns that are not in this file${where}: ${none.join(' | ')}`);
     if (part.length > 0) notes.push(`source columns only partly in this file${where}: ${part.join(' | ')}`);
   }

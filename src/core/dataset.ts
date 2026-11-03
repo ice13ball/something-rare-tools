@@ -28,7 +28,7 @@ import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { pairHemisphere, parseCoordinate } from './values/coords';
-import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, fullDatetimeOfTimeCell, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
+import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, fullDatetimeOfTimeCell, isPlausibleSerial, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -621,7 +621,7 @@ interface Built {
   /** The source columns whose every non-blank cell gave something to the output, by sheet: this sheet's, and the lookup sheet's columns that lent a value from every joined row they have one in. */
   reads: Map<string, Set<number>>;
   /** Columns only partly carried, by sheet: how many of their non-blank cells gave a value. */
-  partial: Map<string, Map<number, { used: number; filled: number }>>;
+  partial: Map<string, Map<number, PartialCount>>;
   /** The Year column beside the date column of this sheet, if there is one (its cells are on `DataRow.yearCell`). */
   year?: { index: number; header: string; date: string };
 }
@@ -667,13 +667,16 @@ function extraColumnsOf(sheet: RawSheet, pressure: readonly (Spec & { unit?: str
  * What a sheet's build carried: its own columns (`own`), and the lookup sheet's columns whose value reached the output from every joined row that has one. A key of the join counts only when the
  * column it is matched with on the measurement sheet reached the output (the same values then did too).
  */
-function readsOf(sheet: RawSheet, own: Set<number>, ownPartial: Map<number, { used: number; filled: number }>, lookup: Lookup | undefined): Pick<Built, 'reads' | 'partial'> {
+/** How many non-blank cells of a column gave a value to the output, and in what unit the count is (`cells` of a wide sheet, `rows` of a long sheet, `joined cells` of a lookup sheet). */
+type PartialCount = { used: number; filled: number; unit?: string };
+
+function readsOf(sheet: RawSheet, own: Set<number>, ownPartial: Map<number, PartialCount>, lookup: Lookup | undefined): Pick<Built, 'reads' | 'partial'> {
   for (const i of own) ownPartial.delete(i);
   const reads = new Map<string, Set<number>>([[sheet.name, own]]);
-  const partial = new Map<string, Map<number, { used: number; filled: number }>>([[sheet.name, ownPartial]]);
+  const partial = new Map<string, Map<number, PartialCount>>([[sheet.name, ownPartial]]);
   if (!lookup) return { reads, partial };
   const carried = new Set<number>();
-  const lookupPartial = new Map<number, { used: number; filled: number }>();
+  const lookupPartial = new Map<number, PartialCount>();
   for (const [col, used] of lookup.usedRows) {
     let filled = 0;
     let given = 0;
@@ -690,7 +693,7 @@ function readsOf(sheet: RawSheet, own: Set<number>, ownPartial: Map<number, { us
       if (t !== undefined && used.has(t) && String(t.cells[col] ?? '').trim() === String(cell).trim()) given++;
     }
     if (filled > 0 && given === filled) carried.add(col);
-    else if (given > 0) lookupPartial.set(col, { used: given, filled });
+    else if (given > 0) lookupPartial.set(col, { used: given, filled, unit: 'joined cells' });
   }
   lookup.rightKeys.forEach((k, n) => {
     if (own.has(lookup.leftKeys[n])) carried.add(k);
@@ -702,12 +705,12 @@ function readsOf(sheet: RawSheet, own: Set<number>, ownPartial: Map<number, { us
 }
 
 /** The columns of which some, not all, non-blank cells gave something (`extraFilled`: cells of a merged source row that gave nothing). */
-function partialOf(cells: ReadonlyMap<number, { filled: number; used: number }>, carried: ReadonlySet<number>, extraFilled?: ReadonlyMap<number, number>): Map<number, { used: number; filled: number }> {
-  const out = new Map<number, { used: number; filled: number }>();
+function partialOf(cells: ReadonlyMap<number, { filled: number; used: number }>, carried: ReadonlySet<number>, unit: string | undefined, extraFilled?: ReadonlyMap<number, number>): Map<number, PartialCount> {
+  const out = new Map<number, PartialCount>();
   for (const [i, st] of cells) {
     if (carried.has(i) && !extraFilled?.has(i)) continue;
     const filled = st.filled + (extraFilled?.get(i) ?? 0);
-    if (st.used > 0 && st.used < filled) out.set(i, { used: st.used, filled });
+    if (st.used > 0 && st.used < filled) out.set(i, { used: st.used, filled, ...(unit === undefined ? {} : { unit }) });
   }
   return out;
 }
@@ -955,7 +958,7 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   const carriedWide = carriedBy(parse.cells);
   for (const i of carriedWide) own.add(i);
   for (const e of extra) own.add(e.index);
-  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide), lookup), ...(year ? { year } : {}) };
+  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide, undefined), lookup), ...(year ? { year } : {}) };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1309,12 +1312,18 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const usedOf = (i: number): number => parse.cells.get(i)?.used ?? 0;
   const wanted = unread.filter((i) => !ignoredOnPurpose.has(i));
   const pressureOk = pressure.filter((p) => !pVarying.has(p.index));
-  /** The text a key cell is written as: a date-formatted xlsx cell goes through the date reader (its serial is not what the person sees), anything else as the file wrote it. */
+  /**
+   * The text a key cell is written as. A number is converted only when EVERY numeric cell of its column is date-formatted (a General 5 among dates stays 5), and only when nothing can be lost: in a
+   * time-only column a value from 0 up to 1 is a time of day (HH:MM); any other value ([h]:mm 36.25, a full datetime shown as hh:mm) stays the number. In a date column a plausible serial is written as
+   * the date (and time) it is, with the workbook's date system; anything else stays the number. Everything that is not a number is written as the file wrote it.
+   */
   const keyCellText = (index: number, cell: RawCell): RawCell => {
-    if (typeof cell !== 'number' || sheet.dateFormatted?.[index] !== true) return cell;
+    if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
+    const timeOnly = sheet.timeAll?.[index] === true;
+    if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
     const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true });
     if ('error' in d) return cell;
-    if (sheet.timeFormatted?.[index] === true) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
+    if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
     return d.iso;
   };
   const cellFor = (e: ExtraKeyColumn, n: number): RawCell => {
@@ -1346,7 +1355,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     });
   }
   for (const e of extra) own.add(e.index);
-  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, lostCols), lookup), ...(year ? { year } : {}) };
+  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, 'rows', lostCols), lookup), ...(year ? { year } : {}) };
 }
 
 /**
@@ -1356,8 +1365,8 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
  * a time with no date, date parts no date was built from, a hemisphere that did not apply, a lookup column no row took a value from, a pressure that varies inside one row, a key column the person ignored.
  * A dataset without the record (built by hand) names nothing.
  */
-export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; header: string; partial?: { used: number; filled: number } }[] {
-  const out: { sheet: string; index: number; header: string; partial?: { used: number; filled: number } }[] = [];
+export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; header: string; partial?: PartialCount }[] {
+  const out: { sheet: string; index: number; header: string; partial?: PartialCount }[] = [];
   if (ds.readColumns === undefined) return out;
   for (const m of ds.mappings) {
     const rec = ds.readColumns.find((r) => r.sheet === m.sheet);
@@ -1366,7 +1375,7 @@ export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; h
     for (const c of m.columns) {
       if (read.has(c.index)) continue;
       const part = rec?.partial?.find((p) => p.index === c.index);
-      out.push({ sheet: m.sheet, index: c.index, header: c.header, ...(part ? { partial: { used: part.used, filled: part.filled } } : {}) });
+      out.push({ sheet: m.sheet, index: c.index, header: c.header, ...(part ? { partial: { used: part.used, filled: part.filled, ...(part.unit === undefined ? {} : { unit: part.unit }) } } : {}) });
     }
   }
   return out;
@@ -1420,7 +1429,7 @@ export function buildDataset(
   const usedSheets: string[] = [];
   const extraKeyColumns: ExtraKeyColumn[] = [];
   const readBy = new Map<string, Set<number>>();
-  const partialBy = new Map<string, Map<number, { used: number; filled: number }>>();
+  const partialBy = new Map<string, Map<number, PartialCount>>();
   const yearColumns: NonNullable<Dataset['yearColumns']> = [];
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
@@ -1451,7 +1460,7 @@ export function buildDataset(
       readBy.set(name, into);
     }
     for (const [name, cols] of built.partial) {
-      const into = partialBy.get(name) ?? new Map<number, { used: number; filled: number }>();
+      const into = partialBy.get(name) ?? new Map<number, PartialCount>();
       for (const [i, v] of cols) into.set(i, v);
       partialBy.set(name, into);
     }

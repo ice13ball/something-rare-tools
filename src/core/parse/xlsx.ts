@@ -136,7 +136,10 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one
   const timeFormatted = header.map((_, c) => dateFormatted[c] && timed[c] * 2 > dated[c]);
-  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
+  // the same, for EVERY numeric cell of the column (not the majority): a conversion that could lose a cell that is not date-formatted (a General 5 among dates) may only be made when all of them are. Set only when there is one.
+  const dateAll = header.map((_, c) => numeric[c] > 0 && dated[c] === numeric[c]);
+  const timeAll = header.map((_, c) => dateAll[c] && timed[c] === numeric[c]);
+  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}) };
 }
 
 /** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */

@@ -94,7 +94,7 @@ describe('a sheet joined to a lookup sheet: the columns it lent are the ones car
     expect(parse(out.csv).rows.map((r) => r[depth])).toEqual(['', '5', '5']);
     // withheld for S1, lent for S2 and S3: the column is not carried whole, so it is named, with the counts
     expect(left(out.sidecar)).toEqual([]);
-    expect(part(out.sidecar)).toEqual([`${PART} (sheet Sites): Depth [m] (2 of 4 cells)`]);
+    expect(part(out.sidecar)).toEqual([`${PART} (sheet Sites): Depth [m] (2 of 4 joined cells)`]);
   });
 
   it('a Sites column no row took a value from is named, one that gave a position is not', () => {
@@ -289,7 +289,7 @@ describe('per cell: a column is carried only if every non-blank cell of it gave 
     const { datasets } = buildDatasets(file, layout, proposeMappings(file, layout), [], 'd');
     const out = toCleanCsv(datasets[0]);
     expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020-06-01', '2019-01-02', '2020-06-03']);
-    expect(part(out.sidecar)).toEqual([`${PART} (sheet Sites): Date (1 of 3 cells)`]);
+    expect(part(out.sidecar)).toEqual([`${PART} (sheet Sites): Date (1 of 3 joined cells)`]);
   });
 });
 
@@ -402,18 +402,18 @@ describe('round 3: every right row of a joined key is judged; the date is credit
 
   it('a depth blank on the first S1 row and 6 on the second, while S2 lends 7: the 6 is lost, so Depth is named', () => {
     const sites = [['Station', 'Depth [m]', 'Latitude', 'Longitude'], ['S1', '', 70.1, 15.2], ['S1', 6, 70.1, 15.2], ['S2', 7, 60.2, 5.4], ['S3', 7, 50.3, -5.6]];
-    expect(part(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${PART} (sheet Sites): Depth [m] (2 of 3 cells)`]);
+    expect(part(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${PART} (sheet Sites): Depth [m] (2 of 3 joined cells)`]);
   });
 
   it('Cruise C1 and C2 on one key: the cruise of the second row is lost, so Cruise is named', () => {
     const sites = [['Station', 'Cruise', 'Latitude', 'Longitude'], ['S1', 'C1', 70.1, 15.2], ['S1', 'C2', 70.1, 15.2], ['S2', 'C1', 60.2, 5.4], ['S3', 'C1', 50.3, -5.6]];
-    expect(part(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${PART} (sheet Sites): Cruise (3 of 4 cells)`]);
+    expect(part(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${PART} (sheet Sites): Cruise (3 of 4 joined cells)`]);
   });
 
   it('an ambiguous key beside a lent one: the position of the ambiguous rows was never given, so it is named', () => {
     const sites = [['Station', 'Latitude', 'Longitude'], ['S1', 70.1, 15.2], ['S1', 71.9, 16.8], ['S2', 60.2, 5.4], ['S3', 50.3, -5.6]];
     const out = toCleanCsv(run(sites, data));
-    expect(part(out.sidecar).join('|')).toMatch(/\(sheet Sites\): .*Latitude \(2 of 4 cells\)/);
+    expect(part(out.sidecar).join('|')).toMatch(/\(sheet Sites\): .*Latitude \(2 of 4 joined cells\)/);
   });
 
   it('identical repeats of one key are not lost: nothing is named', () => {
@@ -443,7 +443,7 @@ describe('round 3: source rows that merge into one output row of a long sheet ar
     for (const s of ['S1', 'S2']) [['Corg', '2021'], ['Ntot', '1999'], ['Ptot', '2021']].forEach(([p, y]) => lines.push(`${s},49.4,0.2,,${y},${p},${p.length}.${s.length}`));
     const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'year', { kind: 'ignore' }));
     expect(dataset.rows).toHaveLength(2);
-    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: year (2 of 4 cells)`]);
+    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: year (2 of 4 rows)`]);
   });
 
   it('N and S at one latitude on the rows of one station: the hemisphere column is named', () => {
@@ -451,7 +451,7 @@ describe('round 3: source rows that merge into one output row of a long sheet ar
     for (const s of ['S1', 'S2']) [['Corg', 'N'], ['Ntot', 'S'], ['Ptot', 'N']].forEach(([p, h]) => lines.push(`${s},49.4,${h},0.2,2020-06-01,${p},${p.length}.${s.length}`));
     const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'Lat NS', { kind: 'hemisphere', axis: 'latitude' }));
     expect(dataset.rows).toHaveLength(2);
-    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: Lat NS (2 of 4 cells)`]);
+    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: Lat NS (2 of 4 rows)`]);
   });
 
   it('the same year on every row of a station is one value: not named for merging', () => {

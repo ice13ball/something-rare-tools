@@ -18,6 +18,8 @@ export interface RawSheet {
   unitsRowLine?: number;
   unnamedFrom?: number;         // CSV: the header had too few names (IN-HEADER-SHORT); columns from this index on were added by the tool as `Column N`
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
+  dateAll?: boolean[];          // xlsx: EVERY numeric cell of the column is date-formatted (dateFormatted is the majority); only present when some column is
+  timeAll?: boolean[];          // xlsx: every numeric cell of the column has a time-only format; only present when some column is
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
   /** Set only by the converter's long-sheet reader (core/convert/pivot.ts): this sheet is a PIVOT of a long environmental sheet, with where each cell came from. Never set for /check. */
   pivot?: PivotInfo;
@@ -252,7 +254,7 @@ export interface Dataset {
   /** Source columns the clean CSV writes after the depth and before the variables (pressure, and the columns that joined a long sheet's row key). Absent when there are none. */
   extraKeyColumns?: ExtraKeyColumn[];
   /** The source columns the build read, by sheet name (the lookup sheet of a join included): the record the clean CSV's list of left-out columns comes from. */
-  readColumns?: { sheet: string; columns: number[]; /** Columns some cells of which gave a value and some did not: how many of the non-blank cells did. */ partial?: { index: number; used: number; filled: number }[] }[];
+  readColumns?: { sheet: string; columns: number[]; /** Columns some cells of which gave a value and some did not: how many of the non-blank cells did. */ partial?: { index: number; used: number; filled: number; unit?: string }[] }[];
   /** Per sheet, the Year column beside a date column and the date column's header: what ROW-YEAR-DATE-MISMATCH compares. */
   yearColumns?: { sheet: string; year: string; date: string }[];
 }
