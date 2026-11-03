@@ -8,6 +8,7 @@ import { toCleanCsv } from '../../src/core/output/csv';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import type { ParsedFile } from '../../src/core/types';
 import { textFile, xlsxFile } from '../helpers/files';
+import { dataset, row } from './ds';
 
 const FMT = 'yyyy-mm-dd hh:mm:ss.000';
 const dt = (serial: number, z = FMT) => ({ t: 'n' as const, v: serial, z });
@@ -215,5 +216,37 @@ describe('the evidence of a column is not turned on by a long fill-down', () => 
     }
     expect(dateOf(wide(cells))).toEqual(expected);
     expect(expected.some((x) => /\.\d{3}$/.test(x))).toBe(true);
+  });
+});
+
+describe('the note counts a lookup date only where it is taken, and not a date a zone-stated time replaced', () => {
+  const PLAIN = 'yyyy-mm-dd hh:mm:ss';
+  const ROUNDED = /^date cells rounded to the second/;
+  const roundedNotes = (file: ParsedFile, pick = 0): string[] => {
+    const layout = proposeLayout(file);
+    const ds = buildDatasets(file, layout, proposeMappings(file, layout), [], 'd').datasets[pick];
+    return textFile('o.csv', toCleanCsv(ds).sidecar).sheets[0].rows.map((r) => r.cells.map((c) => String(c ?? ''))).filter((r) => r[0] === '(note)').map((r) => r[1]).filter((n) => ROUNDED.test(n));
+  };
+  const stations = [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', dt(43983 + 0.002 / 86400, PLAIN), 70.1, 15.2], ['S2', dt(43984 + 0.108 / 86400, PLAIN), 60.2, 5.4]];
+
+  it('taken: the lookup date is lent to the data rows, so its rounded cells are counted', () => {
+    const file = xlsxFile('book.xlsx', { Stations: stations as never, Data: [['Station', 'Temperature [degC]'], ['S1', 4.5], ['S2', 5.5]] as never });
+    expect(roundedNotes(file)).toEqual(['date cells rounded to the second (sheet Stations): Date (2 cells, up to 108 ms)']);
+  });
+
+  it('not taken: the data has its own Date, so the lookup date is not read and not counted', () => {
+    const file = xlsxFile('book.xlsx', { Stations: stations as never, Data: [['Station', 'Date', 'Temperature [degC]'], ['S1', dt(43985, PLAIN), 4.5], ['S2', dt(43986, PLAIN), 5.5]] as never });
+    expect(roundedNotes(file)).toEqual([]);
+  });
+
+  it('a date overruled by a zone-stated time on the same day is not counted: the CSV has the time', () => {
+    const file = xlsxFile('z.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ['S1', 49.4, 0.2, dt(43983.33333, PLAIN), '2020-06-01T20:00:00Z', 11], ['S1', 49.5, 0.3, dt(43984.5, PLAIN), '2020-06-02T20:00:00Z', 12]] as never });
+    expect(dateOf(file)).toEqual(['2020-06-01T20:00:00Z', '2020-06-02T20:00:00Z']);
+    expect(roundedNotes(file)).toEqual([]);
+  });
+
+  it('a column counted by two paths says "at least"', () => {
+    const ds = { ...dataset([row(2)]), roundedTimes: [{ sheet: 'a.csv', header: 'Date', count: 3, maxMs: 5, atLeast: true }] };
+    expect(textFile('o.csv', toCleanCsv(ds).sidecar).sheets[0].rows.map((r) => String(r.cells[1] ?? ''))).toContain('date cells rounded to the second: Date (at least 3 cells, up to 5 ms)');
   });
 });

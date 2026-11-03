@@ -301,6 +301,8 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
   const millisOf = (spec: Spec | undefined): KeepMillis => (opts.keepMillis !== true ? false : spec !== undefined && columnFractions(sheet, spec.index, sheet.fractionShown?.[spec.index] === true).shown ? 'shown' : true);
   // The cells /check read as the whole second though they hold a fraction of 0.5 ms or more (a column that is not shown, a cell that is not a real fraction): counted per column where a cell is READ, for the sidecar note
   const rounded = new Map<number, { count: number; maxMs: number }>();
+  /** The rounded cells of the row parsed last: [column, offset ms] (a lookup counts them only when it lends the date). */
+  const rowRounded: [number, number][] = [];
   const tally = (spec: Spec | undefined, cell: RawCell): void => {
     if (spec === undefined || typeof cell !== 'number' || millisOf(spec) !== true) return;
     const off = secondOffsetMs(cell);
@@ -309,6 +311,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
     t.count++;
     if (off > t.maxMs) t.maxMs = off;
     rounded.set(spec.index, t);
+    rowRounded.push([spec.index, off]);
   };
   // The record the clean CSV's list of left-out columns comes from, kept per CELL: for each column that feeds a field of the output, how many of its non-blank cells there were and how many gave
   // something (`cells`). `rowCols` holds the columns that gave something on the row being parsed; `reads` (only with opts.fields: a lookup sheet) says which field each of them gave.
@@ -438,6 +441,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           let date: ParsedDate = d;
           // the date column is credited unless a zone-stated time replaces the date altogether (its day is then gone)
           let whenKept = true;
+          let timeReplaced = false;
           let tzField = specs.when.header;
           if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
           let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
@@ -457,6 +461,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
               c.add('ROW-TIME-OTHER-DAY', sheet.name, tField, row.line, String(timeCell).trim(), true);
             } else if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown') {
               date = full;
+              timeReplaced = true;
               tzField = tField;
               // the time replaces the date; the date column is credited only when the kept date falls on the day (month, year) the date cell states
               whenKept = full.iso.slice(0, own) === d.iso.slice(0, own);
@@ -483,7 +488,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           }
           if (whenKept) {
             note('datetime', specs.when.index);
-            tally(specs.when, cell);
+            if (!timeReplaced) tally(specs.when, cell);
           }
           m.datetime = date;
         }
@@ -557,6 +562,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
   for (const i of tracked) cells.set(i, { filled: 0, used: 0 });
   const parseRow = (row: RawRow): Meta => {
     rowCols.length = 0;
+    rowRounded.length = 0;
     if (opts.fields === true) reads.clear();
     const m = parseBody(row);
     for (const i of tracked) {
@@ -567,7 +573,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
     }
     return m;
   };
-  return Object.assign(parseRow, { rounded: rounded as ReadonlyMap<number, { count: number; maxMs: number }>, reads: reads as ReadonlyMap<keyof Meta, readonly number[]>, cells: cells as ReadonlyMap<number, { filled: number; used: number }>, tracked });
+  return Object.assign(parseRow, { lastRounded: rowRounded as readonly (readonly [number, number])[], rounded: rounded as ReadonlyMap<number, { count: number; maxMs: number }>, reads: reads as ReadonlyMap<keyof Meta, readonly number[]>, cells: cells as ReadonlyMap<number, { filled: number; used: number }>, tracked });
 }
 
 /** The columns of which EVERY non-blank cell gave something to the output (a column with one cell that gave nothing, or with no cell at all, is not carried). */
@@ -578,7 +584,7 @@ function carriedBy(cells: ReadonlyMap<number, { filled: number; used: number }>)
 }
 
 /** metaParser's result: the row parser, and the source columns that gave each field of the last row it parsed. */
-export type MetaParser = ((row: RawRow) => Meta) & { rounded: ReadonlyMap<number, { count: number; maxMs: number }>; reads: ReadonlyMap<keyof Meta, readonly number[]>; cells: ReadonlyMap<number, { filled: number; used: number }>; tracked: readonly number[] };
+export type MetaParser = ((row: RawRow) => Meta) & { lastRounded: readonly (readonly [number, number])[]; rounded: ReadonlyMap<number, { count: number; maxMs: number }>; reads: ReadonlyMap<keyof Meta, readonly number[]>; cells: ReadonlyMap<number, { filled: number; used: number }>; tracked: readonly number[] };
 
 /** The field a lookup field is read with: the decimals of a coordinate come from its column, the raw text of a date from the date's columns. */
 const READ_ALIAS: Partial<Record<keyof Meta, keyof Meta>> = { latDecimals: 'lat', lonDecimals: 'lon', dateRaw: 'datetime', depthDecimals: 'depth' };
@@ -640,12 +646,13 @@ function fillUnitsFromMetadata(variables: Variable[], metadata: readonly Metadat
 
 /** The tally of a metaParser (and of the key path) as note entries, one per column. */
 function roundedEntries(sheet: RawSheet, ...tallies: ReadonlyMap<number, { count: number; maxMs: number }>[]): RoundedTimes[] {
-  const merged = new Map<number, { count: number; maxMs: number }>();
+  const merged = new Map<number, { count: number; maxMs: number; atLeast?: boolean }>();
   for (const t of tallies) for (const [i, v] of t) {
     const was = merged.get(i);
-    merged.set(i, was === undefined ? { ...v } : { count: Math.max(was.count, v.count), maxMs: Math.max(was.maxMs, v.maxMs) });
+    // the same column counted by two paths: the cells they share cannot be told apart, so the larger count is a lower bound
+    merged.set(i, was === undefined ? { ...v } : { count: Math.max(was.count, v.count), maxMs: Math.max(was.maxMs, v.maxMs), atLeast: true });
   }
-  return [...merged].sort((x, y) => x[0] - y[0]).map(([i, v]) => ({ sheet: sheet.name, header: sheet.header[i] ?? '', count: v.count, maxMs: v.maxMs }));
+  return [...merged].sort((x, y) => x[0] - y[0]).map(([i, v]) => ({ sheet: sheet.name, header: sheet.header[i] ?? '', count: v.count, maxMs: v.maxMs, ...(v.atLeast ? { atLeast: true } : {}) }));
 }
 
 /** One entry per column (sheet and header): the same column read twice keeps the larger count. */
@@ -654,7 +661,7 @@ function mergeRounded(list: readonly RoundedTimes[]): RoundedTimes[] {
   for (const r of list) {
     const key = `${r.sheet}\u0000${r.header}`;
     const was = out.get(key);
-    out.set(key, was === undefined ? r : { ...r, count: Math.max(was.count, r.count), maxMs: Math.max(was.maxMs, r.maxMs) });
+    out.set(key, was === undefined ? r : { ...r, count: Math.max(was.count, r.count), maxMs: Math.max(was.maxMs, r.maxMs), atLeast: true });
   }
   return [...out.values()];
 }
@@ -792,7 +799,9 @@ interface Lookup {
    */
   rowsByKey: Map<string, { row: RawRow; depthless: boolean } | 'ambiguous'>;
   meta: MetaParser;
-  cache: Map<RawRow, { meta: Meta; reads: ReadonlyMap<keyof Meta, readonly number[]> }>;
+  cache: Map<RawRow, { meta: Meta; reads: ReadonlyMap<keyof Meta, readonly number[]>; rounded: readonly (readonly [number, number])[] }>;
+  /** The lookup sheet's date or time cells that were rounded to the second and whose row actually LENT its date to a row of the left sheet, per column. */
+  rounded: Map<number, { count: number; maxMs: number }>;
   /** For each column of the right sheet, the right rows whose cell gave a value to a row of the left sheet, and the right rows any left row was joined to. */
   usedRows: Map<number, Set<RawRow>>;
   /** Every right row of a key some left row was joined to (or that was found ambiguous): all of them are judged, not only the one that was taken. */
@@ -872,7 +881,7 @@ function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, map
     else if (depthOf(r) !== depths.get(k)) rowsByKey.set(k, { row: first.row, depthless: true });
   }
   const header = (cols: readonly number[], s: RawSheet | undefined): string => cols.map((i) => s?.header[i] ?? `#${i + 1}`).join(' + ');
-  return { rowsByKey, meta, cache: new Map(), usedRows: new Map(), hitRows: new Set(), takenFor: new Map(), rowsOfKey, keysJudged: new Set(), leftKeys, rightKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
+  return { rowsByKey, meta, cache: new Map(), rounded: new Map(), usedRows: new Map(), hitRows: new Set(), takenFor: new Map(), rowsOfKey, keysJudged: new Set(), leftKeys, rightKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
 }
 
 const DEPTH_FIELDS: (keyof Meta)[] = ['depth', 'depthDecimals', 'depthMin', 'depthMax'];
@@ -900,12 +909,20 @@ function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
     let lm = lookup.cache.get(hit.row);
     if (!lm) {
       const meta = lookup.meta(hit.row);
-      lookup.cache.set(hit.row, (lm = { meta, reads: new Map([...lookup.meta.reads].map(([k, v]) => [k, [...v]])) }));
+      lookup.cache.set(hit.row, (lm = { meta, reads: new Map([...lookup.meta.reads].map(([k, v]) => [k, [...v]])), rounded: lookup.meta.lastRounded.map(([i, off]) => [i, off] as const) }));
     }
     for (const f of META_FIELDS) {
       if (hit.depthless && DEPTH_FIELDS.includes(f)) continue;
       if (base[f] === undefined && lm.meta[f] !== undefined) {
         (base as Record<string, unknown>)[f] = lm.meta[f];
+        if (f === 'datetime') {
+          for (const [col, off] of lm.rounded) {
+            const t = lookup.rounded.get(col) ?? { count: 0, maxMs: 0 };
+            t.count++;
+            if (off > t.maxMs) t.maxMs = off;
+            lookup.rounded.set(col, t);
+          }
+        }
         for (const col of readsFor(lm.reads, f)) {
           const rows = lookup.usedRows.get(col) ?? new Set<RawRow>();
           rows.add(hit.row);
@@ -1563,7 +1580,7 @@ export function buildDataset(
     roundedTimes.push(...built.rounded);
     if (lookup) {
       const right = file.sheets.find((x) => x.name === layout.joins.find((j) => j.left === sheet.name)!.right);
-      if (right) roundedTimes.push(...roundedEntries(right, lookup.meta.rounded));
+      if (right) roundedTimes.push(...roundedEntries(right, lookup.rounded));
     }
     if (built.year) yearColumns.push({ sheet: sheet.name, year: built.year.header, date: built.year.date });
     for (const [name, cols] of built.reads) {

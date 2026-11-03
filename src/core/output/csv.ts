@@ -212,7 +212,7 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   // date and time cells that held a fraction of a second the clean CSV does not write (read as the whole second): per sheet, how many and the largest offset
   for (const sheet of [...new Set((ds.roundedTimes ?? []).map((r) => r.sheet))]) {
     const where = ds.mappings.length > 1 ? ` (sheet ${sheet})` : '';
-    const mine = (ds.roundedTimes ?? []).filter((r) => r.sheet === sheet).map((r) => `${r.header.trim() === '' ? '(column)' : r.header} (${r.count} ${r.count === 1 ? 'cell' : 'cells'}, up to ${Math.max(1, Math.round(r.maxMs))} ms)`);
+    const mine = (ds.roundedTimes ?? []).filter((r) => r.sheet === sheet).map((r) => `${r.header.trim() === '' ? '(column)' : r.header} (${r.atLeast ? 'at least ' : ''}${r.count} ${r.count === 1 ? 'cell' : 'cells'}, up to ${Math.max(1, Math.round(r.maxMs))} ms)`);
     notes.push(`date cells rounded to the second${where}: ${mine.join(' | ')}`);
   }
   const sidecar = [

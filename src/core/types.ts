@@ -243,7 +243,7 @@ export interface DataRow {
  */
 export interface ExtraKeyColumn { header: string; index: number; sheet: string; id: string; kind: 'pressure' | 'key'; unit?: string; /** The cells are numbers (a pressure, a vertical coordinate): a decimal comma of the file is swapped for a dot, as for every measurement. */ numeric?: true }
 /** Date or time cells of a column read as the whole second though they hold a fraction of at least 0.5 ms: how many, and the largest offset in ms (see columnFractions). */
-export interface RoundedTimes { sheet: string; header: string; count: number; maxMs: number }
+export interface RoundedTimes { sheet: string; header: string; count: number; maxMs: number; /** The column was counted by two paths and the count is a lower bound. */ atLeast?: boolean }
 export interface Dataset {
   id: string; label: string; file: string;
   rows: DataRow[]; variables: Variable[];
