@@ -731,6 +731,13 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [] };
 }
 
+/** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
+const NOT_DETECTED = new Set(['nd', 'n.d.', 'ND']);
+function givesWay(raw: RawCell): boolean {
+  if (!isBlankCell(raw)) return false;
+  return !(typeof raw === 'string' && NOT_DETECTED.has(raw.trim()));
+}
+
 /** Does the value cell `raw` differ from the value already kept (`keptRaw`)? A blank cell never differs; numbers compare as numbers, anything else as trimmed text. */
 function longValueDiffers(raw: RawCell, keptRaw: RawCell | undefined, dc: boolean): boolean {
   if (isBlankCell(raw)) return false;
@@ -772,8 +779,8 @@ function longVariables(sheet: RawSheet, plan: NonNullable<TablePlan['long']>): {
  *
  * A candidate column (outside the key and the parameter, unit and value columns, with a header) is acceptable only when
  *  - it is not unique on every row of the sheet (a record id, a note), and
- *  - in every key where it varies, the parameter sets of the resulting rows are nested (for any two, one contains the other): rows keep the measurements of one thing together, a replicate
- *    may lack a parameter, but a running number or a per-value flag cuts a measurement into rows of disjoint parameters and is refused.
+ *  - in every key where it varies, no two resulting rows have disjoint parameter sets: rows keep the measurements of one thing together, a replicate may lack some parameters, but a running
+ *    number or a per-value flag cuts a measurement into rows with no parameter in common and is refused.
  * Among the acceptable ones, greedy: the column that fully resolves the most colliding (key, parameter) groups together with those already taken. Two candidates with the same count that split
  * the rows identically are one choice (the first is taken); two that split them differently leave the choice open and neither is taken. A balanced flag with no other candidate (a QC 0/1
  * on every pair) cannot be told from a replicate without guessing and joins the key; the finding names it. When a collision in a key the chosen columns vary in stays unresolved, none is taken.
@@ -797,10 +804,7 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
     idOf[i] = id;
     const f = first.get(k);
     if (f === undefined) first.set(k, i);
-    else if (isBlankCell(rows[f].cells[plan.valueCol] ?? null)) {
-      // a blank kept value gives way to the first value after it (buildLong does the same)
-      if (!isBlankCell(r.cells[plan.valueCol] ?? null)) first.set(k, i);
-    } else if (!colliding.has(k) && longValueDiffers(r.cells[plan.valueCol] ?? null, rows[f].cells[plan.valueCol] ?? null, dc)) colliding.add(k);
+    else if (!colliding.has(k) && longValueDiffers(r.cells[plan.valueCol] ?? null, rows[f].cells[plan.valueCol] ?? null, dc)) colliding.add(k);
   }
   if (colliding.size === 0) return [];
 
@@ -825,20 +829,18 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   const cell = (i: number, c: number): string => str(rows[i].cells[c] ?? null) ?? '';
   const valueOf = (i: number): RawCell => rows[i].cells[plan.valueCol] ?? null;
   const classOf = (i: number, cols: number[]): string => (cols.length === 1 ? cell(i, cols[0]) : JSON.stringify(cols.map((c) => cell(i, c))));
-  /** True when, within the group, no two rows that agree on `cols` hold different values (a blank value gives way to the first value after it, as in buildLong). */
+  /** True when, within the group, no two rows that agree on `cols` hold different values. */
   const resolves = (group: number[], cols: number[]): boolean => {
     const rep = new Map<string, number>();
     for (const i of group) {
       const id = classOf(i, cols);
       const j = rep.get(id);
       if (j === undefined) rep.set(id, i);
-      else if (isBlankCell(valueOf(j))) {
-        if (!isBlankCell(valueOf(i))) rep.set(id, i);
-      } else if (longValueDiffers(valueOf(i), valueOf(j), dc)) return false;
+      else if (longValueDiffers(valueOf(i), valueOf(j), dc)) return false;
     }
     return true;
   };
-  /** In every key where `cols` vary, the parameter sets of the resulting rows are nested: for any two, one contains the other. */
+  /** In every key where `cols` vary, no two resulting rows have disjoint parameter sets (a replicate may lack some parameters; a running number or a per-value flag cuts a measurement into rows with nothing in common). */
   const keepsMeasurementsTogether = (cols: number[]): boolean => {
     for (const list of rowsOfId.values()) {
       const params = new Map<string, Set<string>>();
@@ -849,8 +851,9 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
         else params.set(cls, new Set([paramOf(i)]));
       }
       if (params.size < 2) continue;
+      if (params.size > 2000) return false;
       const sets = [...params.values()].sort((x, y) => x.size - y.size);
-      for (let k = 0; k + 1 < sets.length; k++) for (const p of sets[k]) if (!sets[k + 1].has(p)) return false;
+      for (let a = 0; a < sets.length; a++) for (let b = a + 1; b < sets.length; b++) if (![...sets[a]].some((p) => sets[b].has(p))) return false;
     }
     return true;
   };
@@ -930,7 +933,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const { unitOfRow, baseKey } = longVariables(sheet, plan);
   const varKey = (r: RawRow, param: string): string => (namespace ? `${sheet.name}!${baseKey(r, param)}` : baseKey(r, param));
 
-  // A column that tells colliding rows apart (a pressure, a replicate, a cast, a layer) joins the key, so every value is read: said once (ROW-LONG-KEY-EXTENDED)
+  // A column that tells colliding rows apart (a pressure, a replicate, a cast, a layer) joins the key, so the values of the rows it separates are read: said once (ROW-LONG-KEY-EXTENDED)
   const concerned: number[] = [];
   const added = extendLongKey(sheet, plan, keyCols, dc, baseKey, concerned);
   if (added.length > 0) {
@@ -968,8 +971,8 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       variables.set(key, v);
     }
     const kept = row.values[key];
-    if (kept !== undefined && isBlankCell(kept.raw) && !isBlankCell(r.cells[plan.valueCol] ?? null)) {
-      // a blank kept value gives way to the first value after it
+    if (kept !== undefined && givesWay(kept.raw) && !isBlankCell(r.cells[plan.valueCol] ?? null)) {
+      // a blank or plainly missing kept value gives way to the first value after it (not 'nd', 'n.d.', 'ND': not detected is a result)
       row.values[key] = numericCell(r.cells[plan.valueCol] ?? null, r.line, param, sheet.name, dc, c);
       continue;
     }
@@ -1006,7 +1009,7 @@ function layoutUnsupportedFinding(file: string, layout: LayoutPlan): Finding {
  *
  * - wide: one DataRow per row. long: one DataRow per sample key (sample/core id, station, cruise, depth, date, time and
  *   in-sheet position, as raw text), DataRow.line = the line of its first measurement, each NumericCell keeps its own line;
- *   a repeated (sample, parameter) keeps the first value. join: position, date and station come from the lookup sheet
+ *   a repeated (sample, parameter) keeps one value (the first, or the first after a blank one). join: position, date and station come from the lookup sheet
  *   (the join's `right`), DataRow.line stays the measurement row's line; a lookup row's own findings carry the lookup sheet.
  * - Values are parsed, never changed: out-of-range coordinates keep their number (the range rules report them),
  *   sign conventions are not flipped, a missing value is status 'missing' and raises nothing.

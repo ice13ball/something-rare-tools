@@ -295,6 +295,70 @@ describe('the review cases: a column joins the key only when it is safe', () => 
     expect(skipped(r)).toEqual([]);
   });
 
+  it('r6: two different rows missing of 6,000 still read 5,998 values with no skipped warning', () => {
+    const r = build(samples(500, (s, rep, p) => s === 123 && ((rep === 3 && p.startsWith('Chl')) || (rep === 2 && p.startsWith('Nitrate')))));
+    expect(read(r)).toBe(5998);
+    expect(r.dataset.rows).toHaveLength(1500);
+    expect(skipped(r)).toEqual([]);
+  });
+
+  it('r7: two different rows missing in one sample of a small sheet: 18 rows, 70 values', () => {
+    const r = build(samples(6, (s, rep, p) => s === 4 && ((rep === 3 && p.startsWith('Chl')) || (rep === 2 && p.startsWith('Nitrate')))));
+    expect(r.dataset.rows).toHaveLength(18);
+    expect(read(r)).toBe(70);
+    expect(skipped(r)).toEqual([]);
+  });
+
+  it('w1: complementary blanks (or NA) in two replicates stay two rows: no merged row, no false DIC > TA', async () => {
+    for (const miss of ['', 'NA']) {
+      const t = csv('Replicate,Parameter,Value', [['S1', '1', DIC, miss], ['S1', '1', TA, '2300'], ['S1', '2', DIC, '2400'], ['S1', '2', TA, miss]]);
+      const r = build(t);
+      expect(r.dataset.rows, miss).toHaveLength(2);
+      expect(extended(r), miss).toHaveLength(1);
+      expect(await check(t), miss).not.toContain('CHEM-DIC-GT-TA');
+    }
+  });
+
+  it('w2: a replicate whose first value is NA is not merged into the next one', () => {
+    const r = build(csv('Replicate,Parameter,Value', [['S1', '1', 'Corg', 'NA'], ['S1', '1', 'Ntot', '3'], ['S1', '2', 'Corg', '5'], ['S1', '2', 'Ntot', '3']]));
+    expect(r.dataset.rows).toHaveLength(2);
+    expect(r.dataset.rows[1].values.Corg.value).toBe(5);
+  });
+
+  it('n1: blank, NA, a dash and null give way to the first value after them; n.d. and ND (not detected) do not, and the value after them is said', () => {
+    for (const tok of ['NA', '-', 'null', '']) {
+      const r = build(csv('Parameter,Value', [['S1', 'Corg', tok], ['S1', 'Corg', '5'], ['S1', 'Ntot', '6']]));
+      expect(r.dataset.rows[0].values.Corg.value, tok).toBe(5);
+      expect(skipped(r), tok).toEqual([]);
+    }
+    for (const tok of ['n.d.', 'ND', 'nd']) {
+      const r = build(csv('Parameter,Value', [['S1', 'Corg', tok], ['S1', 'Corg', '5'], ['S1', 'Ntot', '6']]));
+      expect(r.dataset.rows[0].values.Corg.value, tok).toBeUndefined();
+      expect(skipped(r)[0].params.count, tok).toBe(1);
+    }
+  });
+
+  it('n2: a value then ND: nothing is said; n3: NA, 5, 6 keeps the 5 and says the 6; n4: n.a. does not give way; n5: all missing says nothing', () => {
+    const n2 = build(csv('Parameter,Value', [['S1', 'Corg', '5'], ['S1', 'Corg', 'ND'], ['S1', 'Ntot', '6']]));
+    expect(n2.dataset.rows[0].values.Corg.value).toBe(5);
+    expect(skipped(n2)).toEqual([]);
+    const n3 = build(csv('Parameter,Value', [['S1', 'Corg', 'NA'], ['S1', 'Corg', '5'], ['S1', 'Corg', '6'], ['S1', 'Ntot', '6']]));
+    expect(n3.dataset.rows[0].values.Corg.value).toBe(5);
+    expect(skipped(n3)[0].params.count).toBe(1);
+    const n4 = build(csv('Parameter,Value', [['S1', 'Corg', 'n.a.'], ['S1', 'Corg', '5'], ['S1', 'Ntot', '6']]));
+    expect(n4.dataset.rows[0].values.Corg.value).toBeUndefined();
+    expect(skipped(n4)[0].params.count).toBe(1);
+    const n5 = build(csv('Parameter,Value', [['S1', 'Corg', 'NA'], ['S1', 'Corg', ''], ['S1', 'Ntot', '6']]));
+    expect(skipped(n5)).toEqual([]);
+  });
+
+  it('the skipped texts say one value is kept and give the refusal reason as rows with no parameter in common', () => {
+    const r = build(csv('Parameter,Value', [['S1', 'Corg', '5'], ['S1', 'Corg', '6']]));
+    for (const lang of LANGS) expect(renderPlain(skipped(r)[0], lang)).not.toMatch(/only the first|nur der erste|seule la première|tylko pierwszą/i);
+    expect(getRule('ROW-LONG-VALUE-SKIPPED').technical).toContain('no parameter in common');
+    expect(getRule('ROW-LONG-VALUE-SKIPPED').technical).not.toContain('different parameters');
+  });
+
   it('s1, s2, s3: the extension and the skipped warning read consistently side by side', () => {
     const s1 = build(csv('Replicate,Parameter,Value', [['S1', '1', 'Corg', '1'], ['S1', '2', 'Corg', '2'], ['S2', '1', 'Corg', '7'], ['S2', '1', 'Corg', '8']]));
     expect(extended(s1)).toHaveLength(1);
