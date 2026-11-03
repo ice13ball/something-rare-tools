@@ -346,7 +346,7 @@ describe('an Analyst column that is ignored by default and splits rows is writte
     expect(parse(toCleanCsv(dataset).csv).header).toContain('Analyst');
     const f = findings.find((x) => x.ruleId === 'ROW-LONG-KEY-EXTENDED')!;
     expect(f.params.columns).toBe('Analyst');
-    const said: Record<string, RegExp> = { en: /The clean CSV writes it too/, pl: /Czysty CSV zapisuje je też/, de: /Die bereinigte CSV schreibt sie auch/, fr: /Le CSV nettoyé les écrit aussi/ };
+    const said: Record<string, RegExp> = { en: /The clean CSV writes it too/, pl: /Czysty CSV zapisuje ją też/, de: /Die bereinigte CSV schreibt sie auch/, fr: /Le CSV nettoyé l'écrit aussi/ };
     for (const lang of LANGS) expect(renderPlain(f, lang), lang).toMatch(said[lang]);
     for (const lang of LANGS) expect(renderPlain(f, lang), lang).not.toMatch(/[{}]/);
   });
@@ -383,5 +383,95 @@ describe('a numeric vertical key of a decimal-comma file is swapped like a press
     const { header, rows } = parse(toCleanCsv(dataset).csv);
     const at = header.findIndex((h) => /sediment/i.test(h) && !/^depth/.test(h));
     expect(rows.slice(0, 3).map((r) => r[at])).toEqual(['1.5', '1.1', 'surface']);
+  });
+});
+
+describe('round 3: every right row of a joined key is judged; the date is credited only when it stays', () => {
+  const run = (sites: (string | number)[][], data: (string | number)[][]) => {
+    const file = xlsxFile('book.xlsx', { Sites: sites, Data: data });
+    const layout = proposeLayout(file);
+    return buildDatasets(file, layout, proposeMappings(file, layout), [], 'd').datasets[0];
+  };
+  const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '2020-06-02', 5.5], ['S3', '2020-06-03', 6.5]];
+
+  it('a depth blank on the first S1 row and 6 on the second, while S2 lends 7: the 6 is lost, so Depth is named', () => {
+    const sites = [['Station', 'Depth [m]', 'Latitude', 'Longitude'], ['S1', '', 70.1, 15.2], ['S1', 6, 70.1, 15.2], ['S2', 7, 60.2, 5.4], ['S3', 7, 50.3, -5.6]];
+    expect(left(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${LEFT} (sheet Sites): Depth [m]`]);
+  });
+
+  it('Cruise C1 and C2 on one key: the cruise of the second row is lost, so Cruise is named', () => {
+    const sites = [['Station', 'Cruise', 'Latitude', 'Longitude'], ['S1', 'C1', 70.1, 15.2], ['S1', 'C2', 70.1, 15.2], ['S2', 'C1', 60.2, 5.4], ['S3', 'C1', 50.3, -5.6]];
+    expect(left(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${LEFT} (sheet Sites): Cruise`]);
+  });
+
+  it('an ambiguous key beside a lent one: the position of the ambiguous rows was never given, so it is named', () => {
+    const sites = [['Station', 'Latitude', 'Longitude'], ['S1', 70.1, 15.2], ['S1', 71.9, 16.8], ['S2', 60.2, 5.4], ['S3', 50.3, -5.6]];
+    const out = toCleanCsv(run(sites, data));
+    expect(left(out.sidecar).join('|')).toMatch(/\(sheet Sites\): .*Latitude/);
+  });
+
+  it('identical repeats of one key are not lost: nothing is named', () => {
+    const sites = [['Station', 'Cruise', 'Latitude', 'Longitude'], ['S1', 'C1', 70.1, 15.2], ['S1', 'C1', 70.1, 15.2], ['S2', 'C1', 60.2, 5.4], ['S3', 'C1', 50.3, -5.6]];
+    expect(left(toCleanCsv(run(sites, data)).sidecar)).toEqual([]);
+  });
+
+  it('a zone-stated time that replaces the date: the date column gave nothing, so it is named; the time is written as the date', () => {
+    const t = ['Station,Latitude,Longitude,Date,Time,Temp [°C]', 'S1,49.4,0.2,2020-06-02,2020-06-02T10:30:00Z,11.2', 'S2,49.5,0.3,2020-06-03,2020-06-03T11:45:00Z,10.4'].join('\n');
+    const out = toCleanCsv(build(t).dataset);
+    expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020-06-02T10:30:00Z', '2020-06-03T11:45:00Z']);
+    expect(left(out.sidecar)).toEqual([`${LEFT}: Date`]);
+  });
+});
+
+describe('round 3: source rows that merge into one output row of a long sheet are all counted', () => {
+  it('a year column outside the key, 2021 and 1999 under an empty eventDate: the year is named', () => {
+    const lines = ['Station,Latitude,Longitude,eventDate,year,Parameter,Value'];
+    for (const s of ['S1', 'S2']) [['Corg', '2021'], ['Ntot', '1999'], ['Ptot', '2021']].forEach(([p, y]) => lines.push(`${s},49.4,0.2,,${y},${p},${p.length}.${s.length}`));
+    const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'year', { kind: 'ignore' }));
+    expect(dataset.rows).toHaveLength(2);
+    expect(left(toCleanCsv(dataset).sidecar).join('|')).toMatch(/\byear\b/);
+  });
+
+  it('N and S at one latitude on the rows of one station: the hemisphere column is named', () => {
+    const lines = ['Station,Latitude,Lat NS,Longitude,Date,Parameter,Value'];
+    for (const s of ['S1', 'S2']) [['Corg', 'N'], ['Ntot', 'S'], ['Ptot', 'N']].forEach(([p, h]) => lines.push(`${s},49.4,${h},0.2,2020-06-01,${p},${p.length}.${s.length}`));
+    const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'Lat NS', { kind: 'hemisphere', axis: 'latitude' }));
+    expect(dataset.rows).toHaveLength(2);
+    expect(left(toCleanCsv(dataset).sidecar)).toEqual([`${LEFT}: Lat NS`]);
+  });
+
+  it('the same year on every row of a station is one value: not named for merging', () => {
+    const lines = ['Station,Latitude,Longitude,eventDate,year,Parameter,Value'];
+    for (const s of ['S1', 'S2']) for (const p of ['Corg', 'Ntot', 'Ptot']) lines.push(`${s},49.4,0.2,,2021,${p},${p.length}.${s.length}`);
+    const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'year', { kind: 'ignore' }));
+    expect(left(toCleanCsv(dataset).sidecar).join('|')).not.toMatch(/\byear\b/);
+  });
+});
+
+describe('round 3: one column of the row-key sentence reads naturally in pl and fr, and the text says what the clean CSV writes', () => {
+  const f = (count: number, columns: string) => ({ ruleId: 'ROW-LONG-KEY-EXTENDED', severity: 'info', sheet: 'S', lines: [3], params: { columns, count } }) as never;
+
+  it('one column: the count forms point at the column', () => {
+    expect(renderPlain(f(1, 'Analyst'), 'pl')).toContain('Czysty CSV zapisuje ją też');
+    expect(renderPlain(f(1, 'Analyst'), 'fr')).toContain("Le CSV nettoyé l'écrit aussi");
+    expect(renderPlain(f(1, 'Analyst'), 'en')).toContain('The clean CSV writes it too');
+    expect(renderPlain(f(1, 'Analyst'), 'de')).toContain('Die Spalte, die sie unterscheidet');
+    expect(renderPlain(f(1, 'Analyst'), 'en')).toContain('read and checked');
+  });
+
+  it('several columns: the plural forms, in four languages, with no placeholder left', () => {
+    expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Czysty CSV zapisuje je też');
+    expect(renderPlain(f(2, 'A, B'), 'fr')).toContain('Le CSV nettoyé les écrit aussi');
+    for (const lang of LANGS) {
+      expect(renderPlain(f(1, 'Analyst'), lang), lang).not.toMatch(/[{}]/);
+      expect(renderPlain(f(2, 'A, B'), lang), lang).not.toMatch(/[{}]/);
+    }
+  });
+
+  it('the tip says a vertical coordinate that tells rows apart is always written, in four languages', () => {
+    expect(UI.en['tip.cleanCsv.logic']).toContain('A vertical coordinate that tells rows apart (a sediment depth, a depth bottom) is always written');
+    expect(UI.pl['tip.cleanCsv.logic']).toContain('Współrzędna pionowa, która odróżnia wiersze');
+    expect(UI.de['tip.cleanCsv.logic']).toContain('Eine vertikale Koordinate, die Zeilen unterscheidet');
+    expect(UI.fr['tip.cleanCsv.logic']).toContain('Une coordonnée verticale qui distingue les lignes');
   });
 });
