@@ -346,7 +346,7 @@ describe('an Analyst column that is ignored by default and splits rows is writte
     expect(parse(toCleanCsv(dataset).csv).header).toContain('Analyst');
     const f = findings.find((x) => x.ruleId === 'ROW-LONG-KEY-EXTENDED')!;
     expect(f.params.columns).toBe('Analyst');
-    const said: Record<string, RegExp> = { en: /The clean CSV writes it too/, pl: /Czysty CSV zapisuje ją też/, de: /Die bereinigte CSV schreibt sie auch/, fr: /Le CSV nettoyé l'écrit aussi/ };
+    const said: Record<string, RegExp> = { en: /The clean CSV writes it too/, pl: /Czysty CSV zapisuje ją też/, de: /Die bereinigte CSV schreibt diese Spalte auch/, fr: /Le CSV nettoyé l'écrit aussi/ };
     for (const lang of LANGS) expect(renderPlain(f, lang), lang).toMatch(said[lang]);
     for (const lang of LANGS) expect(renderPlain(f, lang), lang).not.toMatch(/[{}]/);
   });
@@ -469,7 +469,7 @@ describe('round 3: one column of the row-key sentence reads naturally in pl and 
   });
 
   it('the tip says a vertical coordinate that tells rows apart is always written, in four languages', () => {
-    expect(UI.en['tip.cleanCsv.logic']).toContain('A vertical coordinate that tells rows apart (a sediment depth, a depth bottom) is always written');
+    expect(UI.en['tip.cleanCsv.logic']).toContain('A vertical coordinate that tells rows apart (a sediment depth, for example) is always written, unless you set it to ignore yourself');
     expect(UI.pl['tip.cleanCsv.logic']).toContain('Współrzędna pionowa, która odróżnia wiersze');
     expect(UI.de['tip.cleanCsv.logic']).toContain('Eine vertikale Koordinate, die Zeilen unterscheidet');
     expect(UI.fr['tip.cleanCsv.logic']).toContain('Une coordonnée verticale qui distingue les lignes');
