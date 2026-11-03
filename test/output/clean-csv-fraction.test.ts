@@ -9,7 +9,7 @@ import type { ParsedFile } from '../../src/core/types';
 import { textFile, xlsxFile } from '../helpers/files';
 
 const FMT = 'yyyy-mm-dd hh:mm:ss.000';
-const dt = (serial: number) => ({ t: 'n' as const, v: serial, z: FMT });
+const dt = (serial: number, z = FMT) => ({ t: 'n' as const, v: serial, z });
 const tm = (v: number) => ({ t: 'n' as const, v, z: 'hh:mm:ss.000' });
 const T = 43983; // 2020-06-01
 const at = (secs: number, base = T) => base + secs / 86400;
@@ -51,5 +51,23 @@ describe('a text date with a fraction and no zone is kept as before', () => {
   it('a CSV with 12:00:00.250 and 12:00:00.250Z', () => {
     const file = textFile('s.csv', ['Station,Latitude,Longitude,Date,Temp [°C]', 'S1,49.4,0.2,2021-06-01T12:00:00.250,11', 'S1,49.4,0.3,2021-06-01T12:00:00.250Z,12'].join('\n'));
     expect(dateOf(file)).toEqual(['2021-06-01T12:00:00.250', '2021-06-01T12:00:00.250Z']);
+  });
+});
+
+describe('a column whose format does not show the fraction', () => {
+  const PLAIN = 'yyyy-mm-dd hh:mm:ss';
+  it('a real .250 and .750 stay; .002, a rounded serial and 1/3 are whole seconds', () => {
+    const got = dateOf(wide([dt(at(43200.25), PLAIN), dt(at(43200.75), PLAIN), dt(at(43200.002), PLAIN), dt(43983.33333, PLAIN), dt(T + 1 / 3, PLAIN)]));
+    expect(got).toEqual(['2020-06-01T12:00:00.250', '2020-06-01T12:00:00.750', '2020-06-01T12:00', '2020-06-01T08:00', '2020-06-01T08:00']);
+  });
+  it('a fill-down of =A+1/1440 over 6000 rows comes out as whole minutes, as before', () => {
+    const cells: object[] = [];
+    let v = 43983.25;
+    for (let i = 0; i < 6000; i++) { v += 1 / 1440; cells.push(dt(v, 'yyyy-mm-dd hh:mm')); }
+    expect(dateOf(wide(cells)).every((x) => /^20\d\d-\d\d-\d\d(T\d\d:\d\d)?$/.test(x))).toBe(true);
+  });
+  it('the sheet flag fractionShown is set by a format with ss.0 only', () => {
+    expect(wide([dt(at(1), FMT)]).sheets[0].fractionShown).toEqual([false, false, false, true, false]);
+    expect(wide([dt(at(1), PLAIN)]).sheets[0].fractionShown).toBeUndefined();
   });
 });

@@ -76,6 +76,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   const numeric = new Array<number>(width).fill(0);
   const dated = new Array<number>(width).fill(0);
   const timed = new Array<number>(width).fill(0);
+  const fractional = new Array<boolean>(width).fill(false);
   for (const r of rowsAsc) {
     if (r <= headerRow) continue;
     const cells = grid.get(r)!;
@@ -91,6 +92,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
         if (typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z)) {
           dated[c]++;
           if (isTimeOnlyFormat(cell.z)) timed[c]++;
+          if (showsFractionOfSecond(cell.z)) fractional[c] = true;
         }
       }
     }
@@ -111,6 +113,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       numeric.push(0);
       dated.push(0);
       timed.push(0);
+      fractional.push(false);
     }
   }
   // so is a row of units (ERDDAP, BCO-DMO), judged by the cells below it; a time column under "UTC" holds date-formatted serials
@@ -131,6 +134,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       numeric.push(0);
       dated.push(0);
       timed.push(0);
+      fractional.push(false);
     }
   }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
@@ -139,7 +143,14 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   // the same, for EVERY numeric cell of the column (not the majority): a conversion that could lose a cell that is not date-formatted (a General 5 among dates) may only be made when all of them are. Set only when there is one.
   const dateAll = header.map((_, c) => numeric[c] > 0 && dated[c] === numeric[c]);
   const timeAll = header.map((_, c) => dateAll[c] && timed[c] === numeric[c]);
-  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}) };
+  // some numeric cell of the column has a date format that shows a fraction of a second (ss.0, ss.000): a fraction in the column is a real one. Set only when there is one.
+  const fractionShown = header.map((_, c) => fractional[c] === true);
+  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}), ...(fractionShown.some(Boolean) ? { fractionShown } : {}) };
+}
+
+/** A date format that shows a fraction of a second: "hh:mm:ss.000", "ss.0", "mm:ss.00". Quoted text is ignored. */
+export function showsFractionOfSecond(z: string): boolean {
+  return /s\.0/i.test(z.replace(/"[^"]*"/g, '').replace(/\\./g, ''));
 }
 
 /** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */

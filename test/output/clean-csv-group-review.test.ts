@@ -147,12 +147,18 @@ describe('an Excel number is converted only when nothing can be lost; otherwise 
     expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.25 / 86400, 'hh:mm'), cell(0.5 + 0.75 / 86400, 'hh:mm')])).toEqual(['12:00', '12:00:00.250', '12:00:00.750']);
   });
 
-  it('a time finer than a millisecond keeps the raw number, so two such times stay two', () => {
-    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.0004 / 86400, 'hh:mm'), cell(0.500001, 'hh:mm')])).toEqual(['12:00', String(0.5 + 0.0004 / 86400), '0.500001']);
-    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.00025 / 86400, 'hh:mm')])).toEqual(['12:00', String(0.5 + 0.00025 / 86400)]);
+  it('times a few milliseconds apart stay two where the format shows the fraction, and where it does not when they are real', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm:ss.000'), cell(0.5 + 0.003 / 86400, 'hh:mm:ss.000')])).toEqual(['12:00', '12:00:00.003']);
+    expect(timeColumn([cell(0.5, 'hh:mm:ss'), cell(0.5 + 0.0037 / 86400, 'hh:mm:ss')])).toEqual(['12:00', '12:00']);
+    expect(timeColumn([cell(0.5, 'hh:mm:ss'), cell(0.5 + 0.0104 / 86400, 'hh:mm:ss')])).toEqual(['12:00', '12:00:00.010']);
   });
 
-  it('float noise in a whole-second time is not a fraction', () => {
+  it('float noise and a fill-down are not a fraction: 600 rows of =A+1/1440 are written as the minutes they are', () => {
+    const cells: object[] = [];
+    let v = 43983.25;
+    for (let i = 0; i < 600; i++) { v += 1 / 1440; cells.push(cell(v, 'yyyy-mm-dd hh:mm')); }
+    const got = dateColumn(cells);
+    expect(got.every((t) => /^2020-06-0\dT\d\d:\d\d$/.test(t))).toBe(true);
     expect(timeColumn([cell(0.5000000000001, 'hh:mm'), cell(0.75, 'hh:mm')])).toEqual(['12:00', '18:00']);
   });
 

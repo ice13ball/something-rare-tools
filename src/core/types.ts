@@ -20,6 +20,7 @@ export interface RawSheet {
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
   dateAll?: boolean[];          // xlsx: EVERY numeric cell of the column is date-formatted (dateFormatted is the majority); only present when some column is
   timeAll?: boolean[];          // xlsx: every numeric cell of the column has a time-only format; only present when some column is
+  fractionShown?: boolean[];    // xlsx: some numeric cell of the column has a date format that shows a fraction of a second (ss.000); only present when some column is
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
   /** Set only by the converter's long-sheet reader (core/convert/pivot.ts): this sheet is a PIVOT of a long environmental sheet, with where each cell came from. Never set for /check. */
   pivot?: PivotInfo;

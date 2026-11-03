@@ -524,17 +524,26 @@ describe('ROW-LONG-KEY-IGNORED reads naturally in four languages, with one colum
 
   it('one column', () => {
     expect(renderPlain(f(1, 'Pressure'), 'en')).toContain('told apart only by the column you set to ignore (Pressure). The clean CSV does not write it, so those rows look alike there');
-    expect(renderPlain(f(1, 'Pressure'), 'pl')).toContain('odróżnia tylko kolumna ustawiona na „ignoruj” (Pressure). Czysty CSV jej nie zapisuje');
+    expect(renderPlain(f(1, 'Pressure'), 'pl')).toContain('Kolumna ustawiona na „ignoruj” (Pressure) odróżnia wiersze w „S”');
+    expect(renderPlain(f(1, 'Pressure'), 'pl')).toContain('Czysty CSV jej nie zapisuje');
     expect(renderPlain(f(1, 'Pressure'), 'de')).toContain('nur durch die Spalte unterschieden, die Sie auf ignorieren gesetzt haben (Pressure)');
     expect(renderPlain(f(1, 'Pressure'), 'fr')).toContain("ne se distinguent que par la colonne que vous avez réglée sur ignorer (Pressure). Le CSV nettoyé ne l'écrit pas");
   });
 
-  it('several columns', () => {
+  it('several columns: 2 to 4 and 5 or more in Polish have their own forms', () => {
     expect(renderPlain(f(2, 'A, B'), 'en')).toContain('only by the columns you set to ignore (A, B). The clean CSV does not write them');
-    expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('kolumny ustawione na „ignoruj” (A, B). Czysty CSV ich nie zapisuje');
-    expect(renderPlain(f(5, 'A, B, C, D, E'), 'pl')).toContain('kolumn ustawionych');
+    expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Kolumny ustawione na „ignoruj” (A, B) odróżniają wiersze');
+    expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Czysty CSV ich nie zapisuje');
+    expect(renderPlain(f(5, 'A, B, C, D, E'), 'pl')).toContain('Kolumn ustawionych na „ignoruj” (A, B, C, D, E) odróżnia wiersze');
     expect(renderPlain(f(2, 'A, B'), 'de')).toContain('die Spalten unterschieden');
-    expect(renderPlain(f(2, 'A, B'), 'fr')).toContain("les colonnes que vous avez réglées sur ignorer (A, B). Le CSV nettoyé ne les écrit pas");
+    expect(renderPlain(f(2, 'A, B'), 'fr')).toContain('les colonnes que vous avez réglées sur ignorer (A, B). Le CSV nettoyé ne les écrit pas');
+  });
+
+  it('the measured values are said to remain, in four languages (not the values of the ignored column)', () => {
+    expect(renderPlain(f(1, 'P'), 'en')).toContain('measured values');
+    expect(renderPlain(f(1, 'P'), 'pl')).toContain('Zmierzone wartości');
+    expect(renderPlain(f(1, 'P'), 'de')).toContain('Messwerte');
+    expect(renderPlain(f(1, 'P'), 'fr')).toContain('valeurs mesurées');
   });
 
   it('no placeholder is left, the rows and the sheet are named, the values are said to remain, and nothing is to be deleted', () => {

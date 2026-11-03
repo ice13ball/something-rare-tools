@@ -8,10 +8,12 @@ const DAY = 45000; // 2023-03-15
 const at = (secs: number, base = DAY): number => base + secs / 86400;
 
 describe('excelSerialToDate keepMillis', () => {
-  it('keeps .250 and .750, and a real 12:00:01 stays different from 12:00:00.750', () => {
-    expect(excelSerialToDate(at(43200.25), false, true).iso).toBe('2023-03-15T12:00:00.250');
-    expect(excelSerialToDate(at(43200.75), false, true).iso).toBe('2023-03-15T12:00:00.750');
-    expect(excelSerialToDate(at(43201), false, true).iso).toBe('2023-03-15T12:00:01');
+  it('a real .250 and .750 stay, in a column whose format shows the fraction and in one that does not; a real 12:00:01 stays different', () => {
+    for (const keep of ['shown', true] as const) {
+      expect(excelSerialToDate(at(43200.25), false, keep).iso).toBe('2023-03-15T12:00:00.250');
+      expect(excelSerialToDate(at(43200.75), false, keep).iso).toBe('2023-03-15T12:00:00.750');
+      expect(excelSerialToDate(at(43201), false, keep).iso).toBe('2023-03-15T12:00:01');
+    }
     expect(excelSerialToDate(at(43200.25), false, true).precision).toBe('second');
   });
 
@@ -21,33 +23,52 @@ describe('excelSerialToDate keepMillis', () => {
     expect(excelSerialToDate(at(43200.75), false, false)).toEqual(excelSerialToDate(at(43200.75), false));
   });
 
-  it('float noise gives no invented fraction: whole-second times stay byte-identical, with and without the option', () => {
-    for (const serial of [43900.5000000001, 43900.5 - 1e-10, 43900 + 1e-10, 43900 - 1e-10, 45000.4375 + 4e-11, 0.1 + 0.2 + 45000.1, at(37815) + 3e-10]) {
-      expect(excelSerialToDate(serial, false, true)).toEqual(excelSerialToDate(serial, false));
-    }
+  it('.002 stays where the format shows the fraction and rounds where it does not (under 5 ms from a whole second)', () => {
+    expect(excelSerialToDate(at(43200.002), false, 'shown').iso).toBe('2023-03-15T12:00:00.002');
+    expect(excelSerialToDate(at(43200.002), false, true).iso).toBe('2023-03-15T12:00');
+    expect(excelSerialToDate(at(43200.004), false, true).iso).toBe('2023-03-15T12:00');
+    expect(excelSerialToDate(at(43200.006), false, true).iso).toBe('2023-03-15T12:00:00.006');
+  });
+
+  it('a rounded or a thirds serial is a whole second, not a fraction', () => {
+    expect(excelSerialToDate(43983.33333, false, true).iso).toBe('2020-06-01T08:00');
+    expect(excelSerialToDate(43983.33333, false)).toEqual(excelSerialToDate(43983.33333, false, true));
+    expect(excelSerialToDate(43983 + 1 / 3, false, true).iso).toBe('2020-06-01T08:00');
     expect(excelSerialToDate(43900.5000000001, false, true).iso).toBe('2020-03-10T12:00');
     expect(excelSerialToDate(43900 + 1e-11, false, true)).toEqual({ iso: '2020-03-10', year: 2020, precision: 'day', tz: 'unknown' });
-    // a time built from a formula: 0.1 days + 0.2 days of seconds
-    expect(excelSerialToDate(45000 + (8 / 24 + 0.5 / 24 + 15 / 86400), false, true).iso).toBe('2023-03-15T08:30:15');
+  });
+
+  it('a fill-down formula of 1 s, 1 min, 5 min, 15 min or 1 h over 6000 rows is byte-identical to the whole-second reading', () => {
+    for (const step of [1 / 86400, 1 / 1440, 5 / 1440, 15 / 1440, 1 / 24]) {
+      let v = 43983.25;
+      for (let i = 0; i < 6000; i++) {
+        v += step;
+        expect(excelSerialToDate(v, false, true), `step ${step} row ${i}`).toEqual(excelSerialToDate(v, false));
+      }
+    }
   });
 
   it('a fraction with zero whole seconds is not a date-only value', () => {
-    const d = excelSerialToDate(at(0.25), false, true);
-    expect(d.iso).toBe('2023-03-15T00:00:00.250');
-    expect(d.precision).toBe('second');
+    for (const keep of ['shown', true] as const) {
+      const d = excelSerialToDate(at(0.25), false, keep);
+      expect(d.iso).toBe('2023-03-15T00:00:00.250');
+      expect(d.precision).toBe('second');
+    }
     expect(excelSerialToDate(at(60.5), false, true).iso).toBe('2023-03-15T00:01:00.500');
   });
 
-  it('a fraction finer than a millisecond rounds to the millisecond', () => {
-    expect(excelSerialToDate(at(43200.2504), false, true).iso).toBe('2023-03-15T12:00:00.250');
+  it('a fraction finer than a millisecond rounds to the millisecond where it is kept', () => {
+    expect(excelSerialToDate(at(43200.2504), false, 'shown').iso).toBe('2023-03-15T12:00:00.250');
     expect(excelSerialToDate(at(43200.2506), false, true).iso).toBe('2023-03-15T12:00:00.251');
     expect(excelSerialToDate(at(43200.0004), false, true).iso).toBe('2023-03-15T12:00');
   });
 
-  it('23:59:59.9996 rolls over to the next day, also in a 1904 workbook; 23:59:59.999 does not', () => {
-    expect(excelSerialToDate(at(86399.9996), false, true)).toEqual({ iso: '2023-03-16', year: 2023, precision: 'day', tz: 'unknown' });
-    expect(excelSerialToDate(at(86399.9996, DAY - 1462), true, true).iso).toBe('2023-03-16');
-    expect(excelSerialToDate(at(86399.999), false, true).iso).toBe('2023-03-15T23:59:59.999');
+  it('23:59:59.9996 rolls over to the next day, also in a 1904 workbook; 23:59:59.999 keeps its day where the format shows it', () => {
+    for (const keep of ['shown', true] as const) {
+      expect(excelSerialToDate(at(86399.9996), false, keep)).toEqual({ iso: '2023-03-16', year: 2023, precision: 'day', tz: 'unknown' });
+      expect(excelSerialToDate(at(86399.9996, DAY - 1462), true, keep).iso).toBe('2023-03-16');
+    }
+    expect(excelSerialToDate(at(86399.999), false, 'shown').iso).toBe('2023-03-15T23:59:59.999');
     expect(excelSerialToDate(at(43200.25, DAY - 1462), true, true).iso).toBe('2023-03-15T12:00:00.250');
   });
 });

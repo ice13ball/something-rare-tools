@@ -28,6 +28,7 @@ import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { pairHemisphere, parseCoordinate } from './values/coords';
+import type { KeepMillis } from './values/dates';
 import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, fullDatetimeOfTimeCell, isPlausibleSerial, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
@@ -292,8 +293,10 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
  * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
  * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
  */
-export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean } = {}): MetaParser {
+export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean; keepMillis?: boolean } = {}): MetaParser {
   const dc = file.decimalComma;
+  // /check keeps a real fraction of a second of an Excel date or time cell (opts.keepMillis); /convert does not pass it and reads the whole second, as its event IDs need. 'shown': the column's number format shows the fraction.
+  const millisOf = (spec: Spec | undefined): KeepMillis => (opts.keepMillis !== true ? false : spec !== undefined && sheet.fractionShown?.[spec.index] === true ? 'shown' : true);
   // The record the clean CSV's list of left-out columns comes from, kept per CELL: for each column that feeds a field of the output, how many of its non-blank cells there were and how many gave
   // something (`cells`). `rowCols` holds the columns that gave something on the row being parsed; `reads` (only with opts.fields: a lookup sheet) says which field each of them gave.
   const rowCols: number[] = [];
@@ -411,7 +414,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             date1904: file.date1904,
             dateFormatted: sheet.dateFormatted?.[specs.when.index] === true,
             datumColumn: true,
-            keepMillis: true,
+            keepMillis: millisOf(specs.when),
             ...(whenOrder === 'unknown' ? {} : { order: whenOrder }),
           });
           dateCache.set(cacheKey, d);
@@ -430,7 +433,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             const tField = specs.time.header;
             // the time column holds a full datetime (a text one, or the serial of a date-formatted column): a zone-stated one is the instant of the event and wins over a date (or a local datetime) that states no zone
             // (a local date beside a UTC time on the next day); one without a zone gives its time of day when it falls on the day of the row
-            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }), keepMillis: true });
+            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }), keepMillis: millisOf(specs.time) });
             const dayGap = (a: string, b: string): number => Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
             // compared at the date's own precision: a year-only or month-only date is contradicted by another year or month, a day by more than a day
             const own = date.precision === 'year' ? 4 : date.precision === 'month' ? 7 : 10;
@@ -446,12 +449,12 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
               note('datetime', specs.time.index);
             } else {
               if (full !== undefined && typeof timeCell === 'number') timeCell = full.iso;
-              if ('error' in (timeIsYears ? parseTimeOfDay(timeCell, true) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder, true))) {
+              if ('error' in (timeIsYears ? parseTimeOfDay(timeCell, millisOf(specs.time)) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder, millisOf(specs.time)))) {
                 // a full datetime of another day than the row's date cannot be cut to its time of day: said as what it is, not as an unreadable time
                 if (full !== undefined) c.add('ROW-TIME-OTHER-DAY', sheet.name, tField, row.line, String(timeCell).trim(), true);
                 else c.add('ROW-DATE-UNPARSEABLE', sheet.name, tField, row.line, String(timeCell).trim(), true, { role: 'time' });
               } else {
-                date = combineDateTime(date, timeCell, tOrder, true);
+                date = combineDateTime(date, timeCell, tOrder, millisOf(specs.time));
                 tzField = tField;
                 note('datetime', specs.time.index);
               }
@@ -477,9 +480,9 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
         const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
         if (specs.time && !isBlankCell(timeCell) && date.precision === 'day') {
           const tOrder = timeOrder === 'unknown' ? undefined : timeOrder;
-          if ('error' in (timeIsYears ? parseTimeOfDay(timeCell, true) : parseTimeColumnCell(timeCell, date.iso, tOrder, true))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
+          if ('error' in (timeIsYears ? parseTimeOfDay(timeCell, millisOf(specs.time)) : parseTimeColumnCell(timeCell, date.iso, tOrder, millisOf(specs.time)))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
           else {
-            date = combineDateTime(date, timeCell, tOrder, true);
+            date = combineDateTime(date, timeCell, tOrder, millisOf(specs.time));
             note('datetime', specs.time.index);
             if (timeUtc) date = { ...date, tz: 'utc', iso: `${date.iso}Z` };
             else if (date.tz === 'unknown') c.add('ROW-TZ-UNKNOWN', sheet.name, specs.time.header, row.line, undefined, false);
@@ -788,10 +791,10 @@ function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, map
   const leftKeys = [join.leftKey, ...(join.extraKeys ?? []).map((e) => e.leftKey)];
   const rightKeys = [join.rightKey, ...(join.extraKeys ?? []).map((e) => e.rightKey)];
   const specs = specsOf(mappingFor(file, mappings, sheet));
-  const meta = metaParser(file, sheet, specs, c, { fields: true });
+  const meta = metaParser(file, sheet, specs, c, { fields: true, keepMillis: true });
   // a key that several right rows hold is a key only when those rows say the same about position and date ("rows that truly repeat identically are fine"); otherwise no row is taken.
   // Rows that differ only in depth lend their position and date, and no depth.
-  const quiet = metaParser(file, sheet, specs, new Collector(file.fileName));
+  const quiet = metaParser(file, sheet, specs, new Collector(file.fileName), { keepMillis: true });
   const placeOf = (r: RawRow): string => {
     const m = quiet(r);
     return JSON.stringify([m.lat ?? null, m.lon ?? null, m.datetime?.iso ?? null]);
@@ -928,7 +931,7 @@ function clearInheritedPositions(sheet: RawSheet, rows: DataRow[]): void {
 
 function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector): Built {
   const dc = file.decimalComma;
-  const parse = metaParser(file, sheet, specs, c);
+  const parse = metaParser(file, sheet, specs, c, { keepMillis: true });
   const seen = new Set<string>();
   const cols = specs.vars.map((v) => {
     let key = namespace ? `${sheet.name}!${v.header}` : v.header;
@@ -1208,7 +1211,7 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
 
 function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector, explicitIgnore: () => ReadonlySet<number>): Built {
   const dc = file.decimalComma;
-  const parse = metaParser(file, sheet, specs, c);
+  const parse = metaParser(file, sheet, specs, c, { keepMillis: true });
   const skip = new Set(longColumns(plan));
   const keyCols = [specs.sampleId, specs.station, specs.cruise, specs.depth, specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon]
     .filter((s): s is Spec => s !== undefined && !skip.has(s.index))
@@ -1322,11 +1325,8 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
     const timeOnly = sheet.timeAll?.[index] === true;
     if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
-    // the text keeps the millisecond ('12:00:00.250'). Only a time finer than that (more than 0.02 ms from a whole millisecond, twice the largest float noise of a 15-digit serial, 1e-5 s)
-    // would lose something in the text, so such a cell stays the number and two close times stay two
-    const millis = cell * 86_400_000;
-    if (Math.abs(millis - Math.round(millis)) > 0.02) return cell;
-    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: true });
+    // the text keeps the millisecond ('12:00:00.250') by the same rule as the date column: a fraction the column's format shows, or a number that is plainly not float noise (see KeepMillis)
+    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: sheet.fractionShown?.[index] === true ? 'shown' : true });
     if ('error' in d) return cell;
     if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
     return d.iso;

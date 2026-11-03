@@ -161,7 +161,7 @@ describe('rule table', () => {
 
 // Wording decided by Michal word for word (ROW-ON-LAND-NEAR, 23.10.2026: the map, not the position, says land; the skip list
 // names estuaries and tidal inlets): longer than the usual cap, allowed explicitly. ROW-LONG-KEY-EXTENDED also says that the clean CSV writes the column (Task 9).
-const LONG_TEXT_ALLOWED: Record<string, number> = { 'ROW-ON-LAND-NEAR': 420, 'IN-HEADER-SHORT': 620, 'ROW-LONG-KEY-EXTENDED': 450, 'ROW-YEAR-DATE-MISMATCH': 420 };
+const LONG_TEXT_ALLOWED: Record<string, number> = { 'ROW-ON-LAND-NEAR': 420, 'IN-HEADER-SHORT': 620, 'ROW-LONG-KEY-EXTENDED': 450, 'ROW-LONG-KEY-IGNORED': 380, 'ROW-YEAR-DATE-MISMATCH': 420 };
 
 describe('messages', () => {
   const GENERIC = new Set<string>(GENERIC_PARAMS);
