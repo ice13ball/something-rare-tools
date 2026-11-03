@@ -82,9 +82,30 @@ describe('a fallback decode is not read', () => {
     expect(moji(check(file))).toHaveLength(1);
   });
 
+  it('an encoding the file declares itself is no fallback: it is read; the parser\'s own IN-ENCODING-FALLBACK silences it', () => {
+    const sheetObj = { name: 's', header: ['Note'], headerLine: 1, rows: [{ line: 2, fieldCount: 1, cells: [`7${degree}S`] }] } as never;
+    const declared = { fileName: 'd.txt', kind: 'csv', sheets: [sheetObj], date1904: false, decimalComma: false, encoding: 'iso-8859-2', findings: [] } as unknown as ParsedFile;
+    expect(checkRawTable(declared, declared.sheets[0], []).filter((f) => f.ruleId === 'ROW-TEXT-MOJIBAKE')).toHaveLength(1);
+    const fallback = { ...declared, findings: [{ ruleId: 'IN-ENCODING-FALLBACK', severity: 'info', params: { encoding: 'iso-8859-2' } }] } as unknown as ParsedFile;
+    expect(checkRawTable(fallback, fallback.sheets[0], []).filter((f) => f.ruleId === 'ROW-TEXT-MOJIBAKE')).toEqual([]);
+  });
+
+  it('one cell reads correctly in all four languages', () => {
+    const f = sheet([`7${degree}S`])[0];
+    expect(f.params.count).toBe(1);
+    expect(renderPlain(f, 'en')).toContain('1 cell with this pattern');
+    expect(renderPlain(f, 'pl')).toContain('1 komórka z tym wzorcem');
+    expect(renderPlain(f, 'de')).toContain('1 Zelle mit diesem Muster');
+    expect(renderPlain(f, 'fr')).toContain('1 cellule avec ce motif');
+    const many = { ...f, params: { ...f.params, count: 3 } };
+    expect(renderPlain(many, 'en')).toContain('3 cells with');
+    expect(renderPlain(many, 'pl')).toContain('3 komórki');
+    expect(renderPlain(many, 'pl')).not.toMatch(/[{}]/);
+  });
+
   it('the count is of the pair only: the text says "with this pattern", not a total', () => {
     const f = sheet([`7${degree}S`])[0];
-    expect(renderPlain(f, 'en')).toContain('cells with this pattern');
+    expect(renderPlain(f, 'en')).toContain('with this pattern');
     expect(renderPlain(f, 'en')).not.toContain('in all');
     expect(getRule('ROW-TEXT-MOJIBAKE').technical).toContain('not matched');
   });

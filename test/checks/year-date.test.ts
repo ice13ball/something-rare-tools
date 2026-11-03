@@ -117,6 +117,11 @@ describe('ROW-YEAR-DATE-MISMATCH', () => {
     expect(f[0].lines).toEqual([2]);
   });
 
+  it('next year is a year and the year after is a code, with today in 2026: 2027 fires, 2028 is silent', () => {
+    expect(mismatch(sheet(['S1,49.4,0.2,2019-03-04,2027,11.2']))).toHaveLength(1);
+    expect(mismatch(sheet(['S1,49.4,0.2,2019-03-04,2028,11.2']))).toEqual([]);
+  });
+
   it('says that the column may mean something else, such as a cruise or a season, in four languages', () => {
     const f = mismatch(sheet(['S1,49.4,0.2,2019-03-04,2020,11.2']))[0];
     const said: Record<string, RegExp> = { en: /cruise or a season/, pl: /rejs lub sezon/, de: /Fahrt oder eine Saison/, fr: /campagne ou une saison/ };

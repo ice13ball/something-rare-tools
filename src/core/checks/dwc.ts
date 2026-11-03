@@ -340,6 +340,11 @@ const isIdTerm = (t: string): boolean => (DWC_TERMS.has(t) && t.endsWith('id')) 
 
 const daysInMonth = (y: number, m: number): number => new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), m, 0)).getUTCDate();
 const validDay = (y: number, m: number, d: number): boolean => m >= 1 && m <= 12 && d >= 1 && d <= daysInMonth(y, m);
+/** A year with 53 ISO weeks: 1 January is a Thursday, or a Wednesday in a leap year (2015, 2020, 2026). */
+const hasWeek53 = (y: number): boolean => {
+  const p = (n: number): number => (n + Math.floor(n / 4) - Math.floor(n / 100) + Math.floor(n / 400)) % 7;
+  return p(y) === 4 || p(y - 1) === 3;
+};
 const isLeap = (y: number): boolean => y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
 
 const ZONE = '(?:Z|[+-](?:[01]\\d|2[0-3])(?::?[0-5]\\d)?)';
@@ -349,6 +354,7 @@ const TIME_BASIC = '(?:[01]\\d|2[0-3])(?:[0-5]\\d(?:(?:[0-5]\\d|60)(?:[.,]\\d+)?
 const TIME_PART = `(?:T(?:${TIME_EXT}|${TIME_BASIC})${ZONE}?)?`;
 // calendar date forms: YYYY, YYYY-MM, YYYY-MM-DD, YYYYMMDD; ordinal YYYY-DDD, YYYYDDD; week YYYY-Www, YYYY-Www-D, YYYYWww, YYYYWwwD
 const DATE_FORM = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?|-(\d{3})|-W(\d{2})(?:-(\d))?|(\d{2})(\d{2})|(\d{3})|W(\d{2})(\d)?)?$/;
+const TIME_ONLY = new RegExp(`^${TIME_PART}$`);
 const DURATION = /^P(?=\d|T\d)(?:\d+(?:[.,]\d+)?Y)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?W)?(?:\d+(?:[.,]\d+)?D)?(?:T(?=\d)(?:\d+(?:[.,]\d+)?H)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?S)?)?$/;
 const ISO_END_TIME = new RegExp(`^${TIME_EXT}${ZONE}?$`);
 const ISO_END_DAYTIME = new RegExp(`^(\\d{2})T(?:${TIME_EXT}|${TIME_BASIC})${ZONE}?$`);
@@ -363,8 +369,10 @@ function isoStart(text: string): IsoStart | undefined {
   const timePart = at < 0 ? '' : text.slice(at);
   const m = DATE_FORM.exec(datePart);
   if (!m) return undefined;
-  if (timePart !== '' && !new RegExp(`^${TIME_PART}$`).test(timePart)) return undefined;
+  if (timePart !== '' && !TIME_ONLY.test(timePart)) return undefined;
   const y = Number(m[1]);
+  // a form without separators (20110614, 2011165, 2011W24) is only a date from 1700: 1234123 and 11111111 are numbers
+  if ((m[7] !== undefined || m[9] !== undefined || m[10] !== undefined) && y < 1700) return undefined;
   const time = timePart !== '';
   // YYYY-MM-DD, YYYY-MM
   if (m[2] !== undefined) {
@@ -383,7 +391,7 @@ function isoStart(text: string): IsoStart | undefined {
   if (m[5] !== undefined || m[10] !== undefined) {
     const w = Number(m[5] ?? m[10]);
     const wd = m[6] ?? m[11];
-    if (w < 1 || w > 53 || (wd !== undefined && (Number(wd) < 1 || Number(wd) > 7))) return undefined;
+    if (w < 1 || w > (hasWeek53(y) ? 53 : 52) || (wd !== undefined && (Number(wd) < 1 || Number(wd) > 7))) return undefined;
     return time && wd === undefined ? undefined : { y, time };
   }
   // YYYYMMDD
@@ -451,8 +459,9 @@ function eventDateIso(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
 const MOJIBAKE_PAIR = /[\u00C2\u00C3][\u0080-\u00BF]/;
 const MAX_MOJIBAKE_COLUMNS = 10;
 function mojibake(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
-  // a file that was not UTF-8 and was decoded by a fallback (one stray byte is enough) shows the pair for a sign that is not in the file: the rule says nothing there
-  if (file.encoding === 'windows-1250' || file.encoding === 'iso-8859-2') return;
+  // a file that was not UTF-8 and was decoded by a fallback (one stray byte is enough; the parser says so in IN-ENCODING-FALLBACK) shows the pair for a sign that is not in the file: the rule says nothing
+  // there. An encoding the file declared itself (a Darwin Core Archive that says ISO-8859-2) is no fallback and is read.
+  if (file.findings.some((f) => f.ruleId === 'IN-ENCODING-FALLBACK')) return;
   const cols = new Map<number, { cells: number; example: string }>();
   const lines = new Set<number>();
   const look = (c: RawCell | undefined, index: number, line: number): void => {
