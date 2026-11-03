@@ -483,7 +483,7 @@ describe('ledger: the fate of every line, as data (what the list of rows not wri
     const rows: Cell[][] = [['a', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['Total', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['a', '2020-06-01', 49.4, 0.2, 'Gadus morhua', -2], ['b', '2020-06-01', 49.4, 0.2, null, null]];
     const l = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
     const unwritten = l.lines.filter((x) => x.fate !== 'written');
-    expect(unwritten.map((x) => [x.line, x.fate])).toEqual([[3, 'summary-row'], [4, 'negative'], [5, 'value-no-taxon']]);
+    expect(unwritten.map((x) => [x.line, x.fate])).toEqual([[3, 'summary-row'], [4, 'negative'], [5, 'position-no-taxon']]);
     expect(unwritten.length).toBe(l.rows.skipped.reduce((n, s) => n + s.count, 0) + l.rows.unexplained);
     expect(l.rows.source).toBe(l.rows.written + unwritten.length);
   });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useState } from 'react';
+import { UNPLACED } from '../../core/convert/ledger';
 import type { LedgerColumn, LedgerTally, SheetLedger } from '../../core/convert/ledger';
 import type { UiKey } from '../../core/i18n/ui';
 import { t } from '../i18n';
@@ -114,6 +115,7 @@ export function ConvertLedger({ ledger, blocked = false }: { ledger: readonly Sh
         const kept = l.columns.filter((c) => c.to !== 'not-written' && c.to !== 'event');
         // a column of text that is not written is listed, but it is not a number that went nowhere
         const lostNumeric = lost.filter((c) => c.numbers > 0);
+        const unplaced = l.rows.skipped.filter((x) => (UNPLACED as readonly string[]).includes(x.reason)).reduce((n, x) => n + x.count, 0);
         const settled = l.kind !== 'not-read' && l.kind !== 'not-used';
         return (
           <section key={`${i}\u0000${l.file}\u0000${l.sheet}`} aria-label={names[i]}>
@@ -122,7 +124,8 @@ export function ConvertLedger({ ledger, blocked = false }: { ledger: readonly Sh
             {l.cells === undefined ? <Tally tally={l.rows} line="rows" blocked={blocked} /> : <Tally tally={l.cells} line="cells" blocked={blocked} />}
             {l.cells !== undefined && <Tally tally={l.rows} line="also" blocked={blocked} />}
             {settled && !l.balanced && <p className="notice" role="note">{t('convert.ledger.unbalanced')}</p>}
-            {settled && l.balanced && l.notUnderstood > 0 && <p className="notice" role="note">{t('convert.ledger.lostValues', { count: l.notUnderstood })}</p>}
+            {settled && l.balanced && l.notUnderstood - unplaced > 0 && <p className="notice" role="note">{t('convert.ledger.lostValues', { count: l.notUnderstood - unplaced })}</p>}
+            {settled && l.balanced && unplaced > 0 && <p className="notice" role="note">{t('convert.ledger.unplaced', { count: unplaced })}</p>}
             {settled && l.balanced && l.notUnderstood === 0 && <p className="muted">{lostNumeric.length === 0 ? t('convert.ledger.balanced') : t('convert.ledger.balancedColumns', { count: lostNumeric.length })}</p>}
             {lost.length > 0 && (
               <>

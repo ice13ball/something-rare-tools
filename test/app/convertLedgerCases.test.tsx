@@ -92,7 +92,7 @@ describe('2. a long row with a number and no taxon is never "nothing to record"'
   });
 
   it('a row with nothing in it is still "nothing to record"', () => {
-    const l = convert({ sheets: [sheetInput(fileOf(header, [...rows, ['c', null, null, null, null, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
+    const l = convert({ sheets: [sheetInput(fileOf(header, [...rows, [null, null, null, null, null, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
     expect(reasonOf(l, 4)).toBe('nothing-to-record');
   });
 });
@@ -243,7 +243,10 @@ describe('round 2: what the panel says', () => {
   it('a row with only a position: it is named, and the sentence is not said', () => {
     const l = convert({ sheets: [sheetInput(fileOf([...base, 'Species', 'Count'], [[...fr('a'), 'Solea solea', 3], [null, null, 49.4, 0.2, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } } })], options: {} }).ledger;
     const text = panel(l);
-    expect(text).toContain('rows with a number but no taxon');
+    expect(text).toContain('rows with a position or a depth, but no taxon or number');
+    expect(text).toContain('holds a position, a sample name or a date, but no taxon or number');
+    expect(text).not.toContain('did not understand');
+    expect(text).not.toContain('(the number is not written)');
     expect(text).not.toContain(SENTENCE);
     expect(text).not.toContain('rows with nothing to record');
   });

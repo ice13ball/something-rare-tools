@@ -49,13 +49,17 @@ export type LedgerReason =
   | 'empty-parameter'
   | 'repeated-parameter'
   | 'quality-flag'
-  | 'text-cell';
+  | 'text-cell'
+  | 'position-no-taxon'
+  | 'sample-no-taxon'
+  | 'not-in-event';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
-  'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell',
+  'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
 ];
+// (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last three belong to whole lines)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
 // (a reason set fits one bit of an Int32 per line: the chain of a wide row is kept that way)
 const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code - 1) : 0);
@@ -64,7 +68,9 @@ const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code -
  * Rows the converter did not understand: they hold a value (or, for a row of the wrong length, cells) that it cannot place, so it does not write them. They are never "nothing to record": the
  * panel does not say all is accounted for while one of them is there. (Task 8 sorts the reasons the same way.)
  */
-export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'empty-parameter', 'repeated-parameter'];
+/** Of those, the rows that name a position, a depth, a sample or a date and no taxon or number: the panel says that plainly, not as "a value". */
+export const UNPLACED: readonly LedgerReason[] = ['position-no-taxon', 'sample-no-taxon'];
+export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter'];
 
 /**
  * The reasons the conversion records while it reads a sheet. Created per sheet; the builder writes into it, the ledger reads it. A cell's reason is kept in one byte per cell and column
@@ -590,8 +596,12 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
    * (has an occurrence), a field of an event (the row opened its event), a column that is not written (column-not-read). It is run again once the event columns are settled
    * (settleEventColumns), because a column read for the events may turn out to be written nowhere.
    */
-  const pivotPass = (): void => {
+  const pivotPass = (settled?: { events: readonly EventRec[]; cruiseText: readonly string[] }): void => {
     if (pivot === undefined) return;
+    const eventsAt = new Map<number, EventRec[]>();
+    if (settled !== undefined) for (const e of settled.events) if (e.source?.file === inp.file && e.source.sheet === sheet.name) (eventsAt.get(e.source.line) ?? eventsAt.set(e.source.line, []).get(e.source.line)!).push(e);
+    const eventKinds = new Set(out.columns.filter((c) => c.to === 'event').map((c) => c.role));
+    if (out.columns.some((c) => c.to === 'event' && c.role === 'datePart' && c.part === 'year')) eventKinds.add('datePartYear');
     const toNow = new Map(out.columns.map((c) => [c.index, c.to] as const));
     const counts = new Map<LedgerReason, number>();
     const fates: LineFate[] = [];
@@ -623,7 +633,7 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       const cl = pivot.cellLines[row.line];
       if (cl === undefined) continue;
       const absent = new Set(L.entryAbsent[row.line] ?? []);
-      const opened = fate.events.has(row.line);
+      const opened = fate.events.has(row.line) || inp.levelLines?.has(row.line) === true;
       pivot.pivoted.forEach((pv, pi) => {
         if (absent.has(pi)) return;
         const line = cl[pi];
@@ -634,7 +644,15 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
         if (to === 'not-written') return put(line, 'column-not-read', ['column-not-read']);
         const own = rowCode[pos] || fate.column(col)?.[pos] || 0;
         const ownReason = own === 0 ? undefined : LEDGER_REASONS[own - 1];
-        if (to === 'event') return opened ? put(line, 'written') : ownReason !== undefined ? put(line, ownReason, [ownReason]) : put(line, rowReason[pos]);
+        if (to === 'event') {
+          if (!opened) return ownReason !== undefined ? put(line, ownReason, [ownReason]) : put(line, rowReason[pos]);
+          // the event of the row has to carry the value: a depth that says "deep", a latitude of 999, are in the file and in no event
+          if (settled !== undefined) {
+            const role = out.columns.find((c) => c.index === col)?.role ?? roleKindOf(inp.mapping, col);
+            if (eventTrace(role, eventsAt.get(row.line) ?? [], eventKinds, { events: settled.events, cruiseText: settled.cruiseText }) === false) return put(line, 'not-in-event', ['not-in-event']);
+          }
+          return put(line, 'written');
+        }
         const flag = to === 'occurrence' ? occFlag.get(col) : meaFlag.get(col);
         if (flag?.[pos] === 1) return put(line, 'written');
         if (ownReason !== undefined) return put(line, ownReason, [ownReason]);
@@ -660,7 +678,7 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
 }
 
 /** The work of a ledger that has to be done again when the event columns are settled (a pivoted sheet). */
-const PENDING = new WeakMap<SheetLedger, () => void>();
+const PENDING = new WeakMap<SheetLedger, (settled: { events: readonly EventRec[]; cruiseText: readonly string[] }) => void>();
 
 /** A sheet that was not read at all (CONV-LONG-UNSUPPORTED, CONV-SHEET-TRANSPOSED): every row went nowhere, and the ledger says so. */
 export function notReadLedger(file: string, sheet: RawSheet, inputIndex?: number): SheetLedger {
@@ -732,6 +750,6 @@ export function settleEventColumns(ledger: SheetLedger[], events: readonly Event
       const trace = eventTrace(c.role, mine, kinds, { events, cruiseText });
       if (trace === false) c.to = 'not-written';
     }
-    PENDING.get(l)?.();
+    PENDING.get(l)?.({ events, cruiseText });
   }
 }

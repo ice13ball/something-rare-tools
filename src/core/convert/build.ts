@@ -1682,8 +1682,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       });
 
     // a number in a column that is read as a value (a variable, a weight, a quantity, a taxon column): a row that holds one is never "nothing to record"
-    const valueColumns = sin.mapping.columns.filter((c) => ['variable', 'biomass', 'quantity', 'taxon', 'effort', 'latitude', 'longitude', 'depth', 'depthBelowSeafloor', 'pressure'].includes(c.role.kind)).map((c) => c.index);
+    const valueColumns = sin.mapping.columns.filter((c) => ['variable', 'biomass', 'quantity', 'taxon', 'effort'].includes(c.role.kind)).map((c) => c.index);
     const rowHasValue = (row: RawRow): boolean => valueColumns.some((i) => parseNumber(row.cells[i] ?? null, dc).status === 'ok');
+    const positionColumns = sin.mapping.columns.filter((c) => ['latitude', 'longitude', 'depth', 'depthBelowSeafloor', 'pressure'].includes(c.role.kind)).map((c) => c.index);
+    const rowHasPosition = (row: RawRow): boolean => positionColumns.some((i) => parseNumber(row.cells[i] ?? null, dc).status === 'ok');
+    // anything at all in a column that is read (every role but "ignore"): a sample name, a date part, a station
+    const readColumnIndexes = sin.mapping.columns.filter((c) => c.role.kind !== 'ignore').map((c) => c.index);
+    const rowHasSomething = (row: RawRow): boolean => readColumnIndexes.some((i) => !isBlankCell(row.cells[i] ?? null));
 
     const visitIds = new Map<number, string>();
     const visitParts = new Set<string>();
@@ -1785,9 +1790,21 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           }
           fate.row(row.line, 'quantity-blank');
         } else {
-          // a row that holds a number (a value, a weight, a position, a depth) is never "nothing to record": it says which part is missing
-          const holds = rowHasValue(row);
-          fate.row(row.line, !holds ? 'nothing-to-record' : sin.shape === 'wide' ? 'no-code' : taxonCellText !== undefined && cols.quantity === undefined && !presence ? 'taxon-no-quantity' : 'value-no-taxon');
+          // a row that holds anything in a column that is read is never "nothing to record": the reason says which part is missing
+          fate.row(
+            row.line,
+            !rowHasSomething(row)
+              ? 'nothing-to-record'
+              : sin.shape === 'wide'
+                ? 'no-code'
+                : taxonCellText !== undefined && cols.quantity === undefined && !presence
+                  ? 'taxon-no-quantity'
+                  : rowHasValue(row)
+                    ? 'value-no-taxon'
+                    : rowHasPosition(row)
+                      ? 'position-no-taxon'
+                      : 'sample-no-taxon',
+          );
         }
         continue;
       }

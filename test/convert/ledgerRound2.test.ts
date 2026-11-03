@@ -79,16 +79,20 @@ describe('round 2, item 1: a pivoted long sheet, whatever its columns are read a
     let seed = 20261103;
     const rnd = (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
     const pick = <T,>(a: readonly T[]): T => a[Math.floor(rnd() * a.length)];
+    const HD = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Parameter', 'Value', 'Unit'];
     const params = ['Temperature', 'Salinity', 'Depth', 'Calanus finmarchicus', 'Oithona similis', 'Notes', 'Volume', 'Temperature_QC', 'Oxygen', '', ''];
     const values: Cell[] = [null, '', 0, -3, 7.5, 12, 12, 'x', 'NA', '5 g', 1, 1];
     const roles: (ColumnRole | undefined)[] = [undefined, undefined, { kind: 'ignore' }, { kind: 'taxon', header: true }, { kind: 'depth', positive: 'down' }, { kind: 'effort' }, { kind: 'variable', variable: 'v' }];
     let pivots = 0;
+    let profiles = 0;
     let bad = 0;
     for (let i = 0; i < 400; i++) {
       const n = 3 + Math.floor(rnd() * 14);
-      const lines: string[] = [H.join(',')];
+      const profile = rnd() < 0.3;
+      // (a profile reads its levels from the Depth parameter: no depth key column there)
+      const lines: string[] = [(profile ? HD.filter((h) => h !== 'Depth [m]') : HD).join(',')];
       for (let k = 0; k < n; k++) {
-        const f = [pick(['S1', 'S1', 'S2', '']), '2020-06-01', '49.4', '0.2', pick(params), String(pick(values) ?? ''), pick(['C', 'm', '', 'PSU'])];
+        const f = [pick(['S1', 'S1', 'S2', '']), '2020-06-01', '49.4', '0.2', ...(profile ? [] : [pick(['1', '2', ''])]), pick(params), String(pick(values) ?? ''), pick(['C', 'm', '', 'PSU'])];
         lines.push((rnd() < 0.08 ? [...f, '99'] : f).join(','));
       }
       const file = readConvertFile(textFile('long.csv', lines.join('\n') + '\n'));
@@ -102,8 +106,9 @@ describe('round 2, item 1: a pivoted long sheet, whatever its columns are read a
         const role = pick(roles);
         if (role !== undefined) edit[h] = role;
       }
-      if (rnd() < 0.5) edit['Station'] = { kind: 'sampleId' };
-      const r = convert({ sheets: [sheetInput(piv, { shape: 'wide', quantity: { kind: 'count' }, presenceOnly: rnd() < 0.2, edit })], options: { fullList: rnd() < 0.3 } });
+      if (!profile && rnd() < 0.5) edit['Station'] = { kind: 'sampleId' };
+      const r = convert({ sheets: [sheetInput(piv, { shape: 'wide', quantity: { kind: 'count' }, presenceOnly: !profile && rnd() < 0.2, ...(profile ? { profile: { depthIds: rnd() < 0.7 } } : {}), edit })], options: { fullList: rnd() < 0.3 } });
+      if (profile) profiles++;
       for (const l of r.ledger) {
         try {
           expectLinesAgree(l, physicalLines, file.sheets[0].rows.length);
@@ -114,8 +119,44 @@ describe('round 2, item 1: a pivoted long sheet, whatever its columns are read a
       }
     }
     expect(pivots).toBeGreaterThan(150);
+    expect(profiles).toBeGreaterThan(40);
     expect(bad).toBe(0);
   }, 120_000);
+});
+
+describe('round 3: a pivoted sheet read as a profile, and a value the event did not take', () => {
+  const HP = ['Station', 'Date', 'Depth [m]', 'Parameter', 'Value', 'Unit'];
+  const S1: Cell[][] = [['S1', '2020-06-01', 1, 'Temperature', 11, 'C'], ['S1', '2020-06-01', 1, 'Salinity', 34, 'PSU'], ['S2', '2020-06-01', 2, 'Temperature', 12, 'C'], ['S2', '2020-06-01', 2, 'Salinity', 35, 'PSU']];
+  const pivoted = (rows: Cell[][], header = HP, extra: Record<string, unknown> = {}, edit: Record<string, ColumnRole> = {}) => {
+    const piv = pivotConvertFile(fileOf(header, rows, 'Long'), {});
+    expect(piv.sheets[0].pivot).toBeDefined();
+    return convert({ sheets: [sheetInput(piv, { shape: 'wide', quantity: { kind: 'count' }, ...extra, edit })], options: {} });
+  };
+  const physical = (n: number): Set<number> => new Set(Array.from({ length: n }, (_, i) => i + 2));
+
+  it('a profile sheet with Parameter = Depth: every line has a fate (the level opened its event)', () => {
+    const rows: Cell[][] = [['S1', '2020-06-01', 'Temperature', 11, 'C'], ['S1', '2020-06-01', 'Depth', 1, 'm'], ['S2', '2020-06-01', 'Temperature', 12, 'C'], ['S2', '2020-06-01', 'Depth', 2, 'm']];
+    const r = pivoted(rows, ['Station', 'Date', 'Parameter', 'Value', 'Unit'], { profile: { depthIds: true } });
+    expectLinesAgree(r.ledger[0], physical(4), 4);
+    expect(r.ledger[0].kind).toBe('profile');
+  });
+
+  it('Depth = deep: the line is not written, because no event has a depth; the other lines are', () => {
+    const rows: Cell[][] = [['S1', '2020-06-01', null, 'Temperature', 11, 'C'], ['S1', '2020-06-01', null, 'Depth', 'deep', 'm'], ['S2', '2020-06-01', null, 'Temperature', 12, 'C'], ['S2', '2020-06-01', null, 'Depth', 5, 'm']];
+    const r = pivoted(rows, HP, {}, { Station: { kind: 'sampleId' }, 'Depth [m]': { kind: 'ignore' } });
+    const l = r.ledger[0];
+    expectLinesAgree(l, physical(4), 4);
+    expect(l.lines.map((x) => [x.line, x.fate])).toEqual([[3, 'not-in-event']]);
+    expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.depthMin)).toEqual([undefined, 5]);
+  });
+
+  it('Latitude = 999 is kept: the event carries 999 as written, so the line is written (a coordinate out of range is for the output check to say)', () => {
+    const rows: Cell[][] = [['S1', '2020-06-01', 1, 'Latitude', 999, 'deg'], ['S1', '2020-06-01', 1, 'Longitude', 0.2, 'deg'], ['S2', '2020-06-01', 2, 'Latitude', 49.4, 'deg'], ['S2', '2020-06-01', 2, 'Longitude', 0.3, 'deg']];
+    const r = pivoted(rows, HP, {}, { Station: { kind: 'sampleId' } });
+    expectLinesAgree(r.ledger[0], physical(4), 4);
+    expect(r.events.find((e) => e.id === 'S1')!.lat).toBe(999);
+    expect(r.ledger[0].lines).toEqual([]);
+  });
 });
 
 describe('round 2, item 2: a long line with a taxon is written only with its occurrence', () => {
@@ -167,18 +208,33 @@ describe('round 2, item 4: a row that holds a position or a depth is not "nothin
 
   it('only a latitude and a longitude', () => {
     const l = run([[...fr('a'), null, 'Solea solea', 3], [null, null, 49.4, 0.2, null, null, null]]);
-    expect(fateOf(l, 3)).toBe('value-no-taxon');
+    expect(fateOf(l, 3)).toBe('position-no-taxon');
     expect(l.notUnderstood).toBe(1);
   });
 
   it('only a depth', () => {
-    const l = run([[...fr('a'), null, 'Solea solea', 3], ['b', null, null, null, 25, null, null]]);
-    expect(fateOf(l, 3)).toBe('value-no-taxon');
+    const l = run([[...fr('a'), null, 'Solea solea', 3], [null, null, null, null, 25, null, null]]);
+    expect(fateOf(l, 3)).toBe('position-no-taxon');
   });
 
-  it('a row with only text stays "nothing to record"', () => {
-    const l = run([[...fr('a'), null, 'Solea solea', 3], ['b', null, null, null, null, null, null]]);
+  it('a row with only a sample name, or date parts, is not "nothing to record" either: the sample would vanish', () => {
+    const l = run([[...fr('a'), null, 'Solea solea', 3], ['s2', null, null, null, null, null, null], [null, '2020-06-02', null, null, null, null, null]]);
+    expect(fateOf(l, 3)).toBe('sample-no-taxon');
+    expect(fateOf(l, 4)).toBe('sample-no-taxon');
+    expect(l.notUnderstood).toBe(2);
+  });
+
+  it('a row with nothing in a column that is read stays "nothing to record"', () => {
+    const l = run([[...fr('a'), null, 'Solea solea', 3], [null, null, null, null, null, null, null]]);
     expect(fateOf(l, 3)).toBe('nothing-to-record');
+    expect(l.notUnderstood).toBe(0);
+  });
+
+  it('a row with only year, month and day columns (s2, 2020, 6, 2) keeps its place', () => {
+    const header = ['Sample', 'Year', 'Month', 'Day', 'Species', 'Count'];
+    const dp: Record<string, ColumnRole> = { Sample: { kind: 'sampleId' }, Year: { kind: 'datePart', part: 'year' }, Month: { kind: 'datePart', part: 'month' }, Day: { kind: 'datePart', part: 'day' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } };
+    const l = convert({ sheets: [sheetInput(fileOf(header, [['a', 2020, 6, 1, 'Solea solea', 3], ['s2', 2020, 6, 2, null, null]]), { shape: 'long', quantity: { kind: 'count' }, edit: dp })], options: {} }).ledger[0];
+    expect(fateOf(l, 3)).toBe('sample-no-taxon');
   });
 });
 
