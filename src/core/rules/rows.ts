@@ -126,7 +126,7 @@ const SHIP_DECLARED = {
  *   ROW-YEAR-OUTLIER      years, declared  years = years of the flagged rows; declared = years named in label/file name/title/extent
  *   ROW-JOIN-AMBIGUOUS    right   field = the key (columns joined with " + "), value = an example key, lines = the rows of the measurement sheet that could not be placed; right = the sheet that holds several rows of that key with different positions or dates
  *   ROW-LONG-VALUE-SKIPPED count   field = one parameter as an example, lines = the rows whose value was not read: another row of a long sheet has the same key and parameter with a different value (count = such values)
- *   ROW-LONG-KEY-EXTENDED columns   columns = the headers (comma-separated) added to a long sheet's row key because rows with the same key and parameter held different values there (info; field is empty)
+ *   ROW-LONG-KEY-EXTENDED columns, count   columns = the headers (comma-separated) added; count = how many to a long sheet's row key because rows with the same key and parameter held different values there (info; field is empty)
  *   ROW-JOIN-KEY-BLANK    right   field = the key (columns joined with " + "), lines = the rows whose key has a blank part and that have no position of their own; right = the sheet that would give it
  *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
@@ -518,25 +518,25 @@ export const ROW_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `Nieodczytane wartości w „{sheet}”: {count} ({+lines:wiersz|wiersze|wierszy} {lines}). Inny wiersz ma ten sam klucz i parametr (np. „{field}”) z inną wartością, a żadna kolumna arkusza tych wierszy nie rozróżnia; sprawdzono tylko pierwszą wartość.`,
-      en: `{count} {+count:value was|values were} not read in "{sheet}" ({+lines:line|lines} {lines}): another row has the same key and parameter (e.g. "{field}") with a different value, and no column of the sheet tells these rows apart; only the first value is kept and checked.`,
-      de: `{count} {+count:Wert wurde|Werte wurden} in „{sheet}“ nicht gelesen ({+lines:Zeile|Zeilen} {lines}): eine andere Zeile hat denselben Schlüssel und Parameter (z. B. „{field}“) mit anderem Wert, und keine Spalte des Blatts unterscheidet diese Zeilen; nur der erste Wert bleibt und wird geprüft.`,
-      fr: `Valeurs non lues dans « {sheet} » : {count} ({+lines:ligne|lignes} {lines}). Une autre ligne a la même clé et le même paramètre (ex. « {field} ») avec une autre valeur, et aucune colonne de la feuille ne distingue ces lignes ; seule la première valeur est gardée et vérifiée.`,
+      pl: `Nieodczytane wartości w „{sheet}”: {count} ({+lines:wiersz|wiersze|wierszy} {lines}). Inny wiersz ma ten sam klucz i parametr (np. „{field}”) z inną wartością, a żadnej kolumny arkusza nie dało się bezpiecznie użyć do rozróżnienia tych wierszy; sprawdzono tylko pierwszą wartość.`,
+      en: `{count} {+count:value was|values were} not read in "{sheet}" ({+lines:line|lines} {lines}): another row has the same key and parameter (e.g. "{field}") with a different value, and no column of the sheet could safely be used to tell these rows apart; only the first value is kept and checked.`,
+      de: `{count} {+count:Wert wurde|Werte wurden} in „{sheet}“ nicht gelesen ({+lines:Zeile|Zeilen} {lines}): eine andere Zeile hat denselben Schlüssel und Parameter (z. B. „{field}“) mit anderem Wert, und keine Spalte des Blatts konnte sicher dazu dienen, diese Zeilen zu unterscheiden; nur der erste Wert bleibt und wird geprüft.`,
+      fr: `Valeurs non lues dans « {sheet} » : {count} ({+lines:ligne|lignes} {lines}). Une autre ligne a la même clé et le même paramètre (ex. « {field} ») avec une autre valeur, et aucune colonne de la feuille n'a pu servir sans risque à distinguer ces lignes ; seule la première valeur est gardée et vérifiée.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: in a long sheet (parameter and value columns) {count} value(s) differ from the value already kept for the same key (sample, position, date, depth) and parameter, and no other column separates those rows (ROW-LONG-KEY-EXTENDED would have named one); only the first value of a pair is read and nothing is averaged. Values equal to the kept one are not counted.`,
+    technical: `{file}, {sheet}:{lines} field {field}: in a long sheet (parameter and value columns) {count} value(s) differ from the value already kept for the same key (sample, position, date, depth) and parameter, and no column could safely be used to tell those rows apart (a column is refused when it is unique on every row, when it cuts the measurements of one key into rows of different parameters, when two columns are equally good, or when it leaves a collision in a key it varies in); only the first value of a pair is read and nothing is averaged. Values equal to the kept one are not counted.`,
   },
   {
     id: 'ROW-LONG-KEY-EXTENDED',
     category: 'B',
     severity: 'info',
-    params: ['columns'],
+    params: ['columns', 'count'],
     plain: {
-      pl: `W „{sheet}” kilka wierszy miało ten sam klucz i parametr, ale różne wartości. Kolumny rozróżniające te wiersze ({columns}) stały się częścią ich tożsamości, więc przeczytano i sprawdzono wszystkie wartości.`,
-      en: `In "{sheet}" several rows had the same key and parameter but different values. The columns that tell these rows apart ({columns}) became part of their identity, so every value was read and checked.`,
-      de: `In „{sheet}“ hatten mehrere Zeilen denselben Schlüssel und Parameter, aber verschiedene Werte. Die Spalten, die diese Zeilen unterscheiden ({columns}), wurden Teil ihrer Identität, daher wurden alle Werte gelesen und geprüft.`,
-      fr: `Dans « {sheet} », plusieurs lignes avaient la même clé et le même paramètre mais des valeurs différentes. Les colonnes qui distinguent ces lignes ({columns}) font désormais partie de leur identité : toutes les valeurs ont été lues et vérifiées.`,
+      pl: `W „{sheet}” kilka wierszy miało ten sam klucz i parametr, ale różne wartości. {+count:Kolumna rozróżniająca|Kolumny rozróżniające|Kolumny rozróżniające} te wiersze ({columns}) {+count:stała|stały|stały} się częścią ich tożsamości, więc przeczytano i sprawdzono wszystkie ich wartości.`,
+      en: `In "{sheet}" several rows had the same key and parameter but different values. {+count:The column that tells|The columns that tell} these rows apart ({columns}) became part of their identity, so every value of these rows was read and checked.`,
+      de: `In „{sheet}“ hatten mehrere Zeilen denselben Schlüssel und Parameter, aber verschiedene Werte. {+count:Die Spalte, die diese Zeilen unterscheidet|Die Spalten, die diese Zeilen unterscheiden} ({columns}), {+count:wurde|wurden} Teil ihrer Identität, daher wurden alle Werte dieser Zeilen gelesen und geprüft.`,
+      fr: `Dans « {sheet} », plusieurs lignes avaient la même clé et le même paramètre mais des valeurs différentes. {+count:La colonne qui distingue|Les colonnes qui distinguent} ces lignes ({columns}) {+count:fait|font} désormais partie de leur identité : toutes les valeurs de ces lignes ont été lues et vérifiées.`,
     },
-    technical: `{file}, {sheet}: in a long sheet the column(s) {columns} were added to the row key because rows with the same key and parameter held different values there (the fewest columns that separate them, chosen without looking at any header). Nothing is averaged and no value is dropped; identical repeated rows are untouched.`,
+    technical: `{file}, {sheet}: in a long sheet {count} column(s) ({columns}) were added to the row key because rows with the same key and parameter held different values there. A column is taken only when it is not unique on every row, when in every key where it varies each resulting row holds the same parameters, when it is the single best of the acceptable ones, and when it leaves no collision unresolved in a key it varies in. Nothing is averaged and no value is dropped; identical repeated rows are untouched.`,
   },
   {
     id: 'ROW-JOIN-KEY-BLANK',

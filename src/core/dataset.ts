@@ -741,17 +741,46 @@ function longValueDiffers(raw: RawCell, keptRaw: RawCell | undefined, dc: boolea
 }
 
 /**
- * Columns that must join the row key of a long sheet so that no two rows with the same key and parameter hold different values. Returns the added column indexes, in the order chosen
- * (greedy: the column that resolves the most colliding (key, parameter) groups, ties by fewest distinct values, then by column order; no header is looked at). A column is taken only when it
- * fully resolves at least one group together with those already taken. A sheet with no differing collision costs one scan and returns [].
+ * The unit of a row of a long sheet (the unit column, else the unit written in the parameter text, 'DIC [umol/kg]') and the key of its variable: the parameter alone, or 'parameter [unit]' when the
+ * sheet gives that parameter in more than one unit. One definition for the grouping of buildLong and for the collisions extendLongKey looks for.
  */
-export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long']>, keyCols: number[], dc: boolean): number[] {
-  const rows = sheet.rows;
-  const unitOf = (r: RawRow, param: string): string => {
+function longVariables(sheet: RawSheet, plan: NonNullable<TablePlan['long']>): { unitOfRow: (r: RawRow, param: string) => string | undefined; baseKey: (r: RawRow, param: string) => string } {
+  const unitOfRow = (r: RawRow, param: string): string | undefined => {
     const fromCol = plan.unitCol === undefined ? undefined : str(r.cells[plan.unitCol] ?? null);
     const t = fromCol ?? unitFromHeader(param).unitText;
-    return t === undefined ? '' : (normaliseUnit(t) ?? t);
+    return t === undefined ? undefined : (normaliseUnit(t) ?? t);
   };
+  const unitsOf = new Map<string, Set<string>>();
+  for (const r of sheet.rows) {
+    const param = str(r.cells[plan.parameterCol] ?? null);
+    if (param === undefined) continue;
+    const u = unitOfRow(r, param);
+    if (!unitsOf.has(param)) unitsOf.set(param, new Set());
+    if (u !== undefined) unitsOf.get(param)!.add(u);
+  }
+  const baseKey = (r: RawRow, param: string): string => {
+    const units = unitsOf.get(param);
+    const unit = units && units.size > 1 ? unitOfRow(r, param) : undefined;
+    return unit !== undefined ? `${param} [${unit}]` : param;
+  };
+  return { unitOfRow, baseKey };
+}
+
+/**
+ * Columns that must join the row key of a long sheet so that no two rows with the same key and parameter hold different values. Returns the added column indexes, or [] when none can be
+ * used safely. A sheet with no differing collision costs one scan and returns [].
+ *
+ * A candidate column (outside the key and the parameter, unit and value columns, with a header) is acceptable only when
+ *  - it is not unique on every row of the sheet (a record id, a note), and
+ *  - in every key where it varies, each resulting row holds the same parameters as every other row of that key (rows keep the measurements of one thing together: a replicate, a level, a
+ *    cast; a running number or a per-value flag cuts one measurement into rows of different parameters and is refused).
+ * Among the acceptable ones, greedy: the column that fully resolves the most colliding (key, parameter) groups together with those already taken, ties by fewest distinct values. A tie on both
+ * between two acceptable columns means nothing says which one is meant: neither is taken. When a collision in a key the chosen columns vary in stays unresolved, none is taken. Columns that
+ * only separate the rows jointly (a cruise and a station, both needed) are not found.
+ */
+export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long']>, keyCols: number[], dc: boolean, paramKey?: (r: RawRow, param: string) => string): number[] {
+  const rows = sheet.rows;
+  const keyOfParam = paramKey ?? longVariables(sheet, plan).baseKey;
   const keys: (string | undefined)[] = new Array(rows.length);
   const idOf: (string | undefined)[] = new Array(rows.length);
   const first = new Map<string, number>();
@@ -761,7 +790,8 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
     const param = str(r.cells[plan.parameterCol] ?? null);
     if (param === undefined) continue;
     const id = JSON.stringify(keyCols.map((c) => str(r.cells[c] ?? null) ?? ''));
-    const k = id + '\u0000' + param + '\u0000' + unitOf(r, param);
+    const pk = keyOfParam(r, param);
+    const k = id + '\u0000' + pk;
     keys[i] = k;
     idOf[i] = id;
     const f = first.get(k);
@@ -770,71 +800,93 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   }
   if (colliding.size === 0) return [];
 
+  const paramOf = (i: number): string => keys[i]!.slice(idOf[i]!.length + 1);
   const members = new Map<string, number[]>();
+  const rowsOfId = new Map<string, number[]>();
+  let n = 0;
   for (let i = 0; i < rows.length; i++) {
     const k = keys[i];
-    if (k === undefined || !colliding.has(k)) continue;
+    if (k === undefined) continue;
+    n++;
+    const byId = rowsOfId.get(idOf[i]!);
+    if (byId) byId.push(i);
+    else rowsOfId.set(idOf[i]!, [i]);
+    if (!colliding.has(k)) continue;
     const list = members.get(k);
     if (list) list.push(i);
     else members.set(k, [i]);
   }
   let remaining = [...members.values()];
   const skip = new Set<number>([...longColumns(plan), ...keyCols]);
-  const candidatesAll = sheet.header.map((_, i) => i).filter((i) => !skip.has(i));
   const cell = (i: number, c: number): string => str(rows[i].cells[c] ?? null) ?? '';
   const valueOf = (i: number): RawCell => rows[i].cells[plan.valueCol] ?? null;
+  const classOf = (i: number, cols: number[]): string => (cols.length === 1 ? cell(i, cols[0]) : JSON.stringify(cols.map((c) => cell(i, c))));
   /** True when, within the group, no two rows that agree on `cols` hold different values. */
   const resolves = (group: number[], cols: number[]): boolean => {
     const rep = new Map<string, number>();
     for (const i of group) {
-      const id = cols.length === 1 ? cell(i, cols[0]) : JSON.stringify(cols.map((c) => cell(i, c)));
+      const id = classOf(i, cols);
       const j = rep.get(id);
       if (j === undefined) rep.set(id, i);
       else if (longValueDiffers(valueOf(i), valueOf(j), dc)) return false;
     }
     return true;
   };
-  // A column is a false separator, and never joins the key, when it is unique on every row of the sheet (a record id, a note) or when it varies inside a row group that has no collision at all
-  // (a quality flag differs per value, a real replicate or level is the same for all parameters of one measurement).
-  const collidingIds = new Set<string>();
-  for (let i = 0; i < rows.length; i++) if (keys[i] !== undefined && colliding.has(keys[i]!)) collidingIds.add(idOf[i]!);
-  const falseSeparator = (c: number): boolean => {
-    const all = new Set<string>();
-    const perId = new Map<string, string>();
-    let n = 0;
-    let splits = false;
-    for (let i = 0; i < rows.length; i++) {
-      const id = idOf[i];
-      if (id === undefined) continue;
-      n++;
-      const v = cell(i, c);
-      all.add(v);
-      if (!splits && !collidingIds.has(id)) {
-        const seen = perId.get(id);
-        if (seen === undefined) perId.set(id, v);
-        else if (seen !== v) splits = true;
+  /** In every key where `cols` vary, each resulting row holds the same parameters as every other. */
+  const keepsMeasurementsTogether = (cols: number[]): boolean => {
+    for (const list of rowsOfId.values()) {
+      const params = new Map<string, Set<string>>();
+      for (const i of list) {
+        const cls = classOf(i, cols);
+        const set = params.get(cls);
+        if (set) set.add(paramOf(i));
+        else params.set(cls, new Set([paramOf(i)]));
+      }
+      if (params.size < 2) continue;
+      let want: string | undefined;
+      for (const set of params.values()) {
+        const sig = [...set].sort().join('\u0001');
+        if (want === undefined) want = sig;
+        else if (sig !== want) return false;
       }
     }
-    return all.size === n || splits;
+    return true;
   };
-  const candidates = candidatesAll.filter((c) => !falseSeparator(c));
+  const isUnique = (c: number): boolean => {
+    const all = new Set<string>();
+    for (const list of rowsOfId.values()) for (const i of list) all.add(cell(i, c));
+    return all.size === n;
+  };
+  const candidates = sheet.header.map((_, i) => i).filter((i) => !skip.has(i) && sheet.header[i].trim() !== '' && !isUnique(i));
+
   const chosen: number[] = [];
   while (remaining.length > 0) {
     let best: { c: number; count: number; distinct: number } | undefined;
+    let tied = false;
     for (const c of candidates) {
       if (chosen.includes(c)) continue;
       const cols = [...chosen, c];
       let count = 0;
       for (const g of remaining) if (resolves(g, cols)) count++;
-      if (count === 0) continue;
+      if (count === 0 || !keepsMeasurementsTogether(cols)) continue;
       const seen = new Set<string>();
       for (const g of remaining) for (const i of g) seen.add(cell(i, c));
-      if (!best || count > best.count || (count === best.count && seen.size < best.distinct)) best = { c, count, distinct: seen.size };
+      if (!best || count > best.count || (count === best.count && seen.size < best.distinct)) {
+        best = { c, count, distinct: seen.size };
+        tied = false;
+      } else if (count === best.count && seen.size === best.distinct) tied = true;
     }
     if (!best) break;
+    if (tied) return [];
     chosen.push(best.c);
     const cols = [...chosen];
     remaining = remaining.filter((g) => !resolves(g, cols));
+  }
+  if (chosen.length === 0) return [];
+  // a collision in a key the chosen columns vary in that they do not resolve: the columns are not what tells these rows apart
+  for (const g of remaining) {
+    const list = rowsOfId.get(idOf[g[0]]!)!;
+    if (new Set(list.map((i) => classOf(i, chosen))).size > 1) return [];
   }
   return chosen;
 }
@@ -852,32 +904,16 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     if (!skip.has(i) && !keyCols.includes(i) && isVerticalCoordinateKey(headerKey(unitFromHeader(h).name))) keyCols.push(i);
   });
 
+  // units per parameter, from the unit column (or from the parameter text itself, 'DIC [umol/kg]')
+  const { unitOfRow, baseKey } = longVariables(sheet, plan);
+  const varKey = (r: RawRow, param: string): string => (namespace ? `${sheet.name}!${baseKey(r, param)}` : baseKey(r, param));
+
   // A column that tells colliding rows apart (a pressure, a replicate, a cast, a layer) joins the key, so every value is read: said once (ROW-LONG-KEY-EXTENDED)
-  const added = extendLongKey(sheet, plan, keyCols, dc);
+  const added = extendLongKey(sheet, plan, keyCols, dc, baseKey);
   if (added.length > 0) {
     keyCols.push(...added);
-    c.add('ROW-LONG-KEY-EXTENDED', sheet.name, '', 0, undefined, false, { columns: added.map((i) => sheet.header[i]).join(', ') });
+    c.add('ROW-LONG-KEY-EXTENDED', sheet.name, '', 0, undefined, false, { columns: added.map((i) => sheet.header[i]).join(', '), count: added.length });
   }
-
-  // units per parameter, from the unit column (or from the parameter text itself, 'DIC [umol/kg]')
-  const unitsOf = new Map<string, Set<string>>();
-  const unitOfRow = (r: RawRow, param: string): string | undefined => {
-    const fromCol = plan.unitCol === undefined ? undefined : str(r.cells[plan.unitCol] ?? null);
-    const t = fromCol ?? unitFromHeader(param).unitText;
-    return t === undefined ? undefined : (normaliseUnit(t) ?? t);
-  };
-  for (const r of sheet.rows) {
-    const param = str(r.cells[plan.parameterCol] ?? null);
-    if (param === undefined) continue;
-    const u = unitOfRow(r, param);
-    if (!unitsOf.has(param)) unitsOf.set(param, new Set());
-    if (u !== undefined) unitsOf.get(param)!.add(u);
-  }
-  const varKey = (param: string, unit: string | undefined): string => {
-    const units = unitsOf.get(param);
-    const base = units && units.size > 1 && unit !== undefined ? `${param} [${unit}]` : param;
-    return namespace ? `${sheet.name}!${base}` : base;
-  };
 
   const variables = new Map<string, Variable>();
   const groups = new Map<string, DataRow>();
@@ -895,7 +931,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       rows.push(row);
     }
     const unit = unitOfRow(r, param);
-    const key = varKey(param, unit);
+    const key = varKey(r, param);
     if (!variables.has(key)) {
       const hu = unitFromHeader(param);
       const canonical = canonicalFromKey(headerKey(hu.name));
