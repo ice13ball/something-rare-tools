@@ -6,6 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { buildDataset, buildDatasets } from '../../src/core/dataset';
 import { toCleanCsv } from '../../src/core/output/csv';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
+import { renderPlain } from '../../src/core/report';
+import { UI } from '../../src/core/i18n/ui';
+import { createDirectEngine } from '../../src/worker/handler';
+import { LANGS } from '../../src/core/types';
 import type { ColumnRole, SheetMapping } from '../../src/core/types';
 import { textFile, xlsxFile } from '../helpers/files';
 
@@ -83,7 +87,8 @@ describe('a sheet joined to a lookup sheet: the columns it lent are the ones car
     const out = toCleanCsv(ds);
     const depth = parse(out.csv).header.findIndex((h) => h.startsWith('depth'));
     expect(parse(out.csv).rows.map((r) => r[depth])).toEqual(['', '5', '5']);
-    expect(left(out.sidecar)).toEqual([]);
+    // withheld for S1, lent for S2 and S3: the column is not carried whole, so it is named
+    expect(left(out.sidecar)).toEqual([`${LEFT} (sheet Sites): Depth [m]`]);
   });
 
   it('a Sites column no row took a value from is named, one that gave a position is not', () => {
@@ -230,5 +235,153 @@ describe('a key column the person set to ignore is not written; one that is igno
   it('a sheet built with no pressure and no key is unchanged by the ignore check (it asks for nothing)', () => {
     const { dataset } = build(sheet('', () => '').replace(',,Parameter', ',Parameter'));
     expect(dataset.extraKeyColumns).toBeUndefined();
+  });
+});
+
+describe('per cell: a column is carried only if every non-blank cell of it gave something', () => {
+  it('a time beside a date on one row only: the undated row leaves the time unused, so the wide sheet names it', () => {
+    const t = ['Station,Latitude,Longitude,Date,Time,Temp [°C]', 'S1,49.4,0.2,2020-06-01,10:30,11.2', 'S2,49.5,0.3,,11:45,10.4'].join('\n');
+    expect(left(toCleanCsv(build(t).dataset).sidecar)).toEqual([`${LEFT}: Time`]);
+  });
+
+  it('and on a long sheet the times that split undated rows are written, so the rows do not look identical', () => {
+    const lines = ['Station,Latitude,Longitude,Date,Time,Parameter,Value'];
+    for (const [d, t] of [['2020-06-01', '10:30'], ['', '11:45'], ['', '12:50']]) for (const p of ['Corg', 'Ntot']) lines.push(`S1,49.4,0.2,${d},${t},${p},${t.length}.${p.length}${d.length}`);
+    const { dataset } = build(lines.join('\n'));
+    const { header, rows } = parse(toCleanCsv(dataset).csv);
+    expect(rows).toHaveLength(3);
+    const at = header.indexOf('Time');
+    expect(at).toBeGreaterThan(-1);
+    expect(rows.map((r) => r[at])).toEqual(['10:30', '11:45', '12:50']);
+  });
+
+  it('a date that parses on one row and reads spring or summer on the others: the column is named (wide) or written raw as a key (long)', () => {
+    const wide = ['Station,Latitude,Longitude,Date,Temp [°C]', 'S1,49.4,0.2,2020-06-01,11.2', 'S2,49.5,0.3,spring,10.4', 'S3,49.5,0.3,summer,10.1'].join('\n');
+    expect(left(toCleanCsv(build(wide).dataset).sidecar)).toEqual([`${LEFT}: Date`]);
+    const lines = ['Station,Latitude,Longitude,Date,Parameter,Value'];
+    for (const d of ['2020-06-01', 'spring', 'summer']) for (const p of ['Corg', 'Ntot']) lines.push(`S1,49.4,0.2,${d},${p},${d.length}.${p.length}`);
+    const { dataset } = build(lines.join('\n'));
+    const out = toCleanCsv(dataset);
+    const { header, rows } = parse(out.csv);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r[header.indexOf('Date')])).toEqual(['2020-06-01', 'spring', 'summer']);
+    expect(left(out.sidecar)).toEqual([]);
+  });
+
+  it('a year under a filled eventDate on one row and the only date on another: named', () => {
+    const t = ['Station,Latitude,Longitude,eventDate,year,Temp [°C]', 'S1,49.4,0.2,2020-06-01,1999,11.2', 'S2,49.5,0.3,,2020,10.4'].join('\n');
+    const { dataset } = build(t, (m) => setRole(m, 'year', { kind: 'datePart', part: 'year' }));
+    expect(parse(toCleanCsv(dataset).csv).rows.map((r) => r[1])).toEqual(['2020-06-01', '2020']);
+    expect(left(toCleanCsv(dataset).sidecar)).toEqual([`${LEFT}: year`]);
+  });
+
+  it('a Sites date lost on one row (the data row has its own) and lent on another: named', () => {
+    const sites = [['Station', 'Date', 'Latitude', 'Longitude'], ['S1', '2019-01-01', 70.1, 15.2], ['S2', '2019-01-02', 60.2, 5.4], ['S3', '2019-01-03', 50.3, -5.6]];
+    const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '', 5.5], ['S3', '2020-06-03', 6.5]];
+    const file = xlsxFile('book.xlsx', { Sites: sites, Data: data });
+    const layout = proposeLayout(file);
+    const { datasets } = buildDatasets(file, layout, proposeMappings(file, layout), [], 'd');
+    const out = toCleanCsv(datasets[0]);
+    expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020-06-01', '2019-01-02', '2020-06-03']);
+    expect(left(out.sidecar)).toEqual([`${LEFT} (sheet Sites): Date`]);
+  });
+});
+
+describe('Darwin Core depth bounds are not written by the clean CSV, so they are not carried', () => {
+  it('a wide sheet with both bounds: the one the depth slot did not take is named, and no bound has a column of its own', () => {
+    const t = ['Station,Latitude,Longitude,Date,minimumDepthInMeters,maximumDepthInMeters,Temp [°C]', 'S1,49.4,0.2,2020-06-01,5,10,11.2', 'S2,49.5,0.3,2020-06-02,6,12,10.4'].join('\n');
+    const out = toCleanCsv(build(t).dataset);
+    const named = left(out.sidecar);
+    expect(named).toHaveLength(1);
+    expect(named[0]).toMatch(/^source columns that are not in this file: (minimum|maximum)DepthInMeters$/);
+    expect(parse(out.csv).header.filter((h) => /inimum|aximum/.test(h))).toEqual([]);
+  });
+
+  it('a long sheet whose bound splits the rows: the bound is written as a key column', () => {
+    const lines = ['Station,Latitude,Longitude,Date,minimumDepthInMeters,maximumDepthInMeters,Parameter,Value'];
+    for (const s of ['S1', 'S2']) for (const p of ['Corg', 'Ntot', 'Ptot']) [10, 20].forEach((mx, i) => lines.push(`${s},49.4,0.2,2020-06-01,0,${mx},${p},${i + 1}.${p.length}`));
+    const { dataset } = build(lines.join('\n'));
+    const out = toCleanCsv(dataset);
+    const { header, rows } = parse(out.csv);
+    expect(rows).toHaveLength(4);
+    const written = header.filter((h) => /inimum|aximum/.test(h));
+    expect(written.length).toBeGreaterThan(0);
+    expect(new Set(rows.map((r) => `${r[0]}|${header.map((h, i) => (/inimum|aximum|^depth/.test(h) ? r[i] : '')).join('|')}`)).size).toBe(4);
+  });
+});
+
+describe('join keys count only when their value reached the output', () => {
+  const sites = [['Station', 'Latitude', 'Longitude'], ['S1', 70.1, 15.2], ['S2', 60.2, 5.4], ['S3', 50.3, -5.6]];
+  const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '2020-06-02', 5.5], ['S3', '2020-06-03', 6.5]];
+  const run = (ignoreStation: boolean) => {
+    const file = xlsxFile('book.xlsx', { Sites: sites, Data: data });
+    const layout = proposeLayout(file);
+    const mappings = proposeMappings(file, layout);
+    if (ignoreStation) for (const m of mappings) for (const c of m.columns) if (c.header === 'Station') c.role = { kind: 'ignore' };
+    return buildDatasets(file, layout, mappings, [], 'd').datasets[0];
+  };
+
+  it('the default join on Station: the key is the station of the file, nothing is named', () => {
+    const out = toCleanCsv(run(false));
+    expect(parse(out.csv).rows.map((r) => r[0])).toEqual(['S1', 'S2', 'S3']);
+    expect(left(out.sidecar)).toEqual([]);
+  });
+
+  it('Station set to ignore on both sheets: it is not in the file, and both are named', () => {
+    const out = toCleanCsv(run(true));
+    expect(parse(out.csv).header).not.toContain('station');
+    expect(left(out.sidecar).sort()).toEqual([`${LEFT} (sheet Data): Station`, `${LEFT} (sheet Sites): Station`]);
+  });
+});
+
+describe('an Analyst column that is ignored by default and splits rows is written, and the person is told', () => {
+  const analyst = (): string => {
+    const lines = ['Station,Latitude,Longitude,Date,Analyst,Parameter,Value'];
+    for (const s of ['S1', 'S2']) for (const p of ['Corg', 'Ntot', 'Ptot']) ['Ada', 'Bob'].forEach((a, i) => lines.push(`${s},49.4,0.2,2020-06-01,${a},${p},${i + 1}.${p.length}`));
+    return lines.join('\n');
+  };
+
+  it('it is written, the row-key finding names it, and its text says in four languages that the clean CSV writes it', async () => {
+    const { dataset, findings } = build(analyst());
+    expect(parse(toCleanCsv(dataset).csv).header).toContain('Analyst');
+    const f = findings.find((x) => x.ruleId === 'ROW-LONG-KEY-EXTENDED')!;
+    expect(f.params.columns).toBe('Analyst');
+    const said: Record<string, RegExp> = { en: /The clean CSV writes it too/, pl: /Czysty CSV zapisuje je też/, de: /Die bereinigte CSV schreibt sie auch/, fr: /Le CSV nettoyé les écrit aussi/ };
+    for (const lang of LANGS) expect(renderPlain(f, lang), lang).toMatch(said[lang]);
+    for (const lang of LANGS) expect(renderPlain(f, lang), lang).not.toMatch(/[{}]/);
+  });
+
+  it('the finding reaches the report that is shown above the downloads (CheckPage: ReportView, then MapPreview, then Downloads)', async () => {
+    const e = createDirectEngine();
+    const p = await e.parse([{ name: 'long.csv', bytes: new TextEncoder().encode(analyst()), source: 'dropped' }], [], []);
+    for (const f of p.files) {
+      const pr = await e.propose(f.fileId, f.layout);
+      await e.build(f.fileId, f.layout, pr.mappings);
+    }
+    const report = (await e.check()).report;
+    const shown = report.findings.find((f) => f.ruleId === 'ROW-LONG-KEY-EXTENDED');
+    expect(shown?.severity).toBe('info');
+    expect(shown?.params.columns).toBe('Analyst');
+  });
+
+  it('the clean CSV tip says a column ignored by default that tells rows apart is written, and any other ignored column is not', () => {
+    for (const lang of LANGS) expect(UI[lang]['tip.cleanCsv.logic'], lang).not.toMatch(/\{/);
+    expect(UI.en['tip.cleanCsv.logic']).toContain('A column ignored by default that tells rows apart (a replicate, a cast, an analyst) is written');
+    expect(UI.en['tip.cleanCsv.logic']).toContain('any other ignored column is not written');
+    expect(UI.pl['tip.cleanCsv.logic']).toContain('analityk');
+    expect(UI.de['tip.cleanCsv.logic']).toContain('Analystin');
+    expect(UI.fr['tip.cleanCsv.logic']).toContain('analyste');
+  });
+});
+
+describe('a numeric vertical key of a decimal-comma file is swapped like a pressure; text stays as written', () => {
+  it('Sediment depth: 1,5 becomes 1.5, a word stays', () => {
+    const lines = ['Station;Latitude;Longitude;Date;Sediment depth [m];Parameter;Value'];
+    for (const s of ['S1', 'S2']) for (const p of ['Corg', 'Ntot', 'Ptot']) ['1,5', '1,1', 'surface'].forEach((d, i) => lines.push(`${s};49,4;0,2;2020-06-01;${d};${p};${i + 1},${p.length}`));
+    const { dataset } = build(lines.join('\n'));
+    expect(dataset.decimalComma).toBe(true);
+    const { header, rows } = parse(toCleanCsv(dataset).csv);
+    const at = header.findIndex((h) => /sediment/i.test(h) && !/^depth/.test(h));
+    expect(rows.slice(0, 3).map((r) => r[at])).toEqual(['1.5', '1.1', 'surface']);
   });
 });

@@ -236,7 +236,7 @@ export interface DataRow {
  * A source column the clean CSV keeps beside the fixed ones because without it rows cannot be told apart or lose their meaning: a pressure, or a column that joined the row key of a long sheet
  * (a replicate, a cast, a layer). `id` is the key of its cells in `DataRow.keyCells` (the header, or `header#index` when the sheet repeats the header); `unit` is the pressure role's unit.
  */
-export interface ExtraKeyColumn { header: string; index: number; sheet: string; id: string; kind: 'pressure' | 'key'; unit?: string }
+export interface ExtraKeyColumn { header: string; index: number; sheet: string; id: string; kind: 'pressure' | 'key'; unit?: string; /** The cells are numbers (a pressure, a vertical coordinate): a decimal comma of the file is swapped for a dot, as for every measurement. */ numeric?: true }
 export interface Dataset {
   id: string; label: string; file: string;
   rows: DataRow[]; variables: Variable[];

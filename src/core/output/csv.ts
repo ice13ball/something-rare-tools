@@ -173,11 +173,11 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   if (ds.depthPositive === 'up') notes.push('depth is positive upwards in the source; values are not flipped');
 
   // The columns that tell rows apart or give them meaning and that are no fixed column: a pressure, a replicate, a cast, a layer. Their cells are written as the file wrote them
-  // (a pressure of a decimal-comma file loses only its comma, as every measurement does); a key is a label and is never re-read as a number.
+  // (a pressure of a decimal-comma file loses only its comma, as every measurement does); a vertical coordinate is a number like a pressure, any other key is a label and is never re-read as a number.
   for (const e of ds.extraKeyColumns ?? []) {
     const hu = unitFromHeader(e.header);
     const unit = e.kind === 'pressure' ? (e.unit ?? hu.unitText) : hu.unitText;
-    const swap = e.kind === 'pressure' && ds.decimalComma === true;
+    const swap = e.numeric === true && ds.decimalComma === true;
     add(hu.name || e.header, unit, (r) => valueText(r.keyCells?.[e.id], swap), [e.header, unit !== undefined && hu.unitText !== undefined ? 'header' : '', '']);
   }
 
