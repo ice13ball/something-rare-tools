@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { biomassBasisOf, bulkApprovable, doubtedGroups, perOccurrenceOf, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
+import { biomassBasisOf, bulkApprovable, doubtedGroups, perOccurrenceOf, sexLetterSplit, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
 import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
@@ -391,14 +391,23 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const bulk = bulkApprovable(toApprove);
   // doubted names by reason, each group with its own button and the list beside it. A name the user has already edited is left out: it keeps its edit and its own
   // "Approve" on the row (the group takes only names exactly as written); an approved name is in no group (doubtedGroups).
+  // Michal, 03.11: "approve as written" in a group only where the doubt cannot hide a non-name (a digit: an authority's year; more than three words: a forma);
+  // every other reason stays one by one
   const groups = doubtedGroups(toApprove)
+    .filter((g) => g.reason === 'digits' || g.reason === 'long')
     .map((g) => ({ reason: g.reason, entries: g.entries.filter((s) => drafts[s.verbatim] === undefined) }))
     .filter((g) => g.entries.length > 0);
+  // single-letter names whose last token is a bare m or f: one more group, which reads that letter as the sex (never automatic, never a default; the user
+  // sees the result per name before pressing). The split comes from core (sexLetterSplit), an edited name is left to its row.
+  const sexGroup = toApprove.flatMap((s) => {
+    const split = drafts[s.verbatim] === undefined ? sexLetterSplit(s) : undefined;
+    return split ? [{ entry: s, split }] : [];
+  });
   // the group button disappears when it is used; focus moves to the next group's button, else to the heading, so a keyboard user keeps their place
   const splitsSection = useRef<HTMLElement | null>(null);
   const refocus = useRef(false);
   // the splits come back from the worker a moment after the click, so focus moves when the groups really change, not on the first re-render
-  const groupsKey = groups.map((g) => `${g.reason}:${g.entries.length}`).join('|');
+  const groupsKey = groups.map((g) => `${g.reason}:${g.entries.length}`).join('|') + `|sex:${sexGroup.length}`;
   useEffect(() => {
     if (!refocus.current) return;
     refocus.current = false;
@@ -931,6 +940,31 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   </button>
                 </div>
               ))}
+              {sexGroup.length > 0 && (
+                <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.sexGroup')}>
+                  <p className="convert-doubt">{t('convert.splits.sexGroupNote')}</p>
+                  <ul className="convert-doubt-list">
+                    {sexGroup.map(({ entry, split }) => (
+                      <li key={entry.verbatim}>
+                        <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>, {t(split.sex === 'female' ? 'convert.sex.female' : 'convert.sex.male')}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="button"
+                    data-group-approve="sex-letter"
+                    onClick={() => {
+                      refocus.current = true;
+                      const fresh = sexGroup.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(approved, entry.verbatim));
+                      setDrafts((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => prev[entry.verbatim] === undefined).map(({ entry, split }) => [entry.verbatim, split] as const)) }));
+                      setApproved((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(prev, entry.verbatim)).map(({ entry, split }) => [entry.verbatim, { ...split, verbatimIdentification: entry.verbatim }] as const)) }));
+                    }}
+                  >
+                    {t('convert.splits.approveSex', { n: sexGroup.length })}
+                  </button>
+                </div>
+              )}
               {toApprove.length > 0 && (
                 <div className="table-scroll">
                   <table className="convert-table">

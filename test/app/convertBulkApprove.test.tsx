@@ -61,7 +61,9 @@ describe('bulk approval skips doubted names', () => {
     // the bulk button now offers nothing (both left have a doubt) and says so
     expect(within(section).queryByRole('button', { name: /^Approve \d+ shown/ })).toBeNull();
     // the two left are in a group each (one reason per name), with a button beside the list
-    expect(within(section).getAllByRole('button', { name: 'Approve 1 name as written' })).toHaveLength(2);
+    // (digits: as written; a trailing f: the sex group, never "as written")
+    expect(within(section).getAllByRole('button', { name: 'Approve 1 name as written' })).toHaveLength(1);
+    expect(within(section).getByRole('button', { name: 'Treat the last letter as sex (m/f) in 1 name' })).toBeTruthy();
     // a doubted row has its own "Approve as it is"
     fireEvent.click(within(section).getByRole('button', { name: 'Approve as it is: Acartia longiremis f' }));
     fireEvent.click(within(section).getByRole('button', { name: 'Approve as it is: Oithona 2' }));

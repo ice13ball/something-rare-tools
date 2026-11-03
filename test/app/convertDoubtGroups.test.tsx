@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const HEAD = ['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4', 'Ggg hhh/iii', 'Jjj kkk/lll', 'Mmm nnn'];
+const HEAD = ['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4', 'Ggg hhh iii jjj', 'Kkk lll mmm nnn', 'Mmm nnn'];
 const CSV = `Sample,Station,Latitude,Longitude,Date,${HEAD.join(',')}\na,S,55,3,2020-01-01,1,2,3,4,5,6\n`;
 const summary = (): HTMLElement => screen.getByRole('region', { name: T['convert.summary.title'] });
 
@@ -42,11 +42,11 @@ describe('doubted names by reason', () => {
   it('one group per reason, each with its button and its names listed open', async () => {
     const section = await load();
     const digits = within(section).getByRole('group', { name: /digit/ });
-    const slash = within(section).getByRole('group', { name: /slash/ });
+    const slash = within(section).getByRole('group', { name: /more than three words/ });
     expect(within(digits).getByRole('button', { name: 'Approve 3 names as written' })).toBeTruthy();
     expect(within(digits).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4']);
     expect(within(slash).getByRole('button', { name: 'Approve 2 names as written' })).toBeTruthy();
-    expect(within(slash).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(slash).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Ggg hhh iii jjj', 'Kkk lll mmm nnn']);
     // the list is not under a closed fold
     expect(within(slash).getByRole('list').closest('details')).toBeNull();
   });
@@ -56,13 +56,13 @@ describe('doubted names by reason', () => {
     fireEvent.click(within(within(section).getByRole('group', { name: /digit/ })).getByRole('button', { name: /as written/ }));
     await waitFor(() => expect(input(section, 'Aaa bbb 2').disabled).toBe(true));
     expect(input(section, 'Ccc ddd 3').disabled).toBe(true);
-    expect(input(section, 'Ggg hhh/iii').disabled).toBe(false);
+    expect(input(section, 'Ggg hhh iii jjj').disabled).toBe(false);
     expect(input(section, 'Aaa bbb 2').value).toBe('Aaa bbb 2');
     // the digits group is gone; focus is on the slash button
     expect(within(section).queryByRole('group', { name: /digit/ })).toBeNull();
     await waitFor(() => expect(document.activeElement?.textContent).toBe('Approve 2 names as written'));
     fireEvent.click(within(section).getByRole('button', { name: 'Approve 2 names as written' }));
-    await waitFor(() => expect(input(section, 'Jjj kkk/lll').disabled).toBe(true));
+    await waitFor(() => expect(input(section, 'Kkk lll mmm nnn').disabled).toBe(true));
     // no group left: focus falls back to the heading
     await waitFor(() => expect(document.activeElement?.id).toBe('convert-splits-title'));
     expect(summary().textContent).not.toContain(T['convert.summary.blocked']);

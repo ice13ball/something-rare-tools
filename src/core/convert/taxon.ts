@@ -274,3 +274,21 @@ const DOUBT_ORDER: readonly NameDoubt[] = ['digits', 'remark', 'slash', 'questio
 export function doubtedGroups(entries: readonly SplitEntry[]): { reason: NameDoubt; entries: SplitEntry[] }[] {
   return DOUBT_ORDER.map((reason) => ({ reason, entries: entries.filter((s) => s.needsDecision && !s.approved && s.doubt === reason) })).filter((g) => g.entries.length > 0);
 }
+
+/**
+ * The split a `single-letter` name would get if its trailing single "m" or "f" is read as the sex ("C. vanus m": name "C. vanus", sex male), or undefined
+ * when it does not apply. The letter is read by `sexToken`, the same reader splitTaxon uses (so the same letters, in the same case), not by a second parser;
+ * only a bare one-letter last word counts ("f." is a forma), the name must keep at least one word and must have no doubt of its own once the letter is gone
+ * ("C. x f" still has a single letter in it), and a name that already has a sex keeps it. Nothing is applied here: the page offers it, the user approves it.
+ */
+export function sexLetterSplit(s: SplitEntry): TaxonSplit | undefined {
+  if (s.doubt !== 'single-letter' || s.approved || s.split.sex !== undefined) return undefined;
+  const words = s.split.scientificName.split(/\s+/).filter((w) => w !== '');
+  const last = words[words.length - 1];
+  if (words.length < 2 || last === undefined || last.length !== 1) return undefined;
+  const sex = sexToken(last);
+  if (sex === undefined) return undefined;
+  const name = words.slice(0, -1).join(' ');
+  if (nameDoubt(name) !== undefined) return undefined;
+  return { ...s.split, scientificName: name, sex };
+}
