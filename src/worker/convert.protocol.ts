@@ -34,7 +34,7 @@ export interface ConvertFileSummary extends FileSummary {
   /** The long sheets the user chose to read as normal tables (their names), so that the page can offer the way back. */
   pivotOff?: string[];
   /** by sheet name, only for a sheet that looks transposed (species or variables in rows; core/convert/transposed.ts): the page offers "read as a normal table" next to the blocking message. */
-  transposedSheets?: Record<string, 'transposed' | 'transposed-taxa'>;
+  transposedSheets?: Record<string, 'transposed' | 'transposed-taxa' | 'header-units'>;
 }
 
 export interface ConvertParseResult {

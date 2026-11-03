@@ -4,8 +4,9 @@ import type { Finding, RawCell, RawRow } from '../types';
 import { makeFinding } from '../rules/registryCheck';
 import type { DecodedText } from '../values/encoding';
 import { parseNumber } from '../values/numbers';
-import { parseDate } from '../values/dates';
-import { decodeUnitText, unitCellKind, unitKey } from './unitWords';
+import { parseDate, parseTimeCell } from '../values/dates';
+import { unitFromHeader } from '../recognize/columns';
+import { decodeUnitText, nameTailUnit, unitCellKind, unitKey } from './unitWords';
 import { AMBIGUOUS_STATISTIC, STATISTIC_LABEL } from '../summaryLabels';
 
 /**
@@ -192,21 +193,39 @@ export interface UnitsFoldOptions {
  */
 export function foldUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions = {}): UnitsFold | undefined {
   const scan = scanUnitsRow(header, rows, decimalComma, opts);
-  if (scan === undefined || scan.failing > 0) return undefined;
-  return { header: scan.header, rows: rows.slice(1), line: scan.line, count: scan.units };
+  if (scan === undefined || scan.failing) return undefined;
+  return { header: scan.header, rows: rows.slice(1), line: scan.line, count: scan.changed };
 }
 
 /**
- * A first data row that IS a row of units by its cells (every filled cell a unit, two or more that go into a header, a header above each) but that foldUnitsRow did not fold because the cells under some
- * of its units are not numbers (a size class "0-1", a range ">250 um"): the line, when the numbers agree under at least half of the units. The converter names it instead of reading it as data. Never changes anything.
+ * A first data row that IS a row of units by its cells (every filled cell a unit, two or more that go into a header, a header above each, no disagreement with a unit the header names) and whose
+ * values under the units are mostly plain numbers, but that foldUnitsRow did not fold because under some unit the cells do not look like values (a word, a code): the line. The converter and /check say
+ * "this looks like a units row" instead of reading it as data. Never changes anything.
  */
 export function unitsRowNotFolded(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions = {}): { line: number } | undefined {
   const scan = scanUnitsRow(header, rows, decimalComma, opts);
-  if (scan === undefined || scan.failing === 0 || scan.failing * 2 > scan.units) return undefined;
+  if (scan === undefined || !scan.failing || !scan.plainOk) return undefined;
   return { line: scan.line };
 }
 
-function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions): { header: string[]; line: number; units: number; failing: number } | undefined {
+/** A cell longer than this is not a value ("<5", ">250 um", "0-1" are a few characters); it is not matched at all, so a hostile cell costs one length test. */
+export const VALUE_SHAPE_MAX = 80;
+// one pattern per decimal mode, compiled once. A number, an optional range "-N", and an optional unit that starts with a non-digit and holds no line break: the tail can not overlap the digits
+const VALUE_DOT = /^-?\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?(?:\s*([^\d\s][^\r\n]*))?$/;
+const VALUE_COMMA = /^-?\d+(?:,\d+)?(?:\s*-\s*\d+(?:,\d+)?)?(?:\s*([^\d\s][^\r\n]*))?$/;
+
+/** A number, optionally led by < > ≤ ≥ ~ and followed by a known unit, or a range N-N ("<5", ">250 um", "0-1", "12.5 cm"): a value, though not a plain number. */
+export function valueShaped(cell: RawCell, decimalComma: boolean): boolean {
+  if (cell === null) return false;
+  if (typeof cell === 'number') return true;
+  if (cell.length > VALUE_SHAPE_MAX || /[\r\n]/.test(cell)) return false;
+  const t = cell.trim().replace(/^[<>≤≥~]\s*/, '');
+  const m = (decimalComma ? VALUE_COMMA : VALUE_DOT).exec(t);
+  if (!m) return false;
+  return m[1] === undefined || unitCellKind(m[1]) === 'unit';
+}
+
+function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions): { header: string[]; line: number; changed: number; failing: boolean; plainOk: boolean } | undefined {
   const first = rows[0];
   if (first === undefined || rows.length < 2) return undefined;
   const units = new Map<number, { kind: 'unit' | 'utc'; text: string }>();
@@ -220,40 +239,63 @@ function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decima
     if (kind !== 'neutral') units.set(c, { kind, text: decodeUnitText(v) });
   }
   if (units.size < 2) return undefined;
-  const below = rows.slice(1, 51);
-  let failing = 0;
-  let passing = 0;
+  // the header names a unit already (a bracket, a round bracket, a tail such as depth_ft or depth [m] von): it stays when the cell agrees, and a cell that disagrees means no fold at all
+  const keep = new Set<number>();
   for (const [c, u] of units) {
-    let ok = 0;
-    let bad = 0;
+    const h = (header[c] ?? '').trim();
+    const declared = unitFromHeader(h);
+    const stated = declared.unitText ?? (nameTailUnit(h) !== undefined ? h : undefined);
+    if (stated === undefined) continue;
+    const key = declared.unitText !== undefined ? unitKey(declared.unitText) : nameTailUnit(h);
+    if (key !== unitKey(u.text)) return undefined;
+    keep.add(c);
+  }
+  const below = rows.slice(1, 51);
+  let failing = false;
+  let plain = 0;
+  for (const [c, u] of units) {
+    let total = 0;
+    let shaped = 0;
+    let plainN = 0;
     for (const r of below) {
       const cell = r.cells[c] ?? null;
       if (cell === null || String(cell).trim() === '') continue;
-      if (u.kind === 'utc') {
-        if ('error' in parseDate(cell, { date1904: opts.date1904 ?? false, dateFormatted: opts.dateFormatted?.[c] ?? false })) bad++;
-        else ok++;
-      } else {
-        const st = parseNumber(cell, decimalComma).status;
-        if (st === 'ok') ok++;
-        else if (st === 'non-numeric') bad++;
+      // a string over the cap is not a value and no parser sees it (parseDate, parseTimeCell and parseNumber are shared with /check and run on whatever the cell holds)
+      if (typeof cell === 'string' && cell.length > VALUE_SHAPE_MAX) {
+        total++;
+        continue;
       }
+      if (u.kind === 'utc') {
+        total++;
+        // a date, or a time of day (a time column of its own, 00:30): what "UTC" is the zone of
+        if (!('error' in parseDate(cell, { date1904: opts.date1904 ?? false, dateFormatted: opts.dateFormatted?.[c] ?? false })) || !('error' in parseTimeCell(cell))) {
+          shaped++;
+          plainN++;
+        }
+        continue;
+      }
+      const st = parseNumber(cell, decimalComma).status;
+      if (st === 'missing' || st === 'na-variant') continue;
+      total++;
+      if (st === 'ok') {
+        shaped++;
+        plainN++;
+      } else if (valueShaped(cell, decimalComma)) shaped++;
     }
-    // a column empty below says nothing either way; two columns must have numbers (dates) agreeing
-    if (ok > bad) passing++;
-    else if (bad > 0) failing++;
+    // each unit column: at least half of its cells are values; a column empty below says nothing
+    if (total > 0 && shaped * 2 < total) failing = true;
+    if (total > 0 && plainN * 2 >= total) plain++;
   }
-  if (passing < 2) return undefined;
+  // at least two unit columns hold plain numbers (dates under UTC), and at least half of all unit columns do
+  if (plain < 2) return undefined;
+  const plainOk = plain * 2 >= units.size;
+  if (!plainOk) failing = true;
   const out: string[] = [...header];
+  let changed = 0;
   for (const [c, u] of units) {
-    const h = (header[c] ?? '').trim();
-    const declared = TRAILING_UNIT.exec(h);
-    const declaredInner = declared ? declared[2].slice(1, -1).trim() : undefined;
-    if (declared && declaredInner !== undefined && unitCellKind(declaredInner) !== undefined) {
-      // the header names a unit already: it stays, unless the row says another one
-      if (unitKey(declaredInner) !== unitKey(u.text)) return undefined;
-      continue;
-    }
-    out[c] = `${h} [${u.text}]`;
+    if (keep.has(c)) continue;
+    out[c] = `${(header[c] ?? '').trim()} [${u.text}]`;
+    changed++;
   }
-  return { header: out, line: first.line, units: units.size, failing };
+  return { header: out, line: first.line, changed, failing, plainOk };
 }

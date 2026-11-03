@@ -10,6 +10,7 @@ import { proposeColumns } from '../../src/core/recognize/columns';
 import { proposeLayout } from '../../src/core/recognize/layout';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import { sheetInput } from '../convert/helpers';
+import { createConvertHandler } from '../../src/worker/convert.handler';
 import { foldUnitsRow } from '../../src/core/parse/shared';
 import { renderPlain } from '../../src/core/report';
 import { LANGS } from '../../src/core/types';
@@ -262,22 +263,29 @@ describe('/check and /convert read the folded file the same way', () => {
 });
 
 describe('/convert names a units row it could not fold', () => {
-  // size classes under a unit: text below, so the row is not folded; two other units have numbers
-  const TEXT_UNDER = ['station,size,count,depth', 'unitless,centimeters,individuals,m', 'S1,0-1,4,5.0', 'S2,1-2,6,6.0', 'S3,2-3,3,7.0'].join('\n');
+  // four units, a word under one of them: three columns hold plain numbers, so it is a units row that is not folded
+  const WORD_UNDER = ['station,temp,sal,oxy,depth', 'unitless,degC,PSU,umol/kg,m', 'S1,4.5,high,210,5.0', 'S2,5.5,low,220,6.0', 'S3,6.5,mid,230,7.0'].join('\n');
 
   it('is not folded', () => {
-    expect(textFile('s.csv', TEXT_UNDER).sheets[0].header).toEqual(['station', 'size', 'count', 'depth']);
+    expect(textFile('s.csv', WORD_UNDER).sheets[0].header).toEqual(['station', 'temp', 'sal', 'oxy', 'depth']);
   });
 
-  it('the sheet is not read and the finding says a units row, in all four languages', () => {
-    const file = readConvertFile(textFile('s.csv', TEXT_UNDER));
+  it('the sheet is not read and the finding says "looks like units", with the way out, in all four languages', () => {
+    const file = readConvertFile(textFile('s.csv', WORD_UNDER));
     const r = convert({ sheets: [sheetInput(file)], options: {} } as never);
     expect(r.findings.map((f) => f.ruleId)).toContain('CONV-SHEET-UNITS-ROW');
     expect(r.findings.map((f) => f.ruleId)).not.toContain('CONV-TEXT-IN-TAXON-CELL');
     const f = r.findings.find((x) => x.ruleId === 'CONV-SHEET-UNITS-ROW')!;
     expect(f.lines).toEqual([2]);
     for (const lang of LANGS) expect(renderConvertPlain(f, lang), lang).not.toMatch(/[{}]/);
-    expect(renderConvertPlain(f, 'en')).toContain('units');
+    expect(renderConvertPlain(f, 'en')).toContain('looks like units');
+    expect(renderConvertPlain(f, 'en')).toContain('Read as a normal table');
+  });
+
+  it('the tick "read as a normal table" reads the sheet as it stands', () => {
+    const file = readConvertFile(textFile('s.csv', WORD_UNDER));
+    const r = convert({ sheets: [sheetInput(file, { readAsTable: true })], options: {} } as never);
+    expect(r.findings.map((f) => f.ruleId)).not.toContain('CONV-SHEET-UNITS-ROW');
   });
 
   it('a first data row of codes over names is not that', () => {
@@ -285,11 +293,19 @@ describe('/convert names a units row it could not fold', () => {
     const r = convert({ sheets: [sheetInput(file)], options: {} } as never);
     expect(r.findings.map((f) => f.ruleId)).not.toContain('CONV-SHEET-UNITS-ROW');
   });
+
+  it('a sheet of text codes with N/D beside numbers is read, not refused', () => {
+    const t = ['station,temp,sal,oxy', 'S1,N/D,N/D,N/D', 'S2,4.5,35.1,210', 'S3,5.5,35.2,220', 'S4,6.5,35.3,230'].join('\n');
+    const f = textFile('s.csv', t);
+    expect(proposeLayout(f).unsupportedReasons).toBeUndefined();
+    const r = convert({ sheets: [sheetInput(readConvertFile(f))], options: {} } as never);
+    expect(r.findings.map((x) => x.ruleId)).not.toContain('CONV-SHEET-UNITS-ROW');
+  });
 });
 
 describe('/check and /convert agree on a units row that is not folded', () => {
-  const T = ['station,size,count,depth', 'unitless,centimeters,individuals,m', 'S1,0-1,4,5.0', 'S2,1-2,6,6.0', 'S3,2-3,3,7.0'].join('\n');
-  it('/check refuses it as a header over several rows (no phrase of the vocabulary needed)', () => {
+  const T = ['station,temp,sal,oxy,depth', 'unitless,degC,PSU,umol/kg,m', 'S1,4.5,high,210,5.0', 'S2,5.5,low,220,6.0', 'S3,6.5,mid,230,7.0'].join('\n');
+  it('/check refuses it as a header over several rows', () => {
     expect(proposeLayout(textFile('s.csv', T)).unsupportedReasons?.map((r) => r.code)).toEqual(['header-units']);
   });
   it('a file that is folded is refused by neither', () => {
@@ -317,5 +333,16 @@ describe('the words of a units row, as declared', () => {
     expect(proposeLayout(f).unsupportedReasons?.map((r) => r.code)).toEqual(['header-units']);
     const r = convert({ sheets: [sheetInput(readConvertFile(f))], options: {} } as never);
     expect(r.findings.map((x) => x.ruleId)).toContain('CONV-SHEET-UNITS-ROW');
+  });
+});
+
+describe('the page offers the tick for a units row it could not fold', () => {
+  const WORD_UNDER = ['station,temp,sal,oxy,depth', 'unitless,degC,PSU,umol/kg,m', 'S1,4.5,high,210,5.0', 'S2,5.5,low,220,6.0', 'S3,6.5,mid,230,7.0'].join('\n');
+  it('the worker lists the sheet as header-units (the tick of CONV-SHEET-TRANSPOSED), and not a folded or an ordinary sheet', () => {
+    const h = createConvertHandler();
+    const parse = (name: string, text: string) => h.handle({ type: 'parse', files: [{ name, bytes: new TextEncoder().encode(text), source: 'dropped' }] }) as { files: { transposedSheets?: Record<string, string> }[] };
+    expect(parse('s.csv', WORD_UNDER).files[0].transposedSheets).toEqual({ 's.csv': 'header-units' });
+    expect(parse('e.csv', ERDDAP).files[0].transposedSheets).toBeUndefined();
+    expect(parse('o.csv', 'a,b,c\n1,2,3\n4,5,6\n').files[0].transposedSheets).toBeUndefined();
   });
 });

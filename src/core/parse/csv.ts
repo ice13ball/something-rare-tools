@@ -195,8 +195,14 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
     rows = unitsFold.rows;
     findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count } }));
   }
+  // statistic labels written UNDER the units (units, then mean / st.dev.) are the same second header, in the other order
+  const fold2 = unitsFold && !fold ? foldStatisticSubheader(header, rows) : undefined;
+  if (fold2) {
+    header = fold2.header;
+    rows = fold2.rows;
+  }
 
-  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows, ...(fold || unitsFold ? { subHeaderLine: (fold ?? unitsFold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}) };
+  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}) };
   const shortHeader = extendShortHeader(fileName, fileName, header, rows, file.decimalComma);
   if (shortHeader?.kind === 'trim') {
     // fields past the header are empty in every row: the rows end with a delimiter. Drop them; rows with and without it are both regular.

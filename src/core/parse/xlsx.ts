@@ -120,10 +120,21 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
     rows.splice(0, 1);
     findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: name, lines: [unitsFold.line], params: { count: unitsFold.count } }));
   }
+  // statistic labels written UNDER the units are the same second header, in the other order
+  const fold2 = unitsFold && !fold ? foldStatisticSubheader(header, rows, mergedText) : undefined;
+  if (fold2) {
+    header.splice(0, header.length, ...fold2.header);
+    rows.splice(0, 1);
+    while (numeric.length < header.length) {
+      numeric.push(0);
+      dated.push(0);
+      timed.push(0);
+    }
+  }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one
   const timeFormatted = header.map((_, c) => dateFormatted[c] && timed[c] * 2 > dated[c]);
-  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold ?? unitsFold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
+  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
 }
 
 /** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */

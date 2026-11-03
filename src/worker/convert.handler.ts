@@ -11,6 +11,7 @@ import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../cor
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
 import { transposedSheetReason } from '../core/convert/transposed';
+import { firstRowIsUnits } from '../core/recognize/layout';
 import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
@@ -183,7 +184,7 @@ export function createConvertHandler(): ConvertHandler {
       const profiles: ConvertFileSummary['suggestedProfiles'] = Object.create(null) as ConvertFileSummary['suggestedProfiles'];
       const dictionary: Record<string, 'name' | 'columns'> = Object.create(null) as Record<string, 'name' | 'columns'>;
       const pivots: Record<string, PivotNote> = Object.create(null) as Record<string, PivotNote>;
-      const transposed: Record<string, 'transposed' | 'transposed-taxa'> = Object.create(null) as Record<string, 'transposed' | 'transposed-taxa'>;
+      const transposed: Record<string, 'transposed' | 'transposed-taxa' | 'header-units'> = Object.create(null) as Record<string, 'transposed' | 'transposed-taxa' | 'header-units'>;
       // the long sheets the user chose to read as normal tables: listed, so that the page can offer the way back
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
       for (const sheet of parsed.sheets) {
@@ -214,6 +215,8 @@ export function createConvertHandler(): ConvertHandler {
         // a data dictionary is not tested (its rows are words); a pivoted sheet is skipped inside the test
         const turned = dict === undefined ? transposedSheetReason(sheet, parsed, p) : undefined;
         if (turned === 'transposed' || turned === 'transposed-taxa') transposed[sheet.name] = turned;
+        // a first row that looks like units and was not folded (CONV-SHEET-UNITS-ROW): the same tick lets the user read the sheet as it stands when the call is wrong
+        else if (turned === undefined && dict === undefined && firstRowIsUnits(sheet, parsed.decimalComma) !== undefined) transposed[sheet.name] = 'header-units';
       }
       return {
         fileId,
