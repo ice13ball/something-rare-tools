@@ -143,6 +143,10 @@ describe('an Excel number is converted only when nothing can be lost; otherwise 
     expect(got).toEqual(['12:00', '1.5', '36.25']);
   });
 
+  it('a fraction of a second stays the number, so two close times stay two', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.500001, 'hh:mm')])).toEqual(['12:00', '0.500001']);
+  });
+
   it('a full datetime shown as hh:mm keeps its day: 43900.5 and 43901.5 stay numbers', () => {
     expect(timeColumn([cell(43900.5, 'hh:mm'), cell(43901.5, 'hh:mm')])).toEqual(['43900.5', '43901.5']);
   });

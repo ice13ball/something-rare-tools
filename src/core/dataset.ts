@@ -1321,6 +1321,9 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
     const timeOnly = sheet.timeAll?.[index] === true;
     if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
+    // a fraction of a second has no place in the text, so such a cell stays the number
+    const seconds = cell * 86400;
+    if (Math.abs(seconds - Math.round(seconds)) > 0.001) return cell;
     const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true });
     if ('error' in d) return cell;
     if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
