@@ -242,6 +242,8 @@ export interface DataRow {
  * (a replicate, a cast, a layer). `id` is the key of its cells in `DataRow.keyCells` (the header, or `header#index` when the sheet repeats the header); `unit` is the pressure role's unit.
  */
 export interface ExtraKeyColumn { header: string; index: number; sheet: string; id: string; kind: 'pressure' | 'key'; unit?: string; /** The cells are numbers (a pressure, a vertical coordinate): a decimal comma of the file is swapped for a dot, as for every measurement. */ numeric?: true }
+/** Date or time cells of a column read as the whole second though they hold a fraction of at least 0.5 ms: how many, and the largest offset in ms (see columnFractions). */
+export interface RoundedTimes { sheet: string; header: string; count: number; maxMs: number }
 export interface Dataset {
   id: string; label: string; file: string;
   rows: DataRow[]; variables: Variable[];
@@ -258,6 +260,8 @@ export interface Dataset {
   readColumns?: { sheet: string; columns: number[]; /** Columns some cells of which gave a value and some did not: how many of the non-blank cells did. */ partial?: { index: number; used: number; filled: number; unit?: string }[] }[];
   /** Per sheet, the Year column beside a date column and the date column's header: what ROW-YEAR-DATE-MISMATCH compares. */
   yearColumns?: { sheet: string; year: string; date: string }[];
+  /** Date and time columns whose cells with a fraction of a second were read as the whole second: the clean CSV's sidecar says so (a note per sheet). Absent when none. */
+  roundedTimes?: RoundedTimes[];
 }
 
 /* ---------- findings and rules ---------- */

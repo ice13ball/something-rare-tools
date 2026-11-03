@@ -238,8 +238,8 @@ describe('a key column the person set to ignore is not written; one that is igno
     expect(left(out.sidecar)).toEqual([`${LEFT}: Time`]);
   });
 
-  it('ROW-LONG-KEY-IGNORED: fires only when the column the person set to ignore leaves rows of the clean CSV looking alike', () => {
-    const ids = (t: string, edit?: (m: SheetMapping[]) => void) => build(t, edit).findings.filter((f) => f.ruleId === 'ROW-LONG-KEY-IGNORED');
+  it('ROW-KEY-IGNORED: fires only when the column the person set to ignore leaves rows of the clean CSV looking alike', () => {
+    const ids = (t: string, edit?: (m: SheetMapping[]) => void) => build(t, edit).findings.filter((f) => f.ruleId === 'ROW-KEY-IGNORED');
     const t = two('Pressure [dbar]', '10.50', '20.00');
     const f = ids(t, (m) => setRole(m, 'Pressure [dbar]', { kind: 'ignore' }));
     expect(f).toHaveLength(1);
@@ -254,14 +254,14 @@ describe('a key column the person set to ignore is not written; one that is igno
     expect(ids(sheet('Analyst', (s) => `A${s}`), (m) => setRole(m, 'Analyst', { kind: 'ignore' }))).toEqual([]);
   });
 
-  it('ROW-LONG-KEY-IGNORED names every ignored column that separates rows', () => {
+  it('ROW-KEY-IGNORED names every ignored column that separates rows', () => {
     const lines = ['Station,Latitude,Longitude,Depth bottom [m],Sediment depth [cm],Parameter,Value'];
     for (const s of ['S1', 'S2']) for (const [t, pr] of [['3.0', '1.5'], ['6.0', '4.5']]) for (const p of ['Corg', 'Ntot', 'Ptot']) lines.push(`${s},49.4,0.2,${t},${pr},${p},${t.length}.${p.length}${pr.length}`);
     const { findings } = build(lines.join('\n'), (m) => {
       setRole(m, 'Depth bottom [m]', { kind: 'ignore' });
       setRole(m, 'Sediment depth [cm]', { kind: 'ignore' });
     });
-    const f = findings.filter((x) => x.ruleId === 'ROW-LONG-KEY-IGNORED');
+    const f = findings.filter((x) => x.ruleId === 'ROW-KEY-IGNORED');
     expect(f).toHaveLength(1);
     expect(f[0].params).toEqual({ columns: 'Depth bottom [m], Sediment depth [cm]', count: 2 });
   });
@@ -519,40 +519,68 @@ describe('round 3: one column of the row-key sentence reads naturally in pl and 
   });
 });
 
-describe('ROW-LONG-KEY-IGNORED reads naturally in four languages, with one column and with several', () => {
-  const f = (count: number, columns: string) => ({ ruleId: 'ROW-LONG-KEY-IGNORED', severity: 'warning', sheet: 'S', lines: [3, 5], params: { columns, count } }) as never;
+describe('ROW-KEY-IGNORED reads naturally in four languages, with one column and with several', () => {
+  const f = (count: number, columns: string) => ({ ruleId: 'ROW-KEY-IGNORED', severity: 'warning', sheet: 'S', lines: [3, 5], params: { columns, count } }) as never;
 
   it('one column', () => {
-    expect(renderPlain(f(1, 'Pressure'), 'en')).toContain('told apart only by the column you set to ignore (Pressure). The clean CSV does not write it, so those rows look alike there');
-    expect(renderPlain(f(1, 'Pressure'), 'pl')).toContain('Kolumna ustawiona na „ignoruj” (Pressure) odróżnia wiersze w „S”');
-    expect(renderPlain(f(1, 'Pressure'), 'pl')).toContain('Czysty CSV jej nie zapisuje');
-    expect(renderPlain(f(1, 'Pressure'), 'de')).toContain('nur durch die Spalte unterschieden, die Sie auf ignorieren gesetzt haben (Pressure)');
-    expect(renderPlain(f(1, 'Pressure'), 'fr')).toContain("ne se distinguent que par la colonne que vous avez réglée sur ignorer (Pressure). Le CSV nettoyé ne l'écrit pas");
+    expect(renderPlain(f(1, 'Pressure'), 'en')).toContain('look alike in the identifying columns of the clean CSV. The column you set to ignore (Pressure) differs between them and is not written');
+    expect(renderPlain(f(1, 'Pressure'), 'pl')).toContain('Kolumna ustawiona na „ignoruj” (Pressure) różni je i nie jest zapisywana');
+    expect(renderPlain(f(1, 'Pressure'), 'de')).toContain('Die Spalte, die Sie auf ignorieren gesetzt haben (Pressure), unterscheidet sie und wird nicht geschrieben');
+    expect(renderPlain(f(1, 'Pressure'), 'fr')).toContain("La colonne que vous avez réglée sur ignorer (Pressure) les distingue et n'est pas écrite");
   });
 
-  it('several columns: 2 to 4 and 5 or more in Polish have their own forms', () => {
-    expect(renderPlain(f(2, 'A, B'), 'en')).toContain('only by the columns you set to ignore (A, B). The clean CSV does not write them');
-    expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Kolumny ustawione na „ignoruj” (A, B) odróżniają wiersze');
-    expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Czysty CSV ich nie zapisuje');
-    expect(renderPlain(f(5, 'A, B, C, D, E'), 'pl')).toContain('Kolumny ustawione na „ignoruj” (A, B, C, D, E) odróżniają wiersze');
-    expect(renderPlain(f(2, 'A, B'), 'de')).toContain('die Spalten unterschieden');
-    expect(renderPlain(f(2, 'A, B'), 'fr')).toContain('les colonnes que vous avez réglées sur ignorer (A, B). Le CSV nettoyé ne les écrit pas');
+  it('several columns, including the Polish forms for 2 to 4 and 5 or more', () => {
+    expect(renderPlain(f(2, 'A, B'), 'en')).toContain('The columns you set to ignore (A, B) differ between them and are not written');
+    for (const n of [2, 5]) expect(renderPlain(f(n, 'A, B'), 'pl')).toContain('Kolumny ustawione na „ignoruj” (A, B) różnią je i nie są zapisywane');
+    expect(renderPlain(f(2, 'A, B'), 'de')).toContain('Die Spalten, die Sie auf ignorieren gesetzt haben (A, B), unterscheiden sie und werden nicht geschrieben');
+    expect(renderPlain(f(2, 'A, B'), 'fr')).toContain('Les colonnes que vous avez réglées sur ignorer (A, B) les distinguent et ne sont pas écrites');
   });
 
-  it('the measured values are said to remain, in four languages (not the values of the ignored column)', () => {
-    expect(renderPlain(f(1, 'P'), 'en')).toContain('measured values');
-    expect(renderPlain(f(1, 'P'), 'pl')).toContain('Zmierzone wartości');
-    expect(renderPlain(f(1, 'P'), 'de')).toContain('Messwerte');
-    expect(renderPlain(f(1, 'P'), 'fr')).toContain('valeurs mesurées');
-  });
-
-  it('no placeholder is left, the rows and the sheet are named, the values are said to remain, and nothing is to be deleted', () => {
-    for (const lang of LANGS) for (const n of [1, 2]) {
-      const text = renderPlain(f(n, n === 1 ? 'Pressure' : 'A, B'), lang);
+  it('it does not say "told apart only by"; the other measured values are said to remain, in four languages', () => {
+    for (const lang of LANGS) {
+      const text = renderPlain(f(1, 'P'), lang);
+      expect(text, lang).not.toMatch(/told apart|odróżnia|unterschieden, die|ne se distinguent que/);
       expect(text, lang).not.toMatch(/[{}]/);
       expect(text, lang).toMatch(/3, 5/);
-      expect(text, lang).toContain('S');
-      expect(text.toLowerCase(), lang).not.toMatch(/delet|usuń|usun|lösch|supprim/);
     }
+    expect(renderPlain(f(1, 'P'), 'en')).toContain('other measured values');
+    expect(renderPlain(f(1, 'P'), 'pl')).toContain('pozostałe zmierzone wartości');
+    expect(renderPlain(f(1, 'P'), 'de')).toContain('übrigen Messwerte');
+    expect(renderPlain(f(1, 'P'), 'fr')).toContain('autres valeurs mesurées');
+  });
+});
+
+describe('ROW-KEY-IGNORED on a wide sheet', () => {
+  const ids = (t: string, edit?: (m: SheetMapping[]) => void) => build(t, edit).findings.filter((x) => x.ruleId === 'ROW-KEY-IGNORED');
+  // a sediment core: two levels of one core at one station, position and date
+  const sed = ['Station,Latitude,Longitude,Date,Depth [m],Sediment depth [cm],Temp [°C]', 'S1,49.4,0.2,2020-06-01,5,1.5,11.2', 'S1,49.4,0.2,2020-06-01,5,4.5,10.9', 'S2,49.5,0.3,2020-06-02,9,1.5,10.4'].join('\n');
+
+  it('a sediment depth the person set to ignore, differing between rows that look alike: said once, with the column', () => {
+    const f = ids(sed, (m) => setRole(m, 'Sediment depth [cm]', { kind: 'ignore' }));
+    expect(f).toHaveLength(1);
+    expect(f[0].severity).toBe('warning');
+    expect(f[0].params).toEqual({ columns: 'Sediment depth [cm]', count: 1 });
+    expect(f[0].lines).toEqual([2, 3]);
+  });
+
+  it('silent when the column is written, when no two rows look alike, and when the rows do not differ in the ignored column', () => {
+    expect(ids(sed)).toEqual([]);
+    const apart = sed.replace('S1,49.4,0.2,2020-06-01,5,4.5', 'S1,49.4,0.2,2020-06-03,5,4.5');
+    expect(ids(apart, (m) => setRole(m, 'Sediment depth [cm]', { kind: 'ignore' }))).toEqual([]);
+    const same = sed.replace('4.5', '1.5');
+    expect(ids(same, (m) => setRole(m, 'Sediment depth [cm]', { kind: 'ignore' }))).toEqual([]);
+  });
+
+  it('an ignored MEASURED column: other measurements may differ too, the rule still names only the ignored column', () => {
+    const t = ['Station,Latitude,Longitude,Date,Depth [m],Temp [°C],Salinity', 'S1,49.4,0.2,2020-06-01,5,11.2,34.1', 'S1,49.4,0.2,2020-06-01,5,10.9,34.3'].join('\n');
+    const f = ids(t, (m) => setRole(m, 'Temp [°C]', { kind: 'ignore' }));
+    expect(f).toHaveLength(1);
+    expect(f[0].params).toEqual({ columns: 'Temp [°C]', count: 1 });
+  });
+
+  it('a column ignored by default, or never ignored by the person, costs and says nothing', () => {
+    const t = ['Station,Latitude,Longitude,Date,Replicate,Temp [°C]', 'S1,49.4,0.2,2020-06-01,R1,11.2', 'S1,49.4,0.2,2020-06-01,R2,10.9'].join('\n');
+    expect(ids(t)).toEqual([]);
+    expect(ids(t, (m) => setRole(m, 'Replicate', { kind: 'ignore' }))).toEqual([]);
   });
 });

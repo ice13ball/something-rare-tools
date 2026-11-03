@@ -209,6 +209,12 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
     if (none.length > 0) notes.push(`source columns that are not in this file${where}: ${none.join(' | ')}`);
     if (part.length > 0) notes.push(`source columns only partly in this file${where}: ${part.join(' | ')}`);
   }
+  // date and time cells that held a fraction of a second the clean CSV does not write (read as the whole second): per sheet, how many and the largest offset
+  for (const sheet of [...new Set((ds.roundedTimes ?? []).map((r) => r.sheet))]) {
+    const where = ds.mappings.length > 1 ? ` (sheet ${sheet})` : '';
+    const mine = (ds.roundedTimes ?? []).filter((r) => r.sheet === sheet).map((r) => `${r.header.trim() === '' ? '(column)' : r.header} (${r.count} ${r.count === 1 ? 'cell' : 'cells'}, up to ${Math.max(1, Math.round(r.maxMs))} ms)`);
+    notes.push(`date cells rounded to the second${where}: ${mine.join(' | ')}`);
+  }
   const sidecar = [
     csvLine(['original_column', 'output_column', 'unit', 'unit_source', 'p01']),
     ...side.map((s) => csvLine(s.map(guardText))),

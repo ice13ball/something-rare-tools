@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type {
+import type { RoundedTimes,
   ColumnRole,
   DataRow,
   Dataset,
@@ -29,6 +29,8 @@ import { encodeReasons } from './recognize/layoutReasons';
 import { canonicalFromKey, headerKey, isCanonicalKey, normaliseUnit } from './recognize/vocab';
 import { pairHemisphere, parseCoordinate } from './values/coords';
 import type { KeepMillis } from './values/dates';
+import { columnFractions } from './values/fractionEvidence';
+import { secondOffsetMs } from './values/dates';
 import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, fullDatetimeOfTimeCell, isPlausibleSerial, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
@@ -37,7 +39,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-LONG-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -296,7 +298,7 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
 export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean; keepMillis?: boolean } = {}): MetaParser {
   const dc = file.decimalComma;
   // /check keeps a real fraction of a second of an Excel date or time cell (opts.keepMillis); /convert does not pass it and reads the whole second, as its event IDs need. 'shown': the column's number format shows the fraction.
-  const millisOf = (spec: Spec | undefined): KeepMillis => (opts.keepMillis !== true ? false : spec !== undefined && sheet.fractionShown?.[spec.index] === true ? 'shown' : true);
+  const millisOf = (spec: Spec | undefined): KeepMillis => (opts.keepMillis !== true ? false : spec !== undefined && columnFractions(sheet, spec.index, sheet.fractionShown?.[spec.index] === true).shown ? 'shown' : true);
   // The record the clean CSV's list of left-out columns comes from, kept per CELL: for each column that feeds a field of the output, how many of its non-blank cells there were and how many gave
   // something (`cells`). `rowCols` holds the columns that gave something on the row being parsed; `reads` (only with opts.fields: a lookup sheet) says which field each of them gave.
   const rowCols: number[] = [];
@@ -616,8 +618,21 @@ function fillUnitsFromMetadata(variables: Variable[], metadata: readonly Metadat
 
 /* ---------- tables ---------- */
 
+/** The date and time columns of the sheet that /check read and that hold fractions of a second read as the whole second (columnFractions), for the sidecar note. */
+function roundedOf(sheet: RawSheet, specs: Specs): RoundedTimes[] {
+  const out: RoundedTimes[] = [];
+  for (const spec of [specs.when, specs.time]) {
+    if (spec === undefined || out.some((o) => o.header === spec.header) || sheet.dateFormatted?.[spec.index] !== true) continue;
+    const f = columnFractions(sheet, spec.index, sheet.fractionShown?.[spec.index] === true);
+    if (f.rounded > 0) out.push({ sheet: sheet.name, header: spec.header, count: f.rounded, maxMs: f.maxMs });
+  }
+  return out;
+}
+
 interface Built {
   rows: DataRow[];
+  /** Columns whose cells were rounded to the second (sidecar note). */
+  rounded: RoundedTimes[];
   variables: Variable[];
   positives: ('down' | 'up' | 'unknown')[];
   /** Source columns whose cells the rows carry in `keyCells` (see ExtraKeyColumn). */
@@ -929,7 +944,7 @@ function clearInheritedPositions(sheet: RawSheet, rows: DataRow[]): void {
   });
 }
 
-function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector): Built {
+function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector, explicitIgnore: () => ReadonlySet<number>): Built {
   const dc = file.decimalComma;
   const parse = metaParser(file, sheet, specs, c, { keepMillis: true });
   const seen = new Set<string>();
@@ -962,7 +977,10 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   const carriedWide = carriedBy(parse.cells);
   for (const i of carriedWide) own.add(i);
   for (const e of extra) own.add(e.index);
-  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide, undefined), lookup), ...(year ? { year } : {}) };
+  // a column the person set to ignore that differs between rows which look alike in every identifying column the clean CSV writes (only looked for when some column was set to ignore)
+  const ignoredWide = [...explicitIgnore()].filter((i) => sheet.rows.some((r) => !isBlankCell(r.cells[i] ?? null)));
+  if (ignoredWide.length > 0) reportKeyIgnored(c, sheet, rows, (n) => JSON.stringify(extra.map((e) => String(rows[n].keyCells?.[e.id] ?? '').trim())), (n, i) => sheet.rows[n].cells[i] ?? null, ignoredWide);
+  return { rows, variables, rounded: roundedOf(sheet, specs), positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide, undefined), lookup), ...(year ? { year } : {}) };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1209,6 +1227,37 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   return chosen;
 }
 
+/**
+ * ROW-KEY-IGNORED: rows of the output that look alike in every identifying column the clean CSV writes (`idOf`: station, cruise, sample, date, position, depth and the written extras; undefined = the row
+ * identifies nothing) and differ in a column the person set to ignore on purpose (`ignored`). Said once per sheet with the columns and some of the rows (at most 20). Costs nothing when `ignored` is empty.
+ */
+function reportKeyIgnored(c: Collector, sheet: RawSheet, rows: readonly DataRow[], idOf: (n: number) => string | undefined, cellOf: (n: number, column: number) => RawCell, ignored: readonly number[]): void {
+  if (ignored.length === 0) return;
+  const alike = new Map<string, number[]>();
+  for (let n = 0; n < rows.length; n++) {
+    const row = rows[n];
+    if (row.station === undefined && row.cruise === undefined && row.sampleId === undefined && row.datetime === undefined && row.lat === undefined && row.lon === undefined && row.depth === undefined) continue;
+    const id = JSON.stringify([row.station, row.cruise, row.sampleId, row.datetime?.iso, row.lat, row.lon, row.depth, idOf(n)]);
+    const group = alike.get(id);
+    if (group === undefined) alike.set(id, [n]);
+    else group.push(n);
+  }
+  const told: number[] = [];
+  const lines = new Set<number>();
+  for (const i of ignored) {
+    let differs = false;
+    for (const group of alike.values()) {
+      if (group.length < 2) continue;
+      const first = String(cellOf(group[0], i) ?? '').trim();
+      if (!group.some((n) => String(cellOf(n, i) ?? '').trim() !== first)) continue;
+      differs = true;
+      for (const n of group) if (lines.size < 20) lines.add(rows[n].line);
+    }
+    if (differs) told.push(i);
+  }
+  if (told.length > 0) for (const line of lines) c.add('ROW-KEY-IGNORED', sheet.name, '', line, undefined, true, { columns: told.map((i) => sheet.header[i]).join(', '), count: told.length });
+}
+
 function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector, explicitIgnore: () => ReadonlySet<number>): Built {
   const dc = file.decimalComma;
   const parse = metaParser(file, sheet, specs, c, { keepMillis: true });
@@ -1326,7 +1375,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     const timeOnly = sheet.timeAll?.[index] === true;
     if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
     // the text keeps the millisecond ('12:00:00.250') by the same rule as the date column (see KeepMillis)
-    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: sheet.fractionShown?.[index] === true ? 'shown' : true });
+    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: columnFractions(sheet, index, sheet.fractionShown?.[index] === true).shown ? 'shown' : true });
     if ('error' in d) return cell;
     // a key cell stays the number when the text would lose anything: to the millisecond when the text has one, to the second otherwise (two cells that differ by less read alike in the text)
     const off = /\.\d{3}$/.test(d.iso) ? Math.abs(cell * 86_400_000 - Math.round(cell * 86_400_000)) > 0.02 : Math.abs(cell * 86400 - Math.round(cell * 86400)) > 0.001;
@@ -1363,28 +1412,29 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     });
   }
   for (const e of extra) own.add(e.index);
-  // A key column the person set to ignore that really separates rows of the output: those rows look alike in the clean CSV (every column it writes is equal), only the column they differ in is not written
+  // A key column the person set to ignore that really separates rows of the output: those rows look alike in the clean CSV (every identifying column it writes is equal), only the column they differ in is not written
   if (ignoredOnPurpose.size > 0) {
-    const alike = new Map<string, number[]>();
-    rows.forEach((row, n) => {
-      const id = JSON.stringify([row.station, row.cruise, row.sampleId, row.datetime?.iso, row.lat, row.lon, row.depth, extra.map((e) => String(cellFor(e, n) ?? '').trim())]);
-      alike.set(id, [...(alike.get(id) ?? []), n]);
-    });
-    const told: number[] = [];
-    const lines = new Set<number>();
-    for (const i of unread.filter((x) => ignoredOnPurpose.has(x))) {
-      let separates = false;
-      for (const group of alike.values()) {
-        const seen = new Set(group.map((n) => String(firsts[n].cells[i] ?? '').trim()));
-        if (seen.size < 2) continue;
-        separates = true;
-        for (const n of group) if (lines.size < 20) lines.add(rows[n].line);
-      }
-      if (separates) told.push(i);
-    }
-    if (told.length > 0) for (const line of lines) c.add('ROW-LONG-KEY-IGNORED', sheet.name, '', line, undefined, true, { columns: told.map((i) => sheet.header[i]).join(', '), count: told.length });
+    reportKeyIgnored(c, sheet, rows, (n) => JSON.stringify([extra.map((e) => String(cellFor(e, n) ?? '').trim())]), (n, i) => firsts[n].cells[i] ?? null, unread.filter((x) => ignoredOnPurpose.has(x)));
   }
-  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, 'rows', lostCols), lookup), ...(year ? { year } : {}) };
+  // key columns written as dates: the cells the text rounded to the second (a raw number is not rounded)
+  const roundedKeys: RoundedTimes[] = [];
+  for (const e of extra) {
+    if (e.kind === 'pressure' || sheet.dateAll?.[e.index] !== true) continue;
+    const f = columnFractions(sheet, e.index, sheet.fractionShown?.[e.index] === true);
+    if (f.shown || f.rounded === 0) continue;
+    let count = 0;
+    let maxMs = 0;
+    for (let n = 0; n < rows.length; n++) {
+      const cell = firsts[n].cells[e.index] ?? null;
+      if (typeof cell !== 'number' || typeof keyCellText(e.index, cell) === 'number') continue;
+      const off = secondOffsetMs(cell);
+      if (off < 0.5) continue;
+      count++;
+      if (off > maxMs) maxMs = off;
+    }
+    if (count > 0) roundedKeys.push({ sheet: sheet.name, header: sheet.header[e.index] ?? e.id, count, maxMs });
+  }
+  return { rows, variables: [...variables.values()], rounded: [...roundedOf(sheet, specs), ...roundedKeys], positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, 'rows', lostCols), lookup), ...(year ? { year } : {}) };
 }
 
 /**
@@ -1460,6 +1510,7 @@ export function buildDataset(
   const readBy = new Map<string, Set<number>>();
   const partialBy = new Map<string, Map<number, PartialCount>>();
   const yearColumns: NonNullable<Dataset['yearColumns']> = [];
+  const roundedTimes: RoundedTimes[] = [];
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
   };
@@ -1473,7 +1524,7 @@ export function buildDataset(
     if (lookup) use(layout.joins.find((j) => j.left === sheet.name)!.right);
     const built = table.long
       ? buildLong(file, sheet, table.long, specs, lookup, namespace, collector, () => explicitlyIgnored(file, mappings, sheet, table.long))
-      : buildWide(file, sheet, specs, lookup, namespace, collector);
+      : buildWide(file, sheet, specs, lookup, namespace, collector, () => explicitlyIgnored(file, mappings, sheet));
     for (const r of built.rows) rows.push(r);
     // META-NO-DATES (checks/metadata.ts) fires when neither a row nor a metadata record has a date: the empty-eventDate finding leaves that case to it
     const noDateSaid = !built.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== '')) && !metadata.some((m) => m.temporalExtent && (m.temporalExtent.start || m.temporalExtent.end));
@@ -1482,6 +1533,7 @@ export function buildDataset(
     pushAll(positives, built.positives);
     // one output column for the same header of two sheets; the cells of each row sit under the id
     for (const e of built.extra) if (!extraKeyColumns.some((x) => x.id === e.id)) extraKeyColumns.push(e);
+    roundedTimes.push(...built.rounded);
     if (built.year) yearColumns.push({ sheet: sheet.name, year: built.year.header, date: built.year.date });
     for (const [name, cols] of built.reads) {
       const into = readBy.get(name) ?? new Set<number>();
@@ -1510,7 +1562,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}) };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}), ...(roundedTimes.length > 0 ? { roundedTimes } : {}) };
   return { dataset, findings };
 }
 

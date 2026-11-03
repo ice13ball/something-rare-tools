@@ -69,12 +69,23 @@ function timeText(hh: number, mm: number, ss: number | undefined, frac: string, 
 }
 
 /** Number of decimals of the shortest decimal form of a number (exponent forms counted). */
-function decimalsOf(n: number): number {
+export function decimalsOf(n: number): number {
   const s = String(Math.abs(n));
   const mantissa = s.replace(/e.*$/, '');
   const d = (mantissa.split('.')[1] ?? '').length;
   const e = /e-(\d+)$/.exec(s);
   return e ? d + Number(e[1]) : d;
+}
+
+/** How far, in milliseconds, the fraction of a serial (a time of day below 1 as well) is from the nearest whole second. */
+export function secondOffsetMs(serial: number): number {
+  const frac = serial - Math.floor(serial);
+  return Math.abs(frac * 86_400_000 - Math.round(frac * 86400) * 1000);
+}
+
+/** The keep rule of `keepMillis: true`: at least 5 ms from a whole second and more than 8 decimals. */
+export function isRealFraction(serial: number): boolean {
+  return secondOffsetMs(serial) >= 5 && decimalsOf(serial) > 8;
 }
 
 /** Milliseconds of the day (86 400 000 = the next day) of a serial's fraction, read as `keep` says (see KeepMillis). */

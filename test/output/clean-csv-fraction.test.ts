@@ -56,9 +56,9 @@ describe('a text date with a fraction and no zone is kept as before', () => {
 
 describe('a column whose format does not show the fraction', () => {
   const PLAIN = 'yyyy-mm-dd hh:mm:ss';
-  it('a real .250 and .750 stay; .002, a rounded serial and 1/3 are whole seconds', () => {
-    const got = dateOf(wide([dt(at(43200.25), PLAIN), dt(at(43200.75), PLAIN), dt(at(43200.002), PLAIN), dt(43983.33333, PLAIN), dt(T + 1 / 3, PLAIN)]));
-    expect(got).toEqual(['2020-06-01T12:00:00.250', '2020-06-01T12:00:00.750', '2020-06-01T12:00', '2020-06-01T08:00', '2020-06-01T08:00']);
+  it('a real .250 and .750 stay; a rounded serial and 1/3 are whole seconds (in a column of their own)', () => {
+    expect(dateOf(wide([dt(at(43200.25), PLAIN), dt(at(43200.75), PLAIN)]))).toEqual(['2020-06-01T12:00:00.250', '2020-06-01T12:00:00.750']);
+    expect(dateOf(wide([dt(43983.33333, PLAIN), dt(T + 1 / 3, PLAIN)]))).toEqual(['2020-06-01T08:00', '2020-06-01T08:00']);
   });
   it('a fill-down of =A+1/1440 over 6000 rows comes out as whole minutes, as before', () => {
     const cells: object[] = [];
@@ -69,5 +69,60 @@ describe('a column whose format does not show the fraction', () => {
   it('the sheet flag fractionShown is set by a format with ss.0 only', () => {
     expect(wide([dt(at(1), FMT)]).sheets[0].fractionShown).toEqual([false, false, false, true, false]);
     expect(wide([dt(at(1), PLAIN)]).sheets[0].fractionShown).toBeUndefined();
+  });
+});
+
+describe('one column, consistently: the evidence of the whole column decides', () => {
+  const PLAIN = 'yyyy-mm-dd hh:mm:ss';
+  /** A serial as Excel stores it: 15 significant digits. */
+  const xl = (secs: number, base = T) => Number((base + secs / 86400).toPrecision(15));
+  const HM = (h: number, m: number, sec: number) => h * 3600 + m * 60 + sec;
+  function notesOf(file: ParsedFile): string[] {
+    const layout = proposeLayout(file);
+    const ds = buildDataset(file, layout, proposeMappings(file, layout), [], 'd').dataset;
+    return textFile('o.csv', toCleanCsv(ds).sidecar).sheets[0].rows.map((r) => r.cells.map((c) => String(c ?? ''))).filter((r) => r[0] === '(note)').map((r) => r[1]);
+  }
+  const ROUNDED = /^date cells rounded to the second/;
+
+  it('.864, .972 and a .108 among other real milliseconds in one plain-format column are all kept (those three are 108 ms multiples or not; the column decides), no cell counted as rounded', () => {
+    const secs = [HM(12, 8, 0.864), HM(12, 9, 0.972), HM(12, 0, 0.108), HM(12, 20, 0.731), HM(12, 21, 0.417)];
+    const file = wide(secs.map((x) => dt(xl(x), PLAIN)));
+    expect(dateOf(file)).toEqual(['2020-06-01T12:08:00.864', '2020-06-01T12:09:00.972', '2020-06-01T12:00:00.108', '2020-06-01T12:20:00.731', '2020-06-01T12:21:00.417']);
+    expect(notesOf(file).filter((n) => ROUNDED.test(n))).toEqual([]);
+  });
+
+  it('the same cells in a column where most are 108 ms multiples are not evidence: the column is not shown', () => {
+    const file = wide([HM(12, 8, 0.864), HM(12, 9, 0.972), HM(12, 0, 0.108)].map((x) => dt(xl(x), PLAIN)));
+    expect(dateOf(file)).toEqual(['2020-06-01T12:08:00.864', '2020-06-01T12:09:01', '2020-06-01T12:00']);
+  });
+
+  it('.108, .216, .002 and .250 in one column: only .250 qualifies, the column is not shown, three cells are counted up to 216 ms', () => {
+    const file = wide([dt(xl(HM(12, 0, 0.108)), PLAIN), dt(xl(HM(12, 0, 0.216)), PLAIN), dt(xl(HM(12, 0, 0.002)), PLAIN), dt(xl(HM(12, 0, 0.25)), PLAIN)]);
+    expect(dateOf(file)).toEqual(['2020-06-01T12:00', '2020-06-01T12:00', '2020-06-01T12:00', '2020-06-01T12:00:00.250']);
+    expect(notesOf(file).filter((n) => ROUNDED.test(n))).toEqual(['date cells rounded to the second: Date (3 cells, up to 216 ms)']);
+  });
+
+  it('a file of whole seconds gets no note; a rounded serial and a long fill-down get one and keep their CSV', () => {
+    expect(notesOf(wide([dt(xl(43200), PLAIN), dt(xl(43260), PLAIN)])).filter((n) => ROUNDED.test(n))).toEqual([]);
+    const rounded = wide([dt(43983.33333, PLAIN), dt(43983.5, PLAIN)]);
+    expect(dateOf(rounded)).toEqual(['2020-06-01T08:00', '2020-06-01T12:00']);
+    expect(notesOf(rounded).filter((n) => ROUNDED.test(n))).toEqual(['date cells rounded to the second: Date (1 cell, up to 288 ms)']);
+    const cells: object[] = [];
+    let v = 43983.25;
+    for (let i = 0; i < 6000; i++) { v += 1 / 1440; cells.push(dt(v, 'yyyy-mm-dd hh:mm')); }
+    const drift = wide(cells);
+    const notes = notesOf(drift).filter((n) => ROUNDED.test(n));
+    expect(dateOf(drift).every((x) => /^20\d\d-\d\d-\d\d(T\d\d:\d\d)?$/.test(x))).toBe(true);
+    expect(notes.length === 0 || /up to [0-4] ms\)$/.test(notes[0])).toBe(true);
+  });
+
+  it('a 1904 workbook, a time column beside a date, and a long sheet read the same way', () => {
+    const S5 = [HM(12, 8, 0.864), HM(12, 9, 0.972), HM(12, 0, 0.108), HM(12, 20, 0.731), HM(12, 21, 0.417)];
+    const E5 = ['2020-06-01T12:08:00.864', '2020-06-01T12:09:00.972', '2020-06-01T12:00:00.108', '2020-06-01T12:20:00.731', '2020-06-01T12:21:00.417'];
+    const f1904 = wide(S5.map((x) => dt(xl(x, T - 1462), PLAIN)), { Workbook: { WBProps: { date1904: true } } });
+    expect(dateOf(f1904)).toEqual(E5);
+    const timed = xlsxFile('t.xlsx', { S: [['Station', 'Latitude', 'Longitude', 'Date', 'Time', 'Temp [°C]'], ...S5.map((secs, i) => ['S1', 49.4, 0.2 + i / 100, { t: 'n', v: T, z: 'yyyy-mm-dd' }, { t: 'n', v: Number((secs / 86400).toPrecision(15)), z: 'hh:mm:ss' }, 11 + i])] as never });
+    expect(dateOf(timed)).toEqual(E5);
+    expect(dateOf(long(S5.map((x) => dt(xl(x), PLAIN))))).toEqual(E5);
   });
 });
