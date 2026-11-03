@@ -60,7 +60,8 @@ describe('bulk approval skips doubted names', () => {
     expect(summary().textContent).toMatch(/2 names? .*not approved|undecided|split/i);
     // the bulk button now offers nothing (both left have a doubt) and says so
     expect(within(section).queryByRole('button', { name: /^Approve \d+ shown/ })).toBeNull();
-    expect(section.textContent).toContain(T['convert.splits.allDoubted']);
+    // the two left are in a group each (one reason per name), with a button beside the list
+    expect(within(section).getAllByRole('button', { name: 'Approve 1 name as written' })).toHaveLength(2);
     // a doubted row has its own "Approve as it is"
     fireEvent.click(within(section).getByRole('button', { name: 'Approve as it is: Acartia longiremis f' }));
     fireEvent.click(within(section).getByRole('button', { name: 'Approve as it is: Oithona 2' }));

@@ -32,7 +32,7 @@ export { proposeConvertColumns, proposeConvertMapping, suggestConvertProfile, su
 export type { ConvertShape } from './recognize';
 export { FULL_LIST_SETTING, NVS_SETTING, PROFILE_DEPTH_IDS_SETTING, PROFILE_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, biomassBasisOf, perOccurrenceOf, readConvertSettings, writeConvertSidecar } from './settings';
 export type { ConvertSettings } from './settings';
-export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
+export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, doubtedGroups, nameDoubt, splitChanged, splitTaxon } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
 export { DEVICES, P01, P06, PRESSURE, PRESSURE_VERIFIED_CODES, VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, VERIFIED_CODES, conceptVariable, foldUnit, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 export type { DeviceKey, NercTerm, PerDimension, VariableConcept, VariableUnit } from './vocab';

@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { distinctSplits, nameDoubt, splitChanged, splitTaxon } from '../../src/core/convert/taxon';
+import { distinctSplits, doubtedGroups, nameDoubt, splitChanged, splitTaxon } from '../../src/core/convert/taxon';
 import { fileOf, sheetInput } from './helpers';
 
 describe('splitTaxon', () => {
@@ -167,5 +167,22 @@ describe('sex markers (round 3)', () => {
     expect(splitTaxon('Acartia? f')).toEqual({ verbatimIdentification: 'Acartia? f', scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
     expect(splitTaxon('Acartia? m.')).toMatchObject({ scientificName: 'Acartia', identificationQualifier: '?', sex: 'male' });
     expect(splitTaxon('Acartia ? f')).toMatchObject({ scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
+  });
+});
+
+describe('doubtedGroups', () => {
+  const names = ['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4', 'Ggg hhh/iii', 'Jjj kkk/lll', 'Mmm nnn', 'Ooo ppp 5/6'];
+  it('groups the open doubted names by reason, in a fixed order, each name once', () => {
+    const groups = doubtedGroups(distinctSplits(names));
+    expect(groups.map((g) => g.reason)).toEqual(['digits', 'slash']);
+    expect(groups[0].entries.map((e) => e.verbatim)).toEqual(['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4', 'Ooo ppp 5/6']); // digits and a slash: digits wins
+    expect(groups[1].entries.map((e) => e.verbatim)).toEqual(['Ggg hhh/iii', 'Jjj kkk/lll']);
+  });
+  it('leaves out approved names, names without a doubt and empty reasons', () => {
+    const approved = { 'Aaa bbb 2': splitTaxon('Aaa bbb 2') };
+    const groups = doubtedGroups(distinctSplits(names, approved));
+    expect(groups[0].entries.map((e) => e.verbatim)).not.toContain('Aaa bbb 2');
+    expect(groups.flatMap((g) => g.entries.map((e) => e.verbatim))).not.toContain('Mmm nnn');
+    expect(doubtedGroups(distinctSplits(['Mmm nnn']))).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { biomassBasisOf, bulkApprovable, perOccurrenceOf, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
+import { biomassBasisOf, bulkApprovable, doubtedGroups, perOccurrenceOf, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
 import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
@@ -389,6 +389,22 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const rest = allSplits.filter((s) => !s.needsDecision);
   // "approve all shown" takes only the names without a doubt; a doubted one needs its own action on its row
   const bulk = bulkApprovable(toApprove);
+  // doubted names by reason, each group with its own button and the list beside it. A name the user has already edited is left out: it keeps its edit and its own
+  // "Approve" on the row (the group takes only names exactly as written); an approved name is in no group (doubtedGroups).
+  const groups = doubtedGroups(toApprove)
+    .map((g) => ({ reason: g.reason, entries: g.entries.filter((s) => drafts[s.verbatim] === undefined) }))
+    .filter((g) => g.entries.length > 0);
+  // the group button disappears when it is used; focus moves to the next group's button, else to the heading, so a keyboard user keeps their place
+  const splitsSection = useRef<HTMLElement | null>(null);
+  const refocus = useRef(false);
+  // the splits come back from the worker a moment after the click, so focus moves when the groups really change, not on the first re-render
+  const groupsKey = groups.map((g) => `${g.reason}:${g.entries.length}`).join('|');
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const next = splitsSection.current?.querySelector<HTMLElement>('[data-group-approve]');
+    (next ?? splitsSection.current?.querySelector<HTMLElement>('#convert-splits-title'))?.focus();
+  }, [groupsKey]);
   const draftOf = (s: (typeof toApprove)[number]): TaxonSplit => drafts[s.verbatim] ?? s.split;
   const finalSplit = (s: (typeof toApprove)[number]): TaxonSplit | null => {
     const d = draftOf(s);
@@ -865,9 +881,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           </section>
 
           {allSplits.length > 0 && (
-            <section className="convert-splits" aria-labelledby="convert-splits-title">
+            <section className="convert-splits" aria-labelledby="convert-splits-title" ref={splitsSection}>
               <HeadingTip tip="convertSplits">
-                <h2 id="convert-splits-title">{t('convert.splits.title')}</h2>
+                <h2 id="convert-splits-title" tabIndex={-1}>{t('convert.splits.title')}</h2>
               </HeadingTip>
               {toApprove.length > 0 && <p>{t('convert.splits.intro')}</p>}
               {bulk.approve.length > 0 && (
@@ -885,7 +901,36 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   {bulk.skipped.length > 0 ? t('convert.splits.approveAllSkip', { n: bulk.approve.length, skipped: bulk.skipped.length }) : t('convert.splits.approveAll', { n: bulk.approve.length })}
                 </button>
               )}
-              {bulk.approve.length === 0 && bulk.skipped.length > 0 && <p className="muted">{t('convert.splits.allDoubted')}</p>}
+              {groups.map((g) => (
+                <div key={g.reason} className="convert-doubt-group" role="group" aria-label={t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}>
+                  <p className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}</p>
+                  <ul className="convert-doubt-list">
+                    {g.entries.map((s) => (
+                      <li key={s.verbatim}>
+                        <code>{s.verbatim}</code>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="button"
+                    data-group-approve={g.reason}
+                    onClick={() => {
+                      refocus.current = true;
+                      // only what is still unapproved and unedited when the button is pressed; an existing approval is never replaced
+                      setApproved((prev) => ({
+                        ...prev,
+                        ...Object.fromEntries(g.entries.flatMap((s) => {
+                            const f = finalSplit(s);
+                            return f && !Object.prototype.hasOwnProperty.call(prev, s.verbatim) ? [[s.verbatim, f] as const] : [];
+                          })),
+                      }));
+                    }}
+                  >
+                    {t('convert.splits.approveGroup', { n: g.entries.length })}
+                  </button>
+                </div>
+              ))}
               {toApprove.length > 0 && (
                 <div className="table-scroll">
                   <table className="convert-table">

@@ -262,3 +262,15 @@ export function bulkApprovable(entries: readonly SplitEntry[]): { approve: Split
   const open = entries.filter((s) => s.needsDecision && !s.approved);
   return { approve: open.filter((s) => s.doubt === undefined), skipped: open.filter((s) => s.doubt !== undefined) };
 }
+
+/** The reasons in the order the page shows them (the order `nameDoubt` tests them, so a name with two doubts sits in the first only). */
+const DOUBT_ORDER: readonly NameDoubt[] = ['digits', 'remark', 'slash', 'question', 'stage-range', 'single-letter', 'sex-marker', 'long'];
+
+/**
+ * The open doubted names (need a decision, not approved) grouped by their reason, so the page can offer one button per reason with the list beside it.
+ * `nameDoubt` returns ONE reason per name (the first that applies: "Foo 2/3" is `digits`, not `slash`), so a name is in exactly one group and a group
+ * action can never touch a name twice. Approved names and names without a doubt are in no group. Empty reasons are left out.
+ */
+export function doubtedGroups(entries: readonly SplitEntry[]): { reason: NameDoubt; entries: SplitEntry[] }[] {
+  return DOUBT_ORDER.map((reason) => ({ reason, entries: entries.filter((s) => s.needsDecision && !s.approved && s.doubt === reason) })).filter((g) => g.entries.length > 0);
+}
