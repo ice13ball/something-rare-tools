@@ -747,6 +747,48 @@ function longValueDiffers(raw: RawCell, keptRaw: RawCell | undefined, dc: boolea
   return !same;
 }
 
+/** What a repeated value of one (row, parameter) does when the sheet is built: it replaces a kept value that gives way, it differs (and is reported), or it adds nothing. */
+function longRepeat(raw: RawCell, keptRaw: RawCell, dc: boolean): 'replaces' | 'differs' | 'same' {
+  if (givesWay(keptRaw) && !isBlankCell(raw)) return 'replaces';
+  return longValueDiffers(raw, keptRaw, dc) ? 'differs' : 'same';
+}
+
+/**
+ * Do two of these non-empty sets have no member in common? Each set is held against a block of sets at a time, one bit per set of the block for each member, so a key with tens of thousands of
+ * different parameter sets costs a small fraction of comparing every pair, and the memory stays that of one block.
+ */
+const DISJOINT_BLOCK = 4096;
+export function hasDisjointPair(sets: Set<string>[]): boolean {
+  for (let start = 0; start < sets.length; start += DISJOINT_BLOCK) {
+    const size = Math.min(DISJOINT_BLOCK, sets.length - start);
+    const words = (size + 31) >>> 5;
+    const holders = new Map<string, Uint32Array>();
+    const all = new Uint32Array(words);
+    for (let n = 0; n < size; n++) {
+      all[n >>> 5] |= 1 << (n & 31);
+      for (const member of sets[start + n]) {
+        let bits = holders.get(member);
+        if (!bits) holders.set(member, (bits = new Uint32Array(words)));
+        bits[n >>> 5] |= 1 << (n & 31);
+      }
+    }
+    const open = new Uint32Array(words);
+    for (let s = start; s < sets.length; s++) {
+      open.set(all);
+      let left = 1;
+      for (const member of sets[s]) {
+        const bits = holders.get(member);
+        if (!bits) continue;
+        left = 0;
+        for (let w = 0; w < words; w++) left |= open[w] &= ~bits[w];
+        if (left === 0) break;
+      }
+      if (left !== 0) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * The unit of a row of a long sheet (the unit column, else the unit written in the parameter text, 'DIC [umol/kg]') and the key of its variable: the parameter alone, or 'parameter [unit]' when the
  * sheet gives that parameter in more than one unit. One definition for the grouping of buildLong and for the collisions extendLongKey looks for.
@@ -783,7 +825,8 @@ function longVariables(sheet: RawSheet, plan: NonNullable<TablePlan['long']>): {
  *    number or a per-value flag cuts a measurement into rows with no parameter in common and is refused.
  * Among the acceptable ones, greedy: the column that fully resolves the most colliding (key, parameter) groups together with those already taken. Two candidates with the same count that split
  * the rows identically are one choice (the first is taken); two that split them differently leave the choice open and neither is taken. A balanced flag with no other candidate (a QC 0/1
- * on every pair) cannot be told from a replicate without guessing and joins the key; the finding names it. When a collision in a key the chosen columns vary in stays unresolved, none is taken.
+ * on every pair) cannot be told from a replicate without guessing and joins the key; the finding names it. When a collision in a key the chosen columns vary in stays unresolved, none is taken;
+ * a collision that the give-way of buildLong settles inside each resulting row (NA, then the value, in one replicate) is not unresolved. The scan and the choice compare the cells as written.
  * Columns that only separate the rows jointly (a cruise and a station, both needed) are not found.
  */
 export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long']>, keyCols: number[], dc: boolean, paramKey?: (r: RawRow, param: string) => string, concerned?: number[]): number[] {
@@ -840,7 +883,22 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
     }
     return true;
   };
-  /** In every key where `cols` vary, no two resulting rows have disjoint parameter sets (a replicate may lack some parameters; a running number or a per-value flag cuts a measurement into rows with nothing in common). */
+  /** As the sheet will be built: inside each row `cols` make, the group loses no value, a blank or missing kept value giving way to the first value after it. */
+  const settledWhenBuilt = (group: number[], cols: number[]): boolean => {
+    const kept = new Map<string, RawCell>();
+    for (const i of group) {
+      const id = classOf(i, cols);
+      const k = kept.get(id);
+      const repeat = k === undefined ? 'replaces' : longRepeat(valueOf(i), k, dc);
+      if (repeat === 'differs') return false;
+      if (repeat === 'replaces') kept.set(id, valueOf(i));
+    }
+    return true;
+  };
+  /**
+   * In every key where `cols` vary, no two resulting rows have disjoint parameter sets (a replicate may lack some parameters; a running number or a per-value flag cuts a measurement into rows with
+   * nothing in common). Rows with the same parameters are one set, so the comparison grows with the different sets of a key and not with its rows: the levels of a long cast are one set.
+   */
   const keepsMeasurementsTogether = (cols: number[]): boolean => {
     for (const list of rowsOfId.values()) {
       const params = new Map<string, Set<string>>();
@@ -851,9 +909,9 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
         else params.set(cls, new Set([paramOf(i)]));
       }
       if (params.size < 2) continue;
-      if (params.size > 2000) return false;
-      const sets = [...params.values()].sort((x, y) => x.size - y.size);
-      for (let a = 0; a < sets.length; a++) for (let b = a + 1; b < sets.length; b++) if (![...sets[a]].some((p) => sets[b].has(p))) return false;
+      const distinct = new Map<string, Set<string>>();
+      for (const set of params.values()) distinct.set(JSON.stringify([...set].sort()), set);
+      if (hasDisjointPair([...distinct.values()])) return false;
     }
     return true;
   };
@@ -904,6 +962,7 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   if (chosen.length === 0) return [];
   // a collision in a key the chosen columns vary in that they do not resolve: the columns are not what tells these rows apart
   for (const g of remaining) {
+    if (settledWhenBuilt(g, chosen)) continue;
     const list = rowsOfId.get(idOf[g[0]]!)!;
     if (new Set(list.map((i) => classOf(i, chosen))).size > 1) return [];
   }
@@ -970,21 +1029,16 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       }
       variables.set(key, v);
     }
+    const raw = r.cells[plan.valueCol] ?? null;
     const kept = row.values[key];
-    if (kept !== undefined && givesWay(kept.raw) && !isBlankCell(r.cells[plan.valueCol] ?? null)) {
-      // a blank or plainly missing kept value gives way to the first value after it (not 'nd', 'n.d.', 'ND': not detected is a result)
-      row.values[key] = numericCell(r.cells[plan.valueCol] ?? null, r.line, param, sheet.name, dc, c);
-      continue;
+    // duplicate (sample, parameter): one value stays, nothing is averaged. A blank or plainly missing kept value gives way to the first value after it (not 'nd', 'n.d.', 'ND': not detected is a
+    // result). A value that differs from the kept one was not read: said once at the end (ROW-LONG-VALUE-SKIPPED)
+    const repeat = kept === undefined ? 'replaces' : longRepeat(raw, kept.raw, dc);
+    if (repeat === 'replaces') row.values[key] = numericCell(raw, r.line, param, sheet.name, dc, c);
+    else if (repeat === 'differs') {
+      skippedDiffer.push(r.line);
+      skippedExample ??= param;
     }
-    if (kept !== undefined) {
-      // duplicate (sample, parameter): the first one stays, nothing is averaged. A value that differs from the kept one was not read: said once at the end (ROW-LONG-VALUE-SKIPPED)
-      if (longValueDiffers(r.cells[plan.valueCol] ?? null, kept.raw, dc)) {
-        skippedDiffer.push(r.line);
-        skippedExample ??= param;
-      }
-      continue;
-    }
-    row.values[key] = numericCell(r.cells[plan.valueCol] ?? null, r.line, param, sheet.name, dc, c);
   }
   for (const line of skippedDiffer) c.add('ROW-LONG-VALUE-SKIPPED', sheet.name, skippedExample ?? '', line, undefined, true, { count: skippedDiffer.length });
   return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [] };

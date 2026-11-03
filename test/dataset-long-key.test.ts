@@ -3,7 +3,7 @@
 // A long sheet keeps every value: a column that tells colliding rows apart joins the row key (ROW-LONG-KEY-EXTENDED); when nothing does, the first value is kept and ROW-LONG-VALUE-SKIPPED
 // says so. Every row is invented.
 import { describe, expect, it } from 'vitest';
-import { buildDataset, extendLongKey } from '../src/core/dataset';
+import { buildDataset, extendLongKey, hasDisjointPair } from '../src/core/dataset';
 import { pivotConvertFile } from '../src/core/convert/pivot';
 import { proposeLayout, proposeMappings } from '../src/core/recognize/layout';
 import { renderPlain } from '../src/core/report';
@@ -307,6 +307,114 @@ describe('the review cases: a column joins the key only when it is safe', () => 
     expect(r.dataset.rows).toHaveLength(18);
     expect(read(r)).toBe(70);
     expect(skipped(r)).toEqual([]);
+  });
+
+  /** One CTD cast per entry of `levels`, each with its number of levels, Temperature and Salinity at each level. */
+  const casts = (levels: number[]): string => {
+    const lines = ['Station,Latitude,Longitude,Date,Pressure [dbar],Parameter,Value'];
+    levels.forEach((n, c) => {
+      for (let l = 1; l <= n; l++) lines.push(`S${c},${40 + c * 0.1},0.2,2020-06-01,${l},Temperature,${10 + l * 0.001}`, `S${c},${40 + c * 0.1},0.2,2020-06-01,${l},Salinity,${35 + l * 0.001}`);
+    });
+    return lines.join('\n');
+  };
+  const allRead = (r: ReturnType<typeof build>, rows: number, values: number, column: string) => {
+    expect(r.dataset.rows).toHaveLength(rows);
+    expect(read(r)).toBe(values);
+    expect(skipped(r)).toEqual([]);
+    expect(extended(r)[0].params.columns).toBe(column);
+  };
+
+  it('p1: one CTD cast of 1,900 levels', () => allRead(build(casts([1900])), 1900, 3800, 'Pressure [dbar]'));
+  it('p2: one CTD cast of 2,100 levels, no limit on the rows a column makes', () => allRead(build(casts([2100])), 2100, 4200, 'Pressure [dbar]'));
+  it('p3: two casts of 50 levels and one of 2,100 lose nothing, the small ones included', () => allRead(build(casts([50, 50, 2100])), 2200, 4400, 'Pressure [dbar]'));
+
+  it('p4: 3,000 samples of three parameters under a code column the tool does not recognise', () => {
+    const lines = ['Station,Latitude,Longitude,Date,Kod,Parameter,Value'];
+    for (let k = 0; k < 3000; k++) for (const [i, p] of PARAMS.entries()) lines.push(`S1,49.4,0.2,2020-06-01,K${k},${p},${i + 1 + k * 0.01}`);
+    allRead(build(lines.join('\n')), 3000, 9000, 'Kod');
+  });
+
+  it('p5: 40 casts of 1,999 levels read whole, with few reads of the cells', () => {
+    const text = casts(Array.from({ length: 40 }, () => 1999));
+    allRead(build(text), 79_960, 159_920, 'Pressure [dbar]');
+    const file = textFile('big.csv', text);
+    const plan = proposeLayout(file).tables[0].long!;
+    let gets = 0;
+    file.sheets[0].rows = file.sheets[0].rows.map((x) => {
+      const cells = x.cells;
+      return { ...x, get cells() { gets++; return cells; } } as typeof x;
+    });
+    expect(extendLongKey(file.sheets[0], plan, [0, 1, 2, 3], false)).toEqual([4]);
+    expect(gets).toBeLessThanOrEqual(159_920 * 40);
+  }, 120_000);
+
+  it('p6: thousands of different parameter sets in one key: they share one parameter and the column joins; one set with nothing in common refuses it, past the first block of the comparison', () => {
+    const lines = ['Station,Latitude,Longitude,Date,Kod,Parameter,Value'];
+    let d = 0;
+    for (let a = 0; a < 40; a++) for (let b = a + 1; b < 40; b++) for (let e = b + 1; e < 40 && d < 6000; e++, d++) for (const p of [a, b, e, 'Shared']) lines.push(`S1,49.4,0.2,2020-06-01,K${d},P${p},${d + 0.5}`);
+    allRead(build(lines.join('\n')), 6000, 24_000, 'Kod');
+    const refused = build([...lines, 'S1,49.4,0.2,2020-06-01,Klast,Alone,1', 'S1,49.4,0.2,2020-06-01,Klast,Alone2,2'].join('\n'));
+    expect(extended(refused)).toEqual([]);
+    expect(skipped(refused)).toHaveLength(1);
+  });
+
+  it('hasDisjointPair agrees with comparing every pair, also across the blocks of its comparison', () => {
+    const brute = (sets: Set<string>[]) => sets.some((a, i) => sets.some((b, j) => j > i && ![...a].some((m) => b.has(m))));
+    let seed = 7;
+    const next = (n: number) => (seed = (seed * 48271) % 2147483647) % n;
+    for (let round = 0; round < 400; round++) {
+      const members = 2 + next(12);
+      const sets = Array.from({ length: 1 + next(40) }, () => new Set(Array.from({ length: 1 + next(4) }, () => `m${next(members)}`)));
+      expect(hasDisjointPair(sets), `round ${round}`).toBe(brute(sets));
+    }
+    for (const n of [31, 32, 33, 4095, 4096, 4097, 8192, 8193]) {
+      const shared = Array.from({ length: n }, (_, i) => new Set(['shared', `m${i}`]));
+      expect(hasDisjointPair(shared), `${n} sharing one member`).toBe(false);
+      expect(hasDisjointPair([...shared, new Set(['alone'])]), `${n} and one alone, last`).toBe(true);
+      expect(hasDisjointPair([new Set(['alone']), ...shared]), `${n} and one alone, first`).toBe(true);
+      const threeWay = Array.from({ length: n }, (_, i) => new Set([['x', 'y'], ['y', 'z'], ['x', 'z']][i % 3]).add(`m${i}`));
+      expect(hasDisjointPair(threeWay), `${n} meeting pair by pair, no member in all`).toBe(false);
+    }
+    for (const [i, j] of [[0, 32], [31, 32], [63, 64], [0, 4096], [4095, 4096], [4096, 4097], [4096, 8192], [8191, 8192]]) {
+      const sets = Array.from({ length: 8200 }, (_, n) => new Set(n === i ? ['a'] : n === j ? ['b'] : ['a', 'b']));
+      expect(hasDisjointPair(sets), `the only pair is ${i} and ${j}`).toBe(true);
+    }
+  });
+
+  /** 500 samples x 3 replicates x 4 parameters, and `entered` written once more, just before the real value of parameter A in sample 83, replicate 2. */
+  const reentered = (...entered: string[]): string => {
+    const lines = ['Station,Latitude,Longitude,Date,Replicate,Parameter,Value'];
+    for (let s = 0; s < 500; s++) for (const rep of [1, 2, 3]) for (const p of ['A', 'B', 'C', 'D']) {
+      const at = `B${s},${40 + s * 0.01},0.2,2020-06-01,${rep},${p}`;
+      if (s === 83 && rep === 2 && p === 'A') for (const e of entered) lines.push(`${at},${e}`);
+      lines.push(`${at},${s + rep / 10}`);
+    }
+    return lines.join('\n');
+  };
+
+  it('z1: one NA entered before the real value of a replicate, in 6,000 rows, does not cost the column: the value is read', () => {
+    const r = build(reentered('NA'));
+    allRead(r, 1500, 6000, 'Replicate');
+    const sample = r.dataset.rows.filter((x) => x.values.A?.value === 83.2);
+    expect(sample).toHaveLength(1);
+    expect(sample[0].line).toBe(83 * 12 + 4 + 2);
+  });
+
+  it('z1 also for a blank, a dash and several of them; a real second value, or ND before the value, still refuses the column as in case d', () => {
+    for (const entered of [[''], ['-'], ['NA', '']]) allRead(build(reentered(...entered)), 1500, 6000, 'Replicate');
+    for (const entered of [['ND'], ['n.a.'], ['7'], ['NA', '7']]) {
+      const r = build(reentered(...entered));
+      expect(extended(r), entered.join()).toEqual([]);
+      expect(r.dataset.rows, entered.join()).toHaveLength(500);
+      expect(skipped(r), entered.join()).toHaveLength(1);
+    }
+  });
+
+  it('z1 does not count in favour of a column: a key whose only collision is NA then the value takes no column', () => {
+    const r = build(csv('Replicate,Parameter,Value', [['S1', '1', 'Corg', '1'], ['S1', '2', 'Corg', 'NA'], ['S1', '2', 'Corg', '5'], ['S1', '1', 'Ntot', '6'], ['S1', '2', 'Ntot', '6']]));
+    expect(extended(r)).toEqual([]);
+    expect(r.dataset.rows).toHaveLength(1);
+    expect(skipped(r)).toHaveLength(1);
   });
 
   it('w1: complementary blanks (or NA) in two replicates stay two rows: no merged row, no false DIC > TA', async () => {
