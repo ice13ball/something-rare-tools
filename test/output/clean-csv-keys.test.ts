@@ -227,11 +227,20 @@ describe('IN-HEADER-UNITS-READ names an example from the file and never says 0 c
     }
   });
 
-  it('units already in every name: the row is still a header row, and no finding says 0', () => {
+  it('units already in every name: the row is not data, and that is said in its own text in all four languages, never as "0 columns"', () => {
     const f = textFile('u.csv', ['a [h],b [s],c [m]', 'h,s,m', '1,2,3', '4,5,6', '7,8,9'].join('\n'));
     expect(f.sheets[0].header).toEqual(['a [h]', 'b [s]', 'c [m]']);
     expect(f.sheets[0].rows).toHaveLength(3);
     expect(f.findings.filter((x) => x.ruleId === 'IN-HEADER-UNITS-READ')).toEqual([]);
+    const named = f.findings.filter((x) => x.ruleId === 'IN-HEADER-UNITS-NAMED');
+    expect(named).toHaveLength(1);
+    expect(named[0].lines).toEqual([2]);
+    for (const lang of LANGS) {
+      const t = renderPlain(named[0], lang);
+      expect(t, lang).toContain('2');
+      expect(t, lang).not.toMatch(/[{}]/);
+      expect(t, lang).not.toMatch(/\b0\b/);
+    }
   });
 
   it('foldUnitsRow carries the example only when a name changed', () => {

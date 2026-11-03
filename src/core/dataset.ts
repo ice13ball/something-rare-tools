@@ -292,8 +292,15 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
  * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
  * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
  */
-export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean } = {}): (row: RawRow) => Meta {
+export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean } = {}): MetaParser {
   const dc = file.decimalComma;
+  // The source columns that gave each field of the LAST row parsed (read after the call, before the next one): the record the clean CSV's list of left-out columns comes from.
+  const reads = new Map<keyof Meta, number[]>();
+  const note = (field: keyof Meta, ...cols: (number | undefined)[]): void => {
+    const list = reads.get(field) ?? [];
+    for (const i of cols) if (i !== undefined && !list.includes(i)) list.push(i);
+    reads.set(field, list);
+  };
   // "Year" chosen as the date while a month (and day) column is mapped as part of a date: the Year column IS the year of that date, so the combination is read and the day is not lost
   // (a date column whose cells are all whole years, beside a datePart month column)
   const specs: Specs = (() => {
@@ -354,7 +361,8 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
     return undefined;
   };
 
-  return (row: RawRow): Meta => {
+  const parseRow = (row: RawRow): Meta => {
+    reads.clear();
     const m: Meta = {};
     if (specs.lat && specs.lon) {
       // a blank (not unreadable) coordinate cell on a row that holds something else: ROW-NO-COORD decides whether other rows have a position
@@ -369,6 +377,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
       if (r) {
         m.lat = r.value;
         m.latDecimals = r.decimals;
+        note('lat', specs.lat.index, latHemi?.index);
       }
     }
     if (specs.lon) {
@@ -376,6 +385,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
       if (r) {
         m.lon = r.value;
         m.lonDecimals = r.decimals;
+        note('lon', specs.lon.index, lonHemi?.index);
       }
     }
     if (specs.when) {
@@ -385,6 +395,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
         if (d) {
           m.datetime = d;
           m.dateRaw = d.iso;
+          note('datetime', dwcParts.year, dwcParts.month, dwcParts.day);
         }
       }
       if (!isBlankCell(cell)) {
@@ -404,6 +415,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.when.header, row.line, String(cell).trim());
         } else {
           let date: ParsedDate = d;
+          note('datetime', specs.when.index);
           let tzField = specs.when.header;
           if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
           let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
@@ -423,6 +435,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             } else if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown') {
               date = full;
               tzField = tField;
+              note('datetime', specs.time.index);
             } else {
               if (full !== undefined && typeof timeCell === 'number') timeCell = full.iso;
               if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder))) {
@@ -432,6 +445,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
               } else {
                 date = combineDateTime(date, timeCell, tOrder);
                 tzField = tField;
+                note('datetime', specs.time.index);
               }
             }
           }
@@ -450,12 +464,14 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
       else if (got !== undefined) {
         let date: ParsedDate = got;
         m.dateRaw = got.iso;
+        for (const part of [specs.dateParts.year, specs.dateParts.month, specs.dateParts.day]) if (part !== undefined && !isBlankCell(row.cells[part.index] ?? null)) note('datetime', part.index);
         const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
         if (specs.time && !isBlankCell(timeCell) && date.precision === 'day') {
           const tOrder = timeOrder === 'unknown' ? undefined : timeOrder;
           if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso, tOrder))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
           else {
             date = combineDateTime(date, timeCell, tOrder);
+            note('datetime', specs.time.index);
             if (timeUtc) date = { ...date, tz: 'utc', iso: `${date.iso}Z` };
             else if (date.tz === 'unknown') c.add('ROW-TZ-UNKNOWN', sheet.name, specs.time.header, row.line, undefined, false);
           }
@@ -470,6 +486,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
         if (p.status === 'ok') {
           m.depth = p.value;
           m.depthDecimals = p.decimals;
+          note('depth', specs.depth.index);
         }
         else reportBadNumber(c, sheet.name, specs.depth.header, row.line, cell, dc);
       }
@@ -480,17 +497,42 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
       const cell = row.cells[spec.index] ?? null;
       if (isBlankCell(cell)) continue;
       const p = parseNumber(cell, dc);
-      if (p.status === 'ok') m[key] = p.value;
-      else if (spec.index !== specs.depth?.index) reportBadNumber(c, sheet.name, spec.header, row.line, cell, dc);
+      if (p.status === 'ok') {
+        m[key] = p.value;
+        note(key, spec.index);
+      } else if (spec.index !== specs.depth?.index) reportBadNumber(c, sheet.name, spec.header, row.line, cell, dc);
     }
     const station = specs.station ? str(row.cells[specs.station.index] ?? null) : undefined;
     const cruise = specs.cruise ? str(row.cells[specs.cruise.index] ?? null) : undefined;
     const sampleId = specs.sampleId ? str(row.cells[specs.sampleId.index] ?? null) : undefined;
-    if (station !== undefined) m.station = station;
-    if (cruise !== undefined) m.cruise = cruise;
-    if (sampleId !== undefined) m.sampleId = sampleId;
+    if (station !== undefined) {
+      m.station = station;
+      note('station', specs.station!.index);
+    }
+    if (cruise !== undefined) {
+      m.cruise = cruise;
+      note('cruise', specs.cruise!.index);
+    }
+    if (sampleId !== undefined) {
+      m.sampleId = sampleId;
+      note('sampleId', specs.sampleId!.index);
+    }
     return m;
   };
+  return Object.assign(parseRow, { reads: reads as ReadonlyMap<keyof Meta, readonly number[]> });
+}
+
+/** metaParser's result: the row parser, and the source columns that gave each field of the last row it parsed. */
+export type MetaParser = ((row: RawRow) => Meta) & { reads: ReadonlyMap<keyof Meta, readonly number[]> };
+
+/** The field a lookup field is read with: the decimals of a coordinate come from its column, the raw text of a date from the date's columns. */
+const READ_ALIAS: Partial<Record<keyof Meta, keyof Meta>> = { latDecimals: 'lat', lonDecimals: 'lon', dateRaw: 'datetime', depthDecimals: 'depth' };
+function addReads(reads: ReadonlyMap<keyof Meta, readonly number[]>, into: Set<number>, only?: keyof Meta): void {
+  if (only !== undefined) {
+    for (const i of reads.get(only) ?? reads.get(READ_ALIAS[only] as keyof Meta) ?? []) into.add(i);
+    return;
+  }
+  for (const cols of reads.values()) for (const i of cols) into.add(i);
 }
 
 function numericCell(raw: RawCell, line: number, field: string, sheet: string, dc: boolean, c: Collector): NumericCell {
@@ -551,16 +593,18 @@ interface Built {
   positives: ('down' | 'up' | 'unknown')[];
   /** Source columns whose cells the rows carry in `keyCells` (see ExtraKeyColumn). */
   extra: ExtraKeyColumn[];
+  /** The source columns the build actually read, by sheet: this sheet's, and the lookup sheet's columns that lent a field to a row. */
+  reads: Map<string, Set<number>>;
 }
 
 /**
- * The columns of one sheet that the clean CSV keeps beside the fixed ones: its pressure columns and the columns that joined a long sheet's row key (`added`), each once, in the order of the sheet.
+ * The columns of one sheet that the clean CSV keeps beside the fixed ones: its pressure columns and the key columns no fixed column carries (`keys`), each once, in the order of the sheet.
  * `skip` holds the columns that already have another place (the parameter, unit and value columns of a long sheet, the variables of a wide one).
  */
-function extraColumnsOf(sheet: RawSheet, specs: Specs, added: readonly number[], skip: ReadonlySet<number>): ExtraKeyColumn[] {
+function extraColumnsOf(sheet: RawSheet, pressure: readonly (Spec & { unit?: string })[], keys: readonly number[], skip: ReadonlySet<number>): ExtraKeyColumn[] {
   const picked = new Map<number, { kind: ExtraKeyColumn['kind']; unit?: string }>();
-  for (const p of specs.pressure ?? []) if (!skip.has(p.index) && !picked.has(p.index)) picked.set(p.index, { kind: 'pressure', ...(p.unit === undefined ? {} : { unit: p.unit }) });
-  for (const i of added) if (!skip.has(i) && !picked.has(i)) picked.set(i, { kind: 'key' });
+  for (const p of pressure) if (!skip.has(p.index) && !picked.has(p.index)) picked.set(p.index, { kind: 'pressure', ...(p.unit === undefined ? {} : { unit: p.unit }) });
+  for (const i of keys) if (!skip.has(i) && !picked.has(i)) picked.set(i, { kind: 'key' });
   const ids = new Set<string>();
   const out: ExtraKeyColumn[] = [];
   for (const index of [...picked.keys()].sort((a, b) => a - b)) {
@@ -572,6 +616,31 @@ function extraColumnsOf(sheet: RawSheet, specs: Specs, added: readonly number[],
     ids.add(id);
     out.push({ header, index, sheet: sheet.name, id, kind: picked.get(index)!.kind, ...(picked.get(index)!.unit === undefined ? {} : { unit: picked.get(index)!.unit }) });
   }
+  return out;
+}
+
+/** What a sheet's build read: its own columns, and the lookup sheet's that lent a field. */
+function readsOf(sheet: RawSheet, own: Set<number>, lookup: Lookup | undefined): Map<string, Set<number>> {
+  // the key columns of both sheets were read to find the row of the other sheet
+  if (lookup) for (const i of lookup.leftKeys) own.add(i);
+  const out = new Map<string, Set<number>>([[sheet.name, own]]);
+  if (lookup) {
+    for (const i of lookup.rightKeys) lookup.reads.add(i);
+    out.set(lookup.rightName, lookup.reads);
+  }
+  return out;
+}
+
+/**
+ * The columns the person set to `ignore` on purpose: the mapping given to the build says ignore and the proposal for that column does not (a column that is `ignore` by default, a replicate or a
+ * cast, is not one of them). Empty when the sheet has no given mapping.
+ */
+function explicitlyIgnored(file: ParsedFile, mappings: readonly SheetMapping[], sheet: RawSheet, long?: TablePlan['long']): Set<number> {
+  const given = mappings.find((m) => m.sheet === sheet.name);
+  const out = new Set<number>();
+  if (!given) return out;
+  const proposed = proposeColumns(sheet, { decimalComma: file.decimalComma, date1904: file.date1904, ...(long ? { long } : {}) });
+  for (const c of given.columns) if (c.role.kind === 'ignore' && proposed.find((p) => p.index === c.index)?.role.kind !== 'ignore') out.add(c.index);
   return out;
 }
 
@@ -589,10 +658,14 @@ interface Lookup {
    * differ only in depth (the position and date are lent, no depth).
    */
   rowsByKey: Map<string, { row: RawRow; depthless: boolean } | 'ambiguous'>;
-  meta: (row: RawRow) => Meta;
-  cache: Map<RawRow, Meta>;
+  meta: MetaParser;
+  cache: Map<RawRow, { meta: Meta; reads: ReadonlyMap<keyof Meta, readonly number[]> }>;
+  /** The columns of the right sheet that gave a field to a row of the left one (the record of what the clean CSV carries from the lookup sheet). */
+  reads: Set<number>;
   /** The key columns of the measurement sheet, in the order of the right key columns. */
   leftKeys: number[];
+  /** The key columns of the lookup sheet: read to find the row, whatever else they are. */
+  rightKeys: number[];
   /** What the key is called in a message: the left key headers joined with " + ". */
   keyName: string;
   sheetName: string;
@@ -656,7 +729,7 @@ function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, map
     else if (depthOf(r) !== depths.get(k)) rowsByKey.set(k, { row: first.row, depthless: true });
   }
   const header = (cols: readonly number[], s: RawSheet | undefined): string => cols.map((i) => s?.header[i] ?? `#${i + 1}`).join(' + ');
-  return { rowsByKey, meta, cache: new Map(), leftKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
+  return { rowsByKey, meta, cache: new Map(), reads: new Set<number>(), leftKeys, rightKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
 }
 
 const DEPTH_FIELDS: (keyof Meta)[] = ['depth', 'depthDecimals', 'depthMin', 'depthMax'];
@@ -674,10 +747,16 @@ function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
     lookup.collector.add('ROW-JOIN-AMBIGUOUS', lookup.sheetName, lookup.keyName, row.line, parts === undefined ? k : parts.join(' + '), true, { right: lookup.rightName });
   } else if (hit) {
     let lm = lookup.cache.get(hit.row);
-    if (!lm) lookup.cache.set(hit.row, (lm = lookup.meta(hit.row)));
+    if (!lm) {
+      const meta = lookup.meta(hit.row);
+      lookup.cache.set(hit.row, (lm = { meta, reads: new Map([...lookup.meta.reads].map(([k, v]) => [k, [...v]])) }));
+    }
     for (const f of META_FIELDS) {
       if (hit.depthless && DEPTH_FIELDS.includes(f)) continue;
-      if (base[f] === undefined && lm[f] !== undefined) (base as Record<string, unknown>)[f] = lm[f];
+      if (base[f] === undefined && lm.meta[f] !== undefined) {
+        (base as Record<string, unknown>)[f] = lm.meta[f];
+        addReads(lm.reads, lookup.reads, f);
+      }
     }
   }
   if (base.posBlank !== undefined && base.lat !== undefined && base.lon !== undefined) delete base.posBlank;
@@ -752,9 +831,13 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   });
   const variables = cols.map(({ v, key }) => variableFrom(key, v.header, v.role));
   const rows: DataRow[] = [];
-  const extra = extraColumnsOf(sheet, specs, [], new Set(specs.vars.map((v) => v.index)));
+  const own = new Set(specs.vars.map((v) => v.index));
+  const extra = extraColumnsOf(sheet, specs.pressure ?? [], [], own);
+  for (const e of extra) own.add(e.index);
   for (const r of sheet.rows) {
-    const row: DataRow = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: newValues() };
+    const meta = parse(r);
+    addReads(parse.reads, own);
+    const row: DataRow = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(meta, r, lookup), values: newValues() };
     for (const { v, key } of cols) row.values[key] = numericCell(r.cells[v.index] ?? null, r.line, v.header, sheet.name, dc, c);
     if (extra.length > 0) {
       row.keyCells = newValues() as unknown as Record<string, RawCell>;
@@ -763,7 +846,7 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
     rows.push(row);
   }
   clearInheritedPositions(sheet, rows);
-  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra };
+  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup) };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1010,7 +1093,7 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
   return chosen;
 }
 
-function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector): Built {
+function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector, explicitIgnore: () => ReadonlySet<number>): Built {
   const dc = file.decimalComma;
   const parse = metaParser(file, sheet, specs, c);
   const skip = new Set(longColumns(plan));
@@ -1037,35 +1120,39 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   }
 
   const variables = new Map<string, Variable>();
-  const groups = new Map<string, DataRow>();
+  const groups = new Map<string, number>();
   const rows: DataRow[] = [];
-  // the columns the clean CSV keeps: pressure, and what joined the key. A pressure that differs inside one row of the output (it did not join the key) cannot be written and is dropped below.
-  const extra = extraColumnsOf(sheet, specs, added, skip);
-  const varying = new Set<string>();
+  const firsts: RawRow[] = [];
+  const own = new Set<number>(longColumns(plan));
+  // A pressure of the sheet is carried when it is one value inside each row of the output; the first non-blank cell of a row's source rows is its value, and two different ones make it unwritable (below).
+  const pressure = (specs.pressure ?? []).filter((p, k, all) => !skip.has(p.index) && all.findIndex((q) => q.index === p.index) === k);
+  const pCells: RawCell[][] = [];
+  const pVarying = new Set<number>();
   const skippedDiffer: number[] = [];
   let skippedExample: string | undefined;
   for (const r of sheet.rows) {
     const param = str(r.cells[plan.parameterCol] ?? null);
     if (param === undefined) continue;
     const id = JSON.stringify(keyCols.map((i) => str(r.cells[i] ?? null) ?? ''));
-    let row = groups.get(id);
-    if (!row) {
-      row = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: newValues() };
-      groups.set(id, row);
-      rows.push(row);
-      if (extra.length > 0) {
-        row.keyCells = newValues() as unknown as Record<string, RawCell>;
-        for (const e of extra) row.keyCells[e.id] = r.cells[e.index] ?? null;
-      }
-    } else if (row.keyCells) {
-      for (const e of extra) {
-        const now = r.cells[e.index] ?? null;
-        if (isBlankCell(now)) continue;
-        const kept = row.keyCells[e.id];
-        if (isBlankCell(kept)) row.keyCells[e.id] = now;
-        else if (String(kept).trim() !== String(now).trim()) varying.add(e.id);
-      }
+    let n = groups.get(id);
+    if (n === undefined) {
+      const meta = parse(r);
+      addReads(parse.reads, own);
+      n = rows.length;
+      groups.set(id, n);
+      rows.push({ file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(meta, r, lookup), values: newValues() });
+      firsts.push(r);
+      if (pressure.length > 0) pCells.push(pressure.map((p) => r.cells[p.index] ?? null));
+    } else if (pressure.length > 0) {
+      pressure.forEach((p, k) => {
+        const now = r.cells[p.index] ?? null;
+        if (isBlankCell(now)) return;
+        const kept = pCells[n!][k];
+        if (isBlankCell(kept)) pCells[n!][k] = now;
+        else if (String(kept).trim() !== String(now).trim()) pVarying.add(p.index);
+      });
     }
+    const row = rows[n];
     const unit = unitOfRow(r, param);
     const key = varKey(r, param);
     if (!variables.has(key)) {
@@ -1091,39 +1178,37 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     }
   }
   for (const line of skippedDiffer) c.add('ROW-LONG-VALUE-SKIPPED', sheet.name, skippedExample ?? '', line, undefined, true, { count: skippedDiffer.length });
-  if (varying.size > 0) {
-    for (const row of rows) for (const id of varying) delete row.keyCells?.[id];
+  // The key columns no fixed column carries are written too, or rows that differ only there look identical: a time with no date, a sediment depth, a depth bottom, a replicate. A key column is
+  // "carried" when the build read it into the date, position, depth, station, cruise or sample; one with nothing in it separates nothing; one the person set to ignore on purpose is not written.
+  const unreadKeys = keyCols.filter((i) => !own.has(i) && !skip.has(i) && sheet.rows.some((r) => !isBlankCell(r.cells[i] ?? null)));
+  const ignoredOnPurpose = unreadKeys.length > 0 ? explicitIgnore() : new Set<number>();
+  const extra = extraColumnsOf(sheet, pressure.filter((p) => !pVarying.has(p.index)), unreadKeys.filter((i) => !ignoredOnPurpose.has(i)), skip);
+  if (extra.length > 0) {
+    rows.forEach((row, n) => {
+      const cells = newValues() as unknown as Record<string, RawCell>;
+      for (const e of extra) {
+        const k = e.kind === 'pressure' ? pressure.findIndex((p) => p.index === e.index) : -1;
+        cells[e.id] = k >= 0 ? pCells[n][k] : (firsts[n].cells[e.index] ?? null);
+      }
+      row.keyCells = cells;
+    });
   }
-  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra: extra.filter((e) => !varying.has(e.id)) };
+  for (const e of extra) own.add(e.index);
+  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup) };
 }
 
 /**
- * The columns of the sheets a dataset was built from whose content the clean CSV does NOT carry: a column with no role (ignore), a converter role, a second column for a slot already filled, a
- * hemisphere column that did not apply, a variable column of a lookup sheet, a pressure that varies inside one row of a long sheet. A column is carried when it is the station, cruise, sample, date,
- * time, date part, position, hemisphere, depth or variable the rows were built from, the parameter, unit or value column of a long sheet, or one of `ds.extraKeyColumns`. Date parts beside a mapped
- * date count as carried only where the date is built from them (a Year chosen as the date beside a month; a Darwin Core eventDate column).
+ * The columns of the sheets a dataset was built from whose content the clean CSV does NOT carry. Nothing is inferred from the roles: the build records the source columns it actually read into a row
+ * (`Dataset.readColumns`: the date, time, date parts, position, hemisphere, depth, station, cruise and sample cells that gave a value, the variables, the parameter, unit and value columns of a long sheet,
+ * and what a lookup sheet lent to a row) and the columns it wrote beside them (`extraKeyColumns`). Every other column of the mappings is named: an ignored one, a second column for a slot already filled,
+ * a time with no date, date parts no date was built from, a hemisphere that did not apply, a lookup column no row took a value from, a pressure that varies inside one row, a key column the person ignored.
+ * A dataset without the record (built by hand) names nothing.
  */
 export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; header: string }[] {
   const out: { sheet: string; index: number; header: string }[] = [];
-  const keyOf = (s: Spec): string => headerKey(unitFromHeader(s.header).name);
+  if (ds.readColumns === undefined) return out;
   for (const m of ds.mappings) {
-    const specs = specsOf(m);
-    const table = ds.layout.tables.find((t) => t.sheet === m.sheet);
-    const read = new Set<number>();
-    const mark = (...ss: (Spec | undefined)[]): void => {
-      for (const x of ss) if (x) read.add(x.index);
-    };
-    mark(specs.lat, specs.lon, specs.when, specs.time, specs.depth, specs.station, specs.cruise, specs.sampleId);
-    if (specs.lat && specs.latHemi && hemisphereBoundAgrees(keyOf(specs.latHemi), keyOf(specs.lat))) mark(specs.latHemi);
-    if (specs.lon && specs.lonHemi && hemisphereBoundAgrees(keyOf(specs.lonHemi), keyOf(specs.lon))) mark(specs.lonHemi);
-    const parts = specs.dateParts;
-    if (parts && (!specs.when || (parts.year === undefined && parts.month !== undefined) || dwcTermOf(specs.when.header) === 'eventdate')) mark(parts.year, parts.month, parts.day);
-    if (table && !table.long) mark(...specs.vars);
-    if (table?.long) {
-      read.add(table.long.parameterCol);
-      read.add(table.long.valueCol);
-      if (table.long.unitCol !== undefined) read.add(table.long.unitCol);
-    }
+    const read = new Set<number>(ds.readColumns.find((r) => r.sheet === m.sheet)?.columns);
     for (const e of ds.extraKeyColumns ?? []) if (e.sheet === m.sheet) read.add(e.index);
     for (const c of m.columns) if (!read.has(c.index)) out.push({ sheet: m.sheet, index: c.index, header: c.header });
   }
@@ -1177,6 +1262,7 @@ export function buildDataset(
   const positives: ('down' | 'up' | 'unknown')[] = [];
   const usedSheets: string[] = [];
   const extraKeyColumns: ExtraKeyColumn[] = [];
+  const readBy = new Map<string, Set<number>>();
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
   };
@@ -1189,7 +1275,7 @@ export function buildDataset(
     const lookup = makeLookup(file, layout, sheet.name, mappings, collector);
     if (lookup) use(layout.joins.find((j) => j.left === sheet.name)!.right);
     const built = table.long
-      ? buildLong(file, sheet, table.long, specs, lookup, namespace, collector)
+      ? buildLong(file, sheet, table.long, specs, lookup, namespace, collector, () => explicitlyIgnored(file, mappings, sheet, table.long))
       : buildWide(file, sheet, specs, lookup, namespace, collector);
     for (const r of built.rows) rows.push(r);
     // META-NO-DATES (checks/metadata.ts) fires when neither a row nor a metadata record has a date: the empty-eventDate finding leaves that case to it
@@ -1199,6 +1285,11 @@ export function buildDataset(
     pushAll(positives, built.positives);
     // one output column for the same header of two sheets; the cells of each row sit under the id
     for (const e of built.extra) if (!extraKeyColumns.some((x) => x.id === e.id)) extraKeyColumns.push(e);
+    for (const [name, cols] of built.reads) {
+      const into = readBy.get(name) ?? new Set<number>();
+      for (const i of cols) into.add(i);
+      readBy.set(name, into);
+    }
   }
 
   fillUnitsFromMetadata(variables, metadata);
@@ -1216,7 +1307,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}) };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b) })) };
   return { dataset, findings };
 }
 

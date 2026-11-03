@@ -242,7 +242,7 @@ time of day under `UTC`), at least two unit columns hold plain numbers, and at l
 words (`high`, `1A`) under a unit. A header that already names a unit (a bracket, `Temp [deg C] (CTD)`, `Tiefe [m] von`, `depth_ft`, `depth_m`, `temp_c`) keeps it when the cell
 agrees, no second bracket is added; a cell that disagrees (`depth_ft` over `m`) means no fold at all, so a unit is never silently replaced. A decimal comma is decided before the fold.
 Data rows keep their physical line numbers; `RawSheet.unitsRowLine` (also `subHeaderLine`) keeps the line of the units row, and `IN-HEADER-UNITS-READ` (info) says it once and
-counts the columns whose name got a unit (a name that had one already is not counted) and gives the first of them as it now reads (`example`, `a [h]`: the text takes its example from the file). When every name had its unit already the count would be 0, and no finding is made. Nothing is changed in any cell and no role is guessed.
+counts the columns whose name got a unit (a name that had one already is not counted) and gives the first of them as it now reads (`example`, `a [h]`: the text takes its example from the file). When every name had its unit already (a count of 0 is never said), the row is still not data and `IN-HEADER-UNITS-NAMED` (info, four languages) says so: the line holds units, the names carry them, it is not counted as a data row, the line numbers stay the file's. Nothing is changed in any cell and no role is guessed.
 What is named: a first row in which every cell is a unit and the numbers agree under most of them, but under some unit stand words (`firstRowIsUnits`, `recognize/layout.ts`; also the
 older test of two vocabulary units over numbers). /check refuses it (`IN-LAYOUT-UNSUPPORTED`, header over several rows). /convert does not read the sheet: `CONV-SHEET-UNITS-ROW` says the
 line "looks like units" in four languages and the sheet gets the tick "Read as a normal table" (the one of transposed sheets), so a wrong call has a way out. A row that is not
@@ -806,16 +806,18 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
   re-read as a number). A pressure of a long sheet that does not join the key is written only when it does not differ inside one output row (otherwise it would show the first value of
   several); the first non-blank cell of the group wins, and a pressure that varies is not written and is named in the note below. A header that repeats in a sheet keeps both columns
   (`header#index` is the id of the second); the same header on two sheets is one column; a header that collides with a column already in the CSV gets the usual `_2`. A sheet with
-  no pressure and no extended key is written exactly as before. Values are written **from the
+  no pressure and no key column of these kinds is written exactly as before. A key column that no fixed column carries (a time with no date, a sediment depth, a depth bottom, a replicate) is written as a `key` column when it holds anything, because rows that differ only
+  there would look identical. A column the person set to `ignore` on purpose (the given mapping says ignore, the proposal for it did not) is not written, still separates the rows, and is named; a column
+  that is `ignore` by default (a replicate, a cast) is written. Values are written **from the
   original text**; a decimal-comma file keeps every character except the separator; coordinates
   parsed from degrees-minutes are written as decimal degrees rounded to the precision of the
   source and a note says so; every text cell passes the formula guard (a leading `= + - @` or tab
   gets an apostrophe), the OWASP rule for spreadsheets. Notes record an unknown time zone, an
   unparseable date, an unstated depth unit and an upward depth, and **every source column the file does not contain**
-  (`unwrittenColumns` in `dataset.ts`): one note per sheet, `source columns that are not in this file: a | b | c`, whole and in file order (the list is not cut). A column counts as
-  contained when it is the station, cruise, sample, date, time, date part (where the date is built from it), position, applied hemisphere, depth or variable the rows were built from,
-  the parameter, unit or value column of a long sheet, or an extra column above; an ignored column, a converter-only role, a second column for a slot already filled and the variables of a
-  lookup sheet are left out. A hemisphere/date-part column that the build did not use is named too.
+  (`unwrittenColumns` in `dataset.ts`; nothing is inferred from the roles: the build records the source columns it actually read, `Dataset.readColumns`, and the list is every other column of the mappings): one note per sheet, `source columns that are not in this file: a | b | c`, whole and in file order (the list is not cut). A column is read when a value of it went into the date (a date, a time beside it, date parts that built it, a Darwin Core year/month/day under an empty
+  eventDate), the position (with its hemisphere), the depth, the station, cruise or sample of a row, a variable, the parameter, unit or value of a long sheet, or when it lent such a value from a lookup
+  sheet (a join key counts as read). An ignored column, a time with no date, date parts no date was built from (month and day with no year, a month beside a full date, a year under a filled eventDate),
+  a lookup column no row took a value from (a date the data sheet has itself, a depth two rows of one station disagree on), a pressure that varies inside one row and a key column the person set to ignore are named.
 - **Sidecar CSV** (`original_column, output_column, unit, unit_source, p01`): what each output
   column came from, plus the `(setting)` row for the "one cruise" declaration.
 - **GeoJSON** (`toGeoJson`): one point per row, `[lon, lat]` as parsed, with the worst severity of

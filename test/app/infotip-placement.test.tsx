@@ -392,7 +392,7 @@ describe('/convert: the profile / environment file (stage 6)', () => {
     cleanup();
     setLang('en');
     expect(UI.en['tip.role.pressureConvert']).toContain('profile sheet');
-    expect(UI.en['tip.role.pressure']).toContain('the clean CSV keeps it after the depth');
+    expect(UI.en['tip.role.pressure']).toContain('writes it after the depth');
   });
 });
 

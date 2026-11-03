@@ -249,6 +249,8 @@ export interface Dataset {
   joinLost?: string;
   /** Source columns the clean CSV writes after the depth and before the variables (pressure, and the columns that joined a long sheet's row key). Absent when there are none. */
   extraKeyColumns?: ExtraKeyColumn[];
+  /** The source columns the build read, by sheet name (the lookup sheet of a join included): the record the clean CSV's list of left-out columns comes from. */
+  readColumns?: { sheet: string; columns: number[] }[];
 }
 
 /* ---------- findings and rules ---------- */

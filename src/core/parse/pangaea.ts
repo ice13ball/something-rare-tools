@@ -153,8 +153,9 @@ export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<
   if (unitsFold) {
     header = unitsFold.header;
     rows = unitsFold.rows;
-    // said only when a name got a unit (all units already in the names: nothing to report); the example is a header of this file
+    // a name got a unit: said with the first one as the example; every name had its unit already: the row is still not data, and that is said too (never "0 columns")
     if (unitsFold.example !== undefined) findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count, example: unitsFold.example } }));
+    else findings.push(makeFinding('IN-HEADER-UNITS-NAMED', { file: fileName, sheet: fileName, lines: [unitsFold.line] }));
   }
   file.sheets.push({ name: fileName, header, headerLine: h + 1, rows, ...(unitsFold ? { subHeaderLine: unitsFold.line, unitsRowLine: unitsFold.line } : {}) });
   const rag = raggedFinding(fileName, fileName, header.length, rows);

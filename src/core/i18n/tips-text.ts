@@ -35,7 +35,7 @@ const en = {
   'tip.role.dateDay': `the day of the month of a date written in separate columns.`,
   'tip.role.time': `the time of day, combined with the date of the date column; without a date column it is not used.`,
   'tip.role.depth': `distance below the surface; you give the positive direction and the unit beside it.`,
-  'tip.role.pressure': `the column is recognised; no check reads it, and the clean CSV keeps it after the depth.`,
+  'tip.role.pressure': `the column is recognised; no check reads it. The clean CSV writes it after the depth when it is one value for each row of the file; when it varies inside a row, the sidecar notes name it instead.`,
   'tip.role.station': `the name or number of a station; groups the rows taken at one place.`,
   'tip.role.cruise': `in the ship-speed test, separates cruises and replaces the one-cruise tick.`,
   'tip.role.sampleId': `the id of a sample or core; when sheets are joined, it stands in for the station.`,
@@ -90,7 +90,7 @@ No findings only means that no problems were found in the checked categories.`,
 • Rows without a position are not on the map.`,
 
   'tip.cleanCsv.does': `Saves your data in one CSV layout: fixed columns first, then the variables.`,
-  'tip.cleanCsv.logic': `• Fixed columns: station, cruise, sample id, date, latitude and longitude, depth; then the pressure and any column that tells rows apart (a replicate, a cast, a layer) as they are in the file; then each measured variable as “name [unit]”. Ignored columns and the time column (merged into the date) are not written, and the sidecar notes name every source column that is left out.
+  'tip.cleanCsv.logic': `• Fixed columns: station, cruise, sample id, date, latitude and longitude, depth; then the pressure and any column that tells rows apart (a replicate, a cast, a layer) as they are in the file; then each measured variable as “name [unit]”. Ignored columns and the time column (merged into the date) are not written, and the sidecar notes name every source column that is not in the file, including a key column you set to ignore yourself.
 • The date is written in ISO 8601, coordinates in decimal degrees (also when the file had degrees and minutes), and a decimal comma becomes a dot; other values are copied as written in the file, without conversion.
 • Text starting with =, +, - or @ gets a leading apostrophe, so that a spreadsheet does not treat it as a formula.`,
   'tip.sidecar.does': `Records what the tool found out about the columns: their meaning, unit and where the unit came from.`,
@@ -531,7 +531,7 @@ const pl: Record<TipKey, string> = {
   'tip.role.dateDay': `dzień miesiąca daty zapisanej w osobnych kolumnach.`,
   'tip.role.time': `godzina łączona z datą z kolumny daty; bez kolumny z datą nie jest używana.`,
   'tip.role.depth': `odległość od powierzchni; kierunek dodatni i jednostkę podajesz obok.`,
-  'tip.role.pressure': `kolumna jest rozpoznawana; żadne sprawdzenie jej nie czyta, a czysty CSV zachowuje ją po głębokości.`,
+  'tip.role.pressure': `kolumna jest rozpoznawana; żadne sprawdzenie jej nie czyta. Czysty CSV zapisuje ją po głębokości, gdy jest jedną wartością dla wiersza pliku; gdy zmienia się wewnątrz wiersza, nazywają ją uwagi pliku towarzyszącego.`,
   'tip.role.station': `nazwa lub numer stacji; grupuje wiersze z jednego miejsca.`,
   'tip.role.cruise': `w teście prędkości statku rozdziela rejsy i zastępuje zaznaczenie pola o jednym rejsie.`,
   'tip.role.sampleId': `identyfikator próbki lub rdzenia; przy połączonych arkuszach zastępuje stację.`,
@@ -586,7 +586,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Wierszy bez pozycji nie ma na mapie.`,
 
   'tip.cleanCsv.does': `Zapisuje Twoje dane w jednym układzie CSV: najpierw stałe kolumny, potem zmienne.`,
-  'tip.cleanCsv.logic': `• Stałe kolumny: stacja, rejs, identyfikator próbki, data, szerokość i długość geograficzna, głębokość; dalej ciśnienie i każda kolumna, która odróżnia wiersze (powtórzenie, rzut, warstwa), tak jak w pliku; dalej każda mierzona zmienna jako „nazwa [jednostka]”. Pominięte kolumny i kolumna godziny (dołączona do daty) nie trafiają do pliku, a uwagi w pliku towarzyszącym wymieniają każdą kolumnę źródła, której brakuje.
+  'tip.cleanCsv.logic': `• Stałe kolumny: stacja, rejs, identyfikator próbki, data, szerokość i długość geograficzna, głębokość; dalej ciśnienie i każda kolumna, która odróżnia wiersze (powtórzenie, rzut, warstwa), tak jak w pliku; dalej każda mierzona zmienna jako „nazwa [jednostka]”. Pominięte kolumny i kolumna godziny (dołączona do daty) nie trafiają do pliku, a uwagi w pliku towarzyszącym wymieniają każdą kolumnę źródła, której nie ma w pliku, także kolumnę klucza, którą sam ustawiłeś jako pomijaną.
 • Data jest zapisana w ISO 8601, współrzędne w stopniach dziesiętnych (także gdy w pliku były stopnie i minuty), a przecinek dziesiętny zamieniony na kropkę; pozostałe wartości są przepisane tak, jak zapisano je w pliku, bez przeliczania.
 • Tekst zaczynający się od =, +, - lub @ dostaje na początku apostrof, żeby arkusz kalkulacyjny nie potraktował go jako formuły.`,
   'tip.sidecar.does': `Zapisuje, co narzędzie ustaliło o kolumnach: ich znaczenie, jednostkę i skąd ją wzięto.`,
@@ -1025,7 +1025,7 @@ const de: Record<TipKey, string> = {
   'tip.role.dateDay': `der Tag im Monat eines Datums in getrennten Spalten.`,
   'tip.role.time': `die Uhrzeit, mit dem Datum der Datumsspalte verbunden; ohne Datumsspalte wird sie nicht verwendet.`,
   'tip.role.depth': `Abstand unter der Oberfläche; die positive Richtung und die Einheit geben Sie daneben an.`,
-  'tip.role.pressure': `die Spalte wird erkannt; keine Prüfung liest sie, und die bereinigte CSV behält sie nach der Tiefe.`,
+  'tip.role.pressure': `die Spalte wird erkannt; keine Prüfung liest sie. Die bereinigte CSV schreibt sie nach der Tiefe, wenn sie für jede Zeile der Datei ein einziger Wert ist; wechselt sie innerhalb einer Zeile, nennen sie die Hinweise der Begleitdatei.`,
   'tip.role.station': `Name oder Nummer einer Station; fasst die Zeilen eines Ortes zusammen.`,
   'tip.role.cruise': `trennt beim Geschwindigkeitstest die Fahrten und ersetzt das Häkchen für eine Fahrt.`,
   'tip.role.sampleId': `Kennung einer Probe oder eines Kerns; bei verknüpften Blättern vertritt sie die Station.`,
@@ -1080,7 +1080,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Zeilen ohne Position erscheinen nicht auf der Karte.`,
 
   'tip.cleanCsv.does': `Speichert Ihre Daten in einem CSV-Layout: feste Spalten zuerst, dann die Variablen.`,
-  'tip.cleanCsv.logic': `• Feste Spalten: Station, Fahrt, Proben-ID, Datum, Breite und Länge, Tiefe; danach der Druck und jede Spalte, die Zeilen unterscheidet (eine Wiederholung, ein Einsatz, eine Schicht), wie in der Datei; danach jede gemessene Variable als „Name [Einheit]“. Ignorierte Spalten und die Uhrzeitspalte (ins Datum eingerechnet) werden nicht geschrieben, und die Hinweise der Begleitdatei nennen jede Spalte der Quelle, die fehlt.
+  'tip.cleanCsv.logic': `• Feste Spalten: Station, Fahrt, Proben-ID, Datum, Breite und Länge, Tiefe; danach der Druck und jede Spalte, die Zeilen unterscheidet (eine Wiederholung, ein Einsatz, eine Schicht), wie in der Datei; danach jede gemessene Variable als „Name [Einheit]“. Ignorierte Spalten und die Uhrzeitspalte (ins Datum eingerechnet) werden nicht geschrieben, und die Hinweise der Begleitdatei nennen jede Spalte der Quelle, die nicht in der Datei steht, auch eine Schlüsselspalte, die Sie selbst auf ignorieren gesetzt haben.
 • Das Datum steht im Format ISO 8601, Koordinaten in Dezimalgrad (auch wenn die Datei Grad und Minuten hatte), ein Dezimalkomma wird zum Punkt; übrige Werte werden so übernommen, wie sie in der Datei stehen, ohne Umrechnung.
 • Text, der mit =, +, - oder @ beginnt, erhält ein Apostroph davor, damit eine Tabellenkalkulation ihn nicht als Formel behandelt.`,
   'tip.sidecar.does': `Hält fest, was das Werkzeug über die Spalten herausgefunden hat: Bedeutung, Einheit und woher die Einheit stammt.`,
@@ -1519,7 +1519,7 @@ const fr: Record<TipKey, string> = {
   'tip.role.dateDay': `le jour du mois d'une date écrite en colonnes séparées.`,
   'tip.role.time': `l'heure, associée à la date de la colonne de date ; sans colonne de date, elle n'est pas utilisée.`,
   'tip.role.depth': `la distance sous la surface ; vous indiquez à côté le sens positif et l'unité.`,
-  'tip.role.pressure': `la colonne est reconnue ; aucune vérification ne la lit, et le CSV nettoyé la garde après la profondeur.`,
+  'tip.role.pressure': `la colonne est reconnue ; aucune vérification ne la lit. Le CSV nettoyé l'écrit après la profondeur quand elle est une seule valeur par ligne du fichier ; quand elle varie à l'intérieur d'une ligne, les notes du fichier d'accompagnement la nomment.`,
   'tip.role.station': `le nom ou le numéro d'une station ; regroupe les lignes d'un même lieu.`,
   'tip.role.cruise': `dans le test de vitesse, sépare les campagnes et remplace la case d'une seule campagne.`,
   'tip.role.sampleId': `l'identifiant d'un échantillon ou d'une carotte ; quand des feuilles sont reliées, il tient lieu de station.`,
@@ -1574,7 +1574,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Les lignes sans position ne figurent pas sur la carte.`,
 
   'tip.cleanCsv.does': `Enregistre vos données dans une seule disposition CSV : colonnes fixes d'abord, puis les variables.`,
-  'tip.cleanCsv.logic': `• Colonnes fixes : station, campagne, identifiant d'échantillon, date, latitude et longitude, profondeur ; puis la pression et toute colonne qui distingue les lignes (une répétition, un déploiement, une couche), telles que dans le fichier ; puis chaque variable mesurée sous la forme « nom [unité] ». Les colonnes ignorées et la colonne d'heure (fusionnée dans la date) ne sont pas écrites, et les notes du fichier d'accompagnement nomment chaque colonne de la source qui manque.
+  'tip.cleanCsv.logic': `• Colonnes fixes : station, campagne, identifiant d'échantillon, date, latitude et longitude, profondeur ; puis la pression et toute colonne qui distingue les lignes (une répétition, un déploiement, une couche), telles que dans le fichier ; puis chaque variable mesurée sous la forme « nom [unité] ». Les colonnes ignorées et la colonne d'heure (fusionnée dans la date) ne sont pas écrites, et les notes du fichier d'accompagnement nomment chaque colonne de la source qui n'est pas dans le fichier, y compris une colonne de clé que vous avez vous-même réglée sur ignorer.
 • La date est écrite en ISO 8601, les coordonnées en degrés décimaux (même si le fichier avait des degrés et minutes), et une virgule décimale devient un point ; les autres valeurs sont recopiées telles qu'elles sont écrites dans le fichier, sans conversion.
 • Un texte commençant par =, +, - ou @ reçoit une apostrophe devant, pour qu'un tableur ne le traite pas comme une formule.`,
   'tip.sidecar.does': `Consigne ce que l'outil a établi sur les colonnes : leur sens, leur unité et l'origine de l'unité.`,
