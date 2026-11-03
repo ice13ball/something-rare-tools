@@ -1317,7 +1317,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const wanted = unread.filter((i) => !ignoredOnPurpose.has(i));
   const pressureOk = pressure.filter((p) => !pVarying.has(p.index));
   /**
-   * The text a key cell is written as. A number is converted only when EVERY numeric cell of its column is date-formatted (a General 5 among dates stays 5), and only when nothing can be lost: in a
+   * The text a key cell is written as. A number is converted only when EVERY numeric cell of its column is date-formatted (a General 5 among dates stays 5), and only when nothing can be lost (a cell the text would not tell from its neighbour stays the number): in a
    * time-only column a value from 0 up to 1 is a time of day (HH:MM, with seconds and milliseconds when it has them); any other value ([h]:mm 36.25, a full datetime shown as hh:mm) stays the number. In a date column a plausible serial is written as
    * the date (and time) it is, with the workbook's date system; anything else stays the number. Everything that is not a number is written as the file wrote it.
    */
@@ -1325,9 +1325,12 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
     const timeOnly = sheet.timeAll?.[index] === true;
     if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
-    // the text keeps the millisecond ('12:00:00.250') by the same rule as the date column: a fraction the column's format shows, or a number that is plainly not float noise (see KeepMillis)
+    // the text keeps the millisecond ('12:00:00.250') by the same rule as the date column (see KeepMillis)
     const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: sheet.fractionShown?.[index] === true ? 'shown' : true });
     if ('error' in d) return cell;
+    // a key cell stays the number when the text would lose anything: to the millisecond when the text has one, to the second otherwise (two cells that differ by less read alike in the text)
+    const off = /\.\d{3}$/.test(d.iso) ? Math.abs(cell * 86_400_000 - Math.round(cell * 86_400_000)) > 0.02 : Math.abs(cell * 86400 - Math.round(cell * 86400)) > 0.001;
+    if (off) return cell;
     if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
     return d.iso;
   };

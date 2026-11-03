@@ -148,9 +148,10 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}), ...(fractionShown.some(Boolean) ? { fractionShown } : {}) };
 }
 
-/** A date format that shows a fraction of a second: "hh:mm:ss.000", "ss.0", "mm:ss.00". Quoted text is ignored. */
+/** A date format that shows a fraction of a second: "hh:mm:ss.000", "ss.0", "[ss].000", "mm:ss.00". Quoted text, escaped characters, `[$locale]` brackets, `_x` (a space) and `*x` (a fill) are ignored. */
 export function showsFractionOfSecond(z: string): boolean {
-  return /s\.0/i.test(z.replace(/"[^"]*"/g, '').replace(/\\./g, ''));
+  const f = z.replace(/"[^"]*"/g, '').replace(/\[\$[^\]]*\]/g, '').replace(/\\./g, '').replace(/[_*]./g, '');
+  return /s\]?\.0/i.test(f);
 }
 
 /** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */

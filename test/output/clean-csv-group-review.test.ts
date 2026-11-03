@@ -147,10 +147,18 @@ describe('an Excel number is converted only when nothing can be lost; otherwise 
     expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.25 / 86400, 'hh:mm'), cell(0.5 + 0.75 / 86400, 'hh:mm')])).toEqual(['12:00', '12:00:00.250', '12:00:00.750']);
   });
 
-  it('times a few milliseconds apart stay two where the format shows the fraction, and where it does not when they are real', () => {
+  it('rows the text would not tell apart keep the raw number: nothing is read alike in silence', () => {
+    const raw = (v: number) => String(v);
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.003 / 86400, 'hh:mm')])).toEqual(['12:00', raw(0.5 + 0.003 / 86400)]);
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.500001, 'hh:mm')])).toEqual(['12:00', '0.500001']);
+    expect(timeColumn([cell(0.5 + 0.1 / 86400, 'hh:mm:ss.000'), cell(0.5 + 0.1004 / 86400, 'hh:mm:ss.000')])).toEqual(['12:00:00.100', raw(0.5 + 0.1004 / 86400)]);
+    expect(dateColumn([cell(43900.5, 'yyyy-mm-dd hh:mm:ss'), cell(43900.5 + 0.003 / 86400, 'yyyy-mm-dd hh:mm:ss')])).toEqual(['2020-03-10T12:00', raw(43900.5 + 0.003 / 86400)]);
+    expect(dateColumn([cell(43900.5, 'yyyy-mm-dd hh:mm:ss'), cell(43900.50001, 'yyyy-mm-dd hh:mm:ss')])).toEqual(['2020-03-10T12:00', '43900.50001']);
+  });
+
+  it('times a few milliseconds apart stay two where the format shows the fraction, and a real .250 is written', () => {
     expect(timeColumn([cell(0.5, 'hh:mm:ss.000'), cell(0.5 + 0.003 / 86400, 'hh:mm:ss.000')])).toEqual(['12:00', '12:00:00.003']);
-    expect(timeColumn([cell(0.5, 'hh:mm:ss'), cell(0.5 + 0.0037 / 86400, 'hh:mm:ss')])).toEqual(['12:00', '12:00']);
-    expect(timeColumn([cell(0.5, 'hh:mm:ss'), cell(0.5 + 0.0104 / 86400, 'hh:mm:ss')])).toEqual(['12:00', '12:00:00.010']);
+    expect(timeColumn([cell(0.5, 'hh:mm:ss'), cell(0.5 + 0.25 / 86400, 'hh:mm:ss')])).toEqual(['12:00', '12:00:00.250']);
   });
 
   it('float noise and a fill-down are not a fraction: 600 rows of =A+1/1440 are written as the minutes they are', () => {

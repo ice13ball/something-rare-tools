@@ -534,7 +534,7 @@ describe('ROW-LONG-KEY-IGNORED reads naturally in four languages, with one colum
     expect(renderPlain(f(2, 'A, B'), 'en')).toContain('only by the columns you set to ignore (A, B). The clean CSV does not write them');
     expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Kolumny ustawione na „ignoruj” (A, B) odróżniają wiersze');
     expect(renderPlain(f(2, 'A, B'), 'pl')).toContain('Czysty CSV ich nie zapisuje');
-    expect(renderPlain(f(5, 'A, B, C, D, E'), 'pl')).toContain('Kolumn ustawionych na „ignoruj” (A, B, C, D, E) odróżnia wiersze');
+    expect(renderPlain(f(5, 'A, B, C, D, E'), 'pl')).toContain('Kolumny ustawione na „ignoruj” (A, B, C, D, E) odróżniają wiersze');
     expect(renderPlain(f(2, 'A, B'), 'de')).toContain('die Spalten unterschieden');
     expect(renderPlain(f(2, 'A, B'), 'fr')).toContain('les colonnes que vous avez réglées sur ignorer (A, B). Le CSV nettoyé ne les écrit pas');
   });
