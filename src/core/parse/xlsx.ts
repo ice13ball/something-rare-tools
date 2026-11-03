@@ -118,7 +118,8 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   if (unitsFold) {
     header.splice(0, header.length, ...unitsFold.header);
     rows.splice(0, 1);
-    findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: name, lines: [unitsFold.line], params: { count: unitsFold.count } }));
+    // said only when a name got a unit (all units already in the names: nothing to report); the example is a header of this file
+    if (unitsFold.example !== undefined) findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: name, lines: [unitsFold.line], params: { count: unitsFold.count, example: unitsFold.example } }));
   }
   // statistic labels written UNDER the units are the same second header, in the other order
   const fold2 = unitsFold && !fold ? foldStatisticSubheader(header, rows, mergedText) : undefined;

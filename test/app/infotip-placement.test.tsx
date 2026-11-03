@@ -232,7 +232,7 @@ describe('/convert', () => {
     const bubble = document.querySelector('[data-tip-bubble="convertRoles"]') as HTMLElement;
     expect(bubble.parentElement).toBe(document.body);
     for (const k of ['role.taxonHeader', 'role.quantity', 'role.effort', 'role.occurrenceId', 'role.lifeStage', 'role.qualifier'] as const) expect(bubble.textContent).toContain(UI.en[k]);
-    // the pressure line is the converter's own (a profile sheet writes it), not the /check sentence that says no output file uses it
+    // the pressure line is the converter's own (a profile sheet writes it), not the /check sentence that says the clean CSV keeps it
     expect(bubble.textContent).toContain(UI.en['tip.role.pressureConvert']);
     expect(bubble.textContent).not.toContain(UI.en['tip.role.pressure']);
     fireEvent.click(document.querySelector('[data-tip="convertRoles"] button') as HTMLElement);
@@ -392,7 +392,7 @@ describe('/convert: the profile / environment file (stage 6)', () => {
     cleanup();
     setLang('en');
     expect(UI.en['tip.role.pressureConvert']).toContain('profile sheet');
-    expect(UI.en['tip.role.pressure']).toContain('no check or output file uses it');
+    expect(UI.en['tip.role.pressure']).toContain('the clean CSV keeps it after the depth');
   });
 });
 

@@ -4,6 +4,7 @@ import type {
   ColumnRole,
   DataRow,
   Dataset,
+  ExtraKeyColumn,
   Finding,
   LayoutPlan,
   MetadataRecord,
@@ -98,6 +99,8 @@ export interface Specs {
   cruise?: Spec;
   sampleId?: Spec;
   vars: (Spec & { role: VariableRole })[];
+  /** Columns with the pressure role: the clean CSV keeps them (the value itself is not read by any check). */
+  pressure?: (Spec & { unit?: string })[];
 }
 
 /** Exported for the converter (src/core/convert), which reads rows exactly as /check does. No logic of its own was added for that. */
@@ -141,6 +144,9 @@ export function specsOf(mapping: SheetMapping): Specs {
         break;
       case 'variable':
         s.vars.push({ ...spec, role: r });
+        break;
+      case 'pressure':
+        (s.pressure ??= []).push(r.unit === undefined ? spec : { ...spec, unit: r.unit });
         break;
       // converter-only roles (types.ts ConverterRole): /check never proposes them; a column that has one is not read here, so a
       // species or quantity column can never raise ROW-UNIT-MISSING or any other variable rule
@@ -543,6 +549,30 @@ interface Built {
   rows: DataRow[];
   variables: Variable[];
   positives: ('down' | 'up' | 'unknown')[];
+  /** Source columns whose cells the rows carry in `keyCells` (see ExtraKeyColumn). */
+  extra: ExtraKeyColumn[];
+}
+
+/**
+ * The columns of one sheet that the clean CSV keeps beside the fixed ones: its pressure columns and the columns that joined a long sheet's row key (`added`), each once, in the order of the sheet.
+ * `skip` holds the columns that already have another place (the parameter, unit and value columns of a long sheet, the variables of a wide one).
+ */
+function extraColumnsOf(sheet: RawSheet, specs: Specs, added: readonly number[], skip: ReadonlySet<number>): ExtraKeyColumn[] {
+  const picked = new Map<number, { kind: ExtraKeyColumn['kind']; unit?: string }>();
+  for (const p of specs.pressure ?? []) if (!skip.has(p.index) && !picked.has(p.index)) picked.set(p.index, { kind: 'pressure', ...(p.unit === undefined ? {} : { unit: p.unit }) });
+  for (const i of added) if (!skip.has(i) && !picked.has(i)) picked.set(i, { kind: 'key' });
+  const ids = new Set<string>();
+  const out: ExtraKeyColumn[] = [];
+  for (const index of [...picked.keys()].sort((a, b) => a - b)) {
+    const header = sheet.header[index] ?? '';
+    if (header.trim() === '') continue;
+    // a header the sheet repeats gets its index, so the two columns stay two
+    let id = header;
+    if (ids.has(id)) id = `${header}#${index}`;
+    ids.add(id);
+    out.push({ header, index, sheet: sheet.name, id, kind: picked.get(index)!.kind, ...(picked.get(index)!.unit === undefined ? {} : { unit: picked.get(index)!.unit }) });
+  }
+  return out;
 }
 
 const longColumns = (l: NonNullable<TablePlan['long']>): number[] => [l.parameterCol, l.valueCol, ...(l.unitCol === undefined ? [] : [l.unitCol])];
@@ -722,13 +752,18 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   });
   const variables = cols.map(({ v, key }) => variableFrom(key, v.header, v.role));
   const rows: DataRow[] = [];
+  const extra = extraColumnsOf(sheet, specs, [], new Set(specs.vars.map((v) => v.index)));
   for (const r of sheet.rows) {
     const row: DataRow = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: newValues() };
     for (const { v, key } of cols) row.values[key] = numericCell(r.cells[v.index] ?? null, r.line, v.header, sheet.name, dc, c);
+    if (extra.length > 0) {
+      row.keyCells = newValues() as unknown as Record<string, RawCell>;
+      for (const e of extra) row.keyCells[e.id] = r.cells[e.index] ?? null;
+    }
     rows.push(row);
   }
   clearInheritedPositions(sheet, rows);
-  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [] };
+  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1004,6 +1039,9 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const variables = new Map<string, Variable>();
   const groups = new Map<string, DataRow>();
   const rows: DataRow[] = [];
+  // the columns the clean CSV keeps: pressure, and what joined the key. A pressure that differs inside one row of the output (it did not join the key) cannot be written and is dropped below.
+  const extra = extraColumnsOf(sheet, specs, added, skip);
+  const varying = new Set<string>();
   const skippedDiffer: number[] = [];
   let skippedExample: string | undefined;
   for (const r of sheet.rows) {
@@ -1015,6 +1053,18 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       row = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(parse(r), r, lookup), values: newValues() };
       groups.set(id, row);
       rows.push(row);
+      if (extra.length > 0) {
+        row.keyCells = newValues() as unknown as Record<string, RawCell>;
+        for (const e of extra) row.keyCells[e.id] = r.cells[e.index] ?? null;
+      }
+    } else if (row.keyCells) {
+      for (const e of extra) {
+        const now = r.cells[e.index] ?? null;
+        if (isBlankCell(now)) continue;
+        const kept = row.keyCells[e.id];
+        if (isBlankCell(kept)) row.keyCells[e.id] = now;
+        else if (String(kept).trim() !== String(now).trim()) varying.add(e.id);
+      }
     }
     const unit = unitOfRow(r, param);
     const key = varKey(r, param);
@@ -1041,7 +1091,43 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     }
   }
   for (const line of skippedDiffer) c.add('ROW-LONG-VALUE-SKIPPED', sheet.name, skippedExample ?? '', line, undefined, true, { count: skippedDiffer.length });
-  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [] };
+  if (varying.size > 0) {
+    for (const row of rows) for (const id of varying) delete row.keyCells?.[id];
+  }
+  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra: extra.filter((e) => !varying.has(e.id)) };
+}
+
+/**
+ * The columns of the sheets a dataset was built from whose content the clean CSV does NOT carry: a column with no role (ignore), a converter role, a second column for a slot already filled, a
+ * hemisphere column that did not apply, a variable column of a lookup sheet, a pressure that varies inside one row of a long sheet. A column is carried when it is the station, cruise, sample, date,
+ * time, date part, position, hemisphere, depth or variable the rows were built from, the parameter, unit or value column of a long sheet, or one of `ds.extraKeyColumns`. Date parts beside a mapped
+ * date count as carried only where the date is built from them (a Year chosen as the date beside a month; a Darwin Core eventDate column).
+ */
+export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; header: string }[] {
+  const out: { sheet: string; index: number; header: string }[] = [];
+  const keyOf = (s: Spec): string => headerKey(unitFromHeader(s.header).name);
+  for (const m of ds.mappings) {
+    const specs = specsOf(m);
+    const table = ds.layout.tables.find((t) => t.sheet === m.sheet);
+    const read = new Set<number>();
+    const mark = (...ss: (Spec | undefined)[]): void => {
+      for (const x of ss) if (x) read.add(x.index);
+    };
+    mark(specs.lat, specs.lon, specs.when, specs.time, specs.depth, specs.station, specs.cruise, specs.sampleId);
+    if (specs.lat && specs.latHemi && hemisphereBoundAgrees(keyOf(specs.latHemi), keyOf(specs.lat))) mark(specs.latHemi);
+    if (specs.lon && specs.lonHemi && hemisphereBoundAgrees(keyOf(specs.lonHemi), keyOf(specs.lon))) mark(specs.lonHemi);
+    const parts = specs.dateParts;
+    if (parts && (!specs.when || (parts.year === undefined && parts.month !== undefined) || dwcTermOf(specs.when.header) === 'eventdate')) mark(parts.year, parts.month, parts.day);
+    if (table && !table.long) mark(...specs.vars);
+    if (table?.long) {
+      read.add(table.long.parameterCol);
+      read.add(table.long.valueCol);
+      if (table.long.unitCol !== undefined) read.add(table.long.unitCol);
+    }
+    for (const e of ds.extraKeyColumns ?? []) if (e.sheet === m.sheet) read.add(e.index);
+    for (const c of m.columns) if (!read.has(c.index)) out.push({ sheet: m.sheet, index: c.index, header: c.header });
+  }
+  return out;
 }
 
 /* ---------- public ---------- */
@@ -1090,6 +1176,7 @@ export function buildDataset(
   const variables: Variable[] = [];
   const positives: ('down' | 'up' | 'unknown')[] = [];
   const usedSheets: string[] = [];
+  const extraKeyColumns: ExtraKeyColumn[] = [];
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
   };
@@ -1110,6 +1197,8 @@ export function buildDataset(
     pushAll(findings, checkRawTable(file, sheet, [specs.station, specs.cruise, specs.sampleId].filter((x): x is Spec => x !== undefined).map((x) => x.index), { noDateSaid }));
     pushAll(variables, built.variables);
     pushAll(positives, built.positives);
+    // one output column for the same header of two sheets; the cells of each row sit under the id
+    for (const e of built.extra) if (!extraKeyColumns.some((x) => x.id === e.id)) extraKeyColumns.push(e);
   }
 
   fillUnitsFromMetadata(variables, metadata);
@@ -1127,7 +1216,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}) };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}) };
   return { dataset, findings };
 }
 

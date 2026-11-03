@@ -193,7 +193,8 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
   if (unitsFold) {
     header = unitsFold.header;
     rows = unitsFold.rows;
-    findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count } }));
+    // said only when a name got a unit (all units already in the names: nothing to report); the example is a header of this file
+    if (unitsFold.example !== undefined) findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count, example: unitsFold.example } }));
   }
   // statistic labels written UNDER the units (units, then mean / st.dev.) are the same second header, in the other order
   const fold2 = unitsFold && !fold ? foldStatisticSubheader(header, rows) : undefined;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Clean CSV export + sidecar. Values are WRITTEN FROM THEIR ORIGINAL TEXT: nothing is parsed and re-formatted.
+import { unwrittenColumns } from '../dataset';
 import { unitFromHeader } from '../recognize/columns';
 import type { ColumnRole, DataRow, Dataset, NumericCell, ParsedDate, RawCell } from '../types';
 import { SETTING_ROW, SINGLE_CRUISE_SETTING } from '../parse/mappingFile';
@@ -171,6 +172,15 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   if (!srcDepth && has((r) => r.depth)) notes.push('depth unit not stated in the source; the column has no unit');
   if (ds.depthPositive === 'up') notes.push('depth is positive upwards in the source; values are not flipped');
 
+  // The columns that tell rows apart or give them meaning and that are no fixed column: a pressure, a replicate, a cast, a layer. Their cells are written as the file wrote them
+  // (a pressure of a decimal-comma file loses only its comma, as every measurement does); a key is a label and is never re-read as a number.
+  for (const e of ds.extraKeyColumns ?? []) {
+    const hu = unitFromHeader(e.header);
+    const unit = e.kind === 'pressure' ? (e.unit ?? hu.unitText) : hu.unitText;
+    const swap = e.kind === 'pressure' && ds.decimalComma === true;
+    add(hu.name || e.header, unit, (r) => valueText(r.keyCells?.[e.id], swap), [e.header, unit !== undefined && hu.unitText !== undefined ? 'header' : '', '']);
+  }
+
   for (const v of ds.variables) {
     const name = unitFromHeader(v.header).name || v.header;
     add(name, v.unit, (r) => cellText(r.values[v.key], ds.decimalComma === true), [v.header, v.unitSource ?? '', v.p01 ?? '']);
@@ -179,6 +189,13 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   const lines = [csvLine(cols.map((c) => guardText(c.header))), ...rows.map((r) => csvLine(cols.map((c) => c.get(r))))];
 
   if (rounded) notes.push('coordinates parsed from degrees and minutes/seconds are written as decimal degrees rounded to the precision of the source text');
+  // every source column that is not in this file is named, whole and in the order of the file (a long list is not cut)
+  const left = unwrittenColumns(ds);
+  const sheets = [...new Set(left.map((c) => c.sheet))];
+  for (const sheet of sheets) {
+    const names = left.filter((c) => c.sheet === sheet).map((c) => (c.header.trim() === '' ? `(column ${c.index + 1})` : c.header));
+    notes.push(`source columns that are not in this file${ds.mappings.length > 1 ? ` (sheet ${sheet})` : ''}: ${names.join(' | ')}`);
+  }
   const sidecar = [
     csvLine(['original_column', 'output_column', 'unit', 'unit_source', 'p01']),
     ...side.map((s) => csvLine(s.map(guardText))),

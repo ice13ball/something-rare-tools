@@ -153,7 +153,8 @@ export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<
   if (unitsFold) {
     header = unitsFold.header;
     rows = unitsFold.rows;
-    findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count } }));
+    // said only when a name got a unit (all units already in the names: nothing to report); the example is a header of this file
+    if (unitsFold.example !== undefined) findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count, example: unitsFold.example } }));
   }
   file.sheets.push({ name: fileName, header, headerLine: h + 1, rows, ...(unitsFold ? { subHeaderLine: unitsFold.line, unitsRowLine: unitsFold.line } : {}) });
   const rag = raggedFinding(fileName, fileName, header.length, rows);

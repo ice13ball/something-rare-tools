@@ -173,6 +173,8 @@ export function foldStatisticSubheader(header: readonly string[], rows: readonly
 /** What a units row folded into the header: the fold (header, rows without the units row, its physical line) and the number of columns that got a unit. */
 export interface UnitsFold extends SubheaderFold {
   count: number;
+  /** The first header that got a unit, as it now reads ('a [h]'): the finding's example comes from the file. Present exactly when `count` > 0. */
+  example?: string;
 }
 
 export interface UnitsFoldOptions {
@@ -194,7 +196,7 @@ export interface UnitsFoldOptions {
 export function foldUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions = {}): UnitsFold | undefined {
   const scan = scanUnitsRow(header, rows, decimalComma, opts);
   if (scan === undefined || scan.failing) return undefined;
-  return { header: scan.header, rows: rows.slice(1), line: scan.line, count: scan.changed };
+  return { header: scan.header, rows: rows.slice(1), line: scan.line, count: scan.changed, ...(scan.example === undefined ? {} : { example: scan.example }) };
 }
 
 /**
@@ -225,7 +227,7 @@ export function valueShaped(cell: RawCell, decimalComma: boolean): boolean {
   return m[1] === undefined || unitCellKind(m[1]) === 'unit';
 }
 
-function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions): { header: string[]; line: number; changed: number; failing: boolean; plainOk: boolean } | undefined {
+function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions): { header: string[]; line: number; changed: number; failing: boolean; plainOk: boolean; example?: string } | undefined {
   const first = rows[0];
   if (first === undefined || rows.length < 2) return undefined;
   const units = new Map<number, { kind: 'unit' | 'utc'; text: string }>();
@@ -292,10 +294,12 @@ function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decima
   if (!plainOk) failing = true;
   const out: string[] = [...header];
   let changed = 0;
+  let example: string | undefined;
   for (const [c, u] of units) {
     if (keep.has(c)) continue;
     out[c] = `${(header[c] ?? '').trim()} [${u.text}]`;
+    example ??= out[c];
     changed++;
   }
-  return { header: out, line: first.line, changed, failing, plainOk };
+  return { header: out, line: first.line, changed, failing, plainOk, ...(example === undefined ? {} : { example }) };
 }

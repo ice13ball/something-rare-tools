@@ -242,7 +242,7 @@ time of day under `UTC`), at least two unit columns hold plain numbers, and at l
 words (`high`, `1A`) under a unit. A header that already names a unit (a bracket, `Temp [deg C] (CTD)`, `Tiefe [m] von`, `depth_ft`, `depth_m`, `temp_c`) keeps it when the cell
 agrees, no second bracket is added; a cell that disagrees (`depth_ft` over `m`) means no fold at all, so a unit is never silently replaced. A decimal comma is decided before the fold.
 Data rows keep their physical line numbers; `RawSheet.unitsRowLine` (also `subHeaderLine`) keeps the line of the units row, and `IN-HEADER-UNITS-READ` (info) says it once and
-counts the columns whose name got a unit (a name that had one already is not counted). Nothing is changed in any cell and no role is guessed.
+counts the columns whose name got a unit (a name that had one already is not counted) and gives the first of them as it now reads (`example`, `a [h]`: the text takes its example from the file). When every name had its unit already the count would be 0, and no finding is made. Nothing is changed in any cell and no role is guessed.
 What is named: a first row in which every cell is a unit and the numbers agree under most of them, but under some unit stand words (`firstRowIsUnits`, `recognize/layout.ts`; also the
 older test of two vocabulary units over numbers). /check refuses it (`IN-LAYOUT-UNSUPPORTED`, header over several rows). /convert does not read the sheet: `CONV-SHEET-UNITS-ROW` says the
 line "looks like units" in four languages and the sheet gets the tick "Read as a normal table" (the one of transposed sheets), so a wrong call has a way out. A row that is not
@@ -800,12 +800,22 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
 
 - **Clean CSV** (`toCleanCsv`): columns `station`, `cruise`, `sample_id` (when present), `date`
   (ISO 8601; a UTC time carries its `Z`), `latitude` (`degrees_north`), `longitude`
-  (`degrees_east`), `depth`, then each variable as `name [unit]`. Values are written **from the
+  (`degrees_east`), `depth`, then the columns that tell rows apart, then each variable as `name [unit]`. The columns that tell rows apart are each pressure column (role `pressure`, in
+  its own unit, `Dataset.extraKeyColumns` with kind `pressure`) and the columns that joined the row key of a long sheet (`extendLongKey`: a replicate, a cast, a layer; kind `key`); their cells
+  sit on `DataRow.keyCells`, by `ExtraKeyColumn.id`, and are written as the file wrote them (`10.50` stays `10.50`; a pressure of a decimal-comma file loses only its comma, a key is never
+  re-read as a number). A pressure of a long sheet that does not join the key is written only when it does not differ inside one output row (otherwise it would show the first value of
+  several); the first non-blank cell of the group wins, and a pressure that varies is not written and is named in the note below. A header that repeats in a sheet keeps both columns
+  (`header#index` is the id of the second); the same header on two sheets is one column; a header that collides with a column already in the CSV gets the usual `_2`. A sheet with
+  no pressure and no extended key is written exactly as before. Values are written **from the
   original text**; a decimal-comma file keeps every character except the separator; coordinates
   parsed from degrees-minutes are written as decimal degrees rounded to the precision of the
   source and a note says so; every text cell passes the formula guard (a leading `= + - @` or tab
   gets an apostrophe), the OWASP rule for spreadsheets. Notes record an unknown time zone, an
-  unparseable date, an unstated depth unit and an upward depth.
+  unparseable date, an unstated depth unit and an upward depth, and **every source column the file does not contain**
+  (`unwrittenColumns` in `dataset.ts`): one note per sheet, `source columns that are not in this file: a | b | c`, whole and in file order (the list is not cut). A column counts as
+  contained when it is the station, cruise, sample, date, time, date part (where the date is built from it), position, applied hemisphere, depth or variable the rows were built from,
+  the parameter, unit or value column of a long sheet, or an extra column above; an ignored column, a converter-only role, a second column for a slot already filled and the variables of a
+  lookup sheet are left out. A hemisphere/date-part column that the build did not use is named too.
 - **Sidecar CSV** (`original_column, output_column, unit, unit_source, p01`): what each output
   column came from, plus the `(setting)` row for the "one cruise" declaration.
 - **GeoJSON** (`toGeoJson`): one point per row, `[lon, lat]` as parsed, with the worst severity of

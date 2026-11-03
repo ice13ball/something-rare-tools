@@ -229,7 +229,14 @@ export interface DataRow {
   /** The latitude and/or longitude CELL is blank (not text, not a number) on a row that holds something else; set only where a position column exists. */
   posBlank?: 'lat' | 'lon' | 'both';
   values: Record<string, NumericCell>;                   // key = Variable.key
+  /** The cells of the dataset's `extraKeyColumns` on this row, exactly as the file wrote them, by `ExtraKeyColumn.id`. Absent on a row of a sheet that has none. */
+  keyCells?: Record<string, RawCell>;
 }
+/**
+ * A source column the clean CSV keeps beside the fixed ones because without it rows cannot be told apart or lose their meaning: a pressure, or a column that joined the row key of a long sheet
+ * (a replicate, a cast, a layer). `id` is the key of its cells in `DataRow.keyCells` (the header, or `header#index` when the sheet repeats the header); `unit` is the pressure role's unit.
+ */
+export interface ExtraKeyColumn { header: string; index: number; sheet: string; id: string; kind: 'pressure' | 'key'; unit?: string }
 export interface Dataset {
   id: string; label: string; file: string;
   rows: DataRow[]; variables: Variable[];
@@ -240,6 +247,8 @@ export interface Dataset {
   decimalComma?: boolean;
   /** The sheet a join left rows without a position or date for (its key matches several rows that differ): META-NO-DATES / META-NO-POSITIONS name it as the likely cause. */
   joinLost?: string;
+  /** Source columns the clean CSV writes after the depth and before the variables (pressure, and the columns that joined a long sheet's row key). Absent when there are none. */
+  extraKeyColumns?: ExtraKeyColumn[];
 }
 
 /* ---------- findings and rules ---------- */

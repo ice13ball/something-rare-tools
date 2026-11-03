@@ -10,6 +10,8 @@
  *   GOLDEN_DIFF_MODE=compare GOLDEN_DIFF_BEFORE=/tmp/before.json GOLDEN_DIFF_AFTER=/tmp/after.json \
  *     npx vitest run --config vitest.golden-diff.config.ts
  *
+ * dump     (every dataset also carries what its clean CSV and sidecar come to: the header line, a hash of the CSV and of the sidecar, so a change of the output shows as a changed hash and, if it added
+ *          or lost a column, a changed header; no cell value is kept in the dump beyond what the headers say),
  * dump     (every dataset also carries its row and value counts, `rows` and `values`: a change that loses measurements shows as a count that falls)
  * dump     For every folder under the golden directory writes, into GOLDEN_DIFF_OUT:
  *            - `input:<folder>/<id>`  for each input of the folder's expected.json (or inputs.json): the column mappings
@@ -56,6 +58,13 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
   const { proposeColumns } = await load<typeof import('../src/core/recognize/columns')>('src/core/recognize/columns.ts');
   const { proposeLayout, proposeMappings } = await load<typeof import('../src/core/recognize/layout')>('src/core/recognize/layout.ts');
   const { buildDatasets } = await load<typeof import('../src/core/dataset')>('src/core/dataset.ts');
+  const { toCleanCsv } = await load<typeof import('../src/core/output/csv')>('src/core/output/csv.ts');
+  const sha = (t: string): string => createHash('sha1').update(t).digest('hex').slice(0, 12);
+  // what the clean CSV and its sidecar come to (a hash each, and the header line): a changed output shows even when no finding moved
+  const cleanOf = (d: Parameters<typeof toCleanCsv>[0]): { header: string; csv: string; sidecar: string } => {
+    const out = toCleanCsv(d);
+    return { header: out.csv.slice(0, out.csv.indexOf('\n')), csv: sha(out.csv), sidecar: sha(out.sidecar) };
+  };
   const { runInput } = await load<typeof import('../test/golden/pipeline')>('test/golden/pipeline.ts');
   const land = decodeLandMask(new Uint8Array(gunzipSync(readFileSync(join(repo, 'src', 'core', 'geo', 'land-mask.bin')))));
 
@@ -81,7 +90,7 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         const r = await runInput(input, dir);
         const checked = runChecks({ datasets: r.datasets, records: r.records, parseFindings: r.parseFindings }, { land });
         result[key] = {
-          datasets: r.datasets.map((d) => ({ id: d.id, mappings: d.mappings, layout: d.layout, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0) })),
+          datasets: r.datasets.map((d) => ({ id: d.id, mappings: d.mappings, layout: d.layout, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0), clean: cleanOf(d) })),
           findings: checked.findings,
         };
       } catch (e) {
@@ -106,10 +115,10 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         const bytes = new Uint8Array(readFileSync(f));
         const file = parseFile(f.split('/').pop() as string, bytes);
         // what the app builds from the file as it proposes it: the rows and the values of every dataset (a change that drops measurements shows here)
-        let built: { label: string; rows: number; values: number }[] | undefined;
+        let built: { label: string; rows: number; values: number; clean: { header: string; csv: string; sidecar: string } }[] | undefined;
         try {
           const layout0 = proposeLayout(file);
-          built = buildDatasets(file, layout0, proposeMappings(file, layout0), [], 'x').datasets.map((d) => ({ label: d.label, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0) }));
+          built = buildDatasets(file, layout0, proposeMappings(file, layout0), [], 'x').datasets.map((d) => ({ label: d.label, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0), clean: cleanOf(d) }));
         } catch {
           built = undefined;
         }

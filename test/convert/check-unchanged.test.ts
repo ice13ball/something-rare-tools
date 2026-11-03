@@ -106,7 +106,10 @@ describe('the new role kinds are inert in /check', () => {
     expect(findings.filter((f) => f.ruleId === 'ROW-UNIT-MISSING')).toEqual([]);
     const out = toCleanCsv(dataset);
     expect(out.csv.split('\n')[0]).not.toMatch(/Calanus|Count|Vol/);
-    expect(out.sidecar).not.toMatch(/Calanus|Count|Vol/);
+    // no column row of the sidecar maps them; the note that names every source column left out does name them
+    const mapped = out.sidecar.split('\n').filter((l) => !l.startsWith('(note)'));
+    expect(mapped.join('\n')).not.toMatch(/Calanus|Count|Vol/);
+    expect(out.sidecar).toContain('(note),source columns that are not in this file: Calanus | Count | Vol');
   });
 
   it('the role dropdown of /check lists the same kinds as before, none of the new ones, and no tip lists them', () => {
