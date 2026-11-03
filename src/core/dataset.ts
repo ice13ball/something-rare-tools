@@ -802,6 +802,8 @@ interface Lookup {
   cache: Map<RawRow, { meta: Meta; reads: ReadonlyMap<keyof Meta, readonly number[]>; rounded: readonly (readonly [number, number])[] }>;
   /** The lookup sheet's date or time cells that were rounded to the second and whose row actually LENT its date to a row of the left sheet, per column. */
   rounded: Map<number, { count: number; maxMs: number }>;
+  /** The right rows already counted in `rounded`: a cell is counted once, however many rows take its date. */
+  counted: Set<RawRow>;
   /** For each column of the right sheet, the right rows whose cell gave a value to a row of the left sheet, and the right rows any left row was joined to. */
   usedRows: Map<number, Set<RawRow>>;
   /** Every right row of a key some left row was joined to (or that was found ambiguous): all of them are judged, not only the one that was taken. */
@@ -881,7 +883,7 @@ function makeLookup(file: ParsedFile, layout: LayoutPlan, sheetName: string, map
     else if (depthOf(r) !== depths.get(k)) rowsByKey.set(k, { row: first.row, depthless: true });
   }
   const header = (cols: readonly number[], s: RawSheet | undefined): string => cols.map((i) => s?.header[i] ?? `#${i + 1}`).join(' + ');
-  return { rowsByKey, meta, cache: new Map(), rounded: new Map(), usedRows: new Map(), hitRows: new Set(), takenFor: new Map(), rowsOfKey, keysJudged: new Set(), leftKeys, rightKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
+  return { rowsByKey, meta, cache: new Map(), rounded: new Map(), counted: new Set(), usedRows: new Map(), hitRows: new Set(), takenFor: new Map(), rowsOfKey, keysJudged: new Set(), leftKeys, rightKeys, keyName: header(leftKeys, leftSheet), sheetName, rightName: join.right, collector: c };
 }
 
 const DEPTH_FIELDS: (keyof Meta)[] = ['depth', 'depthDecimals', 'depthMin', 'depthMax'];
@@ -915,7 +917,8 @@ function withLookup(base: Meta, row: RawRow, lookup: Lookup | undefined): Meta {
       if (hit.depthless && DEPTH_FIELDS.includes(f)) continue;
       if (base[f] === undefined && lm.meta[f] !== undefined) {
         (base as Record<string, unknown>)[f] = lm.meta[f];
-        if (f === 'datetime') {
+        if (f === 'datetime' && !lookup.counted.has(hit.row)) {
+          lookup.counted.add(hit.row);
           for (const [col, off] of lm.rounded) {
             const t = lookup.rounded.get(col) ?? { count: 0, maxMs: 0 };
             t.count++;

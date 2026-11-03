@@ -234,6 +234,15 @@ describe('the note counts a lookup date only where it is taken, and not a date a
     expect(roundedNotes(file)).toEqual(['date cells rounded to the second (sheet Stations): Date (2 cells, up to 108 ms)']);
   });
 
+  it('a cell counts once however many rows take it: 2 cells lent to many rows are 2 cells, 1 cell taken by 3 rows is 1 cell', () => {
+    const many = Array.from({ length: 53 }, (_, i) => [i % 2 === 0 ? 'S1' : 'S2', 4 + i / 10]);
+    const file = xlsxFile('book.xlsx', { Stations: stations as never, Data: [['Station', 'Temperature [degC]'], ...many] as never });
+    expect(roundedNotes(file)).toEqual(['date cells rounded to the second (sheet Stations): Date (2 cells, up to 108 ms)']);
+    const one = [stations[0], stations[1], ['S2', dt(43984, PLAIN), 60.2, 5.4]];
+    const file1 = xlsxFile('book.xlsx', { Stations: one as never, Data: [['Station', 'Temperature [degC]'], ['S1', 4.5], ['S1', 4.6], ['S1', 4.7]] as never });
+    expect(roundedNotes(file1)).toEqual(['date cells rounded to the second (sheet Stations): Date (1 cell, up to 2 ms)']);
+  });
+
   it('not taken: the data has its own Date, so the lookup date is not read and not counted', () => {
     const file = xlsxFile('book.xlsx', { Stations: stations as never, Data: [['Station', 'Date', 'Temperature [degC]'], ['S1', dt(43985, PLAIN), 4.5], ['S2', dt(43986, PLAIN), 5.5]] as never });
     expect(roundedNotes(file)).toEqual([]);
