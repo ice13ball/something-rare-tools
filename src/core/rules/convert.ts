@@ -52,6 +52,7 @@ import type { RuleSpec } from './spec';
  *   CONV-COLUMN-UNNAMED        (none)           field = a column the file's header does not name (IN-HEADER-SHORT) that is mapped as a variable still called by its internal name, or as a taxon whose HEADER is the name
  *   CONV-LONG-UNSUPPORTED      parameterColumn, valueColumn, reason, count, max   a sheet in the long environmental layout (a parameter column and a value column, no taxon and no quantity column) that the converter does not read; sheet = the sheet; reason = one-parameter | too-many (absent: the sheet was not read as a long one for another reason), count = the distinct parameters / the (parameter, unit) pairs
  *   CONV-SHEET-TRANSPOSED      reason           reason = a layoutReasons code (transposed | transposed-taxa): a sheet with the table turned (variables or species in rows), not read; blocks until it is turned or ticked "read as a normal table"
+ *   CONV-SHEET-UNITS-ROW       line             line = the line (also in `lines`) of the first row under the header that reads as a row of units and that the reader did not fold into the header (an unknown word or text under some unit): the sheet is not read, blocks until the line is deleted and the units are written into the header names
  *   CONV-LONG-READ             parameterColumn, valueColumn, rows, samples, columns   info: a long environmental sheet was read as one row per sample (core/convert/pivot.ts); rows = rows read, samples = rows made, columns = parameter columns made
  *   CONV-LONG-FLAG-COLUMNS     count, columns   info: quality-flag columns of a long sheet left out
  *   CONV-LONG-FLAG-PARAMETERS  count, names, rows   info: parameters of a long sheet that are quality flags, their rows left out
@@ -624,6 +625,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La feuille « {sheet} » n'a pas été lue : {reason}. La ligne 1 serait lue comme en-tête. Transposez le tableau dans votre tableur (échantillons en lignes, espèces ou variables en colonnes) et rechargez-le, ou cochez « Lire comme un tableau normal » pour cette feuille.`,
     },
     technical: `{file}, {sheet}: {reason}. /check reports the same reading of variables in rows (IN-LAYOUT-UNSUPPORTED) and cannot read it; the converter also detects species in rows (first column Latin names, headers that are sample codes, numbers or presence marks in the cells; a normal wide sheet with species as headers is never flagged). The sheet is not converted and the export is blocked until the table is turned in the spreadsheet or the user ticks "Read as a normal table" for the sheet (a pre-tick from the companion file: transposedAsTable=<sheet>). A sheet that is a pivot of a long sheet, a profile sheet and a sheet read as it stands are not tested.`,
+  },
+  {
+    id: 'CONV-SHEET-UNITS-ROW',
+    category: 'B',
+    severity: 'error',
+    params: ['line'],
+    plain: {
+      pl: `Arkusz „{sheet}” nie został wczytany: wiersz {line} pod nagłówkiem zawiera jednostki (np. m, degrees_north), nie dane, a narzędzie nie mogło dopisać ich do nazw kolumn. Usuń ten wiersz, wpisz jednostki w nazwach kolumn (np. „depth [m]”) i wczytaj plik ponownie.`,
+      en: `Sheet "{sheet}" was not read: line {line}, under the header, holds units (e.g. m, degrees_north), not data, and the tool could not add them to the column names. Delete that line, write the units into the column names (e.g. "depth [m]") and load the file again.`,
+      de: `Das Blatt „{sheet}“ wurde nicht gelesen: Zeile {line} unter der Kopfzeile enthält Einheiten (z. B. m, degrees_north), keine Daten, und das Werkzeug konnte sie den Spaltennamen nicht hinzufügen. Löschen Sie die Zeile, schreiben Sie die Einheiten in die Spaltennamen (z. B. „depth [m]“) und laden Sie die Datei neu.`,
+      fr: `La feuille « {sheet} » n'a pas été lue : la ligne {line}, sous l'en-tête, contient des unités (p. ex. m, degrees_north), pas des données, et l'outil n'a pas pu les ajouter aux noms de colonnes. Supprimez cette ligne, écrivez les unités dans les noms (p. ex. « depth [m] ») et rechargez le fichier.`,
+    },
+    technical: `{file}, {sheet}: line {line} is the first row under the header and reads as a row of units: every filled cell is a unit and the numbers agree under most of them (text or an unknown word stands under some), or two cells are units of the vocabulary with numbers under them (recognize/layout.ts firstRowIsUnits, the row /check refuses as a header over several rows). It was not folded into the header (foldUnitsRow needs every filled cell a unit and numbers under all), so the converter would read it as a data row (text in the taxon columns, a wrong sample). The sheet is not converted and the export is blocked until the line is deleted.`,
   },
   {
     id: 'CONV-LONG-READ',

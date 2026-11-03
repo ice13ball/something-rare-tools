@@ -6,6 +6,7 @@ import { isBlankCell, isKnownColumnName, proposeColumns, stripTypeSuffix, toMapp
 import type { ProposeContext } from './columns';
 import { reasonsText, type LayoutReason, type LayoutReasonCode } from './layoutReasons';
 import { canonicalFromKey, headerKey, normaliseUnit } from './vocab';
+import { unitsRowNotFolded } from '../parse/shared';
 
 /*
  * Layout kinds, as TablePlan / LayoutPlan describe them:
@@ -86,29 +87,38 @@ function footnoteMarkerRow(sheet: RawSheet, cols: number): boolean {
   return filled >= 3 && words * 2 > filled;
 }
 
+/**
+ * The first data row is a row of units that the parser did not fold into the header (a row it folded is no longer there): either every filled cell is a unit and the numbers agree under most of them but
+ * text stands under some (unitsRowNotFolded), or two or more cells are units of the vocabulary with numbers under them. The line of that row; the converter says the same row in its own words.
+ */
+export function firstRowIsUnits(sheet: RawSheet, decimalComma: boolean, cols = sheet.unnamedFrom ?? sheet.header.length): { line: number } | undefined {
+  const named = unitsRowNotFolded(sheet.header, sheet.rows, decimalComma, { dateFormatted: sheet.dateFormatted });
+  if (named) return named;
+  if (sheet.rows.length < 2) return undefined;
+  const first = sheet.rows[0];
+  let unitCells = 0;
+  for (let i = 0; i < cols; i++) {
+    const c = first.cells[i] ?? null;
+    if (typeof c !== 'string' || normaliseUnit(c) === undefined) continue;
+    let ok = 0;
+    let bad = 0;
+    for (const r of sheet.rows.slice(1, 51)) {
+      const p = parseNumber(r.cells[i] ?? null, decimalComma);
+      if (p.status === 'ok') ok++;
+      else if (p.status === 'non-numeric') bad++;
+    }
+    if (ok > 0 && ok >= bad) unitCells++;
+  }
+  return unitCells >= 2 ? { line: first.line } : undefined;
+}
+
 function headerRowsReason(sheet: RawSheet, decimalComma: boolean): LayoutReasonCode | undefined {
   // the names the tool added (IN-HEADER-SHORT) are not the file's: only the file's own header says whether it is empty
   const cols = sheet.unnamedFrom ?? sheet.header.length;
   if (cols >= 3 && sheet.header.slice(0, cols).filter((h) => h.trim() === '').length * 2 > cols) {
     return 'header-empty';
   }
-  if (sheet.rows.length >= 2) {
-    const first = sheet.rows[0];
-    let unitCells = 0;
-    for (let i = 0; i < cols; i++) {
-      const c = first.cells[i] ?? null;
-      if (typeof c !== 'string' || normaliseUnit(c) === undefined) continue;
-      let ok = 0;
-      let bad = 0;
-      for (const r of sheet.rows.slice(1, 51)) {
-        const p = parseNumber(r.cells[i] ?? null, decimalComma);
-        if (p.status === 'ok') ok++;
-        else if (p.status === 'non-numeric') bad++;
-      }
-      if (ok > 0 && ok >= bad) unitCells++;
-    }
-    if (unitCells >= 2) return 'header-units';
-  }
+  if (firstRowIsUnits(sheet, decimalComma, cols) !== undefined) return 'header-units';
   // (units first: 'z, T, S, O, N, P' over a row of units is a header of short names, not footnote marks)
   if (footnoteMarkerRow(sheet, cols)) return 'header-footnote';
   return undefined;

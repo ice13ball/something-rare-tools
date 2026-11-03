@@ -109,8 +109,14 @@ describe('proposeLayout: unsupported', () => {
     expect(l.tables).toEqual([]);
   });
 
-  it('a header that spans several rows (units on the second row)', () => {
+  it('a header that spans several rows (units on the second row) is read: the units go into the header', () => {
     const f = textFile('h.csv', 'Station,Latitude,Longitude,DIC,TA\n,degrees_north,degrees_east,umol/kg,umol/kg\nST1,70,10,2100,2300\nST2,71,11,2110,2310\n');
+    expect(proposeLayout(f).unsupported).toBeUndefined();
+    expect(f.sheets[0].header).toEqual(['Station', 'Latitude [degrees_north]', 'Longitude [degrees_east]', 'DIC [umol/kg]', 'TA [umol/kg]']);
+  });
+
+  it('units over a column of text are not folded: a header that spans several rows', () => {
+    const f = textFile('h.csv', 'Station,Temp,Sal,DIC,TA\n,degC,PSU,umol/kg,umol/kg\nST1,4,35,2100,low\nST2,5,35,2110,high\n');
     expect(proposeLayout(f).unsupported).toMatch(/header spans several rows/);
   });
 

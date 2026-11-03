@@ -4,6 +4,8 @@ import type { Finding, RawCell, RawRow } from '../types';
 import { makeFinding } from '../rules/registryCheck';
 import type { DecodedText } from '../values/encoding';
 import { parseNumber } from '../values/numbers';
+import { parseDate } from '../values/dates';
+import { decodeUnitText, unitCellKind, unitKey } from './unitWords';
 import { AMBIGUOUS_STATISTIC, STATISTIC_LABEL } from '../summaryLabels';
 
 /**
@@ -163,4 +165,95 @@ export function foldStatisticSubheader(header: readonly string[], rows: readonly
     out.push(m && m[1] !== '' ? `${m[1]} ${label} ${m[2]}` : `${top[c]} ${label}`);
   }
   return { header: out, rows: rows.slice(1), line: first.line };
+}
+
+/* ---------- a second header row of units ---------- */
+
+/** What a units row folded into the header: the fold (header, rows without the units row, its physical line) and the number of columns that got a unit. */
+export interface UnitsFold extends SubheaderFold {
+  count: number;
+}
+
+export interface UnitsFoldOptions {
+  /** xlsx: the columns whose cells are date-formatted (a time column under "UTC" holds serial numbers). */
+  dateFormatted?: readonly boolean[];
+  date1904?: boolean;
+}
+
+/**
+ * A row directly under the header (and under a statistic sub-header, when that was folded first) in which EVERY filled cell is a unit (unitCellKind: the vocabulary, degrees_north / degrees_east,
+ * "UTC", a phrase of unit words) is a second header row of the table, as ERDDAP and BCO-DMO write it: `latitude` over `degrees_north` is the column `latitude [degrees_north]`.
+ * Nothing about the columns' roles is decided here; the unit goes into the name as the header's own `[unit]`. It is a units row only when
+ *  - at least two of its cells are units that go into the header ("unitless", "text", "code" and number formats such as "ddd.d" are allowed in the row, add nothing, and do not count), and
+ *  - in the first 50 rows below, no unit column holds more non-numbers than numbers (a first data row of codes `m`, `g`, `cm` over names is data), at least two have numbers, and a column empty below says nothing;
+ *    a column under "UTC" needs dates it can read instead of numbers, and
+ *  - every filled cell has a header above it, and a header that already declares a unit agrees with the cell (a disagreeing cell means no fold at all; an agreeing one leaves the header as it is).
+ * The data rows keep their physical line numbers. `decimalComma` must be known before the call (a column of `1,5` is numbers). Returns undefined, and changes nothing, when the row is not such a row.
+ */
+export function foldUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions = {}): UnitsFold | undefined {
+  const scan = scanUnitsRow(header, rows, decimalComma, opts);
+  if (scan === undefined || scan.failing > 0) return undefined;
+  return { header: scan.header, rows: rows.slice(1), line: scan.line, count: scan.units };
+}
+
+/**
+ * A first data row that IS a row of units by its cells (every filled cell a unit, two or more that go into a header, a header above each) but that foldUnitsRow did not fold because the cells under some
+ * of its units are not numbers (a size class "0-1", a range ">250 um"): the line, when the numbers agree under at least half of the units. The converter names it instead of reading it as data. Never changes anything.
+ */
+export function unitsRowNotFolded(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions = {}): { line: number } | undefined {
+  const scan = scanUnitsRow(header, rows, decimalComma, opts);
+  if (scan === undefined || scan.failing === 0 || scan.failing * 2 > scan.units) return undefined;
+  return { line: scan.line };
+}
+
+function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decimalComma: boolean, opts: UnitsFoldOptions): { header: string[]; line: number; units: number; failing: number } | undefined {
+  const first = rows[0];
+  if (first === undefined || rows.length < 2) return undefined;
+  const units = new Map<number, { kind: 'unit' | 'utc'; text: string }>();
+  for (let c = 0; c < first.cells.length; c++) {
+    const v: RawCell = first.cells[c] ?? null;
+    if (v === null || String(v).trim() === '') continue;
+    if (typeof v !== 'string') return undefined;
+    const kind = unitCellKind(v);
+    if (kind === undefined) return undefined;
+    if ((header[c] ?? '').trim() === '') return undefined;
+    if (kind !== 'neutral') units.set(c, { kind, text: decodeUnitText(v) });
+  }
+  if (units.size < 2) return undefined;
+  const below = rows.slice(1, 51);
+  let failing = 0;
+  let passing = 0;
+  for (const [c, u] of units) {
+    let ok = 0;
+    let bad = 0;
+    for (const r of below) {
+      const cell = r.cells[c] ?? null;
+      if (cell === null || String(cell).trim() === '') continue;
+      if (u.kind === 'utc') {
+        if ('error' in parseDate(cell, { date1904: opts.date1904 ?? false, dateFormatted: opts.dateFormatted?.[c] ?? false })) bad++;
+        else ok++;
+      } else {
+        const st = parseNumber(cell, decimalComma).status;
+        if (st === 'ok') ok++;
+        else if (st === 'non-numeric') bad++;
+      }
+    }
+    // a column empty below says nothing either way; two columns must have numbers (dates) agreeing
+    if (ok > bad) passing++;
+    else if (bad > 0) failing++;
+  }
+  if (passing < 2) return undefined;
+  const out: string[] = [...header];
+  for (const [c, u] of units) {
+    const h = (header[c] ?? '').trim();
+    const declared = TRAILING_UNIT.exec(h);
+    const declaredInner = declared ? declared[2].slice(1, -1).trim() : undefined;
+    if (declared && declaredInner !== undefined && unitCellKind(declaredInner) !== undefined) {
+      // the header names a unit already: it stays, unless the row says another one
+      if (unitKey(declaredInner) !== unitKey(u.text)) return undefined;
+      continue;
+    }
+    out[c] = `${h} [${u.text}]`;
+  }
+  return { header: out, line: first.line, units: units.size, failing };
 }

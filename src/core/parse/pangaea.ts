@@ -5,7 +5,8 @@ import type { Finding, LicenceStatement, MetadataRecord, ParsedFile, RawRow } fr
 import { buildStatement } from '../metadata/licence';
 import type { DecodedText } from '../values/encoding';
 import { lendEventColumns, readEvents } from './pangaeaEvents';
-import { encodingFinding, raggedFinding, splitPhysicalLines } from './shared';
+import { encodingFinding, foldUnitsRow, raggedFinding, splitPhysicalLines } from './shared';
+import { makeFinding } from '../rules/registryCheck';
 
 const KEY_LINE = /^([A-Za-z][A-Za-z() \/]*):\t(.*)$/;
 
@@ -140,14 +141,21 @@ export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<
   while (h < lines.length && isBlank(lines[h])) h++;
   if (h >= lines.length) return file;
 
-  const header = lines[h].split('\t');
-  const rows: RawRow[] = [];
+  let header = lines[h].split('\t');
+  let rows: RawRow[] = [];
   for (let i = h + 1; i < lines.length; i++) {
     if (isBlank(lines[i])) continue;
     const cells = lines[i].split('\t');
     rows.push({ line: i + 1, cells, fieldCount: cells.length });
   }
-  file.sheets.push({ name: fileName, header, headerLine: h + 1, rows });
+  // a row of units under the header is part of the header, as in a csv
+  const unitsFold = foldUnitsRow(header, rows, false);
+  if (unitsFold) {
+    header = unitsFold.header;
+    rows = unitsFold.rows;
+    findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count } }));
+  }
+  file.sheets.push({ name: fileName, header, headerLine: h + 1, rows, ...(unitsFold ? { subHeaderLine: unitsFold.line, unitsRowLine: unitsFold.line } : {}) });
   const rag = raggedFinding(fileName, fileName, header.length, rows);
   if (rag) findings.push(rag);
   // the position and date of the Event(s) block, for a table that has none of its own

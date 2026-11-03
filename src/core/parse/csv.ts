@@ -3,7 +3,7 @@
 import type { Finding, ParsedFile, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registryCheck';
 import type { DecodedText } from '../values/encoding';
-import { encodingFinding, extendShortHeader, foldStatisticSubheader, raggedFinding } from './shared';
+import { encodingFinding, extendShortHeader, foldStatisticSubheader, foldUnitsRow, raggedFinding } from './shared';
 
 export interface CsvRecord {
   /** physical line where the record STARTS (a quoted field with newlines belongs to its first line) */
@@ -179,16 +179,24 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
   }
 
   let rows: RawRow[] = body.map((r) => ({ line: r.line, cells: r.cells, fieldCount: r.cells.length }));
+  // decimalComma is known before any fold: a units row is judged by the numbers below it
+  file.decimalComma = looksDecimalComma(delim, body.map((r) => r.cells));
+  if (file.decimalComma) findings.push(makeFinding('IN-DECIMAL-COMMA', { file: fileName }));
   // a second header row of statistic labels (mean, st.dev.) is part of the header, not a data row
   const fold = foldStatisticSubheader(header, rows);
   if (fold) {
     header = fold.header;
     rows = fold.rows;
   }
-  file.decimalComma = looksDecimalComma(delim, body.map((r) => r.cells));
-  if (file.decimalComma) findings.push(makeFinding('IN-DECIMAL-COMMA', { file: fileName }));
+  // so is a row of units (ERDDAP, BCO-DMO), after the statistic labels when there were any
+  const unitsFold = foldUnitsRow(header, rows, file.decimalComma);
+  if (unitsFold) {
+    header = unitsFold.header;
+    rows = unitsFold.rows;
+    findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: fileName, lines: [unitsFold.line], params: { count: unitsFold.count } }));
+  }
 
-  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows, ...(fold ? { subHeaderLine: fold.line } : {}) };
+  const sheet: RawSheet = { name: fileName, header, headerLine: records[0].line, rows, ...(fold || unitsFold ? { subHeaderLine: (fold ?? unitsFold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}) };
   const shortHeader = extendShortHeader(fileName, fileName, header, rows, file.decimalComma);
   if (shortHeader?.kind === 'trim') {
     // fields past the header are empty in every row: the rows end with a delimiter. Drop them; rows with and without it are both regular.

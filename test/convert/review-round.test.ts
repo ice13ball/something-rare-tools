@@ -269,9 +269,17 @@ describe('MEDIUM 11: an Excel Time formatted as a date and time', () => {
 });
 
 describe('LOW', () => {
-  it('z, T, S, O, N, P over a row of units is a units row, not footnote marks', () => {
+  it('z, T, S, O, N, P over a row of units is a units row, not footnote marks: it is folded into the header, so no layout reason is left', () => {
     const t = 'z,T,S,O,N,P,Q\nm,degC,PSU,umol/l,umol/l,umol/l,umol/l\n1,4,35,200,5,1,2\n2,5,35,210,6,1,2\n3,6,35,220,7,1,2\n';
     const file = parseFile('u.csv', new TextEncoder().encode(t));
+    expect(file.sheets[0].header[0]).toBe('z [m]');
+    expect(proposeLayout(file).unsupportedReasons).toBeUndefined();
+  });
+
+  it('the same row over a column of text is not folded (a first data row stays data) and the layout still says it is a units row', () => {
+    const t = 'z,T,S,O,N,P,Q\nm,degC,PSU,umol/l,umol/l,umol/l,umol/l\n1,4,high,200,5,1,2\n2,5,low,210,6,1,2\n3,6,mid,220,7,1,2\n';
+    const file = parseFile('u.csv', new TextEncoder().encode(t));
+    expect(file.sheets[0].header[0]).toBe('z');
     expect(proposeLayout(file).unsupportedReasons?.map((r) => r.code)).toEqual(['header-units']);
   });
 

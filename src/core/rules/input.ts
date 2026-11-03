@@ -26,6 +26,7 @@ import type { RuleSpec } from './spec';
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
+ *   IN-HEADER-UNITS-READ    count    columns that got a unit from the row under the header (the row's line is in `lines`); file + sheet
  *   IN-DATE1904             (none)
  *   IN-PANGAEA-EVENT-USED   columns, events, count   a PANGAEA table without position/date columns got Latitude, Longitude and/or Date/Time from its Event(s) header block (columns = the names added, events = how many events the block lists, count = rows filled)
  *   IN-PANGAEA-EVENT-NOT-USED events    the block was not used; optional several (= events) = several events and no Event column to match them, track = the one event's position is a track
@@ -340,6 +341,19 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `L'en-tête compte {header} {+header:nom|noms}, mais {count} lignes sur {rows} ont {width} valeurs, donc {extra} {+extra:nom manque|noms manquent}. L'outil ne peut pas savoir où : il montre les valeurs en trop à la fin comme {+extra:Colonne|Colonnes} {range}. Si des noms manquent plus tôt dans l'en-tête, les colonnes à partir de ce point portent les valeurs de leur voisine : vérifiez aussi les premières valeurs des dernières colonnes nommées et donnez à chaque colonne le sens de ses valeurs.`,
     },
     technical: `{file}: the header has {header} names; {count} of {rows} data rows have {width} fields; {extra} names missing, position unknown; the extra values are shown as Column {range} (internal names "Column N").`,
+  },
+  {
+    id: 'IN-HEADER-UNITS-READ',
+    category: 'input',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `Wiersz {lines} zawiera jednostki, a nie dane: {count} {+count:kolumna dostała|kolumny dostały|kolumn dostało} jednostkę w nazwie (na przykład „latitude [degrees_north]”). Ten wiersz nie jest liczony jako wiersz danych, a numery wierszy w raporcie pozostają numerami wierszy pliku.`,
+      en: `Line {lines} holds units, not data: {count} {+count:column|columns} got the unit in the name (for example "latitude [degrees_north]"). That line is not counted as a data row, and the line numbers in this report stay the file's own.`,
+      de: `Zeile {lines} enthält Einheiten, keine Daten: {count} {+count:Spalte hat|Spalten haben} die Einheit im Namen erhalten (zum Beispiel „latitude [degrees_north]“). Diese Zeile zählt nicht als Datenzeile, und die Zeilennummern in diesem Bericht bleiben die der Datei.`,
+      fr: `La ligne {lines} contient des unités, pas des données : {count} {+count:colonne a reçu|colonnes ont reçu} l'unité dans leur nom (par exemple « latitude [degrees_north] »). Cette ligne n'est pas comptée comme une ligne de données, et les numéros de ligne de ce rapport restent ceux du fichier.`,
+    },
+    technical: `{file} sheet {sheet}: line {lines} is a second header row in which every filled cell is a unit; {count} column names now carry their unit as "name [unit]". Cells are not changed; the row is not a data row.`,
   },
   {
     id: 'IN-DATE1904',

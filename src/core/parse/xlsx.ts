@@ -3,7 +3,7 @@
 import * as XLSX from 'xlsx';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registryCheck';
-import { ParseError, foldStatisticSubheader } from './shared';
+import { ParseError, foldStatisticSubheader, foldUnitsRow } from './shared';
 
 type Grid = Map<number, Map<number, XLSX.CellObject>>;
 
@@ -58,7 +58,7 @@ function findHeaderRow(grid: Grid, rowsAsc: number[]): number | undefined {
   return live.find((r) => count(grid.get(r)!, true) >= 2) ?? live.find((r) => count(grid.get(r)!, false) >= 2) ?? live[0];
 }
 
-function parseSheet(name: string, ws: XLSX.WorkSheet): RawSheet | undefined {
+function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, findings: Finding[], fileName: string): RawSheet | undefined {
   const grid = toGrid(ws);
   const rowsAsc = [...grid.keys()].sort((a, b) => a - b);
   const headerRow = findHeaderRow(grid, rowsAsc);
@@ -113,10 +113,17 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): RawSheet | undefined {
       timed.push(0);
     }
   }
+  // so is a row of units (ERDDAP, BCO-DMO), judged by the cells below it; a time column under "UTC" holds date-formatted serials
+  const unitsFold = foldUnitsRow(header, rows, false, { dateFormatted: header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]), date1904 });
+  if (unitsFold) {
+    header.splice(0, header.length, ...unitsFold.header);
+    rows.splice(0, 1);
+    findings.push(makeFinding('IN-HEADER-UNITS-READ', { file: fileName, sheet: name, lines: [unitsFold.line], params: { count: unitsFold.count } }));
+  }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one
   const timeFormatted = header.map((_, c) => dateFormatted[c] && timed[c] * 2 > dated[c]);
-  return { name, header, headerLine: headerRow + 1, rows, ...(fold ? { subHeaderLine: fold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
+  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold ?? unitsFold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}) };
 }
 
 /** A date format that shows a time of day and no date part: "hh:mm", "[h]:mm", "h:mm:ss AM/PM", "mm:ss.0". Quoted text and colour/condition brackets are ignored. */
@@ -141,14 +148,15 @@ export function parseXlsx(bytes: Uint8Array, fileName: string): ParsedFile {
   } catch (e) {
     throw new ParseError(fileName, `not a readable Excel workbook (${e instanceof Error ? e.message : 'unknown error'})`);
   }
+  const date1904 = Boolean(wb.Workbook?.WBProps?.date1904);
+  const sheetFindings: Finding[] = [];
   const sheets: RawSheet[] = [];
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name];
     if (!ws) continue;
-    const s = parseSheet(name, ws);
+    const s = parseSheet(name, ws, date1904, sheetFindings, fileName);
     if (s) sheets.push(s);
   }
-  const date1904 = Boolean(wb.Workbook?.WBProps?.date1904);
-  const findings: Finding[] = date1904 ? [makeFinding('IN-DATE1904', { file: fileName })] : [];
+  const findings: Finding[] = [...(date1904 ? [makeFinding('IN-DATE1904', { file: fileName })] : []), ...sheetFindings];
   return { fileName, kind: 'xlsx', sheets, date1904, decimalComma: false, encoding: 'utf-8', findings };
 }

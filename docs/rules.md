@@ -27,6 +27,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | IN-ENCODING-FALLBACK | info | input | — | —<a id="IN-ENCODING-FALLBACK"></a> |
 | IN-DECIMAL-COMMA | info | input | — | —<a id="IN-DECIMAL-COMMA"></a> |
 | IN-HEADER-SHORT | warning | input | — | —<a id="IN-HEADER-SHORT"></a> |
+| IN-HEADER-UNITS-READ | info | input | — | —<a id="IN-HEADER-UNITS-READ"></a> |
 | IN-DATE1904 | info | input | — | [Microsoft Support, Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487), 1900 and 1904 date systems; "The difference between the two date systems is 1,462 days."<a id="IN-DATE1904"></a> |
 | IN-PANGAEA-EVENT-USED | info | input | — | —<a id="IN-PANGAEA-EVENT-USED"></a> |
 | IN-PANGAEA-EVENT-NOT-USED | warning | input | — | —<a id="IN-PANGAEA-EVENT-NOT-USED"></a> |
@@ -148,6 +149,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-COLUMN-UNNAMED | error | B | — | —<a id="CONV-COLUMN-UNNAMED"></a> |
 | CONV-LONG-UNSUPPORTED | error | B | — | —<a id="CONV-LONG-UNSUPPORTED"></a> |
 | CONV-SHEET-TRANSPOSED | error | B | — | —<a id="CONV-SHEET-TRANSPOSED"></a> |
+| CONV-SHEET-UNITS-ROW | error | B | — | —<a id="CONV-SHEET-UNITS-ROW"></a> |
 | CONV-LONG-READ | info | B | — | —<a id="CONV-LONG-READ"></a> |
 | CONV-LONG-FLAG-COLUMNS | info | B | — | —<a id="CONV-LONG-FLAG-COLUMNS"></a> |
 | CONV-LONG-FLAG-PARAMETERS | info | B | — | —<a id="CONV-LONG-FLAG-PARAMETERS"></a> |

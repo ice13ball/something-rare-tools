@@ -22,6 +22,7 @@ import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
 import { transposedSheetReason } from './transposed';
+import { firstRowIsUnits } from '../recognize/layout';
 import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
@@ -1337,8 +1338,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         // a table that looks turned (species or variables in rows) is not read as it stands unless the user says so; not a profile sheet, not a pivot (transposedSheetReason)
         const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
         const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file, sin.mapping.columns);
-        if (turned === undefined) return true;
-        longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
+        if (turned !== undefined) {
+          longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
+          return false;
+        }
+        // a row of units under the header that the parser could not fold (an unknown word or text under some of the units; the very row /check refuses as a header over several rows) is said as what it is, not read as a data row (CONV-TEXT-IN-TAXON-CELL lists)
+        const unitsRow = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true || sheet.pivot !== undefined ? undefined : firstRowIsUnits(sheet, sin.file.decimalComma);
+        if (unitsRow === undefined) return true;
+        longFindings.push(makeConvertFinding('CONV-SHEET-UNITS-ROW', { file: sin.file.fileName, sheet: sin.sheet, lines: [unitsRow.line], params: { line: unitsRow.line } }));
         return false;
       }
       longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count, ...(long.reason.reason === 'too-many' ? { max: MAX_PAIRS } : {}) }) } }));

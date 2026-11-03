@@ -14,6 +14,8 @@ export interface RawSheet {
   rows: RawRow[];               // data rows only, physical line numbers
   /** The physical line of a second header row of statistic labels (mean, st.dev. ...) that was folded into the header (parse/shared.ts foldStatisticSubheader); absent when there was none. */
   subHeaderLine?: number;
+  /** The physical line of a second header row of UNITS (ERDDAP, BCO-DMO: `latitude` over `degrees_north`) that was folded into the header as `name [unit]` (parse/shared.ts foldUnitsRow); absent when there was none. Also set in subHeaderLine when no statistic row was folded. */
+  unitsRowLine?: number;
   unnamedFrom?: number;         // CSV: the header had too few names (IN-HEADER-SHORT); columns from this index on were added by the tool as `Column N`
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
