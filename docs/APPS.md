@@ -1686,15 +1686,21 @@ Above the export button the page lists, per sheet, where every source row went a
 nothing blocks on it, it adds no finding, and it is never written into the archive or the companion file (the sums stay on the page). Without it the archive is byte-identical.
 
 - **Read from what was written.** `convert()` hands the ledger the records it produced and the reason it recorded where it left a row or a cell out (`FateLog`, set beside each `continue`;
-  it never decides anything: with every call turned into a no-op the records are identical, tested). A row with a record is written; a row with neither a record nor a reason is
-  `unexplained` and the sheet is not balanced. Nothing recomputes a rule, so the ledger cannot disagree with the writer about what a zero or a repeat is.
-- **Where a column goes** is read the same way: a column an occurrence or a measurement came from; a column read for the events (the set `CONV-COLUMN-NOT-EXPORTED` is computed from) only if the
-  written events carry what it gives (Month and Day with no Year, a Time with no date: "not written"); every other numeric column "not written". An unwritten `Volume filtered` or a numeric
-  `occurrenceID` is therefore listed as not written, and the sheet is not called settled.
+  it never decides anything: with every call turned into a no-op the records are identical, tested). A line is *written* when it wrote an occurrence, a measurement, the event it opened or a
+  profile level; a written line that wrote no occurrence is counted apart and says what it wrote. A line with neither a record nor a reason is `unexplained` and the sheet is not balanced.
+- **"Every row is accounted for"** is on the page only if every line has a fate, every numeric cell is written or has a reason, no numeric column is left unwritten, and no line is one the converter
+  did not understand (`NOT_UNDERSTOOD`: a value with no parameter name, a repeated parameter in one sample, a number with no taxon, a row of the wrong length, no sample code). Those rows are named instead
+  ("N rows hold a value the converter did not understand"). A column of text that is not written is listed, but is not a number that went nowhere.
+- **Where a column goes** is read from the written records: a column an occurrence or a measurement came from; a column read for the events (the set `CONV-COLUMN-NOT-EXPORTED` is computed from) only if the
+  written events carry what it gives (Month and Day with no Year: "not written"); every other column "not written". A weight column of a long sheet is written only with a quantity column or a presence tick; the finding and the ledger agree on that.
+- **A pivoted long sheet** is accounted in the lines of the long file: quality-flag rows, a value with no parameter (`empty-parameter`), a parameter twice in one sample (`repeated-parameter`, the repeat is in no sum) and
+  every cell have a fate by their original line.
+- **The fate of every line** is data on `SheetLedger.lines` (kept in `ConvertResult`; the page's view carries none): only lines that are not a plain "written" are listed, each with its reason, the chain of reasons recorded
+  for it, what a written line wrote when it wrote no occurrence, and on a wide sheet how many taxon cells of the line were written and how many lost. A 2000 x 1000 sheet lists at most 2000 entries.
 - **Sums** are compensated and compared with a tolerance of 1e-12 of the sum of the absolute values: float noise (0.1 + 0.2) is no difference, a changed value or a lost cell is. A cell
-  that holds text (`5 g`, an NA variant) is shown as "not read as a number" and is in no sum. A presence mark is written with no value of its own and is not a mismatch.
-- **Sheets that are not converted** have a line each: not read (long environmental, turned, a units row that was not folded), not used (unticked). A sheet read as one row per sample
-  reports the rows of the long file. While something blocks the export the page says "would be written".
+  that holds text (`5 g`, an NA variant) is shown as "not read as a number" and is in no sum; a mark on a presence sheet is written with no value of its own and is not a mismatch.
+- **Sheets that are not converted** have a line each: not read (long environmental, turned, a units row that was not folded), not used (its box is not ticked, a dictionary sheet is off by default).
+  While anything stops the export (a blocking finding, a missing metadata field, a warning not accepted, nothing to write) the page says "would be written". The list of columns shows 50 and a button for the rest.
 - Limits: the ledger is built on every conversion of the page (one pass over the cells, a byte per cell and column; a wide 2000 x 1000 sheet is checked by `test/perf/wide.perf.ts`, under 1300 ms per
   convert). It does not say that the contents are right, only where each row and number went.
 

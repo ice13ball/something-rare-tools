@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { EventRec, OccRec, MofIntent } from './model';
-import type { RawSheet, SheetMapping } from '../types';
+import type { PivotInfo, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
 
 /*
@@ -25,6 +25,7 @@ export type LedgerReason =
   | 'no-code'
   | 'no-replicate'
   | 'no-taxon'
+  | 'value-no-taxon'
   | 'quantity-blank'
   | 'nothing-to-record'
   | 'duplicate-event'
@@ -39,20 +40,30 @@ export type LedgerReason =
   | 'bad-mark'
   | 'no-station'
   | 'duplicate-level'
-  | 'same-sample'
   | 'repeat-in-sample'
   | 'absent-record'
   | 'column-not-read'
   | 'sheet-not-read'
   | 'sheet-not-used'
-  | 'empty';
+  | 'empty-parameter'
+  | 'repeated-parameter'
+  | 'quality-flag'
+  | 'text-cell';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
-  'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass', 'negative',
-  'not-integer', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'same-sample', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used', 'empty',
+  'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
+  'negative', 'not-integer', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
+  'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell',
 ];
-const REASON_CODE = new Map(LEDGER_REASONS.map((r, i) => [r, i + 1] as const));
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
+// (a reason set fits one bit of an Int32 per line: the chain of a wide row is kept that way)
+const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code - 1) : 0);
+
+/**
+ * Rows the converter did not understand: they hold a value (or, for a row of the wrong length, cells) that it cannot place, so it does not write them. They are never "nothing to record": the
+ * panel does not say all is accounted for while one of them is there. (Task 8 sorts the reasons the same way.)
+ */
+export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'empty-parameter', 'repeated-parameter'];
 
 /**
  * The reasons the conversion records while it reads a sheet. Created per sheet; the builder writes into it, the ledger reads it. A cell's reason is kept in one byte per cell and column
@@ -63,13 +74,17 @@ export class FateLog {
   private readonly cols = new Map<number, Uint8Array>();
   /** The column a record was written from, by record. The record objects themselves are not touched. */
   readonly origin = new WeakMap<object, number>();
-  /** The rows (by line) that joined a sample an earlier row of the sheet had opened. */
-  readonly merged = new Set<number>();
+  /** The lines that opened an event (a sample): a line that wrote an event but no occurrence is still a line that wrote something. */
+  readonly events = new Set<number>();
   private lastIndex = -1;
   private last: Uint8Array | undefined;
   constructor(private readonly rowCount: number) {}
   row(line: number, reason: LedgerReason): void {
     if (!this.rows.has(line)) this.rows.set(line, reason);
+  }
+  /** This line opened an event. */
+  event(line: number): void {
+    this.events.add(line);
   }
   /** The cell at row position `pos` (0-based, in the order of the sheet's rows) of column `index`. */
   cell(pos: number, index: number, reason: LedgerReason): void {
@@ -109,6 +124,8 @@ export interface LedgerTally {
   written: number;
   /** Of `written`: the rows whose records carry no number (a taxon kept for its weight, a text cell). `written - writtenWithoutNumber` are the rows with a quantity. Rows tally of a sheet read for taxa only. */
   writtenWithoutNumber?: number;
+  /** Of `written`: the lines that wrote an event or a measurement and no occurrence (a sample row whose taxon cells are all zero, a row that only carries the sample's variables). Rows tally of a sheet read for taxa only. */
+  writtenNoOccurrence?: number;
   skipped: LedgerCount[];
   /** Neither a record nor a recorded reason: the conversion lost something nobody can name. Anything above 0 is a defect, shown on the page. */
   unexplained: number;
@@ -144,18 +161,39 @@ export interface LedgerColumn {
   match: boolean;
 }
 
+/**
+ * What became of one line of the file. Listed only for the lines that are not a plain "written": a line with no record (`fate` is the reason), a line that wrote no occurrence (`wrote` says what it
+ * did write) and, on a wide sheet, a written line that lost cells (`cells`). Every other line of the sheet is written with nothing lost, so a big file costs a few entries, not one per line.
+ * `chain` is every reason recorded for the line, the row's own first, then those of its cells in column order.
+ */
+export interface LineFate {
+  line: number;
+  /** 'unexplained': neither a record nor a reason (a fault of the converter, shown on the page). */
+  fate: 'written' | 'unexplained' | LedgerReason;
+  chain?: LedgerReason[];
+  wrote?: ('occurrence' | 'measurement' | 'event' | 'level')[];
+  /** Wide sheets: the non-blank taxon cells of the line with a record, and those without (`chain` says why). */
+  cells?: { written: number; lost: number };
+}
+
 export interface SheetLedger {
   file: string;
   sheet: string;
   kind: 'wide' | 'long' | 'profile' | 'not-read' | 'not-used';
   /** The tally the sheet is judged by: its taxon cells for a wide sheet, its rows for every other. */
   unit: 'rows' | 'cells';
+  /** In lines of the file (for a pivoted long sheet: the lines of the long sheet, not the samples made of them). */
   rows: LedgerTally;
   /** Wide sheets only: the non-blank cells of the taxon columns. */
   cells?: LedgerTally;
-  /** A sheet that was read as one row per sample out of a long one: the rows the file had, against `rows.source` (the rows made of them). */
+  /** A sheet that was read as one row per sample out of a long one: the rows the long file had (= `rows.source`) and the samples made of them. */
   pivotRowsIn?: number;
+  pivotSamples?: number;
   columns: LedgerColumn[];
+  /** The lines that are not a plain "written" (see LineFate), in file order. Kept in the conversion result for the rows-not-written list; the page's view does not carry it. */
+  lines: LineFate[];
+  /** Lines the converter did not understand and does not write (NOT_UNDERSTOOD): a number is among them, so the sheet is never called accounted for. */
+  notUnderstood: number;
   /** No unexplained row or cell and every sum agrees. */
   balanced: boolean;
 }
@@ -218,8 +256,8 @@ export interface SheetLedgerInput {
   measurements: readonly MofIntent[];
   /** Profile: the rows that became a level event. */
   levelLines?: ReadonlySet<number>;
-  /** The sheet is the pivot of a long sheet of this many rows. */
-  pivotRowsIn?: number;
+  /** The sheet is the pivot of a long sheet: its ledger is kept in the lines of that sheet. */
+  pivot?: PivotInfo;
 }
 
 const tally = (source: number, written: number, counts: Map<LedgerReason, number>, unexplained: number): LedgerTally => ({
@@ -237,6 +275,7 @@ const rolePart = (mapping: SheetMapping, index: number): { part?: 'year' | 'mont
   return r?.kind === 'datePart' ? { part: r.part } : {};
 };
 const isBlank = (c: unknown): boolean => c === null || c === undefined || (typeof c === 'string' && c.trim() === '');
+const reasonsOfBits = (bits: number): LedgerReason[] => LEDGER_REASONS.filter((_, i) => i < 31 && (bits & (1 << i)) !== 0);
 
 export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
   const { fate, sheet } = inp;
@@ -269,46 +308,78 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     (measurementCellAt.get(k) ?? measurementCellAt.set(k, []).get(k)!).push(m);
   }
   const hasOcc = (pos: number): boolean => presentAt.has(pos) || absentAt.has(pos);
-  const isWrittenAt = (pos: number, line: number): boolean =>
-    inp.kind === 'profile' ? (inp.levelLines?.has(line) ?? false) : inp.hasTaxa ? hasOcc(pos) : measurementAt.has(line) || (inp.levelLines?.has(line) ?? false);
+  /** What the line wrote: an occurrence, a measurement, the event it opened, a profile level. */
+  const wroteAt = (pos: number, line: number): ('occurrence' | 'measurement' | 'event' | 'level')[] => {
+    const out: ('occurrence' | 'measurement' | 'event' | 'level')[] = [];
+    if (hasOcc(pos)) out.push('occurrence');
+    if (measurementAt.has(line)) out.push('measurement');
+    if (fate.events.has(line)) out.push('event');
+    if (inp.levelLines?.has(line)) out.push('level');
+    return out;
+  };
+  const isWrittenAt = (pos: number, line: number): boolean => (inp.kind === 'profile' ? (inp.levelLines?.has(line) ?? false) : hasOcc(pos) || measurementAt.has(line) || fate.events.has(line) || (inp.levelLines?.has(line) ?? false));
 
   /* the rows */
   const rowCounts = new Map<LedgerReason, number>();
   let rowsWritten = 0;
   let rowsWithoutNumber = 0;
+  let rowsNoOccurrence = 0;
   let rowsUnexplained = 0;
-  const longCellFate = (pos: number): LedgerReason | undefined => {
-    for (const i of inp.occurrenceColumns) {
+  const cellFateOf = (cols: readonly number[], pos: number): LedgerReason | undefined => {
+    for (const i of cols) {
       const r = fate.cellFate(pos, i);
       if (r !== undefined) return r;
     }
     return undefined;
   };
-  const taxonCellFate = (pos: number): LedgerReason | undefined => {
-    for (const i of inp.taxonColumns) {
+  const longCellFate = (pos: number): LedgerReason | undefined => cellFateOf(inp.occurrenceColumns, pos);
+  const taxonCellFate = (pos: number): LedgerReason | undefined => cellFateOf(inp.taxonColumns, pos);
+  const chainOf = (pos: number, line: number): LedgerReason[] => {
+    const out: LedgerReason[] = [];
+    const own = fate.rows.get(line);
+    if (own !== undefined) out.push(own);
+    for (const i of inp.kind === 'wide' ? inp.taxonColumns : inp.occurrenceColumns) {
       const r = fate.cellFate(pos, i);
-      if (r !== undefined) return r;
+      if (r !== undefined && !out.includes(r) && out.length < 6) out.push(r);
     }
-    return undefined;
+    return out;
   };
+  const lines: LineFate[] = [];
+  const pivot = inp.pivot;
+  let notUnderstood = 0;
+  const rowReason: (LedgerReason | undefined)[] = new Array<LedgerReason | undefined>(rows.length);
   for (let pos = 0; pos < rows.length; pos++) {
     const row = rows[pos];
     if (isWrittenAt(pos, row.line)) {
       rowsWritten++;
-      if (inp.kind !== 'profile' && inp.hasTaxa && !numberAt.has(pos)) rowsWithoutNumber++;
+      if (inp.kind !== 'profile' && inp.hasTaxa) {
+        if (!hasOcc(pos)) {
+          rowsNoOccurrence++;
+          const chain = chainOf(pos, row.line);
+          if (pivot === undefined) lines.push({ line: row.line, fate: 'written', wrote: wroteAt(pos, row.line), ...(chain.length > 0 ? { chain } : {}) });
+        } else if (!numberAt.has(pos)) rowsWithoutNumber++;
+      }
       continue;
     }
     const reason: LedgerReason | undefined =
       fate.rows.get(row.line) ??
       (inp.kind === 'wide' ? taxonCellFate(pos) : longCellFate(pos)) ??
-      (fate.merged.has(row.line) ? 'same-sample' : undefined) ??
-      (row.cells.every((c) => isBlank(c)) ? 'empty' : undefined) ??
+      (row.cells.every((c) => isBlank(c)) ? 'nothing-to-record' : undefined) ??
       (inp.kind === 'wide' && !inp.taxonColumns.some((i) => !isBlank(row.cells[i])) ? 'nothing-to-record' : undefined);
+    rowReason[pos] = reason;
     if (reason === undefined) rowsUnexplained++;
     else bump(rowCounts, reason);
+    if (pivot === undefined) {
+      if (reason !== undefined && (NOT_UNDERSTOOD as readonly string[]).includes(reason)) notUnderstood++;
+      const chain = chainOf(pos, row.line);
+      lines.push({ line: row.line, fate: reason ?? 'unexplained', ...(chain.length > 0 ? { chain } : {}) });
+    }
   }
-  const rowTally = tally(rows.length, rowsWritten, rowCounts, rowsUnexplained);
-  if (inp.kind !== 'profile' && inp.hasTaxa) rowTally.writtenWithoutNumber = rowsWithoutNumber;
+  let rowTally = tally(rows.length, rowsWritten, rowCounts, rowsUnexplained);
+  if (inp.kind !== 'profile' && inp.hasTaxa) {
+    rowTally.writtenWithoutNumber = rowsWithoutNumber;
+    rowTally.writtenNoOccurrence = rowsNoOccurrence;
+  }
 
   // the reason recorded for the whole row, by position (0 = none), and the cells that have a record, by column: one byte each, so the loops below are plain array reads
   const rowCode = new Uint8Array(rows.length);
@@ -339,6 +410,9 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     let source = 0;
     let written = 0;
     let unexplained = 0;
+    const cellsWritten = new Int32Array(rows.length);
+    const cellsLost = new Int32Array(rows.length);
+    const lostBits = new Int32Array(rows.length);
     for (const i of inp.taxonColumns) {
       const flag = occFlag.get(i);
       const cf = fate.column(i);
@@ -347,14 +421,34 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
         source++;
         if (flag !== undefined && flag[pos] === 1) {
           written++;
+          cellsWritten[pos]++;
           continue;
         }
         const code = rowCode[pos] || (cf === undefined ? 0 : cf[pos]);
+        cellsLost[pos]++;
         if (code === 0) unexplained++;
-        else counts[code]++;
+        else {
+          counts[code]++;
+          lostBits[pos] |= BIT_OF(code);
+        }
       }
     }
     cellTally = tally(source, written, countsOf(counts), unexplained);
+    // the written lines that lost cells, countable per line
+    const byLine = new Map(lines.map((l) => [l.line, l] as const));
+    for (let pos = 0; pos < rows.length; pos++) {
+      if (cellsLost[pos] === 0) continue;
+      const line = rows[pos].line;
+      const cells = { written: cellsWritten[pos], lost: cellsLost[pos] };
+      const entry = byLine.get(line);
+      if (entry !== undefined) entry.cells = cells;
+      else if (isWrittenAt(pos, line)) {
+        const chain = reasonsOfBits(lostBits[pos]);
+        const e: LineFate = { line, fate: 'written', cells, ...(chain.length > 0 ? { chain } : {}) };
+        lines.push(e);
+      }
+    }
+    lines.sort((a, b) => a.line - b.line);
   }
 
   /* the columns that hold numbers */
@@ -381,20 +475,23 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     for (let pos = 0; pos < rows.length; pos++) {
       const raw = rows[pos].cells[index];
       if (raw === null || raw === undefined) continue;
-      let value: number;
+      let value: number | undefined;
+      let text = false;
       if (typeof raw === 'number') {
-        if (!Number.isFinite(raw)) {
-          nonNumbers++;
-          continue;
-        }
-        value = raw;
+        if (!Number.isFinite(raw)) text = true;
+        else value = raw;
       } else {
         const p = parseNumber(raw, inp.decimalComma);
-        if (p.status !== 'ok') {
-          if (p.status !== 'missing') nonNumbers++;
-          continue;
-        }
-        value = p.value;
+        if (p.status === 'ok') value = p.value;
+        else if (p.status !== 'missing') text = true;
+      }
+      if (value === undefined) {
+        // a mark on a presence sheet is read, and written as a mark with no value of its own: it is not "something that was not read"
+        if (text && inp.presence === true && flag !== undefined && flag[pos] === 1) {
+          written++;
+          writtenWithoutValue++;
+        } else if (text) nonNumbers++;
+        continue;
       }
       numbers++;
       // (a zero adds nothing to a sum: a wide matrix of zeros is most of its cells)
@@ -422,10 +519,11 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
         const line = rows[pos].line;
         const reason: LedgerReason | undefined =
           // a long row whose one record was left out (a zero, an NA, a negative): its other numbers (a weight) went with it
-          (inp.kind === 'long' && !isWrittenAt(pos, line) ? longCellFate(pos) : undefined) ??
+          (inp.kind === 'long' && !hasOcc(pos) ? longCellFate(pos) : undefined) ??
           // a per-organism value of a record that is an absence has nothing to hang on
           (inp.kind === 'long' && absentAt.has(pos) && !presentAt.has(pos) ? 'absent-record' : undefined) ??
-          (!isWrittenAt(pos, line) && fate.merged.has(line) ? 'same-sample' : undefined);
+          // a long row that was not written and has no reason of its own cell: the reason of its row
+          (!isWrittenAt(pos, line) ? rowReason[pos] : undefined);
         code = reason === undefined ? 0 : (CODE_OF[reason] ?? 0);
       }
       if (code === 0) {
@@ -436,7 +534,7 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       const sc = (sums[code] ??= new Sum());
       if (value !== 0) sc.add(value);
     }
-    if (numbers === 0 && nonNumbers === 0) continue;
+    if (numbers === 0 && nonNumbers === 0 && writtenWithoutValue === 0) continue;
     columns.push({
       index,
       header: c.header,
@@ -457,6 +555,59 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     });
   }
 
+  /* a pivoted long sheet: the ledger is kept in the lines of the long sheet */
+  if (pivot !== undefined) {
+    const counts = new Map<LedgerReason, number>();
+    let writtenLines = 0;
+    let unexplainedLines = 0;
+    let seen = 0;
+    const put = (line: number, fate_: 'written' | LedgerReason | undefined, chain: LedgerReason[] = []): void => {
+      seen++;
+      if (fate_ === 'written') {
+        writtenLines++;
+        return;
+      }
+      if (fate_ === undefined) unexplainedLines++;
+      else {
+        bump(counts, fate_);
+        if ((NOT_UNDERSTOOD as readonly string[]).includes(fate_)) notUnderstood++;
+      }
+      lines.push({ line, fate: fate_ ?? 'unexplained', ...(chain.length > 0 ? { chain } : {}) });
+    };
+    const L = pivot.lines;
+    for (const l of L.ragged) put(l, 'ragged');
+    for (const l of L.flag) put(l, 'quality-flag');
+    for (const l of L.emptyParameter) put(l, 'empty-parameter');
+    for (const l of L.blank) put(l, 'nothing-to-record');
+    for (const l of L.repeated) put(l, 'repeated-parameter');
+    for (let pos = 0; pos < rows.length; pos++) {
+      const row = rows[pos];
+      const cl = pivot.cellLines[row.line];
+      if (cl === undefined) continue;
+      const absent = new Set(L.entryAbsent[row.line] ?? []);
+      pivot.pivoted.forEach((pv, pi) => {
+        if (absent.has(pi)) return;
+        const line = cl[pi];
+        const col = pv.index;
+        if (meaFlag.get(col)?.[pos] === 1) return put(line, 'written');
+        const raw = row.cells[col];
+        const own = rowCode[pos] || fate.column(col)?.[pos] || 0;
+        if (own !== 0) return put(line, LEDGER_REASONS[own - 1], [LEDGER_REASONS[own - 1]]);
+        if (isBlank(raw)) return put(line, 'nothing-to-record');
+        const p = typeof raw === 'number' ? ({ status: Number.isFinite(raw) ? 'ok' : 'non-numeric' } as const) : parseNumber(raw, inp.decimalComma);
+        if (p.status === 'ok') {
+          const r = rowReason[pos];
+          return put(line, r);
+        }
+        return put(line, p.status === 'non-numeric' ? 'text-cell' : 'na-cell');
+      });
+    }
+    // every line of the long sheet is one of the above; a number that is not is a fault, shown
+    if (seen < L.sourceRows) unexplainedLines += L.sourceRows - seen;
+    lines.sort((a, b) => a.line - b.line);
+    rowTally = { source: L.sourceRows, written: writtenLines, skipped: LEDGER_REASONS.filter((r) => counts.has(r)).map((reason) => ({ reason, count: counts.get(reason)! })), unexplained: unexplainedLines };
+  }
+
   const headline = cellTally ?? rowTally;
   const balanced = headline.unexplained === 0 && rowTally.unexplained === 0 && columns.every((c) => c.match && (c.to === 'event' || c.unexplained === 0));
   return {
@@ -466,8 +617,10 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     unit: cellTally === undefined ? 'rows' : 'cells',
     rows: rowTally,
     ...(cellTally === undefined ? {} : { cells: cellTally }),
-    ...(inp.pivotRowsIn === undefined ? {} : { pivotRowsIn: inp.pivotRowsIn }),
+    ...(pivot === undefined ? {} : { pivotRowsIn: pivot.lines.sourceRows, pivotSamples: rows.length }),
     columns,
+    lines,
+    notUnderstood,
     balanced,
   };
 }
@@ -477,16 +630,18 @@ export function notReadLedger(file: string, sheet: RawSheet): SheetLedger {
   return skippedSheet(file, sheet, 'not-read', 'sheet-not-read');
 }
 
-/** A sheet the user left out ("use" unticked): nothing of it is converted, and the ledger says so. */
+/** A sheet that is not used ("use" not ticked: the user left it out, or it is a dictionary sheet that is off by default): nothing of it is converted, and the ledger says so. */
 export function notUsedLedger(file: string, sheet: RawSheet): SheetLedger {
   return skippedSheet(file, sheet, 'not-used', 'sheet-not-used');
 }
 
 function skippedSheet(file: string, sheet: RawSheet, kind: 'not-read' | 'not-used', reason: LedgerReason): SheetLedger {
   // (a long sheet read as its pivot: the rows the file had, not the samples made of them)
-  const n = sheet.pivot?.rowsIn ?? sheet.rows.length;
+  const n = sheet.pivot?.lines.sourceRows ?? sheet.rows.length;
   const rows: LedgerTally = { source: n, written: 0, skipped: n === 0 ? [] : [{ reason, count: n }], unexplained: 0 };
-  return { file, sheet: sheet.name, kind, unit: 'rows', rows, columns: [], balanced: true };
+  // a sheet not read lists its lines (a blocked sheet is the one a decision is made on); a sheet not used is one fate for all of it, said by `rows`
+  const lines: LineFate[] = kind === 'not-read' && sheet.pivot === undefined ? sheet.rows.map((r) => ({ line: r.line, fate: reason })) : [];
+  return { file, sheet: sheet.name, kind, unit: 'rows', rows, columns: [], lines, notUnderstood: 0, balanced: true };
 }
 
 /* ---------- the columns read for the events, settled by the events that were written ---------- */

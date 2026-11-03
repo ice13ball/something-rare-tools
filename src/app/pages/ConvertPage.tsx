@@ -505,6 +505,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const unconfirmedAccepted = unconfirmed.length === 0 || accepted[UNCONFIRMED_KEY] === unconfirmedPrint;
   const allAccepted = judged.acceptRules.every(isAccepted) && unconfirmedAccepted;
   const nothingToWrite = view !== null && (view.tree.events === 0 || view.stats.occurrences === 0);
+  // what stops the export for a reason that is not the page being busy: the ledger says "would be written" while this is true
+  const exportBlocked = view === null || judged.blocking.length > 0 || metaFindings.length > 0 || !allAccepted || nothingToWrite;
   const canExport = view !== null && !working && !exporting && judged.blocking.length === 0 && metaFindings.length === 0 && allAccepted && !nothingToWrite;
   // the shape of the sheets that have one: a profile sheet has none (it is not wide or long)
   const shapes = useMemo(() => Object.entries(choices).filter(([, c]) => c.use && !c.profile).map(([, c]) => c.shape), [choices]);
@@ -1126,7 +1128,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
                 <p className="muted">{t('convert.summary.noLand')}</p>
-                {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={!view.ok} />}
+                {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={exportBlocked} />}
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}

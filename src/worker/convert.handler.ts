@@ -191,7 +191,7 @@ export function createConvertHandler(): ConvertHandler {
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
       for (const sheet of parsed.sheets) {
         if (sheet.pivot !== undefined) {
-          const { cellLines: _lines, ...note } = sheet.pivot;
+          const { cellLines: _lines, lines: _sourceLines, ...note } = sheet.pivot;
           pivots[sheet.name] = note;
         }
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
@@ -347,7 +347,8 @@ export function createConvertHandler(): ConvertHandler {
       worms: r.nameLookup,
       examples: { cruise: by('cruise'), station: by('station'), sample: by('sample'), level: by('level') },
       profile: r.profile,
-      ledger: [...r.ledger, ...notUsedLedgers(body)],
+      // (the page gets the tallies and the columns; the fate of every line stays in the conversion result, where the list of rows not written reads it)
+      ledger: [...r.ledger, ...notUsedLedgers(body)].map((l) => ({ ...l, lines: [] })),
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
     };

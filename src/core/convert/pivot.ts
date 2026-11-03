@@ -160,19 +160,27 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
   const byKey = new Map<string, Group>();
   const duplicates = new Map<string, { header: string; lines: number[] }>();
   const unnamed: number[] = [];
+  const flagLines: number[] = [];
+  const blankLines: number[] = [];
+  const raggedLines: number[] = [];
   let rowsIn = 0;
   let flagRows = 0;
   for (const row of sheet.rows) {
-    if (ragged.has(row.line)) continue;
+    if (ragged.has(row.line)) {
+      raggedLines.push(row.line);
+      continue;
+    }
     const parameter = text(row.cells[c.parameterAt]);
     const value = row.cells[c.valueAt] ?? null;
     if (parameter === undefined) {
       if (!isBlankCell(value)) unnamed.push(row.line);
+      else blankLines.push(row.line);
       continue;
     }
     rowsIn++;
     if (flagNames.has(parameter)) {
       flagRows++;
+      flagLines.push(row.line);
       continue;
     }
     const unit = c.unitAt === undefined ? undefined : text(row.cells[c.unitAt]);
@@ -227,10 +235,16 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     return { line: g.first.line, cells, fieldCount: width };
   });
   const cellLines: Record<number, number[]> = Object.create(null) as Record<number, number[]>;
+  const entryAbsent: Record<number, number[]> = Object.create(null) as Record<number, number[]>;
+  const repeatedLines: number[] = [];
   groups.forEach((g, gi) => {
     const lines = new Array<number>(pairs.length).fill(rows[gi].line);
-    for (const [pi, e] of g.entries) lines[pi] = e.line;
+    for (const [pi, e] of g.entries) {
+      lines[pi] = e.line;
+      for (let k = 1; k < e.lines.length; k++) repeatedLines.push(e.lines[k]);
+    }
     cellLines[rows[gi].line] = lines;
+    if (g.entries.size < pairs.length) entryAbsent[rows[gi].line] = pairs.map((_, pi) => pi).filter((pi) => !g.entries.has(pi));
   });
 
   // rows that share every position / identity column but differ in another key column: that column splits what may be one sample
@@ -270,6 +284,7 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     flagRows,
     duplicates: [...duplicates.values()],
     unnamed,
+    lines: { sourceRows: sheet.rows.length, ragged: raggedLines, flag: flagLines, emptyParameter: unnamed, blank: blankLines, repeated: repeatedLines, entryAbsent },
     keyOptions,
     dropped,
     varying: [...varying].sort((a, b) => a - b).map((j) => keyHeaders[j].trim()),
@@ -304,7 +319,7 @@ export function pivotConvertFile(file: ParsedFile, choices: Readonly<Record<stri
 }
 
 /** What the page needs of a pivot to say it when the file is READ (the lines of every cell stay in the worker). */
-export type PivotNote = Omit<PivotInfo, 'cellLines'>;
+export type PivotNote = Omit<PivotInfo, 'cellLines' | 'lines'>;
 
 /** The note of a pivot, as the findings that say it: how the sheet was read, the flag columns and flag parameters left out, the headers that were renamed. All information. */
 export function pivotNoteFindings(file: string, sheet: string, p: PivotNote): Finding[] {

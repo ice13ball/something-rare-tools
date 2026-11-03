@@ -26,7 +26,7 @@ function expectRowsAgree(l: SheetLedger, result: ReturnType<typeof convert>, row
   expect(l.rows.unexplained).toBe(0);
   expect(l.balanced).toBe(true);
   // the rows written are the distinct source lines of the written occurrences, read from the records
-  expect(l.rows.written).toBe(new Set(result.occurrences.map((o) => o.source.line)).size);
+  expect(l.rows.written - (l.rows.writtenNoOccurrence ?? 0)).toBe(new Set(result.occurrences.map((o) => o.source.line)).size);
 }
 
 describe('ledger: wide sheets', () => {
@@ -121,10 +121,13 @@ describe('ledger: long sheets', () => {
     const r = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} });
     const l = r.ledger[0];
     expectRowsAgree(l, r, 3);
-    expect(l.rows.written).toBe(2);
+    // the third row opens the event of sample b: it wrote an event and no occurrence, and says so; the zero and its weight are in the column lines
+    expect(l.rows.written).toBe(3);
+    expect(l.rows.writtenNoOccurrence).toBe(1);
     expect(l.rows.writtenWithoutNumber).toBe(1);
-    expect(skippedOf(l.rows, 'zero-with-biomass')).toBe(1);
-    expect(l.rows.written - l.rows.writtenWithoutNumber!).toBe(r.occurrences.filter((o) => o.quantityText !== undefined).length);
+    expect(l.columns.find((c) => c.header === 'Count')!.skipped).toEqual([{ reason: 'zero-with-biomass', count: 1, sum: 0 }]);
+    expect(l.lines).toContainEqual(expect.objectContaining({ line: 4, fate: 'written', wrote: expect.arrayContaining(['event']), chain: ['zero-with-biomass'] }));
+    expect(l.rows.written - l.rows.writtenNoOccurrence! - l.rows.writtenWithoutNumber!).toBe(r.occurrences.filter((o) => o.quantityText !== undefined).length);
   });
 
   it('a total taken once: the repeats are in the ledger as repeat-total, and the sum written is the collapsed one', () => {
@@ -269,13 +272,15 @@ describe('ledger: the columns are read from what was written', () => {
   });
 
   it('a sheet read as one row per sample reports the rows of the long sheet it was made of', () => {
-    const longH = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Parameter', 'Value', 'Unit'];
+    const longH = ['Sample', 'Station', 'Date', 'Latitude', 'Longitude', 'Depth [m]', 'Parameter', 'Value', 'Unit'];
     const longR: Cell[][] = [];
-    for (const st of ['S1', 'S2']) for (const d of [5, 10]) for (const [p, v, u] of [['Temperature', 11 + d, 'C'], ['Salinity', 34, 'PSU'], ['Oxygen', 6, 'mg/L']] as [string, number, string][]) longR.push([st, '2020-06-01', 49.4, 0.2, d, p, v, u]);
+    for (const st of ['S1', 'S2']) for (const d of [5, 10]) for (const [p, v, u] of [['Temperature', 11 + d, 'C'], ['Salinity', 34, 'PSU'], ['Oxygen', 6, 'mg/L']] as [string, number, string][]) longR.push([`${st}-${d}`, st, '2020-06-01', 49.4, 0.2, d, p, v, u]);
     const piv = pivotConvertFile(fileOf(longH, longR, 'Long'), {});
-    const r = convert({ sheets: [sheetInput(piv, { shape: 'wide' })], options: {} });
+    const r = convert({ sheets: [sheetInput(piv, { shape: 'wide', edit: { Sample: { kind: 'sampleId' } } })], options: {} });
     expect(r.ledger[0].pivotRowsIn).toBe(12);
-    expect(r.ledger[0].rows.source).toBe(4);
+    expect(r.ledger[0].pivotSamples).toBe(4);
+    // the ledger is in lines of the long file: all 12 are accounted for, each written as a measurement
+    expect(r.ledger[0].rows).toMatchObject({ source: 12, written: 12, unexplained: 0 });
   });
 
   it('a sheet the user left out is in the ledger as not used', () => {
@@ -433,5 +438,61 @@ describe('ledger: sheets that give no row, sheets left out, and the ledger as an
     } finally {
       vi.restoreAllMocks();
     }
+  });
+});
+
+describe('ledger: CONV-COLUMN-NOT-EXPORTED and the ledger name the same unwritten columns', () => {
+  const base = ['Sample', 'Date', 'Latitude', 'Longitude'];
+  const fr = (s: string): Cell[] => [s, '2020-06-01', 49.4, 0.2];
+  const edit: Record<string, ColumnRole> = { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, 'Weight [g]': { kind: 'biomass', basis: 'wet' } };
+  const named = (r: ReturnType<typeof convert>): string[] => r.findings.filter((f) => f.ruleId === 'CONV-COLUMN-NOT-EXPORTED').flatMap((f) => String(f.params.columns).split(', '));
+
+  it('a long sheet with a taxon and a weight but no quantity column writes no weight: both say so', () => {
+    const r = convert({ sheets: [sheetInput(fileOf([...base, 'Species', 'Weight [g]'], [[...fr('a'), 'Solea solea', 5], [...fr('b'), 'Gadus morhua', 7]]), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} });
+    expect(r.measurements).toHaveLength(0);
+    expect(named(r)).toContain('Weight [g]');
+    const c = r.ledger[0].columns.find((x) => x.header === 'Weight [g]')!;
+    expect(c.to).toBe('not-written');
+    expect(c.unexplained).toBe(0);
+  });
+
+  it('the same sheet read as a presence list writes the weight: neither says it is unwritten', () => {
+    const r = convert({ sheets: [sheetInput(fileOf([...base, 'Species', 'Weight [g]'], [[...fr('a'), 'Solea solea', 5], [...fr('b'), 'Gadus morhua', 7]]), { shape: 'long', presenceOnly: true, edit })], options: {} });
+    expect(r.measurements.filter((m) => m.role === 'biomass')).toHaveLength(2);
+    expect(named(r)).not.toContain('Weight [g]');
+    const c = r.ledger[0].columns.find((x) => x.header === 'Weight [g]')!;
+    expect(c).toMatchObject({ to: 'measurement', written: 2, unexplained: 0, match: true });
+    expect(r.ledger[0].balanced).toBe(true);
+  });
+});
+
+describe('ledger: the fate of every line, as data (what the list of rows not written reads)', () => {
+  it('W1: the cells a written line lost are counted per line, with the reasons, and plain written lines are not listed', () => {
+    const r = convert({ sheets: [sheetInput(fileOf(W1_HEADER, W1_ROWS), { quantity: W1_QUANTITY, device: { kind: 'known', key: 'multinet' } })], options: { fullList: false } });
+    const l = r.ledger[0];
+    // line 2: 10, 5, 0 -> the zero is lost; line 3: 7, blank, 3 -> nothing lost; line 4: NA, 4, 1 -> the NA is lost
+    expect(l.lines).toEqual([
+      { line: 2, fate: 'written', cells: { written: 2, lost: 1 }, chain: ['zero'] },
+      { line: 4, fate: 'written', cells: { written: 2, lost: 1 }, chain: ['na-cell'] },
+    ]);
+  });
+
+  it('an unwritten line is listed with its reason and its chain; the lines of a sheet add up to the tally', () => {
+    const header = ['sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];
+    const edit: Record<string, ColumnRole> = { sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } };
+    const rows: Cell[][] = [['a', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['Total', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['a', '2020-06-01', 49.4, 0.2, 'Gadus morhua', -2], ['b', '2020-06-01', 49.4, 0.2, null, null]];
+    const l = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
+    const unwritten = l.lines.filter((x) => x.fate !== 'written');
+    expect(unwritten.map((x) => [x.line, x.fate])).toEqual([[3, 'summary-row'], [4, 'negative'], [5, 'nothing-to-record']]);
+    expect(unwritten.length).toBe(l.rows.skipped.reduce((n, s) => n + s.count, 0) + l.rows.unexplained);
+    expect(l.rows.source).toBe(l.rows.written + unwritten.length);
+  });
+
+  it('a wide 40 x 30 sheet lists one entry per line at most, never one per cell', () => {
+    const header = [...W1_HEADER.slice(0, 9), ...Array.from({ length: 30 }, (_, i) => `Taxon genus${i}`)];
+    const rows: Cell[][] = Array.from({ length: 40 }, (_, r) => ['CR1', 'S1', `s${r}`, '2023-06-14', 55.5, 2.5, 0, 25, 12, ...Array.from({ length: 30 }, (_, c) => (c % 7 === 0 ? c + 1 : 0))]);
+    const l = convert({ sheets: [sheetInput(fileOf(header, rows), { quantity: W1_QUANTITY })], options: {} }).ledger[0];
+    expect(l.lines.length).toBeLessThanOrEqual(40);
+    expect(l.lines.every((x) => x.cells !== undefined && x.cells.lost > 0)).toBe(true);
   });
 });

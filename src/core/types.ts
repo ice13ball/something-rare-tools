@@ -48,6 +48,11 @@ export interface PivotInfo {
   duplicates: { header: string; lines: number[] }[];
   /** Original lines that have a value but no parameter name (nothing can be named for them). */
   unnamed: number[];
+  /**
+   * Where every ORIGINAL line went when the sheet was pivoted (the ledger reads it; the page never gets it). `entryAbsent`: per pivoted row (by its `line`), the positions in `pivoted` that no original line filled.
+   * Every other line is one of the lists, or the first line of a (pivoted row, pivoted column) cell. `sourceRows` = all the data lines of the long sheet.
+   */
+  lines: { sourceRows: number; ragged: number[]; flag: number[]; emptyParameter: number[]; blank: number[]; repeated: number[]; entryAbsent: Record<number, number[]> };
   /** The key columns that are not position / identity columns (station, cruise, sample, time, depth, position): the user may mark each as describing the measurement, not the sample. */
   keyOptions: { index: number; header: string; describes: boolean }[];
   /** Columns the user marked as describing the measurement: removed from the key, their values not written. */

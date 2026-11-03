@@ -44,7 +44,7 @@ import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
 import { FateLog, buildSheetLedger, notReadLedger, settleEventColumns } from './ledger';
-import type { SheetLedger } from './ledger';
+import type { LedgerReason, SheetLedger } from './ledger';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -418,7 +418,7 @@ function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeo
   for (const v of cols.variables) use(v);
   use(cols.replicate);
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
-  if (sin.profile === undefined && sin.shape === 'long' && cols.quantity !== undefined && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
+  if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
   use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
@@ -1294,7 +1294,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
       decimalComma: dc,
       fate,
       eventColumns: [...readColumns(sin, cols, specs)],
-      ...(sheet.pivot === undefined ? {} : { pivotRowsIn: sheet.pivot.rowsIn }),
+      ...(sheet.pivot === undefined ? {} : { pivot: sheet.pivot }),
       taxonColumns: [],
       occurrenceColumns: [],
       measurementColumns: [...cols.variables.map((v) => v.index), ...(pressure === undefined ? [] : [pressure.index])],
@@ -1678,6 +1678,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         return bp.status === 'ok' && bp.value > 0;
       });
 
+    // a number in a column that is read as a value (a variable, a weight, a quantity, a taxon column): a row that holds one is never "nothing to record"
+    const valueColumns = sin.mapping.columns.filter((c) => ['variable', 'biomass', 'quantity', 'taxon', 'effort'].includes(c.role.kind)).map((c) => c.index);
+    const rowHasValue = (row: RawRow): boolean => valueColumns.some((i) => parseNumber(row.cells[i] ?? null, dc).status === 'ok');
+
     const visitIds = new Map<number, string>();
     const visitParts = new Set<string>();
     const visitGroups: { id: string; lines: number[] }[] = [];
@@ -1777,7 +1781,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             if (!isBlankCell(row.cells[c.index] ?? null)) naOther.set(c.header.trim(), (naOther.get(c.header.trim()) ?? 0) + 1);
           }
           fate.row(row.line, 'quantity-blank');
-        } else fate.row(row.line, 'nothing-to-record');
+        } else fate.row(row.line, rowHasValue(row) ? (sin.shape === 'wide' ? 'no-code' : 'value-no-taxon') : 'nothing-to-record');
         continue;
       }
       if (code === undefined) {
@@ -1829,7 +1833,6 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         }
         acc = earlier;
         acc.lines.push(row.line);
-        fate.merged.add(row.line);
         const differs = (what: string): void => void acc.conflicts.add(what);
         if (acc.dateText !== dateText) differs('date');
         if (!sameNumber(acc.site.lat, m.lat) || !sameNumber(acc.site.lon, m.lon)) differs('position');
@@ -1838,6 +1841,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (acc.effortText !== effort) differs('sample size');
       } else {
         const site: SampleSite = { id: eventId, code: replicate ?? code, source };
+        fate.event(row.line);
         const whenText = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time].map((sp) => (sp === undefined ? '' : String(row.cells[sp.index] ?? '').trim())).join('|');
         if (whenText !== '|') site.whenText = whenText;
         if (replicate !== undefined) {
@@ -1998,6 +2002,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           ...(qualifierCol === undefined ? {} : { qualifierCol }),
         });
       }
+      // the reason a cell has no record: its own cell when the column is known, else the row (a presence list of a long sheet has one cell per row)
+      const cellFate = (cell: { index?: number }, reason: LedgerReason): void => (cell.index === undefined ? fate.row(row.line, reason) : fate.cell(rowPos, cell.index, reason));
       for (const cell of cells) {
         const raw = cell.raw as string | number | null;
         const p = parseNumber(raw, dc);
@@ -2007,17 +2013,21 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         let remarks: string | undefined;
         if (presence) {
           const mark = presenceMark(raw, dc);
-          if (mark.kind === 'blank') continue;
+          if (mark.kind === 'blank') {
+            // (NA, nd, n/a read as "no record" by presenceMark: a blank cell has nothing to account for, a cell with a word in it says why it has no record)
+            if (typeof raw === 'string' && raw.trim() !== '') cellFate(cell, 'na-cell');
+            continue;
+          }
           if (mark.kind === 'unknown') {
             presenceBad.add(fileName, sheet.name, field, row.line, mark.text);
-            if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'bad-mark');
+            cellFate(cell, 'bad-mark');
             continue;
           }
           if (mark.kind === 'absent') {
             // an absence only for a full species list; otherwise nothing is written (as a zero)
             if (!fullList) {
               presenceSkipped++;
-              if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'absent-mark');
+              cellFate(cell, 'absent-mark');
               continue;
             }
             status = 'absent';
@@ -2029,12 +2039,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             blankKept.add(fileName, sheet.name, field, row.line);
           } else if (p.status === 'missing') {
             // a cell that says NA (not a blank one) is counted: it makes no record, and the user is told how many
-            if (typeof raw === 'string' && raw.trim() !== '') naCells++;
-            if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'na-cell');
+            if (typeof raw === 'string' && raw.trim() !== '') {
+              naCells++;
+              cellFate(cell, 'na-cell');
+            }
             continue;
           } else if (p.status === 'na-variant') {
             collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
-            if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'na-cell');
+            cellFate(cell, 'na-cell');
             continue;
           }
           if (p.status === 'missing') {
@@ -2048,7 +2060,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             value = p.value;
             if (value < 0) {
               negatives.add(fileName, sheet.name, field, row.line, String(raw).trim());
-              if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'negative');
+              cellFate(cell, 'negative');
               continue;
             }
             if (value === 0) {
@@ -2056,18 +2068,18 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               if (sin.shape === 'long' && cols.taxonCell !== undefined && rowHasBiomass(row)) {
                 // a count of 0 with a mass above zero contradicts itself: never written as absent (a false absence), left out whatever the full-list tick says, and listed
                 zeroBiomass.add(fileName, sheet.name, field, row.line);
-              if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'zero-with-biomass');
+              cellFate(cell, 'zero-with-biomass');
                 continue;
               }
               if (!fullList) {
                 zeros++;
-              if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'zero');
+              cellFate(cell, 'zero');
                 continue;
               }
               status = 'absent';
             } else if (kind === 'count' && !Number.isInteger(value)) {
               notInteger.add(fileName, sheet.name, field, row.line, String(raw).trim());
-              if (cell.index !== undefined) fate.cell(rowPos, cell.index, 'not-integer');
+              cellFate(cell, 'not-integer');
               continue;
             }
           }
@@ -2246,10 +2258,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           decimalComma: dc,
           fate,
           eventColumns: [...readColumns(sin, cols, specs)],
-          ...(sheet.pivot === undefined ? {} : { pivotRowsIn: sheet.pivot.rowsIn }),
+          ...(sheet.pivot === undefined ? {} : { pivot: sheet.pivot }),
           taxonColumns: wide ? cols.taxonHeaders.map((c) => c.index) : [],
           occurrenceColumns: wide ? cols.taxonHeaders.map((c) => c.index) : longBiology && cols.quantity !== undefined ? [cols.quantity.index] : [],
-          measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
+          measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology && (cols.quantity !== undefined || presence) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
           hasTaxa: cols.taxonHeaders.length > 0 || cols.taxonCell !== undefined,
           presence,
           occurrences: occurrences.slice(occurrencesBefore),

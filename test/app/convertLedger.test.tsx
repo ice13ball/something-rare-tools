@@ -33,6 +33,8 @@ const sheet = (n: number): SheetLedger => ({
     { index: 2, header: 'Count', role: 'quantity', to: 'occurrence', numbers: n, sum: 10.5, nonNumbers: 0, writtenWithoutValue: 0, valueMissing: 0, written: n - 1, writtenSum: 10.5, outSum: 10.5, skipped: [{ reason: 'zero', count: 1, sum: 0 }], unexplained: 0, match: true },
     { index: 3, header: 'Mesh', role: 'ignore', to: 'not-written', numbers: n, sum: 7, nonNumbers: 0, writtenWithoutValue: 0, valueMissing: 0, written: 0, writtenSum: 0, outSum: 0, skipped: [{ reason: 'column-not-read', count: n, sum: 7 }], unexplained: 0, match: true },
   ],
+  lines: [],
+  notUnderstood: 0,
   balanced: true,
 });
 
@@ -138,5 +140,26 @@ describe('the ledger panel', () => {
     // the quantity kind is not declared: the export is blocked, so nothing is written yet
     expect(summary().querySelector('details.convert-ledger')!.textContent).toMatch(/would be written/);
     expect(summary().querySelector('details.convert-ledger')!.textContent).not.toMatch(/: \d+ written/);
+  });
+
+  it('nothing in the findings blocks, but the metadata is missing: the export is stopped, so the page still says "would be written"', async () => {
+    setLang('en');
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'wide.csv', text: W1_CSV }]);
+    fireEvent.click(screen.getByRole('button', { name: UI.en['convert.read'] }));
+    await screen.findByRole('heading', { name: UI.en['convert.columns.title'] });
+    const confirm = screen.queryByRole('button', { name: /Confirm/ });
+    if (confirm) fireEvent.click(confirm);
+    fireEvent.change(screen.getByLabelText(UI.en['convert.quantity.kind']), { target: { value: 'count' } });
+    fireEvent.change(screen.getByLabelText(UI.en['convert.effort.title']), { target: { value: 'column' } });
+    fireEvent.click(await screen.findByRole('button', { name: /^Approve 1 shown / }));
+    const summary = (): HTMLElement => screen.getByRole('region', { name: UI.en['convert.summary.title'] });
+    await waitFor(() => expect(summary().textContent).toContain(UI.en['convert.summary.none']));
+    // no blocking finding: the view is ok, but the export button is still disabled by the missing metadata
+    const exportButton = screen.getAllByRole('button').find((b) => b.getAttribute('aria-describedby') === 'convert-export-note')!;
+    expect(exportButton.getAttribute('aria-disabled')).toBe('true');
+    const text = summary().querySelector('details.convert-ledger')!.textContent ?? '';
+    expect(text).toContain('would be written');
+    expect(text).not.toMatch(/Written: \d/);
   });
 });

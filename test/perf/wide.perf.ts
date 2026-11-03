@@ -31,6 +31,8 @@ describe('a wide sheet, 2000 rows x 1000 taxon columns', () => {
       times.push(performance.now() - t0);
       ledgerCells = r.ledger[0].cells?.source ?? 0;
       expect(r.ledger[0].balanced).toBe(true);
+      // the fate of each line is kept per line (with the cells it lost), never per cell
+      expect(r.ledger[0].lines.length).toBeLessThanOrEqual(nr);
     }
     times.sort((a, b) => a - b);
     console.log(`wide 2000x1000: convert median ${times[1].toFixed(0)} ms (runs ${times.map((t) => t.toFixed(0)).join(', ')}); taxon cells in the ledger ${ledgerCells}`);

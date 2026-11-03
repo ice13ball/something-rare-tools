@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React from 'react';
+import React, { useState } from 'react';
 import type { LedgerColumn, LedgerTally, SheetLedger } from '../../core/convert/ledger';
 import type { UiKey } from '../../core/i18n/ui';
 import { t } from '../i18n';
@@ -28,6 +28,7 @@ function Tally({ tally, line, blocked }: { tally: LedgerTally; line: 'rows' | 'c
         ))}
         .
       </p>
+      {tally.writtenNoOccurrence !== undefined && tally.writtenNoOccurrence > 0 && !blocked && <p className="muted">{t('convert.ledger.noOccurrence', { count: tally.writtenNoOccurrence })}</p>}
       {tally.unexplained > 0 && (
         <p className="notice" role="note">
           {t('convert.ledger.unexplained', { count: tally.unexplained })}
@@ -37,12 +38,12 @@ function Tally({ tally, line, blocked }: { tally: LedgerTally; line: 'rows' | 'c
   );
 }
 
-function Column({ c }: { c: LedgerColumn }): React.ReactElement {
+function Column({ c, blocked }: { c: LedgerColumn; blocked: boolean }): React.ReactElement {
   return (
     <li>
       {c.numbers === 0
         ? t('convert.ledger.columnText', { header: c.header.trim() === '' ? `#${c.index + 1}` : c.header.trim(), nonNumbers: c.nonNumbers })
-        : t('convert.ledger.column', { header: c.header.trim() === '' ? `#${c.index + 1}` : c.header.trim(), numbers: c.numbers, sum: c.sum, written: c.written, out: c.outSum })}{' '}
+        : t(blocked ? 'convert.ledger.columnWould' : 'convert.ledger.column', { header: c.header.trim() === '' ? `#${c.index + 1}` : c.header.trim(), numbers: c.numbers, sum: c.sum, written: c.written, out: c.outSum })}{' '}
       ({toLabel(c.to)})
       {c.skipped.map((s) => (
         <span key={s.reason}>
@@ -80,6 +81,26 @@ function headings(ledger: readonly SheetLedger[]): string[] {
   return ledger.map((l) => ((count.get(l.sheet) ?? 0) > 1 ? `${l.file} / ${l.sheet}` : l.sheet));
 }
 
+/** A list of columns: the first 50, and a button for the rest (a wide sheet has thousands of columns; the open panel must stay short). */
+const OPEN_COLUMNS = 50;
+function Columns({ list, blocked }: { list: readonly LedgerColumn[]; blocked: boolean }): React.ReactElement {
+  const [all, setAll] = useState(false);
+  const shown = all ? list : list.slice(0, OPEN_COLUMNS);
+  return (
+    <>
+      <ul>{shown.map((c) => <Column key={c.index} c={c} blocked={blocked} />)}</ul>
+      {!all && list.length > OPEN_COLUMNS && (
+        <button type="button" className="button" onClick={() => setAll(true)}>
+          {t('convert.ledger.showAll', { count: list.length })}
+        </button>
+      )}
+    </>
+  );
+}
+
+/**
+ * `blocked`: something stops the export (a blocking finding, a missing metadata field, an acceptance not given, nothing to write), so nothing is written yet and the sentences say what WOULD be.
+ */
 export function ConvertLedger({ ledger, blocked = false }: { ledger: readonly SheetLedger[]; blocked?: boolean }): React.ReactElement | null {
   if (ledger.length === 0) return null;
   const names = headings(ledger);
@@ -91,24 +112,28 @@ export function ConvertLedger({ ledger, blocked = false }: { ledger: readonly Sh
         // the columns that are not written at all come first: a numeric column left out must be seen
         const lost = l.columns.filter((c) => c.to === 'not-written');
         const kept = l.columns.filter((c) => c.to !== 'not-written' && c.to !== 'event');
+        // a column of text that is not written is listed, but it is not a number that went nowhere
+        const lostNumeric = lost.filter((c) => c.numbers > 0);
         const settled = l.kind !== 'not-read' && l.kind !== 'not-used';
         return (
           <section key={`${i}\u0000${l.file}\u0000${l.sheet}`} aria-label={names[i]}>
             <h3>{names[i]}</h3>
-            {l.pivotRowsIn !== undefined && <p className="muted">{t('convert.ledger.pivot', { rowsIn: l.pivotRowsIn, rows: l.rows.source })}</p>}
+            {l.pivotRowsIn !== undefined && <p className="muted">{t('convert.ledger.pivot', { rowsIn: l.pivotRowsIn, samples: l.pivotSamples ?? 0 })}</p>}
             {l.cells === undefined ? <Tally tally={l.rows} line="rows" blocked={blocked} /> : <Tally tally={l.cells} line="cells" blocked={blocked} />}
             {l.cells !== undefined && <Tally tally={l.rows} line="also" blocked={blocked} />}
-            {settled && (l.balanced ? <p className="muted">{lost.length === 0 ? t('convert.ledger.balanced') : t('convert.ledger.balancedColumns', { count: lost.length })}</p> : <p className="notice" role="note">{t('convert.ledger.unbalanced')}</p>)}
+            {settled && !l.balanced && <p className="notice" role="note">{t('convert.ledger.unbalanced')}</p>}
+            {settled && l.balanced && l.notUnderstood > 0 && <p className="notice" role="note">{t('convert.ledger.lostValues', { count: l.notUnderstood })}</p>}
+            {settled && l.balanced && l.notUnderstood === 0 && <p className="muted">{lostNumeric.length === 0 ? t('convert.ledger.balanced') : t('convert.ledger.balancedColumns', { count: lostNumeric.length })}</p>}
             {lost.length > 0 && (
               <>
                 <h4>{t('convert.ledger.notWritten')}</h4>
-                <ul>{lost.map((c) => <Column key={c.index} c={c} />)}</ul>
+                <Columns list={lost} blocked={blocked} />
               </>
             )}
             {kept.length > 0 && (
               <>
                 <h4>{t('convert.ledger.columns')}</h4>
-                <ul>{kept.map((c) => <Column key={c.index} c={c} />)}</ul>
+                <Columns list={kept} blocked={blocked} />
               </>
             )}
           </section>
