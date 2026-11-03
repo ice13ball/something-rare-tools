@@ -9,6 +9,7 @@ import type { ConvertPrefill } from '../core/convert/prefill';
 import type { NercDecisions } from '../core/convert/nerc';
 import type { ConvertSettings } from '../core/convert/settings';
 import type { WormsLookup } from '../core/convert/worms';
+import type { SheetLedger } from '../core/convert/ledger';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -140,6 +141,8 @@ export interface ConvertView {
   codeCollision: boolean;
   /** Some sheet has rows without a sample code: the code proposal is worth showing. */
   codesMissing: { fileId: string; sheet: string }[];
+  /** Where every source row and numeric column of every sheet went (core/convert/ledger.ts): informational, blocks nothing. */
+  ledger: SheetLedger[];
 }
 
 export interface CodeProposalView {

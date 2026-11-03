@@ -18,6 +18,8 @@ import type { LicenceSource } from '../core/convert/prefill';
 import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
 import { biomassBasisOf, readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
+import { notUsedLedger } from '../core/convert/ledger';
+import type { SheetLedger } from '../core/convert/ledger';
 import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
@@ -307,6 +309,14 @@ export function createConvertHandler(): ConvertHandler {
     };
   };
 
+  /** The sheets of the dropped files that the request leaves out (the page's "use" unticked): the ledger says they were not used. Told apart by file id AND sheet name. */
+  function notUsedLedgers(body: ConvertRequestBody): SheetLedger[] {
+    const asked = new Set(body.sheets.map((s) => `${s.fileId}\u0000${s.sheet}`));
+    const out: SheetLedger[] = [];
+    for (const [fileId, h] of files) for (const sh of h.parsed.sheets) if (!asked.has(`${fileId}\u0000${sh.name}`)) out.push(notUsedLedger(h.parsed.fileName, sh));
+    return out;
+  }
+
   function run(body: ConvertRequestBody): ConvertView {
     const { splits, r } = compute(body);
     const dataset = toDataset(r, body.metadata ?? EMPTY_METADATA, decisionsOf(body));
@@ -337,6 +347,7 @@ export function createConvertHandler(): ConvertHandler {
       worms: r.nameLookup,
       examples: { cruise: by('cruise'), station: by('station'), sample: by('sample'), level: by('level') },
       profile: r.profile,
+      ledger: [...r.ledger, ...notUsedLedgers(body)],
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
     };

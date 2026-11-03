@@ -1680,6 +1680,24 @@ and the description by `metadataFindings`. A warning that BioCheck gives (no sam
 effort among the `measurementTypeID`s) is `CONV-NO-SAMPLING-DESCRIPTOR`. **The land mask is not
 loaded here**: the converter does not compare positions with land (`ROW-ON-LAND` cannot arise).
 
+### The ledger before the export (`convert/ledger.ts`, `ConvertLedger`)
+
+Above the export button the page lists, per sheet, where every source row went and where every numeric column went, with the sums in and out. It is **information only**: no rule reads it,
+nothing blocks on it, it adds no finding, and it is never written into the archive or the companion file (the sums stay on the page). Without it the archive is byte-identical.
+
+- **Read from what was written.** `convert()` hands the ledger the records it produced and the reason it recorded where it left a row or a cell out (`FateLog`, set beside each `continue`;
+  it never decides anything: with every call turned into a no-op the records are identical, tested). A row with a record is written; a row with neither a record nor a reason is
+  `unexplained` and the sheet is not balanced. Nothing recomputes a rule, so the ledger cannot disagree with the writer about what a zero or a repeat is.
+- **Where a column goes** is read the same way: a column an occurrence or a measurement came from; a column read for the events (the set `CONV-COLUMN-NOT-EXPORTED` is computed from) only if the
+  written events carry what it gives (Month and Day with no Year, a Time with no date: "not written"); every other numeric column "not written". An unwritten `Volume filtered` or a numeric
+  `occurrenceID` is therefore listed as not written, and the sheet is not called settled.
+- **Sums** are compensated and compared with a tolerance of 1e-12 of the sum of the absolute values: float noise (0.1 + 0.2) is no difference, a changed value or a lost cell is. A cell
+  that holds text (`5 g`, an NA variant) is shown as "not read as a number" and is in no sum. A presence mark is written with no value of its own and is not a mismatch.
+- **Sheets that are not converted** have a line each: not read (long environmental, turned, a units row that was not folded), not used (unticked). A sheet read as one row per sample
+  reports the rows of the long file. While something blocks the export the page says "would be written".
+- Limits: the ledger is built on every conversion of the page (one pass over the cells, a byte per cell and column; a wide 2000 x 1000 sheet is checked by `test/perf/wide.perf.ts`, under 1300 ms per
+  convert). It does not say that the contents are right, only where each row and number went.
+
 ### 8.9 What the archive contains
 
 **`event.txt`** (Event core; `convert/dwca.ts`): `eventID`, `parentEventID`, `eventType`

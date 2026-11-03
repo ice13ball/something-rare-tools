@@ -4,6 +4,7 @@ import type { Finding } from '../types';
 import type { DatasetMetadata } from './metadata';
 import type { ConvertSettings } from './settings';
 import type { SplitEntry, TaxonSplit } from './taxon';
+import type { SheetLedger } from './ledger';
 import type { NercTerm } from './vocab';
 
 /*
@@ -194,6 +195,8 @@ export interface ConvertResult {
   nameLookup: { names: string[]; withSheetId: number; applied: number };
   /** Cruise codes whose level was flattened away: they belong in the dataset text (title / abstract). */
   cruiseText: string[];
+  /** Where every source row and numeric column of every sheet went (ledger.ts). Informational: nothing reads it to block. */
+  ledger: SheetLedger[];
   /** Every occurrenceID that CONV-ID-DUPLICATE named as repeated; kept here and not in the finding, so the finding stays small. */
   repeatedOccurrenceIds?: string[];
   stats: ConvertStats;

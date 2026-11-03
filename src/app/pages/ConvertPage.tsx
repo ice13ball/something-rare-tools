@@ -14,6 +14,7 @@ import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseR
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
+import { ConvertLedger } from '../components/ConvertLedger';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
 import type { NercKind, NvsSearchView } from '../components/ConvertNerc';
 import { ConvertWorms } from '../components/ConvertWorms';
@@ -1046,6 +1047,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
                 <p className="muted">{t('convert.summary.noLand')}</p>
+                {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={!view.ok} />}
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
