@@ -81,7 +81,7 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
  *   cruise                dwc.ts 345 (invisible character); speed.ts (groups by cruise), rows.ts noCoord 470, chemistry.ts 140
  *   sampleId              dwc.ts 345 (invisible character in an id column, via dataset.ts 649); it stands in for the station ONLY when sheets are
  *                         joined: dataset.ts withLookup returns before the stand-in line (454) without a join, so a single table gives no station
- *   pressure              dropped by specsOf (dataset.ts default branch): no rule and no output reads it
+ *   pressure              read by specsOf (Specs.pressure): no check reads it; the clean CSV writes it after the depth
  *   variable              rows.ts unitMissing 435; dataset.ts 164 (non-numeric); chemistry.ts; crossfile.ts 233 (unit conflict);
  *                         metadata.ts 136 (variable named in the abstract)
  * test/app/infotip-sources.test.tsx checks that every id exists in the registry; the lists themselves are checked by reading, as above.

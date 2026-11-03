@@ -30,7 +30,7 @@ const sheet = (cells: string[], head = 'Station,Latitude,Longitude,Date,Note,Tem
 
 describe('ROW-TEXT-MOJIBAKE fires on double-encoded pairs', () => {
   it('a degree sign and an accented name', () => {
-    const f = sheet([`7${degree}S`, `(Lim${e_acute}, 1921)`, 'fine']);
+    const f = sheet([`7${degree}S`, `(Zzzz${e_acute}, 1999)`, 'fine']);
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual([2, 3]);
     expect(f[0].field).toBe('Note');
@@ -47,7 +47,7 @@ describe('ROW-TEXT-MOJIBAKE fires on double-encoded pairs', () => {
 
   it('several columns are one finding that lists them (at most ten, then a count)', () => {
     const head = ['Station', 'Latitude', 'Longitude', 'Date', ...Array.from({ length: 14 }, (_, i) => `Note${i}`)];
-    const row = ['S1', '49.4', '0.2', '2020-06-01', ...Array.from({ length: 14 }, () => `Lim${e_acute}`)];
+    const row = ['S1', '49.4', '0.2', '2020-06-01', ...Array.from({ length: 14 }, () => `Aaaaa bbbb${e_acute}`)];
     const f = moji(check(textFile('s.csv', [head.join(','), row.join(',')].join('\n'))));
     expect(f).toHaveLength(1);
     expect(f[0].params.count).toBe(14);

@@ -13,7 +13,7 @@ const wide = (hit: boolean): ParsedFile => {
   const rows = Array.from({ length: 300_000 }, (_, r) => ({
     line: r + 2,
     fieldCount: cols,
-    cells: Array.from({ length: cols }, (_, c) => (c === 5 && hit ? `Lim${A_TILDE}${String.fromCharCode(0xa9)}` : c % 3 === 0 ? `${r}.${c}` : c % 3 === 1 ? 'São Paulo' : `${A_TILDE}x`)),
+    cells: Array.from({ length: cols }, (_, c) => (c === 5 && hit ? `Aaaaa bbbb${A_TILDE}${String.fromCharCode(0xa9)}` : c % 3 === 0 ? `${r}.${c}` : c % 3 === 1 ? 'São Paulo' : `${A_TILDE}x`)),
   }));
   const sheet = { name: 's', header, headerLine: 1, rows } as unknown as RawSheet;
   return { fileName: 'big.csv', kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding: 'utf-8', findings: [] } as unknown as ParsedFile;

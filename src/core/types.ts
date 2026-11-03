@@ -252,7 +252,7 @@ export interface Dataset {
   /** Source columns the clean CSV writes after the depth and before the variables (pressure, and the columns that joined a long sheet's row key). Absent when there are none. */
   extraKeyColumns?: ExtraKeyColumn[];
   /** The source columns the build read, by sheet name (the lookup sheet of a join included): the record the clean CSV's list of left-out columns comes from. */
-  readColumns?: { sheet: string; columns: number[] }[];
+  readColumns?: { sheet: string; columns: number[]; /** Columns some cells of which gave a value and some did not: how many of the non-blank cells did. */ partial?: { index: number; used: number; filled: number }[] }[];
   /** Per sheet, the Year column beside a date column and the date column's header: what ROW-YEAR-DATE-MISMATCH compares. */
   yearColumns?: { sheet: string; year: string; date: string }[];
 }

@@ -31,7 +31,12 @@ const left = (sidecar: string): string[] =>
   parse(sidecar)
     .rows.filter((r) => r[0] === '(note)' && r[1].startsWith('source columns that are not in this file'))
     .map((r) => r[1]);
+const part = (sidecar: string): string[] =>
+  parse(sidecar)
+    .rows.filter((r) => r[0] === '(note)' && r[1].startsWith('source columns only partly in this file'))
+    .map((r) => r[1]);
 const LEFT = 'source columns that are not in this file';
+const PART = 'source columns only partly in this file';
 
 describe('a time column', () => {
   it('beside a date it is merged into the date: not written as a column, not named', () => {
@@ -87,8 +92,9 @@ describe('a sheet joined to a lookup sheet: the columns it lent are the ones car
     const out = toCleanCsv(ds);
     const depth = parse(out.csv).header.findIndex((h) => h.startsWith('depth'));
     expect(parse(out.csv).rows.map((r) => r[depth])).toEqual(['', '5', '5']);
-    // withheld for S1, lent for S2 and S3: the column is not carried whole, so it is named
-    expect(left(out.sidecar)).toEqual([`${LEFT} (sheet Sites): Depth [m]`]);
+    // withheld for S1, lent for S2 and S3: the column is not carried whole, so it is named, with the counts
+    expect(left(out.sidecar)).toEqual([]);
+    expect(part(out.sidecar)).toEqual([`${PART} (sheet Sites): Depth [m] (2 of 4 cells)`]);
   });
 
   it('a Sites column no row took a value from is named, one that gave a position is not', () => {
@@ -241,7 +247,7 @@ describe('a key column the person set to ignore is not written; one that is igno
 describe('per cell: a column is carried only if every non-blank cell of it gave something', () => {
   it('a time beside a date on one row only: the undated row leaves the time unused, so the wide sheet names it', () => {
     const t = ['Station,Latitude,Longitude,Date,Time,Temp [°C]', 'S1,49.4,0.2,2020-06-01,10:30,11.2', 'S2,49.5,0.3,,11:45,10.4'].join('\n');
-    expect(left(toCleanCsv(build(t).dataset).sidecar)).toEqual([`${LEFT}: Time`]);
+    expect(part(toCleanCsv(build(t).dataset).sidecar)).toEqual([`${PART}: Time (1 of 2 cells)`]);
   });
 
   it('and on a long sheet the times that split undated rows are written, so the rows do not look identical', () => {
@@ -257,7 +263,7 @@ describe('per cell: a column is carried only if every non-blank cell of it gave 
 
   it('a date that parses on one row and reads spring or summer on the others: the column is named (wide) or written raw as a key (long)', () => {
     const wide = ['Station,Latitude,Longitude,Date,Temp [°C]', 'S1,49.4,0.2,2020-06-01,11.2', 'S2,49.5,0.3,spring,10.4', 'S3,49.5,0.3,summer,10.1'].join('\n');
-    expect(left(toCleanCsv(build(wide).dataset).sidecar)).toEqual([`${LEFT}: Date`]);
+    expect(part(toCleanCsv(build(wide).dataset).sidecar)).toEqual([`${PART}: Date (1 of 3 cells)`]);
     const lines = ['Station,Latitude,Longitude,Date,Parameter,Value'];
     for (const d of ['2020-06-01', 'spring', 'summer']) for (const p of ['Corg', 'Ntot']) lines.push(`S1,49.4,0.2,${d},${p},${d.length}.${p.length}`);
     const { dataset } = build(lines.join('\n'));
@@ -272,7 +278,7 @@ describe('per cell: a column is carried only if every non-blank cell of it gave 
     const t = ['Station,Latitude,Longitude,eventDate,year,Temp [°C]', 'S1,49.4,0.2,2020-06-01,1999,11.2', 'S2,49.5,0.3,,2020,10.4'].join('\n');
     const { dataset } = build(t, (m) => setRole(m, 'year', { kind: 'datePart', part: 'year' }));
     expect(parse(toCleanCsv(dataset).csv).rows.map((r) => r[1])).toEqual(['2020-06-01', '2020']);
-    expect(left(toCleanCsv(dataset).sidecar)).toEqual([`${LEFT}: year`]);
+    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: year (1 of 2 cells)`]);
   });
 
   it('a Sites date lost on one row (the data row has its own) and lent on another: named', () => {
@@ -283,7 +289,7 @@ describe('per cell: a column is carried only if every non-blank cell of it gave 
     const { datasets } = buildDatasets(file, layout, proposeMappings(file, layout), [], 'd');
     const out = toCleanCsv(datasets[0]);
     expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020-06-01', '2019-01-02', '2020-06-03']);
-    expect(left(out.sidecar)).toEqual([`${LEFT} (sheet Sites): Date`]);
+    expect(part(out.sidecar)).toEqual([`${PART} (sheet Sites): Date (1 of 3 cells)`]);
   });
 });
 
@@ -366,7 +372,7 @@ describe('an Analyst column that is ignored by default and splits rows is writte
 
   it('the clean CSV tip says a column ignored by default that tells rows apart is written, and any other ignored column is not', () => {
     for (const lang of LANGS) expect(UI[lang]['tip.cleanCsv.logic'], lang).not.toMatch(/\{/);
-    expect(UI.en['tip.cleanCsv.logic']).toContain('A column ignored by default that tells rows apart (a replicate, a cast, an analyst) is written');
+    expect(UI.en['tip.cleanCsv.logic']).toContain('On a long sheet, a column ignored by default that tells rows apart (a replicate, a cast, an analyst) is written');
     expect(UI.en['tip.cleanCsv.logic']).toContain('any other ignored column is not written');
     expect(UI.pl['tip.cleanCsv.logic']).toContain('analityk');
     expect(UI.de['tip.cleanCsv.logic']).toContain('Analystin');
@@ -396,29 +402,37 @@ describe('round 3: every right row of a joined key is judged; the date is credit
 
   it('a depth blank on the first S1 row and 6 on the second, while S2 lends 7: the 6 is lost, so Depth is named', () => {
     const sites = [['Station', 'Depth [m]', 'Latitude', 'Longitude'], ['S1', '', 70.1, 15.2], ['S1', 6, 70.1, 15.2], ['S2', 7, 60.2, 5.4], ['S3', 7, 50.3, -5.6]];
-    expect(left(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${LEFT} (sheet Sites): Depth [m]`]);
+    expect(part(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${PART} (sheet Sites): Depth [m] (2 of 3 cells)`]);
   });
 
   it('Cruise C1 and C2 on one key: the cruise of the second row is lost, so Cruise is named', () => {
     const sites = [['Station', 'Cruise', 'Latitude', 'Longitude'], ['S1', 'C1', 70.1, 15.2], ['S1', 'C2', 70.1, 15.2], ['S2', 'C1', 60.2, 5.4], ['S3', 'C1', 50.3, -5.6]];
-    expect(left(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${LEFT} (sheet Sites): Cruise`]);
+    expect(part(toCleanCsv(run(sites, data)).sidecar)).toEqual([`${PART} (sheet Sites): Cruise (3 of 4 cells)`]);
   });
 
   it('an ambiguous key beside a lent one: the position of the ambiguous rows was never given, so it is named', () => {
     const sites = [['Station', 'Latitude', 'Longitude'], ['S1', 70.1, 15.2], ['S1', 71.9, 16.8], ['S2', 60.2, 5.4], ['S3', 50.3, -5.6]];
     const out = toCleanCsv(run(sites, data));
-    expect(left(out.sidecar).join('|')).toMatch(/\(sheet Sites\): .*Latitude/);
+    expect(part(out.sidecar).join('|')).toMatch(/\(sheet Sites\): .*Latitude \(2 of 4 cells\)/);
   });
 
   it('identical repeats of one key are not lost: nothing is named', () => {
     const sites = [['Station', 'Cruise', 'Latitude', 'Longitude'], ['S1', 'C1', 70.1, 15.2], ['S1', 'C1', 70.1, 15.2], ['S2', 'C1', 60.2, 5.4], ['S3', 'C1', 50.3, -5.6]];
-    expect(left(toCleanCsv(run(sites, data)).sidecar)).toEqual([]);
+    const out = toCleanCsv(run(sites, data));
+    expect([...left(out.sidecar), ...part(out.sidecar)]).toEqual([]);
   });
 
-  it('a zone-stated time that replaces the date: the date column gave nothing, so it is named; the time is written as the date', () => {
+  it('a zone-stated time that replaces the date on the SAME day the date states: the date is credited, nothing is named', () => {
     const t = ['Station,Latitude,Longitude,Date,Time,Temp [°C]', 'S1,49.4,0.2,2020-06-02,2020-06-02T10:30:00Z,11.2', 'S2,49.5,0.3,2020-06-03,2020-06-03T11:45:00Z,10.4'].join('\n');
     const out = toCleanCsv(build(t).dataset);
     expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020-06-02T10:30:00Z', '2020-06-03T11:45:00Z']);
+    expect([...left(out.sidecar), ...part(out.sidecar)]).toEqual([]);
+  });
+
+  it('a zone-stated time that replaces the date on ANOTHER day: the day of the date cell is not in the file, so the date column is named', () => {
+    const t = ['Station,Latitude,Longitude,Date,Time,Temp [°C]', 'S1,49.4,0.2,2020-06-02,2020-06-03T00:10:00Z,11.2', 'S2,49.5,0.3,2020-06-03,2020-06-04T00:20:00Z,10.4'].join('\n');
+    const out = toCleanCsv(build(t).dataset);
+    expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020-06-03T00:10:00Z', '2020-06-04T00:20:00Z']);
     expect(left(out.sidecar)).toEqual([`${LEFT}: Date`]);
   });
 });
@@ -429,7 +443,7 @@ describe('round 3: source rows that merge into one output row of a long sheet ar
     for (const s of ['S1', 'S2']) [['Corg', '2021'], ['Ntot', '1999'], ['Ptot', '2021']].forEach(([p, y]) => lines.push(`${s},49.4,0.2,,${y},${p},${p.length}.${s.length}`));
     const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'year', { kind: 'ignore' }));
     expect(dataset.rows).toHaveLength(2);
-    expect(left(toCleanCsv(dataset).sidecar).join('|')).toMatch(/\byear\b/);
+    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: year (2 of 4 cells)`]);
   });
 
   it('N and S at one latitude on the rows of one station: the hemisphere column is named', () => {
@@ -437,14 +451,15 @@ describe('round 3: source rows that merge into one output row of a long sheet ar
     for (const s of ['S1', 'S2']) [['Corg', 'N'], ['Ntot', 'S'], ['Ptot', 'N']].forEach(([p, h]) => lines.push(`${s},49.4,${h},0.2,2020-06-01,${p},${p.length}.${s.length}`));
     const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'Lat NS', { kind: 'hemisphere', axis: 'latitude' }));
     expect(dataset.rows).toHaveLength(2);
-    expect(left(toCleanCsv(dataset).sidecar)).toEqual([`${LEFT}: Lat NS`]);
+    expect(part(toCleanCsv(dataset).sidecar)).toEqual([`${PART}: Lat NS (2 of 4 cells)`]);
   });
 
   it('the same year on every row of a station is one value: not named for merging', () => {
     const lines = ['Station,Latitude,Longitude,eventDate,year,Parameter,Value'];
     for (const s of ['S1', 'S2']) for (const p of ['Corg', 'Ntot', 'Ptot']) lines.push(`${s},49.4,0.2,,2021,${p},${p.length}.${s.length}`);
     const { dataset } = build(lines.join('\n'), (m) => setRole(m, 'year', { kind: 'ignore' }));
-    expect(left(toCleanCsv(dataset).sidecar).join('|')).not.toMatch(/\byear\b/);
+    const sc = toCleanCsv(dataset).sidecar;
+    expect([...left(sc), ...part(sc)].join('|')).not.toMatch(/\byear\b/);
   });
 });
 

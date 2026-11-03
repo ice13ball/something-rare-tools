@@ -115,8 +115,9 @@ class Namer {
   take(name: string, unit?: string): string {
     const head = (n: string) => (unit ? `${n} [${unit}]` : n);
     let h = head(name);
-    for (let i = 2; this.used.has(h); i++) h = head(`${name}_${i}`);
-    this.used.add(h);
+    // header uniqueness ignores case: a spreadsheet and most readers take `Depth` and `depth` for one name
+    for (let i = 2; this.used.has(h.toLowerCase()); i++) h = head(`${name}_${i}`);
+    this.used.add(h.toLowerCase());
     return h;
   }
 }
@@ -193,8 +194,14 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   const left = unwrittenColumns(ds);
   const sheets = [...new Set(left.map((c) => c.sheet))];
   for (const sheet of sheets) {
-    const names = left.filter((c) => c.sheet === sheet).map((c) => (c.header.trim() === '' ? `(column ${c.index + 1})` : c.header));
-    notes.push(`source columns that are not in this file${ds.mappings.length > 1 ? ` (sheet ${sheet})` : ''}: ${names.join(' | ')}`);
+    const where = ds.mappings.length > 1 ? ` (sheet ${sheet})` : '';
+    const nameOf = (c: { header: string; index: number }): string => (c.header.trim() === '' ? `(column ${c.index + 1})` : c.header);
+    const mine = left.filter((c) => c.sheet === sheet);
+    // a column no cell of which was used is not in the file; one some cells of which were used is only partly in it, with the counts
+    const none = mine.filter((c) => c.partial === undefined).map(nameOf);
+    const part = mine.filter((c) => c.partial !== undefined).map((c) => `${nameOf(c)} (${c.partial!.used} of ${c.partial!.filled} cells)`);
+    if (none.length > 0) notes.push(`source columns that are not in this file${where}: ${none.join(' | ')}`);
+    if (part.length > 0) notes.push(`source columns only partly in this file${where}: ${part.join(' | ')}`);
   }
   const sidecar = [
     csvLine(['original_column', 'output_column', 'unit', 'unit_source', 'p01']),

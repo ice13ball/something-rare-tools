@@ -440,7 +440,8 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             } else if (full !== undefined && full.tz !== 'unknown' && date.tz === 'unknown') {
               date = full;
               tzField = tField;
-              whenKept = false;
+              // the time replaces the date; the date column is credited only when the kept date falls on the day (month, year) the date cell states
+              whenKept = full.iso.slice(0, own) === d.iso.slice(0, own);
               note('datetime', specs.time.index);
             } else {
               if (full !== undefined && typeof timeCell === 'number') timeCell = full.iso;
@@ -619,6 +620,8 @@ interface Built {
   extra: ExtraKeyColumn[];
   /** The source columns whose every non-blank cell gave something to the output, by sheet: this sheet's, and the lookup sheet's columns that lent a value from every joined row they have one in. */
   reads: Map<string, Set<number>>;
+  /** Columns only partly carried, by sheet: how many of their non-blank cells gave a value. */
+  partial: Map<string, Map<number, { used: number; filled: number }>>;
   /** The Year column beside the date column of this sheet, if there is one (its cells are on `DataRow.yearCell`). */
   year?: { index: number; header: string; date: string };
 }
@@ -664,27 +667,48 @@ function extraColumnsOf(sheet: RawSheet, pressure: readonly (Spec & { unit?: str
  * What a sheet's build carried: its own columns (`own`), and the lookup sheet's columns whose value reached the output from every joined row that has one. A key of the join counts only when the
  * column it is matched with on the measurement sheet reached the output (the same values then did too).
  */
-function readsOf(sheet: RawSheet, own: Set<number>, lookup: Lookup | undefined): Map<string, Set<number>> {
-  const out = new Map<string, Set<number>>([[sheet.name, own]]);
-  if (!lookup) return out;
+function readsOf(sheet: RawSheet, own: Set<number>, ownPartial: Map<number, { used: number; filled: number }>, lookup: Lookup | undefined): Pick<Built, 'reads' | 'partial'> {
+  for (const i of own) ownPartial.delete(i);
+  const reads = new Map<string, Set<number>>([[sheet.name, own]]);
+  const partial = new Map<string, Map<number, { used: number; filled: number }>>([[sheet.name, ownPartial]]);
+  if (!lookup) return { reads, partial };
   const carried = new Set<number>();
+  const lookupPartial = new Map<number, { used: number; filled: number }>();
   for (const [col, used] of lookup.usedRows) {
-    let all = true;
+    let filled = 0;
+    let given = 0;
     for (const r of lookup.hitRows) {
       const cell = r.cells[col] ?? null;
-      if (isBlankCell(cell) || used.has(r)) continue;
+      if (isBlankCell(cell)) continue;
+      filled++;
+      if (used.has(r)) {
+        given++;
+        continue;
+      }
       // an identical repeat of the cell of the row that was taken gave nothing new and is not lost
       const t = lookup.takenFor.get(r);
-      if (t !== undefined && used.has(t) && String(t.cells[col] ?? '').trim() === String(cell).trim()) continue;
-      all = false;
-      break;
+      if (t !== undefined && used.has(t) && String(t.cells[col] ?? '').trim() === String(cell).trim()) given++;
     }
-    if (all) carried.add(col);
+    if (filled > 0 && given === filled) carried.add(col);
+    else if (given > 0) lookupPartial.set(col, { used: given, filled });
   }
   lookup.rightKeys.forEach((k, n) => {
     if (own.has(lookup.leftKeys[n])) carried.add(k);
   });
-  out.set(lookup.rightName, carried);
+  for (const i of carried) lookupPartial.delete(i);
+  reads.set(lookup.rightName, carried);
+  partial.set(lookup.rightName, lookupPartial);
+  return { reads, partial };
+}
+
+/** The columns of which some, not all, non-blank cells gave something (`extraFilled`: cells of a merged source row that gave nothing). */
+function partialOf(cells: ReadonlyMap<number, { filled: number; used: number }>, carried: ReadonlySet<number>, extraFilled?: ReadonlyMap<number, number>): Map<number, { used: number; filled: number }> {
+  const out = new Map<number, { used: number; filled: number }>();
+  for (const [i, st] of cells) {
+    if (carried.has(i) && !extraFilled?.has(i)) continue;
+    const filled = st.filled + (extraFilled?.get(i) ?? 0);
+    if (st.used > 0 && st.used < filled) out.set(i, { used: st.used, filled });
+  }
   return out;
 }
 
@@ -928,9 +952,10 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
     rows.push(row);
   }
   clearInheritedPositions(sheet, rows);
-  for (const i of carriedBy(parse.cells)) own.add(i);
+  const carriedWide = carriedBy(parse.cells);
+  for (const i of carriedWide) own.add(i);
   for (const e of extra) own.add(e.index);
-  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup), ...(year ? { year } : {}) };
+  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide), lookup), ...(year ? { year } : {}) };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1213,7 +1238,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const pCells: RawCell[][] = [];
   const pVarying = new Set<number>();
   const unkeyed = parse.tracked.filter((i) => !keyCols.includes(i));
-  const lostCols = new Set<number>();
+  const lostCols = new Map<number, number>();
   const year = yearColumnOf(sheet, specs);
   const skippedDiffer: number[] = [];
   let skippedExample: string | undefined;
@@ -1233,7 +1258,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       // another source row of an output row: a cell of a column that feeds the date, position or identifiers (not in the key) and that differs from the first row's gave nothing to the output
       for (const col of unkeyed) {
         const now = r.cells[col] ?? null;
-        if (!isBlankCell(now) && String(now).trim() !== String(firsts[n].cells[col] ?? '').trim()) lostCols.add(col);
+        if (!isBlankCell(now) && String(now).trim() !== String(firsts[n].cells[col] ?? '').trim()) lostCols.set(col, (lostCols.get(col) ?? 0) + 1);
       }
       pressure.forEach((p, k) => {
         const now = r.cells[p.index] ?? null;
@@ -1274,23 +1299,54 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   }
   for (const line of skippedDiffer) c.add('ROW-LONG-VALUE-SKIPPED', sheet.name, skippedExample ?? '', line, undefined, true, { count: skippedDiffer.length });
   // The key columns no fixed column carries are written too, or rows that differ only there look identical: a time with no date, a sediment depth, a depth bottom, a replicate. A key column is
-  // "carried" when the build read it into the date, position, depth, station, cruise or sample; one with nothing in it separates nothing; one the person set to ignore on purpose is not written.
-  for (const i of carriedBy(parse.cells)) if (!lostCols.has(i)) own.add(i);
-  const unreadKeys = keyCols.filter((i) => !own.has(i) && !skip.has(i) && sheet.rows.some((r) => !isBlankCell(r.cells[i] ?? null)));
-  const ignoredOnPurpose = unreadKeys.length > 0 ? explicitIgnore() : new Set<number>();
-  const extra = extraColumnsOf(sheet, pressure.filter((p) => !pVarying.has(p.index)), unreadKeys.filter((i) => !ignoredOnPurpose.has(i)), skip);
+  // "carried" when every cell of it gave something to the date, position, depth, station, cruise or sample. One with NO cell used is written whole (it is nowhere else in the file); one with only some
+  // cells used (a date that reads `spring` once) is written only when its unread cells leave two output rows otherwise identical, and is otherwise named as partly in the file. One with nothing in it
+  // separates nothing; one the person set to ignore on purpose is not written.
+  const carriedLong = carriedBy(parse.cells);
+  for (const i of carriedLong) if (!lostCols.has(i)) own.add(i);
+  const unread = keyCols.filter((i) => !own.has(i) && !skip.has(i) && sheet.rows.some((r) => !isBlankCell(r.cells[i] ?? null)));
+  const ignoredOnPurpose = unread.length > 0 ? explicitIgnore() : new Set<number>();
+  const usedOf = (i: number): number => parse.cells.get(i)?.used ?? 0;
+  const wanted = unread.filter((i) => !ignoredOnPurpose.has(i));
+  const pressureOk = pressure.filter((p) => !pVarying.has(p.index));
+  /** The text a key cell is written as: a date-formatted xlsx cell goes through the date reader (its serial is not what the person sees), anything else as the file wrote it. */
+  const keyCellText = (index: number, cell: RawCell): RawCell => {
+    if (typeof cell !== 'number' || sheet.dateFormatted?.[index] !== true) return cell;
+    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true });
+    if ('error' in d) return cell;
+    if (sheet.timeFormatted?.[index] === true) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
+    return d.iso;
+  };
+  const cellFor = (e: ExtraKeyColumn, n: number): RawCell => {
+    const k = e.kind === 'pressure' ? pressure.findIndex((p) => p.index === e.index) : -1;
+    return k >= 0 ? pCells[n][k] : keyCellText(e.index, firsts[n].cells[e.index] ?? null);
+  };
+  let extra = extraColumnsOf(sheet, pressureOk, wanted.filter((i) => usedOf(i) === 0), skip);
+  const partialWanted = wanted.filter((i) => usedOf(i) > 0);
+  if (partialWanted.length > 0) {
+    // rows that look identical in every written column but differ in this one
+    const base = rows.map((row, n) => JSON.stringify([row.station, row.cruise, row.sampleId, row.datetime?.iso, row.lat, row.lon, row.depth, extra.map((e) => String(cellFor(e, n) ?? '').trim())]));
+    const needed = partialWanted.filter((i) => {
+      const seen = new Map<string, string>();
+      for (let n = 0; n < rows.length; n++) {
+        const v = String(firsts[n].cells[i] ?? '').trim();
+        const was = seen.get(base[n]);
+        if (was === undefined) seen.set(base[n], v);
+        else if (was !== v) return true;
+      }
+      return false;
+    });
+    if (needed.length > 0) extra = extraColumnsOf(sheet, pressureOk, wanted.filter((i) => usedOf(i) === 0 || needed.includes(i)), skip);
+  }
   if (extra.length > 0) {
     rows.forEach((row, n) => {
       const cells = newValues() as unknown as Record<string, RawCell>;
-      for (const e of extra) {
-        const k = e.kind === 'pressure' ? pressure.findIndex((p) => p.index === e.index) : -1;
-        cells[e.id] = k >= 0 ? pCells[n][k] : (firsts[n].cells[e.index] ?? null);
-      }
+      for (const e of extra) cells[e.id] = cellFor(e, n);
       row.keyCells = cells;
     });
   }
   for (const e of extra) own.add(e.index);
-  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup), ...(year ? { year } : {}) };
+  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, lostCols), lookup), ...(year ? { year } : {}) };
 }
 
 /**
@@ -1300,13 +1356,18 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
  * a time with no date, date parts no date was built from, a hemisphere that did not apply, a lookup column no row took a value from, a pressure that varies inside one row, a key column the person ignored.
  * A dataset without the record (built by hand) names nothing.
  */
-export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; header: string }[] {
-  const out: { sheet: string; index: number; header: string }[] = [];
+export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; header: string; partial?: { used: number; filled: number } }[] {
+  const out: { sheet: string; index: number; header: string; partial?: { used: number; filled: number } }[] = [];
   if (ds.readColumns === undefined) return out;
   for (const m of ds.mappings) {
-    const read = new Set<number>(ds.readColumns.find((r) => r.sheet === m.sheet)?.columns);
+    const rec = ds.readColumns.find((r) => r.sheet === m.sheet);
+    const read = new Set<number>(rec?.columns);
     for (const e of ds.extraKeyColumns ?? []) if (e.sheet === m.sheet) read.add(e.index);
-    for (const c of m.columns) if (!read.has(c.index)) out.push({ sheet: m.sheet, index: c.index, header: c.header });
+    for (const c of m.columns) {
+      if (read.has(c.index)) continue;
+      const part = rec?.partial?.find((p) => p.index === c.index);
+      out.push({ sheet: m.sheet, index: c.index, header: c.header, ...(part ? { partial: { used: part.used, filled: part.filled } } : {}) });
+    }
   }
   return out;
 }
@@ -1359,6 +1420,7 @@ export function buildDataset(
   const usedSheets: string[] = [];
   const extraKeyColumns: ExtraKeyColumn[] = [];
   const readBy = new Map<string, Set<number>>();
+  const partialBy = new Map<string, Map<number, { used: number; filled: number }>>();
   const yearColumns: NonNullable<Dataset['yearColumns']> = [];
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
@@ -1388,6 +1450,11 @@ export function buildDataset(
       for (const i of cols) into.add(i);
       readBy.set(name, into);
     }
+    for (const [name, cols] of built.partial) {
+      const into = partialBy.get(name) ?? new Map<number, { used: number; filled: number }>();
+      for (const [i, v] of cols) into.set(i, v);
+      partialBy.set(name, into);
+    }
   }
 
   fillUnitsFromMetadata(variables, metadata);
@@ -1405,7 +1472,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b) })), ...(yearColumns.length > 0 ? { yearColumns } : {}) };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}) };
   return { dataset, findings };
 }
 
