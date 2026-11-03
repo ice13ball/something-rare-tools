@@ -9,6 +9,8 @@ import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout'
 import { renderPlain } from '../../src/core/report';
 import { LANGS } from '../../src/core/types';
 import type { Finding, ParsedFile } from '../../src/core/types';
+import { parseFile } from '../../src/core/parse';
+import { getRule } from '../../src/core/rules/registry';
 import { textFile, xlsxFile } from '../helpers/files';
 
 const A_TILDE = String.fromCharCode(0xc3);
@@ -63,6 +65,28 @@ describe('ROW-TEXT-MOJIBAKE fires on double-encoded pairs', () => {
     checkRawTable(file, file.sheets[0], []);
     expect(JSON.stringify(file.sheets[0].rows)).toBe(before);
     expect(file.sheets[0].rows[0].cells[4]).toBe(`7${degree}S`);
+  });
+});
+
+describe('a fallback decode is not read', () => {
+  it('a UTF-8 file with one stray byte is decoded as a single-byte encoding, and the pair that makes is not in the file: silent', () => {
+    const bytes = new Uint8Array([...new TextEncoder().encode('Station,Latitude,Longitude,Date,Note\nS1,49.4,0.2,2020-06-01,7\u00B0S\nS2,49.5,0.3,2020-06-02,'), 0xff, 10]);
+    const file = parseFile('s.csv', bytes);
+    expect(['windows-1250', 'iso-8859-2']).toContain(file.encoding);
+    expect(moji(check(file))).toEqual([]);
+  });
+
+  it('the same file as clean UTF-8 with a double-encoded cell does fire', () => {
+    const file = parseFile('s.csv', new TextEncoder().encode(['Station,Latitude,Longitude,Date,Note', `S1,49.4,0.2,2020-06-01,7${degree}S`].join('\n')));
+    expect(file.encoding).toMatch(/^utf-8/);
+    expect(moji(check(file))).toHaveLength(1);
+  });
+
+  it('the count is of the pair only: the text says "with this pattern", not a total', () => {
+    const f = sheet([`7${degree}S`])[0];
+    expect(renderPlain(f, 'en')).toContain('cells with this pattern');
+    expect(renderPlain(f, 'en')).not.toContain('in all');
+    expect(getRule('ROW-TEXT-MOJIBAKE').technical).toContain('not matched');
   });
 });
 

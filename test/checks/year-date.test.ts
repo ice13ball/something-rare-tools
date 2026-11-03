@@ -88,6 +88,41 @@ describe('ROW-YEAR-DATE-MISMATCH', () => {
     expect(f[0].params.count).toBe(1);
   });
 
+  it('a date read with a guess about its order (14-06-11, 25-03-04) says nothing about its year', () => {
+    expect(mismatch(sheet(['S1,49.4,0.2,14-06-11,2011,11.2']))).toEqual([]);
+    expect(mismatch(sheet(['S1,49.4,0.2,25-03-04,1925,11.2']))).toEqual([]);
+    // the same date written in full is compared
+    expect(mismatch(sheet(['S1,49.4,0.2,2014-06-11,2011,11.2']))).toHaveLength(1);
+  });
+
+  it.each(['Year', 'Jahr', 'Rok', 'Année', 'yyyy', 'Sampling year'])('a column called %s beside a full Date column is a Year column', (name) => {
+    const f = mismatch(sheet(['S1,49.4,0.2,2019-03-04,2020,11.2', 'S2,49.5,0.3,2020-03-05,2020,10.4'], `Station,Latitude,Longitude,Date,${name},Temp [°C]`));
+    expect(f).toHaveLength(1);
+    expect(f[0].field).toBe(name);
+  });
+
+  it('Publication year is not the year of the sampling: silent', () => {
+    expect(mismatch(sheet(['S1,49.4,0.2,2019-03-04,2020,11.2'], 'Station,Latitude,Longitude,Date,Publication year,Temp [°C]'))).toEqual([]);
+  });
+
+  it('a Year of 9999 or 0000 is a code, not a year: silent; 1700 and next year are years', () => {
+    expect(mismatch(sheet(['S1,49.4,0.2,2019-03-04,9999,11.2', 'S2,49.5,0.3,2019-03-05,0000,10.4', 'S3,49.5,0.3,2019-03-06,1699,10.4']))).toEqual([]);
+    expect(mismatch(sheet(['S1,49.4,0.2,2019-03-04,1700,11.2']))).toHaveLength(1);
+  });
+
+  it('a range that overlaps the year is silent; a range wholly outside it fires', () => {
+    expect(mismatch(sheet(['S1,49.4,0.2,2019-03-04/2020-03-05,2020,11.2', 'S2,49.5,0.3,2019-03-04/2020-03-05,2019,10.4']))).toEqual([]);
+    const f = mismatch(sheet(['S1,49.4,0.2,2019-03-04/2019-03-09,2021,11.2']));
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([2]);
+  });
+
+  it('says that the column may mean something else, such as a cruise or a season, in four languages', () => {
+    const f = mismatch(sheet(['S1,49.4,0.2,2019-03-04,2020,11.2']))[0];
+    const said: Record<string, RegExp> = { en: /cruise or a season/, pl: /rejs lub sezon/, de: /Fahrt oder eine Saison/, fr: /campagne ou une saison/ };
+    for (const lang of LANGS) expect(renderPlain(f, lang), lang).toMatch(said[lang]);
+  });
+
   it('is a warning with a text in four languages that changes nothing and advises no deletion', () => {
     const f = mismatch(sheet(['S1,49.4,0.2,2019-03-04,2020,11.2']))[0];
     expect(f.severity).toBe('warning');

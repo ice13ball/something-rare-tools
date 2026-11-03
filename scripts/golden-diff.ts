@@ -54,15 +54,22 @@ type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
  * For ROW-TEXT-MOJIBAKE, DWC-EVENTDATE-NOT-ISO and ROW-YEAR-DATE-MISMATCH the dump holds, per sheet of every data file, how many cells an INDEPENDENT test of the raw cell calls a hit: written here with plain
  * character codes and one regular expression per shape, sharing no code with the rules. The dump compares them with what the rules found (`rules`), as counts only; no cell value is written.
  */
-const ISO_PART = /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?)?)?$/;
-const isoEnd = (end: string, start: string): boolean => ISO_PART.test(end) || (/^\d{2}$/.test(end) && /^\d{4}-\d{2}-\d{2}/.test(start)) || (/^\d{2}-\d{2}$/.test(end) && /^\d{4}-\d{2}/.test(start)) || (/^\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/.test(end) && /T\d{2}/.test(start));
-function independentIso(t: string): boolean {
-  const parts = t.trim().split('/');
-  if (parts.length === 1) return ISO_PART.test(parts[0]);
-  return parts.length === 2 && ISO_PART.test(parts[0]) && isoEnd(parts[1], parts[0]);
+// A different test from the rule's grammar: a cell is called non-ISO here only when it has a RECOGNISABLE non-ISO form (day-first or month-first with dots, slashes or dashes, a month word with digits, a space
+// where ISO has a T, a one-digit month or day, a five-digit serial). A cell the rule fires on that none of these confirms is counted apart (`unconfirmed`), and so is one these call non-ISO that the rule leaves.
+const MONTH_WORD = /(?:^|[^a-z])(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|sty|lut|kwi|maj|cze|lip|sie|wrz|pa[zź]|lis|gru|mai|jui|ao[uû]|d[eé]c|okt|dez|janv|f[eé]vr|avr)[a-z]*\.?(?:[^a-z]|$)/i;
+function recognisablyNotIso(t: string): boolean {
+  return (
+    /^\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:$|[T ,])/.test(t) ||
+    /^\d{1,2}-\d{1,2}-\d{2,4}(?:$|[T ,])/.test(t) ||
+    /^\d{4}[./]\d{1,2}[./]\d{1,2}/.test(t) ||
+    /^\d{4}-\d{2}-\d{2} \d/.test(t) ||
+    /^\d{4}-(?:\d-|\d{2}-\d(?!\d))/.test(t) ||
+    (/\d/.test(t) && MONTH_WORD.test(t)) ||
+    /^\d{5}$/.test(t)
+  );
 }
-function independentCounts(file: { sheets: { name: string; header: string[]; headerLine: number; rows: { cells: (string | number | null)[] }[]; dateFormatted?: boolean[] }[] }): Record<string, { mojibake: number; eventDateNotIso: number; yearMismatch: number }> {
-  const out: Record<string, { mojibake: number; eventDateNotIso: number; yearMismatch: number }> = {};
+function independentCounts(file: { sheets: { name: string; header: string[]; headerLine: number; rows: { line: number; cells: (string | number | null)[] }[]; dateFormatted?: boolean[] }[] }): Record<string, { mojibake: number; eventDateNotIso: number; eventDateLines: number[]; yearMismatch: number }> {
+  const out: Record<string, { mojibake: number; eventDateNotIso: number; eventDateLines: number[]; yearMismatch: number }> = {};
   for (const sh of file.sheets) {
     let mojibake = 0;
     const pair = (c: string | number | null): boolean => {
@@ -78,13 +85,17 @@ function independentCounts(file: { sheets: { name: string; header: string[]; hea
     for (const h of sh.header) if (pair(h)) mojibake++;
     for (const r of sh.rows) for (const c of r.cells) if (pair(c)) mojibake++;
     let eventDateNotIso = 0;
+    const eventDateLines: number[] = [];
     sh.header.forEach((h, i) => {
       if (h.trim().replace(/^dwc:/i, '') !== 'eventDate') return;
       for (const r of sh.rows) {
         const c = r.cells[i];
         if (c === null || c === undefined || (typeof c === 'number' && sh.dateFormatted?.[i] === true)) continue;
         const t = String(c).trim();
-        if (t !== '' && !independentIso(t)) eventDateNotIso++;
+        if (t !== '' && recognisablyNotIso(t)) {
+          eventDateNotIso++;
+          eventDateLines.push(r.line);
+        }
       }
     });
     let yearMismatch = 0;
@@ -99,7 +110,7 @@ function independentCounts(file: { sheets: { name: string; header: string[]; hea
         if (d && /^\d{4}(?:\.0+)?$/.test(y) && Number(y) !== Number(d[1])) yearMismatch++;
       }
     }
-    out[sh.name] = { mojibake, eventDateNotIso, yearMismatch };
+    out[sh.name] = { mojibake, eventDateNotIso, eventDateLines, yearMismatch };
   }
   return out;
 }
@@ -180,12 +191,14 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         }
         // what the three rules found on this file (cells for the mojibake and eventDate rules, rows for the year rule), by sheet, beside the independent count
         let rules: Record<string, Record<string, number>> | undefined;
+        const isoLines: Record<string, number[]> = {};
         try {
           const layout1 = proposeLayout(file);
           const b1 = buildDatasets(file, layout1, proposeMappings(file, layout1), [], 'x');
           const checked1 = runChecks({ datasets: b1.datasets, records: [], parseFindings: [...file.findings, ...b1.findings] }, { land, today: '2026-10-24' });
           rules = {};
           for (const f of checked1.findings) {
+            if (f.ruleId === 'DWC-EVENTDATE-NOT-ISO') isoLines[f.sheet ?? ''] = [...(isoLines[f.sheet ?? ''] ?? []), ...(f.lines ?? [])];
             if (f.ruleId !== 'ROW-TEXT-MOJIBAKE' && f.ruleId !== 'DWC-EVENTDATE-NOT-ISO' && f.ruleId !== 'ROW-YEAR-DATE-MISMATCH') continue;
             const per = (rules[f.sheet ?? ''] ??= {});
             per[f.ruleId] = (per[f.ruleId] ?? 0) + (typeof f.params.count === 'number' ? f.params.count : (f.lines ?? []).length);
@@ -196,7 +209,12 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         result[key] = {
           ...(built === undefined ? {} : { built }),
           ...(rules === undefined ? {} : { rules }),
-          independent: independentCounts(file as never),
+          independent: Object.fromEntries(Object.entries(independentCounts(file as never)).map(([sh, v]) => {
+            // eventDate: the lines the rule fired on against the lines the independent test calls non-ISO, as counts
+            const rule = new Set(isoLines[sh] ?? []);
+            const ind = new Set(v.eventDateLines);
+            return [sh, { mojibake: v.mojibake, eventDateNotIso: v.eventDateNotIso, yearMismatch: v.yearMismatch, eventDate: { rule: rule.size, independent: ind.size, confirmed: [...rule].filter((l) => ind.has(l)).length, unconfirmed: [...rule].filter((l) => !ind.has(l)).length, missed: [...ind].filter((l) => !rule.has(l)).length } }];
+          })),
           layout: proposeLayout(file),
           sheets: file.sheets.map((s) => ({
             sheet: s.name,

@@ -22,7 +22,7 @@ import { checkRawTable } from './checks/dwc';
 import { makeFinding } from './rules/registryCheck';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { hemisphereBoundAgrees } from './recognize/headerWords';
-import { monthOf } from './recognize/dateParts';
+import { isYearName, monthOf } from './recognize/dateParts';
 import { isVerticalCoordinateKey } from './recognize/geocodes';
 import { splitLayout } from './recognize/layout';
 import { encodeReasons } from './recognize/layoutReasons';
@@ -631,7 +631,7 @@ function yearColumnOf(sheet: RawSheet, specs: Specs): { index: number; header: s
   const when = specs.when;
   if (when === undefined) return undefined;
   let found: number | undefined = specs.dateParts?.year?.index;
-  if (found === undefined) found = sheet.header.findIndex((h, i) => i !== when.index && (headerKey(unitFromHeader(h).name) === 'year' || dwcTermOf(h) === 'year'));
+  if (found === undefined) found = sheet.header.findIndex((h, i) => i !== when.index && (isYearName(headerKey(unitFromHeader(h).name)) || dwcTermOf(h) === 'year'));
   if (found === undefined || found < 0 || found === when.index) return undefined;
   return { index: found, header: sheet.header[found] ?? '', date: when.header };
 }

@@ -588,26 +588,33 @@ function yearOutlier(ds: Dataset, sheet: string, rows: DataRow[], declared: read
 
 /* ---------- ROW-YEAR-DATE-MISMATCH ---------- */
 
-/** The year a Year cell holds: a whole four-digit number, written as 2020 or 2020.0, in a text or a number cell. Anything else (a word, a serial, a blank) is no year and says nothing. */
-function yearOfCell(c: RawCell | undefined): number | undefined {
+/**
+ * The year a Year cell holds: a whole four-digit number, written as 2020 or 2020.0, in a text or a number cell, from 1700 to next year (the range recognize/dateParts.ts gives a year; 9999 and 0000 are codes).
+ * Anything else (a word, a serial, a blank) is no year and says nothing.
+ */
+function yearOfCell(c: RawCell | undefined, last: number): number | undefined {
   if (c === null || c === undefined) return undefined;
   const t = String(c).trim();
-  return /^\d{4}(?:\.0+)?$/.test(t) ? Number(t) : undefined;
+  if (!/^\d{4}(?:\.0+)?$/.test(t)) return undefined;
+  const y = Number(t);
+  return y >= 1700 && y <= last ? y : undefined;
 }
 
 /**
  * A Year column beside a date column whose year is not the year of the date. Never for a date built from the Year column itself (no date column then: see Dataset.yearColumns), a year-only date,
- * or a blank or unreadable Year cell; a date range is right when the year is any year it covers. Said once per sheet, with the rows; no value is changed.
+ * a date read with a guess about its order (`ambiguity`), or a blank or unreadable Year cell; a date range is right when the year is any year it covers. Said once per sheet, with the rows; no value is changed.
  */
-function yearDateMismatch(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
+function yearDateMismatch(ds: Dataset, sheet: string, rows: DataRow[], today: string | undefined, out: Finding[]): void {
   const cols = ds.yearColumns?.find((y) => y.sheet === sheet);
   if (cols === undefined) return;
   const bad: DataRow[] = [];
   let example: { date: string; year: number } | undefined;
+  const lastYear = today === undefined ? MAX_YEAR : Number(today.slice(0, 4)) + 1;
   for (const r of rows) {
     const d = r.datetime;
-    if (d === undefined || d.precision === 'year' || r.yearCell === undefined) continue;
-    const y = yearOfCell(r.yearCell);
+    // a date read with a guess about its order (14-06-11 as 2014-06-11 or 2011-06-14) says nothing about its year
+    if (d === undefined || d.precision === 'year' || d.ambiguity !== undefined || r.yearCell === undefined) continue;
+    const y = yearOfCell(r.yearCell, lastYear);
     if (y === undefined) continue;
     const last = d.end?.year ?? d.year;
     if (y >= Math.min(d.year, last) && y <= Math.max(d.year, last)) continue;
@@ -821,7 +828,7 @@ export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
     if (ctx.land) onLand(ds, sheet, rows, ctx.land, out);
     depthRules(ds, sheet, rows, out);
     dateMissing(ds, sheet, rows, out);
-    yearDateMismatch(ds, sheet, rows, out);
+    yearDateMismatch(ds, sheet, rows, ctx.today, out);
     // a date in the future is also outside the declared years; one finding for it, the more specific one
     const future = ctx.today === undefined ? [] : futureRows(rows, ctx.today);
     dateFuture(ds, sheet, future, out);

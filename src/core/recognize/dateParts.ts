@@ -26,6 +26,8 @@ const MONTH_WORDS = 'month|mois|monat|miesiac';
 const DAY_WORDS = 'day|jour|tag|dzien';
 const YEAR_NAME = new RegExp(`^${PREFIX}(?:${YEAR_WORDS})${SUFFIX}$`);
 const MONTH_NAME = new RegExp(`^${PREFIX}(?:${MONTH_WORDS})${SUFFIX}$`);
+/** Is this header key (headerKey of the name) the name of a Year column: Year, Rok, Jahr, Année, yyyy, Sampling year; not Publication year. */
+export const isYearName = (key: string): boolean => YEAR_NAME.test(key) || key === 'yyyy';
 const DAY_NAME = new RegExp(`^${PREFIX}(?:${DAY_WORDS})(?:\\s(?:of\\s)?(?:sampling|sample|collection|start|month))?$`);
 
 const isBlankCell = (c: RawCell): boolean => c === null || (typeof c === 'string' && c.trim() === '');

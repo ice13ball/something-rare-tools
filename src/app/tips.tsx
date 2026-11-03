@@ -86,7 +86,7 @@ const megabytes = (bytes: number) => (lang: Lang) => withUnit(Math.round(bytes /
  *                         metadata.ts 136 (variable named in the abstract)
  * test/app/infotip-sources.test.tsx checks that every id exists in the registry; the lists themselves are checked by reading, as above.
  */
-const WHEN_RULES = ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-MISSING', 'ROW-YEAR-OUTLIER', 'ROW-DATE-FUTURE', 'ROW-SHIP-SPEED', 'XF-DATE-CONFLICT'] as const;
+const WHEN_RULES = ['ROW-DATE-UNPARSEABLE', 'ROW-DATE-MISSING', 'ROW-YEAR-OUTLIER', 'ROW-DATE-FUTURE', 'ROW-SHIP-SPEED', 'XF-DATE-CONFLICT', 'DWC-EVENTDATE-NOT-ISO', 'ROW-YEAR-DATE-MISMATCH'] as const;
 export const ROLE_FEEDS: Record<RoleKind | 'dateYear' | 'dateMonth' | 'dateDay', readonly string[]> = {
   ignore: [],
   latitude: ['ROW-LAT-RANGE', 'ROW-LAT-EQ-LON', 'ROW-LAT-EQ-LON-ISOLATED', 'ROW-LAT-EQ-LON-COARSE', 'ROW-ZERO-COORD', 'ROW-NO-COORD', 'ROW-NON-NUMERIC', 'ROW-DM-COORDS', 'ROW-ON-LAND', 'ROW-STATION-SPREAD', 'ROW-SHIP-SPEED', 'XF-POSITION-CONFLICT', 'XF-POSITION-SWAP'],

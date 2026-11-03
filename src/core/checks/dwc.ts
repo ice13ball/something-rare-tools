@@ -3,6 +3,7 @@
 
 import { dwcTermOf } from '../recognize/columns';
 import { parseDate } from '../values/dates';
+import { NA_TOKENS } from '../values/numbers';
 import { makeFinding } from '../rules/registryCheck';
 import type { Finding, ParsedFile, RawCell, RawSheet } from '../types';
 import { pushAll } from '../util/arrays';
@@ -337,40 +338,86 @@ const isIdTerm = (t: string): boolean => (DWC_TERMS.has(t) && t.endsWith('id')) 
 
 /* ---------- DWC-EVENTDATE-NOT-ISO ---------- */
 
-const validDay = (y: number, m: number, d: number): boolean => m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), m, 0)).getUTCDate();
-const ZONE = '(?:Z|[+-](?:[01]\\d|2[0-3])(?::?[0-5]\\d)?)';
-/** year, year-month or date; then optionally T and a time (hh, hh:mm, hh:mm:ss, fraction) with an optional zone. A time needs a full date. */
-const ISO_DATE = new RegExp(`^(\\d{4})(?:-(\\d{2})(?:-(\\d{2})(?:T([01]\\d|2[0-3])(?::([0-5]\\d)(?::([0-5]\\d|60)(?:[.,]\\d+)?)?)?(${ZONE})?)?)?)?$`);
-const ISO_END_TIME = new RegExp(`^([01]\\d|2[0-3]):[0-5]\\d(?::(?:[0-5]\\d|60)(?:[.,]\\d+)?)?${ZONE}?$`);
+const daysInMonth = (y: number, m: number): number => new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), m, 0)).getUTCDate();
+const validDay = (y: number, m: number, d: number): boolean => m >= 1 && m <= 12 && d >= 1 && d <= daysInMonth(y, m);
+const isLeap = (y: number): boolean => y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
 
+const ZONE = '(?:Z|[+-](?:[01]\\d|2[0-3])(?::?[0-5]\\d)?)';
+// a time of day, extended (T10:00:30.5) or basic (T100030.5); hour 24 is not accepted
+const TIME_EXT = '(?:[01]\\d|2[0-3])(?::[0-5]\\d(?::(?:[0-5]\\d|60)(?:[.,]\\d+)?)?)?';
+const TIME_BASIC = '(?:[01]\\d|2[0-3])(?:[0-5]\\d(?:(?:[0-5]\\d|60)(?:[.,]\\d+)?)?)?';
+const TIME_PART = `(?:T(?:${TIME_EXT}|${TIME_BASIC})${ZONE}?)?`;
+// calendar date forms: YYYY, YYYY-MM, YYYY-MM-DD, YYYYMMDD; ordinal YYYY-DDD, YYYYDDD; week YYYY-Www, YYYY-Www-D, YYYYWww, YYYYWwwD
+const DATE_FORM = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?|-(\d{3})|-W(\d{2})(?:-(\d))?|(\d{2})(\d{2})|(\d{3})|W(\d{2})(\d)?)?$/;
+const DURATION = /^P(?=\d|T\d)(?:\d+(?:[.,]\d+)?Y)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?W)?(?:\d+(?:[.,]\d+)?D)?(?:T(?=\d)(?:\d+(?:[.,]\d+)?H)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?S)?)?$/;
+const ISO_END_TIME = new RegExp(`^${TIME_EXT}${ZONE}?$`);
+const ISO_END_DAYTIME = new RegExp(`^(\\d{2})T(?:${TIME_EXT}|${TIME_BASIC})${ZONE}?$`);
+
+/** What the start of an interval leaves for a shortened end: `d` when it is a calendar date (a day of a month), `m` when it has a month, `time` when it has a time of day. */
 interface IsoStart { y: number; m?: number; d?: number; time: boolean }
-function isoStart(t: string): IsoStart | undefined {
-  const m = ISO_DATE.exec(t);
+
+/** One ISO 8601 date or date-time value, or undefined. A week or ordinal date is valid but gives no month for a shortened end. */
+function isoStart(text: string): IsoStart | undefined {
+  const at = text.indexOf('T');
+  const datePart = at < 0 ? text : text.slice(0, at);
+  const timePart = at < 0 ? '' : text.slice(at);
+  const m = DATE_FORM.exec(datePart);
   if (!m) return undefined;
+  if (timePart !== '' && !new RegExp(`^${TIME_PART}$`).test(timePart)) return undefined;
   const y = Number(m[1]);
-  const mo = m[2] === undefined ? undefined : Number(m[2]);
-  const d = m[3] === undefined ? undefined : Number(m[3]);
-  if (mo !== undefined && (mo < 1 || mo > 12)) return undefined;
-  if (mo !== undefined && d !== undefined && !validDay(y, mo, d)) return undefined;
-  return { y, ...(mo === undefined ? {} : { m: mo }), ...(d === undefined ? {} : { d }), time: m[4] !== undefined };
+  const time = timePart !== '';
+  // YYYY-MM-DD, YYYY-MM
+  if (m[2] !== undefined) {
+    const mo = Number(m[2]);
+    if (mo < 1 || mo > 12) return undefined;
+    if (m[3] === undefined) return time ? undefined : { y, m: mo, time };
+    const d = Number(m[3]);
+    return validDay(y, mo, d) ? { y, m: mo, d, time } : undefined;
+  }
+  // YYYY-DDD (ordinal)
+  if (m[4] !== undefined || m[9] !== undefined) {
+    const n = Number(m[4] ?? m[9]);
+    return n >= 1 && n <= (isLeap(y) ? 366 : 365) ? { y, time } : undefined;
+  }
+  // YYYY-Www[-D]
+  if (m[5] !== undefined || m[10] !== undefined) {
+    const w = Number(m[5] ?? m[10]);
+    const wd = m[6] ?? m[11];
+    if (w < 1 || w > 53 || (wd !== undefined && (Number(wd) < 1 || Number(wd) > 7))) return undefined;
+    return time && wd === undefined ? undefined : { y, time };
+  }
+  // YYYYMMDD
+  if (m[7] !== undefined) {
+    const mo = Number(m[7]);
+    const d = Number(m[8]);
+    return validDay(y, mo, d) ? { y, m: mo, d, time } : undefined;
+  }
+  // YYYY
+  return time ? undefined : { y, time };
 }
 
 /**
- * Is this text a Darwin Core eventDate in ISO 8601: a year, year-month, date, date with a time (and a zone), or an interval of two of them joined by a slash. The end of an interval may be shortened
- * to what differs from its start: a day (2011-06-14/20), a month and day (2011-06-14/07-02) or a time (2011-06-14T10:00/11:30).
+ * Is this text a Darwin Core eventDate in ISO 8601: a year, year-month, date, ordinal or week date, extended or basic, with a time of day and a zone (T24:00 is not accepted), or an interval of two of them
+ * joined by a slash, or a start or an end beside a duration (2011-06-14/P1D, P1D/2011-06-14). The end of an interval may be shortened to what differs from its start: a month (2011-06/08), a day (2011-06-14/20),
+ * a month and day (2011-06-14/07-02), a time (2011-06-14T10:00/11:30) or a day and time (2011-06-14T10:00/15T11:30).
  */
 export function isIsoEventDate(text: string): boolean {
   const t = text.trim();
   const slash = t.indexOf('/');
   if (slash < 0) return isoStart(t) !== undefined;
-  const a = isoStart(t.slice(0, slash));
+  const first = t.slice(0, slash);
   const rest = t.slice(slash + 1);
-  if (a === undefined || rest.includes('/')) return false;
-  if (isoStart(rest) !== undefined) return true;
+  if (rest.includes('/')) return false;
+  if (DURATION.test(first)) return isoStart(rest) !== undefined;
+  const a = isoStart(first);
+  if (a === undefined) return false;
+  if (DURATION.test(rest) || isoStart(rest) !== undefined) return true;
   let m = /^(\d{2})$/.exec(rest);
-  if (m) return a.d !== undefined && a.m !== undefined && validDay(a.y, a.m, Number(m[1]));
+  if (m) return (a.d !== undefined && validDay(a.y, a.m!, Number(m[1]))) || (a.m !== undefined && a.d === undefined && Number(m[1]) >= (a.m) && Number(m[1]) <= 12);
   m = /^(\d{2})-(\d{2})$/.exec(rest);
   if (m) return a.m !== undefined && validDay(a.y, Number(m[1]), Number(m[2]));
+  m = ISO_END_DAYTIME.exec(rest);
+  if (m) return a.d !== undefined && a.time && validDay(a.y, a.m!, Number(m[1]));
   return a.time && ISO_END_TIME.test(rest);
 }
 
@@ -385,7 +432,8 @@ function eventDateIso(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
       if (c === null || c === undefined) continue;
       if (typeof c === 'number' && sheet.dateFormatted?.[index] === true) continue;
       const t = String(c).trim();
-      if (t === '' || isIsoEventDate(t)) continue;
+      // blank and the missing-value tokens (NA, N/A, -, null, nd) are not dates
+      if (t === '' || NA_TOKENS.includes(t) || isIsoEventDate(t)) continue;
       lines.push(r.line);
       example ??= t.length > 60 ? `${t.slice(0, 57)}…` : t;
     }
@@ -403,6 +451,8 @@ function eventDateIso(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
 const MOJIBAKE_PAIR = /[\u00C2\u00C3][\u0080-\u00BF]/;
 const MAX_MOJIBAKE_COLUMNS = 10;
 function mojibake(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
+  // a file that was not UTF-8 and was decoded by a fallback (one stray byte is enough) shows the pair for a sign that is not in the file: the rule says nothing there
+  if (file.encoding === 'windows-1250' || file.encoding === 'iso-8859-2') return;
   const cols = new Map<number, { cells: number; example: string }>();
   const lines = new Set<number>();
   const look = (c: RawCell | undefined, index: number, line: number): void => {
