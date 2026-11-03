@@ -99,6 +99,8 @@ const SHIP_DECLARED = {
  * Row rules (category 'B'), emitted by the dataset builder (Task 6) and checkRows() (Task 8).
  * Generic fields: file, sheet, lines (the offending rows), field (column header), value (one example).
  * Declared params per rule:
+ *   ROW-YEAR-DATE-MISMATCH count, date, year   field = the Year column, value = an example date, year = its year, date = the date column, lines = the rows (one finding per sheet)
+ *   ROW-TEXT-MOJIBAKE     count, columns   count = cells with a double-encoded pair, columns = the quoted headers (at most ten), field/value = the first column and an example
  *   ROW-LAT-RANGE         (none)      lines/field/value = the rows, the column, one example; bounds come from thresholds
  *   ROW-LON-RANGE         (none)      same
  *   ROW-LON-360           (none)      lines/field/value = rows given on a 0-360 scale (info)
@@ -756,5 +758,31 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Dans la colonne « {field} », les valeurs des lignes {lines} contiennent des caractères invisibles ({chars}), par ex. « {value} ». Ils ressemblent à une espace ordinaire, mais un nom ou un identifiant avec un tel caractère ne correspond pas au même nom saisi normalement. Remplacez-les par une espace ordinaire ou supprimez-les.`,
     },
     technical: `{file}:{lines} field {field} value '{value}': invisible characters inside the value ({chars}). OBIS trims only the ends of a value, so inside they break name matching, vocabulary matching and duplicate checks (OBIS Manual, "Hidden characters and non-breaking spaces"). Checked columns: station, cruise and sample identifiers, and the name, identifier and vocabulary columns of Darwin Core input.`,
+  },
+  {
+    id: 'ROW-YEAR-DATE-MISMATCH',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'date', 'year'],
+    plain: {
+      pl: `W kolumnie „{field}” rok w wierszach {lines} (razem: {count}) nie jest rokiem daty z kolumny „{date}”, np. data „{value}” obok roku {year}. Jedna z tych wartości jest błędna albo dotyczą różnych zdarzeń. Nic nie zmieniono; sprawdź, która jest właściwa.`,
+      en: `In column "{field}" the year in lines {lines} ({count} in all) is not the year of the date in "{date}", e.g. the date "{value}" beside the year {year}. One of the two is wrong, or they belong to different events. Nothing was changed; check which one is right.`,
+      de: `In der Spalte „{field}“ ist das Jahr in den Zeilen {lines} (insgesamt {count}) nicht das Jahr des Datums in „{date}“, z. B. das Datum „{value}“ neben dem Jahr {year}. Einer der beiden Werte ist falsch, oder sie gehören zu verschiedenen Ereignissen. Nichts wurde geändert; prüfen Sie, welcher stimmt.`,
+      fr: `Dans la colonne « {field} », l'année des lignes {lines} ({count} au total) n'est pas celle de la date de « {date} », par ex. la date « {value} » à côté de l'année {year}. L'une des deux valeurs est fausse, ou elles concernent des événements différents. Rien n'a été modifié ; vérifiez laquelle est juste.`,
+    },
+    technical: `{file}:{lines} field {field}: {count} row(s) whose year ({year} in the first) is not a year of the date in {date} (e.g. '{value}'). A date range counts every year it covers; a year-only date, a date built from the Year column itself and a blank or non-numeric year are not compared. Nothing is changed.`,
+  },
+  {
+    id: 'ROW-TEXT-MOJIBAKE',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Tekst w kolumnach {columns} (wiersze {lines}, razem komórek: {count}) wygląda na zapisany dwukrotnie w złym kodowaniu, np. „{value}”: plik w UTF-8 został gdzieś odczytany jako Windows-1252 lub Latin-1. Tekstu nie zmieniono. Zapisz oryginał ponownie w UTF-8 i porównaj te wartości.`,
+      en: `Text in {columns} (lines {lines}, {count} cells in all) looks encoded twice, e.g. "{value}": a UTF-8 file was read as Windows-1252 or Latin-1 somewhere. The text was not changed. Save the original again as UTF-8 and compare these values.`,
+      de: `Text in {columns} (Zeilen {lines}, insgesamt {count} Zellen) sieht doppelt kodiert aus, z. B. „{value}“: eine UTF-8-Datei wurde irgendwo als Windows-1252 oder Latin-1 gelesen. Der Text wurde nicht geändert. Speichern Sie das Original erneut als UTF-8 und vergleichen Sie diese Werte.`,
+      fr: `Le texte de {columns} (lignes {lines}, {count} cellules au total) semble encodé deux fois, par ex. « {value} » : un fichier UTF-8 a été lu quelque part comme Windows-1252 ou Latin-1. Le texte n'a pas été modifié. Enregistrez de nouveau l'original en UTF-8 et comparez ces valeurs.`,
+    },
+    technical: `{file}:{lines} {count} cell(s) in {columns} hold a double-encoding pair (U+00C3 or U+00C2 followed by a character in U+0080-U+00BF; first value '{value}'), the signature of UTF-8 bytes read as a single-byte encoding and encoded again. A lone U+00C3 or U+00C2 is real text and is not matched. Nothing is rewritten.`,
   },
 ];

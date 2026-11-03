@@ -48,6 +48,62 @@ const MAX_PER_KEY = 40;
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
+/* ---------- an independent count of the cells three rules judge ---------- */
+
+/*
+ * For ROW-TEXT-MOJIBAKE, DWC-EVENTDATE-NOT-ISO and ROW-YEAR-DATE-MISMATCH the dump holds, per sheet of every data file, how many cells an INDEPENDENT test of the raw cell calls a hit: written here with plain
+ * character codes and one regular expression per shape, sharing no code with the rules. The dump compares them with what the rules found (`rules`), as counts only; no cell value is written.
+ */
+const ISO_PART = /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}(?::\d{2}(?::\d{2}(?:[.,]\d+)?)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?)?)?$/;
+const isoEnd = (end: string, start: string): boolean => ISO_PART.test(end) || (/^\d{2}$/.test(end) && /^\d{4}-\d{2}-\d{2}/.test(start)) || (/^\d{2}-\d{2}$/.test(end) && /^\d{4}-\d{2}/.test(start)) || (/^\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/.test(end) && /T\d{2}/.test(start));
+function independentIso(t: string): boolean {
+  const parts = t.trim().split('/');
+  if (parts.length === 1) return ISO_PART.test(parts[0]);
+  return parts.length === 2 && ISO_PART.test(parts[0]) && isoEnd(parts[1], parts[0]);
+}
+function independentCounts(file: { sheets: { name: string; header: string[]; headerLine: number; rows: { cells: (string | number | null)[] }[]; dateFormatted?: boolean[] }[] }): Record<string, { mojibake: number; eventDateNotIso: number; yearMismatch: number }> {
+  const out: Record<string, { mojibake: number; eventDateNotIso: number; yearMismatch: number }> = {};
+  for (const sh of file.sheets) {
+    let mojibake = 0;
+    const pair = (c: string | number | null): boolean => {
+      if (typeof c !== 'string') return false;
+      for (let i = 0; i + 1 < c.length; i++) {
+        const a = c.charCodeAt(i);
+        if (a !== 0xc3 && a !== 0xc2) continue;
+        const b = c.charCodeAt(i + 1);
+        if (b >= 0x80 && b <= 0xbf) return true;
+      }
+      return false;
+    };
+    for (const h of sh.header) if (pair(h)) mojibake++;
+    for (const r of sh.rows) for (const c of r.cells) if (pair(c)) mojibake++;
+    let eventDateNotIso = 0;
+    sh.header.forEach((h, i) => {
+      if (h.trim().replace(/^dwc:/i, '') !== 'eventDate') return;
+      for (const r of sh.rows) {
+        const c = r.cells[i];
+        if (c === null || c === undefined || (typeof c === 'number' && sh.dateFormatted?.[i] === true)) continue;
+        const t = String(c).trim();
+        if (t !== '' && !independentIso(t)) eventDateNotIso++;
+      }
+    });
+    let yearMismatch = 0;
+    const yi = sh.header.findIndex((h) => h.trim().toLowerCase() === 'year');
+    const di = sh.header.findIndex((h) => /^(date|eventDate)$/i.test(h.trim()));
+    if (yi >= 0 && di >= 0 && yi !== di) {
+      for (const r of sh.rows) {
+        const y = String(r.cells[yi] ?? '').trim();
+        const text = String(r.cells[di] ?? '').trim();
+        // the year of the date as written: first in ISO, last in day.month.year or day/month/year
+        const d = /^(\d{4})-\d{2}(?:-\d{2})?(?:$|[T ])/.exec(text) ?? /^\d{1,2}[./]\d{1,2}[./](\d{4})(?:$|[T ])/.exec(text);
+        if (d && /^\d{4}(?:\.0+)?$/.test(y) && Number(y) !== Number(d[1])) yearMismatch++;
+      }
+    }
+    out[sh.name] = { mojibake, eventDateNotIso, yearMismatch };
+  }
+  return out;
+}
+
 /* ---------- dump ---------- */
 
 async function dump(out: string, repo: string, goldenDir: string): Promise<number> {
@@ -122,8 +178,25 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         } catch {
           built = undefined;
         }
+        // what the three rules found on this file (cells for the mojibake and eventDate rules, rows for the year rule), by sheet, beside the independent count
+        let rules: Record<string, Record<string, number>> | undefined;
+        try {
+          const layout1 = proposeLayout(file);
+          const b1 = buildDatasets(file, layout1, proposeMappings(file, layout1), [], 'x');
+          const checked1 = runChecks({ datasets: b1.datasets, records: [], parseFindings: [...file.findings, ...b1.findings] }, { land, today: '2026-10-24' });
+          rules = {};
+          for (const f of checked1.findings) {
+            if (f.ruleId !== 'ROW-TEXT-MOJIBAKE' && f.ruleId !== 'DWC-EVENTDATE-NOT-ISO' && f.ruleId !== 'ROW-YEAR-DATE-MISMATCH') continue;
+            const per = (rules[f.sheet ?? ''] ??= {});
+            per[f.ruleId] = (per[f.ruleId] ?? 0) + (typeof f.params.count === 'number' ? f.params.count : (f.lines ?? []).length);
+          }
+        } catch {
+          rules = undefined;
+        }
         result[key] = {
           ...(built === undefined ? {} : { built }),
+          ...(rules === undefined ? {} : { rules }),
+          independent: independentCounts(file as never),
           layout: proposeLayout(file),
           sheets: file.sheets.map((s) => ({
             sheet: s.name,

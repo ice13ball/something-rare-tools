@@ -16,6 +16,7 @@ import type { RuleSpec } from './spec';
  *   DWC-PARENT-DANGLING       count           value = an example parentEventID, lines = rows pointing at an eventID that is not there
  *   DWC-PARENT-LOOP           count           value = an eventID on the loop, lines = rows on a loop, count = rows on a loop
  *   DWC-OCCURRENCEID-DUPLICATE count          value = an example occurrenceID, lines = every row of a repeated occurrenceID, count = repeated ids
+ *   DWC-EVENTDATE-NOT-ISO     count           field = the column headed exactly eventDate, value = an example, lines = the rows whose value is not ISO 8601, count = how many
  */
 export const DWC_RULES: readonly RuleSpec[] = [
   {
@@ -129,5 +130,18 @@ export const DWC_RULES: readonly RuleSpec[] = [
       fr: `Aux lignes {lines}, des occurrenceID se répètent (par ex. « {value} » ; {count} répétés au total). L'occurrenceID est la clé d'un enregistrement et doit être unique ; donnez à chaque enregistrement son propre identifiant.`,
     },
     technical: `{file}:{lines} occurrenceID '{value}' and {count} repeated occurrenceID(s) in all (Biocheck: "occurrenceID is unique in the occurrence table", the primary key). Every row of a repeated occurrenceID is listed.`,
+  },
+  {
+    id: 'DWC-EVENTDATE-NOT-ISO',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `W kolumnie „{field}” daty w wierszach {lines} (razem: {count}) nie są zapisane w ISO 8601, np. „{value}”. Darwin Core przyjmuje 2011-06-14, 2011-06, 2011, czas jak 2011-06-14T10:00Z albo przedział z ukośnikiem (2011-06-14/2011-06-20). Nic nie zmieniono; zapisz daty w tej postaci.`,
+      en: `In column "{field}" the dates in lines {lines} ({count} in all) are not written in ISO 8601, e.g. "{value}". Darwin Core takes 2011-06-14, 2011-06, 2011, a time such as 2011-06-14T10:00Z, or an interval with a slash (2011-06-14/2011-06-20). Nothing was changed; write the dates that way.`,
+      de: `In der Spalte „{field}“ sind die Daten in den Zeilen {lines} (insgesamt {count}) nicht in ISO 8601 geschrieben, z. B. „{value}“. Darwin Core nimmt 2011-06-14, 2011-06, 2011, eine Zeit wie 2011-06-14T10:00Z oder ein Intervall mit Schrägstrich (2011-06-14/2011-06-20). Nichts wurde geändert; schreiben Sie die Daten so.`,
+      fr: `Dans la colonne « {field} », les dates des lignes {lines} ({count} au total) ne sont pas écrites en ISO 8601, par ex. « {value} ». Darwin Core accepte 2011-06-14, 2011-06, 2011, une heure comme 2011-06-14T10:00Z ou un intervalle avec une barre oblique (2011-06-14/2011-06-20). Rien n'a été modifié ; écrivez les dates ainsi.`,
+    },
+    technical: `{file}:{lines} field {field}: {count} value(s) that are not ISO 8601 as Darwin Core eventDate takes it (year, year-month, date, date with a time and an optional zone, or an interval of two such values joined by a slash; first '{value}'). Only a column headed exactly eventDate is read; an xlsx date-formatted cell is not judged. Nothing is changed.`,
   },
 ];

@@ -99,6 +99,8 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-DEPTH-RANGE': ['warning', 'B'],
   'ROW-DATE-FUTURE': ['warning', 'B'],
   'ROW-INVISIBLE-CHAR': ['warning', 'B'],
+  'ROW-YEAR-DATE-MISMATCH': ['warning', 'B'],
+  'ROW-TEXT-MOJIBAKE': ['warning', 'B'],
   'DWC-TERM-MISSING': ['error', 'B'],
   'DWC-TERM-EMPTY': ['error', 'B'],
   'DWC-RECOMMENDED': ['warning', 'B'],
@@ -106,6 +108,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'DWC-EVENTID-DUPLICATE': ['error', 'B'],
   'DWC-PARENT-DANGLING': ['error', 'B'],
   'DWC-PARENT-LOOP': ['error', 'B'],
+  'DWC-EVENTDATE-NOT-ISO': ['warning', 'B'],
   'DWC-OCCURRENCEID-DUPLICATE': ['error', 'B'],
   'XF-DUPLICATE-SAMPLES': ['info', 'C'],
   'XF-DATE-CONFLICT': ['warning', 'C'],
@@ -124,9 +127,9 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // the 108 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
-    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(108);
-    expect(ids.length).toBe(108 + CONVERT_RULES.length);
+    // the 111 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
+    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(111);
+    expect(ids.length).toBe(111 + CONVERT_RULES.length);
     expect([...ids.filter((id) => !id.startsWith('CONV-'))].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES.filter((x) => !x.id.startsWith('CONV-'))) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);

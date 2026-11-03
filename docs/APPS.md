@@ -857,6 +857,14 @@ On the report, citations are hidden under `LIC-*` findings (`NO_CITATIONS_IN_CHE
   (`1950-2000 m`), descending pairs, dates, two years joined only by an underscore (`cruise_2015_2019`)
   and two years joined by "and" after "years" or "lata" are separate years. The covered years only widen what is accepted: rows in a year outside them still raise
   `ROW-YEAR-OUTLIER`.
+- Three warnings that only say what they saw and never change a value:
+  [ROW-YEAR-DATE-MISMATCH](rules.md#ROW-YEAR-DATE-MISMATCH) (a Year column beside a date column, `Dataset.yearColumns`, `DataRow.yearCell`: the year is not a year of the date; a date range counts every
+  year it covers; never for a year-only date, a date built from the Year column itself, or a blank or non-numeric year; one finding per sheet with the rows),
+  [DWC-EVENTDATE-NOT-ISO](rules.md#DWC-EVENTDATE-NOT-ISO) (`checks/dwc.ts` `isIsoEventDate`: only a column headed exactly `eventDate`, with or without `dwc:`; year, year-month, date, date with a time and a zone, or
+  an interval, whose end may be shortened to a day, a month and day or a time; an xlsx date-formatted cell is not judged, a plain number is) and
+  [ROW-TEXT-MOJIBAKE](rules.md#ROW-TEXT-MOJIBAKE) (`checks/dwc.ts` `mojibake`: `U+00C3` or `U+00C2` followed by `U+0080`-`U+00BF` in any text cell or header of a sheet; a lone `Ã` or `Â`, `Ãngulo`, `São`,
+  `Århus` and Greek or Cyrillic names are real text; one finding per sheet listing at most ten columns; two `indexOf` calls per cell before the pattern, so one linear pass, `test/perf/mojibake.perf.ts`:
+  300,000 rows of 40 columns in about 0.3 s). The same checks run on the output tables of /convert (`validate.ts`); a warning that is on no policy list is shown, never blocks.
 - The report does not check scientific validity, calibration, taxonomy or PDF content
   (`NOT_CHECKED`).
 - Cross-file checks treat the sheets of one workbook as one witness, not independent ones.

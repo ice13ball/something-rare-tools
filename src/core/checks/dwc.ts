@@ -335,6 +335,107 @@ const DWC_MATCHED = new Set([
 const DWC_ID_EXTRA = new Set(['acceptednameusageid', 'parentnameusageid', 'originalnameusageid', 'catalognumber', 'recordnumber', 'fieldnumber']);
 const isIdTerm = (t: string): boolean => (DWC_TERMS.has(t) && t.endsWith('id')) || DWC_ID_EXTRA.has(t);
 
+/* ---------- DWC-EVENTDATE-NOT-ISO ---------- */
+
+const validDay = (y: number, m: number, d: number): boolean => m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(2000 + (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 0 : 1), m, 0)).getUTCDate();
+const ZONE = '(?:Z|[+-](?:[01]\\d|2[0-3])(?::?[0-5]\\d)?)';
+/** year, year-month or date; then optionally T and a time (hh, hh:mm, hh:mm:ss, fraction) with an optional zone. A time needs a full date. */
+const ISO_DATE = new RegExp(`^(\\d{4})(?:-(\\d{2})(?:-(\\d{2})(?:T([01]\\d|2[0-3])(?::([0-5]\\d)(?::([0-5]\\d|60)(?:[.,]\\d+)?)?)?(${ZONE})?)?)?)?$`);
+const ISO_END_TIME = new RegExp(`^([01]\\d|2[0-3]):[0-5]\\d(?::(?:[0-5]\\d|60)(?:[.,]\\d+)?)?${ZONE}?$`);
+
+interface IsoStart { y: number; m?: number; d?: number; time: boolean }
+function isoStart(t: string): IsoStart | undefined {
+  const m = ISO_DATE.exec(t);
+  if (!m) return undefined;
+  const y = Number(m[1]);
+  const mo = m[2] === undefined ? undefined : Number(m[2]);
+  const d = m[3] === undefined ? undefined : Number(m[3]);
+  if (mo !== undefined && (mo < 1 || mo > 12)) return undefined;
+  if (mo !== undefined && d !== undefined && !validDay(y, mo, d)) return undefined;
+  return { y, ...(mo === undefined ? {} : { m: mo }), ...(d === undefined ? {} : { d }), time: m[4] !== undefined };
+}
+
+/**
+ * Is this text a Darwin Core eventDate in ISO 8601: a year, year-month, date, date with a time (and a zone), or an interval of two of them joined by a slash. The end of an interval may be shortened
+ * to what differs from its start: a day (2011-06-14/20), a month and day (2011-06-14/07-02) or a time (2011-06-14T10:00/11:30).
+ */
+export function isIsoEventDate(text: string): boolean {
+  const t = text.trim();
+  const slash = t.indexOf('/');
+  if (slash < 0) return isoStart(t) !== undefined;
+  const a = isoStart(t.slice(0, slash));
+  const rest = t.slice(slash + 1);
+  if (a === undefined || rest.includes('/')) return false;
+  if (isoStart(rest) !== undefined) return true;
+  let m = /^(\d{2})$/.exec(rest);
+  if (m) return a.d !== undefined && a.m !== undefined && validDay(a.y, a.m, Number(m[1]));
+  m = /^(\d{2})-(\d{2})$/.exec(rest);
+  if (m) return a.m !== undefined && validDay(a.y, Number(m[1]), Number(m[2]));
+  return a.time && ISO_END_TIME.test(rest);
+}
+
+/** Only a column headed exactly eventDate (the Darwin Core term, with or without the dwc: prefix) is read; a date-formatted xlsx cell is a date whose written form is not known, so it is not judged. */
+function eventDateIso(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
+  sheet.header.forEach((h, index) => {
+    if (bareTerm(h) !== 'eventDate') return;
+    const lines: number[] = [];
+    let example: string | undefined;
+    for (const r of sheet.rows) {
+      const c = r.cells[index];
+      if (c === null || c === undefined) continue;
+      if (typeof c === 'number' && sheet.dateFormatted?.[index] === true) continue;
+      const t = String(c).trim();
+      if (t === '' || isIsoEventDate(t)) continue;
+      lines.push(r.line);
+      example ??= t.length > 60 ? `${t.slice(0, 57)}…` : t;
+    }
+    if (lines.length > 0 && example !== undefined) out.push(makeFinding('DWC-EVENTDATE-NOT-ISO', { file: file.fileName, sheet: sheet.name, lines, field: h, value: example, params: { count: lines.length } }));
+  });
+}
+
+/* ---------- ROW-TEXT-MOJIBAKE ---------- */
+
+/**
+ * Text that was encoded twice: UTF-8 bytes read as a single-byte encoding and encoded again turn a letter or a sign into U+00C3 or U+00C2 followed by a character in U+0080-U+00BF ("Ã©" for é, "Â°" for °).
+ * Only that pair is matched: a lone Ã or Â, a Ã before a letter ("Ãngulo") and every correctly encoded name (Århus, Müller, São, Greek, Cyrillic) are real text. Every text cell and header of the sheet is
+ * read once, with two native indexOf calls per cell before the pattern is tried, so the cost is linear and a cell without either letter allocates nothing. Nothing is rewritten.
+ */
+const MOJIBAKE_PAIR = /[\u00C2\u00C3][\u0080-\u00BF]/;
+const MAX_MOJIBAKE_COLUMNS = 10;
+function mojibake(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
+  const cols = new Map<number, { cells: number; example: string }>();
+  const lines = new Set<number>();
+  const look = (c: RawCell | undefined, index: number, line: number): void => {
+    if (typeof c !== 'string' || c.length < 2) return;
+    if (c.indexOf('\u00C3') < 0 && c.indexOf('\u00C2') < 0) return;
+    const m = MOJIBAKE_PAIR.exec(c);
+    if (!m) return;
+    lines.add(line);
+    const at = cols.get(index);
+    if (at) at.cells++;
+    else {
+      const t = c.trim();
+      const from = Math.max(0, m.index - 20);
+      cols.set(index, { cells: 1, example: t.length <= 60 ? t : `${from > 0 ? '…' : ''}${c.slice(from, from + 50).trim()}…` });
+    }
+  };
+  if (sheet.headerLine !== undefined) sheet.header.forEach((h, i) => look(h, i, sheet.headerLine as number));
+  for (const r of sheet.rows) {
+    const cells = r.cells;
+    for (let i = 0; i < cells.length; i++) look(cells[i], i, r.line);
+  }
+  if (cols.size === 0) return;
+  const order = [...cols.keys()].sort((a, b) => a - b);
+  const names = order.slice(0, MAX_MOJIBAKE_COLUMNS).map((i) => `"${sheet.header[i] || `#${i + 1}`}"`).join(', ') + (order.length > MAX_MOJIBAKE_COLUMNS ? `, …+${order.length - MAX_MOJIBAKE_COLUMNS}` : '');
+  const cells = order.reduce((n, i) => n + cols.get(i)!.cells, 0);
+  out.push(
+    makeFinding('ROW-TEXT-MOJIBAKE', {
+      file: file.fileName, sheet: sheet.name, lines: [...lines].sort((a, b) => a - b), field: sheet.header[order[0]], value: cols.get(order[0])!.example,
+      params: { count: cells, columns: names },
+    }),
+  );
+}
+
 /* ---------- public ---------- */
 
 /**
@@ -359,5 +460,7 @@ export function checkRawTable(file: ParsedFile, sheet: RawSheet, idColumns: read
     if (dwc.archive) sheet.header.forEach((h, i) => h.trim().toLowerCase() === 'id' && invisibleCols.add(i));
   }
   for (const i of [...invisibleCols].sort((a, b) => a - b)) invisible(file, sheet, i, out);
+  eventDateIso(file, sheet, out);
+  mojibake(file, sheet, out);
   return out;
 }

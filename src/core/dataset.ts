@@ -619,6 +619,21 @@ interface Built {
   extra: ExtraKeyColumn[];
   /** The source columns whose every non-blank cell gave something to the output, by sheet: this sheet's, and the lookup sheet's columns that lent a value from every joined row they have one in. */
   reads: Map<string, Set<number>>;
+  /** The Year column beside the date column of this sheet, if there is one (its cells are on `DataRow.yearCell`). */
+  year?: { index: number; header: string; date: string };
+}
+
+/**
+ * A Year column that stands BESIDE a date column: the column the mapping reads as the year of a date (role datePart year) or a column headed Year (or the Darwin Core term `year`), when the sheet
+ * also has a date column. A sheet whose date is built from the year, month and day columns has no date column and so no such pair, and a whole-year date column is its own year.
+ */
+function yearColumnOf(sheet: RawSheet, specs: Specs): { index: number; header: string; date: string } | undefined {
+  const when = specs.when;
+  if (when === undefined) return undefined;
+  let found: number | undefined = specs.dateParts?.year?.index;
+  if (found === undefined) found = sheet.header.findIndex((h, i) => i !== when.index && (headerKey(unitFromHeader(h).name) === 'year' || dwcTermOf(h) === 'year'));
+  if (found === undefined || found < 0 || found === when.index) return undefined;
+  return { index: found, header: sheet.header[found] ?? '', date: when.header };
 }
 
 /**
@@ -897,9 +912,14 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   const rows: DataRow[] = [];
   const own = new Set(specs.vars.map((v) => v.index));
   const extra = extraColumnsOf(sheet, specs.pressure ?? [], [], own);
+  const year = yearColumnOf(sheet, specs);
   for (const r of sheet.rows) {
     const meta = parse(r);
     const row: DataRow = { file: file.fileName, sheet: sheet.name, line: r.line, ...withLookup(meta, r, lookup), values: newValues() };
+    if (year) {
+      const yc = r.cells[year.index] ?? null;
+      if (!isBlankCell(yc)) row.yearCell = yc;
+    }
     for (const { v, key } of cols) row.values[key] = numericCell(r.cells[v.index] ?? null, r.line, v.header, sheet.name, dc, c);
     if (extra.length > 0) {
       row.keyCells = newValues() as unknown as Record<string, RawCell>;
@@ -910,7 +930,7 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   clearInheritedPositions(sheet, rows);
   for (const i of carriedBy(parse.cells)) own.add(i);
   for (const e of extra) own.add(e.index);
-  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup) };
+  return { rows, variables, positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup), ...(year ? { year } : {}) };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1194,6 +1214,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const pVarying = new Set<number>();
   const unkeyed = parse.tracked.filter((i) => !keyCols.includes(i));
   const lostCols = new Set<number>();
+  const year = yearColumnOf(sheet, specs);
   const skippedDiffer: number[] = [];
   let skippedExample: string | undefined;
   for (const r of sheet.rows) {
@@ -1223,6 +1244,10 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       });
     }
     const row = rows[n];
+    if (year && row.yearCell === undefined) {
+      const yc = r.cells[year.index] ?? null;
+      if (!isBlankCell(yc)) row.yearCell = yc;
+    }
     const unit = unitOfRow(r, param);
     const key = varKey(r, param);
     if (!variables.has(key)) {
@@ -1265,7 +1290,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     });
   }
   for (const e of extra) own.add(e.index);
-  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup) };
+  return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, reads: readsOf(sheet, own, lookup), ...(year ? { year } : {}) };
 }
 
 /**
@@ -1334,6 +1359,7 @@ export function buildDataset(
   const usedSheets: string[] = [];
   const extraKeyColumns: ExtraKeyColumn[] = [];
   const readBy = new Map<string, Set<number>>();
+  const yearColumns: NonNullable<Dataset['yearColumns']> = [];
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
   };
@@ -1356,6 +1382,7 @@ export function buildDataset(
     pushAll(positives, built.positives);
     // one output column for the same header of two sheets; the cells of each row sit under the id
     for (const e of built.extra) if (!extraKeyColumns.some((x) => x.id === e.id)) extraKeyColumns.push(e);
+    if (built.year) yearColumns.push({ sheet: sheet.name, year: built.year.header, date: built.year.date });
     for (const [name, cols] of built.reads) {
       const into = readBy.get(name) ?? new Set<number>();
       for (const i of cols) into.add(i);
@@ -1378,7 +1405,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b) })) };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b) })), ...(yearColumns.length > 0 ? { yearColumns } : {}) };
   return { dataset, findings };
 }
 

@@ -231,6 +231,8 @@ export interface DataRow {
   values: Record<string, NumericCell>;                   // key = Variable.key
   /** The cells of the dataset's `extraKeyColumns` on this row, exactly as the file wrote them, by `ExtraKeyColumn.id`. Absent on a row of a sheet that has none. */
   keyCells?: Record<string, RawCell>;
+  /** The cell of the Year column that stands beside this row's date column (ROW-YEAR-DATE-MISMATCH); absent when the sheet has none or the cell is blank. */
+  yearCell?: RawCell;
 }
 /**
  * A source column the clean CSV keeps beside the fixed ones because without it rows cannot be told apart or lose their meaning: a pressure, or a column that joined the row key of a long sheet
@@ -251,6 +253,8 @@ export interface Dataset {
   extraKeyColumns?: ExtraKeyColumn[];
   /** The source columns the build read, by sheet name (the lookup sheet of a join included): the record the clean CSV's list of left-out columns comes from. */
   readColumns?: { sheet: string; columns: number[] }[];
+  /** Per sheet, the Year column beside a date column and the date column's header: what ROW-YEAR-DATE-MISMATCH compares. */
+  yearColumns?: { sheet: string; year: string; date: string }[];
 }
 
 /* ---------- findings and rules ---------- */

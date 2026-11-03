@@ -9,7 +9,7 @@ import { statisticOfName } from '../recognize/headerWords';
 import { canonicalFromKey, headerKey } from '../recognize/vocab';
 import { makeFinding, threshold } from '../rules/registryCheck';
 import { earliestUtcDayOf, utcDayOf } from '../values/dates';
-import type { ColumnRole, DataRow, Dataset, Finding, Variable } from '../types';
+import type { ColumnRole, DataRow, Dataset, Finding, RawCell, Variable } from '../types';
 import { minOf, pushAll } from '../util/arrays';
 
 /*
@@ -586,6 +586,38 @@ function yearOutlier(ds: Dataset, sheet: string, rows: DataRow[], declared: read
   );
 }
 
+/* ---------- ROW-YEAR-DATE-MISMATCH ---------- */
+
+/** The year a Year cell holds: a whole four-digit number, written as 2020 or 2020.0, in a text or a number cell. Anything else (a word, a serial, a blank) is no year and says nothing. */
+function yearOfCell(c: RawCell | undefined): number | undefined {
+  if (c === null || c === undefined) return undefined;
+  const t = String(c).trim();
+  return /^\d{4}(?:\.0+)?$/.test(t) ? Number(t) : undefined;
+}
+
+/**
+ * A Year column beside a date column whose year is not the year of the date. Never for a date built from the Year column itself (no date column then: see Dataset.yearColumns), a year-only date,
+ * or a blank or unreadable Year cell; a date range is right when the year is any year it covers. Said once per sheet, with the rows; no value is changed.
+ */
+function yearDateMismatch(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
+  const cols = ds.yearColumns?.find((y) => y.sheet === sheet);
+  if (cols === undefined) return;
+  const bad: DataRow[] = [];
+  let example: { date: string; year: number } | undefined;
+  for (const r of rows) {
+    const d = r.datetime;
+    if (d === undefined || d.precision === 'year' || r.yearCell === undefined) continue;
+    const y = yearOfCell(r.yearCell);
+    if (y === undefined) continue;
+    const last = d.end?.year ?? d.year;
+    if (y >= Math.min(d.year, last) && y <= Math.max(d.year, last)) continue;
+    bad.push(r);
+    example ??= { date: String(r.dateRaw ?? d.iso).trim().slice(0, 40), year: y };
+  }
+  if (bad.length === 0 || example === undefined) return;
+  out.push(makeFinding('ROW-YEAR-DATE-MISMATCH', { file: ds.file, sheet, lines: bad.map((r) => r.line), field: cols.year, value: example.date, params: { count: bad.length, date: cols.date, year: String(example.year) } }));
+}
+
 /* ---------- ROW-UNIT-MISSING, ROW-DEPTH-SIGN ---------- */
 
 /*
@@ -789,6 +821,7 @@ export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
     if (ctx.land) onLand(ds, sheet, rows, ctx.land, out);
     depthRules(ds, sheet, rows, out);
     dateMissing(ds, sheet, rows, out);
+    yearDateMismatch(ds, sheet, rows, out);
     // a date in the future is also outside the declared years; one finding for it, the more specific one
     const future = ctx.today === undefined ? [] : futureRows(rows, ctx.today);
     dateFuture(ds, sheet, future, out);
