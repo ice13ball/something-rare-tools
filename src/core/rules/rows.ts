@@ -129,6 +129,7 @@ const SHIP_DECLARED = {
  *   ROW-JOIN-AMBIGUOUS    right   field = the key (columns joined with " + "), value = an example key, lines = the rows of the measurement sheet that could not be placed; right = the sheet that holds several rows of that key with different positions or dates
  *   ROW-LONG-VALUE-SKIPPED count   field = one parameter as an example, lines = the rows whose value was not read: another row of a long sheet has the same key and parameter with a different value (count = such values)
  *   ROW-LONG-KEY-EXTENDED columns, count   lines = some of the rows the columns separate (at most 20); columns = the headers (comma-separated) added; count = how many (info; field is empty)
+ *   ROW-LONG-KEY-IGNORED  columns, count   lines = some of the rows of the clean CSV that look alike (at most 20); columns = the headers (comma-separated) of the key columns the person set to ignore that separate them; count = how many (field is empty)
  *   ROW-JOIN-KEY-BLANK    right   field = the key (columns joined with " + "), lines = the rows whose key has a blank part and that have no position of their own; right = the sheet that would give it
  *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
@@ -539,6 +540,19 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Dans « {sheet} », des lignes de même clé et paramètre avaient des valeurs différentes. {+count:La colonne|Les colonnes} ({columns}) {+count:fait|font} désormais partie de la clé : les valeurs des lignes séparées (p. ex. {+lines:ligne|lignes} {lines}) sont lues et vérifiées. Le CSV nettoyé {+count:l'écrit|les écrit} aussi, sauf une colonne réglée sur ignorer par vous.`,
     },
     technical: `{file}, {sheet}:{lines} {count} column(s) ({columns}) were added to the row key because rows with the same key and parameter held different values there; the lines are some of the rows they separate. A column is taken only when it is not unique on every row, when in every key where it varies no two resulting rows have disjoint parameter sets, when it is the best of the acceptable ones (or splits the rows exactly like the others of equal count), and when it leaves no collision unresolved in a key it varies in. It is a column that separates the rows, not proof that it is a replicate: the choice is not confirmed by the header. Rows of other keys are unchanged and nothing is averaged; ROW-LONG-VALUE-SKIPPED still says what could not be read.`,
+  },
+  {
+    id: 'ROW-LONG-KEY-IGNORED',
+    category: 'B',
+    severity: 'warning',
+    params: ['columns', 'count'],
+    plain: {
+      pl: `W „{sheet}” wiersze (np. {+lines:wiersz|wiersze|wierszy} {lines}) odróżnia tylko {+count:kolumna ustawiona|kolumny ustawione|kolumn ustawionych} na „ignoruj” ({columns}). Czysty CSV {+count:jej nie zapisuje|ich nie zapisuje|ich nie zapisuje}, więc te wiersze wyglądają w nim tak samo. Wartości nadal są w pliku i w czystym CSV.`,
+      en: `In "{sheet}" the rows (e.g. {+lines:line|lines} {lines}) are told apart only by {+count:the column|the columns} you set to ignore ({columns}). The clean CSV does not write {+count:it|them}, so those rows look alike there. Their values are still in the file and in the clean CSV.`,
+      de: `In „{sheet}“ werden die Zeilen (z. B. {+lines:Zeile|Zeilen} {lines}) nur durch {+count:die Spalte|die Spalten} unterschieden, die Sie auf ignorieren gesetzt haben ({columns}). Die bereinigte CSV schreibt sie nicht, daher sehen diese Zeilen dort gleich aus. Die Werte stehen weiter in der Datei und in der bereinigten CSV.`,
+      fr: `Dans « {sheet} », les lignes (p. ex. {+lines:ligne|lignes} {lines}) ne se distinguent que par {+count:la colonne que vous avez réglée|les colonnes que vous avez réglées} sur ignorer ({columns}). Le CSV nettoyé {+count:ne l'écrit pas|ne les écrit pas} : ces lignes s'y ressemblent. Les valeurs restent dans le CSV nettoyé.`,
+    },
+    technical: `{file}, {sheet}:{lines} {count} key column(s) ({columns}) set to ignore by the person separate rows of the long sheet (rows with the same key and parameter held different values, or the column places the measurement), but the clean CSV does not write them: the rows listed look alike in every column the clean CSV writes. The values of the rows are all written; only the column that told them apart is not. Nothing is removed from the file. Said only when two rows of the output are equal in every written column and differ in a column set to ignore; a column that is ignore by default (a replicate, a cast) is written and is not this.`,
   },
   {
     id: 'ROW-JOIN-KEY-BLANK',

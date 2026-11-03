@@ -143,8 +143,21 @@ describe('an Excel number is converted only when nothing can be lost; otherwise 
     expect(got).toEqual(['12:00', '1.5', '36.25']);
   });
 
-  it('a fraction of a second stays the number, so two close times stay two', () => {
-    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.500001, 'hh:mm')])).toEqual(['12:00', '0.500001']);
+  it('a fraction of a second is written to the millisecond, so two close times stay two', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.25 / 86400, 'hh:mm'), cell(0.5 + 0.75 / 86400, 'hh:mm')])).toEqual(['12:00', '12:00:00.250', '12:00:00.750']);
+  });
+
+  it('a time finer than a millisecond keeps the raw number, so two such times stay two', () => {
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.0004 / 86400, 'hh:mm'), cell(0.500001, 'hh:mm')])).toEqual(['12:00', String(0.5 + 0.0004 / 86400), '0.500001']);
+    expect(timeColumn([cell(0.5, 'hh:mm'), cell(0.5 + 0.00025 / 86400, 'hh:mm')])).toEqual(['12:00', String(0.5 + 0.00025 / 86400)]);
+  });
+
+  it('float noise in a whole-second time is not a fraction', () => {
+    expect(timeColumn([cell(0.5000000000001, 'hh:mm'), cell(0.75, 'hh:mm')])).toEqual(['12:00', '18:00']);
+  });
+
+  it('a date column: a date-time with a fraction is written with it, whole seconds are as before', () => {
+    expect(dateColumn([cell(43900.5 + 0.25 / 86400, 'yyyy-mm-dd hh:mm:ss'), cell(43900.5, 'yyyy-mm-dd hh:mm:ss'), cell(43901, 'yyyy-mm-dd hh:mm:ss')])).toEqual(['2020-03-10T12:00:00.250', '2020-03-10T12:00', '2020-03-11']);
   });
 
   it('a full datetime shown as hh:mm keeps its day: 43900.5 and 43901.5 stay numbers', () => {

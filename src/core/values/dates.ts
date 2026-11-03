@@ -30,6 +30,11 @@ export interface ParseDateOptions {
    * as a whole number, and a whole number of four digits is a year, as the text '2000' is. Absent: both stay unparseable (an eight-digit ID or a measurement is not a date).
    */
   datumColumn?: boolean;
+  /**
+   * An Excel serial keeps a real fraction of a second, to the millisecond ('2021-06-01T12:00:00.250'). Off (the default): the time is rounded to the whole second, as /convert has always read it
+   * (its event IDs depend on that). /check turns it on where it reads the values that go to the clean CSV. Text dates are not affected: their fraction is always kept.
+   */
+  keepMillis?: boolean;
 }
 
 const MS_DAY = 86_400_000;
@@ -61,29 +66,36 @@ function timeText(hh: number, mm: number, ss: number | undefined, frac: string, 
  * 1900-02-29 is not modelled). 1904 system: day 0 = 1904-01-01. The fraction becomes a time of day, rounded
  * to the nearest second (kills float noise); a time of exactly 00:00:00 is indistinguishable from a plain date and gets day precision; zero seconds -> minute
  * precision. tz is 'unknown'.
+ * `keepMillis`: the fraction is rounded to the nearest MILLISECOND instead, and written as '.250' when it is not zero (precision 'second' then, also at 00:00:00.250). A 15-significant-digit serial
+ * of 2020-2100 is off by at most about 1e-10 day (9e-6 s), formula noise a few times that; rounding to 0.5 ms is therefore 50 times wider than any noise, so a whole-second time stays whole
+ * and byte-identical, and a finer-than-millisecond fraction is rounded to the millisecond.
  * Throws RangeError for a non-finite serial or one outside years 1..9999.
  */
-export function excelSerialToDate(serial: number, date1904: boolean): ParsedDate {
+export function excelSerialToDate(serial: number, date1904: boolean, keepMillis = false): ParsedDate {
   if (!Number.isFinite(serial)) throw new RangeError(`invalid Excel serial: ${serial}`);
   let days = Math.floor(serial);
-  let secs = Math.round((serial - days) * 86400);
-  if (secs >= 86400) {
+  const unit = keepMillis ? 1000 : 1;
+  let slots = Math.round((serial - days) * 86400 * unit);
+  if (slots >= 86400 * unit) {
     days += 1;
-    secs = 0;
+    slots = 0;
   }
+  const secs = Math.floor(slots / unit);
+  const millis = slots % unit;
   const ms = (date1904 ? EPOCH_1904 : EPOCH_1900) + days * MS_DAY;
   const dt = new Date(ms);
   const year = dt.getUTCFullYear();
   if (!Number.isFinite(year) || year < 1 || year > 9999) throw new RangeError(`Excel serial out of range: ${serial}`);
   const date = `${pad4(year)}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
-  if (secs === 0) return { iso: date, year, precision: 'day', tz: 'unknown' };
+  if (slots === 0) return { iso: date, year, precision: 'day', tz: 'unknown' };
   const hh = Math.floor(secs / 3600);
   const mm = Math.floor((secs % 3600) / 60);
   const ss = secs % 60;
+  const whole = ss === 0 && millis === 0;
   return {
-    iso: `${date}T${timeText(hh, mm, ss === 0 ? undefined : ss, '', '')}`,
+    iso: `${date}T${timeText(hh, mm, whole ? undefined : ss, millis === 0 ? '' : `.${String(millis).padStart(3, '0')}`, '')}`,
     year,
-    precision: ss === 0 ? 'minute' : 'second',
+    precision: whole ? 'minute' : 'second',
     tz: 'unknown',
   };
 }
@@ -94,17 +106,20 @@ const TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2})(\.\d+)?)?\s*(Z|[+-]\d{2}(?::?\d{2
  * Time of day from text ('10:30', '10:30:15', '10:30Z', '10:00:00+02:00', fractional seconds kept in `text`)
  * or from an xlsx day fraction (number in [0, 1)).
  */
-export function parseTimeOfDay(raw: RawCell): TimeOfDay | DateError {
+export function parseTimeOfDay(raw: RawCell, keepMillis = false): TimeOfDay | DateError {
   if (raw === null) return fail('');
   if (typeof raw === 'number') {
     if (!Number.isFinite(raw) || raw < 0 || raw >= 1) return fail(String(raw));
-    const secs = Math.round(raw * 86400);
-    if (secs >= 86400) return fail(String(raw));
+    const unit = keepMillis ? 1000 : 1;
+    const slots = Math.round(raw * 86400 * unit);
+    if (slots >= 86400 * unit) return fail(String(raw));
+    const secs = Math.floor(slots / unit);
+    const millis = slots % unit;
     const hh = Math.floor(secs / 3600);
     const mm = Math.floor((secs % 3600) / 60);
     const ss = secs % 60;
-    if (ss === 0) return { hh, mm, tz: 'unknown', text: timeText(hh, mm, undefined, '', '') };
-    return { hh, mm, ss, tz: 'unknown', text: timeText(hh, mm, ss, '', '') };
+    if (ss === 0 && millis === 0) return { hh, mm, tz: 'unknown', text: timeText(hh, mm, undefined, '', '') };
+    return { hh, mm, ss, tz: 'unknown', text: timeText(hh, mm, ss, millis === 0 ? '' : `.${String(millis).padStart(3, '0')}`, '') };
   }
   const m = TIME_RE.exec(raw.trim());
   if (!m) return fail(raw);
@@ -182,7 +197,7 @@ export function parseTimeRange(raw: RawCell): TimeOfDay | DateError {
  * "10:00" with the zone offset -11:30 (11.5 hours off); in a time column a dash between two times is a range. An offset is still read when it has a "+",
  * a "Z" or seconds ("10:00:00-05:00"), or is not a time itself ("10:00-11").
  */
-export function parseTimeCell(raw: RawCell): TimeOfDay | DateError {
+export function parseTimeCell(raw: RawCell, keepMillis = false): TimeOfDay | DateError {
   const range = parseTimeRange(raw);
   if (!('error' in range)) return range;
   const text = typeof raw === 'string' ? stripTrailingPeriod(raw.trim()) : raw;
@@ -192,7 +207,7 @@ export function parseTimeCell(raw: RawCell): TimeOfDay | DateError {
     const t = parseTimeOfDay(`${hhmm[1]}:${hhmm[2]}`);
     return 'error' in t ? fail(String(raw)) : t;
   }
-  const one = parseTimeOfDay(text);
+  const one = parseTimeOfDay(text, keepMillis);
   return 'error' in one && typeof raw === 'string' ? fail(raw) : one;
 }
 
@@ -269,7 +284,7 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
     if (opts.datumColumn && !opts.dateFormatted && Number.isInteger(raw)) return parseDate(String(raw), opts);
     if (!opts.dateFormatted || !Number.isFinite(raw) || raw < 0) return fail(String(raw));
     try {
-      return excelSerialToDate(raw, opts.date1904);
+      return excelSerialToDate(raw, opts.date1904, opts.keepMillis === true);
     } catch {
       return fail(String(raw));
     }
@@ -378,10 +393,10 @@ export function detectDayMonthOrder(cells: readonly RawCell[]): DayMonthOrder {
  * be parsed (use parseTimeOfDay if the caller must report that), or when `d` is not day-precision.
  * The time's own tz ('utc' / 'offset') wins; the date's ambiguity flag is kept.
  */
-export function combineDateTime(d: ParsedDate, time: RawCell, order?: Exclude<DayMonthOrder, 'unknown'>): ParsedDate {
+export function combineDateTime(d: ParsedDate, time: RawCell, order?: Exclude<DayMonthOrder, 'unknown'>, keepMillis = false): ParsedDate {
   if (d.precision !== 'day') return d;
   if (time === null || (typeof time === 'string' && time.trim() === '')) return d;
-  const t = parseTimeColumnCell(time, d.iso.slice(0, 10), order);
+  const t = parseTimeColumnCell(time, d.iso.slice(0, 10), order, keepMillis);
   if ('error' in t) return d;
   return { ...d, iso: `${d.iso}T${t.text}`, precision: t.ss === undefined ? 'minute' : 'second', tz: t.tz };
 }
@@ -428,8 +443,8 @@ export const isEpochPlaceholder = (raw: RawCell): boolean => typeof raw === 'str
  * (a spreadsheet's placeholder date is a time). The date part of such a cell is not read as a date, so it must be the day of the row (`rowDay`, YYYY-MM-DD) or a placeholder: a cell that
  * names another day than its row is unreadable, never silently cut. `order` is the column's day/month order, when its cells decide one. A cell that holds no time of day is an error.
  */
-export function parseTimeColumnCell(raw: RawCell, rowDay?: string, order?: Exclude<DayMonthOrder, 'unknown'>): TimeOfDay | DateError {
-  const t = parseTimeCell(raw);
+export function parseTimeColumnCell(raw: RawCell, rowDay?: string, order?: Exclude<DayMonthOrder, 'unknown'>, keepMillis = false): TimeOfDay | DateError {
+  const t = parseTimeCell(raw, keepMillis);
   if (!('error' in t) || typeof raw !== 'string') return t;
   const d = parseDate(raw, { date1904: false, dateFormatted: false, ...(order === undefined ? {} : { order }) });
   if ('error' in d || (d.precision !== 'minute' && d.precision !== 'second')) return t;
@@ -455,9 +470,9 @@ export function looksLikeUnreadDate(raw: RawCell): boolean {
 /** A spreadsheet serial that stands for a date between 1954 and 2118 (the range a sampling date can have): 1.5 or 12 are times and durations, not dates. */
 export const isPlausibleSerial = (n: number): boolean => n >= 20000 && n <= 80000;
 
-export function fullDatetimeOfTimeCell(raw: RawCell, o: { date1904: boolean; dateFormatted: boolean; order?: Exclude<DayMonthOrder, 'unknown'> }): ParsedDate | undefined {
+export function fullDatetimeOfTimeCell(raw: RawCell, o: { date1904: boolean; dateFormatted: boolean; order?: Exclude<DayMonthOrder, 'unknown'>; keepMillis?: boolean }): ParsedDate | undefined {
   if (raw === null || isEpochPlaceholder(raw)) return undefined;
   if (typeof raw === 'number' && !(o.dateFormatted && isPlausibleSerial(raw))) return undefined;
-  const d = parseDate(raw, { date1904: o.date1904, dateFormatted: o.dateFormatted, ...(o.order === undefined ? {} : { order: o.order }) });
+  const d = parseDate(raw, { date1904: o.date1904, dateFormatted: o.dateFormatted, ...(o.order === undefined ? {} : { order: o.order }), ...(o.keepMillis ? { keepMillis: true } : {}) });
   return 'error' in d || (d.precision !== 'minute' && d.precision !== 'second') ? undefined : d;
 }

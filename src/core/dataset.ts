@@ -36,7 +36,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-LONG-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -411,6 +411,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             date1904: file.date1904,
             dateFormatted: sheet.dateFormatted?.[specs.when.index] === true,
             datumColumn: true,
+            keepMillis: true,
             ...(whenOrder === 'unknown' ? {} : { order: whenOrder }),
           });
           dateCache.set(cacheKey, d);
@@ -429,7 +430,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             const tField = specs.time.header;
             // the time column holds a full datetime (a text one, or the serial of a date-formatted column): a zone-stated one is the instant of the event and wins over a date (or a local datetime) that states no zone
             // (a local date beside a UTC time on the next day); one without a zone gives its time of day when it falls on the day of the row
-            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }) });
+            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }), keepMillis: true });
             const dayGap = (a: string, b: string): number => Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
             // compared at the date's own precision: a year-only or month-only date is contradicted by another year or month, a day by more than a day
             const own = date.precision === 'year' ? 4 : date.precision === 'month' ? 7 : 10;
@@ -445,12 +446,12 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
               note('datetime', specs.time.index);
             } else {
               if (full !== undefined && typeof timeCell === 'number') timeCell = full.iso;
-              if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder))) {
+              if ('error' in (timeIsYears ? parseTimeOfDay(timeCell, true) : parseTimeColumnCell(timeCell, date.iso.slice(0, 10), tOrder, true))) {
                 // a full datetime of another day than the row's date cannot be cut to its time of day: said as what it is, not as an unreadable time
                 if (full !== undefined) c.add('ROW-TIME-OTHER-DAY', sheet.name, tField, row.line, String(timeCell).trim(), true);
                 else c.add('ROW-DATE-UNPARSEABLE', sheet.name, tField, row.line, String(timeCell).trim(), true, { role: 'time' });
               } else {
-                date = combineDateTime(date, timeCell, tOrder);
+                date = combineDateTime(date, timeCell, tOrder, true);
                 tzField = tField;
                 note('datetime', specs.time.index);
               }
@@ -476,9 +477,9 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
         const timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
         if (specs.time && !isBlankCell(timeCell) && date.precision === 'day') {
           const tOrder = timeOrder === 'unknown' ? undefined : timeOrder;
-          if ('error' in (timeIsYears ? parseTimeOfDay(timeCell) : parseTimeColumnCell(timeCell, date.iso, tOrder))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
+          if ('error' in (timeIsYears ? parseTimeOfDay(timeCell, true) : parseTimeColumnCell(timeCell, date.iso, tOrder, true))) c.add('ROW-DATE-UNPARSEABLE', sheet.name, specs.time.header, row.line, String(timeCell).trim(), true, { role: 'time' });
           else {
-            date = combineDateTime(date, timeCell, tOrder);
+            date = combineDateTime(date, timeCell, tOrder, true);
             note('datetime', specs.time.index);
             if (timeUtc) date = { ...date, tz: 'utc', iso: `${date.iso}Z` };
             else if (date.tz === 'unknown') c.add('ROW-TZ-UNKNOWN', sheet.name, specs.time.header, row.line, undefined, false);
@@ -1314,17 +1315,18 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const pressureOk = pressure.filter((p) => !pVarying.has(p.index));
   /**
    * The text a key cell is written as. A number is converted only when EVERY numeric cell of its column is date-formatted (a General 5 among dates stays 5), and only when nothing can be lost: in a
-   * time-only column a value from 0 up to 1 is a time of day (HH:MM); any other value ([h]:mm 36.25, a full datetime shown as hh:mm) stays the number. In a date column a plausible serial is written as
+   * time-only column a value from 0 up to 1 is a time of day (HH:MM, with seconds and milliseconds when it has them); any other value ([h]:mm 36.25, a full datetime shown as hh:mm) stays the number. In a date column a plausible serial is written as
    * the date (and time) it is, with the workbook's date system; anything else stays the number. Everything that is not a number is written as the file wrote it.
    */
   const keyCellText = (index: number, cell: RawCell): RawCell => {
     if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
     const timeOnly = sheet.timeAll?.[index] === true;
     if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
-    // a fraction of a second has no place in the text, so such a cell stays the number
-    const seconds = cell * 86400;
-    if (Math.abs(seconds - Math.round(seconds)) > 0.001) return cell;
-    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true });
+    // the text keeps the millisecond ('12:00:00.250'). Only a time finer than that (more than 0.02 ms from a whole millisecond, twice the largest float noise of a 15-digit serial, 1e-5 s)
+    // would lose something in the text, so such a cell stays the number and two close times stay two
+    const millis = cell * 86_400_000;
+    if (Math.abs(millis - Math.round(millis)) > 0.02) return cell;
+    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: true });
     if ('error' in d) return cell;
     if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
     return d.iso;
@@ -1358,6 +1360,27 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
     });
   }
   for (const e of extra) own.add(e.index);
+  // A key column the person set to ignore that really separates rows of the output: those rows look alike in the clean CSV (every column it writes is equal), only the column they differ in is not written
+  if (ignoredOnPurpose.size > 0) {
+    const alike = new Map<string, number[]>();
+    rows.forEach((row, n) => {
+      const id = JSON.stringify([row.station, row.cruise, row.sampleId, row.datetime?.iso, row.lat, row.lon, row.depth, extra.map((e) => String(cellFor(e, n) ?? '').trim())]);
+      alike.set(id, [...(alike.get(id) ?? []), n]);
+    });
+    const told: number[] = [];
+    const lines = new Set<number>();
+    for (const i of unread.filter((x) => ignoredOnPurpose.has(x))) {
+      let separates = false;
+      for (const group of alike.values()) {
+        const seen = new Set(group.map((n) => String(firsts[n].cells[i] ?? '').trim()));
+        if (seen.size < 2) continue;
+        separates = true;
+        for (const n of group) if (lines.size < 20) lines.add(rows[n].line);
+      }
+      if (separates) told.push(i);
+    }
+    if (told.length > 0) for (const line of lines) c.add('ROW-LONG-KEY-IGNORED', sheet.name, '', line, undefined, true, { columns: told.map((i) => sheet.header[i]).join(', '), count: told.length });
+  }
   return { rows, variables: [...variables.values()], positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, 'rows', lostCols), lookup), ...(year ? { year } : {}) };
 }
 
