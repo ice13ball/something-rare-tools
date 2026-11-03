@@ -283,12 +283,15 @@ export function doubtedGroups(entries: readonly SplitEntry[]): { reason: NameDou
  */
 export function sexLetterSplit(s: SplitEntry): TaxonSplit | undefined {
   if (s.doubt !== 'single-letter' || s.approved || s.split.sex !== undefined) return undefined;
-  const words = s.split.scientificName.split(/\s+/).filter((w) => w !== '');
+  // the letter is the last word of the typed text itself; the rest goes through splitTaxon as if it had been typed alone, so "Genus spp. m" gets the qualifier
+  // "spp." (and a stage its stage) exactly as "Genus spp." does, instead of leaving "sp." inside the name
+  const words = s.verbatim.trim().split(/\s+/);
   const last = words[words.length - 1];
   if (words.length < 2 || last === undefined || last.length !== 1) return undefined;
   const sex = sexToken(last);
   if (sex === undefined) return undefined;
-  const name = words.slice(0, -1).join(' ');
-  if (nameDoubt(name) !== undefined) return undefined;
-  return { ...s.split, scientificName: name, sex };
+  const rest = splitTaxon(words.slice(0, -1).join(' '));
+  // a sex already read in the rest, or a doubt that is still there ("C. x f"), leaves the name to its own row
+  if (rest.sex !== undefined || nameDoubt(rest.scientificName) !== undefined) return undefined;
+  return { ...rest, verbatimIdentification: s.verbatim, sex };
 }

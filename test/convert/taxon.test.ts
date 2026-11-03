@@ -194,6 +194,13 @@ describe('sexLetterSplit', () => {
     expect(one('Ccc ddd f')).toMatchObject({ scientificName: 'Ccc ddd', sex: 'female' });
     expect(one('Ccc ddd F')?.sex).toBe('female'); // sexToken lowercases, so does this
   });
+  it('runs the rest through splitTaxon: "Genus spp. m" has the qualifier spp., not "spp." inside the name', () => {
+    const typed = splitTaxon('Ggg spp.');
+    expect(typed).toMatchObject({ scientificName: 'Ggg', identificationQualifier: 'spp.' });
+    expect(one('Ggg spp. m')).toEqual({ verbatimIdentification: 'Ggg spp. m', scientificName: 'Ggg', identificationQualifier: typed.identificationQualifier, sex: 'male' });
+    expect(one('Hhh sp. f')).toMatchObject({ scientificName: 'Hhh', identificationQualifier: 'sp.', sex: 'female' });
+    expect(one('cf. Iii jjj m')).toMatchObject({ scientificName: 'Iii jjj', identificationQualifier: 'cf.', sex: 'male' });
+  });
   it('is undefined for another letter, a forma, a lone word, a second doubt, a name with a sex, an approved name', () => {
     expect(one('C. vanus x')).toBeUndefined();
     expect(one('Ccc ddd f.')).toBeUndefined();

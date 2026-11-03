@@ -23,8 +23,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const HEAD = ['C. vanus m', 'C. vanus f', 'C. vanus x', 'Ddd eee/fff', 'Foram, benthic', 'Mmm nnn'];
-const CSV = `Sample,Station,Latitude,Longitude,Date,${HEAD.map((h) => `"${h}"`).join(',')}\na,S,55,3,2020-01-01,1,2,3,4,5,6\n`;
+const HEAD = ['Ggg spp. m', 'C. vanus m', 'C. vanus f', 'C. vanus x', 'Ddd eee/fff', 'Foram, benthic', 'Mmm nnn'];
+const CSV = `Sample,Station,Latitude,Longitude,Date,${HEAD.map((h) => `"${h}"`).join(',')}\na,S,55,3,2020-01-01,1,2,3,4,5,6,7\n`;
 const sexBtn = /^Treat the last letter as sex \(m\/f\) in \d+ names?$/;
 
 async function load(): Promise<{ section: HTMLElement; downloadFile: ReturnType<typeof vi.fn> }> {
@@ -49,8 +49,8 @@ describe('group buttons by reason', () => {
     expect(within(section).queryByRole('group', { name: /slash/ })).toBeNull();
     expect(within(section).queryByRole('group', { name: /remark|comma/ })).toBeNull();
     const group = within(section).getByRole('group', { name: T['convert.splits.sexGroup'] });
-    expect(within(group).getByRole('button', { name: 'Treat the last letter as sex (m/f) in 2 names' })).toBeTruthy();
-    expect(within(group).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['C. vanus m → C. vanus, male', 'C. vanus f → C. vanus, female']);
+    expect(within(group).getByRole('button', { name: 'Treat the last letter as sex (m/f) in 3 names' })).toBeTruthy();
+    expect(within(group).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Ggg spp. m \u2192 Ggg (spp.), male', 'C. vanus m → C. vanus, male', 'C. vanus f → C. vanus, female']);
     // C. vanus x is not in it and is still one by one
     expect(group.textContent).not.toContain('C. vanus x');
     expect(within(section).getByRole('button', { name: 'Approve as it is: C. vanus x' })).toBeTruthy();
@@ -74,8 +74,8 @@ describe('group buttons by reason', () => {
     const { section } = await load();
     fireEvent.change(input(section, 'C. vanus m'), { target: { value: 'C. vanus mine' } });
     const group = within(section).getByRole('group', { name: T['convert.splits.sexGroup'] });
-    expect(within(group).getAllByRole('listitem')).toHaveLength(1);
-    fireEvent.click(within(group).getByRole('button', { name: 'Treat the last letter as sex (m/f) in 1 name' }));
+    expect(within(group).getAllByRole('listitem')).toHaveLength(2);
+    fireEvent.click(within(group).getByRole('button', { name: 'Treat the last letter as sex (m/f) in 2 names' }));
     await waitFor(() => expect(input(section, 'C. vanus f').disabled).toBe(true));
     expect(input(section, 'C. vanus m').value).toBe('C. vanus mine');
     expect(input(section, 'C. vanus m').disabled).toBe(false);
@@ -125,6 +125,10 @@ describe('the written archive', () => {
       expect(byVerbatim(v)[col('scientificName')]).toBe('C. vanus');
       expect(byVerbatim(v)[col('sex')]).toBe(sex);
     }
+    // Genus spp. m: the qualifier is spp., the name has no "spp." in it
+    expect(byVerbatim('Ggg spp. m')[col('scientificName')]).toBe('Ggg');
+    expect(byVerbatim('Ggg spp. m')[col('identificationQualifier')]).toBe('spp.');
+    expect(byVerbatim('Ggg spp. m')[col('sex')]).toBe('male');
     expect(byVerbatim('C. vanus x')[col('scientificName')]).toBe('C. vanus x');
     expect(byVerbatim('C. vanus x')[col('sex')] ?? '').toBe('');
   });

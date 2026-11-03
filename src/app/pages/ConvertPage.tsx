@@ -946,7 +946,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   <ul className="convert-doubt-list">
                     {sexGroup.map(({ entry, split }) => (
                       <li key={entry.verbatim}>
-                        <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>, {t(split.sex === 'female' ? 'convert.sex.female' : 'convert.sex.male')}
+                        <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}, {t(split.sex === 'female' ? 'convert.sex.female' : 'convert.sex.male')}
                       </li>
                     ))}
                   </ul>
