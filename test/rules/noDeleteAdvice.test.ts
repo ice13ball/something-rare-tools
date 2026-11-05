@@ -5,6 +5,7 @@
 // still be in the text it is named for (a phrase that is no longer there fails the test, so the list cannot grow stale or swallow anything else).
 import { describe, expect, it } from 'vitest';
 import { UI } from '../../src/core/i18n/ui';
+import { TIP_TEXTS } from '../../src/core/i18n/tips-text';
 import { RULES } from '../../src/core/rules';
 import { CONVERT_RULES } from '../../src/core/rules/convert';
 
@@ -40,7 +41,23 @@ const ALLOWED: Allowed[] = [
   { id: 'CONV-ROW-NOT-UNDERSTOOD', phrase: 'nothing is deleted from the file the user gave', why: 'a promise, not advice' },
   { id: 'CONV-ROW-LEFT-OUT', phrase: 'Nothing was deleted', why: 'a promise, not advice' },
   { key: 'convert.notWritten.help', phrase: 'Nothing is deleted', why: 'a promise, not advice' },
+  { id: 'ROW-INVISIBLE-CHAR', phrase: 'taken out of the value', why: 'fixing a typing mistake, not removing data: a zero-width character inside a name is not part of the name' },
   { id: 'ROW-KEY-IGNORED', phrase: 'Nothing is removed from the file', why: 'a reassurance in /check text (production), not advice: the sentence says the file keeps everything' },
+  // the (i) explanations: the drop zone, how numbers are written, a choice that has to be made again
+  { key: 'tip.linkField.logic', phrase: 'drop it above', why: 'the drop zone of the page' },
+  { key: 'tip.downloadMode.logic', phrase: 'Files you drop here', why: 'the drop zone of the page' },
+  { key: 'tip.sidecar.logic', phrase: 'Drop it with the files', why: 'the drop zone of the page' },
+  { key: 'tip.indexConvert.logic', phrase: 'What you drop goes through', why: 'the drop zone of the page' },
+  { key: 'tip.convertFullList.logic', phrase: 'a companion file dropped with the data', why: 'the drop zone of the page' },
+  { key: 'tip.convertCompanion.logic', phrase: 'Drop it together with your data', why: 'the drop zone of the page' },
+  { key: 'tip.convertProfile.logic', phrase: 'when you drop it with a sheet', why: 'the drop zone of the page' },
+  { key: 'tip.convertAccept.logic', phrase: 'until the cause is removed', why: 'fixing the cause of an error in the file, not removing data' },
+  { key: 'tip.convertExport.logic', phrase: 'leading zeros before the integer part are dropped', why: 'how a number is written (the value is the same), not a data row' },
+  { key: 'tip.convertExport.logic', phrase: 'a bare trailing point is dropped', why: 'how a number is written (the value is the same), not a data row' },
+  { key: 'tip.convertExport.logic', phrase: 'trailing zeros dropped', why: 'how a number is written (the value is the same), not a data row' },
+  { key: 'tip.convertExport.logic', phrase: 'a decimal part that is zero is dropped', why: 'how a whole number is written (the value is the same), not a data row' },
+  { key: 'tip.convertProfileStations.logic', phrase: 'spaces at both ends removed', why: 'how a station text is normalised for a comparison' },
+  { key: 'tip.convertNercChoice.logic', phrase: 'the choice is dropped', why: 'a chosen vocabulary entry is given up when the column changes; no data row' },
   // the page's own words about levels, a choice taken back, a vocabulary entry
   { key: 'convert.nerc.dropped', phrase: 'was dropped', why: 'a chosen identifier is given up when the column changes; no data row' },
   { key: 'convert.worms.status.deleted', phrase: 'deleted', why: 'WoRMS says the taxon record is deleted' },
@@ -69,6 +86,8 @@ describe('no text advises deleting data', () => {
     ...Object.entries(UI.en)
       .filter(([k]) => k.startsWith('convert.') || k.startsWith('check.'))
       .map(([k, v]) => ({ where: `page text ${k}`, key: k, text: String(v) })),
+    // the explanations behind the (i) buttons
+    ...Object.entries(TIP_TEXTS.en).map(([k, v]) => ({ where: `tip ${k}`, key: k, text: String(v) })),
   ];
 
   it('the English rule texts, their technical lines and the converter\'s page texts hold no instruction to delete, remove or drop', () => {
@@ -85,7 +104,7 @@ describe('no text advises deleting data', () => {
   });
 
   it('the list is short, each phrase is specific, and the words themselves are not on it', () => {
-    expect(ALLOWED.length).toBeLessThanOrEqual(30);
+    expect(ALLOWED.length).toBeLessThanOrEqual(50);
     for (const a of ALLOWED) {
       expect(a.phrase.length).toBeGreaterThanOrEqual(7);
       // a single bare word is allowed only as the whole text of a page label
@@ -111,16 +130,48 @@ describe('no text advises deleting data', () => {
     expect(say('CONV-SUMMARY-ROW-KEPT')).toMatch(/correct the sheet/);
   });
 
-  it('the other languages of the converter\'s rules do not tell the user to delete either', () => {
+  it('the other languages (the converter\'s rules, the converter\'s page texts and the tips) do not tell the user to delete either', () => {
     const NOT_EN: Record<string, RegExp> = {
-      pl: /\b(usuń|usuńcie|usunąć|skasuj|wykreśl|wyrzuć|odrzuć)\w*/i,
+      pl: /\b(usuń|usuńcie|usunąć|usuwaj|skasuj|skasować|wykasuj|wykreśl|wyrzuć|odrzuć)\w*/i,
       de: /\b(lösch\w*|entfern\w*|verwerfen|verwirf\w*|streich\w*)/i,
-      fr: /\b(supprimez|supprimer|retirez|retirer|effacez|effacer)\b/i,
+      fr: /\b(supprimez|supprimer|retirez|retirer|enlevez|enlever|ôtez|ôter|effacez|effacer)\b/i,
     };
-    // German "entfernt" is a distance, and "entfernen Sie das Häkchen / bei der Spalte ..." takes a tick off the page: named, not swallowed
-    const ok = (lang: string, text: string): string => (lang === 'de' ? text.replace(/entfernen Sie das Häkchen/g, ' ').replace(/entfernen Sie bei der Spalte/g, ' ').replace(/ entfernt/g, ' ') : text);
-    const bad: string[] = [];
-    for (const r of CONVERT_RULES) for (const lang of ['pl', 'de', 'fr'] as const) for (const t of [r.plain[lang], ...(r.plainIf ?? []).map((x) => x.plain[lang])]) if (NOT_EN[lang].test(ok(lang, t))) bad.push(`${r.id} ${lang}`);
-    expect(bad).toEqual([]);
+    // German "entfernt" and "Entfernung" are a distance, and "entfernen Sie das Häkchen / bei der Spalte / „jedes Organismus“" takes a tick off the page: named, not swallowed
+    const ok = (lang: string, text: string): string =>
+      lang === 'de' ? text.replace(/entfernen Sie das Häkchen/g, ' ').replace(/entfernen Sie bei der Spalte/g, ' ').replace(/entfernen Sie „jedes Organismus“/g, ' ').replace(/ entfernt/g, ' ').replace(/Entfernung/g, ' ') : text;
+    const all: { where: string; lang: 'pl' | 'de' | 'fr'; text: string }[] = [];
+    for (const lang of ['pl', 'de', 'fr'] as const) {
+      for (const r of CONVERT_RULES) for (const t of [r.plain[lang], ...(r.plainIf ?? []).map((x) => x.plain[lang])]) all.push({ where: `${r.id} ${lang}`, lang, text: t });
+      for (const [k, v] of Object.entries(UI[lang])) if (k.startsWith('convert.') || k.startsWith('check.')) all.push({ where: `${k} ${lang}`, lang, text: String(v) });
+      for (const [k, v] of Object.entries(TIP_TEXTS[lang])) all.push({ where: `${k} ${lang}`, lang, text: String(v) });
+    }
+    const bad = all.filter((t) => {
+      let rest = ok(t.lang, t.text);
+      for (const a of NOT_EN_ALLOWED) if (a.where === t.where) rest = rest.split(a.phrase).join(' ');
+      return NOT_EN[t.lang].test(rest);
+    });
+    expect(bad.map((b) => b.where)).toEqual([]);
+  });
+
+  it('every phrase allowed in another language is still in its text', () => {
+    for (const a of NOT_EN_ALLOWED) {
+      const lang = a.where.slice(-2) as 'pl' | 'de' | 'fr';
+      const text = a.where.startsWith('CONV-') ? CONVERT_RULES.map((r) => ({ id: `${r.id} ${lang}`, t: r.plain[lang] })).find((x) => x.id === a.where)?.t : (UI[lang] as Record<string, string>)[a.where.slice(0, -3)] ?? (TIP_TEXTS[lang] as Record<string, string>)[a.where.slice(0, -3)];
+      expect(String(text), a.where).toContain(a.phrase);
+      expect(a.why.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('the mutation check holds in the other languages too', () => {
+    expect(/\b(retirez|enlevez|ôtez)\b/i.test('Enlevez la ligne.')).toBe(true);
+    expect(/\b(usuń|wykasuj)\w*/i.test('Wykasuj wiersz.')).toBe(true);
   });
 });
+
+/** Phrases of the other languages that are not advice to delete (the same rule as ALLOWED: the exact place and the reason). Filled from the first run. */
+const NOT_EN_ALLOWED: { where: string; phrase: string; why: string }[] = [
+  { where: 'convert.splits.withdraw fr', phrase: 'Retirer la validation', why: 'takes back the approval of a split on the page; no data row' },
+  { where: 'convert.codes.clear fr', phrase: 'Effacer les colonnes choisies', why: 'clears the choice of columns on the page; no data row' },
+  { where: 'convert.flatten.station fr', phrase: 'Supprimer le niveau station', why: 'a level of the archive tree, not rows; the code is moved, not lost' },
+  { where: 'convert.flatten.cruise fr', phrase: 'Supprimer le niveau campagne', why: 'a level of the archive tree, not rows; the code is moved, not lost' },
+];

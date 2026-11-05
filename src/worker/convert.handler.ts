@@ -144,6 +144,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
         for (const n of s.totalOnce ?? []) if (!(settings.totalOnce ??= []).includes(n)) settings.totalOnce.push(n);
         for (const n of s.realCounts ?? []) if (!(settings.realCounts ??= []).includes(n)) settings.realCounts.push(n);
+        for (const c of s.realCountsRows ?? []) if (!(settings.realCountsRows ??= []).some((x) => x.sheet === c.sheet)) settings.realCountsRows.push(c);
         for (const n of s.dropCopies ?? []) if (!(settings.dropCopies ??= []).includes(n)) settings.dropCopies.push(n);
         // the answers of an earlier run to the questions about rows: kept with their numbers, and the converter uses them only where the numbers are the same today
         for (const c of s.dropCopiesRows ?? []) if (!(settings.dropCopiesRows ??= []).some((x) => x.sheet === c.sheet)) settings.dropCopiesRows.push(c);
@@ -277,8 +278,11 @@ export function createConvertHandler(): ConvertHandler {
       // the answers of a companion file carry the numbers they hold for; only whole numbers count, and the core compares them with today's
       ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
       ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
+      ...(Number.isInteger(s.realCountsRows) && (s.realCountsRows as number) >= 0 ? { realCountsRows: s.realCountsRows as number } : {}),
       // the page's word is not taken for more than a list of words and whole numbers; the core ignores a reason that cannot be left out
-      ...(Array.isArray(s.leaveOut) && s.leaveOut.length > 0 ? { leaveOut: s.leaveOut.filter((r): r is string => typeof r === 'string') } : {}),
+      ...(Array.isArray(s.leaveOut) && s.leaveOut.length > 0
+        ? { leaveOut: s.leaveOut.filter((r) => r !== null && typeof r === 'object' && typeof r.reason === 'string' && Number.isInteger(r.count)).map((r) => ({ reason: r.reason, count: r.count })) }
+        : {}),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
         ? { leaveOutFile: s.leaveOutFile.filter((g) => g !== null && typeof g === 'object' && typeof g.reason === 'string' && Number.isInteger(g.count) && Number.isInteger(g.rows)).map((g) => ({ reason: g.reason, count: g.count, rows: g.rows })) }
         : {}),

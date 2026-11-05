@@ -242,12 +242,13 @@ describe('a reason with a rule of its own is not asked twice, and is asked when 
     expect(ofRule(r, 'CONV-ROW-NOT-UNDERSTOOD')).toHaveLength(0);
   });
 
-  it('the same lines with no covering finding are asked (a rule that holds back a row must name it, or the question is ours)', () => {
+  it('a covered reason is asked only when no blocking rule of its own stands for the sheet at all', () => {
     const r = convert({ sheets: [W1()], options: {} });
     const fake: SheetLedger = { ...r.ledger[0], lines: [{ line: 2, fate: 'no-code', chain: ['no-code'] }, { line: 3, fate: 'no-code', chain: ['no-code'] }] };
     const sheets = [W1()];
     const covered = decideRows([fake], sheets, [makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: fake.file, sheet: fake.sheet, lines: [2] })]);
-    expect(covered.findings.map((f) => [f.ruleId, f.lines])).toEqual([['CONV-ROW-NOT-UNDERSTOOD', [3]]]);
+    // (the rule of its own is the decision, even for a line it does not name: our question is never raised beside it)
+    expect(covered.findings).toEqual([]);
     const none = decideRows([fake], sheets, []);
     expect(none.findings.map((f) => [f.ruleId, f.lines])).toEqual([['CONV-ROW-NOT-UNDERSTOOD', [2, 3]]]);
     const named = decideRows([fake], sheets, [makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: fake.file, sheet: fake.sheet })]);

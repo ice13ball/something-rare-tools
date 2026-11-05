@@ -5,6 +5,7 @@ import { makeConvertFinding } from '../rules/convert';
 import type { Finding, RawCell, RawRow, RawSheet } from '../types';
 import type { ConvertSheetInput } from './build';
 import type { LedgerReason, LineFate, SheetLedger } from './ledger';
+import { parseDate } from '../values/dates';
 import { policyOf } from './policy';
 
 /*
@@ -161,9 +162,11 @@ export function decideRows(ledger: readonly SheetLedger[], sheets: readonly Conv
     if (sin === undefined) continue;
     const byReason = new Map<string, number[]>();
     for (const f of l.lines) {
-      if (!isUnwritten(f)) continue;
-      const list = byReason.get(f.fate);
-      if (list === undefined) byReason.set(f.fate, [f.line]);
+      // a written line whose lost cell has no reason is a fault of the converter, like a row with none: it blocks too
+      const fate: string | undefined = isUnwritten(f) ? f.fate : (f.lostCells ?? []).some((c) => c.reason === 'unexplained') ? 'unexplained' : undefined;
+      if (fate === undefined) continue;
+      const list = byReason.get(fate);
+      if (list === undefined) byReason.set(fate, [f.line]);
       else list.push(f.line);
     }
     const source = sourceOf(l, sheets);
@@ -172,15 +175,15 @@ export function decideRows(ledger: readonly SheetLedger[], sheets: readonly Conv
       if (kind === 'listed') continue;
       let lines = all;
       if (kind === 'covered') {
+        // a covered reason is decided by its own rule, which blocks: our question is never raised beside it. Only when no blocking rule of the kind stands for the sheet at all (a fault: the rows
+        // would go in silence) the question is asked after all.
         const covering = existing.filter((f) => f.file === l.file && f.sheet === l.sheet && (COVERED_BY[reason as LedgerReason] ?? []).includes(f.ruleId) && policyOf(f) === 'block');
-        // a covering finding that names no lines covers the sheet
-        if (covering.some((f) => f.lines === undefined || f.lines.length === 0)) continue;
-        const named = new Set(covering.flatMap((f) => f.lines ?? []));
-        lines = all.filter((x) => !named.has(x));
-        if (lines.length === 0) continue;
+        if (covering.length > 0) continue;
       }
       const count = lines.length;
-      const you = (sin.leaveOut ?? []).includes(reason);
+      // an answer given on the page holds for the number of rows it was given for (a bare reason, from a caller that is not the page, holds whatever the number); the same for a companion file, which
+      // also holds only for a sheet of the same number of rows
+      const you = (sin.leaveOut ?? []).some((a) => (typeof a === 'string' ? a === reason : a.reason === reason && a.count === count));
       const file = !you && (sin.leaveOutFile ?? []).some((g) => g.reason === reason && g.count === count && g.rows === l.rows.source);
       const sorted = [...lines].sort((a, b) => a - b);
       const left = you || file;
@@ -193,6 +196,8 @@ export function decideRows(ledger: readonly SheetLedger[], sheets: readonly Conv
         if (rule !== undefined) out.suppress.push({ ruleId: rule, file: l.file, sheet: l.sheet });
       } else {
         out.findings.push(makeConvertFinding('CONV-ROW-NOT-UNDERSTOOD', { ...base, params: { reason, count, rows: l.rows.source, ...(examples === '' ? {} : { examples }) } }));
+        // one message for the same lines: a warning about a number with no taxon gives way to the question that covers the same rows, before the answer as well
+        if (reason === 'no-taxon') out.suppress.push({ ruleId: 'CONV-TAXON-EMPTY-ROW', file: l.file, sheet: l.sheet });
       }
     }
   }
@@ -220,12 +225,15 @@ export interface NotWrittenRow {
 /** A line of the ledger that is listed: a line with no record, or a written line that lost cells other than zeros. */
 const listed = (f: LineFate): boolean => isUnwritten(f) || (f.lostCells !== undefined && f.lostCells.length > 0);
 
+/** A sheet that is left out as a whole and has no line of its own: not used, or not read with no lines kept (a pivoted long sheet). It is one row of the list with its count of rows, not row by row. */
+const leftWhole = (l: SheetLedger): boolean => l.kind === 'not-used' || (l.kind === 'not-read' && l.lines.length === 0);
+
 /** How many lines the list holds for these ledger entries (a sheet left out as a whole is not a line: it is one row of its own and is counted apart). */
 export function countNotWritten(ledger: readonly SheetLedger[]): { rows: number; sheets: number } {
   let rows = 0;
   let sheets = 0;
   for (const l of ledger) {
-    if (l.kind === 'not-used') {
+    if (leftWhole(l)) {
       if (l.rows.source > 0) sheets++;
       continue;
     }
@@ -244,24 +252,39 @@ const statusOf = (reason: string, l: SheetLedger, left: ReadonlySet<string>): No
 export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly ConvertSheetInput[], leftOut: readonly string[] = []): Generator<NotWrittenRow> {
   const left = new Set(leftOut);
   for (const l of ledger) {
-    if (l.kind === 'not-used') {
-      if (l.rows.source > 0) yield { file: l.file, sheet: l.sheet, line: undefined, reason: 'sheet-not-used', status: 'left-out', detail: 'rows', cells: [l.rows.source], kind: 'sheet' };
+    if (leftWhole(l)) {
+      const reason = l.rows.skipped[0]?.reason ?? 'sheet-not-used';
+      if (l.rows.source > 0) yield { file: l.file, sheet: l.sheet, line: undefined, reason, status: l.kind === 'not-used' ? 'left-out' : statusOf(reason, l, left), detail: 'rows', cells: [l.rows.source], kind: 'sheet' };
       continue;
     }
     const wanted = l.lines.filter(listed);
     if (wanted.length === 0) continue;
     const source = sourceOf(l, sheets);
     const rows = rowsAt(source, wanted.map((f) => f.line));
+    const input = l.inputIndex === undefined ? undefined : sheets[l.inputIndex];
+    const dated = (cells: readonly RawCell[]): string => {
+      const flags = source?.dateFormatted;
+      if (flags === undefined || input === undefined) return '';
+      const out: string[] = [];
+      cells.forEach((c, i) => {
+        if (typeof c !== 'number' || flags[i] !== true) return;
+        const d = parseDate(c, { date1904: input.file.date1904, dateFormatted: true });
+        if (!('error' in d)) out.push(`${(source?.header[i] ?? '').trim() || `#${i + 1}`}: ${d.iso}`);
+      });
+      return out.length === 0 ? '' : `date: ${out.join('; ')}`;
+    };
+    const join = (a: string, b: string): string => (a === '' ? b : b === '' ? a : `${a} | ${b}`);
     if (source !== undefined) yield { file: l.file, sheet: l.sheet, line: source.headerLine, reason: 'header', status: 'understood', detail: '', cells: source.header, kind: 'header' };
     for (const f of wanted) {
       const cells = rows.get(f.line)?.cells ?? [];
       if (isUnwritten(f)) {
         const others = (f.chain ?? []).filter((c) => c !== f.fate);
-        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: others.join(' '), cells, kind: 'line' };
+        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(others.join(' '), dated(cells)), cells, kind: 'line' };
       } else {
         const header = source?.header ?? [];
         const named = (f.lostCells ?? []).map((c) => `${(header[c.index] ?? '').trim() || `#${c.index + 1}`} (${c.reason})`);
-        yield { file: l.file, sheet: l.sheet, line: f.line, reason: 'cells-not-written', status: 'understood', detail: named.join('; '), cells, kind: 'lost-cells' };
+        const status: NotWrittenStatus = (f.lostCells ?? []).some((c) => c.reason === 'unexplained') ? statusOf('unexplained', l, left) : 'understood';
+        yield { file: l.file, sheet: l.sheet, line: f.line, reason: 'cells-not-written', status, detail: join(named.join('; '), dated(cells)), cells, kind: 'lost-cells' };
       }
     }
   }

@@ -89,8 +89,10 @@ export interface ConvertSheetRequest {
   /** The number of copies / groups a companion file recorded with the same answers; the core honours them only when today's analysis finds the same number. */
   dropCopiesCount?: number;
   totalOnceCount?: number;
-  /** The reasons the user left out and listed (core/convert/notWritten.ts), and the same as a companion file recorded them (with the counts they hold for). */
-  leaveOut?: string[];
+  /** The number of rows the tick "these are real counts" covered; the core honours it only when today's analysis finds the same number. */
+  realCountsRows?: number;
+  /** The reasons the user left out and listed (core/convert/notWritten.ts) with the number of rows each was given for, and the same as a companion file recorded them (with the counts they hold for). */
+  leaveOut?: { reason: string; count: number }[];
   leaveOutFile?: { reason: string; count: number; rows: number }[];
 }
 

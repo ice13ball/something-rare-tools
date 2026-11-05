@@ -154,6 +154,8 @@ describe('a row the converter cannot place', () => {
     expect(bodies).toHaveLength(1);
     const answered = bodies[0];
     expect(answered.body.sheets.some((s) => (s.leaveOut ?? []).length > 0)).toBe(true);
+    // the answer is tied to the number of rows the button named
+    expect(answered.body.sheets.flatMap((s) => s.leaveOut ?? [])).toEqual([{ reason: 'ragged', count: 1 }]);
     // the same request with the answer taken out: the worker judges it again and writes nothing
     const unanswered: ExportBody = { ...answered, body: { ...answered.body, sheets: answered.body.sheets.map((s) => ({ ...s, leaveOut: [], leaveOutFile: [] })) } };
     await expect(real.export(unanswered)).rejects.toThrow(/Export refused.*CONV-ROW-NOT-UNDERSTOOD.*Nothing was written/);
@@ -167,7 +169,7 @@ describe('the list of rows not written', () => {
   it('is offered beside the export button and in the ledger with the same count, even while the export is blocked; one click is one download, never a second one by itself', async () => {
     const run = await load();
     await waitFor(() => expect(listButtons().length).toBe(2));
-    for (const b of listButtons()) expect(b.textContent).toBe('Download the list: 2 rows not written (CSV)');
+    for (const b of listButtons()) expect(b.textContent).toBe('Download the list: 2 rows not written or not written whole (CSV)');
     // one beside the export button, one inside the ledger panel
     expect(listButtons().some((b) => b.closest('.convert-export') !== null)).toBe(true);
     expect(listButtons().some((b) => b.closest('.convert-ledger') !== null)).toBe(true);
@@ -271,5 +273,79 @@ describe('the companion file keeps the answer with the numbers it holds for', ()
     await waitFor(() => expect(item('CONV-ROW-NOT-UNDERSTOOD')).toBeTruthy());
     expect(item('CONV-ROW-LEFT-OUT')).toBeNull();
     expect(within(item('CONV-ROW-NOT-UNDERSTOOD')!).getByRole('button').textContent).toContain('these rows');
+  });
+});
+
+/** The P3 shape of the review: 10 samples x 2 taxa x 3 size classes, a total repeated on each size class; in two groups the weight differs per size class, so those groups are NOT collapsed. */
+const TAXA = ['Solea solea', 'Merlangius merlangus'];
+const REPEAT_HEADER = ['sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Size', 'Quantity', 'Weight'];
+const repeatRows = (): (string | number)[][] => {
+  const rows: (string | number)[][] = [];
+  for (let s = 1; s <= 10; s++) for (let t = 0; t < 2; t++) for (let c = 0; c < 3; c++) rows.push([`s${s}`, '2020-06-01', 49.4 + s / 100, 0.2, TAXA[t], 8 + c, 20 + 7 * s + 3 * t, s <= 2 && t === 0 ? 50 + c : 100 + s * 3 + t]);
+  return rows;
+};
+
+async function loadRepeat(text: string, extra: { name: string; text: string }[] = []): Promise<Run> {
+  const engine = createDirectConvertEngine();
+  const download = vi.fn();
+  const downloadFile = vi.fn();
+  const view = render(<ConvertPage engine={engine} download={download} downloadFile={downloadFile} />);
+  chooseFiles(view.container, [{ name: 'catch.csv', text }, ...extra]);
+  fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+  await screen.findByRole('heading', { name: T['convert.columns.title'] });
+  const confirm = screen.queryByRole('button', { name: /Confirm all shown/ });
+  if (confirm !== null) fireEvent.click(confirm);
+  pick(`Quantity: ${T['mapping.role']}`, 'quantity');
+  pick(`Weight: ${T['mapping.role']}`, 'biomass');
+  pick(T['convert.quantity.kind'], 'count');
+  await idle();
+  return { download, downloadFile, engine };
+}
+
+describe('the answers about the repeated total are kept with the number they were given for (round trip through the companion file)', () => {
+  const buttonIn = (rule: string, name: string | RegExp): HTMLElement => within(item(rule)!).getByRole('button', { name });
+
+  it('"count the total once": the answer is saved with the groups it wrote once, a file dropped with the same sheet gets it back, and another sheet does not', async () => {
+    const first = await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()));
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
+    const asked = item('CONV-QUANTITY-REPEATED')!;
+    // 20 groups repeat the total; the 2 whose weight differs per size class are not collapsed: the answer is bound to the 18 that are
+    fireEvent.click(within(asked).getAllByRole('button').find((b) => /once|Count/i.test(b.textContent ?? ''))!);
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED-ONCE')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    await waitFor(() => expect(first.download).toHaveBeenCalledTimes(1));
+    const companion = first.download.mock.calls[0][0] as string;
+    expect(companion).toContain('(setting),totalOnceGroups=18:catch.csv');
+    cleanup();
+    // the same file with the companion file: the answer is applied (the rows are written once), not asked again
+    await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()), [{ name: 'convert-companion.csv', text: companion }]);
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED-ONCE')).toBeTruthy());
+    cleanup();
+    // another file: one group more disagrees in its weight, the count it was given for is not the same, and the question is open again
+    const other = repeatRows().map((r) => (r[0] === 's3' && r[4] === TAXA[0] ? [...r.slice(0, 7), 70 + Number(r[5])] : r));
+    await loadRepeat(csvOf(REPEAT_HEADER, other), [{ name: 'convert-companion.csv', text: companion }]);
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
+    expect(item('CONV-QUANTITY-REPEATED-ONCE')).toBeNull();
+  });
+
+  it('"these are real counts": saved with the rows the tick covered (never as a bare tick), applied to the same sheet, and the check runs again for a sheet with more rows', async () => {
+    const first = await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()));
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
+    fireEvent.click(within(item('CONV-QUANTITY-REPEATED')!).getByRole('button', { name: T['convert.finding.realCounts'] }));
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    await waitFor(() => expect(first.download).toHaveBeenCalledTimes(1));
+    const companion = first.download.mock.calls[0][0] as string;
+    expect(companion).toContain('(setting),realCountsRows=60:catch.csv');
+    expect(companion).not.toContain('realCounts=');
+    cleanup();
+    await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()), [{ name: 'convert-companion.csv', text: companion }]);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(item('CONV-QUANTITY-REPEATED')).toBeNull();
+    cleanup();
+    // a sheet with more rows that repeat a total: the tick was not given for them, and the check runs
+    const more = [...repeatRows(), ...[0, 1].flatMap((t) => [0, 1, 2].map((c) => ['s11', '2020-06-01', 49.5, 0.2, TAXA[t], 8 + c, 400 + t, 200 + t]))];
+    await loadRepeat(csvOf(REPEAT_HEADER, more), [{ name: 'convert-companion.csv', text: companion }]);
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
   });
 });

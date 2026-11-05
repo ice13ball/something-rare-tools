@@ -84,12 +84,16 @@ describe('a total repeated on size-class rows', () => {
     expect(ids(r, 'CONV-SAMPLE-CONFLICT').length).toBeGreaterThan(0);
   });
 
-  it('the choice is kept in the companion file by sheet name, with the other two choices', () => {
-    const csv = writeConvertSidecar({ totalOnce: ['catch.csv'], realCounts: ['catch.csv'], dropCopies: ['catch.csv'] });
+  it('the choice is kept in the companion file by sheet name, with the other two choices; real counts are kept with the rows they cover, and the old form without a count is read and not applied', () => {
+    const csv = writeConvertSidecar({ totalOnce: ['catch.csv'], realCountsRows: [{ sheet: 'catch.csv', count: 12 }], dropCopies: ['catch.csv'] });
     const s = readConvertSettings(parseFile('side.csv', new TextEncoder().encode(csv)));
     expect(s?.totalOnce).toEqual(['catch.csv']);
-    expect(s?.realCounts).toEqual(['catch.csv']);
+    expect(s?.realCountsRows).toEqual([{ sheet: 'catch.csv', count: 12 }]);
+    expect(s?.realCounts).toBeUndefined();
     expect(s?.dropCopies).toEqual(['catch.csv']);
+    expect(csv).not.toContain('realCounts=');
+    const old = readConvertSettings(parseFile('side.csv', new TextEncoder().encode('original_column,output_column,unit,unit_source,p01\n(setting),realCounts=catch.csv,,,\n')));
+    expect(old?.realCounts).toEqual(['catch.csv']);
     expect(readConvertSettings(parseFile('side.csv', new TextEncoder().encode(writeConvertSidecar({ fullList: true }))))?.totalOnce).toBeUndefined();
   });
 

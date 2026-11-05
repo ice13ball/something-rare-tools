@@ -475,7 +475,8 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       const lostCells = lostAt.get(pos);
       if (entry !== undefined) {
         entry.cells = cells;
-        // (an unwritten line lists its cells whole; its lost cells are not a second thing to name)
+        // (an unwritten line lists its cells whole; its lost cells are not a second thing to name; a written line that wrote no occurrence, only an event or measurements, names them)
+        if (entry.fate === 'written' && lostCells !== undefined) entry.lostCells = lostCells;
       } else if (isWrittenAt(pos, line)) {
         const chain = reasonsOfBits(lostBits[pos]);
         const e: LineFate = { line, fate: 'written', cells, ...(chain.length > 0 ? { chain } : {}), ...(lostCells === undefined ? {} : { lostCells }) };
@@ -490,6 +491,8 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
   const mea = new Set(inp.measurementColumns);
   const evt = new Set(inp.eventColumns);
   const columns: LedgerColumn[] = [];
+  const taxonSet = new Set(inp.taxonColumns);
+  const extraLost = new Map<number, { index: number; reason: LedgerReason | 'unexplained' }[]>();
   for (const c of inp.mapping.columns) {
     const to: LedgerColumn['to'] = occ.has(c.index) ? 'occurrence' : mea.has(c.index) ? 'measurement' : evt.has(c.index) ? 'event' : 'not-written';
     const sumIn = new Sum();
@@ -506,16 +509,26 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     const index = c.index;
     const flag = to === 'occurrence' ? occFlag.get(index) : to === 'measurement' ? meaFlag.get(index) : undefined;
     const cf = fate.column(index);
+    // a value of a column that is written, in a line that is written, which has no record of its own (a weight "abc", a length "<5", an NA): named in the list, whole row beside it
+    const named = (to === 'occurrence' || to === 'measurement') && !(inp.kind === 'wide' && taxonSet.has(index)) && pivot === undefined;
+    const lose = (pos: number, reason: LedgerReason): void => {
+      if (!named || (flag !== undefined && flag[pos] === 1) || !isWrittenAt(pos, rows[pos].line)) return;
+      const list = extraLost.get(pos);
+      if (list === undefined) extraLost.set(pos, [{ index, reason }]);
+      else if (!list.some((x) => x.index === index)) list.push({ index, reason });
+    };
     for (let pos = 0; pos < rows.length; pos++) {
       const raw = rows[pos].cells[index];
       if (raw === null || raw === undefined) continue;
       let value: number | undefined;
       let text = false;
+      let status = 'ok';
       if (typeof raw === 'number') {
         if (!Number.isFinite(raw)) text = true;
         else value = raw;
       } else {
         const p = parseNumber(raw, inp.decimalComma);
+        status = p.status;
         if (p.status === 'ok') value = p.value;
         else if (p.status !== 'missing') text = true;
       }
@@ -525,6 +538,8 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
           written++;
           writtenWithoutValue++;
         } else if (text) nonNumbers++;
+        if (text) lose(pos, status === 'na-variant' ? 'na-cell' : 'text-cell');
+        else if (typeof raw === 'string' && raw.trim() !== '') lose(pos, 'na-cell');
         continue;
       }
       numbers++;
@@ -567,6 +582,9 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       counts[code]++;
       const sc = (sums[code] ??= new Sum());
       if (value !== 0) sc.add(value);
+      // (a zero is counted and not named, as in a wide matrix; a number of a column that is not written is the column's, not the cell's)
+      const why = LEDGER_REASONS[code - 1];
+      if (why !== 'zero' && why !== 'column-not-read') lose(pos, why);
     }
     if (numbers === 0 && nonNumbers === 0 && writtenWithoutValue === 0) continue;
     columns.push({
@@ -587,6 +605,25 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       unexplained,
       match: to === 'event' || (valueMissing === 0 && sameSum(sumWritten, sumOut)),
     });
+  }
+
+  // the written lines that lost a cell of a value column: attached to the line they are on, or a line of their own (a long row that wrote its occurrence and lost its weight)
+  if (extraLost.size > 0) {
+    const byLine = new Map(lines.map((l) => [l.line, l] as const));
+    for (const [pos, list] of extraLost) {
+      const line = rows[pos].line;
+      const entry = byLine.get(line);
+      if (entry !== undefined) {
+        if (entry.fate !== 'written') continue;
+        const have = entry.lostCells ?? [];
+        entry.lostCells = [...have, ...list.filter((x) => !have.some((h) => h.index === x.index))];
+        for (const x of list) if (x.reason !== 'unexplained' && !(entry.chain ?? []).includes(x.reason)) entry.chain = [...(entry.chain ?? []), x.reason];
+      } else {
+        const chain = [...new Set(list.flatMap((x) => (x.reason === 'unexplained' ? [] : [x.reason])))];
+        lines.push({ line, fate: 'written', ...(chain.length > 0 ? { chain } : {}), lostCells: list });
+      }
+    }
+    lines.sort((a, b) => a.line - b.line);
   }
 
   const initialTo = (col: number): LedgerColumn['to'] => (occ.has(col) ? 'occurrence' : mea.has(col) ? 'measurement' : evt.has(col) ? 'event' : 'not-written');
@@ -627,8 +664,10 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     let unexplainedLines = 0;
     let seen = 0;
     let lostNumbers = 0;
+    const seenLines = new Set<number>();
     const put = (line: number, fate_: 'written' | LedgerReason | undefined, chain: LedgerReason[] = []): void => {
       seen++;
+      seenLines.add(line);
       if (fate_ === 'written') {
         writtenLines++;
         return;
@@ -680,7 +719,11 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       });
     }
     // every line of the long file is one of the above; a line that is not is a fault, shown
-    if (seen < L.sourceRows) unexplainedLines += L.sourceRows - seen;
+    if (seen < L.sourceRows) {
+      unexplainedLines += L.sourceRows - seen;
+      // (which lines: the ones of the long file that no fate was given to; each is a line of its own, shown and blocking)
+      for (const r of sheet.pivot?.source.rows ?? []) if (!seenLines.has(r.line)) fates.push({ line: r.line, fate: 'unexplained' });
+    }
     fates.sort((a, b) => a.line - b.line);
     out.lines = fates;
     out.notUnderstood = lostNumbers;

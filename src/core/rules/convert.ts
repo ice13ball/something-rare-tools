@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { reasonsText } from '../recognize/layoutReasons';
 import type { Finding, Lang, RuleDef } from '../types';
-import { applyPlurals } from '../i18n/plural';
+import { applyPlurals, pluralForm } from '../i18n/plural';
 import { MAX_PAIRS } from '../convert/pivotLimits';
 import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
@@ -774,12 +774,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: [],
     plain: {
-      pl: `W arkuszu „{sheet}” jedna próbka ma parametr „{field}” więcej niż raz ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter nie wybiera między nimi ani ich nie sumuje: rozróżnij próbki w innej kolumnie (rzut, powtórzenie, głębokość) albo pomiń powtórzone wiersze i wypisz je (zob. następny komunikat).`,
-      en: `In sheet "{sheet}", one sample has the parameter "{field}" more than once ({+lineCount:line|lines} {lines}). The converter does not choose between them or sum them: tell the samples apart in another column (cast, replicate, depth), or leave the repeated rows out and list them (see the next message).`,
-      de: `Im Blatt „{sheet}“ hat eine Probe den Parameter „{field}“ mehrfach ({+lineCount:Zeile|Zeilen} {lines}). Der Konverter wählt nicht aus und summiert nicht: Unterscheiden Sie die Proben in einer anderen Spalte (Einsatz, Wiederholung, Tiefe) oder lassen Sie die wiederholten Zeilen aus und listen Sie sie auf (siehe nächste Meldung).`,
-      fr: `Dans la feuille « {sheet} », un échantillon a le paramètre « {field} » plusieurs fois ({+lineCount:ligne|lignes} {lines}). Le convertisseur ne choisit pas et n'additionne pas : distinguez les échantillons dans une autre colonne (déploiement, réplicat, profondeur) ou écartez les lignes répétées et listez-les (message suivant).`,
+      pl: `W arkuszu „{sheet}” jedna próbka ma parametr „{field}” więcej niż raz ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter ich nie sumuje: rozróżnij próbki w innej kolumnie (rzut, powtórzenie, głębokość) albo pomiń powtórzone wiersze i wypisz je (zapisana zostaje pierwsza wartość; zob. następny komunikat).`,
+      en: `In sheet "{sheet}", one sample has the parameter "{field}" more than once ({+lineCount:line|lines} {lines}). The converter does not sum them: tell the samples apart in another column (cast, replicate, depth), or leave the repeated rows out and list them (the first value is written; see the next message).`,
+      de: `Im Blatt „{sheet}“ hat eine Probe den Parameter „{field}“ mehrfach ({+lineCount:Zeile|Zeilen} {lines}). Er summiert sie nicht: Trennen Sie die Proben in einer anderen Spalte (Einsatz, Wiederholung, Tiefe) oder lassen Sie die wiederholten Zeilen aus und listen Sie sie auf (der erste Wert wird geschrieben; nächste Meldung).`,
+      fr: `Dans la feuille « {sheet} », un échantillon a le paramètre « {field} » plusieurs fois ({+lineCount:ligne|lignes} {lines}). Il ne les additionne pas : distinguez les échantillons dans une autre colonne (déploiement, réplicat, profondeur) ou écartez les lignes répétées et listez-les (la première valeur est écrite).`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: a long sheet has the same sample (the same values in every column but the parameter, unit, value and quality-flag columns) and the same parameter and unit on more than one row. Whatever the values, the rows are not merged, summed or chosen between; the export is blocked.`,
+    technical: `{file}, {sheet}:{lines} field {field}: a long sheet has the same sample (the same values in every column but the parameter, unit, value and quality-flag columns) and the same parameter and unit on more than one row. Whatever the values, the rows are never merged or summed, and the export is blocked until the person tells the samples apart or leaves the repeated rows out (CONV-ROW-NOT-UNDERSTOOD, reason repeated-parameter): then the first value of the sample and parameter is written and the later ones are listed.`,
   },
   {
     id: 'CONV-LONG-NO-PARAMETER',
@@ -1872,8 +1872,12 @@ function fill(template: string, f: Finding, lang?: Lang): string {
   });
 }
 
-/** What the rows of CONV-ROW-NOT-UNDERSTOOD / CONV-ROW-LEFT-OUT are, by ledger reason: a phrase that follows the counted noun ("3 rows with ..."). Says what the converter did understand. */
-const ROW_WHAT: Record<string, Record<Lang, string>> = {
+/**
+ * What the rows of CONV-ROW-NOT-UNDERSTOOD / CONV-ROW-LEFT-OUT are, by ledger reason: a phrase that follows the counted noun ("3 rows with ..."). Says what the converter did understand.
+ * A phrase that has to agree with the number is given as its forms ([one, other] for en, de, fr; [one, few, many] for pl) and chosen by the count; a person never reads the code of a reason.
+ */
+type Forms = string | readonly string[];
+const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
   ragged: {
     en: 'with more or fewer fields than the header, so their values would sit under the wrong columns',
     pl: 'z większą lub mniejszą liczbą pól niż nagłówek, więc ich wartości trafiłyby pod złe kolumny',
@@ -1905,34 +1909,105 @@ const ROW_WHAT: Record<string, Record<Lang, string>> = {
     fr: 'avec une valeur mais sans nom de paramètre',
   },
   'repeated-parameter': {
-    en: 'that repeat a parameter already given for the same sample (the first value was kept)',
-    pl: 'powtarzające parametr podany już dla tej samej próbki (zachowano pierwszą wartość)',
-    de: 'die einen für dieselbe Probe schon angegebenen Parameter wiederholen (der erste Wert wurde behalten)',
-    fr: 'qui répètent un paramètre déjà donné pour le même échantillon (la première valeur a été gardée)',
+    en: ['that repeats a parameter already given for the same sample (if you leave it out, the first value is written and the later one is listed)', 'that repeat a parameter already given for the same sample (if you leave them out, the first value is written and the later ones are listed)'],
+    pl: [
+      'powtarzający parametr podany już dla tej samej próbki (po pominięciu zapisana zostaje pierwsza wartość, a późniejsza trafia na listę)',
+      'powtarzające parametr podany już dla tej samej próbki (po pominięciu zapisana zostaje pierwsza wartość, a późniejsze trafiają na listę)',
+      'powtarzających parametr podany już dla tej samej próbki (po pominięciu zapisana zostaje pierwsza wartość, a późniejsze trafiają na listę)',
+    ],
+    de: [
+      'der einen für dieselbe Probe schon angegebenen Parameter wiederholt (lässt man sie aus, wird der erste Wert geschrieben und der spätere aufgelistet)',
+      'die einen für dieselbe Probe schon angegebenen Parameter wiederholen (lässt man sie aus, wird der erste Wert geschrieben und die späteren werden aufgelistet)',
+    ],
+    fr: [
+      "qui répète un paramètre déjà donné pour le même échantillon (si on l'écarte, la première valeur est écrite et la suivante est listée)",
+      'qui répètent un paramètre déjà donné pour le même échantillon (si on les écarte, la première valeur est écrite et les suivantes sont listées)',
+    ],
   },
   'not-in-event': {
     en: "whose value (a depth, a position or a date) the sample's event did not take",
-    pl: 'których wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+    pl: [
+      'którego wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+      'których wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+      'których wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+    ],
     de: 'deren Wert (Tiefe, Position oder Datum) das Ereignis der Probe nicht übernommen hat',
     fr: "dont la valeur (profondeur, position ou date) n'a pas été reprise par l'événement de l'échantillon",
   },
   unexplained: {
-    en: 'that the converter neither wrote nor gave a reason for (a fault of the converter)',
-    pl: 'których konwerter ani nie zapisał, ani nie podał powodu (błąd konwertera)',
-    de: 'die der Konverter weder geschrieben noch begründet hat (ein Fehler des Konverters)',
-    fr: "que le convertisseur n'a ni écrites ni expliquées (un défaut du convertisseur)",
+    en: 'with a value that the converter neither wrote nor gave a reason for (a fault of the converter)',
+    pl: 'z wartością, której konwerter ani nie zapisał, ani nie podał powodu (błąd konwertera)',
+    de: 'mit einem Wert, den der Konverter weder geschrieben noch begründet hat (ein Fehler des Konverters)',
+    fr: "avec une valeur que le convertisseur n'a ni écrite ni expliquée (un défaut du convertisseur)",
+  },
+  // the reasons a rule of its own decides (the question is not asked beside that rule; these words serve the rare row that no rule names)
+  'no-code': {
+    en: 'with a value but no sample code',
+    pl: 'z wartością, ale bez kodu próbki',
+    de: 'mit einem Wert, aber ohne Probencode',
+    fr: "avec une valeur mais sans code d'échantillon",
+  },
+  'no-replicate': {
+    en: 'with no value in the replicate column',
+    pl: 'bez wartości w kolumnie powtórzeń',
+    de: 'ohne Wert in der Replikatspalte',
+    fr: 'sans valeur dans la colonne des réplicats',
+  },
+  'duplicate-event': {
+    en: 'with a sample code that another row already uses for a different sample',
+    pl: 'z kodem próbki, którego inny wiersz używa już dla innej próbki',
+    de: 'mit einem Probencode, den eine andere Zeile schon für eine andere Probe verwendet',
+    fr: "avec un code d'échantillon qu'une autre ligne utilise déjà pour un autre échantillon",
+  },
+  'duplicate-level': {
+    en: 'with a level identifier that another row of the profile already has',
+    pl: 'z identyfikatorem poziomu, który ma już inny wiersz profilu',
+    de: 'mit einer Stufenkennung, die schon eine andere Zeile des Profils hat',
+    fr: "avec un identifiant de niveau qu'une autre ligne du profil a déjà",
+  },
+  'no-station': {
+    en: 'with no station',
+    pl: 'bez stacji',
+    de: 'ohne Station',
+    fr: 'sans station',
+  },
+  negative: {
+    en: 'with a negative quantity',
+    pl: 'z ujemną ilością',
+    de: 'mit einer negativen Menge',
+    fr: 'avec une quantité négative',
+  },
+  'not-integer': {
+    en: 'with a count that is not a whole number',
+    pl: 'z liczebnością, która nie jest liczbą całkowitą',
+    de: 'mit einer Anzahl, die keine ganze Zahl ist',
+    fr: "avec un effectif qui n'est pas un nombre entier",
+  },
+  'bad-mark': {
+    en: 'with a presence mark the converter does not know',
+    pl: 'ze znakiem obecności, którego konwerter nie zna',
+    de: 'mit einer Anwesenheitsmarke, die der Konverter nicht kennt',
+    fr: 'avec une marque de présence que le convertisseur ne connaît pas',
+  },
+  'sheet-not-read': {
+    en: 'of a sheet that was not read',
+    pl: 'z arkusza, który nie został odczytany',
+    de: 'eines Blattes, das nicht gelesen wurde',
+    fr: "d'une feuille qui n'a pas été lue",
   },
 };
-const rowWhat = (reason: unknown, lang: Lang): string => {
+/** A reason this file has no words for (a future one): no code is shown to the person, only that the rows were not written. */
+const ROW_WHAT_OTHER: Record<Lang, readonly string[]> = {
+  en: ['that was not written', 'that were not written'],
+  pl: ['który nie został zapisany', 'które nie zostały zapisane', 'które nie zostały zapisane'],
+  de: ['die nicht geschrieben wurde', 'die nicht geschrieben wurden'],
+  fr: ["qui n'a pas été écrite", "qui n'ont pas été écrites"],
+};
+export const rowWhat = (reason: unknown, lang: Lang, count: unknown = 2): string => {
   const code = String(reason);
-  const known = Object.prototype.hasOwnProperty.call(ROW_WHAT, code) ? ROW_WHAT[code] : undefined;
-  if (known !== undefined) return known[lang];
-  return {
-    en: `that were not written (reason: ${code})`,
-    pl: `które nie zostały zapisane (powód: ${code})`,
-    de: `die nicht geschrieben wurden (Grund: ${code})`,
-    fr: `qui n'ont pas été écrites (raison : ${code})`,
-  }[lang];
+  const n = Number(count);
+  const known = Object.prototype.hasOwnProperty.call(ROW_WHAT, code) ? ROW_WHAT[code][lang] : ROW_WHAT_OTHER[lang];
+  return typeof known === 'string' ? known : pluralForm(lang, Number.isFinite(n) ? n : 2, known);
 };
 
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
@@ -1964,7 +2039,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
   }
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, lang) } };
-  if (f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' || f.ruleId === 'CONV-ROW-LEFT-OUT') f = { ...f, params: { ...f.params, what: rowWhat(f.params.reason, lang) } };
+  if (f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' || f.ruleId === 'CONV-ROW-LEFT-OUT') f = { ...f, params: { ...f.params, what: rowWhat(f.params.reason, lang, f.params.count) } };
   if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, lang) } };
   if (f.ruleId === 'CONV-NERC-UNKNOWN' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: shortList(quantityWhat(f.params.what, lang)) } };
   if (f.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: LEVEL_WHAT_WORDS[f.params.what]?.[lang] ?? f.params.what } };

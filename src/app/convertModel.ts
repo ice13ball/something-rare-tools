@@ -62,8 +62,10 @@ export interface SheetChoice {
   dropCopiesFile?: number;
   /** The same for "one occurrence per sample and taxon": the number of groups the companion file recorded. */
   totalOnceFile?: number;
-  /** The reasons the user answered "leave these rows out and list them" for (CONV-ROW-NOT-UNDERSTOOD). Starts empty; never prefilled. */
-  leaveOut?: string[];
+  /** The reasons the user answered "leave these rows out and list them" for (CONV-ROW-NOT-UNDERSTOOD), each with the number of rows it was given for. Starts empty; never prefilled. */
+  leaveOut?: { reason: string; count: number }[];
+  /** The number of rows the user's tick "these are real counts" covered (the page's answer and a companion file's alike). The converter honours it only when today's analysis finds the same number. */
+  realCountsFile?: number;
   /** The same answers as a companion file recorded them (the reason, the rows of that reason and the rows of the sheet): honoured by the converter only when today's numbers are the same. */
   leaveOutFile?: { reason: string; count: number; rows: number }[];
 }
@@ -257,18 +259,19 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRows: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
 }
 
 /** What a companion file recorded for a sheet that the converter checks against today's numbers (never a tick): copies, repeated totals and the reasons left out. */
-function fileAnswers(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'dropCopiesFile' | 'totalOnceFile' | 'leaveOutFile'> {
+function fileAnswers(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'dropCopiesFile' | 'totalOnceFile' | 'leaveOutFile' | 'realCountsFile'> {
+  const real = settings.realCountsRows?.find((x) => x.sheet === sheet);
   const copies = settings.dropCopiesRows?.find((x) => x.sheet === sheet);
   const once = settings.totalOnceGroups?.find((x) => x.sheet === sheet);
   const left = (settings.leaveOut ?? []).filter((x) => x.sheet === sheet).map((x) => ({ reason: x.reason, count: x.count, rows: x.rows }));
-  return { ...(copies === undefined ? {} : { dropCopiesFile: copies.count }), ...(once === undefined ? {} : { totalOnceFile: once.count }), ...(left.length === 0 ? {} : { leaveOutFile: left }) };
+  return { ...(copies === undefined ? {} : { dropCopiesFile: copies.count }), ...(once === undefined ? {} : { totalOnceFile: once.count }), ...(left.length === 0 ? {} : { leaveOutFile: left }), ...(real === undefined ? {} : { realCountsFile: real.count }) };
 }
 
 /**
@@ -283,11 +286,10 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   const castTicked = new Set(parsed.settings.profileIgnoreCast ?? []);
   const asTable = new Set(parsed.settings.transposedAsTable ?? []);
   const presence = new Set(parsed.settings.presenceOnly ?? []);
-  const real = new Set(parsed.settings.realCounts ?? []);
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: real.has(sh.name), dropCopies: false, ...fileAnswers(parsed.settings, sh.name) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name) };
     }
   }
   return out;
@@ -331,9 +333,19 @@ export function presenceSettingsOf(parsed: ConvertParseResult, choices: Record<s
 
 /** The names of the sheets in use whose repeated per-taxon total the user chose to write once per sample and taxon: what the companion file keeps (nothing but names). */
 /** The names of the sheets in use where the user declared the equal quantities real counts / chose to drop the exact copies: what the companion file keeps (nothing but names). */
-export function sheetFlagSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, flag: 'realCounts' | 'dropCopies'): string[] {
+export function sheetFlagSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, flag: 'dropCopies'): string[] {
   const out: string[] = [];
   for (const f of parsed.files) for (const sh of f.sheets) if (choices[sheetKey(f.fileId, sh.name)]?.use === true && choices[sheetKey(f.fileId, sh.name)]?.[flag] === true && !out.includes(sh.name)) out.push(sh.name);
+  return out;
+}
+
+/** The sheets in use where the user said "these are real counts", each with the number of rows the tick covered: what the companion file keeps. */
+export function realCountsRowsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { sheet: string; count: number }[] {
+  const out: { sheet: string; count: number }[] = [];
+  for (const f of parsed.files) for (const sh of f.sheets) {
+    const c = choices[sheetKey(f.fileId, sh.name)];
+    if (c?.use === true && c.realCountsFile !== undefined && !out.some((o) => o.sheet === sh.name)) out.push({ sheet: sh.name, count: c.realCountsFile });
+  }
   return out;
 }
 

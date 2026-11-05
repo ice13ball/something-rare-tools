@@ -27,7 +27,9 @@ import type { ParsedFile } from '../types';
  *   presenceOnly=<sheet>  the sheet of that name was ticked "This is a list of species found (presence only, no counts)". A PRE-TICK only; the user can undo it on the page. A sheet name, never a value.
  *   totalOnce=<sheet>  the sheet of that name repeats a per-taxon total on the rows of its size classes (CONV-QUANTITY-REPEATED) and the user chose to write one occurrence per sample and taxon. A PRE-TICK only; the user can undo it on the page,
  *                     and a sheet without that pattern ignores it. A sheet name, never a value.
- *   realCounts=<sheet>  the user said, on CONV-QUANTITY-REPEATED, that the equal quantities of the sheet of that name are real counts: nothing is looked for there. A PRE-TICK only; a sheet name, never a value.
+ *   realCounts=<sheet>  (old files) the user said, on CONV-QUANTITY-REPEATED, that the equal quantities of the sheet of that name are real counts. Read and ignored: it carries no count, and a tick that switches a check off
+ *                     must hold only for the rows it was given for. See realCountsRows.
+ *   realCountsRows=<count>:<sheet>  the same answer with the number of rows the tick covered. Holds only while today's analysis finds the same number of rows; the page does not tick anything.
  *   dropCopies=<sheet>  the user chose, on CONV-ROW-COPIES, to drop the rows that are exact copies of an earlier row. A PRE-TICK only; a sheet name, never a value.
  *   biomassBasis=<basis>:<sheet>  the biomass / weight columns of the sheet of that name were given the kind of mass <basis> (wet | dry | afdw). A PRE-PICK only: it sets that kind on the biomass
  *                     columns of a sheet of the same name that have none, and the user can change it on the page. A basis word and a sheet name, never a value.
@@ -55,6 +57,7 @@ export const REAL_COUNTS_SETTING = 'realCounts=';
 export const DROP_COPIES_SETTING = 'dropCopies=';
 export const DROP_COPIES_ROWS_SETTING = 'dropCopiesRows=';
 export const TOTAL_ONCE_GROUPS_SETTING = 'totalOnceGroups=';
+export const REAL_COUNTS_ROWS_SETTING = 'realCountsRows=';
 export const LEAVE_OUT_SETTING = 'leaveOut=';
 export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
@@ -83,8 +86,10 @@ export interface ConvertSettings {
   presenceOnly?: string[];
   /** The sheets whose repeated per-taxon total the user chose to write once per sample and taxon, by sheet name. Only present when there is at least one. A pre-tick only. */
   totalOnce?: string[];
-  /** The sheets whose equal quantities the user declared real counts, by sheet name. A pre-tick only. */
+  /** The sheets whose equal quantities the user declared real counts, by sheet name, as an OLD companion file recorded them (no count). Read, never applied: an answer without the rows it was given for cannot be checked. */
   realCounts?: string[];
+  /** The sheets whose equal quantities the user declared real counts, with the number of rows the tick covered. Holds only for the same number. */
+  realCountsRows?: { sheet: string; count: number }[];
   /** The sheets whose exact copies of rows the user chose to drop, by sheet name. A pre-tick only. */
   dropCopies?: string[];
   /** The sheets whose copies the user left out, with the number of copies the analysis found. A pre-tick that holds only for the same count. */
@@ -156,10 +161,11 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v.startsWith(TOTAL_ONCE_SETTING)) addName((settings.totalOnce ??= []), v.slice(TOTAL_ONCE_SETTING.length));
     else if (v.startsWith(REAL_COUNTS_SETTING)) addName((settings.realCounts ??= []), v.slice(REAL_COUNTS_SETTING.length));
     else if (v.startsWith(DROP_COPIES_SETTING)) addName((settings.dropCopies ??= []), v.slice(DROP_COPIES_SETTING.length));
-    else if (v.startsWith(DROP_COPIES_ROWS_SETTING) || v.startsWith(TOTAL_ONCE_GROUPS_SETTING)) {
+    else if (v.startsWith(DROP_COPIES_ROWS_SETTING) || v.startsWith(TOTAL_ONCE_GROUPS_SETTING) || v.startsWith(REAL_COUNTS_ROWS_SETTING)) {
       const copies = v.startsWith(DROP_COPIES_ROWS_SETTING);
-      const m = COUNT.exec(v.slice((copies ? DROP_COPIES_ROWS_SETTING : TOTAL_ONCE_GROUPS_SETTING).length));
-      const list = copies ? (settings.dropCopiesRows ??= []) : (settings.totalOnceGroups ??= []);
+      const real = v.startsWith(REAL_COUNTS_ROWS_SETTING);
+      const m = COUNT.exec(v.slice((copies ? DROP_COPIES_ROWS_SETTING : real ? REAL_COUNTS_ROWS_SETTING : TOTAL_ONCE_GROUPS_SETTING).length));
+      const list = copies ? (settings.dropCopiesRows ??= []) : real ? (settings.realCountsRows ??= []) : (settings.totalOnceGroups ??= []);
       if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[2])) list.push({ sheet: m[2], count: Number(m[1]) });
     } else if (v.startsWith(LEAVE_OUT_SETTING)) {
       const m = LEAVE_OUT.exec(v.slice(LEAVE_OUT_SETTING.length));
@@ -198,7 +204,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.dropCopiesRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${DROP_COPIES_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.totalOnceGroups ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${TOTAL_ONCE_GROUPS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.leaveOut ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME && /^[a-z][a-z-]{0,40}$/.test(c.reason)).slice(0, MAX_SETTING_SHEETS * 8).map((c) => line([SETTING_ROW, `${LEAVE_OUT_SETTING}${c.reason}:${c.count}:${c.rows}:${c.sheet}`, '', '', ''])),
-      ...(settings.realCounts ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${REAL_COUNTS_SETTING}${n}`, '', '', ''])),
+      ...(settings.realCountsRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${REAL_COUNTS_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.dropCopies ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${DROP_COPIES_SETTING}${n}`, '', '', ''])),
       ...(settings.totalOnce ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TOTAL_ONCE_SETTING}${n}`, '', '', ''])),
       ...(settings.presenceOnly ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${PRESENCE_ONLY_SETTING}${n}`, '', '', ''])),

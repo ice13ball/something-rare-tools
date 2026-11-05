@@ -106,12 +106,21 @@ export interface ConvertSheetInput {
    * the check runs and the question is open (the answer of a file cannot switch a check off for rows it never saw). Ignored when `dropCopies` is true.
    */
   dropCopiesCount?: number;
-  /** The choice "write one occurrence per sample and taxon" as a companion file recorded it, with the number of groups it was given for (the same rule as `dropCopiesCount`). */
+  /**
+   * The choice "write one occurrence per sample and taxon", with the number of groups it was given for (the same rule as `dropCopiesCount`). The number is `collapsedGroups` of the analysis
+   * (the groups the choice writes once), the same one CONV-QUANTITY-REPEATED-ONCE reports and the companion file keeps.
+   */
   totalOnceCount?: number;
   /**
-   * The reasons the user answered "leave these rows out and list them" for (notWritten.ts: only a reason that blocks can be answered). Never prefilled, never a default.
+   * The choice "these are real counts", with the number of rows the tick covered (the rows of the groups that repeat the total, `affected`). Honoured only when today's analysis finds the same number of
+   * rows; otherwise the checks run and the question is open (a tick must not switch a check off for rows it never saw).
    */
-  leaveOut?: readonly string[];
+  realCountsRows?: number;
+  /**
+   * The reasons the user answered "leave these rows out and list them" for (notWritten.ts: only a reason that blocks can be answered). Never prefilled, never a default. A reason given with its count
+   * holds only while the sheet has the same number of rows of that reason; a bare reason holds whatever the count (for callers that are not the page).
+   */
+  leaveOut?: readonly (string | { reason: string; count: number })[];
   /** The same answers as a companion file recorded them: the reason, the lines it affected and the rows of the sheet. Honoured only when both numbers are the same today (the question reopens otherwise). */
   leaveOutFile?: readonly { reason: string; count: number; rows: number }[];
 }
@@ -1715,22 +1724,23 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     const ragged = raggedLines(file, sheet.name);
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
-    const analyse = (drop: boolean) =>
+    const analyse = (drop: boolean, real: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: sin.realCounts === true, dropCopies: drop })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop })
         : {};
-    let analysis = analyse(sin.dropCopies === true);
-    // An answer of a companion file that switches a check off (drop the copies, take a total once) is honoured only when today's analysis finds the count the file recorded with it
+    let analysis = analyse(sin.dropCopies === true, sin.realCounts === true);
+    // An answer that switches a check off (drop the copies, take a total once, real counts) is honoured only when today's analysis finds the count it was given for
     let copiesFromFile = false;
     if (sin.dropCopies !== true && sin.dropCopiesCount !== undefined && analysis.copies?.copyLines.length === sin.dropCopiesCount) {
       copiesFromFile = true;
-      analysis = analyse(true);
+      analysis = analyse(true, sin.realCounts === true);
     }
+    if (sin.realCounts !== true && sin.realCountsRows !== undefined && analysis.total?.affected.size === sin.realCountsRows) analysis = analyse(copiesFromFile || sin.dropCopies === true, true);
     const repeated = analysis.total;
     const sameValue = analysis.same;
     const copies = analysis.copies;
     const specimenCopies = analysis.specimenCopies;
-    const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.groups === sin.totalOnceCount));
+    const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.collapsedGroups === sin.totalOnceCount));
     const dropCopies = copies !== undefined && (sin.dropCopies === true || copiesFromFile);
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
     const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(dropCopies ? copies.copyLines : [])]);
@@ -1868,7 +1878,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             !rowHasSomething(row)
               ? 'nothing-to-record'
               : sin.shape === 'wide'
-                ? 'no-code'
+                ? // no measured value and no sample code: a spacer, a station header or a comment row is understood and listed (a row that holds a value goes on to the sample code check below)
+                  rowHasPosition(row)
+                  ? 'position-no-taxon'
+                  : 'sample-no-taxon'
                 : taxonCellText !== undefined && cols.quantity === undefined && !presence
                   ? 'taxon-no-quantity'
                   : rowHasValue(row)
@@ -2449,7 +2462,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...left].sort((a, b) => a - b), params: { ...common, count: left.size, groups: repeated.collapsedGroups, lost: repeated.lostColumns.join(', ') || repeated.differs } }));
         }
         if (repeated.disagree.length > 0) {
-          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes' } }));
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes', collapsed: repeated.collapsedGroups, covered: repeated.affected.size } }));
         }
       } else {
         findings.push(
@@ -2458,7 +2471,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             field: repeated.columns[0].header,
             value: repeated.example,
             lines: [...repeated.affected].sort((a, b) => a - b),
-            params: { ...common, count: repeated.groups, of: repeated.of, ...(repeated.alternative === undefined ? {} : { alternative: repeated.alternative }) },
+            params: { ...common, count: repeated.groups, of: repeated.of, collapsed: repeated.collapsedGroups, covered: repeated.affected.size, ...(repeated.alternative === undefined ? {} : { alternative: repeated.alternative }) },
           }),
         );
       }

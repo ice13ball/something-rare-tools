@@ -23,7 +23,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, realCountsRowsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -303,11 +303,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setChoices((prev) => {
       const c = prev[key];
       if (c === undefined) return prev;
-      // "Leave these rows out and list them": the answer of the person, for this reason in this sheet. Never given by the page itself.
-      if (choice === 'leaveOut') return reason === undefined || (c.leaveOut ?? []).includes(reason) ? prev : { ...prev, [key]: { ...c, leaveOut: [...(c.leaveOut ?? []), reason] } };
+      // "Leave these rows out and list them": the answer of the person, for this reason in this sheet, for the number of rows the button named. Never given by the page itself.
+      if (choice === 'leaveOut') {
+        const count = Number(f.params.count);
+        if (reason === undefined || !Number.isInteger(count)) return prev;
+        const rest = (c.leaveOut ?? []).filter((a) => a.reason !== reason);
+        return { ...prev, [key]: { ...c, leaveOut: [...rest, { reason, count }] } };
+      }
       // "Ask again": takes back an answer, whether it was given here or read from the companion file (the question and the acceptance start again)
       if (choice === 'askAgain') {
-        if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((r) => r !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
+        if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((a) => a.reason !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
         if (f.ruleId === 'CONV-ROW-COPIES-DROPPED') {
           const { dropCopiesFile: _d, ...rest } = c;
           return { ...prev, [key]: { ...rest, dropCopies: false } };
@@ -318,7 +323,17 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         }
         return prev;
       }
-      return { ...prev, [key]: { ...c, [choice]: true } };
+      // The other answers switch a check off (or take rows out), so each is kept with the number it was given for, from the question itself: the converter honours it only while its own analysis finds
+      // the same number, and the question reopens otherwise. The tick itself is never set by the page.
+      const bound: Record<'totalOnce' | 'realCounts' | 'dropCopies', { field: 'totalOnceFile' | 'realCountsFile' | 'dropCopiesFile'; param: string }> = {
+        totalOnce: { field: 'totalOnceFile', param: 'collapsed' },
+        realCounts: { field: 'realCountsFile', param: 'covered' },
+        dropCopies: { field: 'dropCopiesFile', param: 'count' },
+      };
+      const b = bound[choice];
+      const n = Number(f.params[b.param]);
+      if (!Number.isInteger(n)) return prev;
+      return { ...prev, [key]: { ...c, [b.field]: n } };
     });
   };
 
@@ -695,7 +710,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
     const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
     const presenceOnly = parsed ? presenceSettingsOf(parsed, choices, mappings) : [];
-    const realCounts = parsed ? sheetFlagSettingsOf(parsed, choices, 'realCounts') : [];
+    const realCountsRows = parsed ? realCountsRowsOf(parsed, choices) : [];
     // The answers that switch a check off or leave rows out are kept WITH the number they were given for, read from the findings that say them (copies left out, a total taken once, rows left out):
     // a companion file holds only while today's analysis finds the same number, so the question reopens for another file
     const said = (view?.findings ?? []).filter((f) => f.sheet !== undefined);
@@ -705,7 +720,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCounts.length > 0 ? { realCounts } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (

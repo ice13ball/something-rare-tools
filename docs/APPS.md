@@ -1702,15 +1702,23 @@ nothing blocks on it, it adds no finding, and it is never written into the archi
 - **Sheets that are not converted** have a line each: not read (long environmental, turned, a units row that was not folded), not used (its box is not ticked, a dictionary sheet is off by default).
   While anything stops the export (a blocking finding, a missing metadata field, a warning not accepted, nothing to write) the page says "would be written". The list of columns shows 50 and a button for the rest.
 - **Nothing disappears** (`convert/notWritten.ts`): the ledger's reasons are sorted into three kinds. *Blocks until someone decides* (`CONV-ROW-NOT-UNDERSTOOD`, once per sheet and reason, with the lines and a few cells):
-  a value with an empty parameter, a parameter repeated in one sample, a number or weight with no taxon, a row of the wrong length, a value the event of its row did not take, and a row with no explanation (a reason this file
-  does not know blocks as well). The one answer is "leave these rows out and list them" (`CONV-ROW-LEFT-OUT`, with "ask again" to take it back) or a corrected file; nothing is prefilled. *Covered*: the reason already
-  has a blocking finding of its own that names the lines (no sample code, a negative count, a duplicate event ...), so it does not block twice. *Listed, no block*: zeros, statistic rows, copies and repeated totals the person
-  chose to leave out, a row with a position or a sample name and no taxon, NA cells, quality flags. Every line not written, and every written line that lost a cell other than a zero, is in
-  `<archive name>-not-written.csv` (columns: file, sheet, line, reason, status `understood | left-out | needs-decision`, detail, then every original cell; a header row opens each sheet; a sheet left out as a whole has a
-  line of its own). It is offered by a button beside Export and in the ledger panel with the same count, whether or not the export is blocked, and is never downloaded by itself; it is not part of the archive. Formula-like cells
-  get the leading apostrophe that `readConvertFile` takes off. The companion file keeps the answers as `leaveOut=<reason>:<count>:<rows>:<sheet>`, `dropCopiesRows=` and `totalOnceGroups=`, and the converter uses one only where
-  the count and the rows of the sheet are the same today. "Leave out the copies" and "count the total once" start unticked. The worker judges the export again from the request alone. A column set to ignore that holds a
-  value is named by `CONV-COLUMN-IGNORED` (information, no acceptance), up to 20 names. No text advises deleting data: `test/rules/noDeleteAdvice.test.ts` searches the English texts for the words and allows a named list.
+  a value with an empty parameter, a parameter repeated in one sample, a number or weight with no taxon (`no-taxon`, `value-no-taxon`), a row of the wrong length, a value the event of its row did not take, and a row or a
+  cell with no explanation (`unexplained`, a fault of the converter; a reason this file does not know blocks as well). The one answer is "leave these rows out and list them" (`CONV-ROW-LEFT-OUT`, with "ask again" to take
+  it back) or a corrected file; nothing is prefilled. Leaving out a repeated parameter writes the first value and lists the later ones. *Covered*: the reason has a blocking rule of its own (no sample code, a negative count,
+  a duplicate event ...), which is the decision, so our question is never raised beside it (only when no such rule stands for the sheet at all). *Listed, no block*: zeros, statistic rows, copies and repeated totals the person
+  chose to leave out, a row with a position or a sample name and no taxon or value (a spacer, a station header or a comment row, on a wide sheet as on a long one), NA cells, quality flags.
+  **Every answer holds for the number it was given for**, whether it comes from the page or from a companion file: leaving rows out (the rows of that reason; a file also the rows of the sheet), leaving copies out (the copies),
+  taking a total once (`collapsedGroups`, the groups the answer writes once, the same number `CONV-QUANTITY-REPEATED-ONCE` reports) and "real counts" (`affected`, the rows of the groups that repeat the total). If today's
+  analysis finds another number the answer is not applied and the question is open. The page never ticks anything itself. The companion file keeps `leaveOut=<reason>:<count>:<rows>:<sheet>`, `dropCopiesRows=<count>:<sheet>`,
+  `totalOnceGroups=<count>:<sheet>` and `realCountsRows=<count>:<sheet>`; the old `realCounts=<sheet>` carries no count: it is read and not applied.
+  `<archive name>-not-written.csv` lists every line not written and every written line that lost a cell (columns: file, sheet, line, reason, status `understood | left-out | needs-decision`, detail, then every original cell; a header
+  row opens each sheet). A written line that lost cells has reason `cells-not-written` and names the columns and why in `detail` (an NA or a text where a number should be, on a wide sheet or a long one; zeros are counted, not
+  named). A date-formatted cell keeps its serial and `detail` adds `date: <column>: <ISO date>`, read the way the converter reads it (1904 workbooks included). A sheet left out whole (not used, or not read) is one `sheet` line with
+  its count of rows, not row by row. The list is offered by a button beside Export and in the ledger panel with the same count (rows not written or not written whole), whether or not the export is blocked, and is never
+  downloaded by itself; it is not part of the archive. Formula-like cells get the leading apostrophe that `readConvertFile` takes off. "Leave out the copies" and "count the total once" start unticked. The worker judges the
+  export again from the request alone. A column set to ignore that holds a value is named by `CONV-COLUMN-IGNORED` (information, no acceptance), up to 20 names; a column that `CONV-ID-DUPLICATE` names as the ignored column
+  that tells rows apart is named there only. No text advises deleting data: `test/rules/noDeleteAdvice.test.ts` searches the English rule texts, page texts and tips (and the other languages for their words) and allows a
+  named list.
 - Limits: the ledger is built on every conversion of the page (one pass over the cells, a byte per cell and column; a wide 2000 x 1000 sheet is checked by `test/perf/wide.perf.ts`, under 1300 ms per
   convert). It does not say that the contents are right, only where each row and number went.
 
