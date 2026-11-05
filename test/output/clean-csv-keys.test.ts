@@ -80,8 +80,8 @@ describe('a long sheet: the column that tells rows apart is written', () => {
     const out = toCleanCsv(ds);
     expect(ds.extraKeyColumns).toBeUndefined();
     expect(parse(out.csv).header.some((h) => /pressure/i.test(h))).toBe(false);
-    expect(left(out.sidecar)).toEqual(['source columns that are not in this file: Pressure [dbar]']);
-    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there: Pressure [dbar] (4 rows)');
+    expect(left(out.sidecar)).toEqual([]);
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there: Pressure [dbar] (4 rows, column not written)');
   });
 
   it('rows stay aligned with their cell after a give-way, a blank value and a skipped row', () => {
@@ -216,12 +216,13 @@ describe('every source column the clean CSV does not contain is named', () => {
     expect(left(out.sidecar)).toEqual([]);
   });
 
-  it('a pressure the sheet cannot carry is named, the comment beside it is written', () => {
+  it('a pressure the sheet cannot carry is named in the differ note as not written, the comment beside it is written', () => {
     const ds = build(manyLong('Pressure [dbar],Comment', (s, p) => `${s}${['Corg', 'Ntot', 'Ptot'].indexOf(p)}.50,ok`));
     const out = toCleanCsv(ds);
     expect(parse(out.csv).header.slice(-1)).toEqual(['Comment']);
     expect(parse(out.csv).header.some((h) => /pressure/i.test(h))).toBe(false);
-    expect(left(out.sidecar)).toEqual(['source columns that are not in this file: Pressure [dbar]']);
+    expect(left(out.sidecar)).toEqual([]);
+    expect(notes(out.sidecar).filter((n) => n.includes('differ within'))).toEqual(['source columns that differ within a row, left empty there: Pressure [dbar] (4 rows, column not written)']);
   });
 
   it('the sidecar lists a written extra column with its original name and unit', () => {

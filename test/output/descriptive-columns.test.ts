@@ -6,8 +6,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripTrailingColumns } from '../../scripts/csv-strip';
-import { sidecarProblems, sidecarRecords } from '../../scripts/sidecar-invariant';
-import { buildDataset, buildDatasets } from '../../src/core/dataset';
+import { sidecarProblems, sidecarRecords, unquoteField, type InvariantContext } from '../../scripts/sidecar-invariant';
+import { buildDataset, buildDatasets, unwrittenColumns } from '../../src/core/dataset';
 import { toCleanCsv } from '../../src/core/output/csv';
 import { parseFile } from '../../src/core/parse';
 import { UI } from '../../src/core/i18n/ui';
@@ -40,6 +40,16 @@ const notes = (sidecar: string): string[] => parse(sidecar).rows.filter((r) => r
 const text = (t: string, name = 's.csv') => textFile(name, t);
 const without = (ds: Dataset): Dataset => ({ ...ds, descriptiveColumns: undefined });
 
+/** What the sidecar invariant needs: the columns the base listed as not in the file (sheet, place, header), the new headers, and the source columns that may leave the note. */
+function invariantContext(ds: Dataset, base: Dataset, written: string[]): InvariantContext {
+  return {
+    manySheets: ds.mappings.length > 1,
+    before: unwrittenColumns(base).filter((c) => c.partial === undefined).map(({ sheet, index, header }) => ({ sheet, index, header })),
+    written,
+    removed: [...(ds.descriptiveColumns ?? []).flatMap((d) => d.sources.map(({ sheet, index }) => ({ sheet, index }))), ...(ds.descriptiveLeftEmpty ?? []).map(({ sheet, index }) => ({ sheet, index }))],
+  };
+}
+
 /**
  * The invariant: the CSV without its trailing descriptive columns is the CSV the dataset gave before they existed, and the sidecar differs only by (a) the mapping rows of the new columns, (b) the columns now
  * written leaving the "not in this file" note, (c) the new "differ within a row" notes.
@@ -52,7 +62,7 @@ function expectOnlyTrailing(ds: Dataset): void {
   const before = toCleanCsv(base!);
   expect(stripTrailingColumns(out.csv, k)).toBe(before.csv);
   const head = parse(out.csv).header;
-  expect(sidecarProblems(sidecarRecords(before.sidecar), sidecarRecords(out.sidecar), head.slice(head.length - k), (ds.descriptiveColumns ?? []).map((d) => d.header))).toEqual([]);
+  expect(sidecarProblems(sidecarRecords(before.sidecar), sidecarRecords(out.sidecar), invariantContext(ds, base!, head.slice(head.length - k)))).toEqual([]);
 }
 
 describe('a descriptive column is written after the variables, as the file has it', () => {
@@ -218,8 +228,8 @@ describe('a lookup sheet lends its descriptive columns', () => {
     const ds = run(sites, data);
     const out = toCleanCsv(ds);
     expect(parse(out.csv).header.filter((h) => /area|gear/i.test(h))).toEqual([]);
-    expect(notes(out.sidecar)).toContain('source columns that are not in this file (sheet Sites): Area | Gear');
-    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there (sheet Sites): Gear (2 rows)');
+    expect(notes(out.sidecar)).toContain('source columns that are not in this file (sheet Sites): Area');
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there (sheet Sites): Gear (2 rows, column not written)');
     expectOnlyTrailing(ds);
   });
 });
@@ -233,6 +243,85 @@ describe('Excel cells are written by the rules of the key columns', () => {
     expect(header.slice(-2)).toEqual(['Sampled', 'Count']);
     expect(out.map((r) => r.slice(-2))).toEqual([['2020-06-01T12:00', '7'], ['2020-06-02T06:00:00.250', '8']]);
     expectOnlyTrailing(ds);
+  });
+});
+
+describe('the sidecar invariant knows a column by its sheet and its place, never by its header', () => {
+  const side = (...lines: string[]): string[] => ['original_column,output_column,unit,unit_source,p01', ...lines];
+  const NOTE = (sheet: string, names: string): string => `(note),source columns that are not in this file (sheet ${sheet}): ${names},,,`;
+  const ctx = (over: Partial<InvariantContext>): InvariantContext => ({ manySheets: true, before: [], written: [], removed: [], ...over });
+
+  it('Q1: a same-named column of another sheet that was NOT written must not leave its note', () => {
+    const before = side(NOTE('A', 'Fjord'), NOTE('B', 'Fjord'));
+    const c = ctx({ before: [{ sheet: 'A', index: 5, header: 'Fjord' }, { sheet: 'B', index: 5, header: 'Fjord' }], written: ['Fjord'], removed: [{ sheet: 'A', index: 5 }] });
+    expect(sidecarProblems(before, side('Fjord,Fjord,,,', NOTE('B', 'Fjord')), c)).toEqual([]);
+    expect(sidecarProblems(before, side('Fjord,Fjord,,,'), c)).not.toEqual([]);
+  });
+
+  it('a repeated header with one copy written: only that copy leaves the note', () => {
+    const before = side('(note),source columns that are not in this file: Notes | Notes,,,');
+    const c = ctx({ manySheets: false, before: [{ sheet: 'S', index: 5, header: 'Notes' }, { sheet: 'S', index: 6, header: 'Notes' }], written: ['Notes'], removed: [{ sheet: 'S', index: 5 }] });
+    expect(sidecarProblems(before, side('Notes,Notes,,,', '(note),source columns that are not in this file: Notes,,,'), c)).toEqual([]);
+    expect(sidecarProblems(before, side('Notes,Notes,,,'), c)).not.toEqual([]);
+    expect(sidecarProblems(before, side('Notes,Notes,,,', '(note),source columns that are not in this file: Notes | Notes,,,'), c)).not.toEqual([]);
+  });
+
+  it('a header with a comma and a quote is compared by what it says, quoted in the files', () => {
+    const header = 'Area, "km2"';
+    const t = ['Station,Latitude,Longitude,Date,Temp [°C],"Area, ""km2"""', 'S1,49.4,0.2,2020-06-01,11.2,big', 'S2,49.5,0.3,2020-06-02,10.4,small'].join('\n');
+    const ds = build(text(t));
+    expect(ds.descriptiveColumns?.map((d) => d.header)).toEqual([header]);
+    expectOnlyTrailing(ds);
+    expect(parse(toCleanCsv(ds).csv).header.slice(-1)).toEqual([header]);
+    // the golden tool reads the header from the raw CSV text: unquoted it is the same
+    expect(unquoteField('"Area, ""km2"""')).toBe(header);
+  });
+
+  it('the real builds: a repeated header with one copy written, a second sheet whose column is blank', () => {
+    const rep = build(text(['Station,Latitude,Longitude,Date,Temp [°C],Notes,Notes', 'S1,49.4,0.2,2020-06-01,11.2,a,', 'S2,49.5,0.3,2020-06-02,10.4,b,'].join('\n')));
+    expectOnlyTrailing(rep);
+    expect(notes(toCleanCsv(rep).sidecar)).toContain('source columns that are not in this file: Notes');
+    const mk = (s: string, fj: string) => [['Station', 'Latitude', 'Longitude', 'Date', 'Temp [°C]', 'Fjord'], [`${s}1`, 49.4, 0.2, '2020-06-01', 10, fj], [`${s}2`, 49.5, 0.3, '2020-06-02', 11, fj]];
+    const two = build(xlsxFile('two.xlsx', { A: mk('A', 'Nord'), B: mk('B', '') }));
+    expectOnlyTrailing(two);
+    const n = notes(toCleanCsv(two).sidecar);
+    expect(n).toContain('source columns that are not in this file (sheet B): Fjord');
+    expect(n.filter((x) => x.includes('(sheet A)'))).toEqual([]);
+  });
+});
+
+describe('a differ note names the sheet whose rows disagree', () => {
+  const long = (s: string, fj: (st: number, p: string) => string): (string | number)[][] => {
+    const r: (string | number)[][] = [['Station', 'Latitude', 'Longitude', 'Date', 'Parameter', 'Value', 'Fjord']];
+    for (let st = 1; st <= 3; st++) for (const p of ['Corg', 'Ntot', 'Ptot']) r.push([`${s}${st}`, 49.4 + st / 10, 0.2, `2020-06-0${st}`, p, st + 0.5, fj(st, p)]);
+    return r;
+  };
+  const differ = (ds: Dataset): string[] => notes(toCleanCsv(ds).sidecar).filter((n) => n.includes('differ within'));
+
+  it('only B disagrees: the note says sheet B, not A (the first sheet of the shared column)', () => {
+    const ds = build(xlsxFile('two.xlsx', { A: long('A', () => 'Nord'), B: long('B', (st, p) => (st === 1 ? `x${p}` : 'Sund')) }));
+    expect(differ(ds)).toEqual(['source columns that differ within a row, left empty there (sheet B): Fjord (1 row)']);
+    expectOnlyTrailing(ds);
+  });
+
+  it('both disagree: one note per sheet, with its own count', () => {
+    const ds = build(xlsxFile('two.xlsx', { A: long('A', (st, p) => (st <= 2 ? `x${p}` : 'Nord')), B: long('B', (st, p) => (st === 1 ? `x${p}` : 'Sund')) }));
+    expect(differ(ds)).toEqual(['source columns that differ within a row, left empty there (sheet A): Fjord (2 rows)', 'source columns that differ within a row, left empty there (sheet B): Fjord (1 row)']);
+  });
+});
+
+describe('a join has its own cache: two tables joined to one sheet on different keys', () => {
+  it('a value that is a Station for A and a Sample for B reads its own rows', () => {
+    const sites = [['Station', 'Sample', 'Latitude', 'Longitude', 'Fjord'], ['X1', 'Y1', 70.1, 15.2, 'ofStation'], ['Y1', 'X1', 60.2, 5.4, 'ofSample']];
+    const a = [['Station', 'Date', 'Temp [°C]'], ['X1', '2020-06-01', 4.5]];
+    const b = [['Sample', 'Date', 'Temp [°C]'], ['X1', '2020-06-02', 5.5]];
+    const file = xlsxFile('book.xlsx', { Sites: sites as never, A: a as never, B: b as never });
+    const layout = proposeLayout(file);
+    layout.joins = [{ left: 'A', right: 'Sites', leftKey: 0, rightKey: 0 }, { left: 'B', right: 'Sites', leftKey: 0, rightKey: 1 }];
+    const ds = buildDataset(file, layout, proposeMappings(file, layout), [], 'd').dataset;
+    const { header, rows } = parse(toCleanCsv(ds).csv);
+    expect(header[header.length - 1]).toBe('Fjord');
+    expect(rows.map((r) => r[r.length - 1])).toEqual(['ofStation', 'ofSample']);
   });
 });
 

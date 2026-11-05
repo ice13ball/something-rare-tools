@@ -1561,7 +1561,7 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
   const roundedBy = new Map<string, { sheet: string; header: string; count: number; maxMs: number }>();
   const ignored = new Map<string, Set<number>>();
   const ownIds = new Set<string>();
-  interface Pending { col: DescriptiveColumn; index: number; sheet: RawSheet; own: TableRec | undefined; lenders: TableRec[]; tally: (cell: RawCell, out: RawCell) => void }
+  interface Pending { differ: number; col: DescriptiveColumn; index: number; sheet: RawSheet; own: TableRec | undefined; lenders: TableRec[]; tally: (cell: RawCell, out: RawCell) => void }
   const pending: Pending[] = [];
   for (const sheetName of [...new Set(none.map((c) => c.sheet))]) {
     const sheet = file.sheets.find((x) => x.name === sheetName);
@@ -1583,7 +1583,7 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
       if (same !== undefined && !(own !== undefined && ownIds.has(id) && same.sheet !== sheetName)) id = `${c.header}#${sheetName}#${c.index}`;
       if (own !== undefined) ownIds.add(id);
       let col = columns.get(id);
-      if (col === undefined) columns.set(id, (col = { id, header: c.header, sheet: sheetName, index: c.index, values: new Array<RawCell>(total).fill(null), differ: 0 }));
+      if (col === undefined) columns.set(id, (col = { id, header: c.header, sheet: sheetName, index: c.index, values: new Array<RawCell>(total).fill(null), sources: [] }));
       const dated = sheet.dateAll?.[c.index] === true;
       const shown = dated && columnFractions(sheet, c.index, sheet.fractionShown?.[c.index] === true).shown;
       // a date or time cell whose text is rounded to the second and that is WRITTEN is counted, once per source cell (the sidecar note about rounded cells)
@@ -1597,12 +1597,13 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
         if (off > t.maxMs) t.maxMs = off;
         roundedBy.set(key, t);
       };
-      pending.push({ col, index: c.index, sheet, own, lenders, tally });
+      pending.push({ differ: 0, col, index: c.index, sheet, own, lenders, tally });
     }
   }
 
   // 1. the columns of tables: the cell of the row (wide), or the cell the source rows of a row agree on (long)
-  for (const { col, sheet, own, tally, index } of pending.filter((x) => x.own !== undefined)) {
+  for (const p of pending.filter((x) => x.own !== undefined)) {
+    const { col, sheet, own, tally, index } = p;
     const t = own!;
     if (t.sourceRow === undefined) {
       for (let i = 0; i < t.count; i++) {
@@ -1629,29 +1630,29 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
         } else if (String(text).trim() !== String(kept).trim()) {
           clash[n] = 1;
           col.values[at] = null;
-          col.differ++;
+          p.differ++;
         }
       }
       if (first) for (let n = 0; n < t.count; n++) if (col.values[t.start + n] !== null) tally(first[n], col.values[t.start + n]);
     }
   }
 
-  // 2. the columns of lookup sheets, read from EVERY right row the key points at (position or date ambiguity does not matter here): the value they agree on, empty where they differ
+  // 2. the columns of lookup sheets, read from EVERY right row the join key points at (position or date ambiguity does not matter here): the value they agree on, empty where they differ.
+  // The cache of a resolved key belongs to ONE join (one table, its key columns): two tables joined to the same sheet on different keys never share an entry.
   const CONFLICT = Symbol('conflict');
   for (const sheetName of new Set(pending.filter((x) => x.own === undefined).map((x) => x.sheet.name))) {
     const mine = pending.filter((x) => x.own === undefined && x.sheet.name === sheetName);
-    const lenders = mine[0].lenders;
-    // per column and key: the written value, or CONFLICT, or null (nothing); a right row is tallied once
-    const resolved = mine.map(() => new Map<string, RawCell | typeof CONFLICT>());
     const counted = mine.map(() => new Set<RawRow>());
-    for (const t of lenders) {
+    for (const t of mine[0].lenders) {
       const lookup = t.lookup!;
+      const resolved = mine.map(() => new Map<string, RawCell | typeof CONFLICT>());
       for (let i = 0; i < t.count; i++) {
         const parts = keyPartsOf(t.reps[i], lookup.leftKeys);
         const k = parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
         const group = k === undefined ? undefined : lookup.rowsOfKey.get(k);
         if (k === undefined || group === undefined) continue;
-        mine.forEach(({ col, sheet, tally, index }, m) => {
+        mine.forEach((p, m) => {
+          const { col, sheet, tally, index } = p;
           let got = resolved[m].get(k);
           if (got === undefined) {
             got = null;
@@ -1674,27 +1675,32 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
             }
             resolved[m].set(k, got);
           }
-          if (got === CONFLICT) col.differ++;
+          if (got === CONFLICT) p.differ++;
           else if (got !== null) col.values[t.start + i] = got;
         });
       }
     }
   }
 
-  // 3. a column is written when at least one cell is; a column every cell of which was emptied by disagreement, or that holds nothing in the rows that reach the output, is not written
-  // and stays in the list of columns that are not in the file (the disagreement is counted, too)
-  const written = new Set<DescriptiveColumn>();
-  for (const { col } of pending) {
-    if (col.values.some((v) => v !== null)) written.add(col);
-    else {
-      columns.delete(col.id);
-      if (col.differ > 0) emptied.push({ header: col.header, sheet: col.sheet, differ: col.differ });
+  // 3. a source column "wrote" when at least one cell of its own rows is written; it is "read" when it wrote or lost cells to disagreement. A column that is written (by any of its sheets) is in the CSV; the sheets
+  // that wrote nothing stay in "not in this file" (an all-blank column of a second sheet too), unless they were read and emptied by disagreement, which the differ note then names ("column not written").
+  const spans = (p: Pending): [number, number][] => (p.own ? [[p.own.start, p.own.start + p.own.count]] : p.lenders.map((t) => [t.start, t.start + t.count] as [number, number]));
+  const wrote = (p: Pending): boolean => spans(p).some(([from, to]) => { for (let i = from; i < to; i++) if (p.col.values[i] !== null) return true; return false; });
+  const writtenCols = new Set<DescriptiveColumn>();
+  for (const p of pending) if (wrote(p)) writtenCols.add(p.col);
+  for (const p of pending) {
+    if (writtenCols.has(p.col)) {
+      if (wrote(p) || p.differ > 0) p.col.sources.push({ sheet: p.sheet.name, index: p.index, differ: p.differ });
+      if (wrote(p) || p.differ > 0) taken.push({ sheet: p.sheet.name, index: p.index });
+    } else if (p.differ > 0) {
+      emptied.push({ header: p.col.header, sheet: p.sheet.name, index: p.index, differ: p.differ });
+      taken.push({ sheet: p.sheet.name, index: p.index });
     }
   }
-  for (const p of pending) if (written.has(p.col)) taken.push({ sheet: p.sheet.name, index: p.index });
+  for (const p of pending) if (!writtenCols.has(p.col)) columns.delete(p.col.id);
   if (columns.size > 0) ds.descriptiveColumns = [...columns.values()];
   if (emptied.length > 0) ds.descriptiveLeftEmpty = emptied;
-  // what is written is no longer "not in this file"
+  // what is written (or named as not written) is no longer "not in this file"
   if (taken.length > 0 && ds.readColumns) {
     for (const rec of ds.readColumns) {
       const add = taken.filter((x) => x.sheet === rec.sheet).map((x) => x.index);

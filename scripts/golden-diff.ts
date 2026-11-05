@@ -39,7 +39,7 @@
  */
 import { createHash } from 'node:crypto';
 import { rawRecords, stripTrailingColumns } from './csv-strip';
-import { sidecarProblems, sidecarRecords } from './sidecar-invariant';
+import { sidecarProblems, sidecarRecords, unquoteField } from './sidecar-invariant';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -128,18 +128,31 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
   const { parseFile } = await load<typeof import('../src/core/parse')>('src/core/parse/index.ts');
   const { proposeColumns } = await load<typeof import('../src/core/recognize/columns')>('src/core/recognize/columns.ts');
   const { proposeLayout, proposeMappings } = await load<typeof import('../src/core/recognize/layout')>('src/core/recognize/layout.ts');
-  const { buildDatasets } = await load<typeof import('../src/core/dataset')>('src/core/dataset.ts');
+  const { buildDatasets, unwrittenColumns } = await load<typeof import('../src/core/dataset')>('src/core/dataset.ts');
   const { toCleanCsv } = await load<typeof import('../src/core/output/csv')>('src/core/output/csv.ts');
   const sha = (t: string): string => createHash('sha1').update(t).digest('hex').slice(0, 12);
   // what the clean CSV and its sidecar come to (a hash each, and the header line): a changed output shows even when no finding moved
   // `core` is the hash of the CSV without the trailing descriptive columns (their number is `Dataset.descriptiveColumns`, absent before they existed: then core = csv); `descriptive` names them
-  // `sidecarLines` and `sources` (the source headers of the trailing columns) feed the sidecar side of the invariant; they hold column names, notes and counts, never a cell value
-  const cleanOf = (d: Parameters<typeof toCleanCsv>[0]): { header: string; csv: string; core: string; descriptive: string[]; sources: string[]; sidecarLines: string[]; sidecar: string } => {
+  // `sidecarLines`, `unwritten` (the columns the "not in this file" note lists) and `removed` (the source columns the new columns, or a differ note, take out of it) feed the sidecar side of the invariant;
+  // they hold column names, places, notes and counts, never a cell value
+  type Clean = { header: string; csv: string; core: string; descriptive: string[]; unwritten: { sheet: string; index: number; header: string }[]; removed: { sheet: string; index: number }[]; manySheets: boolean; sidecarLines: string[]; sidecar: string };
+  const cleanOf = (d: Parameters<typeof toCleanCsv>[0]): Clean => {
     const out = toCleanCsv(d);
-    const desc = (d as { descriptiveColumns?: { header: string }[] }).descriptiveColumns ?? [];
-    const k = desc.length;
+    const ds = d as { descriptiveColumns?: { sources: { sheet: string; index: number }[] }[]; descriptiveLeftEmpty?: { sheet: string; index: number }[]; mappings: unknown[] };
+    const k = ds.descriptiveColumns?.length ?? 0;
     const head = rawRecords(out.csv)[0] ?? [];
-    return { header: out.csv.slice(0, out.csv.indexOf('\n')), csv: sha(out.csv), core: sha(stripTrailingColumns(out.csv, k)), descriptive: head.slice(head.length - k), sources: desc.map((x) => x.header), sidecarLines: sidecarRecords(out.sidecar), sidecar: sha(out.sidecar) };
+    const removed = [...(ds.descriptiveColumns ?? []).flatMap((x) => x.sources.map(({ sheet, index }) => ({ sheet, index }))), ...(ds.descriptiveLeftEmpty ?? []).map(({ sheet, index }) => ({ sheet, index }))];
+    return {
+      header: out.csv.slice(0, out.csv.indexOf('\n')),
+      csv: sha(out.csv),
+      core: sha(stripTrailingColumns(out.csv, k)),
+      descriptive: head.slice(head.length - k).map(unquoteField),
+      unwritten: unwrittenColumns(d).filter((c) => c.partial === undefined).map(({ sheet, index, header }) => ({ sheet, index, header })),
+      removed,
+      manySheets: ds.mappings.length > 1,
+      sidecarLines: sidecarRecords(out.sidecar),
+      sidecar: sha(out.sidecar),
+    };
   };
   const { runInput } = await load<typeof import('../test/golden/pipeline')>('test/golden/pipeline.ts');
   const land = decodeLandMask(new Uint8Array(gunzipSync(readFileSync(join(repo, 'src', 'core', 'geo', 'land-mask.bin')))));
@@ -191,7 +204,7 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         const bytes = new Uint8Array(readFileSync(f));
         const file = parseFile(f.split('/').pop() as string, bytes);
         // what the app builds from the file as it proposes it: the rows and the values of every dataset (a change that drops measurements shows here)
-        let built: { label: string; rows: number; values: number; clean: { header: string; csv: string; core: string; descriptive: string[]; sources: string[]; sidecarLines: string[]; sidecar: string } }[] | undefined;
+        let built: { label: string; rows: number; values: number; clean: Clean }[] | undefined;
         try {
           const layout0 = proposeLayout(file);
           built = buildDatasets(file, layout0, proposeMappings(file, layout0), [], 'x').datasets.map((d) => ({ label: d.label, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0), clean: cleanOf(d) }));
@@ -298,7 +311,7 @@ function compare(beforePath: string, afterPath: string, all: boolean): number {
  * Only trailing columns may differ. Prints, per dataset that has them, the number and the names of the trailing columns (header names, never values). Returns the number of mismatches.
  */
 function invariant(beforePath: string, afterPath: string): number {
-  type Clean = { csv: string; core: string; descriptive?: string[]; sources?: string[]; sidecarLines?: string[]; header: string };
+  type Clean = { csv: string; core: string; descriptive?: string[]; unwritten?: { sheet: string; index: number; header: string }[]; removed?: { sheet: string; index: number }[]; manySheets?: boolean; sidecarLines?: string[]; header: string };
   type Built = { label: string; rows: number; clean: Clean }[];
   const A = JSON.parse(readFileSync(beforePath, 'utf8')) as Record<string, { built?: Built }>;
   const B = JSON.parse(readFileSync(afterPath, 'utf8')) as Record<string, { built?: Built }>;
@@ -319,7 +332,7 @@ function invariant(beforePath: string, afterPath: string): number {
       if (names.length > 0) { withColumns++; columns += names.length; process.stdout.write(`  ${key} [${db.label}]: ${names.length} descriptive column(s): ${names.join(' | ')}` + '\n'); }
       if (da.clean.csv !== db.clean.core || da.rows !== db.rows) { bad++; process.stdout.write(`MISMATCH ${key} [${db.label}]: the CSV without its trailing columns is not the before CSV` + '\n'); }
       if (da.clean.sidecarLines !== undefined && db.clean.sidecarLines !== undefined) {
-        const problems = sidecarProblems(da.clean.sidecarLines, db.clean.sidecarLines, names, db.clean.sources ?? []);
+        const problems = sidecarProblems(da.clean.sidecarLines, db.clean.sidecarLines, { manySheets: db.clean.manySheets === true, before: da.clean.unwritten ?? [], written: names, removed: db.clean.removed ?? [] });
         sidecarChecked++;
         if (problems.length > 0) { bad++; process.stdout.write(`MISMATCH ${key} [${db.label}]: the sidecar moved beyond the allowed changes: ${problems.length} problem(s), e.g. ${problems[0].slice(0, 160)}` + '\n'); }
       }

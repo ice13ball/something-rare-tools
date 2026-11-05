@@ -225,9 +225,9 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   // descriptive cells left empty on purpose (the rows the source rows, or the rows of a joined sheet, disagree on): said per sheet and column, with the header the column has in the CSV
   const rowsOf = (n: number): string => `${n} ${n === 1 ? 'row' : 'rows'}`;
   const emptied: { sheet: string; label: string }[] = [
-    ...(ds.descriptiveColumns ?? []).map((d, k) => ({ sheet: d.sheet, label: d.differ > 0 ? `${descriptiveHeaders[k]} (${rowsOf(d.differ)})` : '' })),
-    ...(ds.descriptiveLeftEmpty ?? []).map((d) => ({ sheet: d.sheet, label: `${d.header} (${rowsOf(d.differ)})` })),
-  ].filter((x) => x.label !== '');
+    ...(ds.descriptiveColumns ?? []).flatMap((d, k) => d.sources.filter((x) => x.differ > 0).map((x) => ({ sheet: x.sheet, label: `${descriptiveHeaders[k]} (${rowsOf(x.differ)})` }))),
+    ...(ds.descriptiveLeftEmpty ?? []).map((d) => ({ sheet: d.sheet, label: `${d.header} (${rowsOf(d.differ)}, column not written)` })),
+  ];
   for (const sheet of [...new Set(emptied.map((x) => x.sheet))]) {
     const where = ds.mappings.length > 1 ? ` (sheet ${sheet})` : '';
     notes.push(`source columns that differ within a row, left empty there${where}: ${emptied.filter((x) => x.sheet === sheet).map((x) => x.label).join(' | ')}`);
