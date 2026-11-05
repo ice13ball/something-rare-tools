@@ -27,6 +27,8 @@ export interface SampleKeyPickerProps {
   onPrefix: (value: string) => void;
   /** What the ticked columns would make, from the converter itself; undefined while it is being asked, null when nothing is ticked. */
   report: SheetKeyReport | null | undefined;
+  /** The companion file had saved keys that fit this sheet more than once: none was applied. */
+  ambiguous?: boolean;
   /** A failed count: the message, shown with a button to count again. */
   error?: string;
   onRetry?: () => void;
@@ -43,7 +45,7 @@ const nameOf = (c: KeyColumn): string => (c.header.trim() === '' ? t('convert.ke
  * The picker of the sample key: the columns that together say which rows are one sample, with the converter's own count of what they make. Nothing is ticked for the person, no column is
  * proposed, and nothing reaches the conversion until "Use this key" is pressed.
  */
-export function SampleKeyPicker({ sheet, columns, picked, inUse, prefix, inUsePrefix, onPrefix, report, error, onRetry, onToggle, onUse, onClear }: SampleKeyPickerProps): React.ReactElement {
+export function SampleKeyPicker({ sheet, columns, picked, inUse, prefix, inUsePrefix, onPrefix, ambiguous, report, error, onRetry, onToggle, onUse, onClear }: SampleKeyPickerProps): React.ReactElement {
   const { lang } = useLang();
   const [all, setAll] = useState(false);
   const shown = all ? columns : columns.filter((c, i) => i < SHOWN || picked.includes(c.index));
@@ -57,6 +59,7 @@ export function SampleKeyPicker({ sheet, columns, picked, inUse, prefix, inUsePr
         {t('convert.key.legend', { sheet })} <InfoTip id="convertKey" />
       </legend>
       <p>{t('convert.key.help')}</p>
+      {ambiguous === true && inUse.length === 0 ? <p className="warning">{t('convert.key.ambiguous')}</p> : null}
       <ul className="convert-key-columns">
         {shown.map((c) => (
           <li key={c.index}>

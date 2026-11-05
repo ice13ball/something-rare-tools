@@ -431,7 +431,10 @@ export function createConvertHandler(): ConvertHandler {
   function previewKey(req: Extract<ConvertRequest, { type: 'previewKey' }>): SheetKeyReport | null {
     const target = req.body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet);
     if (target === undefined || !Array.isArray(req.columns)) return null;
-    const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns, ...(target.sampleKey?.prefix === undefined ? {} : { prefix: target.sampleKey.prefix }) }, sampleKeyFromFile: false } : s)) };
+    // the name as typed at the picker (the preview is what "Use this key" will give), else the one the request carries
+    const typed = typeof req.prefix === 'string' ? req.prefix.trim() : '';
+    const previewPrefix = typed !== '' && typed.length <= MAX_KEY_PREFIX ? typed : target.sampleKey?.prefix;
+    const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns, ...(previewPrefix === undefined ? {} : { prefix: previewPrefix }) }, sampleKeyFromFile: false } : s)) };
     const sheets = inputsOf(body);
     const at = body.sheets.indexOf(body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet) as (typeof body.sheets)[number]);
     const input = sheets[at];

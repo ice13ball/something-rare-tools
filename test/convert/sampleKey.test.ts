@@ -508,6 +508,13 @@ describe('the key contract: a key column is a column that says which sample, wha
       expect(ids(casts([1, 2]), 'CONV-KEY-MIXED-NUMBERS')).toEqual([]);
       expect(ids(casts(['1', '1.50']), 'CONV-KEY-MIXED-NUMBERS')).toEqual([]);
       expect(ids(casts([1, 'x1']), 'CONV-KEY-MIXED-NUMBERS')).toEqual([]);
+      // a typed integer beside integers written as text cannot split a sample: typed 1 and "1", typed 1 and "1.0" are one code
+      for (const cells of [[1, '1'], [1, '2', 3], [1, '1.0', 2], [1, '1.00']]) expect(ids(casts(cells as Cell[]), 'CONV-KEY-MIXED-NUMBERS'), JSON.stringify(cells)).toEqual([]);
+      // a pair that reads as one number and gives two codes is named: typed 1.5 against "1.50", typed 1 against "01"
+      expect(ids(casts([1, '01']), 'CONV-KEY-MIXED-NUMBERS')[0].params.examples).toBe('1, 01');
+      expect(ids(casts([2, 1.5, '1.50', '7']), 'CONV-KEY-MIXED-NUMBERS')[0].params.examples).toBe('1.5, 1.50');
+      // the file's own separator
+      expect(ids(casts([1.5, '1,50'], true), 'CONV-KEY-MIXED-NUMBERS')[0].params.examples).toBe('1.5, 1,50');
     });
   });
 });

@@ -309,12 +309,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       const gen = previewGen.current;
       const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMetadataOf(EMPTY_METADATA), ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       for (const [k, cols] of todo) {
-        const sig = `${gen}:${cols.join()}`;
+        const typed = (keyPrefixDraft[k] ?? choices[k]?.sampleKeyPrefix ?? '').trim();
+        const sig = `${gen}:${cols.join()}:${typed}`;
         if (previewAsked.current.get(k) === sig) continue;
         previewAsked.current.set(k, sig);
         setKeyPreviewError((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
         const [fileId, sheet] = k.split('\u0000');
-        engine.previewKey(body, fileId, sheet, cols).then(
+        engine.previewKey(body, fileId, sheet, cols, typed === '' ? undefined : typed).then(
           (report) => {
             if (previewAsked.current.get(k) === sig) setKeyPreview((prev) => ({ ...prev, [k]: { cols, report } }));
           },
@@ -325,7 +326,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks, keyDraft, previewRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks, keyDraft, keyPrefixDraft, previewRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
@@ -1201,6 +1202,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                         inUsePrefix={inUse.length > 0 ? (choices[key]?.sampleKeyPrefix ?? defaultPrefix) : undefined}
                         onPrefix={(v) => setKeyPrefixDraft((prev) => ({ ...prev, [key]: v }))}
                         report={report}
+                        ambiguous={choices[key]?.sampleKeyAmbiguous === true}
                         {...(keyPreviewError[key] === undefined ? {} : { error: keyPreviewError[key] })}
                         onRetry={() => {
                           previewAsked.current.delete(key);

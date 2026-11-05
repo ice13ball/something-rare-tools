@@ -440,6 +440,16 @@ describe('the worker', () => {
     const run = h.handle({ type: 'convert', body: { sheets: [{ ...sheet, sampleKey: { columns: [0, 1] } }], options: {}, approvedSplits: {} } } as never) as { keys: unknown[] };
     expect(p).toEqual(run.keys[0]);
     expect(p).toMatchObject({ samples: 4, rows: 12 });
+    // the name as typed at the picker is used by the preview, so its count of too-long IDs is the one "Use this key" gives
+    const h2 = createConvertHandler();
+    const wide = h2.handle({ type: 'parse', files: [{ name: 'wide.csv', bytes: new TextEncoder().encode(csvOf(HEADER, [['s'.repeat(150), 1, '2021-08-01', 70.1, 20.2, TAXA[0], 3]])), source: 'dropped' }] } as never) as typeof parsed;
+    const wf = wide.files[0];
+    const wsheet = { fileId: wf.fileId, sheet: wf.sheets[0].name, mapping: wf.mappings[0], shape: 'long', quantity: { kind: 'count' } };
+    const wbody = { sheets: [wsheet], options: {}, approvedSplits: {} } as never;
+    const asked = (prefix?: string) => h2.handle({ type: 'previewKey', body: wbody, fileId: wf.fileId, sheet: wsheet.sheet, columns: [0, 1], ...(prefix === undefined ? {} : { prefix }) } as never) as { tooLong: number };
+    expect(asked().tooLong).toBe(0);
+    expect(asked('N'.repeat(100)).tooLong).toBeGreaterThan(0);
+    expect(asked('  ').tooLong).toBe(0);
     // a column that is not one of the sheet: no key
     expect(h.handle({ type: 'previewKey', body, fileId: f.fileId, sheet: sheet.sheet, columns: [99] } as never)).toBeNull();
     expect(h.handle({ type: 'previewKey', body, fileId: f.fileId, sheet: 'nope', columns: [0] } as never)).toBeNull();

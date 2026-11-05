@@ -78,6 +78,8 @@ export interface SheetChoice {
   sampleKeyFromFile?: boolean;
   /** The name every sample ID of the key starts with, as the person saw it (and may have changed it); kept in the companion file so that a renamed file keeps its IDs. */
   sampleKeyPrefix?: string;
+  /** The companion file has saved keys that fit this sheet more than once (several keys, or one key for several sheets): none was applied and the picker says so. */
+  sampleKeyAmbiguous?: true;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -284,6 +286,33 @@ function fileAnswers(settings: ConvertParseResult['settings'], sheet: string): P
   return { ...(copies === undefined ? {} : { dropCopiesFile: copies.count }), ...(once === undefined ? {} : { totalOnceFile: once.count }), ...(left.length === 0 ? {} : { leaveOutFile: left }), ...(real === undefined ? {} : { realCountsFile: real.count }) };
 }
 
+type SavedKey = NonNullable<ConvertParseResult['settings']['sampleKey']>[number];
+const TABLE_NAME = /\.(csv|tsv|tab|txt)$/i;
+
+/**
+ * The saved key (companion file) that belongs to a sheet of this drop, or why none is applied.
+ *  1. The name first: an entry with the sheet's name that fits (same number of rows, every column found again) is the sheet's. An entry with its name but another number of rows is the sheet's too, and does not hold.
+ *  2. A table file (not a workbook) whose name is in no entry may be a renamed file. An entry of a table file (its sheet name is a table file name) that belongs by name to no sheet of this drop and fits by
+ *     columns and rows is applied only when it is the ONLY such entry that fits this sheet and no other table file of the drop without a name match fits it too. Otherwise none is applied and the sheet
+ *     says the question is open because several saved keys fit.
+ *  3. A workbook entry never matches a table file by columns alone, and a workbook sheet is known by its name only.
+ */
+function savedKeyFor(parsed: ConvertParseResult, file: ConvertParseResult['files'][number], sheet: ConvertParseResult['files'][number]['sheets'][number]): { kind: 'found'; entry: SavedKey } | { kind: 'ambiguous' } | { kind: 'none' } {
+  const entries = parsed.settings.sampleKey ?? [];
+  const fits = (k: SavedKey, sh: { header: string[]; rowCount: number }): boolean => k.rows === sh.rowCount && resolveKeyHashes(sh.header, k.hashes) !== undefined;
+  const named = entries.find((k) => k.sheet === sheet.name);
+  if (named !== undefined) return fits(named, sheet) ? { kind: 'found', entry: named } : { kind: 'none' };
+  const all = parsed.files.flatMap((f) => f.sheets.map((sh) => ({ f, sh })));
+  const renamable = (f: typeof file, sh: typeof sheet): boolean => f.kind !== 'xlsx' && f.sheets.length === 1 && !entries.some((k) => k.sheet === sh.name);
+  if (!renamable(file, sheet)) return { kind: 'none' };
+  const free = entries.filter((k) => TABLE_NAME.test(k.sheet) && !all.some((o) => o.sh.name === k.sheet));
+  const mine = free.filter((k) => fits(k, sheet));
+  if (mine.length === 0) return { kind: 'none' };
+  if (mine.length > 1) return { kind: 'ambiguous' };
+  const rivals = all.filter((o) => !(o.f === file && o.sh === sheet) && renamable(o.f, o.sh) && fits(mine[0], o.sh));
+  return rivals.length === 0 ? { kind: 'found', entry: mine[0] } : { kind: 'ambiguous' };
+}
+
 /**
  * The initial choices: every sheet used (except one that looks like a data dictionary: it starts unticked, with a note), the shape the overlay suggests (wide when it cannot tell), nothing declared. The profile mark and the approval of depth-based level
  * IDs start OFF; only a companion file of THIS drop that names the sheet pre-ticks them (the approval only on a sheet that is marked), and the suggestion of the overlay
@@ -300,12 +329,10 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
       // a key a companion file recorded holds only when every column is found again by its hash and the sheet has the same number of rows; otherwise the question is open
-      // the sheet of a table file is called after the file, so a renamed file is the same sheet: for such a file the columns and the number of rows decide (a workbook's sheet is known by its name)
-      const nameless = f.kind !== 'xlsx' && f.sheets.length === 1;
-      const same = profile ? [] : (parsed.settings.sampleKey ?? []).filter((k) => k.rows === sh.rowCount && (k.sheet === sh.name || nameless));
-      const saved = same.find((k) => k.sheet === sh.name) ?? same.find((k) => resolveKeyHashes(sh.header, k.hashes) !== undefined);
+      const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
+      const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;

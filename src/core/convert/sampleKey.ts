@@ -97,8 +97,8 @@ export function keyPrefixOf(key: SampleKey, kind: string, fileName: string, shee
 }
 
 /**
- * Key columns that mix typed numbers (a spreadsheet cell) with number-like TEXT (a text that reads as a number in the file's own way): such cells are compared differently, so one sample may be split in
- * two ("1.5" typed and "1.50" written are two values). Date and time columns are not looked at (the date reader makes them one). Returns the column and a typed example and a text example.
+ * Key columns where a typed number (a spreadsheet cell) and a text that reads as the SAME number give DIFFERENT codes: a typed 1.5 and the text "1.50" are one number and two samples. A typed 1 beside
+ * the text "1" (or "1.0") give one code, so they are not looked at. Date and time columns are not looked at (the date reader makes them one). Returns the column and the first such pair (typed, text).
  */
 export function mixedKeyColumns(sheet: RawSheet, columns: readonly number[], decimalComma: boolean, roleOf: (index: number) => string): { index: number; examples: [string, string] }[] {
   const out: { index: number; examples: [string, string] }[] = [];
@@ -106,15 +106,27 @@ export function mixedKeyColumns(sheet: RawSheet, columns: readonly number[], dec
   for (const index of columns) {
     const role = roleOf(index);
     if (role === 'date' || role === 'datetime' || role === 'time' || sheet.dateFormatted?.[index] === true || sheet.timeFormatted?.[index] === true) continue;
-    let typed: string | undefined;
-    let text: string | undefined;
+    const typed = new Map<number, string>();
+    const texts = new Map<number, { code: string; text: string }[]>();
     for (const row of sheet.rows) {
       const cell = row.cells[index] ?? null;
-      if (typeof cell === 'number') typed ??= String(cell);
-      else if (typeof cell === 'string' && like.test(cell.trim())) text ??= cell.trim();
-      if (typed !== undefined && text !== undefined) break;
+      if (typeof cell === 'number') {
+        if (Number.isFinite(cell) && !typed.has(cell)) typed.set(cell, String(cell));
+      } else if (typeof cell === 'string' && like.test(cell.trim())) {
+        const t = cell.trim();
+        const n = Number(decimalComma ? t.replace(',', '.') : t);
+        const list = texts.get(n) ?? texts.set(n, []).get(n)!;
+        const code = codeText(t, decimalComma);
+        if (!list.some((x) => x.code === code)) list.push({ code, text: t });
+      }
     }
-    if (typed !== undefined && text !== undefined) out.push({ index, examples: [typed, text] });
+    for (const [n, tCode] of typed) {
+      const other = (texts.get(n) ?? []).find((x) => x.code !== tCode);
+      if (other !== undefined) {
+        out.push({ index, examples: [tCode, other.text] });
+        break;
+      }
+    }
   }
   return out;
 }

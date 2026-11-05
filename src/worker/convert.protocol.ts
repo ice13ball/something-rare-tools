@@ -213,7 +213,7 @@ export interface ConvertProtocol {
   export: { req: { export: ExportBody }; res: ExportResult };
   notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
   /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
-  previewKey: { req: { body: ConvertRequestBody; fileId: string; sheet: string; columns: number[] }; res: SheetKeyReport | null };
+  previewKey: { req: { body: ConvertRequestBody; fileId: string; sheet: string; columns: number[]; prefix?: string }; res: SheetKeyReport | null };
 }
 
 export type ConvertRequestType = keyof ConvertProtocol;
@@ -234,5 +234,5 @@ export interface ConvertEngine {
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
   notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
-  previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[]): Promise<SheetKeyReport | null>;
+  previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[], prefix?: string): Promise<SheetKeyReport | null>;
 }
