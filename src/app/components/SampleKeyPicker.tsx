@@ -23,6 +23,9 @@ export interface SampleKeyPickerProps {
   inUse: number[];
   /** What the ticked columns would make, from the converter itself; undefined while it is being asked, null when nothing is ticked. */
   report: SheetKeyReport | null | undefined;
+  /** A failed count: the message, shown with a button to count again. */
+  error?: string;
+  onRetry?: () => void;
   onToggle: (index: number) => void;
   onUse: () => void;
   onClear: () => void;
@@ -36,7 +39,7 @@ const nameOf = (c: KeyColumn): string => (c.header.trim() === '' ? t('convert.ke
  * The picker of the sample key: the columns that together say which rows are one sample, with the converter's own count of what they make. Nothing is ticked for the person, no column is
  * proposed, and nothing reaches the conversion until "Use this key" is pressed.
  */
-export function SampleKeyPicker({ sheet, columns, picked, inUse, report, onToggle, onUse, onClear }: SampleKeyPickerProps): React.ReactElement {
+export function SampleKeyPicker({ sheet, columns, picked, inUse, report, error, onRetry, onToggle, onUse, onClear }: SampleKeyPickerProps): React.ReactElement {
   const { lang } = useLang();
   const [all, setAll] = useState(false);
   const shown = all ? columns : columns.filter((c, i) => i < SHOWN || picked.includes(c.index));
@@ -71,7 +74,17 @@ export function SampleKeyPicker({ sheet, columns, picked, inUse, report, onToggl
       {picked.length === 0 ? <p>{t('convert.key.none')}</p> : <p>{t('convert.key.order', { columns: order })}</p>}
       {picked.length > 0 ? (
         <div aria-live="polite" data-testid="key-preview">
-          {report === undefined ? <p>{t('convert.key.working')}</p> : null}
+          {report === undefined && error === undefined ? <p>{t('convert.key.working')}</p> : null}
+          {error !== undefined ? (
+            <p className="warning">
+              {t('convert.key.failed', { message: error })}{' '}
+              {onRetry ? (
+                <button type="button" className="button" onClick={onRetry}>
+                  {t('convert.key.retry')}
+                </button>
+              ) : null}
+            </p>
+          ) : null}
           {report === null ? <p className="warning">{t('convert.key.noReport')}</p> : null}
           {report !== undefined && report !== null ? (
             <>

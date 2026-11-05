@@ -7,10 +7,14 @@ import type { SheetKeyReport } from './sampleKey';
 /**
  * What a picked sample key makes of one sheet: how many samples and how many rows in each. This is not a second reading of the key: it runs the converter and reports what the converter made
  * (ConvertResult.keys), so the preview of the page and the export cannot count differently (rows the export leaves out - summary rows, rows with no key - are left out here too).
- * `others` are the other sheets of the same request, so that the numbers are those of the real run; the key of THIS sheet is the one of `input`. undefined when the sheet carries no key.
+ * `others.sheets` are the sheets of the whole request IN THEIR ORDER; the sheet of `input` (same file and sheet name) is replaced there by `input`, so the run is the export's run with this key
+ * in place; when it is not among them it is added last. undefined when the sheet carries no key.
  */
 export function previewSampleKey(input: ConvertSheetInput, others: Partial<ConvertInput> = {}): SheetKeyReport | undefined {
   if (input.sampleKey === undefined) return undefined;
-  const r = convert({ options: {}, ...others, sheets: [...(others.sheets ?? []), input] });
+  const same = (s: ConvertSheetInput): boolean => s.sheet === input.sheet && s.file.fileName === input.file.fileName;
+  const given = others.sheets ?? [];
+  const sheets = given.some(same) ? given.map((s) => (same(s) ? input : s)) : [...given, input];
+  const r = convert({ options: {}, ...others, sheets });
   return r.keys?.find((k) => k.sheet === input.sheet && k.file === input.file.fileName);
 }

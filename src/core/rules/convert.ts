@@ -22,7 +22,7 @@ import type { RuleSpec } from './spec';
  *   CONV-NEGATIVE-QUANTITY     count            field = column (or the effort column), value = an example, lines = rows
  *   CONV-SAMPLE-CODE-MISSING   count, column    column = the sample-code column ('none' when the sheet has none); lines = the rows without a code
  *   CONV-KEY-PART-BLANK        count, columns   the person picked a sample key (sampleKey.ts); columns = the headers of the key; lines = rows where a part of the key is empty (NA, nan and a dash too)
- *   CONV-KEY-TOO-LONG          count, max       an ID made of the key is longer than max characters; value = the first 60 characters of an example; lines = rows
+ *   CONV-KEY-TOO-LONG          count, max, longest   an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
  *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
@@ -241,14 +241,14 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-KEY-TOO-LONG',
     category: 'B',
     severity: 'error',
-    params: ['count', 'max'],
+    params: ['count', 'max', 'longest'],
     plain: {
-      pl: `Identyfikator próbki z wybranego klucza ma ponad {max} znaków {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}…”. Archiwum Darwin Core nie przyjmuje tak długich identyfikatorów. Wybierz mniej kolumn albo kolumny o krótszych wartościach.`,
-      en: `The sample identifier made from the key you picked is longer than {max} characters in {+lineCount:line|lines} {lines} ({count} in all), e.g. "{value}…". A Darwin Core archive does not take identifiers that long. Pick fewer columns, or columns with shorter values.`,
-      de: `Die aus dem gewählten Schlüssel gebildete Probenkennung ist in {+lineCount:der Zeile|den Zeilen} {lines} länger als {max} Zeichen (insgesamt {count}), z. B. „{value}…“. Ein Darwin-Core-Archiv nimmt so lange Kennungen nicht an. Wählen Sie weniger Spalten oder Spalten mit kürzeren Werten.`,
-      fr: `L'identifiant d'échantillon formé par la clé choisie dépasse {max} caractères {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. « {value}… ». Une archive Darwin Core n'accepte pas d'identifiants aussi longs. Choisissez moins de colonnes, ou des colonnes aux valeurs plus courtes.`,
+      pl: `Identyfikator z wybranego klucza (próbki, powtórzenia lub wystąpienia) ma ponad {max} znaków {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); najdłuższy ma {longest}: „{value}…”. Archiwum Darwin Core nie przyjmuje takich identyfikatorów. Wybierz mniej kolumn albo kolumny o krótszych wartościach.`,
+      en: `An identifier made from the key you picked (of a sample, a replicate or an occurrence) is longer than {max} characters in {+lineCount:line|lines} {lines} ({count} in all); the longest has {longest}: "{value}…". A Darwin Core archive does not take identifiers that long. Pick fewer columns, or columns with shorter values.`,
+      de: `Eine aus dem gewählten Schlüssel gebildete Kennung (von Probe, Replikat oder Vorkommen) ist in {+lineCount:der Zeile|den Zeilen} {lines} länger als {max} Zeichen (insgesamt {count}); die längste hat {longest}: „{value}…“. Ein Darwin-Core-Archiv nimmt das nicht an. Wählen Sie weniger Spalten oder Spalten mit kürzeren Werten.`,
+      fr: `Un identifiant formé par la clé choisie (d'échantillon, de réplicat ou d'occurrence) dépasse {max} caractères {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) ; le plus long en a {longest} : « {value}… ». Une archive Darwin Core ne l'accepte pas. Cochez moins de colonnes ou des valeurs plus courtes.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) get a sample ID longer than {max} characters from the key the user picked (example, first 60 characters: "{value}"). Nothing is shortened or cut: the export is blocked.`,
+    technical: `{file}, {sheet}:{lines}: {count} row(s) get an ID (sample, replicate or occurrence) longer than {max} characters from the key the user picked; the longest has {longest} characters (first 60: "{value}"). Nothing is shortened or cut: the export is blocked.`,
   },
   {
     id: 'CONV-KEY-PICKED',

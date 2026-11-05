@@ -435,7 +435,7 @@ export function createConvertHandler(): ConvertHandler {
     if (input === undefined) return null;
     return (
       previewSampleKey(input, {
-        sheets: sheets.filter((_, i) => i !== at),
+        sheets,
         options: body.options,
         approvedSplits: body.approvedSplits,
         ...(body.worms ? { worms: body.worms } : {}),

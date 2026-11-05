@@ -1600,9 +1600,16 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const readKey =
       pickedKey === undefined
         ? undefined
-        : keyReader(pickedKey, { sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore', ...(specs.station === undefined ? {} : { stationColumn: specs.station.index }), ...(specs.cruise === undefined ? {} : { cruiseColumn: specs.cruise.index }) });
+        : keyReader(pickedKey, { fileName, sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore' });
     const keyBlank = new Lines();
     const keyTooLong = new Lines();
+    // every ID written for a sheet with a picked key is held to the limit of the archive (sample, replicate and occurrence); the longest is named
+    let longestId = '';
+    const noteId = (id: string, line: number): void => {
+      if (pickedKey === undefined || id.length <= MAX_EVENT_ID) return;
+      keyTooLong.add(fileName, sheet.name, '', line);
+      if (id.length > longestId.length) longestId = id;
+    };
 
     // the names of the wide taxon columns: the header without its unit, or the long name of a PANGAEA parameter (core/convert/headers.ts)
     const taxonNames = sin.shape === 'wide' ? taxonColumnNames(file, sheet, cols.taxonHeaders) : new Map<number, TaxonColumnName>();
@@ -1946,7 +1953,6 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
         continue;
       }
       if (keyRead?.blankPart === true) keyBlank.add(fileName, sheet.name, '', row.line);
-      if (pickedKey !== undefined && code.length > MAX_EVENT_ID) keyTooLong.add(fileName, sheet.name, '', row.line, code.slice(0, 60));
       const cruiseText = m.cruise ?? sin.cruise?.trim();
       const cruise = cruiseText === '' ? undefined : cruiseText;
       if (stationText !== undefined) stationRows.push(stationRowOf(fileName, sheet.name, row.line, m, stationText, cruise));
@@ -1965,6 +1971,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       }
       if (cols.replicate) checkText(cols.replicate.header, row.line, replicate);
       const eventId = replicate === undefined ? sampleEventId : `${sampleEventId}:${replicate}`;
+      noteId(eventId, row.line);
       if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined) rowsPerEvent.set(sampleEventId, (rowsPerEvent.get(sampleEventId) ?? 0) + 1);
       const depth = depthOf(row);
       const sf = seafloorOf.read(row);
@@ -2253,6 +2260,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
         checkText(cell.column, row.line, sp.identificationQualifier);
         checkText(cell.column, row.line, sp.lifeStage);
         const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.idText ?? cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
+        noteId(id, row.line);
         const occSource: SourceRef = { ...source, column: cell.column };
         const occ: OccRec = {
           id,
@@ -2419,6 +2427,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
         blank: [...fate.rows.values()].filter((r) => r === 'no-code').length,
         blankParts: keyBlank.entries().reduce((n, e) => n + e.lines.length, 0),
         tooLong: keyTooLong.entries().reduce((n, e) => n + e.lines.length, 0),
+        columns: [...pickedKey.columns],
       });
     }
 
@@ -2497,7 +2506,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     {
       const names = keyColumns(pickedKey).map((i) => sin.mapping.columns.find((c) => c.index === i)?.header.trim() ?? `#${i + 1}`).join(', ');
       for (const e of keyBlank.entries()) findings.push(makeConvertFinding('CONV-KEY-PART-BLANK', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, columns: names } }));
-      for (const e of keyTooLong.entries()) findings.push(makeConvertFinding('CONV-KEY-TOO-LONG', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, max: MAX_EVENT_ID } }));
+      for (const e of keyTooLong.entries()) findings.push(makeConvertFinding('CONV-KEY-TOO-LONG', { file: e.file, sheet: e.sheet, lines: e.lines, value: longestId.slice(0, 60), params: { count: e.lines.length, max: MAX_EVENT_ID, longest: longestId.length } }));
       const report = keyReports.find((k) => k.file === fileName && k.sheet === sheet.name);
       if (report !== undefined) findings.push(makeConvertFinding('CONV-KEY-PICKED', { ...base, params: { samples: report.samples, rows: report.rows, columns: names, ...(sin.sampleKeyFromFile === true ? { fromFile: 'yes' } : {}) } }));
     }

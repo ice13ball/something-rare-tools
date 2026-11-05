@@ -197,7 +197,7 @@ describe('the picker of the sample key', () => {
     const back = await readBack(await bytesOf(zip));
     const events = objects(back.tables['event.txt']);
     const samples = events.filter((e) => e.eventType === 'sample');
-    expect(samples.map((e) => e.eventID).sort()).toEqual(['A|1', 'A|2', 'B|1', 'B|2']);
+    expect(samples.map((e) => e.eventID).sort()).toEqual(['hauls.csv|A|1', 'hauls.csv|A|2', 'hauls.csv|B|1', 'hauls.csv|B|2']);
     expect(back.tables['occurrence.txt'].rows).toHaveLength(12);
     expect(samples).toHaveLength(4);
   });
@@ -209,6 +209,91 @@ describe('the picker of the sample key', () => {
     await load(csvOf(HEADER, rows()), [], seen);
     await settled('The sample code is missing');
     expect(bodies.every((b) => b.body.sheets.every((s) => s.sampleKey === undefined))).toBe(true);
+  });
+});
+
+describe('the preview while the page waits, and when it fails', () => {
+  /** An engine whose previewKey answers when the test says so (and counts its questions). */
+  function slow(real: ConvertEngine) {
+    const calls: { columns: number[]; settle: (how: 'ok' | 'fail') => void }[] = [];
+    const engine: ConvertEngine = {
+      ...real,
+      previewKey: (body, fileId, sheet, columns) =>
+        new Promise((resolve, reject) => {
+          calls.push({
+            columns,
+            settle: (how) => {
+              if (how === 'fail') reject(new Error('worker went away'));
+              else void real.previewKey(body, fileId, sheet, columns).then(resolve, reject);
+            },
+          });
+        }),
+    };
+    return { engine, calls };
+  }
+  const asked = async (calls: unknown[], n: number): Promise<void> => void (await waitFor(() => expect(calls.length).toBe(n)));
+
+  it('shows no numbers while a new count is pending, drops an older answer that comes late, and asks once for each change of the ticks', async () => {
+    const { engine, calls } = slow(createDirectConvertEngine());
+    await load(csvOf(HEADER, rows()), [], engine);
+    await settled('The sample code is missing');
+    tick('Station');
+    await asked(calls, 1);
+    expect(previewText()).toContain(T['convert.key.working']);
+    tick('Cast');
+    await asked(calls, 2);
+    // the answer of the first question comes after the second was asked: it is dropped, the picker still waits
+    calls[0].settle('ok');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(previewText()).toContain(T['convert.key.working']);
+    expect(previewText()).not.toContain('samples of');
+    calls[1].settle('ok');
+    await waitFor(() => expect(previewText()).toContain('4 samples of 12 rows'));
+    // nothing else was asked meanwhile
+    expect(calls).toHaveLength(2);
+  });
+
+  it('a failed count is said at the picker, with a button that counts again', async () => {
+    const { engine, calls } = slow(createDirectConvertEngine());
+    await load(csvOf(HEADER, rows()), [], engine);
+    await settled('The sample code is missing');
+    tick('Station');
+    tick('Cast');
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    const n = calls.length;
+    calls[n - 1].settle('fail');
+    await waitFor(() => expect(previewText()).toContain('The samples could not be counted: worker went away'));
+    expect(previewText()).not.toContain(T['convert.key.working']);
+    // the page itself is not in an error state
+    expect(document.querySelector('.convert-error')).toBeNull();
+    fireEvent.click(within(picker()).getByRole('button', { name: T['convert.key.retry'] }));
+    await asked(calls, n + 1);
+    calls[n].settle('ok');
+    await waitFor(() => expect(previewText()).toContain('4 samples of 12 rows'));
+  });
+
+  it('after "Use this key" the numbers of the OLD key are not shown under the new one while the page counts', async () => {
+    const real = createDirectConvertEngine();
+    let hold: (() => void) | undefined;
+    let holding = false;
+    const engine: ConvertEngine = { ...real, convert: (b) => (holding ? new Promise((resolve, reject) => (hold = () => void real.convert(b).then(resolve, reject))) : real.convert(b)) };
+    await load(csvOf(HEADER, rows()), [], engine);
+    await settled('The sample code is missing');
+    tick('Station');
+    tick('Cast');
+    await waitFor(() => expect(previewText()).toContain('4 samples of 12 rows'));
+    fireEvent.click(useButton());
+    await waitFor(() => expect(item('CONV-KEY-PICKED')).toBeTruthy());
+    // another key: untick Cast, use it, with the main conversion held back
+    tick('Cast');
+    await waitFor(() => expect(previewText()).toContain('2 samples of 12 rows'));
+    holding = true;
+    fireEvent.click(useButton());
+    await waitFor(() => expect(hold).toBeDefined());
+    expect(previewText()).not.toContain('4 samples of 12 rows');
+    expect(previewText()).toContain(T['convert.key.working']);
+    hold!();
+    await waitFor(() => expect(previewText()).toContain('2 samples of 12 rows'));
   });
 });
 

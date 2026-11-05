@@ -9,22 +9,19 @@ import type { RawRow, RawSheet } from '../types';
  * of them. It is read ONLY when the request carries a key for the sheet; without one nothing here is called and the converter takes the sample code from the sample-code column as before.
  * The key is never guessed: no column is proposed, no role is changed, nothing is pre-ticked. (The other way to get codes, the file with proposed codes, stays.)
  *
- * ONE reader of the values: a cell is read the way groupLongSheet (sampleGroups.ts) reads the key of a long sheet, so `1` and `1.0` are one sample; a date cell (the role date or datetime, or
+ * ONE reader of the values: `1` and `1.0` are one sample (codeText); a date cell (the role date or datetime, or
  * a column the workbook formats as a date) goes through the date reader that writes the dates, so an Excel serial and the same date as text are one sample and one ID, and 1904 workbooks are
- * read right; a time column goes through the time reader; an empty cell and the missing tokens of the converter (NA, nan, a dash ...) are blank. A text with a leading zero ("007") stays
- * a text: a code is not a number.
+ * read right; a time column goes through the time reader; an empty cell and the missing tokens of the converter (NA, nan, a dash ...) are blank.
  *
- * The eventID of a key made of columns is the values of those columns, in the order the person picked them, joined with "|":
- *   - it depends on the values and nothing else: the same file and the same answers give the same IDs whatever the order of the rows;
+ * The eventID of a key made of columns is the SHEET, then the values of those columns in the order the person picked them, joined with "|":
+ *   - it depends on the sheet and the values and nothing else: the same file and the same answers give the same IDs whatever the order of the rows, and whatever other sheets are in the run;
  *   - no two different keys give the same ID: "|" and "\\" inside a value are written "\\|" and "\\\\", a tab, a line break and a carriage return "\\t", "\\n" and "\\r" (so the ID is safe in the
  *     tab-separated tables), a blank value is an empty part, and the number of parts is fixed for a sheet, so "a|b" + "c" and "a" + "b|c" stay two samples;
+ *   - the keys of two sheets never meet, and no ID is the ID of a station or a cruise (those carry no sheet). Whether two sheets hold the SAME samples is a question for the person and is not asked here;
  *   - a value is trimmed and in Unicode form NFC (a letter with its accent in one piece or in two is one value); case and inner spaces are kept ("A1" and "a1" are two samples);
  *   - a blank part is part of the key (rows with a blank and rows with a value are different samples) and is said (CONV-KEY-PART-BLANK, to accept); a row whose every part is blank has no
  *     sample (CONV-SAMPLE-CODE-MISSING);
- *   - an ID longer than MAX_EVENT_ID characters blocks (CONV-KEY-TOO-LONG).
- * A key of one column that is the station column (or the cruise column) would give the sample the ID of its own station, which CONV-ID-DUPLICATE always blocks: the sample gets "<value>|sample"
- * instead (a one-part ID never holds an unescaped "|", so this form is no other key's ID of the same sheet).
- * Two sheets that make the same ID are NOT merged and NOT renamed: the converter's own CONV-ID-DUPLICATE names both and blocks (the same rule as for any code the person wrote).
+ *   - an ID written to the archive (sample, replicate or occurrence) longer than MAX_EVENT_ID characters blocks (CONV-KEY-TOO-LONG, which names the longest).
  */
 
 /** What the person picked: the indexes of the columns, in the order picked. */
@@ -49,15 +46,13 @@ export function keyColumns(key: SampleKey | undefined): number[] {
 }
 
 export interface KeyContext {
+  /** The file the sheet is in: the ID of a sample carries the sheet, so keys of two sheets never meet. */
+  fileName: string;
   sheet: RawSheet;
   decimalComma: boolean;
   date1904: boolean;
   /** The kind of the role of a column ('date', 'time', 'station' ...). */
   roleOf: (index: number) => string;
-  /** The column of the station role, if the sheet has one. */
-  stationColumn?: number;
-  /** The column of the cruise role, if the sheet has one. */
-  cruiseColumn?: number;
 }
 
 export interface KeyRead {
@@ -69,14 +64,23 @@ export interface KeyRead {
   parts: string[];
 }
 
-/** A text cell as a code is compared: "1" and "1.0" are one value, "007" is not "7". */
-function codeText(cell: string | number | boolean | Date, decimalComma: boolean): string {
+/**
+ * A cell as a code is compared. A typed number (a spreadsheet cell) is its number. A text is its trimmed self, except an integer written with an all-zero fraction ("1.0", "1.00", "1,0" with a
+ * decimal comma), which is the integer: "1" and "1.0" are one value, and so is a numeric cell 1 and the text "1.0". Nothing else is read as a number: "1.1" and "1.10", "1e1" and "10", "+5" and "5" stay
+ * different, a code with a leading zero ("007") and a code of 16 digits or more stay the text they are.
+ */
+function codeText(cell: string | number | boolean | Date): string {
+  if (typeof cell === 'number') return String(cell);
   const t = String(cell).trim();
   if (t === '') return '';
-  // a code with a leading zero, or with more digits than a number holds exactly, stays the text it is (two long codes must not become one rounded number)
-  if (typeof cell === 'string' && (/^[+-]?0\d/.test(t) || /\d{16}/.test(t))) return t;
-  const p = parseNumber(cell as never, decimalComma);
-  return p.status === 'ok' ? String(p.value) : t;
+  if (/^[+-]?0\d/.test(t) || /\d{16}/.test(t)) return t;
+  const m = /^(-?\d+)[.,]0+$/.exec(t);
+  return m === null ? t : m[1];
+}
+
+/** The part of every ID that tells the sheet: the sheet's name, with the file's when the two differ (a workbook's "Sheet 1" exists in many files). */
+export function keyPrefix(fileName: string, sheetName: string): string {
+  return sheetName === fileName ? sheetName : `${fileName} / ${sheetName}`;
 }
 
 /** One cell of a key column, as the key compares it. '' is blank. */
@@ -97,21 +101,20 @@ export function keyPart(ctx: KeyContext, row: RawRow, index: number, dayOrder: M
     const t = parseTimeCell(cell);
     if (!('error' in t)) return t.text.normalize('NFC');
   }
-  return codeText(cell as string | number, ctx.decimalComma).normalize('NFC');
+  return codeText(cell as string | number).normalize('NFC');
 }
 
 /** The reader of a sheet's sample code under a picked key. */
 export function keyReader(key: SampleKey, ctx: KeyContext): (row: RawRow) => KeyRead {
   const order = new Map<number, ReturnType<typeof detectDayMonthOrder>>();
   const cols = key.columns;
-  // (a key of one column that is the station or the cruise would make the sample's ID the ID of its own station or cruise event)
-  const soleEvent = cols.length === 1 && (ctx.stationColumn === cols[0] || ctx.cruiseColumn === cols[0]);
+  const prefix = keyPrefix(ctx.fileName, ctx.sheet.name);
   return (row) => {
     const parts = cols.map((i) => keyPart(ctx, row, i, order));
     const blanks = parts.filter((p) => p === '').length;
     if (blanks === parts.length) return { id: undefined, blankPart: false, parts };
-    const id = derivedEventId(parts);
-    return { id: soleEvent ? `${id}|sample` : id, blankPart: blanks > 0, parts };
+    // (the sheet is the first part: a key never meets another sheet's, and never the ID of a station or a cruise)
+    return { id: derivedEventId([prefix, ...parts]), blankPart: blanks > 0, parts };
   };
 }
 
@@ -129,6 +132,8 @@ export interface SheetKeyReport {
   blank: number;
   /** Rows with a blank part in the key (said, to accept). */
   blankParts: number;
-  /** Rows whose key-derived ID is longer than MAX_EVENT_ID (blocking). */
+  /** Rows with an ID written to the archive (sample, replicate or occurrence) longer than MAX_EVENT_ID (blocking). */
   tooLong: number;
+  /** The columns the key was made of, in the order picked (the page shows numbers only for the key they belong to). */
+  columns: number[];
 }

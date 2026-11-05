@@ -20,6 +20,9 @@ import type { Cell } from './helpers';
 
 const ids = (r: ReturnType<typeof convert>, rule: string) => r.findings.filter((f) => f.ruleId === rule);
 const key = (...columns: number[]): SampleKey => ({ columns });
+/** The ID of a sample on the sheet `S` of `sheet.csv` (the helpers' default): the sheet comes first. */
+const P = 'sheet.csv / S';
+const idOf = (...parts: string[]): string => [P, ...parts].join('|');
 const sampleIds = (r: ReturnType<typeof convert>): string[] => r.events.filter((e) => e.eventType === 'sample').map((e) => e.id).sort();
 
 /* ---- b08: a station, a time and a cast make one sample; many rows each ---- */
@@ -84,17 +87,21 @@ describe('the eventID of a key made of columns', () => {
       const t = c.trim();
       if (t === '' || ['NA', 'nan', '-'].includes(t)) return '';
       if (/^[-+]?0\d/.test(t)) return `t${NFC(t)}`;
-      if (/^[-+]?\d+(\.\d+)?$/.test(t)) return `n${Number(t)}`;
+      const whole = /^(-?\d+)\.0+$/.exec(t);
+      if (whole !== null) return `n${whole[1]}`;
+      // a text that is a number written the one way a number is written (no sign, no zero tail) is that number; any other text stays text
+      if (/^(0|[1-9]\d*)(\.\d*[1-9])?$/.test(t)) return `n${t}`;
       return `t${NFC(t)}`;
     };
     const sheet = rawSheet(['a', 'b', 'c'], [], 'S');
-    const read = keyReader(key(0, 1, 2), { sheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' });
+    const read = keyReader(key(0, 1, 2), { fileName: 'sheet.csv', sheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' });
     const byId = new Map<string, string>();
     const byCanon = new Map<string, string>();
     for (let i = 0; i < 40000; i++) {
       const cells = [cell(), cell(), cell()];
       const id = read({ line: i + 2, fieldCount: 3, cells }).id ?? '';
       expect(id).not.toMatch(/[\t\n\r]/);
+      if (id !== '') expect(id.startsWith('sheet.csv / S|')).toBe(true);
       const c = JSON.stringify(cells.map(canon));
       // the same canonical row gives the same ID, and two canonical rows never share one
       expect(byCanon.get(c) ?? id, c).toBe(id);
@@ -108,7 +115,7 @@ describe('the eventID of a key made of columns', () => {
   it('one reader of the cells: 1 and 1.0, an accent in one piece or two, blank tokens, a date serial and the same date as text, a 1904 workbook, a code with a leading zero', () => {
     const rows = [['1', 'S'], ['1.0', 'S'], ['é', 'S'], ['é', 'S'], ['NA', 'S'], ['-', 'S'], ['', 'S'], [45581, 'S'], ['2024-10-16', 'S'], ['007', 'S'], ['7', 'S']];
     const sheet = rawSheet(['d', 'k'], rows as Cell[][], 'S', [true, false]);
-    const idOf = (role: string, i: number, date1904 = false): string | undefined => keyReader(key(0, 1), { sheet, decimalComma: false, date1904, roleOf: (c) => (c === 0 ? role : 'ignore') })(sheet.rows[i]).id;
+    const idOf = (role: string, i: number, date1904 = false): string | undefined => keyReader(key(0, 1), { fileName: 'sheet.csv', sheet, decimalComma: false, date1904, roleOf: (c) => (c === 0 ? role : 'ignore') })(sheet.rows[i]).id?.slice('sheet.csv / S|'.length);
     expect(idOf('ignore', 0)).toBe(idOf('ignore', 1));
     expect(idOf('ignore', 2)).toBe(idOf('ignore', 3));
     expect(idOf('ignore', 4)).toBe(idOf('ignore', 5));
@@ -126,7 +133,7 @@ describe('the eventID of a key made of columns', () => {
     expect(idOf('ignore', 10)).toBe('7|S');
     // two long digit codes that a number could not tell apart stay two
     const longSheet = rawSheet(['k'], [['12345678901234567890'], ['12345678901234567891']], 'S');
-    const longId = (i: number): string | undefined => keyReader(key(0), { sheet: longSheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' })(longSheet.rows[i]).id;
+    const longId = (i: number): string | undefined => keyReader(key(0), { fileName: 'sheet.csv', sheet: longSheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' })(longSheet.rows[i]).id?.slice('sheet.csv / S|'.length);
     expect(longId(0)).toBe('12345678901234567890');
     expect(longId(0)).not.toBe(longId(1));
     expect(derivedEventId(['x'])).toBe('x');
@@ -140,7 +147,7 @@ describe('a picked key in the converter (the b08 shape)', () => {
     const r = convert({ sheets: [b08(b08Rows(), KEY3)], options: {} });
     const samples = r.events.filter((e) => e.eventType === 'sample');
     expect(samples).toHaveLength(3 * 2 * 2);
-    expect(samples.map((e) => e.id)).toContain('P1|2012-03-05T00:00:00Z|1');
+    expect(samples.map((e) => e.id)).toContain(idOf('P1', '2012-03-05T00:00:00Z', '1'));
     expect(r.occurrences).toHaveLength(b08Rows().length);
     expect(new Set(r.occurrences.map((o) => o.eventId)).size).toBe(12);
     expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
@@ -222,7 +229,7 @@ describe('a picked key in the converter (the b08 shape)', () => {
 
   it('the guesses about visits and the station prefix are not applied to a key; the key columns are columns the converter reads, and the key is said', () => {
     const r = convert({ sheets: [b08(b08Rows(), KEY3)], options: { prefixStation: true } });
-    expect(sampleIds(r)).toContain('P2|2012-03-06T06:30:00Z|2');
+    expect(sampleIds(r)).toContain(idOf('P2', '2012-03-06T06:30:00Z', '2'));
     expect(ids(r, 'CONV-ID-REVISIT')).toEqual([]);
     const cast = r.ledger[0].columns.find((c) => c.header === 'cast')!;
     expect(cast.to).toBe('event');
@@ -328,34 +335,42 @@ describe('the key contract: a key column is a column that says which sample, wha
     const rs: Cell[][] = [['A', 1, 49.4, 0.2, '2020-06-01', 'Solea solea', 3], ['A', 2, 49.4, 0.2, '2020-06-01', 'Solea solea', 4], ['B', 1, 49.5, 0.3, '2020-06-02', 'Solea solea', 6], ['Total', 1, null, null, null, 'Solea solea', 7], ['Mean', 2, null, null, null, 'Solea solea', 3.5]];
     const r = run(rs, key(0, 1));
     expect(r.occurrences).toHaveLength(3);
-    expect(sampleIds(r)).toEqual(['A|1', 'A|2', 'B|1']);
+    expect(sampleIds(r)).toEqual([idOf('A', '1'), idOf('A', '2'), idOf('B', '1')]);
     expect(ids(r, 'CONV-SUMMARY-ROW-SKIPPED')).toHaveLength(1);
   });
 
-  it('a key of one column that is the station gets an ID of its own, so the obvious answer is not a duplicate-ID block', () => {
+  it('a key of one column that is the station gets an ID of its own (the sheet comes first), so the obvious answer is not a duplicate-ID block', () => {
     const rs: Cell[][] = [['S1', 1, 49.4, 0.2, '2020-06-01', 'Solea solea', 3], ['S1', 1, 49.4, 0.2, '2020-06-01', 'Gadus morhua', 4], ['S2', 1, 49.5, 0.3, '2020-06-02', 'Solea solea', 6]];
     const r = run(rs, key(0), { ...edit, Station: { kind: 'station' } });
-    expect(sampleIds(r)).toEqual(['S1|sample', 'S2|sample']);
+    expect(sampleIds(r)).toEqual([idOf('S1'), idOf('S2')]);
     expect(r.events.filter((e) => e.eventType === 'station').map((e) => e.id).sort()).toEqual(['S1', 'S2']);
     expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
     expect(judge(r.findings).blocking.map((f) => f.ruleId)).not.toContain('CONV-ID-DUPLICATE');
-    // a key of one column that is NOT the station keeps the plain value
     const other = run(rs, key(4), { ...edit, Station: { kind: 'station' } });
-    expect(sampleIds(other)).toEqual(['2020-06-01', '2020-06-02']);
+    expect(sampleIds(other)).toEqual([idOf('2020-06-01'), idOf('2020-06-02')]);
+  });
+
+  it('L2: a key of one column that is a COPY of the station column gets its own ID too', () => {
+    const h = ['Station', 'StationCode', 'Latitude', 'Longitude', 'Date', 'Species', 'Quantity'];
+    const rs: Cell[][] = [['S1', 'S1', 49.4, 0.2, '2020-06-01', 'Solea solea', 3], ['S1', 'S1', 49.4, 0.2, '2020-06-01', 'Gadus morhua', 4], ['S2', 'S2', 49.5, 0.3, '2020-06-02', 'Solea solea', 6]];
+    const r = convert({ sheets: [sheetInput(fileOf(h, rs), { shape: 'long', quantity: { kind: 'count' }, edit: { Station: { kind: 'station' }, StationCode: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } }, sampleKey: key(1), device: { kind: 'known', key: 'multinet' } })], options: {} });
+    expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
+    expect(sampleIds(r)).toEqual([idOf('S1'), idOf('S2')]);
+    expect(r.events.filter((e) => e.eventType === 'station').map((e) => e.id).sort()).toEqual(['S1', 'S2']);
   });
 
   it('a key of one column that is the cruise gets the same treatment', () => {
     const h = ['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Species', 'Quantity'];
     const rs: Cell[][] = [['C1', 'S1', 49.4, 0.2, '2020-06-01', 'Solea solea', 3], ['C1', 'S1', 49.4, 0.2, '2020-06-01', 'Gadus morhua', 4]];
     const r = convert({ sheets: [sheetInput(fileOf(h, rs), { shape: 'long', quantity: { kind: 'count' }, edit: { Cruise: { kind: 'cruise' }, Station: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } }, sampleKey: key(0), device: { kind: 'known', key: 'multinet' } })], options: {} });
-    expect(sampleIds(r)).toEqual(['C1|sample']);
+    expect(sampleIds(r)).toEqual([idOf('C1')]);
     expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
   });
 
   it('1 and 1.0 are one sample and a date cell and the same date as text are one sample', () => {
     const rs: Cell[][] = [['A', 1, 49.4, 0.2, '2020-06-01', 'Solea solea', 3], ['A', '1.0', 49.4, 0.2, '2020-06-01', 'Gadus morhua', 4], ['A', 1, 49.4, 0.2, '2020-06-01', 'Merlangius merlangus', 5]];
     const r = run(rs, key(0, 1));
-    expect(sampleIds(r)).toEqual(['A|1']);
+    expect(sampleIds(r)).toEqual([idOf('A', '1')]);
     expect(r.occurrences).toHaveLength(3);
     // a date serial in a date-formatted column and the same day as text
     const file = fileOf(H, [['A', 1, 49.4, 0.2, 45581, 'Solea solea', 3], ['A', 1, 49.4, 0.2, '2024-10-16', 'Gadus morhua', 4]]);
@@ -363,20 +378,86 @@ describe('the key contract: a key column is a column that says which sample, wha
     const d = convert({ sheets: [sheetInput(file, { shape: 'long', quantity: { kind: 'count' }, edit: { ...edit, Date: { kind: 'date' } }, sampleKey: key(0, 4), device: { kind: 'known', key: 'multinet' } })], options: {} });
     expect(d.keys![0].samples).toBe(1);
     expect(sampleIds(d)).toHaveLength(1);
-    expect(sampleIds(d)[0]).toMatch(/^A\|2024-10-1\d$/);
+    expect(sampleIds(d)[0]).toMatch(/^sheet\.csv \/ S\|A\|2024-10-1\d$/);
   });
 
-  it('two sheets that make the same ID are not merged and not renamed: the converter names both and blocks; different values collide nowhere', () => {
-    const h = ['Station', 'Date', 'Latitude', 'Longitude', 'Species', 'Quantity'];
-    const mkSheet = (name: string, st: string) => sheetInput(fileOf(h, [[st, '2020-06-01', 49.4, 0.2, 'Solea solea', 3], [st, '2020-06-01', 49.4, 0.2, 'Gadus morhua', 4]], name, { fileName: `${name}.csv` }), { shape: 'long', quantity: { kind: 'count' }, edit: { Station: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } }, sampleKey: key(0, 1), device: { kind: 'known', key: 'multinet' } });
-    const same = convert({ sheets: [mkSheet('One', 'A'), mkSheet('Two', 'A')], options: {} });
-    const dup = ids(same, 'CONV-ID-DUPLICATE');
-    expect(dup.length).toBeGreaterThan(0);
-    expect(judge(same.findings).blocking.map((f) => f.ruleId)).toContain('CONV-ID-DUPLICATE');
-    expect(same.keys!.map((k) => k.sheet)).toEqual(['One', 'Two']);
-    const apart = convert({ sheets: [mkSheet('One', 'A'), mkSheet('Two', 'B')], options: {} });
-    expect(ids(apart, 'CONV-ID-DUPLICATE')).toEqual([]);
-    expect(sampleIds(apart)).toEqual(['A|2020-06-01', 'B|2020-06-01']);
+  describe('two sheets: the keys never meet', () => {
+    const h = ['Station', 'Cast', 'Date', 'Latitude', 'Longitude', 'Species', 'Quantity'];
+    const edit2: Record<string, ColumnRole> = { Station: { kind: 'ignore' }, Cast: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } };
+    const mkSheet = (name: string, rs: Cell[][], k: SampleKey = key(0, 1), fileName = `${name}.csv`) =>
+      sheetInput(fileOf(h, rs, name, { fileName }), { shape: 'long', quantity: { kind: 'count' }, edit: edit2, sampleKey: k, device: { kind: 'known', key: 'multinet' } });
+    const rowsOf = (st: string, cast: Cell): Cell[][] => [[st, cast, '2020-06-01', 49.4, 0.2, 'Solea solea', 3], [st, cast, '2020-06-01', 49.4, 0.2, 'Gadus morhua', 4]];
+
+    it('the same key values on two sheets do not collide: every ID carries its sheet, nothing is merged, nothing blocks', () => {
+      const r = convert({ sheets: [mkSheet('One', rowsOf('A', 1)), mkSheet('Two', rowsOf('A', 1))], options: {} });
+      expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
+      expect(sampleIds(r)).toEqual(['One.csv / One|A|1', 'Two.csv / Two|A|1']);
+      expect(r.occurrences).toHaveLength(4);
+      expect(r.keys!.map((k) => [k.sheet, k.samples, k.rows])).toEqual([['One', 1, 2], ['Two', 1, 2]]);
+      expect(judge(r.findings).blocking.map((f) => f.ruleId)).not.toContain('CONV-ID-DUPLICATE');
+    });
+
+    it('the IDs of a sheet do not change when another sheet is added or dropped, or when the order of the sheets changes', () => {
+      const one = convert({ sheets: [mkSheet('One', rowsOf('A', 1))], options: {} });
+      const both = convert({ sheets: [mkSheet('One', rowsOf('A', 1)), mkSheet('Two', rowsOf('A', 1))], options: {} });
+      const swapped = convert({ sheets: [mkSheet('Two', rowsOf('A', 1)), mkSheet('One', rowsOf('A', 1))], options: {} });
+      expect(sampleIds(one)).toEqual(['One.csv / One|A|1']);
+      expect(sampleIds(both)).toContain('One.csv / One|A|1');
+      expect(sampleIds(swapped)).toEqual(sampleIds(both));
+    });
+
+    it('L1: a one-column key on one sheet and a two-column key on another cannot make the same ID', () => {
+      const a = mkSheet('One', [['S1', 1, '2020-06-01', 49.4, 0.2, 'Solea solea', 3]], key(0));
+      const b = mkSheet('Two', [['S1', 'sample', '2020-06-01', 49.4, 0.2, 'Solea solea', 3]], key(0, 1));
+      const r = convert({ sheets: [a, b], options: {} });
+      expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
+      expect(sampleIds(r)).toEqual(['One.csv / One|S1', 'Two.csv / Two|S1|sample']);
+    });
+
+    it('two workbooks with a sheet of the same name ("Sheet 1") are told apart by their files', () => {
+      const r = convert({ sheets: [mkSheet('Sheet 1', rowsOf('A', 1), key(0, 1), 'a.xlsx'), mkSheet('Sheet 1', rowsOf('A', 1), key(0, 1), 'b.xlsx')], options: {} });
+      expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
+      expect(sampleIds(r)).toEqual(['a.xlsx / Sheet 1|A|1', 'b.xlsx / Sheet 1|A|1']);
+    });
+
+    it('the preview of each sheet is the export of the same request, in the order of the request, with the other sheets as they are', () => {
+      const one = mkSheet('One', [...rowsOf('A', 1), ...rowsOf('A', 1), ...rowsOf('B', 1)]);
+      const two = mkSheet('Two', [...rowsOf('A', 1), ...rowsOf('C', 1)]);
+      for (const order of [[one, two], [two, one]]) {
+        const run = convert({ sheets: order, options: {} });
+        for (const target of order) {
+          const p = previewSampleKey(target, { sheets: order, options: {} })!;
+          expect(p, `${target.sheet} in ${order.map((x) => x.sheet).join(',')}`).toEqual(run.keys!.find((k) => k.sheet === target.sheet));
+        }
+      }
+      // a key swapped in for the previewed sheet is read in its place
+      const free = { ...one, sampleKey: key(0) };
+      const p = previewSampleKey(free, { sheets: [one, two], options: {} })!;
+      expect(p.columns).toEqual([0]);
+      expect(p).toEqual(convert({ sheets: [free, two], options: {} }).keys![0]);
+    });
+  });
+
+  describe('numbers in a key', () => {
+    const H = ['Station', 'Cast', 'Date', 'Latitude', 'Longitude', 'Species', 'Quantity'];
+    const edit: Record<string, ColumnRole> = { Station: { kind: 'ignore' }, Cast: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } };
+    const casts = (cells: Cell[]) => {
+      const rs: Cell[][] = cells.map((c, i) => ['A', c, '2020-06-01', 49.4, 0.2, `Species ${String.fromCharCode(97 + i)}`, 3]);
+      return convert({ sheets: [sheetInput(fileOf(H, rs), { shape: 'long', quantity: { kind: 'count' }, edit, sampleKey: key(0, 1), device: { kind: 'known', key: 'multinet' } })], options: {} });
+    };
+    it('1.1 and 1.10 are two samples, 1e1 and 10 are two, +5 and 5 are two', () => {
+      expect(casts(['1.1', '1.10']).keys![0].samples).toBe(2);
+      expect(casts(['1e1', '10']).keys![0].samples).toBe(2);
+      expect(casts(['+5', '5']).keys![0].samples).toBe(2);
+      expect(casts(['0.50', '0.5']).keys![0].samples).toBe(2);
+    });
+    it('1 and 1.0 and 1.00 are one sample; a numeric cell 1 and the text 1.0 are one sample', () => {
+      expect(casts(['1', '1.0', '1.00']).keys![0].samples).toBe(1);
+      const mixed = casts([1, '1.0']);
+      expect(mixed.keys![0].samples).toBe(1);
+      expect(sampleIds(mixed)).toEqual([idOf('A', '1')]);
+      expect(casts([1.5, '1.5']).keys![0].samples).toBe(1);
+    });
   });
 });
 
@@ -394,7 +475,7 @@ describe('the values of a key: blanks, length, replicates', () => {
     expect(judge(r.findings).acceptRules).toContain('CONV-KEY-PART-BLANK');
     expect(judge(r.findings).blocking.map((x) => x.ruleId)).not.toContain('CONV-KEY-PART-BLANK');
     // the three blank rows are ONE sample (A|), not merged into A|1
-    expect(sampleIds(r)).toEqual(['A|', 'A|1', 'B|2']);
+    expect(sampleIds(r)).toEqual([idOf('A', ''), idOf('A', '1'), idOf('B', '2')]);
     expect(r.keys![0].blankParts).toBe(3);
     for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f[0], lang)).toContain('Station, Cast');
   });
@@ -407,26 +488,51 @@ describe('the values of a key: blanks, length, replicates', () => {
     expect(judge(r.findings).blocking.map((x) => x.ruleId)).toContain('CONV-SAMPLE-CODE-MISSING');
   });
 
-  it('an ID over 255 characters blocks, one of 255 does not', () => {
+  it('an ID over 255 characters blocks, one of 255 does not; the longest is named', () => {
     const r = run([row('A', 1), row('x'.repeat(60001), 2)], key(0, 1));
     const f = ids(r, 'CONV-KEY-TOO-LONG');
     expect(f).toHaveLength(1);
-    expect(f[0].params).toMatchObject({ count: 1, max: 255 });
+    expect(f[0].params).toMatchObject({ max: 255 });
+    expect(Number(f[0].params.longest)).toBeGreaterThan(60001);
     expect(String(f[0].value).length).toBeLessThan(100);
     expect(judge(r.findings).blocking.map((x) => x.ruleId)).toContain('CONV-KEY-TOO-LONG');
-    expect(r.keys![0].tooLong).toBe(1);
-    // exactly MAX_EVENT_ID characters: "<n x>|1"
-    const exact = 'x'.repeat(MAX_EVENT_ID - 2);
-    expect(run([row(exact, 1)], key(0, 1)).findings.some((x) => x.ruleId === 'CONV-KEY-TOO-LONG')).toBe(false);
-    expect(run([row(`${exact}x`, 1)], key(0, 1)).findings.some((x) => x.ruleId === 'CONV-KEY-TOO-LONG')).toBe(true);
+    expect(r.keys![0].tooLong).toBeGreaterThan(0);
+    // the longest ID written is the occurrence's: the station that makes it exactly 255 characters passes, one more character does not
+    const longestOf = (st: string): number => {
+      const q = run([row(st, 1)], key(0, 1));
+      return Math.max(...q.events.map((e) => e.id.length), ...q.occurrences.map((o) => o.id.length));
+    };
+    const fit = 'x'.repeat(MAX_EVENT_ID - longestOf('x') + 1);
+    expect(longestOf(fit)).toBe(MAX_EVENT_ID);
+    expect(run([row(fit, 1)], key(0, 1)).findings.some((x) => x.ruleId === 'CONV-KEY-TOO-LONG')).toBe(false);
+    expect(run([row(`${fit}x`, 1)], key(0, 1)).findings.some((x) => x.ruleId === 'CONV-KEY-TOO-LONG')).toBe(true);
     for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f[0], lang)).toContain('255');
+  });
+
+  it('L3: the limit is held by every ID written, not only the sample code: a replicate event and an occurrence of a code that fits are named, and the longest is said', () => {
+    const h = ['Station', 'Rep', 'Date', 'Latitude', 'Longitude', 'Species', 'Quantity'];
+    const room = MAX_EVENT_ID - `${P}|`.length;
+    const code = 'x'.repeat(room); // the sample ID is exactly 255 characters
+    const rs: Cell[][] = [[code, 'r1', '2020-06-01', 49.4, 0.2, 'Solea solea', 3]];
+    const mk = (c: string) => convert({ sheets: [sheetInput(fileOf(h, [[c, 'r1', '2020-06-01', 49.4, 0.2, 'Solea solea', 3]]), { shape: 'long', quantity: { kind: 'count' }, edit: { Station: { kind: 'ignore' }, Rep: { kind: 'replicate' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } }, sampleKey: key(0), device: { kind: 'known', key: 'multinet' } })], options: {} });
+    const r = mk(code);
+    expect(rs).toHaveLength(1);
+    const f = ids(r, 'CONV-KEY-TOO-LONG');
+    expect(f).toHaveLength(1);
+    // the replicate event (255 + ":r1") and the occurrence (longer still) are over; the longest is the occurrence
+    const longest = Math.max(...r.events.map((e) => e.id.length), ...r.occurrences.map((o) => o.id.length));
+    expect(longest).toBeGreaterThan(255);
+    expect(Number(f[0].params.longest)).toBe(longest);
+    expect(judge(r.findings).blocking.map((x) => x.ruleId)).toContain('CONV-KEY-TOO-LONG');
+    // a short code is none of this
+    expect(ids(mk('S1'), 'CONV-KEY-TOO-LONG')).toEqual([]);
   });
 
   it('a value with a tab or a line break gives an ID without them (they are written \\t and \\n)', () => {
     const r = run([row('A\tB', 1), row('C\nD', 2)], key(0, 1));
     const all = r.events.map((e) => e.id).join('');
     expect(all).not.toMatch(/[\t\n\r]/);
-    expect(sampleIds(r)).toEqual(['A\\tB|1', 'C\\nD|2']);
+    expect(sampleIds(r)).toEqual([idOf('A\\tB', '1'), idOf('C\\nD', '2')]);
   });
 });
 

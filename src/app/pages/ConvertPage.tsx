@@ -284,32 +284,44 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup, nercPicks]);
 
   // what the ticked columns of the picker would make: the converter's own report for the request with that key on that sheet (the same run as the export), asked after a short pause; nothing is kept
-  // in the request, so ticking changes nothing until "Use this key"
+  // in the request, so ticking changes nothing until "Use this key". Only the latest question of a sheet counts (an older answer is dropped), a sheet is asked again only when its ticks or the request
+  // changed, and a failure is shown at the picker with a way to try again.
+  const previewGen = useRef(0);
+  const previewAsked = useRef(new Map<string, string>());
+  const [previewRetry, setPreviewRetry] = useState(0);
+  const [keyPreviewError, setKeyPreviewError] = useState<Record<string, string>>({});
+  useEffect(() => {
+    // the request changed: what was counted is stale
+    previewGen.current += 1;
+    previewAsked.current.clear();
+    setKeyPreview({});
+    setKeyPreviewError({});
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks]);
   useEffect(() => {
     if (phase !== 'work' || !parsed) return undefined;
     const todo = Object.entries(keyDraft).filter(([, cols]) => cols.length > 0);
     if (todo.length === 0) return undefined;
-    setKeyPreview({});
-    let alive = true;
     const timer = setTimeout(() => {
+      const gen = previewGen.current;
       const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMetadataOf(EMPTY_METADATA), ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       for (const [k, cols] of todo) {
+        const sig = `${gen}:${cols.join()}`;
+        if (previewAsked.current.get(k) === sig) continue;
+        previewAsked.current.set(k, sig);
+        setKeyPreviewError((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
         const [fileId, sheet] = k.split('\u0000');
         engine.previewKey(body, fileId, sheet, cols).then(
           (report) => {
-            if (alive) setKeyPreview((prev) => ({ ...prev, [k]: { cols, report } }));
+            if (previewAsked.current.get(k) === sig) setKeyPreview((prev) => ({ ...prev, [k]: { cols, report } }));
           },
           (e: unknown) => {
-            if (alive) setConvertError(messageOf(e));
+            if (previewAsked.current.get(k) === sig) setKeyPreviewError((prev) => ({ ...prev, [k]: messageOf(e) }));
           },
         );
       }
     }, 150);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks, keyDraft]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => clearTimeout(timer);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks, keyDraft, previewRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
@@ -1164,7 +1176,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 const picked = draft ?? inUse;
                 const samples = f?.samples[c.sheet] ?? [];
                 const known = draft === undefined || (keyPreview[key] !== undefined && keyPreview[key].cols.join() === draft.join());
-                const report = draft === undefined || draft.join() === inUse.join() ? (view?.keys ?? []).find((k) => k.sheet === c.sheet && k.file === f?.fileName) ?? (picked.length === 0 ? null : undefined) : known ? keyPreview[key]?.report : undefined;
+                // the numbers of the key in use are shown only while they are the numbers of THIS key (a new key counts again first)
+                const mine = (view?.keys ?? []).find((k) => k.sheet === c.sheet && k.file === f?.fileName && k.columns.join() === inUse.join());
+                const report = draft === undefined || draft.join() === inUse.join() ? (mine ?? (picked.length === 0 ? null : undefined)) : known ? keyPreview[key]?.report : undefined;
                 return (
                   <div key={key} className="notice" role="note">
                     <p>{t('convert.codes.text', { sheet: c.sheet, file: f?.fileName ?? '' })}</p>
@@ -1175,6 +1189,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                         picked={picked}
                         inUse={inUse}
                         report={report}
+                        {...(keyPreviewError[key] === undefined ? {} : { error: keyPreviewError[key] })}
+                        onRetry={() => {
+                          previewAsked.current.delete(key);
+                          setPreviewRetry((n) => n + 1);
+                        }}
                         onToggle={(index) => toggleKey(c.fileId, c.sheet, index)}
                         onUse={() => useKey(c.fileId, c.sheet)}
                         onClear={() => clearKey(c.fileId, c.sheet)}
