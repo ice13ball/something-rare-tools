@@ -23,7 +23,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, realCountsRowsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -317,6 +317,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           const { dropCopiesFile: _d, ...rest } = c;
           return { ...prev, [key]: { ...rest, dropCopies: false } };
         }
+        if (f.ruleId === 'CONV-QUANTITY-REAL-COUNTS') {
+          const { realCountsAnswer: _a, realCountsFile: _r, ...rest } = c;
+          return { ...prev, [key]: { ...rest, realCounts: false } };
+        }
         if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE') {
           const { totalOnceFile: _t, ...rest } = c;
           return { ...prev, [key]: { ...rest, totalOnce: false } };
@@ -325,9 +329,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       }
       // The other answers switch a check off (or take rows out), so each is kept with the number it was given for, from the question itself: the converter honours it only while its own analysis finds
       // the same number, and the question reopens otherwise. The tick itself is never set by the page.
-      const bound: Record<'totalOnce' | 'realCounts' | 'dropCopies', { field: 'totalOnceFile' | 'realCountsFile' | 'dropCopiesFile'; param: string }> = {
+      const bound: Record<'totalOnce' | 'realCounts' | 'dropCopies', { field: 'totalOnceFile' | 'realCountsAnswer' | 'dropCopiesFile'; param: string }> = {
         totalOnce: { field: 'totalOnceFile', param: 'collapsed' },
-        realCounts: { field: 'realCountsFile', param: 'covered' },
+        realCounts: { field: 'realCountsAnswer', param: 'covered' },
         dropCopies: { field: 'dropCopiesFile', param: 'count' },
       };
       const b = bound[choice];
@@ -710,12 +714,12 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
     const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
     const presenceOnly = parsed ? presenceSettingsOf(parsed, choices, mappings) : [];
-    const realCountsRows = parsed ? realCountsRowsOf(parsed, choices) : [];
     // The answers that switch a check off or leave rows out are kept WITH the number they were given for, read from the findings that say them (copies left out, a total taken once, rows left out):
     // a companion file holds only while today's analysis finds the same number, so the question reopens for another file
     const said = (view?.findings ?? []).filter((f) => f.sheet !== undefined);
     const dropCopiesRows = said.filter((f) => f.ruleId === 'CONV-ROW-COPIES-DROPPED').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
     const totalOnceGroups = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.groups) }));
+    const realCountsRows = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REAL-COUNTS').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
     const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
@@ -1378,7 +1382,7 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
               </button>
             </>
           )}
-          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE') && onChoose !== undefined && (
+          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS') && onChoose !== undefined && (
             <>
               {' '}
               <button type="button" className="button" data-testid="ask-again" onClick={() => onChoose(f, 'askAgain')}>

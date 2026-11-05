@@ -136,9 +136,7 @@ describe('no text advises deleting data', () => {
       de: /\b(lösch\w*|entfern\w*|verwerfen|verwirf\w*|streich\w*)/i,
       fr: /\b(supprimez|supprimer|retirez|retirer|enlevez|enlever|ôtez|ôter|effacez|effacer)\b/i,
     };
-    // German "entfernt" and "Entfernung" are a distance, and "entfernen Sie das Häkchen / bei der Spalte / „jedes Organismus“" takes a tick off the page: named, not swallowed
-    const ok = (lang: string, text: string): string =>
-      lang === 'de' ? text.replace(/entfernen Sie das Häkchen/g, ' ').replace(/entfernen Sie bei der Spalte/g, ' ').replace(/entfernen Sie „jedes Organismus“/g, ' ').replace(/ entfernt/g, ' ').replace(/Entfernung/g, ' ') : text;
+    const ok = (_lang: string, text: string): string => text;
     const all: { where: string; lang: 'pl' | 'de' | 'fr'; text: string }[] = [];
     for (const lang of ['pl', 'de', 'fr'] as const) {
       for (const r of CONVERT_RULES) for (const t of [r.plain[lang], ...(r.plainIf ?? []).map((x) => x.plain[lang])]) all.push({ where: `${r.id} ${lang}`, lang, text: t });
@@ -170,6 +168,16 @@ describe('no text advises deleting data', () => {
 
 /** Phrases of the other languages that are not advice to delete (the same rule as ALLOWED: the exact place and the reason). Filled from the first run. */
 const NOT_EN_ALLOWED: { where: string; phrase: string; why: string }[] = [
+  // German: a tick taken off the page, a distance, and a tick that typing does not take off (each at its own place, with its exact words)
+  { where: 'CONV-VALUE-PER-OCCURRENCE de', phrase: 'entfernen Sie bei der Spalte', why: 'takes a tick off the page; no data row' },
+  { where: 'CONV-PRESENCE-VALUE de', phrase: 'entfernen Sie das Häkchen', why: 'takes a tick off the page; no data row' },
+  { where: 'convert.reason.value-per-occurrence de', phrase: 'entfernen Sie „jedes Organismus“', why: 'takes a tick off the page; no data row' },
+  { where: 'convert.taxa.intro de', phrase: 'entfernen Sie das Häkchen', why: 'takes a tick off the page; no data row' },
+  { where: 'CONV-PROFILE-STATION-FAR de', phrase: 'von der Biologie-Station entfernt', why: 'a distance in km, not a removal' },
+  { where: 'tip.convertProfileCast.logic de', phrase: 'von der Biologie-Station entfernt', why: 'a distance, not a removal' },
+  { where: 'convert.reason.seafloor-depth-name de', phrase: 'negative Entfernung', why: 'a distance (a depth below the seafloor), not a removal' },
+  { where: 'tip.role.depthBelowSeafloor de', phrase: 'maximale Entfernung', why: 'a distance (a depth below the seafloor), not a removal' },
+  { where: 'tip.convertAccept.logic de', phrase: 'entfernt keinen Haken', why: 'says that typing does not take a tick off; no data row' },
   { where: 'convert.splits.withdraw fr', phrase: 'Retirer la validation', why: 'takes back the approval of a split on the page; no data row' },
   { where: 'convert.codes.clear fr', phrase: 'Effacer les colonnes choisies', why: 'clears the choice of columns on the page; no data row' },
   { where: 'convert.flatten.station fr', phrase: 'Supprimer le niveau station', why: 'a level of the archive tree, not rows; the code is moved, not lost' },

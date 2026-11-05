@@ -91,6 +91,8 @@ export interface ConvertSheetRequest {
   totalOnceCount?: number;
   /** The number of rows the tick "these are real counts" covered; the core honours it only when today's analysis finds the same number. */
   realCountsRows?: number;
+  /** The same answer as a companion file recorded it. */
+  realCountsRowsFile?: number;
   /** The reasons the user left out and listed (core/convert/notWritten.ts) with the number of rows each was given for, and the same as a companion file recorded them (with the counts they hold for). */
   leaveOut?: { reason: string; count: number }[];
   leaveOutFile?: { reason: string; count: number; rows: number }[];

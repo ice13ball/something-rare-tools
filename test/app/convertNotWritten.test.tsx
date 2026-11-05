@@ -328,24 +328,53 @@ describe('the answers about the repeated total are kept with the number they wer
     expect(item('CONV-QUANTITY-REPEATED-ONCE')).toBeNull();
   });
 
-  it('"these are real counts": saved with the rows the tick covered (never as a bare tick), applied to the same sheet, and the check runs again for a sheet with more rows', async () => {
+  it('"these are real counts": said with its count, reversible with "Ask again", saved with the rows it covers (never as a bare tick), read back as from the file only for the same count', async () => {
     const first = await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()));
     await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
     fireEvent.click(within(item('CONV-QUANTITY-REPEATED')!).getByRole('button', { name: T['convert.finding.realCounts'] }));
-    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeNull());
+    await waitFor(() => expect(item('CONV-QUANTITY-REAL-COUNTS')).toBeTruthy());
+    expect(item('CONV-QUANTITY-REPEATED')).toBeNull();
+    const said = item('CONV-QUANTITY-REAL-COUNTS')!;
+    expect(said.textContent).toContain('60 rows are real counts');
+    expect(said.textContent).not.toContain('companion file');
+    // "Ask again" turns the repeated-total check back on
+    fireEvent.click(within(said).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
+    expect(item('CONV-QUANTITY-REAL-COUNTS')).toBeNull();
+    fireEvent.click(within(item('CONV-QUANTITY-REPEATED')!).getByRole('button', { name: T['convert.finding.realCounts'] }));
+    await waitFor(() => expect(item('CONV-QUANTITY-REAL-COUNTS')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     await waitFor(() => expect(first.download).toHaveBeenCalledTimes(1));
     const companion = first.download.mock.calls[0][0] as string;
     expect(companion).toContain('(setting),realCountsRows=60:catch.csv');
     expect(companion).not.toContain('realCounts=');
     cleanup();
+    // the same sheet with the file: said, as from the file
     await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()), [{ name: 'convert-companion.csv', text: companion }]);
-    await new Promise((r) => setTimeout(r, 300));
+    await waitFor(() => expect(item('CONV-QUANTITY-REAL-COUNTS')).toBeTruthy());
+    expect(item('CONV-QUANTITY-REAL-COUNTS')!.textContent).toContain('read from the companion file');
     expect(item('CONV-QUANTITY-REPEATED')).toBeNull();
+    fireEvent.click(within(item('CONV-QUANTITY-REAL-COUNTS')!).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
     cleanup();
-    // a sheet with more rows that repeat a total: the tick was not given for them, and the check runs
+    // a sheet with more rows that repeat a total: the answer was not given for them, and the check runs
     const more = [...repeatRows(), ...[0, 1].flatMap((t) => [0, 1, 2].map((c) => ['s11', '2020-06-01', 49.5, 0.2, TAXA[t], 8 + c, 400 + t, 200 + t]))];
     await loadRepeat(csvOf(REPEAT_HEADER, more), [{ name: 'convert-companion.csv', text: companion }]);
     await waitFor(() => expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy());
+    expect(item('CONV-QUANTITY-REAL-COUNTS')).toBeNull();
+  });
+
+  it('an old companion file (answers with no count) is said once, with how many were not applied; a new one says nothing of the kind', async () => {
+    const old = 'original_column,output_column,unit,unit_source,p01\n(setting),realCounts=catch.csv,,,\n(setting),totalOnce=catch.csv,,,\n';
+    await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()), [{ name: 'convert-companion.csv', text: old }]);
+    await waitFor(() => expect(item('CONV-COMPANION-OLD')).toBeTruthy());
+    expect(document.querySelectorAll('li[data-rule="CONV-COMPANION-OLD"]')).toHaveLength(1);
+    expect(item('CONV-COMPANION-OLD')!.textContent).toContain('2 saved answers have no number of rows');
+    // not applied: the question is asked again
+    expect(item('CONV-QUANTITY-REPEATED')).toBeTruthy();
+    cleanup();
+    await loadRepeat(csvOf(REPEAT_HEADER, repeatRows()), [{ name: 'convert-companion.csv', text: 'original_column,output_column,unit,unit_source,p01\n(setting),fullList=yes,,,\n' }]);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(item('CONV-COMPANION-OLD')).toBeNull();
   });
 });

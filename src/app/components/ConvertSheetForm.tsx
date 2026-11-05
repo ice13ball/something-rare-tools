@@ -179,17 +179,6 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             </div>
             )}
 
-            {(['totalOnce', 'realCounts', 'dropCopies'] as const).filter((k) => choice[k]).map((k) => (
-              <div className="convert-group" key={k}>
-                <div className="choice-line">
-                  <label className="inline-choice">
-                    <input type="checkbox" checked={choice[k]} onChange={(e) => onChange({ ...choice, [k]: e.target.checked })} />
-                    <span>{t(`convert.sheet.${k}` as UiKey)}</span>
-                  </label>
-                </div>
-              </div>
-            ))}
-
             {(!choice.presenceOnly || hasQuantityColumn === true) && (
             <div className="convert-group">
               <h4>{t('convert.quantity.title')}</h4>

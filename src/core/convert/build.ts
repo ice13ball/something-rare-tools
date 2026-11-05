@@ -116,6 +116,8 @@ export interface ConvertSheetInput {
    * rows; otherwise the checks run and the question is open (a tick must not switch a check off for rows it never saw).
    */
   realCountsRows?: number;
+  /** The same answer as a companion file recorded it (the page and the message say where it came from). */
+  realCountsRowsFile?: number;
   /**
    * The reasons the user answered "leave these rows out and list them" for (notWritten.ts: only a reason that blocks can be answered). Never prefilled, never a default. A reason given with its count
    * holds only while the sheet has the same number of rows of that reason; a bare reason holds whatever the count (for callers that are not the page).
@@ -167,6 +169,8 @@ export interface ConvertInput {
    * already has a scientificNameID from the sheet is never looked up and never overwritten.
    */
   worms?: WormsLookup;
+  /** How many answers of an older companion file (no number of rows with them) came with the files: they are not applied, and the person is told once (CONV-COMPANION-OLD). */
+  oldCompanionAnswers?: number;
 }
 
 /* ---------- reading one sheet ---------- */
@@ -1735,7 +1739,17 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       copiesFromFile = true;
       analysis = analyse(true, sin.realCounts === true);
     }
-    if (sin.realCounts !== true && sin.realCountsRows !== undefined && analysis.total?.affected.size === sin.realCountsRows) analysis = analyse(copiesFromFile || sin.dropCopies === true, true);
+    // "these are real counts" (from the page or from a companion file) is held only while today's analysis finds the same number of rows; it is then said, with the count, and can be asked again
+    let realCountsHeld: { count: number; fromFile: boolean } | undefined;
+    if (sin.realCounts !== true) {
+      const rows = analysis.total?.affected.size;
+      const page = sin.realCountsRows !== undefined && rows === sin.realCountsRows;
+      const file = !page && sin.realCountsRowsFile !== undefined && rows === sin.realCountsRowsFile;
+      if (page || file) {
+        realCountsHeld = { count: rows as number, fromFile: file };
+        analysis = analyse(copiesFromFile || sin.dropCopies === true, true);
+      }
+    }
     const repeated = analysis.total;
     const sameValue = analysis.same;
     const copies = analysis.copies;
@@ -2476,6 +2490,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         );
       }
     }
+    if (realCountsHeld !== undefined) findings.push(makeConvertFinding('CONV-QUANTITY-REAL-COUNTS', { ...base, params: { count: realCountsHeld.count, ...(realCountsHeld.fromFile ? { fromFile: 'yes' } : {}) } }));
     const round = (n: number): number => Math.round(n * 1000) / 1000;
     if (copies !== undefined) {
       const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies) };
@@ -2935,6 +2950,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   const once = nameOnce(findings);
   findings.length = 0;
   pushAll(findings, once);
+  if ((rawInput.oldCompanionAnswers ?? 0) > 0) findings.push(makeConvertFinding('CONV-COMPANION-OLD', { params: { count: rawInput.oldCompanionAnswers as number } }));
   const decision = decideRows(ledger, rawInput.sheets, findings);
   if (decision.suppress.length > 0) {
     const kept = findings.filter((f) => !decision.suppress.some((x) => x.ruleId === f.ruleId && x.file === f.file && x.sheet === f.sheet));

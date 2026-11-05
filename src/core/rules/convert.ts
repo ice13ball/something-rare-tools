@@ -80,6 +80,8 @@ import type { RuleSpec } from './spec';
  *   CONV-EMOF-EVENT-MISMATCH   count            value = an example occurrenceID
  *   CONV-EMOF-VALUE-EMPTY      count            lines = rows of the eMoF table
  *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
+ *   CONV-QUANTITY-REAL-COUNTS  count            count = rows the answer "these are real counts" covers; fromFile when a companion file gave it (info; "Ask again" turns the checks back on)
+ *   CONV-COMPANION-OLD         count            count = answers of an old companion file that carry no number of rows: read and not applied, the questions are asked again (info; no file or sheet)
  *   CONV-REPLICATE-EVENTS      column, count    field = the replicate column, count = the replicate events it makes (info)
  *   CONV-TAXON-ATTRIBUTE-IGNORED count, columns  columns of a long sheet whose value is the same for every row of one taxon (a code, an id, a serial number, a trophic level): ignored, not written (info)
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
@@ -338,6 +340,43 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Comme choisi, le total de « {columns} » est écrit une fois par échantillon et taxon ({groups} {+groups:groupe|groupes}) ; {count} {+count:ligne répétée ignorée|lignes répétées ignorées} ({+lineCount:ligne|lignes} {lines}). Non écrit sur l'occurrence, les lignes y différant : {lost}. Vérifiez la somme.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: the user chose to write one occurrence per sample and taxon where {columns} repeats a total on size-class rows ({groups} groups); {count} later row(s) of those groups, whose repeated values equal those of the first row of their group, are not converted. The rows differ in "{differs}" and in {lost}: nothing per-row is written from the first row, because one occurrence would hold several values of them. A group below the threshold, or whose values differ, stays as separate rows. Rows whose other weight or count column has numbers of its own are not taken once (CONV-QUANTITY-REPEATED).`,
+  },
+  {
+    id: 'CONV-QUANTITY-REAL-COUNTS',
+    category: 'B',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `Jak wybrano, równe ilości w {count} {+count:wierszu|wierszach|wierszach} są prawdziwymi liczebnościami: dla tego arkusza nie sprawdzam powtórzonych sum ani dokładnych kopii wierszy. Przycisk „Zapytaj ponownie” włącza oba sprawdzenia z powrotem.`,
+      en: `As you chose, the equal quantities in {count} {+count:row are|rows are} real counts: for this sheet, repeated totals and exact copies of rows are not looked for. "Ask again" turns both checks back on.`,
+      de: `Wie gewählt, sind die gleichen Mengen in {count} {+count:Zeile|Zeilen} echte Zahlen: für dieses Blatt wird nicht nach wiederholten Summen und genauen Zeilenkopien gesucht. „Erneut fragen“ schaltet beide Prüfungen wieder ein.`,
+      fr: `Comme choisi, les quantités égales de {count} {+count:ligne sont|lignes sont} de vrais effectifs : pour cette feuille, les totaux répétés et les copies exactes de lignes ne sont pas recherchés. « Demander à nouveau » rétablit les deux contrôles.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo tyle samo wierszy powtarza sumę.`,
+          en: `This answer was read from the companion file; it holds because the same number of rows repeat a total.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilen eine Summe wiederholen.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de lignes répète un total.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the user (or a companion file whose number of rows is the same today) declared the equal quantities of the {count} row(s) of the groups that repeat a total to be real counts. Nothing is looked for in the sheet then (CONV-QUANTITY-REPEATED, CONV-QUANTITY-SAME-IN-SAMPLE, CONV-ROW-COPIES are off). Information only; asked again by the button, or when the number of rows changes.`,
+  },
+  {
+    id: 'CONV-COMPANION-OLD',
+    category: 'B',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `Plik towarzyszący pochodzi ze starszej wersji: {count} {+count:zapisana odpowiedź nie ma|zapisane odpowiedzi nie mają|zapisanych odpowiedzi nie ma} liczby wierszy, dla której ją dano, więc {+count:nie została zastosowana|nie zostały zastosowane|nie zostało zastosowanych}, a pytania padają ponownie.`,
+      en: `The companion file is from an older version: {count} saved {+count:answer has|answers have} no number of rows {+count:it was|they were} given for, so {+count:it was|they were} not applied and the questions are asked again.`,
+      de: `Die Begleitdatei stammt aus einer älteren Version: {count} gespeicherte {+count:Antwort hat|Antworten haben} keine Zeilenzahl, für die {+count:sie|sie} gegeben wurde, daher {+count:wurde sie|wurden sie} nicht angewendet, und die Fragen werden neu gestellt.`,
+      fr: `Le fichier d'accompagnement est d'une version plus ancienne : {count} {+count:réponse enregistrée n'a|réponses enregistrées n'ont} pas de nombre de lignes, donc {+count:elle n'a pas été appliquée|elles n'ont pas été appliquées} ; les questions sont reposées.`,
+    },
+    technical: `The companion file of this run holds {count} answer(s) of the old form (the settings realCounts, totalOnce and the copies one, each with a sheet name and no count). An answer that switches a check off or takes rows out holds only for the number it was given for, so these are read and not applied. Information only.`,
   },
   {
     id: 'CONV-ROW-COPIES',

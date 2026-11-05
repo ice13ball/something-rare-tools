@@ -133,6 +133,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-BIOMASS-UNIT-UNCLEAR | warning | B | — | —<a id="CONV-BIOMASS-UNIT-UNCLEAR"></a> |
 | CONV-QUANTITY-REPEATED | error | B | — | —<a id="CONV-QUANTITY-REPEATED"></a> |
 | CONV-QUANTITY-REPEATED-ONCE | warning | B | — | —<a id="CONV-QUANTITY-REPEATED-ONCE"></a> |
+| CONV-QUANTITY-REAL-COUNTS | info | B | — | —<a id="CONV-QUANTITY-REAL-COUNTS"></a> |
+| CONV-COMPANION-OLD | info | B | — | —<a id="CONV-COMPANION-OLD"></a> |
 | CONV-ROW-COPIES | error | B | — | —<a id="CONV-ROW-COPIES"></a> |
 | CONV-ROW-COPIES-DROPPED | warning | B | — | —<a id="CONV-ROW-COPIES-DROPPED"></a> |
 | CONV-ROW-COPIES-SPECIMENS | warning | B | — | —<a id="CONV-ROW-COPIES-SPECIMENS"></a> |

@@ -71,6 +71,8 @@ export function createConvertHandler(): ConvertHandler {
   let files = new Map<string, Held>();
   // what the dropped metadata files state about the licence, from THIS session's own parse: CONV-LICENCE-DIFFERS at export is judged from it, never from what the page sends
   let licenceSource: LicenceSource = { ids: [], disagree: false };
+  /** How many answers of an older companion file (no count with them) this drop holds: they are not applied, the questions are asked again, and the person is told once. */
+  let oldAnswers = 0;
   // the kind of mass a companion file of this drop gave the biomass columns of a sheet, by sheet name: a pre-pick for columns the header leaves open
   let biomassPick = new Map<string, 'wet' | 'dry' | 'afdw'>();
   // the ticks "of each organism" a companion file of this drop sets or takes back, by sheet and column header
@@ -170,6 +172,7 @@ export function createConvertHandler(): ConvertHandler {
     result.prefillInfo = buildPrefill(records) ?? null;
     result.prefill = prefillValues(result.prefillInfo ?? undefined);
     licenceSource = licenceSourceOf(result.prefillInfo);
+    oldAnswers = (settings.realCounts?.length ?? 0) + (settings.dropCopies?.length ?? 0) + (settings.totalOnce?.length ?? 0);
     return result;
   }
 
@@ -279,6 +282,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
       ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
       ...(Number.isInteger(s.realCountsRows) && (s.realCountsRows as number) >= 0 ? { realCountsRows: s.realCountsRows as number } : {}),
+      ...(Number.isInteger(s.realCountsRowsFile) && (s.realCountsRowsFile as number) >= 0 ? { realCountsRowsFile: s.realCountsRowsFile as number } : {}),
       // the page's word is not taken for more than a list of words and whole numbers; the core ignores a reason that cannot be left out
       ...(Array.isArray(s.leaveOut) && s.leaveOut.length > 0
         ? { leaveOut: s.leaveOut.filter((r) => r !== null && typeof r === 'object' && typeof r.reason === 'string' && Number.isInteger(r.count)).map((r) => ({ reason: r.reason, count: r.count })) }
@@ -290,7 +294,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
-    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
+    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
     return { sheets, splits, r };
   }
 
@@ -424,6 +428,7 @@ export function createConvertHandler(): ConvertHandler {
           files = new Map();
           seq = 0;
           licenceSource = { ids: [], disagree: false };
+          oldAnswers = 0;
           return null;
         case 'parse':
           return parse(req);

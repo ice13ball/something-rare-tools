@@ -11,6 +11,7 @@ import { REASON_KIND, countNotWritten, decideRows, notWrittenCsv, notWrittenRows
 import { pivotConvertFile } from '../../src/core/convert/pivot';
 import { judge } from '../../src/core/convert/policy';
 import { readConvertFile } from '../../src/core/convert/read';
+import { UI } from '../../src/core/i18n/ui';
 import { tipDe, tipEn, tipFr, tipPl } from '../../src/core/i18n/tips-text';
 import { renderConvertPlain, rowWhat } from '../../src/core/rules/convert';
 import type { ColumnRole } from '../../src/core/types';
@@ -274,5 +275,66 @@ describe('L3b: a line of a pivoted sheet that no fate was given to is a line of 
     expect(r.ledger[0].lines.map((l) => [l.line, l.fate])).toEqual([[99, 'unexplained']]);
     expect(ofRule(r, 'CONV-ROW-NOT-UNDERSTOOD').map((f) => [f.params.reason, f.lines])).toEqual([['unexplained', [99]]]);
     expect(blockers(r)).toContain('CONV-ROW-NOT-UNDERSTOOD');
+  });
+});
+
+describe('Fix round 2', () => {
+  const HEADER = ['sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Size', 'Quantity', 'Weight'];
+  const EDIT: Record<string, ColumnRole> = {
+    sample: { kind: 'sampleId' },
+    Species: { kind: 'taxon' },
+    Quantity: { kind: 'quantity' },
+    Weight: { kind: 'biomass', basis: 'wet' },
+    Size: { kind: 'variable', variable: 'body length', unit: 'cm', unitSource: 'user', perOccurrence: true },
+  };
+  const TAXA = ['Solea solea', 'Merlangius merlangus'];
+  const rows = (): Cell[][] => {
+    const out: Cell[][] = [];
+    for (let s = 1; s <= 10; s++) for (let t = 0; t < 2; t++) for (let c = 0; c < 3; c++) out.push([`s${s}`, '2020-06-01', 49.4 + s / 100, 0.2, TAXA[t], 8 + c, 20 + 7 * s + 3 * t, 100 + s * 3 + t]);
+    return out;
+  };
+  const mk = (data: Cell[][], extra: Partial<ConvertSheetInput> = {}): ConvertSheetInput[] => [sheetInput(fileOf(HEADER, data, 'S', { fileName: 'catch.csv' }), { shape: 'long', quantity: { kind: 'count' }, edit: EDIT, ...extra })];
+
+  it('N1: "real counts" is said with the sheet and the count, as from the page or from the file, and the copies check is back when the answer is taken back', () => {
+    // plus a sample of its own whose one row is written twice, exactly: a copy that is not a size class
+    const copy: Cell[] = ['s11', '2020-06-01', 49.5, 0.2, TAXA[0], 9, 33, 77];
+    const data = [...rows(), copy, copy];
+    const open = convert({ sheets: mk(data), options: {} });
+    const covered = Number(ofRule(open, 'CONV-QUANTITY-REPEATED')[0].params.covered);
+    const page = convert({ sheets: mk(data, { realCountsRows: covered }), options: {} });
+    expect(ofRule(page, 'CONV-QUANTITY-REAL-COUNTS').map((f) => [f.sheet, f.params.count, f.params.fromFile])).toEqual([['S', covered, undefined]]);
+    expect(ofRule(page, 'CONV-QUANTITY-REPEATED')).toHaveLength(0);
+    expect(ofRule(page, 'CONV-ROW-COPIES')).toHaveLength(0);
+    const file = convert({ sheets: mk(data, { realCountsRowsFile: covered }), options: {} });
+    expect(ofRule(file, 'CONV-QUANTITY-REAL-COUNTS')[0].params).toMatchObject({ count: covered, fromFile: 'yes' });
+    // taken back: both questions are back
+    expect(ofRule(open, 'CONV-QUANTITY-REAL-COUNTS')).toHaveLength(0);
+    expect(ofRule(open, 'CONV-QUANTITY-REPEATED')).toHaveLength(1);
+    expect(ofRule(open, 'CONV-ROW-COPIES')).toHaveLength(1);
+    // another number of rows: not applied, no message
+    const stale = convert({ sheets: mk(data, { realCountsRowsFile: covered + 3 }), options: {} });
+    expect(ofRule(stale, 'CONV-QUANTITY-REAL-COUNTS')).toHaveLength(0);
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      for (const count of [1, 2, 5]) {
+        const t = renderConvertPlain({ ruleId: 'CONV-QUANTITY-REAL-COUNTS', severity: 'info', file: 'f.csv', sheet: 'S', params: { count, fromFile: 'yes' } } as never, lang);
+        expect(t, `${lang} ${count}`).not.toMatch(/[{}]/);
+      }
+    }
+  });
+
+  it('N4: the label of a row with a station or a note and no taxon and no value says so, in four languages', () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(UI[lang]['convert.ledger.reason.sample-no-taxon' as never]).toBeTruthy();
+    expect(UI.en['convert.ledger.reason.sample-no-taxon' as never]).toMatch(/station.*note.*no taxon and no value/);
+    expect(UI.pl['convert.ledger.reason.sample-no-taxon' as never]).toMatch(/stacją.*uwagą/);
+    expect(UI.de['convert.ledger.reason.sample-no-taxon' as never]).toMatch(/Station.*Notiz/);
+    expect(UI.fr['convert.ledger.reason.sample-no-taxon' as never]).toMatch(/station.*note/);
+  });
+
+  it('N5: the text about an old companion file has the number in every language', () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) for (const count of [1, 2, 5]) {
+      const t = renderConvertPlain({ ruleId: 'CONV-COMPANION-OLD', severity: 'info', params: { count } } as never, lang);
+      expect(t, `${lang} ${count}`).not.toMatch(/[{}]/);
+      expect(t).toContain(String(count));
+    }
   });
 });

@@ -64,7 +64,9 @@ export interface SheetChoice {
   totalOnceFile?: number;
   /** The reasons the user answered "leave these rows out and list them" for (CONV-ROW-NOT-UNDERSTOOD), each with the number of rows it was given for. Starts empty; never prefilled. */
   leaveOut?: { reason: string; count: number }[];
-  /** The number of rows the user's tick "these are real counts" covered (the page's answer and a companion file's alike). The converter honours it only when today's analysis finds the same number. */
+  /** The number of rows the user's answer "these are real counts" covered, as the page recorded it. The converter honours it only when today's analysis finds the same number. */
+  realCountsAnswer?: number;
+  /** The same as a companion file recorded it. */
   realCountsFile?: number;
   /** The same answers as a companion file recorded them (the reason, the rows of that reason and the rows of the sheet): honoured by the converter only when today's numbers are the same. */
   leaveOutFile?: { reason: string; count: number; rows: number }[];
@@ -259,7 +261,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRows: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
@@ -336,16 +338,6 @@ export function presenceSettingsOf(parsed: ConvertParseResult, choices: Record<s
 export function sheetFlagSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, flag: 'dropCopies'): string[] {
   const out: string[] = [];
   for (const f of parsed.files) for (const sh of f.sheets) if (choices[sheetKey(f.fileId, sh.name)]?.use === true && choices[sheetKey(f.fileId, sh.name)]?.[flag] === true && !out.includes(sh.name)) out.push(sh.name);
-  return out;
-}
-
-/** The sheets in use where the user said "these are real counts", each with the number of rows the tick covered: what the companion file keeps. */
-export function realCountsRowsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { sheet: string; count: number }[] {
-  const out: { sheet: string; count: number }[] = [];
-  for (const f of parsed.files) for (const sh of f.sheets) {
-    const c = choices[sheetKey(f.fileId, sh.name)];
-    if (c?.use === true && c.realCountsFile !== undefined && !out.some((o) => o.sheet === sh.name)) out.push({ sheet: sh.name, count: c.realCountsFile });
-  }
   return out;
 }
 
