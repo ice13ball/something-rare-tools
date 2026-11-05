@@ -178,8 +178,8 @@ describe('date parts set by hand', () => {
     const { dataset } = build(t, (m) => setRole(m, 'year', part('year')));
     const out = toCleanCsv(dataset);
     expect(parse(out.csv).rows.map((r) => r[1])).toEqual(['2020', '2021']);
-    // the eventDate column holds nothing: nothing is lost, so it is neither written nor named
-    expect(left(out.sidecar)).toEqual([]);
+    // the eventDate column holds nothing: no value of it is in the file, and no blank column is written for it
+    expect(left(out.sidecar)).toEqual([`${LEFT}: eventDate`]);
     expect(parse(out.csv).header).not.toContain('eventDate');
   });
 });

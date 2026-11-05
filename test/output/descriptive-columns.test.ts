@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripTrailingColumns } from '../../scripts/csv-strip';
+import { sidecarProblems, sidecarRecords } from '../../scripts/sidecar-invariant';
 import { buildDataset, buildDatasets } from '../../src/core/dataset';
 import { toCleanCsv } from '../../src/core/output/csv';
 import { parseFile } from '../../src/core/parse';
@@ -15,15 +16,21 @@ import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout'
 import type { Dataset, ParsedFile, SheetMapping } from '../../src/core/types';
 import { dateCell, textFile, xlsxFile } from '../helpers/files';
 
+/** Every dataset built here with its twin built without the descriptive columns: the dataset as it was before they existed. */
+const bases = new WeakMap<Dataset, Dataset>();
 const build = (file: ParsedFile, edit?: (m: SheetMapping[]) => void): Dataset => {
   const layout = proposeLayout(file);
   const mappings = proposeMappings(file, layout);
   edit?.(mappings);
-  return buildDataset(file, layout, mappings, [], 'd').dataset;
+  const ds = buildDataset(file, layout, mappings, [], 'd').dataset;
+  bases.set(ds, buildDataset(file, layout, mappings, [], 'd', { descriptive: false }).dataset);
+  return ds;
 };
 const buildAll = (file: ParsedFile): Dataset[] => {
   const layout = proposeLayout(file);
-  return buildDatasets(file, layout, proposeMappings(file, layout), [], 'd').datasets;
+  const mappings = proposeMappings(file, layout);
+  const base = buildDatasets(file, layout, mappings, [], 'd', { descriptive: false }).datasets;
+  return buildDatasets(file, layout, mappings, [], 'd').datasets.map((ds, i) => (bases.set(ds, base[i]), ds));
 };
 const parse = (csv: string): { header: string[]; rows: string[][] } => {
   const sheet = textFile('out.csv', csv).sheets[0];
@@ -33,10 +40,19 @@ const notes = (sidecar: string): string[] => parse(sidecar).rows.filter((r) => r
 const text = (t: string, name = 's.csv') => textFile(name, t);
 const without = (ds: Dataset): Dataset => ({ ...ds, descriptiveColumns: undefined });
 
-/** The invariant: the CSV without its trailing descriptive columns is the CSV the dataset gave before they existed. */
+/**
+ * The invariant: the CSV without its trailing descriptive columns is the CSV the dataset gave before they existed, and the sidecar differs only by (a) the mapping rows of the new columns, (b) the columns now
+ * written leaving the "not in this file" note, (c) the new "differ within a row" notes.
+ */
 function expectOnlyTrailing(ds: Dataset): void {
+  const base = bases.get(ds);
+  expect(base, 'built through build() or buildAll()').toBeDefined();
   const k = ds.descriptiveColumns?.length ?? 0;
-  expect(stripTrailingColumns(toCleanCsv(ds).csv, k)).toBe(toCleanCsv(without(ds)).csv);
+  const out = toCleanCsv(ds);
+  const before = toCleanCsv(base!);
+  expect(stripTrailingColumns(out.csv, k)).toBe(before.csv);
+  const head = parse(out.csv).header;
+  expect(sidecarProblems(sidecarRecords(before.sidecar), sidecarRecords(out.sidecar), head.slice(head.length - k), (ds.descriptiveColumns ?? []).map((d) => d.header))).toEqual([]);
 }
 
 describe('a descriptive column is written after the variables, as the file has it', () => {
@@ -76,14 +92,15 @@ describe('a descriptive column is written after the variables, as the file has i
     expectOnlyTrailing(dl);
   });
 
-  it('an empty column is neither written nor named; a sheet without a descriptive column is unchanged', () => {
+  it('an empty column is not written (no blank column) and stays named; a sheet without a descriptive column is unchanged', () => {
     const t = ['Station,Latitude,Longitude,Date,Temp [°C],Notes', 'S1,49.4,0.2,2020-06-01,11.2,', 'S2,49.5,0.3,2020-06-02,10.4,  '].join('\n');
     const ds = build(text(t));
     const out = toCleanCsv(ds);
     expect(ds.descriptiveColumns).toBeUndefined();
     expect(parse(out.csv).header).not.toContain('Notes');
-    expect(notes(out.sidecar)).toEqual([]);
+    expect(notes(out.sidecar)).toEqual(['source columns that are not in this file: Notes']);
     expect(out.csv).toBe(toCleanCsv(without(ds)).csv);
+    expectOnlyTrailing(ds);
   });
 
   it('a column the person set to ignore (the proposal gave it a role) stays out and stays named', () => {
@@ -151,7 +168,7 @@ describe('a long sheet: the cell its source rows agree on', () => {
 describe('a lookup sheet lends its descriptive columns', () => {
   const run = (sites: (string | number)[][], data: (string | number)[][]) => buildAll(xlsxFile('book.xlsx', { Sites: sites, Data: data }))[0];
 
-  it('written beside the data row, a collision suffixed; an ambiguous key leaves the cell empty, counted', () => {
+  it('written beside the data row, a collision suffixed; rows of the key that disagree leave the cell empty, counted under the output header and the sheet', () => {
     const sites = [['Station', 'Latitude', 'Longitude', 'Fjord', 'Region'], ['S1', 70.1, 15.2, 'Nord', 'n'], ['S2', 60.2, 5.4, 'Sund', 's'], ['S3', 50.3, -5.6, 'Ytre', 'o'], ['S3', 50.9, -5.9, 'Indre', 'i']];
     const data = [['Station', 'Date', 'Temperature [degC]', 'Fjord'], ['S1', '2020-06-01', 4.5, 'own1'], ['S2', '2020-06-02', 5.5, 'own2'], ['S3', '2020-06-03', 6.5, 'own3']];
     const ds = run(sites, data);
@@ -159,7 +176,50 @@ describe('a lookup sheet lends its descriptive columns', () => {
     const { header, rows } = parse(out.csv);
     expect(header.slice(-3)).toEqual(['Fjord', 'Fjord_2', 'Region']);
     expect(rows.map((r) => r.slice(-3))).toEqual([['own1', 'Nord', 'n'], ['own2', 'Sund', 's'], ['own3', '', '']]);
-    expect(notes(out.sidecar)).toContain('source columns of a joined sheet whose key is ambiguous, left empty there: Fjord (1 row) | Region (1 row)');
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there (sheet Sites): Fjord_2 (1 row) | Region (1 row)');
+    expectOnlyTrailing(ds);
+  });
+
+  it('two rows of one key that name Nord and Sund: the cell is empty and counted, not the first one', () => {
+    const sites = [['Station', 'Latitude', 'Longitude', 'Fjord'], ['S1', 70.1, 15.2, 'Nord'], ['S1', 70.1, 15.2, 'Sund'], ['S2', 60.2, 5.4, 'Ytre']];
+    const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '2020-06-02', 5.5]];
+    const ds = run(sites, data);
+    const out = toCleanCsv(ds);
+    expect(parse(out.csv).rows.map((r) => r[r.length - 1])).toEqual(['', 'Ytre']);
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there (sheet Sites): Fjord (1 row)');
+    expectOnlyTrailing(ds);
+  });
+
+  it('rows that differ only in depth: the water mass of both is not lost in silence', () => {
+    const sites = [['Station', 'Latitude', 'Longitude', 'Depth [m]', 'Water Mass'], ['S1', 70.1, 15.2, 5, 'AW'], ['S1', 70.1, 15.2, 50, 'ArW'], ['S2', 60.2, 5.4, 5, 'AW']];
+    const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '2020-06-02', 5.5]];
+    const ds = run(sites, data);
+    const out = toCleanCsv(ds);
+    expect(parse(out.csv).rows.map((r) => r[r.length - 1])).toEqual(['', 'AW']);
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there (sheet Sites): Water Mass (1 row)');
+    // two rows that agree on the water mass: the value
+    const agree = [['Station', 'Latitude', 'Longitude', 'Depth [m]', 'Water Mass'], ['S1', 70.1, 15.2, 5, 'AW'], ['S1', 70.1, 15.2, 50, 'AW'], ['S2', 60.2, 5.4, 5, 'AW']];
+    expect(parse(toCleanCsv(run(agree, data)).csv).rows.map((r) => r[r.length - 1])).toEqual(['AW', 'AW']);
+  });
+
+  it('an ambiguous key (the positions differ) whose rows agree on Nord writes Nord', () => {
+    const sites = [['Station', 'Latitude', 'Longitude', 'Fjord'], ['S1', 70.1, 15.2, 'Nord'], ['S1', 71.1, 15.9, 'Nord'], ['S2', 60.2, 5.4, 'Ytre']];
+    const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '2020-06-02', 5.5]];
+    const ds = run(sites, data);
+    const out = toCleanCsv(ds);
+    expect(parse(out.csv).rows.map((r) => r[r.length - 1])).toEqual(['Nord', 'Ytre']);
+    expect(notes(out.sidecar).filter((n) => n.includes('differ within'))).toEqual([]);
+    expectOnlyTrailing(ds);
+  });
+
+  it('a lookup column that is blank in every row the data reaches is not written and stays named; one emptied everywhere by disagreement is not written either', () => {
+    const sites = [['Station', 'Latitude', 'Longitude', 'Area', 'Gear'], ['S1', 70.1, 15.2, '', 'a'], ['S1', 70.1, 15.2, '', 'b'], ['S2', 60.2, 5.4, '', 'c'], ['S2', 60.2, 5.4, '', 'd'], ['S9', 61.2, 5.4, 'Far', 'e']];
+    const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S2', '2020-06-02', 5.5]];
+    const ds = run(sites, data);
+    const out = toCleanCsv(ds);
+    expect(parse(out.csv).header.filter((h) => /area|gear/i.test(h))).toEqual([]);
+    expect(notes(out.sidecar)).toContain('source columns that are not in this file (sheet Sites): Area | Gear');
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there (sheet Sites): Gear (2 rows)');
     expectOnlyTrailing(ds);
   });
 });
@@ -173,6 +233,32 @@ describe('Excel cells are written by the rules of the key columns', () => {
     expect(header.slice(-2)).toEqual(['Sampled', 'Count']);
     expect(out.map((r) => r.slice(-2))).toEqual([['2020-06-01T12:00', '7'], ['2020-06-02T06:00:00.250', '8']]);
     expectOnlyTrailing(ds);
+  });
+});
+
+describe('the rounding note counts each source cell written, once', () => {
+  const ROUNDED = /^date cells rounded to the second/;
+  const PLAIN = 'yyyy-mm-dd hh:mm:ss';
+  const noteOf = (ds: Dataset): string[] => notes(toCleanCsv(ds).sidecar).filter((n) => ROUNDED.test(n));
+
+  it('a lookup date taken by four data rows from two sheet cells is 2 cells', () => {
+    const d = (v: number) => ({ t: 'n' as const, v, z: PLAIN });
+    const sites = [['Station', 'Latitude', 'Longitude', 'Deployed'], ['S1', 70.1, 15.2, d(43983 + 0.0006 / 86400)], ['S2', 60.2, 5.4, d(43984 + 0.0006 / 86400)]];
+    const data = [['Station', 'Date', 'Temperature [degC]'], ['S1', '2020-06-01', 4.5], ['S1', '2020-06-01', 4.6], ['S1', '2020-06-01', 4.7], ['S2', '2020-06-02', 5.5]];
+    const ds = buildAll(xlsxFile('book.xlsx', { Sites: sites as never, Data: data as never }))[0];
+    expect(noteOf(ds)).toEqual(['date cells rounded to the second (sheet Sites): Deployed (2 cells, up to 1 ms)']);
+  });
+
+  it('a long sheet: a cell emptied by a later disagreement is not counted, one written is counted once however many source rows carry it', () => {
+    const d = (v: number) => ({ t: 'n' as const, v, z: PLAIN });
+    const rows: (string | number | object)[][] = [['Station', 'Latitude', 'Longitude', 'Date', 'Parameter', 'Value', 'Sampled']];
+    const same = d(43983 + 0.0006 / 86400);
+    for (const p of ['Corg', 'Ntot', 'Ptot']) rows.push(['S1', 49.4, 0.2, d(43983), p, 1, same]);
+    rows.push(['S2', 49.4, 0.3, d(43984), 'Corg', 1, d(43984 + 0.0007 / 86400)], ['S2', 49.4, 0.3, d(43984), 'Ntot', 2, d(43985 + 0.0008 / 86400)]);
+    const ds = buildAll(xlsxFile('l.xlsx', { S: rows as never }))[0];
+    const { rows: out } = parse(toCleanCsv(ds).csv);
+    expect(out.map((r) => r[r.length - 1])).toEqual(['2020-06-01', '']);
+    expect(noteOf(ds)).toEqual(['date cells rounded to the second: Sampled (1 cell, up to 1 ms)']);
   });
 });
 

@@ -251,11 +251,11 @@ export interface RoundedTimes { sheet: string; header: string; count: number; ma
 export interface DescriptiveColumn {
   id: string; header: string; sheet: string; index: number;
   values: RawCell[];
-  /** Long sheet: rows left empty because the source rows merged into them disagree in this column. */
+  /** Rows left empty because the source rows merged into them (a long sheet), or the rows of the joined sheet the key points at, disagree in this column. */
   differ: number;
-  /** Lookup sheet: rows left empty because the join key matches several rows of the other sheet. */
-  ambiguous: number;
 }
+/** A column no cell of which could be written because every cell was emptied by disagreement: not in the CSV, the count of rows still said. */
+export interface DescriptiveLeftEmpty { header: string; sheet: string; differ: number }
 export interface Dataset {
   id: string; label: string; file: string;
   rows: DataRow[]; variables: Variable[];
@@ -276,6 +276,8 @@ export interface Dataset {
   roundedTimes?: RoundedTimes[];
   /** Source columns written after the variables because nothing else carries them. Absent when there are none. */
   descriptiveColumns?: DescriptiveColumn[];
+  /** Source columns whose every cell was emptied by disagreement (so no column was written): the sidecar says how many rows. Absent when none. */
+  descriptiveLeftEmpty?: DescriptiveLeftEmpty[];
 }
 
 /* ---------- findings and rules ---------- */

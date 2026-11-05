@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { DescriptiveColumn, RoundedTimes,
+import type { DescriptiveColumn, DescriptiveLeftEmpty, RoundedTimes,
   ColumnRole,
   DataRow,
   Dataset,
@@ -1528,6 +1528,8 @@ export function unwrittenColumns(ds: Dataset): { sheet: string; index: number; h
 export interface BuildOptions {
   /** Overrides the dataset label (default: the file name, plus the sheet when the file has several). */
   label?: string;
+  /** false: the descriptive columns are not added (the dataset as it was before they existed; for tests that compare the two). */
+  descriptive?: false;
 }
 
 /** `reason` is the English phrase (technical line); `reasons` the codes every language renders from (report.ts). */
@@ -1555,9 +1557,12 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
   const total = ds.rows.length;
   const columns = new Map<string, DescriptiveColumn>();
   const taken: { sheet: string; index: number }[] = [];
+  const emptied: DescriptiveLeftEmpty[] = [];
   const roundedBy = new Map<string, { sheet: string; header: string; count: number; maxMs: number }>();
   const ignored = new Map<string, Set<number>>();
   const ownIds = new Set<string>();
+  interface Pending { col: DescriptiveColumn; index: number; sheet: RawSheet; own: TableRec | undefined; lenders: TableRec[]; tally: (cell: RawCell, out: RawCell) => void }
+  const pending: Pending[] = [];
   for (const sheetName of [...new Set(none.map((c) => c.sheet))]) {
     const sheet = file.sheets.find((x) => x.name === sheetName);
     if (!sheet) continue;
@@ -1571,11 +1576,6 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
       if (skip.has(c.index)) continue;
       // the converter's own roles never come from /check's proposals; a column a hand-made mapping gives one is not /check's to write
       if (CONVERTER_ONLY_ROLES.has(mappingFor(file, mappings, sheet, own?.long).columns.find((x) => x.index === c.index)?.role.kind ?? '')) continue;
-      if (!sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null))) {
-        // nothing in the column: nothing is lost, so it is neither written nor named
-        taken.push({ sheet: sheetName, index: c.index });
-        continue;
-      }
       if (c.header.trim() === '') continue;
       // the same header on two TABLES is one column (their rows are different rows); a header repeated on one sheet, or lent by a lookup beside a column of the data sheet itself, is another column
       let id = c.header;
@@ -1583,10 +1583,10 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
       if (same !== undefined && !(own !== undefined && ownIds.has(id) && same.sheet !== sheetName)) id = `${c.header}#${sheetName}#${c.index}`;
       if (own !== undefined) ownIds.add(id);
       let col = columns.get(id);
-      if (col === undefined) columns.set(id, (col = { id, header: c.header, sheet: sheetName, index: c.index, values: new Array<RawCell>(total).fill(null), differ: 0, ambiguous: 0 }));
+      if (col === undefined) columns.set(id, (col = { id, header: c.header, sheet: sheetName, index: c.index, values: new Array<RawCell>(total).fill(null), differ: 0 }));
       const dated = sheet.dateAll?.[c.index] === true;
       const shown = dated && columnFractions(sheet, c.index, sheet.fractionShown?.[c.index] === true).shown;
-      // a date or time cell whose text is rounded to the second is counted (the sidecar note about rounded cells)
+      // a date or time cell whose text is rounded to the second and that is WRITTEN is counted, once per source cell (the sidecar note about rounded cells)
       const tally = (cell: RawCell, out: RawCell): void => {
         if (!dated || shown || typeof cell !== 'number' || typeof out !== 'string') return;
         const off = secondOffsetMs(cell);
@@ -1597,57 +1597,104 @@ function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMap
         if (off > t.maxMs) t.maxMs = off;
         roundedBy.set(key, t);
       };
-      const convert = (cell: RawCell): RawCell => {
-        const out = keyCellTextOf(file, sheet, c.index, cell);
-        tally(cell, out);
-        return out;
-      };
-      if (own) {
-        if (own.sourceRow === undefined) {
-          for (let i = 0; i < own.count; i++) {
-            const cell = own.reps[i].cells[c.index] ?? null;
-            if (!isBlankCell(cell)) col.values[own.start + i] = convert(cell);
-          }
-        } else {
-          const clash = new Uint8Array(own.count);
-          for (let i = 0; i < sheet.rows.length; i++) {
-            const n: number = own.sourceRow[i];
-            if (n < 0 || clash[n] === 1) continue;
-            const cell = sheet.rows[i].cells[c.index] ?? null;
-            if (isBlankCell(cell)) continue;
-            const at = own.start + n;
-            const kept = col.values[at];
-            const text = keyCellTextOf(file, sheet, c.index, cell);
-            if (kept === null) {
-              col.values[at] = text;
-              tally(cell, text);
-            } else if (String(text).trim() !== String(kept).trim()) {
-              clash[n] = 1;
-              col.values[at] = null;
-              col.differ++;
-            }
-          }
-        }
-      } else {
-        for (const t of lenders) {
-          const lookup = t.lookup!;
-          for (let i = 0; i < t.count; i++) {
-            const parts = keyPartsOf(t.reps[i], lookup.leftKeys);
-            const k = parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
-            const hit = k === undefined ? undefined : lookup.rowsByKey.get(k);
-            if (hit === 'ambiguous') col.ambiguous++;
-            else if (hit) {
-              const cell = hit.row.cells[c.index] ?? null;
-              if (!isBlankCell(cell)) col.values[t.start + i] = convert(cell);
-            }
-          }
-        }
-      }
-      taken.push({ sheet: sheetName, index: c.index });
+      pending.push({ col, index: c.index, sheet, own, lenders, tally });
     }
   }
+
+  // 1. the columns of tables: the cell of the row (wide), or the cell the source rows of a row agree on (long)
+  for (const { col, sheet, own, tally, index } of pending.filter((x) => x.own !== undefined)) {
+    const t = own!;
+    if (t.sourceRow === undefined) {
+      for (let i = 0; i < t.count; i++) {
+        const cell = t.reps[i].cells[index] ?? null;
+        if (isBlankCell(cell)) continue;
+        const text = keyCellTextOf(file, sheet, index, cell);
+        col.values[t.start + i] = text;
+        tally(cell, text);
+      }
+    } else {
+      const clash = new Uint8Array(t.count);
+      const first = sheet.dateAll?.[index] === true ? new Array<RawCell>(t.count).fill(null) : undefined;
+      for (let i = 0; i < sheet.rows.length; i++) {
+        const n: number = t.sourceRow[i];
+        if (n < 0 || clash[n] === 1) continue;
+        const cell = sheet.rows[i].cells[index] ?? null;
+        if (isBlankCell(cell)) continue;
+        const at = t.start + n;
+        const kept = col.values[at];
+        const text = keyCellTextOf(file, sheet, index, cell);
+        if (kept === null) {
+          col.values[at] = text;
+          if (first) first[n] = cell;
+        } else if (String(text).trim() !== String(kept).trim()) {
+          clash[n] = 1;
+          col.values[at] = null;
+          col.differ++;
+        }
+      }
+      if (first) for (let n = 0; n < t.count; n++) if (col.values[t.start + n] !== null) tally(first[n], col.values[t.start + n]);
+    }
+  }
+
+  // 2. the columns of lookup sheets, read from EVERY right row the key points at (position or date ambiguity does not matter here): the value they agree on, empty where they differ
+  const CONFLICT = Symbol('conflict');
+  for (const sheetName of new Set(pending.filter((x) => x.own === undefined).map((x) => x.sheet.name))) {
+    const mine = pending.filter((x) => x.own === undefined && x.sheet.name === sheetName);
+    const lenders = mine[0].lenders;
+    // per column and key: the written value, or CONFLICT, or null (nothing); a right row is tallied once
+    const resolved = mine.map(() => new Map<string, RawCell | typeof CONFLICT>());
+    const counted = mine.map(() => new Set<RawRow>());
+    for (const t of lenders) {
+      const lookup = t.lookup!;
+      for (let i = 0; i < t.count; i++) {
+        const parts = keyPartsOf(t.reps[i], lookup.leftKeys);
+        const k = parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
+        const group = k === undefined ? undefined : lookup.rowsOfKey.get(k);
+        if (k === undefined || group === undefined) continue;
+        mine.forEach(({ col, sheet, tally, index }, m) => {
+          let got = resolved[m].get(k);
+          if (got === undefined) {
+            got = null;
+            let from: RawRow | undefined;
+            for (const r of group) {
+              const cell = r.cells[index] ?? null;
+              if (isBlankCell(cell)) continue;
+              const text = keyCellTextOf(file, sheet, index, cell);
+              if (got === null) {
+                got = text;
+                from = r;
+              } else if (String(text).trim() !== String(got).trim()) {
+                got = CONFLICT;
+                break;
+              }
+            }
+            if (got !== null && got !== CONFLICT && from !== undefined && !counted[m].has(from)) {
+              counted[m].add(from);
+              tally(from.cells[index] ?? null, got);
+            }
+            resolved[m].set(k, got);
+          }
+          if (got === CONFLICT) col.differ++;
+          else if (got !== null) col.values[t.start + i] = got;
+        });
+      }
+    }
+  }
+
+  // 3. a column is written when at least one cell is; a column every cell of which was emptied by disagreement, or that holds nothing in the rows that reach the output, is not written
+  // and stays in the list of columns that are not in the file (the disagreement is counted, too)
+  const written = new Set<DescriptiveColumn>();
+  for (const { col } of pending) {
+    if (col.values.some((v) => v !== null)) written.add(col);
+    else {
+      columns.delete(col.id);
+      if (col.differ > 0) emptied.push({ header: col.header, sheet: col.sheet, differ: col.differ });
+    }
+  }
+  for (const p of pending) if (written.has(p.col)) taken.push({ sheet: p.sheet.name, index: p.index });
   if (columns.size > 0) ds.descriptiveColumns = [...columns.values()];
-  // what is written (or empty) is no longer "not in this file"
+  if (emptied.length > 0) ds.descriptiveLeftEmpty = emptied;
+  // what is written is no longer "not in this file"
   if (taken.length > 0 && ds.readColumns) {
     for (const rec of ds.readColumns) {
       const add = taken.filter((x) => x.sheet === rec.sheet).map((x) => x.index);
@@ -1752,7 +1799,7 @@ export function buildDataset(
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
   const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}), ...(roundedTimes.length > 0 ? { roundedTimes: mergeRounded(roundedTimes) } : {}) };
-  addDescriptive(file, layout, mappings, dataset, tables);
+  if (opts.descriptive !== false) addDescriptive(file, layout, mappings, dataset, tables);
   return { dataset, findings };
 }
 
@@ -1766,6 +1813,7 @@ export function buildDatasets(
   mappings: SheetMapping[],
   metadata: MetadataRecord[],
   id: string,
+  buildOpts: Pick<BuildOptions, 'descriptive'> = {},
 ): { datasets: Dataset[]; findings: Finding[] } {
   const findings: Finding[] = [];
   if (layout.unsupported) findings.push(layoutUnsupportedFinding(file.fileName, layout));
@@ -1779,7 +1827,7 @@ export function buildDatasets(
   for (const g of groups) {
     const sheet = g.tables[0].sheet;
     const label = file.sheets.length > 1 ? `${file.fileName} (${sheet})` : file.fileName;
-    const r = buildDataset(file, g, mappings, metadata, groups.length === 1 ? id : `${id}:${sheet}`, { label });
+    const r = buildDataset(file, g, mappings, metadata, groups.length === 1 ? id : `${id}:${sheet}`, { label, ...buildOpts });
     datasets.push(r.dataset);
     pushAll(findings, r.findings);
   }

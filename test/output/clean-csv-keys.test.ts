@@ -75,14 +75,12 @@ describe('a long sheet: the column that tells rows apart is written', () => {
     expect(left(out.sidecar)).toEqual([]);
   });
 
-  it('a pressure that differs inside one output row and did not join the key is written as a descriptive column, empty where the rows disagree, and the note counts it', () => {
+  it('a pressure that differs inside one output row and did not join the key is not written (every cell would be empty), and the note names it, as before', () => {
     const ds = build(manyLong('Pressure [dbar]', (s, p) => `${s}${['Corg', 'Ntot', 'Ptot'].indexOf(p)}.50`));
     const out = toCleanCsv(ds);
     expect(ds.extraKeyColumns).toBeUndefined();
-    const { header, rows } = parse(out.csv);
-    expect(header[header.length - 1]).toBe('Pressure [dbar]');
-    expect(rows.every((r) => r[r.length - 1] === '')).toBe(true);
-    expect(left(out.sidecar)).toEqual([]);
+    expect(parse(out.csv).header.some((h) => /pressure/i.test(h))).toBe(false);
+    expect(left(out.sidecar)).toEqual(['source columns that are not in this file: Pressure [dbar]']);
     expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there: Pressure [dbar] (4 rows)');
   });
 
@@ -218,11 +216,12 @@ describe('every source column the clean CSV does not contain is named', () => {
     expect(left(out.sidecar)).toEqual([]);
   });
 
-  it('a pressure the sheet cannot carry and a comment are both written, the pressure empty where its rows disagree', () => {
+  it('a pressure the sheet cannot carry is named, the comment beside it is written', () => {
     const ds = build(manyLong('Pressure [dbar],Comment', (s, p) => `${s}${['Corg', 'Ntot', 'Ptot'].indexOf(p)}.50,ok`));
     const out = toCleanCsv(ds);
-    expect(parse(out.csv).header.slice(-2)).toEqual(['Pressure [dbar]', 'Comment']);
-    expect(left(out.sidecar)).toEqual([]);
+    expect(parse(out.csv).header.slice(-1)).toEqual(['Comment']);
+    expect(parse(out.csv).header.some((h) => /pressure/i.test(h))).toBe(false);
+    expect(left(out.sidecar)).toEqual(['source columns that are not in this file: Pressure [dbar]']);
   });
 
   it('the sidecar lists a written extra column with its original name and unit', () => {

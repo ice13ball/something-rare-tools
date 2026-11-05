@@ -193,7 +193,11 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   }
 
   // The descriptive columns: source columns nothing else carries, as the file has them, after the variables (a collision gets a suffix, caseless, as the key columns do)
-  for (const d of ds.descriptiveColumns ?? []) add(d.header, undefined, (_r, i) => valueText(d.values[i]), [d.header, '', ''], true);
+  const descriptiveHeaders: string[] = [];
+  for (const d of ds.descriptiveColumns ?? []) {
+    add(d.header, undefined, (_r, i) => valueText(d.values[i]), [d.header, '', ''], true);
+    descriptiveHeaders.push(cols[cols.length - 1].header);
+  }
 
   const lines = [csvLine(cols.map((c) => guardText(c.header))), ...rows.map((r, i) => csvLine(cols.map((c) => c.get(r, i))))];
 
@@ -218,12 +222,16 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
     const mine = (ds.roundedTimes ?? []).filter((r) => r.sheet === sheet).map((r) => `${r.header.trim() === '' ? '(column)' : r.header} (${r.atLeast ? 'at least ' : ''}${r.count} ${r.count === 1 ? 'cell' : 'cells'}, up to ${Math.max(1, Math.round(r.maxMs))} ms)`);
     notes.push(`date cells rounded to the second${where}: ${mine.join(' | ')}`);
   }
-  // descriptive cells left empty on purpose: said per column
+  // descriptive cells left empty on purpose (the rows the source rows, or the rows of a joined sheet, disagree on): said per sheet and column, with the header the column has in the CSV
   const rowsOf = (n: number): string => `${n} ${n === 1 ? 'row' : 'rows'}`;
-  const differ = (ds.descriptiveColumns ?? []).filter((d) => d.differ > 0).map((d) => `${d.header} (${rowsOf(d.differ)})`);
-  if (differ.length > 0) notes.push(`source columns that differ within a row, left empty there: ${differ.join(' | ')}`);
-  const ambiguous = (ds.descriptiveColumns ?? []).filter((d) => d.ambiguous > 0).map((d) => `${d.header} (${rowsOf(d.ambiguous)})`);
-  if (ambiguous.length > 0) notes.push(`source columns of a joined sheet whose key is ambiguous, left empty there: ${ambiguous.join(' | ')}`);
+  const emptied: { sheet: string; label: string }[] = [
+    ...(ds.descriptiveColumns ?? []).map((d, k) => ({ sheet: d.sheet, label: d.differ > 0 ? `${descriptiveHeaders[k]} (${rowsOf(d.differ)})` : '' })),
+    ...(ds.descriptiveLeftEmpty ?? []).map((d) => ({ sheet: d.sheet, label: `${d.header} (${rowsOf(d.differ)})` })),
+  ].filter((x) => x.label !== '');
+  for (const sheet of [...new Set(emptied.map((x) => x.sheet))]) {
+    const where = ds.mappings.length > 1 ? ` (sheet ${sheet})` : '';
+    notes.push(`source columns that differ within a row, left empty there${where}: ${emptied.filter((x) => x.sheet === sheet).map((x) => x.label).join(' | ')}`);
+  }
   const sidecar = [
     csvLine(['original_column', 'output_column', 'unit', 'unit_source', 'p01']),
     ...side.map((s) => csvLine(s.map(guardText))),
