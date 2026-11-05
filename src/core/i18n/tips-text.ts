@@ -354,7 +354,7 @@ No findings only means that no problems were found in the checked categories.`,
 • Only a column the tool would otherwise take as a measured variable is changed this way. A column it recognises as a standard variable keeps its proposal.`,
   'tip.convertAccept.does': `Lets you accept a kind of warning for this export.`,
   'tip.convertAccept.logic': `• A warning does not stop the export, but the archive will carry what it says (for example text in a species cell, a column that is not written, or a missing taxon ID). Each kind has to be accepted once, after you have read it.
-• A tick holds while the findings of that kind stay the same; when a decision of yours changes them, it has to be given again. Typing in the description unticks nothing. Nothing is stored: a new upload starts with every warning unaccepted.
+• A tick holds while the findings of that kind stay the same; when a decision of yours changes them, it has to be given again. Typing in the description unticks nothing. Nothing is stored: a new upload starts with every warning unaccepted. One exception: the list of proposed roles that the file does not state stays accepted when you set one of its columns yourself, and asks again only when a column joins the list.
 • Errors cannot be accepted: they block the export until the cause is removed.
 • Findings that only inform are shown and never need an answer.`,
   'tip.convertExport.does': `Builds the Darwin Core Archive and downloads it.`,
@@ -858,7 +858,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • W ten sposób zmieniana jest tylko kolumna, którą narzędzie uznałoby inaczej za zmierzoną wielkość. Kolumna rozpoznana jako standardowa wielkość zachowuje swoją propozycję.`,
   'tip.convertAccept.does': `Pozwala zaakceptować rodzaj ostrzeżenia dla tego eksportu.`,
   'tip.convertAccept.logic': `• Ostrzeżenie nie blokuje eksportu, ale archiwum będzie zawierać to, o czym mówi (na przykład tekst w komórce gatunku, kolumna, która nie jest zapisywana, albo brak identyfikatora taksonu). Każdy rodzaj trzeba zaakceptować raz, po przeczytaniu.
-• Zaznaczenie trwa, dopóki uwagi tego rodzaju się nie zmienią; gdy zmieni je Twoja decyzja, trzeba je dać ponownie. Pisanie w opisie niczego nie odznacza. Nic nie jest zapisywane: nowe wgranie zaczyna z każdym ostrzeżeniem niezaakceptowanym.
+• Zaznaczenie trwa, dopóki uwagi tego rodzaju się nie zmienią; gdy zmieni je Twoja decyzja, trzeba je dać ponownie. Pisanie w opisie niczego nie odznacza. Nic nie jest zapisywane: nowe wgranie zaczyna z każdym ostrzeżeniem niezaakceptowanym. Jeden wyjątek: lista zaproponowanych ról, których plik nie podaje, zostaje zaakceptowana, gdy sam ustawisz rolę jednej z jej kolumn; pyta ponownie dopiero, gdy do listy dojdzie kolumna.
 • Błędów nie można zaakceptować: blokują eksport, dopóki nie usuniesz przyczyny.
 • Uwagi, które tylko informują, są pokazywane i nie wymagają odpowiedzi.`,
   'tip.convertExport.does': `Buduje archiwum Darwin Core i je pobiera.`,
@@ -1360,7 +1360,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Nur eine Spalte, die das Werkzeug sonst als Messgröße nehmen würde, wird so geändert. Eine Spalte, die es als Standardgröße erkennt, behält ihren Vorschlag.`,
   'tip.convertAccept.does': `Lässt Sie eine Art von Warnung für diesen Export akzeptieren.`,
   'tip.convertAccept.logic': `• Eine Warnung stoppt den Export nicht, aber das Archiv enthält, was sie sagt (zum Beispiel Text in einer Artzelle, eine Spalte, die nicht geschrieben wird, oder eine fehlende Taxon-Kennung). Jede Art muss einmal akzeptiert werden, nachdem Sie sie gelesen haben.
-• Ein Haken gilt, solange die Hinweise dieser Art gleich bleiben; ändert sie eine Entscheidung von Ihnen, muss er neu gesetzt werden. Tippen in der Beschreibung entfernt keinen Haken. Nichts wird gespeichert: Ein neuer Upload beginnt mit jeder Warnung unakzeptiert.
+• Ein Haken gilt, solange die Hinweise dieser Art gleich bleiben; ändert sie eine Entscheidung von Ihnen, muss er neu gesetzt werden. Tippen in der Beschreibung entfernt keinen Haken. Nichts wird gespeichert: Ein neuer Upload beginnt mit jeder Warnung unakzeptiert. Eine Ausnahme: Die Liste der vorgeschlagenen Rollen, die die Datei nicht angibt, bleibt akzeptiert, wenn Sie selbst die Rolle einer ihrer Spalten setzen; sie fragt erst wieder, wenn eine Spalte zur Liste hinzukommt.
 • Fehler lassen sich nicht akzeptieren: Sie blockieren den Export, bis die Ursache beseitigt ist.
 • Hinweise, die nur informieren, werden gezeigt und brauchen keine Antwort.`,
   'tip.convertExport.does': `Erstellt das Darwin-Core-Archiv und lädt es herunter.`,
@@ -1862,7 +1862,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Seule une colonne que l'outil prendrait sinon pour une grandeur mesurée est changée ainsi. Une colonne qu'il reconnaît comme grandeur standard garde sa proposition.`,
   'tip.convertAccept.does': `Vous permet d'accepter un type d'avertissement pour cet export.`,
   'tip.convertAccept.logic': `• Un avertissement n'arrête pas l'export, mais l'archive contiendra ce qu'il dit (par exemple du texte dans une cellule d'espèce, une colonne qui n'est pas écrite ou un identifiant de taxon manquant). Chaque type doit être accepté une fois, après lecture.
-• Une coche reste tant que les constats de ce type ne changent pas ; si une de vos décisions les change, il faut la remettre. Saisir dans la description n'en décoche aucune. Rien n'est enregistré : un nouveau dépôt commence avec chaque avertissement non accepté.
+• Une coche reste tant que les constats de ce type ne changent pas ; si une de vos décisions les change, il faut la remettre. Saisir dans la description n'en décoche aucune. Rien n'est enregistré : un nouveau dépôt commence avec chaque avertissement non accepté. Une exception : la liste des rôles proposés que le fichier n'indique pas reste acceptée quand vous fixez vous-même le rôle d'une de ses colonnes ; elle ne redemande que si une colonne s'ajoute à la liste.
 • Les erreurs ne s'acceptent pas : elles bloquent l'export jusqu'à ce que la cause soit supprimée.
 • Les constats qui informent seulement sont affichés et n'appellent aucune réponse.`,
   'tip.convertExport.does': `Construit l'archive Darwin Core et la télécharge.`,

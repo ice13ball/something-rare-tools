@@ -22,6 +22,7 @@ import type { RuleSpec } from './spec';
  *   CONV-NEGATIVE-QUANTITY     count            field = column (or the effort column), value = an example, lines = rows
  *   CONV-SAMPLE-CODE-MISSING   count, column    column = the sample-code column ('none' when the sheet has none); lines = the rows without a code
  *   CONV-KEY-PART-BLANK        count, columns   the person picked a sample key (sampleKey.ts); columns = the headers of the key; lines = rows where a part of the key is empty (NA, nan and a dash too)
+ *   CONV-ROLE-UNCONFIRMED      count, columns, keys   columns = the columns (header, proposed role, a few cells) whose taxon, quantity, date, latitude or longitude role the converter proposed and the file does not state; keys = index:role of each, for the page (a tick stands for a set); one finding per sheet (warning, to accept; nothing is re-roled)
  *   CONV-KEY-MIXED-NUMBERS     examples         a key column mixes typed numbers and number-like text; field = column; examples = one of each (warning, to accept)
  *   CONV-KEY-TOO-LONG          count, max, longest, prefix, prefixLength   (prefixBig = the name is a fifth of the longest or more: the advice names it) an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
  *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
@@ -237,6 +238,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Une colonne de la clé d'échantillon ({columns}) est vide {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) ; « NA », « nan » et un tiret comptent comme vides. Ces lignes forment des échantillons à part, non réunis à ceux qui ont une valeur ici. Acceptez si c'est exact ; sinon corrigez le fichier.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) have an empty part in the sample key the user picked (columns: {columns}; an empty cell, NA, nan and a dash are empty). The empty part is part of the key: those rows are samples of their own, never merged with rows that have a value. A row whose every part is empty has no sample (CONV-SAMPLE-CODE-MISSING).`,
+  },
+  {
+    id: 'CONV-ROLE-UNCONFIRMED',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns', 'keys'],
+    plain: {
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} rolę zaproponowaną przez konwerter, której plik nie podaje: {columns}. Nic nie zostało zmienione. Sprawdź {+count:ją|je|je}, popraw złą rolę w tabeli kolumn i zaakceptuj raz.`,
+      en: `{count} {+count:column has|columns have} a role the converter proposed that the file does not state: {columns}. Nothing was changed. Check {+count:it|them}, correct a wrong role in the column table, and accept once.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} eine vom Konverter vorgeschlagene Rolle, die die Datei nicht angibt: {columns}. Nichts wurde geändert. Prüfen Sie sie, korrigieren Sie eine falsche Rolle in der Spaltentabelle und akzeptieren Sie einmal.`,
+      fr: `{count} {+count:colonne a|colonnes ont} un rôle proposé par le convertisseur que le fichier n'indique pas : {columns}. Rien n'a été modifié. Vérifiez-{+count:la|les}, corrigez un rôle faux dans le tableau des colonnes et acceptez une fois.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) have a taxon, quantity, date, latitude or longitude role that the proposer gave and the file does not state by name (an exact Darwin Core term, an exact vocabulary entry, a unit the header declares or a PANGAEA geocode): {columns}. A column the person set by hand is not listed. Nothing is re-roled and nothing is written about this finding in the archive or the companion file; the acceptance holds while the listed set does not grow (set: {keys}, column index and proposed role).`,
   },
   {
     id: 'CONV-KEY-MIXED-NUMBERS',
@@ -2146,13 +2160,37 @@ function shortList(text: string): string {
   return items.length <= SHOWN_ITEMS ? text : `${items.slice(0, SHOWN_ITEMS).join(', ')}, …`;
 }
 
+/** The words for the five roles CONV-ROLE-UNCONFIRMED lists, in the reader's language. */
+const LISTED_ROLE_WORDS: Record<string, Record<Lang, string>> = {
+  taxon: { en: 'taxon', pl: 'takson', de: 'Taxon', fr: 'taxon' },
+  quantity: { en: 'quantity', pl: 'liczebność', de: 'Anzahl', fr: 'effectif' },
+  date: { en: 'date', pl: 'data', de: 'Datum', fr: 'date' },
+  latitude: { en: 'latitude', pl: 'szerokość geograficzna', de: 'Breitengrad', fr: 'latitude' },
+  longitude: { en: 'longitude', pl: 'długość geograficzna', de: 'Längengrad', fr: 'longitude' },
+};
+const ITEM_SEP = '\u001e';
+const FIELD_SEP = '\u001f';
+
+/** The `columns` parameter of CONV-ROLE-UNCONFIRMED: one item per column, `header US role US cell US cell`, items separated by RS (neither occurs in a visible text; they are taken out of a header or a cell). */
+export function encodeListedColumns(columns: readonly { header: string; role: string; cells: readonly string[] }[]): string {
+  return columns.map((c) => [c.header, c.role, ...c.cells].map((x) => x.replace(/[\u001e\u001f]/g, ' ')).join(FIELD_SEP)).join(ITEM_SEP);
+}
+
+/** The listed columns as text in the reader's language: "Date" (date: 2014-05-02 | 2014-05-03); the first few, then the count of the rest. The finding keeps the whole set. */
+function listedColumnsText(encoded: string, lang: Lang): string {
+  const items = encoded === '' ? [] : encoded.split(ITEM_SEP).map((item) => item.split(FIELD_SEP));
+  const shown = items.slice(0, SHOWN_ITEMS).map(([header, role, ...cells]) => `"${header}" (${LISTED_ROLE_WORDS[role]?.[lang] ?? role}${cells.length > 0 ? `: ${cells.join(' | ')}` : ''})`);
+  return `${shown.join('; ')}${items.length > SHOWN_ITEMS ? `; … (+${items.length - SHOWN_ITEMS})` : ''}`;
+}
+
 /** A finding of CONV-LONG-UNSUPPORTED without a reason (the sheet was not read for another cause) still names every placeholder of its text. */
 const withDefaults = (f: Finding): Finding => (f.ruleId === 'CONV-LONG-UNSUPPORTED' ? { ...f, params: { reason: 'other', count: 0, max: MAX_PAIRS, ...f.params } } : f);
 
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
-  if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
+  if (f.ruleId === 'CONV-ROLE-UNCONFIRMED' && typeof f.params.columns === 'string') f = { ...f, params: { ...f.params, columns: listedColumnsText(f.params.columns, lang) } };
+  else if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
@@ -2230,5 +2268,6 @@ export function renderConvertTechnical(f: Finding): string {
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, 'en') } };
   if (f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' || f.ruleId === 'CONV-ROW-LEFT-OUT') f = { ...f, params: { ...f.params, what: rowWhat(f.params.reason, 'en') } };
   if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, 'en') } };
+  if (f.ruleId === 'CONV-ROLE-UNCONFIRMED' && typeof f.params.columns === 'string') f = { ...f, params: { ...f.params, columns: listedColumnsText(f.params.columns, 'en') } };
   return fill(profileVariant(f)?.technical ?? getConvertRule(f.ruleId).technical, f);
 }

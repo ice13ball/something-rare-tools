@@ -207,6 +207,11 @@ export interface ColumnProposal {
   /** Shared-proposer codes written before / after the main reason, joined with "; " (an empty column; a depth direction that is not stated). */
   reasonLead?: string;
   reasonNotes?: string[];
+  /**
+   * Converter only (core/convert/stated.ts, set by `withStated`): the file itself states this role (an exact Darwin Core term, an exact vocabulary entry, a unit the header declares or a PANGAEA geocode)
+   * and the cells do not contradict it. Absent = a suggestion only. A mark and nothing else: it changes no role. /check never sets it.
+   */
+  stated?: true;
 }
 export interface SheetMapping { sheet: string; columns: { index: number; header: string; role: ColumnRole }[] }
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }

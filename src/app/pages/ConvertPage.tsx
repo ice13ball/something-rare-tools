@@ -26,7 +26,7 @@ import { SampleKeyPicker } from '../components/SampleKeyPicker';
 import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, printOf, tickHolds, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -56,12 +56,6 @@ async function toInputFiles(files: File[]): Promise<InputFile[]> {
 const splitText = (s: TaxonSplit): string => s.scientificName;
 /** A list of names without a doubt this short is shown open; a longer one is folded behind "show all N names". */
 const SPLITS_OPEN_MAX = 15;
-
-/**
- * What a tick of "I accept" holds for: the findings of one rule as they are now. A tick is kept per rule id together with this fingerprint, so a rule whose
- * findings change after the tick (a new mapping, another sheet) is no longer accepted and has to be ticked again.
- */
-const fingerprint = (findings: readonly Finding[]): string => JSON.stringify(findings.map((f) => [f.file, f.sheet, f.field, f.value, f.lines, f.params]));
 
 /** The shape a GA4 event reports: wide, long or mixed. Never a name. */
 const shapeOf = (shapes: readonly ('wide' | 'long')[]): 'wide' | 'long' | 'mixed' => (shapes.every((x) => x === 'wide') ? 'wide' : shapes.every((x) => x === 'long') ? 'long' : 'mixed');
@@ -628,8 +622,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const showPrefix = prefixStation || view?.codeCollision === true;
 
   // warning rules to accept: one tick per rule, valid only for the findings it was given for; plus the page's own "unconfirmed taxon columns"
-  const prints = useMemo(() => Object.fromEntries(judged.acceptRules.map((r) => [r, fingerprint(judged.toAccept.filter((f) => f.ruleId === r))])), [judged]);
-  const isAccepted = (rule: string): boolean => accepted[rule] !== undefined && accepted[rule] === prints[rule];
+  const prints = useMemo(() => Object.fromEntries(judged.acceptRules.map((r) => [r, printOf(r, judged.toAccept.filter((f) => f.ruleId === r))])), [judged]);
+  const isAccepted = (rule: string): boolean => tickHolds(rule, accepted[rule], prints[rule], judged.toAccept.filter((f) => f.ruleId === rule));
   // the identity of the columns left out (not their number): another set of columns is another acceptance
   const unconfirmedPrint = unconfirmed.map((c) => c.key).sort().join('|');
   const unconfirmedAccepted = unconfirmed.length === 0 || accepted[UNCONFIRMED_KEY] === unconfirmedPrint;

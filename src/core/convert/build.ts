@@ -21,6 +21,7 @@ import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './e
 import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
+import { roleUnconfirmedParams, unconfirmedRoles } from './roleUnconfirmed';
 import { transposedSheetReason } from './transposed';
 import { firstRowIsUnits } from '../recognize/layout';
 import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
@@ -1559,6 +1560,14 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     pivoted.push({ file: sin.file.fileName, sheet: sh });
     pushAll(findings, pivotNoteFindings(sin.file.fileName, sh.name, sh.pivot));
     pushAll(findings, pivotBlockFindings(sin.file.fileName, sh.name, sh.pivot));
+  }
+
+  // a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: said once per sheet, to be accepted; nothing is re-roled (roleUnconfirmed.ts)
+  for (const sin of input.sheets) {
+    const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
+    if (sh === undefined) continue;
+    const listed = unconfirmedRoles(sin.file, sh, sin.mapping);
+    if (listed.length > 0) findings.push(makeConvertFinding('CONV-ROLE-UNCONFIRMED', { file: sin.file.fileName, sheet: sin.sheet, params: roleUnconfirmedParams(listed) }));
   }
 
   const splits = listSplits(input);

@@ -125,6 +125,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-NEGATIVE-QUANTITY | error | B | — | —<a id="CONV-NEGATIVE-QUANTITY"></a> |
 | CONV-SAMPLE-CODE-MISSING | error | B | — | —<a id="CONV-SAMPLE-CODE-MISSING"></a> |
 | CONV-KEY-PART-BLANK | warning | B | — | —<a id="CONV-KEY-PART-BLANK"></a> |
+| CONV-ROLE-UNCONFIRMED | warning | B | — | —<a id="CONV-ROLE-UNCONFIRMED"></a> |
 | CONV-KEY-MIXED-NUMBERS | warning | B | — | —<a id="CONV-KEY-MIXED-NUMBERS"></a> |
 | CONV-KEY-TOO-LONG | error | B | — | —<a id="CONV-KEY-TOO-LONG"></a> |
 | CONV-KEY-PICKED | info | B | — | —<a id="CONV-KEY-PICKED"></a> |

@@ -141,6 +141,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-KEY-PART-BLANK',
   // a key column that mixes typed numbers and number-like text: one sample may be split
   'CONV-KEY-MIXED-NUMBERS',
+  // a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: the person looks at the list once; nothing is re-roled
+  'CONV-ROLE-UNCONFIRMED',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written

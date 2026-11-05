@@ -416,3 +416,29 @@ export function codesFileName(fileName: string, sheet: string, sheetCount: numbe
   const stem = fileName.replace(/\.[A-Za-z0-9]+$/, '');
   return `${stem}${sheetCount > 1 ? `-${sheet}` : ''}-with-codes.csv`;
 }
+
+/**
+ * What a tick of "I accept" holds for: the findings of one rule as they are now. A tick is kept per rule id together with this fingerprint, so a rule whose
+ * findings change after the tick (a new mapping, another sheet) is no longer accepted and has to be ticked again.
+ */
+export const fingerprint = (findings: readonly Finding[]): string => JSON.stringify(findings.map((f) => [f.file, f.sheet, f.field, f.value, f.lines, f.params]));
+
+/**
+ * CONV-ROLE-UNCONFIRMED is ticked for a SET of columns, not for a text: a column the person answers by hand after the tick leaves the list and the tick stays, only a column that was not
+ * on the list at the tick reopens it. The set is the (file, sheet, column, proposed role) of every listed column, kept in `params.keys`. The tick is the person's acknowledgement and nothing
+ * else: it is not a role, it is not sent anywhere except in the list of accepted rules the export asks for, and nothing of it is saved in the companion file.
+ */
+export const ROLE_RULE = 'CONV-ROLE-UNCONFIRMED';
+export const listedColumns = (findings: readonly Finding[]): string[] =>
+  findings.flatMap((f) => String(f.params.keys ?? '').split(',').filter((k) => k !== '').map((k) => `${f.file ?? ''}\u0000${f.sheet ?? ''}\u0000${k}`)).sort();
+export const printOf = (rule: string, findings: readonly Finding[]): string => (rule === ROLE_RULE ? JSON.stringify(listedColumns(findings)) : fingerprint(findings));
+export const tickHolds = (rule: string, ticked: string | undefined, now: string | undefined, findings: readonly Finding[]): boolean => {
+  if (ticked === undefined) return false;
+  if (rule !== ROLE_RULE) return ticked === now;
+  try {
+    const before = new Set(JSON.parse(ticked) as string[]);
+    return listedColumns(findings).every((k) => before.has(k));
+  } catch {
+    return false;
+  }
+};
