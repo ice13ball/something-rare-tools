@@ -10,6 +10,7 @@ import type { NercDecisions } from '../core/convert/nerc';
 import type { ConvertSettings } from '../core/convert/settings';
 import type { WormsLookup } from '../core/convert/worms';
 import type { SheetLedger } from '../core/convert/ledger';
+import type { SheetKeyReport } from '../core/convert/sampleKey';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -96,6 +97,12 @@ export interface ConvertSheetRequest {
   /** The reasons the user left out and listed (core/convert/notWritten.ts) with the number of rows each was given for, and the same as a companion file recorded them (with the counts they hold for). */
   leaveOut?: { reason: string; count: number }[];
   leaveOutFile?: { reason: string; count: number; rows: number }[];
+  /**
+   * The columns the PERSON picked to say which rows are one sample (core/convert/sampleKey.ts), by column index, in the order picked. Never set by the page itself. `sampleKeyFromFile` says the
+   * pick was read from a companion file (it holds only for the same columns and the same number of rows: the page checks both before it sends it).
+   */
+  sampleKey?: { columns: number[] };
+  sampleKeyFromFile?: boolean;
 }
 
 export interface ConvertRequestBody {
@@ -149,8 +156,10 @@ export interface ConvertView {
   profile: ProfileSummary;
   /** At least one sample code repeats between stations / rows: the station prefix toggle is worth showing. */
   codeCollision: boolean;
-  /** Some sheet has rows without a sample code: the code proposal is worth showing. */
+  /** Some sheet has rows without a sample code: the picker of the sample key and the code proposal are worth showing. */
   codesMissing: { fileId: string; sheet: string }[];
+  /** What the picked sample keys made, by sheet (core/convert/sampleKey.ts): the numbers the picker shows after a pick. */
+  keys: SheetKeyReport[];
   /** Where every source row and numeric column of every sheet went (core/convert/ledger.ts): informational. A row it could not place is a finding of its own (CONV-ROW-NOT-UNDERSTOOD). */
   ledger: SheetLedger[];
   /** How many rows the list beside the archive holds (a line with no record, a written line that lost cells other than zeros), and how many sheets are left out as a whole: the same function that writes the list counts them. */
@@ -203,6 +212,8 @@ export interface ConvertProtocol {
   pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
   notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
+  /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
+  previewKey: { req: { body: ConvertRequestBody; fileId: string; sheet: string; columns: number[] }; res: SheetKeyReport | null };
 }
 
 export type ConvertRequestType = keyof ConvertProtocol;
@@ -223,4 +234,5 @@ export interface ConvertEngine {
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
   notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
+  previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[]): Promise<SheetKeyReport | null>;
 }

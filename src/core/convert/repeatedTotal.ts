@@ -124,6 +124,8 @@ export function analyseRepeats(args: {
   realCounts?: boolean;
   /** The user chose to drop the copies: they are not part of the groups. */
   dropCopies?: boolean;
+  /** The columns of a picked sample key: they say which sample a row is of whatever role they have, and none of them is an identifier of the row. */
+  keyColumns?: readonly number[];
 }): RepeatAnalysis {
   if (args.realCounts === true) return {};
   const { sheet, mapping, decimalComma: dc } = args;
@@ -136,11 +138,13 @@ export function analyseRepeats(args: {
     ...roles.filter((c) => c.role.kind === 'biomass').map((c) => ({ index: c.index, header: c.header.trim(), kind: 'biomass' as const })),
   ];
   if (candidates.length === 0) return {};
-  const STRICT_KEY = new Set(['sampleId', 'station', 'cruise', 'replicate', 'date', 'datetime', 'datePart', 'time', 'latitude', 'longitude', 'depth', 'pressure', 'hemisphere', 'taxon', 'lifeStage', 'qualifier', 'taxonId']);
+  const STRICT_KEY = new Set(['keyPart', 'sampleId', 'station', 'cruise', 'replicate', 'date', 'datetime', 'datePart', 'time', 'latitude', 'longitude', 'depth', 'pressure', 'hemisphere', 'taxon', 'lifeStage', 'qualifier', 'taxonId']);
   const LOOSE_KEY = new Set([...STRICT_KEY].filter((k) => !['replicate', 'lifeStage', 'qualifier', 'taxonId'].includes(k)));
   const keyOf = (set: Set<string>): number[] => roles.filter((c) => set.has(c.role.kind) && !(c.role.kind === 'taxon' && c.role.header === true)).map((c) => c.index);
-  const strictCols = keyOf(STRICT_KEY);
-  const looseCols = keyOf(LOOSE_KEY);
+  const picked = args.keyColumns ?? [];
+  const withPicked = (cols: number[]): number[] => [...new Set([...cols, ...picked])];
+  const strictCols = withPicked(keyOf(STRICT_KEY));
+  const looseCols = withPicked(keyOf(LOOSE_KEY));
   const candidateIndexes = new Set(candidates.map((c) => c.index));
   const occurrenceId = roles.find((c) => c.role.kind === 'occurrenceId')?.index;
   const sample = sheet.rows;
@@ -154,7 +158,7 @@ export function analyseRepeats(args: {
     return vals.length >= 20 && new Set(vals).size >= vals.length * 0.95;
   };
   // (only a column the tool does not read is an identifier of the row; a size or a variable that differs on every row is data, and tells the rows apart)
-  const idLike = new Set<number>(roles.filter((c) => c.index === occurrenceId || (c.role.kind === 'ignore' && identifierLike(c.index))).map((c) => c.index));
+  const idLike = new Set<number>(roles.filter((c) => c.index === occurrenceId || (c.role.kind === 'ignore' && !picked.includes(c.index) && identifierLike(c.index))).map((c) => c.index));
   const rowsIn = sample.filter((r) => !args.skipLines(r) && cellText(r, taxon.index) !== '');
   const value = (row: RawRow, i: number): number | undefined => {
     const p = parseNumber(row.cells[i] ?? null, dc);

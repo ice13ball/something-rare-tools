@@ -1452,7 +1452,20 @@ code" (the button above applies it).
   when there is one. **A sample's id is never derived from depth, row order or a WoRMS name** (one exception below: a
   code reused on every visit of a station). The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
-  new code column last, for the user to check and drop again). **A wide sheet** gets one code per row
+  new code column last, for the user to check and drop again). **The first way, on the page: the person picks the columns that make a sample**
+  (`SampleKeyPicker`, `core/convert/sampleKey.ts`; shown under the heading of the sample codes for a sheet that has rows without a code, and kept while a key is in use). Nothing is ticked, proposed or changed for
+  the person (no role is changed by the existence of the feature; a ticked column that was `ignore` is read as `keyPart` in the conversion only, and the table of roles still shows what the person set). The ticked columns are
+  a draft: the page asks the worker (`previewKey`) what they would make, and the answer is the converter's own `SheetKeyReport` (samples, rows, rows per sample, rows with no key, rows with an empty part,
+  rows whose ID is too long) from the same run the export is (`previewSampleKey`, `ConvertResult.keys`), so the preview and the archive cannot count differently; "Use this key" is the only thing that puts it in the request
+  (`ConvertSheetRequest.sampleKey`, `ConvertSheetInput.sampleKey`). The sample's eventID is then the values of the columns in the order ticked, joined with `|` (a `|`, `\`, tab and line break inside a
+  value are written `\|`, `\\`, `\t`, `\n`, so different keys never give one ID): it depends on the values and never on the order of the rows. A value is trimmed and in Unicode form NFC, `1` and `1.0` are one value
+  (a text with a leading zero, or with 16 digits or more, stays text), a date cell goes through the date reader (a serial and the same date as text are one sample, a 1904 workbook is read right), an empty cell, NA, nan and a dash are
+  empty. An empty part is part of the key: those rows are samples of their own, said in `CONV-KEY-PART-BLANK` (a warning to accept); a row empty in every part has no sample (`CONV-SAMPLE-CODE-MISSING`, blocks); an ID over 255
+  characters blocks (`CONV-KEY-TOO-LONG`). A key of one column that is the station (or the cruise) gets `|sample` after it, so that the sample is not given the code of its own station. Two sheets that make the same ID are not merged
+  and not renamed: `CONV-ID-DUPLICATE` names both and blocks. The visit and station-prefix guesses are not applied to a key; the repeated-total, exact-copy and statistic-row checks read the key columns (a size-class total repeated on
+  a haul's rows is taken once with the key alone). `CONV-KEY-PICKED` (information, with "Ask again") says the key, the samples and the rows. The companion file keeps `sampleKey=<sheet>:<hashes>:<rows>`: one 8-digit hash of the folded header
+  per key column (case, spacing and underscores do not matter; `.<n>of<m>` tells equal columns apart) and the number of rows of the sheet the pick was made for, never a header. On a later drop it is applied only when every column is
+  found again and the sheet has the same number of rows, and then it is said as read from the companion file, with "Ask again"; otherwise the question is open. The code file stays as the second way. **A wide sheet** gets one code per row
   (`<station>-<n>`). **A long sheet** (a row is a taxon) gets **one code per sample**: the rows are grouped
   by the columns that define a sample, read from the mapped roles (cruise, station, date and time, depth,
   replicate; the position when nothing else is mapped, and **also when the key has no station and positions differ

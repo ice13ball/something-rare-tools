@@ -46,6 +46,8 @@ import { pushAll } from '../util/arrays';
 import { FateLog, buildSheetLedger, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
 import { decideRows } from './notWritten';
+import { MAX_EVENT_ID, keyColumns, keyReader } from './sampleKey';
+import type { SampleKey, SheetKeyReport } from './sampleKey';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -125,6 +127,13 @@ export interface ConvertSheetInput {
   leaveOut?: readonly (string | { reason: string; count: number })[];
   /** The same answers as a companion file recorded them: the reason, the lines it affected and the rows of the sheet. Honoured only when both numbers are the same today (the question reopens otherwise). */
   leaveOutFile?: readonly { reason: string; count: number; rows: number }[];
+  /**
+   * The columns the PERSON picked to say which rows are one sample, for a sheet that has no sample codes (sampleKey.ts). The sample code of a row is made of their values; the guesses about visits
+   * and the station prefix are not applied to it. Never guessed, never prefilled; absent = the sheet is read exactly as before.
+   */
+  sampleKey?: SampleKey;
+  /** The key was read from a companion file of an earlier run (the message says so and offers "Ask again"). */
+  sampleKeyFromFile?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -443,6 +452,8 @@ function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeo
   else if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
   for (const v of cols.variables) use(v);
+  // a sheet that carries a picked key reads those columns (profile sheets take no key)
+  if (sin.profile === undefined) for (const i of keyColumns(sin.sampleKey)) use({ index: i });
   use(cols.replicate);
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
   if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
@@ -1448,10 +1459,22 @@ function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly strin
   return { parameter: header[parameterAt].trim(), value: header[valueAt].trim(), ...(reason === undefined ? {} : { reason }) };
 }
 
-export function convert(rawInput: ConvertInput): ConvertResult {
+/**
+ * A column the person named as part of the sample key has a role: its own where it has one, else "keyPart" (never `ignore`), so that every check that reads the roles to find out which
+ * columns say which sample a row is of (the repeated totals, the copies, the statistic rows) sees it. Only a column the person picked is touched; a profile sheet takes no key.
+ */
+function withKeyParts(sin: ConvertSheetInput): ConvertSheetInput {
+  const cols = sin.profile !== undefined ? [] : keyColumns(sin.sampleKey);
+  if (cols.length === 0 || !sin.mapping.columns.some((c) => cols.includes(c.index) && c.role.kind === 'ignore')) return sin;
+  return { ...sin, mapping: { ...sin.mapping, columns: sin.mapping.columns.map((c) => (cols.includes(c.index) && c.role.kind === 'ignore' ? { ...c, role: { kind: 'keyPart' as const } } : c)) } };
+}
+
+export function convert(rawInputGiven: ConvertInput): ConvertResult {
+  const rawInput: ConvertInput = { ...rawInputGiven, sheets: rawInputGiven.sheets.map(withKeyParts) };
   // a sheet in the long environmental layout is not read at all: nothing of it is written, and the finding blocks the export
   const longFindings: Finding[] = [];
   const ledger: SheetLedger[] = [];
+  const keyReports: SheetKeyReport[] = [];
   const input: ConvertInput = {
     ...rawInput,
     sheets: rawInput.sheets.filter((sin) => {
@@ -1572,6 +1595,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // where each row and cell of this sheet went, for the ledger (ledger.ts): written beside the `continue`s below, never read by the conversion itself
     const fate = new FateLog(sheet.rows.length);
     let rowPos = -1;
+    // the sample key the person picked (sampleKey.ts): the sample code of a row is made of it, and the guesses about visits and the station prefix are not applied to it
+    const pickedKey = sin.profile === undefined && keyColumns(sin.sampleKey).length > 0 ? sin.sampleKey : undefined;
+    const readKey =
+      pickedKey === undefined
+        ? undefined
+        : keyReader(pickedKey, { sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore', ...(specs.station === undefined ? {} : { stationColumn: specs.station.index }), ...(specs.cruise === undefined ? {} : { cruiseColumn: specs.cruise.index }) });
+    const keyBlank = new Lines();
+    const keyTooLong = new Lines();
 
     // the names of the wide taxon columns: the header without its unit, or the long name of a PANGAEA parameter (core/convert/headers.ts)
     const taxonNames = sin.shape === 'wide' ? taxonColumnNames(file, sheet, cols.taxonHeaders) : new Map<number, TaxonColumnName>();
@@ -1641,7 +1672,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const summaries = new Lines();
     const keptStats = new Lines();
     const presenceBad = new Lines();
-    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon));
+    const statRows = scanStatisticRows(sheet.rows, [...indexesOf(specs.sampleId), ...keyColumns(pickedKey)], indexesOf(specs.station), indexesOf(specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon));
     let zeros = 0;
     let presenceSkipped = 0;
     let naCells = 0;
@@ -1730,7 +1761,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
     const analyse = (drop: boolean, real: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey) })
         : {};
     let analysis = analyse(sin.dropCopies === true, sin.realCounts === true);
     // An answer that switches a check off (drop the copies, take a total once, real counts) is honoured only when today's analysis finds the count it was given for
@@ -1789,7 +1820,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const visitIds = new Map<number, string>();
     const visitParts = new Set<string>();
     const visitGroups: { id: string; lines: number[] }[] = [];
-    {
+    if (readKey === undefined) {
       const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header) });
       const groups = new Map<string, { station: string | undefined; stationId: string | undefined; code: string; rows: { line: number; key: VisitKey }[]; mixed: boolean }>();
       for (const row of sheet.rows) {
@@ -1839,7 +1870,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         continue;
       }
       const m = parse(row);
-      const code = m.sampleId;
+      const keyRead = readKey?.(row);
+      const code = keyRead === undefined ? m.sampleId : keyRead.id;
       const stationText = m.station;
       const wideHasValue = cols.taxonHeaders.some((c) => !isBlankCell(row.cells[c.index] ?? null));
       const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
@@ -1855,7 +1887,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const biomassOnly = quantityBlank && rowHasBiomass(row);
       const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly);
       // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
-      const summaryLabel = [code, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
+      // (a label in a part of a picked sample key is the same row: "Total" in the station column of a key of station and cast)
+      const summaryLabel = [code, stationText, ...(keyRead?.parts ?? [])].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
       if (summaryLabel !== undefined) {
         summaries.add(fileName, sheet.name, 'sample', row.line, summaryLabel);
         fate.row(row.line, 'summary-row');
@@ -1912,15 +1945,17 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         fate.row(row.line, 'no-code');
         continue;
       }
+      if (keyRead?.blankPart === true) keyBlank.add(fileName, sheet.name, '', row.line);
+      if (pickedKey !== undefined && code.length > MAX_EVENT_ID) keyTooLong.add(fileName, sheet.name, '', row.line, code.slice(0, 60));
       const cruiseText = m.cruise ?? sin.cruise?.trim();
       const cruise = cruiseText === '' ? undefined : cruiseText;
       if (stationText !== undefined) stationRows.push(stationRowOf(fileName, sheet.name, row.line, m, stationText, cruise));
-      if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
+      if (specs.sampleId && readKey === undefined) checkText(specs.sampleId.header, row.line, code);
       if (specs.station && stationText !== undefined) checkText(specs.station.header, row.line, stationText);
       if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
 
       const stationId = stationText === undefined ? undefined : stationEventId(cruise, stationText);
-      const sampleEventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code);
+      const sampleEventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined && readKey === undefined ? stationPrefixedId(stationId, code) : code);
       // a replicate column: the row belongs to a replicate event `<sample eventID>:<value>` under the sample, and everything the row carries hangs on the replicate
       const replicate = cols.replicate ? text(row.cells[cols.replicate.index]) : undefined;
       if (cols.replicate && replicate === undefined) {
@@ -2369,6 +2404,24 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
     }
 
+    if (pickedKey !== undefined) {
+      // the samples the key made and the rows each has, as the export will have them (a replicate is an event under its sample, not a sample: its rows count for the sample they belong to)
+      const bySample = new Map<string, number>();
+      for (const a of samples.values()) if (a.sheetKey === sheetKey) bySample.set(a.site.parentSample?.id ?? a.site.id, (bySample.get(a.site.parentSample?.id ?? a.site.id) ?? 0) + a.lines.length);
+      const per = [...bySample.values()].sort((a, b) => a - b);
+      const mid = per.length === 0 ? 0 : per.length % 2 === 1 ? per[(per.length - 1) / 2] : (per[per.length / 2 - 1] + per[per.length / 2]) / 2;
+      keyReports.push({
+        file: fileName,
+        sheet: sheet.name,
+        samples: bySample.size,
+        rows: per.reduce((n, x) => n + x, 0),
+        rowsPerSample: { min: per[0] ?? 0, max: per[per.length - 1] ?? 0, median: mid },
+        blank: [...fate.rows.values()].filter((r) => r === 'no-code').length,
+        blankParts: keyBlank.entries().reduce((n, e) => n + e.lines.length, 0),
+        tooLong: keyTooLong.entries().reduce((n, e) => n + e.lines.length, 0),
+      });
+    }
+
     {
       const wide = sin.shape === 'wide';
       const longBiology = sin.shape === 'long' && cols.taxonCell !== undefined;
@@ -2440,6 +2493,13 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         const total = new Set(kinds.flatMap((e) => e.lines)).size;
         findings.push(makeConvertFinding('CONV-BIOMASS-KIND-UNSET', { ...base, field: kinds[0].field, lines: kinds.flatMap((e) => e.lines).sort((a, b) => a - b), params: { count: total, columns: kinds.map((e) => e.field.trim()).join(', ') } }));
       }
+    }
+    {
+      const names = keyColumns(pickedKey).map((i) => sin.mapping.columns.find((c) => c.index === i)?.header.trim() ?? `#${i + 1}`).join(', ');
+      for (const e of keyBlank.entries()) findings.push(makeConvertFinding('CONV-KEY-PART-BLANK', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, columns: names } }));
+      for (const e of keyTooLong.entries()) findings.push(makeConvertFinding('CONV-KEY-TOO-LONG', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, max: MAX_EVENT_ID } }));
+      const report = keyReports.find((k) => k.file === fileName && k.sheet === sheet.name);
+      if (report !== undefined) findings.push(makeConvertFinding('CONV-KEY-PICKED', { ...base, params: { samples: report.samples, rows: report.rows, columns: names, ...(sin.sampleKeyFromFile === true ? { fromFile: 'yes' } : {}) } }));
     }
     for (const e of noReplicate.entries()) findings.push(makeConvertFinding('CONV-REPLICATE-MISSING', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (noCode.size > 0) {
@@ -2972,6 +3032,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     nameLookup,
     cruiseText: tree.cruiseText,
     ledger,
+    ...(keyReports.length > 0 ? { keys: keyReports } : {}),
     leftOut: decision.leftOut,
     // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
     ...(repeatedOcc.size > 0 || hiddenIds.length > 0 ? { repeatedOccurrenceIds: [...new Set([...repeatedOcc.keys(), ...hiddenIds])] } : {}),

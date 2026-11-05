@@ -13,6 +13,7 @@ import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
 import type { NercColumnDecision, NercDecisions, NercPick } from '../core/convert/nerc';
+import { keyHashes, resolveKeyHashes } from '../core/convert/keySetting';
 
 /** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
 export interface QuantityForm {
@@ -70,6 +71,10 @@ export interface SheetChoice {
   realCountsFile?: number;
   /** The same answers as a companion file recorded them (the reason, the rows of that reason and the rows of the sheet): honoured by the converter only when today's numbers are the same. */
   leaveOutFile?: { reason: string; count: number; rows: number }[];
+  /** The columns the person picked on the page to say which rows are one sample (indexes, in the order picked). Never prefilled and never guessed; absent until the person uses a key. */
+  sampleKey?: number[];
+  /** The key above was read from a companion file (it held: the same columns, the same number of rows). */
+  sampleKeyFromFile?: boolean;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -261,7 +266,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
@@ -291,7 +296,27 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name) };
+      // a key a companion file recorded holds only when every column is found again by its hash and the sheet has the same number of rows; otherwise the question is open
+      const saved = profile ? undefined : parsed.settings.sampleKey?.find((k) => k.sheet === sh.name && k.rows === sh.rowCount);
+      const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true }) };
+    }
+  }
+  return out;
+}
+
+/**
+ * The sample keys the person picked (or a companion file gave and still holds), for the companion file: the sheet, the hashes of the key columns and the number of rows (core/convert/keySetting.ts).
+ * No header text: a sheet in use that is not a profile and has a key.
+ */
+export function sampleKeySettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { sheet: string; hashes: string; rows: number }[] {
+  const out: { sheet: string; hashes: string; rows: number }[] = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (!c || !c.use || c.profile || c.sampleKey === undefined || c.sampleKey.length === 0 || out.some((o) => o.sheet === sh.name)) continue;
+      const hashes = keyHashes(sh.header, c.sampleKey);
+      if (hashes !== undefined) out.push({ sheet: sh.name, hashes, rows: sh.rowCount });
     }
   }
   return out;

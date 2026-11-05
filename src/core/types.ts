@@ -170,6 +170,11 @@ export type ColumnRole =
  */
 export type ConverterRole =
   | { kind: 'taxon'; header?: boolean }
+  /**
+   * A column the person named as part of the key that identifies a sample (core/convert/sampleKey.ts) and gave no meaning of its own. It says which sample a row is of, so the checks that
+   * group rows by sample read it; it is never `ignore`. Converter only: /check never proposes it, and the page never sets it by itself.
+   */
+  | { kind: 'keyPart' }
   | { kind: 'quantity' } | { kind: 'quantityType' }
   | { kind: 'effort'; unit?: string }
   | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' }

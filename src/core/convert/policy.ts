@@ -51,6 +51,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-COUNT-NOT-INTEGER',
   'CONV-NEGATIVE-QUANTITY',
   'CONV-SAMPLE-CODE-MISSING',
+  // a picked sample key that makes an identifier too long for a Darwin Core archive
+  'CONV-KEY-TOO-LONG',
   'CONV-PROFILE-NO-STATION',
   'CONV-PROFILE-LEVEL-INCOMPLETE',
   'CONV-ID-DUPLICATE',
@@ -135,6 +137,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-ROW-COPIES-DROPPED',
   // identical rows with a count of 1: copies, or specimens that look the same; both sums are shown
   'CONV-ROW-COPIES-SPECIMENS',
+  // a picked sample key with an empty part: those rows are samples of their own
+  'CONV-KEY-PART-BLANK',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written

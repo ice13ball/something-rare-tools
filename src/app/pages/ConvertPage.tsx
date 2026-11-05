@@ -22,8 +22,10 @@ import type { WormsStatus } from '../components/ConvertWorms';
 import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
+import { SampleKeyPicker } from '../components/SampleKeyPicker';
+import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -109,6 +111,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // the columns the user picked to add to the grouping of a sheet (valid for the roles and shape they were picked for)
   const [codesExtra, setCodesExtra] = useState<Record<string, { sig: string; indexes: number[] }>>({});
   const [codesPreview, setCodesPreview] = useState<Record<string, { p: CodeProposalView; sig: string }>>({});
+  // the columns ticked in the sample-key picker and not yet used (by sheet), and what the converter says they would make; both start empty and are never filled by the page itself
+  const [keyDraft, setKeyDraft] = useState<Record<string, number[]>>({});
+  const [keyPreview, setKeyPreview] = useState<Record<string, { cols: number[]; report: SheetKeyReport | null }>>({});
   const [filesChosen, setFilesChosen] = useState(0);
   const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
   // rule id -> the fingerprint of its findings when the user ticked it (nothing is stored beyond this page state)
@@ -192,6 +197,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setCodesDone({});
     setCodesPreview({});
     setCodesExtra({});
+    setKeyDraft({});
+    setKeyPreview({});
     setApproved({});
     setDrafts({});
     setConfirmed({});
@@ -276,6 +283,34 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     return () => clearTimeout(timer);
   }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup, nercPicks]);
 
+  // what the ticked columns of the picker would make: the converter's own report for the request with that key on that sheet (the same run as the export), asked after a short pause; nothing is kept
+  // in the request, so ticking changes nothing until "Use this key"
+  useEffect(() => {
+    if (phase !== 'work' || !parsed) return undefined;
+    const todo = Object.entries(keyDraft).filter(([, cols]) => cols.length > 0);
+    if (todo.length === 0) return undefined;
+    setKeyPreview({});
+    let alive = true;
+    const timer = setTimeout(() => {
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMetadataOf(EMPTY_METADATA), ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      for (const [k, cols] of todo) {
+        const [fileId, sheet] = k.split('\u0000');
+        engine.previewKey(body, fileId, sheet, cols).then(
+          (report) => {
+            if (alive) setKeyPreview((prev) => ({ ...prev, [k]: { cols, report } }));
+          },
+          (e: unknown) => {
+            if (alive) setConvertError(messageOf(e));
+          },
+        );
+      }
+    }, 150);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks, keyDraft]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
     // a column the user turns into a taxon by hand is their own decision: no confirmation is asked for it
@@ -313,6 +348,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       // "Ask again": takes back an answer, whether it was given here or read from the companion file (the question and the acceptance start again)
       if (choice === 'askAgain') {
         if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((a) => a.reason !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
+        if (f.ruleId === 'CONV-KEY-PICKED') {
+          const { sampleKey: _k, sampleKeyFromFile: _f, ...rest } = c;
+          return { ...prev, [key]: rest };
+        }
         if (f.ruleId === 'CONV-ROW-COPIES-DROPPED') {
           const { dropCopiesFile: _d, ...rest } = c;
           return { ...prev, [key]: { ...rest, dropCopies: false } };
@@ -365,6 +404,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setCodesDone({});
       setCodesPreview({});
       setCodesExtra({});
+      setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      setKeyPreview({});
     } catch (e) {
       setConvertError(messageOf(e));
     } finally {
@@ -394,6 +435,35 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const indexes = index === null ? [] : [...new Set([...pickedFor(fileId, sheet), index])];
     setCodesExtra((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: { sig: codesSig(fileId, sheet), indexes } }));
     void proposeCodes(fileId, sheet, indexes);
+  };
+  /** Ticks or unticks a column in the picker of a sheet; the order of ticking is the order of the parts of the code. Starts from the key in use, never from a guess. */
+  const toggleKey = (fileId: string, sheet: string, index: number): void => {
+    const k = sheetKey(fileId, sheet);
+    setKeyDraft((prev) => {
+      const cur = prev[k] ?? choices[k]?.sampleKey ?? [];
+      return { ...prev, [k]: cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index] };
+    });
+  };
+  /** "Use this key": the ticked columns become the sheet's sample key (the request now carries it). */
+  const useKey = (fileId: string, sheet: string): void => {
+    const k = sheetKey(fileId, sheet);
+    const cols = keyDraft[k];
+    if (cols === undefined || cols.length === 0) return;
+    setChoices((prev) => {
+      const { sampleKeyFromFile: _f, ...rest } = prev[k] ?? ({} as SheetChoice);
+      return prev[k] === undefined ? prev : { ...prev, [k]: { ...rest, sampleKey: cols } };
+    });
+    setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+  };
+  /** "Clear the key": the sheet is read as before (the codes it has, or none). */
+  const clearKey = (fileId: string, sheet: string): void => {
+    const k = sheetKey(fileId, sheet);
+    setChoices((prev) => {
+      if (prev[k] === undefined) return prev;
+      const { sampleKey: _k, sampleKeyFromFile: _f, ...rest } = prev[k];
+      return { ...prev, [k]: rest };
+    });
+    setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
   };
   const proposeCodes = async (fileId: string, sheet: string, extra?: number[]): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
@@ -708,6 +778,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
   const notWrittenProps = view === null ? undefined : { rows: view.notWritten.rows, sheets: view.notWritten.sheets, busy: listBusy, error: listError, onDownload: () => void downloadNotWritten() };
 
+  // the sheets the sample-key picker is shown for: those with rows that have no sample code, and those that carry a key (the picker stays once a key is in use, although the codes are no longer missing)
+  const codeSheets = (() => {
+    const out = [...(view?.codesMissing ?? [])];
+    for (const f of files) for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (c?.use === true && !c.profile && (c.sampleKey?.length ?? 0) > 0 && !out.some((o) => o.fileId === f.fileId && o.sheet === sh.name)) out.push({ fileId: f.fileId, sheet: sh.name });
+    }
+    return out;
+  })();
+
   const downloadCompanion = (): void => {
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
@@ -721,10 +801,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const totalOnceGroups = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.groups) }));
     const realCountsRows = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REAL-COUNTS').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
     const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
+    const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1069,17 +1150,37 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             </section>
           )}
 
-          {(view?.codesMissing ?? []).length > 0 && (
+          {codeSheets.length > 0 && (
             <section className="convert-codes" aria-labelledby="convert-codes-title">
               <HeadingTip tip="convertCodes">
                 <h2 id="convert-codes-title">{t('convert.codes.title')}</h2>
               </HeadingTip>
-              {(view?.codesMissing ?? []).map((c) => {
+              {codeSheets.map((c) => {
                 const f = files.find((x) => x.fileId === c.fileId);
                 const key = sheetKey(c.fileId, c.sheet);
+                const sh = f?.sheets.find((x) => x.name === c.sheet);
+                const inUse = choices[key]?.sampleKey ?? [];
+                const draft = keyDraft[key];
+                const picked = draft ?? inUse;
+                const samples = f?.samples[c.sheet] ?? [];
+                const known = draft === undefined || (keyPreview[key] !== undefined && keyPreview[key].cols.join() === draft.join());
+                const report = draft === undefined || draft.join() === inUse.join() ? (view?.keys ?? []).find((k) => k.sheet === c.sheet && k.file === f?.fileName) ?? (picked.length === 0 ? null : undefined) : known ? keyPreview[key]?.report : undefined;
                 return (
                   <div key={key} className="notice" role="note">
                     <p>{t('convert.codes.text', { sheet: c.sheet, file: f?.fileName ?? '' })}</p>
+                    {sh !== undefined && (
+                      <SampleKeyPicker
+                        sheet={c.sheet}
+                        columns={sh.header.map((header, index) => ({ index, header, examples: samples[index] ?? [] }))}
+                        picked={picked}
+                        inUse={inUse}
+                        report={report}
+                        onToggle={(index) => toggleKey(c.fileId, c.sheet, index)}
+                        onUse={() => useKey(c.fileId, c.sheet)}
+                        onClear={() => clearKey(c.fileId, c.sheet)}
+                      />
+                    )}
+                    <p>{t('convert.codes.second')}</p>
                     <button type="button" className="button" onClick={() => pickCodes(c.fileId, c.sheet, null)}>
                       {t('convert.codes.propose')}
                     </button>
@@ -1382,7 +1483,7 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
               </button>
             </>
           )}
-          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS') && onChoose !== undefined && (
+          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED') && onChoose !== undefined && (
             <>
               {' '}
               <button type="button" className="button" data-testid="ask-again" onClick={() => onChoose(f, 'askAgain')}>

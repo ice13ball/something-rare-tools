@@ -5,6 +5,7 @@ import type { DatasetMetadata } from './metadata';
 import type { ConvertSettings } from './settings';
 import type { SplitEntry, TaxonSplit } from './taxon';
 import type { SheetLedger } from './ledger';
+import type { SheetKeyReport } from './sampleKey';
 import type { NercTerm } from './vocab';
 
 /*
@@ -197,6 +198,8 @@ export interface ConvertResult {
   cruiseText: string[];
   /** Where every source row and numeric column of every sheet went (ledger.ts). Informational: nothing reads it to block. */
   ledger: SheetLedger[];
+  /** Only for sheets that carry a picked sample key: how many samples the key made and how many rows each has, as the export will have them (sampleKey.ts). */
+  keys?: SheetKeyReport[];
   /** The reasons the user left out, per sheet (`${position of the sheet in the request}\u0000${reason}`): the list of rows not written marks them. */
   leftOut: string[];
   /** Every occurrenceID that CONV-ID-DUPLICATE named as repeated; kept here and not in the finding, so the finding stays small. */

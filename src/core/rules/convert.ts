@@ -21,6 +21,9 @@ import type { RuleSpec } from './spec';
  *   CONV-COUNT-NOT-INTEGER     count            field = column, value = an example, lines = rows
  *   CONV-NEGATIVE-QUANTITY     count            field = column (or the effort column), value = an example, lines = rows
  *   CONV-SAMPLE-CODE-MISSING   count, column    column = the sample-code column ('none' when the sheet has none); lines = the rows without a code
+ *   CONV-KEY-PART-BLANK        count, columns   the person picked a sample key (sampleKey.ts); columns = the headers of the key; lines = rows where a part of the key is empty (NA, nan and a dash too)
+ *   CONV-KEY-TOO-LONG          count, max       an ID made of the key is longer than max characters; value = the first 60 characters of an example; lines = rows
+ *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
@@ -214,12 +217,62 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'column'],
     plain: {
-      pl: `Brakuje kodu próbki {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie. Możesz pobrać arkusz z proponowanymi kodami, sprawdzić je i wgrać ponownie.`,
-      en: `The sample code is missing in {+lineCount:line|lines} {lines} ({count} in all). The code becomes the identifier in the archive, so it has to come from you. You can download the sheet with proposed codes, check them and upload it again.`,
-      de: `Der Probencode fehlt in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Der Code wird zur Kennung im Archiv und muss daher von Ihnen kommen. Sie können das Blatt mit vorgeschlagenen Codes herunterladen, prüfen und erneut hochladen.`,
-      fr: `Le code d'échantillon manque {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le code devient l'identifiant dans l'archive : il doit donc venir de vous. Vous pouvez télécharger la feuille avec des codes proposés, les vérifier et la recharger.`,
+      pl: `Brakuje kodu próbki {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie: wskaż kolumny, które razem tworzą próbkę (pod listą), albo pobierz arkusz z proponowanymi kodami, sprawdź je i wgraj ponownie.`,
+      en: `The sample code is missing in {+lineCount:line|lines} {lines} ({count} in all). The code becomes the identifier in the archive, so it has to come from you: pick the columns that together make a sample (below the list), or download the sheet with proposed codes, check them and upload it again.`,
+      de: `Der Probencode fehlt in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Er wird zur Kennung im Archiv und muss von Ihnen kommen: wählen Sie die Spalten, die zusammen eine Probe bilden (unter der Liste), oder laden Sie das Blatt mit vorgeschlagenen Codes herunter, prüfen Sie sie und laden Sie es neu hoch.`,
+      fr: `Le code d'échantillon manque {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le code devient l'identifiant dans l'archive : il doit donc venir de vous. Choisissez les colonnes qui forment ensemble un échantillon (sous la liste), ou téléchargez la feuille avec des codes proposés, vérifiez-les et rechargez-la.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) have no sample code (column: {column}). The eventID of a sample is the user's own code and is never derived from depth or row order. A one-time proposal (proposeSampleCodes) returns the sheet with a new code column.`,
+    technical: `{file}, {sheet}:{lines}: {count} row(s) have no sample code (column: {column}). The eventID of a sample is the user's own code and is never derived from depth or row order. Two ways out: the person picks the columns that make a sample (a sample key, sampleKey.ts), or a one-time proposal (proposeSampleCodes) returns the sheet with a new code column.`,
+  },
+  {
+    id: 'CONV-KEY-PART-BLANK',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Jedna z kolumn klucza próbki ({columns}) jest pusta {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); „NA”, „nan” i myślnik też są puste. Takie wiersze tworzą własne próbki i nie łączą się z wierszami, które mają tam wartość. Jeśli tak ma być, zaakceptuj; jeśli to luka w danych, popraw ją w pliku.`,
+      en: `A column of the sample key ({columns}) is empty in {+lineCount:line|lines} {lines} ({count} in all); "NA", "nan" and a dash count as empty. Such rows make samples of their own and are not joined with the rows that have a value there. Accept if that is right; if it is a gap in the data, fix it in the file.`,
+      de: `Eine Spalte des Probenschlüssels ({columns}) ist leer in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}); „NA“, „nan“ und ein Strich gelten als leer. Solche Zeilen bilden eigene Proben, nicht verbunden mit Zeilen, die dort einen Wert haben. Akzeptieren Sie, wenn das stimmt; sonst korrigieren Sie die Datei.`,
+      fr: `Une colonne de la clé d'échantillon ({columns}) est vide {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) ; « NA », « nan » et un tiret comptent comme vides. Ces lignes forment des échantillons à part, non réunis à ceux qui ont une valeur ici. Acceptez si c'est exact ; sinon corrigez le fichier.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} row(s) have an empty part in the sample key the user picked (columns: {columns}; an empty cell, NA, nan and a dash are empty). The empty part is part of the key: those rows are samples of their own, never merged with rows that have a value. A row whose every part is empty has no sample (CONV-SAMPLE-CODE-MISSING).`,
+  },
+  {
+    id: 'CONV-KEY-TOO-LONG',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'max'],
+    plain: {
+      pl: `Identyfikator próbki z wybranego klucza ma ponad {max} znaków {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}…”. Archiwum Darwin Core nie przyjmuje tak długich identyfikatorów. Wybierz mniej kolumn albo kolumny o krótszych wartościach.`,
+      en: `The sample identifier made from the key you picked is longer than {max} characters in {+lineCount:line|lines} {lines} ({count} in all), e.g. "{value}…". A Darwin Core archive does not take identifiers that long. Pick fewer columns, or columns with shorter values.`,
+      de: `Die aus dem gewählten Schlüssel gebildete Probenkennung ist in {+lineCount:der Zeile|den Zeilen} {lines} länger als {max} Zeichen (insgesamt {count}), z. B. „{value}…“. Ein Darwin-Core-Archiv nimmt so lange Kennungen nicht an. Wählen Sie weniger Spalten oder Spalten mit kürzeren Werten.`,
+      fr: `L'identifiant d'échantillon formé par la clé choisie dépasse {max} caractères {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. « {value}… ». Une archive Darwin Core n'accepte pas d'identifiants aussi longs. Choisissez moins de colonnes, ou des colonnes aux valeurs plus courtes.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} row(s) get a sample ID longer than {max} characters from the key the user picked (example, first 60 characters: "{value}"). Nothing is shortened or cut: the export is blocked.`,
+  },
+  {
+    id: 'CONV-KEY-PICKED',
+    category: 'B',
+    severity: 'info',
+    params: ['samples', 'rows', 'columns'],
+    plain: {
+      pl: `Jak wybrano, próbkę wyznaczają kolumny: {columns}. Próbek: {samples}, wierszy w nich: {rows}. Kody próbek w archiwum powstają z wartości tych kolumn. Przycisk „Zapytaj ponownie” cofa wybór.`,
+      en: `As you chose, a sample is identified by the columns: {columns}. Samples: {samples}, rows in them: {rows}. The sample codes of the archive are made of the values of those columns. "Ask again" takes the choice back.`,
+      de: `Wie gewählt, wird eine Probe durch die Spalten bestimmt: {columns}. Proben: {samples}, Zeilen darin: {rows}. Die Probencodes des Archivs werden aus den Werten dieser Spalten gebildet. „Erneut fragen“ nimmt die Wahl zurück.`,
+      fr: `Comme choisi, un échantillon est défini par les colonnes : {columns}. Échantillons : {samples}, lignes qu'ils contiennent : {rows}. Les codes d'échantillon de l'archive sont formés des valeurs de ces colonnes. « Demander à nouveau » annule le choix.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo kolumny są te same, a arkusz ma tyle samo wierszy.`,
+          en: `This choice was read from the companion file; it holds because the columns are the same and the sheet has the same number of rows.`,
+          de: `Diese Wahl stammt aus der Begleitdatei; sie gilt, weil die Spalten dieselben sind und das Blatt gleich viele Zeilen hat.`,
+          fr: `Ce choix vient du fichier d'accompagnement ; il vaut parce que les colonnes sont les mêmes et que la feuille a le même nombre de lignes.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the sample code of a row is made of the values of the columns the user picked ({columns}), joined with "|"; the key made {samples} sample(s) of {rows} row(s). Information only. Asked again by the button (a companion file's choice holds only while the same columns and the same number of rows are there).`,
   },
   {
     id: 'CONV-ID-DUPLICATE',

@@ -305,6 +305,14 @@ No findings only means that no problems were found in the checked categories.`,
 • Check it and upload that file again: only a code in your own uploaded sheet becomes an ID.
 • A leading apostrophe before a formula character is the spreadsheet's own text escape, so when you upload the file again the converter reads '=x as =x. It takes that one apostrophe off every text cell and header that starts with it, and only here: the checker reads a file as it is.
 • The converter never applies or renews codes by itself.`,
+  'tip.convertKey.does': `Lets you say which columns make up one sample, when the sheet has no sample codes.`,
+  'tip.convertKey.logic': `• The code of a sample is the values of the columns you tick, in the order you tick them, joined with "|". A value is trimmed; {sameNumber} are one value; a date is read as a date, so a date cell and the same date as text are one value; an empty cell, NA, nan and a dash are empty. Upper and lower case are kept: {sameCase} are two samples.
+• The code depends on the values only, never on the order of the rows. Nothing is ticked for you and no column is proposed.
+• An empty part is part of the key: rows that are empty there make samples of their own, and you are asked to accept that. A row that is empty in every ticked column has no sample code and blocks the export. A code longer than {maxId} characters blocks it too.
+• A key of one column that is the station (or the cruise) gets "|sample" after it, so that the sample does not get the code of its own station. Two sheets that make the same code are not merged: the export is blocked and the lines are named.
+• A ticked column that the sheet had marked as ignored is read as part of the key, and is no longer listed as ignored. Nothing else about the column changes.
+• The numbers under the list come from the converter itself, run on the whole request, so they are the numbers of the archive.
+• The companion file keeps the key as short hashes of the headers and the number of rows of the sheet, never a header. It holds only while the same columns are found and the sheet has the same number of rows.`,
   'tip.convertMetaTitle.does': `Gives the dataset a name that people will read.`,
   'tip.convertMetaTitle.logic': `• It becomes the title in the description (eml.xml) and, when you leave the dataset name empty, the dataset name in every event row.
 • Write it in English: the description is marked as English.
@@ -801,6 +809,14 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Sprawdź go i wgraj ten plik ponownie: identyfikatorem staje się tylko kod z Twojego wgranego arkusza.
 • Apostrof przed znakiem formuły to własny sposób arkusza na oznaczenie tekstu, więc gdy wgrasz plik ponownie, konwerter czyta '=x jako =x. Zdejmuje ten jeden apostrof z każdej komórki tekstowej i każdego nagłówka, które od niego zaczynają, i tylko tu: sprawdzarka czyta plik takim, jaki jest.
 • Konwerter nigdy sam nie stosuje ani nie odnawia kodów.`,
+  'tip.convertKey.does': `Pozwala wskazać, które kolumny tworzą jedną próbkę, gdy arkusz nie ma kodów próbek.`,
+  'tip.convertKey.logic': `• Kod próbki to wartości zaznaczonych kolumn, w kolejności zaznaczania, połączone znakiem „|”. Wartość jest przycinana ze spacji; {sameNumber} to jedna wartość; data jest czytana jako data, więc komórka z datą i ta sama data jako tekst to jedna wartość; pusta komórka, NA, nan i myślnik są puste. Wielkość liter się liczy: {sameCase} to dwie próbki.
+• Kod zależy tylko od wartości, nigdy od kolejności wierszy. Nic nie jest zaznaczone za Ciebie i żadna kolumna nie jest proponowana.
+• Pusta część jest częścią klucza: wiersze puste w tym miejscu tworzą osobne próbki i trzeba to zaakceptować. Wiersz pusty we wszystkich zaznaczonych kolumnach nie ma kodu próbki i blokuje eksport. Kod dłuższy niż {maxId} znaków też go blokuje.
+• Klucz z jednej kolumny, która jest stacją (albo rejsem), dostaje po sobie „|sample”, aby próbka nie dostała kodu własnej stacji. Dwa arkusze, które tworzą ten sam kod, nie są łączone: eksport jest zablokowany, a wiersze są wymienione.
+• Zaznaczona kolumna, którą arkusz miał jako ignorowaną, jest czytana jako część klucza i nie jest już wymieniana jako ignorowana. Nic innego w tej kolumnie się nie zmienia.
+• Liczby pod listą pochodzą od samego konwertera, uruchomionego na całym żądaniu, więc są to liczby archiwum.
+• Plik towarzyszący zapisuje klucz jako krótkie skróty nagłówków i liczbę wierszy arkusza, nigdy nagłówek. Obowiązuje tylko, dopóki znajdują się te same kolumny, a arkusz ma tyle samo wierszy.`,
   'tip.convertMetaTitle.does': `Nadaje zbiorowi danych nazwę, którą ludzie przeczytają.`,
   'tip.convertMetaTitle.logic': `• Staje się tytułem w opisie (eml.xml), a gdy nazwa zbioru jest pusta, także nazwą zbioru w każdym wierszu zdarzenia.
 • Napisz go po angielsku: opis jest oznaczony jako angielski.
@@ -1295,6 +1311,14 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Prüfen Sie es und laden Sie diese Datei erneut hoch: Nur ein Code in Ihrem eigenen hochgeladenen Blatt wird zur Kennung.
 • Ein Apostroph vor einem Formelzeichen ist das eigene Textkennzeichen der Tabellenkalkulation; lädt man die Datei erneut hoch, liest der Konverter '=x daher als =x. Er nimmt diesen einen Apostroph von jeder Textzelle und jeder Überschrift ab, die damit beginnt, und nur hier: Das Prüfwerkzeug liest eine Datei, wie sie ist.
 • Der Konverter wendet Codes nie von selbst an und erneuert sie nie.`,
+  'tip.convertKey.does': `Lässt Sie sagen, welche Spalten eine Probe bilden, wenn das Blatt keine Probencodes hat.`,
+  'tip.convertKey.logic': `• Der Code einer Probe sind die Werte der gewählten Spalten, in der Reihenfolge, in der Sie wählen, mit „|“ verbunden. Ein Wert wird von Leerzeichen befreit; {sameNumber} sind ein Wert; ein Datum wird als Datum gelesen, eine Datumszelle und dasselbe Datum als Text sind also ein Wert; eine leere Zelle, NA, nan und ein Strich sind leer. Groß- und Kleinschreibung zählt: {sameCase} sind zwei Proben.
+• Der Code hängt nur von den Werten ab, nie von der Reihenfolge der Zeilen. Nichts ist für Sie vorgewählt und keine Spalte wird vorgeschlagen.
+• Ein leerer Teil gehört zum Schlüssel: Zeilen, die dort leer sind, bilden eigene Proben, und Sie müssen das akzeptieren. Eine Zeile, die in jeder gewählten Spalte leer ist, hat keinen Probencode und sperrt den Export. Ein Code von mehr als {maxId} Zeichen sperrt ihn ebenfalls.
+• Ein Schlüssel aus einer Spalte, die die Station (oder die Fahrt) ist, bekommt „|sample“ dahinter, damit die Probe nicht den Code ihrer eigenen Station erhält. Zwei Blätter, die denselben Code bilden, werden nicht zusammengeführt: der Export ist gesperrt, und die Zeilen werden genannt.
+• Eine gewählte Spalte, die das Blatt als ignoriert geführt hatte, wird als Teil des Schlüssels gelesen und nicht mehr als ignoriert aufgeführt. Sonst ändert sich an der Spalte nichts.
+• Die Zahlen unter der Liste stammen vom Konverter selbst, über die ganze Anfrage gerechnet, es sind also die Zahlen des Archivs.
+• Die Begleitdatei hält den Schlüssel als kurze Hashes der Kopfzeilen und die Zeilenzahl des Blatts fest, nie eine Kopfzeile. Er gilt nur, solange dieselben Spalten gefunden werden und das Blatt gleich viele Zeilen hat.`,
   'tip.convertMetaTitle.does': `Gibt dem Datensatz einen Namen, den Menschen lesen werden.`,
   'tip.convertMetaTitle.logic': `• Er wird zum Titel in der Beschreibung (eml.xml) und, wenn der Datensatzname leer bleibt, zum Datensatznamen in jeder Ereigniszeile.
 • Schreiben Sie ihn auf Englisch: Die Beschreibung ist als englisch gekennzeichnet.
@@ -1789,6 +1813,14 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • Vérifiez-la et rechargez ce fichier : seul un code de votre propre feuille chargée devient un identifiant.
 • Une apostrophe devant un caractère de formule est l'échappement de texte propre au tableur : quand vous rechargez le fichier, le convertisseur lit donc '=x comme =x. Il retire cette seule apostrophe de chaque cellule de texte et de chaque en-tête qui commence par une, et seulement ici : le vérificateur lit un fichier tel quel.
 • Le convertisseur n'applique ni ne renouvelle jamais les codes de lui-même.`,
+  'tip.convertKey.does': `Vous permet de dire quelles colonnes forment un échantillon, quand la feuille n'a pas de codes d'échantillon.`,
+  'tip.convertKey.logic': `• Le code d'un échantillon est formé des valeurs des colonnes cochées, dans l'ordre où vous les cochez, jointes par « | ». Une valeur est débarrassée de ses espaces ; {sameNumber} sont une seule valeur ; une date est lue comme une date, donc une cellule de date et la même date en texte sont une seule valeur ; une cellule vide, NA, nan et un tiret sont vides. Les majuscules comptent : {sameCase} sont deux échantillons.
+• Le code ne dépend que des valeurs, jamais de l'ordre des lignes. Rien n'est coché pour vous et aucune colonne n'est proposée.
+• Une partie vide fait partie de la clé : les lignes vides à cet endroit forment des échantillons à part, et il faut l'accepter. Une ligne vide dans toutes les colonnes cochées n'a pas de code d'échantillon et bloque l'export. Un code de plus de {maxId} caractères le bloque aussi.
+• Une clé d'une seule colonne qui est la station (ou la campagne) reçoit « |sample » à la suite, pour que l'échantillon ne prenne pas le code de sa propre station. Deux feuilles qui forment le même code ne sont pas fusionnées : l'export est bloqué et les lignes sont nommées.
+• Une colonne cochée que la feuille avait marquée comme ignorée est lue comme partie de la clé et n'est plus listée comme ignorée. Rien d'autre ne change pour cette colonne.
+• Les chiffres sous la liste viennent du convertisseur lui-même, exécuté sur toute la requête : ce sont les chiffres de l'archive.
+• Le fichier d'accompagnement garde la clé sous forme de courts hachages des en-têtes et le nombre de lignes de la feuille, jamais un en-tête. Elle ne vaut que tant que les mêmes colonnes sont retrouvées et que la feuille a le même nombre de lignes.`,
   'tip.convertMetaTitle.does': `Donne au jeu de données un nom que les gens liront.`,
   'tip.convertMetaTitle.logic': `• Il devient le titre de la description (eml.xml) et, si le nom du jeu reste vide, le nom du jeu dans chaque ligne d'événement.
 • Écrivez-le en anglais : la description est marquée comme anglaise.

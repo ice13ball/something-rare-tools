@@ -19,6 +19,8 @@ import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
 import { biomassBasisOf, readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { notUsedLedger } from '../core/convert/ledger';
+import type { SheetKeyReport } from '../core/convert/sampleKey';
+import { previewSampleKey } from '../core/convert/keyPreview';
 import type { SheetLedger } from '../core/convert/ledger';
 import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
@@ -152,6 +154,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const c of s.dropCopiesRows ?? []) if (!(settings.dropCopiesRows ??= []).some((x) => x.sheet === c.sheet)) settings.dropCopiesRows.push(c);
         for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
         for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
+        for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
@@ -260,9 +263,16 @@ export function createConvertHandler(): ConvertHandler {
     return summaryOf(h);
   }
 
-  /** The conversion of a request: the records and findings of the core, and the model the writers take. */
-  function compute(body: ConvertRequestBody) {
-    const sheets: ConvertSheetInput[] = body.sheets.map((s) => ({
+  /** The sample key of a request sheet, checked: only whole numbers that are columns of the sheet, each once. Nothing, when nothing is left. */
+  function keyOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'sampleKey' | 'sampleKeyFromFile'> {
+    const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
+    const columns = [...new Set((s.sampleKey?.columns ?? []).filter((i): i is number => Number.isInteger(i) && i >= 0 && i < width))];
+    return columns.length === 0 ? {} : { sampleKey: { columns }, ...(s.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) };
+  }
+
+  /** The sheets of a request as the core takes them. */
+  function inputsOf(body: ConvertRequestBody): ConvertSheetInput[] {
+    return body.sheets.map((s) => ({
       file: held(s.fileId).parsed,
       sheet: s.sheet,
       mapping: s.mapping,
@@ -285,12 +295,19 @@ export function createConvertHandler(): ConvertHandler {
       ...(Array.isArray(s.leaveOut) && s.leaveOut.length > 0
         ? { leaveOut: s.leaveOut.filter((r) => r !== null && typeof r === 'object' && typeof r.reason === 'string' && Number.isInteger(r.count)).map((r) => ({ reason: r.reason, count: r.count })) }
         : {}),
+      // the columns the person picked as the sample key: whole numbers only, each column once, in the order picked (the core reads nothing else; a profile sheet takes no key)
+      ...(s.profile === undefined && s.sampleKey !== undefined && s.sampleKey !== null && Array.isArray(s.sampleKey.columns) ? keyOf(s) : {}),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
         ? { leaveOutFile: s.leaveOutFile.filter((g) => g !== null && typeof g === 'object' && typeof g.reason === 'string' && Number.isInteger(g.count) && Number.isInteger(g.rows)).map((g) => ({ reason: g.reason, count: g.count, rows: g.rows })) }
         : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
+  }
+
+  /** The conversion of a request: the records and findings of the core, and the model the writers take. */
+  function compute(body: ConvertRequestBody) {
+    const sheets = inputsOf(body);
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
     const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
     return { sheets, splits, r };
@@ -364,6 +381,7 @@ export function createConvertHandler(): ConvertHandler {
       notWritten: countNotWritten([...r.ledger, ...notUsedLedgers(body)]),
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
+      keys: r.keys ?? [],
     };
   }
 
@@ -403,6 +421,29 @@ export function createConvertHandler(): ConvertHandler {
     return { fileName: `${archiveFileName(dataset).replace(/\.zip$/, '')}-not-written.csv`, blob: new Blob(chunks, { type: 'text/csv;charset=utf-8' }), count };
   }
 
+  /**
+   * What a key would make of one sheet: the same conversion as the export (compute), with this key on this sheet, so the numbers cannot differ from what the archive will have. A key that is no
+   * key (no column of the sheet) gives null. Nothing about the request is changed or kept.
+   */
+  function previewKey(req: Extract<ConvertRequest, { type: 'previewKey' }>): SheetKeyReport | null {
+    const target = req.body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet);
+    if (target === undefined || !Array.isArray(req.columns)) return null;
+    const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns }, sampleKeyFromFile: false } : s)) };
+    const sheets = inputsOf(body);
+    const at = body.sheets.indexOf(body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet) as (typeof body.sheets)[number]);
+    const input = sheets[at];
+    if (input === undefined) return null;
+    return (
+      previewSampleKey(input, {
+        sheets: sheets.filter((_, i) => i !== at),
+        options: body.options,
+        approvedSplits: body.approvedSplits,
+        ...(body.worms ? { worms: body.worms } : {}),
+        ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}),
+      }) ?? null
+    );
+  }
+
   function proposeCodes(req: Extract<ConvertRequest, { type: 'proposeCodes' }>): CodeProposalView | null {
     const h = held(req.fileId);
     const sheet = h.parsed.sheets.find((s) => s.name === req.sheet);
@@ -434,6 +475,8 @@ export function createConvertHandler(): ConvertHandler {
           return exportArchive(req.export);
         case 'notWritten':
           return notWritten(req.notWritten);
+        case 'previewKey':
+          return previewKey(req);
       }
     },
   };
