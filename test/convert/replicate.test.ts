@@ -83,6 +83,25 @@ describe('a replicate column puts a level under the sample', () => {
   });
 });
 
+describe('a colliding ignored column is named once (Task 8)', () => {
+  it('the duplicate names Frame; CONV-COLUMN-IGNORED does not name it again, and still names an ignored column that tells nothing apart', () => {
+    const header = [...HEADER, 'Remarks'];
+    const rows = ROWS.map((r) => [...r, "see sheet"]);
+    const r = convert({ sheets: [sheetInput(fileOf(header, rows), { quantity: { kind: 'count' }, shape: 'long', edit: { Frame: { kind: 'ignore' } } })] });
+    expect(find(r.blocking, 'CONV-ID-DUPLICATE')[0]?.params.column).toBe('Frame');
+    const named = find(r.findings, 'CONV-COLUMN-IGNORED');
+    expect(named).toHaveLength(1);
+    expect(String(named[0].params.columns)).toBe('Remarks');
+    expect(named[0].params.count).toBe(1);
+    expect(find(r.findings, 'CONV-COLUMN-NOT-EXPORTED').some((f) => String(f.params.columns).includes('Frame'))).toBe(false);
+  });
+  it('with nothing else ignored, no CONV-COLUMN-IGNORED is left', () => {
+    const r = run(HEADER, ROWS, {});
+    expect(find(r.blocking, 'CONV-ID-DUPLICATE')).toHaveLength(1);
+    expect(find(r.findings, 'CONV-COLUMN-IGNORED')).toEqual([]);
+  });
+});
+
 describe('without the role, the duplicate names the column', () => {
   const ignored = {};
   it('the occurrence IDs repeat and the message says which ignored column tells the rows apart', () => {

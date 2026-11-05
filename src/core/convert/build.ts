@@ -477,8 +477,35 @@ function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<ty
     if (header === '' || taken.has(header) || !sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null))) continue;
     names.push(header);
   }
+  return ignoredParams(names);
+}
+
+/** The separator of the full list of names kept beside the text, so that a name can be taken out later without cutting the text apart. */
+const NAME_SEP = '\u001f';
+function ignoredParams(names: readonly string[]): { count: number; columns: string; names: string } | undefined {
   if (names.length === 0) return undefined;
-  return { count: names.length, columns: names.length > IGNORED_NAMED_MAX ? `${names.slice(0, IGNORED_NAMED_MAX).join(', ')}, …` : names.join(', ') };
+  return { count: names.length, columns: names.length > IGNORED_NAMED_MAX ? `${names.slice(0, IGNORED_NAMED_MAX).join(', ')}, …` : names.join(', '), names: names.join(NAME_SEP) };
+}
+
+/**
+ * A column that tells rows apart (the one CONV-ID-DUPLICATE names as ignored) is named by that finding, which blocks and says what to do: it is taken out of CONV-COLUMN-IGNORED, so that a column is
+ * named once. The finding disappears when no column is left.
+ */
+function nameOnce(findings: readonly Finding[]): Finding[] {
+  const taken = new Set<string>();
+  for (const f of findings) if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string') taken.add(`${f.file}\u0000${f.sheet}\u0000${f.params.column}`);
+  if (taken.size === 0) return [...findings];
+  const out: Finding[] = [];
+  for (const f of findings) {
+    if (f.ruleId !== 'CONV-COLUMN-IGNORED') {
+      out.push(f);
+      continue;
+    }
+    const left = String(f.params.names ?? '').split(NAME_SEP).filter((n) => !taken.has(`${f.file}\u0000${f.sheet}\u0000${n}`));
+    const params = ignoredParams(left);
+    if (params !== undefined) out.push({ ...f, params });
+  }
+  return out;
 }
 
 /**
@@ -2892,6 +2919,9 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   }
 
   // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way
+  const once = nameOnce(findings);
+  findings.length = 0;
+  pushAll(findings, once);
   const decision = decideRows(ledger, rawInput.sheets, findings);
   if (decision.suppress.length > 0) {
     const kept = findings.filter((f) => !decision.suppress.some((x) => x.ruleId === f.ruleId && x.file === f.file && x.sheet === f.sheet));
