@@ -14,7 +14,7 @@ import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseR
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
-import { ConvertLedger } from '../components/ConvertLedger';
+import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
 import type { NercKind, NvsSearchView } from '../components/ConvertNerc';
 import { ConvertWorms } from '../components/ConvertWorms';
@@ -23,7 +23,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, totalOnceSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -295,11 +295,31 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
-    setChoices((prev) => (prev[key] === undefined ? prev : { ...prev, [key]: { ...prev[key], [choice]: true } }));
+    const reason = typeof f.params.reason === 'string' ? f.params.reason : undefined;
+    setChoices((prev) => {
+      const c = prev[key];
+      if (c === undefined) return prev;
+      // "Leave these rows out and list them": the answer of the person, for this reason in this sheet. Never given by the page itself.
+      if (choice === 'leaveOut') return reason === undefined || (c.leaveOut ?? []).includes(reason) ? prev : { ...prev, [key]: { ...c, leaveOut: [...(c.leaveOut ?? []), reason] } };
+      // "Ask again": takes back an answer, whether it was given here or read from the companion file (the question and the acceptance start again)
+      if (choice === 'askAgain') {
+        if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((r) => r !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
+        if (f.ruleId === 'CONV-ROW-COPIES-DROPPED') {
+          const { dropCopiesFile: _d, ...rest } = c;
+          return { ...prev, [key]: { ...rest, dropCopies: false } };
+        }
+        if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE') {
+          const { totalOnceFile: _t, ...rest } = c;
+          return { ...prev, [key]: { ...rest, totalOnce: false } };
+        }
+        return prev;
+      }
+      return { ...prev, [key]: { ...c, [choice]: true } };
+    });
   };
 
   /**
@@ -650,19 +670,42 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
   const abortNvs = (): void => nvsAbort.current?.abort();
 
+  // The list of rows not written: one file beside the archive, made in the worker from the same conversion as the export. A click makes one download; nothing is downloaded by itself.
+  const [listBusy, setListBusy] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const downloadNotWritten = async (): Promise<void> => {
+    if (!parsed || listBusy) return;
+    setListBusy(true);
+    setListError(null);
+    try {
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      const res = await engine.notWritten({ body, metadata: meta });
+      downloadFile(res.blob, res.fileName);
+    } catch (e) {
+      setListError(messageOf(e));
+    } finally {
+      setListBusy(false);
+    }
+  };
+  const notWrittenProps = view === null ? undefined : { rows: view.notWritten.rows, sheets: view.notWritten.sheets, busy: listBusy, error: listError, onDownload: () => void downloadNotWritten() };
+
   const downloadCompanion = (): void => {
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
     const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
     const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
     const presenceOnly = parsed ? presenceSettingsOf(parsed, choices, mappings) : [];
-    const totalOnce = parsed ? totalOnceSettingsOf(parsed, choices) : [];
     const realCounts = parsed ? sheetFlagSettingsOf(parsed, choices, 'realCounts') : [];
-    const dropCopies = parsed ? sheetFlagSettingsOf(parsed, choices, 'dropCopies') : [];
+    // The answers that switch a check off or leave rows out are kept WITH the number they were given for, read from the findings that say them (copies left out, a total taken once, rows left out):
+    // a companion file holds only while today's analysis finds the same number, so the question reopens for another file
+    const said = (view?.findings ?? []).filter((f) => f.sheet !== undefined);
+    const dropCopiesRows = said.filter((f) => f.ruleId === 'CONV-ROW-COPIES-DROPPED').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
+    const totalOnceGroups = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.groups) }));
+    const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(totalOnce.length > 0 ? { totalOnce } : {}), ...(realCounts.length > 0 ? { realCounts } : {}), ...(dropCopies.length > 0 ? { dropCopies } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCounts.length > 0 ? { realCounts } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1128,7 +1171,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
                 <p className="muted">{t('convert.summary.noLand')}</p>
-                {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={exportBlocked} />}
+                {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={exportBlocked} {...(notWrittenProps === undefined ? {} : { notWritten: notWrittenProps })} />}
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
@@ -1153,7 +1196,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                             />
                             <span>{t('convert.accept.rule', { n: group.length, rule })}</span>
                           </label>
-                          <FindingItems findings={group} />
+                          <FindingItems findings={group} onChoose={chooseForSheet} />
                         </div>
                       );
                     })}
@@ -1171,7 +1214,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     )}
                   </div>
                 )}
-                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" />
+                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" onChoose={chooseForSheet} />
                 <p role="status" className={view.ok ? 'notice' : 'notice notice-blocked'}>
                   {view.ok ? t('convert.summary.none') : t('convert.summary.blocked')}
                 </p>
@@ -1188,6 +1231,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   {t('convert.export.button')}
                 </button>
               </div>
+              {notWrittenProps !== undefined && <NotWrittenList {...notWrittenProps} />}
               <p id="convert-export-note" className="muted" role="note" aria-live="polite">
                 {view !== null && !canExport && !exporting && !working ? t('convert.export.blocked') : ''}
               </p>
@@ -1276,7 +1320,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1311,6 +1355,22 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
               </button>
             </>
           )}
+          {f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="leave-out" data-reason={String(f.params.reason)} onClick={() => onChoose(f, 'leaveOut')}>
+                {t('convert.finding.leaveOut', { count: Number(f.params.count) })}
+              </button>
+            </>
+          )}
+          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE') && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="ask-again" onClick={() => onChoose(f, 'askAgain')}>
+                {t('convert.finding.askAgain')}
+              </button>
+            </>
+          )}
           {f.ruleId === 'CONV-ENV-ONLY-SHEET' && (
             <>
               {' '}
@@ -1323,7 +1383,7 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

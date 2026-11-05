@@ -6,7 +6,7 @@
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
 import { licenceDiffersFindings } from '../core/convert/validate';
-import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
+import { archiveFileName, archiveFiles, buildEml, buildZip, convert, countNotWritten, judge, notWrittenCsv, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../core/convert';
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
@@ -24,7 +24,7 @@ import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
-import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult } from './convert.protocol';
+import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
 import { MAX_SAMPLES, type InputFile } from './protocol';
 
@@ -145,6 +145,10 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.totalOnce ?? []) if (!(settings.totalOnce ??= []).includes(n)) settings.totalOnce.push(n);
         for (const n of s.realCounts ?? []) if (!(settings.realCounts ??= []).includes(n)) settings.realCounts.push(n);
         for (const n of s.dropCopies ?? []) if (!(settings.dropCopies ??= []).includes(n)) settings.dropCopies.push(n);
+        // the answers of an earlier run to the questions about rows: kept with their numbers, and the converter uses them only where the numbers are the same today
+        for (const c of s.dropCopiesRows ?? []) if (!(settings.dropCopiesRows ??= []).some((x) => x.sheet === c.sheet)) settings.dropCopiesRows.push(c);
+        for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
+        for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
@@ -191,7 +195,7 @@ export function createConvertHandler(): ConvertHandler {
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
       for (const sheet of parsed.sheets) {
         if (sheet.pivot !== undefined) {
-          const { cellLines: _lines, lines: _sourceLines, ...note } = sheet.pivot;
+          const { cellLines: _lines, lines: _sourceLines, source: _source, ...note } = sheet.pivot;
           pivots[sheet.name] = note;
         }
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
@@ -270,6 +274,14 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.totalOnce === true ? { totalOnce: true } : {}),
       ...(s.realCounts === true ? { realCounts: true } : {}),
       ...(s.dropCopies === true ? { dropCopies: true } : {}),
+      // the answers of a companion file carry the numbers they hold for; only whole numbers count, and the core compares them with today's
+      ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
+      ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
+      // the page's word is not taken for more than a list of words and whole numbers; the core ignores a reason that cannot be left out
+      ...(Array.isArray(s.leaveOut) && s.leaveOut.length > 0 ? { leaveOut: s.leaveOut.filter((r): r is string => typeof r === 'string') } : {}),
+      ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
+        ? { leaveOutFile: s.leaveOutFile.filter((g) => g !== null && typeof g === 'object' && typeof g.reason === 'string' && Number.isInteger(g.count) && Number.isInteger(g.rows)).map((g) => ({ reason: g.reason, count: g.count, rows: g.rows })) }
+        : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
@@ -349,6 +361,7 @@ export function createConvertHandler(): ConvertHandler {
       profile: r.profile,
       // (the page gets the tallies and the columns; the fate of every line stays in the conversion result, where the list of rows not written reads it)
       ledger: [...r.ledger, ...notUsedLedgers(body)].map((l) => ({ ...l, lines: [] })),
+      notWritten: countNotWritten([...r.ledger, ...notUsedLedgers(body)]),
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
     };
@@ -379,6 +392,17 @@ export function createConvertHandler(): ConvertHandler {
     };
   }
 
+  /**
+   * The list of rows not written, beside the archive. Built from the same conversion as the export (compute) and from the same lines of the ledger as the findings, so it cannot disagree with them.
+   * Offered whether or not the export is blocked: it is what the converter did not write.
+   */
+  function notWritten(req: NotWrittenBody): NotWrittenResult {
+    const { sheets, r } = compute(req.body);
+    const dataset = toDataset(r, req.metadata, decisionsOf(req.body));
+    const { chunks, count } = notWrittenCsv([...r.ledger, ...notUsedLedgers(req.body)], sheets, r.leftOut);
+    return { fileName: `${archiveFileName(dataset).replace(/\.zip$/, '')}-not-written.csv`, blob: new Blob(chunks, { type: 'text/csv;charset=utf-8' }), count };
+  }
+
   function proposeCodes(req: Extract<ConvertRequest, { type: 'proposeCodes' }>): CodeProposalView | null {
     const h = held(req.fileId);
     const sheet = h.parsed.sheets.find((s) => s.name === req.sheet);
@@ -407,6 +431,8 @@ export function createConvertHandler(): ConvertHandler {
           return pivotChoice(req);
         case 'export':
           return exportArchive(req.export);
+        case 'notWritten':
+          return notWritten(req.notWritten);
       }
     },
   };

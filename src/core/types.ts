@@ -53,6 +53,8 @@ export interface PivotInfo {
    * Every other line is one of the lists, or the first line of a (pivoted row, pivoted column) cell. `sourceRows` = all the data lines of the long sheet.
    */
   lines: { sourceRows: number; ragged: number[]; flag: number[]; emptyParameter: number[]; blank: number[]; repeated: number[]; entryAbsent: Record<number, number[]> };
+  /** The long sheet as it was read, before the pivot (a reference, not a copy): the list of rows not written shows the cells of the line of the LONG file. Never sent to the page. */
+  source: RawSheet;
   /** The key columns that are not position / identity columns (station, cruise, sample, time, depth, position): the user may mark each as describing the measurement, not the sample. */
   keyOptions: { index: number; header: string; describes: boolean }[];
   /** Columns the user marked as describing the measurement: removed from the key, their values not written. */

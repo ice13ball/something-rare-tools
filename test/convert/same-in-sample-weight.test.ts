@@ -84,7 +84,7 @@ describe('identical rows with a count of 1', () => {
     const r = convert({ sheets: [sheetInput(fileOf(header, noId), { shape: 'long', quantity: { kind: 'count' }, edit: { ...EDIT, record: undefined as never } })] });
     const f = r.findings.find((x) => x.ruleId === 'CONV-ID-DUPLICATE');
     expect(f).toBeDefined();
-    expect(renderConvertPlain(f!, 'en')).toMatch(/remove the copies/i);
+    expect(renderConvertPlain(f!, 'en')).toMatch(/correct the sheet/i);
   });
 });
 

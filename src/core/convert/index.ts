@@ -60,3 +60,5 @@ export { licenceDiffersFindings, metadataFindings, validateDataset, validateTabl
 export { CONVERT_RULES, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../rules/convert';
 export { buildPrefill, cleanText, licenceCaseOf, licenceSourceOf, recognisedLicenceIds, metadataKindName, prefillValues, PREFILL_KEYS } from './prefill';
 export type { Candidate, ConvertPrefill, CoverageSaid, LicenceCase, LicenceSaid, MetadataFileInfo, PrefillKey, SourceRef as PrefillSourceRef } from './prefill';
+export { COVERED_BY, REASON_KIND, SUPERSEDES, canLeaveOut, cellField, countNotWritten, decideRows, kindOf, notWrittenCsv, notWrittenRows } from './notWritten';
+export type { NotWrittenRow, NotWrittenStatus, ReasonKind, RowDecision } from './notWritten';

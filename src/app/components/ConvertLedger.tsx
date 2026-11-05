@@ -99,16 +99,45 @@ function Columns({ list, blocked }: { list: readonly LedgerColumn[]; blocked: bo
   );
 }
 
+/** What is not written, as one file beside the archive: the count (rows, and sheets left out as a whole) and the button. The same count and button stand beside the export button and in the ledger. */
+export interface NotWrittenProps {
+  rows: number;
+  sheets: number;
+  busy: boolean;
+  error: string | null;
+  onDownload: () => void;
+}
+
+export function NotWrittenList({ rows, sheets, busy, error, onDownload }: NotWrittenProps): React.ReactElement | null {
+  if (rows === 0 && sheets === 0) return null;
+  const label = rows > 0 && sheets > 0 ? t('convert.notWritten.buttonSheets', { count: rows, sheets }) : rows > 0 ? t('convert.notWritten.button', { count: rows }) : t('convert.notWritten.sheetsOnly', { sheets });
+  return (
+    <div className="convert-not-written">
+      <button type="button" className="button" data-testid="not-written-button" disabled={busy} onClick={onDownload}>
+        {label}
+      </button>
+      <p className="muted">{t('convert.notWritten.help')}</p>
+      {busy && <p role="status">{t('convert.notWritten.busy')}</p>}
+      {error !== null && (
+        <p className="notice" role="alert">
+          {t('convert.notWritten.error', { message: error })}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * `blocked`: something stops the export (a blocking finding, a missing metadata field, an acceptance not given, nothing to write), so nothing is written yet and the sentences say what WOULD be.
  */
-export function ConvertLedger({ ledger, blocked = false }: { ledger: readonly SheetLedger[]; blocked?: boolean }): React.ReactElement | null {
+export function ConvertLedger({ ledger, blocked = false, notWritten }: { ledger: readonly SheetLedger[]; blocked?: boolean; notWritten?: NotWrittenProps }): React.ReactElement | null {
   if (ledger.length === 0) return null;
   const names = headings(ledger);
   return (
     <details className="convert-ledger">
       <summary>{t('convert.ledger.title')}</summary>
       <p className="muted">{t('convert.ledger.intro')}</p>
+      {notWritten !== undefined && <NotWrittenList {...notWritten} />}
       {ledger.map((l, i) => {
         // the columns that are not written at all come first: a numeric column left out must be seen
         const lost = l.columns.filter((c) => c.to === 'not-written');

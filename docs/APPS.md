@@ -1701,6 +1701,15 @@ nothing blocks on it, it adds no finding, and it is never written into the archi
   that holds text (`5 g`, an NA variant) is shown as "not read as a number" and is in no sum; a mark on a presence sheet is written with no value of its own and is not a mismatch.
 - **Sheets that are not converted** have a line each: not read (long environmental, turned, a units row that was not folded), not used (its box is not ticked, a dictionary sheet is off by default).
   While anything stops the export (a blocking finding, a missing metadata field, a warning not accepted, nothing to write) the page says "would be written". The list of columns shows 50 and a button for the rest.
+- **Nothing disappears** (`convert/notWritten.ts`): the ledger's reasons are sorted into three kinds. *Blocks until someone decides* (`CONV-ROW-NOT-UNDERSTOOD`, once per sheet and reason, with the lines and a few cells):
+  a value with an empty parameter, a parameter repeated in one sample, a number or weight with no taxon, a row of the wrong length, a value the event of its row did not take, and a row with no explanation (a reason this file
+  does not know blocks as well). The one answer is "leave these rows out and list them" (`CONV-ROW-LEFT-OUT`, with "ask again" to take it back) or a corrected file; nothing is prefilled. *Covered*: the reason already
+  has a blocking finding of its own that names the lines (no sample code, a negative count, a duplicate event ...), so it does not block twice. *Listed, no block*: zeros, statistic rows, copies and repeated totals the person
+  chose to leave out, a row with a position or a sample name and no taxon, NA cells, quality flags. Every line not written, and every written line that lost a cell other than a zero, is in
+  `<archive name>-not-written.csv` (columns: file, sheet, line, reason, status `understood | left-out | needs-decision`, detail, then every original cell; a header row opens each sheet; a sheet left out as a whole has a
+  line of its own). It is offered by a button beside Export and in the ledger panel with the same count, whether or not the export is blocked, and is never downloaded by itself; it is not part of the archive. Formula-like cells
+  get the leading apostrophe that `readConvertFile` takes off. The companion file keeps the answers as `leaveOut=<reason>:<count>:<rows>:<sheet>`, `dropCopiesRows=` and `totalOnceGroups=`, and the converter uses one only where
+  the count and the rows of the sheet are the same today. "Leave out the copies" and "count the total once" start unticked. The worker judges the export again from the request alone. No text advises deleting data: `test/rules/noDeleteAdvice.test.ts` searches the English texts for the words and allows a named list.
 - Limits: the ledger is built on every conversion of the page (one pass over the cells, a byte per cell and column; a wide 2000 x 1000 sheet is checked by `test/perf/wide.perf.ts`, under 1300 ms per
   convert). It does not say that the contents are right, only where each row and number went.
 

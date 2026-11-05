@@ -73,6 +73,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-PROFILE-NOTHING-READ',
   'CONV-SEAFLOOR-UNIT',
   'CONV-SEAFLOOR-VALUE',
+  // a row the converter could not place (a value with no parameter, a number with no taxon ...): blocks until someone decides to leave it out and list it, or corrects the file
+  'CONV-ROW-NOT-UNDERSTOOD',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */

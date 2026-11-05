@@ -157,8 +157,8 @@ const bioCases = (): Record<string, unknown> => {
   out['L1'] = convert({ sheets: [sheetInput(fileOf(L1_HEADER, L1_ROWS.map((r) => [...r])))], approvedSplits: {} });
   out['L2'] = convert({ sheets: [sheetInput(fileOf(L2_HEADER, L2_ROWS.map((r) => [...r])), { quantity: { kind: 'count' } })], approvedSplits: {} });
   out['W1'] = convert({ sheets: [sheetInput(fileOf(W1_HEADER, W1_ROWS.map((r) => [...r])), { quantity: W1_QUANTITY })], options: { fullList: true }, approvedSplits: {} });
-  // the snapshot is the output of origin/main: the ledger (core/convert/ledger.ts) is new and informational, and is tested in ledger.test.ts
-  return JSON.parse(JSON.stringify(out, (k, v) => (k === 'ledger' ? undefined : v))) as Record<string, unknown>;
+  // the snapshot is the output of origin/main: the ledger (core/convert/ledger.ts) and the count of rows not written beside it are new, and are tested in ledger.test.ts and notWritten.test.ts
+  return JSON.parse(JSON.stringify(out, (k, v) => (k === 'ledger' || k === 'notWritten' || k === 'leftOut' ? undefined : v))) as Record<string, unknown>;
 };
 
 /* The ARCHIVES (every file of the zip as text, and the zip's own hash) of long biology sheets, WoRMS off and on (the test stub, no network), and what the worker makes of each dropped file

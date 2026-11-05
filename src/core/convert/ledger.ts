@@ -181,6 +181,11 @@ export interface LineFate {
   wrote?: ('occurrence' | 'measurement' | 'event' | 'level')[];
   /** Wide sheets: the non-blank taxon cells of the line with a record, and those without (`chain` says why). */
   cells?: { written: number; lost: number };
+  /**
+   * Wide sheets: the cells of the line that have no record, WHICH ones, except the zeros (a matrix of zeros is most of its cells and appears as a count only): the column index and the reason
+   * (`unexplained`: no reason was recorded). Kept for the list of rows not written; the page's view does not carry `lines`.
+   */
+  lostCells?: { index: number; reason: LedgerReason | 'unexplained' }[];
 }
 
 export interface SheetLedger {
@@ -428,6 +433,12 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     const cellsWritten = new Int32Array(rows.length);
     const cellsLost = new Int32Array(rows.length);
     const lostBits = new Int32Array(rows.length);
+    const lostAt = new Map<number, { index: number; reason: LedgerReason | 'unexplained' }[]>();
+    const lostPush = (pos: number, index: number, reason: LedgerReason | 'unexplained'): void => {
+      const list = lostAt.get(pos);
+      if (list === undefined) lostAt.set(pos, [{ index, reason }]);
+      else list.push({ index, reason });
+    };
     for (const i of inp.taxonColumns) {
       const flag = occFlag.get(i);
       const cf = fate.column(i);
@@ -441,10 +452,14 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
         }
         const code = rowCode[pos] || (cf === undefined ? 0 : cf[pos]);
         cellsLost[pos]++;
-        if (code === 0) unexplained++;
-        else {
+        if (code === 0) {
+          unexplained++;
+          lostPush(pos, i, 'unexplained');
+        } else {
           counts[code]++;
           lostBits[pos] |= BIT_OF(code);
+          // (a zero is counted and not named: a wide matrix of zeros would be most of its cells)
+          if (LEDGER_REASONS[code - 1] !== 'zero') lostPush(pos, i, LEDGER_REASONS[code - 1]);
         }
       }
     }
@@ -457,10 +472,13 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       const line = rows[pos].line;
       const cells = { written: cellsWritten[pos], lost: cellsLost[pos] };
       const entry = byLine.get(line);
-      if (entry !== undefined) entry.cells = cells;
-      else if (isWrittenAt(pos, line)) {
+      const lostCells = lostAt.get(pos);
+      if (entry !== undefined) {
+        entry.cells = cells;
+        // (an unwritten line lists its cells whole; its lost cells are not a second thing to name)
+      } else if (isWrittenAt(pos, line)) {
         const chain = reasonsOfBits(lostBits[pos]);
-        const e: LineFate = { line, fate: 'written', cells, ...(chain.length > 0 ? { chain } : {}) };
+        const e: LineFate = { line, fate: 'written', cells, ...(chain.length > 0 ? { chain } : {}), ...(lostCells === undefined ? {} : { lostCells }) };
         lines.push(e);
       }
     }

@@ -84,8 +84,14 @@ export interface ConvertSheetRequest {
   totalOnce?: boolean;
   /** The user's choice "these are real counts" (only the boolean true counts). */
   realCounts?: boolean;
-  /** The user's choice "drop the exact copies of rows" (only the boolean true counts). */
+  /** The user's choice "leave out the exact copies of rows and list them" (only the boolean true counts). */
   dropCopies?: boolean;
+  /** The number of copies / groups a companion file recorded with the same answers; the core honours them only when today's analysis finds the same number. */
+  dropCopiesCount?: number;
+  totalOnceCount?: number;
+  /** The reasons the user left out and listed (core/convert/notWritten.ts), and the same as a companion file recorded them (with the counts they hold for). */
+  leaveOut?: string[];
+  leaveOutFile?: { reason: string; count: number; rows: number }[];
 }
 
 export interface ConvertRequestBody {
@@ -141,8 +147,23 @@ export interface ConvertView {
   codeCollision: boolean;
   /** Some sheet has rows without a sample code: the code proposal is worth showing. */
   codesMissing: { fileId: string; sheet: string }[];
-  /** Where every source row and numeric column of every sheet went (core/convert/ledger.ts): informational, blocks nothing. */
+  /** Where every source row and numeric column of every sheet went (core/convert/ledger.ts): informational. A row it could not place is a finding of its own (CONV-ROW-NOT-UNDERSTOOD). */
   ledger: SheetLedger[];
+  /** How many rows the list beside the archive holds (a line with no record, a written line that lost cells other than zeros), and how many sheets are left out as a whole: the same function that writes the list counts them. */
+  notWritten: { rows: number; sheets: number };
+}
+
+/** What the page sends to get the list of rows not written: the same body as the export, and the description (the file is named after the archive). */
+export interface NotWrittenBody {
+  body: ConvertRequestBody;
+  metadata: DatasetMetadata;
+}
+
+/** The list of rows not written, built in the worker: a Blob (nothing is copied to make it a string on the page), the name beside the archive's, and the number of rows in it. */
+export interface NotWrittenResult {
+  fileName: string;
+  blob: Blob;
+  count: number;
 }
 
 export interface CodeProposalView {
@@ -177,6 +198,7 @@ export interface ConvertProtocol {
   /** The user's choice about a long environmental sheet: read it as a normal table (`off`), and which key columns describe the measurement, not the sample. The file is read again; the answer is its new summary. */
   pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
+  notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
 }
 
 export type ConvertRequestType = keyof ConvertProtocol;
@@ -196,4 +218,5 @@ export interface ConvertEngine {
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping, shape?: ConvertShape, extra?: number[]): Promise<CodeProposalView | null>;
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
+  notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
 }

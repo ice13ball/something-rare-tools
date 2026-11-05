@@ -45,6 +45,7 @@ import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
 import { FateLog, buildSheetLedger, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
+import { decideRows } from './notWritten';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -100,6 +101,19 @@ export interface ConvertSheetInput {
   realCounts?: boolean;
   /** The user's choice on CONV-ROW-COPIES: the rows that are exact copies of another row are not converted. */
   dropCopies?: boolean;
+  /**
+   * The same choice, as a companion file of an earlier run recorded it: with the number of copies it was given for. Honoured only when today's analysis finds exactly that many copies; otherwise
+   * the check runs and the question is open (the answer of a file cannot switch a check off for rows it never saw). Ignored when `dropCopies` is true.
+   */
+  dropCopiesCount?: number;
+  /** The choice "write one occurrence per sample and taxon" as a companion file recorded it, with the number of groups it was given for (the same rule as `dropCopiesCount`). */
+  totalOnceCount?: number;
+  /**
+   * The reasons the user answered "leave these rows out and list them" for (notWritten.ts: only a reason that blocks can be answered). Never prefilled, never a default.
+   */
+  leaveOut?: readonly string[];
+  /** The same answers as a companion file recorded them: the reason, the lines it affected and the rows of the sheet. Honoured only when both numbers are the same today (the question reopens otherwise). */
+  leaveOutFile?: readonly { reason: string; count: number; rows: number }[];
 }
 
 export interface ProfileDeclaration {
@@ -1650,16 +1664,23 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     const ragged = raggedLines(file, sheet.name);
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
-    const analysis =
+    const analyse = (drop: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: sin.realCounts === true, dropCopies: sin.dropCopies === true })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: sin.realCounts === true, dropCopies: drop })
         : {};
+    let analysis = analyse(sin.dropCopies === true);
+    // An answer of a companion file that switches a check off (drop the copies, take a total once) is honoured only when today's analysis finds the count the file recorded with it
+    let copiesFromFile = false;
+    if (sin.dropCopies !== true && sin.dropCopiesCount !== undefined && analysis.copies?.copyLines.length === sin.dropCopiesCount) {
+      copiesFromFile = true;
+      analysis = analyse(true);
+    }
     const repeated = analysis.total;
     const sameValue = analysis.same;
     const copies = analysis.copies;
     const specimenCopies = analysis.specimenCopies;
-    const takeOnce = repeated !== undefined && sin.totalOnce === true;
-    const dropCopies = copies !== undefined && sin.dropCopies === true;
+    const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.groups === sin.totalOnceCount));
+    const dropCopies = copies !== undefined && (sin.dropCopies === true || copiesFromFile);
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
     const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(dropCopies ? copies.copyLines : [])]);
     {
@@ -2844,6 +2865,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     pushAll(findings, moved);
   }
 
+  // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way
+  const decision = decideRows(ledger, rawInput.sheets, findings);
+  if (decision.suppress.length > 0) {
+    const kept = findings.filter((f) => !decision.suppress.some((x) => x.ruleId === f.ruleId && x.file === f.file && x.sheet === f.sheet));
+    findings.length = 0;
+    pushAll(findings, kept);
+  }
+  pushAll(findings, decision.findings);
+
   const blocking = findings.filter((f) => f.severity === 'error');
   return {
     ok: blocking.length === 0,
@@ -2857,6 +2887,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     nameLookup,
     cruiseText: tree.cruiseText,
     ledger,
+    leftOut: decision.leftOut,
     // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
     ...(repeatedOcc.size > 0 || hiddenIds.length > 0 ? { repeatedOccurrenceIds: [...new Set([...repeatedOcc.keys(), ...hiddenIds])] } : {}),
     profile: {

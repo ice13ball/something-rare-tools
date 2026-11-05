@@ -197,6 +197,8 @@ export interface ConvertResult {
   cruiseText: string[];
   /** Where every source row and numeric column of every sheet went (ledger.ts). Informational: nothing reads it to block. */
   ledger: SheetLedger[];
+  /** The reasons the user left out, per sheet (`${position of the sheet in the request}\u0000${reason}`): the list of rows not written marks them. */
+  leftOut: string[];
   /** Every occurrenceID that CONV-ID-DUPLICATE named as repeated; kept here and not in the finding, so the finding stays small. */
   repeatedOccurrenceIds?: string[];
   stats: ConvertStats;

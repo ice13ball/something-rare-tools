@@ -284,6 +284,7 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     flagRows,
     duplicates: [...duplicates.values()],
     unnamed,
+    source: sheet,
     lines: { sourceRows: sheet.rows.length, ragged: raggedLines, flag: flagLines, emptyParameter: unnamed, blank: blankLines, repeated: repeatedLines, entryAbsent },
     keyOptions,
     dropped,
@@ -319,7 +320,7 @@ export function pivotConvertFile(file: ParsedFile, choices: Readonly<Record<stri
 }
 
 /** What the page needs of a pivot to say it when the file is READ (the lines of every cell stay in the worker). */
-export type PivotNote = Omit<PivotInfo, 'cellLines' | 'lines'>;
+export type PivotNote = Omit<PivotInfo, 'cellLines' | 'lines' | 'source'>;
 
 /** The note of a pivot, as the findings that say it: how the sheet was read, the flag columns and flag parameters left out, the headers that were renamed. All information. */
 export function pivotNoteFindings(file: string, sheet: string, p: PivotNote): Finding[] {

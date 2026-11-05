@@ -432,7 +432,8 @@ describe('ledger: sheets that give no row, sheets left out, and the ledger as an
       for (const m of [...noop, from]) m.mockRestore();
       const real = inputs().map((s) => convert({ sheets: s, options: {} }));
       plain.forEach((x, i) => {
-        const strip = (r: ReturnType<typeof convert>) => JSON.stringify({ o: r.occurrences, m: r.measurements, e: r.events, f: r.findings, s: r.stats });
+        // (the questions about rows the converter could not place are read FROM the ledger, so they are the one thing that is not the same; every other finding is)
+        const strip = (r: ReturnType<typeof convert>) => JSON.stringify({ o: r.occurrences, m: r.measurements, e: r.events, f: r.findings.filter((f) => f.ruleId !== 'CONV-ROW-NOT-UNDERSTOOD' && f.ruleId !== 'CONV-ROW-LEFT-OUT'), s: r.stats });
         expect(strip(x), `input ${i}`).toBe(strip(real[i]));
       });
     } finally {
@@ -473,7 +474,7 @@ describe('ledger: the fate of every line, as data (what the list of rows not wri
     // line 2: 10, 5, 0 -> the zero is lost; line 3: 7, blank, 3 -> nothing lost; line 4: NA, 4, 1 -> the NA is lost
     expect(l.lines).toEqual([
       { line: 2, fate: 'written', cells: { written: 2, lost: 1 }, chain: ['zero'] },
-      { line: 4, fate: 'written', cells: { written: 2, lost: 1 }, chain: ['na-cell'] },
+      { line: 4, fate: 'written', cells: { written: 2, lost: 1 }, chain: ['na-cell'], lostCells: [expect.objectContaining({ reason: 'na-cell' })] },
     ]);
   });
 

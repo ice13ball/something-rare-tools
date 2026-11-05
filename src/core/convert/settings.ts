@@ -33,7 +33,12 @@ import type { ParsedFile } from '../types';
  *                     columns of a sheet of the same name that have none, and the user can change it on the page. A basis word and a sheet name, never a value.
  *   perOccurrence=<on|off>:<sheet>:<column>  the tick "of each organism" of a measured-variable column of a long sheet: on = ticked, off = the tool proposed it ticked and the user took it back. A PRE-PICK only: it
  *                     sets the tick on the column of that header in a sheet of the same name (a sheet name has no colon; the header is the rest of the line), and the user can change it on the page.
- * An unknown name or value is ignored.
+ *   dropCopiesRows=<count>:<sheet>  the user chose, on CONV-ROW-COPIES, to leave out the rows that are exact copies of an earlier row, and the analysis found <count> copies. Read as a PRE-TICK that holds only
+ *                     when today's analysis of the sheet finds the same number of copies (core/convert/build.ts): for another file the question is open again. A count and a sheet name, never a value.
+ *   totalOnceGroups=<count>:<sheet>  the same for "one occurrence per sample and taxon" (CONV-QUANTITY-REPEATED): <count> is the number of groups of rows that repeat a total.
+ *   leaveOut=<reason>:<count>:<rows>:<sheet>  the user answered "leave these rows out and list them" (CONV-ROW-NOT-UNDERSTOOD) for <count> rows of <reason> in a sheet of <rows> rows. Holds only while
+ *                     today's sheet has the same number of rows and finds the same number of rows of that reason; otherwise the question is open again. Counts, a reason word and a sheet name, never a value.
+ * An unknown name or value is ignored. (`dropCopies=<sheet>` and `totalOnce=<sheet>` of earlier files are still read, and the page does not tick anything from them: they carry no count.)
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
 export const STATION_PREFIX_SETTING = 'stationPrefix=yes';
@@ -48,6 +53,9 @@ export const PRESENCE_ONLY_SETTING = 'presenceOnly=';
 export const TOTAL_ONCE_SETTING = 'totalOnce=';
 export const REAL_COUNTS_SETTING = 'realCounts=';
 export const DROP_COPIES_SETTING = 'dropCopies=';
+export const DROP_COPIES_ROWS_SETTING = 'dropCopiesRows=';
+export const TOTAL_ONCE_GROUPS_SETTING = 'totalOnceGroups=';
+export const LEAVE_OUT_SETTING = 'leaveOut=';
 export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
@@ -79,6 +87,12 @@ export interface ConvertSettings {
   realCounts?: string[];
   /** The sheets whose exact copies of rows the user chose to drop, by sheet name. A pre-tick only. */
   dropCopies?: string[];
+  /** The sheets whose copies the user left out, with the number of copies the analysis found. A pre-tick that holds only for the same count. */
+  dropCopiesRows?: { sheet: string; count: number }[];
+  /** The sheets whose repeated totals the user took once, with the number of groups found. A pre-tick that holds only for the same count. */
+  totalOnceGroups?: { sheet: string; count: number }[];
+  /** The reasons the user left out and listed, by sheet, with the rows of that reason and the rows of the sheet. Holds only for the same two numbers. */
+  leaveOut?: { sheet: string; reason: string; count: number; rows: number }[];
   /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
   biomassBasis?: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[];
   /** The ticks "of each organism" the user set (on) or took back (off), by sheet and column header. Only present when there is at least one. A pre-pick only. */
@@ -116,6 +130,9 @@ export function perOccurrenceOf(
   return out;
 }
 
+const COUNT = /^(\d{1,9}):(.+)$/s;
+const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
+
 const addName = (list: string[], name: string): void => {
   if (name !== '' && name.length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.includes(name)) list.push(name);
 };
@@ -139,7 +156,16 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v.startsWith(TOTAL_ONCE_SETTING)) addName((settings.totalOnce ??= []), v.slice(TOTAL_ONCE_SETTING.length));
     else if (v.startsWith(REAL_COUNTS_SETTING)) addName((settings.realCounts ??= []), v.slice(REAL_COUNTS_SETTING.length));
     else if (v.startsWith(DROP_COPIES_SETTING)) addName((settings.dropCopies ??= []), v.slice(DROP_COPIES_SETTING.length));
-    else if (v.startsWith(BIOMASS_BASIS_SETTING)) {
+    else if (v.startsWith(DROP_COPIES_ROWS_SETTING) || v.startsWith(TOTAL_ONCE_GROUPS_SETTING)) {
+      const copies = v.startsWith(DROP_COPIES_ROWS_SETTING);
+      const m = COUNT.exec(v.slice((copies ? DROP_COPIES_ROWS_SETTING : TOTAL_ONCE_GROUPS_SETTING).length));
+      const list = copies ? (settings.dropCopiesRows ??= []) : (settings.totalOnceGroups ??= []);
+      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[2])) list.push({ sheet: m[2], count: Number(m[1]) });
+    } else if (v.startsWith(LEAVE_OUT_SETTING)) {
+      const m = LEAVE_OUT.exec(v.slice(LEAVE_OUT_SETTING.length));
+      const list = (settings.leaveOut ??= []);
+      if (m !== null && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[4] && x.reason === m[1])) list.push({ reason: m[1], count: Number(m[2]), rows: Number(m[3]), sheet: m[4] });
+    } else if (v.startsWith(BIOMASS_BASIS_SETTING)) {
       const rest = v.slice(BIOMASS_BASIS_SETTING.length);
       const basis = rest.slice(0, rest.indexOf(':'));
       const sheet = rest.slice(rest.indexOf(':') + 1);
@@ -169,6 +195,9 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.transposedAsTable ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TRANSPOSED_AS_TABLE_SETTING}${n}`, '', '', ''])),
       ...(settings.biomassBasis ?? []).filter((b) => b.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((b) => line([SETTING_ROW, `${BIOMASS_BASIS_SETTING}${b.basis}:${b.sheet}`, '', '', ''])),
       ...(settings.perOccurrence ?? []).filter((o) => o.header.length <= MAX_SETTING_NAME && o.sheet.length <= MAX_SETTING_NAME && !o.sheet.includes(':')).slice(0, MAX_SETTING_SHEETS).map((o) => line([SETTING_ROW, `${PER_OCCURRENCE_SETTING}${o.on ? 'on' : 'off'}:${o.sheet}:${o.header}`, '', '', ''])),
+      ...(settings.dropCopiesRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${DROP_COPIES_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
+      ...(settings.totalOnceGroups ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${TOTAL_ONCE_GROUPS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
+      ...(settings.leaveOut ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME && /^[a-z][a-z-]{0,40}$/.test(c.reason)).slice(0, MAX_SETTING_SHEETS * 8).map((c) => line([SETTING_ROW, `${LEAVE_OUT_SETTING}${c.reason}:${c.count}:${c.rows}:${c.sheet}`, '', '', ''])),
       ...(settings.realCounts ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${REAL_COUNTS_SETTING}${n}`, '', '', ''])),
       ...(settings.dropCopies ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${DROP_COPIES_SETTING}${n}`, '', '', ''])),
       ...(settings.totalOnce ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TOTAL_ONCE_SETTING}${n}`, '', '', ''])),
