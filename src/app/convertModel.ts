@@ -14,6 +14,7 @@ import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
 import type { NercColumnDecision, NercDecisions, NercPick } from '../core/convert/nerc';
 import { keyHashes, resolveKeyHashes } from '../core/convert/keySetting';
+import { defaultKeyPrefix } from '../core/convert/sampleKey';
 
 /** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
 export interface QuantityForm {
@@ -75,6 +76,8 @@ export interface SheetChoice {
   sampleKey?: number[];
   /** The key above was read from a companion file (it held: the same columns, the same number of rows). */
   sampleKeyFromFile?: boolean;
+  /** The name every sample ID of the key starts with, as the person saw it (and may have changed it); kept in the companion file so that a renamed file keeps its IDs. */
+  sampleKeyPrefix?: string;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -266,7 +269,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(c.dropCopiesFile !== undefined && !c.dropCopies ? { dropCopiesCount: c.dropCopiesFile } : {}), ...(c.totalOnceFile !== undefined && !c.totalOnce ? { totalOnceCount: c.totalOnceFile } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
@@ -297,9 +300,12 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
       // a key a companion file recorded holds only when every column is found again by its hash and the sheet has the same number of rows; otherwise the question is open
-      const saved = profile ? undefined : parsed.settings.sampleKey?.find((k) => k.sheet === sh.name && k.rows === sh.rowCount);
+      // the sheet of a table file is called after the file, so a renamed file is the same sheet: for such a file the columns and the number of rows decide (a workbook's sheet is known by its name)
+      const nameless = f.kind !== 'xlsx' && f.sheets.length === 1;
+      const same = profile ? [] : (parsed.settings.sampleKey ?? []).filter((k) => k.rows === sh.rowCount && (k.sheet === sh.name || nameless));
+      const saved = same.find((k) => k.sheet === sh.name) ?? same.find((k) => resolveKeyHashes(sh.header, k.hashes) !== undefined);
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true }) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }) };
     }
   }
   return out;
@@ -309,14 +315,15 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
  * The sample keys the person picked (or a companion file gave and still holds), for the companion file: the sheet, the hashes of the key columns and the number of rows (core/convert/keySetting.ts).
  * No header text: a sheet in use that is not a profile and has a key.
  */
-export function sampleKeySettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { sheet: string; hashes: string; rows: number }[] {
-  const out: { sheet: string; hashes: string; rows: number }[] = [];
+export function sampleKeySettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { sheet: string; hashes: string; rows: number; prefix?: string }[] {
+  const out: { sheet: string; hashes: string; rows: number; prefix?: string }[] = [];
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const c = choices[sheetKey(f.fileId, sh.name)];
       if (!c || !c.use || c.profile || c.sampleKey === undefined || c.sampleKey.length === 0 || out.some((o) => o.sheet === sh.name)) continue;
       const hashes = keyHashes(sh.header, c.sampleKey);
-      if (hashes !== undefined) out.push({ sheet: sh.name, hashes, rows: sh.rowCount });
+      // the name in front of the IDs is kept as it was used (the default too), so that the same file under another name keeps its IDs
+      if (hashes !== undefined) out.push({ sheet: sh.name, hashes, rows: sh.rowCount, prefix: c.sampleKeyPrefix ?? defaultKeyPrefix(f.kind, f.fileName, sh.name) });
     }
   }
   return out;

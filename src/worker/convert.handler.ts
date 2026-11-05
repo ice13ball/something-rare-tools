@@ -16,7 +16,7 @@ import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
 import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
-import { biomassBasisOf, readConvertSettings } from '../core/convert/settings';
+import { MAX_KEY_PREFIX, biomassBasisOf, readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
 import { notUsedLedger } from '../core/convert/ledger';
 import type { SheetKeyReport } from '../core/convert/sampleKey';
@@ -267,7 +267,10 @@ export function createConvertHandler(): ConvertHandler {
   function keyOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'sampleKey' | 'sampleKeyFromFile'> {
     const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
     const columns = [...new Set((s.sampleKey?.columns ?? []).filter((i): i is number => Number.isInteger(i) && i >= 0 && i < width))];
-    return columns.length === 0 ? {} : { sampleKey: { columns }, ...(s.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) };
+    // the name in front of the IDs: the person's text, as long as the companion file keeps it; an empty or very long one is no name
+    const raw = typeof s.sampleKey?.prefix === 'string' ? s.sampleKey.prefix.trim() : '';
+    const prefix = raw !== '' && raw.length <= MAX_KEY_PREFIX ? raw : undefined;
+    return columns.length === 0 ? {} : { sampleKey: { columns, ...(prefix === undefined ? {} : { prefix }) }, ...(s.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) };
   }
 
   /** The sheets of a request as the core takes them. */
@@ -428,7 +431,7 @@ export function createConvertHandler(): ConvertHandler {
   function previewKey(req: Extract<ConvertRequest, { type: 'previewKey' }>): SheetKeyReport | null {
     const target = req.body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet);
     if (target === undefined || !Array.isArray(req.columns)) return null;
-    const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns }, sampleKeyFromFile: false } : s)) };
+    const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns, ...(target.sampleKey?.prefix === undefined ? {} : { prefix: target.sampleKey.prefix }) }, sampleKeyFromFile: false } : s)) };
     const sheets = inputsOf(body);
     const at = body.sheets.indexOf(body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet) as (typeof body.sheets)[number]);
     const input = sheets[at];

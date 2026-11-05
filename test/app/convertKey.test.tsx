@@ -59,11 +59,11 @@ interface Run {
   engine: ConvertEngine;
 }
 
-async function load(text = csvOf(HEADER, rows()), extra: { name: string; text: string }[] = [], engine: ConvertEngine = createDirectConvertEngine()): Promise<Run> {
+async function load(text = csvOf(HEADER, rows()), extra: { name: string; text: string }[] = [], engine: ConvertEngine = createDirectConvertEngine(), fileName = 'hauls.csv'): Promise<Run> {
   const download = vi.fn();
   const downloadFile = vi.fn();
   const view = render(<ConvertPage engine={engine} download={download} downloadFile={downloadFile} />);
-  chooseFiles(view.container, [{ name: 'hauls.csv', text }, ...extra]);
+  chooseFiles(view.container, [{ name: fileName, text }, ...extra]);
   fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
   await screen.findByRole('heading', { name: T['convert.columns.title'] });
   const confirm = screen.queryByRole('button', { name: /Confirm all shown/ });
@@ -192,12 +192,12 @@ describe('the picker of the sample key', () => {
     await waitFor(() => expect(exportButton.getAttribute('aria-disabled')).not.toBe('true'));
     fireEvent.click(exportButton);
     await waitFor(() => expect(run.downloadFile).toHaveBeenCalledTimes(1));
-    expect(bodies[0].body.sheets[0].sampleKey).toEqual({ columns: [0, 1] });
+    expect(bodies[0].body.sheets[0].sampleKey).toEqual({ columns: [0, 1], prefix: 'hauls' });
     const [zip] = run.downloadFile.mock.calls[0] as [Blob];
     const back = await readBack(await bytesOf(zip));
     const events = objects(back.tables['event.txt']);
     const samples = events.filter((e) => e.eventType === 'sample');
-    expect(samples.map((e) => e.eventID).sort()).toEqual(['hauls.csv|A|1', 'hauls.csv|A|2', 'hauls.csv|B|1', 'hauls.csv|B|2']);
+    expect(samples.map((e) => e.eventID).sort()).toEqual(['hauls|A|1', 'hauls|A|2', 'hauls|B|1', 'hauls|B|2']);
     expect(back.tables['occurrence.txt'].rows).toHaveLength(12);
     expect(samples).toHaveLength(4);
   });
@@ -342,6 +342,61 @@ describe('the companion file', () => {
     await load(csvOf(['Note', 'STATION', 'cast', ...HEADER.slice(2)], rows().map((r) => ['x', ...r])), [{ name: 'convert-companion.csv', text: companion }]);
     await waitFor(() => expect(item('CONV-KEY-PICKED')).toBeTruthy());
     expect(ticked()).toEqual(['STATION', 'cast']);
+  });
+
+  it('the name in front of the IDs is shown, can be changed, is said in the key line, is kept in the companion file, and a RENAMED file with that file keeps the same IDs', async () => {
+    const real = createDirectConvertEngine();
+    const bodies: ExportBody[] = [];
+    const spy: ConvertEngine = { ...real, export: (b) => (bodies.push(b), real.export(b)) };
+    const run = await load(csvOf(HEADER, rows()), [], spy);
+    await settled('The sample code is missing');
+    const prefixBox = (): HTMLInputElement => within(picker()).getByLabelText(T['convert.key.prefix']) as HTMLInputElement;
+    // the default is the file's name without its extension
+    expect(prefixBox().value).toBe('hauls');
+    tick('Station');
+    tick('Cast');
+    await waitFor(() => expect(previewText()).toContain('4 samples'));
+    // an empty name cannot be used
+    fireEvent.change(prefixBox(), { target: { value: '  ' } });
+    expect(useButton().disabled).toBe(true);
+    fireEvent.change(prefixBox(), { target: { value: 'Survey one' } });
+    fireEvent.click(useButton());
+    await waitFor(() => expect(item('CONV-KEY-PICKED')).toBeTruthy());
+    expect(item('CONV-KEY-PICKED')!.textContent).toContain('starts with "Survey one"');
+    expect(prefixBox().value).toBe('Survey one');
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    await waitFor(() => expect(run.download).toHaveBeenCalledTimes(1));
+    const companion = run.download.mock.calls[0][0] as string;
+    expect(companion).toMatch(/\(setting\),sampleKeyPrefix=hauls\.csv:[0-9a-f]{8}\+[0-9a-f]{8}:12:Survey one,/);
+    expect(companion).not.toMatch(/Station|Cast/i);
+    // the IDs of the archive
+    fillDescription();
+    await tickAll();
+    const exportButton = screen.getByRole('button', { name: T['convert.export.button'] });
+    await waitFor(() => expect(exportButton.getAttribute('aria-disabled')).not.toBe('true'));
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(run.downloadFile).toHaveBeenCalledTimes(1));
+    const ids = objects((await readBack(await bytesOf((run.downloadFile.mock.calls[0] as [Blob])[0]))).tables['event.txt']).filter((e) => e.eventType === 'sample').map((e) => e.eventID).sort();
+    expect(ids).toEqual(['Survey one|A|1', 'Survey one|A|2', 'Survey one|B|1', 'Survey one|B|2']);
+    cleanup();
+    // the same rows in a file with another name, and the companion file: the key and the name come back, so the IDs are the same
+    const real2 = createDirectConvertEngine();
+    const bodies2: ExportBody[] = [];
+    const spy2: ConvertEngine = { ...real2, export: (b) => (bodies2.push(b), real2.export(b)) };
+    const run2 = await load(csvOf(HEADER, rows()), [{ name: 'convert-companion.csv', text: companion }], spy2, 'hauls_final_v2.csv');
+    await waitFor(() => expect(item('CONV-KEY-PICKED')).toBeTruthy());
+    expect(item('CONV-KEY-PICKED')!.textContent).toContain('read from the companion file');
+    expect(item('CONV-KEY-PICKED')!.textContent).toContain('starts with "Survey one"');
+    expect((within(picker()).getByLabelText(T['convert.key.prefix']) as HTMLInputElement).value).toBe('Survey one');
+    fillDescription();
+    await tickAll();
+    const exportButton2 = screen.getByRole('button', { name: T['convert.export.button'] });
+    await waitFor(() => expect(exportButton2.getAttribute('aria-disabled')).not.toBe('true'));
+    fireEvent.click(exportButton2);
+    await waitFor(() => expect(run2.downloadFile).toHaveBeenCalledTimes(1));
+    const ids2 = objects((await readBack(await bytesOf((run2.downloadFile.mock.calls[0] as [Blob])[0]))).tables['event.txt']).filter((e) => e.eventType === 'sample').map((e) => e.eventID).sort();
+    expect(ids2).toEqual(ids);
+    expect(bodies.length + bodies2.length).toBe(2);
   });
 
   it('an old companion file (no key line) and a hostile key line change nothing', async () => {

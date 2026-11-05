@@ -21,6 +21,10 @@ export interface SampleKeyPickerProps {
   picked: number[];
   /** The key in use for the sheet (the one the export has). */
   inUse: number[];
+  /** The name in front of every sample ID, as typed (or the default), and the one in use (undefined without a key in use). */
+  prefix: string;
+  inUsePrefix?: string | undefined;
+  onPrefix: (value: string) => void;
   /** What the ticked columns would make, from the converter itself; undefined while it is being asked, null when nothing is ticked. */
   report: SheetKeyReport | null | undefined;
   /** A failed count: the message, shown with a button to count again. */
@@ -39,11 +43,11 @@ const nameOf = (c: KeyColumn): string => (c.header.trim() === '' ? t('convert.ke
  * The picker of the sample key: the columns that together say which rows are one sample, with the converter's own count of what they make. Nothing is ticked for the person, no column is
  * proposed, and nothing reaches the conversion until "Use this key" is pressed.
  */
-export function SampleKeyPicker({ sheet, columns, picked, inUse, report, error, onRetry, onToggle, onUse, onClear }: SampleKeyPickerProps): React.ReactElement {
+export function SampleKeyPicker({ sheet, columns, picked, inUse, prefix, inUsePrefix, onPrefix, report, error, onRetry, onToggle, onUse, onClear }: SampleKeyPickerProps): React.ReactElement {
   const { lang } = useLang();
   const [all, setAll] = useState(false);
   const shown = all ? columns : columns.filter((c, i) => i < SHOWN || picked.includes(c.index));
-  const same = picked.length === inUse.length && picked.every((p, i) => p === inUse[i]);
+  const same = picked.length === inUse.length && picked.every((p, i) => p === inUse[i]) && prefix.trim() === inUsePrefix;
   const byIndex = new Map(columns.map((c) => [c.index, c]));
   const order = picked.map((i) => (byIndex.get(i) === undefined ? `#${i + 1}` : nameOf(byIndex.get(i) as KeyColumn))).join(' + ');
   const n = (x: number): string => formatNumber(x, lang);
@@ -71,6 +75,11 @@ export function SampleKeyPicker({ sheet, columns, picked, inUse, report, error, 
           {t('convert.key.showAll', { n: columns.length })}
         </button>
       ) : null}
+      <label className="convert-key-prefix">
+        <span>{t('convert.key.prefix')}</span>{' '}
+        <input type="text" value={prefix} maxLength={100} onChange={(e) => onPrefix(e.target.value)} />
+      </label>
+      <p className="hint">{t('convert.key.prefixHelp')}</p>
       {picked.length === 0 ? <p>{t('convert.key.none')}</p> : <p>{t('convert.key.order', { columns: order })}</p>}
       {picked.length > 0 ? (
         <div aria-live="polite" data-testid="key-preview">
@@ -98,7 +107,7 @@ export function SampleKeyPicker({ sheet, columns, picked, inUse, report, error, 
         </div>
       ) : null}
       <div className="button-row">
-        <button type="button" className="button" disabled={picked.length === 0 || same} onClick={onUse}>
+        <button type="button" className="button" disabled={picked.length === 0 || prefix.trim() === '' || same} onClick={onUse}>
           {t('convert.key.use')}
         </button>
         {inUse.length > 0 || picked.length > 0 ? (

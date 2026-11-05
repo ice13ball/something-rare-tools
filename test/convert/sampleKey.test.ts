@@ -8,7 +8,7 @@ import type { ConvertSheetInput } from '../../src/core/convert/build';
 import { previewSampleKey } from '../../src/core/convert/keyPreview';
 import { keyHashes, resolveKeyHashes } from '../../src/core/convert/keySetting';
 import { judge } from '../../src/core/convert/policy';
-import { MAX_EVENT_ID, derivedEventId, keyColumns, keyReader } from '../../src/core/convert/sampleKey';
+import { MAX_EVENT_ID, defaultKeyPrefix, derivedEventId, keyColumns, keyReader } from '../../src/core/convert/sampleKey';
 import type { SampleKey } from '../../src/core/convert/sampleKey';
 import { readConvertSettings, writeConvertSidecar } from '../../src/core/convert/settings';
 import { renderConvertPlain } from '../../src/core/rules/convert';
@@ -20,8 +20,8 @@ import type { Cell } from './helpers';
 
 const ids = (r: ReturnType<typeof convert>, rule: string) => r.findings.filter((f) => f.ruleId === rule);
 const key = (...columns: number[]): SampleKey => ({ columns });
-/** The ID of a sample on the sheet `S` of `sheet.csv` (the helpers' default): the sheet comes first. */
-const P = 'sheet.csv / S';
+/** The ID of a sample of `sheet.csv` (the helpers' default): the file's name without its extension comes first, then the values. */
+const P = 'sheet';
 const idOf = (...parts: string[]): string => [P, ...parts].join('|');
 const sampleIds = (r: ReturnType<typeof convert>): string[] => r.events.filter((e) => e.eventType === 'sample').map((e) => e.id).sort();
 
@@ -94,7 +94,7 @@ describe('the eventID of a key made of columns', () => {
       return `t${NFC(t)}`;
     };
     const sheet = rawSheet(['a', 'b', 'c'], [], 'S');
-    const read = keyReader(key(0, 1, 2), { fileName: 'sheet.csv', sheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' });
+    const read = keyReader(key(0, 1, 2), { prefix: 'sheet.csv / S', sheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' });
     const byId = new Map<string, string>();
     const byCanon = new Map<string, string>();
     for (let i = 0; i < 40000; i++) {
@@ -115,7 +115,7 @@ describe('the eventID of a key made of columns', () => {
   it('one reader of the cells: 1 and 1.0, an accent in one piece or two, blank tokens, a date serial and the same date as text, a 1904 workbook, a code with a leading zero', () => {
     const rows = [['1', 'S'], ['1.0', 'S'], ['é', 'S'], ['é', 'S'], ['NA', 'S'], ['-', 'S'], ['', 'S'], [45581, 'S'], ['2024-10-16', 'S'], ['007', 'S'], ['7', 'S']];
     const sheet = rawSheet(['d', 'k'], rows as Cell[][], 'S', [true, false]);
-    const idOf = (role: string, i: number, date1904 = false): string | undefined => keyReader(key(0, 1), { fileName: 'sheet.csv', sheet, decimalComma: false, date1904, roleOf: (c) => (c === 0 ? role : 'ignore') })(sheet.rows[i]).id?.slice('sheet.csv / S|'.length);
+    const idOf = (role: string, i: number, date1904 = false): string | undefined => keyReader(key(0, 1), { prefix: 'sheet.csv / S', sheet, decimalComma: false, date1904, roleOf: (c) => (c === 0 ? role : 'ignore') })(sheet.rows[i]).id?.slice('sheet.csv / S|'.length);
     expect(idOf('ignore', 0)).toBe(idOf('ignore', 1));
     expect(idOf('ignore', 2)).toBe(idOf('ignore', 3));
     expect(idOf('ignore', 4)).toBe(idOf('ignore', 5));
@@ -133,7 +133,7 @@ describe('the eventID of a key made of columns', () => {
     expect(idOf('ignore', 10)).toBe('7|S');
     // two long digit codes that a number could not tell apart stay two
     const longSheet = rawSheet(['k'], [['12345678901234567890'], ['12345678901234567891']], 'S');
-    const longId = (i: number): string | undefined => keyReader(key(0), { fileName: 'sheet.csv', sheet: longSheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' })(longSheet.rows[i]).id?.slice('sheet.csv / S|'.length);
+    const longId = (i: number): string | undefined => keyReader(key(0), { prefix: 'sheet.csv / S', sheet: longSheet, decimalComma: false, date1904: false, roleOf: () => 'ignore' })(longSheet.rows[i]).id?.slice('sheet.csv / S|'.length);
     expect(longId(0)).toBe('12345678901234567890');
     expect(longId(0)).not.toBe(longId(1));
     expect(derivedEventId(['x'])).toBe('x');
@@ -378,7 +378,7 @@ describe('the key contract: a key column is a column that says which sample, wha
     const d = convert({ sheets: [sheetInput(file, { shape: 'long', quantity: { kind: 'count' }, edit: { ...edit, Date: { kind: 'date' } }, sampleKey: key(0, 4), device: { kind: 'known', key: 'multinet' } })], options: {} });
     expect(d.keys![0].samples).toBe(1);
     expect(sampleIds(d)).toHaveLength(1);
-    expect(sampleIds(d)[0]).toMatch(/^sheet\.csv \/ S\|A\|2024-10-1\d$/);
+    expect(sampleIds(d)[0]).toMatch(/^sheet\|A\|2024-10-1\d$/);
   });
 
   describe('two sheets: the keys never meet', () => {
@@ -388,21 +388,20 @@ describe('the key contract: a key column is a column that says which sample, wha
       sheetInput(fileOf(h, rs, name, { fileName }), { shape: 'long', quantity: { kind: 'count' }, edit: edit2, sampleKey: k, device: { kind: 'known', key: 'multinet' } });
     const rowsOf = (st: string, cast: Cell): Cell[][] => [[st, cast, '2020-06-01', 49.4, 0.2, 'Solea solea', 3], [st, cast, '2020-06-01', 49.4, 0.2, 'Gadus morhua', 4]];
 
-    it('the same key values on two sheets do not collide: every ID carries its sheet, nothing is merged, nothing blocks', () => {
+    it('the same key values on two sheets with different names do not collide: every ID carries its name, nothing is merged, nothing blocks', () => {
       const r = convert({ sheets: [mkSheet('One', rowsOf('A', 1)), mkSheet('Two', rowsOf('A', 1))], options: {} });
       expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
-      expect(sampleIds(r)).toEqual(['One.csv / One|A|1', 'Two.csv / Two|A|1']);
+      expect(sampleIds(r)).toEqual(['One|A|1', 'Two|A|1']);
       expect(r.occurrences).toHaveLength(4);
       expect(r.keys!.map((k) => [k.sheet, k.samples, k.rows])).toEqual([['One', 1, 2], ['Two', 1, 2]]);
-      expect(judge(r.findings).blocking.map((f) => f.ruleId)).not.toContain('CONV-ID-DUPLICATE');
     });
 
     it('the IDs of a sheet do not change when another sheet is added or dropped, or when the order of the sheets changes', () => {
       const one = convert({ sheets: [mkSheet('One', rowsOf('A', 1))], options: {} });
       const both = convert({ sheets: [mkSheet('One', rowsOf('A', 1)), mkSheet('Two', rowsOf('A', 1))], options: {} });
       const swapped = convert({ sheets: [mkSheet('Two', rowsOf('A', 1)), mkSheet('One', rowsOf('A', 1))], options: {} });
-      expect(sampleIds(one)).toEqual(['One.csv / One|A|1']);
-      expect(sampleIds(both)).toContain('One.csv / One|A|1');
+      expect(sampleIds(one)).toEqual(['One|A|1']);
+      expect(sampleIds(both)).toContain('One|A|1');
       expect(sampleIds(swapped)).toEqual(sampleIds(both));
     });
 
@@ -411,13 +410,45 @@ describe('the key contract: a key column is a column that says which sample, wha
       const b = mkSheet('Two', [['S1', 'sample', '2020-06-01', 49.4, 0.2, 'Solea solea', 3]], key(0, 1));
       const r = convert({ sheets: [a, b], options: {} });
       expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
-      expect(sampleIds(r)).toEqual(['One.csv / One|S1', 'Two.csv / Two|S1|sample']);
+      expect(sampleIds(r)).toEqual(['One|S1', 'Two|S1|sample']);
     });
 
-    it('two workbooks with a sheet of the same name ("Sheet 1") are told apart by their files', () => {
-      const r = convert({ sheets: [mkSheet('Sheet 1', rowsOf('A', 1), key(0, 1), 'a.xlsx'), mkSheet('Sheet 1', rowsOf('A', 1), key(0, 1), 'b.xlsx')], options: {} });
-      expect(ids(r, 'CONV-ID-DUPLICATE')).toEqual([]);
-      expect(sampleIds(r)).toEqual(['a.xlsx / Sheet 1|A|1', 'b.xlsx / Sheet 1|A|1']);
+    it('two workbooks with a sheet called "Sheet1" and the same values make the same IDs: blocked loudly, the advice names the prefix and says to give one another; an edited prefix fixes it', () => {
+      const wb = (fileName: string, k: SampleKey = key(0, 1)) => {
+        const input = mkSheet('Sheet1', rowsOf('A', 1), k, fileName);
+        input.file.kind = 'xlsx';
+        return input;
+      };
+      const r = convert({ sheets: [wb('a.xlsx'), wb('b.xlsx')], options: {} });
+      const dup = ids(r, 'CONV-ID-DUPLICATE');
+      expect(dup.length).toBeGreaterThan(0);
+      expect(judge(r.findings).blocking.map((f) => f.ruleId)).toContain('CONV-ID-DUPLICATE');
+      expect(dup[0].params.keyPrefix).toBe('Sheet1');
+      for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(dup[0], lang)).toContain('Sheet1');
+      expect(renderConvertPlain(dup[0], 'en')).toContain('give one of them another name');
+      expect(sampleIds(convert({ sheets: [wb('a.xlsx')], options: {} }))).toEqual(['Sheet1|A|1']);
+      // the person gives one of them another name
+      const fixed = convert({ sheets: [wb('a.xlsx'), wb('b.xlsx', { columns: [0, 1], prefix: 'Year two' })], options: {} });
+      expect(ids(fixed, 'CONV-ID-DUPLICATE')).toEqual([]);
+      expect(sampleIds(fixed)).toEqual(['Sheet1|A|1', 'Year two|A|1']);
+      expect(ids(fixed, 'CONV-KEY-PICKED').map((f) => f.params.prefix)).toEqual(['Sheet1', 'Year two']);
+    });
+
+    it('the name in front of the IDs: a workbook sheet is its sheet name, a table file is its file name without extension, an edited name wins, a blank one is the default, | and \\ are escaped', () => {
+      expect(defaultKeyPrefix('xlsx', 'book.xlsx', 'Counts')).toBe('Counts');
+      expect(defaultKeyPrefix('csv', 'survey_v1.csv', 'survey_v1.csv')).toBe('survey_v1');
+      expect(defaultKeyPrefix('pangaea', 'PANGAEA.848550.tab', 'x')).toBe('PANGAEA.848550');
+      const edited = (prefix: string) => convert({ sheets: [mkSheet('One', rowsOf('A', 1), { columns: [0, 1], prefix })], options: {} });
+      expect(sampleIds(edited('Survey 2020'))).toEqual(['Survey 2020|A|1']);
+      expect(sampleIds(edited('   '))).toEqual(['One|A|1']);
+      expect(sampleIds(edited('a|b\\c'))).toEqual(['a\\|b\\\\c|A|1']);
+    });
+
+    it('renaming a CSV does not change the IDs when the name is given (the companion file keeps it), and does without it', () => {
+      const asFile = (fileName: string, prefix?: string) => convert({ sheets: [mkSheet(fileName, rowsOf('A', 1), prefix === undefined ? key(0, 1) : { columns: [0, 1], prefix }, fileName)], options: {} });
+      expect(sampleIds(asFile('survey_v1.csv'))).toEqual(['survey_v1|A|1']);
+      expect(sampleIds(asFile('survey_v2.csv'))).toEqual(['survey_v2|A|1']);
+      expect(sampleIds(asFile('survey_v2.csv', 'survey_v1'))).toEqual(sampleIds(asFile('survey_v1.csv', 'survey_v1')));
     });
 
     it('the preview of each sheet is the export of the same request, in the order of the request, with the other sheets as they are', () => {
@@ -441,9 +472,9 @@ describe('the key contract: a key column is a column that says which sample, wha
   describe('numbers in a key', () => {
     const H = ['Station', 'Cast', 'Date', 'Latitude', 'Longitude', 'Species', 'Quantity'];
     const edit: Record<string, ColumnRole> = { Station: { kind: 'ignore' }, Cast: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } };
-    const casts = (cells: Cell[]) => {
+    const casts = (cells: Cell[], decimalComma = false) => {
       const rs: Cell[][] = cells.map((c, i) => ['A', c, '2020-06-01', 49.4, 0.2, `Species ${String.fromCharCode(97 + i)}`, 3]);
-      return convert({ sheets: [sheetInput(fileOf(H, rs), { shape: 'long', quantity: { kind: 'count' }, edit, sampleKey: key(0, 1), device: { kind: 'known', key: 'multinet' } })], options: {} });
+      return convert({ sheets: [sheetInput(fileOf(H, rs, 'S', { decimalComma }), { shape: 'long', quantity: { kind: 'count' }, edit, sampleKey: key(0, 1), device: { kind: 'known', key: 'multinet' } })], options: {} });
     };
     it('1.1 and 1.10 are two samples, 1e1 and 10 are two, +5 and 5 are two', () => {
       expect(casts(['1.1', '1.10']).keys![0].samples).toBe(2);
@@ -457,6 +488,26 @@ describe('the key contract: a key column is a column that says which sample, wha
       expect(mixed.keys![0].samples).toBe(1);
       expect(sampleIds(mixed)).toEqual([idOf('A', '1')]);
       expect(casts([1.5, '1.5']).keys![0].samples).toBe(1);
+    });
+    it('only the file\'s own decimal separator makes a zero fraction: in a dot file 1,000 and 1,0 stay text, in a comma file 1.000 and 1.0 do, and 1,0 is 1; thousands separators are never read', () => {
+      expect(casts(['1', '1,000']).keys![0].samples).toBe(2);
+      expect(casts(['1', '1,0']).keys![0].samples).toBe(2);
+      expect(casts(['1', '1.000', '1.0'], true).keys![0].samples).toBe(3);
+      expect(casts(['1', '1,0', '1,00'], true).keys![0].samples).toBe(1);
+      expect(sampleIds(casts(['1', '1,0'], true))).toEqual([idOf('A', '1')]);
+    });
+    it('a column that mixes typed numbers and number-like text is said (to accept), with the column and one of each', () => {
+      const mixed = casts([1.5, '1.50']);
+      const f = ids(mixed, 'CONV-KEY-MIXED-NUMBERS');
+      expect(f).toHaveLength(1);
+      expect(f[0].field).toBe('Cast');
+      expect(f[0].params.examples).toBe('1.5, 1.50');
+      expect(mixed.keys![0].samples).toBe(2);
+      expect(judge(mixed.findings).acceptRules).toContain('CONV-KEY-MIXED-NUMBERS');
+      for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f[0], lang)).toContain('1.5, 1.50');
+      expect(ids(casts([1, 2]), 'CONV-KEY-MIXED-NUMBERS')).toEqual([]);
+      expect(ids(casts(['1', '1.50']), 'CONV-KEY-MIXED-NUMBERS')).toEqual([]);
+      expect(ids(casts([1, 'x1']), 'CONV-KEY-MIXED-NUMBERS')).toEqual([]);
     });
   });
 });
@@ -528,6 +579,15 @@ describe('the values of a key: blanks, length, replicates', () => {
     expect(ids(mk('S1'), 'CONV-KEY-TOO-LONG')).toEqual([]);
   });
 
+  it('R1-L3: when the name in front of the IDs is a big part of the longest, the advice names it', () => {
+    const big = 'N'.repeat(80);
+    const mk = (prefix: string, st = 200) => convert({ sheets: [sheetInput(fileOf(H, [row('x'.repeat(st), 1)]), { shape: 'long', quantity: { kind: 'count' }, edit: { Station: { kind: 'ignore' }, Cast: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } }, sampleKey: { columns: [0, 1], prefix }, device: { kind: 'known', key: 'multinet' } })], options: {} });
+    const f = ids(mk(big), 'CONV-KEY-TOO-LONG')[0];
+    expect(f.params).toMatchObject({ prefixLength: 80, prefixBig: 'yes' });
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f, lang)).toContain(big.slice(0, 60));
+    expect(ids(mk('S', 260), 'CONV-KEY-TOO-LONG')[0].params.prefixBig).toBeUndefined();
+  });
+
   it('a value with a tab or a line break gives an ID without them (they are written \\t and \\n)', () => {
     const r = run([row('A\tB', 1), row('C\nD', 2)], key(0, 1));
     const all = r.events.map((e) => e.id).join('');
@@ -572,6 +632,19 @@ describe('a key is kept in the companion file as hashes, never as header text', 
     const old = readConvertSettings(parseFile('o.csv', new TextEncoder().encode(writeConvertSidecar({ fullList: true, prefixStation: false, worms: false, nvs: false }))))!;
     expect(old.sampleKey).toBeUndefined();
     expect(old.fullList).toBe(true);
+  });
+
+  it('the name in front of the IDs round-trips with its key, and a name line that matches no key line is ignored', () => {
+    const hashes = keyHashes(H, [0, 3])!;
+    const text = writeConvertSidecar({ fullList: false, prefixStation: false, worms: false, nvs: false, sampleKey: [{ sheet: 'Sheet 1', hashes, rows: 12, prefix: 'Survey: one | two' }] });
+    expect(text).toContain(`sampleKeyPrefix=Sheet 1:${hashes}:12:Survey: one | two`);
+    expect(readConvertSettings(parseFile('c.csv', new TextEncoder().encode(text)))!.sampleKey).toEqual([{ sheet: 'Sheet 1', hashes, rows: 12, prefix: 'Survey: one | two' }]);
+    // no name: the key alone, as before
+    const bare = writeConvertSidecar({ fullList: false, prefixStation: false, worms: false, nvs: false, sampleKey: [{ sheet: 'S', hashes, rows: 12 }] });
+    expect(bare).not.toContain('sampleKeyPrefix');
+    // a name for another sheet, other columns or another number of rows is not applied
+    const csv = ['original_column,output_column,unit,unit_source,p01', `(setting),sampleKey=S:${hashes}:12,,,`, `(setting),sampleKeyPrefix=T:${hashes}:12:x,,,`, `(setting),sampleKeyPrefix=S:${hashes}:13:x,,,`, `(setting),sampleKeyPrefix=S:${hashes}:12:${'n'.repeat(101)},,,`, `(setting),sampleKeyPrefix=S:${hashes}:12:   ,,,`].join('\n') + '\n';
+    expect(readConvertSettings(parseFile('h.csv', new TextEncoder().encode(csv)))!.sampleKey).toEqual([{ sheet: 'S', hashes, rows: 12 }]);
   });
 
   it('a hostile key line is ignored, not thrown on', () => {

@@ -43,6 +43,8 @@ import type { ParsedFile } from '../types';
  *   sampleKey=<sheet>:<hashes>:<rows>  the person picked the columns that make a sample for the sheet of that name (core/convert/sampleKey.ts), given as short hashes of the folded headers and the
  *                     number of rows of the sheet (core/convert/keySetting.ts): NO header text. A PRE-PICK that holds only when every column is found again and the sheet has the same number of rows; the page
  *                     shows it with its numbers and "Ask again". A sheet name, hashes and a count, never a value.
+ *   sampleKeyPrefix=<sheet>:<hashes>:<rows>:<name>  the name every sample ID of that key starts with (the person's own text, which the page showed and they may have changed; by default the sheet's or the file's name). Tied to the same sheet, hashes
+ *                     and row count as the sampleKey line: it is applied only together with it, so a renamed file keeps its IDs.
  * An unknown name or value is ignored. (`dropCopies=<sheet>` and `totalOnce=<sheet>` of earlier files are still read, and the page does not tick anything from them: they carry no count.)
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
@@ -65,6 +67,9 @@ export const LEAVE_OUT_SETTING = 'leaveOut=';
 export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 export const SAMPLE_KEY_SETTING = 'sampleKey=';
+export const SAMPLE_KEY_PREFIX_SETTING = 'sampleKeyPrefix=';
+/** The longest name kept for the front of a sample ID. */
+export const MAX_KEY_PREFIX = 100;
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
 export const MAX_SETTING_SHEETS = 100;
 export const MAX_SETTING_NAME = 255;
@@ -103,7 +108,7 @@ export interface ConvertSettings {
   /** The reasons the user left out and listed, by sheet, with the rows of that reason and the rows of the sheet. Holds only for the same two numbers. */
   leaveOut?: { sheet: string; reason: string; count: number; rows: number }[];
   /** The sample keys the person picked, by sheet: the hashes of the key columns and the number of rows the pick was made for. Holds only for the same columns and the same number of rows. */
-  sampleKey?: { sheet: string; hashes: string; rows: number }[];
+  sampleKey?: { sheet: string; hashes: string; rows: number; prefix?: string }[];
   /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
   biomassBasis?: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[];
   /** The ticks "of each organism" the user set (on) or took back (off), by sheet and column header. Only present when there is at least one. A pre-pick only. */
@@ -143,6 +148,7 @@ export function perOccurrenceOf(
 
 const COUNT = /^(\d{1,9}):(.+)$/s;
 const SAMPLE_KEY = /^(.+):((?:[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?)(?:\+[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?){0,63}):(\d{1,9})$/s;
+const SAMPLE_KEY_PREFIX = /^(.+?):((?:[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?)(?:\+[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?){0,63}):(\d{1,9}):(.+)$/s;
 const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
 
 const addName = (list: string[], name: string): void => {
@@ -182,6 +188,11 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = SAMPLE_KEY.exec(v.slice(SAMPLE_KEY_SETTING.length));
       const list = (settings.sampleKey ??= []);
       if (m !== null && m[1].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[1])) list.push({ sheet: m[1], hashes: m[2], rows: Number(m[3]) });
+    } else if (v.startsWith(SAMPLE_KEY_PREFIX_SETTING)) {
+      const m = SAMPLE_KEY_PREFIX.exec(v.slice(SAMPLE_KEY_PREFIX_SETTING.length));
+      const hit = m === null ? undefined : (settings.sampleKey ?? []).find((x) => x.sheet === m[1] && x.hashes === m[2] && x.rows === Number(m[3]));
+      const name = m === null ? '' : m[4].trim();
+      if (hit !== undefined && name !== '' && name.length <= MAX_KEY_PREFIX && hit.prefix === undefined) hit.prefix = name;
     } else if (v.startsWith(BIOMASS_BASIS_SETTING)) {
       const rest = v.slice(BIOMASS_BASIS_SETTING.length);
       const basis = rest.slice(0, rest.indexOf(':'));
@@ -215,7 +226,10 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.dropCopiesRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${DROP_COPIES_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.totalOnceGroups ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${TOTAL_ONCE_GROUPS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.leaveOut ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME && /^[a-z][a-z-]{0,40}$/.test(c.reason)).slice(0, MAX_SETTING_SHEETS * 8).map((c) => line([SETTING_ROW, `${LEAVE_OUT_SETTING}${c.reason}:${c.count}:${c.rows}:${c.sheet}`, '', '', ''])),
-      ...(settings.sampleKey ?? []).filter((k) => k.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(k.hashes) && Number.isInteger(k.rows) && k.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((k) => line([SETTING_ROW, `${SAMPLE_KEY_SETTING}${k.sheet}:${k.hashes}:${k.rows}`, '', '', ''])),
+      ...(settings.sampleKey ?? []).filter((k) => k.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(k.hashes) && Number.isInteger(k.rows) && k.rows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((k) => [
+        line([SETTING_ROW, `${SAMPLE_KEY_SETTING}${k.sheet}:${k.hashes}:${k.rows}`, '', '', '']),
+        ...(k.prefix !== undefined && k.prefix.trim() !== '' && k.prefix.trim().length <= MAX_KEY_PREFIX ? [line([SETTING_ROW, `${SAMPLE_KEY_PREFIX_SETTING}${k.sheet}:${k.hashes}:${k.rows}:${k.prefix.trim()}`, '', '', ''])] : []),
+      ]),
       ...(settings.realCountsRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${REAL_COUNTS_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.dropCopies ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${DROP_COPIES_SETTING}${n}`, '', '', ''])),
       ...(settings.totalOnce ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TOTAL_ONCE_SETTING}${n}`, '', '', ''])),

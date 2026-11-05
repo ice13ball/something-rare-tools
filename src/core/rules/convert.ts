@@ -22,7 +22,8 @@ import type { RuleSpec } from './spec';
  *   CONV-NEGATIVE-QUANTITY     count            field = column (or the effort column), value = an example, lines = rows
  *   CONV-SAMPLE-CODE-MISSING   count, column    column = the sample-code column ('none' when the sheet has none); lines = the rows without a code
  *   CONV-KEY-PART-BLANK        count, columns   the person picked a sample key (sampleKey.ts); columns = the headers of the key; lines = rows where a part of the key is empty (NA, nan and a dash too)
- *   CONV-KEY-TOO-LONG          count, max, longest   an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
+ *   CONV-KEY-MIXED-NUMBERS     examples         a key column mixes typed numbers and number-like text; field = column; examples = one of each (warning, to accept)
+ *   CONV-KEY-TOO-LONG          count, max, longest, prefix, prefixLength   (prefixBig = the name is a fifth of the longest or more: the advice names it) an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
  *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
@@ -238,28 +239,52 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}:{lines}: {count} row(s) have an empty part in the sample key the user picked (columns: {columns}; an empty cell, NA, nan and a dash are empty). The empty part is part of the key: those rows are samples of their own, never merged with rows that have a value. A row whose every part is empty has no sample (CONV-SAMPLE-CODE-MISSING).`,
   },
   {
+    id: 'CONV-KEY-MIXED-NUMBERS',
+    category: 'B',
+    severity: 'warning',
+    params: ['examples'],
+    plain: {
+      pl: `Kolumna klucza „{field}” miesza liczby wpisane jako liczby i tekst wyglądający jak liczba (np. {examples}). Są porównywane inaczej, więc jedna próbka może się rozdzielić na dwie. Sprawdź kolumnę w pliku; zaakceptuj, jeśli próbki są dobre.`,
+      en: `The key column "{field}" mixes typed numbers and text that looks like a number (for example {examples}). They are compared differently, so one sample may be split in two. Check the column in your file; accept if the samples are right.`,
+      de: `Die Schlüsselspalte „{field}“ mischt echte Zahlen und Text, der wie eine Zahl aussieht (z. B. {examples}). Sie werden unterschiedlich verglichen, daher kann eine Probe in zwei zerfallen. Prüfen Sie die Spalte in Ihrer Datei; akzeptieren Sie, wenn die Proben stimmen.`,
+      fr: `La colonne de clé « {field} » mêle de vrais nombres et du texte qui ressemble à un nombre (p. ex. {examples}). Ils sont comparés autrement : un échantillon peut donc être coupé en deux. Vérifiez la colonne dans votre fichier ; acceptez si les échantillons sont justes.`,
+    },
+    technical: `{file}, {sheet} field {field}: the key column holds typed numbers and number-like text (examples: {examples}); a typed number is compared as a number, a text only as an integer with an all-zero fraction, so "1.5" typed and "1.50" written are two values and one sample may be split.`,
+  },
+  {
     id: 'CONV-KEY-TOO-LONG',
     category: 'B',
     severity: 'error',
-    params: ['count', 'max', 'longest'],
+    params: ['count', 'max', 'longest', 'prefix', 'prefixLength'],
     plain: {
       pl: `Identyfikator z wybranego klucza (próbki, powtórzenia lub wystąpienia) ma ponad {max} znaków {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); najdłuższy ma {longest}: „{value}…”. Archiwum Darwin Core nie przyjmuje takich identyfikatorów. Wybierz mniej kolumn albo kolumny o krótszych wartościach.`,
       en: `An identifier made from the key you picked (of a sample, a replicate or an occurrence) is longer than {max} characters in {+lineCount:line|lines} {lines} ({count} in all); the longest has {longest}: "{value}…". A Darwin Core archive does not take identifiers that long. Pick fewer columns, or columns with shorter values.`,
       de: `Eine aus dem gewählten Schlüssel gebildete Kennung (von Probe, Replikat oder Vorkommen) ist in {+lineCount:der Zeile|den Zeilen} {lines} länger als {max} Zeichen (insgesamt {count}); die längste hat {longest}: „{value}…“. Ein Darwin-Core-Archiv nimmt das nicht an. Wählen Sie weniger Spalten oder Spalten mit kürzeren Werten.`,
       fr: `Un identifiant formé par la clé choisie (d'échantillon, de réplicat ou d'occurrence) dépasse {max} caractères {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) ; le plus long en a {longest} : « {value}… ». Une archive Darwin Core ne l'accepte pas. Cochez moins de colonnes ou des valeurs plus courtes.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) get an ID (sample, replicate or occurrence) longer than {max} characters from the key the user picked; the longest has {longest} characters (first 60: "{value}"). Nothing is shortened or cut: the export is blocked.`,
+    plainIf: [
+      {
+        param: 'prefixBig',
+        plain: {
+          pl: `Nazwa na początku każdego identyfikatora („{prefix}”, {prefixLength} znaków) jest jego częścią: krótsza pomoże.`,
+          en: `The name in front of every ID ("{prefix}", {prefixLength} characters) is part of it: a shorter one helps.`,
+          de: `Der Name am Anfang jeder Kennung („{prefix}“, {prefixLength} Zeichen) gehört dazu: ein kürzerer hilft.`,
+          fr: `Le nom au début de chaque identifiant (« {prefix} », {prefixLength} caractères) en fait partie : un nom plus court aide.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines}: {count} row(s) get an ID (sample, replicate or occurrence) longer than {max} characters from the key the user picked; the longest has {longest} characters (first 60: "{value}"); the name in front of every ID is "{prefix}" ({prefixLength} characters). Nothing is shortened or cut: the export is blocked.`,
   },
   {
     id: 'CONV-KEY-PICKED',
     category: 'B',
     severity: 'info',
-    params: ['samples', 'rows', 'columns'],
+    params: ['samples', 'rows', 'columns', 'prefix'],
     plain: {
-      pl: `Jak wybrano, próbkę wyznaczają kolumny: {columns}. Próbek: {samples}, wierszy w nich: {rows}. Kody próbek w archiwum powstają z wartości tych kolumn. Przycisk „Zapytaj ponownie” cofa wybór.`,
-      en: `As you chose, a sample is identified by the columns: {columns}. Samples: {samples}, rows in them: {rows}. The sample codes of the archive are made of the values of those columns. "Ask again" takes the choice back.`,
-      de: `Wie gewählt, wird eine Probe durch die Spalten bestimmt: {columns}. Proben: {samples}, Zeilen darin: {rows}. Die Probencodes des Archivs werden aus den Werten dieser Spalten gebildet. „Erneut fragen“ nimmt die Wahl zurück.`,
-      fr: `Comme choisi, un échantillon est défini par les colonnes : {columns}. Échantillons : {samples}, lignes qu'ils contiennent : {rows}. Les codes d'échantillon de l'archive sont formés des valeurs de ces colonnes. « Demander à nouveau » annule le choix.`,
+      pl: `Jak wybrano, próbkę wyznaczają kolumny: {columns}. Próbek: {samples}, wierszy w nich: {rows}. Każdy kod próbki w archiwum zaczyna się od „{prefix}” (nazwa do zmiany przy wyborze klucza), a dalej są wartości tych kolumn. „Zapytaj ponownie” cofa wybór.`,
+      en: `As you chose, a sample is identified by the columns: {columns}. Samples: {samples}, rows in them: {rows}. Every sample ID in the archive starts with "{prefix}" (a name you can change at the picker), then come the values of those columns. "Ask again" takes the choice back.`,
+      de: `Wie gewählt, wird eine Probe durch die Spalten bestimmt: {columns}. Proben: {samples}, Zeilen darin: {rows}. Jede Proben-ID im Archiv beginnt mit „{prefix}“ (ein Name, den Sie bei der Auswahl ändern können), danach folgen die Werte dieser Spalten. „Erneut fragen“ nimmt die Wahl zurück.`,
+      fr: `Comme choisi, un échantillon est défini par les colonnes : {columns}. Échantillons : {samples}, lignes : {rows}. Chaque identifiant d'échantillon de l'archive commence par « {prefix} » (un nom modifiable dans le sélecteur), puis viennent les valeurs de ces colonnes. « Demander à nouveau » annule le choix.`,
     },
     plainIf: [
       {
@@ -272,7 +297,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}, {sheet}: the sample code of a row is made of the values of the columns the user picked ({columns}), joined with "|"; the key made {samples} sample(s) of {rows} row(s). Information only. Asked again by the button (a companion file's choice holds only while the same columns and the same number of rows are there).`,
+    technical: `{file}, {sheet}: the sample code of a row is made of the values of the columns the user picked ({columns}), after the name "{prefix}" (part of every sample ID; the person may change it; the companion file keeps it), joined with "|"; the key made {samples} sample(s) of {rows} row(s). Information only. Asked again by the button (a companion file's choice holds only while the same columns and the same number of rows are there).`,
   },
   {
     id: 'CONV-ID-DUPLICATE',
@@ -285,6 +310,17 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Dieselbe Kennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: ändern Sie den wiederholten Code oder Kopf oder, wenn Codes zwischen Stationen wiederkehren, wählen Sie das Stationspräfix.`,
       fr: `Le même identifiant est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : changez le code ou l'en-tête répété ou, si des codes se répètent entre stations, cochez le préfixe de station.`,
     },
+    plainIf: [
+      {
+        param: 'keyPrefix',
+        plain: {
+          pl: `Identyfikatory próbek z wybranego klucza zaczynają się od nazwy „{keyPrefix}” widocznej przy wyborze klucza. Jeśli dwa arkusze mają ją wspólną, nadaj jednemu inną nazwę.`,
+          en: `The sample IDs of a picked key start with the name "{keyPrefix}" shown at the key picker. If two sheets share it, give one of them another name there.`,
+          de: `Die Proben-IDs eines gewählten Schlüssels beginnen mit dem Namen „{keyPrefix}“ aus der Schlüsselauswahl. Teilen zwei Blätter ihn, geben Sie einem einen anderen Namen.`,
+          fr: `Les identifiants d'échantillon d'une clé choisie commencent par le nom « {keyPrefix} » du sélecteur. Si deux feuilles le partagent, donnez un autre nom à l'une.`,
+        },
+      },
+    ],
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". {hint}`,
     citations: [CITE.obistoolsEventIds, CITE.biocheckOccurrenceId],
   },

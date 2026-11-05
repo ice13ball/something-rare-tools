@@ -101,7 +101,7 @@ export interface ConvertSheetRequest {
    * The columns the PERSON picked to say which rows are one sample (core/convert/sampleKey.ts), by column index, in the order picked. Never set by the page itself. `sampleKeyFromFile` says the
    * pick was read from a companion file (it holds only for the same columns and the same number of rows: the page checks both before it sends it).
    */
-  sampleKey?: { columns: number[] };
+  sampleKey?: { columns: number[]; /** The name every sample ID starts with, as the person saw and may have changed it. */ prefix?: string };
   sampleKeyFromFile?: boolean;
 }
 

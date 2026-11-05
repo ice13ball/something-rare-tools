@@ -125,6 +125,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-NEGATIVE-QUANTITY | error | B | — | —<a id="CONV-NEGATIVE-QUANTITY"></a> |
 | CONV-SAMPLE-CODE-MISSING | error | B | — | —<a id="CONV-SAMPLE-CODE-MISSING"></a> |
 | CONV-KEY-PART-BLANK | warning | B | — | —<a id="CONV-KEY-PART-BLANK"></a> |
+| CONV-KEY-MIXED-NUMBERS | warning | B | — | —<a id="CONV-KEY-MIXED-NUMBERS"></a> |
 | CONV-KEY-TOO-LONG | error | B | — | —<a id="CONV-KEY-TOO-LONG"></a> |
 | CONV-KEY-PICKED | info | B | — | —<a id="CONV-KEY-PICKED"></a> |
 | CONV-ID-DUPLICATE | error | B | — | [OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_eventids.R), check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")<br>[EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."<a id="CONV-ID-DUPLICATE"></a> |

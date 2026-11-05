@@ -46,7 +46,7 @@ import { pushAll } from '../util/arrays';
 import { FateLog, buildSheetLedger, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
 import { decideRows } from './notWritten';
-import { MAX_EVENT_ID, keyColumns, keyReader } from './sampleKey';
+import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
 import type { SampleKey, SheetKeyReport } from './sampleKey';
 
 /*
@@ -1600,7 +1600,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const readKey =
       pickedKey === undefined
         ? undefined
-        : keyReader(pickedKey, { fileName, sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore' });
+        : keyReader(pickedKey, { prefix: keyPrefixOf(pickedKey, file.kind, fileName, sheet.name), sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore' });
     const keyBlank = new Lines();
     const keyTooLong = new Lines();
     // every ID written for a sheet with a picked key is held to the limit of the archive (sample, replicate and occurrence); the longest is named
@@ -2506,9 +2506,15 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     {
       const names = keyColumns(pickedKey).map((i) => sin.mapping.columns.find((c) => c.index === i)?.header.trim() ?? `#${i + 1}`).join(', ');
       for (const e of keyBlank.entries()) findings.push(makeConvertFinding('CONV-KEY-PART-BLANK', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, columns: names } }));
-      for (const e of keyTooLong.entries()) findings.push(makeConvertFinding('CONV-KEY-TOO-LONG', { file: e.file, sheet: e.sheet, lines: e.lines, value: longestId.slice(0, 60), params: { count: e.lines.length, max: MAX_EVENT_ID, longest: longestId.length } }));
+      const usedPrefix = pickedKey === undefined ? '' : keyPrefixOf(pickedKey, file.kind, fileName, sheet.name);
+      // (the name in front of every ID is said when it is a fifth or more of the longest ID)
+      for (const e of keyTooLong.entries()) findings.push(makeConvertFinding('CONV-KEY-TOO-LONG', { file: e.file, sheet: e.sheet, lines: e.lines, value: longestId.slice(0, 60), params: { count: e.lines.length, max: MAX_EVENT_ID, longest: longestId.length, prefix: usedPrefix.slice(0, 60), prefixLength: usedPrefix.length, ...(usedPrefix.length * 5 >= longestId.length ? { prefixBig: 'yes' } : {}) } }));
+      if (pickedKey !== undefined) {
+        const roleOf = (i: number): string => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore';
+        for (const m of mixedKeyColumns(sheet, pickedKey.columns, dc, roleOf)) findings.push(makeConvertFinding('CONV-KEY-MIXED-NUMBERS', { ...base, field: sin.mapping.columns.find((c) => c.index === m.index)?.header.trim() ?? `#${m.index + 1}`, params: { examples: m.examples.join(', ') } }));
+      }
       const report = keyReports.find((k) => k.file === fileName && k.sheet === sheet.name);
-      if (report !== undefined) findings.push(makeConvertFinding('CONV-KEY-PICKED', { ...base, params: { samples: report.samples, rows: report.rows, columns: names, ...(sin.sampleKeyFromFile === true ? { fromFile: 'yes' } : {}) } }));
+      if (report !== undefined) findings.push(makeConvertFinding('CONV-KEY-PICKED', { ...base, params: { samples: report.samples, rows: report.rows, columns: names, prefix: keyPrefixOf(pickedKey as SampleKey, file.kind, fileName, sheet.name), ...(sin.sampleKeyFromFile === true ? { fromFile: 'yes' } : {}) } }));
     }
     for (const e of noReplicate.entries()) findings.push(makeConvertFinding('CONV-REPLICATE-MISSING', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (noCode.size > 0) {
@@ -2810,13 +2816,15 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   for (const [id, places] of dups) {
     for (const w of places.values()) {
       const rep = replicateColumn(input.sheets, w.file, w.sheet, [[...w.lines]]);
+      const ks = input.sheets.find((x) => x.file.fileName === w.file && x.sheet === w.sheet);
+      const keyed = ks !== undefined && ks.profile === undefined && keyColumns(ks.sampleKey).length > 0 ? keyPrefixOf(ks.sampleKey as SampleKey, ks.file.kind, ks.file.fileName, ks.sheet) : undefined;
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
           file: w.file,
           sheet: w.sheet,
           value: id,
           lines: [...w.lines],
-          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }) },
+          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }), ...(keyed === undefined ? {} : { keyPrefix: keyed }) },
         }),
       );
     }

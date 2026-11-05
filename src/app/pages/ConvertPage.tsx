@@ -23,6 +23,7 @@ import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { SampleKeyPicker } from '../components/SampleKeyPicker';
+import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
 import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
@@ -113,6 +114,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [codesPreview, setCodesPreview] = useState<Record<string, { p: CodeProposalView; sig: string }>>({});
   // the columns ticked in the sample-key picker and not yet used (by sheet), and what the converter says they would make; both start empty and are never filled by the page itself
   const [keyDraft, setKeyDraft] = useState<Record<string, number[]>>({});
+  // the name typed for the front of the IDs of a sheet's key and not yet used
+  const [keyPrefixDraft, setKeyPrefixDraft] = useState<Record<string, string>>({});
   const [keyPreview, setKeyPreview] = useState<Record<string, { cols: number[]; report: SheetKeyReport | null }>>({});
   const [filesChosen, setFilesChosen] = useState(0);
   const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
@@ -198,6 +201,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setCodesPreview({});
     setCodesExtra({});
     setKeyDraft({});
+    setKeyPrefixDraft({});
     setKeyPreview({});
     setApproved({});
     setDrafts({});
@@ -361,7 +365,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       if (choice === 'askAgain') {
         if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((a) => a.reason !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
         if (f.ruleId === 'CONV-KEY-PICKED') {
-          const { sampleKey: _k, sampleKeyFromFile: _f, ...rest } = c;
+          const { sampleKey: _k, sampleKeyFromFile: _f, sampleKeyPrefix: _p, ...rest } = c;
           return { ...prev, [key]: rest };
         }
         if (f.ruleId === 'CONV-ROW-COPIES-DROPPED') {
@@ -459,23 +463,27 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   /** "Use this key": the ticked columns become the sheet's sample key (the request now carries it). */
   const useKey = (fileId: string, sheet: string): void => {
     const k = sheetKey(fileId, sheet);
-    const cols = keyDraft[k];
-    if (cols === undefined || cols.length === 0) return;
+    const cols = keyDraft[k] ?? choices[k]?.sampleKey ?? [];
+    const f = files.find((x) => x.fileId === fileId);
+    const prefix = (keyPrefixDraft[k] ?? choices[k]?.sampleKeyPrefix ?? defaultKeyPrefix(f?.kind ?? '', f?.fileName ?? '', sheet)).trim();
+    if (cols.length === 0 || prefix === '') return;
     setChoices((prev) => {
       const { sampleKeyFromFile: _f, ...rest } = prev[k] ?? ({} as SheetChoice);
-      return prev[k] === undefined ? prev : { ...prev, [k]: { ...rest, sampleKey: cols } };
+      return prev[k] === undefined ? prev : { ...prev, [k]: { ...rest, sampleKey: cols, sampleKeyPrefix: prefix } };
     });
     setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+    setKeyPrefixDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
   };
   /** "Clear the key": the sheet is read as before (the codes it has, or none). */
   const clearKey = (fileId: string, sheet: string): void => {
     const k = sheetKey(fileId, sheet);
     setChoices((prev) => {
       if (prev[k] === undefined) return prev;
-      const { sampleKey: _k, sampleKeyFromFile: _f, ...rest } = prev[k];
+      const { sampleKey: _k, sampleKeyFromFile: _f, sampleKeyPrefix: _p, ...rest } = prev[k];
       return { ...prev, [k]: rest };
     });
     setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+    setKeyPrefixDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
   };
   const proposeCodes = async (fileId: string, sheet: string, extra?: number[]): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
@@ -1172,6 +1180,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 const key = sheetKey(c.fileId, c.sheet);
                 const sh = f?.sheets.find((x) => x.name === c.sheet);
                 const inUse = choices[key]?.sampleKey ?? [];
+                const defaultPrefix = defaultKeyPrefix(f?.kind ?? '', f?.fileName ?? '', c.sheet);
                 const draft = keyDraft[key];
                 const picked = draft ?? inUse;
                 const samples = f?.samples[c.sheet] ?? [];
@@ -1188,6 +1197,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                         columns={sh.header.map((header, index) => ({ index, header, examples: samples[index] ?? [] }))}
                         picked={picked}
                         inUse={inUse}
+                        prefix={keyPrefixDraft[key] ?? choices[key]?.sampleKeyPrefix ?? defaultPrefix}
+                        inUsePrefix={inUse.length > 0 ? (choices[key]?.sampleKeyPrefix ?? defaultPrefix) : undefined}
+                        onPrefix={(v) => setKeyPrefixDraft((prev) => ({ ...prev, [key]: v }))}
                         report={report}
                         {...(keyPreviewError[key] === undefined ? {} : { error: keyPreviewError[key] })}
                         onRetry={() => {
