@@ -75,12 +75,15 @@ describe('a long sheet: the column that tells rows apart is written', () => {
     expect(left(out.sidecar)).toEqual([]);
   });
 
-  it('a pressure that differs inside one output row and did not join the key is not written, and the note names it', () => {
+  it('a pressure that differs inside one output row and did not join the key is written as a descriptive column, empty where the rows disagree, and the note counts it', () => {
     const ds = build(manyLong('Pressure [dbar]', (s, p) => `${s}${['Corg', 'Ntot', 'Ptot'].indexOf(p)}.50`));
     const out = toCleanCsv(ds);
     expect(ds.extraKeyColumns).toBeUndefined();
-    expect(parse(out.csv).header.some((h) => /pressure/i.test(h))).toBe(false);
-    expect(left(out.sidecar)).toEqual(['source columns that are not in this file: Pressure [dbar]']);
+    const { header, rows } = parse(out.csv);
+    expect(header[header.length - 1]).toBe('Pressure [dbar]');
+    expect(rows.every((r) => r[r.length - 1] === '')).toBe(true);
+    expect(left(out.sidecar)).toEqual([]);
+    expect(notes(out.sidecar)).toContain('source columns that differ within a row, left empty there: Pressure [dbar] (4 rows)');
   });
 
   it('rows stay aligned with their cell after a give-way, a blank value and a skipped row', () => {
@@ -182,29 +185,44 @@ describe('a sheet with no extended key and no pressure is written as before', ()
 });
 
 describe('every source column the clean CSV does not contain is named', () => {
-  it('a long list is named whole, in file order, and names nothing that is written', () => {
+  it('a long list of descriptive columns is written whole, in file order, after the variables, and nothing is named', () => {
     const extra = Array.from({ length: 60 }, (_, i) => `Note ${i + 1}`);
     const t = [`Station,Latitude,Longitude,Date,${extra.join(',')},Temp [°C]`, `S1,49.4,0.2,2020-06-01,${extra.map((_, i) => `n${i}`).join(',')},11.2`].join('\n');
-    const ds = build(t);
+    const out = toCleanCsv(build(t));
+    const { header, rows } = parse(out.csv);
+    expect(header.slice(-61)).toEqual(['Temp [°C]', ...extra]);
+    expect(rows[0].slice(-60)).toEqual(extra.map((_, i) => `n${i}`));
+    expect(left(out.sidecar)).toEqual([]);
+  });
+
+  it('a long list the person set to ignore is named whole, in file order, and names nothing that is written', () => {
+    const extra = Array.from({ length: 60 }, (_, i) => `Sal ${i + 1}`);
+    const t = [`Station,Latitude,Longitude,Date,${extra.join(',')},Temp [°C]`, `S1,49.4,0.2,2020-06-01,${extra.map((_, i) => `${i}.5`).join(',')},11.2`].join('\n');
+    const ds = build(t, (m) => { for (const c of m[0].columns) if (extra.includes(c.header)) c.role = { kind: 'ignore' }; });
     const out = toCleanCsv(ds);
     const names = left(out.sidecar);
     expect(names).toHaveLength(1);
     const list = names[0].slice(names[0].indexOf(': ') + 2).split(' | ');
     expect(list).toEqual(extra);
-    expect(parse(out.csv).header).not.toContain('Note 1');
+    expect(parse(out.csv).header).not.toContain('Sal 1');
     for (const written of ['Station', 'Latitude', 'Longitude', 'Date', 'Temp [°C]']) expect(list).not.toContain(written);
   });
 
-  it('an ignored column is named; the parameter, unit and value columns of a long sheet are carried and not named', () => {
+  it('a descriptive column of a long sheet is written once per output row; the parameter, unit and value columns are carried and not named', () => {
     const lines = ['Station,Latitude,Longitude,Date,Comment,Parameter,Unit,Value'];
-    for (let s = 1; s <= 4; s++) for (const p of ['Corg', 'Ntot', 'Ptot']) lines.push(`S${s},49.4,0.2,2020-06-01,ok,${p},mg/l,${s}.5`);
+    for (let s = 1; s <= 4; s++) for (const p of ['Corg', 'Ntot', 'Ptot']) lines.push(`S${s},49.4,0.2,2020-06-01,ok${s},${p},mg/l,${s}.5`);
     const out = toCleanCsv(build(lines.join('\n')));
-    expect(left(out.sidecar)).toEqual(['source columns that are not in this file: Comment']);
+    const { header, rows } = parse(out.csv);
+    expect(header[header.length - 1]).toBe('Comment');
+    expect(rows.map((r) => r[r.length - 1])).toEqual(['ok1', 'ok2', 'ok3', 'ok4']);
+    expect(left(out.sidecar)).toEqual([]);
   });
 
-  it('a pressure the sheet cannot carry is named, a pressure it carries is not', () => {
+  it('a pressure the sheet cannot carry and a comment are both written, the pressure empty where its rows disagree', () => {
     const ds = build(manyLong('Pressure [dbar],Comment', (s, p) => `${s}${['Corg', 'Ntot', 'Ptot'].indexOf(p)}.50,ok`));
-    expect(left(toCleanCsv(ds).sidecar)).toEqual(['source columns that are not in this file: Pressure [dbar] | Comment']);
+    const out = toCleanCsv(ds);
+    expect(parse(out.csv).header.slice(-2)).toEqual(['Pressure [dbar]', 'Comment']);
+    expect(left(out.sidecar)).toEqual([]);
   });
 
   it('the sidecar lists a written extra column with its original name and unit', () => {

@@ -30,12 +30,15 @@
  *                             with 0 entries fails; a passing run prints "golden-diff: N entries" (add --reporter=verbose to be sure).
  *          GOLDEN_DIFF_OUT    required, and must lie OUTSIDE the repository (the golden data are private: a dump holds values from
  *                             them); GOLDEN_DIFF_ALLOW_IN_REPO=1 overrides the refusal, and the file must still never be committed.
+ * invariant  GOLDEN_DIFF_BEFORE and GOLDEN_DIFF_AFTER as for compare: the AFTER clean CSV without its trailing descriptive columns must equal the BEFORE clean CSV for every dataset (the sidecar and the
+ *          trailing columns are allowed to differ); prints the names of the trailing columns per dataset. Fails on any mismatch.
  * compare  Prints every difference between two dumps (key, path, before, after; the first 40 per key, all with GOLDEN_DIFF_ALL=1)
  *          and a verdict. The test passes when the dumps are byte-identical and fails otherwise (exit code 1 of vitest).
  *
  * Without GOLDEN_DIFF_MODE nothing runs. ⛔ Never commit a dump or any content of the golden set (test/golden/ holds no data).
  */
 import { createHash } from 'node:crypto';
+import { rawRecords, stripTrailingColumns } from './csv-strip';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -128,9 +131,12 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
   const { toCleanCsv } = await load<typeof import('../src/core/output/csv')>('src/core/output/csv.ts');
   const sha = (t: string): string => createHash('sha1').update(t).digest('hex').slice(0, 12);
   // what the clean CSV and its sidecar come to (a hash each, and the header line): a changed output shows even when no finding moved
-  const cleanOf = (d: Parameters<typeof toCleanCsv>[0]): { header: string; csv: string; sidecar: string } => {
+  // `core` is the hash of the CSV without the trailing descriptive columns (their number is `Dataset.descriptiveColumns`, absent before they existed: then core = csv); `descriptive` names them
+  const cleanOf = (d: Parameters<typeof toCleanCsv>[0]): { header: string; csv: string; core: string; descriptive: string[]; sidecar: string } => {
     const out = toCleanCsv(d);
-    return { header: out.csv.slice(0, out.csv.indexOf('\n')), csv: sha(out.csv), sidecar: sha(out.sidecar) };
+    const k = (d as { descriptiveColumns?: unknown[] }).descriptiveColumns?.length ?? 0;
+    const head = rawRecords(out.csv)[0] ?? [];
+    return { header: out.csv.slice(0, out.csv.indexOf('\n')), csv: sha(out.csv), core: sha(stripTrailingColumns(out.csv, k)), descriptive: head.slice(head.length - k), sidecar: sha(out.sidecar) };
   };
   const { runInput } = await load<typeof import('../test/golden/pipeline')>('test/golden/pipeline.ts');
   const land = decodeLandMask(new Uint8Array(gunzipSync(readFileSync(join(repo, 'src', 'core', 'geo', 'land-mask.bin')))));
@@ -182,7 +188,7 @@ async function dump(out: string, repo: string, goldenDir: string): Promise<numbe
         const bytes = new Uint8Array(readFileSync(f));
         const file = parseFile(f.split('/').pop() as string, bytes);
         // what the app builds from the file as it proposes it: the rows and the values of every dataset (a change that drops measurements shows here)
-        let built: { label: string; rows: number; values: number; clean: { header: string; csv: string; sidecar: string } }[] | undefined;
+        let built: { label: string; rows: number; values: number; clean: { header: string; csv: string; core: string; descriptive: string[]; sidecar: string } }[] | undefined;
         try {
           const layout0 = proposeLayout(file);
           built = buildDatasets(file, layout0, proposeMappings(file, layout0), [], 'x').datasets.map((d) => ({ label: d.label, rows: d.rows.length, values: d.rows.reduce((n, row) => n + Object.keys(row.values).length, 0), clean: cleanOf(d) }));
@@ -284,6 +290,36 @@ function compare(beforePath: string, afterPath: string, all: boolean): number {
   return total === 0 ? 0 : 1;
 }
 
+/**
+ * The invariant of the descriptive columns: for every dataset of every entry, the clean CSV of the BEFORE dump equals the AFTER dump's clean CSV with its trailing descriptive columns removed (`core`).
+ * Only trailing columns may differ. Prints, per dataset that has them, the number and the names of the trailing columns (header names, never values). Returns the number of mismatches.
+ */
+function invariant(beforePath: string, afterPath: string): number {
+  type Clean = { csv: string; core: string; descriptive?: string[]; header: string };
+  type Built = { label: string; rows: number; clean: Clean }[];
+  const A = JSON.parse(readFileSync(beforePath, 'utf8')) as Record<string, { built?: Built }>;
+  const B = JSON.parse(readFileSync(afterPath, 'utf8')) as Record<string, { built?: Built }>;
+  let checked = 0;
+  let bad = 0;
+  let withColumns = 0;
+  let columns = 0;
+  for (const key of Object.keys(A).sort()) {
+    const a = A[key]?.built;
+    const b = B[key]?.built;
+    if (a === undefined && b === undefined) continue;
+    if (a === undefined || b === undefined || a.length !== b.length) { process.stdout.write(`MISMATCH ${key}: the datasets differ in number` + '\n'); bad++; continue; }
+    a.forEach((da, i) => {
+      const db = b[i];
+      checked++;
+      const names = db.clean.descriptive ?? [];
+      if (names.length > 0) { withColumns++; columns += names.length; process.stdout.write(`  ${key} [${db.label}]: ${names.length} descriptive column(s): ${names.join(' | ')}` + '\n'); }
+      if (da.clean.csv !== db.clean.core || da.rows !== db.rows) { bad++; process.stdout.write(`MISMATCH ${key} [${db.label}]: the CSV without its trailing columns is not the before CSV` + '\n'); }
+    });
+  }
+  process.stdout.write(`invariant: ${checked} datasets checked, ${withColumns} with descriptive columns (${columns} columns), ${bad} mismatch(es).` + '\n');
+  return bad;
+}
+
 /* ---------- entry ---------- */
 
 const env = process.env;
@@ -310,6 +346,11 @@ it.runIf(MODE === 'compare')('compare', () => {
   expect(verdict, 'the dumps differ (see the listing above)').toBe(0);
 });
 
-it.runIf(MODE !== 'dump' && MODE !== 'compare')('needs GOLDEN_DIFF_MODE=dump or compare', () => {
+it.runIf(MODE === 'invariant')('invariant', () => {
+  const bad = invariant(resolve(need('GOLDEN_DIFF_BEFORE')), resolve(need('GOLDEN_DIFF_AFTER')));
+  expect(bad, 'the clean CSV changed beyond trailing columns').toBe(0);
+});
+
+it.runIf(MODE !== 'dump' && MODE !== 'compare' && MODE !== 'invariant')('needs GOLDEN_DIFF_MODE=dump or compare', () => {
   console.log('golden-diff: set GOLDEN_DIFF_MODE=dump|compare (see the header of scripts/golden-diff.ts); nothing was read or written.');
 });

@@ -244,6 +244,18 @@ export interface DataRow {
 export interface ExtraKeyColumn { header: string; index: number; sheet: string; id: string; kind: 'pressure' | 'key'; unit?: string; /** The cells are numbers (a pressure, a vertical coordinate): a decimal comma of the file is swapped for a dot, as for every measurement. */ numeric?: true }
 /** Date or time cells of a column read as the whole second though they hold a fraction of at least 0.5 ms: how many, and the largest offset in ms (see columnFractions). */
 export interface RoundedTimes { sheet: string; header: string; count: number; maxMs: number; /** The column was counted by two paths and the count is a lower bound. */ atLeast?: boolean }
+/**
+ * A source column no field of the output was built from (a descriptive column: a fjord, a water type, a gear), written by the clean CSV after the variables, as the file has it. `values` has one cell per row of
+ * `Dataset.rows` (null: blank, or left empty on purpose), so the cells are the source's own, not copies per row.
+ */
+export interface DescriptiveColumn {
+  id: string; header: string; sheet: string; index: number;
+  values: RawCell[];
+  /** Long sheet: rows left empty because the source rows merged into them disagree in this column. */
+  differ: number;
+  /** Lookup sheet: rows left empty because the join key matches several rows of the other sheet. */
+  ambiguous: number;
+}
 export interface Dataset {
   id: string; label: string; file: string;
   rows: DataRow[]; variables: Variable[];
@@ -262,6 +274,8 @@ export interface Dataset {
   yearColumns?: { sheet: string; year: string; date: string }[];
   /** Date and time columns whose cells with a fraction of a second were read as the whole second: the clean CSV's sidecar says so (a note per sheet). Absent when none. */
   roundedTimes?: RoundedTimes[];
+  /** Source columns written after the variables because nothing else carries them. Absent when there are none. */
+  descriptiveColumns?: DescriptiveColumn[];
 }
 
 /* ---------- findings and rules ---------- */

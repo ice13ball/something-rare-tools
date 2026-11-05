@@ -39,9 +39,19 @@ describe('partly in the file is not "not in the file"', () => {
     expect(mapped).toEqual(expect.arrayContaining(['Date', 'Latitude', 'Depth [m]']));
   });
 
-  it('a column no cell of which was used is still "not in this file"', () => {
+  it('a column no cell of which was used is written after the variables, and no longer named', () => {
     const t = ['Station,Latitude,Longitude,Date,Temp [°C],Comment', 'S1,49.4,0.2,2020-06-01,11.2,ok'].join('\n');
-    expect(notes(csv(t).sidecar)).toEqual(['source columns that are not in this file: Comment']);
+    const out = csv(t);
+    expect(parse(out.csv).header.slice(-2)).toEqual(['Temp [°C]', 'Comment']);
+    expect(parse(out.csv).rows[0].slice(-2)).toEqual(['11.2', 'ok']);
+    expect(notes(out.sidecar)).toEqual([]);
+  });
+
+  it('a column the person set to ignore (the proposal gave it a role) stays out and stays named', () => {
+    const t = ['Station,Latitude,Longitude,Date,Temp [°C],Salinity', 'S1,49.4,0.2,2020-06-01,11.2,34.1'].join('\n');
+    const out = csv(t, (m) => { for (const c of m[0].columns) if (c.header === 'Salinity') c.role = { kind: 'ignore' }; });
+    expect(parse(out.csv).header).not.toContain('Salinity');
+    expect(notes(out.sidecar)).toEqual(['source columns that are not in this file: Salinity']);
   });
 });
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { RoundedTimes,
+import type { DescriptiveColumn, RoundedTimes,
   ColumnRole,
   DataRow,
   Dataset,
@@ -668,6 +668,10 @@ function mergeRounded(list: readonly RoundedTimes[]): RoundedTimes[] {
 
 interface Built {
   rows: DataRow[];
+  /** The source row each output row stands for (a wide sheet: its own rows; a long sheet: the first source row of the group), for the descriptive columns and the lookup. */
+  reps: readonly RawRow[];
+  /** A long sheet: the output row each source row was merged into, -1 for a row that stands for none. Absent on a wide sheet (output row i is source row i). */
+  sourceRow?: Int32Array;
   /** Columns whose cells were rounded to the second (sidecar note). */
   rounded: RoundedTimes[];
   variables: Variable[];
@@ -1030,7 +1034,7 @@ function buildWide(file: ParsedFile, sheet: RawSheet, specs: Specs, lookup: Look
   // a column the person set to ignore that differs between rows which look alike in every identifying column the clean CSV writes (only looked for when some column was set to ignore)
   const ignoredWide = [...explicitIgnore()].filter((i) => sheet.rows.some((r) => !isBlankCell(r.cells[i] ?? null)));
   if (ignoredWide.length > 0) reportKeyIgnored(c, sheet, rows, (n) => JSON.stringify(extra.map((e) => String(rows[n].keyCells?.[e.id] ?? '').trim())), (n, i) => sheet.rows[n].cells[i] ?? null, ignoredWide);
-  return { rows, variables, rounded: roundedEntries(sheet, parse.rounded), positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide, undefined), lookup), ...(year ? { year } : {}) };
+  return { rows, reps: sheet.rows, variables, rounded: roundedEntries(sheet, parse.rounded), positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedWide, undefined), lookup), ...(year ? { year } : {}) };
 }
 
 /** A kept value that is blank or a plain missing token (NA, N/A, NaN, -, null) gives way to the first value after it; 'nd', 'n.d.', 'ND' mean not detected, which is a result, and do not. */
@@ -1278,6 +1282,26 @@ export function extendLongKey(sheet: RawSheet, plan: NonNullable<TablePlan['long
 }
 
 /**
+ * The text a cell of a column the clean CSV writes beside the fixed ones is written as (a key column, a descriptive column). A number is converted only when EVERY numeric cell of its column is date-formatted
+ * (a General 5 among dates stays 5), and only when nothing can be lost: in a time-only column a value from 0 up to 1 is a time of day (HH:MM, with seconds and milliseconds when it has them); any other value
+ * ([h]:mm 36.25, a full datetime shown as hh:mm) stays the number. In a date column a plausible serial is written as the date (and time) it is, with the workbook's date system; anything else stays the number.
+ * Everything that is not a number is written as the file wrote it.
+ */
+function keyCellTextOf(file: ParsedFile, sheet: RawSheet, index: number, cell: RawCell): RawCell {
+  if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
+  const timeOnly = sheet.timeAll?.[index] === true;
+  if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
+  // the text keeps the millisecond ('12:00:00.250') by the same rule as the date column (see KeepMillis)
+  const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: columnFractions(sheet, index, sheet.fractionShown?.[index] === true).shown ? 'shown' : true });
+  if ('error' in d) return cell;
+  // a key cell stays the number when the text would lose anything: to the millisecond when the text has one, to the second otherwise (two cells that differ by less read alike in the text)
+  const off = /\.\d{3}$/.test(d.iso) ? Math.abs(cell * 86_400_000 - Math.round(cell * 86_400_000)) > 0.02 : Math.abs(cell * 86400 - Math.round(cell * 86400)) > 0.001;
+  if (off) return cell;
+  if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
+  return d.iso;
+}
+
+/**
  * ROW-KEY-IGNORED: rows of the output that look alike in every identifying column the clean CSV writes (`idOf`: station, cruise, sample, date, position, depth and the written extras; undefined = the row
  * identifies nothing) and differ in a column the person set to ignore on purpose (`ignored`). Said once per sheet with the columns and some of the rows (at most 20). Costs nothing when `ignored` is empty.
  */
@@ -1348,7 +1372,10 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const year = yearColumnOf(sheet, specs);
   const skippedDiffer: number[] = [];
   let skippedExample: string | undefined;
+  const sourceRow = new Int32Array(sheet.rows.length).fill(-1);
+  let sourceAt = -1;
   for (const r of sheet.rows) {
+    sourceAt++;
     const param = str(r.cells[plan.parameterCol] ?? null);
     if (param === undefined) continue;
     const id = JSON.stringify(keyCols.map((i) => str(r.cells[i] ?? null) ?? ''));
@@ -1374,6 +1401,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
         else if (String(kept).trim() !== String(now).trim()) pVarying.add(p.index);
       });
     }
+    sourceRow[sourceAt] = n;
     const row = rows[n];
     if (year && row.yearCell === undefined) {
       const yc = r.cells[year.index] ?? null;
@@ -1420,19 +1448,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
    * time-only column a value from 0 up to 1 is a time of day (HH:MM, with seconds and milliseconds when it has them); any other value ([h]:mm 36.25, a full datetime shown as hh:mm) stays the number. In a date column a plausible serial is written as
    * the date (and time) it is, with the workbook's date system; anything else stays the number. Everything that is not a number is written as the file wrote it.
    */
-  const keyCellText = (index: number, cell: RawCell): RawCell => {
-    if (typeof cell !== 'number' || sheet.dateAll?.[index] !== true) return cell;
-    const timeOnly = sheet.timeAll?.[index] === true;
-    if (timeOnly ? !(cell >= 0 && cell < 1) : !isPlausibleSerial(cell)) return cell;
-    // the text keeps the millisecond ('12:00:00.250') by the same rule as the date column (see KeepMillis)
-    const d = parseDate(cell, { date1904: file.date1904, dateFormatted: true, keepMillis: columnFractions(sheet, index, sheet.fractionShown?.[index] === true).shown ? 'shown' : true });
-    if ('error' in d) return cell;
-    // a key cell stays the number when the text would lose anything: to the millisecond when the text has one, to the second otherwise (two cells that differ by less read alike in the text)
-    const off = /\.\d{3}$/.test(d.iso) ? Math.abs(cell * 86_400_000 - Math.round(cell * 86_400_000)) > 0.02 : Math.abs(cell * 86400 - Math.round(cell * 86400)) > 0.001;
-    if (off) return cell;
-    if (timeOnly) return d.iso.includes('T') ? d.iso.slice(d.iso.indexOf('T') + 1) : '00:00';
-    return d.iso;
-  };
+  const keyCellText = (index: number, cell: RawCell): RawCell => keyCellTextOf(file, sheet, index, cell);
   const cellFor = (e: ExtraKeyColumn, n: number): RawCell => {
     const k = e.kind === 'pressure' ? pressure.findIndex((p) => p.index === e.index) : -1;
     return k >= 0 ? pCells[n][k] : keyCellText(e.index, firsts[n].cells[e.index] ?? null);
@@ -1481,7 +1497,7 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       roundedKeys.set(e.index, t);
     }
   }
-  return { rows, variables: [...variables.values()], rounded: roundedEntries(sheet, parse.rounded, roundedKeys), positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, 'rows', lostCols), lookup), ...(year ? { year } : {}) };
+  return { rows, reps: firsts, sourceRow, variables: [...variables.values()], rounded: roundedEntries(sheet, parse.rounded, roundedKeys), positives: specs.depth ? [specs.depth.positive] : [], extra, ...readsOf(sheet, own, partialOf(parse.cells, carriedLong, 'rows', lostCols), lookup), ...(year ? { year } : {}) };
 }
 
 /**
@@ -1521,6 +1537,126 @@ function layoutUnsupportedFinding(file: string, layout: LayoutPlan): Finding {
   return makeFinding('IN-LAYOUT-UNSUPPORTED', { file, params });
 }
 
+/** The role kinds only /convert proposes (see recognize/convertColumns): /check writes nothing for a column that has one. */
+const CONVERTER_ONLY_ROLES: ReadonlySet<string> = new Set(['taxon', 'quantity', 'quantityType', 'effort', 'occurrenceId', 'lifeStage', 'qualifier', 'taxonId']);
+
+/** A table of the layout as built: where its rows sit in the dataset and where each came from. */
+interface TableRec { sheet: RawSheet; long: TablePlan['long'] | undefined; lookup: Lookup | undefined; reps: readonly RawRow[]; sourceRow: Int32Array | undefined; start: number; count: number }
+
+/**
+ * The descriptive columns: every source column that the build carried into no field of the output (the clean CSV's "not in this file" list) and that the person has not set to `ignore` on purpose is
+ * written after the variables (a fjord, a water type, a sampling gear). A column with no non-blank cell is nothing to write and nothing lost: it is neither written nor named. A partly read column stays
+ * a note. A wide sheet writes the cell of its own row; a long sheet the cell its source rows agree on (rows that disagree stay empty and are counted); a lookup sheet's column is read from the row the join
+ * key points at (an ambiguous key leaves the cell empty, counted). The cells are the source's own (`keyCellTextOf`), held once per column, not copied onto the rows.
+ */
+function addDescriptive(file: ParsedFile, layout: LayoutPlan, mappings: SheetMapping[], ds: Dataset, tables: readonly TableRec[]): void {
+  const none = unwrittenColumns(ds).filter((c) => c.partial === undefined);
+  if (none.length === 0) return;
+  const total = ds.rows.length;
+  const columns = new Map<string, DescriptiveColumn>();
+  const taken: { sheet: string; index: number }[] = [];
+  const roundedBy = new Map<string, { sheet: string; header: string; count: number; maxMs: number }>();
+  const ignored = new Map<string, Set<number>>();
+  const ownIds = new Set<string>();
+  for (const sheetName of [...new Set(none.map((c) => c.sheet))]) {
+    const sheet = file.sheets.find((x) => x.name === sheetName);
+    if (!sheet) continue;
+    const own = tables.find((t) => t.sheet.name === sheetName);
+    let skip = ignored.get(sheetName);
+    if (skip === undefined) ignored.set(sheetName, (skip = explicitlyIgnored(file, mappings, sheet, own?.long)));
+    // tables that read this sheet through a join (only when the sheet is not a table itself)
+    const lenders = own ? [] : tables.filter((t) => t.lookup !== undefined && layout.joins.find((j) => j.left === t.sheet.name)?.right === sheetName);
+    if (!own && lenders.length === 0) continue;
+    for (const c of none.filter((x) => x.sheet === sheetName)) {
+      if (skip.has(c.index)) continue;
+      // the converter's own roles never come from /check's proposals; a column a hand-made mapping gives one is not /check's to write
+      if (CONVERTER_ONLY_ROLES.has(mappingFor(file, mappings, sheet, own?.long).columns.find((x) => x.index === c.index)?.role.kind ?? '')) continue;
+      if (!sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null))) {
+        // nothing in the column: nothing is lost, so it is neither written nor named
+        taken.push({ sheet: sheetName, index: c.index });
+        continue;
+      }
+      if (c.header.trim() === '') continue;
+      // the same header on two TABLES is one column (their rows are different rows); a header repeated on one sheet, or lent by a lookup beside a column of the data sheet itself, is another column
+      let id = c.header;
+      const same = columns.get(id);
+      if (same !== undefined && !(own !== undefined && ownIds.has(id) && same.sheet !== sheetName)) id = `${c.header}#${sheetName}#${c.index}`;
+      if (own !== undefined) ownIds.add(id);
+      let col = columns.get(id);
+      if (col === undefined) columns.set(id, (col = { id, header: c.header, sheet: sheetName, index: c.index, values: new Array<RawCell>(total).fill(null), differ: 0, ambiguous: 0 }));
+      const dated = sheet.dateAll?.[c.index] === true;
+      const shown = dated && columnFractions(sheet, c.index, sheet.fractionShown?.[c.index] === true).shown;
+      // a date or time cell whose text is rounded to the second is counted (the sidecar note about rounded cells)
+      const tally = (cell: RawCell, out: RawCell): void => {
+        if (!dated || shown || typeof cell !== 'number' || typeof out !== 'string') return;
+        const off = secondOffsetMs(cell);
+        if (off < 0.5 || isRealFraction(cell)) return;
+        const key = `${sheetName}\u0000${c.header}`;
+        const t = roundedBy.get(key) ?? { sheet: sheetName, header: c.header, count: 0, maxMs: 0 };
+        t.count++;
+        if (off > t.maxMs) t.maxMs = off;
+        roundedBy.set(key, t);
+      };
+      const convert = (cell: RawCell): RawCell => {
+        const out = keyCellTextOf(file, sheet, c.index, cell);
+        tally(cell, out);
+        return out;
+      };
+      if (own) {
+        if (own.sourceRow === undefined) {
+          for (let i = 0; i < own.count; i++) {
+            const cell = own.reps[i].cells[c.index] ?? null;
+            if (!isBlankCell(cell)) col.values[own.start + i] = convert(cell);
+          }
+        } else {
+          const clash = new Uint8Array(own.count);
+          for (let i = 0; i < sheet.rows.length; i++) {
+            const n: number = own.sourceRow[i];
+            if (n < 0 || clash[n] === 1) continue;
+            const cell = sheet.rows[i].cells[c.index] ?? null;
+            if (isBlankCell(cell)) continue;
+            const at = own.start + n;
+            const kept = col.values[at];
+            const text = keyCellTextOf(file, sheet, c.index, cell);
+            if (kept === null) {
+              col.values[at] = text;
+              tally(cell, text);
+            } else if (String(text).trim() !== String(kept).trim()) {
+              clash[n] = 1;
+              col.values[at] = null;
+              col.differ++;
+            }
+          }
+        }
+      } else {
+        for (const t of lenders) {
+          const lookup = t.lookup!;
+          for (let i = 0; i < t.count; i++) {
+            const parts = keyPartsOf(t.reps[i], lookup.leftKeys);
+            const k = parts === undefined ? undefined : parts.length === 1 ? parts[0] : JSON.stringify(parts);
+            const hit = k === undefined ? undefined : lookup.rowsByKey.get(k);
+            if (hit === 'ambiguous') col.ambiguous++;
+            else if (hit) {
+              const cell = hit.row.cells[c.index] ?? null;
+              if (!isBlankCell(cell)) col.values[t.start + i] = convert(cell);
+            }
+          }
+        }
+      }
+      taken.push({ sheet: sheetName, index: c.index });
+    }
+  }
+  if (columns.size > 0) ds.descriptiveColumns = [...columns.values()];
+  // what is written (or empty) is no longer "not in this file"
+  if (taken.length > 0 && ds.readColumns) {
+    for (const rec of ds.readColumns) {
+      const add = taken.filter((x) => x.sheet === rec.sheet).map((x) => x.index);
+      if (add.length > 0) rec.columns = [...new Set([...rec.columns, ...add])].sort((a, b) => a - b);
+    }
+  }
+  if (roundedBy.size > 0) ds.roundedTimes = mergeRounded([...(ds.roundedTimes ?? []), ...roundedBy.values()]);
+}
+
 /**
  * Applies a confirmed mapping to a file and builds the Dataset the checks read.
  *
@@ -1558,6 +1694,7 @@ export function buildDataset(
   const partialBy = new Map<string, Map<number, PartialCount>>();
   const yearColumns: NonNullable<Dataset['yearColumns']> = [];
   const roundedTimes: RoundedTimes[] = [];
+  const tables: TableRec[] = [];
   const use = (name: string) => {
     if (!usedSheets.includes(name)) usedSheets.push(name);
   };
@@ -1572,6 +1709,7 @@ export function buildDataset(
     const built = table.long
       ? buildLong(file, sheet, table.long, specs, lookup, namespace, collector, () => explicitlyIgnored(file, mappings, sheet, table.long))
       : buildWide(file, sheet, specs, lookup, namespace, collector, () => explicitlyIgnored(file, mappings, sheet));
+    tables.push({ sheet, long: table.long, lookup, reps: built.reps, sourceRow: built.sourceRow, start: rows.length, count: built.rows.length });
     for (const r of built.rows) rows.push(r);
     // META-NO-DATES (checks/metadata.ts) fires when neither a row nor a metadata record has a date: the empty-eventDate finding leaves that case to it
     const noDateSaid = !built.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== '')) && !metadata.some((m) => m.temporalExtent && (m.temporalExtent.start || m.temporalExtent.end));
@@ -1614,6 +1752,7 @@ export function buildDataset(
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
   const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}), ...(roundedTimes.length > 0 ? { roundedTimes: mergeRounded(roundedTimes) } : {}) };
+  addDescriptive(file, layout, mappings, dataset, tables);
   return { dataset, findings };
 }
 

@@ -139,9 +139,9 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
   const notes: string[] = [];
   const side: string[][] = [];
 
-  type Col = { header: string; get: (r: DataRow) => string };
+  type Col = { header: string; get: (r: DataRow, i: number) => string };
   const cols: Col[] = [];
-  const add = (name: string, unit: string | undefined, get: (r: DataRow) => string, sidecar: [string, string, string], caseless = false) => {
+  const add = (name: string, unit: string | undefined, get: (r: DataRow, i: number) => string, sidecar: [string, string, string], caseless = false) => {
     const header = namer.take(name, unit, { caseless });
     cols.push({ header, get });
     side.push([sidecar[0], header, unit ?? '', sidecar[1], sidecar[2]]);
@@ -192,7 +192,10 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
     add(name, v.unit, (r) => cellText(r.values[v.key], ds.decimalComma === true), [v.header, v.unitSource ?? '', v.p01 ?? '']);
   }
 
-  const lines = [csvLine(cols.map((c) => guardText(c.header))), ...rows.map((r) => csvLine(cols.map((c) => c.get(r))))];
+  // The descriptive columns: source columns nothing else carries, as the file has them, after the variables (a collision gets a suffix, caseless, as the key columns do)
+  for (const d of ds.descriptiveColumns ?? []) add(d.header, undefined, (_r, i) => valueText(d.values[i]), [d.header, '', ''], true);
+
+  const lines = [csvLine(cols.map((c) => guardText(c.header))), ...rows.map((r, i) => csvLine(cols.map((c) => c.get(r, i))))];
 
   if (rounded) notes.push('coordinates parsed from degrees and minutes/seconds are written as decimal degrees rounded to the precision of the source text');
   // every source column that is not in this file is named, whole and in the order of the file (a long list is not cut)
@@ -215,6 +218,12 @@ export function toCleanCsv(ds: Dataset, opts: CleanCsvOptions = {}): CleanCsv {
     const mine = (ds.roundedTimes ?? []).filter((r) => r.sheet === sheet).map((r) => `${r.header.trim() === '' ? '(column)' : r.header} (${r.atLeast ? 'at least ' : ''}${r.count} ${r.count === 1 ? 'cell' : 'cells'}, up to ${Math.max(1, Math.round(r.maxMs))} ms)`);
     notes.push(`date cells rounded to the second${where}: ${mine.join(' | ')}`);
   }
+  // descriptive cells left empty on purpose: said per column
+  const rowsOf = (n: number): string => `${n} ${n === 1 ? 'row' : 'rows'}`;
+  const differ = (ds.descriptiveColumns ?? []).filter((d) => d.differ > 0).map((d) => `${d.header} (${rowsOf(d.differ)})`);
+  if (differ.length > 0) notes.push(`source columns that differ within a row, left empty there: ${differ.join(' | ')}`);
+  const ambiguous = (ds.descriptiveColumns ?? []).filter((d) => d.ambiguous > 0).map((d) => `${d.header} (${rowsOf(d.ambiguous)})`);
+  if (ambiguous.length > 0) notes.push(`source columns of a joined sheet whose key is ambiguous, left empty there: ${ambiguous.join(' | ')}`);
   const sidecar = [
     csvLine(['original_column', 'output_column', 'unit', 'unit_source', 'p01']),
     ...side.map((s) => csvLine(s.map(guardText))),
