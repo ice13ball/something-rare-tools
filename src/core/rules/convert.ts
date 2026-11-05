@@ -84,6 +84,7 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-ATTRIBUTE-IGNORED count, columns  columns of a long sheet whose value is the same for every row of one taxon (a code, an id, a serial number, a trophic level): ignored, not written (info)
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
+ *   CONV-COLUMN-IGNORED        count, columns   columns = the headers (first 20) of columns set to ignore that hold at least one value: not written, named so that no column leaves without a word (info)
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
  *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
  *   CONV-NAMEID-INCOMPLETE     count, names     value = an example name; the sheet gives a taxon ID for some rows of the name and not for others (the name is not looked up)
@@ -1178,6 +1179,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Non écrit dans l'archive : {count} {+count:colonne|colonnes} : {columns}. Raison : un sens qu'on n'écrit pas ici (par ex. pression hors fichier de profils), pas d'en-tête (indiquée par [lettre]) ou une deuxième colonne de quantité. Acceptez-le pour exporter {+count:sans elle|sans elles}.`,
     },
     technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure of a sheet that is not a profile file (a measured variable is written as an eMoF row on the sample event, or on the level event of a profile sheet, where the first pressure column is written as well), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column; and two kinds of column with the role ignore that hold data: a column with an empty header (shown as its letter in brackets) and a second quantity column (a count next to a biomass). Nothing from them is written. The warning has to be accepted before the export.`,
+  },
+  {
+    id: 'CONV-COLUMN-IGNORED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:kolumna zawiera|kolumny zawierają|kolumn zawiera} wartości, a w ustawieniach {+count:jest ignorowana|są ignorowane|jest ignorowanych}, więc nie {+count:trafi|trafią|trafi} do archiwum: {columns}. Twój plik się nie zmienia. Jeśli któraś niesie dane, które archiwum powinno mieć, nadaj jej znaczenie.`,
+      en: `{count} {+count:column holds|columns hold} values and {+count:is|are} set to be ignored, so {+count:it is|they are} not in the archive: {columns}. Your file is not changed. If one of them carries data the archive should have, give it a meaning.`,
+      de: `{count} {+count:Spalte enthält|Spalten enthalten} Werte und {+count:ist|sind} auf „ignorieren“ gestellt, daher nicht im Archiv: {columns}. Ihre Datei bleibt unverändert. Trägt eine davon Daten, die das Archiv haben soll, geben Sie ihr eine Bedeutung.`,
+      fr: `{count} {+count:colonne contient|colonnes contiennent} des valeurs et {+count:est réglée|sont réglées} sur « ignorer » ; {+count:elle n'est|elles ne sont} donc pas dans l'archive : {columns}. Votre fichier n'est pas modifié. Si l'une porte des données que l'archive doit avoir, donnez-lui un sens.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) that hold at least one value and have the role ignore (chosen by the person or proposed by the converter, for example a Cast, Layer or Replicate column that does not separate rows), so none of their cells is written: {columns}. A column with another role that this conversion does not read, a column without a header and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED, which has to be accepted; this finding only names, it blocks nothing and needs no acceptance. The file is not changed.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',

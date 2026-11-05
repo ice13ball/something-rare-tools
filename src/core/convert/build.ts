@@ -460,6 +460,28 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
 }
 
 /**
+ * The columns set to ignore that hold a value (a Cast, a Layer, a Replicate that separates no rows, a comment): not written, and named by CONV-COLUMN-IGNORED so that no column leaves without a word.
+ * A column without a header, one past the short-header detection and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED already, and are not named twice.
+ */
+export const IGNORED_NAMED_MAX = 20;
+function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, unexported: readonly string[]): { count: number; columns: string } | undefined {
+  const used = readColumns(sin, cols, specs);
+  const sheet = sin.file.sheets.find((s) => s.name === sin.sheet);
+  if (sheet === undefined) return undefined;
+  const taken = new Set(unexported);
+  const names: string[] = [];
+  for (const c of sin.mapping.columns) {
+    if (c.role.kind !== 'ignore' || used.has(c.index)) continue;
+    if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
+    const header = c.header.trim();
+    if (header === '' || taken.has(header) || !sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null))) continue;
+    names.push(header);
+  }
+  if (names.length === 0) return undefined;
+  return { count: names.length, columns: names.length > IGNORED_NAMED_MAX ? `${names.slice(0, IGNORED_NAMED_MAX).join(', ')}, …` : names.join(', ') };
+}
+
+/**
  * A long sheet whose sample events are close to its occurrences: at least SPLIT_MIN_OCCURRENCES occurrences, events of at least SPLIT_RATIO of them, and at least SPLIT_SHARED of the events
  * sharing station, date and depth with another event. One taxon per sample is possible (a sheet of one species caught per haul), but then the events differ in station, date or depth; events that
  * repeat all three are rows of one sample. A replicate is counted as the sample it belongs to, so a sheet of replicates is not a split.
@@ -1346,6 +1368,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // every column of the sheet that has a meaning this conversion does not read as a profile (a taxon or quantity column, a second pressure): said, nothing is dropped silently
   const unexported = unreadColumns(sin, cols, specs);
   if (unexported.length > 0) ctx.findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
+  const ignored = ignoredColumns(sin, cols, specs, unexported);
+  if (ignored !== undefined) ctx.findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored }));
   pushAll(ctx.findings, collector.findings());
 }
 
@@ -2516,6 +2540,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (unexported.length > 0) {
       findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
     }
+    const ignored = ignoredColumns(sin, cols, specs, unexported);
+    if (ignored !== undefined) findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored }));
     // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
       findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: stripTypeSuffix(cols.taxonId.header) } }));

@@ -6,6 +6,7 @@
 // dropped silently. Every value is invented.
 import { describe, expect, it } from 'vitest';
 import { buildTables } from '../../src/core/convert/dwca';
+import { judge } from '../../src/core/convert/policy';
 import { proposeConvertColumns } from '../../src/core/convert/recognize';
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
 import type { ColumnRole } from '../../src/core/types';
@@ -61,11 +62,12 @@ const QUANTITIES: { name: string; q: QuantityDeclaration }[] = [
 ];
 
 const withX = (shape: Shape, values: [Cell, Cell]): { header: string[]; rows: Cell[][] } => ({ header: BASE[shape].header, rows: BASE[shape].rows.map((r, i) => [...r.slice(0, -1), values[i]]) });
-const written = async (shape: Shape, role: ColumnRole, values: [Cell, Cell], q: QuantityDeclaration): Promise<{ tables: string; named: string[] }> => {
+const written = async (shape: Shape, role: ColumnRole, values: [Cell, Cell], q: QuantityDeclaration): Promise<{ tables: string; named: string[]; ignoredNamed: string[] }> => {
   const { header, rows } = withX(shape, values);
   const e = await exportSheet(header, rows, { quantity: q, fullList: true, edit: { X: role }, shape });
   const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-NOT-EXPORTED');
-  return { tables: JSON.stringify(buildTables(e.dataset)), named: f ? String(f.params.columns).split(', ') : [] };
+  const g = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-IGNORED');
+  return { tables: JSON.stringify(buildTables(e.dataset)), named: f ? String(f.params.columns).split(', ') : [], ignoredNamed: g ? String(g.params.columns).split(', ') : [] };
 };
 
 describe('every role on both shapes: written, or named in CONV-COLUMN-NOT-EXPORTED', () => {
@@ -73,7 +75,9 @@ describe('every role on both shapes: written, or named in CONV-COLUMN-NOT-EXPORT
     for (const quantity of QUANTITIES) {
       it(`${shape}, ${quantity.name}`, async () => {
         const ignored = await written(shape, { kind: 'ignore' }, [0, 0], quantity.q);
-        expect(ignored.named, 'an ignored column is never named').toEqual([]);
+        expect(ignored.named, 'an ignored column is not an unread one: CONV-COLUMN-NOT-EXPORTED does not name it').toEqual([]);
+        // ... but it is not silent either: a column set to ignore that holds a value is named by CONV-COLUMN-IGNORED (Task 8: nothing leaves without a word)
+        expect(ignored.ignoredNamed, 'an ignored column that holds values is named').toEqual(['X']);
         const read: string[] = [];
         const silent: string[] = [];
         for (const r of ROLES) {
@@ -82,6 +86,7 @@ describe('every role on both shapes: written, or named in CONV-COLUMN-NOT-EXPORT
           const named = w.named.includes('X');
           if (changesTheArchive) read.push(r.name);
           if (changesTheArchive && named) silent.push(`${r.name}: written AND named`);
+          if (w.ignoredNamed.length > 0) silent.push(`${r.name}: a column with a role named as ignored`);
           if (!changesTheArchive && !named) silent.push(`${r.name}: dropped silently`);
         }
         expect(silent).toEqual([]);
@@ -157,5 +162,32 @@ describe('a taxon ID chosen by hand on bare whole numbers', () => {
     expect(text.findings.some((x) => x.ruleId === 'CONV-NAMEID-APHIA-LIKE')).toBe(false);
     const mixed = await exportSheet(header, rows.map((r, i) => [r[0], r[1], i === 0 ? 104464 : '10.5', ...r.slice(3)]), { quantity: { kind: 'count' }, edit: { 'WoRMS ID': { kind: 'taxonId' } } });
     expect(mixed.findings.some((x) => x.ruleId === 'CONV-NAMEID-APHIA-LIKE')).toBe(false);
+  });
+});
+
+describe('a key column that is ignored and separates no rows (Task 8: nothing leaves without a word)', () => {
+  const header = ['Sample', 'Species', 'Count', 'Latitude', 'Longitude', 'Date', 'Cast', 'Layer', 'Replicate', 'Notes'];
+  const rows: Cell[][] = [
+    ['A1', 'Calanus finmarchicus', 4, 55.5, 2.5, '2023-06-14', 'C1', 'L1', 1, null],
+    ['A2', 'Oithona similis', 9, 55.6, 2.6, '2023-06-15', 'C2', 'L2', 2, null],
+  ];
+  const named = (e: Awaited<ReturnType<typeof exportSheet>>): string[] => {
+    const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-IGNORED');
+    return f ? String(f.params.columns).split(', ') : [];
+  };
+
+  it('names each ignored column that holds a value, once, as information that blocks nothing; a column with no value in any row is not named', async () => {
+    const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Cast: { kind: 'ignore' }, Layer: { kind: 'ignore' }, Replicate: { kind: 'ignore' } } });
+    expect(e.findings.filter((x) => x.ruleId === 'CONV-COLUMN-IGNORED')).toHaveLength(1);
+    expect(named(e)).toEqual(['Cast', 'Layer', 'Replicate']);
+    expect(e.findings.find((x) => x.ruleId === 'CONV-COLUMN-IGNORED')).toMatchObject({ severity: 'info', params: { count: 3 } });
+    expect(e.findings.find((x) => x.ruleId === 'CONV-COLUMN-NOT-EXPORTED')?.params.columns ?? '').not.toMatch(/Cast|Layer|Replicate/);
+    expect(judge(e.findings).blocking.map((f) => f.ruleId)).not.toContain('CONV-COLUMN-IGNORED');
+    expect(judge(e.findings).acceptRules).not.toContain('CONV-COLUMN-IGNORED');
+  });
+
+  it('a sheet with no ignored column holding a value says nothing of the kind', async () => {
+    const e = await exportSheet(header.slice(0, 6), rows.map((r) => r.slice(0, 6)), { quantity: { kind: 'count' } });
+    expect(named(e)).toEqual([]);
   });
 });
