@@ -4,6 +4,7 @@
 // every reason a person reads has words in four languages; the list holds the cells lost from written rows, the dates as ISO dates, and a sheet left out whole as one line; the faults block.
 // The inputs are those of the reviewer's probes. Every value is invented.
 import { describe, expect, it } from 'vitest';
+import { EMPTY_QUANTITY, initialChoices, requestOf } from '../../src/app/convertModel';
 import { convert } from '../../src/core/convert/build';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
 import type { SheetLedger } from '../../src/core/convert/ledger';
@@ -16,6 +17,7 @@ import { tipDe, tipEn, tipFr, tipPl } from '../../src/core/i18n/tips-text';
 import { renderConvertPlain, rowWhat } from '../../src/core/rules/convert';
 import type { ColumnRole } from '../../src/core/types';
 import { dateCell, textFile, xlsxFile } from '../helpers/files';
+import { createConvertHandler } from '../../src/worker/convert.handler';
 import { fileOf, sheetInput, W1_HEADER, W1_QUANTITY, W1_ROWS } from './helpers';
 import type { Cell } from './helpers';
 
@@ -336,5 +338,27 @@ describe('Fix round 2', () => {
       expect(t, `${lang} ${count}`).not.toMatch(/[{}]/);
       expect(t).toContain(String(count));
     }
+  });
+});
+
+describe('R2-L1: a bare tick in a request changes nothing (only count-tied answers reach the converter)', () => {
+  it('realCounts, totalOnce and dropCopies set to true in a request are not forwarded: the findings are those of the request without them', () => {
+    const HEADER = ['sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Size', 'Quantity', 'Weight'];
+    const TAXA = ['Solea solea', 'Merlangius merlangus'];
+    const rows: Cell[][] = [];
+    for (let s = 1; s <= 10; s++) for (let t = 0; t < 2; t++) for (let c = 0; c < 3; c++) rows.push([`s${s}`, '2020-06-01', 49.4 + s / 100, 0.2, TAXA[t], 8 + c, 20 + 7 * s + 3 * t, 100 + s * 3 + t]);
+    const text = [HEADER, ...rows].map((r) => r.join(',')).join('\n') + '\n';
+    const h = createConvertHandler();
+    const parsed = h.handle({ type: 'parse', files: [{ name: 'catch.csv', bytes: new TextEncoder().encode(text), source: 'dropped' }] } as never) as never as Parameters<typeof initialChoices>[0] & { files: { fileId: string; mappings: { sheet: string; columns: { header: string; role: ColumnRole }[] }[] }[] };
+    const roles: Record<string, ColumnRole> = { sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' }, Weight: { kind: 'biomass', basis: 'wet' } };
+    const mappings = Object.fromEntries(parsed.files.map((f) => [f.fileId, f.mappings.map((m) => ({ ...m, columns: m.columns.map((c) => (roles[c.header] ? { ...c, role: roles[c.header] } : c)) }))]));
+    const choices = initialChoices(parsed);
+    for (const k of Object.keys(choices)) choices[k] = { ...choices[k], shape: 'long', quantity: { ...EMPTY_QUANTITY, kind: 'count' } };
+    const body = requestOf({ parsed, mappings: mappings as never, choices, options: { fullList: false, prefixStation: false, flatten: { station: false, cruise: false } }, approved: {}, confirmed: {} } as never);
+    const ticked = { ...body, sheets: body.sheets.map((s) => ({ ...s, realCounts: true, totalOnce: true, dropCopies: true })) };
+    const ids = (b: typeof body): string[] => ((h.handle({ type: 'convert', body: b } as never) as { findings: { ruleId: string }[] }).findings).map((f) => f.ruleId);
+    const plain = ids(body);
+    expect(plain).toContain('CONV-QUANTITY-REPEATED');
+    expect(ids(ticked)).toEqual(plain);
   });
 });

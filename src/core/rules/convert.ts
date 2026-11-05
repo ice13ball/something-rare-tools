@@ -347,7 +347,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'info',
     params: ['count'],
     plain: {
-      pl: `Jak wybrano, równe ilości w {count} {+count:wierszu|wierszach|wierszach} są prawdziwymi liczebnościami: dla tego arkusza nie sprawdzam powtórzonych sum ani dokładnych kopii wierszy. Przycisk „Zapytaj ponownie” włącza oba sprawdzenia z powrotem.`,
+      pl: `Jak wybrano, równe ilości w {count} {+count:wierszu|wierszach|wierszach} są prawdziwymi liczebnościami: dla tego arkusza nie szuka się powtórzonych sum ani dokładnych kopii wierszy. Przycisk „Zapytaj ponownie” włącza oba sprawdzenia z powrotem.`,
       en: `As you chose, the equal quantities in {count} {+count:row are|rows are} real counts: for this sheet, repeated totals and exact copies of rows are not looked for. "Ask again" turns both checks back on.`,
       de: `Wie gewählt, sind die gleichen Mengen in {count} {+count:Zeile|Zeilen} echte Zahlen: für dieses Blatt wird nicht nach wiederholten Summen und genauen Zeilenkopien gesucht. „Erneut fragen“ schaltet beide Prüfungen wieder ein.`,
       fr: `Comme choisi, les quantités égales de {count} {+count:ligne sont|lignes sont} de vrais effectifs : pour cette feuille, les totaux répétés et les copies exactes de lignes ne sont pas recherchés. « Demander à nouveau » rétablit les deux contrôles.`,
@@ -371,10 +371,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'info',
     params: ['count'],
     plain: {
-      pl: `Plik towarzyszący pochodzi ze starszej wersji: {count} {+count:zapisana odpowiedź nie ma|zapisane odpowiedzi nie mają|zapisanych odpowiedzi nie ma} liczby wierszy, dla której ją dano, więc {+count:nie została zastosowana|nie zostały zastosowane|nie zostało zastosowanych}, a pytania padają ponownie.`,
-      en: `The companion file is from an older version: {count} saved {+count:answer has|answers have} no number of rows {+count:it was|they were} given for, so {+count:it was|they were} not applied and the questions are asked again.`,
-      de: `Die Begleitdatei stammt aus einer älteren Version: {count} gespeicherte {+count:Antwort hat|Antworten haben} keine Zeilenzahl, für die {+count:sie|sie} gegeben wurde, daher {+count:wurde sie|wurden sie} nicht angewendet, und die Fragen werden neu gestellt.`,
-      fr: `Le fichier d'accompagnement est d'une version plus ancienne : {count} {+count:réponse enregistrée n'a|réponses enregistrées n'ont} pas de nombre de lignes, donc {+count:elle n'a pas été appliquée|elles n'ont pas été appliquées} ; les questions sont reposées.`,
+      pl: `Plik towarzyszący jest starszy: {count} {+count:zapisana odpowiedź nie ma|zapisane odpowiedzi nie mają|zapisanych odpowiedzi nie ma} liczby wierszy, dla której {+count:ją|je|je} dano, więc {+count:nie została zastosowana|nie zostały zastosowane|nie zostało zastosowanych}; tam, gdzie mają zastosowanie, pytania padają ponownie.`,
+      en: `The companion file is from an older version: {count} saved {+count:answer has|answers have} no number of rows {+count:it was|they were} given for, so {+count:it was|they were} not applied; where they apply, the questions are asked again.`,
+      de: `Die Begleitdatei stammt aus einer älteren Version: {count} gespeicherte {+count:Antwort hat|Antworten haben} keine Zeilenzahl, für die {+count:sie|sie} gegeben wurde, daher {+count:wurde sie|wurden sie} nicht angewendet; wo sie gelten, werden die Fragen neu gestellt.`,
+      fr: `Le fichier d'accompagnement est d'une version plus ancienne : {count} {+count:réponse enregistrée n'a|réponses enregistrées n'ont} pas de nombre de lignes, donc {+count:elle n'a pas été appliquée|elles n'ont pas été appliquées} ; là où elles s'appliquent, les questions sont reposées.`,
     },
     technical: `The companion file of this run holds {count} answer(s) of the old form (the settings realCounts, totalOnce and the copies one, each with a sheet name and no count). An answer that switches a check off or takes rows out holds only for the number it was given for, so these are read and not applied. Information only.`,
   },

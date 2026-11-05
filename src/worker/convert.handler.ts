@@ -275,10 +275,8 @@ export function createConvertHandler(): ConvertHandler {
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
       ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
-      ...(s.totalOnce === true ? { totalOnce: true } : {}),
-      ...(s.realCounts === true ? { realCounts: true } : {}),
-      ...(s.dropCopies === true ? { dropCopies: true } : {}),
-      // the answers of a companion file carry the numbers they hold for; only whole numbers count, and the core compares them with today's
+      // (a bare tick for totalOnce, realCounts or dropCopies is not forwarded: an answer that switches a check off or takes rows out reaches the converter only with the number it was given for)
+      // the answers carry the numbers they hold for; only whole numbers count, and the core compares them with today's
       ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
       ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
       ...(Number.isInteger(s.realCountsRows) && (s.realCountsRows as number) >= 0 ? { realCountsRows: s.realCountsRows as number } : {}),
@@ -307,9 +305,6 @@ export function createConvertHandler(): ConvertHandler {
     const longAsTable = [...new Set(body.sheets.filter((s) => files.get(s.fileId)?.choices[s.sheet]?.off === true).map((s) => s.sheet))];
     const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
     const presenceOnly = [...new Set(body.sheets.filter((s) => s.presenceOnly === true).map((s) => s.sheet))];
-    const totalOnce = [...new Set(body.sheets.filter((s) => s.totalOnce === true).map((s) => s.sheet))];
-    const realCounts = [...new Set(body.sheets.filter((s) => s.realCounts === true).map((s) => s.sheet))];
-    const dropCopies = [...new Set(body.sheets.filter((s) => s.dropCopies === true).map((s) => s.sheet))];
     const biomassBasis = biomassBasisOf(body.sheets.map((s) => s.mapping));
     return {
       fullList: body.options.fullList === true,
@@ -322,9 +317,6 @@ export function createConvertHandler(): ConvertHandler {
       ...(longAsTable.length > 0 ? { longAsTable } : {}),
       ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
       ...(presenceOnly.length > 0 ? { presenceOnly } : {}),
-      ...(totalOnce.length > 0 ? { totalOnce } : {}),
-      ...(realCounts.length > 0 ? { realCounts } : {}),
-      ...(dropCopies.length > 0 ? { dropCopies } : {}),
       ...(biomassBasis.length > 0 ? { biomassBasis } : {}),
     };
   };
