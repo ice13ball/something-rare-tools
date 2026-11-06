@@ -1809,7 +1809,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.collapsedGroups === sin.totalOnceCount));
     const dropCopies = copies !== undefined && (sin.dropCopies === true || copiesFromFile);
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
-    const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(dropCopies ? copies.copyLines : [])]);
+    const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(takeOnce ? repeated.taxonOnly : []), ...(dropCopies ? copies.copyLines : [])]);
     {
       const k = `${fileName}\u0000${sheet.name}`;
       // the plain duplicate-identifier advice and the same-taxon warning give way to the finding that names the real defect of these rows
@@ -2147,7 +2147,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
 
       // a repeat of a total taken once, or a copy that is dropped: nothing of the row is an occurrence (the sample above has had what it carries)
       if (notConverted.has(row.line)) {
-        fate.row(row.line, repeated !== undefined && takeOnce && repeated.skip.has(row.line) ? 'repeat-total' : 'copy-dropped');
+        fate.row(row.line, repeated !== undefined && takeOnce && repeated.skip.has(row.line) ? 'repeat-total' : repeated !== undefined && takeOnce && repeated.taxonOnly.has(row.line) ? 'taxon-only-in-total' : 'copy-dropped');
         continue;
       }
       /* ---- the occurrences of this row ---- */

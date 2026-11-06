@@ -204,8 +204,12 @@ describe('below the block there is never silence and never the old advice (H4d)'
   });
 
   it('a blank size in a group', () => {
-    const r = run(table(2, 3, (s, t) => total(s, t), undefined, (c) => (c === 1 ? null : 8 + c)));
+    // fewer than 4 groups: the warning with both sums
+    const r = run(table(1, 3, (s, t) => total(s, t), undefined, (c) => (c === 1 ? null : 8 + c)));
     expect(warns(r)).toHaveLength(1);
+    // the row with the blank size has only the taxon (round 2): with 4 groups the total repeats in them and the block stands, with the row counted in its group
+    const four = run(table(2, 3, (s, t) => total(s, t), undefined, (c) => (c === 1 ? null : 8 + c)));
+    expect(ids(four, 'CONV-QUANTITY-REPEATED')).toHaveLength(1);
   });
 
   it('lengths that are 95 % distinct (a size of each fish)', () => {

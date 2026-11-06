@@ -27,6 +27,11 @@ import { parseNumber } from '../values/numbers';
  *              size that is different on every row) are never silent, whatever their number: the text gives both sums.
  *   copies     (CONV-ROW-COPIES) rows identical in every column but a per-row identifier, with a quantity above 1: the same row twice.
  *
+ *   taxon only inside a group taken once, a row whose every differing column is blank (no size, no number measured, no stage) carries only the taxon and the total. It is read from the values
+ *              and counted in its group for the evidence (the size classes are the other rows), not joined to the group and not written under its occurrenceID: ledger reason
+ *              'taxon-only-in-total', one decision per sheet.
+ *   total of 1 a count of 1 on 2 or more rows of a sample and taxon is no repeat (it cannot be shared by size classes); on a sheet whose quantity is a repeated total it is said by the warning, with both sums.
+ *
  * Why 50 %: a total repeated on size classes repeats in every group of its table (the share is near 100 %), while counts that coincide by chance coincide in a minority of the groups. Half is
  * the line between the two readings that is hardest to argue with; below it the tool does not block but warns, and says both sums, so that a table that is mostly genuine counts with some
  * repeated totals is not silently written and a table of genuine counts is not blocked. Four groups keep one or two coincidences from blocking.
@@ -55,6 +60,11 @@ export interface RepeatedTotal {
   skip: Set<number>;
   /** With the choice "once": the first row of each group taken once (it carries the total; nothing per-row is written from it). */
   first: Set<number>;
+  /**
+   * With the choice "once" and a repeated QUANTITY: the rows of a group taken once that have only the taxon (every column that tells the rows of the group apart is blank, a size and a number
+   * among them). They are not joined to the group and not written under its occurrenceID: they are their own listed case, one decision per sheet (reason 'taxon-only-in-total').
+   */
+  taxonOnly: Set<number>;
   /** With the choice "once" and only a repeated WEIGHT: the later rows of a group, whose repeated weight is not written (their counts stay). */
   omitWeight: Set<number>;
   /** The groups that cannot be taken once: the quantity repeats but another weight or count column of the rows has numbers of its own. */
@@ -251,14 +261,36 @@ export function analyseRepeats(args: {
   const othersLoose = roles.filter((c) => !looseCols.includes(c.index) && !candidateIndexes.has(c.index) && !idLike.has(c.index) && c.role.kind !== 'taxon').map((c) => c.index);
   const differingAny = (g: RawRow[]): number[] => othersLoose.filter((i) => new Set(g.map((r) => cellText(r, i).toLowerCase())).size > 1);
 
+  /**
+   * A group as it is taken once: its `core` (the rows that tell something apart), its rows that have only the taxon (every column that differs within the group is blank on them: a size and a
+   * number among them), and the columns that tell the core apart. Read from the values; a row is never given a role.
+   */
+  interface Shape { rows: RawRow[]; core: RawRow[]; taxonOnly: RawRow[]; diff: number[] }
+  const shapeOf = (g: RawRow[]): Shape => {
+    if (qIndex !== undefined) {
+      const d = differingAny(g);
+      if (d.length > 0) {
+        const only = new Set(g.filter((r) => d.every((i) => cellText(r, i) === '')));
+        // (only a group that is a take-once group without them: two or more rows that tell something apart. One row beside rows that have only the taxon is no size-class group)
+        if (only.size > 0 && g.length - only.size >= 2) {
+          const core = g.filter((r) => !only.has(r));
+          return { rows: g, core, taxonOnly: g.filter((r) => only.has(r)), diff: differingFilled(core) };
+        }
+      }
+    }
+    return { rows: g, core: g, taxonOnly: [], diff: differingFilled(g) };
+  };
+  const groupStatus = (sh: Shape, c: Candidate) => (sh.taxonOnly.length === 0 ? statusOf(sh.rows, c) : statusOf(sh.rows, c, sh.core.length));
+
   /** The status of a group for a column: the value it repeats, 'differs' (the values are not all one), or 'below' / 'none' (not evidence). */
-  const statusOf = (g: RawRow[], c: Candidate): { kind: 'repeat'; v: number; text: string } | { kind: 'differs' } | { kind: 'none' } => {
+  const statusOf = (g: RawRow[], c: Candidate, nClasses?: number): { kind: 'repeat'; v: number; text: string } | { kind: 'differs' } | { kind: 'none' } => {
     const items = g.map((r) => ({ r, v: value(r, c.index) })).filter((x): x is { r: RawRow; v: number } => x.v !== undefined && x.v > 0);
     if (items.length < 2) return { kind: 'none' };
     const v = items[0].v;
     if (!items.every((x) => x.v === v)) return { kind: 'differs' };
     // a count that is one total shared by n different size classes is at least n; 1,1,1 is a table of specimens
-    if (c.kind === 'quantity' && countKind && (v <= 1 || v < items.length)) return { kind: 'none' };
+    // (with rows that have only the taxon in the group, the size classes are the other rows: `nClasses`)
+    if (c.kind === 'quantity' && countKind && (v <= 1 || v < (nClasses ?? items.length))) return { kind: 'none' };
     return { kind: 'repeat', v, text: cellText(items[0].r, c.index) };
   };
 
@@ -268,8 +300,9 @@ export function analyseRepeats(args: {
   for (const c of candidates) {
     const s = { repeat: 0, of: 0, values: new Set<number>(), example: '' };
     for (const g of strict) {
-      if (differingFilled(g).length === 0) continue;
-      const st = statusOf(g, c);
+      const sh = shapeOf(g);
+      if (sh.diff.length === 0) continue;
+      const st = groupStatus(sh, c);
       if (st.kind === 'none') continue;
       s.of++;
       if (st.kind === 'repeat') {
@@ -286,7 +319,7 @@ export function analyseRepeats(args: {
   const coveredLines = new Set<number>();
   if (fired.length > 0) {
     const tally = new Map<number, number>();
-    for (const g of strict) for (const i of differingFilled(g)) tally.set(i, (tally.get(i) ?? 0) + 1);
+    for (const g of strict) for (const i of shapeOf(g).diff) tally.set(i, (tally.get(i) ?? 0) + 1);
     let differsIndex: number | undefined;
     let best = -1;
     for (const [i, n] of tally) {
@@ -301,27 +334,31 @@ export function analyseRepeats(args: {
     const affected = new Set<number>();
     const skip = new Set<number>();
     const first = new Set<number>();
+    const taxonOnly = new Set<number>();
     const omitWeight = new Set<number>();
     const disagree: number[][] = [];
     const lost = new Set<number>();
     let collapsedGroups = 0;
     for (const g of strict) {
-      const diff = differingFilled(g);
+      const sh = shapeOf(g);
+      const diff = sh.diff;
       if (diff.length === 0) continue;
       for (const r of g) affected.add(r.line);
       // taken once only where EVERY fired column repeats in the group; a group below the threshold, or whose values differ, stays as separate rows with their own values
-      const repeats = fired.every((c) => statusOf(g, c).kind === 'repeat');
+      const repeats = fired.every((c) => groupStatus(sh, c).kind === 'repeat');
       if (!repeats) continue;
       for (const r of g) coveredLines.add(r.line);
       // a weight or count column that is not a repeated total but has numbers of its own cannot be dropped with the rows
-      const ownNumbers = quantityRepeats && candidates.some((c) => !firedIndexes.has(c.index) && new Set(g.map((r) => value(r, c.index) ?? -1)).size > 1 && g.some((r) => (value(r, c.index) ?? 0) > 0));
+      const ownNumbers = quantityRepeats && candidates.some((c) => !firedIndexes.has(c.index) && new Set(sh.core.map((r) => value(r, c.index) ?? -1)).size > 1 && sh.core.some((r) => (value(r, c.index) ?? 0) > 0));
       if (ownNumbers) {
         disagree.push(g.map((r) => r.line));
         continue;
       }
       collapsedGroups++;
-      first.add(g[0].line);
-      for (const r of g.slice(1)) (quantityRepeats ? skip : omitWeight).add(r.line);
+      first.add(sh.core[0].line);
+      for (const r of sh.core.slice(1)) (quantityRepeats ? skip : omitWeight).add(r.line);
+      // rows with only the taxon: with a repeated quantity they are their own case; with only a repeated weight their weight is the repeat (their count is blank)
+      for (const r of sh.taxonOnly) (quantityRepeats ? taxonOnly : omitWeight).add(r.line);
       if (quantityRepeats) for (const i of differingAny(g)) lost.add(i);
       if (quantityRepeats) for (const i of diff) lost.add(i);
     }
@@ -355,6 +392,7 @@ export function analyseRepeats(args: {
       affected,
       skip,
       first,
+      taxonOnly,
       omitWeight,
       disagree,
       collapsedGroups,
@@ -375,8 +413,10 @@ export function analyseRepeats(args: {
         const items = g.map((row) => ({ row, v: value(row, c.index) })).filter((x): x is { row: RawRow; v: number } => x.v !== undefined && x.v > 0);
         if (items.length < 2) continue;
         const v = items[0].v;
-        // a count of 1 is a specimen; the exclusion is for counts only (a density or a weight of 1 repeated on stage rows is a repeat like any other)
-        if (!items.every((x) => x.v === v) || (c.kind === 'quantity' && countKind && v <= 1)) continue;
+        // a count of 1 is a specimen; the exclusion is for counts only (a density or a weight of 1 repeated on stage rows is a repeat like any other). Except on a sheet whose quantity IS a repeated
+        // total (the block fired): there a 1 on 2 or more rows of a sample and taxon is not told apart from a total of 1 by the values, so it is not treated as a repeat but said, with both sums
+        const oneOnRepeatSheet = firedHere && c.kind === 'quantity' && countKind && v === 1;
+        if (!items.every((x) => x.v === v) || (c.kind === 'quantity' && countKind && v <= 1 && !oneOnRepeatSheet)) continue;
         // a group the block already stands for is not said twice
         if (firedHere && items.every((x) => coveredLines.has(x.row.line))) continue;
         r.groups++;

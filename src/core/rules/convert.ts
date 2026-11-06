@@ -2108,6 +2108,22 @@ const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
     de: 'deren Wert (Tiefe, Position oder Datum) das Ereignis der Probe nicht übernommen hat',
     fr: "dont la valeur (profondeur, position ou date) n'a pas été reprise par l'événement de l'échantillon",
   },
+  'taxon-only-in-total': {
+    en: ['that has only a taxon name, inside a group of rows whose total is written once (the taxon is already in that occurrence; if you leave it out, it is listed and nothing is added)', 'that have only a taxon name, inside groups of rows whose total is written once (the taxon is already in that occurrence; if you leave them out, they are listed and nothing is added)'],
+    pl: [
+      'z samą nazwą taksonu, w grupie wierszy, której suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafia na listę i nic nie jest dodane)',
+      'z samą nazwą taksonu, w grupach wierszy, których suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafiają na listę i nic nie jest dodane)',
+      'z samą nazwą taksonu, w grupach wierszy, których suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafiają na listę i nic nie jest dodane)',
+    ],
+    de: [
+      'der nur einen Taxonnamen hat, in einer Gruppe von Zeilen, deren Summe einmal geschrieben wird (das Taxon steht schon in diesem Vorkommen; lässt man sie aus, wird sie aufgelistet und nichts hinzugefügt)',
+      'die nur einen Taxonnamen haben, in Gruppen von Zeilen, deren Summe einmal geschrieben wird (das Taxon steht schon in diesem Vorkommen; lässt man sie aus, werden sie aufgelistet und nichts wird hinzugefügt)',
+    ],
+    fr: [
+      "qui n'a qu'un nom de taxon, dans un groupe de lignes dont le total est écrit une fois (le taxon est déjà dans cette occurrence ; si on l'écarte, elle est listée et rien n'est ajouté)",
+      "qui n'ont qu'un nom de taxon, dans des groupes de lignes dont le total est écrit une fois (le taxon est déjà dans cette occurrence ; si on les écarte, elles sont listées et rien n'est ajouté)",
+    ],
+  },
   unexplained: {
     en: 'with a value that the converter neither wrote nor gave a reason for (a fault of the converter)',
     pl: 'z wartością, której konwerter ani nie zapisał, ani nie podał powodu (błąd konwertera)',

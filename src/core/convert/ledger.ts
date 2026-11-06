@@ -52,12 +52,14 @@ export type LedgerReason =
   | 'text-cell'
   | 'position-no-taxon'
   | 'sample-no-taxon'
-  | 'not-in-event';
+  | 'not-in-event'
+  | 'taxon-only-in-total';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
+  'taxon-only-in-total',
 ];
 // (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last three belong to whole lines)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
