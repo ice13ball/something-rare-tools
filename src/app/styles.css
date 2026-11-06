@@ -1641,3 +1641,25 @@ code.multiline {
   min-width: 0;
   max-width: 100%;
 }
+
+/* Long lists of examples (CollapsibleList.tsx): more than 10 items show the first 5 and a button. The rest is in the page (marked `hidden`), so paper gets the whole list:
+   the rest is shown, the ellipsis and the button are not printed. The collapse state is view state only. */
+.collapsible-toggle {
+  margin-left: 0.25rem;
+}
+@media print {
+  .collapsible-more[hidden] {
+    display: inline !important;
+  }
+  li.collapsible-more[hidden] {
+    display: list-item !important;
+  }
+  .collapsible-ellipsis,
+  .collapsible-toggle {
+    display: none !important;
+  }
+  .convert-doubt-list {
+    max-height: none;
+    overflow: visible;
+  }
+}

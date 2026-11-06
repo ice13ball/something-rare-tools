@@ -6,6 +6,7 @@ import { getRule } from '../../core/rules/registryCheck';
 import type { Citation, Finding, Report, Severity } from '../../core/types';
 import { isUiKey, type UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
+import { sentenceWithList } from './CollapsibleList';
 import { HeadingTip } from './InfoTip';
 
 export interface ReportViewProps {
@@ -84,16 +85,16 @@ function FindingItem({ f, hideCitations }: { f: Finding; hideCitations: (ruleId:
       <div className="finding-head">
         <span className={'badge sev-' + f.severity}>{t(('severity.' + f.severity) as UiKey)}</span>
         <p className="plain" data-testid="plain">
-          {plain}
+          {sentenceWithList(plain, lines)}
         </p>
       </div>
       <details>
         <summary>{t('report.details')}</summary>
-        {technical && <p className="technical"><code>{technical}</code></p>}
+        {technical && <p className="technical"><code>{sentenceWithList(technical, lines)}</code></p>}
         <dl>
           {f.file && row(t('report.file'), f.file)}
           {f.sheet && row(t('report.sheet'), f.sheet)}
-          {lines && row(t('report.lines'), lines)}
+          {lines && row(t('report.lines'), sentenceWithList(lines, lines))}
           {f.field && row(t('report.field'), f.field)}
           {f.value !== undefined && f.value !== '' && row(t('report.value'), <code>{f.value}</code>)}
           {row(t('report.rule'), <code>{f.ruleId}</code>)}

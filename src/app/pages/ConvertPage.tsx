@@ -14,7 +14,9 @@ import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseR
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
+import { CollapsibleList, sentenceWithList } from '../components/CollapsibleList';
 import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
+import { MAX_LINE_RANGES, formatLines } from '../../core/lines';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
 import type { NercKind, NvsSearchView } from '../components/ConvertNerc';
 import { ConvertWorms } from '../components/ConvertWorms';
@@ -1083,13 +1085,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               {groups.map((g) => (
                 <div key={g.reason} className="convert-doubt-group" role="group" aria-label={t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}>
                   <p className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}</p>
-                  <ul className="convert-doubt-list">
-                    {g.entries.map((s) => (
-                      <li key={s.verbatim}>
-                        <code>{s.verbatim}</code>
-                      </li>
-                    ))}
-                  </ul>
+                  <CollapsibleList className="convert-doubt-list" items={g.entries} itemKey={(s) => s.verbatim} renderItem={(s) => <code>{s.verbatim}</code>} />
                   <button
                     type="button"
                     className="button"
@@ -1113,13 +1109,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               {sexGroup.length > 0 && (
                 <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.sexGroup')}>
                   <p className="convert-doubt">{t('convert.splits.sexGroupNote')}</p>
-                  <ul className="convert-doubt-list">
-                    {sexGroup.map(({ entry, split }) => (
-                      <li key={entry.verbatim}>
+                  <CollapsibleList
+                    className="convert-doubt-list"
+                    items={sexGroup}
+                    itemKey={({ entry }) => entry.verbatim}
+                    renderItem={({ entry, split }) => (
+                      <>
                         <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}, {t(split.sex === 'female' ? 'convert.sex.female' : 'convert.sex.male')}
-                      </li>
-                    ))}
-                  </ul>
+                      </>
+                    )}
+                  />
                   <button
                     type="button"
                     className="button"
@@ -1138,13 +1137,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               {underscoreGroup.length > 0 && (
                 <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.underscoreGroup')}>
                   <p className="convert-doubt">{t('convert.splits.underscoreGroupNote')}</p>
-                  <ul className="convert-doubt-list">
-                    {underscoreGroup.map(({ entry, split }) => (
-                      <li key={entry.verbatim}>
+                  <CollapsibleList
+                    className="convert-doubt-list"
+                    items={underscoreGroup}
+                    itemKey={({ entry }) => entry.verbatim}
+                    renderItem={({ entry, split }) => (
+                      <>
                         <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}
-                      </li>
-                    ))}
-                  </ul>
+                      </>
+                    )}
+                  />
                   <button
                     type="button"
                     className="button"
@@ -1309,16 +1311,18 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 {view.tree.samplesWithoutPosition > 0 && <p className="muted">{t('convert.tree.noPosition', { n: view.tree.samplesWithoutPosition })}</p>}
                 {view.cruiseText.length > 0 && <p>{t('convert.tree.cruiseText', { codes: view.cruiseText.join(', ') })}</p>}
                 <h3>{t('convert.tree.examples')}</h3>
-                <ul className="convert-nodes">
-                  {(['cruise', 'station', 'sample', 'level'] as const).flatMap((level) =>
-                    view.examples[level].map((e) => (
-                      <li key={`${level}:${e.id}`} data-level={level}>
-                        <strong>{t(`convert.type.${level}` as UiKey)}</strong> <code>{e.id}</code>
-                        {nodeLine(e) !== '' && <span className="muted"> — {nodeLine(e)}</span>}
-                      </li>
-                    )),
+                <CollapsibleList
+                  className="convert-nodes"
+                  items={(['cruise', 'station', 'sample', 'level'] as const).flatMap((level) => view.examples[level].map((e) => ({ level, e })))}
+                  itemKey={({ level, e }) => `${level}:${e.id}`}
+                  itemAttrs={({ level }) => ({ 'data-level': level })}
+                  renderItem={({ level, e }) => (
+                    <>
+                      <strong>{t(`convert.type.${level}` as UiKey)}</strong> <code>{e.id}</code>
+                      {nodeLine(e) !== '' && <span className="muted"> — {nodeLine(e)}</span>}
+                    </>
                   )}
-                </ul>
+                />
               </>
             ) : (
               <p className="muted">{t('convert.tree.empty')}</p>
@@ -1509,7 +1513,7 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
       {findings.map((f, i) => (
         <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
           {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
-          {plainOf(f, lang)}
+          {sentenceWithList(plainOf(f, lang), formatLines(f.lines, MAX_LINE_RANGES))}
           {f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '' && onUseReplicate !== undefined && (
             <>
               {' '}
