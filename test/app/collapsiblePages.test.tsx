@@ -48,14 +48,14 @@ describe('/check: a finding with more than 10 line ranges', () => {
     return container;
   }
 
-  it('shows the first 5 ranges and "Show all (13)"; heading with its count, level badge and rule id stay out of the collapsible part', async () => {
+  it('shows the first 5 ranges and "Show all 13 lines"; heading with its count, level badge and rule id stay out of the collapsible part', async () => {
     const container = await report();
     const item = container.querySelector('li.finding[data-severity="error"]') as HTMLElement;
     expect(item).toBeTruthy();
     const plain = within(item).getByTestId('plain');
     const more = plain.querySelector('.collapsible-more') as HTMLElement;
     expect(more.hasAttribute('hidden')).toBe(true);
-    const button = within(plain).getByRole('button', { name: 'Show all (13)' });
+    const button = within(plain).getByRole('button', { name: 'Show all 13 lines' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
     // the first five lines are in the text that stays; the sixth is in the hidden part
     expect(visibleText(plain)).toContain('but lines 3, 5, 7, 9, 11, … are outside this range');
@@ -69,8 +69,12 @@ describe('/check: a finding with more than 10 line ranges', () => {
     const ruleId = within(item).getByText('ROW-LAT-RANGE');
     expect(inCollapsible(ruleId)).toBe(false);
     expect(screen.getByTestId('summary').textContent).toMatch(/Errors: 1/);
-    // the lines row of the details is its own list, collapsed the same way
-    expect(item.querySelectorAll('.collapsible')).toHaveLength(3);
+    // one toggle per finding: the technical line and the Lines row inside the details show in full
+    expect(item.querySelectorAll('.collapsible')).toHaveLength(1);
+    expect(item.querySelector('details dl')?.textContent).toContain('3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27');
+    expect(item.querySelector('details .technical .collapsible')).toBeNull();
+    // the button has its context: it describes itself by the sentence it stands in
+    expect(button.getAttribute('aria-describedby')).toBe((plain.querySelector('.collapsible') as HTMLElement).id);
     // expanding shows all and "Collapse"; the sentence is whole
     fireEvent.click(button);
     expect(more.hasAttribute('hidden')).toBe(false);
@@ -78,21 +82,47 @@ describe('/check: a finding with more than 10 line ranges', () => {
     expect(within(plain).getByRole('button', { name: 'Collapse' }).getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('what is downloaded does not depend on the collapse: the exported text is the same before and after opening a list', async () => {
-    const engine = createDirectEngine();
-    const { container } = render(<CheckPage engine={engine} />);
+  it('what the page downloads is byte-for-byte the same with the list collapsed and with it open', async () => {
+    const download = vi.fn();
+    const { container } = render(<CheckPage engine={createDirectEngine()} download={download} />);
     fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File([CSV], 'lat.csv', { type: 'text/csv' })] } });
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and check' }));
     await screen.findByRole('heading', { name: 'Report' });
-    const kinds = ['cleanCsv', 'sidecar', 'iso19139', 'datacite', 'geojson'] as const;
-    const take = async (): Promise<string[]> => Promise.all(kinds.map((k) => engine.export(k, [])));
-    const before = await take();
-    for (const b of screen.getAllByRole('button', { name: /^Show all \(\d+\)$/ })) fireEvent.click(b);
-    const after = await take();
-    expect(after).toEqual(before);
-    expect(before.every((x) => typeof x === 'string')).toBe(true);
-    expect(before[0]!.split('\n').length).toBeGreaterThan(26);
+    const labels = ['Clean CSV', 'Sidecar CSV (column mapping)', 'ISO 19139 XML', 'DataCite XML', 'GeoJSON of all datasets'];
+    const take = async (): Promise<unknown[][]> => {
+      download.mockClear();
+      for (const [i, label] of labels.entries()) {
+        fireEvent.click(screen.getByRole('button', { name: label }));
+        await waitFor(() => expect(download).toHaveBeenCalledTimes(i + 1));
+      }
+      return download.mock.calls.map((c) => [...c]);
+    };
+    const collapsed = await take();
+    expect(screen.getAllByRole('button', { name: /^Show all \d+ lines$/ }).length).toBeGreaterThan(0);
+    for (const b of screen.getAllByRole('button', { name: /^Show all \d+ lines$/ })) fireEvent.click(b);
+    expect(screen.queryByRole('button', { name: /^Show all/ })).toBeNull();
+    const open = await take();
+    expect(open).toEqual(collapsed);
+    expect(String(collapsed[0]![0]).split('\n').length).toBeGreaterThan(26);
+  });
+
+  it('11 blocks of 50 adjacent lines: the button says 550 lines, not 11', async () => {
+    const r = ['Station_ID,Lat,Lon,Date,Depth_m,DIC_umol_kg'];
+    for (let blk = 0; blk < 11; blk++) {
+      for (let i = 0; i < 50; i++) r.push(`B${blk}-${i},95.5,15.1,2021-07-25,${i + 1},${2100 + i}`);
+      r.push(`OK${blk},55.5,15.1,2021-07-25,1,2100`);
+    }
+    const { container } = render(<CheckPage engine={createDirectEngine()} />);
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File([r.join('\n') + '\n'], 'blocks.csv', { type: 'text/csv' })] } });
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm and check' }));
+    await screen.findByRole('heading', { name: 'Report' });
+    const item = container.querySelector('li.finding[data-severity="error"]') as HTMLElement;
+    const plain = within(item).getByTestId('plain');
+    expect(within(plain).getByRole('button', { name: 'Show all 550 lines' })).toBeTruthy();
+    expect(visibleText(plain)).toContain('lines 2\u201351, 53\u2013102, 104\u2013153, 155\u2013204, 206\u2013255, \u2026');
+    expect(visibleText(plain)).toContain('Show all 550 lines');
   });
 });
 
@@ -137,7 +167,7 @@ describe('/convert: a question with more than 10 line ranges', () => {
     expect(q.textContent).toContain('13 rows');
     const more = q.querySelector('.collapsible-more') as HTMLElement;
     expect(more.hasAttribute('hidden')).toBe(true);
-    const toggle = within(q).getByRole('button', { name: 'Show all (13)' });
+    const toggle = within(q).getByRole('button', { name: 'Show all 13 lines' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     // the decision button is visible, and is not inside the collapsible text
     const leave = q.querySelector('[data-testid="leave-out"]') as HTMLElement;
@@ -151,6 +181,12 @@ describe('/convert: a question with more than 10 line ranges', () => {
     fireEvent.click(toggle);
     expect(more.hasAttribute('hidden')).toBe(false);
     expect(within(q).getByRole('button', { name: 'Collapse' })).toBeTruthy();
+    // the tree examples are not collapsible: every level that exists is shown
+    const nodes = document.querySelector('.convert-nodes') as HTMLElement;
+    expect(nodes).toBeTruthy();
+    expect(nodes.querySelector('[data-level="sample"]')).toBeTruthy();
+    expect(nodes.querySelector('[hidden]')).toBeNull();
+    expect(nodes.closest('.collapsible')).toBeNull();
     expect(summary()).toBeTruthy();
   });
 
@@ -166,7 +202,7 @@ describe('/convert: a question with more than 10 line ranges', () => {
     fireEvent.click(screen.getAllByTestId('not-written-button')[0]!);
     await waitFor(() => expect(run.downloadFile).toHaveBeenCalledTimes(1));
     const first = await textOf((run.downloadFile.mock.calls[0] as [Blob, string])[0]);
-    fireEvent.click(within(document.querySelector('li[data-rule="CONV-ROW-NOT-UNDERSTOOD"]') as HTMLElement).getByRole('button', { name: 'Show all (13)' }));
+    fireEvent.click(within(document.querySelector('li[data-rule="CONV-ROW-NOT-UNDERSTOOD"]') as HTMLElement).getByRole('button', { name: 'Show all 13 lines' }));
     fireEvent.click(screen.getAllByTestId('not-written-button')[0]!);
     await waitFor(() => expect(run.downloadFile).toHaveBeenCalledTimes(2));
     const second = await textOf((run.downloadFile.mock.calls[1] as [Blob, string])[0]);
@@ -206,6 +242,25 @@ describe('/convert: a group a button acts on stays open', () => {
     const group = groups.find((g) => within(g).queryByRole('button', { name: /^Approve 15 names as written$/ }) !== null || within(g).queryByRole('button', { name: /^Write 15 names with a space/ }) !== null) as HTMLElement;
     expect(group).toBeTruthy();
     expect(group.querySelectorAll('li')).toHaveLength(15);
+    expect(group.querySelector('[hidden]')).toBeNull();
+    expect(group.querySelector('.collapsible')).toBeNull();
+    expect(within(group).queryByRole('button', { name: /Show all/ })).toBeNull();
+  });
+});
+
+describe('the sex-letter group and the tree stay open', () => {
+  it('12 names with a sex letter are all shown beside the group button', async () => {
+    const names = Array.from({ length: 12 }, (_, i) => `${String.fromCharCode(65 + i)}. vanus ${i % 2 === 0 ? 'm' : 'f'}`);
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 's.csv', text: `Sample,Station,Latitude,Longitude,Date,${names.map((n) => `"${n}"`).join(',')}\na,S,55,3,2020-01-01,${Array(12).fill(1).join(',')}\n` }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    const confirm = screen.queryByRole('button', { name: /^Confirm all shown/ });
+    if (confirm) fireEvent.click(confirm);
+    fireEvent.change(screen.getByLabelText(T['convert.quantity.kind']), { target: { value: 'count' } });
+    const sec = (await screen.findByRole('heading', { name: T['convert.splits.title'] })).closest('section') as HTMLElement;
+    const group = within(sec).getByRole('group', { name: T['convert.splits.sexGroup'] });
+    expect(group.querySelectorAll('li')).toHaveLength(12);
     expect(group.querySelector('[hidden]')).toBeNull();
     expect(group.querySelector('.collapsible')).toBeNull();
     expect(within(group).queryByRole('button', { name: /Show all/ })).toBeNull();

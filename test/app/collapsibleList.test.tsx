@@ -20,6 +20,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+/** What a reader sees: the text without the parts marked `hidden`. */
+function visibleOf(el: Node): string {
+  if (el.nodeType === 3) return el.textContent ?? '';
+  if (el instanceof Element && el.hasAttribute('hidden')) return '';
+  return [...el.childNodes].map(visibleOf).join('');
+}
 const names = (n: number): string[] => Array.from({ length: n }, (_, i) => `Name ${i + 1}`);
 const list = (n: number): React.ReactElement => <CollapsibleList items={names(n)} itemKey={(x) => x} renderItem={(x) => <code>{x}</code>} className="demo" />;
 const shown = (container: HTMLElement): string[] => [...container.querySelectorAll('li')].filter((li) => !li.hasAttribute('hidden')).map((li) => li.textContent ?? '');
@@ -125,18 +131,25 @@ describe('sentenceWithList', () => {
     expect(container.textContent).toBe(`Lines ${LISTED} are wrong. Collapse`);
   });
 
-  it('a "… (+n)" note of lines the converter did not list is a tail, not an item, and it stays visible while collapsed', () => {
+  it('a "… (+n)" tail leaves the sentence and is said plainly after the button, open or closed', () => {
     expect(splitListText('2, 5, …')).toEqual({ items: ['2', '5'], tail: '…' });
     expect(splitListText('2, 5, … (+40)')).toEqual({ items: ['2', '5'], tail: '… (+40)' });
     const text = `${LISTED}, … (+40)`;
-    const { container } = render(<p>{sentenceWithList(`Lines ${text}.`, text)}</p>);
-    expect(screen.getByRole('button', { name: 'Show all (12)' })).toBeTruthy();
-    const tail = container.querySelector('.collapsible-tail') as HTMLElement;
-    expect(tail.textContent).toBe(', … (+40)');
-    expect(tail.closest('[hidden]')).toBeNull();
-    expect(container.querySelector('.collapsible-more')?.textContent?.includes('+40')).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Show all (12)' }));
-    expect(container.textContent).toBe(`Lines ${text}. Collapse`);
+    const { container } = render(<p>{sentenceWithList(`Lines ${text}.`, text, { lines: 600 })}</p>);
+    const note = container.querySelector('.collapsible-note') as HTMLElement;
+    expect(note.textContent?.trim()).toBe('Only these are listed; 40 more lines are not.');
+    expect(note.closest('[hidden]')).toBeNull();
+    // the visible text: five ranges, one ellipsis, the sentence, the button, the note; no "…, … (+40)"
+    expect(visibleOf(container)).toBe('Lines 2, 5, 8, 11, 14, \u2026. Show all 600 lines Only these are listed; 40 more lines are not.');
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 600 lines' }));
+    expect(container.textContent).toBe(`Lines ${LISTED}. Collapse Only these are listed; 40 more lines are not.`);
+    expect(container.querySelector('.collapsible-note')).toBeTruthy();
+  });
+
+  it('the button names the true number of lines when it is given, and describes itself by the sentence', () => {
+    const { container } = render(<p>{sentenceWithList(`Lines ${LISTED} are wrong.`, LISTED, { lines: 550 })}</p>);
+    const b = screen.getByRole('button', { name: 'Show all 550 lines' });
+    expect(b.getAttribute('aria-describedby')).toBe((container.querySelector('.collapsible') as HTMLElement).id);
   });
 
   it('a list that is not in the sentence leaves the sentence alone', () => {
@@ -148,6 +161,8 @@ describe('sentenceWithList', () => {
 describe('labels and print', () => {
   it('has both labels in four languages, with the count in "Show all"', () => {
     for (const lang of LANGS) {
+      expect(UI[lang]['list.showAllLines'], lang).toContain('{n}');
+      expect(UI[lang]['list.tailNote'], lang).toContain('{n}');
       expect(UI[lang]['list.showAll'], lang).toContain('{n}');
       expect(UI[lang]['list.collapse'].trim(), lang).not.toBe('');
     }

@@ -17,10 +17,10 @@ export const SHOWN_WHEN_COLLAPSED = 5;
 
 export const needsCollapse = (count: number): boolean => count > COLLAPSE_AFTER;
 
-function Toggle({ open, count, controls, onClick }: { open: boolean; count: number; controls: string; onClick: () => void }): React.ReactElement {
+function Toggle({ open, count, lines, controls, describedBy, onClick }: { open: boolean; count: number; lines?: number | undefined; controls: string; describedBy?: string; onClick: () => void }): React.ReactElement {
   return (
-    <button type="button" className="link-button collapsible-toggle" aria-expanded={open} aria-controls={controls} onClick={onClick}>
-      {open ? t('list.collapse') : t('list.showAll', { n: count })}
+    <button type="button" className="link-button collapsible-toggle" aria-expanded={open} aria-controls={controls} {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })} onClick={onClick}>
+      {open ? t('list.collapse') : lines === undefined ? t('list.showAll', { n: count }) : t('list.showAllLines', { n: lines })}
     </button>
   );
 }
@@ -61,17 +61,14 @@ export interface CollapsibleTextProps {
   /** The items of a list that a sentence holds joined by `separator` ("2–3, 6, 9–12, ..."). */
   items: readonly string[];
   separator?: string;
-  /** What follows the items when the text is whole (the converter's "… (+120)" of lines it did not list). It stays visible while the list is collapsed: a count of hidden things is never hidden. */
-  tail?: string;
   /** Controlled by the sentence, whose button stands after the whole sentence. */
   open: boolean;
   controlsId: string;
 }
 
-/** The list written inside a sentence: the text is exactly `items.join(separator)` (and the tail) when open; collapsed it is the first 5, an ellipsis and the tail. */
-export function CollapsibleText({ items, separator = ', ', tail, open, controlsId }: CollapsibleTextProps): React.ReactElement {
-  const hasTail = tail !== undefined && tail !== '';
-  if (!needsCollapse(items.length)) return <>{items.join(separator) + (hasTail ? separator + tail : '')}</>;
+/** The list written inside a sentence: the text is exactly `items.join(separator)` when open; collapsed it is the first 5 and an ellipsis. */
+export function CollapsibleText({ items, separator = ', ', open, controlsId }: CollapsibleTextProps): React.ReactElement {
+  if (!needsCollapse(items.length)) return <>{items.join(separator)}</>;
   const head = items.slice(0, SHOWN_WHEN_COLLAPSED).join(separator);
   const rest = separator + items.slice(SHOWN_WHEN_COLLAPSED).join(separator);
   return (
@@ -81,7 +78,6 @@ export function CollapsibleText({ items, separator = ', ', tail, open, controlsI
         {rest}
       </span>
       {!open && <span className="collapsible-ellipsis">{separator}…</span>}
-      {hasTail && <span className="collapsible-tail">{separator + tail}</span>}
     </span>
   );
 }
@@ -94,28 +90,35 @@ export function splitListText(text: string, separator = ', '): { items: string[]
   return { items: parts };
 }
 
-function SentenceWithList({ before, items, separator, tail, after }: { before: string; items: readonly string[]; separator: string; tail: string | undefined; after: string }): React.ReactElement {
+/** "… (+40)": the converter's count of lines it did not list, as a number ('' when the tail has none). */
+const tailCount = (tail: string | undefined): string => /\(\+(\d+)\)/.exec(tail ?? '')?.[1] ?? '';
+
+function SentenceWithList({ before, items, separator, tail, after, lines }: { before: string; items: readonly string[]; separator: string; tail: string | undefined; after: string; lines: number | undefined }): React.ReactElement {
   const id = useId();
   const [open, setOpen] = useState(false);
+  const left = tailCount(tail);
   return (
-    <span className="collapsible" data-collapsed={open ? 'no' : 'yes'}>
+    <span className="collapsible" id={id + 's'} data-collapsed={open ? 'no' : 'yes'}>
       {before}
-      <CollapsibleText items={items} separator={separator} {...(tail === undefined ? {} : { tail })} open={open} controlsId={id} />
+      <CollapsibleText items={items} separator={separator} open={open} controlsId={id} />
       {after}{' '}
-      <Toggle open={open} count={items.length} controls={id} onClick={() => setOpen(!open)} />
+      <Toggle open={open} count={items.length} lines={lines} controls={id} describedBy={id + 's'} onClick={() => setOpen(!open)} />
+      {left !== '' && <span className="collapsible-note muted"> {t('list.tailNote', { n: Number(left) })}</span>}
     </span>
   );
 }
 
 /**
  * A sentence with a list inside: when `listText` stands in `sentence` and holds more than 10 items, the list is collapsed and the button stands right after the whole sentence, so the
- * sentence is never broken by it. Otherwise the sentence is returned as it is (a string), so a short list changes nothing.
+ * sentence is never broken by it. `lines` is the true number of lines the ranges cover: the button says "Show all 550 lines", not the number of ranges. A "… (+n)" tail (lines the
+ * converter did not list) is taken out of the sentence and said plainly after the button, open or closed. A short list returns the sentence as it is (a string).
  */
-export function sentenceWithList(sentence: string, listText: string, separator = ', '): React.ReactNode {
+export function sentenceWithList(sentence: string, listText: string, opts: { lines?: number; separator?: string } = {}): React.ReactNode {
   if (listText === '') return sentence;
   const at = sentence.indexOf(listText);
   if (at < 0) return sentence;
+  const separator = opts.separator ?? ', ';
   const { items, tail } = splitListText(listText, separator);
   if (!needsCollapse(items.length)) return sentence;
-  return <SentenceWithList before={sentence.slice(0, at)} items={items} separator={separator} tail={tail} after={sentence.slice(at + listText.length)} />;
+  return <SentenceWithList before={sentence.slice(0, at)} items={items} separator={separator} tail={tail} after={sentence.slice(at + listText.length)} lines={opts.lines} />;
 }

@@ -14,7 +14,7 @@ import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseR
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
-import { CollapsibleList, sentenceWithList } from '../components/CollapsibleList';
+import { sentenceWithList } from '../components/CollapsibleList';
 import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
 import { MAX_LINE_RANGES, formatLines } from '../../core/lines';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
@@ -1311,18 +1311,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                 {view.tree.samplesWithoutPosition > 0 && <p className="muted">{t('convert.tree.noPosition', { n: view.tree.samplesWithoutPosition })}</p>}
                 {view.cruiseText.length > 0 && <p>{t('convert.tree.cruiseText', { codes: view.cruiseText.join(', ') })}</p>}
                 <h3>{t('convert.tree.examples')}</h3>
-                <CollapsibleList
-                  className="convert-nodes"
-                  items={(['cruise', 'station', 'sample', 'level'] as const).flatMap((level) => view.examples[level].map((e) => ({ level, e })))}
-                  itemKey={({ level, e }) => `${level}:${e.id}`}
-                  itemAttrs={({ level }) => ({ 'data-level': level })}
-                  renderItem={({ level, e }) => (
-                    <>
-                      <strong>{t(`convert.type.${level}` as UiKey)}</strong> <code>{e.id}</code>
-                      {nodeLine(e) !== '' && <span className="muted"> — {nodeLine(e)}</span>}
-                    </>
+                <ul className="convert-nodes">
+                  {(['cruise', 'station', 'sample', 'level'] as const).flatMap((level) =>
+                    view.examples[level].map((e) => (
+                      <li key={`${level}:${e.id}`} data-level={level}>
+                        <strong>{t(`convert.type.${level}` as UiKey)}</strong> <code>{e.id}</code>
+                        {nodeLine(e) !== '' && <span className="muted"> — {nodeLine(e)}</span>}
+                      </li>
+                    )),
                   )}
-                />
+                </ul>
               </>
             ) : (
               <p className="muted">{t('convert.tree.empty')}</p>
@@ -1513,7 +1511,7 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
       {findings.map((f, i) => (
         <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
           {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
-          {sentenceWithList(plainOf(f, lang), formatLines(f.lines, MAX_LINE_RANGES))}
+          {sentenceWithList(plainOf(f, lang), formatLines(f.lines, MAX_LINE_RANGES), { lines: new Set(f.lines).size })}
           {f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '' && onUseReplicate !== undefined && (
             <>
               {' '}

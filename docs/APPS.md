@@ -769,10 +769,12 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
    land mask; a mask that cannot be loaded is reported, not skipped silently. A check that finishes
    in a session that was reset meanwhile is discarded.
 6. **Report, map, downloads.**
-   A list of line ranges inside a finding (the sentence, its technical line and the Lines row of the details) that holds more than 10 ranges is
-   collapsed in the page to its first 5 behind a button "Show all (N)" that turns into "Collapse" (`CollapsibleList.tsx`; 10 or fewer are shown whole). The
-   heading with its count, the level, the rule id and every decision button stay outside it; the rest of the list is in the page (marked `hidden`) and the print
-   stylesheet shows it whole. The state is the page's alone: the reports, the clean CSV, the sidecar and every other download are the same open or closed.
+   A list of line ranges in a finding's sentence that holds more than 10 ranges is collapsed in the page to its first 5, with a button after the whole sentence that says
+   "Show all 550 lines" (the true number of lines the ranges cover) and turns into "Collapse" (`CollapsibleList.tsx`; 10 or fewer ranges are shown whole). The technical line and the
+   Lines row inside "Technical details" always show in full: opening the details is the person's choice. The heading with its count, the level, the rule id and every decision button stay
+   outside the collapsible part; the rest of the list is in the page (marked `hidden`) and the print stylesheet shows the sentence whole (a closed details is not printed at all). A "... (+n)"
+   count of lines the converter did not list is said plainly after the button, open or closed. The state is the page's alone: the reports, the clean CSV, the sidecar and every other
+   download are the same open or closed. (Known gap: the hidden part is not found by the browser's find-in-page while collapsed.)
 
 ### How a mapping becomes rows (`buildDataset`, `src/core/dataset.ts`)
 
@@ -1422,7 +1424,7 @@ a slash, a `?`, a one-letter word, a sex marker at the end, more than three word
 comma, or letters joined by underscores with a capital first part such as `Genus_species`, which is kept
 exactly as written and never rewritten; a code such as `SP_01` is not asked) needs its own action). An undecided split blocks (`CONV-SPLIT-UNDECIDED`). The user can edit
 any split.
-The same view rule as on /check applies to the page's lists of examples: a line-range list in a question or a note and the examples of the event tree show their first 5 behind "Show all (N)" when they hold more than 10 items (`CollapsibleList.tsx`; in a sentence the button stands after the whole sentence, and a "... (+n)" count of lines not listed stays visible). The counts and the decision buttons of a question are never inside it, and print shows the whole list.
+The same view rule as on /check applies to the page's lists of examples: a line-range list in a question or a note shows its first 5 behind "Show all N lines" when it holds more than 10 ranges (`CollapsibleList.tsx`; the button stands after the whole sentence, and a "... (+n)" count of lines not listed is said after it). The event-tree examples (at most 17) stay open. The counts and the decision buttons of a question are never inside it, and print shows the sentence whole.
 A list whose items a group button acts on (the doubted names by reason, the sex-letter group, the underscore group) stays open always: the person sees what one click changes.
 Lists of controls the person fills in (the taxon-candidate boxes, the split table, the key columns) and the ledger's column lists keep their own cap and button.
 
