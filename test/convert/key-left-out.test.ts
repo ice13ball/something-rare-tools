@@ -40,10 +40,11 @@ describe('the size class declared as the cruise (variant a)', () => {
   it('is asked about: CONV-QUANTITY-SAME-IN-SAMPLE at accept level names the column and both sums', () => {
     const { header, rows } = classRows('column');
     const r = run(header, rows, edit);
+    // the quantity and the weight that repeat across the same column are one finding
     const f = same(r).filter((x) => x.params.by === 'Size');
-    expect(f.map((x) => x.params.column).sort()).toEqual(['Quantity', 'Weight']);
-    const q = f.find((x) => x.params.column === 'Quantity')!;
-    expect(q.params).toMatchObject({ groups: 20, records: 60, written: 3 * SUM, asTotal: SUM, by: 'Size' });
+    expect(f).toHaveLength(1);
+    const q = f[0];
+    expect(q.params).toMatchObject({ groups: 20, records: 60, written: 3 * SUM, asTotal: SUM, by: 'Size', column: 'Quantity', alsoColumn: 'Weight' });
     expect(judge(r.findings).acceptRules).toContain('CONV-QUANTITY-SAME-IN-SAMPLE');
     // nothing is blocked, collapsed or re-roled by it
     expect(judge(r.findings).blocking).toEqual([]);
@@ -56,13 +57,34 @@ describe('the size class declared as the cruise (variant a)', () => {
       const t = renderConvertPlain(q, lang);
       expect(t).toContain('Size');
       expect(t).toContain(String(SUM));
+      expect(t).toContain('Weight');
     }
+  });
+
+  it('does not say that the rows differ ONLY in the column: a per-class number beside it is common (M2)', () => {
+    const { header, rows } = classRows('column');
+    const r = run(header, rows, edit);
+    const q = same(r).find((x) => x.params.by === 'Size')!;
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(q, lang)).not.toMatch(/differ only|różni się tylko|unterscheiden sich nur|ne diffèrent que/i);
+    expect(renderConvertPlain(q, 'en')).toContain('across different values of "Size"');
+  });
+
+  it('Polish: the plural of the rows and the lines is right for any number (L1)', () => {
+    const base = { ruleId: 'CONV-QUANTITY-SAME-IN-SAMPLE', severity: 'warning', file: 'f.csv', sheet: 'S', lines: [2, 3], params: { groups: 22, records: 22, written: 66, asTotal: 22, column: 'Q', by: 'Size' } } as const;
+    const make = (records: number) => renderConvertPlain({ ...base, params: { ...base.params, records } } as never, 'pl');
+    expect(make(22)).toContain('W 22 wierszach');
+    expect(make(1)).toContain('W 1 wierszu');
+    expect(make(22)).not.toMatch(/różni się/);
   });
 
   it('works without an occurrenceID column too (the duplicate ID still blocks, the question is there beside it)', () => {
     const { header, rows } = classRows('column');
     const r = run(header.slice(0, 8), rows.map((x) => x.slice(0, 8)), { ...BASE, Size: { kind: 'cruise' } });
     expect(same(r).some((x) => x.params.by === 'Size')).toBe(true);
+    // the advice to make a column a replicate would split every sample: it is not given beside this finding (L9)
+    const dup = r.findings.filter((f) => f.ruleId === 'CONV-ID-DUPLICATE');
+    expect(dup.length).toBeGreaterThan(0);
+    expect(dup.every((f) => f.params.column === undefined)).toBe(true);
   });
 
   it('a clean sheet, where the totals differ per class, raises nothing', () => {

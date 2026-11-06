@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { UI } from '../../src/core/i18n/ui';
 import { TIP_TEXTS } from '../../src/core/i18n/tips-text';
 import { RULES } from '../../src/core/rules';
-import { CONVERT_RULES } from '../../src/core/rules/convert';
+import { CONVERT_RULES, PROFILE_VARIANTS, ROW_WHAT } from '../../src/core/rules/convert';
 
 const WORDS = /\b(delet\w*|remov\w*|drop\w*|discard\w*|eras\w*|get rid\w*|throw\w*|wip\w*|purg\w*)\b/gi;
 
@@ -83,6 +83,12 @@ describe('no text advises deleting data', () => {
       { where: `${r.id} technical`, id: r.id, text: r.technical },
       ...(r.plainIf ?? []).map((x) => ({ where: `${r.id} plainIf`, id: r.id, text: x.plain.en })),
     ]),
+    // the variants of a rule's text and the phrases that say what rows are (they live beside the rules, not in them)
+    ...Object.entries(PROFILE_VARIANTS).flatMap(([k, v]) => [
+      { where: `${k} plain`, id: k, text: v.plain.en },
+      { where: `${k} technical`, id: k, text: v.technical },
+    ]),
+    ...Object.entries(ROW_WHAT).flatMap(([k, v]) => (Array.isArray(v.en) ? v.en : [v.en]).map((text) => ({ where: `row what ${k}`, id: `ROW-WHAT:${k}`, text: String(text) }))),
     ...Object.entries(UI.en)
       .filter(([k]) => k.startsWith('convert.') || k.startsWith('check.'))
       .map(([k, v]) => ({ where: `page text ${k}`, key: k, text: String(v) })),

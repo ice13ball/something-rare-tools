@@ -1522,6 +1522,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   const repeatedAffected = new Map<string, Set<number>>();
   // the lines of rows with the same quantity above 1 in one sample and taxon (CONV-QUANTITY-SAME-IN-SAMPLE says it; the advice to tell the rows apart would count each of them), by file and sheet
   const sameValueLines = new Map<string, Set<number>>();
+  // the lines of the leave-one-out finding (a key column that tells the rows of one sample apart): the advice to make a column a replicate would split every sample, so it is not given there
+  const separatedLines = new Map<string, Set<number>>();
   // the lines of identical rows with a count of 1 (CONV-ROW-COPIES-SPECIMENS says it; the duplicate-identifier advice must not tell the rows apart as if they were certainly separate animals)
   const copyLikeLines = new Map<string, Set<number>>();
   // where each occurrence stands, for the findings about one taxon written twice in a sample: the column (wide) or the line (long)
@@ -1810,12 +1812,13 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.collapsedGroups === sin.totalOnceCount));
     const dropCopies = copies !== undefined && (sin.dropCopies === true || copiesFromFile);
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
-    const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(takeOnce ? repeated.taxonOnly : []), ...(dropCopies ? copies.copyLines : [])]);
+    const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(takeOnce ? repeated.taxonOnly : []), ...(takeOnce ? repeated.oneOnce : []), ...(dropCopies ? copies.copyLines : [])]);
     {
       const k = `${fileName}\u0000${sheet.name}`;
       // the plain duplicate-identifier advice and the same-taxon warning give way to the finding that names the real defect of these rows
       const hide = new Set<number>([...(repeated !== undefined && !takeOnce ? repeated.affected : []), ...(copies !== undefined ? copies.lines : [])]);
       if (hide.size > 0) repeatedAffected.set(k, hide);
+      if (separated !== undefined) separatedLines.set(k, new Set(separated.flatMap((x) => x.groups.flatMap((g) => g.lines))));
       if (sameValue !== undefined || separated !== undefined) sameValueLines.set(k, new Set([...(sameValue?.lines ?? []), ...(separated ?? []).flatMap((x) => x.groups.flatMap((g) => g.lines))]));
       if (specimenCopies !== undefined) copyLikeLines.set(k, new Set(specimenCopies.lines));
     }
@@ -2148,7 +2151,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
 
       // a repeat of a total taken once, or a copy that is dropped: nothing of the row is an occurrence (the sample above has had what it carries)
       if (notConverted.has(row.line)) {
-        fate.row(row.line, repeated !== undefined && takeOnce && repeated.skip.has(row.line) ? 'repeat-total' : repeated !== undefined && takeOnce && repeated.taxonOnly.has(row.line) ? 'taxon-only-in-total' : 'copy-dropped');
+        fate.row(row.line, repeated !== undefined && takeOnce && repeated.skip.has(row.line) ? 'repeat-total' : repeated !== undefined && takeOnce && repeated.taxonOnly.has(row.line) ? 'taxon-only-in-total' : repeated !== undefined && takeOnce && repeated.oneOnce.has(row.line) ? 'one-specimen-total' : 'copy-dropped');
         continue;
       }
       /* ---- the occurrences of this row ---- */
@@ -2612,8 +2615,9 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
         const copiesSum = written.reduce((n, l) => n + (quantityAt.get(l) ?? 0), 0);
         if (written.length > 0) findings.push(makeConvertFinding('CONV-ROW-COPIES-SPECIMENS', { ...base, field: specimenCopies.column, lines: written, params: { count: written.length, withCopies: round(withCopies), withoutCopies: round(withCopies - copiesSum) } }));
       }
-      // a key column that tells the rows of one sample apart (the leave-one-out pass): the same finding, naming the column; the sums are those of the archive as above
-      for (const sep of separated ?? []) {
+      // a key column that tells the rows of one sample apart (the leave-one-out pass): the same finding, naming the column; the sums are those of the archive as above. The quantity and a weight
+      // that repeat across the same column are one finding (the weight beside the quantity, as the other warning does)
+      const sepSums = (separated ?? []).map((sep) => {
         const at = sep.kind === 'quantity' ? quantityAt : (weightAt.get(sep.column) ?? new Map<number, number>());
         let groups = 0;
         let records = 0;
@@ -2629,7 +2633,18 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
           asTotal += g.v;
           lines.push(...there);
         }
-        if (groups > 0) findings.push(makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', { ...base, field: sep.column, lines: lines.sort((x, y) => x - y), params: { groups, records, written: round(written), asTotal: round(asTotal), column: sep.column, by: sep.by } }));
+        return { by: sep.by, column: sep.column, groups, records, written, asTotal, lines };
+      }).filter((x) => x.groups > 0);
+      for (const by of [...new Set(sepSums.map((x) => x.by))]) {
+        const [main, other] = sepSums.filter((x) => x.by === by);
+        findings.push(
+          makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', {
+            ...base,
+            field: main.column,
+            lines: [...new Set([...main.lines, ...(other?.lines ?? [])])].sort((x, y) => x - y),
+            params: { groups: main.groups, records: main.records, written: round(main.written), asTotal: round(main.asTotal), column: main.column, by, ...(other === undefined ? {} : { alsoColumn: other.column, alsoWritten: round(other.written), alsoAsTotal: round(other.asTotal) }) },
+          }),
+        );
       }
       if (sameValue !== undefined) {
         const per = sameValue.detail.map((d) => {
@@ -2891,7 +2906,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       }
     }
     for (const w of byWhere.values()) {
-      const rep = replicateColumn(input.sheets, w.file, w.sheet, w.groups);
+      const rep = w.lines.every((l) => separatedLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? undefined : replicateColumn(input.sheets, w.file, w.sheet, w.groups);
       const sin = input.sheets.find((x) => x.file.fileName === w.file && x.sheet === w.sheet);
       // a long sheet repeats an occurrenceID only for rows of the same sample (and replicate, when the sheet has that role) with the same taxon: said as that, with the number of rows
       // (not when the sheet gives the occurrenceIDs itself: then the repeated value is the user's, and no row is known to be the same sample and taxon)

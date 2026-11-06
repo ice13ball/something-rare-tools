@@ -38,6 +38,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'not-in-event': 'blocks',
   // a row with only the taxon inside a group whose total is taken once: it would be joined to the group silently or written as one more occurrence with the whole total again, so it is asked, once per sheet
   'taxon-only-in-total': 'blocks',
+  // a total of 1 on several rows of a group whose total is taken once: one specimen listed on several rows, or separate specimens; the later rows are asked about, not collapsed by the choice
+  'one-specimen-total': 'blocks',
   // held back by a rule of its own that blocks
   'no-code': 'covered',
   'no-replicate': 'covered',

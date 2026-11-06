@@ -1822,12 +1822,22 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-QUANTITY-SAME-IN-SAMPLE where leaving one key column out puts the rows of a sample together (a size class declared as the cruise)
   'CONV-QUANTITY-SAME-IN-SAMPLE:by': {
     plain: {
-      pl: `{records} {+records:wiersz|wiersze|wierszy} ({groups} {+groups:grupa|grupy|grup}) różni się tylko kolumną „{by}”, a „{column}” ma w nich tę samą wartość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisana przy każdym wierszu daje {written}; jeśli to suma całości, a „{by}” tylko rozróżnia klasy wielkości tej samej próbki, byłoby {asTotal}. Jeśli tak jest, nadaj kolumnie „{by}” inną rolę (zmienna) i wybierz zapis sumy raz. Sprawdź, co to jest.`,
-      en: `{records} rows ({groups} {+groups:group|groups}) differ only in the column "{by}", and "{column}" has the same value in them ({+lineCount:line|lines} {lines}). Written on every row it adds up to {written}; if it is the total of the whole and "{by}" only tells size classes of one sample apart, it would be {asTotal}. If so, give "{by}" another role (a variable) and choose to write the total once. Check which it is.`,
-      de: `{records} Zeilen ({groups} {+groups:Gruppe|Gruppen}) unterscheiden sich nur in der Spalte „{by}“, und „{column}“ hat in ihnen denselben Wert ({+lineCount:Zeile|Zeilen} {lines}). In jeder Zeile geschrieben ergibt das {written}; ist es die Summe des Ganzen und „{by}“ unterscheidet nur Größenklassen derselben Probe, wären es {asTotal}. Wenn ja, geben Sie „{by}“ eine andere Rolle (eine Variable) und wählen Sie, die Summe einmal zu schreiben. Prüfen Sie, was es ist.`,
-      fr: `{records} lignes ({groups} {+groups:groupe|groupes}) ne diffèrent que par la colonne « {by} », et « {column} » y a la même valeur ({+lineCount:ligne|lignes} {lines}). Écrite sur chaque ligne elle fait {written} ; si c'est le total de l'ensemble et que « {by} » ne distingue que des classes de taille d'un même échantillon, ce serait {asTotal}. Si oui, donnez à « {by} » un autre rôle (une variable) et choisissez d'écrire le total une fois. Vérifiez ce que c'est.`,
+      pl: `W {records} {+records:wierszu|wierszach|wierszach} ({groups} {+groups:grupie|grupach|grupach}) „{column}” ma tę samą wartość przy różnych wartościach „{by}”, a pozostałe kolumny klucza i takson są takie same ({+lineCount:w wierszu|w wierszach|w wierszach} {lines}). Przy każdym wierszu: {written}; jeśli to suma całości, a „{by}” tylko rozróżnia klasy wielkości jednej próbki: {asTotal}. Jeśli tak, nadaj „{by}” inną rolę (zmienna) i zapisz sumę raz. Sprawdź, co to jest.`,
+      en: `In {records} rows ({groups} {+groups:group|groups}) "{column}" has the same value across different values of "{by}", the other key columns and the taxon being the same ({+lineCount:line|lines} {lines}). On every row: {written}; if it is the total of the whole and "{by}" only tells size classes of one sample apart: {asTotal}. If so, give "{by}" another role (a variable) and write the total once. Check which it is.`,
+      de: `In {records} Zeilen ({groups} {+groups:Gruppe|Gruppen}) hat „{column}“ über verschiedene Werte von „{by}“ hinweg denselben Wert, die übrigen Schlüsselspalten und das Taxon sind gleich ({+lineCount:Zeile|Zeilen} {lines}). In jeder Zeile: {written}; ist es die Summe des Ganzen und „{by}“ unterscheidet nur Größenklassen einer Probe: {asTotal}. Wenn ja, geben Sie „{by}“ eine andere Rolle (Variable) und schreiben Sie die Summe einmal. Prüfen Sie, was es ist.`,
+      fr: `Dans {records} lignes ({groups} {+groups:groupe|groupes}) « {column} » a la même valeur pour des valeurs différentes de « {by} », les autres colonnes de la clé et le taxon étant les mêmes ({+lineCount:ligne|lignes} {lines}). Sur chaque ligne : {written} ; si c'est le total de l'ensemble et que « {by} » ne distingue que des classes de taille d'un échantillon : {asTotal}. Si oui, donnez à « {by} » un autre rôle (variable) et écrivez le total une fois. Vérifiez.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: leaving the key column {by} out, {records} rows in {groups} group(s) (the same other key columns and taxon) carry the same value in {column}, in the same way as a total repeated on size classes (the evidence and thresholds of CONV-QUANTITY-REPEATED). Written on every row the sum is {written}; as a total it would be {asTotal}. Nothing is blocked, collapsed or re-roled; the sample code is never left out.`,
+    technical: `{file}, {sheet}:{lines} field {field}: leaving the key column {by} out, {records} rows in {groups} group(s) (the same other key columns and taxon, a different {by} on every row) carry the same value in {column}, in the same way as a total repeated on size classes (the evidence and thresholds of CONV-QUANTITY-REPEATED). Written on every row the sum is {written}; as a total it would be {asTotal}. Other columns may differ in these rows. Nothing is blocked, collapsed or re-roled; the sample code is never left out.`,
+  },
+  // the same where a weight repeats across the same column beside the quantity
+  'CONV-QUANTITY-SAME-IN-SAMPLE:by-also': {
+    plain: {
+      pl: `W {records} {+records:wierszu|wierszach|wierszach} ({groups} {+groups:grupie|grupach|grupach}) „{column}” ma tę samą wartość przy różnych wartościach „{by}”, a pozostałe kolumny klucza i takson są takie same ({+lineCount:w wierszu|w wierszach|w wierszach} {lines}): {written}, jako suma {asTotal}. Waga w „{alsoColumn}” też: {alsoWritten}, jako suma {alsoAsTotal}. Jeśli „{by}” tylko rozróżnia klasy wielkości, nadaj mu inną rolę (zmienna) i zapisz sumę raz. Sprawdź.`,
+      en: `In {records} rows ({groups} {+groups:group|groups}) "{column}" has the same value across different values of "{by}", the other key columns and the taxon being the same ({+lineCount:line|lines} {lines}): {written}, or {asTotal} as a total. The weight in "{alsoColumn}" too: {alsoWritten}, or {alsoAsTotal}. If "{by}" only tells size classes apart, give it another role (a variable) and write the total once. Check which it is.`,
+      de: `In {records} Zeilen ({groups} {+groups:Gruppe|Gruppen}) hat „{column}“ über verschiedene Werte von „{by}“ hinweg denselben Wert, die übrigen Schlüsselspalten und das Taxon sind gleich ({+lineCount:Zeile|Zeilen} {lines}): {written}, als Summe {asTotal}. Das Gewicht in „{alsoColumn}“ ebenso: {alsoWritten}, als Summe {alsoAsTotal}. Unterscheidet „{by}“ nur Größenklassen, geben Sie der Spalte eine andere Rolle (Variable) und schreiben Sie die Summe einmal. Prüfen Sie.`,
+      fr: `Dans {records} lignes ({groups} {+groups:groupe|groupes}) « {column} » a la même valeur pour des valeurs différentes de « {by} », les autres colonnes de la clé et le taxon étant les mêmes ({+lineCount:ligne|lignes} {lines}) : {written}, ou {asTotal} comme total. Le poids de « {alsoColumn} » aussi : {alsoWritten}, ou {alsoAsTotal}. Si « {by} » ne distingue que des classes de taille, donnez-lui un autre rôle (variable) et écrivez le total une fois. Vérifiez.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: leaving the key column {by} out, {records} rows in {groups} group(s) carry the same quantity in {column} (sum {written}, or {asTotal} as a total) and the same weight in {alsoColumn} (sum {alsoWritten}, or {alsoAsTotal} as a total).`,
   },
   // CONV-QUANTITY-SAME-IN-SAMPLE where a weight repeats beside the quantity
   'CONV-QUANTITY-SAME-IN-SAMPLE:also': {
@@ -2001,7 +2011,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:weight'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED-ONCE:weight'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.copyLike === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:copies'];
-  if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && typeof f.params.by === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:by'];
+  if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && typeof f.params.by === 'string') return PROFILE_VARIANTS[typeof f.params.alsoColumn === 'string' ? 'CONV-QUANTITY-SAME-IN-SAMPLE:by-also' : 'CONV-QUANTITY-SAME-IN-SAMPLE:by'];
   if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:weight'];
   if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && typeof f.params.alsoColumn === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:also'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.sameValue === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:same-value'];
@@ -2062,7 +2072,7 @@ function fill(template: string, f: Finding, lang?: Lang): string {
  * A phrase that has to agree with the number is given as its forms ([one, other] for en, de, fr; [one, few, many] for pl) and chosen by the count; a person never reads the code of a reason.
  */
 type Forms = string | readonly string[];
-const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
+export const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
   ragged: {
     en: 'with more or fewer fields than the header, so their values would sit under the wrong columns',
     pl: 'z większą lub mniejszą liczbą pól niż nagłówek, więc ich wartości trafiłyby pod złe kolumny',
@@ -2120,19 +2130,41 @@ const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
     fr: "dont la valeur (profondeur, position ou date) n'a pas été reprise par l'événement de l'échantillon",
   },
   'taxon-only-in-total': {
-    en: ['that has only a taxon name, inside a group of rows whose total is written once (the taxon is already in that occurrence; if you leave it out, it is listed and nothing is added)', 'that have only a taxon name, inside groups of rows whose total is written once (the taxon is already in that occurrence; if you leave them out, they are listed and nothing is added)'],
+    en: [
+      'with no size or other detail of its own, inside a group of rows whose total is written once (the taxon is already in that occurrence; if you leave it out, it is listed with any number it carries, and nothing is added)',
+      'with no size or other detail of their own, inside groups of rows whose total is written once (the taxon is already in those occurrences; if you leave them out, they are listed with any number they carry, and nothing is added)',
+    ],
     pl: [
-      'z samą nazwą taksonu, w grupie wierszy, której suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafia na listę i nic nie jest dodane)',
-      'z samą nazwą taksonu, w grupach wierszy, których suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafiają na listę i nic nie jest dodane)',
-      'z samą nazwą taksonu, w grupach wierszy, których suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafiają na listę i nic nie jest dodane)',
+      'bez własnej wielkości ani innego szczegółu, w grupie wierszy, której suma jest zapisana raz (takson jest już w tym wystąpieniu; po pominięciu trafia na listę razem z ewentualną liczbą i nic nie jest dodane)',
+      'bez własnej wielkości ani innego szczegółu, w grupach wierszy, których suma jest zapisana raz (takson jest już w tych wystąpieniach; po pominięciu trafiają na listę razem z ewentualną liczbą i nic nie jest dodane)',
+      'bez własnej wielkości ani innego szczegółu, w grupach wierszy, których suma jest zapisana raz (takson jest już w tych wystąpieniach; po pominięciu trafiają na listę razem z ewentualną liczbą i nic nie jest dodane)',
     ],
     de: [
-      'der nur einen Taxonnamen hat, in einer Gruppe von Zeilen, deren Summe einmal geschrieben wird (das Taxon steht schon in diesem Vorkommen; lässt man sie aus, wird sie aufgelistet und nichts hinzugefügt)',
-      'die nur einen Taxonnamen haben, in Gruppen von Zeilen, deren Summe einmal geschrieben wird (das Taxon steht schon in diesem Vorkommen; lässt man sie aus, werden sie aufgelistet und nichts wird hinzugefügt)',
+      'ohne eigene Größe oder anderes Detail, in einer Gruppe von Zeilen, deren Summe einmal geschrieben wird (das Taxon steht schon in diesem Vorkommen; lässt man sie aus, wird sie samt einer etwaigen Zahl aufgelistet und nichts wird hinzugefügt)',
+      'ohne eigene Größe oder anderes Detail, in Gruppen von Zeilen, deren Summe einmal geschrieben wird (das Taxon steht schon in diesen Vorkommen; lässt man sie aus, werden sie samt einer etwaigen Zahl aufgelistet und nichts wird hinzugefügt)',
     ],
     fr: [
-      "qui n'a qu'un nom de taxon, dans un groupe de lignes dont le total est écrit une fois (le taxon est déjà dans cette occurrence ; si on l'écarte, elle est listée et rien n'est ajouté)",
-      "qui n'ont qu'un nom de taxon, dans des groupes de lignes dont le total est écrit une fois (le taxon est déjà dans cette occurrence ; si on les écarte, elles sont listées et rien n'est ajouté)",
+      "sans taille ni autre détail propre, dans un groupe de lignes dont le total est écrit une fois (le taxon est déjà dans cette occurrence ; si on l'écarte, elle est listée avec le nombre qu'elle porte éventuellement, et rien n'est ajouté)",
+      "sans taille ni autre détail propre, dans des groupes de lignes dont le total est écrit une fois (le taxon est déjà dans ces occurrences ; si on les écarte, elles sont listées avec le nombre qu'elles portent éventuellement, et rien n'est ajouté)",
+    ],
+  },
+  'one-specimen-total': {
+    en: [
+      'that repeats a total of 1 already given for its sample and taxon (if the 1 is one specimen listed on several rows, leave it out: the first row is written and this one is listed; if they are separate specimens, correct your file)',
+      'that repeat a total of 1 already given for their sample and taxon (if the 1 is one specimen listed on several rows, leave them out: the first row of each is written and these are listed; if they are separate specimens, correct your file)',
+    ],
+    pl: [
+      'powtarzający sumę 1 podaną już dla tej samej próbki i taksonu (jeśli to 1 to jeden osobnik wypisany w kilku wierszach, pomiń go: pierwszy wiersz zostaje zapisany, a ten trafia na listę; jeśli to osobne osobniki, popraw plik)',
+      'powtarzające sumę 1 podaną już dla tej samej próbki i taksonu (jeśli to 1 to jeden osobnik wypisany w kilku wierszach, pomiń je: pierwszy wiersz każdej grupy zostaje zapisany, a te trafiają na listę; jeśli to osobne osobniki, popraw plik)',
+      'powtarzających sumę 1 podaną już dla tej samej próbki i taksonu (jeśli to 1 to jeden osobnik wypisany w kilku wierszach, pomiń je: pierwszy wiersz każdej grupy zostaje zapisany, a te trafiają na listę; jeśli to osobne osobniki, popraw plik)',
+    ],
+    de: [
+      'der eine bereits für dieselbe Probe und dasselbe Taxon angegebene Summe von 1 wiederholt (ist die 1 ein Exemplar, das in mehreren Zeilen steht, lassen Sie sie aus: die erste Zeile wird geschrieben und diese aufgelistet; sind es getrennte Exemplare, korrigieren Sie Ihre Datei)',
+      'die eine bereits für dieselbe Probe und dasselbe Taxon angegebene Summe von 1 wiederholen (ist die 1 ein Exemplar, das in mehreren Zeilen steht, lassen Sie sie aus: die erste Zeile jeder Gruppe wird geschrieben und diese aufgelistet; sind es getrennte Exemplare, korrigieren Sie Ihre Datei)',
+    ],
+    fr: [
+      "qui répète un total de 1 déjà donné pour le même échantillon et le même taxon (si le 1 est un spécimen listé sur plusieurs lignes, écartez-la : la première ligne est écrite et celle-ci est listée ; si ce sont des spécimens séparés, corrigez votre fichier)",
+      "qui répètent un total de 1 déjà donné pour le même échantillon et le même taxon (si le 1 est un spécimen listé sur plusieurs lignes, écartez-les : la première ligne de chaque groupe est écrite et celles-ci sont listées ; si ce sont des spécimens séparés, corrigez votre fichier)",
     ],
   },
   unexplained: {
