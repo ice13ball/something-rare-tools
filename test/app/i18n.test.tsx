@@ -55,7 +55,7 @@ describe('language state', () => {
     });
     expect(localStorage.getItem('lang')).toBe('pl');
     expect(document.documentElement.lang).toBe('pl');
-    expect(screen.getByTestId('p').textContent).toBe('pl:Sprawdzanie danych');
+    expect(screen.getByTestId('p').textContent).toBe('pl:Weryfikator danych');
     expect(push).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
     expect(location.href).toBe(before);
