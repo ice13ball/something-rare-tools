@@ -4,12 +4,12 @@ import React, { useId, useState } from 'react';
 import { t } from '../i18n';
 
 /*
- * A long list of examples (cells, rows, names, values) is read badly, so more than COLLAPSE_AFTER items show only the first SHOWN_WHEN_COLLAPSED and a button
- * "Show all (N)" that turns into "Collapse". COLLAPSE_AFTER items or fewer are shown whole, with no button.
+ * A long list of line ranges inside a finding's sentence is read badly, so more than COLLAPSE_AFTER ranges show only the first SHOWN_WHEN_COLLAPSED and a button
+ * "Show all N lines" that turns into "Collapse". COLLAPSE_AFTER ranges or fewer are shown whole, with no button.
  *
  * ⛔ This is view state and nothing else: the open/closed state lives in the component, never in a request, a result, a report, the companion file or an archive.
- * ⛔ Only a list of examples is wrapped in it. A heading with its count, a rule id, a level and every decision button stay outside, always visible.
- * Every item is in the page even when the list is collapsed (the rest carries `hidden`): the print stylesheet (styles.css) shows them all and drops the button, and the
+ * ⛔ Only the list of examples is wrapped in it. A heading with its count, a rule id, a level and every decision button stay outside, always visible.
+ * Every range is in the page even when the list is collapsed (the rest carries `hidden`): the print stylesheet (styles.css) shows them all and drops the button, and the
  * button is a native <button> with aria-expanded and aria-controls, so it works from the keyboard.
  */
 export const COLLAPSE_AFTER = 10;
@@ -20,40 +20,8 @@ export const needsCollapse = (count: number): boolean => count > COLLAPSE_AFTER;
 function Toggle({ open, count, lines, controls, describedBy, onClick }: { open: boolean; count: number; lines?: number | undefined; controls: string; describedBy?: string; onClick: () => void }): React.ReactElement {
   return (
     <button type="button" className="link-button collapsible-toggle" aria-expanded={open} aria-controls={controls} {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })} onClick={onClick}>
-      {open ? t('list.collapse') : lines === undefined ? t('list.showAll', { n: count }) : t('list.showAllLines', { n: lines })}
+      {open ? t('list.collapse') : t('list.showAllLines', { n: lines ?? count })}
     </button>
-  );
-}
-
-export interface CollapsibleListProps<T> {
-  items: readonly T[];
-  itemKey: (item: T) => string;
-  renderItem: (item: T) => React.ReactNode;
-  /** Attributes of the <li> (a data attribute the tests and the styles read). */
-  itemAttrs?: (item: T) => Record<string, string>;
-  className?: string;
-}
-
-/** A list of separate items (<ul>): the first 5 and a button when there are more than 10. */
-export function CollapsibleList<T>({ items, itemKey, renderItem, itemAttrs, className }: CollapsibleListProps<T>): React.ReactElement {
-  const id = useId();
-  const [open, setOpen] = useState(false);
-  const long = needsCollapse(items.length);
-  const hiddenNow = long && !open;
-  return (
-    <div className="collapsible" data-collapsed={hiddenNow ? 'yes' : 'no'}>
-      <ul id={id} {...(className === undefined ? {} : { className })}>
-        {items.map((item, i) => {
-          const extra = long && i >= SHOWN_WHEN_COLLAPSED;
-          return (
-            <li key={itemKey(item)} {...(itemAttrs === undefined ? {} : itemAttrs(item))} {...(extra ? { className: 'collapsible-more', hidden: hiddenNow } : {})}>
-              {renderItem(item)}
-            </li>
-          );
-        })}
-      </ul>
-      {long && <Toggle open={open} count={items.length} controls={id} onClick={() => setOpen(!open)} />}
-    </div>
   );
 }
 
