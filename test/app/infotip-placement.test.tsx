@@ -222,7 +222,7 @@ describe('/convert', () => {
     // the splits and the codes appear with what the data need
     await screen.findByRole('heading', { name: UI.en['convert.splits.title'] });
     await screen.findByRole('heading', { name: UI.en['convert.codes.title'] });
-    expectTips(['convertSplits', 'convertCodes']);
+    expectTips(['convertSplits', 'convertCodes', 'convertKey']);
     // the description of the dataset (every field), the export and the companion file
     expectTips(['convertMetaTitle', 'convertMetaAbstract', 'convertMetaCreators', 'convertMetaContact', 'convertMetaInstitution', 'convertMetaDatasetName', 'convertMetaMethods', 'convertMetaCitation', 'convertLicence', 'convertBasis', 'convertExport', 'convertCompanion']);
     // none of them inside a label or a heading element (names stay clean)

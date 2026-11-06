@@ -51,6 +51,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-COUNT-NOT-INTEGER',
   'CONV-NEGATIVE-QUANTITY',
   'CONV-SAMPLE-CODE-MISSING',
+  // a picked sample key that makes an identifier too long for a Darwin Core archive
+  'CONV-KEY-TOO-LONG',
   'CONV-PROFILE-NO-STATION',
   'CONV-PROFILE-LEVEL-INCOMPLETE',
   'CONV-ID-DUPLICATE',
@@ -73,6 +75,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-PROFILE-NOTHING-READ',
   'CONV-SEAFLOOR-UNIT',
   'CONV-SEAFLOOR-VALUE',
+  // a row the converter could not place (a value with no parameter, a number with no taxon ...): blocks until someone decides to leave it out and list it, or corrects the file
+  'CONV-ROW-NOT-UNDERSTOOD',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */
@@ -133,6 +137,12 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-ROW-COPIES-DROPPED',
   // identical rows with a count of 1: copies, or specimens that look the same; both sums are shown
   'CONV-ROW-COPIES-SPECIMENS',
+  // a picked sample key with an empty part: those rows are samples of their own
+  'CONV-KEY-PART-BLANK',
+  // a key column that mixes typed numbers and number-like text: one sample may be split
+  'CONV-KEY-MIXED-NUMBERS',
+  // a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: the person looks at the list once; nothing is re-roled
+  'CONV-ROLE-UNCONFIRMED',
   // a number or a weight with no taxon name on a long sheet
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written

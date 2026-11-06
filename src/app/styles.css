@@ -1524,6 +1524,18 @@ code.multiline {
   color: var(--warning);
 }
 
+/* Doubted names by reason: the whole list stays open beside its button (a long group scrolls inside its own box rather than hiding under a fold). */
+.convert-doubt-group {
+  margin: 0.75rem 0;
+}
+.convert-doubt-list {
+  max-height: 12rem;
+  overflow-y: auto;
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
 /* The split table: its "approved / not approved" hint is a .visually-hidden span, which is position: absolute. Without a positioned ancestor its containing
    block is the page, so it is NOT clipped by the sideways-scrolling wrapper and, sitting in the last column of a table wider than a phone, it stretched the
    whole page sideways (scrollWidth 878 at 375 px). The wrapper is the containing block now: the table scrolls inside it and the page does not. */

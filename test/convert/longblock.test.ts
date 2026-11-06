@@ -140,6 +140,7 @@ describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
 
 /* The converted output of long biology sheets is the output of origin/main: the snapshot was generated at origin/main (2b2d854) by running this file there with LB_WRITE set (the archives and the worker part included). */
 const SNAP = new URL('./longblock.snap.json', import.meta.url);
+const withoutIgnoredNote = (v: unknown): unknown => (Array.isArray(v) ? v.filter((f) => !['CONV-COLUMN-IGNORED', 'CONV-ROLE-UNCONFIRMED'].includes(String((f as { ruleId?: string } | null)?.ruleId))) : v);
 const bioCases = (): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   const taxonCount = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count'], [
@@ -157,7 +158,9 @@ const bioCases = (): Record<string, unknown> => {
   out['L1'] = convert({ sheets: [sheetInput(fileOf(L1_HEADER, L1_ROWS.map((r) => [...r])))], approvedSplits: {} });
   out['L2'] = convert({ sheets: [sheetInput(fileOf(L2_HEADER, L2_ROWS.map((r) => [...r])), { quantity: { kind: 'count' } })], approvedSplits: {} });
   out['W1'] = convert({ sheets: [sheetInput(fileOf(W1_HEADER, W1_ROWS.map((r) => [...r])), { quantity: W1_QUANTITY })], options: { fullList: true }, approvedSplits: {} });
-  return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+  // the snapshot is the output of origin/main: the ledger (core/convert/ledger.ts) and the count of rows not written beside it are new, and are tested in ledger.test.ts and notWritten.test.ts
+  // (CONV-COLUMN-IGNORED, an information line that only names ignored columns holding values, is new too, and so is CONV-ROLE-UNCONFIRMED, a note that asks for one tick and changes no role: the tables and the archives below are what must not move)
+  return JSON.parse(JSON.stringify(out, (k, v) => (k === 'ledger' || k === 'notWritten' || k === 'leftOut' ? undefined : withoutIgnoredNote(v)))) as Record<string, unknown>;
 };
 
 /* The ARCHIVES (every file of the zip as text, and the zip's own hash) of long biology sheets, WoRMS off and on (the test stub, no network), and what the worker makes of each dropped file
@@ -218,7 +221,7 @@ async function archiveCases(): Promise<Record<string, unknown>> {
       };
     }
   }
-  return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+  return JSON.parse(JSON.stringify(out, (_k, v) => withoutIgnoredNote(v))) as Record<string, unknown>;
 }
 /** What the worker makes of each dropped file: its sheets, mappings and suggestions, as the page gets them. */
 function workerCases(): Record<string, unknown> {
@@ -229,7 +232,7 @@ function workerCases(): Record<string, unknown> {
     const f = res.files[0];
     out[name] = { sheets: f.sheets, mappings: f.mappings, shapes: f.suggestedShapes, profiles: f.suggestedProfiles, hasPivots: 'pivots' in f };
   }
-  return JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+  return JSON.parse(JSON.stringify(out, (_k, v) => withoutIgnoredNote(v))) as Record<string, unknown>;
 }
 
 describe('long biology sheets keep the output of origin/main', () => {

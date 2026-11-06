@@ -1415,7 +1415,8 @@ convention follows the OBIS Manual (the lowest accurate name in `scientificName`
 **Every distinct split that changed something is a decision the user approves** (a table with an
 "approve all shown" for names without doubt; a name whose leftover is not plausibly Latin (digits,
 a slash, a `?`, a one-letter word, a sex marker at the end, more than three words, a remark after a
-comma) needs its own action). An undecided split blocks (`CONV-SPLIT-UNDECIDED`). The user can edit
+comma, or letters joined by underscores with a capital first part such as `Genus_species`, which is kept
+exactly as written and never rewritten; a code such as `SP_01` is not asked) needs its own action). An undecided split blocks (`CONV-SPLIT-UNDECIDED`). The user can edit
 any split.
 
 **WoRMS identifiers are written only from the sheet or from the opt-in** (`scientificNameID`): an
@@ -1452,7 +1453,18 @@ code" (the button above applies it).
   when there is one. **A sample's id is never derived from depth, row order or a WoRMS name** (one exception below: a
   code reused on every visit of a station). The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
-  new code column last, for the user to check and drop again). **A wide sheet** gets one code per row
+  new code column last, for the user to check and drop again). **The first way, on the page: the person picks the columns that make a sample**
+  (`SampleKeyPicker`, `core/convert/sampleKey.ts`; shown under the heading of the sample codes for a sheet that has rows without a code, and kept while a key is in use). Nothing is ticked, proposed or changed for
+  the person (no role is changed by the existence of the feature; a ticked column that was `ignore` is read as `keyPart` in the conversion only, and the table of roles still shows what the person set). The ticked columns are
+  a draft: the page asks the worker (`previewKey`) what they would make, and the answer is the converter's own `SheetKeyReport` (samples, rows, rows per sample, rows with no key, rows with an empty part,
+  rows whose ID is too long) from the same run the export is (`previewSampleKey`, `ConvertResult.keys`), so the preview and the archive cannot count differently; "Use this key" is the only thing that puts it in the request
+  (`ConvertSheetRequest.sampleKey`, `ConvertSheetInput.sampleKey`). The sample's eventID is then a name, then the values of the columns in the order ticked, joined with `|` (a `|`, `\`, tab and line break inside a
+  value are written `\|`, `\\`, `\t`, `\n`, so different keys never give one ID): it depends on the values and never on the order of the rows. A value is trimmed and in Unicode form NFC, `1` and `1.0` are one value (a typed number is compared as a number; a text is a number only as an integer with an all-zero fraction: `1.1` and `1.10`, `1e1` and `10` stay two; a text with a leading zero, or with 16 digits or more, stays text), a date cell goes through the date reader (a serial and the same date as text are one sample, a 1904 workbook is read right), an empty cell, NA, nan and a dash are
+  empty. An empty part is part of the key: those rows are samples of their own, said in `CONV-KEY-PART-BLANK` (a warning to accept); a row empty in every part has no sample (`CONV-SAMPLE-CODE-MISSING`, blocks); an ID written to the archive (sample, replicate or occurrence) over 255
+  characters blocks (`CONV-KEY-TOO-LONG`, which names the longest). The name in front of every ID is shown at the picker and can be changed; by default it is the sheet's name for a workbook and the file's name without its extension for a table file, and the companion file keeps what was used (`sampleKeyPrefix=<sheet>:<hashes>:<rows>:<name>`, tied to the key line), so a renamed file keeps its IDs. A saved key goes to the sheet of the same name first; a renamed table file (its sheet is called after the file) gets one only when exactly one saved table-file key fits it by columns and rows and no other file of the drop fits that key too, otherwise none is applied and the picker says that several saved keys fit; a workbook entry and a table-file entry never match by columns alone. Sheets with different names never make the same ID and no ID is the ID of a station or a cruise; two sheets with the same name and values are blocked by `CONV-ID-DUPLICATE`, whose advice says to give one of them another name; whether two sheets hold the same samples is not asked. A text is read as a number only with the file's own decimal separator (`1,000` in a file with a decimal point is a thousand and stays text); a key column where a typed number and a text read as the same number but give different codes (typed `1.5`, text `1.50`) raises `CONV-KEY-MIXED-NUMBERS` (accept), naming the pair. The visit and station-prefix guesses are not applied to a key; the repeated-total, exact-copy and statistic-row checks read the key columns (a size-class total repeated on
+  a haul's rows is taken once with the key alone). `CONV-KEY-PICKED` (information, with "Ask again") says the key, the samples and the rows. The companion file keeps `sampleKey=<sheet>:<hashes>:<rows>`: one 8-digit hash of the folded header
+  per key column (case, spacing and underscores do not matter; `.<n>of<m>` tells equal columns apart) and the number of rows of the sheet the pick was made for, never a header. On a later drop it is applied only when every column is
+  found again and the sheet has the same number of rows, and then it is said as read from the companion file, with "Ask again"; otherwise the question is open. The code file stays as the second way. **A wide sheet** gets one code per row
   (`<station>-<n>`). **A long sheet** (a row is a taxon) gets **one code per sample**: the rows are grouped
   by the columns that define a sample, read from the mapped roles (cruise, station, date and time, depth,
   replicate; the position when nothing else is mapped, and **also when the key has no station and positions differ
@@ -1658,6 +1670,16 @@ nobody judged must not let a bad archive through) and is only shown otherwise.
   `ROW-INVISIBLE-CHAR`, `ROW-DATE-FUTURE`, `ROW-DEPTH-RANGE`, the hemisphere rules, unconfirmed
   vocabulary ids, a missing sampling device, an unmatched profile station, a licence that differs
   from the one the dropped metadata state. See `ACCEPT_RULES`.
+- **Roles the file does not state** `CONV-ROLE-UNCONFIRMED` (accept, one finding per sheet, `src/core/convert/roleUnconfirmed.ts`): a column the proposer gave the role taxon, quantity, date, latitude or longitude and
+  that the file does not state by name (`src/core/convert/stated.ts`: an exact Darwin Core term after folding case and underscores, an exact vocabulary entry, a unit the header declares for a name that means
+  two things, a PANGAEA geocode; the cells can only take that away) is listed with its proposed role, named as the column table names it (`Quantity`, `Date and time`, ...), and its first three distinct cells; the
+  person ticks the list once. It is a note and nothing else: no role is changed, no proposal is touched (`withStated` only marks), and a column whose role the person changed in the table is never listed (the page
+  records the touch as it does for a taxon header, `handSet`, even when they chose the very role proposed; it is not a role and is not saved). The tick is the person's acknowledgement: it never enters `stated`,
+  nothing of it is written into the archive, the metadata or the companion file (there is nothing to save, and nothing carries it to another file), and a new upload starts unaccepted. The page keeps the tick for a
+  SET of columns, each named by what makes it itself (the hash of its header with its occurrence, as the sample key does, and its proposed role; not its position): a column answered by hand leaves the list and the
+  tick stands; it reopens when a column joins the list (another sheet switched on, for example) and it is cleared when a sheet is read again (`pivotChoice`). A column named with an exact Darwin Core term or vocabulary
+  entry is not listed; a file whose headers are the author's own words or an inexact spelling (`Latitude_dd`, `Date of sampling`, `Scientific name`, `Breitengrad`, `Abundance (ind)`) lists them, and that is the
+  price of "stated by name": the vocabulary is not widened here (an open question for the owner). The wide sheet's taxon headers keep their own confirmation ("Confirm all shown"); they are not listed here.
 - **Only shown**, never blocks, never asks: the prefixes `CHEM-`, `ROW-SHIP-SPEED`, `ROW-ON-LAND`,
   `XF-`, `META-`, `LIC-` (`SHOW_ONLY_PREFIXES`) and the note `ROW-STATION-SPREAD` (a transect legitimately
   spans more than 10 km). `ROW-STATION-MOVED` and `ROW-STATION-SPREAD-FAR` need an acceptance.
@@ -1679,6 +1701,48 @@ Core Archive with an Event core through `buildDatasets` and `runChecks`; the Occ
 and the description by `metadataFindings`. A warning that BioCheck gives (no sampling descriptor or
 effort among the `measurementTypeID`s) is `CONV-NO-SAMPLING-DESCRIPTOR`. **The land mask is not
 loaded here**: the converter does not compare positions with land (`ROW-ON-LAND` cannot arise).
+
+### The ledger before the export (`convert/ledger.ts`, `ConvertLedger`)
+
+Above the export button the page lists, per sheet, where every source row went and where every numeric column went, with the sums in and out. It is **information only**: no rule reads it,
+nothing blocks on it, it adds no finding, and it is never written into the archive or the companion file (the sums stay on the page). Without it the archive is byte-identical.
+
+- **Read from what was written.** `convert()` hands the ledger the records it produced and the reason it recorded where it left a row or a cell out (`FateLog`, set beside each `continue`;
+  it never decides anything: with every call turned into a no-op the records are identical, tested). A line of a long sheet that has a taxon is *written* only when it wrote an occurrence (an event or sample value it opened does not carry its taxon, count and weight: its fate is the reason, and `wrote` says it opened an event).
+  On every other sheet a line is written when it wrote an occurrence, a measurement, the event it opened or a profile level; a written line that wrote no occurrence is counted apart and says what it wrote. A line with neither a record nor a reason is `unexplained` and the sheet is not balanced.
+- **"Every row is accounted for"** is on the page only if every line has a fate, every numeric cell is written or has a reason, no numeric column is left unwritten, and no line is one the converter
+  did not understand (`NOT_UNDERSTOOD`: a value with no parameter name, a repeated parameter in one sample, a number or weight with no taxon, a row that holds only a position or depth (`position-no-taxon`) or only a sample name or date (`sample-no-taxon`; the panel says that in plain words, not as "a value"), a taxon with a number but no quantity column, a row of the wrong length, no sample code). Those rows are named instead
+  ("N rows hold a value the converter did not understand"). A column of text that is not written is listed, but is not a number that went nowhere.
+- **Where a column goes** is read from the written records: a column an occurrence or a measurement came from; a column read for the events (the set `CONV-COLUMN-NOT-EXPORTED` is computed from) only if the
+  written events carry what it gives (Month and Day with no Year: "not written"); every other column "not written". A weight column of a long sheet is written only with a quantity column or a presence tick; the finding and the ledger agree on that.
+- **A pivoted long sheet** is accounted in the lines of the long file: quality-flag rows, a value with no parameter (`empty-parameter`), a parameter twice in one sample (`repeated-parameter`, the repeat is in no sum) and
+  every cell have a fate by their original line, whatever the pivoted column is read as: a measurement, a taxon (an occurrence), a field of an event, or a column that is not written. A value that the event of its row did not take (a depth that says "deep") is `not-in-event`, not written; a latitude of 999 is kept as written in the event (the output check judges the range). A row counts as holding something when any column that is read (every role but ignore) has a cell, so a row with only a sample name is never "nothing to record".
+- **The fate of every line** is data on `SheetLedger.lines` (kept in `ConvertResult`; the page's view carries none): only lines that are not a plain "written" are listed, each with its reason, the chain of reasons recorded
+  for it, what a written line wrote when it wrote no occurrence, and on a wide sheet how many taxon cells of the line were written and how many lost. A 2000 x 1000 sheet lists at most 2000 entries. `line` is the physical line of the file as loaded (for a pivot, of the long file); `inputIndex` is the position of the sheet in the list given to `convert()`, from which the worker finds the file in the request and reads the cells of a line from the parsed sheet the conversion read (for a pivot, from `pivot.source`, the long sheet its lines belong to).
+- **Sums** are compensated and compared with a tolerance of 1e-12 of the sum of the absolute values: float noise (0.1 + 0.2) is no difference, a changed value or a lost cell is. A cell
+  that holds text (`5 g`, an NA variant) is shown as "not read as a number" and is in no sum; a mark on a presence sheet is written with no value of its own and is not a mismatch.
+- **Sheets that are not converted** have a line each: not read (long environmental, turned, a units row that was not folded), not used (its box is not ticked, a dictionary sheet is off by default).
+  While anything stops the export (a blocking finding, a missing metadata field, a warning not accepted, nothing to write) the page says "would be written". The list of columns shows 50 and a button for the rest.
+- **Nothing disappears** (`convert/notWritten.ts`): the ledger's reasons are sorted into three kinds. *Blocks until someone decides* (`CONV-ROW-NOT-UNDERSTOOD`, once per sheet and reason, with the lines and a few cells):
+  a value with an empty parameter, a parameter repeated in one sample, a number or weight with no taxon (`no-taxon`, `value-no-taxon`), a row of the wrong length, a value the event of its row did not take, and a row or a
+  cell with no explanation (`unexplained`, a fault of the converter; a reason this file does not know blocks as well). The one answer is "leave these rows out and list them" (`CONV-ROW-LEFT-OUT`, with "ask again" to take
+  it back) or a corrected file; nothing is prefilled. Leaving out a repeated parameter writes the first value and lists the later ones. *Covered*: the reason has a blocking rule of its own (no sample code, a negative count,
+  a duplicate event ...), which is the decision, so our question is never raised beside it (only when no such rule stands for the sheet at all). *Listed, no block*: zeros, statistic rows, copies and repeated totals the person
+  chose to leave out, a row with a position or a sample name and no taxon or value (a spacer, a station header or a comment row, on a wide sheet as on a long one), NA cells, quality flags.
+  **Every answer holds for the number it was given for**, whether it comes from the page or from a companion file: leaving rows out (the rows of that reason; a file also the rows of the sheet), leaving copies out (the copies),
+  taking a total once (`collapsedGroups`, the groups the answer writes once, the same number `CONV-QUANTITY-REPEATED-ONCE` reports) and "real counts" (`affected`, the rows of the groups that repeat the total). If today's
+  analysis finds another number the answer is not applied and the question is open. The page never ticks anything itself. The companion file keeps `leaveOut=<reason>:<count>:<rows>:<sheet>`, `dropCopiesRows=<count>:<sheet>`,
+  `totalOnceGroups=<count>:<sheet>` and `realCountsRows=<count>:<sheet>`; the old `realCounts=<sheet>`, `dropCopies=<sheet>` and `totalOnce=<sheet>` carry no count: they are read and not applied, and `CONV-COMPANION-OLD` (information) says once how many were not. "Real counts" leaves no finding of its own to be missed: while it holds, `CONV-QUANTITY-REAL-COUNTS` (information) names the number of rows it covers and where it came from, and "Ask again" turns the repeated-total and exact-copy checks back on. The sheet form has no ticks for these three answers.
+  `<archive name>-not-written.csv` lists every line not written and every written line that lost a cell (columns: file, sheet, line, reason, status `understood | left-out | needs-decision`, detail, then every original cell; a header
+  row opens each sheet). A written line that lost cells has reason `cells-not-written` and names the columns and why in `detail` (an NA or a text where a number should be, on a wide sheet or a long one; zeros are counted, not
+  named). A date-formatted cell keeps its serial and `detail` adds `date: <column>: <ISO date>`, read the way the converter reads it (1904 workbooks included). A sheet left out whole (not used, or not read) is one `sheet` line with
+  its count of rows, not row by row. The list is offered by a button beside Export and in the ledger panel with the same count (rows not written or not written whole), whether or not the export is blocked, and is never
+  downloaded by itself; it is not part of the archive. Formula-like cells get the leading apostrophe that `readConvertFile` takes off. "Leave out the copies" and "count the total once" start unticked. The worker judges the
+  export again from the request alone. A column set to ignore that holds a value is named by `CONV-COLUMN-IGNORED` (information, no acceptance), up to 20 names; a column that `CONV-ID-DUPLICATE` names as the ignored column
+  that tells rows apart is named there only. No text advises deleting data: `test/rules/noDeleteAdvice.test.ts` searches the English rule texts, page texts and tips (and the other languages for their words) and allows a
+  named list.
+- Limits: the ledger is built on every conversion of the page (one pass over the cells, a byte per cell and column; a wide 2000 x 1000 sheet is checked by `test/perf/wide.perf.ts`, under 1300 ms per
+  convert). It does not say that the contents are right, only where each row and number went.
 
 ### 8.9 What the archive contains
 

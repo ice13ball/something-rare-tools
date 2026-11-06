@@ -21,6 +21,7 @@ import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './e
 import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
+import { roleUnconfirmedParams, unconfirmedRoles } from './roleUnconfirmed';
 import { transposedSheetReason } from './transposed';
 import { firstRowIsUnits } from '../recognize/layout';
 import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
@@ -43,6 +44,11 @@ import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
+import { FateLog, buildSheetLedger, notReadLedger, settleEventColumns } from './ledger';
+import type { LedgerReason, SheetLedger } from './ledger';
+import { decideRows } from './notWritten';
+import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
+import type { SampleKey, SheetKeyReport } from './sampleKey';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -82,6 +88,8 @@ export interface ConvertSheetInput {
   profile?: ProfileDeclaration;
   /** Columns whose proposed taxon-header role the page replaced by "ignore" because the candidate is not confirmed; such a column is still the proposal, not a decision of the user (CONV-LONG-UNSUPPORTED). */
   unconfirmedTaxa?: readonly number[];
+  /** The columns whose role the person changed in the table (the page records it as it does for a taxon header): never listed by CONV-ROLE-UNCONFIRMED, even when the role they chose is the one proposed. Not a role, not saved anywhere. */
+  handSet?: readonly number[];
   /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
   readAsTable?: boolean;
   /**
@@ -98,6 +106,40 @@ export interface ConvertSheetInput {
   realCounts?: boolean;
   /** The user's choice on CONV-ROW-COPIES: the rows that are exact copies of another row are not converted. */
   dropCopies?: boolean;
+  /**
+   * The same choice, as a companion file of an earlier run recorded it: with the number of copies it was given for. Honoured only when today's analysis finds exactly that many copies; otherwise
+   * the check runs and the question is open (the answer of a file cannot switch a check off for rows it never saw). Ignored when `dropCopies` is true.
+   */
+  dropCopiesCount?: number;
+  /** The count above came from a companion file: said in the finding. */
+  dropCopiesFromFile?: boolean;
+  totalOnceFromFile?: boolean;
+  /**
+   * The choice "write one occurrence per sample and taxon", with the number of groups it was given for (the same rule as `dropCopiesCount`). The number is `collapsedGroups` of the analysis
+   * (the groups the choice writes once), the same one CONV-QUANTITY-REPEATED-ONCE reports and the companion file keeps.
+   */
+  totalOnceCount?: number;
+  /**
+   * The choice "these are real counts", with the number of rows the tick covered (the rows of the groups that repeat the total, `affected`). Honoured only when today's analysis finds the same number of
+   * rows; otherwise the checks run and the question is open (a tick must not switch a check off for rows it never saw).
+   */
+  realCountsRows?: number;
+  /** The same answer as a companion file recorded it (the page and the message say where it came from). */
+  realCountsRowsFile?: number;
+  /**
+   * The reasons the user answered "leave these rows out and list them" for (notWritten.ts: only a reason that blocks can be answered). Never prefilled, never a default. A reason given with its count
+   * holds only while the sheet has the same number of rows of that reason; a bare reason holds whatever the count (for callers that are not the page).
+   */
+  leaveOut?: readonly (string | { reason: string; count: number })[];
+  /** The same answers as a companion file recorded them: the reason, the lines it affected and the rows of the sheet. Honoured only when both numbers are the same today (the question reopens otherwise). */
+  leaveOutFile?: readonly { reason: string; count: number; rows: number }[];
+  /**
+   * The columns the PERSON picked to say which rows are one sample, for a sheet that has no sample codes (sampleKey.ts). The sample code of a row is made of their values; the guesses about visits
+   * and the station prefix are not applied to it. Never guessed, never prefilled; absent = the sheet is read exactly as before.
+   */
+  sampleKey?: SampleKey;
+  /** The key was read from a companion file of an earlier run (the message says so and offers "Ask again"). */
+  sampleKeyFromFile?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -142,6 +184,8 @@ export interface ConvertInput {
    * already has a scientificNameID from the sheet is never looked up and never overwritten.
    */
   worms?: WormsLookup;
+  /** How many answers of an older companion file (no number of rows with them) came with the files: they are not applied, and the person is told once (CONV-COMPANION-OLD). */
+  oldCompanionAnswers?: number;
 }
 
 /* ---------- reading one sheet ---------- */
@@ -402,7 +446,8 @@ const sameNumber = (a: number | undefined, b: number | undefined): boolean => a 
  * variables. Everything else with a role (a taxon, quantity, effort, life stage, qualifier or occurrenceID column, a second pressure column) is reported here, so no column of a
  * profile file is dropped silently.
  */
-function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
+/** The columns this conversion reads (any role): the same set CONV-COLUMN-NOT-EXPORTED is computed from, so the ledger and that finding cannot disagree about which column is written. */
+function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): Set<number> {
   const used = new Set<number>();
   const use = (s: { index: number } | undefined): void => void (s && used.add(s.index));
   for (const s of [specs.lat, specs.lon, specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
@@ -413,15 +458,22 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   else if (sin.shape === 'wide') for (const c of cols.taxonHeaders) use(c);
   else for (const s of [cols.taxonCell, cols.quantity, cols.lifeStage, cols.qualifier, cols.occurrenceId, cols.taxonId]) use(s);
   for (const v of cols.variables) use(v);
+  // a sheet that carries a picked key reads those columns (profile sheets take no key)
+  if (sin.profile === undefined) for (const i of keyColumns(sin.sampleKey)) use({ index: i });
   use(cols.replicate);
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
-  if (sin.profile === undefined && sin.shape === 'long' && cols.quantity !== undefined && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
+  if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
   use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
     use(cols.depthMax);
   } else use(cols.depthPlain ?? cols.depthMin ?? cols.depthMax);
   if (sin.profile === undefined && sin.quantity?.effort?.source === 'column') use(cols.effort);
+  return used;
+}
+
+function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
+  const used = readColumns(sin, cols, specs);
   const named = sin.mapping.columns.filter((c) => c.role.kind !== 'ignore' && !used.has(c.index)).map((c) => c.header.trim());
   // two kinds of IGNORED column that hold data are said as well, so that nothing is left out without a word: a column with an empty header (shown by its letter in brackets: "[E]"), and
   // a second quantity column (a "Biomass [g]" next to a count: one quantity column is read per sheet). Columns the short-header detection added (IN-HEADER-SHORT, CONV-COLUMN-UNNAMED) are said by those.
@@ -435,6 +487,55 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
     return [];
   });
   return [...named, ...left];
+}
+
+/**
+ * The columns set to ignore that hold a value (a Cast, a Layer, a Replicate that separates no rows, a comment): not written, and named by CONV-COLUMN-IGNORED so that no column leaves without a word.
+ * A column without a header, one past the short-header detection and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED already, and are not named twice.
+ */
+export const IGNORED_NAMED_MAX = 20;
+function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, unexported: readonly string[]): { count: number; columns: string } | undefined {
+  const used = readColumns(sin, cols, specs);
+  const sheet = sin.file.sheets.find((s) => s.name === sin.sheet);
+  if (sheet === undefined) return undefined;
+  const taken = new Set(unexported);
+  const names: string[] = [];
+  for (const c of sin.mapping.columns) {
+    if (c.role.kind !== 'ignore' || used.has(c.index)) continue;
+    if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
+    const header = c.header.trim();
+    if (header === '' || taken.has(header) || !sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null))) continue;
+    names.push(header);
+  }
+  return ignoredParams(names);
+}
+
+/** The separator of the full list of names kept beside the text, so that a name can be taken out later without cutting the text apart. */
+const NAME_SEP = '\u001f';
+function ignoredParams(names: readonly string[]): { count: number; columns: string; names: string } | undefined {
+  if (names.length === 0) return undefined;
+  return { count: names.length, columns: names.length > IGNORED_NAMED_MAX ? `${names.slice(0, IGNORED_NAMED_MAX).join(', ')}, …` : names.join(', '), names: names.join(NAME_SEP) };
+}
+
+/**
+ * A column that tells rows apart (the one CONV-ID-DUPLICATE names as ignored) is named by that finding, which blocks and says what to do: it is taken out of CONV-COLUMN-IGNORED, so that a column is
+ * named once. The finding disappears when no column is left.
+ */
+function nameOnce(findings: readonly Finding[]): Finding[] {
+  const taken = new Set<string>();
+  for (const f of findings) if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string') taken.add(`${f.file}\u0000${f.sheet}\u0000${f.params.column}`);
+  if (taken.size === 0) return [...findings];
+  const out: Finding[] = [];
+  for (const f of findings) {
+    if (f.ruleId !== 'CONV-COLUMN-IGNORED') {
+      out.push(f);
+      continue;
+    }
+    const left = String(f.params.names ?? '').split(NAME_SEP).filter((n) => !taken.has(`${f.file}\u0000${f.sheet}\u0000${n}`));
+    const params = ignoredParams(left);
+    if (params !== undefined) out.push({ ...f, params });
+  }
+  return out;
 }
 
 /**
@@ -889,6 +990,9 @@ export function listSplits(input: Pick<ConvertInput, 'sheets' | 'approvedSplits'
 
 /** The state the profile sheets share with the biology pass: the samples (for ID collisions and the station match) and what the profile rows add. */
 interface ProfileContext {
+  ledger: SheetLedger[];
+  /** Position of a sheet in the list handed to convert() (the ledger keeps it so that the handler can reach the original rows of the sheet). */
+  inputIndexOf: (sin: ConvertSheetInput) => number;
   /** The station rows of every sheet read, for the station checks (made once per upload, across the sheets that build the same station). */
   stationSheets: StationSheet[];
   samples: ReadonlyMap<string, SampleAcc>;
@@ -1029,6 +1133,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const seafloorOf = seafloorReader(cols, dc, collector, base);
   const noSiteDepth = new Lines();
   const levelsBefore = ctx.sites.length;
+  const measurementsBefore = ctx.measurements.length;
+  const fate = new FateLog(sheet.rows.length);
 
   ctx.findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
   const noStation = new Lines();
@@ -1111,25 +1217,34 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
 
   const ragged = raggedLines(file, sheet.name);
   for (const row of sheet.rows) {
-    if (ragged.has(row.line)) continue;
+    if (ragged.has(row.line)) {
+      fate.row(row.line, 'ragged');
+      continue;
+    }
     const m = parse(row);
     const stationText = stationOf(row, m);
     // conservative, as on a biology sheet: only the exact word as the WHOLE station or code cell
     const summaryLabel = [m.sampleId, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
     if (summaryLabel !== undefined) {
       summaries.add(fileName, sheet.name, 'station', row.line, summaryLabel);
+      fate.row(row.line, 'summary-row');
       continue;
     }
     const statLabel = statRows.skipped.get(row.line);
     if (statLabel !== undefined) {
       summaries.add(fileName, sheet.name, 'station', row.line, statLabel);
+      fate.row(row.line, 'summary-row');
       continue;
     }
     const keptLabel = statRows.kept.get(row.line);
     if (keptLabel !== undefined) keptStats.add(fileName, sheet.name, 'station', row.line, keptLabel);
-    if (!dataColumns.some((i) => !isBlankCell(row.cells[i] ?? null))) continue;
+    if (!dataColumns.some((i) => !isBlankCell(row.cells[i] ?? null))) {
+      fate.row(row.line, 'nothing-to-record');
+      continue;
+    }
     if (stationText === undefined) {
       noStation.add(fileName, sheet.name, specs.station?.header ?? '', row.line);
+      fate.row(row.line, 'no-station');
       continue;
     }
     const cruiseText = m.cruise ?? sin.cruise?.trim();
@@ -1149,6 +1264,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     const via: LevelVia = codeColumn ? 'code' : (vertical?.via ?? 'depth');
     if (code === undefined) {
       noCode.add(fileName, sheet.name, specs.sampleId?.header ?? '', row.line);
+      fate.row(row.line, 'no-code');
       continue;
     }
     if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
@@ -1168,6 +1284,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
         if (earlierSample) for (const l of earlierSample.lines) d.rows.push({ file: earlierSample.source.file, sheet: earlierSample.source.sheet, line: l, via: 'sample' });
       }
       d.rows.push({ file: fileName, sheet: sheet.name, line: row.line, via });
+      fate.row(row.line, 'duplicate-level');
       continue;
     }
     const info: LevelInfo = { id, via, file: fileName, sheet: sheet.name, line: row.line };
@@ -1234,7 +1351,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
       const written = numberText(row.cells[st.v.index], st.v.header, row.line);
       if (written === undefined) continue;
       st.written = true;
-      ctx.measurements.push({
+      ctx.measurements.push(fate.from({
         target: { kind: 'event', id },
         role: 'variable',
         measurementType: measurementTypeText(st.type, st.v.name),
@@ -1243,13 +1360,13 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
         ...(st.v.unit === undefined ? (st.unit ? { measurementUnit: 'Dimensionless' } : {}) : { measurementUnit: st.v.unit }),
         ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
         source: { ...source, column: st.v.header },
-      });
+      }, st.v.index));
     }
     if (pressure) {
       const written = numberText(row.cells[pressure.index], pressure.header, row.line);
       if (written !== undefined) {
         pressureWritten = true;
-        ctx.measurements.push({
+        ctx.measurements.push(fate.from({
           target: { kind: 'event', id },
           role: 'pressure',
           measurementType: PRESSURE.type.label,
@@ -1258,11 +1375,31 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
           ...(pressure.unit === undefined ? {} : { measurementUnit: pressure.unit }),
           ...(isDecibar(pressure.unit) ? { measurementUnitId: PRESSURE.unit.uri } : {}),
           source: { ...source, column: pressure.header },
-        });
+        }, pressure.index));
       }
     }
   }
 
+  ctx.ledger.push(
+    buildSheetLedger({
+      file: fileName,
+      sheet,
+      kind: 'profile',
+      inputIndex: ctx.inputIndexOf(sin),
+      mapping: sin.mapping,
+      decimalComma: dc,
+      fate,
+      eventColumns: [...readColumns(sin, cols, specs)],
+      ...(sheet.pivot === undefined ? {} : { pivot: sheet.pivot }),
+      taxonColumns: [],
+      occurrenceColumns: [],
+      measurementColumns: [...cols.variables.map((v) => v.index), ...(pressure === undefined ? [] : [pressure.index])],
+      hasTaxa: false,
+      occurrences: [],
+      measurements: ctx.measurements.slice(measurementsBefore),
+      levelLines: new Set(ctx.sites.slice(levelsBefore).flatMap((x) => (x.source === undefined ? [] : [x.source.line]))),
+    }),
+  );
   pushAll(ctx.findings, seafloorOf.findings());
   // the station checks of /check on the input rows: the output has no station name to compare (the station is a parent event)
   ctx.stationSheets.push({ file: fileName, sheet: sheet.name, rows: stationRows });
@@ -1288,6 +1425,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // every column of the sheet that has a meaning this conversion does not read as a profile (a taxon or quantity column, a second pressure): said, nothing is dropped silently
   const unexported = unreadColumns(sin, cols, specs);
   if (unexported.length > 0) ctx.findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
+  const ignored = ignoredColumns(sin, cols, specs, unexported);
+  if (ignored !== undefined) ctx.findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored }));
   pushAll(ctx.findings, collector.findings());
 }
 
@@ -1326,9 +1465,22 @@ function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly strin
   return { parameter: header[parameterAt].trim(), value: header[valueAt].trim(), ...(reason === undefined ? {} : { reason }) };
 }
 
-export function convert(rawInput: ConvertInput): ConvertResult {
+/**
+ * A column the person named as part of the sample key has a role: its own where it has one, else "keyPart" (never `ignore`), so that every check that reads the roles to find out which
+ * columns say which sample a row is of (the repeated totals, the copies, the statistic rows) sees it. Only a column the person picked is touched; a profile sheet takes no key.
+ */
+function withKeyParts(sin: ConvertSheetInput): ConvertSheetInput {
+  const cols = sin.profile !== undefined ? [] : keyColumns(sin.sampleKey);
+  if (cols.length === 0 || !sin.mapping.columns.some((c) => cols.includes(c.index) && c.role.kind === 'ignore')) return sin;
+  return { ...sin, mapping: { ...sin.mapping, columns: sin.mapping.columns.map((c) => (cols.includes(c.index) && c.role.kind === 'ignore' ? { ...c, role: { kind: 'keyPart' as const } } : c)) } };
+}
+
+export function convert(rawInputGiven: ConvertInput): ConvertResult {
+  const rawInput: ConvertInput = { ...rawInputGiven, sheets: rawInputGiven.sheets.map(withKeyParts) };
   // a sheet in the long environmental layout is not read at all: nothing of it is written, and the finding blocks the export
   const longFindings: Finding[] = [];
+  const ledger: SheetLedger[] = [];
+  const keyReports: SheetKeyReport[] = [];
   const input: ConvertInput = {
     ...rawInput,
     sheets: rawInput.sheets.filter((sin) => {
@@ -1340,14 +1492,18 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file, sin.mapping.columns);
         if (turned !== undefined) {
           longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
+          if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet, rawInput.sheets.indexOf(sin)));
           return false;
         }
         // a row of units under the header that the parser could not fold (an unknown word or text under some of the units; the very row /check refuses as a header over several rows) is said as what it is, not read as a data row (CONV-TEXT-IN-TAXON-CELL lists)
         const unitsRow = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true || sheet.pivot !== undefined ? undefined : firstRowIsUnits(sheet, sin.file.decimalComma);
         if (unitsRow === undefined) return true;
         longFindings.push(makeConvertFinding('CONV-SHEET-UNITS-ROW', { file: sin.file.fileName, sheet: sin.sheet, lines: [unitsRow.line], params: { line: unitsRow.line } }));
+        if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet, rawInput.sheets.indexOf(sin)));
         return false;
       }
+      const longSheet = sin.file.sheets.find((x) => x.name === sin.sheet);
+      if (longSheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, longSheet, rawInput.sheets.indexOf(sin)));
       longFindings.push(makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: sin.file.fileName, sheet: sin.sheet, params: { parameterColumn: long.parameter, valueColumn: long.value, ...(long.reason === undefined ? {} : { reason: long.reason.reason, count: long.reason.count, ...(long.reason.reason === 'too-many' ? { max: MAX_PAIRS } : {}) }) } }));
       return false;
     }),
@@ -1411,6 +1567,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     pushAll(findings, pivotBlockFindings(sin.file.fileName, sh.name, sh.pivot));
   }
 
+  // a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: said once per sheet, to be accepted; nothing is re-roled (roleUnconfirmed.ts)
+  for (const sin of input.sheets) {
+    const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
+    if (sh === undefined) continue;
+    const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet);
+    if (listed.length > 0) findings.push(makeConvertFinding('CONV-ROLE-UNCONFIRMED', { file: sin.file.fileName, sheet: sin.sheet, params: roleUnconfirmedParams(listed) }));
+  }
+
   const splits = listSplits(input);
   const undecided = splits.filter((s) => s.needsDecision && !s.approved);
   if (undecided.length > 0) {
@@ -1442,6 +1606,24 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const specs = specsOf(sin.mapping);
     const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
     const base = { file: fileName, sheet: sheet.name };
+    // where each row and cell of this sheet went, for the ledger (ledger.ts): written beside the `continue`s below, never read by the conversion itself
+    const fate = new FateLog(sheet.rows.length);
+    let rowPos = -1;
+    // the sample key the person picked (sampleKey.ts): the sample code of a row is made of it, and the guesses about visits and the station prefix are not applied to it
+    const pickedKey = sin.profile === undefined && keyColumns(sin.sampleKey).length > 0 ? sin.sampleKey : undefined;
+    const readKey =
+      pickedKey === undefined
+        ? undefined
+        : keyReader(pickedKey, { prefix: keyPrefixOf(pickedKey, file.kind, fileName, sheet.name), sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore' });
+    const keyBlank = new Lines();
+    const keyTooLong = new Lines();
+    // every ID written for a sheet with a picked key is held to the limit of the archive (sample, replicate and occurrence); the longest is named
+    let longestId = '';
+    const noteId = (id: string, line: number): void => {
+      if (pickedKey === undefined || id.length <= MAX_EVENT_ID) return;
+      keyTooLong.add(fileName, sheet.name, '', line);
+      if (id.length > longestId.length) longestId = id;
+    };
 
     // the names of the wide taxon columns: the header without its unit, or the long name of a PANGAEA parameter (core/convert/headers.ts)
     const taxonNames = sin.shape === 'wide' ? taxonColumnNames(file, sheet, cols.taxonHeaders) : new Map<number, TaxonColumnName>();
@@ -1511,7 +1693,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     const summaries = new Lines();
     const keptStats = new Lines();
     const presenceBad = new Lines();
-    const statRows = scanStatisticRows(sheet.rows, indexesOf(specs.sampleId), indexesOf(specs.station), indexesOf(specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon));
+    const statRows = scanStatisticRows(sheet.rows, [...indexesOf(specs.sampleId), ...keyColumns(pickedKey)], indexesOf(specs.station), indexesOf(specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.lat, specs.lon));
     let zeros = 0;
     let presenceSkipped = 0;
     let naCells = 0;
@@ -1598,16 +1780,34 @@ export function convert(rawInput: ConvertInput): ConvertResult {
 
     const ragged = raggedLines(file, sheet.name);
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
-    const analysis =
+    const analyse = (drop: boolean, real: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: sin.realCounts === true, dropCopies: sin.dropCopies === true })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey) })
         : {};
+    let analysis = analyse(sin.dropCopies === true, sin.realCounts === true);
+    // An answer that switches a check off (drop the copies, take a total once, real counts) is honoured only when today's analysis finds the count it was given for
+    let copiesFromFile = false;
+    if (sin.dropCopies !== true && sin.dropCopiesCount !== undefined && analysis.copies?.copyLines.length === sin.dropCopiesCount) {
+      copiesFromFile = true;
+      analysis = analyse(true, sin.realCounts === true);
+    }
+    // "these are real counts" (from the page or from a companion file) is held only while today's analysis finds the same number of rows; it is then said, with the count, and can be asked again
+    let realCountsHeld: { count: number; fromFile: boolean } | undefined;
+    if (sin.realCounts !== true) {
+      const rows = analysis.total?.affected.size;
+      const page = sin.realCountsRows !== undefined && rows === sin.realCountsRows;
+      const file = !page && sin.realCountsRowsFile !== undefined && rows === sin.realCountsRowsFile;
+      if (page || file) {
+        realCountsHeld = { count: rows as number, fromFile: file };
+        analysis = analyse(copiesFromFile || sin.dropCopies === true, true);
+      }
+    }
     const repeated = analysis.total;
     const sameValue = analysis.same;
     const copies = analysis.copies;
     const specimenCopies = analysis.specimenCopies;
-    const takeOnce = repeated !== undefined && sin.totalOnce === true;
-    const dropCopies = copies !== undefined && sin.dropCopies === true;
+    const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.collapsedGroups === sin.totalOnceCount));
+    const dropCopies = copies !== undefined && (sin.dropCopies === true || copiesFromFile);
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
     const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(dropCopies ? copies.copyLines : [])]);
     {
@@ -1629,10 +1829,19 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         return bp.status === 'ok' && bp.value > 0;
       });
 
+    // a number in a column that is read as a value (a variable, a weight, a quantity, a taxon column): a row that holds one is never "nothing to record"
+    const valueColumns = sin.mapping.columns.filter((c) => ['variable', 'biomass', 'quantity', 'taxon', 'effort'].includes(c.role.kind)).map((c) => c.index);
+    const rowHasValue = (row: RawRow): boolean => valueColumns.some((i) => parseNumber(row.cells[i] ?? null, dc).status === 'ok');
+    const positionColumns = sin.mapping.columns.filter((c) => ['latitude', 'longitude', 'depth', 'depthBelowSeafloor', 'pressure'].includes(c.role.kind)).map((c) => c.index);
+    const rowHasPosition = (row: RawRow): boolean => positionColumns.some((i) => parseNumber(row.cells[i] ?? null, dc).status === 'ok');
+    // anything at all in a column that is read (every role but "ignore"): a sample name, a date part, a station
+    const readColumnIndexes = sin.mapping.columns.filter((c) => c.role.kind !== 'ignore').map((c) => c.index);
+    const rowHasSomething = (row: RawRow): boolean => readColumnIndexes.some((i) => !isBlankCell(row.cells[i] ?? null));
+
     const visitIds = new Map<number, string>();
     const visitParts = new Set<string>();
     const visitGroups: { id: string; lines: number[] }[] = [];
-    {
+    if (readKey === undefined) {
       const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header) });
       const groups = new Map<string, { station: string | undefined; stationId: string | undefined; code: string; rows: { line: number; key: VisitKey }[]; mixed: boolean }>();
       for (const row of sheet.rows) {
@@ -1676,9 +1885,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     }
 
     for (const row of sheet.rows) {
-      if (ragged.has(row.line)) continue;
+      rowPos++;
+      if (ragged.has(row.line)) {
+        fate.row(row.line, 'ragged');
+        continue;
+      }
       const m = parse(row);
-      const code = m.sampleId;
+      const keyRead = readKey?.(row);
+      const code = keyRead === undefined ? m.sampleId : keyRead.id;
       const stationText = m.station;
       const wideHasValue = cols.taxonHeaders.some((c) => !isBlankCell(row.cells[c.index] ?? null));
       const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
@@ -1694,14 +1908,17 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       const biomassOnly = quantityBlank && rowHasBiomass(row);
       const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly);
       // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
-      const summaryLabel = [code, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
+      // (a label in a part of a picked sample key is the same row: "Total" in the station column of a key of station and cast)
+      const summaryLabel = [code, stationText, ...(keyRead?.parts ?? [])].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
       if (summaryLabel !== undefined) {
         summaries.add(fileName, sheet.name, 'sample', row.line, summaryLabel);
+        fate.row(row.line, 'summary-row');
         continue;
       }
       const statLabel = statRows.skipped.get(row.line);
       if (statLabel !== undefined) {
         summaries.add(fileName, sheet.name, 'sample', row.line, statLabel);
+        fate.row(row.line, 'summary-row');
         continue;
       }
       const keptLabel = statRows.kept.get(row.line);
@@ -1709,6 +1926,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       // a row with a number and no taxon name is not converted and is said (it would vanish silently): a count or a weight with nothing to attach it to
       if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined && cols.quantity !== undefined && taxonCellText === undefined && (!isBlankCell(row.cells[cols.quantity.index] ?? null) || rowHasBiomass(row))) {
         noTaxon.add(fileName, sheet.name, cols.taxonCell.header, row.line);
+        fate.row(row.line, 'no-taxon');
         continue;
       }
       if (!relevant) {
@@ -1720,30 +1938,54 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             if (c.index === cols.quantity?.index || (c.role.kind !== 'ignore' && c.role.kind !== 'variable' && c.role.kind !== 'biomass') || !(isQuantityHeader(c.header) || isTotalHeader(c.header))) continue;
             if (!isBlankCell(row.cells[c.index] ?? null)) naOther.set(c.header.trim(), (naOther.get(c.header.trim()) ?? 0) + 1);
           }
+          fate.row(row.line, 'quantity-blank');
+        } else {
+          // a row that holds anything in a column that is read is never "nothing to record": the reason says which part is missing
+          fate.row(
+            row.line,
+            !rowHasSomething(row)
+              ? 'nothing-to-record'
+              : sin.shape === 'wide'
+                ? // no measured value and no sample code: a spacer, a station header or a comment row is understood and listed (a row that holds a value goes on to the sample code check below)
+                  rowHasPosition(row)
+                  ? 'position-no-taxon'
+                  : 'sample-no-taxon'
+                : taxonCellText !== undefined && cols.quantity === undefined && !presence
+                  ? 'taxon-no-quantity'
+                  : rowHasValue(row)
+                    ? 'value-no-taxon'
+                    : rowHasPosition(row)
+                      ? 'position-no-taxon'
+                      : 'sample-no-taxon',
+          );
         }
         continue;
       }
       if (code === undefined) {
         noCode.add(fileName, sheet.name, cols.sampleId?.header ?? '', row.line);
+        fate.row(row.line, 'no-code');
         continue;
       }
+      if (keyRead?.blankPart === true) keyBlank.add(fileName, sheet.name, '', row.line);
       const cruiseText = m.cruise ?? sin.cruise?.trim();
       const cruise = cruiseText === '' ? undefined : cruiseText;
       if (stationText !== undefined) stationRows.push(stationRowOf(fileName, sheet.name, row.line, m, stationText, cruise));
-      if (specs.sampleId) checkText(specs.sampleId.header, row.line, code);
+      if (specs.sampleId && readKey === undefined) checkText(specs.sampleId.header, row.line, code);
       if (specs.station && stationText !== undefined) checkText(specs.station.header, row.line, stationText);
       if (specs.cruise && m.cruise !== undefined) checkText(specs.cruise.header, row.line, m.cruise);
 
       const stationId = stationText === undefined ? undefined : stationEventId(cruise, stationText);
-      const sampleEventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined ? stationPrefixedId(stationId, code) : code);
+      const sampleEventId = visitIds.get(row.line) ?? (opts.prefixStation === true && stationId !== undefined && readKey === undefined ? stationPrefixedId(stationId, code) : code);
       // a replicate column: the row belongs to a replicate event `<sample eventID>:<value>` under the sample, and everything the row carries hangs on the replicate
       const replicate = cols.replicate ? text(row.cells[cols.replicate.index]) : undefined;
       if (cols.replicate && replicate === undefined) {
         noReplicate.add(fileName, sheet.name, cols.replicate.header, row.line);
+        fate.row(row.line, 'no-replicate');
         continue;
       }
       if (cols.replicate) checkText(cols.replicate.header, row.line, replicate);
       const eventId = replicate === undefined ? sampleEventId : `${sampleEventId}:${replicate}`;
+      noteId(eventId, row.line);
       if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined) rowsPerEvent.set(sampleEventId, (rowsPerEvent.get(sampleEventId) ?? 0) + 1);
       const depth = depthOf(row);
       const sf = seafloorOf.read(row);
@@ -1765,6 +2007,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             for (const l of earlier.lines) addPlace(d, earlier.source.file, earlier.source.sheet, l);
           }
           addPlace(d, fileName, sheet.name, row.line);
+          fate.row(row.line, 'duplicate-event');
           continue;
         }
         acc = earlier;
@@ -1777,6 +2020,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (acc.effortText !== effort) differs('sample size');
       } else {
         const site: SampleSite = { id: eventId, code: replicate ?? code, source };
+        fate.event(row.line);
         const whenText = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time].map((sp) => (sp === undefined ? '' : String(row.cells[sp.index] ?? '').trim())).join('|');
         if (whenText !== '|') site.whenText = whenText;
         if (replicate !== undefined) {
@@ -1884,11 +2128,12 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (before !== undefined) {
           // a long sheet repeats the sample on every row: the same value is the same measurement, another value is two values for one sample
           if (before !== written) acc.conflicts.add(`measured value (${v.header.trim()})`);
+          fate.cell(rowPos, v.index, 'repeat-in-sample');
           continue;
         }
         acc.varValues.set(v.index, written);
         st.written = true;
-        measurements.push({
+        measurements.push(fate.from({
           target: { kind: 'event', id: eventId },
           role: 'variable',
           measurementType: measurementTypeText(st.type, v.name),
@@ -1897,17 +2142,20 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           ...(v.unit === undefined ? (st.unit ? { measurementUnit: 'Dimensionless' } : {}) : { measurementUnit: v.unit }),
           ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
           source: { ...source, column: v.header },
-        });
+        }, v.index));
       }
 
       // a repeat of a total taken once, or a copy that is dropped: nothing of the row is an occurrence (the sample above has had what it carries)
-      if (notConverted.has(row.line)) continue;
+      if (notConverted.has(row.line)) {
+        fate.row(row.line, repeated !== undefined && takeOnce && repeated.skip.has(row.line) ? 'repeat-total' : 'copy-dropped');
+        continue;
+      }
       /* ---- the occurrences of this row ---- */
-      const cells: { verbatim: string; raw: unknown; column: string; idText?: string; columnRemark?: string; userId?: string; lifeStageCol?: string; qualifierCol?: string; nameId?: string }[] = [];
+      const cells: { index?: number; verbatim: string; raw: unknown; column: string; idText?: string; columnRemark?: string; userId?: string; lifeStageCol?: string; qualifierCol?: string; nameId?: string }[] = [];
       if (sin.shape === 'wide') {
         for (const c of cols.taxonHeaders) {
           const n = taxonNames.get(c.index);
-          cells.push({ verbatim: n?.verbatim ?? c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim(), ...(n === undefined ? {} : { idText: n.idText }), ...(n?.remark === undefined ? {} : { columnRemark: n.remark }) });
+          cells.push({ index: c.index, verbatim: n?.verbatim ?? c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim(), ...(n === undefined ? {} : { idText: n.idText }), ...(n?.remark === undefined ? {} : { columnRemark: n.remark }) });
         }
       } else if (cols.taxonCell && (cols.quantity || presence) && taxonCellText !== undefined) {
         const lifeStageCol = cols.lifeStage ? text(row.cells[cols.lifeStage.index]) : undefined;
@@ -1922,6 +2170,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         if (cols.qualifier) checkText(cols.qualifier.header, row.line, qualifierCol);
         if (cols.occurrenceId) checkText(cols.occurrenceId.header, row.line, userId);
         cells.push({
+          ...(cols.quantity === undefined ? {} : { index: cols.quantity.index }),
           verbatim: taxonCellText,
           // a presence list has no quantity: every taxon row is a mark
           raw: cols.quantity ? (row.cells[cols.quantity.index] ?? null) : 'x',
@@ -1932,6 +2181,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
           ...(qualifierCol === undefined ? {} : { qualifierCol }),
         });
       }
+      // the reason a cell has no record: its own cell when the column is known, else the row (a presence list of a long sheet has one cell per row)
+      const cellFate = (cell: { index?: number }, reason: LedgerReason): void => (cell.index === undefined ? fate.row(row.line, reason) : fate.cell(rowPos, cell.index, reason));
       for (const cell of cells) {
         const raw = cell.raw as string | number | null;
         const p = parseNumber(raw, dc);
@@ -1941,15 +2192,21 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         let remarks: string | undefined;
         if (presence) {
           const mark = presenceMark(raw, dc);
-          if (mark.kind === 'blank') continue;
+          if (mark.kind === 'blank') {
+            // (NA, nd, n/a read as "no record" by presenceMark: a blank cell has nothing to account for, a cell with a word in it says why it has no record)
+            if (typeof raw === 'string' && raw.trim() !== '') cellFate(cell, 'na-cell');
+            continue;
+          }
           if (mark.kind === 'unknown') {
             presenceBad.add(fileName, sheet.name, field, row.line, mark.text);
+            cellFate(cell, 'bad-mark');
             continue;
           }
           if (mark.kind === 'absent') {
             // an absence only for a full species list; otherwise nothing is written (as a zero)
             if (!fullList) {
               presenceSkipped++;
+              cellFate(cell, 'absent-mark');
               continue;
             }
             status = 'absent';
@@ -1961,10 +2218,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             blankKept.add(fileName, sheet.name, field, row.line);
           } else if (p.status === 'missing') {
             // a cell that says NA (not a blank one) is counted: it makes no record, and the user is told how many
-            if (typeof raw === 'string' && raw.trim() !== '') naCells++;
+            if (typeof raw === 'string' && raw.trim() !== '') {
+              naCells++;
+              cellFate(cell, 'na-cell');
+            }
             continue;
           } else if (p.status === 'na-variant') {
             collector.add('ROW-NA-VARIANT', sheet.name, field, row.line, p.token);
+            cellFate(cell, 'na-cell');
             continue;
           }
           if (p.status === 'missing') {
@@ -1978,6 +2239,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             value = p.value;
             if (value < 0) {
               negatives.add(fileName, sheet.name, field, row.line, String(raw).trim());
+              cellFate(cell, 'negative');
               continue;
             }
             if (value === 0) {
@@ -1985,15 +2247,18 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               if (sin.shape === 'long' && cols.taxonCell !== undefined && rowHasBiomass(row)) {
                 // a count of 0 with a mass above zero contradicts itself: never written as absent (a false absence), left out whatever the full-list tick says, and listed
                 zeroBiomass.add(fileName, sheet.name, field, row.line);
+              cellFate(cell, 'zero-with-biomass');
                 continue;
               }
               if (!fullList) {
                 zeros++;
+              cellFate(cell, 'zero');
                 continue;
               }
               status = 'absent';
             } else if (kind === 'count' && !Number.isInteger(value)) {
               notInteger.add(fileName, sheet.name, field, row.line, String(raw).trim());
+              cellFate(cell, 'not-integer');
               continue;
             }
           }
@@ -2009,6 +2274,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         checkText(cell.column, row.line, sp.identificationQualifier);
         checkText(cell.column, row.line, sp.lifeStage);
         const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.idText ?? cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
+        noteId(id, row.line);
         const occSource: SourceRef = { ...source, column: cell.column };
         const occ: OccRec = {
           id,
@@ -2057,7 +2323,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             const bcell = row.cells[b.index] ?? null;
             // a weight that is a total repeated on size classes, taken once: written on the first row of each group only, and said to be the total of the taxon
             const reducedWeight = takeOnce && repeated.columns.some((c) => c.index === b.index);
-            if (reducedWeight && repeated.omitWeight.has(row.line)) continue;
+            if (reducedWeight && repeated.omitWeight.has(row.line)) {
+              fate.cell(rowPos, b.index, 'repeat-total');
+              continue;
+            }
             const bp = parseNumber(bcell, dc);
             if (bp.status === 'missing') continue;
             if (bp.status === 'na-variant') {
@@ -2088,7 +2357,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             const sizeValue = acc.site.sampleSizeValue;
             const sizeUnit = quantity?.effort?.unit;
             if (concept === undefined) biomassNoKind.add(fileName, sheet.name, b.header, row.line);
-            measurements.push({
+            measurements.push(fate.from({
               target: { kind: 'occurrence', id },
               role: 'biomass',
               measurementType: `${concept?.label ?? 'biomass'}${clash ? ` (${tag})` : ''}`,
@@ -2104,10 +2373,14 @@ export function convert(rawInput: ConvertInput): ConvertResult {
                 return parts.length === 0 ? {} : { measurementRemarks: parts.join('; ') };
               })(),
               source: { ...occSource, column: b.header },
-            });
+            }, b.index));
           }
         }
         // a measured variable whose value belongs to the occurrence of this row (a length of each fish): one eMoF row of THIS occurrence, the value and the unit as given
+        if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined && takeOnce && repeated.quantityRepeats && repeated.first.has(row.line)) {
+          // the values of the organisms of a total taken once are not written on its first row (they would be one organism's value for the whole lot): said in the ledger
+          for (const st of occState) fate.cell(rowPos, st.v.index, 'repeat-total');
+        }
         if (status === 'present' && sin.shape === 'long' && cols.taxonCell !== undefined && !(takeOnce && repeated.quantityRepeats && repeated.first.has(row.line))) {
           for (const st of occState) {
             const v = st.v;
@@ -2123,7 +2396,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               continue;
             }
             st.written = true;
-            measurements.push({
+            measurements.push(fate.from({
               target: { kind: 'occurrence', id },
               role: 'variable',
               measurementType: measurementTypeText(st.type, v.name),
@@ -2132,10 +2405,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
               ...(v.unit === undefined ? (st.unit ? { measurementUnit: 'Dimensionless' } : {}) : { measurementUnit: v.unit }),
               ...(st.unit ? { measurementUnitId: st.unit.id } : {}),
               source: { ...occSource, column: v.header },
-            });
+            }, v.index));
           }
         }
-        occurrences.push(occ);
+        occurrences.push(cell.index === undefined ? occ : fate.from(occ, cell.index));
         if (status === 'present') stats.present++;
         else stats.absent++;
 
@@ -2153,6 +2426,49 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       }
     }
 
+    if (pickedKey !== undefined) {
+      // the samples the key made and the rows each has, as the export will have them (a replicate is an event under its sample, not a sample: its rows count for the sample they belong to)
+      const bySample = new Map<string, number>();
+      for (const a of samples.values()) if (a.sheetKey === sheetKey) bySample.set(a.site.parentSample?.id ?? a.site.id, (bySample.get(a.site.parentSample?.id ?? a.site.id) ?? 0) + a.lines.length);
+      const per = [...bySample.values()].sort((a, b) => a - b);
+      const mid = per.length === 0 ? 0 : per.length % 2 === 1 ? per[(per.length - 1) / 2] : (per[per.length / 2 - 1] + per[per.length / 2]) / 2;
+      keyReports.push({
+        file: fileName,
+        sheet: sheet.name,
+        samples: bySample.size,
+        rows: per.reduce((n, x) => n + x, 0),
+        rowsPerSample: { min: per[0] ?? 0, max: per[per.length - 1] ?? 0, median: mid },
+        blank: [...fate.rows.values()].filter((r) => r === 'no-code').length,
+        blankParts: keyBlank.entries().reduce((n, e) => n + e.lines.length, 0),
+        tooLong: keyTooLong.entries().reduce((n, e) => n + e.lines.length, 0),
+        columns: [...pickedKey.columns],
+      });
+    }
+
+    {
+      const wide = sin.shape === 'wide';
+      const longBiology = sin.shape === 'long' && cols.taxonCell !== undefined;
+      ledger.push(
+        buildSheetLedger({
+          file: fileName,
+          sheet,
+          kind: sin.shape,
+          inputIndex: rawInput.sheets.indexOf(sin),
+          mapping: sin.mapping,
+          decimalComma: dc,
+          fate,
+          eventColumns: [...readColumns(sin, cols, specs)],
+          ...(sheet.pivot === undefined ? {} : { pivot: sheet.pivot }),
+          taxonColumns: wide ? cols.taxonHeaders.map((c) => c.index) : [],
+          occurrenceColumns: wide ? cols.taxonHeaders.map((c) => c.index) : longBiology && cols.quantity !== undefined ? [cols.quantity.index] : [],
+          measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology && (cols.quantity !== undefined || presence) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
+          hasTaxa: cols.taxonHeaders.length > 0 || cols.taxonCell !== undefined,
+          presence,
+          occurrences: occurrences.slice(occurrencesBefore),
+          measurements: measurements.slice(measurementsBefore),
+        }),
+      );
+    }
     pushAll(findings, reportVariables([...varState, ...occState], base, [], nercStats));
     // the columns that were written on the occurrences of the rows, said once (the user can undo it by the tick "of each organism" on the column's role)
     // the columns of a long sheet that are a function of the taxon and were left out (a species code, a trophic level): said once, so that nothing is dropped in silence
@@ -2201,6 +2517,19 @@ export function convert(rawInput: ConvertInput): ConvertResult {
         findings.push(makeConvertFinding('CONV-BIOMASS-KIND-UNSET', { ...base, field: kinds[0].field, lines: kinds.flatMap((e) => e.lines).sort((a, b) => a - b), params: { count: total, columns: kinds.map((e) => e.field.trim()).join(', ') } }));
       }
     }
+    {
+      const names = keyColumns(pickedKey).map((i) => sin.mapping.columns.find((c) => c.index === i)?.header.trim() ?? `#${i + 1}`).join(', ');
+      for (const e of keyBlank.entries()) findings.push(makeConvertFinding('CONV-KEY-PART-BLANK', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, columns: names } }));
+      const usedPrefix = pickedKey === undefined ? '' : keyPrefixOf(pickedKey, file.kind, fileName, sheet.name);
+      // (the name in front of every ID is said when it is a fifth or more of the longest ID)
+      for (const e of keyTooLong.entries()) findings.push(makeConvertFinding('CONV-KEY-TOO-LONG', { file: e.file, sheet: e.sheet, lines: e.lines, value: longestId.slice(0, 60), params: { count: e.lines.length, max: MAX_EVENT_ID, longest: longestId.length, prefix: usedPrefix.slice(0, 60), prefixLength: usedPrefix.length, ...(usedPrefix.length * 5 >= longestId.length ? { prefixBig: 'yes' } : {}) } }));
+      if (pickedKey !== undefined) {
+        const roleOf = (i: number): string => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore';
+        for (const m of mixedKeyColumns(sheet, pickedKey.columns, dc, roleOf)) findings.push(makeConvertFinding('CONV-KEY-MIXED-NUMBERS', { ...base, field: sin.mapping.columns.find((c) => c.index === m.index)?.header.trim() ?? `#${m.index + 1}`, params: { examples: m.examples.join(', ') } }));
+      }
+      const report = keyReports.find((k) => k.file === fileName && k.sheet === sheet.name);
+      if (report !== undefined) findings.push(makeConvertFinding('CONV-KEY-PICKED', { ...base, params: { samples: report.samples, rows: report.rows, columns: names, prefix: keyPrefixOf(pickedKey as SampleKey, file.kind, fileName, sheet.name), ...(sin.sampleKeyFromFile === true ? { fromFile: 'yes' } : {}) } }));
+    }
     for (const e of noReplicate.entries()) findings.push(makeConvertFinding('CONV-REPLICATE-MISSING', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, params: { count: e.lines.length } }));
     if (noCode.size > 0) {
       for (const e of noCode.entries()) findings.push(makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field } }));
@@ -2233,10 +2562,10 @@ export function convert(rawInput: ConvertInput): ConvertResult {
       if (takeOnce) {
         const left = repeated.quantityRepeats ? repeated.skip : repeated.omitWeight;
         if (left.size > 0) {
-          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...left].sort((a, b) => a - b), params: { ...common, count: left.size, groups: repeated.collapsedGroups, lost: repeated.lostColumns.join(', ') || repeated.differs } }));
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...left].sort((a, b) => a - b), params: { ...common, count: left.size, groups: repeated.collapsedGroups, lost: repeated.lostColumns.join(', ') || repeated.differs, ...(sin.totalOnce !== true && sin.totalOnceFromFile === true ? { fromFile: 'yes' } : {}) } }));
         }
         if (repeated.disagree.length > 0) {
-          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes' } }));
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes', collapsed: repeated.collapsedGroups, covered: repeated.affected.size } }));
         }
       } else {
         findings.push(
@@ -2245,14 +2574,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             field: repeated.columns[0].header,
             value: repeated.example,
             lines: [...repeated.affected].sort((a, b) => a - b),
-            params: { ...common, count: repeated.groups, of: repeated.of, ...(repeated.alternative === undefined ? {} : { alternative: repeated.alternative }) },
+            params: { ...common, count: repeated.groups, of: repeated.of, collapsed: repeated.collapsedGroups, covered: repeated.affected.size, ...(repeated.alternative === undefined ? {} : { alternative: repeated.alternative }) },
           }),
         );
       }
     }
+    if (realCountsHeld !== undefined) findings.push(makeConvertFinding('CONV-QUANTITY-REAL-COUNTS', { ...base, params: { count: realCountsHeld.count, ...(realCountsHeld.fromFile ? { fromFile: 'yes' } : {}) } }));
     const round = (n: number): number => Math.round(n * 1000) / 1000;
     if (copies !== undefined) {
-      const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies) };
+      const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
       findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
     }
     // The sums of the two warnings below are those of the archive: what the occurrences and measurements of THIS sheet really carry after the user's choices (rows taken once or dropped are
@@ -2354,6 +2684,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     if (unexported.length > 0) {
       findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
     }
+    const ignored = ignoredColumns(sin, cols, specs, unexported);
+    if (ignored !== undefined) findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored }));
     // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
       findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: stripTypeSuffix(cols.taxonId.header) } }));
@@ -2373,6 +2705,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     levels: new Map(),
     levelById: new Map(),
     stationSheets,
+    ledger,
+    inputIndexOf: (sin) => rawInput.sheets.indexOf(sin),
     levelDups: new Map(),
     flattenStation: opts.flatten?.station === true,
     sites: [],
@@ -2415,6 +2749,8 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     opts.flatten ? { flatten: opts.flatten } : {},
   );
   const events: EventRec[] = tree.events;
+  // a column read for the events is "event" in the ledger only where the events that were written carry what it gives
+  settleEventColumns(ledger, events, tree.cruiseText);
   // A profile level is a leaf of the tree, and BioCheck needs a date and a position on every leaf AFTER inheritance (a child takes them from its parent only where it leaves them
   // empty, docs/research/qc-sources.md, stage 0, Item 2b). The row checks of the output tables do not always see a level without either, so it is checked here, in the sheet's terms.
   // A level takes them from its PARENT (its station; the cruise when the station level is flattened) and from nowhere further up: a station that has neither does not borrow the
@@ -2494,13 +2830,15 @@ export function convert(rawInput: ConvertInput): ConvertResult {
   for (const [id, places] of dups) {
     for (const w of places.values()) {
       const rep = replicateColumn(input.sheets, w.file, w.sheet, [[...w.lines]]);
+      const ks = input.sheets.find((x) => x.file.fileName === w.file && x.sheet === w.sheet);
+      const keyed = ks !== undefined && ks.profile === undefined && keyColumns(ks.sampleKey).length > 0 ? keyPrefixOf(ks.sampleKey as SampleKey, ks.file.kind, ks.file.fileName, ks.sheet) : undefined;
       findings.push(
         makeConvertFinding('CONV-ID-DUPLICATE', {
           file: w.file,
           sheet: w.sheet,
           value: id,
           lines: [...w.lines],
-          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }) },
+          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }), ...(keyed === undefined ? {} : places.size === 1 ? { keySame: 'yes' } : { keyPrefix: keyed }) },
         }),
       );
     }
@@ -2552,6 +2890,7 @@ export function convert(rawInput: ConvertInput): ConvertResult {
             hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.',
             ...(rep === undefined ? {} : { column: rep.column, ...(rep.separated < rep.total ? { remaining: rep.total - rep.separated, separated: rep.separated } : {}) }),
             ...(rep === undefined && userIds && sin?.shape === 'long' ? { userId: 'yes' } : {}),
+            ...(sin !== undefined && sin.profile === undefined && keyColumns(sin.sampleKey).length > 0 ? { keyAdvice: 'yes' } : {}),
             ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}), ...(w.groups[0]?.every((l) => sameValueLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { sameValue: 'yes' } : {}), ...(w.groups[0]?.every((l) => copyLikeLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { copyLike: 'yes' } : {}) } : {}),
           },
         }),
@@ -2699,6 +3038,19 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     pushAll(findings, moved);
   }
 
+  // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way
+  const once = nameOnce(findings);
+  findings.length = 0;
+  pushAll(findings, once);
+  if ((rawInput.oldCompanionAnswers ?? 0) > 0) findings.push(makeConvertFinding('CONV-COMPANION-OLD', { params: { count: rawInput.oldCompanionAnswers as number } }));
+  const decision = decideRows(ledger, rawInput.sheets, findings);
+  if (decision.suppress.length > 0) {
+    const kept = findings.filter((f) => !decision.suppress.some((x) => x.ruleId === f.ruleId && x.file === f.file && x.sheet === f.sheet));
+    findings.length = 0;
+    pushAll(findings, kept);
+  }
+  pushAll(findings, decision.findings);
+
   const blocking = findings.filter((f) => f.severity === 'error');
   return {
     ok: blocking.length === 0,
@@ -2711,6 +3063,9 @@ export function convert(rawInput: ConvertInput): ConvertResult {
     splits,
     nameLookup,
     cruiseText: tree.cruiseText,
+    ledger,
+    ...(keyReports.length > 0 ? { keys: keyReports } : {}),
+    leftOut: decision.leftOut,
     // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
     ...(repeatedOcc.size > 0 || hiddenIds.length > 0 ? { repeatedOccurrenceIds: [...new Set([...repeatedOcc.keys(), ...hiddenIds])] } : {}),
     profile: {

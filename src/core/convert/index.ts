@@ -32,7 +32,7 @@ export { proposeConvertColumns, proposeConvertMapping, suggestConvertProfile, su
 export type { ConvertShape } from './recognize';
 export { FULL_LIST_SETTING, NVS_SETTING, PROFILE_DEPTH_IDS_SETTING, PROFILE_SETTING, STATION_PREFIX_SETTING, WORMS_SETTING, biomassBasisOf, perOccurrenceOf, readConvertSettings, writeConvertSidecar } from './settings';
 export type { ConvertSettings } from './settings';
-export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, nameDoubt, splitChanged, splitTaxon } from './taxon';
+export { QUALIFIER_TOKENS, STAGE_TOKENS, bulkApprovable, distinctSplits, doubtedGroups, nameDoubt, sexLetterSplit, splitChanged, splitTaxon, underscoreSpaceSplit } from './taxon';
 export type { ApprovedSplits, NameDoubt, SplitEntry, TaxonSplit } from './taxon';
 export { DEVICES, P01, P06, PRESSURE, PRESSURE_VERIFIED_CODES, VARIABLE_CONCEPTS, VARIABLE_SYNONYMS, VARIABLE_UNITS, VARIABLE_VERIFIED_CODES, VERIFIED_CODES, conceptVariable, foldUnit, labelDimension, nercUri, unitConcept, unitDimension } from './vocab';
 export type { DeviceKey, NercTerm, PerDimension, VariableConcept, VariableUnit } from './vocab';
@@ -44,6 +44,9 @@ export { ORGANISATION_WORDS, isOrganisationName, partyOf, BASES_OF_RECORD, EMPTY
 export type { BasisOfRecord, DatasetMetadata, LicenceId } from './metadata';
 export { WORMS_BATCH_MAX, classifyMatches, entryOf, isNotMarine, isUnaccepted, lookupOf, readWormsAnswer, readWormsRecord, wormsBatches, wormsEntry, wormsLsid } from './worms';
 export type { ChooseWhy, MatchClass, WormsChoice, WormsEntry, WormsLookup, WormsRecord } from './worms';
+export { LEDGER_REASONS, buildSheetLedger } from './ledger';
+export { NOT_UNDERSTOOD } from './ledger';
+export type { LedgerColumn, LedgerReason, LedgerTally, LineFate, SheetLedger } from './ledger';
 export { toDataset } from './model';
 export type { ConvertedDataset, Effort, Identification, ModelEvent, ModelMeasurement, ModelOccurrence, Quantity } from './model';
 export { archiveFileName, archiveFiles, buildTables, slugOf, writeMetaXml, writeTsv } from './dwca';
@@ -57,3 +60,5 @@ export { licenceDiffersFindings, metadataFindings, validateDataset, validateTabl
 export { CONVERT_RULES, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../rules/convert';
 export { buildPrefill, cleanText, licenceCaseOf, licenceSourceOf, recognisedLicenceIds, metadataKindName, prefillValues, PREFILL_KEYS } from './prefill';
 export type { Candidate, ConvertPrefill, CoverageSaid, LicenceCase, LicenceSaid, MetadataFileInfo, PrefillKey, SourceRef as PrefillSourceRef } from './prefill';
+export { COVERED_BY, REASON_KIND, SUPERSEDES, canLeaveOut, cellField, countNotWritten, decideRows, kindOf, notWrittenCsv, notWrittenRows } from './notWritten';
+export type { NotWrittenRow, NotWrittenStatus, ReasonKind, RowDecision } from './notWritten';

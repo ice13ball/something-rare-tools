@@ -9,6 +9,8 @@ import type { ConvertPrefill } from '../core/convert/prefill';
 import type { NercDecisions } from '../core/convert/nerc';
 import type { ConvertSettings } from '../core/convert/settings';
 import type { WormsLookup } from '../core/convert/worms';
+import type { SheetLedger } from '../core/convert/ledger';
+import type { SheetKeyReport } from '../core/convert/sampleKey';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -75,6 +77,8 @@ export interface ConvertSheetRequest {
   profile?: ProfileDeclaration;
   /** The columns whose proposed taxon role the page left out for the conversion (a candidate the user has not confirmed: sent as "ignore"). Only these count as "not changed by the user" (CONV-LONG-UNSUPPORTED). */
   unconfirmedTaxa?: number[];
+  /** The columns whose role the person changed in the table (CONV-ROLE-UNCONFIRMED does not list them). */
+  handSet?: number[];
   /** The user's tick "read as a normal table" for a sheet that looks transposed (only the boolean true counts). */
   readAsTable?: boolean;
   /** The user's tick "this is a list of species found (presence only, no counts)" for the sheet (only the boolean true counts). */
@@ -83,8 +87,27 @@ export interface ConvertSheetRequest {
   totalOnce?: boolean;
   /** The user's choice "these are real counts" (only the boolean true counts). */
   realCounts?: boolean;
-  /** The user's choice "drop the exact copies of rows" (only the boolean true counts). */
+  /** The user's choice "leave out the exact copies of rows and list them" (only the boolean true counts). */
   dropCopies?: boolean;
+  /** The number of copies / groups a companion file recorded with the same answers; the core honours them only when today's analysis finds the same number. */
+  dropCopiesCount?: number;
+  /** The count above was read from a companion file (not given on the page). */
+  dropCopiesFromFile?: boolean;
+  totalOnceFromFile?: boolean;
+  totalOnceCount?: number;
+  /** The number of rows the tick "these are real counts" covered; the core honours it only when today's analysis finds the same number. */
+  realCountsRows?: number;
+  /** The same answer as a companion file recorded it. */
+  realCountsRowsFile?: number;
+  /** The reasons the user left out and listed (core/convert/notWritten.ts) with the number of rows each was given for, and the same as a companion file recorded them (with the counts they hold for). */
+  leaveOut?: { reason: string; count: number }[];
+  leaveOutFile?: { reason: string; count: number; rows: number }[];
+  /**
+   * The columns the PERSON picked to say which rows are one sample (core/convert/sampleKey.ts), by column index, in the order picked. Never set by the page itself. `sampleKeyFromFile` says the
+   * pick was read from a companion file (it holds only for the same columns and the same number of rows: the page checks both before it sends it).
+   */
+  sampleKey?: { columns: number[]; /** The name every sample ID starts with, as the person saw and may have changed it. */ prefix?: string };
+  sampleKeyFromFile?: boolean;
 }
 
 export interface ConvertRequestBody {
@@ -138,8 +161,27 @@ export interface ConvertView {
   profile: ProfileSummary;
   /** At least one sample code repeats between stations / rows: the station prefix toggle is worth showing. */
   codeCollision: boolean;
-  /** Some sheet has rows without a sample code: the code proposal is worth showing. */
+  /** Some sheet has rows without a sample code: the picker of the sample key and the code proposal are worth showing. */
   codesMissing: { fileId: string; sheet: string }[];
+  /** What the picked sample keys made, by sheet (core/convert/sampleKey.ts): the numbers the picker shows after a pick. */
+  keys: SheetKeyReport[];
+  /** Where every source row and numeric column of every sheet went (core/convert/ledger.ts): informational. A row it could not place is a finding of its own (CONV-ROW-NOT-UNDERSTOOD). */
+  ledger: SheetLedger[];
+  /** How many rows the list beside the archive holds (a line with no record, a written line that lost cells other than zeros), and how many sheets are left out as a whole: the same function that writes the list counts them. */
+  notWritten: { rows: number; sheets: number };
+}
+
+/** What the page sends to get the list of rows not written: the same body as the export, and the description (the file is named after the archive). */
+export interface NotWrittenBody {
+  body: ConvertRequestBody;
+  metadata: DatasetMetadata;
+}
+
+/** The list of rows not written, built in the worker: a Blob (nothing is copied to make it a string on the page), the name beside the archive's, and the number of rows in it. */
+export interface NotWrittenResult {
+  fileName: string;
+  blob: Blob;
+  count: number;
 }
 
 export interface CodeProposalView {
@@ -174,6 +216,9 @@ export interface ConvertProtocol {
   /** The user's choice about a long environmental sheet: read it as a normal table (`off`), and which key columns describe the measurement, not the sample. The file is read again; the answer is its new summary. */
   pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
+  notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
+  /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
+  previewKey: { req: { body: ConvertRequestBody; fileId: string; sheet: string; columns: number[]; prefix?: string }; res: SheetKeyReport | null };
 }
 
 export type ConvertRequestType = keyof ConvertProtocol;
@@ -193,4 +238,6 @@ export interface ConvertEngine {
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping, shape?: ConvertShape, extra?: number[]): Promise<CodeProposalView | null>;
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
+  notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
+  previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[], prefix?: string): Promise<SheetKeyReport | null>;
 }

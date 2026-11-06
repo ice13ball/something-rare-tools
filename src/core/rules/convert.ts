@@ -2,7 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { reasonsText } from '../recognize/layoutReasons';
 import type { Finding, Lang, RuleDef } from '../types';
-import { applyPlurals } from '../i18n/plural';
+import { applyPlurals, pluralForm } from '../i18n/plural';
+import { roleWord } from '../i18n/roleLabels';
 import { MAX_PAIRS } from '../convert/pivotLimits';
 import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
@@ -21,6 +22,11 @@ import type { RuleSpec } from './spec';
  *   CONV-COUNT-NOT-INTEGER     count            field = column, value = an example, lines = rows
  *   CONV-NEGATIVE-QUANTITY     count            field = column (or the effort column), value = an example, lines = rows
  *   CONV-SAMPLE-CODE-MISSING   count, column    column = the sample-code column ('none' when the sheet has none); lines = the rows without a code
+ *   CONV-KEY-PART-BLANK        count, columns   the person picked a sample key (sampleKey.ts); columns = the headers of the key; lines = rows where a part of the key is empty (NA, nan and a dash too)
+ *   CONV-ROLE-UNCONFIRMED      count, columns, keys   columns = the columns (header, proposed role, a few cells) whose taxon, quantity, date, latitude or longitude role the converter proposed and the file does not state; keys = index:role of each, for the page (a tick stands for a set); one finding per sheet (warning, to accept; nothing is re-roled)
+ *   CONV-KEY-MIXED-NUMBERS     examples         a key column mixes typed numbers and number-like text; field = column; examples = one of each (warning, to accept)
+ *   CONV-KEY-TOO-LONG          count, max, longest, prefix, prefixLength   (prefixBig = the name is a fifth of the longest or more: the advice names it) an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
+ *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
@@ -29,9 +35,11 @@ import type { RuleSpec } from './spec';
  *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
  *   CONV-BIOMASS-UNIT-UNCLEAR  count            field = the biomass column, value = the words of its name after the mass unit, lines = the rows written: the unit of the name is not understood in full, so measurementUnit is empty (warning, accept); with none = yes the header holds no unit at all (variant, value empty): count = the values written with no unit
  *   CONV-QUANTITY-REPEATED     columns, differs, count, of   a long sheet whose quantity or weight column is a per-taxon total repeated on the size-class rows of a sample (repeatedTotal.ts): field = the first column, columns = every repeated column, differs = the column that tells the rows apart, count = groups that repeat it, of = groups that have two or more values, value = an example, lines = every row of the groups; optional alternative = a column with a number of its own on each row (variant), disagree = yes (the groups whose rows disagree after the user chose "once"; variant). Blocks
- *   CONV-ROW-COPIES            count, withCopies, withoutCopies   rows that are exact copies of an earlier row (all columns but a per-row identifier), quantity above 1; lines = the copies; blocks until dropped (error)
+ *   CONV-ROW-COPIES            count, withCopies, withoutCopies   rows that are exact copies of an earlier row (all columns but a per-row identifier), quantity above 1; lines = the copies; blocks until left out and listed (error)
  *   CONV-ROW-COPIES-SPECIMENS  count, withCopies, withoutCopies   identical rows with a count of 1 (a specimen table looks the same): both sums, a warning to accept, never a block
- *   CONV-ROW-COPIES-DROPPED    count, withCopies, withoutCopies   the user dropped them (warning, accept)
+ *   CONV-ROW-COPIES-DROPPED    count, withCopies, withoutCopies   the user left them out and listed them (warning, accept)
+ *   CONV-ROW-NOT-UNDERSTOOD    reason, count, rows, what   rows the converter could not place (notWritten.ts: a value with no parameter, a number with no taxon, a ragged row ...): lines = the first rows, examples = 'line: cells'; one per sheet and reason; blocks until the user leaves them out and lists them, or corrects the file (error)
+ *   CONV-ROW-LEFT-OUT          reason, count, rows, what   the user's answer to the above: those rows are out of the archive and in the file beside it (info; fromFile = the answer came from the companion file)
  *   CONV-QUANTITY-SAME-IN-SAMPLE groups, records, written, asTotal   rows of one sample and taxon with the same quantity above 1 that differ in anything: written as records / as the species' total (warning, accept)
  *   CONV-QUANTITY-REPEATED-ONCE columns, differs, count, groups   the user chose one occurrence per sample and taxon: lines = the rows not converted (count), groups = the groups taken once; optional lost = per-organism columns not written (warning, accept)
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
@@ -78,10 +86,13 @@ import type { RuleSpec } from './spec';
  *   CONV-EMOF-EVENT-MISMATCH   count            value = an example occurrenceID
  *   CONV-EMOF-VALUE-EMPTY      count            lines = rows of the eMoF table
  *   CONV-EMOF-TYPE-EMPTY       count            lines = rows of the eMoF table
+ *   CONV-QUANTITY-REAL-COUNTS  count            count = rows the answer "these are real counts" covers; fromFile when a companion file gave it (info; "Ask again" turns the checks back on)
+ *   CONV-COMPANION-OLD         count            count = answers of an old companion file that carry no number of rows: read and not applied, the questions are asked again (info; no file or sheet)
  *   CONV-REPLICATE-EVENTS      column, count    field = the replicate column, count = the replicate events it makes (info)
  *   CONV-TAXON-ATTRIBUTE-IGNORED count, columns  columns of a long sheet whose value is the same for every row of one taxon (a code, an id, a serial number, a trophic level): ignored, not written (info)
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
+ *   CONV-COLUMN-IGNORED        count, columns   columns = the headers (first 20) of columns set to ignore that hold at least one value: not written, named so that no column leaves without a word (info)
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
  *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
  *   CONV-NAMEID-INCOMPLETE     count, names     value = an example name; the sheet gives a taxon ID for some rows of the name and not for others (the name is not looked up)
@@ -209,12 +220,99 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'column'],
     plain: {
-      pl: `Brakuje kodu próbki {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie. Możesz pobrać arkusz z proponowanymi kodami, sprawdzić je i wgrać ponownie.`,
-      en: `The sample code is missing in {+lineCount:line|lines} {lines} ({count} in all). The code becomes the identifier in the archive, so it has to come from you. You can download the sheet with proposed codes, check them and upload it again.`,
-      de: `Der Probencode fehlt in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Der Code wird zur Kennung im Archiv und muss daher von Ihnen kommen. Sie können das Blatt mit vorgeschlagenen Codes herunterladen, prüfen und erneut hochladen.`,
-      fr: `Le code d'échantillon manque {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le code devient l'identifiant dans l'archive : il doit donc venir de vous. Vous pouvez télécharger la feuille avec des codes proposés, les vérifier et la recharger.`,
+      pl: `Brakuje kodu próbki {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie: wskaż kolumny, które razem tworzą próbkę (pod listą), albo pobierz arkusz z proponowanymi kodami, sprawdź je i wgraj ponownie.`,
+      en: `The sample code is missing in {+lineCount:line|lines} {lines} ({count} in all). The code becomes the identifier in the archive, so it has to come from you: pick the columns that together make a sample (below the list), or download the sheet with proposed codes, check them and upload it again.`,
+      de: `Der Probencode fehlt in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Er wird zur Kennung im Archiv und muss von Ihnen kommen: wählen Sie die Spalten, die zusammen eine Probe bilden (unter der Liste), oder laden Sie das Blatt mit vorgeschlagenen Codes herunter, prüfen Sie sie und laden Sie es neu hoch.`,
+      fr: `Le code d'échantillon manque {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le code devient l'identifiant dans l'archive : il doit donc venir de vous. Choisissez les colonnes qui forment ensemble un échantillon (sous la liste), ou téléchargez la feuille avec des codes proposés, vérifiez-les et rechargez-la.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) have no sample code (column: {column}). The eventID of a sample is the user's own code and is never derived from depth or row order. A one-time proposal (proposeSampleCodes) returns the sheet with a new code column.`,
+    technical: `{file}, {sheet}:{lines}: {count} row(s) have no sample code (column: {column}). The eventID of a sample is the user's own code and is never derived from depth or row order. Two ways out: the person picks the columns that make a sample (a sample key, sampleKey.ts), or a one-time proposal (proposeSampleCodes) returns the sheet with a new code column.`,
+  },
+  {
+    id: 'CONV-KEY-PART-BLANK',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Jedna z kolumn klucza próbki ({columns}) jest pusta {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); „NA”, „nan” i myślnik też są puste. Takie wiersze tworzą własne próbki i nie łączą się z wierszami, które mają tam wartość. Jeśli tak ma być, zaakceptuj; jeśli to luka w danych, popraw ją w pliku.`,
+      en: `A column of the sample key ({columns}) is empty in {+lineCount:line|lines} {lines} ({count} in all); "NA", "nan" and a dash count as empty. Such rows make samples of their own and are not joined with the rows that have a value there. Accept if that is right; if it is a gap in the data, fix it in the file.`,
+      de: `Eine Spalte des Probenschlüssels ({columns}) ist leer in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}); „NA“, „nan“ und ein Strich gelten als leer. Solche Zeilen bilden eigene Proben, nicht verbunden mit Zeilen, die dort einen Wert haben. Akzeptieren Sie, wenn das stimmt; sonst korrigieren Sie die Datei.`,
+      fr: `Une colonne de la clé d'échantillon ({columns}) est vide {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) ; « NA », « nan » et un tiret comptent comme vides. Ces lignes forment des échantillons à part, non réunis à ceux qui ont une valeur ici. Acceptez si c'est exact ; sinon corrigez le fichier.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} row(s) have an empty part in the sample key the user picked (columns: {columns}; an empty cell, NA, nan and a dash are empty). The empty part is part of the key: those rows are samples of their own, never merged with rows that have a value. A row whose every part is empty has no sample (CONV-SAMPLE-CODE-MISSING).`,
+  },
+  {
+    id: 'CONV-ROLE-UNCONFIRMED',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'columns', 'keys'],
+    plain: {
+      pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} rolę zaproponowaną przez konwerter, której plik nie podaje: {columns}. Nic nie zostało zmienione. Sprawdź {+count:ją|je|je}, popraw złą rolę w tabeli kolumn i zaakceptuj raz.`,
+      en: `{count} {+count:column has|columns have} a role the converter proposed that the file does not state: {columns}. Nothing was changed. Check {+count:it|them}, correct a wrong role in the column table, and accept once.`,
+      de: `{count} {+count:Spalte hat|Spalten haben} eine vom Konverter vorgeschlagene Rolle, die die Datei nicht angibt: {columns}. Nichts wurde geändert. Prüfen Sie sie, korrigieren Sie eine falsche Rolle in der Spaltentabelle und akzeptieren Sie einmal.`,
+      fr: `{count} {+count:colonne a|colonnes ont} un rôle proposé par le convertisseur que le fichier n'indique pas : {columns}. Rien n'a été modifié. Vérifiez-{+count:la|les}, corrigez un rôle faux dans le tableau des colonnes et acceptez une fois.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) have a taxon, quantity, date, latitude or longitude role that the proposer gave and the file does not state by name (an exact Darwin Core term, an exact vocabulary entry, a unit the header declares or a PANGAEA geocode): {columns}. A column whose role the person changed is not listed. Nothing is re-roled and nothing is written about this finding in the archive or the companion file; the acceptance holds while the listed set does not grow (set: {keys}, header hash and proposed role).`,
+  },
+  {
+    id: 'CONV-KEY-MIXED-NUMBERS',
+    category: 'B',
+    severity: 'warning',
+    params: ['examples'],
+    plain: {
+      pl: `Kolumna klucza „{field}” miesza liczby wpisane jako liczby i tekst wyglądający jak liczba (np. {examples}). Są porównywane inaczej, więc jedna próbka może się rozdzielić na dwie. Sprawdź kolumnę w pliku; zaakceptuj, jeśli próbki są dobre.`,
+      en: `The key column "{field}" mixes typed numbers and text that looks like a number (for example {examples}). They are compared differently, so one sample may be split in two. Check the column in your file; accept if the samples are right.`,
+      de: `Die Schlüsselspalte „{field}“ mischt echte Zahlen und Text, der wie eine Zahl aussieht (z. B. {examples}). Sie werden unterschiedlich verglichen, daher kann eine Probe in zwei zerfallen. Prüfen Sie die Spalte in Ihrer Datei; akzeptieren Sie, wenn die Proben stimmen.`,
+      fr: `La colonne de clé « {field} » mêle de vrais nombres et du texte qui ressemble à un nombre (p. ex. {examples}). Ils sont comparés autrement : un échantillon peut donc être coupé en deux. Vérifiez la colonne dans votre fichier ; acceptez si les échantillons sont justes.`,
+    },
+    technical: `{file}, {sheet} field {field}: the key column holds typed numbers and number-like text (examples: {examples}); a typed number is compared as a number, a text only as an integer with an all-zero fraction, so "1.5" typed and "1.50" written are two values and one sample may be split.`,
+  },
+  {
+    id: 'CONV-KEY-TOO-LONG',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'max', 'longest', 'prefix', 'prefixLength'],
+    plain: {
+      pl: `Identyfikator z wybranego klucza (próbki, powtórzenia lub wystąpienia) ma ponad {max} znaków {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); najdłuższy ma {longest}: „{value}…”. Archiwum Darwin Core nie przyjmuje takich identyfikatorów. Wybierz mniej kolumn albo kolumny o krótszych wartościach.`,
+      en: `An identifier made from the key you picked (of a sample, a replicate or an occurrence) is longer than {max} characters in {+lineCount:line|lines} {lines} ({count} in all); the longest has {longest}: "{value}…". A Darwin Core archive does not take identifiers that long. Pick fewer columns, or columns with shorter values.`,
+      de: `Eine aus dem gewählten Schlüssel gebildete Kennung (von Probe, Replikat oder Vorkommen) ist in {+lineCount:der Zeile|den Zeilen} {lines} länger als {max} Zeichen (insgesamt {count}); die längste hat {longest}: „{value}…“. Ein Darwin-Core-Archiv nimmt das nicht an. Wählen Sie weniger Spalten oder Spalten mit kürzeren Werten.`,
+      fr: `Un identifiant formé par la clé choisie (d'échantillon, de réplicat ou d'occurrence) dépasse {max} caractères {+lineCount:à la ligne|aux lignes} {lines} ({count} au total) ; le plus long en a {longest} : « {value}… ». Une archive Darwin Core ne l'accepte pas. Cochez moins de colonnes ou des valeurs plus courtes.`,
+    },
+    plainIf: [
+      {
+        param: 'prefixBig',
+        plain: {
+          pl: `Nazwa na początku każdego identyfikatora („{prefix}”, {prefixLength} znaków) jest jego częścią: krótsza pomoże.`,
+          en: `The name in front of every ID ("{prefix}", {prefixLength} characters) is part of it: a shorter one helps.`,
+          de: `Der Name am Anfang jeder Kennung („{prefix}“, {prefixLength} Zeichen) gehört dazu: ein kürzerer hilft.`,
+          fr: `Le nom au début de chaque identifiant (« {prefix} », {prefixLength} caractères) en fait partie : un nom plus court aide.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines}: {count} row(s) get an ID (sample, replicate or occurrence) longer than {max} characters from the key the user picked; the longest has {longest} characters (first 60: "{value}"); the name in front of every ID is "{prefix}" ({prefixLength} characters). Nothing is shortened or cut: the export is blocked.`,
+  },
+  {
+    id: 'CONV-KEY-PICKED',
+    category: 'B',
+    severity: 'info',
+    params: ['samples', 'rows', 'columns', 'prefix'],
+    plain: {
+      pl: `Jak wybrano, próbkę wyznaczają kolumny: {columns}. Próbek: {samples}, wierszy w nich: {rows}. Każdy kod próbki w archiwum zaczyna się od „{prefix}” (nazwa do zmiany przy wyborze klucza), a dalej są wartości tych kolumn. „Zapytaj ponownie” cofa wybór.`,
+      en: `As you chose, a sample is identified by the columns: {columns}. Samples: {samples}, rows in them: {rows}. Every sample ID in the archive starts with "{prefix}" (a name you can change at the picker), then come the values of those columns. "Ask again" takes the choice back.`,
+      de: `Wie gewählt, wird eine Probe durch die Spalten bestimmt: {columns}. Proben: {samples}, Zeilen darin: {rows}. Jede Proben-ID im Archiv beginnt mit „{prefix}“ (ein Name, den Sie bei der Auswahl ändern können), danach folgen die Werte dieser Spalten. „Erneut fragen“ nimmt die Wahl zurück.`,
+      fr: `Comme choisi, un échantillon est défini par les colonnes : {columns}. Échantillons : {samples}, lignes : {rows}. Chaque identifiant d'échantillon de l'archive commence par « {prefix} » (un nom modifiable dans le sélecteur), puis viennent les valeurs de ces colonnes. « Demander à nouveau » annule le choix.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo kolumny są te same, a arkusz ma tyle samo wierszy.`,
+          en: `This choice was read from the companion file; it holds because the columns are the same and the sheet has the same number of rows.`,
+          de: `Diese Wahl stammt aus der Begleitdatei; sie gilt, weil die Spalten dieselben sind und das Blatt gleich viele Zeilen hat.`,
+          fr: `Ce choix vient du fichier d'accompagnement ; il vaut parce que les colonnes sont les mêmes et que la feuille a le même nombre de lignes.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the sample code of a row is made of the values of the columns the user picked ({columns}), after the name "{prefix}" (part of every sample ID; the person may change it; the companion file keeps it), joined with "|"; the key made {samples} sample(s) of {rows} row(s). Information only. Asked again by the button (a companion file's choice holds only while the same columns and the same number of rows are there).`,
   },
   {
     id: 'CONV-ID-DUPLICATE',
@@ -227,6 +325,26 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Dieselbe Kennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: ändern Sie den wiederholten Code oder Kopf oder, wenn Codes zwischen Stationen wiederkehren, wählen Sie das Stationspräfix.`,
       fr: `Le même identifiant est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : changez le code ou l'en-tête répété ou, si des codes se répètent entre stations, cochez le préfixe de station.`,
     },
+    plainIf: [
+      {
+        param: 'keyAdvice',
+        plain: {
+          pl: `Próbki wyznacza wybrany klucz. Jeśli te wiersze pochodzą z różnych próbek, dodaj do klucza kolumnę, która je rozróżnia, albo użyj „Zapytaj ponownie”.`,
+          en: `The samples come from the key you picked. If these rows are from different samples, add a column that tells them apart to the key, or use "Ask again".`,
+          de: `Die Proben ergeben sich aus dem gewählten Schlüssel. Stammen diese Zeilen aus verschiedenen Proben, fügen Sie dem Schlüssel eine Spalte hinzu, die sie unterscheidet, oder nutzen Sie „Erneut fragen“.`,
+          fr: `Les échantillons viennent de la clé choisie. Si ces lignes viennent d'échantillons différents, ajoutez à la clé une colonne qui les distingue, ou utilisez « Demander à nouveau ».`,
+        },
+      },
+      {
+        param: 'keyPrefix',
+        plain: {
+          pl: `Identyfikatory próbek z wybranego klucza zaczynają się od nazwy „{keyPrefix}” widocznej przy wyborze klucza. Jeśli dwa arkusze mają ją wspólną, nadaj jednemu inną nazwę.`,
+          en: `The sample IDs of a picked key start with the name "{keyPrefix}" shown at the key picker. If two sheets share it, give one of them another name there.`,
+          de: `Die Proben-IDs eines gewählten Schlüssels beginnen mit dem Namen „{keyPrefix}“ aus der Schlüsselauswahl. Teilen zwei Blätter ihn, geben Sie einem einen anderen Namen.`,
+          fr: `Les identifiants d'échantillon d'une clé choisie commencent par le nom « {keyPrefix} » du sélecteur. Si deux feuilles le partagent, donnez un autre nom à l'une.`,
+        },
+      },
+    ],
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". {hint}`,
     citations: [CITE.obistoolsEventIds, CITE.biocheckOccurrenceId],
   },
@@ -236,10 +354,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `W kolumnie „{field}” wartość ma tabulator albo podział wiersza {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}”. Pliki archiwum są rozdzielane tabulatorami, więc taka wartość je rozbije. Usuń znak w arkuszu.`,
-      en: `Column "{field}" has a tab or a line break inside a value in {+lineCount:line|lines} {lines} ({count} in all), e.g. "{value}". The archive files are tab-separated, so such a value would break them. Remove the character in the sheet.`,
-      de: `Die Spalte „{field}“ enthält in {+lineCount:der Zeile|den Zeilen} {lines} einen Tabulator oder Zeilenumbruch im Wert (insgesamt {count}), z. B. „{value}“. Die Archivdateien sind tabulatorgetrennt, ein solcher Wert würde sie zerstören. Entfernen Sie das Zeichen im Blatt.`,
-      fr: `La colonne « {field} » contient une tabulation ou un saut de ligne dans une valeur {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. « {value} ». Les fichiers de l'archive sont séparés par des tabulations : une telle valeur les casserait. Supprimez le caractère dans la feuille.`,
+      pl: `W kolumnie „{field}” wartość ma tabulator albo podział wiersza {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}”. Pliki archiwum są rozdzielane tabulatorami, więc taka wartość je rozbije. Zamień znak w arkuszu na spację.`,
+      en: `Column "{field}" has a tab or a line break inside a value in {+lineCount:line|lines} {lines} ({count} in all), e.g. "{value}". The archive files are tab-separated, so such a value would break them. Replace the character with a space in the sheet.`,
+      de: `Die Spalte „{field}“ enthält in {+lineCount:der Zeile|den Zeilen} {lines} einen Tabulator oder Zeilenumbruch im Wert (insgesamt {count}), z. B. „{value}“. Die Archivdateien sind tabulatorgetrennt, ein solcher Wert würde sie zerstören. Ersetzen Sie das Zeichen im Blatt durch ein Leerzeichen.`,
+      fr: `La colonne « {field} » contient une tabulation ou un saut de ligne dans une valeur {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. « {value} ». Les fichiers de l'archive sont séparés par des tabulations : une telle valeur les casserait. Remplacez le caractère par une espace dans la feuille.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} value(s) contain a tab or line break (example "{value}", shown with a space). The text files of the archive are tab-separated with one record per line.`,
     citations: [CITE.obisHiddenChars],
@@ -289,10 +407,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} wagę, ale pustą lub „NA” ilość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisano {+count:go|je|je} jako obecność bez liczebności; liczby nie wymyślono. Jeśli „NA” znaczy „nie analizowano”, usuń {+count:ten wiersz|te wiersze|te wiersze}.`,
-      en: `{count} {+count:row has|rows have} a weight but a blank or "NA" quantity ({+lineCount:line|lines} {lines}). {+count:It is|They are} written as present with no count; no number is invented. If "NA" means "not analysed", delete {+count:the row|the rows}.`,
-      de: `{count} {+count:Zeile hat|Zeilen haben} ein Gewicht, aber eine leere oder „NA“-Menge ({+lineCount:Zeile|Zeilen} {lines}). Sie {+count:wird|werden} als vorhanden ohne Anzahl geschrieben; keine Zahl wird erfunden. Bedeutet „NA“ „nicht analysiert“, löschen Sie {+count:die Zeile|die Zeilen}.`,
-      fr: `{count} {+count:ligne a|lignes ont} un poids mais une quantité vide ou « NA » ({+lineCount:ligne|lignes} {lines}). Écrit comme présence sans effectif ; aucun nombre n'est inventé. Si « NA » signifie « non analysé », supprimez {+count:la ligne|les lignes}.`,
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} wagę, ale pustą lub „NA” ilość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisano {+count:go|je|je} jako obecność bez liczebności; liczby nie wymyślono. Jeśli „NA” znaczy „nie analizowano”, takson nie musiał być obecny: popraw te komórki przed eksportem.`,
+      en: `{count} {+count:row has|rows have} a weight but a blank or "NA" quantity ({+lineCount:line|lines} {lines}). {+count:It is|They are} written as present with no count; no number is invented. If "NA" means "not analysed", the taxon is not known to be present: correct those cells before you export.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} ein Gewicht, aber eine leere oder „NA“-Menge ({+lineCount:Zeile|Zeilen} {lines}). Sie {+count:wird|werden} als vorhanden ohne Anzahl geschrieben; keine Zahl wird erfunden. Bedeutet „NA“ „nicht analysiert“, ist das Taxon nicht sicher vorhanden: korrigieren Sie die Zellen vor dem Export.`,
+      fr: `{count} {+count:ligne a|lignes ont} un poids mais une quantité vide ou « NA » ({+lineCount:ligne|lignes} {lines}). Écrit comme présence sans effectif ; aucun nombre n'est inventé. Si « NA » signifie « non analysé », le taxon n'est pas forcément présent : corrigez ces cellules avant l'export.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a taxon, no quantity (empty or a missing-data token) and a biomass value above zero. Each is written as an occurrence with occurrenceStatus present, no individualCount or organismQuantity, and its biomass measurement: the weight shows the taxon was in the sample, the missing count is not made up. A measured variable is not read as evidence, because it is written once per sample.`,
     citations: [OBIS_OCCURRENCE_STATUS],
@@ -334,7 +452,55 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Wie gewählt, wird die Summe in „{columns}“ je Probe und Taxon einmal geschrieben ({groups} {+groups:Gruppe|Gruppen}); {count} wiederholte {+count:Zeile wurde|Zeilen wurden} ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Am Vorkommen nicht geschrieben, da die Zeilen darin abweichen: {lost}. Prüfen Sie die Summe.`,
       fr: `Comme choisi, le total de « {columns} » est écrit une fois par échantillon et taxon ({groups} {+groups:groupe|groupes}) ; {count} {+count:ligne répétée ignorée|lignes répétées ignorées} ({+lineCount:ligne|lignes} {lines}). Non écrit sur l'occurrence, les lignes y différant : {lost}. Vérifiez la somme.`,
     },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo sumę powtarza tyle samo grup wierszy.`,
+          en: `This answer was read from the companion file; it holds because the same number of row groups repeat the total.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilengruppen die Summe wiederholen.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de groupes de lignes répète le total.`,
+        },
+      },
+    ],
     technical: `{file}, {sheet}:{lines} field {field}: the user chose to write one occurrence per sample and taxon where {columns} repeats a total on size-class rows ({groups} groups); {count} later row(s) of those groups, whose repeated values equal those of the first row of their group, are not converted. The rows differ in "{differs}" and in {lost}: nothing per-row is written from the first row, because one occurrence would hold several values of them. A group below the threshold, or whose values differ, stays as separate rows. Rows whose other weight or count column has numbers of its own are not taken once (CONV-QUANTITY-REPEATED).`,
+  },
+  {
+    id: 'CONV-QUANTITY-REAL-COUNTS',
+    category: 'B',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `Jak wybrano, równe ilości w {count} {+count:wierszu|wierszach|wierszach} są prawdziwymi liczebnościami: dla tego arkusza nie szuka się powtórzonych sum ani dokładnych kopii wierszy. Przycisk „Zapytaj ponownie” włącza oba sprawdzenia z powrotem.`,
+      en: `As you chose, the equal quantities in {count} {+count:row are|rows are} real counts: for this sheet, repeated totals and exact copies of rows are not looked for. "Ask again" turns both checks back on.`,
+      de: `Wie gewählt, sind die gleichen Mengen in {count} {+count:Zeile|Zeilen} echte Zahlen: für dieses Blatt wird nicht nach wiederholten Summen und genauen Zeilenkopien gesucht. „Erneut fragen“ schaltet beide Prüfungen wieder ein.`,
+      fr: `Comme choisi, les quantités égales de {count} {+count:ligne sont|lignes sont} de vrais effectifs : pour cette feuille, les totaux répétés et les copies exactes de lignes ne sont pas recherchés. « Demander à nouveau » rétablit les deux contrôles.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo tyle samo wierszy powtarza sumę.`,
+          en: `This answer was read from the companion file; it holds because the same number of rows repeat a total.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilen eine Summe wiederholen.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de lignes répète un total.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the user (or a companion file whose number of rows is the same today) declared the equal quantities of the {count} row(s) of the groups that repeat a total to be real counts. Nothing is looked for in the sheet then (CONV-QUANTITY-REPEATED, CONV-QUANTITY-SAME-IN-SAMPLE, CONV-ROW-COPIES are off). Information only; asked again by the button, or when the number of rows changes.`,
+  },
+  {
+    id: 'CONV-COMPANION-OLD',
+    category: 'B',
+    severity: 'info',
+    params: ['count'],
+    plain: {
+      pl: `Plik towarzyszący jest starszy: {count} {+count:zapisana odpowiedź nie ma|zapisane odpowiedzi nie mają|zapisanych odpowiedzi nie ma} liczby wierszy, dla której {+count:ją|je|je} dano, więc {+count:nie została zastosowana|nie zostały zastosowane|nie zostało zastosowanych}; tam, gdzie mają zastosowanie, pytania padają ponownie.`,
+      en: `The companion file is from an older version: {count} saved {+count:answer has|answers have} no number of rows {+count:it was|they were} given for, so {+count:it was|they were} not applied; where they apply, the questions are asked again.`,
+      de: `Die Begleitdatei stammt aus einer älteren Version: {count} gespeicherte {+count:Antwort hat|Antworten haben} keine Zeilenzahl, für die {+count:sie|sie} gegeben wurde, daher {+count:wurde sie|wurden sie} nicht angewendet; wo sie gelten, werden die Fragen neu gestellt.`,
+      fr: `Le fichier d'accompagnement est d'une version plus ancienne : {count} {+count:réponse enregistrée n'a|réponses enregistrées n'ont} pas de nombre de lignes, donc {+count:elle n'a pas été appliquée|elles n'ont pas été appliquées} ; là où elles s'appliquent, les questions sont reposées.`,
+    },
+    technical: `The companion file of this run holds {count} answer(s) of the old form (the settings realCounts, totalOnce and the copies one, each with a sheet name and no count). An answer that switches a check off or takes rows out holds only for the number it was given for, so these are read and not applied. Information only.`,
   },
   {
     id: 'CONV-ROW-COPIES',
@@ -342,12 +508,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'withCopies', 'withoutCopies'],
     plain: {
-      pl: `{count} {+count:wiersz jest dokładną kopią|wiersze są dokładnymi kopiami|wierszy jest dokładnymi kopiami} innego wiersza ({+lineCount:wiersz|wiersze|wierszy} {lines}). Ilość: {withCopies} z kopiami, {withoutCopies} bez nich. Odrzuć kopie (przycisk) albo popraw arkusz; identyfikator policzyłby każdą kopię.`,
-      en: `{count} {+count:row is an exact copy|rows are exact copies} of another row ({+lineCount:line|lines} {lines}; apart from a row number). The quantity adds up to {withCopies} with them and {withoutCopies} without them. Drop the copies (button) or correct the sheet; do not tell them apart by an identifier: that counts each copy.`,
-      de: `{count} {+count:Zeile ist eine exakte Kopie|Zeilen sind exakte Kopien} einer anderen Zeile ({+lineCount:Zeile|Zeilen} {lines}; ohne Zeilennummer). Die Menge ergibt {withCopies} mit und {withoutCopies} ohne sie. Kopien verwerfen (Schaltfläche) oder das Blatt korrigieren; nicht per Kennung unterscheiden: das zählt jede Kopie.`,
-      fr: `{count} {+count:ligne est une copie exacte|lignes sont des copies exactes} d'une autre ligne ({+lineCount:ligne|lignes} {lines}). La quantité fait {withCopies} avec elles et {withoutCopies} sans. Écartez les copies (bouton) ou corrigez la feuille ; un identifiant compterait chaque copie.`,
+      pl: `{count} {+count:wiersz jest dokładną kopią|wiersze są dokładnymi kopiami|wierszy jest dokładnymi kopiami} innego wiersza ({+lineCount:wiersz|wiersze|wierszy} {lines}). Ilość: {withCopies} z kopiami, {withoutCopies} bez nich. Pomiń kopie i wypisz je w pliku obok archiwum (przycisk) albo popraw arkusz.`,
+      en: `{count} {+count:row is an exact copy|rows are exact copies} of another row ({+lineCount:line|lines} {lines}). The quantity adds up to {withCopies} with them and {withoutCopies} without them. Leave the copies out and list them in a file beside the archive (button), or correct the sheet.`,
+      de: `{count} {+count:Zeile ist eine exakte Kopie|Zeilen sind exakte Kopien} einer anderen Zeile ({+lineCount:Zeile|Zeilen} {lines}; ohne Zeilennummer). Die Menge ergibt {withCopies} mit und {withoutCopies} ohne sie. Kopien auslassen und in einer Datei neben dem Archiv auflisten (Schaltfläche) oder das Blatt korrigieren.`,
+      fr: `{count} {+count:ligne est une copie exacte|lignes sont des copies exactes} d'une autre ligne ({+lineCount:ligne|lignes} {lines}). La quantité fait {withCopies} avec elles et {withoutCopies} sans. Écartez les copies et listez-les dans un fichier à côté de l'archive (bouton), ou corrigez la feuille.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier (an occurrenceID or a column that differs on nearly every row), with a quantity above 1. The sum of the quantity is {withCopies} with them and {withoutCopies} without them. The advice to tell the rows apart is withheld: it would write each copy. Blocks until the user drops the copies (kept in the companion file) or corrects the sheet.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier (an occurrenceID or a column that differs on nearly every row), with a quantity above 1. The sum of the quantity is {withCopies} with them and {withoutCopies} without them. The advice to tell the rows apart is withheld: it would write each copy. Blocks until the user leaves the copies out and lists them (kept in the companion file with the number of copies) or corrects the sheet.`,
   },
   {
     id: 'CONV-ROW-COPIES-DROPPED',
@@ -360,7 +526,18 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Wie gewählt, {+count:wurde|wurden} {count} exakte {+count:Kopie|Kopien} von Zeilen ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Prüfen Sie, ob es Kopien waren.`,
       fr: `Comme choisi, {count} {+count:copie exacte|copies exactes} de lignes {+count:a été écartée|ont été écartées} ({+lineCount:ligne|lignes} {lines}). Vérifiez que c'étaient des copies.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: the user chose to drop the rows that are exact copies of an earlier row (every column but a per-row identifier); {count} row(s) are not converted (the sum of the quantity of the sheet was {withCopies} with them and {withoutCopies} without them, before any other rule skips a row).`,
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo tyle samo wierszy jest dokładnymi kopiami.`,
+          en: `This answer was read from the companion file; it holds because the same number of rows are exact copies.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilen exakte Kopien sind.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de lignes sont des copies exactes.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines} field {field}: the user chose to leave out the rows that are exact copies of an earlier row (they are listed in the file beside the archive) (every column but a per-row identifier); {count} row(s) are not converted (the sum of the quantity of the sheet was {withCopies} with them and {withoutCopies} without them, before any other rule skips a row).`,
   },
   {
     id: 'CONV-ROW-COPIES-SPECIMENS',
@@ -374,6 +551,54 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:ligne est identique|lignes sont identiques} à une autre, avec un effectif de 1 ({+lineCount:ligne|lignes} {lines}). Comme individus distincts la quantité fait {withCopies} ; si ce sont des copies, ce serait {withoutCopies}. Un tableau d'individus a exactement cet aspect : rien n'est bloqué, vérifiez ce que c'est.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier, with a count of 1. Written as separate records the sum of the quantity is {withCopies}; if they are copies of one record it would be {withoutCopies}. A specimen table looks the same, so this is a warning to accept and never a block.`,
+  },
+  {
+    id: 'CONV-ROW-NOT-UNDERSTOOD',
+    category: 'B',
+    severity: 'error',
+    params: ['reason', 'count', 'rows', 'what'],
+    plain: {
+      pl: `{count} {+count:wiersz|wiersze|wierszy} {what} ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nic z tego nie trafiło do archiwum i nic nie jest usuwane: zostaje w Twoim pliku. Pomiń {+count:go|je|je} i wypisz w pliku obok archiwum (przycisk) albo popraw plik. Eksport czeka na Twoją decyzję.`,
+      en: `{count} {+count:row|rows} {what} ({+lineCount:line|lines} {lines}). Nothing of this is in the archive and nothing is deleted: it stays in your file. Leave {+count:it|them} out and list {+count:it|them} in a file beside the archive (button), or correct your file. The export waits for your decision.`,
+      de: `{count} {+count:Zeile|Zeilen} {what} ({+lineCount:Zeile|Zeilen} {lines}). Nichts davon steht im Archiv und nichts wird gelöscht: es bleibt in Ihrer Datei. Lassen Sie sie aus und führen Sie sie in einer Datei neben dem Archiv auf (Schaltfläche) oder korrigieren Sie Ihre Datei. Der Export wartet auf Ihre Entscheidung.`,
+      fr: `{count} {+count:ligne|lignes} {what} ({+lineCount:ligne|lignes} {lines}). Rien de cela n'est dans l'archive et rien n'est supprimé : tout reste dans votre fichier. Écartez-{+count:la|les} et listez-{+count:la|les} dans un fichier à côté de l'archive (bouton), ou corrigez votre fichier. L'export attend votre décision.`,
+    },
+    plainIf: [
+      {
+        param: 'examples',
+        plain: {
+          pl: `Na przykład (wiersz: komórki): {examples}.`,
+          en: `For example (line: cells): {examples}.`,
+          de: `Zum Beispiel (Zeile: Zellen): {examples}.`,
+          fr: `Par exemple (ligne : cellules) : {examples}.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines}: {count} of the {rows} row(s) of the sheet have no record and the reason is "{reason}" (ledger.ts): the rows are {what}. This is one of the reasons that mean the converter could not place what the row holds (notWritten.ts REASON_KIND: blocks). One finding per sheet and reason. It blocks until the user answers "leave these rows out and list them" (kept in the companion file with the count of the rows and of the sheet) or corrects the file; never prefilled, never a default. Every row not written is in the file beside the archive with its physical line, its reason and all its cells; nothing is deleted from the file the user gave.`,
+  },
+  {
+    id: 'CONV-ROW-LEFT-OUT',
+    category: 'B',
+    severity: 'info',
+    params: ['reason', 'count', 'rows', 'what'],
+    plain: {
+      pl: `Zgodnie z Twoim wyborem {count} {+count:wiersz|wiersze|wierszy} {what} ({+lineCount:wiersz|wiersze|wierszy} {lines}) pominięto w archiwum i wypisano w pliku obok niego. Nic nie zostało usunięte z Twojego pliku.`,
+      en: `As you chose, {count} {+count:row|rows} {what} ({+lineCount:line|lines} {lines}) {+count:was|were} left out of the archive and {+count:is|are} listed in the file beside it. Nothing was deleted from your file.`,
+      de: `Wie gewählt, {+count:wurde|wurden} {count} {+count:Zeile|Zeilen} {what} ({+lineCount:Zeile|Zeilen} {lines}) im Archiv ausgelassen und in der Datei daneben aufgeführt. Aus Ihrer Datei wurde nichts gelöscht.`,
+      fr: `Comme choisi, {count} {+count:ligne|lignes} {what} ({+lineCount:ligne|lignes} {lines}) {+count:a été écartée|ont été écartées} de l'archive et {+count:est listée|sont listées} dans le fichier à côté. Rien n'a été supprimé de votre fichier.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo arkusz ma te same {rows} wierszy i tyle samo wierszy tego rodzaju.`,
+          en: `This answer was read from the companion file; it holds because the sheet has the same {rows} rows and the same number of rows of this kind.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil das Blatt dieselben {rows} Zeilen und gleich viele Zeilen dieser Art hat.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que la feuille a les mêmes {rows} lignes et autant de lignes de ce genre.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines}: the user (or a companion file whose count of rows and of the sheet is the same today) left {count} row(s) with reason "{reason}" out of the archive: the rows are {what}. They are listed in the file beside it. Information only; the question is asked again (button) or when the sheet changes (rows in the sheet: {rows}).`,
   },
   {
     id: 'CONV-QUANTITY-SAME-IN-SAMPLE',
@@ -394,10 +619,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} liczbę lub wagę, ale pustą nazwę taksonu w „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie ma do czego jej przypisać, więc nie jest przekształcana. Wpisz nazwę taksonu albo usuń {+count:ten wiersz|te wiersze|te wiersze}.`,
-      en: `{count} {+count:row has|rows have} a number or a weight but an empty taxon name in "{field}" ({+lineCount:line|lines} {lines}). There is nothing to attach it to, so {+count:it is|they are} not converted. Type the taxon name or delete {+count:the row|the rows}.`,
-      de: `{count} {+count:Zeile hat|Zeilen haben} eine Zahl oder ein Gewicht, aber keinen Taxonnamen in „{field}“ ({+lineCount:Zeile|Zeilen} {lines}). Es gibt nichts, dem sie zugeordnet werden kann, daher wird nichts umgewandelt. Tragen Sie den Namen ein oder löschen Sie {+count:die Zeile|die Zeilen}.`,
-      fr: `{count} {+count:ligne a|lignes ont} un nombre ou un poids mais pas de nom de taxon dans « {field} » ({+lineCount:ligne|lignes} {lines}). Rien n'y est rattaché : non converti. Saisissez le nom du taxon ou supprimez {+count:la ligne|les lignes}.`,
+      pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} liczbę lub wagę, ale pustą nazwę taksonu w „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie ma do czego jej przypisać, więc nie jest przekształcana. Jeśli znasz nazwę taksonu, wpisz ją w arkuszu; wiersze są wypisane w pliku obok archiwum.`,
+      en: `{count} {+count:row has|rows have} a number or a weight but an empty taxon name in "{field}" ({+lineCount:line|lines} {lines}). There is nothing to attach it to, so {+count:it is|they are} not converted. If you know the taxon name, type it in the sheet; the rows are listed in the file beside the archive.`,
+      de: `{count} {+count:Zeile hat|Zeilen haben} eine Zahl oder ein Gewicht, aber keinen Taxonnamen in „{field}“ ({+lineCount:Zeile|Zeilen} {lines}). Es gibt nichts, dem sie zugeordnet werden kann, daher wird nichts umgewandelt. Kennen Sie den Taxonnamen, tragen Sie ihn im Blatt ein; die Zeilen stehen in der Datei neben dem Archiv.`,
+      fr: `{count} {+count:ligne a|lignes ont} un nombre ou un poids mais pas de nom de taxon dans « {field} » ({+lineCount:ligne|lignes} {lines}). Rien n'y est rattaché : non converti. Si vous connaissez le nom du taxon, saisissez-le dans la feuille ; les lignes sont listées dans le fichier à côté de l'archive.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) of a long sheet have a quantity or a biomass value and no taxon name; no occurrence can be written for them and they are not converted.`,
   },
@@ -632,12 +857,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['line'],
     plain: {
-      pl: `Arkusz „{sheet}” nie został wczytany: wiersz {line} pod nagłówkiem wygląda na jednostki (np. m, degrees_north), a nie dane. Jeśli to jednostki, usuń go i wpisz je w nazwach kolumn („depth [m]”). Jeśli to dane, zaznacz „Czytaj jako zwykłą tabelę”.`,
-      en: `Sheet "{sheet}" was not read: line {line}, under the header, looks like units (e.g. m, degrees_north) rather than data. If they are units, delete it and write them into the column names ("depth [m]"). If it is data, tick "Read as a normal table" for this sheet.`,
-      de: `Das Blatt „{sheet}“ wurde nicht gelesen: Zeile {line} unter der Kopfzeile sieht nach Einheiten aus (z. B. m, degrees_north), nicht nach Daten. Sind es Einheiten, löschen Sie sie und schreiben Sie sie in die Spaltennamen („depth [m]“). Sind es Daten, wählen Sie „Als normale Tabelle lesen“.`,
-      fr: `La feuille « {sheet} » n'a pas été lue : la ligne {line}, sous l'en-tête, ressemble à des unités (p. ex. m, degrees_north) plutôt qu'à des données. Si ce sont des unités, supprimez-la et écrivez-les dans les noms de colonnes (« depth [m] ») ; sinon cochez « Lire comme un tableau normal ».`,
+      pl: `Arkusz „{sheet}” nie został wczytany: wiersz {line} pod nagłówkiem wygląda na jednostki (np. m, degrees_north), a nie dane. Jeśli to jednostki, wpisz je w nazwach kolumn („depth [m]”) i wczytaj plik ponownie. Jeśli to dane, zaznacz „Czytaj jako zwykłą tabelę”.`,
+      en: `Sheet "{sheet}" was not read: line {line}, under the header, looks like units (e.g. m, degrees_north) rather than data. If they are units, write them into the column names ("depth [m]") and load the file again. If it is data, tick "Read as a normal table" for this sheet.`,
+      de: `Das Blatt „{sheet}“ wurde nicht gelesen: Zeile {line} unter der Kopfzeile sieht nach Einheiten aus (z. B. m, degrees_north), nicht nach Daten. Sind es Einheiten, schreiben Sie sie in die Spaltennamen („depth [m]“) und laden Sie die Datei neu. Sind es Daten, wählen Sie „Als normale Tabelle lesen“.`,
+      fr: `La feuille « {sheet} » n'a pas été lue : la ligne {line}, sous l'en-tête, ressemble à des unités (p. ex. m, degrees_north) plutôt qu'à des données. Si ce sont des unités, écrivez-les dans les noms de colonnes (« depth [m] ») et rechargez le fichier ; sinon cochez « Lire comme un tableau normal ».`,
     },
-    technical: `{file}, {sheet}: line {line} is the first row under the header and reads as a row of units: every filled cell is a unit and the numbers agree under most of them (text or an unknown word stands under some), or two cells are units of the vocabulary with numbers under them (recognize/layout.ts firstRowIsUnits, the row /check refuses as a header over several rows). It was not folded into the header (foldUnitsRow needs every filled cell a unit and numbers under all), so the converter would read it as a data row (text in the taxon columns, a wrong sample). The sheet is not converted and the export is blocked until the line is deleted or the user ticks "Read as a normal table" for the sheet (the same tick as CONV-SHEET-TRANSPOSED, offered through ConvertFileSummary.transposedSheets = 'header-units'; a pre-tick from the companion file: transposedAsTable=<sheet>).`,
+    technical: `{file}, {sheet}: line {line} is the first row under the header and reads as a row of units: every filled cell is a unit and the numbers agree under most of them (text or an unknown word stands under some), or two cells are units of the vocabulary with numbers under them (recognize/layout.ts firstRowIsUnits, the row /check refuses as a header over several rows). It was not folded into the header (foldUnitsRow needs every filled cell a unit and numbers under all), so the converter would read it as a data row (text in the taxon columns, a wrong sample). The sheet is not converted and the export is blocked until the units are written into the column names and the file is loaded again, or the user ticks "Read as a normal table" for the sheet (the same tick as CONV-SHEET-TRANSPOSED, offered through ConvertFileSummary.transposedSheets = 'header-units'; a pre-tick from the companion file: transposedAsTable=<sheet>).`,
   },
   {
     id: 'CONV-LONG-READ',
@@ -723,12 +948,12 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: [],
     plain: {
-      pl: `W arkuszu „{sheet}” jedna próbka ma parametr „{field}” więcej niż raz ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter nie wybiera między nimi ani ich nie sumuje: usuń powtórzone wiersze albo rozróżnij próbki w innej kolumnie (rzut, powtórzenie, głębokość).`,
-      en: `In sheet "{sheet}", one sample has the parameter "{field}" more than once ({+lineCount:line|lines} {lines}). The converter does not choose between them or sum them: delete the repeated rows, or tell the samples apart in another column (cast, replicate, depth).`,
-      de: `Im Blatt „{sheet}“ hat eine Probe den Parameter „{field}“ mehrfach ({+lineCount:Zeile|Zeilen} {lines}). Der Konverter wählt nicht aus und summiert nicht: Löschen Sie die wiederholten Zeilen oder unterscheiden Sie die Proben in einer anderen Spalte (Einsatz, Wiederholung, Tiefe).`,
-      fr: `Dans la feuille « {sheet} », un échantillon a le paramètre « {field} » plusieurs fois ({+lineCount:ligne|lignes} {lines}). Le convertisseur ne choisit pas et n'additionne pas : supprimez les lignes répétées ou distinguez les échantillons dans une autre colonne (déploiement, réplicat, profondeur).`,
+      pl: `W arkuszu „{sheet}” jedna próbka ma parametr „{field}” więcej niż raz ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter ich nie sumuje: rozróżnij próbki w innej kolumnie (rzut, powtórzenie, głębokość) albo pomiń powtórzone wiersze i wypisz je (zapisana zostaje pierwsza wartość; zob. następny komunikat).`,
+      en: `In sheet "{sheet}", one sample has the parameter "{field}" more than once ({+lineCount:line|lines} {lines}). The converter does not sum them: tell the samples apart in another column (cast, replicate, depth), or leave the repeated rows out and list them (the first value is written; see the next message).`,
+      de: `Im Blatt „{sheet}“ hat eine Probe den Parameter „{field}“ mehrfach ({+lineCount:Zeile|Zeilen} {lines}). Er summiert sie nicht: Trennen Sie die Proben in einer anderen Spalte (Einsatz, Wiederholung, Tiefe) oder lassen Sie die wiederholten Zeilen aus und listen Sie sie auf (der erste Wert wird geschrieben; nächste Meldung).`,
+      fr: `Dans la feuille « {sheet} », un échantillon a le paramètre « {field} » plusieurs fois ({+lineCount:ligne|lignes} {lines}). Il ne les additionne pas : distinguez les échantillons dans une autre colonne (déploiement, réplicat, profondeur) ou écartez les lignes répétées et listez-les (la première valeur est écrite).`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: a long sheet has the same sample (the same values in every column but the parameter, unit, value and quality-flag columns) and the same parameter and unit on more than one row. Whatever the values, the rows are not merged, summed or chosen between; the export is blocked.`,
+    technical: `{file}, {sheet}:{lines} field {field}: a long sheet has the same sample (the same values in every column but the parameter, unit, value and quality-flag columns) and the same parameter and unit on more than one row. Whatever the values, the rows are never merged or summed, and the export is blocked until the person tells the samples apart or leaves the repeated rows out (CONV-ROW-NOT-UNDERSTOOD, reason repeated-parameter): then the first value of the sample and parameter is written and the later ones are listed.`,
   },
   {
     id: 'CONV-LONG-NO-PARAMETER',
@@ -736,10 +961,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count'],
     plain: {
-      pl: `W arkuszu „{sheet}” {count} {+count:wiersz ma|wiersze mają|wierszy ma} wartość, ale kolumna parametru jest pusta ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter nie wie, co zmierzono: wpisz nazwę parametru albo usuń {+count:ten wiersz|te wiersze|te wiersze}.`,
-      en: `In sheet "{sheet}", {count} {+count:row has|rows have} a value but an empty parameter column ({+lineCount:line|lines} {lines}). The converter cannot tell what was measured: type the parameter name, or delete {+count:the row|the rows}.`,
-      de: `Im Blatt „{sheet}“ {+count:hat|haben} {count} {+count:Zeile|Zeilen} einen Wert, aber keinen Namen in der Parameterspalte ({+lineCount:Zeile|Zeilen} {lines}). Der Konverter weiß nicht, was gemessen wurde: Tragen Sie den Parameter ein oder löschen Sie {+count:die Zeile|die Zeilen}.`,
-      fr: `Dans la feuille « {sheet} », {count} {+count:ligne a|lignes ont} une valeur mais pas de nom dans la colonne du paramètre ({+lineCount:ligne|lignes} {lines}). Le convertisseur ne sait pas ce qui a été mesuré : saisissez le paramètre ou supprimez {+count:la ligne|les lignes}.`,
+      pl: `W arkuszu „{sheet}” {count} {+count:wiersz ma|wiersze mają|wierszy ma} wartość, ale kolumna parametru jest pusta ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter nie wie, co zmierzono: wpisz nazwę parametru w arkuszu albo pomiń {+count:ten wiersz|te wiersze|te wiersze} i wypisz (zob. następny komunikat).`,
+      en: `In sheet "{sheet}", {count} {+count:row has|rows have} a value but an empty parameter column ({+lineCount:line|lines} {lines}). The converter cannot tell what was measured: type the parameter name in the sheet, or leave {+count:the row|the rows} out and list {+count:it|them} (see the next message).`,
+      de: `Im Blatt „{sheet}“ {+count:hat|haben} {count} {+count:Zeile|Zeilen} einen Wert, aber keinen Namen in der Parameterspalte ({+lineCount:Zeile|Zeilen} {lines}). Der Konverter weiß nicht, was gemessen wurde: Tragen Sie den Parameter ein oder lassen Sie {+count:die Zeile|die Zeilen} aus und listen Sie sie auf (siehe nächste Meldung).`,
+      fr: `Dans la feuille « {sheet} », {count} {+count:ligne a|lignes ont} une valeur mais pas de nom dans la colonne du paramètre ({+lineCount:ligne|lignes} {lines}). Le convertisseur ne sait pas ce qui a été mesuré : saisissez le paramètre ou écartez {+count:la ligne|les lignes} et {+count:listez-la|listez-les} (message suivant).`,
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) of a long sheet have a value and no name in the parameter column; nothing can be named for them, so they are not read and the export is blocked.`,
   },
@@ -979,10 +1204,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     params: ['count'],
     plain: {
-      pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} wygląda{+count:|ją|} jak statystyki, ale {+count:nie stoi|nie stoją|nie stoi} w bloku, więc zostawiono {+count:go|je|je}. Jeśli {+count:to nie próbka, usuń go|to nie próbki, usuń je|to nie próbki, usuń je}; jeśli tak, potwierdź.`,
-      en: `{count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:looks|look} like statistics but {+count:is|are} not in a summary block, so {+count:it was|they were} kept. If {+count:it is not a real sample|they are not real samples}, delete {+count:it|them}; otherwise confirm.`,
-      de: `{count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:sieht|sehen} wie Statistik aus, {+count:steht|stehen} aber nicht in einem Block und {+count:wurde|wurden} behalten. {+count:Ist es keine echte Probe, löschen Sie sie|Sind es keine echten Proben, löschen Sie sie}; sonst bestätigen Sie.`,
-      fr: `{count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:ressemble|ressemblent} à des statistiques mais {+count:n'est|ne sont} pas dans un bloc : {+count:conservée|conservées}. {+count:Si ce n'est pas un échantillon, supprimez-la|Si ce ne sont pas des échantillons, supprimez-les} ; sinon, confirmez.`,
+      pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} wygląda{+count:|ją|} jak statystyki, ale {+count:nie stoi|nie stoją|nie stoi} w bloku, więc zostawiono {+count:go|je|je}. Jeśli {+count:to nie próbka|to nie próbki|to nie próbki}, popraw arkusz; jeśli tak, potwierdź.`,
+      en: `{count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:looks|look} like statistics but {+count:is|are} not in a summary block, so {+count:it was|they were} kept. If {+count:it is not a real sample|they are not real samples}, correct the sheet and load it again; otherwise confirm.`,
+      de: `{count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:sieht|sehen} wie Statistik aus, {+count:steht|stehen} aber nicht in einem Block und {+count:wurde|wurden} behalten. {+count:Ist es keine echte Probe|Sind es keine echten Proben}, korrigieren Sie das Blatt; sonst bestätigen Sie.`,
+      fr: `{count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:ressemble|ressemblent} à des statistiques mais {+count:n'est|ne sont} pas dans un bloc : {+count:conservée|conservées}. {+count:Si ce n'est pas un échantillon|Si ce ne sont pas des échantillons}, corrigez la feuille ; sinon, confirmez.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station is a statistics label ({value}), with no date and no position of its own, but a short ambiguous label (n, se, cv, min, max, count; a compass point such as N is one) standing alone, not in a block of two or more label rows: converted as a sample (a station really named Max or N stays a station) and said, to accept.`,
   },
@@ -1128,6 +1353,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Non écrit dans l'archive : {count} {+count:colonne|colonnes} : {columns}. Raison : un sens qu'on n'écrit pas ici (par ex. pression hors fichier de profils), pas d'en-tête (indiquée par [lettre]) ou une deuxième colonne de quantité. Acceptez-le pour exporter {+count:sans elle|sans elles}.`,
     },
     technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure of a sheet that is not a profile file (a measured variable is written as an eMoF row on the sample event, or on the level event of a profile sheet, where the first pressure column is written as well), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column; and two kinds of column with the role ignore that hold data: a column with an empty header (shown as its letter in brackets) and a second quantity column (a count next to a biomass). Nothing from them is written. The warning has to be accepted before the export.`,
+  },
+  {
+    id: 'CONV-COLUMN-IGNORED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:kolumna zawiera|kolumny zawierają|kolumn zawiera} wartości, a w ustawieniach {+count:jest ignorowana|są ignorowane|jest ignorowanych}, więc nie {+count:trafi|trafią|trafi} do archiwum: {columns}. Twój plik się nie zmienia. Jeśli któraś niesie dane, które archiwum powinno mieć, nadaj jej znaczenie.`,
+      en: `{count} {+count:column holds|columns hold} values and {+count:is|are} set to be ignored, so {+count:it is|they are} not in the archive: {columns}. Your file is not changed. If one of them carries data the archive should have, give it a meaning.`,
+      de: `{count} {+count:Spalte enthält|Spalten enthalten} Werte und {+count:ist|sind} auf „ignorieren“ gestellt, daher nicht im Archiv: {columns}. Ihre Datei bleibt unverändert. Trägt eine davon Daten, die das Archiv haben soll, geben Sie ihr eine Bedeutung.`,
+      fr: `{count} {+count:colonne contient|colonnes contiennent} des valeurs et {+count:est réglée|sont réglées} sur « ignorer » ; {+count:elle n'est|elles ne sont} donc pas dans l'archive : {columns}. Votre fichier n'est pas modifié. Si l'une porte des données que l'archive doit avoir, donnez-lui un sens.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) that hold at least one value and have the role ignore (chosen by the person or proposed by the converter, for example a Cast, Layer or Replicate column that does not separate rows), so none of their cells is written: {columns}. A column with another role that this conversion does not read, a column without a header and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED, which has to be accepted; this finding only names, it blocks nothing and needs no acceptance. The file is not changed.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',
@@ -1594,10 +1832,10 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-ID-DUPLICATE of rows that are identical in every column and carry a count of 1
   'CONV-ID-DUPLICATE:copies': {
     plain: {
-      pl: `Ten sam identyfikator występowania powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Te wiersze są identyczne we wszystkich kolumnach: jeśli to ten sam rekord zapisany dwa razy, usuń kopie; jeśli to osobne osobniki, każdy potrzebuje własnego identyfikatora występowania.`,
-      en: `The same occurrence identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). These rows are identical in every column: if they are one record written twice, remove the copies; if they are separate specimens, each needs its own occurrenceID.`,
-      de: `Dieselbe Vorkommenskennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Diese Zeilen sind in jeder Spalte identisch: ist es ein Datensatz, der zweimal geschrieben wurde, entfernen Sie die Kopien; sind es getrennte Individuen, braucht jedes seine eigene occurrenceID.`,
-      fr: `Le même identifiant d'occurrence est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Ces lignes sont identiques dans toutes les colonnes : si c'est un enregistrement écrit deux fois, supprimez les copies ; si ce sont des individus distincts, chacun a besoin de son propre occurrenceID.`,
+      pl: `Ten sam identyfikator występowania powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Te wiersze są identyczne we wszystkich kolumnach: jeśli to ten sam rekord zapisany dwa razy, popraw arkusz; jeśli to osobne osobniki, każdy potrzebuje własnego identyfikatora występowania.`,
+      en: `The same occurrence identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). These rows are identical in every column: if they are one record written twice, correct the sheet; if they are separate specimens, each needs its own occurrenceID.`,
+      de: `Dieselbe Vorkommenskennung entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Diese Zeilen sind in jeder Spalte identisch: ist es ein Datensatz, der zweimal geschrieben wurde, korrigieren Sie das Blatt; sind es getrennte Individuen, braucht jedes seine eigene occurrenceID.`,
+      fr: `Le même identifiant d'occurrence est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Ces lignes sont identiques dans toutes les colonnes : si c'est un enregistrement écrit deux fois, corrigez la feuille ; si ce sont des individus distincts, chacun a besoin de son propre occurrenceID.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}": the rows are identical in every column but a per-row identifier and carry a count of 1 (CONV-ROW-COPIES-SPECIMENS gives both sums). One record twice, or separate specimens: the advice depends on which, and says so.`,
   },
@@ -1674,10 +1912,10 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-ID-DUPLICATE of a long sheet whose occurrenceIDs are the user's own column: the column repeats a value
   'CONV-ID-DUPLICATE:user-id': {
     plain: {
-      pl: `Kolumna z identyfikatorami występowań powtarza tę samą wartość, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: popraw powtórzone wartości albo usuń kolumnę z rolą identyfikatora, aby konwerter utworzył je sam.`,
-      en: `The occurrenceID column repeats a value, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique: correct the repeated values, or remove the identifier role from the column so that the converter makes the IDs itself.`,
-      de: `Die occurrenceID-Spalte wiederholt einen Wert, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: Korrigieren Sie die wiederholten Werte oder nehmen Sie der Spalte die Kennungsrolle, damit der Konverter die Kennungen selbst bildet.`,
-      fr: `La colonne des occurrenceID répète une valeur, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : corrigez les valeurs répétées ou retirez le rôle d'identifiant de la colonne pour que le convertisseur crée lui-même les identifiants.`,
+      pl: `Kolumna z identyfikatorami występowań powtarza tę samą wartość, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: popraw powtórzone wartości albo zmień rolę kolumny, aby konwerter utworzył identyfikatory sam.`,
+      en: `The occurrenceID column repeats a value, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique: correct the repeated values, or change the role of the column so that the converter makes the IDs itself.`,
+      de: `Die occurrenceID-Spalte wiederholt einen Wert, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: Korrigieren Sie die wiederholten Werte oder ändern Sie die Rolle der Spalte, damit der Konverter die Kennungen selbst bildet.`,
+      fr: `La colonne des occurrenceID répète une valeur, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : corrigez les valeurs répétées ou changez le rôle de la colonne pour que le convertisseur crée lui-même les identifiants.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} repeated {kind} identifier(s), example "{value}". The sheet's occurrenceIDs come from its own column (role occurrenceID), so rows with the same value are not known to be the same sample and taxon.`,
   },
@@ -1808,6 +2046,144 @@ function fill(template: string, f: Finding, lang?: Lang): string {
   });
 }
 
+/**
+ * What the rows of CONV-ROW-NOT-UNDERSTOOD / CONV-ROW-LEFT-OUT are, by ledger reason: a phrase that follows the counted noun ("3 rows with ..."). Says what the converter did understand.
+ * A phrase that has to agree with the number is given as its forms ([one, other] for en, de, fr; [one, few, many] for pl) and chosen by the count; a person never reads the code of a reason.
+ */
+type Forms = string | readonly string[];
+const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
+  ragged: {
+    en: 'with more or fewer fields than the header, so their values would sit under the wrong columns',
+    pl: 'z większą lub mniejszą liczbą pól niż nagłówek, więc ich wartości trafiłyby pod złe kolumny',
+    de: 'mit mehr oder weniger Feldern als die Kopfzeile, ihre Werte stünden also unter falschen Spalten',
+    fr: "avec plus ou moins de champs que l'en-tête, leurs valeurs seraient donc sous de mauvaises colonnes",
+  },
+  'no-taxon': {
+    en: 'with a number or a weight but no taxon name',
+    pl: 'z liczbą lub masą, ale bez nazwy taksonu',
+    de: 'mit einer Zahl oder einem Gewicht, aber ohne Taxonnamen',
+    fr: 'avec un nombre ou un poids, mais sans nom de taxon',
+  },
+  'value-no-taxon': {
+    en: 'with a number in a column read as a count, a weight or a variable, but no taxon name',
+    pl: 'z liczbą w kolumnie czytanej jako liczebność, masa lub zmienna, ale bez nazwy taksonu',
+    de: 'mit einer Zahl in einer als Anzahl, Gewicht oder Variable gelesenen Spalte, aber ohne Taxonnamen',
+    fr: 'avec un nombre dans une colonne lue comme effectif, poids ou variable, mais sans nom de taxon',
+  },
+  'taxon-no-quantity': {
+    en: 'with a taxon name and a number, but the sheet has no column read as a quantity',
+    pl: 'z nazwą taksonu i liczbą, ale arkusz nie ma kolumny czytanej jako ilość',
+    de: 'mit Taxonnamen und Zahl, aber das Blatt hat keine als Menge gelesene Spalte',
+    fr: "avec un nom de taxon et un nombre, mais la feuille n'a pas de colonne lue comme quantité",
+  },
+  'empty-parameter': {
+    en: 'with a value but no parameter name',
+    pl: 'z wartością, ale bez nazwy parametru',
+    de: 'mit einem Wert, aber ohne Parameternamen',
+    fr: 'avec une valeur mais sans nom de paramètre',
+  },
+  'repeated-parameter': {
+    en: ['that repeats a parameter already given for the same sample (if you leave it out, the first value is written and the later one is listed)', 'that repeat a parameter already given for the same sample (if you leave them out, the first value is written and the later ones are listed)'],
+    pl: [
+      'powtarzający parametr podany już dla tej samej próbki (po pominięciu zapisana zostaje pierwsza wartość, a późniejsza trafia na listę)',
+      'powtarzające parametr podany już dla tej samej próbki (po pominięciu zapisana zostaje pierwsza wartość, a późniejsze trafiają na listę)',
+      'powtarzających parametr podany już dla tej samej próbki (po pominięciu zapisana zostaje pierwsza wartość, a późniejsze trafiają na listę)',
+    ],
+    de: [
+      'der einen für dieselbe Probe schon angegebenen Parameter wiederholt (lässt man sie aus, wird der erste Wert geschrieben und der spätere aufgelistet)',
+      'die einen für dieselbe Probe schon angegebenen Parameter wiederholen (lässt man sie aus, wird der erste Wert geschrieben und die späteren werden aufgelistet)',
+    ],
+    fr: [
+      "qui répète un paramètre déjà donné pour le même échantillon (si on l'écarte, la première valeur est écrite et la suivante est listée)",
+      'qui répètent un paramètre déjà donné pour le même échantillon (si on les écarte, la première valeur est écrite et les suivantes sont listées)',
+    ],
+  },
+  'not-in-event': {
+    en: "whose value (a depth, a position or a date) the sample's event did not take",
+    pl: [
+      'którego wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+      'których wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+      'których wartości (głębokości, pozycji lub daty) zdarzenie próbki nie przyjęło',
+    ],
+    de: 'deren Wert (Tiefe, Position oder Datum) das Ereignis der Probe nicht übernommen hat',
+    fr: "dont la valeur (profondeur, position ou date) n'a pas été reprise par l'événement de l'échantillon",
+  },
+  unexplained: {
+    en: 'with a value that the converter neither wrote nor gave a reason for (a fault of the converter)',
+    pl: 'z wartością, której konwerter ani nie zapisał, ani nie podał powodu (błąd konwertera)',
+    de: 'mit einem Wert, den der Konverter weder geschrieben noch begründet hat (ein Fehler des Konverters)',
+    fr: "avec une valeur que le convertisseur n'a ni écrite ni expliquée (un défaut du convertisseur)",
+  },
+  // the reasons a rule of its own decides (the question is not asked beside that rule; these words serve the rare row that no rule names)
+  'no-code': {
+    en: 'with a value but no sample code',
+    pl: 'z wartością, ale bez kodu próbki',
+    de: 'mit einem Wert, aber ohne Probencode',
+    fr: "avec une valeur mais sans code d'échantillon",
+  },
+  'no-replicate': {
+    en: 'with no value in the replicate column',
+    pl: 'bez wartości w kolumnie powtórzeń',
+    de: 'ohne Wert in der Replikatspalte',
+    fr: 'sans valeur dans la colonne des réplicats',
+  },
+  'duplicate-event': {
+    en: 'with a sample code that another row already uses for a different sample',
+    pl: 'z kodem próbki, którego inny wiersz używa już dla innej próbki',
+    de: 'mit einem Probencode, den eine andere Zeile schon für eine andere Probe verwendet',
+    fr: "avec un code d'échantillon qu'une autre ligne utilise déjà pour un autre échantillon",
+  },
+  'duplicate-level': {
+    en: 'with a level identifier that another row of the profile already has',
+    pl: 'z identyfikatorem poziomu, który ma już inny wiersz profilu',
+    de: 'mit einer Stufenkennung, die schon eine andere Zeile des Profils hat',
+    fr: "avec un identifiant de niveau qu'une autre ligne du profil a déjà",
+  },
+  'no-station': {
+    en: 'with no station',
+    pl: 'bez stacji',
+    de: 'ohne Station',
+    fr: 'sans station',
+  },
+  negative: {
+    en: 'with a negative quantity',
+    pl: 'z ujemną ilością',
+    de: 'mit einer negativen Menge',
+    fr: 'avec une quantité négative',
+  },
+  'not-integer': {
+    en: 'with a count that is not a whole number',
+    pl: 'z liczebnością, która nie jest liczbą całkowitą',
+    de: 'mit einer Anzahl, die keine ganze Zahl ist',
+    fr: "avec un effectif qui n'est pas un nombre entier",
+  },
+  'bad-mark': {
+    en: 'with a presence mark the converter does not know',
+    pl: 'ze znakiem obecności, którego konwerter nie zna',
+    de: 'mit einer Anwesenheitsmarke, die der Konverter nicht kennt',
+    fr: 'avec une marque de présence que le convertisseur ne connaît pas',
+  },
+  'sheet-not-read': {
+    en: 'of a sheet that was not read',
+    pl: 'z arkusza, który nie został odczytany',
+    de: 'eines Blattes, das nicht gelesen wurde',
+    fr: "d'une feuille qui n'a pas été lue",
+  },
+};
+/** A reason this file has no words for (a future one): no code is shown to the person, only that the rows were not written. */
+const ROW_WHAT_OTHER: Record<Lang, readonly string[]> = {
+  en: ['that was not written', 'that were not written'],
+  pl: ['który nie został zapisany', 'które nie zostały zapisane', 'które nie zostały zapisane'],
+  de: ['die nicht geschrieben wurde', 'die nicht geschrieben wurden'],
+  fr: ["qui n'a pas été écrite", "qui n'ont pas été écrites"],
+};
+export const rowWhat = (reason: unknown, lang: Lang, count: unknown = 2): string => {
+  const code = String(reason);
+  const n = Number(count);
+  const known = Object.prototype.hasOwnProperty.call(ROW_WHAT, code) ? ROW_WHAT[code][lang] : ROW_WHAT_OTHER[lang];
+  return typeof known === 'string' ? known : pluralForm(lang, Number.isFinite(n) ? n : 2, known);
+};
+
 /** One or two sentences for a scientist, in `lang` (English when the language is unknown). */
 /** The lists of names or columns are kept whole in the finding (so that the acceptance of a warning stands for the whole set); the text shows the first few. */
 const SHOWN_ITEMS = 6;
@@ -1816,13 +2192,52 @@ function shortList(text: string): string {
   return items.length <= SHOWN_ITEMS ? text : `${items.slice(0, SHOWN_ITEMS).join(', ')}, …`;
 }
 
+/** The role of a listed column in the reader's language: the column table's own label (core/i18n/roleLabels.ts), without a bracketed explanation, so that the finding does not nest brackets. */
+const listedRoleLabel = (role: string, lang: Lang): string => roleWord(lang, role);
+const ITEM_SEP = '\u001e';
+const FIELD_SEP = '\u001f';
+
+/** The `columns` parameter of CONV-ROLE-UNCONFIRMED: one item per column, `header US role US cell US cell`, items separated by RS (neither occurs in a visible text; they are taken out of a header or a cell). */
+export function encodeListedColumns(columns: readonly { header: string; shown: string; cells: readonly string[] }[]): string {
+  return columns.map((c) => [c.header, c.shown, ...c.cells].map((x) => x.replace(/[\u001e\u001f]/g, ' ')).join(FIELD_SEP)).join(ITEM_SEP);
+}
+
+/** The listed columns as text in the reader's language: "Date" (date: 2014-05-02 | 2014-05-03); the first few, then the count of the rest. The finding keeps the whole set. */
+function listedColumnsText(encoded: string, lang: Lang): string {
+  const items = encoded === '' ? [] : encoded.split(ITEM_SEP).map((item) => item.split(FIELD_SEP));
+  const shown = items.slice(0, SHOWN_ITEMS).map(([header, role, ...cells]) => `"${header}" (${listedRoleLabel(role, lang)}${cells.length > 0 ? `${lang === 'fr' ? '\u00a0' : ''}: ${cells.join(' | ')}` : ''})`);
+  return `${shown.join('; ')}${items.length > SHOWN_ITEMS ? `; … (+${items.length - SHOWN_ITEMS})` : ''}`;
+}
+
 /** A finding of CONV-LONG-UNSUPPORTED without a reason (the sheet was not read for another cause) still names every placeholder of its text. */
 const withDefaults = (f: Finding): Finding => (f.ruleId === 'CONV-LONG-UNSUPPORTED' ? { ...f, params: { reason: 'other', count: 0, max: MAX_PAIRS, ...f.params } } : f);
+
+const KEY_SAME_PLAIN: Record<Lang, string> = {
+  pl: `Wybrany klucz daje tym wierszom tę samą próbkę, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: dodaj do klucza kolumnę, która te wiersze rozróżnia, albo użyj „Zapytaj ponownie”.`,
+  en: `The key you picked gives these rows the same sample, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique: add a column that tells these rows apart to the key, or use "Ask again".`,
+  de: `Der gewählte Schlüssel gibt diesen Zeilen dieselbe Probe, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: fügen Sie dem Schlüssel eine Spalte hinzu, die diese Zeilen unterscheidet, oder nutzen Sie „Erneut fragen“.`,
+  fr: `La clé choisie donne à ces lignes le même échantillon, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : ajoutez à la clé une colonne qui distingue ces lignes, ou utilisez « Demander à nouveau ».`,
+};
+
+const KEY_SAME_COLUMN: Record<Lang, string> = {
+  pl: `Te wiersze różnią się w ignorowanej kolumnie „{column}”: dodaj ją do klucza.`,
+  en: `These rows differ in the ignored column "{column}": add it to the key.`,
+  de: `Diese Zeilen unterscheiden sich in der ignorierten Spalte „{column}“: fügen Sie sie dem Schlüssel hinzu.`,
+  fr: `Ces lignes diffèrent dans la colonne ignorée « {column} » : ajoutez-la à la clé.`,
+};
+
+const KEY_CROSS_PLAIN: Record<Lang, string> = {
+  pl: `Ten sam identyfikator próbki powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne.`,
+  en: `The same sample identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique.`,
+  de: `Dieselbe Proben-ID entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein.`,
+  fr: `Le même identifiant d'échantillon est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques.`,
+};
 
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
-  if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
+  if (f.ruleId === 'CONV-ROLE-UNCONFIRMED' && typeof f.params.columns === 'string') f = { ...f, params: { ...f.params, columns: listedColumnsText(f.params.columns, lang) } };
+  else if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
@@ -1837,6 +2252,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, fields: f.params.fields.split(', ').map((m) => EML_WORDS[m]?.[lang] ?? m).join(', ') } };
   }
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, lang) } };
+  if (f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' || f.ruleId === 'CONV-ROW-LEFT-OUT') f = { ...f, params: { ...f.params, what: rowWhat(f.params.reason, lang, f.params.count) } };
   if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, lang) } };
   if (f.ruleId === 'CONV-NERC-UNKNOWN' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: shortList(quantityWhat(f.params.what, lang)) } };
   if (f.ruleId === 'CONV-PROFILE-LEVEL-INCOMPLETE' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: LEVEL_WHAT_WORDS[f.params.what]?.[lang] ?? f.params.what } };
@@ -1850,7 +2266,15 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-SAMPLE-CONFLICT' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: conflictWords(f.params.what, lang) } };
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.used === 'string') f = { ...f, params: { ...f.params, used: f.params.used.split(', ').map((w) => USED_WORDS[w]?.[lang] ?? w).join(', ') } };
   const variant = profileVariant(f);
-  let text = fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
+  // a duplicate sample ID made by a picked key inside one sheet: the key gives these rows the same sample; there is no code to change and the station prefix does not touch key IDs
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.keySame === 'yes') {
+    const base = fill(KEY_SAME_PLAIN[lang] || KEY_SAME_PLAIN.en, f, lang);
+    // the ignored column that tells the rows apart is named: it is the one to add to the key
+    return typeof f.params.column === 'string' && f.params.column !== '' ? `${base} ${fill(KEY_SAME_COLUMN[lang] || KEY_SAME_COLUMN.en, f, lang)}` : base;
+  }
+  // the same ID from two sheets that share the name in front of the key IDs: there is no code to change; the sentence that follows (plainIf keyPrefix) says what does
+  const crossKey = f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.keyPrefix === 'string' && f.params.keyPrefix !== '';
+  let text = fill(crossKey ? KEY_CROSS_PLAIN[lang] || KEY_CROSS_PLAIN.en : variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
   // sentences that follow when their param is set (CONV-SAMPLE-CONFLICT: the offer of the tick "of each organism", only for a column that can be one)
   for (const extra of rule.plainIf ?? []) {
     const v = f.params[extra.param];
@@ -1897,6 +2321,8 @@ const transposedWords = (code: unknown, lang: Lang): string => reasonsText([{ co
 export function renderConvertTechnical(f: Finding): string {
   f = withDefaults(f);
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, 'en') } };
+  if (f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' || f.ruleId === 'CONV-ROW-LEFT-OUT') f = { ...f, params: { ...f.params, what: rowWhat(f.params.reason, 'en') } };
   if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, 'en') } };
+  if (f.ruleId === 'CONV-ROLE-UNCONFIRMED' && typeof f.params.columns === 'string') f = { ...f, params: { ...f.params, columns: listedColumnsText(f.params.columns, 'en') } };
   return fill(profileVariant(f)?.technical ?? getConvertRule(f.ruleId).technical, f);
 }

@@ -48,6 +48,13 @@ export interface PivotInfo {
   duplicates: { header: string; lines: number[] }[];
   /** Original lines that have a value but no parameter name (nothing can be named for them). */
   unnamed: number[];
+  /**
+   * Where every ORIGINAL line went when the sheet was pivoted (the ledger reads it; the page never gets it). `entryAbsent`: per pivoted row (by its `line`), the positions in `pivoted` that no original line filled.
+   * Every other line is one of the lists, or the first line of a (pivoted row, pivoted column) cell. `sourceRows` = all the data lines of the long sheet.
+   */
+  lines: { sourceRows: number; ragged: number[]; flag: number[]; emptyParameter: number[]; blank: number[]; repeated: number[]; entryAbsent: Record<number, number[]> };
+  /** The long sheet as it was read, before the pivot (a reference, not a copy): the list of rows not written shows the cells of the line of the LONG file. Never sent to the page. */
+  source: RawSheet;
   /** The key columns that are not position / identity columns (station, cruise, sample, time, depth, position): the user may mark each as describing the measurement, not the sample. */
   keyOptions: { index: number; header: string; describes: boolean }[];
   /** Columns the user marked as describing the measurement: removed from the key, their values not written. */
@@ -163,6 +170,11 @@ export type ColumnRole =
  */
 export type ConverterRole =
   | { kind: 'taxon'; header?: boolean }
+  /**
+   * A column the person named as part of the key that identifies a sample (core/convert/sampleKey.ts) and gave no meaning of its own. It says which sample a row is of, so the checks that
+   * group rows by sample read it; it is never `ignore`. Converter only: /check never proposes it, and the page never sets it by itself.
+   */
+  | { kind: 'keyPart' }
   | { kind: 'quantity' } | { kind: 'quantityType' }
   | { kind: 'effort'; unit?: string }
   | { kind: 'occurrenceId' } | { kind: 'lifeStage' } | { kind: 'qualifier' }
@@ -195,6 +207,11 @@ export interface ColumnProposal {
   /** Shared-proposer codes written before / after the main reason, joined with "; " (an empty column; a depth direction that is not stated). */
   reasonLead?: string;
   reasonNotes?: string[];
+  /**
+   * Converter only (core/convert/stated.ts, set by `withStated`): the file itself states this role (an exact Darwin Core term, an exact vocabulary entry, a unit the header declares or a PANGAEA geocode)
+   * and the cells do not contradict it. Absent = a suggestion only. A mark and nothing else: it changes no role. /check never sets it.
+   */
+  stated?: true;
 }
 export interface SheetMapping { sheet: string; columns: { index: number; header: string; role: ColumnRole }[] }
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }

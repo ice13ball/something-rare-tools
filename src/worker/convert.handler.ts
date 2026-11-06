@@ -6,7 +6,7 @@
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
 import { licenceDiffersFindings } from '../core/convert/validate';
-import { archiveFileName, archiveFiles, buildEml, buildZip, convert, judge, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
+import { archiveFileName, archiveFiles, buildEml, buildZip, convert, countNotWritten, judge, notWrittenCsv, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../core/convert';
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
@@ -16,13 +16,17 @@ import { EMPTY_METADATA } from '../core/convert/metadata';
 import { buildPrefill, licenceSourceOf, pangaeaHeaderRecord, prefillValues } from '../core/convert/prefill';
 import type { LicenceSource } from '../core/convert/prefill';
 import { archiveDescriptorKind, readConvertFile } from '../core/convert/read';
-import { biomassBasisOf, readConvertSettings } from '../core/convert/settings';
+import { MAX_KEY_PREFIX, biomassBasisOf, readConvertSettings } from '../core/convert/settings';
 import type { ConvertSettings } from '../core/convert/settings';
+import { notUsedLedger } from '../core/convert/ledger';
+import type { SheetKeyReport } from '../core/convert/sampleKey';
+import { previewSampleKey } from '../core/convert/keyPreview';
+import type { SheetLedger } from '../core/convert/ledger';
 import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
-import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult } from './convert.protocol';
+import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
 import { MAX_SAMPLES, type InputFile } from './protocol';
 
@@ -69,6 +73,8 @@ export function createConvertHandler(): ConvertHandler {
   let files = new Map<string, Held>();
   // what the dropped metadata files state about the licence, from THIS session's own parse: CONV-LICENCE-DIFFERS at export is judged from it, never from what the page sends
   let licenceSource: LicenceSource = { ids: [], disagree: false };
+  /** How many answers of an older companion file (no count with them) this drop holds: they are not applied, the questions are asked again, and the person is told once. */
+  let oldAnswers = 0;
   // the kind of mass a companion file of this drop gave the biomass columns of a sheet, by sheet name: a pre-pick for columns the header leaves open
   let biomassPick = new Map<string, 'wet' | 'dry' | 'afdw'>();
   // the ticks "of each organism" a companion file of this drop sets or takes back, by sheet and column header
@@ -142,7 +148,13 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.presenceOnly ?? []) if (!(settings.presenceOnly ??= []).includes(n)) settings.presenceOnly.push(n);
         for (const n of s.totalOnce ?? []) if (!(settings.totalOnce ??= []).includes(n)) settings.totalOnce.push(n);
         for (const n of s.realCounts ?? []) if (!(settings.realCounts ??= []).includes(n)) settings.realCounts.push(n);
+        for (const c of s.realCountsRows ?? []) if (!(settings.realCountsRows ??= []).some((x) => x.sheet === c.sheet)) settings.realCountsRows.push(c);
         for (const n of s.dropCopies ?? []) if (!(settings.dropCopies ??= []).includes(n)) settings.dropCopies.push(n);
+        // the answers of an earlier run to the questions about rows: kept with their numbers, and the converter uses them only where the numbers are the same today
+        for (const c of s.dropCopiesRows ?? []) if (!(settings.dropCopiesRows ??= []).some((x) => x.sheet === c.sheet)) settings.dropCopiesRows.push(c);
+        for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
+        for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
+        for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
@@ -163,6 +175,7 @@ export function createConvertHandler(): ConvertHandler {
     result.prefillInfo = buildPrefill(records) ?? null;
     result.prefill = prefillValues(result.prefillInfo ?? undefined);
     licenceSource = licenceSourceOf(result.prefillInfo);
+    oldAnswers = (settings.realCounts?.length ?? 0) + (settings.dropCopies?.length ?? 0) + (settings.totalOnce?.length ?? 0);
     return result;
   }
 
@@ -189,7 +202,7 @@ export function createConvertHandler(): ConvertHandler {
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
       for (const sheet of parsed.sheets) {
         if (sheet.pivot !== undefined) {
-          const { cellLines: _lines, ...note } = sheet.pivot;
+          const { cellLines: _lines, lines: _sourceLines, source: _source, ...note } = sheet.pivot;
           pivots[sheet.name] = note;
         }
         const p = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
@@ -250,9 +263,19 @@ export function createConvertHandler(): ConvertHandler {
     return summaryOf(h);
   }
 
-  /** The conversion of a request: the records and findings of the core, and the model the writers take. */
-  function compute(body: ConvertRequestBody) {
-    const sheets: ConvertSheetInput[] = body.sheets.map((s) => ({
+  /** The sample key of a request sheet, checked: only whole numbers that are columns of the sheet, each once. Nothing, when nothing is left. */
+  function keyOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'sampleKey' | 'sampleKeyFromFile'> {
+    const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
+    const columns = [...new Set((s.sampleKey?.columns ?? []).filter((i): i is number => Number.isInteger(i) && i >= 0 && i < width))];
+    // the name in front of the IDs: the person's text, as long as the companion file keeps it; an empty or very long one is no name
+    const raw = typeof s.sampleKey?.prefix === 'string' ? s.sampleKey.prefix.trim() : '';
+    const prefix = raw !== '' && raw.length <= MAX_KEY_PREFIX ? raw : undefined;
+    return columns.length === 0 ? {} : { sampleKey: { columns, ...(prefix === undefined ? {} : { prefix }) }, ...(s.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) };
+  }
+
+  /** The sheets of a request as the core takes them. */
+  function inputsOf(body: ConvertRequestBody): ConvertSheetInput[] {
+    return body.sheets.map((s) => ({
       file: held(s.fileId).parsed,
       sheet: s.sheet,
       mapping: s.mapping,
@@ -263,16 +286,36 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
+      ...(Array.isArray(s.handSet) ? { handSet: s.handSet.filter((i) => Number.isInteger(i)) } : {}),
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
       ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
-      ...(s.totalOnce === true ? { totalOnce: true } : {}),
-      ...(s.realCounts === true ? { realCounts: true } : {}),
-      ...(s.dropCopies === true ? { dropCopies: true } : {}),
+      // (a bare tick for totalOnce, realCounts or dropCopies is not forwarded: an answer that switches a check off or takes rows out reaches the converter only with the number it was given for)
+      // the answers carry the numbers they hold for; only whole numbers count, and the core compares them with today's
+      ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
+      ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
+      ...(s.dropCopiesFromFile === true ? { dropCopiesFromFile: true } : {}),
+      ...(s.totalOnceFromFile === true ? { totalOnceFromFile: true } : {}),
+      ...(Number.isInteger(s.realCountsRows) && (s.realCountsRows as number) >= 0 ? { realCountsRows: s.realCountsRows as number } : {}),
+      ...(Number.isInteger(s.realCountsRowsFile) && (s.realCountsRowsFile as number) >= 0 ? { realCountsRowsFile: s.realCountsRowsFile as number } : {}),
+      // the page's word is not taken for more than a list of words and whole numbers; the core ignores a reason that cannot be left out
+      ...(Array.isArray(s.leaveOut) && s.leaveOut.length > 0
+        ? { leaveOut: s.leaveOut.filter((r) => r !== null && typeof r === 'object' && typeof r.reason === 'string' && Number.isInteger(r.count)).map((r) => ({ reason: r.reason, count: r.count })) }
+        : {}),
+      // the columns the person picked as the sample key: whole numbers only, each column once, in the order picked (the core reads nothing else; a profile sheet takes no key)
+      ...(s.profile === undefined && s.sampleKey !== undefined && s.sampleKey !== null && Array.isArray(s.sampleKey.columns) ? keyOf(s) : {}),
+      ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
+        ? { leaveOutFile: s.leaveOutFile.filter((g) => g !== null && typeof g === 'object' && typeof g.reason === 'string' && Number.isInteger(g.count) && Number.isInteger(g.rows)).map((g) => ({ reason: g.reason, count: g.count, rows: g.rows })) }
+        : {}),
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
+  }
+
+  /** The conversion of a request: the records and findings of the core, and the model the writers take. */
+  function compute(body: ConvertRequestBody) {
+    const sheets = inputsOf(body);
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
-    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}) });
+    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
     return { sheets, splits, r };
   }
 
@@ -285,9 +328,6 @@ export function createConvertHandler(): ConvertHandler {
     const longAsTable = [...new Set(body.sheets.filter((s) => files.get(s.fileId)?.choices[s.sheet]?.off === true).map((s) => s.sheet))];
     const transposedAsTable = [...new Set(body.sheets.filter((s) => s.readAsTable === true).map((s) => s.sheet))];
     const presenceOnly = [...new Set(body.sheets.filter((s) => s.presenceOnly === true).map((s) => s.sheet))];
-    const totalOnce = [...new Set(body.sheets.filter((s) => s.totalOnce === true).map((s) => s.sheet))];
-    const realCounts = [...new Set(body.sheets.filter((s) => s.realCounts === true).map((s) => s.sheet))];
-    const dropCopies = [...new Set(body.sheets.filter((s) => s.dropCopies === true).map((s) => s.sheet))];
     const biomassBasis = biomassBasisOf(body.sheets.map((s) => s.mapping));
     return {
       fullList: body.options.fullList === true,
@@ -300,12 +340,17 @@ export function createConvertHandler(): ConvertHandler {
       ...(longAsTable.length > 0 ? { longAsTable } : {}),
       ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}),
       ...(presenceOnly.length > 0 ? { presenceOnly } : {}),
-      ...(totalOnce.length > 0 ? { totalOnce } : {}),
-      ...(realCounts.length > 0 ? { realCounts } : {}),
-      ...(dropCopies.length > 0 ? { dropCopies } : {}),
       ...(biomassBasis.length > 0 ? { biomassBasis } : {}),
     };
   };
+
+  /** The sheets of the dropped files that the request leaves out (the page's "use" unticked): the ledger says they were not used. Told apart by file id AND sheet name. */
+  function notUsedLedgers(body: ConvertRequestBody): SheetLedger[] {
+    const asked = new Set(body.sheets.map((s) => `${s.fileId}\u0000${s.sheet}`));
+    const out: SheetLedger[] = [];
+    for (const [fileId, h] of files) for (const sh of h.parsed.sheets) if (!asked.has(`${fileId}\u0000${sh.name}`)) out.push(notUsedLedger(h.parsed.fileName, sh));
+    return out;
+  }
 
   function run(body: ConvertRequestBody): ConvertView {
     const { splits, r } = compute(body);
@@ -337,8 +382,12 @@ export function createConvertHandler(): ConvertHandler {
       worms: r.nameLookup,
       examples: { cruise: by('cruise'), station: by('station'), sample: by('sample'), level: by('level') },
       profile: r.profile,
+      // (the page gets the tallies and the columns; the fate of every line stays in the conversion result, where the list of rows not written reads it)
+      ledger: [...r.ledger, ...notUsedLedgers(body)].map((l) => ({ ...l, lines: [] })),
+      notWritten: countNotWritten([...r.ledger, ...notUsedLedgers(body)]),
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
+      keys: r.keys ?? [],
     };
   }
 
@@ -367,6 +416,43 @@ export function createConvertHandler(): ConvertHandler {
     };
   }
 
+  /**
+   * The list of rows not written, beside the archive. Built from the same conversion as the export (compute) and from the same lines of the ledger as the findings, so it cannot disagree with them.
+   * Offered whether or not the export is blocked: it is what the converter did not write.
+   */
+  function notWritten(req: NotWrittenBody): NotWrittenResult {
+    const { sheets, r } = compute(req.body);
+    const dataset = toDataset(r, req.metadata, decisionsOf(req.body));
+    const { chunks, count } = notWrittenCsv([...r.ledger, ...notUsedLedgers(req.body)], sheets, r.leftOut);
+    return { fileName: `${archiveFileName(dataset).replace(/\.zip$/, '')}-not-written.csv`, blob: new Blob(chunks, { type: 'text/csv;charset=utf-8' }), count };
+  }
+
+  /**
+   * What a key would make of one sheet: the same conversion as the export (compute), with this key on this sheet, so the numbers cannot differ from what the archive will have. A key that is no
+   * key (no column of the sheet) gives null. Nothing about the request is changed or kept.
+   */
+  function previewKey(req: Extract<ConvertRequest, { type: 'previewKey' }>): SheetKeyReport | null {
+    const target = req.body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet);
+    if (target === undefined || !Array.isArray(req.columns)) return null;
+    // the name as typed at the picker (the preview is what "Use this key" will give), else the one the request carries
+    const typed = typeof req.prefix === 'string' ? req.prefix.trim() : '';
+    const previewPrefix = typed !== '' && typed.length <= MAX_KEY_PREFIX ? typed : target.sampleKey?.prefix;
+    const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns, ...(previewPrefix === undefined ? {} : { prefix: previewPrefix }) }, sampleKeyFromFile: false } : s)) };
+    const sheets = inputsOf(body);
+    const at = body.sheets.indexOf(body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet) as (typeof body.sheets)[number]);
+    const input = sheets[at];
+    if (input === undefined) return null;
+    return (
+      previewSampleKey(input, {
+        sheets,
+        options: body.options,
+        approvedSplits: body.approvedSplits,
+        ...(body.worms ? { worms: body.worms } : {}),
+        ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}),
+      }) ?? null
+    );
+  }
+
   function proposeCodes(req: Extract<ConvertRequest, { type: 'proposeCodes' }>): CodeProposalView | null {
     const h = held(req.fileId);
     const sheet = h.parsed.sheets.find((s) => s.name === req.sheet);
@@ -384,6 +470,7 @@ export function createConvertHandler(): ConvertHandler {
           files = new Map();
           seq = 0;
           licenceSource = { ids: [], disagree: false };
+          oldAnswers = 0;
           return null;
         case 'parse':
           return parse(req);
@@ -395,6 +482,10 @@ export function createConvertHandler(): ConvertHandler {
           return pivotChoice(req);
         case 'export':
           return exportArchive(req.export);
+        case 'notWritten':
+          return notWritten(req.notWritten);
+        case 'previewKey':
+          return previewKey(req);
       }
     },
   };

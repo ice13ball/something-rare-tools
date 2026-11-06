@@ -124,6 +124,11 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-COUNT-NOT-INTEGER | error | B | — | —<a id="CONV-COUNT-NOT-INTEGER"></a> |
 | CONV-NEGATIVE-QUANTITY | error | B | — | —<a id="CONV-NEGATIVE-QUANTITY"></a> |
 | CONV-SAMPLE-CODE-MISSING | error | B | — | —<a id="CONV-SAMPLE-CODE-MISSING"></a> |
+| CONV-KEY-PART-BLANK | warning | B | — | —<a id="CONV-KEY-PART-BLANK"></a> |
+| CONV-ROLE-UNCONFIRMED | warning | B | — | —<a id="CONV-ROLE-UNCONFIRMED"></a> |
+| CONV-KEY-MIXED-NUMBERS | warning | B | — | —<a id="CONV-KEY-MIXED-NUMBERS"></a> |
+| CONV-KEY-TOO-LONG | error | B | — | —<a id="CONV-KEY-TOO-LONG"></a> |
+| CONV-KEY-PICKED | info | B | — | —<a id="CONV-KEY-PICKED"></a> |
 | CONV-ID-DUPLICATE | error | B | — | [OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_eventids.R), check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")<br>[EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."<a id="CONV-ID-DUPLICATE"></a> |
 | CONV-TAB-IN-VALUE | error | B | — | [OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)](https://manual.obis.org/common_qc.html), "Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"<a id="CONV-TAB-IN-VALUE"></a> |
 | CONV-TEXT-IN-TAXON-CELL | warning | B | — | —<a id="CONV-TEXT-IN-TAXON-CELL"></a> |
@@ -133,9 +138,13 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-BIOMASS-UNIT-UNCLEAR | warning | B | — | —<a id="CONV-BIOMASS-UNIT-UNCLEAR"></a> |
 | CONV-QUANTITY-REPEATED | error | B | — | —<a id="CONV-QUANTITY-REPEATED"></a> |
 | CONV-QUANTITY-REPEATED-ONCE | warning | B | — | —<a id="CONV-QUANTITY-REPEATED-ONCE"></a> |
+| CONV-QUANTITY-REAL-COUNTS | info | B | — | —<a id="CONV-QUANTITY-REAL-COUNTS"></a> |
+| CONV-COMPANION-OLD | info | B | — | —<a id="CONV-COMPANION-OLD"></a> |
 | CONV-ROW-COPIES | error | B | — | —<a id="CONV-ROW-COPIES"></a> |
 | CONV-ROW-COPIES-DROPPED | warning | B | — | —<a id="CONV-ROW-COPIES-DROPPED"></a> |
 | CONV-ROW-COPIES-SPECIMENS | warning | B | — | —<a id="CONV-ROW-COPIES-SPECIMENS"></a> |
+| CONV-ROW-NOT-UNDERSTOOD | error | B | — | —<a id="CONV-ROW-NOT-UNDERSTOOD"></a> |
+| CONV-ROW-LEFT-OUT | info | B | — | —<a id="CONV-ROW-LEFT-OUT"></a> |
 | CONV-QUANTITY-SAME-IN-SAMPLE | warning | B | — | —<a id="CONV-QUANTITY-SAME-IN-SAMPLE"></a> |
 | CONV-TAXON-EMPTY-ROW | warning | B | — | —<a id="CONV-TAXON-EMPTY-ROW"></a> |
 | CONV-TIME-HOLDS-DATES | error | B | — | —<a id="CONV-TIME-HOLDS-DATES"></a> |
@@ -192,6 +201,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-EMOF-VALUE-EMPTY | error | B | — | —<a id="CONV-EMOF-VALUE-EMPTY"></a> |
 | CONV-EMOF-TYPE-EMPTY | error | B | — | —<a id="CONV-EMOF-TYPE-EMPTY"></a> |
 | CONV-COLUMN-NOT-EXPORTED | warning | B | — | —<a id="CONV-COLUMN-NOT-EXPORTED"></a> |
+| CONV-COLUMN-IGNORED | info | B | — | —<a id="CONV-COLUMN-IGNORED"></a> |
 | CONV-NAMEID-MISSING | warning | B | — | —<a id="CONV-NAMEID-MISSING"></a> |
 | CONV-WORMS-UNDECIDED | error | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-UNDECIDED"></a> |
 | CONV-WORMS-NO-MATCH | warning | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-NO-MATCH"></a> |

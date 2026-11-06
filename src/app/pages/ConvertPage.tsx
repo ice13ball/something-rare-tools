@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { biomassBasisOf, bulkApprovable, perOccurrenceOf, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
+import { biomassBasisOf, bulkApprovable, doubtedGroups, perOccurrenceOf, sexLetterSplit, underscoreSpaceSplit, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
 import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
@@ -14,6 +14,7 @@ import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseR
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
+import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
 import type { NercKind, NvsSearchView } from '../components/ConvertNerc';
 import { ConvertWorms } from '../components/ConvertWorms';
@@ -21,8 +22,11 @@ import type { WormsStatus } from '../components/ConvertWorms';
 import { FileReview } from '../components/FileReview';
 import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
+import { SampleKeyPicker } from '../components/SampleKeyPicker';
+import { defaultKeyPrefix } from '../../core/convert/sampleKey';
+import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sheetFlagSettingsOf, totalOnceSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -52,12 +56,6 @@ async function toInputFiles(files: File[]): Promise<InputFile[]> {
 const splitText = (s: TaxonSplit): string => s.scientificName;
 /** A list of names without a doubt this short is shown open; a longer one is folded behind "show all N names". */
 const SPLITS_OPEN_MAX = 15;
-
-/**
- * What a tick of "I accept" holds for: the findings of one rule as they are now. A tick is kept per rule id together with this fingerprint, so a rule whose
- * findings change after the tick (a new mapping, another sheet) is no longer accepted and has to be ticked again.
- */
-const fingerprint = (findings: readonly Finding[]): string => JSON.stringify(findings.map((f) => [f.file, f.sheet, f.field, f.value, f.lines, f.params]));
 
 /** The shape a GA4 event reports: wide, long or mixed. Never a name. */
 const shapeOf = (shapes: readonly ('wide' | 'long')[]): 'wide' | 'long' | 'mixed' => (shapes.every((x) => x === 'wide') ? 'wide' : shapes.every((x) => x === 'long') ? 'long' : 'mixed');
@@ -108,6 +106,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // the columns the user picked to add to the grouping of a sheet (valid for the roles and shape they were picked for)
   const [codesExtra, setCodesExtra] = useState<Record<string, { sig: string; indexes: number[] }>>({});
   const [codesPreview, setCodesPreview] = useState<Record<string, { p: CodeProposalView; sig: string }>>({});
+  // the columns ticked in the sample-key picker and not yet used (by sheet), and what the converter says they would make; both start empty and are never filled by the page itself
+  const [keyDraft, setKeyDraft] = useState<Record<string, number[]>>({});
+  // the name typed for the front of the IDs of a sheet's key and not yet used
+  const [keyPrefixDraft, setKeyPrefixDraft] = useState<Record<string, string>>({});
+  const [keyPreview, setKeyPreview] = useState<Record<string, { cols: number[]; report: SheetKeyReport | null }>>({});
   const [filesChosen, setFilesChosen] = useState(0);
   const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
   // rule id -> the fingerprint of its findings when the user ticked it (nothing is stored beyond this page state)
@@ -191,6 +194,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setCodesDone({});
     setCodesPreview({});
     setCodesExtra({});
+    setKeyDraft({});
+    setKeyPrefixDraft({});
+    setKeyPreview({});
     setApproved({});
     setDrafts({});
     setConfirmed({});
@@ -275,11 +281,55 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     return () => clearTimeout(timer);
   }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup, nercPicks]);
 
+  // what the ticked columns of the picker would make: the converter's own report for the request with that key on that sheet (the same run as the export), asked after a short pause; nothing is kept
+  // in the request, so ticking changes nothing until "Use this key". Only the latest question of a sheet counts (an older answer is dropped), a sheet is asked again only when its ticks or the request
+  // changed, and a failure is shown at the picker with a way to try again.
+  const previewGen = useRef(0);
+  const previewAsked = useRef(new Map<string, string>());
+  const [previewRetry, setPreviewRetry] = useState(0);
+  const [keyPreviewError, setKeyPreviewError] = useState<Record<string, string>>({});
+  useEffect(() => {
+    // the request changed: what was counted is stale
+    previewGen.current += 1;
+    previewAsked.current.clear();
+    setKeyPreview({});
+    setKeyPreviewError({});
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks]);
+  useEffect(() => {
+    if (phase !== 'work' || !parsed) return undefined;
+    const todo = Object.entries(keyDraft).filter(([, cols]) => cols.length > 0);
+    if (todo.length === 0) return undefined;
+    const timer = setTimeout(() => {
+      const gen = previewGen.current;
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMetadataOf(EMPTY_METADATA), ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      for (const [k, cols] of todo) {
+        const typed = (keyPrefixDraft[k] ?? choices[k]?.sampleKeyPrefix ?? '').trim();
+        const sig = `${gen}:${cols.join()}:${typed}`;
+        if (previewAsked.current.get(k) === sig) continue;
+        previewAsked.current.set(k, sig);
+        setKeyPreviewError((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+        const [fileId, sheet] = k.split('\u0000');
+        engine.previewKey(body, fileId, sheet, cols, typed === '' ? undefined : typed).then(
+          (report) => {
+            if (previewAsked.current.get(k) === sig) setKeyPreview((prev) => ({ ...prev, [k]: { cols, report } }));
+          },
+          (e: unknown) => {
+            if (previewAsked.current.get(k) === sig) setKeyPreviewError((prev) => ({ ...prev, [k]: messageOf(e) }));
+          },
+        );
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks, keyDraft, keyPrefixDraft, previewRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isTaxonHeader = (r: { kind: string; header?: boolean } | undefined): boolean => r?.kind === 'taxon' && r.header === true;
   const changeMapping = (fileId: string, mapping: SheetMapping): void => {
     // a column the user turns into a taxon by hand is their own decision: no confirmation is asked for it
     const before = (mappings[fileId] ?? []).find((m) => m.sheet === mapping.sheet);
     const nowTaxa = mapping.columns.filter((c) => isTaxonHeader(c.role) && !isTaxonHeader(before?.columns.find((b) => b.index === c.index)?.role));
+    // and any column whose role the person changed is theirs: the list of proposed roles the file does not state (CONV-ROLE-UNCONFIRMED) leaves it out for good
+    const touched = mapping.columns.filter((c) => JSON.stringify(c.role) !== JSON.stringify(before?.columns.find((b) => b.index === c.index)?.role));
+    if (touched.length > 0) setConfirmed((prev) => ({ ...prev, ...Object.fromEntries(touched.map((c) => [handKey(fileId, mapping.sheet, c.index), true])) }));
     if (nowTaxa.length > 0) setConfirmed((prev) => ({ ...prev, ...Object.fromEntries(nowTaxa.map((c) => [candidateKey(fileId, mapping.sheet, c.index), true])) }));
     setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === mapping.sheet ? mapping : m)) }));
   };
@@ -294,11 +344,54 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
-    setChoices((prev) => (prev[key] === undefined ? prev : { ...prev, [key]: { ...prev[key], [choice]: true } }));
+    const reason = typeof f.params.reason === 'string' ? f.params.reason : undefined;
+    setChoices((prev) => {
+      const c = prev[key];
+      if (c === undefined) return prev;
+      // "Leave these rows out and list them": the answer of the person, for this reason in this sheet, for the number of rows the button named. Never given by the page itself.
+      if (choice === 'leaveOut') {
+        const count = Number(f.params.count);
+        if (reason === undefined || !Number.isInteger(count)) return prev;
+        const rest = (c.leaveOut ?? []).filter((a) => a.reason !== reason);
+        return { ...prev, [key]: { ...c, leaveOut: [...rest, { reason, count }] } };
+      }
+      // "Ask again": takes back an answer, whether it was given here or read from the companion file (the question and the acceptance start again)
+      if (choice === 'askAgain') {
+        if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((a) => a.reason !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
+        if (f.ruleId === 'CONV-KEY-PICKED') {
+          const { sampleKey: _k, sampleKeyFromFile: _f, sampleKeyPrefix: _p, ...rest } = c;
+          return { ...prev, [key]: rest };
+        }
+        if (f.ruleId === 'CONV-ROW-COPIES-DROPPED') {
+          const { dropCopiesFile: _d, dropCopiesAnswer: _da, ...rest } = c;
+          return { ...prev, [key]: { ...rest, dropCopies: false } };
+        }
+        if (f.ruleId === 'CONV-QUANTITY-REAL-COUNTS') {
+          const { realCountsAnswer: _a, realCountsFile: _r, ...rest } = c;
+          return { ...prev, [key]: { ...rest, realCounts: false } };
+        }
+        if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE') {
+          const { totalOnceFile: _t, totalOnceAnswer: _ta, ...rest } = c;
+          return { ...prev, [key]: { ...rest, totalOnce: false } };
+        }
+        return prev;
+      }
+      // The other answers switch a check off (or take rows out), so each is kept with the number it was given for, from the question itself: the converter honours it only while its own analysis finds
+      // the same number, and the question reopens otherwise. The tick itself is never set by the page.
+      const bound: Record<'totalOnce' | 'realCounts' | 'dropCopies', { field: 'totalOnceAnswer' | 'realCountsAnswer' | 'dropCopiesAnswer'; param: string }> = {
+        totalOnce: { field: 'totalOnceAnswer', param: 'collapsed' },
+        realCounts: { field: 'realCountsAnswer', param: 'covered' },
+        dropCopies: { field: 'dropCopiesAnswer', param: 'count' },
+      };
+      const b = bound[choice];
+      const n = Number(f.params[b.param]);
+      if (!Number.isInteger(n)) return prev;
+      return { ...prev, [key]: { ...c, [b.field]: n } };
+    });
   };
 
   /**
@@ -318,6 +411,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === sheet ? mapping : m)) }));
       if (fresh) setChoices((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: fresh }));
       setConfirmed((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      // the sheet was read again: its columns may be others, so the tick of the list of proposed roles the file does not state is given again
+      setAccepted((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== ROLE_RULE)));
       setNercPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       // what was typed or found for a column of the sheet belongs to the column it was typed for, which may be another one now
       setNvsWords((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
@@ -325,6 +420,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setCodesDone({});
       setCodesPreview({});
       setCodesExtra({});
+      setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      setKeyPreview({});
     } catch (e) {
       setConvertError(messageOf(e));
     } finally {
@@ -354,6 +451,39 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const indexes = index === null ? [] : [...new Set([...pickedFor(fileId, sheet), index])];
     setCodesExtra((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: { sig: codesSig(fileId, sheet), indexes } }));
     void proposeCodes(fileId, sheet, indexes);
+  };
+  /** Ticks or unticks a column in the picker of a sheet; the order of ticking is the order of the parts of the code. Starts from the key in use, never from a guess. */
+  const toggleKey = (fileId: string, sheet: string, index: number): void => {
+    const k = sheetKey(fileId, sheet);
+    setKeyDraft((prev) => {
+      const cur = prev[k] ?? choices[k]?.sampleKey ?? [];
+      return { ...prev, [k]: cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index] };
+    });
+  };
+  /** "Use this key": the ticked columns become the sheet's sample key (the request now carries it). */
+  const useKey = (fileId: string, sheet: string): void => {
+    const k = sheetKey(fileId, sheet);
+    const cols = keyDraft[k] ?? choices[k]?.sampleKey ?? [];
+    const f = files.find((x) => x.fileId === fileId);
+    const prefix = (keyPrefixDraft[k] ?? choices[k]?.sampleKeyPrefix ?? defaultKeyPrefix(f?.kind ?? '', f?.fileName ?? '', sheet)).trim();
+    if (cols.length === 0 || prefix === '') return;
+    setChoices((prev) => {
+      const { sampleKeyFromFile: _f, ...rest } = prev[k] ?? ({} as SheetChoice);
+      return prev[k] === undefined ? prev : { ...prev, [k]: { ...rest, sampleKey: cols, sampleKeyPrefix: prefix } };
+    });
+    setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+    setKeyPrefixDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+  };
+  /** "Clear the key": the sheet is read as before (the codes it has, or none). */
+  const clearKey = (fileId: string, sheet: string): void => {
+    const k = sheetKey(fileId, sheet);
+    setChoices((prev) => {
+      if (prev[k] === undefined) return prev;
+      const { sampleKey: _k, sampleKeyFromFile: _f, sampleKeyPrefix: _p, ...rest } = prev[k];
+      return { ...prev, [k]: rest };
+    });
+    setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
+    setKeyPrefixDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([x]) => x !== k)));
   };
   const proposeCodes = async (fileId: string, sheet: string, extra?: number[]): Promise<void> => {
     const mapping = (mappings[fileId] ?? []).find((m) => m.sheet === sheet);
@@ -388,6 +518,36 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const rest = allSplits.filter((s) => !s.needsDecision);
   // "approve all shown" takes only the names without a doubt; a doubted one needs its own action on its row
   const bulk = bulkApprovable(toApprove);
+  // doubted names by reason, each group with its own button and the list beside it. A name the user has already edited is left out: it keeps its edit and its own
+  // "Approve" on the row (the group takes only names exactly as written); an approved name is in no group (doubtedGroups).
+  // Michal, 03.11: "approve as written" in a group only where the doubt cannot hide a non-name (a digit: an authority's year; more than three words: a forma);
+  // every other reason stays one by one
+  const groups = doubtedGroups(toApprove)
+    .filter((g) => g.reason === 'digits' || g.reason === 'long' || g.reason === 'underscore')
+    .map((g) => ({ reason: g.reason, entries: g.entries.filter((s) => drafts[s.verbatim] === undefined) }))
+    .filter((g) => g.entries.length > 0);
+  // single-letter names whose last token is a bare m or f: one more group, which reads that letter as the sex (never automatic, never a default; the user
+  // sees the result per name before pressing). The split comes from core (sexLetterSplit), an edited name is left to its row.
+  const sexGroup = toApprove.flatMap((s) => {
+    const split = drafts[s.verbatim] === undefined ? sexLetterSplit(s) : undefined;
+    return split ? [{ entry: s, split }] : [];
+  });
+  // underscore names: a second group action that writes a space instead of each underscore, with the result beside every name; never automatic, an edited name is left to its row
+  const underscoreGroup = toApprove.flatMap((s) => {
+    const split = drafts[s.verbatim] === undefined ? underscoreSpaceSplit(s) : undefined;
+    return split ? [{ entry: s, split }] : [];
+  });
+  // the group button disappears when it is used; focus moves to the next group's button, else to the heading, so a keyboard user keeps their place
+  const splitsSection = useRef<HTMLElement | null>(null);
+  const refocus = useRef(false);
+  // the splits come back from the worker a moment after the click, so focus moves when the groups really change, not on the first re-render
+  const groupsKey = groups.map((g) => `${g.reason}:${g.entries.length}`).join('|') + `|sex:${sexGroup.length}|us:${underscoreGroup.length}`;
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const next = splitsSection.current?.querySelector<HTMLElement>('[data-group-approve]');
+    (next ?? splitsSection.current?.querySelector<HTMLElement>('#convert-splits-title'))?.focus();
+  }, [groupsKey]);
   const draftOf = (s: (typeof toApprove)[number]): TaxonSplit => drafts[s.verbatim] ?? s.split;
   const finalSplit = (s: (typeof toApprove)[number]): TaxonSplit | null => {
     const d = draftOf(s);
@@ -472,13 +632,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const showPrefix = prefixStation || view?.codeCollision === true;
 
   // warning rules to accept: one tick per rule, valid only for the findings it was given for; plus the page's own "unconfirmed taxon columns"
-  const prints = useMemo(() => Object.fromEntries(judged.acceptRules.map((r) => [r, fingerprint(judged.toAccept.filter((f) => f.ruleId === r))])), [judged]);
-  const isAccepted = (rule: string): boolean => accepted[rule] !== undefined && accepted[rule] === prints[rule];
+  const prints = useMemo(() => Object.fromEntries(judged.acceptRules.map((r) => [r, printOf(r, judged.toAccept.filter((f) => f.ruleId === r))])), [judged]);
+  const isAccepted = (rule: string): boolean => tickHolds(rule, accepted[rule], prints[rule], judged.toAccept.filter((f) => f.ruleId === rule));
   // the identity of the columns left out (not their number): another set of columns is another acceptance
   const unconfirmedPrint = unconfirmed.map((c) => c.key).sort().join('|');
   const unconfirmedAccepted = unconfirmed.length === 0 || accepted[UNCONFIRMED_KEY] === unconfirmedPrint;
   const allAccepted = judged.acceptRules.every(isAccepted) && unconfirmedAccepted;
   const nothingToWrite = view !== null && (view.tree.events === 0 || view.stats.occurrences === 0);
+  // what stops the export for a reason that is not the page being busy: the ledger says "would be written" while this is true
+  const exportBlocked = view === null || judged.blocking.length > 0 || metaFindings.length > 0 || !allAccepted || nothingToWrite;
   const canExport = view !== null && !working && !exporting && judged.blocking.length === 0 && metaFindings.length === 0 && allAccepted && !nothingToWrite;
   // the shape of the sheets that have one: a profile sheet has none (it is not wide or long)
   const shapes = useMemo(() => Object.entries(choices).filter(([, c]) => c.use && !c.profile).map(([, c]) => c.shape), [choices]);
@@ -622,19 +784,53 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
   const abortNvs = (): void => nvsAbort.current?.abort();
 
+  // The list of rows not written: one file beside the archive, made in the worker from the same conversion as the export. A click makes one download; nothing is downloaded by itself.
+  const [listBusy, setListBusy] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const downloadNotWritten = async (): Promise<void> => {
+    if (!parsed || listBusy) return;
+    setListBusy(true);
+    setListError(null);
+    try {
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      const res = await engine.notWritten({ body, metadata: meta });
+      downloadFile(res.blob, res.fileName);
+    } catch (e) {
+      setListError(messageOf(e));
+    } finally {
+      setListBusy(false);
+    }
+  };
+  const notWrittenProps = view === null ? undefined : { rows: view.notWritten.rows, sheets: view.notWritten.sheets, busy: listBusy, error: listError, onDownload: () => void downloadNotWritten() };
+
+  // the sheets the sample-key picker is shown for: those with rows that have no sample code, and those that carry a key (the picker stays once a key is in use, although the codes are no longer missing)
+  const codeSheets = (() => {
+    const out = [...(view?.codesMissing ?? [])];
+    for (const f of files) for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (c?.use === true && !c.profile && (c.sampleKey?.length ?? 0) > 0 && !out.some((o) => o.fileId === f.fileId && o.sheet === sh.name)) out.push({ fileId: f.fileId, sheet: sh.name });
+    }
+    return out;
+  })();
+
   const downloadCompanion = (): void => {
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
     const longAsTable = [...new Set(files.flatMap((f) => f.pivotOff ?? []))];
     const transposedAsTable = parsed ? transposedSettingsOf(parsed, choices) : [];
     const presenceOnly = parsed ? presenceSettingsOf(parsed, choices, mappings) : [];
-    const totalOnce = parsed ? totalOnceSettingsOf(parsed, choices) : [];
-    const realCounts = parsed ? sheetFlagSettingsOf(parsed, choices, 'realCounts') : [];
-    const dropCopies = parsed ? sheetFlagSettingsOf(parsed, choices, 'dropCopies') : [];
+    // The answers that switch a check off or leave rows out are kept WITH the number they were given for, read from the findings that say them (copies left out, a total taken once, rows left out):
+    // a companion file holds only while today's analysis finds the same number, so the question reopens for another file
+    const said = (view?.findings ?? []).filter((f) => f.sheet !== undefined);
+    const dropCopiesRows = said.filter((f) => f.ruleId === 'CONV-ROW-COPIES-DROPPED').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
+    const totalOnceGroups = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.groups) }));
+    const realCountsRows = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REAL-COUNTS').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
+    const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
+    const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(totalOnce.length > 0 ? { totalOnce } : {}), ...(realCounts.length > 0 ? { realCounts } : {}), ...(dropCopies.length > 0 ? { dropCopies } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -864,9 +1060,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           </section>
 
           {allSplits.length > 0 && (
-            <section className="convert-splits" aria-labelledby="convert-splits-title">
+            <section className="convert-splits" aria-labelledby="convert-splits-title" ref={splitsSection}>
               <HeadingTip tip="convertSplits">
-                <h2 id="convert-splits-title">{t('convert.splits.title')}</h2>
+                <h2 id="convert-splits-title" tabIndex={-1}>{t('convert.splits.title')}</h2>
               </HeadingTip>
               {toApprove.length > 0 && <p>{t('convert.splits.intro')}</p>}
               {bulk.approve.length > 0 && (
@@ -884,7 +1080,86 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   {bulk.skipped.length > 0 ? t('convert.splits.approveAllSkip', { n: bulk.approve.length, skipped: bulk.skipped.length }) : t('convert.splits.approveAll', { n: bulk.approve.length })}
                 </button>
               )}
-              {bulk.approve.length === 0 && bulk.skipped.length > 0 && <p className="muted">{t('convert.splits.allDoubted')}</p>}
+              {groups.map((g) => (
+                <div key={g.reason} className="convert-doubt-group" role="group" aria-label={t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}>
+                  <p className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}</p>
+                  <ul className="convert-doubt-list">
+                    {g.entries.map((s) => (
+                      <li key={s.verbatim}>
+                        <code>{s.verbatim}</code>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="button"
+                    data-group-approve={g.reason}
+                    onClick={() => {
+                      refocus.current = true;
+                      // only what is still unapproved and unedited when the button is pressed; an existing approval is never replaced
+                      setApproved((prev) => ({
+                        ...prev,
+                        ...Object.fromEntries(g.entries.flatMap((s) => {
+                            const f = finalSplit(s);
+                            return f && !Object.prototype.hasOwnProperty.call(prev, s.verbatim) ? [[s.verbatim, f] as const] : [];
+                          })),
+                      }));
+                    }}
+                  >
+                    {t('convert.splits.approveGroup', { n: g.entries.length })}
+                  </button>
+                </div>
+              ))}
+              {sexGroup.length > 0 && (
+                <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.sexGroup')}>
+                  <p className="convert-doubt">{t('convert.splits.sexGroupNote')}</p>
+                  <ul className="convert-doubt-list">
+                    {sexGroup.map(({ entry, split }) => (
+                      <li key={entry.verbatim}>
+                        <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}, {t(split.sex === 'female' ? 'convert.sex.female' : 'convert.sex.male')}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="button"
+                    data-group-approve="sex-letter"
+                    onClick={() => {
+                      refocus.current = true;
+                      const fresh = sexGroup.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(approved, entry.verbatim));
+                      setDrafts((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => prev[entry.verbatim] === undefined).map(({ entry, split }) => [entry.verbatim, split] as const)) }));
+                      setApproved((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(prev, entry.verbatim)).map(({ entry, split }) => [entry.verbatim, { ...split, verbatimIdentification: entry.verbatim }] as const)) }));
+                    }}
+                  >
+                    {t('convert.splits.approveSex', { n: sexGroup.length })}
+                  </button>
+                </div>
+              )}
+              {underscoreGroup.length > 0 && (
+                <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.underscoreGroup')}>
+                  <p className="convert-doubt">{t('convert.splits.underscoreGroupNote')}</p>
+                  <ul className="convert-doubt-list">
+                    {underscoreGroup.map(({ entry, split }) => (
+                      <li key={entry.verbatim}>
+                        <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="button"
+                    data-group-approve="underscore-space"
+                    onClick={() => {
+                      refocus.current = true;
+                      const fresh = underscoreGroup.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(approved, entry.verbatim));
+                      setDrafts((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => prev[entry.verbatim] === undefined).map(({ entry, split }) => [entry.verbatim, split] as const)) }));
+                      setApproved((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(prev, entry.verbatim)).map(({ entry, split }) => [entry.verbatim, { ...split, verbatimIdentification: entry.verbatim }] as const)) }));
+                    }}
+                  >
+                    {t('convert.splits.approveUnderscoreSpace', { n: underscoreGroup.length })}
+                  </button>
+                </div>
+              )}
               {toApprove.length > 0 && (
                 <div className="table-scroll">
                   <table className="convert-table">
@@ -925,17 +1200,49 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             </section>
           )}
 
-          {(view?.codesMissing ?? []).length > 0 && (
+          {codeSheets.length > 0 && (
             <section className="convert-codes" aria-labelledby="convert-codes-title">
               <HeadingTip tip="convertCodes">
                 <h2 id="convert-codes-title">{t('convert.codes.title')}</h2>
               </HeadingTip>
-              {(view?.codesMissing ?? []).map((c) => {
+              {codeSheets.map((c) => {
                 const f = files.find((x) => x.fileId === c.fileId);
                 const key = sheetKey(c.fileId, c.sheet);
+                const sh = f?.sheets.find((x) => x.name === c.sheet);
+                const inUse = choices[key]?.sampleKey ?? [];
+                const defaultPrefix = defaultKeyPrefix(f?.kind ?? '', f?.fileName ?? '', c.sheet);
+                const draft = keyDraft[key];
+                const picked = draft ?? inUse;
+                const samples = f?.samples[c.sheet] ?? [];
+                const known = draft === undefined || (keyPreview[key] !== undefined && keyPreview[key].cols.join() === draft.join());
+                // the numbers of the key in use are shown only while they are the numbers of THIS key (a new key counts again first)
+                const mine = (view?.keys ?? []).find((k) => k.sheet === c.sheet && k.file === f?.fileName && k.columns.join() === inUse.join());
+                const report = draft === undefined || draft.join() === inUse.join() ? (mine ?? (picked.length === 0 ? null : undefined)) : known ? keyPreview[key]?.report : undefined;
                 return (
                   <div key={key} className="notice" role="note">
                     <p>{t('convert.codes.text', { sheet: c.sheet, file: f?.fileName ?? '' })}</p>
+                    {sh !== undefined && (
+                      <SampleKeyPicker
+                        sheet={c.sheet}
+                        columns={sh.header.map((header, index) => ({ index, header, examples: samples[index] ?? [] }))}
+                        picked={picked}
+                        inUse={inUse}
+                        prefix={keyPrefixDraft[key] ?? choices[key]?.sampleKeyPrefix ?? defaultPrefix}
+                        inUsePrefix={inUse.length > 0 ? (choices[key]?.sampleKeyPrefix ?? defaultPrefix) : undefined}
+                        onPrefix={(v) => setKeyPrefixDraft((prev) => ({ ...prev, [key]: v }))}
+                        report={report}
+                        ambiguous={choices[key]?.sampleKeyAmbiguous === true}
+                        {...(keyPreviewError[key] === undefined ? {} : { error: keyPreviewError[key] })}
+                        onRetry={() => {
+                          previewAsked.current.delete(key);
+                          setPreviewRetry((n) => n + 1);
+                        }}
+                        onToggle={(index) => toggleKey(c.fileId, c.sheet, index)}
+                        onUse={() => useKey(c.fileId, c.sheet)}
+                        onClear={() => clearKey(c.fileId, c.sheet)}
+                      />
+                    )}
+                    <p>{t('convert.codes.second')}</p>
                     <button type="button" className="button" onClick={() => pickCodes(c.fileId, c.sheet, null)}>
                       {t('convert.codes.propose')}
                     </button>
@@ -1046,6 +1353,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
                 <p className="muted">{t('convert.summary.noLand')}</p>
+                {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={exportBlocked} {...(notWrittenProps === undefined ? {} : { notWritten: notWrittenProps })} />}
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
@@ -1070,7 +1378,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                             />
                             <span>{t('convert.accept.rule', { n: group.length, rule })}</span>
                           </label>
-                          <FindingItems findings={group} />
+                          <FindingItems findings={group} onChoose={chooseForSheet} />
                         </div>
                       );
                     })}
@@ -1088,7 +1396,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     )}
                   </div>
                 )}
-                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" />
+                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" onChoose={chooseForSheet} />
                 <p role="status" className={view.ok ? 'notice' : 'notice notice-blocked'}>
                   {view.ok ? t('convert.summary.none') : t('convert.summary.blocked')}
                 </p>
@@ -1105,6 +1413,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   {t('convert.export.button')}
                 </button>
               </div>
+              {notWrittenProps !== undefined && <NotWrittenList {...notWrittenProps} />}
               <p id="convert-export-note" className="muted" role="note" aria-live="polite">
                 {view !== null && !canExport && !exporting && !working ? t('convert.export.blocked') : ''}
               </p>
@@ -1193,7 +1502,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1228,6 +1537,22 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
               </button>
             </>
           )}
+          {f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="leave-out" data-reason={String(f.params.reason)} onClick={() => onChoose(f, 'leaveOut')}>
+                {t('convert.finding.leaveOut', { count: Number(f.params.count) })}
+              </button>
+            </>
+          )}
+          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED') && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="ask-again" onClick={() => onChoose(f, 'askAgain')}>
+                {t('convert.finding.askAgain')}
+              </button>
+            </>
+          )}
           {f.ruleId === 'CONV-ENV-ONLY-SHEET' && (
             <>
               {' '}
@@ -1240,7 +1565,7 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

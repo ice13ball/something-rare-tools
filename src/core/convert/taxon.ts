@@ -189,7 +189,7 @@ export function splitTaxon(text: string): TaxonSplit {
  * Is what is left of the name plausibly a Latin name? A reason code when it is not (the user is asked, whatever the split did):
  * digits, a slash, a "?", a stage range such as CVI-CV, a one-letter word, a sex marker at the end, or more than three words.
  */
-export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long' | 'remark';
+export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long' | 'remark' | 'underscore';
 export function nameDoubt(name: string): NameDoubt | undefined {
   if (/\d/.test(name)) return 'digits';
   // a comma that is left in the name: a remark after it that is no stage, no qualifier and no sex ("Foraminifera, planktic"); the user decides what is the name and what the remark
@@ -203,8 +203,20 @@ export function nameDoubt(name: string): NameDoubt | undefined {
   if (words.length > 1 && sexToken(words[words.length - 1]) !== undefined) return 'sex-marker';
   // a rank marker (f., var., subsp.) is not a word of the name: "Aglantha digitale f. rosea" is three
   if (words.filter((w) => !/^(f|var|subsp|ssp|forma)\.$/i.test(w)).length > 3) return 'long';
+  // LAST, so a name that already has another doubt keeps that reason: "Genus_species" (a space typed as an underscore?) is asked, never rewritten
+  if (underscoreName(words[0] ?? '')) return 'underscore';
   return undefined;
 }
+
+/**
+ * The first word is two or more parts of letters only, joined by underscores, and the first part is capitalised ("Calanus_finmarchicus", "C_finmarchicus").
+ * A code ("SP_01", "sp_1"), a part that is not letters only ("Calanus_sp.") and a lower-case start ("genus_species") are not a name written with underscores.
+ * Only the first word counts: an underscore in an author part later in the name is no doubt about the name.
+ */
+const underscoreName = (word: string): boolean => {
+  const parts = word.split('_');
+  return parts.length >= 2 && /^\p{Lu}\p{L}*$/u.test(parts[0]) && parts.every((p) => /^\p{L}+$/u.test(p));
+};
 
 /** Did the split take something out of the name (a qualifier or a stage)? Only those need the user's approval. */
 export const splitChanged = (s: TaxonSplit): boolean => s.identificationQualifier !== undefined || s.lifeStage !== undefined || s.sex !== undefined;
@@ -261,4 +273,52 @@ export function distinctSplits(names: readonly string[], approved?: ApprovedSpli
 export function bulkApprovable(entries: readonly SplitEntry[]): { approve: SplitEntry[]; skipped: SplitEntry[] } {
   const open = entries.filter((s) => s.needsDecision && !s.approved);
   return { approve: open.filter((s) => s.doubt === undefined), skipped: open.filter((s) => s.doubt !== undefined) };
+}
+
+/** The reasons in the order the page shows them (the order `nameDoubt` tests them, so a name with two doubts sits in the first only). */
+const DOUBT_ORDER: readonly NameDoubt[] = ['digits', 'remark', 'slash', 'question', 'stage-range', 'single-letter', 'sex-marker', 'long', 'underscore'];
+
+/**
+ * The open doubted names (need a decision, not approved) grouped by their reason, so the page can offer one button per reason with the list beside it.
+ * `nameDoubt` returns ONE reason per name (the first that applies: "Foo 2/3" is `digits`, not `slash`), so a name is in exactly one group and a group
+ * action can never touch a name twice. Approved names and names without a doubt are in no group. Empty reasons are left out.
+ */
+export function doubtedGroups(entries: readonly SplitEntry[]): { reason: NameDoubt; entries: SplitEntry[] }[] {
+  return DOUBT_ORDER.map((reason) => ({ reason, entries: entries.filter((s) => s.needsDecision && !s.approved && s.doubt === reason) })).filter((g) => g.entries.length > 0);
+}
+
+/**
+ * The split a `single-letter` name would get if its trailing single "m" or "f" is read as the sex ("C. vanus m": name "C. vanus", sex male), or undefined
+ * when it does not apply. The letter is read by `sexToken`, the same reader splitTaxon uses (so the same letters, in the same case), not by a second parser;
+ * only a bare one-letter last word counts ("f." is a forma), the name must keep at least one word and must have no doubt of its own once the letter is gone
+ * ("C. x f" still has a single letter in it), and a name that already has a sex keeps it. Nothing is applied here: the page offers it, the user approves it.
+ */
+export function sexLetterSplit(s: SplitEntry): TaxonSplit | undefined {
+  if (s.doubt !== 'single-letter' || s.approved || s.split.sex !== undefined) return undefined;
+  // the letter is the last word of the typed text itself; the rest goes through splitTaxon as if it had been typed alone, so "Genus spp. m" gets the qualifier
+  // "spp." (and a stage its stage) exactly as "Genus spp." does, instead of leaving "sp." inside the name
+  const words = s.verbatim.trim().split(/\s+/);
+  const last = words[words.length - 1];
+  if (words.length < 2 || last === undefined || last.length !== 1) return undefined;
+  const sex = sexToken(last);
+  if (sex === undefined) return undefined;
+  const rest = splitTaxon(words.slice(0, -1).join(' '));
+  // a sex already read in the rest, or a doubt that is still there ("C. x f"), leaves the name to its own row
+  if (rest.sex !== undefined || nameDoubt(rest.scientificName) !== undefined) return undefined;
+  return { ...rest, verbatimIdentification: s.verbatim, sex };
+}
+
+/**
+ * The split an `underscore` name would get if every underscore is read as a space ("Acartia_hudsonica" -> "Acartia hudsonica"), or undefined when it does
+ * not apply: not an underscore name, already approved, or the split of the text with spaces would set more than a name and a qualifier (a stage, a sex), or still have a doubt of its own ("Acartia_hudsonica_C" leaves a single
+ * letter). The text goes through splitTaxon as if it had been typed with spaces, and the exact original stays in verbatimIdentification. Nothing is applied
+ * here: the page offers it as a group action the person presses, and the name is never rewritten otherwise.
+ */
+export function underscoreSpaceSplit(s: SplitEntry): TaxonSplit | undefined {
+  if (s.doubt !== 'underscore' || s.approved) return undefined;
+  const spaced = splitTaxon(s.verbatim.replace(/_/g, ' '));
+  if (nameDoubt(spaced.scientificName) !== undefined) return undefined;
+  // only a name and, at most, a qualifier: a stage, a sex or anything else the list does not show leaves the name to its own row
+  if (spaced.lifeStage !== undefined || spaced.sex !== undefined) return undefined;
+  return { ...spaced, verbatimIdentification: s.verbatim };
 }

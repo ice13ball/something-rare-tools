@@ -96,10 +96,13 @@ describe('a long sheet with blank or NaN quantities', () => {
 
   it('a row with a count or a weight and no taxon name is said, not dropped silently', async () => {
     const e = await run([row('s1', 'Calanus finmarchicus', 4, 1), ['S1', 's1', '2023-06-14', 55.5, 2.5, null, 3, null], ['S1', 's1', '2023-06-14', 55.5, 2.5, null, null, 2.5]]);
-    const f = find(e, 'CONV-TAXON-EMPTY-ROW');
+    // one message for the same lines: the question that blocks until the person decides (leave them out and list them, or correct the file) replaces the warning about them
+    expect(find(e, 'CONV-TAXON-EMPTY-ROW')).toHaveLength(0);
+    const f = find(e, 'CONV-ROW-NOT-UNDERSTOOD');
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual([3, 4]);
-    expect(policyOf(f[0])).toBe('accept');
+    expect(f[0].params).toMatchObject({ reason: 'no-taxon', count: 2 });
+    expect(policyOf(f[0])).toBe('block');
   });
 
   it('names the other quantity-named column that is filled on the rows counted as NA, and says when the whole column is empty', async () => {

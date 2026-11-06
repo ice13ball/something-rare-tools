@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { distinctSplits, nameDoubt, splitChanged, splitTaxon } from '../../src/core/convert/taxon';
+import { distinctSplits, doubtedGroups, nameDoubt, sexLetterSplit, splitChanged, splitTaxon } from '../../src/core/convert/taxon';
 import { fileOf, sheetInput } from './helpers';
 
 describe('splitTaxon', () => {
@@ -167,5 +167,46 @@ describe('sex markers (round 3)', () => {
     expect(splitTaxon('Acartia? f')).toEqual({ verbatimIdentification: 'Acartia? f', scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
     expect(splitTaxon('Acartia? m.')).toMatchObject({ scientificName: 'Acartia', identificationQualifier: '?', sex: 'male' });
     expect(splitTaxon('Acartia ? f')).toMatchObject({ scientificName: 'Acartia', identificationQualifier: '?', sex: 'female' });
+  });
+});
+
+describe('doubtedGroups', () => {
+  const names = ['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4', 'Ggg hhh/iii', 'Jjj kkk/lll', 'Mmm nnn', 'Ooo ppp 5/6'];
+  it('groups the open doubted names by reason, in a fixed order, each name once', () => {
+    const groups = doubtedGroups(distinctSplits(names));
+    expect(groups.map((g) => g.reason)).toEqual(['digits', 'slash']);
+    expect(groups[0].entries.map((e) => e.verbatim)).toEqual(['Aaa bbb 2', 'Ccc ddd 3', 'Eee fff 4', 'Ooo ppp 5/6']); // digits and a slash: digits wins
+    expect(groups[1].entries.map((e) => e.verbatim)).toEqual(['Ggg hhh/iii', 'Jjj kkk/lll']);
+  });
+  it('leaves out approved names, names without a doubt and empty reasons', () => {
+    const approved = { 'Aaa bbb 2': splitTaxon('Aaa bbb 2') };
+    const groups = doubtedGroups(distinctSplits(names, approved));
+    expect(groups[0].entries.map((e) => e.verbatim)).not.toContain('Aaa bbb 2');
+    expect(groups.flatMap((g) => g.entries.map((e) => e.verbatim))).not.toContain('Mmm nnn');
+    expect(doubtedGroups(distinctSplits(['Mmm nnn']))).toEqual([]);
+  });
+});
+
+describe('sexLetterSplit', () => {
+  const one = (name: string) => sexLetterSplit(distinctSplits([name])[0]);
+  it('reads a bare trailing m or f with the same reader as splitTaxon', () => {
+    expect(one('C. vanus m')).toMatchObject({ scientificName: 'C. vanus', sex: 'male', verbatimIdentification: 'C. vanus m' });
+    expect(one('Ccc ddd f')).toMatchObject({ scientificName: 'Ccc ddd', sex: 'female' });
+    expect(one('Ccc ddd F')?.sex).toBe('female'); // sexToken lowercases, so does this
+  });
+  it('runs the rest through splitTaxon: "Genus spp. m" has the qualifier spp., not "spp." inside the name', () => {
+    const typed = splitTaxon('Ggg spp.');
+    expect(typed).toMatchObject({ scientificName: 'Ggg', identificationQualifier: 'spp.' });
+    expect(one('Ggg spp. m')).toEqual({ verbatimIdentification: 'Ggg spp. m', scientificName: 'Ggg', identificationQualifier: typed.identificationQualifier, sex: 'male' });
+    expect(one('Hhh sp. f')).toMatchObject({ scientificName: 'Hhh', identificationQualifier: 'sp.', sex: 'female' });
+    expect(one('cf. Iii jjj m')).toMatchObject({ scientificName: 'Iii jjj', identificationQualifier: 'cf.', sex: 'male' });
+  });
+  it('is undefined for another letter, a forma, a lone word, a second doubt, a name with a sex, an approved name', () => {
+    expect(one('C. vanus x')).toBeUndefined();
+    expect(one('Ccc ddd f.')).toBeUndefined();
+    expect(one('f')).toBeUndefined();
+    expect(one('C. x f')).toBeUndefined();
+    const e = distinctSplits(['Ccc ddd f'], { 'Ccc ddd f': splitTaxon('Ccc ddd f') })[0];
+    expect(sexLetterSplit(e)).toBeUndefined();
   });
 });

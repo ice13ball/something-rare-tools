@@ -41,21 +41,19 @@ describe('ROW-NON-NUMERIC: noun and verb agree with the number of lines', () => 
   });
 });
 
-describe('CONV-SUMMARY-ROW-KEPT: "delete it" for one row, "delete them" for several', () => {
+describe('CONV-SUMMARY-ROW-KEPT: "it is not a real sample" for one row, "they are not real samples" for several, and no advice to delete', () => {
   const kept = (count: number, lang: 'pl' | 'en' | 'de' | 'fr'): string =>
     renderConvertPlain(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: 'f.csv', sheet: 'S', value: 'Max', lines: lines(count), params: { count } }), lang);
-  it.each([1, 2, 5, 22])('%i row(s): the pronoun agrees in every language', (n) => {
+  it.each([1, 2, 5, 22])('%i row(s): the verb agrees in every language, and nothing says to delete', (n) => {
     const pl = kept(n, 'pl');
-    if (n === 1) {
-      expect(pl).toContain('usuń go');
-      expect(pl).not.toContain('usuń je');
-    } else {
-      expect(pl).toContain('usuń je');
-      expect(pl).not.toContain('usuń go');
-    }
-    expect(kept(n, 'en')).toContain(n === 1 ? 'delete it' : 'delete them');
+    expect(pl).toContain(n === 1 ? 'to nie próbka' : 'to nie próbki');
+    expect(pl).not.toContain(n === 1 ? 'to nie próbki' : 'to nie próbka,');
+    expect(kept(n, 'en')).toContain(n === 1 ? 'it is not a real sample' : 'they are not real samples');
     expect(kept(n, 'de')).toContain(n === 1 ? 'Ist es keine echte Probe' : 'Sind es keine echten Proben');
-    expect(kept(n, 'fr')).toContain(n === 1 ? "supprimez-la" : 'supprimez-les');
-    for (const lang of ['pl', 'en', 'de', 'fr'] as const) expect(kept(n, lang), lang).not.toMatch(/\{|\}/);
+    expect(kept(n, 'fr')).toContain(n === 1 ? "Si ce n'est pas un échantillon" : 'Si ce ne sont pas des échantillons');
+    for (const lang of ['pl', 'en', 'de', 'fr'] as const) {
+      expect(kept(n, lang), lang).not.toMatch(/\{|\}/);
+      expect(kept(n, lang), lang).not.toMatch(/delete|usuń|löschen|supprim/i);
+    }
   });
 });

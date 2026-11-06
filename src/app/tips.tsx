@@ -11,6 +11,7 @@ import { t } from './i18n';
 import { DERIVED_DECIMALS } from '../core/convert/events';
 import { BASES_OF_RECORD, EML_VERSION, GBIF_PROFILE_VERSION, LICENCES } from '../core/convert/metadata';
 import { NVS_LIMIT } from '../core/convert/nvs';
+import { MAX_EVENT_ID } from '../core/convert/sampleKey';
 import { MAX_PAIRS } from '../core/convert/pivotLimits';
 import { P01, P06, PRESSURE, VARIABLE_CONCEPTS } from '../core/convert/vocab';
 import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
@@ -230,6 +231,14 @@ const DEFS = {
   convertEffortUnit: { label: 'convert.effort.unit', values: { units: codes(P06.m3, P06.m2) } },
   convertEffortDimension: { label: 'convert.effort.dimension', values: { volumeConcept: codes(P01.volumeSampled), areaConcept: codes(P01.areaSampled) } },
   convertCodes: { label: 'convert.codes.title' },
+  convertKey: {
+    label: 'convert.key.title',
+    values: {
+      maxId: () => String(MAX_EVENT_ID),
+      sameNumber: (lang) => ({ en: '1 and 1.0', pl: '1 i 1.0', de: '1 und 1.0', fr: '1 et 1.0' })[lang],
+      sameCase: (lang) => ({ en: 'A1 and a1', pl: 'A1 i a1', de: 'A1 und a1', fr: 'A1 et a1' })[lang],
+    },
+  },
   convertTree: { label: 'convert.tree.title' },
   convertSummaryColumn: { label: 'convert.summary.column' },
   convertMetaTitle: { label: 'convert.meta.f.title' },

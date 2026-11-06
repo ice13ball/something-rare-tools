@@ -13,6 +13,8 @@ import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
 import type { NercColumnDecision, NercDecisions, NercPick } from '../core/convert/nerc';
+import { keyHashes, resolveKeyHashes } from '../core/convert/keySetting';
+import { defaultKeyPrefix } from '../core/convert/sampleKey';
 
 /** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
 export interface QuantityForm {
@@ -56,8 +58,32 @@ export interface SheetChoice {
   totalOnce: boolean;
   /** The user's choice on CONV-QUANTITY-REPEATED: these equal quantities are real counts. Never automatic; a companion file can pre-tick it. */
   realCounts: boolean;
-  /** The user's choice on CONV-ROW-COPIES: drop the rows that are exact copies of an earlier row. Never automatic; a companion file can pre-tick it. */
+  /** The user's choice on CONV-ROW-COPIES: leave out the rows that are exact copies of an earlier row and list them. Never automatic and never pre-ticked: a companion file gives `dropCopiesFile` instead. */
   dropCopies: boolean;
+  /** The number of copies a companion file recorded with its answer. The converter honours it only when today's analysis finds the same number; the tick stays unticked here. */
+  dropCopiesFile?: number;
+  /** The same number as the page recorded it when the person answered here (so the finding does not say "from the companion file"). */
+  dropCopiesAnswer?: number;
+  /** The same for "one occurrence per sample and taxon": the number of groups the companion file recorded. */
+  totalOnceFile?: number;
+  /** The same as the page recorded it. */
+  totalOnceAnswer?: number;
+  /** The reasons the user answered "leave these rows out and list them" for (CONV-ROW-NOT-UNDERSTOOD), each with the number of rows it was given for. Starts empty; never prefilled. */
+  leaveOut?: { reason: string; count: number }[];
+  /** The number of rows the user's answer "these are real counts" covered, as the page recorded it. The converter honours it only when today's analysis finds the same number. */
+  realCountsAnswer?: number;
+  /** The same as a companion file recorded it. */
+  realCountsFile?: number;
+  /** The same answers as a companion file recorded them (the reason, the rows of that reason and the rows of the sheet): honoured by the converter only when today's numbers are the same. */
+  leaveOutFile?: { reason: string; count: number; rows: number }[];
+  /** The columns the person picked on the page to say which rows are one sample (indexes, in the order picked). Never prefilled and never guessed; absent until the person uses a key. */
+  sampleKey?: number[];
+  /** The key above was read from a companion file (it held: the same columns, the same number of rows). */
+  sampleKeyFromFile?: boolean;
+  /** The name every sample ID of the key starts with, as the person saw it (and may have changed it); kept in the companion file so that a renamed file keeps its IDs. */
+  sampleKeyPrefix?: string;
+  /** The companion file has saved keys that fit this sheet more than once (several keys, or one key for several sheets): none was applied and the picker says so. */
+  sampleKeyAmbiguous?: true;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -186,6 +212,8 @@ export function tableMetadataOf(m: DatasetMetadata): DatasetMetadata {
   return { ...EMPTY_METADATA, datasetName: datasetNameOf(m), institutionCode: m.institutionCode.trim(), basisOfRecord: m.basisOfRecord };
 }
 
+/** The mark that the person changed the role of a column in the table (kept beside the confirmed candidates, cleared with them when a sheet is read again): CONV-ROLE-UNCONFIRMED does not list such a column. */
+export const handKey = (fileId: string, sheet: string, index: number): string => `${fileId}\u0000${sheet}\u0000hand\u0000${index}`;
 export const candidateKey = (fileId: string, sheet: string, index: number): string => `${fileId}\u0000${sheet}\u0000${index}`;
 
 export interface TaxonCandidate {
@@ -228,6 +256,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       // a proposed taxon column that is not confirmed is left out: its role becomes "ignore" for the conversion. On a PROFILE sheet it keeps its role instead (there is no
       // confirmation of species there), so that the conversion says that the column is not written (CONV-COLUMN-NOT-EXPORTED) and nothing is dropped without a word.
       const unconfirmedTaxa: number[] = [];
+      const handSet = m0.columns.filter((col) => s.confirmed[handKey(f.fileId, m0.sheet, col.index)] === true).map((col) => col.index);
       const m: SheetMapping = {
         ...m0,
         columns: m0.columns.map((col) => {
@@ -244,15 +273,51 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
+}
+
+/** What a companion file recorded for a sheet that the converter checks against today's numbers (never a tick): copies, repeated totals and the reasons left out. */
+function fileAnswers(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'dropCopiesFile' | 'totalOnceFile' | 'leaveOutFile' | 'realCountsFile'> {
+  const real = settings.realCountsRows?.find((x) => x.sheet === sheet);
+  const copies = settings.dropCopiesRows?.find((x) => x.sheet === sheet);
+  const once = settings.totalOnceGroups?.find((x) => x.sheet === sheet);
+  const left = (settings.leaveOut ?? []).filter((x) => x.sheet === sheet).map((x) => ({ reason: x.reason, count: x.count, rows: x.rows }));
+  return { ...(copies === undefined ? {} : { dropCopiesFile: copies.count }), ...(once === undefined ? {} : { totalOnceFile: once.count }), ...(left.length === 0 ? {} : { leaveOutFile: left }), ...(real === undefined ? {} : { realCountsFile: real.count }) };
+}
+
+type SavedKey = NonNullable<ConvertParseResult['settings']['sampleKey']>[number];
+const TABLE_NAME = /\.(csv|tsv|tab|txt)$/i;
+
+/**
+ * The saved key (companion file) that belongs to a sheet of this drop, or why none is applied.
+ *  1. The name first: an entry with the sheet's name that fits (same number of rows, every column found again) is the sheet's. An entry with its name but another number of rows is the sheet's too, and does not hold.
+ *  2. A table file (not a workbook) whose name is in no entry may be a renamed file. An entry of a table file (its sheet name is a table file name) that belongs by name to no sheet of this drop and fits by
+ *     columns and rows is applied only when it is the ONLY such entry that fits this sheet and no other table file of the drop without a name match fits it too. Otherwise none is applied and the sheet
+ *     says the question is open because several saved keys fit.
+ *  3. A workbook entry never matches a table file by columns alone, and a workbook sheet is known by its name only.
+ */
+function savedKeyFor(parsed: ConvertParseResult, file: ConvertParseResult['files'][number], sheet: ConvertParseResult['files'][number]['sheets'][number]): { kind: 'found'; entry: SavedKey } | { kind: 'ambiguous' } | { kind: 'none' } {
+  const entries = parsed.settings.sampleKey ?? [];
+  const fits = (k: SavedKey, sh: { header: string[]; rowCount: number }): boolean => k.rows === sh.rowCount && resolveKeyHashes(sh.header, k.hashes) !== undefined;
+  const named = entries.find((k) => k.sheet === sheet.name);
+  if (named !== undefined) return fits(named, sheet) ? { kind: 'found', entry: named } : { kind: 'none' };
+  const all = parsed.files.flatMap((f) => f.sheets.map((sh) => ({ f, sh })));
+  const renamable = (f: typeof file, sh: typeof sheet): boolean => f.kind !== 'xlsx' && f.sheets.length === 1 && !entries.some((k) => k.sheet === sh.name);
+  if (!renamable(file, sheet)) return { kind: 'none' };
+  const free = entries.filter((k) => TABLE_NAME.test(k.sheet) && !all.some((o) => o.sh.name === k.sheet));
+  const mine = free.filter((k) => fits(k, sheet));
+  if (mine.length === 0) return { kind: 'none' };
+  if (mine.length > 1) return { kind: 'ambiguous' };
+  const rivals = all.filter((o) => !(o.f === file && o.sh === sheet) && renamable(o.f, o.sh) && fits(mine[0], o.sh));
+  return rivals.length === 0 ? { kind: 'found', entry: mine[0] } : { kind: 'ambiguous' };
 }
 
 /**
@@ -267,13 +332,32 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
   const castTicked = new Set(parsed.settings.profileIgnoreCast ?? []);
   const asTable = new Set(parsed.settings.transposedAsTable ?? []);
   const presence = new Set(parsed.settings.presenceOnly ?? []);
-  const once = new Set(parsed.settings.totalOnce ?? []);
-  const real = new Set(parsed.settings.realCounts ?? []);
-  const drop = new Set(parsed.settings.dropCopies ?? []);
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const profile = marked.has(sh.name);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: once.has(sh.name), realCounts: real.has(sh.name), dropCopies: drop.has(sh.name) };
+      // a key a companion file recorded holds only when every column is found again by its hash and the sheet has the same number of rows; otherwise the question is open
+      const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
+      const saved = match.kind === 'found' ? match.entry : undefined;
+      const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+    }
+  }
+  return out;
+}
+
+/**
+ * The sample keys the person picked (or a companion file gave and still holds), for the companion file: the sheet, the hashes of the key columns and the number of rows (core/convert/keySetting.ts).
+ * No header text: a sheet in use that is not a profile and has a key.
+ */
+export function sampleKeySettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): { sheet: string; hashes: string; rows: number; prefix?: string }[] {
+  const out: { sheet: string; hashes: string; rows: number; prefix?: string }[] = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (!c || !c.use || c.profile || c.sampleKey === undefined || c.sampleKey.length === 0 || out.some((o) => o.sheet === sh.name)) continue;
+      const hashes = keyHashes(sh.header, c.sampleKey);
+      // the name in front of the IDs is kept as it was used (the default too), so that the same file under another name keeps its IDs
+      if (hashes !== undefined) out.push({ sheet: sh.name, hashes, rows: sh.rowCount, prefix: c.sampleKeyPrefix ?? defaultKeyPrefix(f.kind, f.fileName, sh.name) });
     }
   }
   return out;
@@ -317,7 +401,7 @@ export function presenceSettingsOf(parsed: ConvertParseResult, choices: Record<s
 
 /** The names of the sheets in use whose repeated per-taxon total the user chose to write once per sample and taxon: what the companion file keeps (nothing but names). */
 /** The names of the sheets in use where the user declared the equal quantities real counts / chose to drop the exact copies: what the companion file keeps (nothing but names). */
-export function sheetFlagSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, flag: 'realCounts' | 'dropCopies'): string[] {
+export function sheetFlagSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, flag: 'dropCopies'): string[] {
   const out: string[] = [];
   for (const f of parsed.files) for (const sh of f.sheets) if (choices[sheetKey(f.fileId, sh.name)]?.use === true && choices[sheetKey(f.fileId, sh.name)]?.[flag] === true && !out.includes(sh.name)) out.push(sh.name);
   return out;
@@ -339,3 +423,29 @@ export function codesFileName(fileName: string, sheet: string, sheetCount: numbe
   const stem = fileName.replace(/\.[A-Za-z0-9]+$/, '');
   return `${stem}${sheetCount > 1 ? `-${sheet}` : ''}-with-codes.csv`;
 }
+
+/**
+ * What a tick of "I accept" holds for: the findings of one rule as they are now. A tick is kept per rule id together with this fingerprint, so a rule whose
+ * findings change after the tick (a new mapping, another sheet) is no longer accepted and has to be ticked again.
+ */
+export const fingerprint = (findings: readonly Finding[]): string => JSON.stringify(findings.map((f) => [f.file, f.sheet, f.field, f.value, f.lines, f.params]));
+
+/**
+ * CONV-ROLE-UNCONFIRMED is ticked for a SET of columns, not for a text: a column the person answers by hand after the tick leaves the list and the tick stays, only a column that was not
+ * on the list at the tick reopens it. The set is the (file, sheet, column, proposed role) of every listed column, kept in `params.keys`. The tick is the person's acknowledgement and nothing
+ * else: it is not a role, it is not sent anywhere except in the list of accepted rules the export asks for, and nothing of it is saved in the companion file.
+ */
+export const ROLE_RULE = 'CONV-ROLE-UNCONFIRMED';
+export const listedColumns = (findings: readonly Finding[]): string[] =>
+  findings.flatMap((f) => String(f.params.keys ?? '').split(',').filter((k) => k !== '').map((k) => `${f.file ?? ''}\u0000${f.sheet ?? ''}\u0000${k}`)).sort();
+export const printOf = (rule: string, findings: readonly Finding[]): string => (rule === ROLE_RULE ? JSON.stringify(listedColumns(findings)) : fingerprint(findings));
+export const tickHolds = (rule: string, ticked: string | undefined, now: string | undefined, findings: readonly Finding[]): boolean => {
+  if (ticked === undefined) return false;
+  if (rule !== ROLE_RULE) return ticked === now;
+  try {
+    const before = new Set(JSON.parse(ticked) as string[]);
+    return listedColumns(findings).every((k) => before.has(k));
+  } catch {
+    return false;
+  }
+};

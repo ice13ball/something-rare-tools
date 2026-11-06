@@ -35,20 +35,20 @@ import { parseNumber } from '../values/numbers';
 
 export type ConvertShape = 'wide' | 'long';
 
-const TAXON_NAME = /^(species|taxon|taxa|gatunek|takson|art|espece)( name| nom| name)?$/;
+export const TAXON_NAME = /^(species|taxon|taxa|gatunek|takson|art|espece)( name| nom| name)?$/;
 // the unambiguous quantity words may carry a tail ("abundance ind"); the short ones only stand alone
-const QUANTITY_STANDALONE = /^(count|counts|anzahl|nombre|comptage)$/;
+export const QUANTITY_STANDALONE = /^(count|counts|anzahl|nombre|comptage)$/;
 // whole-header phrases of two or more words (an optional unit in brackets is cut off before the match): "Liczba osobników", "Liczba os.", "Anzahl Individuen",
 // "Nombre d'individus" are counts, "Individuendichte" a density. "Liczba prób", "Anzahl Proben", "Nombre d'échantillons", "Liczba gatunków", "Anzahl Arten" count
 // something else (samples, species) and match nothing here.
-const QUANTITY_PHRASE_COUNT = /^(liczba osobnikow|liczba os|anzahl individuen|nombre d individus)$/;
-const QUANTITY_PHRASE_DENSITY = /^(individuendichte)$/;
-const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zageszczenie|liczebnosc|biomass|biomasa|biomasse)( .*)?$/;
+export const QUANTITY_PHRASE_COUNT = /^(liczba osobnikow|liczba os|anzahl individuen|nombre d individus)$/;
+export const QUANTITY_PHRASE_DENSITY = /^(individuendichte)$/;
+export const QUANTITY_WORD = /^(abundance|abundanz|abondance|density|densite|dichte|zageszczenie|liczebnosc|biomass|biomasa|biomasse)( .*)?$/;
 // (the plankton data bases abbreviate the same two words: 'Vol filt', 'Samp vol', 'volfilt'; any other abbreviation is decided by the unit of the column, see isGeometryUnit)
-const EFFORT_VOLUME = /^(volume filtered|filtered volume|vol filtered|vol filt|volfilt|volume sampled|sampled volume|sample volume|sampling volume|samp vol|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
-const EFFORT_AREA = /^(area|area sampled|sampled area|swept area|area swept|powierzchnia|flache|surface|surface echantillonnee)$/;
+export const EFFORT_VOLUME = /^(volume filtered|filtered volume|vol filtered|vol filt|volfilt|volume sampled|sampled volume|sample volume|sampling volume|samp vol|volume|objetosc|objetosc przefiltrowana|volumen|volumen filtriert|volume filtre|volume echantillonne)$/;
+export const EFFORT_AREA = /^(area|area sampled|sampled area|swept area|area swept|powierzchnia|flache|surface|surface echantillonnee)$/;
 // a plain "Area" is a place name on a sheet with no taxa; only a header that says sampled or swept is an effort there
-const PLAIN_AREA = /^(area|powierzchnia|flache|surface)$/;
+export const PLAIN_AREA = /^(area|powierzchnia|flache|surface)$/;
 // the words that mean the water, not an abundance, when a "density" header names them; and the units of a seawater density (mass per volume)
 const SEAWATER_DENSITY_NAME = /^(density|seawater density|sea water density|water density|in situ density|density of seawater|gestosc wody|gestosc wody morskiej|dichte|wasserdichte|meerwasserdichte|masse volumique|masse volumique de l eau)$/;
 const SEAWATER_DENSITY_ONLY = /^(seawater density|sea water density|water density|in situ density|density of seawater|gestosc wody|gestosc wody morskiej|wasserdichte|meerwasserdichte|masse volumique de l eau)$/;
@@ -72,9 +72,9 @@ function isSummaryHeader(rawName: string): boolean {
 }
 // the sample code of a row: PANGAEA's "Sample label (Multinet number)" and "Sample code/label" (the bracket text after the name is cut off before the match)
 // (German whole headers: "Nr. der Probe", "Probennummer", "Proben-Nr.", "Probe Nr.", "Proben-ID"; /check's columns.ts is not changed for them)
-const SAMPLE_CODE_NAME = /^(sample label|sample code|sample code label|sample name|sample id|sample number|nr der probe|probennummer|proben nr|probe nr|proben id)$/;
+export const SAMPLE_CODE_NAME = /^(sample label|sample code|sample code label|sample name|sample id|sample number|nr der probe|probennummer|proben nr|probe nr|proben id)$/;
 // "Stage" and its translations: the life stage of the record (a long sheet)
-const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
+export const STAGE_NAME = /^(stage|life stage|lifestage|stadium|stadium rozwojowe|entwicklungsstadium|stade|stade de developpement)$/;
 
 const DEPTH_WORDS = /^(depth|tiefe|profondeur|glebokosc)(?: (.*))?$/;
 const BOUND_MIN = new Set(['top', 'min', 'minimum', 'from', 'von', 'od', 'de', 'upper', 'start', 'ab']);

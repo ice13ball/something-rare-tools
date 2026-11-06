@@ -11,5 +11,7 @@ export function makeConvertEngine(send: <K extends ConvertRequestType>(req: Extr
     proposeCodes: (fileId, sheet, mapping, shape, extra) => send({ type: 'proposeCodes', fileId, sheet, mapping, ...(shape === undefined ? {} : { shape }), ...(extra === undefined ? {} : { extra }) }),
     pivotChoice: (fileId, sheet, off, describes) => send({ type: 'pivotChoice', fileId, sheet, off, describes }),
     export: (body) => send({ type: 'export', export: body }),
+    notWritten: (body) => send({ type: 'notWritten', notWritten: body }),
+    previewKey: (body, fileId, sheet, columns, prefix) => send({ type: 'previewKey', body, fileId, sheet, columns, ...(prefix === undefined ? {} : { prefix }) }),
   };
 }
