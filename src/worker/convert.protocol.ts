@@ -91,6 +91,9 @@ export interface ConvertSheetRequest {
   dropCopies?: boolean;
   /** The number of copies / groups a companion file recorded with the same answers; the core honours them only when today's analysis finds the same number. */
   dropCopiesCount?: number;
+  /** The count above was read from a companion file (not given on the page). */
+  dropCopiesFromFile?: boolean;
+  totalOnceFromFile?: boolean;
   totalOnceCount?: number;
   /** The number of rows the tick "these are real counts" covered; the core honours it only when today's analysis finds the same number. */
   realCountsRows?: number;

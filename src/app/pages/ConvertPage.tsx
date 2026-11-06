@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRec, TaxonSplit } from '../../core/convert';
-import { biomassBasisOf, bulkApprovable, doubtedGroups, perOccurrenceOf, sexLetterSplit, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
+import { biomassBasisOf, bulkApprovable, doubtedGroups, perOccurrenceOf, sexLetterSplit, underscoreSpaceSplit, judge, licenceDiffersFindings, licenceSourceOf, lookupOf, metadataFindings, pivotNoteFindings, writeConvertSidecar } from '../../core/convert';
 import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
@@ -367,7 +367,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           return { ...prev, [key]: rest };
         }
         if (f.ruleId === 'CONV-ROW-COPIES-DROPPED') {
-          const { dropCopiesFile: _d, ...rest } = c;
+          const { dropCopiesFile: _d, dropCopiesAnswer: _da, ...rest } = c;
           return { ...prev, [key]: { ...rest, dropCopies: false } };
         }
         if (f.ruleId === 'CONV-QUANTITY-REAL-COUNTS') {
@@ -375,17 +375,17 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           return { ...prev, [key]: { ...rest, realCounts: false } };
         }
         if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE') {
-          const { totalOnceFile: _t, ...rest } = c;
+          const { totalOnceFile: _t, totalOnceAnswer: _ta, ...rest } = c;
           return { ...prev, [key]: { ...rest, totalOnce: false } };
         }
         return prev;
       }
       // The other answers switch a check off (or take rows out), so each is kept with the number it was given for, from the question itself: the converter honours it only while its own analysis finds
       // the same number, and the question reopens otherwise. The tick itself is never set by the page.
-      const bound: Record<'totalOnce' | 'realCounts' | 'dropCopies', { field: 'totalOnceFile' | 'realCountsAnswer' | 'dropCopiesFile'; param: string }> = {
-        totalOnce: { field: 'totalOnceFile', param: 'collapsed' },
+      const bound: Record<'totalOnce' | 'realCounts' | 'dropCopies', { field: 'totalOnceAnswer' | 'realCountsAnswer' | 'dropCopiesAnswer'; param: string }> = {
+        totalOnce: { field: 'totalOnceAnswer', param: 'collapsed' },
         realCounts: { field: 'realCountsAnswer', param: 'covered' },
-        dropCopies: { field: 'dropCopiesFile', param: 'count' },
+        dropCopies: { field: 'dropCopiesAnswer', param: 'count' },
       };
       const b = bound[choice];
       const n = Number(f.params[b.param]);
@@ -523,7 +523,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // Michal, 03.11: "approve as written" in a group only where the doubt cannot hide a non-name (a digit: an authority's year; more than three words: a forma);
   // every other reason stays one by one
   const groups = doubtedGroups(toApprove)
-    .filter((g) => g.reason === 'digits' || g.reason === 'long')
+    .filter((g) => g.reason === 'digits' || g.reason === 'long' || g.reason === 'underscore')
     .map((g) => ({ reason: g.reason, entries: g.entries.filter((s) => drafts[s.verbatim] === undefined) }))
     .filter((g) => g.entries.length > 0);
   // single-letter names whose last token is a bare m or f: one more group, which reads that letter as the sex (never automatic, never a default; the user
@@ -532,11 +532,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const split = drafts[s.verbatim] === undefined ? sexLetterSplit(s) : undefined;
     return split ? [{ entry: s, split }] : [];
   });
+  // underscore names: a second group action that writes a space instead of each underscore, with the result beside every name; never automatic, an edited name is left to its row
+  const underscoreGroup = toApprove.flatMap((s) => {
+    const split = drafts[s.verbatim] === undefined ? underscoreSpaceSplit(s) : undefined;
+    return split ? [{ entry: s, split }] : [];
+  });
   // the group button disappears when it is used; focus moves to the next group's button, else to the heading, so a keyboard user keeps their place
   const splitsSection = useRef<HTMLElement | null>(null);
   const refocus = useRef(false);
   // the splits come back from the worker a moment after the click, so focus moves when the groups really change, not on the first re-render
-  const groupsKey = groups.map((g) => `${g.reason}:${g.entries.length}`).join('|') + `|sex:${sexGroup.length}`;
+  const groupsKey = groups.map((g) => `${g.reason}:${g.entries.length}`).join('|') + `|sex:${sexGroup.length}|us:${underscoreGroup.length}`;
   useEffect(() => {
     if (!refocus.current) return;
     refocus.current = false;
@@ -1127,6 +1132,31 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     }}
                   >
                     {t('convert.splits.approveSex', { n: sexGroup.length })}
+                  </button>
+                </div>
+              )}
+              {underscoreGroup.length > 0 && (
+                <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.underscoreGroup')}>
+                  <p className="convert-doubt">{t('convert.splits.underscoreGroupNote')}</p>
+                  <ul className="convert-doubt-list">
+                    {underscoreGroup.map(({ entry, split }) => (
+                      <li key={entry.verbatim}>
+                        <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="button"
+                    data-group-approve="underscore-space"
+                    onClick={() => {
+                      refocus.current = true;
+                      const fresh = underscoreGroup.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(approved, entry.verbatim));
+                      setDrafts((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => prev[entry.verbatim] === undefined).map(({ entry, split }) => [entry.verbatim, split] as const)) }));
+                      setApproved((prev) => ({ ...prev, ...Object.fromEntries(fresh.filter(({ entry }) => !Object.prototype.hasOwnProperty.call(prev, entry.verbatim)).map(({ entry, split }) => [entry.verbatim, { ...split, verbatimIdentification: entry.verbatim }] as const)) }));
+                    }}
+                  >
+                    {t('convert.splits.approveUnderscoreSpace', { n: underscoreGroup.length })}
                   </button>
                 </div>
               )}

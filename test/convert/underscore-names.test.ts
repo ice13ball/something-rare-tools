@@ -1,6 +1,6 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
-import { distinctSplits, doubtedGroups, nameDoubt, splitTaxon } from '../../src/core/convert/taxon';
+import { distinctSplits, doubtedGroups, nameDoubt, splitTaxon, underscoreSpaceSplit } from '../../src/core/convert/taxon';
 import { UI } from '../../src/core/i18n/ui';
 
 const entry = (t: string) => distinctSplits([t])[0];
@@ -65,5 +65,26 @@ describe('a name written with underscores is asked, never rewritten', () => {
       expect(text, lang).not.toMatch(/remov|usun|usuń|entfern|supprim|delet|lösch/i);
     }
     expect(UI.en['convert.doubt.underscore']).toMatch(/kept exactly as written/);
+  });
+
+  it('the space reading is offered only where the spaced text is a plain name, keeps the exact text, and is never applied by itself', () => {
+    const split = underscoreSpaceSplit(entry('Calanus_finmarchicus'))!;
+    expect(split).toEqual({ verbatimIdentification: 'Calanus_finmarchicus', scientificName: 'Calanus finmarchicus' });
+    expect(entry('Calanus_finmarchicus').split.scientificName).toBe('Calanus_finmarchicus');
+    expect(underscoreSpaceSplit(entry('Calanus_sp'))).toMatchObject({ scientificName: 'Calanus', identificationQualifier: 'sp.', verbatimIdentification: 'Calanus_sp' });
+    // a single letter would be left: its own row decides
+    expect(underscoreSpaceSplit(entry('Acartia_hudsonica_C'))).toBeUndefined();
+    // not an underscore name, or already approved
+    expect(underscoreSpaceSplit(entry('Calanus finmarchicus f'))).toBeUndefined();
+    const approved = distinctSplits(['Calanus_finmarchicus'], { Calanus_finmarchicus: splitTaxon('Calanus_finmarchicus') })[0];
+    expect(underscoreSpaceSplit(approved)).toBeUndefined();
+  });
+
+  it('the label is two sentences: it names what is asked, then says the name is kept (no run-on colon)', () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const text = UI[lang]['convert.doubt.underscore'];
+      expect(text, lang).toMatch(/\)\. /);
+      expect(text, lang).not.toMatch(/: /);
+    }
   });
 });

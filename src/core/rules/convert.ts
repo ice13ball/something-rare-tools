@@ -327,6 +327,15 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     },
     plainIf: [
       {
+        param: 'keyAdvice',
+        plain: {
+          pl: `Próbki wyznacza wybrany klucz. Jeśli te wiersze pochodzą z różnych próbek, dodaj do klucza kolumnę, która je rozróżnia, albo użyj „Zapytaj ponownie”.`,
+          en: `The samples come from the key you picked. If these rows are from different samples, add a column that tells them apart to the key, or use "Ask again".`,
+          de: `Die Proben ergeben sich aus dem gewählten Schlüssel. Stammen diese Zeilen aus verschiedenen Proben, fügen Sie dem Schlüssel eine Spalte hinzu, die sie unterscheidet, oder nutzen Sie „Erneut fragen“.`,
+          fr: `Les échantillons viennent de la clé choisie. Si ces lignes viennent d'échantillons différents, ajoutez à la clé une colonne qui les distingue, ou utilisez « Demander à nouveau ».`,
+        },
+      },
+      {
         param: 'keyPrefix',
         plain: {
           pl: `Identyfikatory próbek z wybranego klucza zaczynają się od nazwy „{keyPrefix}” widocznej przy wyborze klucza. Jeśli dwa arkusze mają ją wspólną, nadaj jednemu inną nazwę.`,
@@ -443,6 +452,17 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Wie gewählt, wird die Summe in „{columns}“ je Probe und Taxon einmal geschrieben ({groups} {+groups:Gruppe|Gruppen}); {count} wiederholte {+count:Zeile wurde|Zeilen wurden} ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Am Vorkommen nicht geschrieben, da die Zeilen darin abweichen: {lost}. Prüfen Sie die Summe.`,
       fr: `Comme choisi, le total de « {columns} » est écrit une fois par échantillon et taxon ({groups} {+groups:groupe|groupes}) ; {count} {+count:ligne répétée ignorée|lignes répétées ignorées} ({+lineCount:ligne|lignes} {lines}). Non écrit sur l'occurrence, les lignes y différant : {lost}. Vérifiez la somme.`,
     },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo sumę powtarza tyle samo grup wierszy.`,
+          en: `This answer was read from the companion file; it holds because the same number of row groups repeat the total.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilengruppen die Summe wiederholen.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de groupes de lignes répète le total.`,
+        },
+      },
+    ],
     technical: `{file}, {sheet}:{lines} field {field}: the user chose to write one occurrence per sample and taxon where {columns} repeats a total on size-class rows ({groups} groups); {count} later row(s) of those groups, whose repeated values equal those of the first row of their group, are not converted. The rows differ in "{differs}" and in {lost}: nothing per-row is written from the first row, because one occurrence would hold several values of them. A group below the threshold, or whose values differ, stays as separate rows. Rows whose other weight or count column has numbers of its own are not taken once (CONV-QUANTITY-REPEATED).`,
   },
   {
@@ -506,6 +526,17 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Wie gewählt, {+count:wurde|wurden} {count} exakte {+count:Kopie|Kopien} von Zeilen ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Prüfen Sie, ob es Kopien waren.`,
       fr: `Comme choisi, {count} {+count:copie exacte|copies exactes} de lignes {+count:a été écartée|ont été écartées} ({+lineCount:ligne|lignes} {lines}). Vérifiez que c'étaient des copies.`,
     },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo tyle samo wierszy jest dokładnymi kopiami.`,
+          en: `This answer was read from the companion file; it holds because the same number of rows are exact copies.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilen exakte Kopien sind.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de lignes sont des copies exactes.`,
+        },
+      },
+    ],
     technical: `{file}, {sheet}:{lines} field {field}: the user chose to leave out the rows that are exact copies of an earlier row (they are listed in the file beside the archive) (every column but a per-row identifier); {count} row(s) are not converted (the sum of the quantity of the sheet was {withCopies} with them and {withoutCopies} without them, before any other rule skips a row).`,
   },
   {
@@ -2181,6 +2212,20 @@ function listedColumnsText(encoded: string, lang: Lang): string {
 /** A finding of CONV-LONG-UNSUPPORTED without a reason (the sheet was not read for another cause) still names every placeholder of its text. */
 const withDefaults = (f: Finding): Finding => (f.ruleId === 'CONV-LONG-UNSUPPORTED' ? { ...f, params: { reason: 'other', count: 0, max: MAX_PAIRS, ...f.params } } : f);
 
+const KEY_SAME_PLAIN: Record<Lang, string> = {
+  pl: `Wybrany klucz daje tym wierszom tę samą próbkę, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: dodaj do klucza kolumnę, która te wiersze rozróżnia, albo użyj „Zapytaj ponownie”.`,
+  en: `The key you picked gives these rows the same sample, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique: add a column that tells these rows apart to the key, or use "Ask again".`,
+  de: `Der gewählte Schlüssel gibt diesen Zeilen dieselbe Probe, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein: fügen Sie dem Schlüssel eine Spalte hinzu, die diese Zeilen unterscheidet, oder nutzen Sie „Erneut fragen“.`,
+  fr: `La clé choisie donne à ces lignes le même échantillon, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : ajoutez à la clé une colonne qui distingue ces lignes, ou utilisez « Demander à nouveau ».`,
+};
+
+const KEY_CROSS_PLAIN: Record<Lang, string> = {
+  pl: `Ten sam identyfikator próbki powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne.`,
+  en: `The same sample identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique.`,
+  de: `Dieselbe Proben-ID entsteht mehrfach, z. B. „{value}“, in {+lineCount:der Zeile|den Zeilen} {lines} (wiederholt: {count}). Kennungen müssen eindeutig sein.`,
+  fr: `Le même identifiant d'échantillon est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques.`,
+};
+
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
@@ -2214,7 +2259,11 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-SAMPLE-CONFLICT' && typeof f.params.what === 'string') f = { ...f, params: { ...f.params, what: conflictWords(f.params.what, lang) } };
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.used === 'string') f = { ...f, params: { ...f.params, used: f.params.used.split(', ').map((w) => USED_WORDS[w]?.[lang] ?? w).join(', ') } };
   const variant = profileVariant(f);
-  let text = fill(variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
+  // a duplicate sample ID made by a picked key inside one sheet: the key gives these rows the same sample; there is no code to change and the station prefix does not touch key IDs
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.keySame === 'yes') return fill(KEY_SAME_PLAIN[lang] || KEY_SAME_PLAIN.en, f, lang);
+  // the same ID from two sheets that share the name in front of the key IDs: there is no code to change; the sentence that follows (plainIf keyPrefix) says what does
+  const crossKey = f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.keyPrefix === 'string' && f.params.keyPrefix !== '';
+  let text = fill(crossKey ? KEY_CROSS_PLAIN[lang] || KEY_CROSS_PLAIN.en : variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);
   // sentences that follow when their param is set (CONV-SAMPLE-CONFLICT: the offer of the tick "of each organism", only for a column that can be one)
   for (const extra of rule.plainIf ?? []) {
     const v = f.params[extra.param];

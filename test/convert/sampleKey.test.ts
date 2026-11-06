@@ -437,7 +437,7 @@ describe('the key contract: a key column is a column that says which sample, wha
     it('the name in front of the IDs: a workbook sheet is its sheet name, a table file is its file name without extension, an edited name wins, a blank one is the default, | and \\ are escaped', () => {
       expect(defaultKeyPrefix('xlsx', 'book.xlsx', 'Counts')).toBe('Counts');
       expect(defaultKeyPrefix('csv', 'survey_v1.csv', 'survey_v1.csv')).toBe('survey_v1');
-      expect(defaultKeyPrefix('pangaea', 'PANGAEA.848550.tab', 'x')).toBe('PANGAEA.848550');
+      expect(defaultKeyPrefix('pangaea', 'PANGAEA.000000.tab', 'x')).toBe('PANGAEA.000000');
       const edited = (prefix: string) => convert({ sheets: [mkSheet('One', rowsOf('A', 1), { columns: [0, 1], prefix })], options: {} });
       expect(sampleIds(edited('Survey 2020'))).toEqual(['Survey 2020|A|1']);
       expect(sampleIds(edited('   '))).toEqual(['One|A|1']);

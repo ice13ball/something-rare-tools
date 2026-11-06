@@ -293,6 +293,8 @@ export function createConvertHandler(): ConvertHandler {
       // the answers carry the numbers they hold for; only whole numbers count, and the core compares them with today's
       ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
       ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
+      ...(s.dropCopiesFromFile === true ? { dropCopiesFromFile: true } : {}),
+      ...(s.totalOnceFromFile === true ? { totalOnceFromFile: true } : {}),
       ...(Number.isInteger(s.realCountsRows) && (s.realCountsRows as number) >= 0 ? { realCountsRows: s.realCountsRows as number } : {}),
       ...(Number.isInteger(s.realCountsRowsFile) && (s.realCountsRowsFile as number) >= 0 ? { realCountsRowsFile: s.realCountsRowsFile as number } : {}),
       // the page's word is not taken for more than a list of words and whole numbers; the core ignores a reason that cannot be left out

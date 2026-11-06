@@ -111,6 +111,9 @@ export interface ConvertSheetInput {
    * the check runs and the question is open (the answer of a file cannot switch a check off for rows it never saw). Ignored when `dropCopies` is true.
    */
   dropCopiesCount?: number;
+  /** The count above came from a companion file: said in the finding. */
+  dropCopiesFromFile?: boolean;
+  totalOnceFromFile?: boolean;
   /**
    * The choice "write one occurrence per sample and taxon", with the number of groups it was given for (the same rule as `dropCopiesCount`). The number is `collapsedGroups` of the analysis
    * (the groups the choice writes once), the same one CONV-QUANTITY-REPEATED-ONCE reports and the companion file keeps.
@@ -2559,7 +2562,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       if (takeOnce) {
         const left = repeated.quantityRepeats ? repeated.skip : repeated.omitWeight;
         if (left.size > 0) {
-          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...left].sort((a, b) => a - b), params: { ...common, count: left.size, groups: repeated.collapsedGroups, lost: repeated.lostColumns.join(', ') || repeated.differs } }));
+          findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED-ONCE', { ...base, field: repeated.columns[0].header, lines: [...left].sort((a, b) => a - b), params: { ...common, count: left.size, groups: repeated.collapsedGroups, lost: repeated.lostColumns.join(', ') || repeated.differs, ...(sin.totalOnce !== true && sin.totalOnceFromFile === true ? { fromFile: 'yes' } : {}) } }));
         }
         if (repeated.disagree.length > 0) {
           findings.push(makeConvertFinding('CONV-QUANTITY-REPEATED', { ...base, field: repeated.columns[0].header, lines: repeated.disagree.flat().sort((a, b) => a - b), params: { ...common, count: repeated.disagree.length, of: repeated.of, disagree: 'yes', collapsed: repeated.collapsedGroups, covered: repeated.affected.size } }));
@@ -2579,7 +2582,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     if (realCountsHeld !== undefined) findings.push(makeConvertFinding('CONV-QUANTITY-REAL-COUNTS', { ...base, params: { count: realCountsHeld.count, ...(realCountsHeld.fromFile ? { fromFile: 'yes' } : {}) } }));
     const round = (n: number): number => Math.round(n * 1000) / 1000;
     if (copies !== undefined) {
-      const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies) };
+      const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
       findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
     }
     // The sums of the two warnings below are those of the archive: what the occurrences and measurements of THIS sheet really carry after the user's choices (rows taken once or dropped are
@@ -2835,7 +2838,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
           sheet: w.sheet,
           value: id,
           lines: [...w.lines],
-          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }), ...(keyed === undefined ? {} : { keyPrefix: keyed }) },
+          params: { kind: 'event', count: 1, hint: 'Make the sample codes unique, or prefix the station eventID.', ...(rep === undefined ? {} : { column: rep.column }), ...(keyed === undefined ? {} : places.size === 1 ? { keySame: 'yes' } : { keyPrefix: keyed }) },
         }),
       );
     }
@@ -2887,6 +2890,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
             hint: 'Two columns with the same header, or rows of one sample with the same taxon: rename one, or give the rows an occurrenceID or life stage column.',
             ...(rep === undefined ? {} : { column: rep.column, ...(rep.separated < rep.total ? { remaining: rep.total - rep.separated, separated: rep.separated } : {}) }),
             ...(rep === undefined && userIds && sin?.shape === 'long' ? { userId: 'yes' } : {}),
+            ...(sin !== undefined && sin.profile === undefined && keyColumns(sin.sampleKey).length > 0 ? { keyAdvice: 'yes' } : {}),
             ...(sameTaxon ? { sameTaxon: 'yes', rows: w.groups[0]?.length ?? 2, ...(hasReplicate ? { replicate: 'yes' } : {}), ...(w.groups[0]?.every((l) => sameValueLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { sameValue: 'yes' } : {}), ...(w.groups[0]?.every((l) => copyLikeLines.get(`${w.file}\u0000${w.sheet}`)?.has(l)) ? { copyLike: 'yes' } : {}) } : {}),
           },
         }),

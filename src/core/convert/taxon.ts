@@ -307,3 +307,16 @@ export function sexLetterSplit(s: SplitEntry): TaxonSplit | undefined {
   if (rest.sex !== undefined || nameDoubt(rest.scientificName) !== undefined) return undefined;
   return { ...rest, verbatimIdentification: s.verbatim, sex };
 }
+
+/**
+ * The split an `underscore` name would get if every underscore is read as a space ("Acartia_hudsonica" -> "Acartia hudsonica"), or undefined when it does
+ * not apply: not an underscore name, already approved, or the text with spaces would still have a doubt of its own ("Acartia_hudsonica_C" leaves a single
+ * letter). The text goes through splitTaxon as if it had been typed with spaces, and the exact original stays in verbatimIdentification. Nothing is applied
+ * here: the page offers it as a group action the person presses, and the name is never rewritten otherwise.
+ */
+export function underscoreSpaceSplit(s: SplitEntry): TaxonSplit | undefined {
+  if (s.doubt !== 'underscore' || s.approved) return undefined;
+  const spaced = splitTaxon(s.verbatim.replace(/_/g, ' '));
+  if (nameDoubt(spaced.scientificName) !== undefined) return undefined;
+  return { ...spaced, verbatimIdentification: s.verbatim };
+}
