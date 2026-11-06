@@ -151,11 +151,11 @@ describe('the drop zone', () => {
 
 describe('/licence', () => {
   it('the input and the download mode stand before a result; the comparison, classification, DataCite line and attribution after it', async () => {
-    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
-    const fetcher = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    const c = { doi: '10.5281/zenodo.999999901', title: 'Z' };
+    const fetcher = new MapFetcher({ [ZEN + '999999901']: zenodoJson('999999901', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
     render(<LicencePage fetcherFor={() => fetcher} />);
     expectTips(['licenceInput', 'downloadMode']);
-    fireEvent.change(screen.getByRole('textbox', { name: UI.en['licence.input.label'] }), { target: { value: 'https://zenodo.org/records/9' } });
+    fireEvent.change(screen.getByRole('textbox', { name: UI.en['licence.input.label'] }), { target: { value: 'https://zenodo.org/records/999999901' } });
     fireEvent.click(screen.getByRole('button', { name: 'Compare licences' }));
     await screen.findByTestId('licence-result');
     expectTips(['licenceOneDeposit', 'licenceSpdx', 'licenceDatacite', 'licenceAttribution']);
