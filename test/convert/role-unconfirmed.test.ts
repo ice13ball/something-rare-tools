@@ -8,6 +8,7 @@ import { convert } from '../../src/core/convert/build';
 import { judge } from '../../src/core/convert/policy';
 import { proposeConvertColumns, proposeConvertMapping } from '../../src/core/convert/recognize';
 import { keyHashes } from '../../src/core/convert/keySetting';
+import { ROLE_LABELS, roleWord } from '../../src/core/i18n/roleLabels';
 import { UI } from '../../src/core/i18n/ui';
 import { unconfirmedRoles } from '../../src/core/convert/roleUnconfirmed';
 import { withStated } from '../../src/core/convert/stated';
@@ -128,8 +129,12 @@ describe('the role words are the column table\'s own', () => {
     const base = listed(run())[0];
     const f = { ...base, params: { count: 1, columns: `Col\u001f${role}\u001fx`, keys: 'h:date' } };
     for (const lang of LANGS) {
-      const label = (UI[lang] as Record<string, string>)[key];
-      expect(label, `${lang} ${key}`).toBeTruthy();
+      const table = (UI[lang] as Record<string, string>)[key];
+      expect(table, `${lang} ${key}`).toBe((ROLE_LABELS[lang] as Record<string, string>)[role]);
+      // the finding is inside brackets itself: the label without its own bracketed explanation
+      const label = roleWord(lang, role);
+      expect(table.startsWith(label), `${lang} ${key}`).toBe(true);
+      expect(label, `${lang} ${key}`).not.toMatch(/[()]/);
       expect(renderConvertPlain(f, lang), lang).toContain(`"Col" (${label}${lang === 'fr' ? '\u00a0' : ''}: x)`);
     }
   });

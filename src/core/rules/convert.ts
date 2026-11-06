@@ -3,7 +3,7 @@
 import { reasonsText } from '../recognize/layoutReasons';
 import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals, pluralForm } from '../i18n/plural';
-import { UI } from '../i18n/ui';
+import { roleWord } from '../i18n/roleLabels';
 import { MAX_PAIRS } from '../convert/pivotLimits';
 import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
@@ -2161,8 +2161,8 @@ function shortList(text: string): string {
   return items.length <= SHOWN_ITEMS ? text : `${items.slice(0, SHOWN_ITEMS).join(', ')}, …`;
 }
 
-/** The role of a listed column in the reader's language: the very label the column table shows for it (`role.taxon`, `role.quantity`, `role.date`, `role.datetime`, `role.latitude`, `role.longitude`). */
-const listedRoleLabel = (role: string, lang: Lang): string => (UI[lang] as Record<string, string>)[`role.${role}`] ?? role;
+/** The role of a listed column in the reader's language: the column table's own label (core/i18n/roleLabels.ts), without a bracketed explanation, so that the finding does not nest brackets. */
+const listedRoleLabel = (role: string, lang: Lang): string => roleWord(lang, role);
 const ITEM_SEP = '\u001e';
 const FIELD_SEP = '\u001f';
 

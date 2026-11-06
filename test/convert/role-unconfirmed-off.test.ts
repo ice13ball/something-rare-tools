@@ -59,6 +59,8 @@ describe('the rule switched off and on', () => {
       const body = requestOf({ parsed: parsed as never, mappings: { [parsed.files[0].fileId]: parsed.files[0].mappings } as never, choices, options: { fullList: false, prefixStation: false, flatten: { station: false, cruise: false } }, approved: {}, confirmed: {}, metadata: EMPTY_METADATA });
       const meta = { ...EMPTY_METADATA, title: 'Invented counts', abstract: 'Invented values for a test.', creators: 'Ada Example', contactName: 'Ada Example', contactEmail: 'ada@example.org', institutionCode: 'INVENTED', licence: 'CC-BY-4.0' as const, basisOfRecord: 'HumanObservation' as const };
       const view = h.handle({ type: 'convert', body } as never) as { findings: { ruleId: string }[] };
+      // the finding is there with the rule on and absent with it off
+      expect(view.findings.some((f) => f.ruleId === RULE), `finding present: ${on}`).toBe(on);
       const accepted = [...new Set(view.findings.map((f) => f.ruleId))];
       const ex = (await h.handle({ type: 'export', export: { body, metadata: meta, accepted, generated: '2026-11-06T00:00:00Z' } } as never)) as { bytes: Uint8Array };
       return ex.bytes;
