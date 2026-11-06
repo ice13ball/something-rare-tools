@@ -1415,7 +1415,8 @@ convention follows the OBIS Manual (the lowest accurate name in `scientificName`
 **Every distinct split that changed something is a decision the user approves** (a table with an
 "approve all shown" for names without doubt; a name whose leftover is not plausibly Latin (digits,
 a slash, a `?`, a one-letter word, a sex marker at the end, more than three words, a remark after a
-comma) needs its own action). An undecided split blocks (`CONV-SPLIT-UNDECIDED`). The user can edit
+comma, or letters joined by underscores with a capital first part such as `Genus_species`, which is kept
+exactly as written and never rewritten; a code such as `SP_01` is not asked) needs its own action). An undecided split blocks (`CONV-SPLIT-UNDECIDED`). The user can edit
 any split.
 
 **WoRMS identifiers are written only from the sheet or from the opt-in** (`scientificNameID`): an

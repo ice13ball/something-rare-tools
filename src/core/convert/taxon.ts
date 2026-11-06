@@ -189,7 +189,7 @@ export function splitTaxon(text: string): TaxonSplit {
  * Is what is left of the name plausibly a Latin name? A reason code when it is not (the user is asked, whatever the split did):
  * digits, a slash, a "?", a stage range such as CVI-CV, a one-letter word, a sex marker at the end, or more than three words.
  */
-export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long' | 'remark';
+export type NameDoubt = 'digits' | 'slash' | 'question' | 'stage-range' | 'single-letter' | 'sex-marker' | 'long' | 'remark' | 'underscore';
 export function nameDoubt(name: string): NameDoubt | undefined {
   if (/\d/.test(name)) return 'digits';
   // a comma that is left in the name: a remark after it that is no stage, no qualifier and no sex ("Foraminifera, planktic"); the user decides what is the name and what the remark
@@ -203,8 +203,20 @@ export function nameDoubt(name: string): NameDoubt | undefined {
   if (words.length > 1 && sexToken(words[words.length - 1]) !== undefined) return 'sex-marker';
   // a rank marker (f., var., subsp.) is not a word of the name: "Aglantha digitale f. rosea" is three
   if (words.filter((w) => !/^(f|var|subsp|ssp|forma)\.$/i.test(w)).length > 3) return 'long';
+  // LAST, so a name that already has another doubt keeps that reason: "Genus_species" (a space typed as an underscore?) is asked, never rewritten
+  if (underscoreName(words[0] ?? '')) return 'underscore';
   return undefined;
 }
+
+/**
+ * The first word is two or more parts of letters only, joined by underscores, and the first part is capitalised ("Calanus_finmarchicus", "C_finmarchicus").
+ * A code ("SP_01", "sp_1"), a part that is not letters only ("Calanus_sp.") and a lower-case start ("genus_species") are not a name written with underscores.
+ * Only the first word counts: an underscore in an author part later in the name is no doubt about the name.
+ */
+const underscoreName = (word: string): boolean => {
+  const parts = word.split('_');
+  return parts.length >= 2 && /^\p{Lu}\p{L}*$/u.test(parts[0]) && parts.every((p) => /^\p{L}+$/u.test(p));
+};
 
 /** Did the split take something out of the name (a qualifier or a stage)? Only those need the user's approval. */
 export const splitChanged = (s: TaxonSplit): boolean => s.identificationQualifier !== undefined || s.lifeStage !== undefined || s.sex !== undefined;
@@ -264,7 +276,7 @@ export function bulkApprovable(entries: readonly SplitEntry[]): { approve: Split
 }
 
 /** The reasons in the order the page shows them (the order `nameDoubt` tests them, so a name with two doubts sits in the first only). */
-const DOUBT_ORDER: readonly NameDoubt[] = ['digits', 'remark', 'slash', 'question', 'stage-range', 'single-letter', 'sex-marker', 'long'];
+const DOUBT_ORDER: readonly NameDoubt[] = ['digits', 'remark', 'slash', 'question', 'stage-range', 'single-letter', 'sex-marker', 'long', 'underscore'];
 
 /**
  * The open doubted names (need a decision, not approved) grouped by their reason, so the page can offer one button per reason with the list beside it.
