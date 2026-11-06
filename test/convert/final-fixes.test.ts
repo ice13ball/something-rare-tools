@@ -48,6 +48,31 @@ describe('M2: CONV-ID-DUPLICATE under a picked key', () => {
     expect(text.fr).toContain('Demander à nouveau');
   });
 
+  it('H: the ignored column that tells the rows apart is still named, in four languages', () => {
+    const rows: Cell[][] = [
+      ['ST1', '2024-05-01', 'N1', 54.1, 18.1, 3, 1],
+      ['ST1', '2024-05-01', 'N2', 54.1, 18.1, 5, 2],
+      ['ST2', '2024-05-02', 'N1', 54.2, 18.2, 4, 4],
+    ];
+    const sin = sheetInput(fileOf(H, rows), {
+      shape: 'wide',
+      quantity: { kind: 'count' },
+      edit: { Net: { kind: 'ignore' }, 'Calanus finmarchicus': { kind: 'taxon', header: true }, 'Oithona similis': { kind: 'taxon', header: true } },
+      sampleKey: { columns: [0, 1] },
+      device: { kind: 'known', key: 'multinet' },
+    } as never);
+    const dup = ids(convert({ sheets: [sin], options: {} as never, approvedSplits: {} } as never), 'CONV-ID-DUPLICATE').filter((f) => f.params.kind === 'event');
+    expect(dup[0].params).toMatchObject({ keySame: 'yes', column: 'Net' });
+    expect(renderConvertPlain(dup[0], 'en')).toContain('These rows differ in the ignored column "Net": add it to the key.');
+    for (const l of LANGS) {
+      expect(renderConvertPlain(dup[0], l), l).toContain('Net');
+      expect(renderConvertPlain(dup[0], l), l).not.toMatch(/[{}]/);
+    }
+    // a duplicate that no ignored column explains does not name one
+    const d = ids(convert({ sheets: [wide()], options: {} as never, approvedSplits: {} } as never), 'CONV-ID-DUPLICATE').filter((f) => f.params.kind === 'event');
+    expect(renderConvertPlain(d[0], 'en')).not.toContain('ignored column');
+  });
+
   it('a duplicate that is not made by a key still gets the old advice', () => {
     const noKey = sheetInput(fileOf(['Sample', 'Lat', 'Lon', 'Calanus finmarchicus'], [['A', 54, 18, 1], ['A', 54, 18, 2]]), {
       shape: 'wide',

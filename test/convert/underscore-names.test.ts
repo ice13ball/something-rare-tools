@@ -72,6 +72,12 @@ describe('a name written with underscores is asked, never rewritten', () => {
     expect(split).toEqual({ verbatimIdentification: 'Calanus_finmarchicus', scientificName: 'Calanus finmarchicus' });
     expect(entry('Calanus_finmarchicus').split.scientificName).toBe('Calanus_finmarchicus');
     expect(underscoreSpaceSplit(entry('Calanus_sp'))).toMatchObject({ scientificName: 'Calanus', identificationQualifier: 'sp.', verbatimIdentification: 'Calanus_sp' });
+    // a stage or a sex would be set that the list does not show: those names are not in the group (their own row, or "as written")
+    for (const t of ['Calanus_finmarchicus_CV', 'Calanus_finmarchicus_CV_f', 'Calanus_finmarchicus_juv', 'Sagitta_elegans_juvenile']) {
+      expect(entry(t).doubt, t).toBe('underscore');
+      expect(underscoreSpaceSplit(entry(t)), t).toBeUndefined();
+    }
+    expect(underscoreSpaceSplit(entry('Calanus_finmarchicus'))).toBeDefined();
     // a single letter would be left: its own row decides
     expect(underscoreSpaceSplit(entry('Acartia_hudsonica_C'))).toBeUndefined();
     // not an underscore name, or already approved

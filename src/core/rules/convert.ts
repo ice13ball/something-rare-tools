@@ -2219,6 +2219,13 @@ const KEY_SAME_PLAIN: Record<Lang, string> = {
   fr: `La clé choisie donne à ces lignes le même échantillon, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques : ajoutez à la clé une colonne qui distingue ces lignes, ou utilisez « Demander à nouveau ».`,
 };
 
+const KEY_SAME_COLUMN: Record<Lang, string> = {
+  pl: `Te wiersze różnią się w ignorowanej kolumnie „{column}”: dodaj ją do klucza.`,
+  en: `These rows differ in the ignored column "{column}": add it to the key.`,
+  de: `Diese Zeilen unterscheiden sich in der ignorierten Spalte „{column}“: fügen Sie sie dem Schlüssel hinzu.`,
+  fr: `Ces lignes diffèrent dans la colonne ignorée « {column} » : ajoutez-la à la clé.`,
+};
+
 const KEY_CROSS_PLAIN: Record<Lang, string> = {
   pl: `Ten sam identyfikator próbki powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne.`,
   en: `The same sample identifier is produced more than once, e.g. "{value}", in {+lineCount:line|lines} {lines} ({count} repeated). Identifiers must be unique.`,
@@ -2260,7 +2267,11 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   if (f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.used === 'string') f = { ...f, params: { ...f.params, used: f.params.used.split(', ').map((w) => USED_WORDS[w]?.[lang] ?? w).join(', ') } };
   const variant = profileVariant(f);
   // a duplicate sample ID made by a picked key inside one sheet: the key gives these rows the same sample; there is no code to change and the station prefix does not touch key IDs
-  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.keySame === 'yes') return fill(KEY_SAME_PLAIN[lang] || KEY_SAME_PLAIN.en, f, lang);
+  if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.keySame === 'yes') {
+    const base = fill(KEY_SAME_PLAIN[lang] || KEY_SAME_PLAIN.en, f, lang);
+    // the ignored column that tells the rows apart is named: it is the one to add to the key
+    return typeof f.params.column === 'string' && f.params.column !== '' ? `${base} ${fill(KEY_SAME_COLUMN[lang] || KEY_SAME_COLUMN.en, f, lang)}` : base;
+  }
   // the same ID from two sheets that share the name in front of the key IDs: there is no code to change; the sentence that follows (plainIf keyPrefix) says what does
   const crossKey = f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.keyPrefix === 'string' && f.params.keyPrefix !== '';
   let text = fill(crossKey ? KEY_CROSS_PLAIN[lang] || KEY_CROSS_PLAIN.en : variant ? variant.plain[lang] || variant.plain.en : rule.plain[lang] || rule.plain.en, f, lang);

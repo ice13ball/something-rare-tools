@@ -21,8 +21,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const HEAD = ['Calanus_finmarchicus', 'Oithona_similis', 'Pseudocalanus_acuspes', 'Acartia_hudsonica_C', 'Metridia longa'];
-const CSV = `Sample,Station,Latitude,Longitude,Date,${HEAD.map((h) => `"${h}"`).join(',')}\na,S,55,3,2020-01-01,1,2,3,4,5\n`;
+const HEAD = ['Calanus_finmarchicus', 'Oithona_similis', 'Pseudocalanus_acuspes', 'Acartia_hudsonica_C', 'Metridia longa', 'Calanus_finmarchicus_CV_f'];
+const CSV = `Sample,Station,Latitude,Longitude,Date,${HEAD.map((h) => `"${h}"`).join(',')}\na,S,55,3,2020-01-01,1,2,3,4,5,6\n`;
 
 async function load(): Promise<HTMLElement> {
   const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
@@ -51,8 +51,10 @@ describe('underscore names on a wide sheet', () => {
       'Pseudocalanus_acuspes → Pseudocalanus acuspes',
     ]);
     const asIs = groups.find((g) => within(g).queryByRole('button', { name: asWritten }));
-    expect(within(asIs as HTMLElement).getAllByRole('listitem')).toHaveLength(4);
-    for (const n of ['Calanus_finmarchicus', 'Oithona_similis', 'Pseudocalanus_acuspes', 'Acartia_hudsonica_C']) {
+    expect(within(asIs as HTMLElement).getAllByRole('listitem')).toHaveLength(5);
+    // the space group lists exactly the names it writes: the one that would also set a stage and a sex is not in it
+    expect(within(space as HTMLElement).getByRole('button', { name: 'Write 3 names with a space instead of the underscore' })).toBeTruthy();
+    for (const n of ['Calanus_finmarchicus', 'Oithona_similis', 'Pseudocalanus_acuspes', 'Acartia_hudsonica_C', 'Calanus_finmarchicus_CV_f']) {
       expect(input(section, n).disabled).toBe(false);
       expect(input(section, n).value).toBe(n);
     }
@@ -62,7 +64,7 @@ describe('underscore names on a wide sheet', () => {
     const section = await load();
     fireEvent.click(within(section).getByRole('button', { name: asWritten }));
     await waitFor(() => expect(input(section, 'Calanus_finmarchicus').disabled).toBe(true));
-    for (const n of ['Calanus_finmarchicus', 'Oithona_similis', 'Pseudocalanus_acuspes', 'Acartia_hudsonica_C']) {
+    for (const n of ['Calanus_finmarchicus', 'Oithona_similis', 'Pseudocalanus_acuspes', 'Acartia_hudsonica_C', 'Calanus_finmarchicus_CV_f']) {
       expect(input(section, n).value).toBe(n);
       expect(input(section, n).disabled).toBe(true);
     }
@@ -77,6 +79,8 @@ describe('underscore names on a wide sheet', () => {
     expect(input(section, 'Pseudocalanus_acuspes').value).toBe('Pseudocalanus acuspes');
     expect(input(section, 'Acartia_hudsonica_C').disabled).toBe(false);
     expect(input(section, 'Acartia_hudsonica_C').value).toBe('Acartia_hudsonica_C');
+    expect(input(section, 'Calanus_finmarchicus_CV_f').disabled).toBe(false);
+    expect(input(section, 'Calanus_finmarchicus_CV_f').value).toBe('Calanus_finmarchicus_CV_f');
   });
 
   it('an edited name is left alone by both buttons', async () => {
