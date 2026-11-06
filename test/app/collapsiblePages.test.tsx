@@ -58,7 +58,7 @@ describe('/check: a finding with more than 10 line ranges', () => {
     const button = within(plain).getByRole('button', { name: 'Show all (13)' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
     // the first five lines are in the text that stays; the sixth is in the hidden part
-    expect(visibleText(plain)).toContain('but lines 3, 5, 7, 9, 11, … Show all (13) are outside');
+    expect(visibleText(plain)).toContain('but lines 3, 5, 7, 9, 11, … are outside this range');
     expect(visibleText(plain)).not.toContain('13, 15');
     expect(more.textContent).toBe(', 13, 15, 17, 19, 21, 23, 25, 27');
     // what always stays: the group heading with its count, the level, the rule id, the summary counts
@@ -175,10 +175,8 @@ describe('/convert: a question with more than 10 line ranges', () => {
   });
 });
 
-describe('/convert: a group of doubted names with more than 10 names', () => {
-  it('shows 5 names and "Show all (12)", keeps the group button with its count visible, and the button still approves all 12', async () => {
-    const names = Array.from({ length: 12 }, (_, i) => `Abc${String.fromCharCode(97 + i)} bbb ${i + 2}`);
-    const csv = `Sample,Station,Latitude,Longitude,Date,${names.join(',')}\na,S,55,3,2020-01-01,${Array(12).fill(1).join(',')}\n`;
+describe('/convert: a group a button acts on stays open', () => {
+  async function section(csv: string): Promise<HTMLElement> {
     const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} />);
     chooseFiles(view.container, [{ name: 'g.csv', text: csv }]);
     fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
@@ -186,21 +184,30 @@ describe('/convert: a group of doubted names with more than 10 names', () => {
     const confirm = screen.queryByRole('button', { name: /^Confirm all shown/ });
     if (confirm) fireEvent.click(confirm);
     fireEvent.change(screen.getByLabelText(T['convert.quantity.kind']), { target: { value: 'count' } });
-    const section = (await screen.findByRole('heading', { name: T['convert.splits.title'] })).closest('section') as HTMLElement;
-    const digits = within(section).getByRole('group', { name: /digit/ });
-    const items = [...digits.querySelectorAll('li')];
-    expect(items).toHaveLength(12);
-    expect(items.filter((li) => !li.hasAttribute('hidden'))).toHaveLength(5);
-    const toggle = within(digits).getByRole('button', { name: 'Show all (12)' });
-    const approve = within(digits).getByRole('button', { name: 'Approve 12 names as written' });
-    expect(approve.closest('.collapsible')).toBeNull();
-    expect(approve.closest('[hidden]')).toBeNull();
-    expect(toggle.getAttribute('aria-controls')).toBe(digits.querySelector('ul')!.id);
-    fireEvent.click(toggle);
-    expect([...digits.querySelectorAll('li')].filter((li) => !li.hasAttribute('hidden'))).toHaveLength(12);
-    // the decision is the same open or closed: it approves all twelve
-    fireEvent.click(approve);
-    await waitFor(() => expect(within(section).queryByRole('group', { name: /digit/ })).toBeNull());
-    for (const n of names) expect((within(section).getByLabelText(`Scientific name: ${n}`) as HTMLInputElement).disabled).toBe(true);
+    return (await screen.findByRole('heading', { name: T['convert.splits.title'] })).closest('section') as HTMLElement;
+  }
+
+  it('12 doubted names show all 12 beside their button, no toggle, and the button approves all 12', async () => {
+    const names = Array.from({ length: 12 }, (_, i) => `Abc${String.fromCharCode(97 + i)} bbb ${i + 2}`);
+    const sec = await section(`Sample,Station,Latitude,Longitude,Date,${names.join(',')}\na,S,55,3,2020-01-01,${Array(12).fill(1).join(',')}\n`);
+    const digits = within(sec).getByRole('group', { name: /digit/ });
+    expect(digits.querySelectorAll('li')).toHaveLength(12);
+    expect(digits.querySelector('[hidden]')).toBeNull();
+    expect(digits.querySelector('.collapsible')).toBeNull();
+    expect(within(digits).queryByRole('button', { name: /Show all/ })).toBeNull();
+    fireEvent.click(within(digits).getByRole('button', { name: 'Approve 12 names as written' }));
+    await waitFor(() => expect(within(sec).queryByRole('group', { name: /digit/ })).toBeNull());
+  });
+
+  it('a group of 15 underscore names shows all 15 beside its button', async () => {
+    const names = Array.from({ length: 15 }, (_, i) => `Gen${String.fromCharCode(97 + i)}_specx${String.fromCharCode(97 + i)}`);
+    const sec = await section(`Sample,Station,Latitude,Longitude,Date,${names.join(',')}\na,S,55,3,2020-01-01,${Array(15).fill(1).join(',')}\n`);
+    const groups = within(sec).getAllByRole('group');
+    const group = groups.find((g) => within(g).queryByRole('button', { name: /^Approve 15 names as written$/ }) !== null || within(g).queryByRole('button', { name: /^Write 15 names with a space/ }) !== null) as HTMLElement;
+    expect(group).toBeTruthy();
+    expect(group.querySelectorAll('li')).toHaveLength(15);
+    expect(group.querySelector('[hidden]')).toBeNull();
+    expect(group.querySelector('.collapsible')).toBeNull();
+    expect(within(group).queryByRole('button', { name: /Show all/ })).toBeNull();
   });
 });

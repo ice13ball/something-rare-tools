@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CollapsibleList, CollapsibleText, sentenceWithList, splitListText } from '../../src/app/components/CollapsibleList';
+import { CollapsibleList, sentenceWithList, splitListText } from '../../src/app/components/CollapsibleList';
 import { initLang, setLang } from '../../src/app/i18n';
 import { UI } from '../../src/core/i18n/ui';
 import { LANGS } from '../../src/core/types';
@@ -93,49 +93,50 @@ describe('CollapsibleList', () => {
   });
 });
 
-describe('CollapsibleText and sentenceWithList', () => {
+describe('sentenceWithList', () => {
   const items = Array.from({ length: 12 }, (_, i) => `${i * 3 + 2}`);
   const LISTED = items.join(', ');
 
   it('a short list is the sentence as it was, a string', () => {
     expect(sentenceWithList('Lines 2, 5, 8 are wrong.', '2, 5, 8')).toBe('Lines 2, 5, 8 are wrong.');
-    const { container } = render(<CollapsibleText items={['2', '5', '8']} />);
-    expect(container.textContent).toBe('2, 5, 8');
-    expect(container.querySelector('button')).toBeNull();
   });
 
-  it('10 items in a sentence: whole, no button; 11: five and the button, the sentence around them untouched', () => {
+  it('10 items in a sentence: whole, a string; 11: five and the button after the whole sentence', () => {
     const ten = items.slice(0, 10).join(', ');
     expect(sentenceWithList(`Lines ${ten} are wrong.`, ten)).toBe(`Lines ${ten} are wrong.`);
     const eleven = items.slice(0, 11).join(', ');
     const { container } = render(<p>{sentenceWithList(`Lines ${eleven} are wrong.`, eleven)}</p>);
-    const visible = (container.textContent ?? '').replace(/\s+/g, ' ');
-    // the text is the whole sentence in the page (print, copy), with a button in it
-    expect(visible).toContain(`Lines ${eleven}`);
-    expect(visible).toContain('are wrong.');
     const more = container.querySelector('.collapsible-more') as HTMLElement;
     expect(more.hasAttribute('hidden')).toBe(true);
     expect(more.textContent).toBe(', ' + items.slice(5, 11).join(', '));
     expect(container.querySelector('.collapsible-ellipsis')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Show all (11)' }).getAttribute('aria-controls')).toBe(more.id);
+    const button = screen.getByRole('button', { name: 'Show all (11)' });
+    expect(button.getAttribute('aria-controls')).toBe(more.id);
+    // the sentence reads on to its end, then the button: the button never stands inside it
+    expect(container.textContent).toBe(`Lines ${eleven}, … are wrong. Show all (11)`);
   });
 
-  it('expanding shows the whole list and drops the ellipsis; the text is exactly the list that was there before', () => {
+  it('expanding shows the whole list and drops the ellipsis; the sentence is exactly what it was, with the button after it', () => {
     const { container } = render(<p>{sentenceWithList(`Lines ${LISTED} are wrong.`, LISTED)}</p>);
     fireEvent.click(screen.getByRole('button', { name: 'Show all (12)' }));
     expect(container.querySelector('.collapsible-more')?.hasAttribute('hidden')).toBe(false);
     expect(container.querySelector('.collapsible-ellipsis')).toBeNull();
     expect(screen.getByRole('button', { name: 'Collapse' }).getAttribute('aria-expanded')).toBe('true');
-    expect((container.textContent ?? '').replace(' Collapse', '')).toBe(`Lines ${LISTED} are wrong.`);
+    expect(container.textContent).toBe(`Lines ${LISTED} are wrong. Collapse`);
   });
 
-  it('a "… (+n)" note of lines the converter did not list is a tail, not an item', () => {
+  it('a "… (+n)" note of lines the converter did not list is a tail, not an item, and it stays visible while collapsed', () => {
     expect(splitListText('2, 5, …')).toEqual({ items: ['2', '5'], tail: '…' });
     expect(splitListText('2, 5, … (+40)')).toEqual({ items: ['2', '5'], tail: '… (+40)' });
     const text = `${LISTED}, … (+40)`;
     const { container } = render(<p>{sentenceWithList(`Lines ${text}.`, text)}</p>);
     expect(screen.getByRole('button', { name: 'Show all (12)' })).toBeTruthy();
-    expect(container.querySelector('.collapsible-more')?.textContent?.endsWith(', … (+40)')).toBe(true);
+    const tail = container.querySelector('.collapsible-tail') as HTMLElement;
+    expect(tail.textContent).toBe(', … (+40)');
+    expect(tail.closest('[hidden]')).toBeNull();
+    expect(container.querySelector('.collapsible-more')?.textContent?.includes('+40')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all (12)' }));
+    expect(container.textContent).toBe(`Lines ${text}. Collapse`);
   });
 
   it('a list that is not in the sentence leaves the sentence alone', () => {

@@ -1422,9 +1422,8 @@ a slash, a `?`, a one-letter word, a sex marker at the end, more than three word
 comma, or letters joined by underscores with a capital first part such as `Genus_species`, which is kept
 exactly as written and never rewritten; a code such as `SP_01` is not asked) needs its own action). An undecided split blocks (`CONV-SPLIT-UNDECIDED`). The user can edit
 any split.
-The same view rule as on /check applies to the page's lists of examples: a line-range list in a question or a note, a group of doubted names (by reason, the sex-letter group and the underscore group)
-and the examples of the event tree show their first 5 behind "Show all (N)" when they hold more than 10 items (`CollapsibleList.tsx`). The group buttons ("Approve 12 names as written", "Write 12
-names with a space ..."), the counts and the decision buttons of a question are never inside it, a group button acts on every name of its group open or closed, and print shows the whole list.
+The same view rule as on /check applies to the page's lists of examples: a line-range list in a question or a note and the examples of the event tree show their first 5 behind "Show all (N)" when they hold more than 10 items (`CollapsibleList.tsx`; in a sentence the button stands after the whole sentence, and a "... (+n)" count of lines not listed stays visible). The counts and the decision buttons of a question are never inside it, and print shows the whole list.
+A list whose items a group button acts on (the doubted names by reason, the sex-letter group, the underscore group) stays open always: the person sees what one click changes.
 Lists of controls the person fills in (the taxon-candidate boxes, the split table, the key columns) and the ledger's column lists keep their own cap and button.
 
 **WoRMS identifiers are written only from the sheet or from the opt-in** (`scientificNameID`): an

@@ -1085,7 +1085,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               {groups.map((g) => (
                 <div key={g.reason} className="convert-doubt-group" role="group" aria-label={t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}>
                   <p className="convert-doubt">{t('convert.splits.doubt', { reason: t(`convert.doubt.${g.reason}` as UiKey) })}</p>
-                  <CollapsibleList className="convert-doubt-list" items={g.entries} itemKey={(s) => s.verbatim} renderItem={(s) => <code>{s.verbatim}</code>} />
+                  <ul className="convert-doubt-list">
+                    {g.entries.map((s) => (
+                      <li key={s.verbatim}>
+                        <code>{s.verbatim}</code>
+                      </li>
+                    ))}
+                  </ul>
                   <button
                     type="button"
                     className="button"
@@ -1109,16 +1115,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               {sexGroup.length > 0 && (
                 <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.sexGroup')}>
                   <p className="convert-doubt">{t('convert.splits.sexGroupNote')}</p>
-                  <CollapsibleList
-                    className="convert-doubt-list"
-                    items={sexGroup}
-                    itemKey={({ entry }) => entry.verbatim}
-                    renderItem={({ entry, split }) => (
-                      <>
+                  <ul className="convert-doubt-list">
+                    {sexGroup.map(({ entry, split }) => (
+                      <li key={entry.verbatim}>
                         <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}, {t(split.sex === 'female' ? 'convert.sex.female' : 'convert.sex.male')}
-                      </>
-                    )}
-                  />
+                      </li>
+                    ))}
+                  </ul>
                   <button
                     type="button"
                     className="button"
@@ -1137,16 +1140,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               {underscoreGroup.length > 0 && (
                 <div className="convert-doubt-group" role="group" aria-label={t('convert.splits.underscoreGroup')}>
                   <p className="convert-doubt">{t('convert.splits.underscoreGroupNote')}</p>
-                  <CollapsibleList
-                    className="convert-doubt-list"
-                    items={underscoreGroup}
-                    itemKey={({ entry }) => entry.verbatim}
-                    renderItem={({ entry, split }) => (
-                      <>
+                  <ul className="convert-doubt-list">
+                    {underscoreGroup.map(({ entry, split }) => (
+                      <li key={entry.verbatim}>
                         <code>{entry.verbatim}</code> {'\u2192'} <code>{split.scientificName}</code>{split.identificationQualifier ? ` (${split.identificationQualifier})` : ''}
-                      </>
-                    )}
-                  />
+                      </li>
+                    ))}
+                  </ul>
                   <button
                     type="button"
                     className="button"

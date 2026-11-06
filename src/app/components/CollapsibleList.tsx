@@ -61,29 +61,27 @@ export interface CollapsibleTextProps {
   /** The items of a list that a sentence holds joined by `separator` ("2–3, 6, 9–12, ..."). */
   items: readonly string[];
   separator?: string;
-  /** What follows the items when the text is whole (the converter's "… (+120)" of lines it did not list). It is part of the hidden rest while the list is collapsed. */
+  /** What follows the items when the text is whole (the converter's "… (+120)" of lines it did not list). It stays visible while the list is collapsed: a count of hidden things is never hidden. */
   tail?: string;
+  /** Controlled by the sentence, whose button stands after the whole sentence. */
+  open: boolean;
+  controlsId: string;
 }
 
-/**
- * The same, for a list written inside a sentence. The text is exactly `items.join(separator)` (and the tail), so the sentence says what it said before; more than 10 items
- * show the first 5, an ellipsis and the button. The items are in the page either way.
- */
-export function CollapsibleText({ items, separator = ', ', tail }: CollapsibleTextProps): React.ReactElement {
-  const id = useId();
-  const [open, setOpen] = useState(false);
-  const whole = items.join(separator) + (tail === undefined || tail === '' ? '' : separator + tail);
-  if (!needsCollapse(items.length)) return <>{whole}</>;
+/** The list written inside a sentence: the text is exactly `items.join(separator)` (and the tail) when open; collapsed it is the first 5, an ellipsis and the tail. */
+export function CollapsibleText({ items, separator = ', ', tail, open, controlsId }: CollapsibleTextProps): React.ReactElement {
+  const hasTail = tail !== undefined && tail !== '';
+  if (!needsCollapse(items.length)) return <>{items.join(separator) + (hasTail ? separator + tail : '')}</>;
   const head = items.slice(0, SHOWN_WHEN_COLLAPSED).join(separator);
-  const rest = separator + items.slice(SHOWN_WHEN_COLLAPSED).join(separator) + (tail === undefined || tail === '' ? '' : separator + tail);
+  const rest = separator + items.slice(SHOWN_WHEN_COLLAPSED).join(separator);
   return (
-    <span className="collapsible collapsible-text" data-collapsed={open ? 'no' : 'yes'}>
+    <span className="collapsible-text" data-collapsed={open ? 'no' : 'yes'}>
       {head}
-      <span id={id} className="collapsible-more" hidden={!open}>
+      <span id={controlsId} className="collapsible-more" hidden={!open}>
         {rest}
       </span>
-      {!open && <span className="collapsible-ellipsis">{separator}…</span>}{' '}
-      <Toggle open={open} count={items.length} controls={id} onClick={() => setOpen(!open)} />
+      {!open && <span className="collapsible-ellipsis">{separator}…</span>}
+      {hasTail && <span className="collapsible-tail">{separator + tail}</span>}
     </span>
   );
 }
@@ -96,9 +94,22 @@ export function splitListText(text: string, separator = ', '): { items: string[]
   return { items: parts };
 }
 
+function SentenceWithList({ before, items, separator, tail, after }: { before: string; items: readonly string[]; separator: string; tail: string | undefined; after: string }): React.ReactElement {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="collapsible" data-collapsed={open ? 'no' : 'yes'}>
+      {before}
+      <CollapsibleText items={items} separator={separator} {...(tail === undefined ? {} : { tail })} open={open} controlsId={id} />
+      {after}{' '}
+      <Toggle open={open} count={items.length} controls={id} onClick={() => setOpen(!open)} />
+    </span>
+  );
+}
+
 /**
- * A sentence with a list inside: when `listText` stands in `sentence` and holds more than 10 items, that part is rendered through CollapsibleText and the rest of the sentence is
- * untouched. Otherwise the sentence is returned as it is (a string), so a short list changes nothing.
+ * A sentence with a list inside: when `listText` stands in `sentence` and holds more than 10 items, the list is collapsed and the button stands right after the whole sentence, so the
+ * sentence is never broken by it. Otherwise the sentence is returned as it is (a string), so a short list changes nothing.
  */
 export function sentenceWithList(sentence: string, listText: string, separator = ', '): React.ReactNode {
   if (listText === '') return sentence;
@@ -106,11 +117,5 @@ export function sentenceWithList(sentence: string, listText: string, separator =
   if (at < 0) return sentence;
   const { items, tail } = splitListText(listText, separator);
   if (!needsCollapse(items.length)) return sentence;
-  return (
-    <>
-      {sentence.slice(0, at)}
-      <CollapsibleText items={items} separator={separator} {...(tail === undefined ? {} : { tail })} />
-      {sentence.slice(at + listText.length)}
-    </>
-  );
+  return <SentenceWithList before={sentence.slice(0, at)} items={items} separator={separator} tail={tail} after={sentence.slice(at + listText.length)} />;
 }
