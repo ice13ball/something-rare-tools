@@ -283,7 +283,7 @@ describe('POST /api/csw', () => {
     for (let i = 0; i < 2; i++) expect((await post(app, { catalogue: 'emodnet', op: 'GetCapabilities' }, '5.5.5.5')).status).toBe(200);
     const third = await post(app, { catalogue: 'emodnet', op: 'GetCapabilities' }, '5.5.5.5');
     expect(third.status).toBe(429);
-    const fetchRes = await request(app).post('/api/fetch').set('X-Forwarded-For', '5.5.5.5').set('Content-Type', 'application/json').send({ url: 'https://zenodo.org/api/records/1' });
+    const fetchRes = await request(app).post('/api/fetch').set('X-Forwarded-For', '5.5.5.5').set('Content-Type', 'application/json').send({ url: 'https://zenodo.org/api/records/999999911' });
     expect(fetchRes.status).not.toBe(429);
   });
 });

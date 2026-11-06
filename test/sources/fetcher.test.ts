@@ -22,24 +22,24 @@ describe('browserFetcher', () => {
     const fn = vi.fn();
     const f = browserFetcher(asFetch(fn));
     await expect(f.get('https://example.com/a.csv')).rejects.toMatchObject({ name: 'HostNotAllowedError', host: 'example.com' });
-    await expect(f.get('http://zenodo.org/api/records/1')).rejects.toBeInstanceOf(HostNotAllowedError);
+    await expect(f.get('http://zenodo.org/api/records/999999911')).rejects.toBeInstanceOf(HostNotAllowedError);
     expect(fn).not.toHaveBeenCalled();
   });
 
   it('fetches with no credentials, redirects followed, CORS mode; returns bytes, type and final url', async () => {
     const fn = vi.fn(async () =>
-      reply('{"a":1}', { status: 200, headers: { 'content-type': 'application/json' } }, 'https://zenodo.org/api/records/1'),
+      reply('{"a":1}', { status: 200, headers: { 'content-type': 'application/json' } }, 'https://zenodo.org/api/records/999999911'),
     );
     const f = browserFetcher(asFetch(fn));
-    const r = await f.get('https://zenodo.org/api/records/1', 'application/json');
+    const r = await f.get('https://zenodo.org/api/records/999999911', 'application/json');
     expect(fn).toHaveBeenCalledTimes(1);
     const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('https://zenodo.org/api/records/1');
+    expect(url).toBe('https://zenodo.org/api/records/999999911');
     expect(init).toMatchObject({ credentials: 'omit', redirect: 'follow', mode: 'cors' });
     expect(new Headers(init.headers).get('accept')).toBe('application/json');
     expect(r.status).toBe(200);
     expect(r.contentType).toBe('application/json');
-    expect(r.finalUrl).toBe('https://zenodo.org/api/records/1');
+    expect(r.finalUrl).toBe('https://zenodo.org/api/records/999999911');
     expect(new TextDecoder().decode(r.bytes)).toBe('{"a":1}');
   });
 
@@ -72,7 +72,7 @@ describe('browserFetcher', () => {
         }),
       ),
     );
-    await expect(f.get('https://zenodo.org/api/records/1')).rejects.toBe(abort);
+    await expect(f.get('https://zenodo.org/api/records/999999911')).rejects.toBe(abort);
   });
 
   it('refuses a followed redirect that ended on a host outside the allowlist', async () => {
@@ -90,10 +90,10 @@ describe('browserFetcher', () => {
 describe('serverFetcher: upstream content type', () => {
   it('reads the type from X-Upstream-Content-Type, never from the proxy response Content-Type', async () => {
     const fn = vi.fn(async () => reply('x', { status: 200, headers: { 'content-type': 'application/octet-stream' } }));
-    const r = await serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/1');
+    const r = await serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/999999911');
     expect(r.contentType).toBeUndefined();
     const fn2 = vi.fn(async () => reply('x', { status: 200, headers: { 'content-type': 'text/html', 'x-upstream-content-type': 'application/json' } }));
-    const r2 = await serverFetcher('/api/fetch', asFetch(fn2)).get('https://zenodo.org/api/records/1');
+    const r2 = await serverFetcher('/api/fetch', asFetch(fn2)).get('https://zenodo.org/api/records/999999911');
     expect(r2.contentType).toBe('application/json');
   });
 });
@@ -117,15 +117,15 @@ describe('serverFetcher', () => {
 
   it('omits accept when none is given', async () => {
     const fn = vi.fn(async () => reply('', { status: 200 }));
-    await serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/1');
+    await serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/999999911');
     const init = (fn.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect(JSON.parse(init.body as string)).toEqual({ url: 'https://zenodo.org/api/records/1' });
+    expect(JSON.parse(init.body as string)).toEqual({ url: 'https://zenodo.org/api/records/999999911' });
   });
 
   it('X-Fetch-Proxy-Error: host_not_allowed -> HostNotAllowedError', async () => {
     const fn = vi.fn(async () => reply('{"error":"host_not_allowed"}', { status: 403, headers: { 'X-Fetch-Proxy-Error': 'host_not_allowed' } }));
     const err = await serverFetcher('/api/fetch', asFetch(fn))
-      .get('https://zenodo.org/api/records/1')
+      .get('https://zenodo.org/api/records/999999911')
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HostNotAllowedError);
   });
@@ -133,7 +133,7 @@ describe('serverFetcher', () => {
   it('other proxy errors -> ProxyFetchError(code, status)', async () => {
     const fn = vi.fn(async () => reply('{"error":"rate_limited"}', { status: 429, headers: { 'X-Fetch-Proxy-Error': 'rate_limited' } }));
     const err = await serverFetcher('/api/fetch', asFetch(fn))
-      .get('https://zenodo.org/api/records/1')
+      .get('https://zenodo.org/api/records/999999911')
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ProxyFetchError);
     expect(err).toMatchObject({ code: 'rate_limited', status: 429, host: 'zenodo.org' });
@@ -155,6 +155,6 @@ describe('serverFetcher', () => {
     const fn = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     });
-    await expect(serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/1')).rejects.toBeInstanceOf(FetchBlockedError);
+    await expect(serverFetcher('/api/fetch', asFetch(fn)).get('https://zenodo.org/api/records/999999911')).rejects.toBeInstanceOf(FetchBlockedError);
   });
 });

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parseDataciteJson, parseDataciteXml } from '../../src/core/metadata/datacite';
 import { parseZenodoRecord } from '../../src/core/metadata/zenodo';
 
-const zen = (md: Record<string, unknown>) => parseZenodoRecord({ id: '1', metadata: md }, 'z');
+const zen = (md: Record<string, unknown>) => parseZenodoRecord({ id: '999999911', metadata: md }, 'z');
 
 describe('Zenodo extent', () => {
   it('legacy locations [{lat, lon}] and collected dates [{start, end, type}]', () => {

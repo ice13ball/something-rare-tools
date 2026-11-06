@@ -168,7 +168,7 @@ describe('loadRecord — Zenodo', () => {
   });
 
   it('Zenodo 404 -> IN-RECORD-INACCESSIBLE {404, zenodo.org}', async () => {
-    const rec = await loadRecord({ kind: 'zenodo', id: '999' }, new MapFetcher({}));
+    const rec = await loadRecord({ kind: 'zenodo', id: '999999913' }, new MapFetcher({}));
     expect(rec.findings).toHaveLength(1);
     expect(rec.findings[0]!.ruleId).toBe('IN-RECORD-INACCESSIBLE');
     expect(rec.findings[0]!.params).toEqual({ status: 404, host: 'zenodo.org' });
@@ -242,8 +242,8 @@ describe('loadRecord — DataCite / DOI', () => {
 
 describe('loadRecord — fetch errors', () => {
   it('FetchBlockedError -> IN-FETCH-BLOCKED with the host only (the user is told to download and drop)', async () => {
-    const f = new MapFetcher({ [`https://zenodo.org/api/records/5`]: new FetchBlockedError('zenodo.org') });
-    const rec = await loadRecord({ kind: 'zenodo', id: '5' }, f);
+    const f = new MapFetcher({ [`https://zenodo.org/api/records/999999915`]: new FetchBlockedError('zenodo.org') });
+    const rec = await loadRecord({ kind: 'zenodo', id: '999999915' }, f);
     expect(rec.findings).toHaveLength(1);
     expect(rec.findings[0]!.ruleId).toBe('IN-FETCH-BLOCKED');
     expect(rec.findings[0]!.severity).toBe('warning');
@@ -271,13 +271,13 @@ describe('loadRecord — fetch errors', () => {
 
 describe('fetchFile', () => {
   it('returns the bytes of a 200', async () => {
-    const url = 'https://zenodo.org/api/records/1/files/a.csv/content';
+    const url = 'https://zenodo.org/api/records/999999911/files/a.csv/content';
     const f = new MapFetcher({ [url]: { body: new Uint8Array([1, 2, 3]) } });
     expect(await fetchFile({ name: 'a.csv', url }, f)).toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('non-2xx throws a FileFetchError with status and host', async () => {
-    const url = 'https://zenodo.org/api/records/1/files/a.csv/content';
+    const url = 'https://zenodo.org/api/records/999999911/files/a.csv/content';
     await expect(fetchFile({ name: 'a.csv', url }, new MapFetcher({}))).rejects.toMatchObject({ name: 'FileFetchError', status: 404, host: 'zenodo.org' });
   });
 

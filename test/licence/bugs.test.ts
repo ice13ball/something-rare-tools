@@ -31,7 +31,7 @@ describe('bug 22.10: 1 — a licence URI must not silently beat the text', () =>
     expect(rec.licences[0]!.spdx).toBeUndefined();
   });
   it('Zenodo licence id cc-by-nc-4.0 with a by/4.0 link is not CC-BY-4.0', () => {
-    const rec = parseZenodoRecord({ id: 1, metadata: { license: { id: 'cc-by-nc-4.0', link: 'https://creativecommons.org/licenses/by/4.0/' } } }, 'Zenodo 1');
+    const rec = parseZenodoRecord({ id: 999999911, metadata: { license: { id: 'cc-by-nc-4.0', link: 'https://creativecommons.org/licenses/by/4.0/' } } }, 'Zenodo 1');
     expect(rec.licences[0]!.spdx).toBeUndefined();
     expect(ids(run([rec]))).toContain('LIC-TEXT-URI-CONFLICT');
   });

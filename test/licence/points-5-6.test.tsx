@@ -37,9 +37,9 @@ const lic = (text: string) => buildStatement({ source: 'datacite', field: 'right
 
 describe('point 5 - a failed read is never hidden behind another record of the same type', () => {
   it('analysis: Zenodo A read without a licence + Zenodo B failed = an unreadable source of its own, not "missing"', () => {
-    const a = analyseLicences([makeRecord('zenodo', { label: 'Zenodo 100' })], { failures: [{ source: 'zenodo', ref: '200' }] });
+    const a = analyseLicences([makeRecord('zenodo', { label: 'Zenodo 999999990' })], { failures: [{ source: 'zenodo', ref: '999999980' }] });
     const failed = a.sources.filter((s) => s.state === 'unreadable');
-    expect(failed.map((s) => [s.source, s.label])).toEqual([['zenodo', '200']]);
+    expect(failed.map((s) => [s.source, s.label])).toEqual([['zenodo', '999999980']]);
     expect(a.hasUnreadable).toBe(true);
     expect(a.missing).toBe(false);
   });
@@ -53,13 +53,13 @@ describe('point 5 - a failed read is never hidden behind another record of the s
   });
   it('page: record A without a licence, record B answering 429 -> B is listed with its reference and the reason', async () => {
     const f = new MapFetcher({
-      [ZEN + '100']: zenodoJson('100', { doi: '10.5281/zenodo.100', title: 'A' }),
-      [DC + '10.5281/zenodo.100']: dataciteJson({ doi: '10.5281/zenodo.100' }, []),
-      [ZEN + '200']: { status: 429 },
+      [ZEN + '999999990']: zenodoJson('999999990', { doi: '10.5281/zenodo.999999990', title: 'A' }),
+      [DC + '10.5281/zenodo.999999990']: dataciteJson({ doi: '10.5281/zenodo.999999990' }, []),
+      [ZEN + '999999980']: { status: 429 },
     });
-    const text = await run(f, ['100', '200']);
+    const text = await run(f, ['999999990', '999999980']);
     expect(text).toContain('could not read');
-    expect(text).toContain('200');
+    expect(text).toContain('999999980');
     expect(text).toMatch(/busy|too many|rate/i);
     expect(text).toContain('At least one source could not be read');
   });
@@ -72,14 +72,14 @@ const dcWithRelations = (doi: string, rel: ReturnType<typeof related>[]) => ({
 
 describe('point 6 - concept DOI and version DOI of one Zenodo deposit', () => {
   it('the DataCite parser keeps IsVersionOf / HasVersion DOIs, in JSON and in XML', () => {
-    const j = parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.101', relatedIdentifiers: [related('10.5281/zenodo.100', 'IsVersionOf'), { ...related('10.1/x', 'IsVersionOf'), relatedIdentifierType: 'URL' }, { ...related('10.5281/zenodo.55', 'IsPartOf' as never) }] } } }, 'l');
-    expect(j.versionDois).toEqual(['10.5281/zenodo.100']);
-    const xml = `<resource xmlns="http://datacite.org/schema/kernel-4"><identifier identifierType="DOI">10.5281/zenodo.100</identifier><relatedIdentifiers><relatedIdentifier relatedIdentifierType="DOI" relationType="HasVersion">10.5281/ZENODO.101</relatedIdentifier></relatedIdentifiers></resource>`;
-    expect(parseDataciteXml(xml, 'l').versionDois).toEqual(['10.5281/zenodo.101']);
+    const j = parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999991', relatedIdentifiers: [related('10.5281/zenodo.999999990', 'IsVersionOf'), { ...related('10.1/x', 'IsVersionOf'), relatedIdentifierType: 'URL' }, { ...related('10.5281/zenodo.999999955', 'IsPartOf' as never) }] } } }, 'l');
+    expect(j.versionDois).toEqual(['10.5281/zenodo.999999990']);
+    const xml = `<resource xmlns="http://datacite.org/schema/kernel-4"><identifier identifierType="DOI">10.5281/zenodo.999999990</identifier><relatedIdentifiers><relatedIdentifier relatedIdentifierType="DOI" relationType="HasVersion">10.5281/ZENODO.999999991</relatedIdentifier></relatedIdentifiers></resource>`;
+    expect(parseDataciteXml(xml, 'l').versionDois).toEqual(['10.5281/zenodo.999999991']);
   });
   it('linked through the relations: one deposit group, no "two sources"', () => {
-    const concept = makeRecord('datacite', { label: 'DataCite 10.5281/zenodo.100', doi: '10.5281/zenodo.100', versionDois: ['10.5281/zenodo.101'], licences: [lic('CC BY 4.0')] });
-    const version = makeRecord('datacite', { label: 'DataCite 10.5281/zenodo.101', doi: '10.5281/zenodo.101', versionDois: ['10.5281/zenodo.100'], licences: [lic('CC BY 4.0')] });
+    const concept = makeRecord('datacite', { label: 'DataCite 10.5281/zenodo.999999990', doi: '10.5281/zenodo.999999990', versionDois: ['10.5281/zenodo.999999991'], licences: [lic('CC BY 4.0')] });
+    const version = makeRecord('datacite', { label: 'DataCite 10.5281/zenodo.999999991', doi: '10.5281/zenodo.999999991', versionDois: ['10.5281/zenodo.999999990'], licences: [lic('CC BY 4.0')] });
     const a = analyseLicences([concept, version]);
     expect(a.groups).toHaveLength(1);
     expect(a.recognisedGroups).toBe(1);
@@ -88,26 +88,26 @@ describe('point 6 - concept DOI and version DOI of one Zenodo deposit', () => {
     expect(analyseLicences([{ ...concept, versionDois: undefined }, version]).groups).toHaveLength(1);
   });
   it('two version records of one concept join through the concept', () => {
-    const v = (n: number) => makeRecord('datacite', { doi: `10.5281/zenodo.${n}`, label: `v${n}`, versionDois: ['10.5281/zenodo.100'], licences: [lic('CC BY 4.0')] });
-    expect(analyseLicences([v(101), v(102)]).groups).toHaveLength(1);
+    const v = (n: number) => makeRecord('datacite', { doi: `10.5281/zenodo.${n}`, label: `v${n}`, versionDois: ['10.5281/zenodo.999999990'], licences: [lic('CC BY 4.0')] });
+    expect(analyseLicences([v(999999991), v(999999981)]).groups).toHaveLength(1);
   });
   it('NOT linked (no relation, Zenodo record unread): the analysis says it cannot tell', () => {
     const r = (n: number) => makeRecord('datacite', { doi: `10.5281/zenodo.${n}`, label: `d${n}`, licences: [lic('CC BY 4.0')] });
-    const a = analyseLicences([r(100), r(200)]);
+    const a = analyseLicences([r(999999990), r(999999980)]);
     expect(a.groups).toHaveLength(2);
     expect(a.maybeSameDeposit).toBe(true);
     // different DOI registrants are independent sources
     const other = makeRecord('datacite', { doi: '10.1594/pangaea.1', label: 'p', licences: [lic('CC BY 4.0')] });
-    expect(analyseLicences([r(100), other]).maybeSameDeposit).toBe(false);
+    expect(analyseLicences([r(999999990), other]).maybeSameDeposit).toBe(false);
   });
   it('page, Zenodo records unreadable, relations present: one deposit, a single source', async () => {
     const f = new MapFetcher({
-      [ZEN + '100']: { status: 429 },
-      [ZEN + '101']: { status: 429 },
-      [DC + '10.5281/zenodo.100']: dcWithRelations('10.5281/zenodo.100', [related('10.5281/zenodo.101', 'HasVersion')]),
-      [DC + '10.5281/zenodo.101']: dcWithRelations('10.5281/zenodo.101', [related('10.5281/zenodo.100', 'IsVersionOf')]),
+      [ZEN + '999999990']: { status: 429 },
+      [ZEN + '999999991']: { status: 429 },
+      [DC + '10.5281/zenodo.999999990']: dcWithRelations('10.5281/zenodo.999999990', [related('10.5281/zenodo.999999991', 'HasVersion')]),
+      [DC + '10.5281/zenodo.999999991']: dcWithRelations('10.5281/zenodo.999999991', [related('10.5281/zenodo.999999990', 'IsVersionOf')]),
     });
-    const text = await run(f, ['10.5281/zenodo.100', '10.5281/zenodo.101']);
+    const text = await run(f, ['10.5281/zenodo.999999990', '10.5281/zenodo.999999991']);
     expect(text).toContain('Single source — nothing to compare');
     expect(text).not.toContain('No contradiction among 2');
   });
@@ -115,12 +115,12 @@ describe('point 6 - concept DOI and version DOI of one Zenodo deposit', () => {
     for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
       cleanup();
       const f = new MapFetcher({
-        [ZEN + '100']: { status: 429 },
-        [ZEN + '101']: { status: 429 },
-        [DC + '10.5281/zenodo.100']: dataciteJson({ doi: '10.5281/zenodo.100' }, [BY]),
-        [DC + '10.5281/zenodo.101']: dataciteJson({ doi: '10.5281/zenodo.101' }, [BY]),
+        [ZEN + '999999990']: { status: 429 },
+        [ZEN + '999999991']: { status: 429 },
+        [DC + '10.5281/zenodo.999999990']: dataciteJson({ doi: '10.5281/zenodo.999999990' }, [BY]),
+        [DC + '10.5281/zenodo.999999991']: dataciteJson({ doi: '10.5281/zenodo.999999991' }, [BY]),
       });
-      const text = await run(f, ['10.5281/zenodo.100', '10.5281/zenodo.101'], lang);
+      const text = await run(f, ['10.5281/zenodo.999999990', '10.5281/zenodo.999999991'], lang);
       const want = UI[lang]['licence.summary.noneMaybeSame'].replace('{n}', '2');
       expect(text, lang).toContain(want);
     }

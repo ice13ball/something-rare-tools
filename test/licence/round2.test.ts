@@ -14,7 +14,7 @@ import { renderPlain } from '../../src/core/report';
 import type { Finding, Lang, MetadataRecord } from '../../src/core/types';
 
 type Rights = { rights?: string; rightsUri?: string; rightsIdentifier?: string; rightsIdentifierScheme?: string };
-const dc = (...rights: Rights[]) => parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', rightsList: rights } } }, 'dc');
+const dc = (...rights: Rights[]) => parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', rightsList: rights } } }, 'dc');
 const lic = (f: Finding[]) => f.filter((x) => x.ruleId.startsWith('LIC-'));
 const run = (rec: MetadataRecord) => lic(checkLicence([rec], { label: 'x', inaccessible: false }));
 const rulesOf = (rec: MetadataRecord) => run(rec).map((f) => f.ruleId);
@@ -40,7 +40,7 @@ describe('HIGH 1: the version of an id is its last number', () => {
     const t = 'Creative Commons Zero v1.0 Universal';
     expect(rules({ rights: t, rightsUri: CCBY })).toEqual(['LIC-TEXT-URI-CONFLICT']);
     expect(rules({ rights: t, rightsUri: CCBYNC })).toEqual(['LIC-TEXT-URI-CONFLICT']);
-    const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: t } } } }, 'z');
+    const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: t } } } }, 'z');
     expect(rulesOf(rec)).toEqual(['LIC-AMBIGUOUS']);
   });
   it('the versionless NLOD title: any id or link outside its family is a conflict, its own family passes', () => {
@@ -67,7 +67,7 @@ describe('HIGH 1: the version of an id is its last number', () => {
       expect(isConflict(rules({ rights: z.title, rightsUri: other.url })), 'link').toBe(true);
       expect(isConflict(rules({ rights: z.title, rightsIdentifier: other.id })), 'id').toBe(true);
       expect(isConflict(rules({ rights: z.title, rightsUri: other.url, rightsIdentifier: other.id })), 'both').toBe(true);
-      const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: other.id, title: { en: z.title } } } }, 'z');
+      const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: other.id, title: { en: z.title } } } }, 'z');
       expect(isConflict(rulesOf(rec)), 'zenodo record').toBe(true);
     });
   });
@@ -94,7 +94,7 @@ describe('HIGH 2: LIC-OTHER-RIGHTS-ENTRY, only for repeated rights entries', () 
     expect(run(dc(by, extra)).some((x) => x.ruleId === 'LIC-RESTRICTION-TEXT')).toBe(false);
   });
   it('the same on a Zenodo record: rights[] entry next to license.id', () => {
-    const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: 'Closed Access' } }] } }, 'z');
+    const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: 'Closed Access' } }] } }, 'z');
     expect(rulesOf(rec)).toContain('LIC-OTHER-RIGHTS-ENTRY');
   });
   it.each([{ rights: 'Open Access' }, { rights: 'info:eu-repo/semantics/openAccess' }, { rights: 'https://purl.org/coar/access_right/c_abf2' }, { rightsUri: 'https://purl.org/coar/access_right/c_abf2' }] as Rights[])('%j next to CC BY 4.0: no warning', (extra) => {

@@ -80,7 +80,7 @@ describe('parseZenodoRecord — InvenioRDM shape', () => {
 
 describe('parseZenodoRecord — degenerate input', () => {
   it('returns an empty record, not an exception, for a record without files or licence', () => {
-    const rec = parseZenodoRecord({ id: 5, metadata: { title: 'T' } }, 'x');
+    const rec = parseZenodoRecord({ id: 999999915, metadata: { title: 'T' } }, 'x');
     expect(rec.licences).toEqual([]);
     expect(rec.files).toEqual([]);
     expect(parseZenodoRecord(null, 'x').files).toEqual([]);

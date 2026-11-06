@@ -11,7 +11,7 @@ const INC = 'http://rightsstatements.org/vocab/InC/1.0/';
 const CCBY = 'https://creativecommons.org/licenses/by/4.0/legalcode';
 const by: Rights = { rights: 'Creative Commons Attribution 4.0 International', rightsUri: CCBY, rightsIdentifier: 'cc-by-4.0' };
 const dc = (creators: string[], ...rights: Rights[]) =>
-  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', creators: creators.map((name) => ({ name })), publisher: 'Zenodo', rightsList: rights } } }, 'dc');
+  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', creators: creators.map((name) => ({ name })), publisher: 'Zenodo', rightsList: rights } } }, 'dc');
 const ids = (rec: ReturnType<typeof dc>) => checkLicence([rec], { label: 'x', inaccessible: false }).filter((f) => f.ruleId.startsWith('LIC-')).map((f) => f.ruleId);
 const WARN = ['LIC-OTHER-RIGHTS-ENTRY'];
 const PEOPLE = ['Baird, Kevin', 'Berg, Jan', 'Krašovec, Nina', 'Smith, Nora Claire'];

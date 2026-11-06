@@ -21,12 +21,12 @@ describe('isReadme', () => {
 
 describe('linked records', () => {
   it('Zenodo: README.txt is not downloaded, the table is', async () => {
-    const files = ['README.txt', 'ctd.csv'].map((key) => ({ key, size: 10, links: { self: `https://zenodo.org/api/records/7/files/${key}/content` } }));
+    const files = ['README.txt', 'ctd.csv'].map((key) => ({ key, size: 10, links: { self: `https://zenodo.org/api/records/999999917/files/${key}/content` } }));
     const f = new MapFetcher({
-      [ZEN + '7']: { body: JSON.stringify({ id: 7, doi: '10.5281/zenodo.7', metadata: { title: 'Z' }, files }) },
-      [DC + '10.5281/zenodo.7']: dataciteJson({ doi: '10.5281/zenodo.7', title: 'Z' }, []),
+      [ZEN + '999999917']: { body: JSON.stringify({ id: 999999917, doi: '10.5281/zenodo.999999917', metadata: { title: 'Z' }, files }) },
+      [DC + '10.5281/zenodo.999999917']: dataciteJson({ doi: '10.5281/zenodo.999999917', title: 'Z' }, []),
     });
-    const out = await loadZenodo('7', f);
+    const out = await loadZenodo('999999917', f);
     expect(out.files.map((x) => x.name)).toEqual(['ctd.csv']);
     expect(out.findings).toEqual([]);
   });

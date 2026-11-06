@@ -12,7 +12,7 @@ const PANGAEA_META = 'https://doi.pangaea.de/10.1594/PANGAEA.000000?format=metai
 
 describe('splitReferences', () => {
   it('trims, drops empty lines and repeated lines', () => {
-    expect(splitReferences(' 10.1/a \r\n\n10.1/a\nhttps://zenodo.org/records/1\n')).toEqual(['10.1/a', 'https://zenodo.org/records/1']);
+    expect(splitReferences(' 10.1/a \r\n\n10.1/a\nhttps://zenodo.org/records/999999911\n')).toEqual(['10.1/a', 'https://zenodo.org/records/999999911']);
   });
 });
 
@@ -48,9 +48,9 @@ describe('loadLicenceReferences', () => {
   });
 
   it('a Zenodo link and its DOI give two records, not four, and each URL is fetched once', async () => {
-    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
-    const f = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc0-1.0' }), [DC + c.doi]: dataciteJson(c, [{ rightsIdentifier: 'cc0-1.0' }]) });
-    const load = await loadLicenceReferences(['https://zenodo.org/records/9', c.doi, '9'], f);
+    const c = { doi: '10.5281/zenodo.999999919', title: 'Z' };
+    const f = new MapFetcher({ [ZEN + '999999919']: zenodoJson('999999919', c, { id: 'cc0-1.0' }), [DC + c.doi]: dataciteJson(c, [{ rightsIdentifier: 'cc0-1.0' }]) });
+    const load = await loadLicenceReferences(['https://zenodo.org/records/999999919', c.doi, '9'], f);
     expect(load.records.map((r) => r.source).sort()).toEqual(['datacite', 'zenodo']);
     expect(new Set(f.calls).size).toBe(f.calls.length);
   });
@@ -79,9 +79,9 @@ describe('buildAttribution', () => {
   });
 
   it('DataCite saying nothing is not a contradiction for the attribution: the licence the repository record states stays in it', async () => {
-    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
-    const f = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
-    const a = analyseLicences((await loadLicenceReferences(['https://zenodo.org/records/9'], f)).records);
+    const c = { doi: '10.5281/zenodo.999999919', title: 'Z' };
+    const f = new MapFetcher({ [ZEN + '999999919']: zenodoJson('999999919', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    const a = analyseLicences((await loadLicenceReferences(['https://zenodo.org/records/999999919'], f)).records);
     expect(a.contradictions).toEqual([]);
     expect(a.dataciteSilent?.licence).toBe('CC-BY-4.0');
     const attr = buildAttribution(a);
@@ -108,11 +108,11 @@ describe('buildAttribution', () => {
 
 describe('one deposit, two DOIs', () => {
   it('a concept DOI that leads to a Zenodo record with another DOI does not produce a second DataCite source', async () => {
-    const concept = { doi: '10.5281/zenodo.100', title: 'Z', url: 'https://zenodo.org/records/101' };
-    const version = { doi: '10.5281/zenodo.101', title: 'Z' };
+    const concept = { doi: '10.5281/zenodo.999999990', title: 'Z', url: 'https://zenodo.org/records/999999991' };
+    const version = { doi: '10.5281/zenodo.999999991', title: 'Z' };
     const f = new MapFetcher({
       [DC + concept.doi]: dataciteJson(concept, [{ rightsIdentifier: 'cc-by-4.0' }]),
-      [ZEN + '101']: zenodoJson('101', version, { id: 'cc-by-4.0' }),
+      [ZEN + '999999991']: zenodoJson('999999991', version, { id: 'cc-by-4.0' }),
       [DC + version.doi]: dataciteJson(version, [{ rightsIdentifier: 'cc-by-4.0' }]),
     });
     const load = await loadLicenceReferences([concept.doi], f);

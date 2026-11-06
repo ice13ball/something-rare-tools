@@ -201,7 +201,7 @@ describe('archive download problems are said, never a silent pass', () => {
     const f = serverFetcher('/api/fetch', proxy('timeout'));
     const e = await f.get(ARCHIVE).catch((x: unknown) => x);
     expect(fetchErrorFinding(e, 'a.zip')!.ruleId).toBe('IN-FETCH-INTERRUPTED');
-    const z = await serverFetcher('/api/fetch', proxy('timeout')).get('https://zenodo.org/api/records/1').catch((x: unknown) => x);
+    const z = await serverFetcher('/api/fetch', proxy('timeout')).get('https://zenodo.org/api/records/999999911').catch((x: unknown) => x);
     expect(fetchErrorFinding(z, 'r')!.ruleId).toBe('IN-RECORD-INACCESSIBLE');
     const big = await serverFetcher('/api/fetch', proxy('too_large')).get(ARCHIVE).catch((x: unknown) => x);
     const finding = fetchErrorFinding(big, 'a.zip')!;

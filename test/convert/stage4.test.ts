@@ -51,8 +51,8 @@ describe('the EML citation identifier', () => {
   it('reads a DOI in any of its three spellings and leaves a trailing full stop to the sentence', () => {
     expect(doiOfCitation('Example, A (2020). Title. https://doi.org/10.1594/PANGAEA.839758')).toBe('10.1594/PANGAEA.839758');
     expect(doiOfCitation('Example (2020). Title. doi:10.1594/PANGAEA.839758.')).toBe('10.1594/PANGAEA.839758');
-    expect(doiOfCitation('Example (2020). Title. 10.5281/zenodo.123456')).toBe('10.5281/zenodo.123456');
-    expect(doiOfCitation('Example (2020). Title. (https://dx.doi.org/10.5281/zenodo.123456)')).toBe('10.5281/zenodo.123456');
+    expect(doiOfCitation('Example (2020). Title. 10.5281/zenodo.999999956')).toBe('10.5281/zenodo.999999956');
+    expect(doiOfCitation('Example (2020). Title. (https://dx.doi.org/10.5281/zenodo.999999956)')).toBe('10.5281/zenodo.999999956');
     expect(doiOfCitation('Example (2020). Version 10.2 of the Title, 2020.')).toBeUndefined();
     expect(doiOfCitation('')).toBeUndefined();
   });

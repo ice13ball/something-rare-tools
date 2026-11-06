@@ -18,7 +18,7 @@ const kinds = (r: ReturnType<typeof analyseLicences>) => r.contradictions.map((c
 describe('source groups', () => {
   const groups = (...r: MetadataRecord[]) => depositGroups(r);
   it('Zenodo and the DataCite record of a Zenodo DOI are one deposit; PANGAEA likewise', () => {
-    const [z, d] = groups(makeRecord('zenodo', { doi: '10.5281/zenodo.1' }), makeRecord('datacite', { doi: '10.5281/zenodo.1' }));
+    const [z, d] = groups(makeRecord('zenodo', { doi: '10.5281/zenodo.999999911' }), makeRecord('datacite', { doi: '10.5281/zenodo.999999911' }));
     expect(z).toBe(d);
     const [p, pd, pl] = groups(
       makeRecord('pangaea', { doi: '10.1594/PANGAEA.9' }),
@@ -29,21 +29,21 @@ describe('source groups', () => {
   });
   it('a concept DOI and a version DOI of one Zenodo deposit are one deposit (the concept leads to the version)', () => {
     const g = groups(
-      makeRecord('datacite', { doi: '10.5281/zenodo.100', landingUrl: 'https://zenodo.org/records/101' }),
-      makeRecord('zenodo', { doi: '10.5281/zenodo.101', landingUrl: 'https://zenodo.org/records/101' }),
-      makeRecord('datacite', { doi: '10.5281/zenodo.101' }),
+      makeRecord('datacite', { doi: '10.5281/zenodo.999999990', landingUrl: 'https://zenodo.org/records/999999991' }),
+      makeRecord('zenodo', { doi: '10.5281/zenodo.999999991', landingUrl: 'https://zenodo.org/records/999999991' }),
+      makeRecord('datacite', { doi: '10.5281/zenodo.999999991' }),
     );
     expect(new Set(g).size).toBe(1);
   });
   it('two DataCite DOIs of different repositories, two Zenodo deposits, two catalogues are different deposits', () => {
     expect(new Set(groups(makeRecord('datacite', { doi: '10.17882/1' }), makeRecord('datacite', { doi: '10.5285/2' }))).size).toBe(2);
-    expect(new Set(groups(makeRecord('zenodo', { doi: '10.5281/zenodo.1' }), makeRecord('zenodo', { doi: '10.5281/zenodo.2' }))).size).toBe(2);
+    expect(new Set(groups(makeRecord('zenodo', { doi: '10.5281/zenodo.999999911' }), makeRecord('zenodo', { doi: '10.5281/zenodo.999999912' }))).size).toBe(2);
     expect(new Set(groups(makeRecord('iso19139', { label: 'A', doi: '10.1/x' }), makeRecord('iso19139', { label: 'B', doi: '10.1/x' }))).size).toBe(2);
     expect(new Set(groups(makeRecord('iso19139', { label: 'A', doi: '10.1/x' }), makeRecord('datacite', { doi: '10.1/x' }))).size).toBe(2);
   });
 
   it('their agreement confirms nothing: one group states a licence -> single source', () => {
-    const a = analyseLicences([rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.1' }), rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.1' })]);
+    const a = analyseLicences([rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.999999911' }), rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.999999911' })]);
     expect(a.sources).toHaveLength(2);
     expect(a.groups).toHaveLength(1);
     expect(a.statedGroups).toBe(1);
@@ -54,8 +54,8 @@ describe('source groups', () => {
   it('independent sources that agree are "compared", N = number of groups', () => {
     const a = analyseLicences([
       rec('iso19139', [['CC BY 4.0', BY]]),
-      rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.1' }),
-      rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.1' }),
+      rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.999999911' }),
+      rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.999999911' }),
     ]);
     expect(a.statedGroups).toBe(2);
     expect(a.comparison).toBe('compared');
@@ -72,7 +72,7 @@ describe('source groups', () => {
     expect(a.dataciteSilent?.where).toHaveLength(1);
   });
   it('the DataCite line names each source with its own licence (two sources, two licences)', () => {
-    const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('zenodo', [['cc0-1.0']], { doi: '10.5281/zenodo.2' }), rec('datacite', [])]);
+    const a = analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('zenodo', [['cc0-1.0']], { doi: '10.5281/zenodo.999999912' }), rec('datacite', [])]);
     expect(a.dataciteSilent?.where.map((w) => w.split(': ')[1])).toEqual(['CC-BY-4.0', 'CC0-1.0']);
   });
 });
@@ -83,7 +83,7 @@ describe('contradictions', () => {
     expect(a.contradictions).toMatchObject([{ kind: 'mismatch', licenceA: 'CC-BY-4.0', licenceB: 'CC-BY-SA-4.0', sameGroup: false }]);
   });
   it('Zenodo against its own DataCite record still disagrees (reported as same group)', () => {
-    const a = analyseLicences([rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.1' }), rec('datacite', [['CC BY-SA 4.0', BYSA]], { doi: '10.5281/zenodo.1' })]);
+    const a = analyseLicences([rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.999999911' }), rec('datacite', [['CC BY-SA 4.0', BYSA]], { doi: '10.5281/zenodo.999999911' })]);
     expect(a.contradictions).toMatchObject([{ kind: 'mismatch', sameGroup: true }]);
   });
   it('dual licensing inside one record, with or without a second source naming one of them, is no mismatch', () => {

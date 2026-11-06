@@ -13,7 +13,7 @@ import { UI } from '../src/core/i18n/ui';
 
 describe('isAllowedHost', () => {
   it('accepts https on an allowlisted host', () => {
-    expect(isAllowedHost('https://zenodo.org/api/records/1')).toBe(true);
+    expect(isAllowedHost('https://zenodo.org/api/records/999999911')).toBe(true);
   });
   it('refuses http', () => {
     expect(isAllowedHost('http://zenodo.org/x')).toBe(false);

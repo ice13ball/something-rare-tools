@@ -14,7 +14,7 @@ import { renderPlain } from '../../src/core/report';
 import type { Finding, Lang } from '../../src/core/types';
 
 type Rights = { rights?: string; rightsUri?: string; rightsIdentifier?: string; rightsIdentifierScheme?: string };
-const dc = (...rights: Rights[]) => parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', rightsList: rights } } }, 'dc');
+const dc = (...rights: Rights[]) => parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', rightsList: rights } } }, 'dc');
 const lic = (f: Finding[]) => f.filter((x) => x.ruleId.startsWith('LIC-'));
 const rulesOf = (rec: ReturnType<typeof dc>) => lic(checkLicence([rec], { label: 'x', inaccessible: false })).map((f) => f.ruleId);
 const rules = (...rights: Rights[]) => rulesOf(dc(...rights));
@@ -44,12 +44,12 @@ describe('HIGH: a text that names no licence cannot vouch for an identifier', ()
     expect(rules({ rights: id, rightsIdentifier: t })).toContain('LIC-AMBIGUOUS');
   });
   it.each(combos)('Zenodo record: id %s next to title "%s"', (t, id) => {
-    const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id, title: { en: t } } } }, 'z');
+    const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id, title: { en: t } } } }, 'z');
     expect(classifyStatement(rec.licences[0])).toEqual({ kind: 'unrecognised' });
     expect(rulesOf(rec)).toContain('LIC-AMBIGUOUS');
   });
   it('Zenodo record: id cc-by-4.0 + title "All rights reserved"', () => {
-    const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: 'All rights reserved' } } } }, 'z');
+    const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: 'All rights reserved' } } } }, 'z');
     expect(rulesOf(rec)).toEqual(['LIC-AMBIGUOUS']);
   });
   it('"Open Access" next to an exact id stays clean (neutral wording)', () => {
@@ -63,7 +63,7 @@ describe('HIGH: a text that names no licence cannot vouch for an identifier', ()
   it('the Zenodo form of all table rows stays clean', () => {
     for (const z of ZENODO_LICENCES) {
       expect(rules({ rights: z.title, rightsUri: z.url, rightsIdentifier: z.id.toLowerCase(), rightsIdentifierScheme: 'SPDX' }), z.id).toEqual([]);
-      const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: z.id.toLowerCase(), title: { en: z.title }, link: z.url } } }, 'z');
+      const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: z.id.toLowerCase(), title: { en: z.title }, link: z.url } } }, 'z');
       expect(rulesOf(rec), z.id).toEqual([]);
     }
   });
@@ -92,7 +92,7 @@ describe('LOW: leftover of another string, translated', () => {
     if (lang !== 'en') expect(t).not.toMatch(/Another string|also leaves/);
   });
   it('Zenodo: {text} is the title when the quote comes from the title', () => {
-    const rec = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: 'Creative Commons Attribution 4.0 International, see the README' } } } }, 'z');
+    const rec = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: 'Creative Commons Attribution 4.0 International, see the README' } } } }, 'z');
     const g = lic(checkLicence([rec], { label: 'x', inaccessible: false })).find((x) => x.ruleId === 'LIC-EXTRA-TEXT')!;
     expect(g.params).toEqual({ text: 'Creative Commons Attribution 4.0 International, see the README', rest: 'see the README' });
   });

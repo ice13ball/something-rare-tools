@@ -15,7 +15,7 @@ const INC = 'http://rightsstatements.org/vocab/InC/1.0/';
 const CCBY = 'https://creativecommons.org/licenses/by/4.0/legalcode';
 const by: Rights = { rights: 'Creative Commons Attribution 4.0 International', rightsUri: CCBY, rightsIdentifier: 'cc-by-4.0' };
 const dc = (attrs: { creators?: string[]; publisher?: string }, ...rights: Rights[]) =>
-  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', creators: (attrs.creators ?? []).map((name) => ({ name })), publisher: attrs.publisher, rightsList: rights } } }, 'dc');
+  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', creators: (attrs.creators ?? []).map((name) => ({ name })), publisher: attrs.publisher, rightsList: rights } } }, 'dc');
 const lic = (f: Finding[]) => f.filter((x) => x.ruleId.startsWith('LIC-'));
 const ids = (rec: MetadataRecord) => lic(checkLicence([rec], { label: 'x', inaccessible: false })).map((f) => f.ruleId);
 const OWN = { creators: ['Krašovec, Nina', 'Marsetič, Aleš', 'van der Berg, Jan'], publisher: 'CERN' };
@@ -48,7 +48,7 @@ describe('HIGH: a holder entry is neutral only when every name is a creator or t
     expect(ids(dc(OWN, by, { rightsUri: INC }))).toEqual([]);
   });
   it('a Zenodo record: its rights[] holder entry is checked against its own creators', () => {
-    const rec = (title: string) => parseZenodoRecord({ id: 1, metadata: { title: 'x', creators: [{ name: 'Fabbian, Ignacio' }], license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: title }, link: INC }] } }, 'z');
+    const rec = (title: string) => parseZenodoRecord({ id: 999999911, metadata: { title: 'x', creators: [{ name: 'Fabbian, Ignacio' }], license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: title }, link: INC }] } }, 'z');
     expect(ids(rec('© 2026 Ignacio Fabbian'))).toEqual([]);
     expect(ids(rec('© 2026 Ignacio Fabbian Internal'))).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
   });
@@ -82,13 +82,13 @@ describe('MEDIUM: unknown-link clause only for DataCite / Zenodo; exact spdx.org
     expect(ok('https://spdx.org/licenses/MIT.html', 'cc-by-4.0', 'Creative Commons Attribution 4.0 International')).toEqual(['LIC-TEXT-URI-CONFLICT']);
   });
   it('DataCite and Zenodo keep the conflict for a truly unknown link', () => {
-    expect(ids(dc({}, { rights: 'Creative Commons Attribution 4.0 International', rightsIdentifier: 'cc-by-4.0', rightsUri: 'https://doi.org/10.5281/zenodo.1' }))).toEqual(['LIC-TEXT-URI-CONFLICT']);
-    const z = parseZenodoRecord({ id: 1, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: 'Creative Commons Attribution 4.0 International' }, link: 'https://example.org/terms' } } }, 'z');
+    expect(ids(dc({}, { rights: 'Creative Commons Attribution 4.0 International', rightsIdentifier: 'cc-by-4.0', rightsUri: 'https://doi.org/10.5281/zenodo.999999911' }))).toEqual(['LIC-TEXT-URI-CONFLICT']);
+    const z = parseZenodoRecord({ id: 999999911, metadata: { title: 'x', license: { id: 'cc-by-4.0', title: { en: 'Creative Commons Attribution 4.0 International' }, link: 'https://example.org/terms' } } }, 'z');
     expect(ids(z)).toEqual(['LIC-TEXT-URI-CONFLICT']);
   });
   it('ISO behaves as before for an unknown link next to an exact id / title', () => {
     for (const text of ['CC-BY-4.0', 'Creative Commons Attribution 4.0 International']) {
-      for (const uri of ['https://doi.org/10.5281/zenodo.1', 'https://example.org/terms', 'https://opendefinition.org/licenses/cc-by/']) {
+      for (const uri of ['https://doi.org/10.5281/zenodo.999999911', 'https://example.org/terms', 'https://opendefinition.org/licenses/cc-by/']) {
         const s = buildStatement({ source: 'iso19139', field: 'otherConstraints', text, uri })!;
         expect(s.conflict, `${text} ${uri}`).toBeUndefined();
         expect(s.spdx, `${text} ${uri}`).toBe('CC-BY-4.0');

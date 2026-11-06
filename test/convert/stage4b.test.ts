@@ -208,8 +208,8 @@ describe('the DOI of the citation', () => {
     expect(doiOfCitation('A (2020). T. https://doi.org/10.1594/PANGAEA.839758')).toBe('10.1594/PANGAEA.839758');
     expect(doiOfCitation('A (2020). T. http://dx.doi.org/10.1594/PANGAEA.839758')).toBe('10.1594/PANGAEA.839758');
     expect(doiOfCitation('A (2020). T. doi: 10.1594/PANGAEA.839758')).toBe('10.1594/PANGAEA.839758');
-    expect(doiOfCitation('Cited as 10.5281/zenodo.123456.')).toBe('10.5281/zenodo.123456');
-    expect(doiOfCitation('Cited as (10.5281/zenodo.123456)')).toBe('10.5281/zenodo.123456');
+    expect(doiOfCitation('Cited as 10.5281/zenodo.999999956.')).toBe('10.5281/zenodo.999999956');
+    expect(doiOfCitation('Cited as (10.5281/zenodo.999999956)')).toBe('10.5281/zenodo.999999956');
   });
   it('accepts http and https, with or without www. and dx.', () => {
     for (const prefix of ['https://doi.org/', 'http://doi.org/', 'https://www.doi.org/', 'http://www.doi.org/', 'https://dx.doi.org/', 'http://dx.doi.org/']) expect(doiOfCitation(`A (2020). T. ${prefix}10.1594/PANGAEA.839758`), prefix).toBe('10.1594/PANGAEA.839758');

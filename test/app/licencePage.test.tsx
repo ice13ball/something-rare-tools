@@ -72,22 +72,22 @@ describe('LicencePage', () => {
   });
 
   it('an empty DataCite record next to a licence stated elsewhere is not a contradiction: a line of its own, and the attribution keeps the licence', async () => {
-    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
-    const fetcher = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
-    const result = await run(fetcher, ['https://zenodo.org/records/9']);
+    const c = { doi: '10.5281/zenodo.999999919', title: 'Z' };
+    const fetcher = new MapFetcher({ [ZEN + '999999919']: zenodoJson('999999919', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    const result = await run(fetcher, ['https://zenodo.org/records/999999919']);
     const text = result.textContent ?? '';
     expect(text).not.toContain('Contradictions found');
     const silent = screen.getByTestId('licence-datacite-silent').textContent ?? '';
     expect(silent).toContain('DataCite states no licence.');
-    expect(silent).toContain('Stated by Zenodo 9: CC-BY-4.0.');
+    expect(silent).toContain('Stated by Zenodo 999999919: CC-BY-4.0.');
     expect(silent).toContain('OpenAIRE');
     expect(screen.getByTestId('attribution').textContent).toContain('Licence: Creative Commons Attribution 4.0 International');
   });
 
   it('the same in Polish: „DataCite nie podaje licencji”', async () => {
-    const c = { doi: '10.5281/zenodo.9', title: 'Z' };
-    const fetcher = new MapFetcher({ [ZEN + '9']: zenodoJson('9', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
-    await run(fetcher, ['https://zenodo.org/records/9'], 'pl');
+    const c = { doi: '10.5281/zenodo.999999919', title: 'Z' };
+    const fetcher = new MapFetcher({ [ZEN + '999999919']: zenodoJson('999999919', c, { id: 'cc-by-4.0' }), [DC + c.doi]: dataciteJson(c, []) });
+    await run(fetcher, ['https://zenodo.org/records/999999919'], 'pl');
     expect(screen.getByTestId('licence-datacite-silent').textContent).toContain('DataCite nie podaje licencji.');
     expect(screen.getByTestId('licence-result').textContent).not.toContain('Znalezione sprzeczności');
   });

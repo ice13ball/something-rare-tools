@@ -35,9 +35,9 @@ describe('DataCite', () => {
 
 describe('Zenodo', () => {
   it('legacy and InvenioRDM creators, publication date year, publisher', () => {
-    const legacy = parseZenodoRecord({ id: 1, metadata: { title: 't', creators: [{ name: 'Doe, Jane' }], publication_date: '2022-05-04' } }, 'z');
+    const legacy = parseZenodoRecord({ id: 999999911, metadata: { title: 't', creators: [{ name: 'Doe, Jane' }], publication_date: '2022-05-04' } }, 'z');
     expect(legacy).toMatchObject({ creators: ['Doe, Jane'], publicationYear: 2022 });
-    const rdm = parseZenodoRecord({ id: 2, metadata: { creators: [{ person_or_org: { name: 'Roe, Rick' } }], publication_date: '2020', publisher: 'Zenodo' } }, 'z');
+    const rdm = parseZenodoRecord({ id: 999999912, metadata: { creators: [{ person_or_org: { name: 'Roe, Rick' } }], publication_date: '2020', publisher: 'Zenodo' } }, 'z');
     expect(rdm).toMatchObject({ creators: ['Roe, Rick'], publicationYear: 2020, publisher: 'Zenodo' });
   });
 });

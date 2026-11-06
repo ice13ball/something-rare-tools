@@ -35,7 +35,7 @@ describe('contacts', () => {
 
   it('Zenodo: the legacy contributor type and the InvenioRDM role', () => {
     expect(parseZenodoRecord(JSON.parse(zenodoJson({ contacts: ['Example, Anna'] })), 'z.json').contacts).toEqual([{ name: 'Example, Anna' }]);
-    const rdm = { id: 1, metadata: { title: 'T', contributors: [{ person_or_org: { name: 'Example, Anna' }, role: { id: 'contactperson' } }, { person_or_org: { name: 'Other, Eve' }, role: { id: 'editor' } }] }, files: [] };
+    const rdm = { id: 999999911, metadata: { title: 'T', contributors: [{ person_or_org: { name: 'Example, Anna' }, role: { id: 'contactperson' } }, { person_or_org: { name: 'Other, Eve' }, role: { id: 'editor' } }] }, files: [] };
     expect(parseZenodoRecord(rdm, 'z.json').contacts).toEqual([{ name: 'Example, Anna' }]);
   });
 });

@@ -469,12 +469,12 @@ describe('POST /api/fetch — proxying', () => {
 describe('logging', () => {
   it('writes one {host,status,bytes} JSON line per proxied request and never a path, query or body', async () => {
     const { app, logs } = make();
-    const url = 'https://zenodo.org/api/records/123456?access_token=SECRETTOKEN&q=needle';
+    const url = 'https://zenodo.org/api/records/999999956?access_token=SECRETTOKEN&q=needle';
     await post(app, { url });
     expect(logs).toHaveLength(1);
     expect(Object.keys(JSON.parse(logs[0])).sort()).toEqual(['bytes', 'host', 'status']);
     expect(JSON.parse(logs[0])).toEqual({ host: 'zenodo.org', status: 200, bytes: 'upstream-body'.length });
-    for (const leak of ['api/records', '123456', 'SECRETTOKEN', 'needle', 'access_token', 'https://']) expect(logs[0]).not.toContain(leak);
+    for (const leak of ['api/records', '999999956', 'SECRETTOKEN', 'needle', 'access_token', 'https://']) expect(logs[0]).not.toContain(leak);
     expect(logs[0]).not.toContain('\n');
   });
   it('a refused request is logged with its status, 0 bytes, and no host unless it is an allowlisted one', async () => {

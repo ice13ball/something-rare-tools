@@ -240,21 +240,21 @@ describe('review 7 — sources are grouped by deposit, not by source type', () =
     expect(analyseLicences([z(1), z(2)]).groups).toHaveLength(2);
   });
   it('a Zenodo record, the DataCite record of its version DOI and of its concept DOI are one group', () => {
-    const z = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.101', label: 'Zenodo 101', landingUrl: 'https://zenodo.org/records/101' });
-    const version = dc('10.5281/zenodo.101');
-    const concept = rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.100', label: 'DataCite concept', landingUrl: 'https://zenodo.org/records/101' });
+    const z = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.999999991', label: 'Zenodo 999999991', landingUrl: 'https://zenodo.org/records/999999991' });
+    const version = dc('10.5281/zenodo.999999991');
+    const concept = rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.999999990', label: 'DataCite concept', landingUrl: 'https://zenodo.org/records/999999991' });
     const a = analyseLicences([z, version, concept]);
     expect(a.groups).toHaveLength(1);
     expect(a.groups[0].sources).toHaveLength(3);
     expect(a.comparison).toBe('single-source');
   });
   it('the Zenodo parser keeps the concept record id', () => {
-    expect(parseZenodoRecord({ id: 9, conceptrecid: '7', metadata: {} }, 'Zenodo 9').conceptId).toBe('7');
+    expect(parseZenodoRecord({ id: 999999919, conceptrecid: '999999917', metadata: {} }, 'Zenodo 999999919').conceptId).toBe('999999917');
   });
   it('a Zenodo version record that names its concept record joins the DataCite record of the concept DOI (landing page = the concept itself)', () => {
-    const z = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.19475182', label: 'Zenodo 19475182', landingUrl: 'https://zenodo.org/records/19475182', conceptId: '3633185' });
-    const concept = rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.3633185', label: 'DataCite concept', landingUrl: 'https://zenodo.org/records/3633185' });
-    const other = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.5', label: 'Zenodo 5', landingUrl: 'https://zenodo.org/records/5', conceptId: '4' });
+    const z = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.999999992', label: 'Zenodo 999999992', landingUrl: 'https://zenodo.org/records/999999992', conceptId: '999999993' });
+    const concept = rec('datacite', [['CC BY 4.0', BY]], { doi: '10.5281/zenodo.999999993', label: 'DataCite concept', landingUrl: 'https://zenodo.org/records/999999993' });
+    const other = rec('zenodo', [['cc-by-4.0', undefined]], { doi: '10.5281/zenodo.999999915', label: 'Zenodo 999999915', landingUrl: 'https://zenodo.org/records/999999915', conceptId: '999999914' });
     expect(analyseLicences([z, concept]).groups).toHaveLength(1);
     expect(analyseLicences([z, concept, other]).groups).toHaveLength(2);
   });

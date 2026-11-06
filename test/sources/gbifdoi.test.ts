@@ -26,8 +26,8 @@ describe('GBIF DOI on /licence', () => {
 
 describe('GBIF DOI on /collection', () => {
   it('is a valid DOI, not counted invalid', () => {
-    const b = scanBatch(`${DOI}\n10.5281/zenodo.23541397`, 0);
-    expect(b.dois).toEqual([DOI, '10.5281/zenodo.23541397']);
+    const b = scanBatch(`${DOI}\n10.5281/zenodo.999999997`, 0);
+    expect(b.dois).toEqual([DOI, '10.5281/zenodo.999999997']);
     expect(b.invalid).toBe(0);
   });
 });

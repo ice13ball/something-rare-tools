@@ -140,12 +140,12 @@ describe('proxyFetch — what is sent and returned', () => {
         'x-secret': '1',
       });
     };
-    const r = await proxyFetch('https://zenodo.org/api/records/1?x=1', 'text/csv', deps(up));
+    const r = await proxyFetch('https://zenodo.org/api/records/999999911?x=1', 'text/csv', deps(up));
     expect(r.status).toBe(200);
     expect(r.contentType).toBe('text/csv');
     expect(await drain(r.body)).toBe('hello');
     expect(seen!.addresses).toEqual(PUBLIC);
-    expect(seen!.url.href).toBe('https://zenodo.org/api/records/1?x=1');
+    expect(seen!.url.href).toBe('https://zenodo.org/api/records/999999911?x=1');
     const h = Object.fromEntries(Object.entries(seen!.headers).map(([k, v]) => [k.toLowerCase(), v]));
     expect(h['user-agent']).toBe('AbyssalClaimsTools/1.0 (+https://tools.something-rare.com; mailto:m.mazurowski@ai-wall.com)');
     expect(h['accept']).toBe('text/csv');
@@ -174,10 +174,10 @@ describe('proxyFetch — redirects', () => {
   }
 
   it('follows an allowlisted redirect (relative Location resolved against the current URL)', async () => {
-    const { up, hops } = redirecting({ 'https://geo.iopan.pl/10.1/x': 'https://zenodo.org/records/1', 'https://zenodo.org/records/1': '/api/records/1' });
+    const { up, hops } = redirecting({ 'https://geo.iopan.pl/10.1/x': 'https://zenodo.org/records/999999911', 'https://zenodo.org/records/999999911': '/api/records/999999911' });
     const r = await proxyFetch('https://geo.iopan.pl/10.1/x', undefined, deps(up));
     expect(await drain(r.body)).toBe('done');
-    expect(hops).toEqual(['https://geo.iopan.pl/10.1/x', 'https://zenodo.org/records/1', 'https://zenodo.org/api/records/1']);
+    expect(hops).toEqual(['https://geo.iopan.pl/10.1/x', 'https://zenodo.org/records/999999911', 'https://zenodo.org/api/records/999999911']);
   });
 
   for (const code of [301, 302, 303, 307, 308]) {

@@ -110,11 +110,11 @@ describe('InputPanel', () => {
     expect(input.accept).toBe('.csv,.tsv,.txt,.tab,.xlsx,.xls,.ods,.xml,.json,.zip');
     const f = csv('one.csv');
     fireEvent.change(input, { target: { files: [f] } });
-    fireEvent.change(screen.getByRole('textbox', { name: /Zenodo, GeoNetwork, Dataverse \(RepOD\), GBIF or OBIS link/ }), { target: { value: '  10.5281/zenodo.1  ' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /Zenodo, GeoNetwork, Dataverse \(RepOD\), GBIF or OBIS link/ }), { target: { value: '  10.5281/zenodo.999999911  ' } });
     const form = container.querySelector('form') as HTMLFormElement;
     const notPrevented = fireEvent.submit(form);
     expect(notPrevented).toBe(false);
-    expect(onSubmit).toHaveBeenCalledWith({ files: [f], link: '10.5281/zenodo.1', mode: 'server' });
+    expect(onSubmit).toHaveBeenCalledWith({ files: [f], link: '10.5281/zenodo.999999911', mode: 'server' });
   });
 
   it('omits link when empty, skips unsupported file types and refuses an empty submit', () => {

@@ -207,7 +207,7 @@ describe('archive route — daily budget per IP', () => {
     expect(over.status).toBe(429);
     expect(over.headers['x-fetch-proxy-error']).toBe('archive_daily_budget');
     expect(Number(over.headers['retry-after'])).toBeGreaterThan(0);
-    expect((await post(a, 'https://zenodo.org/api/records/1', '9.9.9.1')).status).toBe(200);
+    expect((await post(a, 'https://zenodo.org/api/records/999999911', '9.9.9.1')).status).toBe(200);
     expect((await post(a, 'https://ipt.vliz.be/page', '9.9.9.1')).status).toBe(200);
     expect((await post(a, ARCH, '9.9.9.2')).status).toBe(200);
   });
@@ -252,7 +252,7 @@ describe('archive route — parallel requests cannot outrun the budget', () => {
 
   it('a non-archive request is not counted against the cap', async () => {
     const a = mk(slow(3, 40));
-    const res = await Promise.all([post(a, '5.5.5.3'), post(a, '5.5.5.3'), post(a, '5.5.5.3', 'https://zenodo.org/api/records/1')]);
+    const res = await Promise.all([post(a, '5.5.5.3'), post(a, '5.5.5.3'), post(a, '5.5.5.3', 'https://zenodo.org/api/records/999999911')]);
     expect(res.map((r) => r.status)).toEqual([200, 200, 200]);
   });
 

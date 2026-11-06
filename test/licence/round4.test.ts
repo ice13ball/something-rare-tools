@@ -13,7 +13,7 @@ const INC = 'http://rightsstatements.org/vocab/InC/1.0/';
 const CCBY = 'https://creativecommons.org/licenses/by/4.0/legalcode';
 const by: Rights = { rights: 'Creative Commons Attribution 4.0 International', rightsUri: CCBY, rightsIdentifier: 'cc-by-4.0' };
 const dc = (creators: Creator[], publisher: string | undefined, ...rights: Rights[]) =>
-  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', creators: creators.map((c) => (typeof c === 'string' ? { name: c } : c)), publisher, rightsList: rights } } }, 'dc');
+  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', creators: creators.map((c) => (typeof c === 'string' ? { name: c } : c)), publisher, rightsList: rights } } }, 'dc');
 const ids = (rec: ReturnType<typeof dc>) => checkLicence([rec], { label: 'x', inaccessible: false }).filter((f: Finding) => f.ruleId.startsWith('LIC-')).map((f) => f.ruleId);
 const WARN = ['LIC-OTHER-RIGHTS-ENTRY'];
 const PEOPLE: Creator[] = ['Baird, Kevin', 'Berg, Jan', 'Krašovec, Nina', 'Cui, Qirui', 'Narr, Marei'];

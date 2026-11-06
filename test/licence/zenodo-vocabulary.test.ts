@@ -12,9 +12,9 @@ import { parseZenodoRecord } from '../../src/core/metadata/zenodo';
 import { ZENODO_LICENCES } from '../../src/core/metadata/zenodo-licences';
 
 const datacite = (z: { id: string; title: string; url: string }) =>
-  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', rightsList: [{ rights: z.title, rightsUri: z.url, rightsIdentifier: z.id.toLowerCase(), rightsIdentifierScheme: 'SPDX' }] } } }, 'dc');
+  parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', rightsList: [{ rights: z.title, rightsUri: z.url, rightsIdentifier: z.id.toLowerCase(), rightsIdentifierScheme: 'SPDX' }] } } }, 'dc');
 const zenodoRecord = (z: { id: string; title: string; url: string }) =>
-  parseZenodoRecord({ id: 1, metadata: { title: 't', license: { id: z.id.toLowerCase(), title: { en: z.title }, link: z.url } } }, 'zen');
+  parseZenodoRecord({ id: 999999911, metadata: { title: 't', license: { id: z.id.toLowerCase(), title: { en: z.title }, link: z.url } } }, 'zen');
 
 describe('Zenodo licence vocabulary (generated table)', () => {
   it('holds only ids the classifier knows, once each', () => {

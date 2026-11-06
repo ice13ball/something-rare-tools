@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // Standard licences as Zenodo writes them into DataCite are recognised by their EXACT names (the title, the SPDX id as identifier); anything
-// else in the text stays leftover (fail-closed unchanged). Reported on production: ODbL (10.5281/zenodo.23541397) and the GNU "or later"
+// else in the text stays leftover (fail-closed unchanged). Reported on production: ODbL (10.5281/zenodo.999999997) and the GNU "or later"
 // licences (10.5281/zenodo.22728476, 10.23695/ajyp-y830).
 import { describe, expect, it } from 'vitest';
 import { renderPlain } from '../../src/core/report';
@@ -12,7 +12,7 @@ import { classifyStatement, exactLicenceName, spdxFromUri } from '../../src/core
 import type { Finding } from '../../src/core/types';
 
 type Rights = { rights?: string; rightsUri?: string; rightsIdentifier?: string; rightsIdentifierScheme?: string };
-const record = (...rights: Rights[]) => parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.1', rightsList: rights } } }, 'dc');
+const record = (...rights: Rights[]) => parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', rightsList: rights } } }, 'dc');
 const lic = (f: Finding[]) => f.filter((x) => x.ruleId.startsWith('LIC-'));
 const findings = (...rights: Rights[]) => lic(checkLicence([record(...rights)], { label: 'x', inaccessible: false }));
 const rules = (...rights: Rights[]) => findings(...rights).map((f) => f.ruleId);

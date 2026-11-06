@@ -37,7 +37,7 @@ describe('META-NO-EXTENT wording', () => {
   });
 
   it('the fix list and the evaluated item of a collection use the collection wording; the technical line is the same', () => {
-    const item = { ref: '10.5281/zenodo.1', state: 'checked', records: [makeRecord('datacite', {})] } as unknown as Item;
+    const item = { ref: '10.5281/zenodo.999999911', state: 'checked', records: [makeRecord('datacite', {})] } as unknown as Item;
     const f = evaluateItem(item).find((x) => x.ruleId === 'META-NO-EXTENT')!;
     for (const lang of LANGS) expect(fixListRow('r', f, lang, 'doi-list'), lang).not.toMatch(TABLE);
     expect(getRule('META-NO-EXTENT').technical).not.toMatch(/\{scope\}/);
