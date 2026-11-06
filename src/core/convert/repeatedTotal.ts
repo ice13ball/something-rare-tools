@@ -25,6 +25,8 @@ import { parseNumber } from '../values/numbers';
  *              of the row.
  *   warns      (CONV-QUANTITY-SAME-IN-SAMPLE) everywhere else: rows of one sample and taxon with the same quantity above 1 that differ in anything (a blank size, a stage, a sex, a
  *              size that is different on every row) are never silent, whatever their number: the text gives both sums.
+ *   separated  (CONV-QUANTITY-SAME-IN-SAMPLE, naming the column) a key column left out in turn (the sample code and a picked key excepted): the other key columns and the taxon then give groups whose
+ *              rows all differ in that column, and the quantity repeats in them under the same evidence and thresholds as the block. Asked only: a size class declared as the cruise is that.
  *   copies     (CONV-ROW-COPIES) rows identical in every column but a per-row identifier, with a quantity above 1: the same row twice.
  *
  *   taxon only inside a group taken once, a row whose every differing column is blank (no size, no number measured, no stage) carries only the taxon and the total. It is read from the values
@@ -108,8 +110,22 @@ export interface RowCopies {
   column: string;
 }
 
+/**
+ * A column that separates the rows of what is one sample if it were left out (the leave-one-out pass): the other key columns and the taxon give groups whose rows all differ in `by`, and the
+ * quantity (or a weight) repeats in them as a total repeats. Asked, never decided: nothing is blocked, collapsed or re-roled.
+ */
+export interface SeparatedTotal {
+  /** The header of the key column left out. */
+  by: string;
+  column: string;
+  kind: 'quantity' | 'biomass';
+  /** The groups the column repeats in, with the repeated value: build.ts recomputes the sums from what the archive writes. */
+  groups: { lines: number[]; v: number }[];
+}
+
 export interface RepeatAnalysis {
   total?: RepeatedTotal;
+  separated?: SeparatedTotal[];
   same?: SameValue;
   copies?: RowCopies;
   /** Rows identical in every column but a per-row identifier whose quantity is 1: copies, or separate specimens that look the same (a finding to accept, never a block). */
@@ -400,6 +416,44 @@ export function analyseRepeats(args: {
     };
   }
 
+  /* ---- leave one out: a key column that tells the rows of one sample apart (a size class declared as the cruise) ---- */
+  // For each key column K (not the sample code and not a column of a picked key: those the person has declared to say which sample a row is of), the rows are grouped by the OTHER key columns and
+  // the taxon, which is what the full key cannot do when K is part of it. The evidence is `statusOf` with the thresholds of the block, unchanged; the answer is only a finding.
+  const separated: SeparatedTotal[] = [];
+  {
+    const kinds = new Map(roles.map((c) => [c.index, c.role.kind] as const));
+    const leave = looseCols.filter((i) => !picked.includes(i) && kinds.get(i) !== 'taxon' && kinds.get(i) !== 'sampleId' && kinds.get(i) !== 'keyPart');
+    for (const k of leave) {
+      const rest = looseCols.filter((i) => i !== k);
+      const groups = groupBy(rest).filter((g) => {
+        const vals = g.map((r) => cellText(r, k).toLowerCase());
+        return vals.every((v) => v !== '') && new Set(vals).size === g.length;
+      });
+      if (groups.length < MIN_REPEAT_GROUPS) continue;
+      for (const c of candidates) {
+        // a column the block already stands for is not asked twice
+        if (total?.columns.some((x) => x.index === c.index) === true) continue;
+        let repeat = 0;
+        let of = 0;
+        const values = new Set<number>();
+        const hits: { lines: number[]; v: number }[] = [];
+        for (const g of groups) {
+          const st = statusOf(g, c);
+          if (st.kind === 'none') continue;
+          of++;
+          if (st.kind === 'repeat') {
+            repeat++;
+            values.add(st.v);
+            hits.push({ lines: g.filter((r) => (value(r, c.index) ?? 0) > 0).map((r) => r.line), v: st.v });
+          }
+        }
+        if (repeat >= MIN_REPEAT_GROUPS && repeat / of >= REPEAT_SHARE && values.size >= 2) {
+          separated.push({ by: (roles.find((x) => x.index === k)?.header ?? '').trim(), column: c.header, kind: c.kind, groups: hits });
+        }
+      }
+    }
+  }
+
   /* ---- the warning: the same quantity (or weight) on rows of one sample and taxon that differ in anything ---- */
   let same: SameValue | undefined;
   {
@@ -448,5 +502,5 @@ export function analyseRepeats(args: {
     if (rest.length === 0) copies = undefined;
     else copies = { ...copies, copyLines: rest, lines: copies.lines.filter((l) => !total!.affected.has(l) || rest.includes(l)) };
   }
-  return { ...(total === undefined ? {} : { total }), ...(same === undefined ? {} : { same }), ...(copies === undefined ? {} : { copies }), ...(specimenCopies === undefined ? {} : { specimenCopies }) };
+  return { ...(total === undefined ? {} : { total }), ...(separated.length === 0 ? {} : { separated }), ...(same === undefined ? {} : { same }), ...(copies === undefined ? {} : { copies }), ...(specimenCopies === undefined ? {} : { specimenCopies }) };
 }

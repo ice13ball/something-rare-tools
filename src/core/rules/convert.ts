@@ -1819,6 +1819,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines} field {field}: {records} rows in {groups} group(s) of one sample and taxon, which differ in some other column, carry the same weight in {column}. Written on every row the sum is {written}; if the value is a per-taxon total repeated on each row it would be {asTotal}. Shown whatever the number of groups, and never with the advice to tell the rows apart.`,
   },
+  // CONV-QUANTITY-SAME-IN-SAMPLE where leaving one key column out puts the rows of a sample together (a size class declared as the cruise)
+  'CONV-QUANTITY-SAME-IN-SAMPLE:by': {
+    plain: {
+      pl: `{records} {+records:wiersz|wiersze|wierszy} ({groups} {+groups:grupa|grupy|grup}) różni się tylko kolumną „{by}”, a „{column}” ma w nich tę samą wartość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisana przy każdym wierszu daje {written}; jeśli to suma całości, a „{by}” tylko rozróżnia klasy wielkości tej samej próbki, byłoby {asTotal}. Jeśli tak jest, nadaj kolumnie „{by}” inną rolę (zmienna) i wybierz zapis sumy raz. Sprawdź, co to jest.`,
+      en: `{records} rows ({groups} {+groups:group|groups}) differ only in the column "{by}", and "{column}" has the same value in them ({+lineCount:line|lines} {lines}). Written on every row it adds up to {written}; if it is the total of the whole and "{by}" only tells size classes of one sample apart, it would be {asTotal}. If so, give "{by}" another role (a variable) and choose to write the total once. Check which it is.`,
+      de: `{records} Zeilen ({groups} {+groups:Gruppe|Gruppen}) unterscheiden sich nur in der Spalte „{by}“, und „{column}“ hat in ihnen denselben Wert ({+lineCount:Zeile|Zeilen} {lines}). In jeder Zeile geschrieben ergibt das {written}; ist es die Summe des Ganzen und „{by}“ unterscheidet nur Größenklassen derselben Probe, wären es {asTotal}. Wenn ja, geben Sie „{by}“ eine andere Rolle (eine Variable) und wählen Sie, die Summe einmal zu schreiben. Prüfen Sie, was es ist.`,
+      fr: `{records} lignes ({groups} {+groups:groupe|groupes}) ne diffèrent que par la colonne « {by} », et « {column} » y a la même valeur ({+lineCount:ligne|lignes} {lines}). Écrite sur chaque ligne elle fait {written} ; si c'est le total de l'ensemble et que « {by} » ne distingue que des classes de taille d'un même échantillon, ce serait {asTotal}. Si oui, donnez à « {by} » un autre rôle (une variable) et choisissez d'écrire le total une fois. Vérifiez ce que c'est.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: leaving the key column {by} out, {records} rows in {groups} group(s) (the same other key columns and taxon) carry the same value in {column}, in the same way as a total repeated on size classes (the evidence and thresholds of CONV-QUANTITY-REPEATED). Written on every row the sum is {written}; as a total it would be {asTotal}. Nothing is blocked, collapsed or re-roled; the sample code is never left out.`,
+  },
   // CONV-QUANTITY-SAME-IN-SAMPLE where a weight repeats beside the quantity
   'CONV-QUANTITY-SAME-IN-SAMPLE:also': {
     plain: {
@@ -1991,6 +2001,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:weight'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED-ONCE:weight'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.copyLike === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:copies'];
+  if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && typeof f.params.by === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:by'];
   if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && f.params.weight === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:weight'];
   if (f.ruleId === 'CONV-QUANTITY-SAME-IN-SAMPLE' && typeof f.params.alsoColumn === 'string') return PROFILE_VARIANTS['CONV-QUANTITY-SAME-IN-SAMPLE:also'];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.sameValue === 'yes') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:same-value'];

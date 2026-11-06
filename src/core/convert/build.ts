@@ -1804,6 +1804,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     }
     const repeated = analysis.total;
     const sameValue = analysis.same;
+    const separated = analysis.separated;
     const copies = analysis.copies;
     const specimenCopies = analysis.specimenCopies;
     const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.collapsedGroups === sin.totalOnceCount));
@@ -1815,7 +1816,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       // the plain duplicate-identifier advice and the same-taxon warning give way to the finding that names the real defect of these rows
       const hide = new Set<number>([...(repeated !== undefined && !takeOnce ? repeated.affected : []), ...(copies !== undefined ? copies.lines : [])]);
       if (hide.size > 0) repeatedAffected.set(k, hide);
-      if (sameValue !== undefined) sameValueLines.set(k, new Set(sameValue.lines));
+      if (sameValue !== undefined || separated !== undefined) sameValueLines.set(k, new Set([...(sameValue?.lines ?? []), ...(separated ?? []).flatMap((x) => x.groups.flatMap((g) => g.lines))]));
       if (specimenCopies !== undefined) copyLikeLines.set(k, new Set(specimenCopies.lines));
     }
 
@@ -2588,7 +2589,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     // The sums of the two warnings below are those of the archive: what the occurrences and measurements of THIS sheet really carry after the user's choices (rows taken once or dropped are
     // not there, a row whose quantity or weight is never written adds nothing), never a sum over the source rows.
     // (no sums while the kind of the numbers is not declared: nothing is written then, the declaration is asked first)
-    if (kind !== undefined && (specimenCopies !== undefined || sameValue !== undefined)) {
+    if (kind !== undefined && (specimenCopies !== undefined || sameValue !== undefined || separated !== undefined)) {
       const quantityAt = new Map<number, number>();
       const weightAt = new Map<string, Map<number, number>>();
       for (const o of occurrences.slice(occurrencesBefore)) quantityAt.set(o.source.line, (quantityAt.get(o.source.line) ?? 0) + (kind === 'count' ? (o.individualCount ?? 0) : 0));
@@ -2610,6 +2611,25 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
         for (const v of quantityAt.values()) withCopies += v;
         const copiesSum = written.reduce((n, l) => n + (quantityAt.get(l) ?? 0), 0);
         if (written.length > 0) findings.push(makeConvertFinding('CONV-ROW-COPIES-SPECIMENS', { ...base, field: specimenCopies.column, lines: written, params: { count: written.length, withCopies: round(withCopies), withoutCopies: round(withCopies - copiesSum) } }));
+      }
+      // a key column that tells the rows of one sample apart (the leave-one-out pass): the same finding, naming the column; the sums are those of the archive as above
+      for (const sep of separated ?? []) {
+        const at = sep.kind === 'quantity' ? quantityAt : (weightAt.get(sep.column) ?? new Map<number, number>());
+        let groups = 0;
+        let records = 0;
+        let written = 0;
+        let asTotal = 0;
+        const lines: number[] = [];
+        for (const g of sep.groups) {
+          const there = g.lines.filter((l) => at.has(l));
+          if (there.length < 2) continue;
+          groups++;
+          records += there.length;
+          written += there.reduce((n, l) => n + (at.get(l) ?? 0), 0);
+          asTotal += g.v;
+          lines.push(...there);
+        }
+        if (groups > 0) findings.push(makeConvertFinding('CONV-QUANTITY-SAME-IN-SAMPLE', { ...base, field: sep.column, lines: lines.sort((x, y) => x - y), params: { groups, records, written: round(written), asTotal: round(asTotal), column: sep.column, by: sep.by } }));
       }
       if (sameValue !== undefined) {
         const per = sameValue.detail.map((d) => {
