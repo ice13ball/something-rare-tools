@@ -1671,12 +1671,14 @@ nobody judged must not let a bad archive through) and is only shown otherwise.
   from the one the dropped metadata state. See `ACCEPT_RULES`.
 - **Roles the file does not state** `CONV-ROLE-UNCONFIRMED` (accept, one finding per sheet, `src/core/convert/roleUnconfirmed.ts`): a column the proposer gave the role taxon, quantity, date, latitude or longitude and
   that the file does not state by name (`src/core/convert/stated.ts`: an exact Darwin Core term after folding case and underscores, an exact vocabulary entry, a unit the header declares for a name that means
-  two things, a PANGAEA geocode; the cells can only take that away) is listed with its proposed role and its first three distinct cells; the person ticks the list once. It is a note and nothing else:
-  no role is changed, no proposal is touched (`withStated` only marks), the proposer is the one that was there, and a column the person set by hand (its role differs from the proposal) is not listed. The tick
-  is the person's acknowledgement: it is not a role set by hand, it never enters `stated`, nothing of it is written into the archive, the metadata or the companion file (there is nothing to save, and nothing carries it to
-  another file), and a new upload starts unaccepted. The page keeps the tick for a SET of columns (`params.keys`, `index:role` per column): a column answered by hand leaves the list and the tick stands; it reopens
-  only when a column joins the list. A well-named file lists nothing; a file whose headers are the author's own words (`Latitude_dd`, `Date of sampling`, `Abundance (ind)`) lists them all, and that is the price of
-  "stated by name": the proposals are not widened, no new name is guessed. The wide sheet's taxon headers keep their own confirmation ("Confirm all shown"); they are not listed here.
+  two things, a PANGAEA geocode; the cells can only take that away) is listed with its proposed role, named as the column table names it (`Quantity`, `Date and time`, ...), and its first three distinct cells; the
+  person ticks the list once. It is a note and nothing else: no role is changed, no proposal is touched (`withStated` only marks), and a column whose role the person changed in the table is never listed (the page
+  records the touch as it does for a taxon header, `handSet`, even when they chose the very role proposed; it is not a role and is not saved). The tick is the person's acknowledgement: it never enters `stated`,
+  nothing of it is written into the archive, the metadata or the companion file (there is nothing to save, and nothing carries it to another file), and a new upload starts unaccepted. The page keeps the tick for a
+  SET of columns, each named by what makes it itself (the hash of its header with its occurrence, as the sample key does, and its proposed role; not its position): a column answered by hand leaves the list and the
+  tick stands; it reopens when a column joins the list (another sheet switched on, for example) and it is cleared when a sheet is read again (`pivotChoice`). A column named with an exact Darwin Core term or vocabulary
+  entry is not listed; a file whose headers are the author's own words or an inexact spelling (`Latitude_dd`, `Date of sampling`, `Scientific name`, `Breitengrad`, `Abundance (ind)`) lists them, and that is the
+  price of "stated by name": the vocabulary is not widened here (an open question for the owner). The wide sheet's taxon headers keep their own confirmation ("Confirm all shown"); they are not listed here.
 - **Only shown**, never blocks, never asks: the prefixes `CHEM-`, `ROW-SHIP-SPEED`, `ROW-ON-LAND`,
   `XF-`, `META-`, `LIC-` (`SHOW_ONLY_PREFIXES`) and the note `ROW-STATION-SPREAD` (a transect legitimately
   spans more than 10 km). `ROW-STATION-MOVED` and `ROW-STATION-SPREAD-FAR` need an acceptance.

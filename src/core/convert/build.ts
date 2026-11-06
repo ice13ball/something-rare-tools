@@ -88,6 +88,8 @@ export interface ConvertSheetInput {
   profile?: ProfileDeclaration;
   /** Columns whose proposed taxon-header role the page replaced by "ignore" because the candidate is not confirmed; such a column is still the proposal, not a decision of the user (CONV-LONG-UNSUPPORTED). */
   unconfirmedTaxa?: readonly number[];
+  /** The columns whose role the person changed in the table (the page records it as it does for a taxon header): never listed by CONV-ROLE-UNCONFIRMED, even when the role they chose is the one proposed. Not a role, not saved anywhere. */
+  handSet?: readonly number[];
   /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
   readAsTable?: boolean;
   /**
@@ -1566,7 +1568,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   for (const sin of input.sheets) {
     const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
     if (sh === undefined) continue;
-    const listed = unconfirmedRoles(sin.file, sh, sin.mapping);
+    const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet);
     if (listed.length > 0) findings.push(makeConvertFinding('CONV-ROLE-UNCONFIRMED', { file: sin.file.fileName, sheet: sin.sheet, params: roleUnconfirmedParams(listed) }));
   }
 

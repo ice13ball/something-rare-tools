@@ -7,6 +7,8 @@ import { listedColumns, printOf, tickHolds } from '../../src/app/convertModel';
 import { convert } from '../../src/core/convert/build';
 import { judge } from '../../src/core/convert/policy';
 import { proposeConvertColumns, proposeConvertMapping } from '../../src/core/convert/recognize';
+import { keyHashes } from '../../src/core/convert/keySetting';
+import { UI } from '../../src/core/i18n/ui';
 import { unconfirmedRoles } from '../../src/core/convert/roleUnconfirmed';
 import { withStated } from '../../src/core/convert/stated';
 import { renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
@@ -34,7 +36,7 @@ describe('what is listed', () => {
     const r = run();
     const f = listed(r);
     expect(f).toHaveLength(1);
-    expect(f[0]).toMatchObject({ severity: 'warning', file: 'catch.csv', sheet: 'S', params: { count: 4, keys: '2:date,3:latitude,4:longitude,6:quantity' } });
+    expect(f[0]).toMatchObject({ severity: 'warning', file: 'catch.csv', sheet: 'S', params: { count: 4, keys: [2, 3, 4, 6].map((i, k) => `${keyHashes(HEADER, [i])}:${['date', 'latitude', 'longitude', 'quantity'][k]}`).join(',') } });
     expect(names(f[0])).toEqual(['Date of sampling', 'Latitude_dd', 'Longitude_dd', 'Abundance (ind)']);
     expect(String(f[0].params.columns)).toContain('2020-05-01\u001f2020-05-02');
     expect(String(f[0].params.columns)).toContain('54.1\u001f54.2');
@@ -48,10 +50,10 @@ describe('what is listed', () => {
       expect(text, lang).toContain('2020-05-01');
       expect(text, lang).not.toMatch(/\{|\}|\u001e|\u001f/);
     }
-    expect(renderConvertPlain(f[0], 'en')).toContain('"Date of sampling" (date: 2020-05-01 | 2020-05-02)');
-    expect(renderConvertPlain(f[0], 'pl')).toContain('"Abundance (ind)" (liczebność: 4 | 2 | 9)');
+    expect(renderConvertPlain(f[0], 'en')).toContain('"Date of sampling" (Date: 2020-05-01 | 2020-05-02)');
+    expect(renderConvertPlain(f[0], 'pl')).toContain('"Abundance (ind)" (Ilość: 4 | 2 | 9)');
     expect(renderConvertPlain(f[0], 'de')).toContain('"Latitude_dd" (Breitengrad: 54.1');
-    expect(renderConvertTechnical(f[0])).toContain('"Longitude_dd" (longitude: 7.2');
+    expect(renderConvertTechnical(f[0])).toContain('"Longitude_dd" (Longitude: 7.2');
   });
 
   it('the count forms agree in four languages for one column and for many', () => {
@@ -95,8 +97,11 @@ describe('what is listed', () => {
     expect(names(listed(r)[0])).toEqual(['Longitude_dd', 'Abundance (ind)']);
     // all answered: nothing to say
     expect(listed(run({ 'Date of sampling': { kind: 'datetime' }, Latitude_dd: { kind: 'ignore' }, Longitude_dd: { kind: 'ignore' }, 'Abundance (ind)': { kind: 'variable', variable: 'n' } }))).toEqual([]);
-    // a role chosen by hand that is the very role proposed cannot be told from the proposal: it stays listed (the person's choice is not remembered anywhere)
-    expect(names(listed(run({ Latitude_dd: { kind: 'latitude' } }))[0])).toContain('Latitude_dd');
+    // a column the person touched (the page sends its index in `handSet`) is theirs even when the role they chose is the very one proposed
+    const f2 = file();
+    const touched = convert({ sheets: [sheetInput(f2, { quantity: { kind: 'count' }, handSet: [3] })], approvedSplits: {} });
+    expect(names(listed(touched)[0])).toEqual(['Date of sampling', 'Longitude_dd', 'Abundance (ind)']);
+    expect(names(listed(run())[0])).toContain('Latitude_dd');
   });
 
   it('a role other than the five is not listed even when it is only proposed', () => {
@@ -114,6 +119,37 @@ describe('what is listed', () => {
       ['B', '2020-05-02', 54.2, 7.3, 7, 3],
     ]);
     expect(unconfirmedRoles(f, f.sheets[0], mappingOf(f))).toEqual([]);
+  });
+});
+
+describe('the role words are the column table\'s own', () => {
+  const ROLES: [string, string][] = [['taxon', 'role.taxon'], ['quantity', 'role.quantity'], ['date', 'role.date'], ['datetime', 'role.datetime'], ['latitude', 'role.latitude'], ['longitude', 'role.longitude']];
+  it.each(ROLES)('%s is named as the table names it, in four languages', (role, key) => {
+    const base = listed(run())[0];
+    const f = { ...base, params: { count: 1, columns: `Col\u001f${role}\u001fx`, keys: 'h:date' } };
+    for (const lang of LANGS) {
+      const label = (UI[lang] as Record<string, string>)[key];
+      expect(label, `${lang} ${key}`).toBeTruthy();
+      expect(renderConvertPlain(f, lang), lang).toContain(`"Col" (${label}${lang === 'fr' ? '\u00a0' : ''}: x)`);
+    }
+  });
+
+  it('a density is not called a count, and a datetime is "Date and time", with the label of the table', () => {
+    const f = fileOf(['Station', 'Sample', 'Date of sampling', 'Latitude_dd', 'Longitude_dd', 'Species', 'densite_ind_1000m2'], [
+      ['A', 'A1', '2020-05-01T10:00', 54.1, 7.2, 'Solea solea', 4.5],
+      ['A', 'A1', '2020-05-01T10:00', 54.1, 7.2, 'Gadus morhua', 2.25],
+      ['B', 'B1', '2020-05-02T11:00', 54.2, 7.3, 'Solea solea', 9.75],
+    ]);
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })], approvedSplits: {} });
+    const found = r.findings.find((x) => x.ruleId === RULE)!;
+    expect(String(found.params.columns)).toContain('Date of sampling\u001fdatetime');
+    expect(renderConvertPlain(found, 'de')).toContain('(Datum und Uhrzeit: 2020-05-01T10:00');
+    expect(renderConvertPlain(found, 'de')).toContain('"densite_ind_1000m2" (Menge: 4.5');
+    expect(renderConvertPlain(found, 'de')).not.toContain('Anzahl');
+    expect(renderConvertPlain(found, 'fr')).toContain('(Quantité\u00a0: 4.5');
+    expect(renderConvertPlain(found, 'fr')).not.toContain('effectif');
+    // the set the tick stands for keeps `date` for both
+    expect(String(found.params.keys)).toContain(':date');
   });
 });
 
@@ -188,22 +224,29 @@ describe('the tick is an acknowledgement and nothing more', () => {
 describe('a tick lasts while the findings stay the same, and is for a set of columns', () => {
   const f = (keys: string, file = 'catch.csv', sheet = 'S') => ({ ruleId: RULE, severity: 'warning' as const, file, sheet, params: { count: 1, columns: 'x', keys } });
   it('the same set holds, a smaller one holds, a larger one or another sheet reopens it', () => {
-    const now = [f('1:date,4:taxon,5:quantity')];
+    const now = [f('h1:date,h4:taxon,h5:quantity')];
     const ticked = printOf(RULE, now);
     expect(tickHolds(RULE, ticked, printOf(RULE, now), now)).toBe(true);
     // a column answered by hand leaves the list: still accepted
-    const fewer = [f('4:taxon,5:quantity')];
+    const fewer = [f('h4:taxon,h5:quantity')];
     expect(tickHolds(RULE, ticked, printOf(RULE, fewer), fewer)).toBe(true);
     // and answered again with the proposed role: back on the list, the set is not larger than the ticked one
     expect(tickHolds(RULE, ticked, printOf(RULE, now), now)).toBe(true);
     // a column that was not on the list: reopens
-    const more = [f('1:date,4:taxon,5:quantity,2:latitude')];
+    const more = [f('h1:date,h4:taxon,h5:quantity,h2:latitude')];
     expect(tickHolds(RULE, ticked, printOf(RULE, more), more)).toBe(false);
     // the same column index in another sheet or file is another column
-    expect(tickHolds(RULE, ticked, printOf(RULE, [f('1:date', 'catch.csv', 'T')]), [f('1:date', 'catch.csv', 'T')])).toBe(false);
-    expect(tickHolds(RULE, ticked, printOf(RULE, [f('1:date', 'other.csv')]), [f('1:date', 'other.csv')])).toBe(false);
+    expect(tickHolds(RULE, ticked, printOf(RULE, [f('h1:date', 'catch.csv', 'T')]), [f('h1:date', 'catch.csv', 'T')])).toBe(false);
+    expect(tickHolds(RULE, ticked, printOf(RULE, [f('h1:date', 'other.csv')]), [f('h1:date', 'other.csv')])).toBe(false);
     // a column listed under another proposed role is another question
-    expect(tickHolds(RULE, ticked, printOf(RULE, [f('1:datetime')]), [f('1:datetime')])).toBe(false);
+    expect(tickHolds(RULE, ticked, printOf(RULE, [f('h1:datetime')]), [f('h1:datetime')])).toBe(false);
+    // a different column at the same position (another header) is another column: the key is the header's hash, not the place
+    const other = [f(`${keyHashes(['Lat start'], [0])}:latitude`)];
+    const ticked2 = printOf(RULE, other);
+    const moved = [f(`${keyHashes(['Other column'], [0])}:latitude`)];
+    expect(tickHolds(RULE, ticked2, printOf(RULE, moved), moved)).toBe(false);
+    // two equal headers are told apart by which of them it is
+    expect(keyHashes(['x', 'x'], [0])).not.toBe(keyHashes(['x', 'x'], [1]));
     // no tick, a broken tick
     expect(tickHolds(RULE, undefined, printOf(RULE, now), now)).toBe(false);
     expect(tickHolds(RULE, 'not json', printOf(RULE, now), now)).toBe(false);

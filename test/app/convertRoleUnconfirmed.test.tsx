@@ -93,9 +93,9 @@ describe('the page asks once', () => {
     fillDescription();
     await waitFor(() => expect(group()).toBeTruthy());
     const text = group()!.textContent!;
-    expect(text).toContain('"Date of sampling" (date: 2020-05-01 | 2020-05-02)');
-    expect(text).toContain('"Latitude_dd" (latitude: 54.1 | 54.2)');
-    expect(text).toContain('"Abundance (ind)" (quantity: 4 | 2 | 9)');
+    expect(text).toContain('"Date of sampling" (Date: 2020-05-01 | 2020-05-02)');
+    expect(text).toContain('"Latitude_dd" (Latitude: 54.1 | 54.2)');
+    expect(text).toContain('"Abundance (ind)" (Quantity: 4 | 2 | 9)');
     expect(text).not.toContain('"Species"');
     expect(text).toContain('Nothing was changed');
     await tickOthers(RULE);
@@ -123,7 +123,7 @@ describe('the page asks once', () => {
     void textOf;
   });
 
-  it('a column answered by hand after the tick leaves the list and the tick stays; ticked columns that return to their proposal do not reopen it', async () => {
+  it('a column answered by hand after the tick leaves the list and the tick stays; given back its proposed role it is still the person\'s and is not listed again', async () => {
     await load();
     fillDescription();
     await waitFor(() => expect(group()).toBeTruthy());
@@ -137,10 +137,11 @@ describe('the page asks once', () => {
     expect(group()!.textContent).toContain('"Latitude_dd"');
     expect(boxOf(RULE).checked).toBe(true);
     expect(off()).toBe(false);
-    // and back to the proposed role: listed again, the set is not larger than the one ticked
+    // and back to the proposed role: the person touched it, so it is theirs and stays out; the tick stands
     pick('Date of sampling: Meaning', 'date');
     await idle();
-    await waitFor(() => expect(group()!.textContent).toContain('"Date of sampling"'));
+    expect((screen.getByLabelText('Date of sampling: Meaning') as HTMLSelectElement).value).toBe('date');
+    expect(group()!.textContent).not.toContain('"Date of sampling"');
     expect(boxOf(RULE).checked).toBe(true);
     expect(off()).toBe(false);
   });
@@ -155,5 +156,67 @@ describe('the page asks once', () => {
     pick('Abundance (ind): Meaning', 'ignore');
     await idle();
     await waitFor(() => expect(group()).toBeNull());
+  });
+});
+
+describe('the tick and the set of columns', () => {
+  const OTHER = csvOf(['Station', 'Sample', 'Date of sampling', 'Latitude_dd', 'Longitude_dd', 'Species', 'Abundance (ind)'], [
+    ['C', 'C1', '2021-05-01', 55.1, 8.2, 'Solea solea', 3],
+    ['C', 'C1', '2021-05-01', 55.1, 8.2, 'Gadus morhua', 1],
+    ['D', 'D1', '2021-05-02', 55.2, 8.3, 'Solea solea', 6],
+  ]);
+
+  it('a list that GROWS reopens the tick: a sheet switched on after the tick brings its columns', async () => {
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'catch.csv', text: CSV }, { name: 'other.csv', text: OTHER }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    await idle();
+    await waitFor(() => expect(group()).toBeTruthy());
+    const useBoxes = screen.getAllByLabelText(T['convert.sheet.use']) as HTMLInputElement[];
+    expect(useBoxes).toHaveLength(2);
+    // the second sheet is left out; the list holds the first sheet's columns; the person ticks it
+    fireEvent.click(useBoxes[1]);
+    await idle();
+    await waitFor(() => expect(group()!.textContent).not.toContain('2021'));
+    fireEvent.click(boxOf(RULE));
+    expect(boxOf(RULE).checked).toBe(true);
+    // the second sheet is switched on: four more columns on the list, which the tick was not given for
+    fireEvent.click((screen.getAllByLabelText(T['convert.sheet.use']) as HTMLInputElement[])[1]);
+    await idle();
+    await waitFor(() => expect(group()!.textContent).toContain('2021-05-01'));
+    expect(boxOf(RULE).checked).toBe(false);
+    // and switched off again: the list is back to what was ticked, and the tick holds
+    fireEvent.click((screen.getAllByLabelText(T['convert.sheet.use']) as HTMLInputElement[])[1]);
+    await idle();
+    await waitFor(() => expect(group()!.textContent).not.toContain('2021'));
+    expect(boxOf(RULE).checked).toBe(true);
+  });
+
+  it('reading a sheet again (the long layout read as a table) clears the tick, whatever the new columns are', async () => {
+    const H = ['Station', 'Bottle', 'Date of sampling', 'Latitude_dd', 'Longitude_dd', 'Depth_m', 'Parameter', 'Unit', 'Value'];
+    const rows: (string | number)[][] = [
+      ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Temperature', 'degC', 4.1],
+      ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Salinity', 'PSU', 34.1],
+      ['ZL2', 'B2', '2020-05-02', 70.3, 20.4, 5, 'Temperature', 'degC', 4.4],
+      ['ZL2', 'B2', '2020-05-02', 70.3, 20.4, 5, 'Salinity', 'PSU', 34.2],
+    ];
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'piv.csv', text: csvOf(H, rows) }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    await idle();
+    await waitFor(() => expect(group()).toBeTruthy());
+    fireEvent.click(boxOf(RULE));
+    expect(boxOf(RULE).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText(T['convert.pivot.off']));
+    await waitFor(() => expect(screen.getByLabelText('Parameter: Meaning')).toBeTruthy());
+    await idle();
+    // read as a table the sheet is the block of the long layout; read again as the pivot, the same list is back and nobody has ticked it
+    fireEvent.click(screen.getByLabelText(T['convert.pivot.off']));
+    await waitFor(() => expect(screen.getByLabelText('Temperature [degC]: Meaning')).toBeTruthy());
+    await idle();
+    await waitFor(() => expect(group()).toBeTruthy());
+    expect(boxOf(RULE).checked).toBe(false);
   });
 });

@@ -77,6 +77,8 @@ export interface ConvertSheetRequest {
   profile?: ProfileDeclaration;
   /** The columns whose proposed taxon role the page left out for the conversion (a candidate the user has not confirmed: sent as "ignore"). Only these count as "not changed by the user" (CONV-LONG-UNSUPPORTED). */
   unconfirmedTaxa?: number[];
+  /** The columns whose role the person changed in the table (CONV-ROLE-UNCONFIRMED does not list them). */
+  handSet?: number[];
   /** The user's tick "read as a normal table" for a sheet that looks transposed (only the boolean true counts). */
   readAsTable?: boolean;
   /** The user's tick "this is a list of species found (presence only, no counts)" for the sheet (only the boolean true counts). */

@@ -26,7 +26,7 @@ import { SampleKeyPicker } from '../components/SampleKeyPicker';
 import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, printOf, tickHolds, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -327,6 +327,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     // a column the user turns into a taxon by hand is their own decision: no confirmation is asked for it
     const before = (mappings[fileId] ?? []).find((m) => m.sheet === mapping.sheet);
     const nowTaxa = mapping.columns.filter((c) => isTaxonHeader(c.role) && !isTaxonHeader(before?.columns.find((b) => b.index === c.index)?.role));
+    // and any column whose role the person changed is theirs: the list of proposed roles the file does not state (CONV-ROLE-UNCONFIRMED) leaves it out for good
+    const touched = mapping.columns.filter((c) => JSON.stringify(c.role) !== JSON.stringify(before?.columns.find((b) => b.index === c.index)?.role));
+    if (touched.length > 0) setConfirmed((prev) => ({ ...prev, ...Object.fromEntries(touched.map((c) => [handKey(fileId, mapping.sheet, c.index), true])) }));
     if (nowTaxa.length > 0) setConfirmed((prev) => ({ ...prev, ...Object.fromEntries(nowTaxa.map((c) => [candidateKey(fileId, mapping.sheet, c.index), true])) }));
     setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === mapping.sheet ? mapping : m)) }));
   };
@@ -408,6 +411,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === sheet ? mapping : m)) }));
       if (fresh) setChoices((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: fresh }));
       setConfirmed((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+      // the sheet was read again: its columns may be others, so the tick of the list of proposed roles the file does not state is given again
+      setAccepted((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== ROLE_RULE)));
       setNercPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       // what was typed or found for a column of the sheet belongs to the column it was typed for, which may be another one now
       setNvsWords((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));

@@ -3,6 +3,7 @@
 import { reasonsText } from '../recognize/layoutReasons';
 import type { Finding, Lang, RuleDef } from '../types';
 import { applyPlurals, pluralForm } from '../i18n/plural';
+import { UI } from '../i18n/ui';
 import { MAX_PAIRS } from '../convert/pivotLimits';
 import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
@@ -250,7 +251,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Spalte hat|Spalten haben} eine vom Konverter vorgeschlagene Rolle, die die Datei nicht angibt: {columns}. Nichts wurde geändert. Prüfen Sie sie, korrigieren Sie eine falsche Rolle in der Spaltentabelle und akzeptieren Sie einmal.`,
       fr: `{count} {+count:colonne a|colonnes ont} un rôle proposé par le convertisseur que le fichier n'indique pas : {columns}. Rien n'a été modifié. Vérifiez-{+count:la|les}, corrigez un rôle faux dans le tableau des colonnes et acceptez une fois.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) have a taxon, quantity, date, latitude or longitude role that the proposer gave and the file does not state by name (an exact Darwin Core term, an exact vocabulary entry, a unit the header declares or a PANGAEA geocode): {columns}. A column the person set by hand is not listed. Nothing is re-roled and nothing is written about this finding in the archive or the companion file; the acceptance holds while the listed set does not grow (set: {keys}, column index and proposed role).`,
+    technical: `{file}, {sheet}: {count} column(s) have a taxon, quantity, date, latitude or longitude role that the proposer gave and the file does not state by name (an exact Darwin Core term, an exact vocabulary entry, a unit the header declares or a PANGAEA geocode): {columns}. A column whose role the person changed is not listed. Nothing is re-roled and nothing is written about this finding in the archive or the companion file; the acceptance holds while the listed set does not grow (set: {keys}, header hash and proposed role).`,
   },
   {
     id: 'CONV-KEY-MIXED-NUMBERS',
@@ -2160,26 +2161,20 @@ function shortList(text: string): string {
   return items.length <= SHOWN_ITEMS ? text : `${items.slice(0, SHOWN_ITEMS).join(', ')}, …`;
 }
 
-/** The words for the five roles CONV-ROLE-UNCONFIRMED lists, in the reader's language. */
-const LISTED_ROLE_WORDS: Record<string, Record<Lang, string>> = {
-  taxon: { en: 'taxon', pl: 'takson', de: 'Taxon', fr: 'taxon' },
-  quantity: { en: 'quantity', pl: 'liczebność', de: 'Anzahl', fr: 'effectif' },
-  date: { en: 'date', pl: 'data', de: 'Datum', fr: 'date' },
-  latitude: { en: 'latitude', pl: 'szerokość geograficzna', de: 'Breitengrad', fr: 'latitude' },
-  longitude: { en: 'longitude', pl: 'długość geograficzna', de: 'Längengrad', fr: 'longitude' },
-};
+/** The role of a listed column in the reader's language: the very label the column table shows for it (`role.taxon`, `role.quantity`, `role.date`, `role.datetime`, `role.latitude`, `role.longitude`). */
+const listedRoleLabel = (role: string, lang: Lang): string => (UI[lang] as Record<string, string>)[`role.${role}`] ?? role;
 const ITEM_SEP = '\u001e';
 const FIELD_SEP = '\u001f';
 
 /** The `columns` parameter of CONV-ROLE-UNCONFIRMED: one item per column, `header US role US cell US cell`, items separated by RS (neither occurs in a visible text; they are taken out of a header or a cell). */
-export function encodeListedColumns(columns: readonly { header: string; role: string; cells: readonly string[] }[]): string {
-  return columns.map((c) => [c.header, c.role, ...c.cells].map((x) => x.replace(/[\u001e\u001f]/g, ' ')).join(FIELD_SEP)).join(ITEM_SEP);
+export function encodeListedColumns(columns: readonly { header: string; shown: string; cells: readonly string[] }[]): string {
+  return columns.map((c) => [c.header, c.shown, ...c.cells].map((x) => x.replace(/[\u001e\u001f]/g, ' ')).join(FIELD_SEP)).join(ITEM_SEP);
 }
 
 /** The listed columns as text in the reader's language: "Date" (date: 2014-05-02 | 2014-05-03); the first few, then the count of the rest. The finding keeps the whole set. */
 function listedColumnsText(encoded: string, lang: Lang): string {
   const items = encoded === '' ? [] : encoded.split(ITEM_SEP).map((item) => item.split(FIELD_SEP));
-  const shown = items.slice(0, SHOWN_ITEMS).map(([header, role, ...cells]) => `"${header}" (${LISTED_ROLE_WORDS[role]?.[lang] ?? role}${cells.length > 0 ? `: ${cells.join(' | ')}` : ''})`);
+  const shown = items.slice(0, SHOWN_ITEMS).map(([header, role, ...cells]) => `"${header}" (${listedRoleLabel(role, lang)}${cells.length > 0 ? `${lang === 'fr' ? '\u00a0' : ''}: ${cells.join(' | ')}` : ''})`);
   return `${shown.join('; ')}${items.length > SHOWN_ITEMS ? `; … (+${items.length - SHOWN_ITEMS})` : ''}`;
 }
 

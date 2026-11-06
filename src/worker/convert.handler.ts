@@ -286,6 +286,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.meshUm !== undefined && s.meshUm.trim() !== '' ? { meshUm: s.meshUm } : {}),
       ...(s.nerc ? { nerc: s.nerc } : {}),
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
+      ...(Array.isArray(s.handSet) ? { handSet: s.handSet.filter((i) => Number.isInteger(i)) } : {}),
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
       ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
       // (a bare tick for totalOnce, realCounts or dropCopies is not forwarded: an answer that switches a check off or takes rows out reaches the converter only with the number it was given for)
