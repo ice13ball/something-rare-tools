@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use these tools, please cite the Zenodo records of Abyssal Claims Tools once they are published; until then cite https://tools.something-rare.com."
+message: "If you use these tools, please cite this software record (10.5281/zenodo.24159771) and the article describing the tools (10.5281/zenodo.24159769)."
 title: "Abyssal Claims Tools: browser-based checks of marine data files, metadata and licences"
 abstract: >-
   Web tools that check marine datasets before they are published or reused.
@@ -15,7 +15,9 @@ abstract: >-
   (Event, Occurrence, extended MeasurementOrFact and EML) for OBIS. Files
   dropped by a user are read in the user's browser and are never uploaded.
 type: software
-# `version`, `date-released` and the record's own `doi` are set at release time and must match the tag.
+version: 1.0.0
+date-released: "2026-11-12"
+doi: "10.5281/zenodo.24159771"
 license: AGPL-3.0-or-later
 url: "https://tools.something-rare.com"
 repository-code: "https://github.com/ice13ball/something-rare-tools"
@@ -42,6 +44,9 @@ authors:
     orcid: "https://orcid.org/0009-0007-3786-0310"
     affiliation: "Independent Researcher"
 identifiers:
+  - description: "Article describing the tools"
+    type: doi
+    value: "10.5281/zenodo.24159769"
   - description: "Live tools"
     type: url
     value: "https://tools.something-rare.com"

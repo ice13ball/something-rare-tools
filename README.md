@@ -282,15 +282,14 @@ The public site is deployed by the maintainers with `scripts/deploy.sh`; you do 
 
 ## How to cite
 
-Two Zenodo records are being prepared: an article describing the tools and the source code with its own DOI.
-Until they are published, cite the tools by their URL, https://tools.something-rare.com.
+Please cite the source code record and the article describing the tools (both on Zenodo):
 
 The tools build on Abyssal Claims: its documentation is 10.5281/zenodo.19745884 and the source code of its engine is 10.5281/zenodo.22728476 (the same two records are listed under `references` in `CITATION.cff`).
 
-- Article: DOI to be added on publication
-- Source code: DOI to be added on publication
+- Article: [10.5281/zenodo.24159769](https://doi.org/10.5281/zenodo.24159769)
+- Source code (version 1.0.0): [10.5281/zenodo.24159771](https://doi.org/10.5281/zenodo.24159771)
 
-[`CITATION.cff`](CITATION.cff) will carry the same identifiers.
+[`CITATION.cff`](CITATION.cff) carries the same identifiers.
 
 ## Licence
 
