@@ -40,6 +40,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'taxon-only-in-total': 'blocks',
   // a total of 1 on several rows of a group whose total is taken once: one specimen listed on several rows, or separate specimens; the later rows are asked about, not collapsed by the choice
   'one-specimen-total': 'blocks',
+  // a row of the description sheet of a join whose key has a blank part: its values can be lent to no sample, so it is asked about (like a ragged row), never dropped by itself
+  'join-no-key': 'blocks',
   // held back by a rule of its own that blocks
   'no-code': 'covered',
   'no-replicate': 'covered',
@@ -50,6 +52,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'not-integer': 'covered',
   'bad-mark': 'covered',
   'sheet-not-read': 'covered',
+  // two description rows of one key that differ: CONV-JOIN-AMBIGUOUS is the one question, found because the merge's findings are convert's own
+  'join-ambiguous': 'covered',
   // understood and not written: listed, no block
   'summary-row': 'listed',
   zero: 'listed',
@@ -68,6 +72,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'text-cell': 'listed',
   'position-no-taxon': 'listed',
   'sample-no-taxon': 'listed',
+  // a value of one sheet that lost a conflict to the other sheet's: the person chose, the value is listed with both lines
+  'join-not-chosen': 'listed',
 };
 
 /** The rules that already block the export for a `covered` reason. */
@@ -83,6 +89,7 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'not-integer': ['CONV-COUNT-NOT-INTEGER'],
   'bad-mark': ['CONV-PRESENCE-VALUE'],
   'sheet-not-read': ['CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW'],
+  'join-ambiguous': ['CONV-JOIN-AMBIGUOUS'],
 };
 
 /** The rule that blocked on its own for a reason that can be left out, and goes when the user leaves the reason out (the new finding takes over its question). */
@@ -91,6 +98,7 @@ export const SUPERSEDES: Partial<Record<LeaveOutReason, string>> = {
   'empty-parameter': 'CONV-LONG-NO-PARAMETER',
   'repeated-parameter': 'CONV-LONG-DUPLICATE',
   'no-taxon': 'CONV-TAXON-EMPTY-ROW',
+  'join-no-key': 'CONV-JOIN-KEY-BLANK',
 };
 
 /** The kind of a reason; a reason that is not known blocks. */
@@ -119,6 +127,12 @@ export interface RowDecision {
 function sourceOf(l: SheetLedger, sheets: readonly ConvertSheetInput[]): RawSheet | undefined {
   if (l.inputIndex === undefined) return undefined;
   const sin = sheets[l.inputIndex];
+  const join = sin?.sampleJoin;
+  // a joined input: the description's lines are those of its own sheet, the results' those of the ORIGINAL results sheet (not the merged one)
+  if (join !== undefined) {
+    if (l.kind === 'description' || (l.kind === 'not-read' && l.sheet !== sin.sheet)) return join.description.sheet;
+    if (l.sheet === sin.sheet) return join.results.raw;
+  }
   const sheet = sin?.file.sheets.find((x) => x.name === l.sheet);
   return sheet?.pivot?.source ?? sheet;
 }
@@ -181,14 +195,18 @@ export function decideRows(ledger: readonly SheetLedger[], sheets: readonly Conv
       if (kind === 'covered') {
         // a covered reason is decided by its own rule, which blocks: our question is never raised beside it. Only when no blocking rule of the kind stands for the sheet at all (a fault: the rows
         // would go in silence) the question is asked after all.
-        const covering = existing.filter((f) => f.file === l.file && f.sheet === l.sheet && (COVERED_BY[reason as LedgerReason] ?? []).includes(f.ruleId) && policyOf(f) === 'block');
+        // (the sheet of a joined input that was not read is judged on the results sheet it was merged into)
+        const host = sin.sampleJoin !== undefined && l.kind === 'not-read' && l.sheet !== sin.sheet ? { file: sin.file.fileName, sheet: sin.sheet } : { file: l.file, sheet: l.sheet };
+        const covering = existing.filter((f) => f.file === host.file && f.sheet === host.sheet && (COVERED_BY[reason as LedgerReason] ?? []).includes(f.ruleId) && policyOf(f) === 'block');
         if (covering.length > 0) continue;
       }
       const count = lines.length;
       // an answer given on the page holds for the number of rows it was given for (a bare reason, from a caller that is not the page, holds whatever the number); the same for a companion file, which
       // also holds only for a sheet of the same number of rows
-      const you = (sin.leaveOut ?? []).some((a) => (typeof a === 'string' ? a === reason : a.reason === reason && a.count === count));
-      const file = !you && (sin.leaveOutFile ?? []).some((g) => g.reason === reason && g.count === count && g.rows === l.rows.source);
+      // (the description sheet of a join has no input of its own: the page stores its answers on the description input, which the merge copied)
+      const answers = l.kind === 'description' && sin.sampleJoin !== undefined ? sin.sampleJoin.description : sin;
+      const you = (answers.leaveOut ?? []).some((a) => (typeof a === 'string' ? a === reason : a.reason === reason && a.count === count));
+      const file = !you && (answers.leaveOutFile ?? []).some((g) => g.reason === reason && g.count === count && g.rows === l.rows.source);
       const sorted = [...lines].sort((a, b) => a - b);
       const left = you || file;
       const examples = examplesOf(rowsAt(source, sorted.slice(0, EXAMPLES)), sorted);
@@ -272,7 +290,7 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
       const out: string[] = [];
       cells.forEach((c, i) => {
         if (typeof c !== 'number' || flags[i] !== true) return;
-        const d = parseDate(c, { date1904: input.file.date1904, dateFormatted: true });
+        const d = parseDate(c, { date1904: (l.kind === 'description' ? input.sampleJoin?.description.file.date1904 : input.file.date1904) ?? input.file.date1904, dateFormatted: true });
         if (!('error' in d)) out.push(`${(source?.header[i] ?? '').trim() || `#${i + 1}`}: ${d.iso}`);
       });
       return out.length === 0 ? '' : `date: ${out.join('; ')}`;
@@ -286,7 +304,10 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
         yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(others.join(' '), dated(cells)), cells, kind: 'line' };
       } else {
         const header = source?.header ?? [];
-        const named = (f.lostCells ?? []).map((c) => `${(header[c.index] ?? '').trim() || `#${c.index + 1}`} (${c.reason})`);
+        const named = (f.lostCells ?? []).map((c) => {
+          const column = (header[c.index] ?? '').trim() || `#${c.index + 1}`;
+          return c.reason === 'join-not-chosen' && c.taken !== undefined && c.other !== undefined ? `${column} (${c.reason}: ${c.taken} taken from ${c.other.sheet} line ${c.other.line})` : `${column} (${c.reason})`;
+        });
         const status: NotWrittenStatus = (f.lostCells ?? []).some((c) => c.reason === 'unexplained') ? statusOf('unexplained', l, left) : 'understood';
         yield { file: l.file, sheet: l.sheet, line: f.line, reason: 'cells-not-written', status, detail: join(named.join('; '), dated(cells)), cells, kind: 'lost-cells' };
       }

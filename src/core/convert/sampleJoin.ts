@@ -134,6 +134,10 @@ export interface SampleJoinInfo {
   consumed: ReadonlySet<number>;
   /** P7: values not chosen, with both lines */
   notChosen: readonly { side: JoinSide; line: number; column: number; otherLine: number; group: string; chosen: string }[];
+  /** `${mergedLine}:${mergedColumn}` of the description cells lent blank because their own file did not read the text as a number (the text is in `rewritten`): not written, listed beside the archive (Task 7) */
+  lentBlank: ReadonlySet<string>;
+  /** a description line that repeats, value for value, an earlier line of the same key → that earlier line: the two count as one row, and the later one says so in the ledger (Task 7) */
+  sameAs: ReadonlyMap<number, number>;
   /** description lines with a blank key part, ambiguous lines */
   noKey: readonly number[];
   ambiguous: readonly number[];
@@ -532,6 +536,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const contents = (row: RawRow): string => JSON.stringify(Array.from({ length: dw }, (_, i) => cellText(row.cells[i])));
   for (const g of groups.values()) g.distinct = new Set(g.rows.map(contents)).size;
   const ambiguousKeys = new Set([...groups].filter(([, g]) => g.distinct > 1).map(([text]) => text));
+  const sameAs = new Map<number, number>();
+  for (const [text, g] of groups) if (!ambiguousKeys.has(text)) for (const r of g.rows.slice(1)) sameAs.set(r.line, g.rows[0].line);
 
   /* --- the shared quantities --- */
   const resKeySet = new Set(resKeyCols);
@@ -659,6 +665,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   };
 
   const turnsNumeric = new Map<number, { lines: Set<number>; value: string }>();
+  const lentBlank = new Set<string>();
   const lend = (descRow: RawRow, line: number): RawCell[] =>
     Array.from({ length: dw }, (_, k) => {
       const descLine = descRow.line;
@@ -672,6 +679,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         turnsNumeric.set(k, n);
         // the own-file outcome: nothing is written for it. The cell is lent blank and the text stays in `rewritten`, where the not-written list reads it.
         rewritten.set(`${line}:${rw + k}`, original);
+        lentBlank.add(`${line}:${rw + k}`);
         return null;
       }
       return got.cell;
@@ -1068,6 +1076,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     rewritten,
     consumed,
     notChosen,
+    lentBlank,
+    sameAs,
     noKey,
     ambiguous: ambiguousLines,
     findings,

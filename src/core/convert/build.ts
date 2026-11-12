@@ -45,7 +45,7 @@ import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
-import { FateLog, buildSheetLedger, notReadLedger, settleEventColumns } from './ledger';
+import { FateLog, buildSheetLedger, combineDescriptionLedgers, joinLedgers, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
 import { decideRows } from './notWritten';
 import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
@@ -2836,6 +2836,47 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   const events: EventRec[] = tree.events;
   // a column read for the events is "event" in the ledger only where the events that were written carry what it gives
   settleEventColumns(ledger, events, tree.cruiseText);
+  // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
+  {
+    const parts = new Map<RawSheet, SheetLedger[]>();
+    const placed: ({ ledger: SheetLedger } | { description: RawSheet })[] = [];
+    for (const l of ledger) {
+      const sin = l.inputIndex === undefined ? undefined : rawInput.sheets[l.inputIndex];
+      const info = sin?.sampleJoin;
+      if (info === undefined || sin === undefined || l.sheet !== sin.sheet || l.kind === 'not-used') {
+        placed.push({ ledger: l });
+        continue;
+      }
+      const list = parts.get(info.description.sheet) ?? [];
+      parts.set(info.description.sheet, list);
+      if (l.kind === 'not-read') {
+        // (nothing of the merged sheet was read, so nothing of the description was)
+        placed.push({ ledger: l }, { description: info.description.sheet });
+        list.push(notReadLedger(info.description.file.fileName, info.description.sheet, l.inputIndex));
+        continue;
+      }
+      const split = joinLedgers(l, info);
+      placed.push({ ledger: split.results }, { description: info.description.sheet });
+      list.push(split.description);
+    }
+    // each description ledger stands after the last results sheet it served
+    const lastAt = new Map<RawSheet, number>();
+    placed.forEach((x, i) => {
+      if ('description' in x) lastAt.set(x.description, i);
+    });
+    const done: SheetLedger[] = [];
+    placed.forEach((x, i) => {
+      if ('ledger' in x) {
+        done.push(x.ledger);
+        return;
+      }
+      if (lastAt.get(x.description) !== i) return;
+      const list = parts.get(x.description)!;
+      const read = list.filter((p) => p.kind === 'description');
+      done.push(read.length > 0 ? combineDescriptionLedgers(read) : list[0]);
+    });
+    ledger.splice(0, ledger.length, ...done);
+  }
   // A profile level is a leaf of the tree, and BioCheck needs a date and a position on every leaf AFTER inheritance (a child takes them from its parent only where it leaves them
   // empty, docs/research/qc-sources.md, stage 0, Item 2b). The row checks of the output tables do not always see a level without either, so it is checked here, in the sheet's terms.
   // A level takes them from its PARENT (its station; the cruise when the station level is flattened) and from nowhere further up: a station that has neither does not borrow the

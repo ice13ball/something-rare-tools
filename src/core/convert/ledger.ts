@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { EventRec, OccRec, MofIntent } from './model';
-import type { PivotInfo, RawSheet, SheetMapping } from '../types';
+import type { PivotInfo, RawCell, RawSheet, SheetMapping } from '../types';
 import { parseNumber } from '../values/numbers';
+import type { SampleJoinInfo } from './sampleJoin';
 
 /*
  * The ledger: for every sheet of an upload, where each source row (and, on a wide sheet, each cell of a taxon column) went, and where each numeric column went, with the sums in and out.
@@ -54,15 +55,18 @@ export type LedgerReason =
   | 'sample-no-taxon'
   | 'not-in-event'
   | 'taxon-only-in-total'
-  | 'one-specimen-total';
+  | 'one-specimen-total'
+  | 'join-not-chosen'
+  | 'join-no-key'
+  | 'join-ambiguous';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
-  'taxon-only-in-total', 'one-specimen-total',
+  'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous',
 ];
-// (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last three belong to whole lines)
+// (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last ones belong to whole lines, or to a lost cell named beside its line, never to FateLog.cell)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
 // (a reason set fits one bit of an Int32 per line: the chain of a wide row is kept that way)
 const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code - 1) : 0);
@@ -73,7 +77,7 @@ const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code -
  */
 /** Of those, the rows that name a position, a depth, a sample or a date and no taxon or number: the panel says that plainly, not as "a value". */
 export const UNPLACED: readonly LedgerReason[] = ['position-no-taxon', 'sample-no-taxon'];
-export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter'];
+export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter', 'join-no-key'];
 
 /**
  * The reasons the conversion records while it reads a sheet. Created per sheet; the builder writes into it, the ledger reads it. A cell's reason is kept in one byte per cell and column
@@ -188,19 +192,29 @@ export interface LineFate {
    * Wide sheets: the cells of the line that have no record, WHICH ones, except the zeros (a matrix of zeros is most of its cells and appears as a count only): the column index and the reason
    * (`unexplained`: no reason was recorded). Kept for the list of rows not written; the page's view does not carry `lines`.
    */
-  lostCells?: { index: number; reason: LedgerReason | 'unexplained' }[];
+  lostCells?: {
+    index: number;
+    reason: LedgerReason | 'unexplained';
+    /** 'join-not-chosen' only: the value that was written instead, and the line of the other sheet it came from (both lines are then known: this cell's own and that one) */
+    taken?: string;
+    other?: { sheet: string; line: number };
+  }[];
+  /** A description line that repeats, value for value, this earlier line of the same sheet and key: the two count as one row, and this line says so. */
+  sameAs?: number;
 }
 
 export interface SheetLedger {
   file: string;
   sheet: string;
-  kind: 'wide' | 'long' | 'profile' | 'not-read' | 'not-used';
+  kind: 'wide' | 'long' | 'profile' | 'not-read' | 'not-used' | 'description';
   /** The tally the sheet is judged by: its taxon cells for a wide sheet, its rows for every other. */
   unit: 'rows' | 'cells';
   /** In lines of the file (for a pivoted long sheet: the lines of the long sheet, not the samples made of them). */
   rows: LedgerTally;
   /** Wide sheets only: the non-blank cells of the taxon columns. */
   cells?: LedgerTally;
+  /** A description sheet of a join only: the results sheets its lines were lent to, the lines lent (identical copies included) and the samples they make. A sample only the description has is written once and is in none of them. */
+  lent?: { sheet: string; lines: number; samples: number }[];
   /** A sheet that was read as one row per sample out of a long one: the rows the long file had (= `rows.source`) and the samples made of them. */
   pivotRowsIn?: number;
   pivotSamples?: number;
@@ -818,4 +832,245 @@ export function settleEventColumns(ledger: SheetLedger[], events: readonly Event
     }
     PENDING.get(l)?.({ events, cruiseText });
   }
+}
+
+/* ---------- a joined results sheet and its description sheet ---------- */
+
+type LostCell = NonNullable<LineFate['lostCells']>[number];
+
+/** `cells` joined to the ones a line has already, one per column. */
+const addLost = (have: readonly LostCell[] | undefined, more: readonly LostCell[]): LostCell[] => {
+  const out = [...(have ?? [])];
+  for (const c of more) if (!out.some((x) => x.index === c.index)) out.push(c);
+  return out;
+};
+
+/** The tally of a sheet read for its rows, from the fate of every row (the lines the ledger does not list are written). */
+function rowTallyOf(source: number, fates: readonly (LedgerReason | 'unexplained' | 'written')[]): LedgerTally {
+  const counts = new Map<LedgerReason, number>();
+  let written = 0;
+  let unexplained = 0;
+  for (const f of fates) {
+    if (f === 'written') written++;
+    else if (f === 'unexplained') unexplained++;
+    else bump(counts, f);
+  }
+  return tally(source, written, counts, unexplained);
+}
+
+/**
+ * The ledger of a merged results sheet (the one buildSheetLedger made of the merge) cut in two, from ONE merge: the results sheet as the person's own file has it, and the description sheet.
+ *
+ * - The lines the merge appended for samples only the description has move to the description ledger (with the fate the conversion gave them: written, with the event).
+ * - A results line keeps its fate. A value of it that lost a conflict is a lost cell `join-not-chosen`, with the value taken and the line of the description it came from. A lost cell that is in a
+ *   column the description lent moves to the description line it was lent from.
+ * - A description line is written when it was lent (or appended), or repeats such a line value for value (`sameAs`); `join-no-key` and `join-ambiguous` when the merge could not use it; a line that
+ *   is none of these is `unexplained` here (another results sheet of the same description may have used it: combineDescriptionLedgers settles that).
+ * - The description's columns keep their own headers; a column the merge consumed (a key, the losing side of a shared quantity) is in neither ledger, a column the merge wrote is in the results'.
+ */
+export function joinLedgers(merged: SheetLedger, info: SampleJoinInfo): { results: SheetLedger; description: SheetLedger } {
+  const rw = info.results.width;
+  const desSheet = info.description.sheet;
+  const dw = desSheet.header.length;
+  const mergedAt = new Map(merged.lines.map((l) => [l.line, l] as const));
+  const lentLines = new Set(info.lentFrom.values());
+  const descriptionOf = (mergedLine: number): number | undefined => info.lentFrom.get(mergedLine) ?? info.descriptionOnly.get(mergedLine);
+  const desIndexOf = (column: number): number | undefined => (column >= rw && column < rw + dw ? column - rw : undefined);
+
+  /* the lost cells that belong to the description: by description line and column */
+  const desLost = new Map<number, LostCell[]>();
+  const loseOnDescription = (line: number | undefined, cell: LostCell): void => {
+    if (line === undefined) return;
+    desLost.set(line, addLost(desLost.get(line), [cell]));
+  };
+  const resLost = new Map<number, LostCell[]>();
+  for (const n of info.notChosen) {
+    if (n.side === 'results') resLost.set(n.line, addLost(resLost.get(n.line), [{ index: n.column, reason: 'join-not-chosen', taken: n.chosen, other: { sheet: desSheet.name, line: n.otherLine } }]));
+    else {
+      const k = desIndexOf(n.column);
+      if (k !== undefined) loseOnDescription(n.line, { index: k, reason: 'join-not-chosen', taken: n.chosen, other: { sheet: info.results.sheet, line: n.otherLine } });
+    }
+  }
+  // (a text its own file rejects as a number was lent blank: the text is not written)
+  for (const key of info.lentBlank) {
+    const [line, column] = key.split(':').map(Number);
+    const k = desIndexOf(column);
+    if (k !== undefined) loseOnDescription(descriptionOf(line), { index: k, reason: 'text-cell' });
+  }
+
+  /* the results ledger: the lines of the results file, with the cells of the description moved out */
+  const resultsLines: LineFate[] = [];
+  const moved: LineFate[] = [];
+  for (const l of merged.lines) {
+    if (info.descriptionOnly.has(l.line)) {
+      moved.push(l);
+      continue;
+    }
+    const mine = (l.lostCells ?? []).filter((c) => c.index < rw);
+    for (const c of (l.lostCells ?? []).filter((x) => x.index >= rw)) {
+      const k = desIndexOf(c.index);
+      if (k !== undefined) loseOnDescription(descriptionOf(l.line), { ...c, index: k });
+    }
+    const lost = l.fate === 'written' ? addLost(mine, resLost.get(l.line) ?? []) : mine;
+    const { lostCells: _drop, ...rest } = l;
+    resultsLines.push({ ...rest, ...(lost.length > 0 ? { lostCells: lost } : {}) });
+  }
+  for (const [line, cells] of resLost) if (!mergedAt.has(line) && cells.length > 0) resultsLines.push({ line, fate: 'written', lostCells: cells });
+  resultsLines.sort((a, b) => a.line - b.line);
+
+  const movedFates = moved.map((l) => l.fate);
+  const appended = info.descriptionOnly.size;
+  const fateCount = (f: LedgerReason): number => movedFates.filter((x) => x === f).length;
+  // (an appended line with no entry of its own is a plain written one)
+  const movedWritten = appended - moved.filter((l) => l.fate !== 'written').length;
+  const movedUnexplained = movedFates.filter((x) => x === 'unexplained').length;
+  const rowsIn = merged.rows;
+  const resultsRows: LedgerTally = {
+    ...rowsIn,
+    source: rowsIn.source - appended,
+    written: rowsIn.written - movedWritten,
+    ...(rowsIn.writtenNoOccurrence === undefined ? {} : { writtenNoOccurrence: rowsIn.writtenNoOccurrence - movedWritten }),
+    skipped: rowsIn.skipped.map((s) => ({ reason: s.reason, count: s.count - fateCount(s.reason) })).filter((s) => s.count > 0),
+    unexplained: rowsIn.unexplained - movedUnexplained,
+  };
+  const movedNotUnderstood = movedFates.filter((f) => (NOT_UNDERSTOOD as readonly string[]).includes(f)).length;
+  const results: SheetLedger = {
+    ...merged,
+    rows: resultsRows,
+    columns: merged.columns.filter((c) => !info.consumed.has(c.index) && (c.index < rw || c.index >= rw + dw)),
+    lines: resultsLines,
+    notUnderstood: merged.notUnderstood - movedNotUnderstood,
+    balanced: true,
+  };
+  results.balanced = results.rows.unexplained === 0 && (results.cells?.unexplained ?? 0) === 0 && results.columns.every((c) => c.match && (c.to === 'event' || c.unexplained === 0));
+
+  /* the description ledger: every line of the description sheet */
+  const lines: LineFate[] = [];
+  const fates: (LedgerReason | 'unexplained' | 'written')[] = [];
+  const noKey = new Set(info.noKey);
+  const ambiguous = new Set(info.ambiguous);
+  const appendedFrom = new Map([...info.descriptionOnly].map(([m, d]) => [d, m] as const));
+  const baseFate = (line: number, cells: readonly RawCell[]): { fate: LineFate['fate']; wrote?: LineFate['wrote']; chain?: LedgerReason[] } => {
+    if (noKey.has(line)) return { fate: 'join-no-key' };
+    if (ambiguous.has(line)) return { fate: 'join-ambiguous' };
+    if (cells.every(isBlank)) return { fate: 'nothing-to-record' };
+    const m = appendedFrom.get(line);
+    if (m !== undefined) {
+      const own = mergedAt.get(m);
+      return { fate: own?.fate ?? 'written', wrote: own?.wrote ?? ['event'], ...(own?.chain === undefined ? {} : { chain: own.chain }) };
+    }
+    if (lentLines.has(line)) return { fate: 'written' };
+    return { fate: 'unexplained' };
+  };
+  const baseOf = new Map<number, ReturnType<typeof baseFate>>();
+  for (const r of desSheet.rows) baseOf.set(r.line, baseFate(r.line, r.cells));
+  for (const r of desSheet.rows) {
+    const own = baseOf.get(r.line)!;
+    const twin = info.sameAs.get(r.line);
+    const b = twin !== undefined && own.fate === 'unexplained' ? baseOf.get(twin)! : own;
+    const lost = b.fate === 'written' ? (desLost.get(r.line) ?? []) : [];
+    fates.push(b.fate);
+    if (b.fate === 'written' && b.wrote === undefined && lost.length === 0 && twin === undefined) continue;
+    lines.push({ line: r.line, fate: b.fate, ...(b.chain === undefined || b.chain.length === 0 ? {} : { chain: b.chain }), ...(b.wrote === undefined ? {} : { wrote: b.wrote }), ...(lost.length > 0 ? { lostCells: lost } : {}), ...(twin === undefined ? {} : { sameAs: twin }) });
+  }
+  const twinsOf = new Map<number, number>();
+  for (const first of info.sameAs.values()) if (lentLines.has(first)) twinsOf.set(first, (twinsOf.get(first) ?? 0) + 1);
+  const columns: LedgerColumn[] = merged.columns.flatMap((c) => {
+    const k = desIndexOf(c.index);
+    return k === undefined || info.consumed.has(c.index) ? [] : [{ ...c, index: k, header: info.columns[c.index]?.header ?? c.header }];
+  });
+  const description: SheetLedger = {
+    file: info.description.file.fileName,
+    sheet: desSheet.name,
+    kind: 'description',
+    unit: 'rows',
+    rows: rowTallyOf(desSheet.rows.length, fates),
+    ...(merged.inputIndex === undefined ? {} : { inputIndex: merged.inputIndex }),
+    columns,
+    lines,
+    notUnderstood: fates.filter((f) => (NOT_UNDERSTOOD as readonly string[]).includes(f)).length,
+    lent: [{ sheet: info.results.sheet, lines: lentLines.size + [...twinsOf.values()].reduce((n, x) => n + x, 0), samples: lentLines.size }],
+    balanced: true,
+  };
+  description.balanced = description.rows.unexplained === 0 && description.columns.every((c) => c.match && (c.to === 'event' || c.unexplained === 0));
+  return { results, description };
+}
+
+/**
+ * The ONLY combiner of the description ledgers of one description sheet (decision 6): one per results sheet it served, as one. A line is written when any results sheet used it (a line lent to two
+ * results sheets is one written line, and `lent` lists each); a line none of them used keeps the reason the merge gave it, or stays unexplained.
+ */
+export function combineDescriptionLedgers(parts: readonly SheetLedger[]): SheetLedger {
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const lineNumbers = new Set(parts.flatMap((p) => p.lines.map((l) => l.line)));
+  const lines: LineFate[] = [];
+  const unusable: LineFate[] = [];
+  for (const line of [...lineNumbers].sort((a, b) => a - b)) {
+    const seen = parts.map((p) => p.lines.find((l) => l.line === line));
+    // a part that does not list the line wrote it plainly
+    const writtenSomewhere = seen.some((l) => l === undefined || l.fate === 'written');
+    if (!writtenSomewhere) {
+      const listedFates = seen as LineFate[];
+      const pick = listedFates.find((l) => l.fate !== 'unexplained') ?? listedFates[0];
+      unusable.push(pick);
+      lines.push(pick);
+      continue;
+    }
+    const writes = seen.filter((l): l is LineFate => l !== undefined && l.fate === 'written');
+    const wrote = [...new Set(writes.flatMap((l) => l.wrote ?? []))];
+    const chain = [...new Set(writes.flatMap((l) => l.chain ?? []))];
+    const lost = writes.reduce<LostCell[]>((acc, l) => addLost(acc, l.lostCells ?? []), []);
+    const sameAs = writes.find((l) => l.sameAs !== undefined)?.sameAs;
+    if (wrote.length === 0 && chain.length === 0 && lost.length === 0 && sameAs === undefined) continue;
+    lines.push({ line, fate: 'written', ...(chain.length > 0 ? { chain } : {}), ...(wrote.length > 0 ? { wrote } : {}), ...(lost.length > 0 ? { lostCells: lost } : {}), ...(sameAs === undefined ? {} : { sameAs }) });
+  }
+  const counts = new Map<LedgerReason, number>();
+  let unexplained = 0;
+  for (const l of unusable) {
+    if (l.fate === 'unexplained') unexplained++;
+    else bump(counts, l.fate);
+  }
+  const source = first.rows.source;
+  const byIndex = new Map<number, LedgerColumn>();
+  for (const c of parts.flatMap((p) => p.columns)) {
+    const have = byIndex.get(c.index);
+    if (have === undefined) {
+      byIndex.set(c.index, { ...c });
+      continue;
+    }
+    const skipped = [...have.skipped];
+    for (const s of c.skipped) {
+      const at = skipped.find((x) => x.reason === s.reason);
+      if (at === undefined) skipped.push({ ...s });
+      else skipped[skipped.indexOf(at)] = { reason: s.reason, count: at.count + s.count, sum: shownSum(at.sum + s.sum) };
+    }
+    byIndex.set(c.index, {
+      ...have,
+      to: have.to === c.to ? have.to : have.to === 'not-written' ? c.to : have.to,
+      numbers: have.numbers + c.numbers,
+      sum: shownSum(have.sum + c.sum),
+      nonNumbers: have.nonNumbers + c.nonNumbers,
+      written: have.written + c.written,
+      writtenSum: shownSum(have.writtenSum + c.writtenSum),
+      outSum: shownSum(have.outSum + c.outSum),
+      writtenWithoutValue: have.writtenWithoutValue + c.writtenWithoutValue,
+      valueMissing: have.valueMissing + c.valueMissing,
+      skipped,
+      unexplained: have.unexplained + c.unexplained,
+      match: have.match && c.match,
+    });
+  }
+  const columns = [...byIndex.values()].sort((a, b) => a.index - b.index);
+  const out: SheetLedger = {
+    ...first,
+    rows: tally(source, source - unusable.length, counts, unexplained),
+    columns,
+    lines,
+    notUnderstood: unusable.filter((l) => (NOT_UNDERSTOOD as readonly string[]).includes(l.fate)).length,
+    lent: parts.flatMap((p) => p.lent ?? []),
+    balanced: true,
+  };
+  out.balanced = unexplained === 0 && columns.every((c) => c.match && (c.to === 'event' || c.unexplained === 0));
+  return out;
 }

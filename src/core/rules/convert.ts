@@ -2347,6 +2347,12 @@ export const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
       'qui répètent un paramètre déjà donné pour le même échantillon (si on les écarte, la première valeur est écrite et les suivantes sont listées)',
     ],
   },
+  'join-no-key': {
+    en: ['of the description sheet whose key has a blank part, so their values cannot be given to any sample', 'of the description sheet whose key has a blank part, so their values cannot be given to any sample'],
+    pl: ['arkusza opisu, którego klucz ma pustą część, więc jego wartości nie da się przypisać żadnej próbce', 'arkusza opisu, których klucz ma pustą część, więc ich wartości nie da się przypisać żadnej próbce', 'arkusza opisu, których klucz ma pustą część, więc ich wartości nie da się przypisać żadnej próbce'],
+    de: ['des Beschreibungsblatts, dessen Schlüssel einen leeren Teil hat, daher kann der Wert keiner Probe zugeordnet werden', 'des Beschreibungsblatts, deren Schlüssel einen leeren Teil hat, daher können die Werte keiner Probe zugeordnet werden'],
+    fr: ["de la feuille de description dont la clé a une partie vide : ses valeurs ne peuvent être données à aucun échantillon", "de la feuille de description dont la clé a une partie vide : leurs valeurs ne peuvent être données à aucun échantillon"],
+  },
   'not-in-event': {
     en: "whose value (a depth, a position or a date) the sample's event did not take",
     pl: [
