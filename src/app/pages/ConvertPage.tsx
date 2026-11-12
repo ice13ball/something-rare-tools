@@ -347,14 +347,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
 
   /** CONV-COLUMN-YEAR-IGNORED / CONV-COLUMN-NUMBER-IGNORED: the person reads the column as a measurement after all; it gets back the role it had before the value veto (nothing else is ever assigned). */
-  const readAsMeasurement = (f: Finding, header: string): void => {
+  const readAsMeasurement = (f: Finding, at: number): void => {
     const file = files.find((x) => x.fileName === f.file);
     const mapping = file === undefined ? undefined : (mappings[file.fileId] ?? file.mappings).find((m) => m.sheet === f.sheet);
-    const column = mapping?.columns.find((c) => (c.header.trim() === '' ? `#${c.index + 1}` : c.header.trim()) === header);
-    const at = String(f.params.names ?? '').split(VETO_NAME_SEP).indexOf(header);
+    // the column is the one the finding lists at this place (by its index, never by its header: two columns may share one)
+    const index = Number(String(f.params.indexes ?? '').split(VETO_NAME_SEP)[at]);
+    const column = mapping?.columns.find((c) => c.index === index);
     let role: SheetMapping['columns'][number]['role'] | undefined;
     try {
-      role = at < 0 ? undefined : (JSON.parse(String(f.params.roles ?? '').split(VETO_NAME_SEP)[at] ?? '') as SheetMapping['columns'][number]['role']);
+      role = JSON.parse(String(f.params.roles ?? '').split(VETO_NAME_SEP)[at] ?? '') as SheetMapping['columns'][number]['role'];
     } catch {
       role = undefined;
     }
@@ -1397,7 +1398,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                             />
                             <span>{t('convert.accept.rule', { n: group.length, rule })}</span>
                           </label>
-                          <FindingItems findings={group} onChoose={chooseForSheet} />
+                          <FindingItems findings={group} onChoose={chooseForSheet} onReadAsMeasurement={readAsMeasurement} />
                         </div>
                       );
                     })}
@@ -1521,7 +1522,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, header: string) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1538,10 +1539,10 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose 
             </>
           )}
           {(f.ruleId === 'CONV-COLUMN-YEAR-IGNORED' || f.ruleId === 'CONV-COLUMN-NUMBER-IGNORED') && typeof f.params.names === 'string' && onReadAsMeasurement !== undefined &&
-            f.params.names.split(VETO_NAME_SEP).map((name) => (
-              <React.Fragment key={name}>
+            f.params.names.split(VETO_NAME_SEP).map((name, at) => (
+              <React.Fragment key={`${at}:${name}`}>
                 {' '}
-                <button type="button" className="button" onClick={() => onReadAsMeasurement(f, name)}>
+                <button type="button" className="button" onClick={() => onReadAsMeasurement(f, at)}>
                   {t('convert.finding.readAsMeasurement', { column: name })}
                 </button>
               </React.Fragment>
@@ -1593,7 +1594,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose 
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, header: string) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

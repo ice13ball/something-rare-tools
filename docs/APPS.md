@@ -1296,12 +1296,14 @@ unit only counts individuals (`#`, `n`, `ind`) and that no name made a quantity 
 (`count-unit-quantity`; a descriptor of the sample such as `Hauls [#]` or `Replicates [n]` is never the count). `Calanus`, `Acartia` and every other genus name stay candidates unless the cells show a year column, a constant fraction or a length unit as above.
 
 Two more value vetoes run last and apply to **every sheet shape** (`convert/recognize.ts`, `year-beside-date` and `running-number`; removal only, never another role). A column the proposer made a measured
-variable (a name no vocabulary knows, no unit, no P01 code) becomes `ignore` (low confidence) when every filled cell (at least 3) is a whole year from 1800 to 2100 **and the sheet has a date or date-time
-column**, or when every filled cell is a whole number of six or more digits and the values are all different (two rows may share one only when they are rows of one sample: each sample holds one value that no other
-sample holds, a sample number written on every taxon row). A count of five digits, a six-digit column with a repeated value, a year column on a sheet with no date column, and a wide sheet's taxon candidates are as before.
-Such a column is named by `CONV-COLUMN-IGNORED` and, with the reason, by `CONV-COLUMN-YEAR-IGNORED` ("looks like a year beside the date") or `CONV-COLUMN-NUMBER-IGNORED` ("looks like a running number: whole numbers only,
-all different"), both information once per sheet (`convert/vetoedNumbers.ts`); the finding carries a "Read it as a measurement" button per column that gives back the role the column had (the page's `readAsMeasurement`).
-A column the person has changed is not listed again. /check is unchanged.
+variable (a name no vocabulary knows, no unit, no P01 code) becomes `ignore` (low confidence) when (a) the sheet has a date or date-time column and, on every row where both are filled (at least 3 rows), the cell is a
+whole year equal to the year of that row's date (so a year class, an age or a measurement that merely lies in 1800-2100 keeps its role), or (b) every filled cell is a whole number of six or more digits that is different on
+every row and strictly rises (or strictly falls) in row order, or that is equal only between rows of one sample, each sample holding one value that no other sample holds and the samples' values strictly rising (or falling) in
+the order the samples first appear (a sample number written on every taxon row; a flowmeter reading, a sequencing depth or a cell count in arbitrary order is none). (b) never applies on a long sheet with a taxon column and no
+quantity or biomass column: its number column may be the counts, and the block stays CONV-TAXON-NO-QUANTITY. A count of five digits, a value shared by two samples, a year column on a sheet with no date column, and a wide
+sheet's taxon candidates are as before; the first 500 rows are read. Such a column is named by `CONV-COLUMN-IGNORED` and, with the reason, by `CONV-COLUMN-YEAR-IGNORED` (information) or `CONV-COLUMN-NUMBER-IGNORED` (warning,
+accepted once, as CONV-COLUMN-NOT-EXPORTED), once per sheet (`convert/vetoedNumbers.ts`); the finding carries a "Read it as a measurement" button per column (keyed by column index) that gives back the role the column had
+(the page's `readAsMeasurement`). A column the person has changed is not listed again; the answer is not kept in the companion file, so a re-upload asks again. /check is unchanged.
 
 Other overlay decisions: a **summary column** (a header starting with or holding Total, Suma,
 Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it would count the

@@ -104,6 +104,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-NERC-CODE-MALFORMED',
   'CONV-UNIT-NO-P06',
   'CONV-COLUMN-NOT-EXPORTED',
+  // a numeric column that looks like a running number was not read as a measurement: it carries data, so leaving it out is accepted once (the page can give the role back)
+  'CONV-COLUMN-NUMBER-IGNORED',
   // a biomass column whose kind (wet, dry, ash-free dry) is open: the rows are written with no measurementTypeID; no default is invented
   'CONV-BIOMASS-KIND-UNSET',
   // a row labelled like a statistic (Max, N) in the middle of the sheet, kept as a sample: the user says it is a station

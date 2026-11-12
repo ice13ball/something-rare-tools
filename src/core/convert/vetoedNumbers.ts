@@ -36,11 +36,11 @@ export function vetoedColumns(file: ParsedFile, sheet: RawSheet, mapping: SheetM
 }
 
 /**
- * The parameters of one finding: `count`, `columns` (the names, readable), `names` (the full list, for the page's buttons) and `roles` (the role each column had before the veto, as JSON, in the
+ * The parameters of one finding: `count`, `columns` (the names, readable), `names` (the full list, for the page's buttons), `indexes` (the column of each, so that two columns with one header are told apart) and `roles` (the role each column had before the veto, as JSON, in the
  * order of `names`: what its button gives back).
  */
-export function vetoedParams(columns: readonly VetoedColumn[]): { count: number; columns: string; names: string; roles: string } {
-  return { count: columns.length, columns: columns.map((c) => c.header).join(', '), names: columns.map((c) => c.header).join(SEP), roles: columns.map((c) => JSON.stringify(c.role)).join(SEP) };
+export function vetoedParams(columns: readonly VetoedColumn[]): { count: number; columns: string; names: string; indexes: string; roles: string } {
+  return { count: columns.length, columns: columns.map((c) => c.header).join(', '), names: columns.map((c) => c.header).join(SEP), indexes: columns.map((c) => c.index).join(SEP), roles: columns.map((c) => JSON.stringify(c.role)).join(SEP) };
 }
 
 export const VETO_NAME_SEP = SEP;

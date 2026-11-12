@@ -42,9 +42,9 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
     const year = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-YEAR-IGNORED');
     const num = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-NUMBER-IGNORED');
     expect(year).toMatchObject({ severity: 'info', params: { count: 1, columns: 'Year' } });
-    expect(num).toMatchObject({ severity: 'info', params: { count: 1, columns: 'SampleNo' } });
+    expect(num).toMatchObject({ severity: 'warning', params: { count: 1, columns: 'SampleNo' } });
     expect(renderConvertPlain(year!, 'en')).toContain('Looks like a year beside the date');
-    expect(renderConvertPlain(num!, 'en')).toContain('Looks like a running number: whole numbers only, all different');
+    expect(renderConvertPlain(num!, 'en')).toContain('Looks like a running number: whole numbers that rise (or fall) from one row or sample to the next');
     // the click: the page sets the role carried in `roles`; here the same role through the mapping
     const back = JSON.parse(String(num!.params.roles)) as { kind: string; variable: string };
     expect(back).toMatchObject({ kind: 'variable', variable: 'SampleNo' });
@@ -59,6 +59,7 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
     const cols = vetoedColumns(f, f.sheets[0], mappingOf(f));
     expect(cols.map((c) => c.header)).toEqual(['Year', 'Yr2']);
     const params = vetoedParams(cols);
+    expect(params.indexes).toBe('1\u001f2');
     for (const lang of LANGS) {
       const one = renderConvertPlain({ ruleId: 'CONV-COLUMN-YEAR-IGNORED', severity: 'info', file: 'a.csv', sheet: 'S', lines: [], params: { ...params, count: 1, columns: 'Year' } } as never, lang);
       const two = renderConvertPlain({ ruleId: 'CONV-COLUMN-YEAR-IGNORED', severity: 'info', file: 'a.csv', sheet: 'S', lines: [], params } as never, lang);
@@ -119,5 +120,67 @@ describe('what keeps its role', () => {
     expect(r.Year).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'year-values' });
     expect(r.SampleNo.role).toEqual({ kind: 'taxon', header: true });
     expect(r.SampleNo.vetoed).toBeUndefined();
+  });
+});
+
+const LH = ['Sample', 'Date', 'Latitude', 'Longitude', 'Species'];
+const longRows = (extra: (s: number, i: number) => Cell[]): Cell[][] => Array.from({ length: 12 }, (_, i) => {
+  const s = Math.floor(i / 2);
+  return [`s${s + 1}`, `${2002 + s}-06-0${s + 1}`, 54.1 + s / 10, 7.2 + s / 10, TAXA[i % 2], ...extra(s, i)];
+});
+
+describe('review round 1: the year must be the year of the date', () => {
+  for (const name of ['YearClass', 'Age', 'PAR', 'Conductivity', 'N']) {
+    it(`${name} with values in 1800-2100 that are not the year of its date keeps its role`, () => {
+      const r = roles([...LH, 'Count', name], longRows((s, i) => [3 + i, 1900 + s * 17]));
+      expect(r[name].role.kind).toBe('variable');
+      expect(r[name].vetoed).toBeUndefined();
+    });
+  }
+  it('a Year that differs from its date on one row keeps its role, one that agrees where both are filled is vetoed', () => {
+    const agree = (bad: boolean) => longRows((s, i) => [3 + i, bad && i === 7 ? 1999 : i % 5 === 4 ? null : 2002 + s]);
+    expect(roles([...LH, 'Count', 'Year'], agree(true)).Year.role.kind).toBe('variable');
+    expect(roles([...LH, 'Count', 'Year'], agree(false)).Year).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'year-beside-date' });
+  });
+});
+
+describe('review round 1: a running number runs', () => {
+  for (const name of ['Flowmeter', 'Revolutions', 'Reads', 'Light']) {
+    it(`${name}, a six-digit value per sample in arbitrary order, keeps its role`, () => {
+      const order = [523411, 498770, 610233, 501002, 733210, 612345];
+      const r = roles([...LH, 'Count', name], longRows((s, i) => [3 + i, order[s]]));
+      expect(r[name].role.kind).toBe('variable');
+    });
+  }
+  it('distinct six-digit values per row in arbitrary order keep their role; rising or falling ones are vetoed', () => {
+    const order = [523411, 498770, 610233, 501002, 733210, 612345, 700001, 400002, 900003, 100004, 800005, 300006];
+    expect(roles([...LH, 'Count', 'Tag'], longRows((s, i) => [3 + i, order[i]])).Tag.role.kind).toBe('variable');
+    expect(roles([...LH, 'Count', 'Tag'], longRows((s, i) => [3 + i, 900000 - i * 13])).Tag.role.kind).toBe('ignore');
+    expect(roles([...LH, 'Count', 'Tag'], longRows((s, i) => [3 + i, 900000 - s * 13])).Tag.role.kind).toBe('ignore');
+  });
+});
+
+describe('review round 1: the counts column is never taken for a running number', () => {
+  for (const name of ['Cells', 'N', 'Reads']) {
+    it(`${name} alone on a long sheet with a taxon column stays a variable and the block is still CONV-TAXON-NO-QUANTITY`, async () => {
+      const rows = longRows((s, i) => [123457 + i * 9173]);
+      expect(roles([...LH, name], rows)[name].role.kind).toBe('variable');
+      const e = await exportSheet([...LH, name], rows, { quantity: { kind: 'count' }, fullList: true });
+      const ids = e.findings.map((f) => f.ruleId);
+      expect(ids).toContain('CONV-TAXON-NO-QUANTITY');
+      expect(ids).not.toContain('CONV-SPECIES-LIST-NO-COUNTS');
+    });
+  }
+  it('beside a real quantity column the same rising column is vetoed', () => {
+    expect(roles([...LH, 'Count', 'Cells'], longRows((s, i) => [3 + i, 123457 + i * 9173])).Cells.role.kind).toBe('ignore');
+  });
+});
+
+describe('review round 1: the button restores its own column', () => {
+  it('two columns with one header are told apart by their index', () => {
+    const f = fileOf([...LH, 'Count', 'Code', 'Code'], longRows((s, i) => [3 + i, 20200101 + i * 7, 30200101 + i * 7]));
+    const cols = vetoedColumns(f, f.sheets[0], mappingOf(f));
+    expect(cols.map((c) => c.index)).toEqual([6, 7]);
+    expect(vetoedParams(cols).indexes).toBe('6\u001f7');
   });
 });

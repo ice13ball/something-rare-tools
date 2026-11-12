@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { RawCell, RawSheet } from '../types';
+import { parseDate } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 
 /*
@@ -60,20 +61,35 @@ export function holdsYears(sheet: RawSheet, index: number, decimalComma: boolean
   return hi - lo <= 120;
 }
 
-/** Every filled cell (at least 3) is a whole year from 1800 to 2100. Blanks are allowed: a Year next to a Date is a year wherever it is filled. */
-export function holdsOnlyYears(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
-  const cells = cellsOf(sheet, index);
-  if (cells.length < 3) return false;
-  return cells.every((c) => {
-    const p = parseNumber(c, decimalComma);
-    return p.status === 'ok' && Number.isInteger(p.value) && p.value >= 1800 && p.value <= 2100;
+/**
+ * A column that only repeats the year of the date: on every row where both it and a date column are filled (at least 3 such rows) the cell is a whole year equal to the year of that row's date. One of
+ * the date columns must match on all of those rows. A column of other years (a year class, a cohort, an age in years) or of other numbers that happen to lie in 1800-2100 never matches, so it
+ * keeps its role; a date that cannot be read (an ambiguous 03/04/2002) is no match.
+ */
+export function holdsYearOfDate(sheet: RawSheet, index: number, dateCols: readonly number[], decimalComma: boolean, date1904: boolean): boolean {
+  return dateCols.some((d) => {
+    let both = 0;
+    for (const r of sheet.rows.slice(0, MAX_ROWS)) {
+      const y = r.cells[index] ?? null;
+      const c = r.cells[d] ?? null;
+      if (blank(y) || blank(c)) continue;
+      const p = parseNumber(y as RawCell, decimalComma);
+      if (p.status !== 'ok' || !Number.isInteger(p.value) || p.value < 1800 || p.value > 2100) return false;
+      const date = parseDate(c as RawCell, { date1904, dateFormatted: typeof c === 'number' });
+      if ('error' in date || date.year !== p.value) return false;
+      both++;
+    }
+    return both >= 3;
   });
 }
 
+const strictlyMonotonic = (v: readonly number[]): boolean => v.length >= 2 && (v.every((x, i) => i === 0 || x > v[i - 1]) || v.every((x, i) => i === 0 || x < v[i - 1]));
+
 /**
- * Every filled cell (at least 3) is a whole number of 6 or more digits, and the values are all different: a running number or an identifier, not a count or a density, which repeat. Two rows may
- * share a value only when they are rows of one sample (`sampleCols`: the columns that tell the samples apart): then each sample holds one value and no value stands under two samples (a sample
- * number written on every taxon row of the sample).
+ * Every filled cell (at least 3) is a whole number of 6 or more digits that RUNS: the values are all different and strictly rise (or all strictly fall) in row order. Two rows may share a value
+ * only when they are rows of one sample (`sampleCols`: the columns that tell the samples apart): then each sample holds one value, no value stands under two samples, and the values of the
+ * samples, in the order the samples first appear, strictly rise (or strictly fall): a sample number written on every taxon row of the sample. A column in arbitrary order (a flowmeter reading, a
+ * sequencing depth, a cell count) is no running number.
  */
 export function holdsRunningNumbers(sheet: RawSheet, index: number, decimalComma: boolean, sampleCols: readonly number[] = []): boolean {
   const rows = sheet.rows.slice(0, MAX_ROWS);
@@ -85,7 +101,7 @@ export function holdsRunningNumbers(sheet: RawSheet, index: number, decimalComma
     if (p.status !== 'ok' || !Number.isInteger(p.value) || p.value < 100000) return false;
     values.push(p.value);
   }
-  if (new Set(values).size === values.length) return true;
+  if (new Set(values).size === values.length) return strictlyMonotonic(values);
   if (sampleCols.length === 0) return false;
   const sampleOf = (r: (typeof rows)[number]): string => sampleCols.map((c) => String(r.cells[c] ?? '').trim()).join('\u0000');
   const valueOfSample = new Map<string, number>();
@@ -96,7 +112,7 @@ export function holdsRunningNumbers(sheet: RawSheet, index: number, decimalComma
     valueOfSample.set(k, values[i]);
     sampleOfValue.set(values[i], k);
   }
-  return valueOfSample.size >= 3;
+  return valueOfSample.size >= 3 && strictlyMonotonic([...valueOfSample.values()]);
 }
 
 /**
