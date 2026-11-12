@@ -3,7 +3,8 @@
 // proposeSampleJoins: which sheet describes the samples of a results sheet, and by which key. A proposal only; invented data.
 import { describe, expect, it } from 'vitest';
 import { proposeSampleJoins } from '../../src/core/convert/sampleJoin';
-import { xlsxFile } from '../helpers/files';
+import { dateCell, textFile, xlsxFile } from '../helpers/files';
+import { sheetInput } from './helpers';
 import { bookInputs, descriptionInput, resultsCsvFile, resultsInput, samplesCsvFile } from './joinFixtures';
 
 const TAX: (string | number)[] = ['Calanus finmarchicus', 3];
@@ -102,5 +103,28 @@ describe('proposeSampleJoins', () => {
       Samples: [['Sample', 'Station'], ['X01', 'ST-1'], ['Y02', 'ST-2'], ['Y03', 'ST-3'], ['Y04', 'ST-4']],
     });
     expect(proposeSampleJoins([resultsInput(file, 'Counts'), descriptionInput(file, 'Samples')], [])).toEqual([]);
+  });
+
+  it('proposes on the key as the converter reads it: a text date in the results and a date serial in the description are one key', () => {
+    const results = textFile('counts.csv', `Station,Day,Taxon,Count\nST-1,2021-05-03,${TAX[0]},4\nST-2,2021-05-04,${TAX[0]},5\n`);
+    const samples = xlsxFile('samples.xlsx', { Samples: [['Station', 'Day', 'Latitude'], ['ST-1', dateCell(44319), 61.1], ['ST-2', dateCell(44320), 61.3], ['ST-4', dateCell(44322), 61.9]] });
+    const res = sheetInput(results, { shape: 'long', quantity: { kind: 'count' }, sampleKey: { columns: [0, 1] }, edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } } } as never);
+    const got = proposeSampleJoins([res, sheetInput(samples)], []);
+    expect(got).toEqual([expect.objectContaining({ results: 0, description: 1, keys: [{ results: 0, description: 0 }, { results: 1, description: 1 }], covered: 2, samples: 2 })]);
+  });
+
+  it('proposes when the codes are written as 1.0 in one sheet and 1 in the other', () => {
+    const file = xlsxFile('b.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count'], [1, ...TAX], [2, ...TAX]],
+      Samples: [['Sample', 'Station'], ['1.0', 'ST-1'], ['2.0', 'ST-2'], ['3.0', 'ST-3']],
+    });
+    expect(proposeSampleJoins([resultsInput(file, 'Counts'), descriptionInput(file, 'Samples')], [])).toEqual([expect.objectContaining({ covered: 2, samples: 2 })]);
+  });
+
+  it('does not change the sheets it was handed', () => {
+    const inputs = bookInputs();
+    const before = JSON.stringify(inputs.map((i) => i.file.sheets));
+    proposeSampleJoins(inputs, []);
+    expect(JSON.stringify(inputs.map((i) => i.file.sheets))).toBe(before);
   });
 });

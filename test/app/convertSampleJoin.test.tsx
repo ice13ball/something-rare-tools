@@ -9,7 +9,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
 import { initialJoins, sampleJoinSettingsOf, type JoinChoice } from '../../src/app/convertModel';
-import { ConvertSampleJoin } from '../../src/app/components/ConvertSampleJoin';
+import { ConvertSampleJoin, undecidedOf } from '../../src/app/components/ConvertSampleJoin';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { shortHash, keyHashes } from '../../src/core/convert/keySetting';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
@@ -406,20 +406,20 @@ describe('the panel on its own', () => {
 
   it('says a confirmed join was not applied when the settled ledger has no description sheet for it', () => {
     const ledger = [{ file: 'results.csv', sheet: 'results.csv', kind: 'wide' }] as never;
-    const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [] }} files={files} joins={[join]} onChange={vi.fn()} ledger={ledger} />);
+    const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets: [] }} files={files} joins={[join]} onChange={vi.fn()} ledger={ledger} />);
     expect(container.textContent).toContain(T['convert.join.notApplied']);
     cleanup();
     const applied = [{ file: 'samples.csv', sheet: 'samples.csv', kind: 'description' }] as never;
-    const ok = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [] }} files={files} joins={[join]} onChange={vi.fn()} ledger={applied} />);
+    const ok = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets: [] }} files={files} joins={[join]} onChange={vi.fn()} ledger={applied} />);
     expect(ok.container.textContent).not.toContain(T['convert.join.notApplied']);
     // while a conversion is running the page passes no ledger, and nothing is said
     cleanup();
-    const busy = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [] }} files={files} joins={[join]} onChange={vi.fn()} />);
+    const busy = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets: [] }} files={files} joins={[join]} onChange={vi.fn()} />);
     expect(busy.container.textContent).not.toContain(T['convert.join.notApplied']);
   });
 
   it('shows nothing when there is no proposal and no decision', () => {
-    const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [] }} files={files} joins={[]} onChange={vi.fn()} />);
+    const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets: [] }} files={files} joins={[]} onChange={vi.fn()} />);
     expect(container.textContent).toBe('');
   });
 });
@@ -481,5 +481,92 @@ describe('review fixes', () => {
     const v = { proposals: [{ results: R, description: D, keys: [{ results: 0, description: 0 }], covered: 1, samples: 1 }], conflicts: [] } as never;
     render(<ConvertSampleJoin view={v} files={files} joins={joins} onChange={vi.fn()} />);
     expect(screen.queryByTestId('join-proposal')).toBeNull();
+  });
+});
+
+describe('final review fixes', () => {
+  const files = [
+    { fileId: 'c1', fileName: 'results.csv', sheets: [{ name: 'results.csv', header: ['Sample', 'Taxon', 'Count'], rowCount: 3 }] },
+    { fileId: 'c2', fileName: 'samples.csv', sheets: [{ name: 'samples.csv', header: ['Ref', 'Date'], rowCount: 3 }] },
+  ] as never;
+  const join: JoinChoice = { results: R, description: D, keys: [{ results: 0, description: 0 }], state: 'confirmed', conflicts: [] };
+  const entry = { id: 'e1', key: 'Y1', descriptionLine: 1, descriptionText: '2021-05-03', resultsText: '2021-05-02', resultsLines: [1], samples: ['Y1'] };
+  const group = { group: 'date', quantity: 'date', label: 'Date', count: 3, entries: [entry], results: R };
+
+  it('a group the converter did not report on is counted from the page, never as fully decided', () => {
+    const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [group], resultsSheets: [] } as never} files={files} joins={[join]} onChange={vi.fn()} ledger={[]} undecided={[]} />);
+    expect(container.textContent).toContain('0 of 3 samples decided');
+    expect(container.textContent).not.toContain('3 of 3 samples decided');
+  });
+
+  it('undecidedOf: the open count, 0 only when the converter says the group was chosen, nothing otherwise', () => {
+    const f = (ruleId: string, params: Record<string, string | number>) => ({ ruleId, file: 'results.csv', sheet: 'results.csv', params });
+    const view = (findings: unknown[]) => ({ findings, sampleJoin: { proposals: [], resultsSheets: [], conflicts: [group] } }) as never;
+    expect(undecidedOf(view([f('CONV-JOIN-CONFLICT', { group: 'date', count: 2 })]), files)).toEqual([{ results: R, group: 'date', count: 2 }]);
+    expect(undecidedOf(view([f('CONV-JOIN-CONFLICT-CHOSEN', { what: 'Date', count: 3 })]), files)).toEqual([{ results: R, group: 'date', count: 0 }]);
+    expect(undecidedOf(view([]), files)).toEqual([]);
+  });
+
+  it('on the page the open group reads "0 of 1 sample decided" after Confirm and "1 of 1" once chosen', async () => {
+    const run = await load([{ name: 'results.csv', text: dated('2021-05-02') }, { name: 'samples.csv', text: SAMPLES }]);
+    await confirm(run);
+    const g = document.querySelector('[data-testid="join-group"]') as HTMLElement;
+    expect(g.textContent).toContain('0 of 1 sample decided');
+    fireEvent.click(within(g).getByRole('button', { name: T['convert.join.conflict.takeDescription'] }));
+    await settled(run, (b) => (b.sampleJoin?.[0].conflicts.length ?? 0) > 0);
+    expect((document.querySelector('[data-testid="join-group"]') as HTMLElement).textContent).toContain('1 of 1 sample decided');
+  });
+
+  it('a results sheet with no proposal still offers the form; nothing joins until "Join with these columns"', async () => {
+    // the description names its sample column "Ref": no role, no equal header, so no proposal
+    const refs = csvOf(['Ref', 'Station', 'Date', 'Latitude', 'Longitude', 'Depth'], [['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 10], ['X02', 'ST-2', '2021-05-04', 61.3, 4.6, 20], ['X03', 'ST-3', '2021-05-05', 61.5, 4.9, 30]]);
+    const run = await load([{ name: 'results.csv', text: RESULTS }, { name: 'samples.csv', text: refs }]);
+    expect(document.querySelector('[data-testid="join-proposal"]')).toBeNull();
+    fireEvent.click(button(T['convert.join.declare'].replace('{results}', 'results.csv')));
+    expect(last(run).sampleJoin).toBeUndefined();
+    fireEvent.click(button(T['convert.join.changeUse']));
+    await settled(run, (b) => b.sampleJoin !== undefined);
+    expect(last(run).sampleJoin).toEqual([{ results: R, description: D, keys: [{ results: 0, description: 0 }], conflicts: [] }]);
+    expect(rule('CONV-ID-DUPLICATE')).toBeNull();
+    expect(panel()!.textContent).toContain('Sample ↔ Ref');
+  });
+
+  it('the entry is not offered for a sheet that has a proposal or a confirmed join, and Cancel closes the form', () => {
+    const resultsSheets = [R];
+    const withProposal = { proposals: [{ results: R, description: D, keys: [{ results: 0, description: 0 }], covered: 2, samples: 2 }], conflicts: [], resultsSheets } as never;
+    const a = render(<ConvertSampleJoin view={withProposal} files={files} joins={[]} onChange={vi.fn()} />);
+    expect(a.container.querySelector('[data-testid="join-declare"]')).toBeNull();
+    cleanup();
+    const b = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets } as never} files={files} joins={[join]} onChange={vi.fn()} />);
+    expect(b.container.querySelector('[data-testid="join-declare"]')).toBeNull();
+    cleanup();
+    const c = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets } as never} files={files} joins={[]} onChange={vi.fn()} />);
+    fireEvent.click(c.container.querySelector('[data-testid="join-declare"] button')!);
+    expect(c.container.querySelector('.convert-join-change')).not.toBeNull();
+    fireEvent.click(button(T['convert.join.changeCancel']));
+    expect(c.container.querySelector('.convert-join-change')).toBeNull();
+  });
+
+  it('the entry reads in every language, with no placeholder left', () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      setLang(lang);
+      const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets: [R] } as never} files={files} joins={[]} onChange={vi.fn()} />);
+      const text = container.querySelector('[data-testid="join-declare"]')!.textContent!;
+      expect(text, lang).toContain('results.csv');
+      expect(text, lang).toBe(UI[lang]['convert.join.declare'].replace('{results}', 'results.csv'));
+      expect(text, lang).not.toMatch(/\{/);
+      cleanup();
+    }
+  });
+
+  it('Polish "first N rows" takes the plural form of N', () => {
+    const cases: [number, string][] = [[1, 'pierwszy wiersz'], [2, 'pierwsze wiersze'], [5, 'pierwszych wierszy']];
+    setLang('pl');
+    for (const [n, form] of cases) {
+      const g = { ...group, count: 600, entries: Array.from({ length: n }, (_, i) => ({ ...entry, id: `e${i}`, key: `Y${i}` })) };
+      const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [g], resultsSheets: [] } as never} files={files} joins={[join]} onChange={vi.fn()} />);
+      expect(container.textContent, String(n)).toContain(`Wypisano tylko ${n} ${form}.`);
+      cleanup();
+    }
   });
 });

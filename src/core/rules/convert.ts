@@ -2526,9 +2526,14 @@ const KEY_CROSS_PLAIN: Record<Lang, string> = {
   fr: `Le même identifiant d'échantillon est produit plusieurs fois, p. ex. « {value} », {+lineCount:à la ligne|aux lignes} {lines} (répétés : {count}). Les identifiants doivent être uniques.`,
 };
 
+/** A results line named in a list of samples is carried as ⟦line:N⟧ (sampleJoin.ts) and written "(line N)" in the reader's language. */
+const LINE_IN_LIST: Record<Lang, (n: string) => string> = { en: (n) => `(line ${n})`, pl: (n) => `(wiersz ${n})`, de: (n) => `(Zeile ${n})`, fr: (n) => `(ligne ${n})` };
+const lineWordsIn = (text: string, lang: Lang): string => text.replace(/\u27e6line:(\d+)\u27e7/g, (_w, n: string) => LINE_IN_LIST[lang](n));
+
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
+  if ((f.ruleId === 'CONV-JOIN-NO-DESCRIPTION' || f.ruleId === 'CONV-JOIN-RESULTS-ONLY') && typeof f.params.samples === 'string') f = { ...f, params: { ...f.params, samples: lineWordsIn(f.params.samples, lang) } };
   if (f.ruleId === 'CONV-ROLE-UNCONFIRMED' && typeof f.params.columns === 'string') f = { ...f, params: { ...f.params, columns: listedColumnsText(f.params.columns, lang) } };
   else if (typeof f.params.names === 'string' || typeof f.params.columns === 'string') {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
@@ -2613,6 +2618,7 @@ const transposedWords = (code: unknown, lang: Lang): string => reasonsText([{ co
 /** The English technical detail line. */
 export function renderConvertTechnical(f: Finding): string {
   f = withDefaults(f);
+  if ((f.ruleId === 'CONV-JOIN-NO-DESCRIPTION' || f.ruleId === 'CONV-JOIN-RESULTS-ONLY') && typeof f.params.samples === 'string') f = { ...f, params: { ...f.params, samples: lineWordsIn(f.params.samples, 'en') } };
   if (f.ruleId === 'CONV-SHEET-TRANSPOSED') f = { ...f, params: { ...f.params, reason: transposedWords(f.params.reason, 'en') } };
   if (f.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' || f.ruleId === 'CONV-ROW-LEFT-OUT') f = { ...f, params: { ...f.params, what: rowWhat(f.params.reason, 'en') } };
   if (f.ruleId === 'CONV-ID-REVISIT') f = { ...f, params: { ...f.params, by: visitWords(f.params.by, 'en') } };

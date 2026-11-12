@@ -7,6 +7,7 @@ import { lendCell, mergeSampleSheets, resultsKeys, sameStructure } from '../../s
 import type { MergeResult, SampleJoinDecl } from '../../src/core/convert/sampleJoin';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
 import type { Finding } from '../../src/core/types';
+import { renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { parseNumber } from '../../src/core/values/numbers';
 import { dateCell, textFile, xlsxFile } from '../helpers/files';
 import type { Cell } from '../helpers/files';
@@ -346,5 +347,44 @@ describe('mergeSampleSheets: the results file conventions (F2)', () => {
     const ok = mergeSampleSheets(decl(resultsInput(res, res.sheets[0].name), descriptionInput(textFile('s2.csv', 'Sample;Station;Depth\nX01;ST-1;1,5\n'), 's2.csv'), { appendDescriptionOnly: false }));
     expect(found(ok, 'ROW-NON-NUMERIC')).toEqual([]);
     expect(rowAt(ok, 2).cells[3 + 2]).toBe('1.5');
+  });
+});
+
+describe('mergeSampleSheets: many results rows share a sample', () => {
+  // the bookkeeping per row keeps a line once and a sample once, without scanning a growing list (the result is what it was)
+  it('lists each filled line once, in order, and each conflicting sample once with all its lines', () => {
+    const counts: Cell[][] = [
+      ...Array.from({ length: 40 }, (_, i): Cell[] => ['X01', `Taxon ${i}`, 1, null]),
+      ...Array.from({ length: 40 }, (_, i): Cell[] => ['X02', `Taxon ${i}`, 1, 25]),
+    ];
+    const file = xlsxFile('book.xlsx', { Counts: [[...COUNTS_HEADER, 'Depth'], ...counts], Samples: [SAMPLES_HEADER, ...SAMPLES_ROWS] });
+    const r = mergeSampleSheets(decl(resultsInput(file, 'Counts'), descriptionInput(file, 'Samples'), { appendDescriptionOnly: false }));
+    const filled = found(r, 'CONV-JOIN-FILLED').find((f) => f.params?.column === 'Depth')!;
+    expect(filled.params?.count).toBe(40);
+    expect(filled.lines).toEqual(Array.from({ length: 40 }, (_, i) => i + 2));
+    const group = r.conflicts.find((g) => g.group === 'depth')!;
+    expect(group.count).toBe(1);
+    expect(group.entries).toHaveLength(1);
+    expect(group.entries[0].samples).toEqual(['X02']);
+    expect(group.entries[0].resultsLines).toEqual(Array.from({ length: 40 }, (_, i) => i + 42));
+  });
+});
+
+describe('the line of a results row with a blank key, named in a list of samples', () => {
+  it('is written in the reader\'s language, never as English text inside another language', () => {
+    const counts: Cell[][] = [...COUNTS_ROWS, [null, 'Oithona similis', 1]];
+    const r = book({ appendDescriptionOnly: false }, counts);
+    const f = found(r, 'CONV-JOIN-NO-DESCRIPTION')[0];
+    const answered = found(book({ appendDescriptionOnly: false, resultsOnly: 1 }, counts), 'CONV-JOIN-RESULTS-ONLY')[0];
+    const word = { en: '(line 5)', pl: '(wiersz 5)', de: '(Zeile 5)', fr: '(ligne 5)' } as const;
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      for (const finding of [f, answered]) {
+        const text = renderConvertPlain(finding, lang);
+        expect(text).toContain(word[lang]);
+        if (lang !== 'en') expect(text).not.toContain('(line');
+        expect(text).not.toContain('\u27e6');
+      }
+    }
+    expect(renderConvertTechnical(f)).toContain('(line 5)');
   });
 });

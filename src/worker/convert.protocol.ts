@@ -201,6 +201,8 @@ export interface ConvertView {
   sampleJoin: {
     proposals: { results: SheetRef; description: SheetRef; keys: { results: number; description: number }[]; covered: number; samples: number; long?: true }[];
     conflicts: (Omit<ConflictGroup, 'answer'> & { results: SheetRef })[];
+    /** The sheets that can be the results sheet of a join and have none confirmed: the person may declare a join for them even where no proposal appears (declare-first, no role guessed from values). */
+    resultsSheets: SheetRef[];
   };
 }
 

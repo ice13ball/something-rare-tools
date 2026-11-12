@@ -37,6 +37,7 @@ const ALLOWED: Allowed[] = [
   { id: 'CONV-PRESENCE-VALUE', phrase: 'the tick is removed', why: 'a tick on the page, not data' },
   { id: 'CONV-WORMS-UNDECIDED', phrase: 'a deleted record', why: 'WoRMS says the taxon record is deleted' },
   // the promises of this task
+  { key: 'convert.join.changeRemoveKey', phrase: 'Remove key', why: 'takes one key column out of the join form on the page; no data row' },
   { id: 'CONV-ROW-NOT-UNDERSTOOD', phrase: 'nothing is deleted', why: 'a promise, not advice' },
   { id: 'CONV-ROW-NOT-UNDERSTOOD', phrase: 'nothing is deleted from the file the user gave', why: 'a promise, not advice' },
   { id: 'CONV-ROW-LEFT-OUT', phrase: 'Nothing was deleted', why: 'a promise, not advice' },
@@ -174,6 +175,10 @@ describe('no text advises deleting data', () => {
 
 /** Phrases of the other languages that are not advice to delete (the same rule as ALLOWED: the exact place and the reason). Filled from the first run. */
 const NOT_EN_ALLOWED: { where: string; phrase: string; why: string }[] = [
+  // the button of the join form that takes one key column out of the form (the person's own pick, not data)
+  { where: 'convert.join.changeRemoveKey pl', phrase: 'Usuń klucz', why: 'takes one key column out of the join form; no data row' },
+  { where: 'convert.join.changeRemoveKey de', phrase: 'entfernen', why: 'takes one key column out of the join form; no data row' },
+  { where: 'convert.join.changeRemoveKey fr', phrase: 'Retirer la clé', why: 'takes one key column out of the join form; no data row' },
   // German: a tick taken off the page, a distance, and a tick that typing does not take off (each at its own place, with its exact words)
   { where: 'CONV-VALUE-PER-OCCURRENCE de', phrase: 'entfernen Sie bei der Spalte', why: 'takes a tick off the page; no data row' },
   { where: 'CONV-PRESENCE-VALUE de', phrase: 'entfernen Sie das Häkchen', why: 'takes a tick off the page; no data row' },

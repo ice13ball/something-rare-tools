@@ -267,15 +267,33 @@ export interface ConvertSampleJoinProps {
   onChange: (joins: JoinChoice[]) => void;
   /** The ledger of the conversion the view belongs to, once it is settled: a confirmed join with no description ledger in it was not applied, and the panel says so. */
   ledger?: readonly SheetLedger[];
-  /** Once the conversion has settled: how many samples of each group the converter still finds undecided (CONV-JOIN-CONFLICT); a group not listed has none. */
+  /** Once the conversion has settled: how many samples of each group the converter still finds undecided (CONV-JOIN-CONFLICT); a group not listed is counted from the answers on the page. */
   undecided?: { results: SheetRef; group: string; count: number }[];
+}
+
+/**
+ * How many samples of each group the converter still finds undecided, read from the settled view: the count of CONV-JOIN-CONFLICT for the group, 0 when CONV-JOIN-CONFLICT-CHOSEN says the group is
+ * fully decided, and no entry otherwise (the panel then counts from the answers it holds itself, never 0 for a group the converter did not report on).
+ */
+export function undecidedOf(view: Pick<ConvertView, 'findings' | 'sampleJoin'>, files: readonly ConvertFileSummary[]): { results: SheetRef; group: string; count: number }[] {
+  const out: { results: SheetRef; group: string; count: number }[] = [];
+  for (const g of view.sampleJoin.conflicts) {
+    const name = files.find((f) => f.fileId === g.results.fileId)?.fileName;
+    const on = (f: { file?: string; sheet?: string }): boolean => f.file === name && f.sheet === g.results.sheet;
+    const open = view.findings.find((f) => f.ruleId === 'CONV-JOIN-CONFLICT' && on(f) && String(f.params.group) === g.group);
+    if (open !== undefined) out.push({ results: g.results, group: g.group, count: Number(open.params.count) });
+    else if (view.findings.some((f) => f.ruleId === 'CONV-JOIN-CONFLICT-CHOSEN' && on(f) && String(f.params.what) === g.label)) out.push({ results: g.results, group: g.group, count: 0 });
+  }
+  return out;
 }
 
 export function ConvertSampleJoin({ view, files, joins, onChange, ledger, undecided }: ConvertSampleJoinProps): React.ReactElement | null {
   const [editing, setEditing] = useState<Record<string, Draft>>({});
   // a results sheet that already has a confirmed join is not proposed again (the view may still be the one from before the confirmation)
   const proposals = (view?.proposals ?? []).filter((p) => !joins.some((j) => j.state === 'confirmed' && same(j.results, p.results)));
-  if (proposals.length === 0 && joins.length === 0) return null;
+  // a results sheet with no proposal and no confirmed join can still be joined: the person says which sheet describes it (declare-first: the entry point names no sheet and guesses no role)
+  const declarable = (view?.resultsSheets ?? []).filter((r) => !proposals.some((p) => same(p.results, r)) && !joins.some((j) => j.state === 'confirmed' && same(j.results, r)) && files.some((f) => f.sheets.some((sh) => !same({ fileId: f.fileId, sheet: sh.name }, r))));
+  if (proposals.length === 0 && joins.length === 0 && declarable.length === 0) return null;
 
   const without = (list: readonly JoinChoice[], results: SheetRef, description: SheetRef, state: JoinChoice['state']): JoinChoice[] =>
     list.filter((j) => !(same(j.results, results) && ((state === 'confirmed' && j.state === 'confirmed') || same(j.description, description) && j.state === 'declined')));
@@ -293,7 +311,7 @@ export function ConvertSampleJoin({ view, files, joins, onChange, ledger, undeci
   return (
     <section className="convert-join" aria-labelledby="convert-join-title" data-testid="sample-join">
       <h3 id="convert-join-title">{t('convert.join.title')}</h3>
-      {proposals.length > 0 && <p className="muted">{t('convert.join.intro')}</p>}
+      {(proposals.length > 0 || declarable.length > 0) && <p className="muted">{t('convert.join.intro')}</p>}
       {proposals.map((p) => {
         const key = proposalKey(p);
         const draft = editing[key];
@@ -339,6 +357,34 @@ export function ConvertSampleJoin({ view, files, joins, onChange, ledger, undeci
           </div>
         );
       })}
+      {declarable.map((r) => {
+        const key = `declare\u0001${refKey(r)}`;
+        const draft = editing[key];
+        const first = files.flatMap((f) => f.sheets.map((sh) => ({ fileId: f.fileId, sheet: sh.name }))).find((o) => !same(o, r));
+        return (
+          <div key={key} className="convert-join-declare" data-testid="join-declare">
+            {draft === undefined ? (
+              <p>
+                <button type="button" className="button" onClick={() => first !== undefined && setEditing((prev) => ({ ...prev, [key]: { description: first, keys: [{ results: 0, description: 0 }] } }))}>
+                  {t('convert.join.declare', { results: labelOf(files, r) })}
+                </button>
+              </p>
+            ) : (
+              <ChangeForm
+                results={r}
+                files={files}
+                draft={draft}
+                onDraft={(d) => setEditing((prev) => ({ ...prev, [key]: d }))}
+                onUse={() => {
+                  decide(r, draft.description, draft.keys, 'confirmed');
+                  stopEditing(key);
+                }}
+                onCancel={() => stopEditing(key)}
+              />
+            )}
+          </div>
+        );
+      })}
       {joins.map((j) => {
         const results = labelOf(files, j.results);
         const description = labelOf(files, j.description);
@@ -374,7 +420,7 @@ export function ConvertSampleJoin({ view, files, joins, onChange, ledger, undeci
                 <h4>{t('convert.join.differ.title')}</h4>
                 <p className="muted">{t('convert.join.differ.intro', { results, description })}</p>
                 {groups.map((g) => (
-                  <GroupPanel key={g.group} group={g} answer={answerFor(j, g.group)} undecided={undecided === undefined ? undefined : (undecided.find((u) => same(u.results, j.results) && u.group === g.group)?.count ?? 0)} onAnswer={(next) => setAnswer(j, g.group, next)} />
+                  <GroupPanel key={g.group} group={g} answer={answerFor(j, g.group)} undecided={undecided === undefined ? undefined : undecided.find((u) => same(u.results, j.results) && u.group === g.group)?.count} onAnswer={(next) => setAnswer(j, g.group, next)} />
                 ))}
               </div>
             )}

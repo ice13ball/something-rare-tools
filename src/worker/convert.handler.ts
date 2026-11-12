@@ -429,6 +429,7 @@ export function createConvertHandler(): ConvertHandler {
   function joinView(body: ConvertRequestBody, outcome: JoinOutcome): ConvertView['sampleJoin'] {
     return {
       proposals: outcome.proposals.map((p) => ({ results: refOf(body, p.results), description: refOf(body, p.description), keys: p.keys, covered: p.covered, samples: p.samples, ...(p.long ? { long: true as const } : {}) })),
+      resultsSheets: outcome.resultsSheets.map((i) => refOf(body, i)),
       conflicts: outcome.conflicts.map(({ answer: _answer, entries, results, ...group }) => ({ ...group, entries: entries.slice(0, MAX_CONFLICT_ENTRIES), results: refOf(body, results) })),
     };
   }

@@ -214,7 +214,7 @@ describe('sample join', () => {
     expect(open.sampleJoin.proposals).toEqual([{ results: R, description: D, keys: KEYS, covered: 2, samples: 2 }]);
     const declined = await e.convert(body({ sampleJoinNo: [{ results: R, description: D }] }));
     expect(ids(declined, 'CONV-JOIN-PROPOSED')).toBe(0);
-    expect(declined.sampleJoin).toEqual({ proposals: [], conflicts: [] });
+    expect(declined.sampleJoin).toEqual({ proposals: [], conflicts: [], resultsSheets: [{ fileId: 'c1', sheet: 'results.csv' }] });
     expect(open.findings.filter((f) => f.ruleId !== 'CONV-JOIN-PROPOSED')).toEqual(declined.findings);
     expect(open.ledger).toEqual(declined.ledger);
     expect(open.notWritten).toEqual(declined.notWritten);
@@ -227,7 +227,7 @@ describe('sample join', () => {
     expect(ids(v, 'CONV-JOIN-PROPOSED')).toBe(0);
     expect(v.ledger.some((l) => l.file === 'samples.csv' && l.kind === 'not-used')).toBe(false);
     expect(v.ledger.filter((l) => l.file === 'samples.csv').map((l) => l.kind)).toEqual(['description']);
-    expect(v.sampleJoin).toEqual({ proposals: [], conflicts: [] });
+    expect(v.sampleJoin).toEqual({ proposals: [], conflicts: [], resultsSheets: [] });
     expect(v.tree.samples).toBe(3);
   });
 

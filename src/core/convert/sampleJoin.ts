@@ -53,6 +53,23 @@ const sheetOf = (s: ConvertSheetInput): RawSheet | undefined => s.file.sheets.fi
 const RIGHT_KINDS = new Set(['sampleId', 'station', 'cruise']);
 
 /**
+ * A copy of the sheet whose cells in `columns` hold the key part the converter reads from them (keyPart, in THIS sheet's own context, the reader the merge uses), blank where keyPart reads blank: the
+ * proposal then ranks the keys the way the merge will join them, so a serial date and the same date written as text are one key. The sheet itself is not touched.
+ */
+function keyNormalised(input: ConvertSheetInput, sheet: RawSheet, columns: readonly number[]): RawSheet {
+  const read = keyReaderOf(input, sheet);
+  const rows = sheet.rows.map((row) => {
+    const cells = row.cells.slice();
+    for (const c of columns) {
+      const part = read(row, [c]).parts[0];
+      cells[c] = part === '' ? null : part;
+    }
+    return { ...row, cells };
+  });
+  return { ...sheet, rows };
+}
+
+/**
  * For each results sheet (a taxon column or taxon headers, not a profile sheet), the sheet that describes its samples best and the key, when the description has at least half of the results
  * sheet's samples. `skip` = pairs already confirmed or declined. A results sheet gets at most one proposal; one description may serve several results sheets.
  */
@@ -74,10 +91,10 @@ export function proposeSampleJoins(sheets: readonly ConvertSheetInput[], skip: r
       const dSheet = sheetOf(d);
       if (dSheet === undefined) return;
       const columns = d.mapping.columns.filter((c) => RIGHT_KINDS.has(c.role.kind) || leftHeaders.has(cleanHeader(c.header)));
-      if (columns.length > 0) candidates.push({ index: di, side: { sheet: dSheet, columns } });
+      if (columns.length > 0) candidates.push({ index: di, side: { sheet: keyNormalised(d, dSheet, columns.map((c) => c.index)), columns } });
     });
     if (candidates.length === 0) return;
-    const j = rankJoinKeys({ sheet: resSheet, columns: leftCols }, candidates.map((c) => c.side), { coverage: 'measure', ...(picked.length > 0 ? { kinds: 'any' as const, together: picked } : {}) });
+    const j = rankJoinKeys({ sheet: keyNormalised(res, resSheet, leftCols.map((c) => c.index)), columns: leftCols }, candidates.map((c) => c.side), { coverage: 'measure', ...(picked.length > 0 ? { kinds: 'any' as const, together: picked } : {}) });
     if (j === undefined || j.covered * 2 < j.total) return;
     const keys: JoinKeyPair[] = [{ results: j.leftKey, description: j.rightKey }, ...(j.extraKeys ?? []).map((k) => ({ results: k.leftKey, description: k.rightKey }))];
     const di = candidates[j.right].index;
@@ -203,6 +220,9 @@ const MAX_EXAMPLES = 3;
 
 const emptyCell = (c: RawCell | undefined): boolean => c === null || c === undefined || (typeof c === 'string' && c.trim() === '');
 const cellText = (c: RawCell | undefined): string => (c === null || c === undefined ? '' : String(c).trim());
+/** A results line named in a list of samples: language-neutral here, turned into "(line N)" in the reader's language by the rule text (rules/convert.ts). */
+const LINE_TOKEN_OPEN = '\u27e6line:';
+const LINE_TOKEN_CLOSE = '\u27e7';
 const listed = (names: readonly string[]): string => (names.length > MAX_LISTED ? `${names.slice(0, MAX_LISTED).join(', ')}, …` : names.join(', '));
 const keyText = (parts: readonly string[]): string => (parts.length === 1 ? parts[0] : JSON.stringify(parts));
 const keyShown = (parts: readonly string[]): string => parts.join(' / ');
@@ -660,10 +680,12 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const countFilled = (space: 'c' | 'q', order: number, name: string, line: number, onlyDescribed = false): void => {
     const f = filled.get(fillKey(space, order)) ?? { order: (space === 'c' ? 0 : 1e9) + order, name, count: 0, lines: [] };
     f.count++;
-    if (!onlyDescribed && !f.lines.includes(line)) f.lines.push(line);
+    // (no membership test on a list that grows with every filled row: the finding builder de-duplicates and sorts the lines)
+    if (!onlyDescribed) f.lines.push(line);
     filled.set(fillKey(space, order), f);
   };
 
+  const entrySamples = new Map<object, Set<string>>();
   const turnsNumeric = new Map<number, { lines: Set<number>; value: string }>();
   const lentBlank = new Set<string>();
   const lend = (descRow: RawRow, line: number): RawCell[] =>
@@ -734,9 +756,14 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         // F6: one entry per (join-key value, results value)
         const id = shortHash(`${k.text}\u0000${rr.text}`);
         const entry = q.entries.get(id) ?? { id, key: k.text, descriptionLine: lent.line, descriptionText: dr.text, resultsText: rr.text, resultsLines: [], samples: [] };
-        if (!entry.resultsLines.includes(row.line)) entry.resultsLines.push(row.line);
+        // (a results row is read once per quantity, so its line is new to the entry; the samples are de-duplicated through a Set, not a scan of the growing list)
+        entry.resultsLines.push(row.line);
         const sample = sampleOf(row, k);
-        if (!entry.samples.includes(sample)) entry.samples.push(sample);
+        const seen = entrySamples.get(entry) ?? entrySamples.set(entry, new Set<string>()).get(entry)!;
+        if (!seen.has(sample)) {
+          seen.add(sample);
+          entry.samples.push(sample);
+        }
         q.entries.set(id, entry);
         at.entry = entry;
       } else if (q.resolved !== undefined) {
@@ -995,7 +1022,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     );
   }
   if (withoutDescription > 0) {
-    const names = [...[...unmatched.values()].map((u) => keyShown(u.parts)), ...blankKeyRows.map((l) => `(line ${l})`)];
+    const names = [...[...unmatched.values()].map((u) => keyShown(u.parts)), ...blankKeyRows.map((l) => `${LINE_TOKEN_OPEN}${l}${LINE_TOKEN_CLOSE}`)];
     const lines = [...[...unmatched.values()].flatMap((u) => u.lines), ...blankKeyRows];
     findings.push(
       answered
@@ -1102,6 +1129,8 @@ export interface JoinOutcome {
   /** CONV-JOIN-PROPOSED and CONV-JOIN-DESCRIPTION-LONG only; a merge's own findings travel on SampleJoinInfo.findings (F1) */
   findings: Finding[];
   proposals: SampleJoinProposal[];
+  /** the REQUEST indexes of the sheets that can be the results sheet of a join (a taxon column or taxon headers, not a profile sheet) and have none confirmed yet: the person may declare a join for them with no proposal (declare-first) */
+  resultsSheets: number[];
   /** `results` = the REQUEST index of the results sheet */
   conflicts: (ConflictGroup & { results: number })[];
   /** for each output sheet, the index of the request sheet it came from */
@@ -1147,9 +1176,10 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
   const proposed = (): SampleJoinProposal[] =>
     // a results sheet whose join was confirmed gets no proposal for another sheet; a declined pair is skipped for that pair only
     proposeSampleJoins(sheets, [...valid, ...declined]).filter((p) => !usedAsResults.has(p.results));
+  const openResultsSheets = (): number[] => sheets.flatMap((s, i) => (s.profile === undefined && hasTaxon(s) && !usedAsResults.has(i) ? [i] : []));
   if (valid.length === 0) {
     const proposals = proposed();
-    return { sheets: sheets as ConvertSheetInput[], findings: proposalFindings(proposals), proposals, conflicts: [], origin: sheets.map((_, i) => i) };
+    return { sheets: sheets as ConvertSheetInput[], findings: proposalFindings(proposals), proposals, resultsSheets: openResultsSheets(), conflicts: [], origin: sheets.map((_, i) => i) };
   }
   // decision 6: one description for several results sheets writes each sample once
   const keysOf = new Map(valid.map((j) => [j, resultsKeys(sheets[j.results], j.keys)] as const));
@@ -1182,7 +1212,7 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
     origin.push(i);
   });
   const proposals = proposed();
-  return { sheets: out, findings: proposalFindings(proposals), proposals, conflicts, origin };
+  return { sheets: out, findings: proposalFindings(proposals), proposals, resultsSheets: openResultsSheets(), conflicts, origin };
 }
 
 /**

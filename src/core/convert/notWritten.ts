@@ -126,7 +126,7 @@ export interface RowDecision {
 }
 
 /**
- * The key of a (sheet, reason) pair that is left out: the position of the input and the reason. A joined input has two ledgers (results and description) that share one input index, and a reason
+ * The key of a (sheet, reason) pair that is left out: the position of the input among the sheets converted (after a join, among the merged sheets, not in the request) and the reason. A joined input has two ledgers (results and description) that share one input index, and a reason
  * the person answered for one of them must not show as left out on the other, so the description ledger's keys carry its own word.
  */
 export const leftOutKey = (l: Pick<SheetLedger, 'inputIndex' | 'kind'>, reason: string): string => `${l.inputIndex}\u0000${l.kind === 'description' ? 'description\u0000' : ''}${reason}`;

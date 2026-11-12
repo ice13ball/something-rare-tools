@@ -1901,7 +1901,9 @@ proposes, the person confirms, and an input without a confirmed join converts ex
 
 - **Proposal** (`proposeSampleJoins`). For each results sheet (a taxon column or taxon headers, not a profile sheet) the sheet that describes its samples best, when it has at least half of the results
   sheet's samples, and the key: columns the person already sees in the role table (sample code, station, cruise, or the parts of a picked sample key, measured together as one key) and equal headers. No
-  role is guessed from values. A results sheet gets one proposal; one description sheet may serve several results sheets; a pair the person declined (`sampleJoinNo`) is skipped for that pair only, and
+  role is guessed from values. The keys are ranked on the values the merge joins by (the converter's own reading of each key cell in its own sheet, so a serial date and the same date as text are one key), while /check keeps
+  ranking raw cell text. A results sheet that gets no proposal (a sample column without a role or an equal header, too little overlap) is still offered "The samples of … are described in another sheet…": the same Change form, on the
+  person's declaration, nothing guessed (`ConvertView.sampleJoin.resultsSheets`). A results sheet gets one proposal; one description sheet may serve several results sheets; a pair the person declined (`sampleJoinNo`) is skipped for that pair only, and
   a results sheet with a confirmed join gets no further proposal. The two sheets may be in two files: a sheet is told by file and sheet name.
 - **Confirmation** (`ConvertRequestBody.sampleJoin`, a list). Each join names the two sheets, the key columns of each, the person's answers to the conflicts below, and `resultsOnly`. The worker only maps the
   sheet references to the request's sheets (a join whose sheet the request does not hold is dropped); `joinInputs` is the one validator (an index out of range, a re-roled column, a profile or long
@@ -1927,7 +1929,7 @@ proposes, the person confirms, and an input without a confirmed join converts ex
 - **C3 Nothing changes without a join**: the archive files and every finding of an input without a confirmed join are as before; the only addition is `CONV-JOIN-PROPOSED`. A description sheet in the long
   layout (one row per parameter, read through its pivot) is not joined for now: the converter names it (CONV-JOIN-DESCRIPTION-LONG) and converts both sheets as it does without a join.
 - **Protocol** (`convert.protocol.ts`). `SampleJoinRequest` (`results` and `description` as `{ fileId, sheet }`, `keys`, `conflicts`, `resultsOnly`, `fromFile`) in `ConvertRequestBody.sampleJoin`; the declined
-  pairs in `sampleJoinNo`. `ConvertView.sampleJoin` returns the proposals still open (a long description sheet is shown with `long`) and the groups of differing values with the results sheet each belongs to;
+  pairs in `sampleJoinNo`. `ConvertView.sampleJoin` returns the proposals still open (a long description sheet is shown with `long`), the sheets that can take a declared join (`resultsSheets`) and the groups of differing values with the results sheet each belongs to;
   the entries of a group are capped at 500 and `count` is the true number of samples. `previewKey` finds the results sheet through the merge; a description sheet that was merged away has no preview.
 - **Companion file**: names, hashes and counts, never a data value. `sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>` (the names as a JSON array, so a `:` in a name is safe; the
   hashes are those of `sampleKey`), `sampleJoinConflict=<description|results|mixed>:<count>:<group>:<["rFile","rSheet"]>`, `sampleJoinResultsOnly=<count>:<["rFile","rSheet"]>` and
