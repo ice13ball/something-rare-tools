@@ -434,12 +434,12 @@ describe('CONV-LICENCE-DIFFERS: a licence other than the one of the source needs
 describe('creator lines: how each is written, shown in the form', () => {
   it('lists a person with given name and family name, and an organisation as such', async () => {
     await load([DATA, BAY]);
-    typeInto(T['convert.meta.f.creators'], 'Maria de la Cruz\nde Vries\nInstytut Oceanologii PAN');
+    typeInto(T['convert.meta.f.creators'], 'Maria de la Cruz\nde Vries\nInstytut badawczy');
     const writes = field(T['convert.meta.f.creators']).querySelector('.convert-writes') as HTMLElement;
     expect(writes.textContent).toContain(T['convert.meta.writes.title']);
     expect(writes.textContent).toContain('Maria de la Cruz: person, given name Maria, family name de la Cruz');
     expect(writes.textContent).toContain('de Vries: person, family name de Vries');
-    expect(writes.textContent).toContain('Instytut Oceanologii PAN: organisation');
+    expect(writes.textContent).toContain('Instytut badawczy: organisation');
   });
 });
 

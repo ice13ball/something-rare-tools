@@ -82,7 +82,7 @@ describe('only particles and one word: the whole name is the family name', () =>
 
 describe('organisation lines are written as organisations, never split', () => {
   it.each([
-    'Institute of Marine Research', 'Instytut Oceanologii PAN', 'IO PAN', 'Alfred-Wegener-Institut', 'Institut français de recherche', 'Universität Bremen', 'Uniwersytet Gdański', 'Université de Brest',
+    'Institute of Marine Research', 'Instytut badawczy', 'Instytut morski', 'Alfred-Wegener-Institut', 'Institut français de recherche', 'Universität Bremen', 'Uniwersytet Gdański', 'Université de Brest',
     'Plymouth Marine Laboratory', 'Laboratoire Arago', 'Zentrum für Marine Tropenforschung', 'Centre for Environment', 'Center for Coastal Studies', 'Natural History Museum', 'Environment Agency',
     'Geological Survey of Denmark', 'Royal Society', 'Polish Academy of Sciences', 'Akademia Morska',
   ])('%s', (line) => {
@@ -100,15 +100,15 @@ describe('organisation lines are written as organisations, never split', () => {
 
   it('the EML writes an organizationName for an organisation creator and contact, and a person as before', () => {
     const eml = buildEml(
-      { events: [], occurrences: [], metadata: { ...EMPTY_METADATA, title: 'T', abstract: 'A', creators: 'Anna Example\nExample Marine Laboratory\nInstytut Oceanologii PAN', contactName: 'Plymouth Marine Laboratory', contactEmail: 'm@example.org', licence: 'CC0-1.0' } },
+      { events: [], occurrences: [], metadata: { ...EMPTY_METADATA, title: 'T', abstract: 'A', creators: 'Anna Example\nExample Marine Laboratory\nInstytut badawczy', contactName: 'Plymouth Marine Laboratory', contactEmail: 'm@example.org', licence: 'CC0-1.0' } },
       { generated: '2026-10-25T12:00:00Z' },
     );
     expect(eml).toContain('<givenName>Anna</givenName><surName>Example</surName>');
     expect(eml).toContain('<organizationName>Example Marine Laboratory</organizationName>');
-    expect(eml).toContain('<organizationName>Instytut Oceanologii PAN</organizationName>');
+    expect(eml).toContain('<organizationName>Instytut badawczy</organizationName>');
     expect(eml).not.toContain('<givenName>Example Marine</givenName>');
     expect(eml).toMatch(/<contact>\s*<organizationName>Plymouth Marine Laboratory<\/organizationName>\s*<electronicMailAddress>m@example.org/);
-    expect(eml).toMatch(/<citation[^>]*>Example, Anna; Example Marine Laboratory; Instytut Oceanologii PAN \(2026\)/);
+    expect(eml).toMatch(/<citation[^>]*>Example, Anna; Example Marine Laboratory; Instytut badawczy \(2026\)/);
   });
 
   it('the creators tip states the rule with the words from the code, in four languages', () => {
