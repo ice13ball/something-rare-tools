@@ -73,7 +73,7 @@ export const CHECK_REASONS = {
   'sample-ambiguous': '2 columns could be the sample code: {name}',
   'sample-ambiguous-few': '{count} columns could be the sample code: {name}',
   'sample-ambiguous-many': '{count} columns could be the sample code: {name}',
-  'sample-ambiguous-other': 'another column could be the sample code: {name} (they tie, so none is chosen)',
+  'sample-ambiguous-other': 'other columns could each be the sample code: {name} (they tie, so none is chosen)',
   // a lead or a note joined to the main reason with "; "
   'lead-empty': 'column is empty',
   'note-negative-up': 'negative values: depth is positive up',
