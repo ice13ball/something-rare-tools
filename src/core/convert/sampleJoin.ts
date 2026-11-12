@@ -228,7 +228,7 @@ const isTimeOnly = (sheet: RawSheet, column: number): boolean => sheet.timeForma
 
 /**
  * F2: a description cell in the results file's convention. Only a cell the two files read differently is changed: a text that reads as a number in its own file gets the results file's decimal
- * separator (the digits as written), and a date serial of a 1900/1904 workbook that differs from the results file's becomes the date it means. Anything else is lent verbatim (a time of day, and a text its own file did not read as a number: mergeSampleSheets reports the latter when the results file would read it as one).
+ * separator (the digits as written), and a date serial of a 1900/1904 workbook that differs from the results file's becomes the date it means. Anything else is lent verbatim (a time of day, and a text its own file did not read as a number: mergeSampleSheets lends that one blank and reports it when the results file would read it as one).
  */
 export function lendCell(cell: RawCell, from: { file: ParsedFile; sheet: RawSheet; column: number }, to: ParsedFile): { cell: RawCell; rewritten: boolean } {
   const verbatim = { cell, rewritten: false };
@@ -436,10 +436,13 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       const got = lendCell(original, { file: description.file, sheet: desSheet, column: k }, results.file);
       if (got.rewritten) rewritten.set(`${line}:${rw + k}`, original);
       else if (typeof original === 'string' && description.file.decimalComma !== results.file.decimalComma && parseNumber(original, description.file.decimalComma).status !== 'ok' && parseNumber(original, results.file.decimalComma).status === 'ok') {
-        // its own file did not read this text as a number, the results file would: the person must hear of it (the finding their own file would have given)
+        // its own file did not read this text as a number, the results file would: it would be written as a number here, so it is not lent (below) and the person hears of it (the finding their own file would have given)
         const n = turnsNumeric.get(k) ?? { lines: new Set<number>(), value: original.trim() };
         n.lines.add(descLine);
         turnsNumeric.set(k, n);
+        // the own-file outcome: nothing is written for it. The cell is lent blank and the text stays in `rewritten`, where the not-written list reads it.
+        rewritten.set(`${line}:${rw + k}`, original);
+        return null;
       }
       return got.cell;
     });
@@ -474,7 +477,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       for (const [rc, dc] of s.pairs) {
         const have = cells[rc];
         const offered = lent.cells[dc] ?? null;
-        if (emptyCell(offered)) continue;
+        if (emptyCell(offered) || lentCells[dc] === null) continue; // nothing offered, or not lent (reported above)
         if (emptyCell(have)) {
           cells[rc] = lentCells[dc];
           takenFromDescription.set(`${row.line}:${rc}`, lent.line);

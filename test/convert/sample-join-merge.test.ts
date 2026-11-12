@@ -325,15 +325,17 @@ describe('mergeSampleSheets: the results file conventions (F2)', () => {
     expect(lendCell(42857.5, { ...from, sheet: { ...sheet, fractionShown: [false] } }, csv)).toEqual({ cell: '2021-05-03T12:00', rewritten: true });
   });
 
-  it('a text its own file does not read as a number is lent as it is and reported when the results file would read it as one', () => {
+  it('a text its own file does not read as a number is not lent as a number: blank, kept in the provenance and reported when the results file would read it as one', () => {
     const res = textFile('r.csv', 'Sample;Taxon;Count\nX01;Calanus finmarchicus;4\n'); // decimal point, ';' separated
     const resComma = textFile('rc.csv', 'Sample;Taxon;Count\nX01;Calanus finmarchicus;4,5\n');
     expect(resComma.decimalComma).toBe(true);
     const des = textFile('s.csv', 'Sample,Station,Depth\nX01,ST-1,"1,5"\n'); // a point file with the text 1,5
     expect(des.decimalComma).toBe(false);
     const r = mergeSampleSheets(decl(resultsInput(resComma, resComma.sheets[0].name), descriptionInput(des, des.sheets[0].name), { appendDescriptionOnly: false }));
-    expect(rowAt(r, 2).cells[3 + 2]).toBe('1,5');
-    expect(r.info.rewritten.size).toBe(0);
+    const cell = rowAt(r, 2).cells[3 + 2];
+    expect(cell).toBeNull();
+    expect(parseNumber(cell, resComma.decimalComma).status).not.toBe('ok');
+    expect(r.info.rewritten.get('2:5')).toBe('1,5');
     expect(found(r, 'ROW-NON-NUMERIC')).toEqual([expect.objectContaining({ file: 's.csv', field: 'Depth', lines: [2], value: '1,5' })]);
     // a number the file reads as one is rewritten, not reported
     const ok = mergeSampleSheets(decl(resultsInput(res, res.sheets[0].name), descriptionInput(textFile('s2.csv', 'Sample;Station;Depth\nX01;ST-1;1,5\n'), 's2.csv'), { appendDescriptionOnly: false }));
