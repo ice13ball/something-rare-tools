@@ -64,11 +64,9 @@ export function proposeSampleJoins(sheets: readonly ConvertSheetInput[], skip: r
       if (columns.length > 0) candidates.push({ index: di, side: { sheet: dSheet, columns } });
     });
     if (candidates.length === 0) return;
-    const j = rankJoinKeys({ sheet: resSheet, columns: leftCols }, candidates.map((c) => c.side), { coverage: 'measure', kinds: picked.length > 0 ? 'any' : undefined });
+    const j = rankJoinKeys({ sheet: resSheet, columns: leftCols }, candidates.map((c) => c.side), { coverage: 'measure', ...(picked.length > 0 ? { kinds: 'any' as const, together: picked } : {}) });
     if (j === undefined || j.covered * 2 < j.total) return;
     const keys: JoinKeyPair[] = [{ results: j.leftKey, description: j.rightKey }, ...(j.extraKeys ?? []).map((k) => ({ results: k.leftKey, description: k.rightKey }))];
-    // a picked key identifies a sample by ALL its parts: a part left out (a single unique column of the other sheet won) is no proposal of this key
-    if (picked.some((p) => !keys.some((k) => k.results === p))) return;
     const di = candidates[j.right].index;
     out.push({ results: ri, description: di, keys, covered: j.covered, samples: j.total, unique: j.unique, long: sheetOf(sheets[di])?.pivot !== undefined });
   });

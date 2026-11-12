@@ -254,7 +254,8 @@ const tupleOf = (row: RawRow, cols: readonly number[]): string | undefined => {
  * coverage 'all': a candidate is dropped unless every left value is on the right (/check). 'measure': a candidate stays when at least one is, and the share covered ranks first.
  * kinds: by default both columns must be in KEY_KINDS. 'any': the caller has chosen the left columns (of any kind); a right column qualifies by the same header or the same strong kind.
  */
-export function rankJoinKeys(left: KeySide, rights: readonly KeySide[], opts: { coverage: 'all' | 'measure'; kinds?: ReadonlySet<string> | 'any' }): RankedJoin | undefined {
+export function rankJoinKeys(left: KeySide, rights: readonly KeySide[], opts: { coverage: 'all' | 'measure'; kinds?: ReadonlySet<string> | 'any'; together?: readonly number[] }): RankedJoin | undefined {
+  if (opts.together !== undefined) return rankTogether(left, rights, opts.together, opts.coverage === 'all');
   const consumed = left.consumed ?? new Set<number>();
   const all = opts.coverage === 'all';
   const kinds = opts.kinds ?? KEY_KINDS;
@@ -337,6 +338,60 @@ export function rankJoinKeys(left: KeySide, rights: readonly KeySide[], opts: { 
     covered: coveredTuples,
     total: leftTuples.size,
   };
+}
+
+/**
+ * The key the caller picked: ALL the given left columns together, each paired with the column of the right sheet that has the same header (else the same strong kind). A right sheet that lacks a partner
+ * for any part is no candidate: a part is never dropped because another one is unique alone. Ranked as rankJoinKeys ranks (coverage of the tuples, uniqueness, score, fineness).
+ */
+function rankTogether(left: KeySide, rights: readonly KeySide[], parts: readonly number[], all: boolean): RankedJoin | undefined {
+  const lcols = parts.map((i) => left.columns.find((c) => c.index === i));
+  if (lcols.length === 0 || lcols.some((c) => c === undefined)) return undefined;
+  const leftCols = lcols as KeySide['columns'][number][];
+  const leftTuples = new Set<string>();
+  for (const r of left.sheet.rows) {
+    const t = tupleOf(r, parts);
+    if (t !== undefined) leftTuples.add(t);
+  }
+  if (leftTuples.size === 0) return undefined;
+  let best: RankedJoin | undefined;
+  rights.forEach((coord, ri) => {
+    const pairs: { rightKey: number; score: number }[] = [];
+    for (const lc of leftCols) {
+      const named = coord.columns.find((c) => cleanKey(c.header) === cleanKey(lc.header));
+      const strong = STRONG_KEY_KINDS.has(lc.role.kind) ? coord.columns.find((c) => c.role.kind === lc.role.kind) : undefined;
+      const hit = named ?? strong;
+      if (hit === undefined) return;
+      pairs.push({ rightKey: hit.index, score: (named ? 2 : 0) + (STRONG_KEY_KINDS.has(lc.role.kind) ? 1 : 0) });
+    }
+    const rightCols = pairs.map((q) => q.rightKey);
+    const rightTuples = new Map<string, number>();
+    for (const r of coord.sheet.rows) {
+      const t = tupleOf(r, rightCols);
+      if (t !== undefined) rightTuples.set(t, (rightTuples.get(t) ?? 0) + 1);
+    }
+    let covered = 0;
+    for (const t of leftTuples) if (rightTuples.has(t)) covered++;
+    if (all ? covered < leftTuples.size : covered === 0) return;
+    const cand: RankedJoin = {
+      right: ri,
+      leftKey: parts[0],
+      rightKey: pairs[0].rightKey,
+      score: pairs.reduce((n, q) => n + q.score, 0),
+      unique: [...rightTuples.values()].every((c) => c === 1),
+      fine: rightTuples.size,
+      extraKeys: pairs.slice(1).map((q, i) => ({ leftKey: parts[i + 1], rightKey: q.rightKey })),
+      covered,
+      total: leftTuples.size,
+    };
+    const cmp = (a: RankedJoin, b: RankedJoin): boolean => {
+      const ca = a.covered * b.total;
+      const cb = b.covered * a.total;
+      return ca !== cb ? ca > cb : a.unique !== b.unique ? a.unique : a.score !== b.score ? a.score > b.score : a.fine > b.fine;
+    };
+    if (!best || cmp(cand, best)) best = cand;
+  });
+  return best;
 }
 
 /** Which sheet carries the position of a measurement sheet, and by which key (the ranking is rankJoinKeys, with every left value required on the right). */

@@ -59,13 +59,33 @@ describe('proposeSampleJoins', () => {
     expect(got[0].keys).toEqual([{ results: 0, description: 0 }, { results: 1, description: 1 }]);
   });
 
-  it('a picked Station + Date key never proposes Date alone', () => {
-    // Date is unique on the other sheet and would win alone; the key is Station + Date, so no proposal
-    const file = xlsxFile('b.xlsx', {
-      Counts: [['Station', 'Date', 'Taxon', 'Count'], ['ST-1', '2021-05-03', ...TAX], ['ST-1', '2021-05-04', ...TAX], ['ST-2', '2021-05-05', ...TAX]],
-      Samples: [['Station', 'Date', 'Depth'], ['ST-1', '2021-05-03', 10], ['ST-1', '2021-05-04', 12], ['ST-1', '2021-05-05', 20]],
-    });
-    const got = proposeSampleJoins([resultsInput(file, 'Counts', { sampleKey: { columns: [0, 1] } }), descriptionInput(file, 'Samples')], []);
+  const picked = (counts: (string | number)[][], samples: (string | number)[][]) => {
+    const file = xlsxFile('b.xlsx', { Counts: [['Station', 'Date', 'Taxon', 'Count'], ...counts], Samples: [samples[0], ...samples.slice(1)] });
+    return proposeSampleJoins([resultsInput(file, 'Counts', { sampleKey: { columns: [0, 1] } }), descriptionInput(file, 'Samples')], []);
+  };
+  const BOTH = [{ results: 0, description: 0 }, { results: 1, description: 1 }];
+
+  it('a picked key, one station per day (Date is unique alone): both parts are measured together, 3 of 3', () => {
+    const got = picked(
+      [['ST-1', '2021-05-03', ...TAX], ['ST-2', '2021-05-04', ...TAX], ['ST-3', '2021-05-05', ...TAX]],
+      [['Station', 'Date', 'Depth'], ['ST-1', '2021-05-03', 10], ['ST-2', '2021-05-04', 12], ['ST-3', '2021-05-05', 20]],
+    );
+    expect(got).toEqual([expect.objectContaining({ keys: BOTH, covered: 3, samples: 3, unique: true })]);
+  });
+
+  it('a picked key where Date alone would cover more: still Station + Date, 2 of 3, never Date alone', () => {
+    const got = picked(
+      [['ST-1', '2021-05-03', ...TAX], ['ST-1', '2021-05-04', ...TAX], ['ST-2', '2021-05-05', ...TAX]],
+      [['Station', 'Date', 'Depth'], ['ST-1', '2021-05-03', 10], ['ST-1', '2021-05-04', 12], ['ST-1', '2021-05-05', 20]],
+    );
+    expect(got).toEqual([expect.objectContaining({ keys: BOTH, covered: 2, samples: 3 })]);
+  });
+
+  it('a picked key whose date column the description sheet lacks: no proposal', () => {
+    const got = picked(
+      [['ST-1', '2021-05-03', ...TAX], ['ST-2', '2021-05-04', ...TAX]],
+      [['Station', 'Depth'], ['ST-1', 10], ['ST-2', 20]],
+    );
     expect(got).toEqual([]);
   });
 
