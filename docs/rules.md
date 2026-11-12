@@ -133,6 +133,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-JOIN-DESCRIPTION-LONG | info | B | — | —<a id="CONV-JOIN-DESCRIPTION-LONG"></a> |
 | CONV-JOIN-CONFLICT | error | B | — | —<a id="CONV-JOIN-CONFLICT"></a> |
 | CONV-JOIN-CONFLICT-CHOSEN | info | B | — | —<a id="CONV-JOIN-CONFLICT-CHOSEN"></a> |
+| CONV-JOIN-UNIT-DIFFERS | error | B | — | —<a id="CONV-JOIN-UNIT-DIFFERS"></a> |
 | CONV-JOIN-NO-DESCRIPTION | error | B | — | —<a id="CONV-JOIN-NO-DESCRIPTION"></a> |
 | CONV-JOIN-RESULTS-ONLY | info | B | — | —<a id="CONV-JOIN-RESULTS-ONLY"></a> |
 | CONV-JOIN-DESCRIPTION-ONLY | warning | B | — | —<a id="CONV-JOIN-DESCRIPTION-ONLY"></a> |

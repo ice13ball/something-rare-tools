@@ -251,7 +251,10 @@ describe('conflicts: a depth in a unit the converter does not convert', () => {
     });
     const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [], appendDescriptionOnly: false });
     expect(r.conflicts).toEqual([]);
-    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([expect.objectContaining({ severity: 'error', params: expect.objectContaining({ group: '' }) })]);
+    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([]);
+    expect(found(r, 'CONV-JOIN-UNIT-DIFFERS')).toEqual([
+      expect.objectContaining({ severity: 'error', lines: [2], params: expect.objectContaining({ resultsColumn: 'Depth [m]', resultsUnit: 'm', descriptionColumn: 'Depth [cm]', descriptionUnit: 'cm' }) }),
+    ]);
     expect(rowAt(r, 2).cells[colOf(r, 'Depth [m]')]).toBe(10);
   });
 });
@@ -393,7 +396,10 @@ describe('every other shared role is a quantity (review 1)', () => {
   it('a numeric role in two units blocks instead of becoming two columns of one role', () => {
     const r = build([5], [500], 'Press', 'Press2', { kind: 'pressure', unit: 'dbar' }, { kind: 'pressure', unit: 'bar' });
     expect(r.conflicts).toEqual([]);
-    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([expect.objectContaining({ severity: 'error', params: expect.objectContaining({ group: '' }) })]);
+    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([]);
+    expect(found(r, 'CONV-JOIN-UNIT-DIFFERS')).toEqual([
+      expect.objectContaining({ severity: 'error', params: expect.objectContaining({ resultsColumn: 'Press', resultsUnit: 'dbar', descriptionColumn: 'Press2', descriptionUnit: 'bar' }) }),
+    ]);
   });
 });
 
@@ -470,5 +476,43 @@ describe('a part only one side gives is a fill, not a conflict (review 3)', () =
     const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', 'Depth top [m]'], ['X01', TAX, 1, 10]], Samples: [['Sample', 'Depth'], ['X01', 10]] });
     const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [], appendDescriptionOnly: false });
     expect(group(r, 'depth').count).toBe(1);
+  });
+});
+
+describe('choosing never invents or lists wrongly (re-review)', () => {
+  const run = (resHeader: string, resVal: Cell, desHeader: string, desVal: Cell, conflicts: ConflictAnswer[]): MergeResult => {
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', resHeader], ['X01', TAX, 1, resVal]], Samples: [['Sample', desHeader], ['X01', desVal]] });
+    return mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts, appendDescriptionOnly: false });
+  };
+  const minmax = (r: MergeResult) => {
+    const d = roles(r, ['depth']);
+    const cell = (b: string) => rowAt(r, 2).cells[d.find((c) => (c.role as { bound?: string }).bound === b)!.index];
+    return [cell('min'), cell('max')];
+  };
+
+  it('a single depth against a top: the chosen side is written as it is, no range is made up', () => {
+    const a = run('Depth [m]', 50, 'Depth top [m]', 10, [answer('depth', 'description', 1)]);
+    expect(minmax(a)).toEqual(['10', null]);
+    const b = run('Depth top [m]', 10, 'Depth [m]', 50, [answer('depth', 'results', 1)]);
+    expect(roles(b, ['depth']).map((c) => (c.role as { bound?: string }).bound)).toEqual(['min']);
+    expect(rowAt(b, 2).cells[colOf(b, 'Depth top [m]')]).toBe(10);
+    expect(found(b, 'CONV-JOIN-FILLED')).toEqual([]);
+  });
+
+  it('notChosen lists only the values not written: a kept longitude is not listed', () => {
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', 'Latitude', 'Longitude'], ['X01', TAX, 1, 61.2, 4.2]], Samples: [['Sample', 'Latitude'], ['X01', 61.1]] });
+    const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [answer('position', 'description', 1)], appendDescriptionOnly: false });
+    expect(r.info.notChosen.map((n) => n.column)).toEqual([colOf(r, 'Latitude')]);
+  });
+
+  it('a blank results cell filled from the description under "take results" is not listed as not chosen', () => {
+    const file = xlsxFile('book.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count', 'Date', 'Time'], ['X01', TAX, 1, '2021-05-02', null]],
+      Samples: [['Sample', 'Date', 'Time'], ['X01', '2021-05-03', '10:00']],
+    });
+    const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [answer('date', 'results', 1)], appendDescriptionOnly: false });
+    expect(rowAt(r, 2).cells[colOf(r, 'Date')]).toBe('2021-05-02');
+    // the description Date (column 6) is not written; its Time (column 7) filled the blank results cell and is not listed
+    expect(r.info.notChosen.map((n) => [n.side, n.column])).toEqual([['description', 6]]);
   });
 });
