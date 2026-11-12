@@ -25,7 +25,6 @@ describe('a name written with underscores is asked, never rewritten', () => {
   it.each([
     ['SP_01', 'a code: a part with digits'],
     ['sp_1', 'a code: lower case, digits'],
-    ['Calanus_sp.', 'a part that is not letters only'],
     ['genus_species', 'the first part is not capitalised'],
     ['Station_12', 'digits (the name has a digit, so the doubt is digits)'],
     ['_Calanus', 'an empty first part'],
@@ -36,6 +35,36 @@ describe('a name written with underscores is asked, never rewritten', () => {
   ])('%s is not an underscore name (%s)', (t) => {
     expect(nameDoubt(t)).not.toBe('underscore');
     expect(entry(t).doubt).not.toBe('underscore');
+  });
+
+  it.each(['Calanus_sp.', 'Oithona_spp.', 'Calanus_cf._glacialis', 'Pseudo-nitzschia_seriata', 'Calanus finmarchicus_CV', 'Calanus_finmarchicus(CV)'])(
+    '%s is asked, every word being judged, and keeps its text',
+    (t) => {
+      const e = entry(t);
+      expect(e.doubt).toBe('underscore');
+      expect(e.needsDecision).toBe(true);
+      expect(e.proposed.scientificName).toContain('_');
+      expect(e.proposed.verbatimIdentification).toBe(t);
+    },
+  );
+
+  it.each(['SP_01', 'sp_1', 'genus_species', 'Calanus finmarchicus Smith_Jones', 'Calanus__sp.', 'Calanus_', 'Calanus sp._'])('%s is still not asked', (t) => {
+    expect(entry(t).doubt).not.toBe('underscore');
+  });
+
+  it('the space reading is offered for a name plus a qualifier, not where a stage would be set', () => {
+    expect(underscoreSpaceSplit(entry('Oithona_spp.'))).toMatchObject({ scientificName: 'Oithona', identificationQualifier: 'spp.' });
+    expect(underscoreSpaceSplit(entry('Calanus finmarchicus_CV'))).toBeUndefined();
+    expect(underscoreSpaceSplit(entry('Calanus_finmarchicus(CV)'))).toBeUndefined();
+  });
+
+  it('an earlier doubt keeps its reason when a qualifier is glued on too, and underscore stays last', () => {
+    expect(entry('Calanus_sp. 2').doubt).toBe('digits');
+    expect(entry('Calanus_sp., planktic').doubt).toBe('remark');
+    expect(entry('Calanus_sp./Oithona').doubt).toBe('slash');
+    expect(entry('Calanus_sp. x').doubt).toBe('single-letter');
+    const groups = doubtedGroups(distinctSplits(['Calanus_sp.', 'Metridia longa f', 'Oithona 2']));
+    expect(groups.map((g) => g.reason)).toEqual(['digits', 'single-letter', 'underscore']);
   });
 
   it('a name with another doubt keeps that reason', () => {

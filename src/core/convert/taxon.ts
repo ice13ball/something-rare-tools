@@ -204,18 +204,24 @@ export function nameDoubt(name: string): NameDoubt | undefined {
   // a rank marker (f., var., subsp.) is not a word of the name: "Aglantha digitale f. rosea" is three
   if (words.filter((w) => !/^(f|var|subsp|ssp|forma)\.$/i.test(w)).length > 3) return 'long';
   // LAST, so a name that already has another doubt keeps that reason: "Genus_species" (a space typed as an underscore?) is asked, never rewritten
-  if (underscoreName(words[0] ?? '')) return 'underscore';
+  if (words.some((w, i) => underscoreName(w, i === 0))) return 'underscore';
   return undefined;
 }
 
 /**
- * The first word is two or more parts of letters only, joined by underscores, and the first part is capitalised ("Calanus_finmarchicus", "C_finmarchicus").
- * A code ("SP_01", "sp_1"), a part that is not letters only ("Calanus_sp.") and a lower-case start ("genus_species") are not a name written with underscores.
- * Only the first word counts: an underscore in an author part later in the name is no doubt about the name.
+ * A word of the name is two or more parts joined by underscores, each part letters only: it may end in a dot ("sp.", "cf.") or hold an inner hyphen
+ * ("Pseudo-nitzschia"), and the last part may end in a bracket of letters ("finmarchicus(CV)"). Every word is judged:
+ *   - the first word needs a capitalised first part ("Calanus_finmarchicus", "Calanus_sp.", "Pseudo-nitzschia_seriata");
+ *   - a later word is asked when its first part is lower case and some part is not ("finmarchicus_CV"); a later word that starts with a capital ("Smith_Jones", an author part) is not asked.
+ * A code ("SP_01", "sp_1": digits are caught earlier anyway), an all-lower-case word ("genus_species") and an empty part are not a name written with underscores.
+ * The name is never rewritten; this only decides whether the person is asked.
  */
-const underscoreName = (word: string): boolean => {
+const NAME_PART = /^\p{L}+(?:-\p{L}+)*\.?(?:\(\p{L}+\))?$/u;
+const underscoreName = (word: string, first: boolean): boolean => {
   const parts = word.split('_');
-  return parts.length >= 2 && /^\p{Lu}\p{L}*$/u.test(parts[0]) && parts.every((p) => /^\p{L}+$/u.test(p));
+  if (parts.length < 2 || !parts.every((p) => NAME_PART.test(p))) return false;
+  if (first) return /^\p{Lu}/u.test(parts[0]);
+  return /^\p{Ll}/u.test(parts[0]) && parts.some((p) => /\p{Lu}/u.test(p));
 };
 
 /** Did the split take something out of the name (a qualifier or a stage)? Only those need the user's approval. */
@@ -320,5 +326,7 @@ export function underscoreSpaceSplit(s: SplitEntry): TaxonSplit | undefined {
   if (nameDoubt(spaced.scientificName) !== undefined) return undefined;
   // only a name and, at most, a qualifier: a stage, a sex or anything else the list does not show leaves the name to its own row
   if (spaced.lifeStage !== undefined || spaced.sex !== undefined) return undefined;
+  // a bracket left in the name ("Calanus finmarchicus(CV)") is a stage or a remark the converter did not read: that name stays on its own row
+  if (/[()]/.test(spaced.scientificName)) return undefined;
   return { ...spaced, verbatimIdentification: s.verbatim };
 }
