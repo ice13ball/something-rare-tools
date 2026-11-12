@@ -401,8 +401,10 @@ export function analyseRepeats(args: {
           if (own.every((v) => v !== '') && new Set(own).size === items.length) continue;
         }
         // the row that is written is the first one with a value in a column that tells the rows apart (a size), not the first in file order; only when none has one, the first in the file
+        // (a column the converter writes counts first: a note in an ignored column does not make a size-less row the one that is written)
         const d = differingAny(g);
-        const keep = items.find((r) => d.some((i) => cellText(r, i) !== '')) ?? items[0];
+        const written = d.filter((i) => roles.find((c) => c.index === i)?.role.kind !== 'ignore');
+        const keep = items.find((r) => written.some((i) => cellText(r, i) !== '')) ?? items.find((r) => d.some((i) => cellText(r, i) !== '')) ?? items[0];
         for (const r of items) if (r !== keep) oneOnce.add(r.line);
       }
     }

@@ -168,6 +168,19 @@ describe('a total of 1 on 2 or more rows', () => {
     expect(r.measurements.filter((m) => written.includes(m.source.line) && /body length/.test(m.measurementType)).length).toBe(3);
   });
 
+  it('a note in an ignored column does not make the size-less row the one that is written (a written column counts first)', () => {
+    const noted: Cell[][] = [1, 2, 3].flatMap((h) => [[`H${h}`, '2020-06-01', 49.4 + h / 100, 0.2, 'Pleuronectes platessa', null, 'NA', null, 1, 50, 'damaged'], [`H${h}`, '2020-06-01', 49.4 + h / 100, 0.2, 'Pleuronectes platessa', 10 + h, 'old', 2, 1, 50, '']] as Cell[][]);
+    const rows = [...catchRows(0).map((x) => [...x, ''] as Cell[]), ...noted];
+    const edit = { ...EDIT, Note: { kind: 'ignore' } as ColumnRole };
+    const sheets = [sheetInput(fileOf([...HEADER, 'Note'], rows, 'S', { fileName: 'catch.csv' }), { shape: 'long', quantity: { kind: 'count' }, edit, totalOnce: true, leaveOut: [{ reason: 'one-specimen-total', count: 3 }] })];
+    const r = convert({ sheets });
+    const written = PLAICE(r).map((o) => o.source.line);
+    const notedLines = noted.map((_, i) => 1 + 120 + 1 + i).filter((_, i) => i % 2 === 0);
+    expect(written).toHaveLength(3);
+    for (const l of notedLines) expect(written).not.toContain(l);
+    expect(r.measurements.filter((m) => written.includes(m.source.line) && /body length/.test(m.measurementType)).length).toBe(3);
+  });
+
   it('without the choice "once" the block stands and the total of 1 is not asked about yet', () => {
     const r = convert({ sheets: [mk(ones(catchRows(0)))] });
     expect(ids(r, 'CONV-QUANTITY-REPEATED')).toHaveLength(1);
