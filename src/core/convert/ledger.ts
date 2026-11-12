@@ -59,13 +59,14 @@ export type LedgerReason =
   | 'join-not-chosen'
   | 'join-no-key'
   | 'join-ambiguous'
+  | 'join-no-match'
   | 'join-results-not-written';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
-  'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written',
+  'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match',
 ];
 // (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last ones belong to whole lines, or to a lost cell named beside its line, never to FateLog.cell)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
@@ -1037,6 +1038,8 @@ export function joinLedgers(merged: SheetLedger, info: SampleJoinInfo): { result
       const chain = [...new Set(to.flatMap((m) => (mergedAt.get(m)?.chain ?? [mergedAt.get(m)?.fate]).filter((x): x is LedgerReason => x !== undefined && x !== 'written' && x !== 'unexplained')))];
       return { fate: 'join-results-not-written', ...(chain.length > 0 ? { chain } : {}), lentTo: [{ sheet: info.results.sheet, lines: to }] };
     }
+    // no key matched: nothing was lent or appended, and CONV-JOIN-NO-MATCH blocks until the keys agree
+    if (info.noMatch) return { fate: 'join-no-match' };
     return { fate: 'unexplained' };
   };
   const baseOf = new Map<number, ReturnType<typeof baseFate>>();

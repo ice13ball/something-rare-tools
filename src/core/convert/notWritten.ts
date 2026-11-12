@@ -54,6 +54,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'sheet-not-read': 'covered',
   // two description rows of one key that differ: CONV-JOIN-AMBIGUOUS is the one question, found because the merge's findings are convert's own
   'join-ambiguous': 'covered',
+  // no key of the results sheet is in the description sheet: CONV-JOIN-NO-MATCH is the one question; the description cells are listed while it blocks
+  'join-no-match': 'covered',
   // understood and not written: listed, no block
   'summary-row': 'listed',
   zero: 'listed',
@@ -92,6 +94,7 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'bad-mark': ['CONV-PRESENCE-VALUE'],
   'sheet-not-read': ['CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW'],
   'join-ambiguous': ['CONV-JOIN-AMBIGUOUS'],
+  'join-no-match': ['CONV-JOIN-NO-MATCH'],
 };
 
 /** The rule that blocked on its own for a reason that can be left out, and goes when the user leaves the reason out (the new finding takes over its question). */

@@ -140,6 +140,29 @@ describe('ambiguous description lines (P3)', () => {
   });
 });
 
+describe('a join that matches nothing (CONV-JOIN-NO-MATCH)', () => {
+  const none = () => converted(bookOf([['S02', TAX, 3], ['S011', TAX, 4]], [['SO2', 'ST-1', '2021-05-03', 61.1, 4.2, 10], ['SO11', 'ST-2', '2021-05-04', 61.3, 4.6, 20]]));
+
+  it('keeps the description ledger balanced: every line has the reason join-no-match', () => {
+    const { result } = none();
+    expect(rules(result.findings, 'CONV-JOIN-NO-MATCH')).toHaveLength(1);
+    const samples = named(result.ledger, 'Samples');
+    expect(samples.balanced).toBe(true);
+    expect(samples.rows).toMatchObject({ source: 2, unexplained: 0 });
+    expect(samples.lines.map((l) => [l.line, l.fate])).toEqual([[2, 'join-no-match'], [3, 'join-no-match']]);
+    expect(result.ok).toBe(false);
+  });
+
+  it('lists the lines as needs-decision while the finding stands', () => {
+    const { out, result } = none();
+    const rows = [...notWrittenRows(result.ledger, out.sheets, result.leftOut)].filter((r) => r.kind === 'line');
+    expect(rows.map((r) => [r.sheet, r.line, r.reason, r.status])).toEqual([
+      ['Samples', 2, 'join-no-match', 'needs-decision'],
+      ['Samples', 3, 'join-no-match', 'needs-decision'],
+    ]);
+  });
+});
+
 describe('duplicate identical description rows', () => {
   it('count as one sample and each line says what happened to it', () => {
     const { out, result } = converted(bookOf(COUNTS_ROWS, [...SAMPLES_ROWS, ['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 10]]));

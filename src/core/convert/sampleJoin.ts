@@ -158,6 +158,8 @@ export interface SampleJoinInfo {
   /** description lines with a blank key part, ambiguous lines */
   noKey: readonly number[];
   ambiguous: readonly number[];
+  /** no key of the results sheet is in the description sheet (CONV-JOIN-NO-MATCH): no description line is lent or appended, every one is held back by that finding */
+  noMatch: boolean;
   /** the merge's own findings (P1, P2, P3, P4, P6, conflicts); convert() pushes them before decideRows (F1, Task 6) */
   findings: readonly Finding[];
 }
@@ -1145,6 +1147,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     sameAs,
     noKey,
     ambiguous: ambiguousLines,
+    noMatch,
     findings,
   };
   return { input: { ...results, file, mapping, sampleJoin: info }, info, conflicts, descriptionKeys: new Set(groups.keys()) };
