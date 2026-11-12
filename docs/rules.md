@@ -129,6 +129,16 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-KEY-MIXED-NUMBERS | warning | B | — | —<a id="CONV-KEY-MIXED-NUMBERS"></a> |
 | CONV-KEY-TOO-LONG | error | B | — | —<a id="CONV-KEY-TOO-LONG"></a> |
 | CONV-KEY-PICKED | info | B | — | —<a id="CONV-KEY-PICKED"></a> |
+| CONV-JOIN-PROPOSED | info | B | — | —<a id="CONV-JOIN-PROPOSED"></a> |
+| CONV-JOIN-DESCRIPTION-LONG | info | B | — | —<a id="CONV-JOIN-DESCRIPTION-LONG"></a> |
+| CONV-JOIN-CONFLICT | error | B | — | —<a id="CONV-JOIN-CONFLICT"></a> |
+| CONV-JOIN-CONFLICT-CHOSEN | info | B | — | —<a id="CONV-JOIN-CONFLICT-CHOSEN"></a> |
+| CONV-JOIN-NO-DESCRIPTION | error | B | — | —<a id="CONV-JOIN-NO-DESCRIPTION"></a> |
+| CONV-JOIN-RESULTS-ONLY | info | B | — | —<a id="CONV-JOIN-RESULTS-ONLY"></a> |
+| CONV-JOIN-DESCRIPTION-ONLY | warning | B | — | —<a id="CONV-JOIN-DESCRIPTION-ONLY"></a> |
+| CONV-JOIN-AMBIGUOUS | error | B | — | —<a id="CONV-JOIN-AMBIGUOUS"></a> |
+| CONV-JOIN-KEY-BLANK | error | B | — | —<a id="CONV-JOIN-KEY-BLANK"></a> |
+| CONV-JOIN-FILLED | info | B | — | —<a id="CONV-JOIN-FILLED"></a> |
 | CONV-ID-DUPLICATE | error | B | — | [OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_eventids.R), check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")<br>[EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."<a id="CONV-ID-DUPLICATE"></a> |
 | CONV-TAB-IN-VALUE | error | B | — | [OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)](https://manual.obis.org/common_qc.html), "Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"<a id="CONV-TAB-IN-VALUE"></a> |
 | CONV-TEXT-IN-TAXON-CELL | warning | B | — | —<a id="CONV-TEXT-IN-TAXON-CELL"></a> |

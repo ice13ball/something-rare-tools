@@ -19,7 +19,7 @@ describe('registry conventions', () => {
   it('has unique CONV-* ids, category B, and a severity of the three allowed', () => {
     const ids = CONVERT_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(103);
+    expect(ids.length).toBe(113);
     for (const r of CONVERT_RULES) {
       expect(r.id).toMatch(/^CONV-[A-Z]+(-[A-Z0-9]+)*$/);
       expect(r.category).toBe('B');
@@ -32,6 +32,10 @@ describe('registry conventions', () => {
     for (const id of ['CONV-SPLIT-UNDECIDED', 'CONV-QUANTITY-UNDECLARED', 'CONV-COUNT-NOT-INTEGER', 'CONV-NEGATIVE-QUANTITY', 'CONV-SAMPLE-CODE-MISSING', 'CONV-KEY-TOO-LONG', 'CONV-ID-DUPLICATE', 'CONV-TAB-IN-VALUE']) expect(sev(id), id).toBe('error');
     for (const id of ['CONV-TEXT-IN-TAXON-CELL', 'CONV-TAXON-SAME-EVENT', 'CONV-NERC-UNKNOWN', 'CONV-NERC-UNIT-MISMATCH', 'CONV-UNIT-NO-P06', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-NAMEID-MISSING', 'CONV-DEVICE-MISSING', 'CONV-LICENCE-DIFFERS', 'CONV-KEY-PART-BLANK', 'CONV-KEY-MIXED-NUMBERS', 'CONV-ROLE-UNCONFIRMED']) expect(sev(id), id).toBe('warning');
     expect(sev('CONV-KEY-PICKED')).toBe('info');
+    expect(sev('CONV-JOIN-CONFLICT')).toBe('error');
+    expect(sev('CONV-JOIN-DESCRIPTION-ONLY')).toBe('warning');
+    expect(sev('CONV-JOIN-PROPOSED')).toBe('info');
+    expect(sev('CONV-JOIN-DESCRIPTION-LONG')).toBe('info');
     expect(sev('CONV-MESH-INVALID')).toBe('error');
     expect(sev('CONV-ZERO-SKIPPED')).toBe('info');
     for (const id of ['CONV-EML-MISSING', 'CONV-LICENCE-UNSET', 'CONV-BASIS-UNSET', 'CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY']) expect(sev(id), id).toBe('error');
@@ -79,6 +83,34 @@ describe('registry conventions', () => {
     // the policy lists the rules of later stages (WoRMS, profiles) before they exist; every other id must be registered
     for (const id of used) if (!LATER_STAGE_RULES.includes(id)) expect(isConvertRuleId(id), id).toBe(true);
     for (const r of CONVERT_RULES) expect(used.has(r.id), `${r.id} is never raised`).toBe(true);
+  });
+});
+
+describe('the CONV-JOIN texts', () => {
+  const plain = (id: string, params: Record<string, string | number>, lang: 'pl' | 'en') => renderConvertPlain(makeConvertFinding(id, { sheet: 'S', lines: [3], params }), lang);
+  it('CONV-JOIN-NO-DESCRIPTION names the samples and takes the Polish singular, few and many forms', () => {
+    const one = plain('CONV-JOIN-NO-DESCRIPTION', { count: 1, samples: 'X04', description: 'Samples' }, 'pl');
+    const two = plain('CONV-JOIN-NO-DESCRIPTION', { count: 2, samples: 'X03, X04', description: 'Samples' }, 'pl');
+    const five = plain('CONV-JOIN-NO-DESCRIPTION', { count: 5, samples: 'X01, X02, X03, X04, X05', description: 'Samples' }, 'pl');
+    expect(one).toContain('X04');
+    expect(one).toContain('1 próbka nie ma');
+    expect(two).toContain('2 próbki nie mają');
+    expect(five).toContain('5 próbek nie ma');
+    expect(new Set([one, two, five].map((t) => t.replace(/X\d\d(, X\d\d)*/, '')))).toHaveProperty('size', 3);
+  });
+  it('CONV-JOIN-KEY-BLANK says it of the description rows on the description side', () => {
+    const results = plain('CONV-JOIN-KEY-BLANK', { count: 2, columns: 'Code', side: 'results' }, 'en');
+    const description = plain('CONV-JOIN-KEY-BLANK', { count: 2, columns: 'Code', side: 'description' }, 'en');
+    expect(description).not.toBe(results);
+    expect(description).toContain('cannot be given to any sample');
+    expect(results).not.toContain('cannot be given to any sample');
+  });
+  it('CONV-JOIN-RESULTS-ONLY adds the companion-file sentence only when fromFile is set', () => {
+    const own = plain('CONV-JOIN-RESULTS-ONLY', { count: 1, samples: 'X04' }, 'en');
+    const companion = plain('CONV-JOIN-RESULTS-ONLY', { count: 1, samples: 'X04', fromFile: 'yes' }, 'en');
+    expect(companion).not.toBe(own);
+    expect(companion).toContain('companion file');
+    expect(own).not.toContain('companion file');
   });
 });
 

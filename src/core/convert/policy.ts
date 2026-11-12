@@ -77,6 +77,12 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-SEAFLOOR-VALUE',
   // a row the converter could not place (a value with no parameter, a number with no taxon ...): blocks until someone decides to leave it out and list it, or corrects the file
   'CONV-ROW-NOT-UNDERSTOOD',
+  // the sample-sheet join: a value that differs between the two sheets and is not decided, a sample with no description row, a key with several different description rows, a blank key part
+  // (shown only, never listed: CONV-JOIN-PROPOSED, CONV-JOIN-DESCRIPTION-LONG, CONV-JOIN-CONFLICT-CHOSEN, CONV-JOIN-RESULTS-ONLY, CONV-JOIN-FILLED)
+  'CONV-JOIN-CONFLICT',
+  'CONV-JOIN-NO-DESCRIPTION',
+  'CONV-JOIN-AMBIGUOUS',
+  'CONV-JOIN-KEY-BLANK',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */
@@ -149,6 +155,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-TAXON-EMPTY-ROW',
   // a few cells of a time column hold a date that will not be written
   'CONV-TIME-SOME-DATES',
+  // samples described in the description sheet with no results: written as sample events with no occurrence
+  'CONV-JOIN-DESCRIPTION-ONLY',
   // a station whose positions differ by a typed digit, exchanged axes or a flipped sign, or that spans more than 1000 km: made on the input rows, so a parent station of the archive is not written with a position and an uncertainty that no one has seen
   // (the plain ROW-STATION-SPREAD, 10 km, is a note: a transect legitimately spans more, and it is only shown)
   'ROW-STATION-MOVED',

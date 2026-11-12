@@ -27,6 +27,16 @@ import type { RuleSpec } from './spec';
  *   CONV-KEY-MIXED-NUMBERS     examples         a key column mixes typed numbers and number-like text; field = column; examples = one of each (warning, to accept)
  *   CONV-KEY-TOO-LONG          count, max, longest, prefix, prefixLength   (prefixBig = the name is a fifth of the longest or more: the advice names it) an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
  *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
+ *   CONV-JOIN-PROPOSED         description, descriptionFile, keys, covered, samples   a sheet seems to describe the samples of this one, linked by keys; covered of samples found; nothing is joined until confirmed (info)
+ *   CONV-JOIN-DESCRIPTION-LONG description, descriptionFile, keys   the same, but the description sheet is in the long layout (one row per parameter): not supported yet, both sheets are converted as without a join (info)
+ *   CONV-JOIN-CONFLICT         what, group, count, total, examples   what differs between the two sheets in total samples, count of them still undecided; blocks until decided for all, per sample or per pair of values (error)
+ *   CONV-JOIN-CONFLICT-CHOSEN  what, count, fromDescription, fromResults   the answer to the above: what was taken from which sheet (info)
+ *   CONV-JOIN-NO-DESCRIPTION   count, samples, description   samples of the results sheet with no row in the description sheet; blocks until converted with only what the results sheet says (error)
+ *   CONV-JOIN-RESULTS-ONLY     count, samples, fromFile   the answer to the above (info, with "Ask again"); fromFile = the answer came from the companion file
+ *   CONV-JOIN-DESCRIPTION-ONLY count, samples, description   samples described with no results: written as sample events with no occurrence (warning, accept)
+ *   CONV-JOIN-AMBIGUOUS        count, keys, description   file, sheet, lines = the DESCRIPTION rows; a key with several different rows (error)
+ *   CONV-JOIN-KEY-BLANK        count, columns, side   side = results: results rows with a blank key part; side = description: file, sheet, lines = the DESCRIPTION rows whose values can be lent to no sample; blocks until the rows are left out or the key is filled (error)
+ *   CONV-JOIN-FILLED           count, column, from   one per column: count blank cells filled from sheet from (info)
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
  *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
@@ -315,6 +325,147 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       },
     ],
     technical: `{file}, {sheet}: the sample code of a row is made of the values of the columns the user picked ({columns}), after the name "{prefix}" (part of every sample ID; the person may change it; the companion file keeps it), joined with "|"; the key made {samples} sample(s) of {rows} row(s). Information only. Asked again by the button (a companion file's choice holds only while the same columns and the same number of rows are there).`,
+  },
+  {
+    id: 'CONV-JOIN-PROPOSED',
+    category: 'B',
+    severity: 'info',
+    params: ['description', 'descriptionFile', 'keys', 'covered', 'samples'],
+    plain: {
+      pl: `Arkusz „{description}” wygląda na opis próbek z tego arkusza; łączy je: {keys}. Znaleziono w nim {covered} z {samples} {+samples:próbki|próbek|próbek}. Nic nie jest łączone, dopóki tego nie potwierdzisz.`,
+      en: `Sheet "{description}" seems to describe the samples of this sheet; they are linked by: {keys}. {covered} of {samples} {+samples:sample was|samples were} found in it. Nothing is joined until you confirm.`,
+      de: `Das Blatt „{description}“ scheint die Proben dieses Blatts zu beschreiben; verbunden über: {keys}. Darin {+covered:wurde|wurden} {covered} von {samples} {+samples:Probe|Proben} gefunden. Nichts wird verbunden, bevor Sie es bestätigen.`,
+      fr: `La feuille « {description} » semble décrire les échantillons de cette feuille ; lien : {keys}. {covered} échantillon(s) sur {samples} y {+covered:a été trouvé|ont été trouvés}. Rien n'est joint avant votre confirmation.`,
+    },
+    technical: `{file}, {sheet}: the sheet "{description}" (file {descriptionFile}) looks like the description of the samples of this sheet, linked by {keys}; {covered} of the {samples} samples of this sheet have a row there. Information only: nothing is joined until the person confirms the link (declare first).`,
+  },
+  {
+    id: 'CONV-JOIN-DESCRIPTION-LONG',
+    category: 'B',
+    severity: 'info',
+    params: ['description', 'descriptionFile', 'keys'],
+    plain: {
+      pl: `Arkusz „{description}” wygląda na opis tych próbek (łączy je: {keys}), ale ma układ długi: jeden wiersz na parametr. Łączenia takiego arkusza jeszcze nie ma; oba arkusze są przekształcane tak, jakby nie było łączenia.`,
+      en: `Sheet "{description}" seems to describe these samples (linked by: {keys}), but it is in the long layout: one row per parameter. Joining such a sheet is not supported yet; both sheets are converted as if there were no join.`,
+      de: `Das Blatt „{description}“ scheint diese Proben zu beschreiben (verbunden über: {keys}), hat aber das lange Layout: eine Zeile je Parameter. Ein solches Blatt zu verbinden wird noch nicht unterstützt; beide Blätter werden wie ohne Verbindung umgewandelt.`,
+      fr: `La feuille « {description} » semble décrire ces échantillons (lien : {keys}), mais elle est en format long : une ligne par paramètre. Joindre une telle feuille n'est pas encore possible ; les deux feuilles sont converties comme sans jointure.`,
+    },
+    technical: `{file}, {sheet}: the sheet "{description}" (file {descriptionFile}) looks like the description of the samples of this sheet, linked by {keys}, but it is in the long layout (one row per parameter). Joining a long description sheet is not supported yet: both sheets are converted exactly as without a join. Information only.`,
+  },
+  {
+    id: 'CONV-JOIN-CONFLICT',
+    category: 'B',
+    severity: 'error',
+    params: ['what', 'group', 'count', 'total', 'examples'],
+    plain: {
+      pl: `{what} ({group}) różni się między dwoma arkuszami w {total} {+total:próbce|próbkach|próbkach}, np. {examples}. Do rozstrzygnięcia zostało: {count}. Wybierz wartość dla wszystkich naraz, dla każdej próbki osobno albo dla każdej pary wartości.`,
+      en: `{what} ({group}) differs between the two sheets in {total} {+total:sample|samples}, e.g. {examples}. Still to decide: {count}. Choose a value for all of them at once, for each sample, or for each pair of values.`,
+      de: `{what} ({group}) unterscheidet sich zwischen den beiden Blättern in {total} {+total:Probe|Proben}, z. B. {examples}. Noch zu entscheiden: {count}. Wählen Sie einen Wert für alle zugleich, für jede Probe einzeln oder für jedes Wertepaar.`,
+      fr: `{what} ({group}) diffère entre les deux feuilles pour {total} {+total:échantillon|échantillons}, p. ex. {examples}. Reste à décider : {count}. Choisissez une valeur pour tous à la fois, pour chaque échantillon, ou pour chaque paire de valeurs.`,
+    },
+    technical: `{file}, {sheet}: {what} (group {group}) holds a different value in the results sheet and in the description sheet for {total} sample(s), e.g. {examples}; {count} of them are not decided yet. Nothing is chosen for the person: the export is blocked until each is decided for all, per sample or per pair of values.`,
+  },
+  {
+    id: 'CONV-JOIN-CONFLICT-CHOSEN',
+    category: 'B',
+    severity: 'info',
+    params: ['what', 'count', 'fromDescription', 'fromResults'],
+    plain: {
+      pl: `Zgodnie z Twoim wyborem {what} różniło się w {count} {+count:próbce|próbkach|próbkach}; wzięto wartość z arkusza opisu dla {fromDescription}, a z arkusza wyników dla {fromResults}.`,
+      en: `As you chose, {what} differed in {count} {+count:sample|samples}; the value of the description sheet was taken for {fromDescription}, and that of the results sheet for {fromResults}.`,
+      de: `Wie gewählt, unterschied sich {what} in {count} {+count:Probe|Proben}; für {fromDescription} wurde der Wert aus dem Beschreibungsblatt genommen, für {fromResults} der aus dem Ergebnisblatt.`,
+      fr: `Comme choisi, {what} différait pour {count} {+count:échantillon|échantillons} ; la valeur de la feuille de description a été prise pour {fromDescription}, celle de la feuille de résultats pour {fromResults}.`,
+    },
+    technical: `{file}, {sheet}: {what} differed between the two sheets in {count} sample(s); the person chose the value of the description sheet for {fromDescription} and the value of the results sheet for {fromResults}. Information only.`,
+  },
+  {
+    id: 'CONV-JOIN-NO-DESCRIPTION',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'samples', 'description'],
+    plain: {
+      pl: `{count} {+count:próbka nie ma|próbki nie mają|próbek nie ma} wiersza w arkuszu „{description}”: {samples}. Przekształć {+count:ją|je|je} tylko z tym, co mówi arkusz wyników, albo dopisz {+count:wiersz|wiersze|wierszy} w arkuszu opisu.`,
+      en: `{count} {+count:sample has|samples have} no row in sheet "{description}": {samples}. Convert {+count:it|them} with only what the results sheet says, or add {+count:the row|the rows} to the description sheet.`,
+      de: `{count} {+count:Probe hat|Proben haben} keine Zeile im Blatt „{description}“: {samples}. Wandeln Sie {+count:sie|sie} nur mit den Angaben des Ergebnisblatts um oder ergänzen Sie {+count:die Zeile|die Zeilen} im Beschreibungsblatt.`,
+      fr: `{count} {+count:échantillon n'a|échantillons n'ont} aucune ligne dans la feuille « {description} » : {samples}. Convertissez-{+count:le|les} avec ce que dit seule la feuille de résultats, ou ajoutez {+count:la ligne|les lignes} à la feuille de description.`,
+    },
+    technical: `{file}, {sheet}: {count} sample(s) of the results sheet have no row in the description sheet "{description}": {samples}. Blocks until the person converts them with only what the results sheet says (CONV-JOIN-RESULTS-ONLY) or completes the description sheet.`,
+  },
+  {
+    id: 'CONV-JOIN-RESULTS-ONLY',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'samples'],
+    plain: {
+      pl: `Zgodnie z Twoim wyborem {count} {+count:próbka bez opisu jest przekształcana|próbki bez opisu są przekształcane|próbek bez opisu jest przekształcanych} tylko z tym, co mówi arkusz wyników: {samples}. „Zapytaj ponownie” cofa wybór.`,
+      en: `As you chose, {count} {+count:sample without a description is|samples without a description are} converted with only what the results sheet says: {samples}. "Ask again" takes the choice back.`,
+      de: `Wie gewählt, {+count:wird|werden} {count} {+count:Probe|Proben} ohne Beschreibung nur mit den Angaben des Ergebnisblatts umgewandelt: {samples}. „Erneut fragen“ nimmt die Wahl zurück.`,
+      fr: `Comme choisi, {count} {+count:échantillon sans description est converti|échantillons sans description sont convertis} avec ce que dit seule la feuille de résultats : {samples}. « Demander à nouveau » annule le choix.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta odpowiedź pochodzi z pliku towarzyszącego; obowiązuje, bo tyle samo próbek nie ma wiersza w arkuszu opisu.`,
+          en: `This answer was read from the companion file; it holds because the same number of samples have no row in the description sheet.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Proben keine Zeile im Beschreibungsblatt haben.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre d'échantillons n'ont pas de ligne dans la feuille de description.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the person chose to convert {count} sample(s) that have no row in the description sheet with only what the results sheet says: {samples}. Nothing is invented for them. Information only; asked again by the button (an answer from the companion file holds only while the same number of samples lack a description).`,
+  },
+  {
+    id: 'CONV-JOIN-DESCRIPTION-ONLY',
+    category: 'B',
+    severity: 'warning',
+    params: ['count', 'samples', 'description'],
+    plain: {
+      pl: `{count} {+count:próbka jest opisana|próbki są opisane|próbek jest opisanych} w arkuszu „{description}”, ale nie ma dla {+count:niej|nich|nich} wyników: {samples}. {+count:Zostanie zapisana|Zostaną zapisane|Zostanie zapisanych} jako zdarzenie próbkowania bez występowania.`,
+      en: `{count} {+count:sample is|samples are} described in sheet "{description}" but {+count:has|have} no results: {samples}. {+count:It is|They are} written as a sampling event with no occurrence.`,
+      de: `{count} {+count:Probe ist|Proben sind} im Blatt „{description}“ beschrieben, {+count:hat|haben} aber keine Ergebnisse: {samples}. {+count:Sie wird|Sie werden} als Probenereignis ohne Nachweis geschrieben.`,
+      fr: `{count} {+count:échantillon est décrit|échantillons sont décrits} dans la feuille « {description} » mais {+count:n'a|n'ont} aucun résultat : {samples}. {+count:Il est écrit|Ils sont écrits} comme événement d'échantillonnage sans occurrence.`,
+    },
+    technical: `{file}, {sheet}: {count} sample(s) have a row in the description sheet "{description}" and none in the results sheet: {samples}. They are written as sample events with no occurrence; the person accepts this once.`,
+  },
+  {
+    id: 'CONV-JOIN-AMBIGUOUS',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'keys', 'description'],
+    plain: {
+      pl: `W arkuszu opisu „{description}” {count} {+count:klucz występuje|klucze występują|kluczy występuje} w kilku wierszach o różnych wartościach ({+lineCount:wiersz|wiersze|wierszy} {lines}): {keys}. Zostaw jeden wiersz na próbkę albo wyrównaj ich wartości.`,
+      en: `In description sheet "{description}", {count} {+count:key occurs|keys occur} on several rows with different values ({+lineCount:line|lines} {lines}): {keys}. Keep one row per sample, or make their values agree.`,
+      de: `Im Beschreibungsblatt „{description}“ {+count:kommt|kommen} {count} {+count:Schlüssel|Schlüssel} in mehreren Zeilen mit verschiedenen Werten vor ({+lineCount:Zeile|Zeilen} {lines}): {keys}. Lassen Sie eine Zeile je Probe oder gleichen Sie die Werte an.`,
+      fr: `Dans la feuille de description « {description} », {count} {+count:clé figure|clés figurent} sur plusieurs lignes aux valeurs différentes ({+lineCount:ligne|lignes} {lines}) : {keys}. Gardez une ligne par échantillon, ou accordez leurs valeurs.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} key(s) of the description sheet "{description}" are on several rows that differ in their values: {keys}. The lines are those of the description sheet. Nothing is chosen between the rows: the export is blocked.`,
+  },
+  {
+    id: 'CONV-JOIN-KEY-BLANK',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'columns', 'side'],
+    plain: {
+      pl: `W arkuszu wyników ({+lineCount:wiersz|wiersze|wierszy} {lines}, razem: {count}) część klucza ({columns}) jest pusta, więc nie da się znaleźć opisu tych próbek. Uzupełnij klucz w pliku albo pomiń te wiersze i wypisz je.`,
+      en: `In the results sheet ({+lineCount:line|lines} {lines}, {count} in all) a part of the key ({columns}) is blank, so no description can be found for those samples. Fill in the key in the file, or leave these rows out and list them.`,
+      de: `Im Ergebnisblatt ({+lineCount:Zeile|Zeilen} {lines}, insgesamt {count}) ist ein Teil des Schlüssels ({columns}) leer, daher findet sich keine Beschreibung für diese Proben. Ergänzen Sie den Schlüssel in der Datei oder lassen Sie diese Zeilen aus und listen Sie sie auf.`,
+      fr: `Dans la feuille de résultats ({+lineCount:ligne|lignes} {lines}, {count} au total) une partie de la clé ({columns}) est vide : aucune description n'est trouvée pour ces échantillons. Renseignez la clé dans le fichier, ou écartez ces lignes et listez-les.`,
+    },
+    technical: `{file}, {sheet}:{lines} ({side} sheet): {count} row(s) have a blank part in the join key (columns: {columns}), so no row of the other sheet can be found for them. Blocks until the key is filled or the person leaves these rows out and lists them.`,
+  },
+  {
+    id: 'CONV-JOIN-FILLED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'column', 'from'],
+    plain: {
+      pl: `{count} {+count:pusta komórka w kolumnie „{column}” została uzupełniona|puste komórki w kolumnie „{column}” zostały uzupełnione|pustych komórek w kolumnie „{column}” zostało uzupełnionych} z arkusza „{from}”.`,
+      en: `{count} blank {+count:cell|cells} in column "{column}" {+count:was|were} filled from sheet "{from}".`,
+      de: `{count} {+count:leere Zelle|leere Zellen} in der Spalte „{column}“ {+count:wurde|wurden} aus dem Blatt „{from}“ ergänzt.`,
+      fr: `{count} {+count:cellule vide|cellules vides} de la colonne « {column} » {+count:a été remplie|ont été remplies} à partir de la feuille « {from} ».`,
+    },
+    technical: `{file}, {sheet}: {count} blank cell(s) of column "{column}" were filled with the value of the same sample in the sheet "{from}". Only blank cells are filled. Information only.`,
   },
   {
     id: 'CONV-ID-DUPLICATE',
@@ -2032,6 +2183,15 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}: a long sheet ("{parameterColumn}", "{valueColumn}") has {count} distinct (parameter, unit) pairs; the converter makes at most {max} columns of them. Nothing is written from this sheet; the export is blocked.`,
   },
+  'CONV-JOIN-KEY-BLANK:description': {
+    plain: {
+      pl: `W arkuszu opisu „{sheet}” ({+lineCount:wiersz|wiersze|wierszy} {lines}, razem: {count}) część klucza ({columns}) jest pusta, więc wartości z tych wierszy nie da się przypisać żadnej próbce. Uzupełnij klucz w pliku albo pomiń te wiersze i wypisz je.`,
+      en: `In the description sheet "{sheet}" ({+lineCount:line|lines} {lines}, {count} in all) a part of the key ({columns}) is blank, so the values of those rows cannot be given to any sample. Fill in the key in the file, or leave these rows out and list them.`,
+      de: `Im Beschreibungsblatt „{sheet}“ ({+lineCount:Zeile|Zeilen} {lines}, insgesamt {count}) ist ein Teil des Schlüssels ({columns}) leer, daher können die Werte dieser Zeilen keiner Probe zugeordnet werden. Ergänzen Sie den Schlüssel in der Datei oder lassen Sie diese Zeilen aus und listen Sie sie auf.`,
+      fr: `Dans la feuille de description « {sheet} » ({+lineCount:ligne|lignes} {lines}, {count} au total) une partie de la clé ({columns}) est vide : les valeurs de ces lignes ne peuvent être données à aucun échantillon. Renseignez la clé dans le fichier, ou écartez ces lignes et listez-les.`,
+    },
+    technical: `{file}, {sheet}:{lines} ({side} sheet): {count} row(s) of the description sheet have a blank part in the join key (columns: {columns}), so their values can be lent to no sample. Blocks until the key is filled or the person leaves these rows out and lists them.`,
+  },
   'CONV-ID-DUPLICATE:other': {
     plain: {
       pl: `Identyfikator poziomu „{value}” {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest też identyfikatorem innego zdarzenia (utworzony z: {used}). Identyfikatory muszą być unikalne: zmień kod wierszy profilu albo kody próbek.`,
@@ -2064,6 +2224,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-SAMPLE-CODE-MISSING' && f.params.profile === 'yes') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level') return PROFILE_VARIANTS[f.ruleId];
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];
+  if (f.ruleId === 'CONV-JOIN-KEY-BLANK' && f.params.side === 'description') return PROFILE_VARIANTS['CONV-JOIN-KEY-BLANK:description'];
   if (f.ruleId === 'CONV-ENV-ONLY-SHEET' && f.params.other === 'taxa') return PROFILE_VARIANTS['CONV-ENV-ONLY-SHEET:other-taxa'];
   if (f.ruleId === 'CONV-NO-OCCURRENCES' && f.params.zeros === 'yes') return PROFILE_VARIANTS['CONV-NO-OCCURRENCES:zeros'];
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS' && f.params.tie === 'yes') return PROFILE_VARIANTS['CONV-SEAFLOOR-SIGNS:tie'];
