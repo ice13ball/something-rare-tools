@@ -114,6 +114,9 @@ export function PrivacyPage(): React.ReactElement {
           {t('privacy.atlas.policy')}: <a href={atlasHref(SITE.atlasPrivacyUrl, lang)}>{SITE.atlasPrivacyUrl.replace('https://', '')}</a>
         </p>
       </section>
+      <p className="atlas-link">
+        {t('cite.article')} <a href={'https://doi.org/' + SITE.doiArticle}>{'https://doi.org/' + SITE.doiArticle}</a>
+      </p>
     </Layout>
   );
 }

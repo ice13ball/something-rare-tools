@@ -18,6 +18,8 @@ const TOOLS = [
   ['/convert', 'index.convert', convertImage, 'indexConvert'],
 ] as const;
 
+const doiUrl = (doi: string): string => 'https://doi.org/' + doi;
+
 export function IndexPage(): React.ReactElement {
   const { lang } = useLang();
   return (
@@ -43,6 +45,16 @@ export function IndexPage(): React.ReactElement {
       <p className="atlas-link">
         {t('index.atlas.lead')} <a href={atlasHref(SITE.atlasUrl, lang)}>{t('nav.atlas')}</a>
       </p>
+      <section>
+        <h2>{t('cite.h')}</h2>
+        <p>
+          {t('cite.article')} <a href={doiUrl(SITE.doiArticle)}>{doiUrl(SITE.doiArticle)}</a>
+        </p>
+        <p>
+          {t('cite.code')} <a href={doiUrl(SITE.doiCode100)}>{doiUrl(SITE.doiCode100)}</a>. {t('cite.all')}{' '}
+          <a href={doiUrl(SITE.doiCodeAll)}>{doiUrl(SITE.doiCodeAll)}</a>.
+        </p>
+      </section>
     </Layout>
   );
 }

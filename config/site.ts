@@ -15,6 +15,10 @@ export const SITE = {
   /** The AGPL section 7(b) attribution notice (LICENSE-ADDITIONAL-TERMS.md), word for word in every language, and where it links. */
   attribution: 'Based on Abyssal Claims — © 2026 Michal Mazurowski',
   attributionUrl: 'https://doi.org/10.5281/zenodo.19745884',
+  /** Zenodo DOIs published 12.11.2026: the article (concept), the source code record of version 1.0.0, and the source code concept (all versions). */
+  doiArticle: '10.5281/zenodo.24159768',
+  doiCode100: '10.5281/zenodo.24159771',
+  doiCodeAll: '10.5281/zenodo.24159770',
   /** Same public address as the atlas's privacy text; also in the proxy's User-Agent. */
   contactEmail: 'm.mazurowski@ai-wall.com',
   origin: 'https://tools.something-rare.com',
