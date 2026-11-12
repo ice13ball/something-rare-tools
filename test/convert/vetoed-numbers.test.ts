@@ -44,7 +44,7 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
     expect(year).toMatchObject({ severity: 'info', params: { count: 1, columns: 'Year' } });
     expect(num).toMatchObject({ severity: 'warning', params: { count: 1, columns: 'SampleNo' } });
     expect(renderConvertPlain(year!, 'en')).toContain('Looks like a year beside the date');
-    expect(renderConvertPlain(num!, 'en')).toContain('Looks like a running number: whole numbers that rise (or fall) from one row or sample to the next');
+    expect(renderConvertPlain(num!, 'en')).toContain('Whole numbers of six or more digits that stay the same within a sample');
     // the click: the page sets the role carried in `roles`; here the same role through the mapping
     const back = JSON.parse(String(num!.params.roles)) as { kind: string; variable: string };
     expect(back).toMatchObject({ kind: 'variable', variable: 'SampleNo' });
@@ -182,5 +182,25 @@ describe('review round 1: the button restores its own column', () => {
     const cols = vetoedColumns(f, f.sheets[0], mappingOf(f));
     expect(cols.map((c) => c.index)).toEqual([6, 7]);
     expect(vetoedParams(cols).indexes).toBe('6\u001f7');
+  });
+});
+
+describe('review round 1: exact Darwin Core terms and digit-written dates', () => {
+  it('an exact Darwin Core term is never vetoed, even if its values would match', () => {
+    const r = roles([...LH, 'Count', 'namePublishedInYear', 'year'], longRows((s, i) => [3 + i, 1750 + s * 3 + (i % 2), 2002 + s]));
+    expect(r.namePublishedInYear.vetoed).toBeUndefined();
+    // `year` is the one term the veto may still reach, and only when it is the year of the date row by row: here it is
+    expect(r.year.vetoed).toBeDefined();
+    const off = roles([...LH, 'Count', 'year'], longRows((s, i) => [3 + i, 1990 + s]));
+    expect(off.year.vetoed).toBeUndefined();
+    const ids = roles([...LH, 'Count', 'organismID'], longRows((s, i) => [3 + i, 100000 + i]));
+    expect(ids.organismID.vetoed).toBeUndefined();
+  });
+  it('date_start / date_mid / date_end written as YYYYMMDD per sample are vetoed with the neutral reason, not called a running number', () => {
+    const r = roles([...LH, 'Count', 'date_start', 'date_mid', 'date_end'], longRows((s) => [3 + s, 20020601 + s, 20020615 + s, 20020630 + s]));
+    for (const h of ['date_start', 'date_mid', 'date_end']) {
+      expect(r[h]).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number' });
+      expect(r[h].reason).not.toMatch(/running number/);
+    }
   });
 });

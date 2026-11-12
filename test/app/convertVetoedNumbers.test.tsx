@@ -42,7 +42,7 @@ describe('Read it as a measurement', () => {
     expect(select('SampleNo').value).toBe('ignore');
     const button = (column: string): Promise<HTMLElement> => screen.findByRole('button', { name: `Read "${column}" as a measurement` });
     await waitFor(() => expect(document.querySelector('[data-rule="CONV-COLUMN-YEAR-IGNORED"]')?.textContent).toContain('Looks like a year beside the date'));
-    expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')?.textContent).toContain('Looks like a running number: whole numbers that rise (or fall) from one row or sample to the next');
+    expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')?.textContent).toContain('Whole numbers of six or more digits that stay the same within a sample');
     expect(document.querySelector('[data-rule="CONV-COLUMN-IGNORED"]')?.textContent).toContain('Year');
     fireEvent.click(await button('SampleNo'));
     await waitFor(() => expect(select('SampleNo').value).toBe('variable'));
