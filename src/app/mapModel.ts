@@ -10,6 +10,25 @@ export const SEVERITIES_ORDER: readonly MapSeverity[] = ['error', 'warning', 'in
 
 export const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
 
+/** How long CARTO may take to load the map before the bundled Natural Earth land takes its place (ms). */
+export const BASEMAP_TIMEOUT_MS = 10000;
+
+/**
+ * Offline base map: the bundled Natural Earth land (public domain, served by this site) over a sea background, with the coastline
+ * drawn on top. `landUrl` must be absolute (maplibre fetches it in a worker). No glyphs or sprites: nothing here draws text.
+ */
+export function fallbackStyle(landUrl: string): Record<string, unknown> {
+  return {
+    version: 8,
+    sources: { land: { type: 'geojson', data: landUrl, attribution: 'Natural Earth' } },
+    layers: [
+      { id: 'sea', type: 'background', paint: { 'background-color': '#0b1a2a' } },
+      { id: 'land', type: 'fill', source: 'land', paint: { 'fill-color': '#2b3440' } },
+      { id: 'coast', type: 'line', source: 'land', paint: { 'line-color': '#6b7f95', 'line-width': 0.8 } },
+    ],
+  };
+}
+
 /** Wraps 0-360 longitudes into -180..180. Exactly ±180 passes through, so a legitimate 180 is never flipped. */
 export function displayLon(lon: number): number {
   if (!Number.isFinite(lon)) return lon;

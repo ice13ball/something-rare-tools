@@ -21,7 +21,9 @@ their users point them at; dropped files are read in the user's browser. Test fi
 are synthetic, except a corpus of short licence statements quoted from public metadata
 catalogues; reference vocabularies (SPDX License List, Zenodo licence vocabulary, EU
 Publications Office licence authority) stay under their publishers' terms; the land/sea
-grid is derived from Natural Earth (public domain).
+grid is derived from Natural Earth (public domain), and the offline base map of the
+preview (src/app/assets/land-fallback.geojson) is Natural Earth 1:50m land, simplified
+(public domain, naturalearthdata.com).
 
 Fonts (self-hosted, public/fonts/), both under the SIL Open Font License, Version 1.1
 (http://scripts.sil.org/OFL; the licence texts with the copyright lines are

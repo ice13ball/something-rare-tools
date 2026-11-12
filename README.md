@@ -67,7 +67,7 @@ page too.
 
 No database, account or API key is needed.
 
-**Offline.** After `npm ci` (and `npm run dev`, or `npm run build` and `npm start`) the data check and the converter work on dropped files without internet, for example on a research vessel. Without a network the map under the report, the WoRMS and NVS lookups, fetching a record by link or DOI, `/licence` and `/collection` do not work.
+**Offline.** After `npm ci` (and `npm run dev`, or `npm run build` and `npm start`) the data check and the converter work on dropped files without internet, for example on a research vessel. Without a network the map under the report is a simplified Natural Earth land map drawn from a file shipped with the site (341 KB, loaded only then), which shows land, coastline and your points but none of the detail of the online base map. The WoRMS and NVS lookups, fetching a record by link or DOI, `/licence` and `/collection` do not work.
 
 ### macOS
 

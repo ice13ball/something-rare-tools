@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { DatasetSummary, Engine, RowDetail } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { InfoTip } from './InfoTip';
-import { BASEMAP_STYLE, SEVERITIES_ORDER, SEVERITY_COLORS, popupContent, prepareMapData, type MapData, type PopupProps } from '../mapModel';
+import landFallbackUrl from '../assets/land-fallback.geojson?url';
+import { BASEMAP_STYLE, BASEMAP_TIMEOUT_MS, SEVERITIES_ORDER, SEVERITY_COLORS, fallbackStyle, popupContent, prepareMapData, type MapData, type PopupProps } from '../mapModel';
 
 /** The few maplibre calls the preview uses, so a test can stand in for the library (WebGL does not exist in jsdom). */
 export interface MapLike {
@@ -60,6 +61,7 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [skipped, setSkipped] = useState(0);
+  const [offline, setOffline] = useState(false);
   const points = datasets.reduce((n, d) => n + d.pointCount, 0);
   const key = datasets.map((d) => d.id).join('|');
 
@@ -69,6 +71,8 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
     let map: MapLike | undefined;
     let popup: PopupLike | undefined;
     setStatus('loading');
+    setOffline(false);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const fail = (): void => {
       if (!cancelled) setStatus('failed');
     };
@@ -76,25 +80,44 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
       const [text, lib] = await Promise.all([engine.export('geojson', key === '' ? [] : key.split('|')), loadLib()]);
       if (cancelled || !container.current) return;
       const data: MapData = prepareMapData(text);
+      const bounds = data.bounds;
       setSkipped(data.skipped);
-      if (data.collection.features.length === 0 || !data.bounds) {
+      if (data.collection.features.length === 0 || !bounds) {
         setStatus('ready');
         return;
       }
+      /**
+       * One map on one base map. CARTO first; when its style or tiles fail (or take longer than BASEMAP_TIMEOUT_MS) before the map has
+       * loaded, that map is thrown away and a second one is built on the bundled Natural Earth land, served by this site.
+       */
+      const create = (style: string | object, isFallback: boolean): void => {
       const m = new lib.Map({
-        container: container.current,
-        style: BASEMAP_STYLE,
+        container: container.current!,
+        style,
         attributionControl: { compact: true },
-        center: [(data.bounds.west + data.bounds.east) / 2, (data.bounds.south + data.bounds.north) / 2],
+        center: [(bounds.west + bounds.east) / 2, (bounds.south + bounds.north) / 2],
         zoom: 2,
       });
       map = m;
       let loaded = false;
-      m.on('error', () => {
-        if (!loaded) fail();
-      });
+      const giveUp = (): void => {
+        if (loaded || cancelled) return;
+        clearTimeout(timer);
+        if (isFallback) return fail();
+        try {
+          m.remove();
+        } catch {
+          /* the map was never fully created */
+        }
+        map = undefined;
+        setOffline(true);
+        create(fallbackStyle(new URL(landFallbackUrl, window.location.href).href), true);
+      };
+      m.on('error', giveUp);
+      if (!isFallback) timer = setTimeout(giveUp, BASEMAP_TIMEOUT_MS);
       m.on('load', () => {
         loaded = true;
+        clearTimeout(timer);
         m.addSource('rows', { type: 'geojson', data: data.collection });
         m.addLayer({
           id: 'rows',
@@ -109,7 +132,7 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
             'circle-stroke-opacity': 0.9,
           },
         });
-        const b = data.bounds!;
+        const b = bounds;
         m.fitBounds(
           [
             [b.west, b.south],
@@ -144,9 +167,12 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
           () => undefined,
         );
       });
+      };
+      create(BASEMAP_STYLE, false);
     })().catch(fail);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       popup?.remove();
       try {
         map?.remove();
@@ -165,6 +191,11 @@ export function MapPreview({ datasets, engine, loadLib = defaultLoad }: MapPrevi
         <>
           <p className="muted">{t('map.intro')}</p>
           {status === 'loading' && <p className="muted">{t('map.loading')}</p>}
+          {offline && status !== 'failed' && (
+            <p className="notice" role="status">
+              {t('map.offline')}
+            </p>
+          )}
           {status === 'failed' && (
             <p className="notice" role="status">
               {t('map.failed')}
