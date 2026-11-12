@@ -82,12 +82,7 @@ describe('stated vocabulary: the names that are added', () => {
   it.each(['SampleID', 'Sample ID', 'sample_id'])('%s: whatever the proposer does with the name, the stated layer follows it and adds no role', (h) => {
     const ids = ['A1', 'A1', 'A2', 'A2', 'B1', 'B1'];
     const { p, i } = probe(h, ids, [['Species', LATIN], ['Count', COUNT], ['Latitude', LAT], ['Longitude', LON], ['Date', DATES]]);
-    if (h === 'SampleID') {
-      // the key of "SampleID" is "sampleid" (a capital is not a space), which no sample-code pattern holds: the proposer reads a text column and ignores it, so there is nothing to mark
-      expect(p.role.kind).toBe('ignore');
-      expect(p.reasonCode).toBe('text-column');
-      expect(i.stated).toBe(false);
-    } else {
+    {
       expect(p.role.kind).toBe('sampleId');
       expect(i).toMatchObject({ stated: true, role: { kind: 'sampleId' } });
     }

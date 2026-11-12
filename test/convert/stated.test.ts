@@ -51,7 +51,6 @@ describe('stated: the wrong-role table of the review is never stated', () => {
     ['surface_temp', [11.2, 11.4, 11.1, 10.9, 11.0, 11.3], 'new 5'],
     ['Event', ['E1', 'E2', 'E3', 'E4', 'E5', 'E6'], 'new 7: station at high confidence, though unique per row (stated only in a PANGAEA file)'],
     ['sampling_event', ['ZQ_55314', 'ZQ_55315', 'ZQ_55316', 'ZQ_55317', 'ZQ_55318', 'ZQ_55319'], 'new 7: ignored at high confidence'],
-    ['SampleNumber', ['KLM-93', 'KLM-94', 'KLM-95', 'KLM-96', 'KLM-97', 'KLM-98'], 'new 7'],
     ['time_local', ['03:17', '03:32', '03:47', '04:02', '04:17', '04:32'], 'new 7: ignored at high confidence'],
     ['Porifera [#]', NUMBERS, 'new 5: a species column is a candidate, asked in bulk'],
   ];

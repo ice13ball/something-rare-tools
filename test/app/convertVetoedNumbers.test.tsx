@@ -22,7 +22,7 @@ afterEach(cleanup);
 
 const TAXA = ['Solea solea', 'Gadus morhua'];
 const CSV = csvOf(
-  ['Sample', 'Year', 'Date', 'SampleNo', 'Station', 'Latitude', 'Longitude', 'Species', 'Count'],
+  ['Sample', 'Year', 'Date', 'LotNo', 'Station', 'Latitude', 'Longitude', 'Species', 'Count'],
   Array.from({ length: 8 }, (_, i) => {
     const s = Math.floor(i / 2);
     return [`s${s + 1}`, 2002 + s, `${2002 + s}-06-0${s + 1}`, 20200101 + s * 101, `ST${s + 1}`, 54.1 + s / 10, 7.2 + s / 10, TAXA[i % 2], 3 + i];
@@ -39,13 +39,13 @@ describe('Read it as a measurement', () => {
     const confirmAll = screen.queryByRole('button', { name: /Confirm all shown/ });
     if (confirmAll !== null) fireEvent.click(confirmAll);
     await waitFor(() => expect(select('Year').value).toBe('ignore'));
-    expect(select('SampleNo').value).toBe('ignore');
+    expect(select('LotNo').value).toBe('ignore');
     const button = (column: string): Promise<HTMLElement> => screen.findByRole('button', { name: `Read "${column}" as a measurement` });
     await waitFor(() => expect(document.querySelector('[data-rule="CONV-COLUMN-YEAR-IGNORED"]')?.textContent).toContain('Looks like a year beside the date'));
     expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')?.textContent).toContain('Whole numbers of six or more digits that rise (or fall) from row to row');
     expect(document.querySelector('[data-rule="CONV-COLUMN-IGNORED"]')?.textContent).toContain('Year');
-    fireEvent.click(await button('SampleNo'));
-    await waitFor(() => expect(select('SampleNo').value).toBe('variable'));
+    fireEvent.click(await button('LotNo'));
+    await waitFor(() => expect(select('LotNo').value).toBe('variable'));
     expect(select('Year').value).toBe('ignore');
     await waitFor(() => expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')).toBeNull());
     fireEvent.click(await button('Year'));

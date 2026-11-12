@@ -103,6 +103,16 @@ describe('identifiers are not measurements', () => {
     expect(roleOf({ 'Sample ID': ID }, 'Sample ID').role.kind).toBe('sampleId');
     expect(roleOf({ 'Cruise ID': ID }, 'Cruise ID').role.kind).toBe('cruise');
   });
+  it('joined-word sample names are the sample code, words that only contain sample are not', () => {
+    for (const h of ['SampleID', 'SampleCode', 'SampleNo', 'SampleName', 'SampleNumber', 'Sample ID', 'sample_id']) {
+      expect(roleOf({ [h]: ID, Latitude: LAT }, h).role.kind, h).toBe('sampleId');
+      const c = proposeConvertColumns(rawSheet([h, 'Latitude'], [101, 102, 103].map((v, i) => [v, LAT[i]])), CTX).find((q) => q.header === h)!;
+      expect(c.role.kind, `convert ${h}`).toBe('sampleId');
+    }
+    for (const h of ['SampleVolume', 'SampleDepth', 'Samples', 'SampleType']) {
+      expect(roleOf({ [h]: ID, Latitude: LAT }, h).role.kind, h).not.toBe('sampleId');
+    }
+  });
   it('real variables that contain such a word stay variables', () => {
     for (const h of ['Number of species', 'Ref temperature', 'Reference temperature', 'Temperature', 'Record temperature', 'Photo period']) {
       const p = roleOf({ [h]: [4.5, 5.5, 6.5] }, h);

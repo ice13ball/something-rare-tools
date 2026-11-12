@@ -294,7 +294,7 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
   if (/^(location( name| id| code| no| number| label)?|locality( name| id| code)?|sampling (location|locality|place)|collection (location|locality|site)|place( name)?)$/.test(key)) {
     return { slot: 'station', tier: 3, kind: 'station', why: why('name-station-place'), guard: 'place-values' };
   }
-  if (/^(sample( id| no| number| name| code| label)?|core( id| name| no| number)?|specimen( id)?|bottle( id| no| number)?|id)$/.test(key)) {
+  if (/^(sample( id| no| number| name| code| label)?|core( id| name| no| number)?|specimen( id)?|bottle( id| no| number)?|sampleid|samplecode|samplename|samplenumber|sampleno|id)$/.test(key)) {
     return { slot: 'sampleId', tier: 1, kind: 'sampleId', why: why('name-sample') };
   }
   return undefined;

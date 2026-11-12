@@ -13,7 +13,7 @@ import { CTX, fileOf, mappingOf } from './helpers';
 import type { Cell } from './helpers';
 import { exportSheet } from './exportHelpers';
 
-const HEADER = ['Sample', 'Year', 'Date', 'SampleNo', 'Station', 'Latitude', 'Longitude', 'Species', 'Count'];
+const HEADER = ['Sample', 'Year', 'Date', 'LotNo', 'Station', 'Latitude', 'Longitude', 'Species', 'Count'];
 const TAXA = ['Abra alba', 'Nucula nitidosa'];
 // 6 samples x 2 taxa
 const ROWS: Cell[][] = Array.from({ length: 12 }, (_, i) => {
@@ -23,11 +23,11 @@ const ROWS: Cell[][] = Array.from({ length: 12 }, (_, i) => {
 const roles = (header: string[], rows: Cell[][]) => Object.fromEntries(proposeConvertColumns(rawSheet(header, rows), CTX).map((p) => [p.header, p]));
 const tablesOf = (e: Awaited<ReturnType<typeof exportSheet>>): string => JSON.stringify(buildTables(e.dataset));
 
-describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () => {
+describe('a Year beside a date and an eight-digit LotNo on a long sheet', () => {
   it('are both ignored with their reason, low confidence, and nothing else is assigned', () => {
     const r = roles(HEADER, ROWS);
     expect(r.Year).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'year-beside-date' });
-    expect(r.SampleNo).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'running-number' });
+    expect(r.LotNo).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'running-number' });
     expect(r.Year.vetoed).toMatchObject({ kind: 'variable' });
     expect(r.Date.role.kind).toBe('date');
     expect(r.Count.role.kind).toBe('quantity');
@@ -35,21 +35,21 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
 
   it('are not in the archive, are named by CONV-COLUMN-IGNORED and by their own finding, and one click gives the measurement back', async () => {
     const e = await exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true });
-    expect(tablesOf(e)).not.toContain('SampleNo');
+    expect(tablesOf(e)).not.toContain('LotNo');
     expect(tablesOf(e)).not.toContain('20200101');
     const ignored = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-IGNORED');
-    expect(String(ignored?.params.columns).split(', ').sort()).toEqual(['SampleNo', 'Year']);
+    expect(String(ignored?.params.columns).split(', ').sort()).toEqual(['LotNo', 'Year']);
     const year = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-YEAR-IGNORED');
     const num = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-NUMBER-IGNORED');
     expect(year).toMatchObject({ severity: 'info', params: { count: 1, columns: 'Year' } });
-    expect(num).toMatchObject({ severity: 'warning', params: { count: 1, columns: 'SampleNo' } });
+    expect(num).toMatchObject({ severity: 'warning', params: { count: 1, columns: 'LotNo' } });
     expect(renderConvertPlain(year!, 'en')).toContain('Looks like a year beside the date');
     expect(renderConvertPlain(num!, 'en')).toContain('Whole numbers of six or more digits that rise (or fall) from row to row');
     // the click: the page sets the role carried in `roles`; here the same role through the mapping
     const back = JSON.parse(String(num!.params.roles)) as { kind: string; variable: string };
-    expect(back).toMatchObject({ kind: 'variable', variable: 'SampleNo' });
-    const again = await exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true, edit: { SampleNo: back as never, Year: JSON.parse(String(year!.params.roles)) } });
-    expect(tablesOf(again)).toContain('SampleNo');
+    expect(back).toMatchObject({ kind: 'variable', variable: 'LotNo' });
+    const again = await exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true, edit: { LotNo: back as never, Year: JSON.parse(String(year!.params.roles)) } });
+    expect(tablesOf(again)).toContain('LotNo');
     expect(again.findings.some((f) => f.ruleId === 'CONV-COLUMN-NUMBER-IGNORED' || f.ruleId === 'CONV-COLUMN-YEAR-IGNORED')).toBe(false);
   });
 
@@ -72,9 +72,9 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
 
   it('a column the person set by hand is not listed again', () => {
     const f = fileOf(HEADER, ROWS);
-    expect(vetoedColumns(f, f.sheets[0], mappingOf(f)).map((c) => c.header)).toEqual(['Year', 'SampleNo']);
+    expect(vetoedColumns(f, f.sheets[0], mappingOf(f)).map((c) => c.header)).toEqual(['Year', 'LotNo']);
     expect(vetoedColumns(f, f.sheets[0], mappingOf(f), [1, 3])).toEqual([]);
-    expect(vetoedColumns(f, f.sheets[0], mappingOf(f, { Year: { kind: 'variable', variable: 'Year' } })).map((c) => c.header)).toEqual(['SampleNo']);
+    expect(vetoedColumns(f, f.sheets[0], mappingOf(f, { Year: { kind: 'variable', variable: 'Year' } })).map((c) => c.header)).toEqual(['LotNo']);
   });
 });
 
@@ -114,12 +114,12 @@ describe('what keeps its role', () => {
   });
 
   it('a wide sheet behaves as before: a Year is ignored by its own rule, an eight-digit column stays a taxon candidate', () => {
-    const header = ['Station', 'Date', 'Year', 'SampleNo', 'Calanus finmarchicus', 'Oithona similis'];
+    const header = ['Station', 'Date', 'Year', 'LotNo', 'Calanus finmarchicus', 'Oithona similis'];
     const rows = Array.from({ length: 6 }, (_, i) => [`S${i}`, `${2002 + i}-06-01`, 2002 + i, 20200101 + i * 101, 4 + i, 2 + i]);
     const r = roles(header, rows);
     expect(r.Year).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'year-values' });
-    expect(r.SampleNo.role).toEqual({ kind: 'taxon', header: true });
-    expect(r.SampleNo.vetoed).toBeUndefined();
+    expect(r.LotNo.role).toEqual({ kind: 'taxon', header: true });
+    expect(r.LotNo.vetoed).toBeUndefined();
   });
 });
 
@@ -233,7 +233,7 @@ describe('review round 2: identifier terms, digit-written dates, both ways of fi
     expect(f.params.dateCount).toBe(1);
     expect(renderConvertPlain(f, 'en')).toContain('If this is a date, give the column the meaning date');
     expect(renderConvertPlain(f, 'fr')).toContain("S'il s'agit d'une date");
-    // repro (d): a real Date column beside the YYYYMMDD SampleNo: no hint
+    // repro (d): a real Date column beside the YYYYMMDD LotNo: no hint
     const d = await exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true });
     const g = d.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
     expect(g.params.dates).toBeUndefined();
@@ -242,5 +242,14 @@ describe('review round 2: identifier terms, digit-written dates, both ways of fi
   it('the French plain texts agree in number', () => {
     const f = { ruleId: 'CONV-COLUMN-NUMBER-IGNORED', severity: 'warning', file: 'a.csv', sheet: 'S', lines: [], params: { count: 2, columns: 'A, B' } } as never;
     expect(renderConvertPlain(f, 'fr')).toContain('Non écrites comme mesure');
+  });
+});
+
+describe('SampleNo is the sample code, so the running-number veto does not meet it (repro d after the SampleID ruling)', () => {
+  it('SampleNo with eight-digit numbers is a sampleId, not a vetoed variable', () => {
+    const r = roles(HEADER.map((h) => (h === 'LotNo' ? 'SampleNo' : h)), ROWS);
+    expect(r.SampleNo.role.kind).toBe('sampleId');
+    expect(r.SampleNo.vetoed).toBeUndefined();
+    expect(r.SampleNo.reasonCode).not.toBe('running-number');
   });
 });
