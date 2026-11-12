@@ -16,7 +16,7 @@ const dc = (creators: Creator[], publisher: string | undefined, ...rights: Right
   parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', creators: creators.map((c) => (typeof c === 'string' ? { name: c } : c)), publisher, rightsList: rights } } }, 'dc');
 const ids = (rec: ReturnType<typeof dc>) => checkLicence([rec], { label: 'x', inaccessible: false }).filter((f: Finding) => f.ruleId.startsWith('LIC-')).map((f) => f.ruleId);
 const WARN = ['LIC-OTHER-RIGHTS-ENTRY'];
-const PEOPLE: Creator[] = ['Baird, Kevin', 'Berg, Jan', 'Krašovec, Nina', 'Cui, Qirui', 'Narr, Marei'];
+const PEOPLE: Creator[] = ['Example, Kevin', 'Voorbeeld, Jan', 'Příkladová, Žaneta', 'Probe, Quirin', 'Muster, Maren'];
 const entry = (t: string, uri: string | undefined = INC) => ({ rights: t, ...(uri ? { rightsUri: uri } : {}) });
 const withLink = (t: string) => [entry(t), entry(t, undefined)];
 
@@ -34,21 +34,21 @@ describe('MEDIUM: "the authors" and name variants', () => {
     }
   });
   it.each([
-    'Kevin T. Baird', 'K. Baird', 'Dr. Jan Berg', 'Prof. Nina Krašovec, PhD', 'Dr. Jan Berg (ORCID: 0000-0002-1825-0097)',
-    'Narr et al.', '© 2026 Narr et al.', 'Narr et al.; Jan Berg', 'Krašovec, N.', 'Berg, J.; Baird, K.', 'Krašovec, N. A.',
+    'Kevin T. Example', 'K. Example', 'Dr. Jan Voorbeeld', 'Prof. Žaneta Příkladová, PhD', 'Dr. Jan Voorbeeld (ORCID: 0000-0002-1825-0097)',
+    'Muster et al.', '© 2026 Muster et al.', 'Muster et al.; Jan Voorbeeld', 'Příkladová, Ž.', 'Voorbeeld, J.; Example, K.', 'Příkladová, Ž. A.',
   ])('name variant "%s" is a creator: clean', (t) => {
     for (const e of withLink(t)) expect(ids(dc(PEOPLE, 'Zenodo', by, e)), JSON.stringify(e)).toEqual([]);
   });
   it.each([
-    'All rights reserved', 'Upstream source retains copyright', '© 2026 Smith J.', 'Kevin Baird Internal', 'Krašovec N. Internal', 'Smith et al.', 'Narr et al. Internal',
-    'Narr et al. and Smith', 'Dr. Smith', 'Kevin Internal Baird Corp', 'Third-party holders (see README)', '© 2026 Baird Ltd.',
+    'All rights reserved', 'Upstream source retains copyright', '© 2026 Smith J.', 'Kevin Example Internal', 'Příkladová Ž. Internal', 'Smith et al.', 'Muster et al. Internal',
+    'Muster et al. and Smith', 'Dr. Smith', 'Kevin Internal Example Corp', 'Third-party holders (see README)', '© 2026 Example Ltd.',
   ])('"%s" stays a warning', (t) => {
     for (const e of withLink(t)) expect(ids(dc(PEOPLE, 'Zenodo', by, e)), JSON.stringify(e)).toEqual(WARN);
   });
 });
 
 describe('LOW 2: the DataCite rightsIdentifier of an entry counts', () => {
-  const holder = (identifier?: string, uri: string | undefined = INC): Rights => ({ rights: 'Krašovec N.', ...(uri ? { rightsUri: uri } : {}), ...(identifier ? { rightsIdentifier: identifier } : {}) });
+  const holder = (identifier?: string, uri: string | undefined = INC): Rights => ({ rights: 'Příkladová Ž.', ...(uri ? { rightsUri: uri } : {}), ...(identifier ? { rightsIdentifier: identifier } : {}) });
   it.each(['other-closed', 'InC-NC', 'InC-EDU', 'proprietary'])('identifier "%s" next to a matching holder: warns', (id) => {
     expect(ids(dc(PEOPLE, 'Zenodo', by, holder(id))), id).toEqual(WARN);
     expect(ids(dc(PEOPLE, 'Zenodo', by, holder(id, undefined))), id).toEqual(WARN);
@@ -59,10 +59,10 @@ describe('LOW 2: the DataCite rightsIdentifier of an entry counts', () => {
 });
 
 describe('LOW 3: an organisation creator matches as a whole name', () => {
-  const ORG: Creator[] = ['Department of Internal Medicine', { name: 'Smith Group', nameType: 'Organizational' }, 'Berg, Jan'];
+  const ORG: Creator[] = ['Department of Internal Medicine', { name: 'Smith Group', nameType: 'Organizational' }, 'Voorbeeld, Jan'];
   it('one word of it is no holder; the whole name is', () => {
     for (const t of ['Internal', 'Medicine', 'Department', 'Smith', 'Department of Internal', 'Internal Medicine']) expect(ids(dc(ORG, 'Zenodo', by, entry(t))), t).toEqual(WARN);
-    for (const t of ['Department of Internal Medicine', '© 2026 Department of Internal Medicine', 'Smith Group', 'Jan Berg']) expect(ids(dc(ORG, 'Zenodo', by, entry(t))), t).toEqual([]);
+    for (const t of ['Department of Internal Medicine', '© 2026 Department of Internal Medicine', 'Smith Group', 'Jan Voorbeeld']) expect(ids(dc(ORG, 'Zenodo', by, entry(t))), t).toEqual([]);
   });
   it('the publisher also matches as a whole name', () => {
     expect(ids(dc([], 'CERN Data Centre', by, entry('CERN')))).toEqual(WARN);
@@ -72,7 +72,7 @@ describe('LOW 3: an organisation creator matches as a whole name', () => {
 
 describe('tightening found while probing', () => {
   it('a symbol in an entry, a lone given name and lone particles are no holder', () => {
-    for (const t of ['Krašovec 🚫💰', 'Krašovec ($)', 'Krašovec +', 'Nina', 'Jan', 'van der', 'Krašovec / Internal']) expect(ids(dc(PEOPLE, 'Zenodo', by, entry(t))), t).toEqual(WARN);
+    for (const t of ['Příkladová 🚫💰', 'Příkladová ($)', 'Příkladová +', 'Žaneta', 'Jan', 'van der', 'Příkladová / Internal']) expect(ids(dc(PEOPLE, 'Zenodo', by, entry(t))), t).toEqual(WARN);
   });
   it('an organisation whose name contains "and" or a comma matches as a whole', () => {
     const ORG: Creator[] = ['Ministry of Agriculture and Forestry', 'Acme, Inc.'];

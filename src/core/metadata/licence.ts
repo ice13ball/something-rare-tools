@@ -906,9 +906,9 @@ const NAME_PARTICLES = new Set(['van', 'von', 'de', 'der', 'den', 'da', 'di', 'd
 
 /**
  * `words` (one name of a holder entry) is the person `c`: every word is a word of the creator, a single letter counting as an initial of one,
- * and one whole word matches ("Krašovec N." is "Krašovec, Nina"); or it is "Given Middle… Surname" with the given name first, the whole
- * surname last and between them only initials and the creator's own other given names ("Kevin Thorsen Baird" is "Baird, Kevin Thorsen", not
- * "Baird, Kevin"). Anything before, after or outside that is nobody ("Krašovec N. Internal", "Kevin Restricted Baird").
+ * and one whole word matches ("Příkladová Ž." is "Příkladová, Žaneta"); or it is "Given Middle… Surname" with the given name first, the whole
+ * surname last and between them only initials and the creator's own other given names ("Kevin Thorsen Example" is "Example, Kevin Thorsen", not
+ * "Example, Kevin"). Anything before, after or outside that is nobody ("Příkladová Ž. Internal", "Kevin Restricted Example").
  */
 function isPerson(words: string[], c: string): boolean {
   const have = partyTokens(c);
@@ -950,7 +950,7 @@ const AUTHOR_WORDS = new Set(
 );
 
 /**
- * The text of a holder entry ("© 2026 Nina Krašovec", "Krašovec, N.; Marsetič, A.", "Dr. Jan Berg (ORCID: …)", "The Authors", "CERN") when EVERY name in it
+ * The text of a holder entry ("© 2026 Žaneta Příkladová", "Příkladová, Ž.; Testovič, Č.", "Dr. Jan Voorbeeld (ORCID: …)", "The Authors", "CERN") when EVERY name in it
  * is a creator or the publisher of the same record; false for anything else (fail-closed: names only, no list of conditions). ©, "(c)", "Copyright" and
  * years are the notice itself; honorifics, an ORCID / handle in brackets and "et al." (only when the other names match) are dropped from names.
  */
@@ -971,7 +971,7 @@ function isHolderOfRecord(text: string, who: RecordParties): boolean {
   if (!etAl && (who.creators?.length ?? 0) > 0 && AUTHOR_WORDS.has(partyTokens(stripped).join(' '))) return true;
   const pieces = stripped
     .split(/[,;&]|(?<![\p{L}\p{N}])(?:and|und|et)(?![\p{L}\p{N}])/giu)
-    // "e" / "y" ("Ana Costa e Jan Berg") only as the lowercase word between two names, never an initial "E." / "Y."
+    // "e" / "y" ("Ana Exemplo e Jan Voorbeeld") only as the lowercase word between two names, never an initial "E." / "Y."
     .flatMap((n) => n.split(/(?<=\p{L}\p{L})\s[ey]\s(?=\p{Lu})/u))
     .map((n) => n.trim())
     .filter(Boolean);
@@ -983,7 +983,7 @@ function isHolderOfRecord(text: string, who: RecordParties): boolean {
     else names.push(piece);
   }
   const clean = names.map((n) => n.replace(HONORIFIC, ' ').trim()).filter((n) => partyTokens(n).length > 0);
-  // A name is no sentence and holds no bracket: "Jan Berg. Reuse only…", "Kevin (internal use only) Baird".
+  // A name is no sentence and holds no bracket: "Jan Voorbeeld. Reuse only…", "Kevin (internal use only) Example".
   if (clean.some((n) => /\p{L}{2,}[.!?]\s+\p{L}/u.test(n) || /[()]/.test(n))) return false;
   // "Surname, Given" arrives as two pieces: two consecutive pieces together may be one person.
   for (let i = 0; i < clean.length; ) {

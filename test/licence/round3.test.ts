@@ -18,14 +18,14 @@ const dc = (attrs: { creators?: string[]; publisher?: string }, ...rights: Right
   parseDataciteJson({ data: { attributes: { doi: '10.5281/zenodo.999999911', creators: (attrs.creators ?? []).map((name) => ({ name })), publisher: attrs.publisher, rightsList: rights } } }, 'dc');
 const lic = (f: Finding[]) => f.filter((x) => x.ruleId.startsWith('LIC-'));
 const ids = (rec: MetadataRecord) => lic(checkLicence([rec], { label: 'x', inaccessible: false })).map((f) => f.ruleId);
-const OWN = { creators: ['Krašovec, Nina', 'Marsetič, Aleš', 'van der Berg, Jan'], publisher: 'CERN' };
+const OWN = { creators: ['Příkladová, Žaneta', 'Testovič, Čeněk', 'van der Voorbeeld, Jan'], publisher: 'CERN' };
 
 describe('HIGH: a holder entry is neutral only when every name is a creator or the publisher of the same record', () => {
   const FALSE_OK = [
     'Non-Commercial', 'Noncommercial', 'Academic Only', 'Research Only', 'Members Only', 'Internal', 'Do Not Redistribute', 'No Redistribution', 'No Derivatives',
     'NOT FOR REDISTRIBUTION', 'Fee Required', 'Proprietary', 'Personal Only', 'Educational Purposes Only', 'Nur Forschung', 'Keine Weitergabe', 'Usage Interne',
     'Tylko Do Użytku Wewnętrznego', 'Zakaz Rozpowszechniania', 'ACME Corp Internal', 'ACME Corp Members', 'ACME Corp Proprietary', 'ACME Corp No Redistribution',
-    'Closed Access', 'All Rights Reserved', 'Krašovec N. Internal', 'Krašovec N., Members Only',
+    'Closed Access', 'All Rights Reserved', 'Příkladová Ž. Internal', 'Příkladová Ž., Members Only',
   ];
   it.each(FALSE_OK)('"%s": warns, with and without the In Copyright link', (t) => {
     for (const extra of [{ rights: t, rightsUri: INC }, { rights: t }, { rights: `© 2026 ${t}`, rightsUri: INC }, { rights: `© 2026 ${t}` }]) {
@@ -33,13 +33,13 @@ describe('HIGH: a holder entry is neutral only when every name is a creator or t
     }
   });
   it.each([
-    'Krašovec N., Marsetič A.', '© 2026 Nina Krašovec', 'Copyright 2024 Krašovec, Nina & Marsetič, Aleš', 'Krasovec N. and Marsetic A.', 'Jan van der Berg',
-    'KRAŠOVEC N.; MARSETIČ A.', 'CERN', '© 2025 CERN', 'Nina Krašovec, CERN',
+    'Příkladová Ž., Testovič Č.', '© 2026 Žaneta Příkladová', 'Copyright 2024 Příkladová, Žaneta & Testovič, Čeněk', 'Prikladova Z. and Testovic C.', 'Jan van der Voorbeeld',
+    'PŘÍKLADOVÁ Ž.; TESTOVIČ Č.', 'CERN', '© 2025 CERN', 'Žaneta Příkladová, CERN',
   ])('"%s" matches the creators / publisher of the record: clean, with and without the link', (t) => {
     for (const extra of [{ rights: t, rightsUri: INC }, { rights: t }]) expect(ids(dc(OWN, by, extra)), JSON.stringify(extra)).toEqual([]);
   });
   it('the same names warn when they are not the record\'s creators, and when the record has none', () => {
-    for (const t of ['Krašovec N., Marsetič A.', '© 2026 Ignacio Fabbian', 'CERN']) {
+    for (const t of ['Příkladová Ž., Testovič Č.', '© 2026 Ignacio Ejemplo', 'CERN']) {
       expect(ids(dc({ creators: ['Smith, John'], publisher: 'Other Org' }, by, { rights: t, rightsUri: INC })), t).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
       expect(ids(dc({}, by, { rights: t, rightsUri: INC })), t).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
     }
@@ -48,9 +48,9 @@ describe('HIGH: a holder entry is neutral only when every name is a creator or t
     expect(ids(dc(OWN, by, { rightsUri: INC }))).toEqual([]);
   });
   it('a Zenodo record: its rights[] holder entry is checked against its own creators', () => {
-    const rec = (title: string) => parseZenodoRecord({ id: 999999911, metadata: { title: 'x', creators: [{ name: 'Fabbian, Ignacio' }], license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: title }, link: INC }] } }, 'z');
-    expect(ids(rec('© 2026 Ignacio Fabbian'))).toEqual([]);
-    expect(ids(rec('© 2026 Ignacio Fabbian Internal'))).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
+    const rec = (title: string) => parseZenodoRecord({ id: 999999911, metadata: { title: 'x', creators: [{ name: 'Ejemplo, Ignacio' }], license: { id: 'cc-by-4.0' }, rights: [{ id: 'cc-by-4.0' }, { title: { en: title }, link: INC }] } }, 'z');
+    expect(ids(rec('© 2026 Ignacio Ejemplo'))).toEqual([]);
+    expect(ids(rec('© 2026 Ignacio Ejemplo Internal'))).toEqual(['LIC-OTHER-RIGHTS-ENTRY']);
   });
 });
 
