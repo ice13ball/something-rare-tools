@@ -468,19 +468,6 @@ interface QuantityRow {
   entry?: ConflictEntry;
 }
 
-interface Differences {
-  what: string;
-  lines: Set<number>;
-  /** per join-key value: description text / results text */
-  samples: Map<string, { description: string; results: string }>;
-}
-const note = (map: Map<string, Differences>, kind: string, what: string, line: number, key: string, description: string, results: string): void => {
-  const d = map.get(kind) ?? { what, lines: new Set<number>(), samples: new Map() };
-  d.lines.add(line);
-  if (!d.samples.has(key)) d.samples.set(key, { description, results });
-  map.set(kind, d);
-};
-
 const roleUnit = (r: ColumnRole): string => ((r as { unit?: string }).unit ?? '').trim();
 const EMPTY: Reading = { parts: [], text: '', cells: [], originals: [], partCols: [] };
 
@@ -544,7 +531,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       const stated = role === undefined ? '' : roleUnit(role);
       return stated !== '' ? stated : role?.kind === 'depth' ? (depthUnitOfHeader(header(sheet, c)) ?? '') : '';
     });
-    return [...new Set(units.filter((u) => u !== ''))].join('/') || '(none)';
+    return [...new Set(units.filter((u) => u !== ''))].join('/') || '–';
   };
   const addQuantity = (group: string, kind: Quantity['kind'], rk: ReaderKind, rc: number[], dc: number[], pairs: [number, number][], resolved?: Quantity['resolved']): void => {
     quantities.push({ group, kind, label: labelOf(rc, dc), resCols: rc, desCols: dc, pairs, ...(resolved === undefined ? {} : { resolved }), readRes: readerOf(rk, 'results', rc), readDes: readerOf(rk, 'description', dc), entries: new Map(), rows: [] });
@@ -605,7 +592,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     const dc = columnsOf(description.mapping, desKeySet, pick);
     if (dc.length === 0) continue;
     const units = (m: SheetMapping, cols: number[]): string => [...new Set(cols.map((c) => roleUnit(m.columns.find((x) => x.index === c)!.role)))].sort().join('|');
-    if (units(results.mapping, rc) !== units(description.mapping, dc)) unmerged.push({ kind, description: dc, results: rc, units: { results: unitOf(results.mapping, resSheet, rc), description: unitOf(description.mapping, desSheet, dc) } });
+    if (rc.length > 0 && units(results.mapping, rc) !== units(description.mapping, dc)) unmerged.push({ kind, description: dc, results: rc, units: { results: unitOf(results.mapping, resSheet, rc), description: unitOf(description.mapping, desSheet, dc) } });
     else textQuantity(`r.${kind}`, 'other', pick, kind);
   }
   // a measured variable of the same name and unit is the same quantity; a header alone is not
@@ -641,7 +628,6 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const filled = new Map<string, { order: number; name: string; count: number; lines: number[] }>();
   /** `space` keeps the columns of the results sheet and the quantities written by the merge apart */
   const fillKey = (space: 'c' | 'q', order: number): string => `${space}:${order}`;
-  const unmergedDiffers = new Map<string, Differences>();
   const unitClashLines = new Map<string, Set<number>>();
   let lastLine = resSheet.headerLine;
   const countFilled = (space: 'c' | 'q', order: number, name: string, line: number): void => {
@@ -673,6 +659,15 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   /** The sample a results row is of, for the entries of a conflict: the code of its sample column, else its key. */
   const sampleCol = results.mapping.columns.find((c) => c.role.kind === 'sampleId')?.index;
   const sampleOf = (row: RawRow, key: ReadKey): string => (sampleCol !== undefined && cellText(row.cells[sampleCol]) !== '' ? cellText(row.cells[sampleCol]) : keyShown(key.parts));
+
+  const markUnmerged = (line: number, lent: RawRow): void => {
+    for (const u of unmerged) {
+      if (!u.description.some((c) => !emptyCell(lent.cells[c]))) continue;
+      const lines = unitClashLines.get(u.kind) ?? new Set<number>();
+      lines.add(line);
+      unitClashLines.set(u.kind, lines);
+    }
+  };
 
   const rows: RawRow[] = resSheet.rows.map((row) => {
     resultsLines.add(row.line);
@@ -732,19 +727,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       }
       if (q.resolved !== undefined || at.entry !== undefined) q.rows.push(at);
     }
-    // a quantity both sheets have in a column structure that cannot be compared (more columns on one side than the other): what the description holds in it cannot reach the archive until it is decided
-    for (const u of unmerged) {
-      const dc = u.description.find((c) => !emptyCell(lent.cells[c]));
-      if (dc === undefined) continue;
-      if (u.units !== undefined) {
-        const lines = unitClashLines.get(u.kind) ?? new Set<number>();
-        lines.add(row.line);
-        unitClashLines.set(u.kind, lines);
-        continue;
-      }
-      const rc = u.results.find((c) => !emptyCell(cells[c]));
-      note(unmergedDiffers, u.kind, u.description.map((c) => header(desSheet, c)).join(', '), row.line, k.text, shown(lent.cells[dc] ?? null, description.file, desSheet, dc), rc === undefined ? '–' : shown(cells[rc], results.file, resSheet, rc));
-    }
+    // a quantity both sheets have in a column structure that cannot be compared: what the description holds in it cannot reach the archive until the columns agree
+    markUnmerged(row.line, lent);
     return { line: row.line, cells, fieldCount: cells.length };
   });
 
@@ -768,6 +752,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         const original = rewritten.get(`${line}:${rw + pair.description}`);
         if (original !== undefined) rewritten.set(`${line}:${pair.results}`, original);
       }
+      markUnmerged(line, row);
       const lentRow: RawRow = { line: row.line, cells: lentCells, fieldCount: dw };
       const full: RawCell[] = [];
       for (const q of quantities) {
@@ -822,7 +807,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       for (const [rc, dc] of q.pairs) {
         const offered = at.lentCells[dc];
         const description = at.entry.take === 'description';
-        const writes = description ? !(emptyCell(offered) && q.kind !== 'date') : emptyCell(at.cells[rc]) && !emptyCell(at.lent.cells[dc]) && offered !== null;
+        const writes = description ? !(emptyCell(offered) && q.kind !== 'date') : q.kind !== 'date' && emptyCell(at.cells[rc]) && !emptyCell(at.lent.cells[dc]) && offered !== null;
         if (writes) {
           if (description && !emptyCell(at.cells[rc])) notChosen.push({ side: 'results', line: at.line, column: rc, otherLine: at.lent.line, group: q.group, chosen: at.dr?.text ?? '' });
           at.cells[rc] = offered;
@@ -995,13 +980,14 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   for (const [k, n] of [...turnsNumeric].sort((a, b) => a[0] - b[0])) {
     findings.push(makeFinding('ROW-NON-NUMERIC', { file: desFile, sheet: desSheet.name, field: header(desSheet, k), lines: [...n.lines], value: n.value }));
   }
-  for (const d of unmergedDiffers.values()) {
-    const examples = [...new Set([...d.samples.values()].map((s) => `${s.description} / ${s.results}`))].slice(0, MAX_EXAMPLES).join('; ');
-    findings.push(makeConvertFinding('CONV-JOIN-CONFLICT', { file: resFile, sheet: results.sheet, lines: [...d.lines], params: { what: d.what, group: '', count: d.samples.size, total: d.samples.size, examples } }));
-  }
   for (const u of unmerged) {
     const lines = unitClashLines.get(u.kind);
-    if (u.units === undefined || lines === undefined) continue;
+    if (lines === undefined) continue;
+    const columns = { resultsColumn: u.results.map((c) => header(resSheet, c)).join(', '), descriptionColumn: u.description.map((c) => header(desSheet, c)).join(', ') };
+    if (u.units === undefined) {
+      findings.push(makeConvertFinding('CONV-JOIN-COLUMNS-DIFFER', { file: resFile, sheet: results.sheet, lines: [...lines], params: { what: labelOf(u.results, u.description), ...columns } }));
+      continue;
+    }
     findings.push(
       makeConvertFinding('CONV-JOIN-UNIT-DIFFERS', {
         file: resFile,

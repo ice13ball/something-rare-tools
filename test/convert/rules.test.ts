@@ -19,7 +19,7 @@ describe('registry conventions', () => {
   it('has unique CONV-* ids, category B, and a severity of the three allowed', () => {
     const ids = CONVERT_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(114);
+    expect(ids.length).toBe(115);
     for (const r of CONVERT_RULES) {
       expect(r.id).toMatch(/^CONV-[A-Z]+(-[A-Z0-9]+)*$/);
       expect(r.category).toBe('B');
@@ -112,6 +112,11 @@ describe('the CONV-JOIN texts', () => {
     for (const part of ['"Press"', 'dbar', '"Press2"', 'bar', 'same unit', 'ignore']) expect(t).toContain(part);
     expect(t).not.toContain('Choose a value');
     expect(getConvertRule('CONV-JOIN-UNIT-DIFFERS').severity).toBe('error');
+  });
+  it('CONV-JOIN-COLUMNS-DIFFER names both column lists and the two ways out', () => {
+    const t = plain('CONV-JOIN-COLUMNS-DIFFER', { what: 'Stn', resultsColumn: 'Stn, Stn2', descriptionColumn: 'Stn' }, 'en');
+    for (const part of ['Stn, Stn2', 'same columns', 'ignore']) expect(t).toContain(part);
+    expect(getConvertRule('CONV-JOIN-COLUMNS-DIFFER').severity).toBe('error');
   });
   it('CONV-JOIN-KEY-BLANK says it of the description rows on the description side', () => {
     const results = plain('CONV-JOIN-KEY-BLANK', { count: 2, columns: 'Code', side: 'results' }, 'en');

@@ -32,6 +32,7 @@ import type { RuleSpec } from './spec';
  *   CONV-JOIN-CONFLICT         what, group, count, total, examples   what differs between the two sheets in total samples, count of them still undecided; blocks until decided for all, per sample or per pair of values (error)
  *   CONV-JOIN-CONFLICT-CHOSEN  what, count, fromDescription, fromResults   the answer to the above: what was taken from which sheet (info)
  *   CONV-JOIN-UNIT-DIFFERS     what, resultsColumn, resultsUnit, descriptionColumn, descriptionUnit   a quantity both sheets have in two units the merge cannot compare or exchange; blocks until the same unit is stated in both sheets or one of the two columns is set to ignore (error)
+ *   CONV-JOIN-COLUMNS-DIFFER   what, resultsColumn, descriptionColumn   a quantity both sheets have in different sets of columns the merge cannot pair; blocks until one side's columns are set to ignore or both sheets use the same columns (error)
  *   CONV-JOIN-NO-DESCRIPTION   count, samples, description   samples of the results sheet with no row in the description sheet; blocks until converted with only what the results sheet says (error)
  *   CONV-JOIN-RESULTS-ONLY     count, samples, fromFile   the answer to the above (info, with "Ask again"); fromFile = the answer came from the companion file
  *   CONV-JOIN-DESCRIPTION-ONLY count, samples, description   samples described with no results: written as sample events with no occurrence (warning, accept)
@@ -391,6 +392,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{what} est dans des unités différentes : « {resultsColumn} » en résultats ({resultsUnit}), « {descriptionColumn} » en description ({descriptionUnit}). Ni comparaison ni échange possibles. Indiquez la même unité dans les deux feuilles ou réglez une colonne sur « ignorer ».`,
     },
     technical: `{file}, {sheet}: {what} has the unit {resultsUnit} in the results column {resultsColumn} and {descriptionUnit} in the description column {descriptionColumn}; the merge compares and exchanges values only in one unit, so nothing is chosen and the export is blocked until the unit is the same or one column is ignored.`,
+  },
+  {
+    id: 'CONV-JOIN-COLUMNS-DIFFER',
+    category: 'B',
+    severity: 'error',
+    params: ['what', 'resultsColumn', 'descriptionColumn'],
+    plain: {
+      pl: `{what} jest w obu arkuszach w innych kolumnach: w arkuszu wyników {resultsColumn}, w arkuszu opisu {descriptionColumn}. Tych kolumn nie da się sparować. Użyj w obu arkuszach tych samych kolumn albo ustaw kolumny jednego z arkuszy na „pomiń”.`,
+      en: `{what} is in different columns in the two sheets: {resultsColumn} in the results sheet, {descriptionColumn} in the description sheet. These columns cannot be paired. Use the same columns in both sheets, or set the columns of one of the sheets to ignore.`,
+      de: `{what} steht in den beiden Blättern in verschiedenen Spalten: {resultsColumn} im Ergebnisblatt, {descriptionColumn} im Beschreibungsblatt. Diese Spalten lassen sich nicht paaren. Nutzen Sie in beiden Blättern dieselben Spalten oder setzen Sie die Spalten eines Blatts auf „ignorieren“.`,
+      fr: `{what} est dans des colonnes différentes : {resultsColumn} en résultats, {descriptionColumn} en description. Ces colonnes ne peuvent pas être appariées. Utilisez les mêmes colonnes dans les deux feuilles ou réglez celles d'une feuille sur « ignorer ».`,
+    },
+    technical: `{file}, {sheet}: {what} is held by the columns {resultsColumn} in the results sheet and {descriptionColumn} in the description sheet, which are not the same set of columns; the merge pairs columns one to one, so nothing is chosen and the export is blocked until the sets agree or the columns of one sheet are ignored.`,
   },
   {
     id: 'CONV-JOIN-NO-DESCRIPTION',

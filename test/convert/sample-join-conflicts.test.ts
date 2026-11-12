@@ -505,14 +505,86 @@ describe('choosing never invents or lists wrongly (re-review)', () => {
     expect(r.info.notChosen.map((n) => n.column)).toEqual([colOf(r, 'Latitude')]);
   });
 
-  it('a blank results cell filled from the description under "take results" is not listed as not chosen', () => {
+  it('a same-structure date taken from the results does not borrow the description time: that time belongs to the other date', () => {
     const file = xlsxFile('book.xlsx', {
       Counts: [['Sample', 'Taxon', 'Count', 'Date', 'Time'], ['X01', TAX, 1, '2021-05-02', null]],
       Samples: [['Sample', 'Date', 'Time'], ['X01', '2021-05-03', '10:00']],
     });
-    const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [answer('date', 'results', 1)], appendDescriptionOnly: false });
-    expect(rowAt(r, 2).cells[colOf(r, 'Date')]).toBe('2021-05-02');
-    // the description Date (column 6) is not written; its Time (column 7) filled the blank results cell and is not listed
+    const mk = (take: 'results' | 'description') => mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [answer('date', take, 1)], appendDescriptionOnly: false });
+    const r = mk('results');
+    expect(rowAt(r, 2).cells.slice(3, 5)).toEqual(['2021-05-02', null]);
+    // both description cells are not written: the Date (column 6) and the Time (column 7)
+    expect(r.info.notChosen.map((n) => [n.side, n.column])).toEqual([['description', 6], ['description', 7]]);
+    expect(found(r, 'CONV-JOIN-FILLED')).toEqual([]);
+    expect(rowAt(mk('description'), 2).cells.slice(3, 5)).toEqual(['2021-05-03', '10:00']);
+  });
+
+  it('a same-structure position taken from the results fills the longitude only the description gives, and does not list it', () => {
+    const file = xlsxFile('book.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count', 'Latitude', 'Longitude'], ['X01', TAX, 1, 61.2, null]],
+      Samples: [['Sample', 'Latitude', 'Longitude'], ['X01', 61.1, 4.2]],
+    });
+    const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [answer('position', 'results', 1)], appendDescriptionOnly: false });
+    expect(rowAt(r, 2).cells.slice(3, 5)).toEqual([61.2, 4.2]);
     expect(r.info.notChosen.map((n) => [n.side, n.column])).toEqual([['description', 6]]);
+  });
+});
+
+describe('columns the merge cannot pair, and unmerged quantities on description-only rows', () => {
+  const stations = (resEdit: Edit, desEdit: Edit): MergeResult => {
+    const file = xlsxFile('book.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count', 'Stn', 'Stn2'], ['X01', TAX, 1, 'ST-9', 'B']],
+      Samples: [['Sample', 'Stn'], ['X01', 'ST-1']],
+    });
+    return mergeSampleSheets({
+      results: resultsInput(file, 'Counts', { edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' }, Stn: { kind: 'station' }, Stn2: { kind: 'station' }, ...resEdit } } as never),
+      description: descriptionInput(file, 'Samples', { edit: { Stn: { kind: 'station' }, ...desEdit } } as never),
+      keys: [{ results: 0, description: 0 }],
+      conflicts: [],
+      appendDescriptionOnly: false,
+    });
+  };
+
+  it('two station columns against one block with a message of their own, and both ways out work', () => {
+    const r = stations({}, {});
+    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([]);
+    expect(found(r, 'CONV-JOIN-COLUMNS-DIFFER')).toEqual([
+      expect.objectContaining({ severity: 'error', lines: [2], params: expect.objectContaining({ resultsColumn: 'Stn, Stn2', descriptionColumn: 'Stn' }) }),
+    ]);
+    // way out 1: one of the results columns is ignored; way out 2: the description columns are ignored
+    const one = stations({ Stn2: { kind: 'ignore' } }, {});
+    expect(found(one, 'CONV-JOIN-COLUMNS-DIFFER')).toEqual([]);
+    expect(group(one, 'station').count).toBe(1);
+    const other = stations({}, { Stn: { kind: 'ignore' } });
+    expect(found(other, 'CONV-JOIN-COLUMNS-DIFFER')).toEqual([]);
+    expect(other.conflicts).toEqual([]);
+  });
+
+  it('a description-only row with a pressure in another unit blocks too, instead of dropping its value', () => {
+    const file = xlsxFile('book.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count', 'Press'], ['X01', TAX, 1, null]],
+      Samples: [['Sample', 'Press2'], ['X01', null], ['X02', 500]],
+    });
+    const r = mergeSampleSheets({
+      results: resultsInput(file, 'Counts', { edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' }, Press: { kind: 'pressure', unit: 'dbar' } } } as never),
+      description: descriptionInput(file, 'Samples', { edit: { Press2: { kind: 'pressure', unit: 'bar' } } } as never),
+      keys: [{ results: 0, description: 0 }],
+      conflicts: [],
+      appendDescriptionOnly: true,
+    });
+    const added = sheetOf(r).rows.find((x) => x.cells[0] === 'X02')!;
+    expect(found(r, 'CONV-JOIN-UNIT-DIFFERS')).toEqual([expect.objectContaining({ lines: [added.line], params: expect.objectContaining({ resultsUnit: 'dbar', descriptionUnit: 'bar' }) })]);
+  });
+
+  it('a column without a unit shows a language-neutral dash', () => {
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', 'Press'], ['X01', TAX, 1, 1]], Samples: [['Sample', 'Press2'], ['X01', 5]] });
+    const r = mergeSampleSheets({
+      results: resultsInput(file, 'Counts', { edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' }, Press: { kind: 'pressure' } } } as never),
+      description: descriptionInput(file, 'Samples', { edit: { Press2: { kind: 'pressure', unit: 'bar' } } } as never),
+      keys: [{ results: 0, description: 0 }],
+      conflicts: [],
+      appendDescriptionOnly: false,
+    });
+    expect(found(r, 'CONV-JOIN-UNIT-DIFFERS')).toEqual([expect.objectContaining({ params: expect.objectContaining({ resultsUnit: '–', descriptionUnit: 'bar' }) })]);
   });
 });
