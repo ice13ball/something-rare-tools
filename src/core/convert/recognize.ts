@@ -881,7 +881,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const countsMayBeHere = base.some((q) => q.role.kind === 'taxon' && q.role.header !== true) && !base.some((q) => q.role.kind === 'quantity' || q.role.kind === 'biomass');
   for (const q of base) {
     if (q.role.kind !== 'variable' || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined || q.role.unit !== undefined) continue;
-    const code = dateCols.length > 0 && holdsYearOfDate(sheet, q.index, dateCols, ctx.decimalComma, ctx.date1904) ? 'year-beside-date' : !countsMayBeHere && holdsRunningNumbers(sheet, q.index, ctx.decimalComma, sampleCols) ? (holdsDigitDates(sheet, q.index, ctx.decimalComma) ? 'running-number-date' : 'running-number') : undefined;
+    const code = dateCols.length > 0 && holdsYearOfDate(sheet, q.index, dateCols, ctx.decimalComma, ctx.date1904) ? 'year-beside-date' : !countsMayBeHere && holdsRunningNumbers(sheet, q.index, ctx.decimalComma, sampleCols) ? (dateCols.length === 0 && holdsDigitDates(sheet, q.index, ctx.decimalComma) ? 'running-number-date' : 'running-number') : undefined;
     if (code === undefined) continue;
     q.vetoed = q.role;
     q.role = { kind: 'ignore' };

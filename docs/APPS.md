@@ -1303,7 +1303,7 @@ the order the samples first appear (a sample number written on every taxon row; 
 quantity or biomass column: its number column may be the counts, and the block stays CONV-TAXON-NO-QUANTITY. A count of five digits, a value shared by two samples, a year column on a sheet with no date column, and a wide
 sheet's taxon candidates are as before; the first 500 rows are read. Such a column is named by `CONV-COLUMN-IGNORED` and, with the reason, by `CONV-COLUMN-YEAR-IGNORED` (information) or `CONV-COLUMN-NUMBER-IGNORED` (warning,
 accepted once, as CONV-COLUMN-NOT-EXPORTED), once per sheet (`convert/vetoedNumbers.ts`); the finding carries a "Read it as a measurement" button per column (keyed by column index) that gives back the role the column had
-(the page's `readAsMeasurement`). A column the person has changed is not listed again; the answer is not kept in the companion file, so a re-upload asks again. /check is unchanged.
+(the page's `readAsMeasurement`). A column the person has changed is not listed again; the answer is not kept in the companion file, so a re-upload asks again. When the sheet has no date column and every value of a vetoed number column reads as a valid date written YYYYMMDD, the finding and the reason add a hint (count forms, 4 languages) to give the column the meaning date in the column table; nothing is assigned. /check is unchanged.
 
 Other overlay decisions: a **summary column** (a header starting with or holding Total, Suma,
 Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it would count the

@@ -1386,7 +1386,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COLUMN-NUMBER-IGNORED',
     category: 'B',
     severity: 'warning',
-    params: ['count', 'columns'],
+    params: ['count', 'columns', 'dateCount'],
     plain: {
       pl: `Liczby całkowite o 6 lub więcej cyfrach, rosnące (albo malejące) z wiersza na wiersz, albo stałe w próbce i rosnące (albo malejące) z próbki na próbkę, bez powtórzeń. Nie zapisano jako pomiar {count} {+count:kolumny|kolumn|kolumn}: {columns}. Jeśli któraś jest pomiarem, przywróć jej rolę jednym kliknięciem; inaczej zaakceptuj.`,
       en: `Whole numbers of six or more digits that rise (or fall) from row to row, or stay the same within a sample and rise (or fall) from sample to sample, never repeating. Not written as a measurement, {count} {+count:column|columns}: {columns}. If one is a measurement, give it that role back with one click; otherwise accept once.`,
@@ -1397,14 +1397,14 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       {
         param: 'dates',
         plain: {
-          pl: `Jeśli to daty, nadaj kolumnie znaczenie „data” w tabeli kolumn: {dates}.`,
-          en: `If these are dates, give the column the meaning date in the column table: {dates}.`,
-          de: `Sind es Daten, geben Sie der Spalte in der Spaltentabelle die Bedeutung Datum: {dates}.`,
-          fr: `S'il s'agit de dates, donnez à la colonne le sens date dans le tableau des colonnes : {dates}.`,
+          pl: `Jeśli {+dateCount:to data|to daty|to daty}, nadaj {+dateCount:kolumnie|kolumnom|kolumnom} znaczenie „data” w tabeli kolumn: {dates}.`,
+          en: `If {+dateCount:this is a date|these are dates}, give {+dateCount:the column|the columns} the meaning date in the column table: {dates}.`,
+          de: `{+dateCount:Ist es ein Datum|Sind es Daten}, geben Sie {+dateCount:der Spalte|den Spalten} in der Spaltentabelle die Bedeutung Datum: {dates}.`,
+          fr: `S'il s'agit {+dateCount:d'une date|de dates}, donnez {+dateCount:à la colonne|aux colonnes} le sens date dans le tableau des colonnes : {dates}.`,
         },
       },
     ],
-    technical: `{file}, {sheet}: {count} numeric column(s) that the proposer would have read as a measured variable (a name no vocabulary knows, no unit, no code) hold only whole numbers of six or more digits (at least 3 filled cells, the first 500 rows are read) that are all different and strictly rise, or all strictly fall, in row order, or that are equal only between rows of one sample, each sample holding one value that no other sample holds, the samples' values strictly rising or strictly falling in the order the samples first appear (a sample number written on every taxon row); not on a long sheet with a taxon column and no quantity or biomass column, where the number column may be the counts. Columns whose every value reads as a date written YYYYMMDD get a hint (the optional param dates) to give them the meaning date; nothing is assigned. Columns: {columns}. They are proposed as ignore (low confidence), named here and by CONV-COLUMN-IGNORED; no other role is assigned. The page gives the measurement role back with one click; a column the person has set is not listed. Nothing is written in the archive for them. The file is not changed.`,
+    technical: `{file}, {sheet}: {count} numeric column(s) that the proposer would have read as a measured variable (a name no vocabulary knows, no unit, no code) hold only whole numbers of six or more digits (at least 3 filled cells, the first 500 rows are read) that are all different and strictly rise, or all strictly fall, in row order, or that are equal only between rows of one sample, each sample holding one value that no other sample holds, the samples' values strictly rising or strictly falling in the order the samples first appear (a sample number written on every taxon row); not on a long sheet with a taxon column and no quantity or biomass column, where the number column may be the counts. Columns whose every value reads as a date written YYYYMMDD get a hint (the optional param dates, {dateCount} of them; only on a sheet with no date column) to give them the meaning date; nothing is assigned. Columns: {columns}. They are proposed as ignore (low confidence), named here and by CONV-COLUMN-IGNORED; no other role is assigned. The page gives the measurement role back with one click; a column the person has set is not listed. Nothing is written in the archive for them. The file is not changed.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',

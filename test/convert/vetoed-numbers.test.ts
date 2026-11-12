@@ -27,7 +27,7 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
   it('are both ignored with their reason, low confidence, and nothing else is assigned', () => {
     const r = roles(HEADER, ROWS);
     expect(r.Year).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'year-beside-date' });
-    expect(r.SampleNo).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'running-number-date' });
+    expect(r.SampleNo).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'running-number' });
     expect(r.Year.vetoed).toMatchObject({ kind: 'variable' });
     expect(r.Date.role.kind).toBe('date');
     expect(r.Count.role.kind).toBe('quantity');
@@ -198,8 +198,9 @@ describe('review round 2: identifier terms, digit-written dates, both ways of fi
     expect(r.materialSampleID).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number' });
   });
   it('date_start / date_mid / date_end written as YYYYMMDD per sample are vetoed with the date hint, assigned nothing, and not called a running number', async () => {
-    const header = [...LH, 'Count', 'date_start', 'date_mid', 'date_end'];
-    const rows = longRows((s) => [3 + s, 20020601 + s, 20020615 + s, 20020625 + s]);
+    // as a05: no date column of its own
+    const header = [...LH.filter((h) => h !== 'Date'), 'Count', 'date_start', 'date_mid', 'date_end'];
+    const rows = longRows((s) => [3 + s, 20020601 + s, 20020615 + s, 20020625 + s]).map((r) => r.filter((_, i) => i !== 1));
     const r = roles(header, rows);
     for (const h of ['date_start', 'date_mid', 'date_end']) {
       expect(r[h]).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number-date' });
@@ -210,6 +211,8 @@ describe('review round 2: identifier terms, digit-written dates, both ways of fi
     const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
     expect(f.params.dates).toBe('date_start, date_mid, date_end');
     for (const [lang, word] of [['en', 'meaning date'], ['pl', 'znaczenie „data”'], ['de', 'Bedeutung Datum'], ['fr', 'sens date']] as const) expect(renderConvertPlain(f, lang)).toContain(word);
+    for (const [lang, word] of [['en', 'these are dates'], ['pl', 'to daty'], ['de', 'Sind es Daten'], ['fr', 'de dates']] as const) expect(renderConvertPlain(f, lang)).toContain(word);
+    expect(f.params.dateCount).toBe(3);
     // numbers that are no valid dates get no hint
     const plain = await exportSheet([...LH, 'Count', 'Tag'], longRows((s) => [3 + s, 31000000 + s]), { quantity: { kind: 'count' }, fullList: true });
     const g = plain.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
@@ -223,6 +226,18 @@ describe('review round 2: identifier terms, digit-written dates, both ways of fi
       expect(renderConvertPlain(f, lang)).toContain(word);
       expect(renderConvertPlain(f, lang)).toMatch(lang === 'en' ? /stay the same within a sample/ : lang === 'pl' ? /stałe w próbce/ : lang === 'de' ? /je Probe gleich/ : /identiques dans un échantillon/);
     }
+  });
+  it('the hint is singular for one column and absent when the sheet has a real date column', async () => {
+    const one = await exportSheet([...LH.filter((h) => h !== 'Date'), 'Count', 'date_start'], longRows((s) => [3 + s, 20020601 + s]).map((r) => r.filter((_, i) => i !== 1)), { quantity: { kind: 'count' }, fullList: true });
+    const f = one.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
+    expect(f.params.dateCount).toBe(1);
+    expect(renderConvertPlain(f, 'en')).toContain('If this is a date, give the column the meaning date');
+    expect(renderConvertPlain(f, 'fr')).toContain("S'il s'agit d'une date");
+    // repro (d): a real Date column beside the YYYYMMDD SampleNo: no hint
+    const d = await exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true });
+    const g = d.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
+    expect(g.params.dates).toBeUndefined();
+    expect(renderConvertPlain(g, 'en')).not.toContain('meaning date');
   });
   it('the French plain texts agree in number', () => {
     const f = { ruleId: 'CONV-COLUMN-NUMBER-IGNORED', severity: 'warning', file: 'a.csv', sheet: 'S', lines: [], params: { count: 2, columns: 'A, B' } } as never;
