@@ -74,6 +74,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'sample-no-taxon': 'listed',
   // a value of one sheet that lost a conflict to the other sheet's: the person chose, the value is listed with both lines
   'join-not-chosen': 'listed',
+  // a description row whose results rows wrote nothing (blank counts, rows left out ...): its values reach no sample, so the row is listed whole; the results rows carry the question
+  'join-results-not-written': 'listed',
 };
 
 /** The rules that already block the export for a `covered` reason. */
@@ -301,7 +303,8 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
       const cells = rows.get(f.line)?.cells ?? [];
       if (isUnwritten(f)) {
         const others = (f.chain ?? []).filter((c) => c !== f.fate);
-        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(others.join(' '), dated(cells)), cells, kind: 'line' };
+        const lentTo = (f.lentTo ?? []).map((t) => `lent to ${t.sheet} line ${t.lines.join(', ')}`).join('; ');
+        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(join(others.join(' '), lentTo), dated(cells)), cells, kind: 'line' };
       } else {
         const header = source?.header ?? [];
         const named = (f.lostCells ?? []).map((c) => {

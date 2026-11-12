@@ -198,3 +198,61 @@ describe('one description for several results sheets (decision 6, F12)', () => {
     expect(combineDescriptionLedgers([samples])).toEqual(samples);
   });
 });
+
+describe('a description line is written only when a results row it was lent to wrote something', () => {
+  it('lent to a results row that wrote nothing: listed whole, naming the results row', () => {
+    const { out, result } = converted(bookOf([['X01', TAX, 12], ['X01', 'Oithona similis', 3], ['X02', TAX, null]], SAMPLES_ROWS));
+    const samples = named(result.ledger, 'Samples');
+    expect(samples.lines).toContainEqual(expect.objectContaining({ line: 3, fate: 'join-results-not-written', lentTo: [{ sheet: 'Counts', lines: [4] }] }));
+    expect(samples.rows).toMatchObject({ source: 3, written: 2, unexplained: 0 });
+    expect(samples.balanced).toBe(true);
+    const row = [...notWrittenRows(result.ledger, out.sheets, result.leftOut)].find((r) => r.sheet === 'Samples' && r.kind === 'line')!;
+    expect(row).toMatchObject({ line: 3, reason: 'join-results-not-written', status: 'understood', cells: ['X02', 'ST-2', '2021-05-04', 61.3, 4.6, 20] });
+    expect(row.detail).toContain('lent to Counts line 4');
+  });
+
+  it('a zero count still writes the event, so the line is written', () => {
+    const { result } = converted(bookOf([['X01', TAX, 12], ['X02', TAX, 0]], SAMPLES_ROWS));
+    expect(named(result.ledger, 'Samples').lines.some((l) => l.fate === 'join-results-not-written')).toBe(false);
+  });
+
+  it('with several results sheets: written if any of them wrote it, listed if none did', () => {
+    const file = xlsxFile('runs.xlsx', {
+      Phyto: [COUNTS_HEADER, ['X01', TAX, 5], ['X02', TAX, null]],
+      Zoo: [COUNTS_HEADER, ['X01', 'Oithona similis', 2], ['X05', 'Oithona similis', null]],
+      Samples: [SAMPLES_HEADER, ['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 10], ['X02', 'ST-2', '2021-05-04', 61.3, 4.6, 20], ['X05', 'ST-5', '2021-05-06', 61.7, 5.1, 50]],
+    });
+    const joins: SampleJoinRequestCore[] = [
+      { results: 0, description: 2, keys: [{ results: 0, description: 0 }], conflicts: [] },
+      { results: 1, description: 2, keys: [{ results: 0, description: 0 }], conflicts: [] },
+    ];
+    const { result } = converted([resultsInput(file, 'Phyto'), resultsInput(file, 'Zoo'), descriptionInput(file, 'Samples')], joins);
+    const samples = named(result.ledger, 'Samples');
+    expect(samples.lines.filter((l) => l.fate !== 'written').map((l) => [l.line, l.fate])).toEqual([[3, 'join-results-not-written'], [4, 'join-results-not-written']]);
+    expect(samples.rows).toMatchObject({ source: 3, written: 1, unexplained: 0 });
+    expect(samples.balanced).toBe(true);
+  });
+});
+
+describe('the description columns are counted from the description sheet', () => {
+  it('each cell once, however many results rows it was lent to', () => {
+    const { result } = converted(bookInputs());
+    const lat = named(result.ledger, 'Samples').columns.find((c) => c.header === 'Latitude')!;
+    expect(lat).toMatchObject({ numbers: 3, sum: 183.9 });
+    const depth = named(result.ledger, 'Samples').columns.find((c) => c.header === 'Depth')!;
+    expect(depth).toMatchObject({ numbers: 3, sum: 60 });
+  });
+
+  it('an identical copy is counted too', () => {
+    const { result } = converted(bookOf(COUNTS_ROWS, [...SAMPLES_ROWS, ['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 10]]));
+    expect(named(result.ledger, 'Samples').columns.find((c) => c.header === 'Depth')).toMatchObject({ numbers: 4, sum: 70 });
+  });
+
+  it('a copy of a description-only row does not claim its event', () => {
+    const { result } = converted(bookOf(COUNTS_ROWS, [...SAMPLES_ROWS, ['X03', 'ST-3', '2021-05-05', 61.5, 4.9, 30]]));
+    const lines = named(result.ledger, 'Samples').lines;
+    expect(lines.find((l) => l.line === 4)).toMatchObject({ wrote: ['event'] });
+    expect(lines.find((l) => l.line === 5)).toMatchObject({ fate: 'written', sameAs: 4 });
+    expect(lines.find((l) => l.line === 5)!.wrote).toBeUndefined();
+  });
+});
