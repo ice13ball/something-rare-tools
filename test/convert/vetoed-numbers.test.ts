@@ -245,11 +245,51 @@ describe('review round 2: identifier terms, digit-written dates, both ways of fi
   });
 });
 
-describe('SampleNo is the sample code, so the running-number veto does not meet it (repro d after the SampleID ruling)', () => {
-  it('SampleNo with eight-digit numbers is a sampleId, not a vetoed variable', () => {
+describe('SampleNo beside Sample is not a second sample code, so the running-number veto does not meet it (repro d after the SampleID ruling)', () => {
+  it('SampleNo with eight-digit numbers beside Sample is ignored as another sample column, not vetoed as a running number', () => {
     const r = roles(HEADER.map((h) => (h === 'LotNo' ? 'SampleNo' : h)), ROWS);
-    expect(r.SampleNo.role.kind).toBe('sampleId');
+    expect(r.Sample.role.kind).toBe('sampleId');
+    expect(r.SampleNo.role.kind).toBe('ignore');
+    expect(r.SampleNo.reasonCode).toBe('other-sample');
     expect(r.SampleNo.vetoed).toBeUndefined();
-    expect(r.SampleNo.reasonCode).not.toBe('running-number');
+  });
+  it('alone, SampleNo with eight-digit numbers is the sample code', () => {
+    const h = HEADER.filter((x) => x !== 'Sample').map((x) => (x === 'LotNo' ? 'SampleNo' : x));
+    const rows = ROWS.map((r) => r.slice(1));
+    expect(roles(h, rows).SampleNo.role.kind).toBe('sampleId');
+  });
+});
+
+describe('one sample code only (review of the SampleID task)', () => {
+  const swap = (h: string[], r: Cell[][]): [string[], Cell[][]] => {
+    const o = [3, 1, 2, 0, 4, 5, 6, 7, 8];
+    return [o.map((k) => h[k]), r.map((row) => o.map((k) => row[k]))];
+  };
+  const SN = HEADER.map((h) => (h === 'LotNo' ? 'SampleNo' : h));
+  it('SampleNo before Sample (a running number per row): Sample wins whatever the order, 6 samples, never 12', async () => {
+    const run = ROWS.map((r, i) => r.map((c, k) => (k === 3 ? i + 1 : c)));
+    const [h, rows] = swap(SN, run);
+    const r = roles(h, rows);
+    expect(r.Sample.role.kind).toBe('sampleId');
+    expect(r.SampleNo.role.kind).not.toBe('sampleId');
+    const e = await exportSheet(h, rows, { quantity: { kind: 'count' }, fullList: true });
+    expect(e.dataset.events.filter((x) => x.type === 'sample')).toHaveLength(6);
+  });
+  it('a joined name beside a spaced one never makes two sample codes on /convert', () => {
+    const r = roles(['Sample ID', 'SampleNo', 'Species', 'Count'], [['a', 1, 'Abra alba', 3], ['a', 2, 'Nucula nitidosa', 4], ['b', 3, 'Abra alba', 5]]);
+    expect(Object.values(r).filter((p) => p.role.kind === 'sampleId')).toHaveLength(1);
+    expect(r['Sample ID'].role.kind).toBe('sampleId');
+  });
+  const T2 = ['Solea solea', 'Merlangius merlangus'];
+  const sizeRows: Cell[][] = [];
+  for (let s = 1; s <= 10; s++) for (let t = 0; t < 2; t++) for (let c = 0; c < 3; c++) sizeRows.push([`s${s}`, sizeRows.length + 1, '2020-06-01', 49.4 + s / 100, 0.2, T2[t], 8 + c, 20 + 7 * s + 3 * t]);
+  const SH = ['Sample', 'SampleNo', 'Date', 'Latitude', 'Longitude', 'Species', 'Size', 'Quantity'];
+  it('a running SampleNo beside Sample does not switch off the repeated-total check', async () => {
+    const withStage = await exportSheet(SH, sizeRows, { quantity: { kind: 'count' }, edit: { Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' }, Size: { kind: 'lifeStage' } } as never });
+    expect(withStage.findings.map((f) => f.ruleId)).toContain('CONV-QUANTITY-SAME-IN-SAMPLE');
+    const without = await exportSheet(SH, sizeRows, { quantity: { kind: 'count' }, edit: { Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } } as never });
+    const ids = without.findings.map((f) => f.ruleId);
+    expect(ids).toContain('CONV-QUANTITY-REPEATED');
+    expect(ids).not.toContain('CONV-ID-DUPLICATE');
   });
 });

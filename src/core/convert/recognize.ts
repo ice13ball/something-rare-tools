@@ -420,6 +420,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   const siteDepthAt = new Set<number>();
   const plainAreaAt = new Set<number>();
   const claims = new Map<number, Claim>();
+  const codeByName = new Map<number, Claim>();
   const bounds = new Map<number, 'min' | 'max'>();
   let dwcEventId = -1;
 
@@ -490,12 +491,23 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
           nameClaim(foldDiacritics(key), hu.unit) ??
           onlyEffortOrCode(bare === foldDiacritics(key) ? undefined : nameClaim(bare, hu.unit ?? bracketText(hu.name))) ??
           quantityClaim(bare);
+        // /convert never holds two sample codes: a sample code made by a name alone waits until every claim is made, and stands only when no other column is the sample code (the shared proposal's
+        // winner, unless this sheet reads it as something else, e.g. a Darwin Core occurrenceID)
+        if (named?.role.kind === 'sampleId' && named.code === 'name-sample-code') {
+          codeByName.set(p.index, named);
+          continue;
+        }
         if (named) {
           claims.set(p.index, named);
           if (named.role.kind === 'effort' && PLAIN_AREA.test(foldDiacritics(headerKey(hu.name)))) plainAreaAt.add(p.index);
         }
       }
     }
+  }
+
+  for (const [index, claim] of codeByName) {
+    const other = base.some((q) => q.index !== index && (claims.get(q.index)?.role.kind ?? q.role.kind) === 'sampleId') || [...codeByName.keys()].some((k) => k < index);
+    if (!other) claims.set(index, claim);
   }
 
   // a column of Latin binomials is the taxon of a long sheet, whatever its header says ('Scientific name', 'SpName'): decided by the cells, and only when the sheet is long by its other columns.

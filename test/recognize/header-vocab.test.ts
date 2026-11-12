@@ -111,6 +111,8 @@ describe('identifiers are not measurements', () => {
     }
     for (const h of ['SampleVolume', 'SampleDepth', 'Samples', 'SampleType']) {
       expect(roleOf({ [h]: ID, Latitude: LAT }, h).role.kind, h).not.toBe('sampleId');
+      const c = proposeConvertColumns(rawSheet([h, 'Latitude'], [101, 102, 103].map((v, i) => [v, LAT[i]])), CTX).find((q) => q.header === h)!;
+      expect(c.role.kind, `convert ${h}`).not.toBe('sampleId');
     }
   });
   it('real variables that contain such a word stay variables', () => {

@@ -79,13 +79,11 @@ describe('stated vocabulary: the names that are added', () => {
     expect(i.stated).toBe(false);
   });
 
-  it.each(['SampleID', 'Sample ID', 'sample_id'])('%s: whatever the proposer does with the name, the stated layer follows it and adds no role', (h) => {
+  it.each(['SampleID', 'SampleCode', 'SampleName', 'SampleNumber', 'SampleNo', 'Sample ID', 'sample_id'])('%s: the stated layer follows the proposer and marks the sample code', (h) => {
     const ids = ['A1', 'A1', 'A2', 'A2', 'B1', 'B1'];
     const { p, i } = probe(h, ids, [['Species', LATIN], ['Count', COUNT], ['Latitude', LAT], ['Longitude', LON], ['Date', DATES]]);
-    {
-      expect(p.role.kind).toBe('sampleId');
-      expect(i).toMatchObject({ stated: true, role: { kind: 'sampleId' } });
-    }
+    expect(p.role.kind).toBe('sampleId');
+    expect(i).toMatchObject({ stated: true, role: { kind: 'sampleId' } });
   });
 });
 

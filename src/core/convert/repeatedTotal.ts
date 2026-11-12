@@ -173,7 +173,9 @@ export function analyseRepeats(args: {
   if (candidates.length === 0) return {};
   const STRICT_KEY = new Set(['keyPart', 'sampleId', 'station', 'cruise', 'replicate', 'date', 'datetime', 'datePart', 'time', 'latitude', 'longitude', 'depth', 'pressure', 'hemisphere', 'taxon', 'lifeStage', 'qualifier', 'taxonId']);
   const LOOSE_KEY = new Set([...STRICT_KEY].filter((k) => !['replicate', 'lifeStage', 'qualifier', 'taxonId'].includes(k)));
-  const keyOf = (set: Set<string>): number[] => roles.filter((c) => set.has(c.role.kind) && !(c.role.kind === 'taxon' && c.role.header === true)).map((c) => c.index);
+  // one sample column: the one the events are built on (the first), as build.ts reads it
+  const firstSample = roles.find((c) => c.role.kind === 'sampleId')?.index;
+  const keyOf = (set: Set<string>): number[] => roles.filter((c) => set.has(c.role.kind) && !(c.role.kind === 'sampleId' && c.index !== firstSample) && !(c.role.kind === 'taxon' && c.role.header === true)).map((c) => c.index);
   const picked = args.keyColumns ?? [];
   const withPicked = (cols: number[]): number[] => [...new Set([...cols, ...picked])];
   const strictCols = withPicked(keyOf(STRICT_KEY));
