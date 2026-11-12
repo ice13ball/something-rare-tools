@@ -1790,7 +1790,7 @@ inside a value is **refused, never replaced**. Values are written **from their s
 coordinate with its own decimals, a depth with its own, a quantity as the cell said it with a decimal
 comma turned into a point); **nothing is rescaled** except the declared units named in 8.6 (a depth below the
 seafloor in centimetres, a plain depth in fathoms, feet or kilometres, which also writes `verbatimDepth`). The other exceptions are computed values: a derived
-parent position is rounded to 6 decimals (`round6`, `DERIVED_DECIMALS` in `events.ts`), and a
+parent position is rounded to 6 decimals (`round6`, `DERIVED_DECIMALS` in `events.ts`) and written without trailing zeros, except that a coordinate, or a depth end, that every child is written with in one and the same text, and that reads as exactly the parent's number, is written with that text (`54.50` on the station when every sample row has `54.50`; the text each sample is written with counts, so a hemisphere column, letters in the cell or degrees and minutes are covered; samples that differ keep the derived form), and a
 coordinate read from degrees and minutes is written as decimal degrees at the precision of its
 text. **`meta.xml`** declares the Event
 core and the two extensions, with `metadata="eml.xml"`.
@@ -2145,8 +2145,9 @@ Each item below is confirmed from code, a test, or a rule text.
   different sheets or files still collide (`CONV-ID-DUPLICATE`).
 - A declared unit that does not fit the kind of quantity is not rejected: it is written as typed with
   no unit id (`CONV-UNIT-NO-P06`, to accept).
-- Derived parent positions are rounded to 6 decimals; coordinates given in degrees and minutes are
-  written as decimals.
+- Derived parent positions are rounded to 6 decimals and written without trailing zeros, unless every
+  child is written with the same text for that coordinate (then the parent has it: `54.50`, `-54.500`);
+  the same holds for a depth end. Coordinates given in degrees and minutes are written as decimals.
 - The archive is limited to 100 MB, 150 MB per entry and in total, and 1000 entries.
 - A long environmental sheet with one parameter, or more than 200 (parameter, unit) pairs, is not
   read and blocks.

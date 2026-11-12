@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { coordinateText } from '../output/csv';
 import type { ParsedDate } from '../types';
 import type { EventRec, SourceRef, TreeSummary } from './model';
 
@@ -220,12 +221,26 @@ function deriveCentre(points: readonly Point[]): { lat: number; lon: number; unc
   return { lat, lon, ...(uncertainty === undefined ? {} : { uncertainty }) };
 }
 
-/** The one text every child wrote for a coordinate, when there is one for all of them and it reads as exactly the derived number; undefined otherwise (the derived text stays). */
-function sharedText(texts: readonly (string | undefined)[], value: number): string | undefined {
+/** A derived coordinate: at most DERIVED_DECIMALS decimals, trailing zeros (and a bare point) dropped. */
+export function derivedText(v: number): string {
+  const s = coordinateText(v, DERIVED_DECIMALS);
+  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
+}
+
+/** The text event.txt carries for a coordinate: the source text when there is one, the derived form for a derived position, else the value at the decimals the parser counted. */
+export const coordText = (v: number, decimals: number | undefined, text: string | undefined, derived: boolean | undefined): string => (text !== undefined ? text : derived === true ? derivedText(v) : coordinateText(v, decimals));
+
+/** The text event.txt carries for a depth: the source text, else the value at its decimals. */
+export const depthWritten = (v: number, decimals: number | undefined, text?: string): string => (text !== undefined ? text : decimals === undefined ? String(v) : v.toFixed(decimals));
+
+/**
+ * The one text every child is WRITTEN with (not the raw cell: a hemisphere column, letters in the cell or degrees and minutes change what is written), when it is the same for all of them
+ * and reads as exactly the parent's number; undefined when they differ, or when it is what the parent would be written with anyway.
+ */
+function sharedText(texts: readonly string[], value: number, own: string): string | undefined {
   const first = texts[0];
   if (first === undefined || texts.some((t) => t !== first)) return undefined;
-  // a text that is already the plain form of the number (54.5) changes nothing: the record stays as it was and only 54.50 and the like are carried
-  return Number(first) === value && first !== String(value) ? first : undefined;
+  return Number(first) === value && first !== own ? first : undefined;
 }
 
 /* ---------- the tree ---------- */
@@ -254,12 +269,15 @@ function derive(node: Node): void {
     rec.lonDecimals = DERIVED_DECIMALS;
     if (centre.uncertainty !== undefined) rec.coordinateUncertaintyInMeters = centre.uncertainty;
     rec.derived.position = true;
-    // when every child that has a position wrote a coordinate in one and the same text and the midpoint is that very number, the parent is written in that text (54.50, not 54.5)
+    // when every child that has a position is written with one and the same text for a coordinate and it reads as exactly the midpoint, the parent is written with it (54.50, not 54.5)
     const withPosition = kids.filter((k) => k.rec.lat !== undefined && k.rec.lon !== undefined);
-    const sharedLat = sharedText(withPosition.map((k) => k.rec.latText), centre.lat);
-    const sharedLon = sharedText(withPosition.map((k) => k.rec.lonText), centre.lon);
+    const written = (pick: (r: EventRec) => string): string[] => withPosition.map((k) => pick(k.rec));
+    const sharedLat = sharedText(written((r) => coordText(r.lat!, r.latDecimals, r.latText, r.derived.position)), centre.lat, derivedText(centre.lat));
+    const sharedLon = sharedText(written((r) => coordText(r.lon!, r.lonDecimals, r.lonText, r.derived.position)), centre.lon, derivedText(centre.lon));
     if (sharedLat !== undefined) rec.latText = sharedLat;
+    else delete rec.latText;
     if (sharedLon !== undefined) rec.lonText = sharedLon;
+    else delete rec.lonText;
   }
   let minD: number | undefined;
   let maxD: number | undefined;
@@ -290,6 +308,16 @@ function derive(node: Node): void {
   if (textMin !== undefined) rec.depthMinText = textMin;
   if (textMax !== undefined) rec.depthMaxText = textMax;
   if (verbatimMin !== undefined || verbatimMax !== undefined) rec.depthVerbatim = { ...(verbatimMin === undefined ? {} : { min: verbatimMin }), ...(verbatimMax === undefined ? {} : { max: verbatimMax }) };
+  // an end every child is written with in one and the same text is written so by the parent too (10.5, not 10.50 because another end of the child has two decimals)
+  const endText = (pick: (r: EventRec) => number | undefined, textOf: (r: EventRec) => string | undefined, value: number | undefined, own: string | undefined): string | undefined => {
+    if (value === undefined) return undefined;
+    const all = kids.flatMap((k) => (pick(k.rec) === undefined ? [] : [depthWritten(pick(k.rec)!, k.rec.depthDecimals, textOf(k.rec))]));
+    return all.length > 0 && all.every((t) => t === all[0]) && Number(all[0]) === value && all[0] !== depthWritten(value, dec, own) ? all[0] : undefined;
+  };
+  const sharedMin = endText((r) => r.depthMin, (r) => r.depthMinText, minD, textMin);
+  const sharedMax = endText((r) => r.depthMax, (r) => r.depthMaxText, maxD, textMax);
+  if (sharedMin !== undefined) rec.depthMinText = sharedMin;
+  if (sharedMax !== undefined) rec.depthMaxText = sharedMax;
   if (minD !== undefined || maxD !== undefined) {
     rec.derived.depth = true;
     if (dec !== undefined) rec.depthDecimals = dec;

@@ -45,10 +45,12 @@ describe('/check join against stations that repeat across cruises', () => {
     }
   }
 
-  it('names the cruise key that matches several station rows with different positions', () => {
-    for (const c2First of [false, true]) {
-      const { ids } = run({ Cruises: cruises, Stations: stations(c2First), Data: data });
-      expect(ids.filter((id) => id === 'ROW-JOIN-AMBIGUOUS')).toHaveLength(1);
+  it('names the cruise key that matches several station rows with different positions, once, in every sheet order', () => {
+    for (const [name, make] of orders) {
+      for (const c2First of [false, true]) {
+        const { ids } = run(make(c2First));
+        expect(ids.filter((id) => id === 'ROW-JOIN-AMBIGUOUS'), `${name}, ${c2First ? 'C2 first' : 'C1 first'}`).toHaveLength(1);
+      }
     }
   });
 

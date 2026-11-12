@@ -39,4 +39,35 @@ describe('a station written like its samples', () => {
     expect(pick(ev, 'station')[0].slice(1, 3)).toEqual(['54.5', '3.2']);
     expect(pick(ev, 'sample').map((r) => r[1])).toEqual(['54.50', '54.5']);
   });
+
+  it('keeps depth ends in the text every sample writes (10.5 stays 10.5 when the other end has two decimals)', async () => {
+    const e = await exportSheet(['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Depth_min', 'Depth_max', 'Species', 'Count'], [
+      ['S1', 'a', '2023-06-14', 54.5, 3.2, '10.5', '20.25', 'Calanus finmarchicus', 4],
+      ['S1', 'b', '2023-06-14', 54.5, 3.2, '10.5', '20.25', 'Calanus finmarchicus', 4],
+    ], { quantity: Q });
+    const rows = objects((await readBack(e.zip)).tables['event.txt']);
+    expect(pick(rows, 'sample').map((r) => [r[3], r[4]])).toEqual([['10.5', '20.25'], ['10.5', '20.25']]);
+    expect(pick(rows, 'station').map((r) => [r[3], r[4]])).toEqual([['10.5', '20.25']]);
+  });
+});
+
+/** Forms in which the sample rows are written with something other than the raw cell: a hemisphere column, letters in the cell, degrees and minutes. */
+describe('a station and a cruise written like samples whose text is not the raw cell', () => {
+  const cases: [string, string[], (lat: string, lon: string, h: [string, string]) => Cell[], [string, string], [string, string]][] = [
+    ['a hemisphere column', ['Cruise', 'Station', 'Sample', 'Date', 'Latitude', 'Lat_hemisphere', 'Longitude', 'Lon_hemisphere', 'Species', 'Count'], (la, lo, h) => [la, h[0], lo, h[1]], ['54.50', '3.20'], ['-54.50', '-3.20']],
+    ['hemisphere letters in the cell', ['Cruise', 'Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'], (la, lo) => [`${la} S`, `${lo} W`], ['54.50', '3.20'], ['-54.50', '-3.20']],
+    ['degrees and minutes', ['Cruise', 'Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'], () => ["54°30.0'N", "3°12.0'E"], ['', ''], ['54.500', '3.200']],
+  ];
+  for (const [name, header, coords, input, expected] of cases) {
+    it(`${name}: station and cruise carry what the samples write`, async () => {
+      const rows: Cell[][] = [];
+      for (const [station, sample] of [['S1', 'a'], ['S1', 'b'], ['S2', 'c']]) rows.push(['C1', station, sample, '2023-06-14', ...coords(input[0], input[1], ['S', 'W']), 'Calanus finmarchicus', 4]);
+      const e = await exportSheet(header, rows, { quantity: Q });
+      expect(e.files, JSON.stringify(e.findings.map((f) => f.ruleId))).not.toHaveLength(0);
+      const ev = objects((await readBack(e.zip)).tables['event.txt']);
+      for (const type of ['sample', 'station', 'cruise']) {
+        for (const r of pick(ev, type)) expect([r[1], r[2]], `${type} ${r[0]}`).toEqual(expected);
+      }
+    });
+  }
 });

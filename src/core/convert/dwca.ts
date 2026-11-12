@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { coordinateText } from '../output/csv';
 import { escapeXml } from '../output/draft';
 import { datasetNameOf } from './metadata';
 import type { ConvertedDataset, ModelEvent } from './model';
-import { DERIVED_DECIMALS } from './events';
+import { coordText, depthWritten } from './events';
 import { hasTabOrNewline } from './ids';
 
 /*
@@ -116,19 +115,7 @@ function prune(spec: { col: Column; always: boolean }[], rows: string[][]): { co
 
 const num = (n: number | undefined): string => (n === undefined ? '' : String(n));
 
-/** A derived coordinate: at most DERIVED_DECIMALS decimals, trailing zeros (and a bare point) dropped. */
-function derivedText(v: number): string {
-  const s = coordinateText(v, DERIVED_DECIMALS);
-  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
-}
-
-const coordText = (v: number, decimals: number | undefined, text: string | undefined, derived: boolean | undefined): string => (text !== undefined ? text : derived === true ? derivedText(v) : coordinateText(v, decimals));
-
-function depthText(v: number | undefined, decimals: number | undefined, text?: string): string {
-  if (v === undefined) return '';
-  if (text !== undefined) return text;
-  return decimals === undefined ? String(v) : v.toFixed(decimals);
-}
+const depthText = (v: number | undefined, decimals: number | undefined, text?: string): string => (v === undefined ? '' : depthWritten(v, decimals, text));
 
 function eventRow(e: ModelEvent, datasetName: string, institutionCode: string): string[] {
   const p = e.position;
