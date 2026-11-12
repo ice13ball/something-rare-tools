@@ -797,7 +797,7 @@ Limits: Darwin Core Archives and linked files as in 3.1 and 3.6; no cap on a dro
   A key that still maps to several lookup rows is never resolved to the first one: when those rows differ in
   position or date, **none is taken** and `ROW-JOIN-AMBIGUOUS` names the key, the lookup sheet and the
   rows that got nothing; rows that repeat the same position and date are one row. `/convert` reads no
-  join at all (each sheet stands on its own), so a position in one sheet is never lent to another
+  join the person has not confirmed (§8.11): without one each sheet stands on its own, so a position in one sheet is never lent to another
   (`test/convert/no-joins.test.ts`). Rows that differ only in depth lend their position and date and **no depth**, and say nothing (limit, §14).
   A blank part of the key on a row with no position of its own is `ROW-JOIN-KEY-BLANK`; after an
   ambiguous join `META-NO-DATES` names the sheet as the likely cause.

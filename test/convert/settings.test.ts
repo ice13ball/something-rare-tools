@@ -45,6 +45,11 @@ describe('the sample join in the companion file', () => {
     expect(text).not.toMatch(/X0\d|ST-\d|2021-05/);
   });
 
+  it('a file or sheet name that contains :[ does not break the conflict line', () => {
+    const j = join({ results: ['a:[b.xlsx', 'Counts:[1'], description: ['a:[b.xlsx', 'Samples'], conflicts: [{ group: 'date', take: 'results', count: 3 }] });
+    expect(readConvertSettings(textFile('c.sidecar.csv', writeConvertSidecar({ sampleJoin: [j] })))?.sampleJoin).toEqual([j]);
+  });
+
   it('a line with a bad shape is ignored, and so is a conflict line of a join that is not in the file', () => {
     const odd = writeConvertSidecar({ sampleJoin: [join()] }) + '(setting),sampleJoin=nonsense,,,\n(setting),sampleJoinConflict=description:1:date:[],,,\n(setting),sampleJoinResultsOnly=x:[],,,\n(setting),sampleJoinNo=[1],,,\n';
     const back = readConvertSettings(textFile('c.sidecar.csv', odd));

@@ -179,7 +179,7 @@ const SAMPLE_KEY = /^(.+):((?:[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?)(?:\+[0-9a-f]{8
 const SAMPLE_KEY_PREFIX = /^(.+?):((?:[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?)(?:\+[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?){0,63}):(\d{1,9}):(.+)$/s;
 const HASHES = '(?:[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?)(?:\\+[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?){0,63}';
 const SAMPLE_JOIN = new RegExp(`^(\\d{1,9}):(\\d{1,9}):(${HASHES}):(${HASHES}):(\\[.*\\])$`, 's');
-const SAMPLE_JOIN_CONFLICT = /^(description|results|mixed):(\d{1,9}):(.+):(\[.*\])$/s;
+const SAMPLE_JOIN_CONFLICT = /^(description|results|mixed):(\d{1,9}):(.+?):(\[.*\])$/s;
 const SAMPLE_JOIN_RESULTS_ONLY = /^(\d{1,9}):(\[.*\])$/s;
 /** A JSON array of exactly `n` short, non-empty strings, or undefined. */
 function names(text: string, n: number): string[] | undefined {
