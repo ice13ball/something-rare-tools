@@ -140,6 +140,34 @@ describe('a total of 1 on 2 or more rows', () => {
     expect(ids(other, 'CONV-ROW-NOT-UNDERSTOOD')).toHaveLength(1);
   });
 
+  it('where the person\'s own occurrenceIDs differ on every row nothing new is asked: the rows are separate specimens already told apart (N1)', () => {
+    let n = 0;
+    const withIds = (rows: Cell[][]): Cell[][] => rows.map((x) => [...x, `o${++n}`]);
+    const edit = { ...EDIT, occ: { kind: 'occurrenceId' } as ColumnRole };
+    const run = (rows: Cell[][]) => convert({ sheets: [sheetInput(fileOf([...HEADER, 'occ'], rows, 'S', { fileName: 'catch.csv' }), { shape: 'long', quantity: { kind: 'count' }, edit, totalOnce: true })] });
+    const r = run(withIds(ones(catchRows(0))));
+    expect(ids(r, 'CONV-ROW-NOT-UNDERSTOOD')).toHaveLength(0);
+    expect(r.ok).toBe(true);
+    expect(PLAICE(r)).toHaveLength(6);
+    expect(sumOf(r)).toBe(truth() + 6);
+    // an occurrenceID column that is blank on those rows gives them no identifier of their own: asked, as without the column
+    const blank = [...withIds(catchRows(0)), ...ones([]).map((x) => [...x, ''])];
+    expect(ids(run(blank), 'CONV-ROW-NOT-UNDERSTOOD')[0]?.params).toMatchObject({ reason: 'one-specimen-total', count: 3 });
+  });
+
+  it('the row that is written is the first one with a size, not the first in the file (N3)', () => {
+    const noSizeFirst: Cell[][] = [1, 2, 3].flatMap((h) => [[`H${h}`, '2020-06-01', 49.4 + h / 100, 0.2, 'Pleuronectes platessa', null, 'NA', null, 1, 50], [`H${h}`, '2020-06-01', 49.4 + h / 100, 0.2, 'Pleuronectes platessa', 10 + h, 'old', 2, 1, 50]] as Cell[][]);
+    const rows = [...catchRows(0), ...noSizeFirst];
+    const sheets = [mk(rows, { totalOnce: true, leaveOut: [{ reason: 'one-specimen-total', count: 3 }] })];
+    const r = convert({ sheets });
+    const written = PLAICE(r).map((o) => o.source.line);
+    const sizeless = noSizeFirst.map((_, i) => 1 + 120 + 1 + i).filter((_, i) => i % 2 === 0);
+    expect(written).toHaveLength(3);
+    for (const l of sizeless) expect(written).not.toContain(l);
+    // the sized row of each haul is the one with a measurement of its size
+    expect(r.measurements.filter((m) => written.includes(m.source.line) && /body length/.test(m.measurementType)).length).toBe(3);
+  });
+
   it('without the choice "once" the block stands and the total of 1 is not asked about yet', () => {
     const r = convert({ sheets: [mk(ones(catchRows(0)))] });
     expect(ids(r, 'CONV-QUANTITY-REPEATED')).toHaveLength(1);

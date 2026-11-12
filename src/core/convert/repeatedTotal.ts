@@ -33,7 +33,7 @@ import { parseNumber } from '../values/numbers';
  *              and counted in its group for the evidence (the size classes are the other rows), not joined to the group and not written under its occurrenceID: ledger reason
  *              'taxon-only-in-total', one decision per sheet.
  *   total of 1 a count of 1 on 2 or more rows of a strict group is no repeat (it cannot be shared by size classes). On a sheet whose quantity is a repeated total and where the person took it once,
- *              the later rows are their own case, one decision per sheet (ledger reason 'one-specimen-total'); never for a pair of life stages.
+ *              the later rows are their own case, one decision per sheet (ledger reason 'one-specimen-total'), only where the rows would get one occurrenceID and never for a pair of life stages.
  *
  * Why 50 %: a total repeated on size classes repeats in every group of its table (the share is near 100 %), while counts that coincide by chance coincide in a minority of the groups. Half is
  * the line between the two readings that is hardest to argue with; below it the tool does not block but warns, and says both sums, so that a table that is mostly genuine counts with some
@@ -394,7 +394,16 @@ export function analyseRepeats(args: {
         if (differingAny(g).length === 0) continue;
         const items = g.filter((r) => (value(r, qIndex) ?? 0) > 0);
         if (items.length < 2 || !items.every((r) => value(r, qIndex) === 1) || items.some((r) => coveredLines.has(r.line))) continue;
-        for (const r of items.slice(1)) oneOnce.add(r.line);
+        // asked only where the rows would get ONE occurrenceID (the dead end of a duplicate identifier): rows that carry an occurrenceID of their own, different on every row, are separate
+        // specimens the person has already told apart, and nothing is asked
+        if (occurrenceId !== undefined) {
+          const own = items.map((r) => cellText(r, occurrenceId));
+          if (own.every((v) => v !== '') && new Set(own).size === items.length) continue;
+        }
+        // the row that is written is the first one with a value in a column that tells the rows apart (a size), not the first in file order; only when none has one, the first in the file
+        const d = differingAny(g);
+        const keep = items.find((r) => d.some((i) => cellText(r, i) !== '')) ?? items[0];
+        for (const r of items) if (r !== keep) oneOnce.add(r.line);
       }
     }
     // a column of the rows with its own number on each row, named like a count: the real per-size quantity, when the sheet has one
