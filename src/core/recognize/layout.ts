@@ -212,8 +212,15 @@ function keyValues(sheet: RawSheet, col: number): { values: Set<string>; unique:
   return { values, unique: values.size === n };
 }
 
-interface JoinCandidate {
-  right: SheetInfo;
+export interface KeySide {
+  sheet: RawSheet;
+  columns: readonly { index: number; header: string; role: { kind: string } }[];
+  consumed?: ReadonlySet<number>;
+}
+
+export interface RankedJoin {
+  /** Index into the `rights` that were offered. */
+  right: number;
   leftKey: number;
   rightKey: number;
   score: number;
@@ -222,6 +229,10 @@ interface JoinCandidate {
   /** How many different key values the right column has: of two keys that are both unique, the finer one (stations, not cruises). */
   fine: number;
   extraKeys?: { leftKey: number; rightKey: number }[];
+  /** Distinct left key values (tuples, for a composite) found on the right. */
+  covered: number;
+  /** All distinct left key values (tuples) that are not blank. */
+  total: number;
 }
 
 const tupleOf = (row: RawRow, cols: readonly number[]): string | undefined => {
@@ -235,45 +246,52 @@ const tupleOf = (row: RawRow, cols: readonly number[]): string | undefined => {
 };
 
 /**
- * Which sheet carries the position of a measurement sheet, and by which key. A key must identify ONE row of the right sheet: among candidates of the same score the one whose right column is unique wins
+ * Ranks the ways to join a left sheet to one of the right sheets. A key must identify ONE row of the right sheet: among candidates of the same score the one whose right column is unique wins
  * (the order of the columns decides nothing), and when no single column is unique the columns the two sheets share by name (Cruise + Station) are tried together as a composite key (taken when it is
- * unique, or when fewer right rows share their key than with the single column). A non-unique key that remains is joined as before, and the rows it cannot place are said by dataset.ts (ROW-JOIN-AMBIGUOUS), never silently given the first row's position.
+ * unique, or, under coverage 'all', when fewer right rows share their key than with the single column). A non-unique key that remains is returned as it is, and the rows it cannot place are said by dataset.ts
+ * (ROW-JOIN-AMBIGUOUS), never silently given the first row's position.
+ *
+ * coverage 'all': a candidate is dropped unless every left value is on the right (/check). 'measure': a candidate stays when at least one is, and the share covered ranks first.
+ * kinds: by default both columns must be in KEY_KINDS. 'any': the caller has chosen the left columns (of any kind); a right column qualifies by the same header or the same strong kind.
  */
-function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandidate | undefined {
-  const consumed = new Set<number>(meas.long ? [meas.long.parameterCol, meas.long.valueCol, ...(meas.long.unitCol === undefined ? [] : [meas.long.unitCol])] : []);
-  let best: JoinCandidate | undefined;
-  /** Per right sheet: the key pairs the two sheets share by name, each of which covers every left value. */
-  const shared = new Map<SheetInfo, { leftKey: number; rightKey: number; named: boolean }[]>();
-  /** Uniqueness on the right ranks first, then the score (a header the two sheets share, a strong kind), then the finer key. */
-  const better = (a: JoinCandidate, b: JoinCandidate): boolean => (a.unique !== b.unique ? a.unique : a.score !== b.score ? a.score > b.score : a.fine > b.fine);
-  for (const coord of coordSheets) {
-    if (coord === meas) continue;
-    for (const mp of meas.proposals) {
-      if (!KEY_KINDS.has(mp.role.kind) || consumed.has(mp.index)) continue;
-      const m = keyValues(meas.sheet, mp.index);
+export function rankJoinKeys(left: KeySide, rights: readonly KeySide[], opts: { coverage: 'all' | 'measure'; kinds?: ReadonlySet<string> | 'any' }): RankedJoin | undefined {
+  const consumed = left.consumed ?? new Set<number>();
+  const all = opts.coverage === 'all';
+  const kinds = opts.kinds ?? KEY_KINDS;
+  const anyKind = kinds === 'any';
+  const inKinds = (k: string): boolean => kinds !== 'any' && kinds.has(k);
+  let best: RankedJoin | undefined;
+  /** Per right sheet: the key pairs the two sheets share by name or by strong kind, each of which has a left value on the right (every one, under 'all'). */
+  const shared = new Map<number, { leftKey: number; rightKey: number; named: boolean }[]>();
+  /** Coverage first (under 'measure'), then uniqueness on the right, then the score (a header the two sheets share, a strong kind), then the finer key. */
+  const better = (a: RankedJoin, b: RankedJoin): boolean => {
+    const ca = a.covered * b.total;
+    const cb = b.covered * a.total;
+    return ca !== cb ? ca > cb : a.unique !== b.unique ? a.unique : a.score !== b.score ? a.score > b.score : a.fine > b.fine;
+  };
+  rights.forEach((coord, ri) => {
+    for (const mp of left.columns) {
+      if (consumed.has(mp.index) || (!anyKind && !inKinds(mp.role.kind))) continue;
+      const m = keyValues(left.sheet, mp.index);
       if (m.values.size === 0) continue;
-      for (const cp of coord.proposals) {
-        if (!KEY_KINDS.has(cp.role.kind)) continue;
-        const c = keyValues(coord.sheet, cp.index);
-        let subset = true;
-        for (const v of m.values) {
-          if (!c.values.has(v)) {
-            subset = false;
-            break;
-          }
-        }
-        if (!subset) continue;
+      for (const cp of coord.columns) {
         const headerEq = cleanKey(mp.header) === cleanKey(cp.header);
         const strong = STRONG_KEY_KINDS.has(mp.role.kind);
+        const sameStrong = strong && mp.role.kind === cp.role.kind;
+        if (anyKind ? !(headerEq || sameStrong) : !inKinds(cp.role.kind)) continue;
+        const c = keyValues(coord.sheet, cp.index);
+        let covered = 0;
+        for (const v of m.values) if (c.values.has(v)) covered++;
+        if (all ? covered < m.values.size : covered === 0) continue;
         // the columns the two sheets share by name, or by meaning (Stn and Station are both the station), are the parts of a composite key
-        if (headerEq || (strong && mp.role.kind === cp.role.kind)) (shared.get(coord) ?? shared.set(coord, []).get(coord)!).push({ leftKey: mp.index, rightKey: cp.index, named: headerEq });
+        if (headerEq || sameStrong) (shared.get(ri) ?? shared.set(ri, []).get(ri)!).push({ leftKey: mp.index, rightKey: cp.index, named: headerEq });
         if (!headerEq && !(c.unique && strong)) continue;
         const score = (headerEq ? 2 : 0) + (strong ? 1 : 0);
-        const cand: JoinCandidate = { right: coord, leftKey: mp.index, rightKey: cp.index, score, unique: c.unique, fine: c.values.size };
+        const cand: RankedJoin = { right: ri, leftKey: mp.index, rightKey: cp.index, score, unique: c.unique, fine: c.values.size, covered, total: m.values.size };
         if (!best || better(cand, best)) best = cand;
       }
     }
-  }
+  });
   if (best === undefined || best.unique) return best;
   // no single column identifies a row of the right sheet: the shared key columns together may
   // one partner for each left column (the one with the same header first)
@@ -286,26 +304,47 @@ function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): JoinCandi
   if (pairs.length < 2) return best;
   const leftCols = pairs.map((q) => q.leftKey);
   const rightCols = pairs.map((q) => q.rightKey);
+  const rightSheet = rights[best.right].sheet;
   const rightTuples = new Map<string, number>();
-  for (const r of best.right.sheet.rows) {
+  for (const r of rightSheet.rows) {
     const t = tupleOf(r, rightCols);
     if (t !== undefined) rightTuples.set(t, (rightTuples.get(t) ?? 0) + 1);
   }
-  for (const r of meas.sheet.rows) {
+  const leftTuples = new Set<string>();
+  for (const r of left.sheet.rows) {
     const t = tupleOf(r, leftCols);
-    if (t !== undefined && !rightTuples.has(t)) return best;
+    if (t !== undefined) leftTuples.add(t);
   }
-  // rows of the right sheet that share their key with another row: the composite is taken when it leaves none (it is a key), or fewer than the single column does (a station listed twice
+  let coveredTuples = 0;
+  for (const t of leftTuples) if (rightTuples.has(t)) coveredTuples++;
+  if (all ? coveredTuples < leftTuples.size : coveredTuples === 0) return best;
+  // rows of the right sheet that share their key with another row: the composite is taken when it leaves none (it is a key), or (under 'all') fewer than the single column does (a station listed twice
   // must not make every row of the cruise ambiguous: dataset.ts then says only the keys that really repeat)
   const dupRows = (counts: Iterable<number>): number => [...counts].reduce((n, c) => n + (c > 1 ? c : 0), 0);
   const single = new Map<string, number>();
-  for (const r of best.right.sheet.rows) {
+  for (const r of rightSheet.rows) {
     const t = tupleOf(r, [best.rightKey]);
     if (t !== undefined) single.set(t, (single.get(t) ?? 0) + 1);
   }
   const composite = dupRows(rightTuples.values());
-  if (composite !== 0 && composite >= dupRows(single.values())) return best;
-  return { ...best, leftKey: pairs[0].leftKey, rightKey: pairs[0].rightKey, unique: composite === 0, extraKeys: pairs.slice(1).map((q) => ({ leftKey: q.leftKey, rightKey: q.rightKey })) };
+  if (composite !== 0 && (!all || composite >= dupRows(single.values()))) return best;
+  return {
+    ...best,
+    leftKey: pairs[0].leftKey,
+    rightKey: pairs[0].rightKey,
+    unique: composite === 0,
+    extraKeys: pairs.slice(1).map((q) => ({ leftKey: q.leftKey, rightKey: q.rightKey })),
+    covered: coveredTuples,
+    total: leftTuples.size,
+  };
+}
+
+/** Which sheet carries the position of a measurement sheet, and by which key (the ranking is rankJoinKeys, with every left value required on the right). */
+function findJoin(meas: SheetInfo, coordSheets: readonly SheetInfo[]): (RankedJoin & { rightInfo: SheetInfo }) | undefined {
+  const consumed = new Set<number>(meas.long ? [meas.long.parameterCol, meas.long.valueCol, ...(meas.long.unitCol === undefined ? [] : [meas.long.unitCol])] : []);
+  const others = coordSheets.filter((c) => c !== meas);
+  const j = rankJoinKeys({ sheet: meas.sheet, columns: meas.proposals, consumed }, others.map((c) => ({ sheet: c.sheet, columns: c.proposals })), { coverage: 'all' });
+  return j && { ...j, rightInfo: others[j.right] };
 }
 
 /* ---------- public ---------- */
@@ -328,8 +367,8 @@ export function proposeLayout(file: ParsedFile, opts: { skipTransposed?: boolean
     if (meas.hasPosition || (meas.nVars === 0 && !meas.long)) continue;
     const j = findJoin(meas, coordSheets);
     if (!j) continue;
-    joins.push({ left: meas.sheet.name, right: j.right.sheet.name, leftKey: j.leftKey, rightKey: j.rightKey, ...(j.extraKeys === undefined ? {} : { extraKeys: j.extraKeys }) });
-    lookups.add(j.right);
+    joins.push({ left: meas.sheet.name, right: j.rightInfo.sheet.name, leftKey: j.leftKey, rightKey: j.rightKey, ...(j.extraKeys === undefined ? {} : { extraKeys: j.extraKeys }) });
+    lookups.add(j.rightInfo);
   }
 
   const tables: TablePlan[] = data
