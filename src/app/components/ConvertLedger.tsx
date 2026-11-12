@@ -149,6 +149,18 @@ export function ConvertLedger({ ledger, blocked = false, notWritten }: { ledger:
         return (
           <section key={`${i}\u0000${l.file}\u0000${l.sheet}`} aria-label={names[i]}>
             <h3>{names[i]}</h3>
+            {l.kind === 'description' && (
+              <>
+                <p className="muted" data-testid="ledger-description">{t('convert.ledger.description')}</p>
+                {l.lent !== undefined && l.lent.length > 0 && (
+                  <ul>
+                    {l.lent.map((x) => (
+                      <li key={x.sheet}>{t('convert.ledger.lent', { sheet: x.sheet, lines: x.lines, samples: x.samples })}</li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
             {l.pivotRowsIn !== undefined && <p className="muted">{t('convert.ledger.pivot', { rowsIn: l.pivotRowsIn, samples: l.pivotSamples ?? 0 })}</p>}
             {l.cells === undefined ? <Tally tally={l.rows} line="rows" blocked={blocked} /> : <Tally tally={l.cells} line="cells" blocked={blocked} />}
             {l.cells !== undefined && <Tally tally={l.rows} line="also" blocked={blocked} />}

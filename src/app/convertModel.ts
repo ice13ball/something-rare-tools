@@ -8,7 +8,9 @@ import { renderPlain } from '../core/report';
 import type { Finding, Lang, SheetMapping } from '../core/types';
 import { EMPTY_METADATA, datasetNameOf } from '../core/convert/metadata';
 import type { DatasetMetadata } from '../core/convert/metadata';
-import type { ConvertParseResult, ConvertRequestBody } from '../worker/convert.protocol';
+import type { ConvertParseResult, ConvertRequestBody, SampleJoinRequest, SheetRef } from '../worker/convert.protocol';
+import type { ConvertSettings } from '../core/convert/settings';
+import { savedJoinTake } from '../core/convert/settings';
 import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
@@ -129,6 +131,22 @@ export interface ConvertState {
   worms?: WormsLookup;
   /** The NERC identifiers the user confirmed per measured-variable column (stage 5); only those that still match the column's variable and unit are sent. */
   nerc?: NercPicks;
+  /** What the person decided about a sheet that describes the samples of another: confirmed (with the answers), or declined. Nothing joins without a confirmed entry. */
+  joins?: JoinChoice[];
+}
+
+/**
+ * The person's decision about one pair of sheets. `confirmed` joins the description sheet to the results sheet by `keys` (column indexes, one pair per key part) with the answers to the groups of
+ * differing values and to the samples without a description; `declined` is only the "No" (that pair is not proposed again). `fromFile`: the numbers of `resultsOnly` were read from a companion file.
+ */
+export interface JoinChoice {
+  results: SheetRef;
+  description: SheetRef;
+  keys: { results: number; description: number }[];
+  state: 'confirmed' | 'declined';
+  conflicts: SampleJoinRequest['conflicts'];
+  resultsOnly?: number;
+  fromFile?: boolean;
 }
 
 /* ---------- measured variables: the columns the NERC section lists, and what the user confirmed for each (stage 5) ---------- */
@@ -281,7 +299,17 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
-  return { sheets, options: s.options, approvedSplits: s.approved, ...(s.worms ? { worms: s.worms } : {}), ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}) };
+  const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
+  const declined = (s.joins ?? []).filter((j) => j.state === 'declined');
+  return {
+    sheets,
+    options: s.options,
+    approvedSplits: s.approved,
+    ...(s.worms ? { worms: s.worms } : {}),
+    ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}),
+    ...(confirmed.length > 0 ? { sampleJoin: confirmed.map((j) => ({ results: j.results, description: j.description, keys: j.keys, conflicts: j.conflicts, ...(j.resultsOnly === undefined ? {} : { resultsOnly: j.resultsOnly }), ...(j.fromFile === true ? { fromFile: true } : {}) })) } : {}),
+    ...(declined.length > 0 ? { sampleJoinNo: declined.map((j) => ({ results: j.results, description: j.description })) } : {}),
+  };
 }
 
 /** What a companion file recorded for a sheet that the converter checks against today's numbers (never a tick): copies, repeated totals and the reasons left out. */
@@ -449,3 +477,89 @@ export const tickHolds = (rule: string, ticked: string | undefined, now: string 
     return false;
   }
 };
+
+/* ---------- the join of a results sheet to the sheet that describes its samples (core/convert/sampleJoin.ts) ---------- */
+
+type SheetOf = { file: ConvertParseResult['files'][number]; sheet: ConvertParseResult['files'][number]['sheets'][number] };
+/** The sheet a reference names in this drop (undefined when the drop holds no such sheet). */
+export function sheetOfRef(parsed: ConvertParseResult, ref: SheetRef): SheetOf | undefined {
+  const file = parsed.files.find((f) => f.fileId === ref.fileId);
+  const sheet = file?.sheets.find((x) => x.name === ref.sheet);
+  return file === undefined || sheet === undefined ? undefined : { file, sheet };
+}
+
+/** The sheet of this drop with that file name and sheet name, when there is exactly one (a companion file knows sheets by names). */
+function refByNames(parsed: ConvertParseResult, names: readonly [string, string]): SheetRef | undefined {
+  const hits = parsed.files.filter((f) => f.fileName === names[0] && f.sheets.some((x) => x.name === names[1]));
+  return hits.length === 1 ? { fileId: hits[0].fileId, sheet: names[1] } : undefined;
+}
+
+/**
+ * The joins a companion file of THIS drop recorded, as the page starts from them (F11). A confirmation holds only when both sheets are found by file name and sheet name, have the same number of
+ * rows as when it was given, and every key column of both sides is found again by its hash; otherwise nothing is applied and the question is open (the proposal shows again). An answer to a group
+ * of differing values comes back with the number it was given for (the core honours it only for the same number); a group saved as `mixed` (per sample or per pair: never written) comes back
+ * unanswered. A declined pair comes back declined.
+ */
+export function initialJoins(parsed: ConvertParseResult): JoinChoice[] {
+  const out: JoinChoice[] = [];
+  for (const j of parsed.settings.sampleJoin ?? []) {
+    const results = refByNames(parsed, j.results);
+    const description = refByNames(parsed, j.description);
+    const r = results === undefined ? undefined : sheetOfRef(parsed, results);
+    const d = description === undefined ? undefined : sheetOfRef(parsed, description);
+    if (results === undefined || description === undefined || r === undefined || d === undefined) continue;
+    if (r.sheet.rowCount !== j.resultsRows || d.sheet.rowCount !== j.descriptionRows) continue;
+    const rc = resolveKeyHashes(r.sheet.header, j.resultsHashes);
+    const dc = resolveKeyHashes(d.sheet.header, j.descriptionHashes);
+    if (rc === undefined || dc === undefined || rc.length !== dc.length) continue;
+    out.push({
+      results,
+      description,
+      keys: rc.map((c, i) => ({ results: c, description: dc[i] })),
+      state: 'confirmed',
+      conflicts: j.conflicts.filter((c) => c.take !== 'mixed').map((c) => ({ group: c.group, take: c.take as 'description' | 'results', count: c.count, exceptions: [] })),
+      fromFile: true,
+      ...(j.resultsOnly === undefined ? {} : { resultsOnly: j.resultsOnly }),
+    });
+  }
+  for (const n of parsed.settings.sampleJoinNo ?? []) {
+    const results = refByNames(parsed, n.results);
+    const description = refByNames(parsed, n.description);
+    if (results !== undefined && description !== undefined && !out.some((j) => j.results.fileId === results.fileId && j.results.sheet === results.sheet && j.description.fileId === description.fileId && j.description.sheet === description.sheet)) {
+      out.push({ results, description, keys: [], state: 'declined', conflicts: [] });
+    }
+  }
+  return out;
+}
+
+/**
+ * The joins for the companion file: names, row counts and hashes of the key columns, the number of samples accepted without a description, and, for each answered group, its bulk side with the
+ * number of samples it was given for. A group answered per sample or per pair is `mixed` (those answers hold sample codes and values, so they are never written). Nothing but names, hashes and counts.
+ */
+export function sampleJoinSettingsOf(parsed: ConvertParseResult, joins: readonly JoinChoice[]): Pick<ConvertSettings, 'sampleJoin' | 'sampleJoinNo'> {
+  const sampleJoin: NonNullable<ConvertSettings['sampleJoin']> = [];
+  const sampleJoinNo: NonNullable<ConvertSettings['sampleJoinNo']> = [];
+  for (const j of joins) {
+    const r = sheetOfRef(parsed, j.results);
+    const d = sheetOfRef(parsed, j.description);
+    if (r === undefined || d === undefined) continue;
+    if (j.state === 'declined') {
+      sampleJoinNo.push({ results: [r.file.fileName, r.sheet.name], description: [d.file.fileName, d.sheet.name] });
+      continue;
+    }
+    const resultsHashes = keyHashes(r.sheet.header, j.keys.map((k) => k.results));
+    const descriptionHashes = keyHashes(d.sheet.header, j.keys.map((k) => k.description));
+    if (resultsHashes === undefined || descriptionHashes === undefined) continue;
+    sampleJoin.push({
+      results: [r.file.fileName, r.sheet.name],
+      description: [d.file.fileName, d.sheet.name],
+      resultsRows: r.sheet.rowCount,
+      descriptionRows: d.sheet.rowCount,
+      resultsHashes,
+      descriptionHashes,
+      ...(j.resultsOnly === undefined ? {} : { resultsOnly: j.resultsOnly }),
+      conflicts: j.conflicts.map((c) => ({ group: c.group, take: savedJoinTake(c), count: c.count })),
+    });
+  }
+  return { ...(sampleJoin.length > 0 ? { sampleJoin } : {}), ...(sampleJoinNo.length > 0 ? { sampleJoinNo } : {}) };
+}

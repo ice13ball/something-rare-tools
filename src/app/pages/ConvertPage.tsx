@@ -16,6 +16,7 @@ import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
 import { sentenceWithList } from '../components/CollapsibleList';
 import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
+import { ConvertSampleJoin } from '../components/ConvertSampleJoin';
 import { MAX_LINE_RANGES, formatLines } from '../../core/lines';
 import { ConvertNerc, effectivePick, searchId, suggestionOf } from '../components/ConvertNerc';
 import type { NercKind, NvsSearchView } from '../components/ConvertNerc';
@@ -29,7 +30,7 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -101,6 +102,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // what the user typed into a split before approving it; confirmed taxon candidates by candidateKey
   const [drafts, setDrafts] = useState<Record<string, TaxonSplit>>({});
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
+  // what the person decided about the sheets that describe the samples of another (the join): nothing joins without a confirmed entry here
+  const [joins, setJoins] = useState<JoinChoice[]>([]);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [view, setView] = useState<ConvertView | null>(null);
   const [working, setWorking] = useState(false);
@@ -203,6 +206,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setApproved({});
     setDrafts({});
     setConfirmed({});
+    setJoins([]);
     setConvertError(null);
     setFlattenStation(false);
     setFlattenCruise(false);
@@ -225,6 +229,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setMeta((m) => refreshPrefill(m, touched.current, p.prefill));
       setMappings(Object.fromEntries(p.files.map((f) => [f.fileId, f.mappings])));
       setChoices(initialChoices(p));
+      // a join a companion file of THIS drop recorded stands only for the same sheets, rows and key columns (initialJoins); the rest is asked again
+      setJoins(initialJoins(p));
       // the ticks start from a companion file of THIS drop, and from nothing else
       setFullList(p.settings.fullList);
       setPrefixStation(p.settings.prefixStation);
@@ -242,6 +248,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     void engine.reset().catch(() => undefined);
     setParsed(null);
     setView(null);
+    setJoins([]);
     setProblem(null);
     setAccepted({});
     setExported(null);
@@ -266,7 +273,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setWorking(true);
     const timer = setTimeout(() => {
       engine
-        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMeta, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks }))
+        .convert(requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, joins, metadata: tableMeta, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks }))
         .then(
           (v) => {
             if (token.current !== mine) return;
@@ -282,7 +289,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         });
     }, 120);
     return () => clearTimeout(timer);
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, tableMeta, wormsLookup, nercPicks]);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, joins, tableMeta, wormsLookup, nercPicks]);
 
   // what the ticked columns of the picker would make: the converter's own report for the request with that key on that sheet (the same run as the export), asked after a short pause; nothing is kept
   // in the request, so ticking changes nothing until "Use this key". Only the latest question of a sheet counts (an older answer is dropped), a sheet is asked again only when its ticks or the request
@@ -297,14 +304,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     previewAsked.current.clear();
     setKeyPreview({});
     setKeyPreviewError({});
-  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, wormsLookup, nercPicks]);
+  }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, joins, wormsLookup, nercPicks]);
   useEffect(() => {
     if (phase !== 'work' || !parsed) return undefined;
     const todo = Object.entries(keyDraft).filter(([, cols]) => cols.length > 0);
     if (todo.length === 0) return undefined;
     const timer = setTimeout(() => {
       const gen = previewGen.current;
-      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, metadata: tableMetadataOf(EMPTY_METADATA), ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, joins, metadata: tableMetadataOf(EMPTY_METADATA), ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       for (const [k, cols] of todo) {
         const typed = (keyPrefixDraft[k] ?? choices[k]?.sampleKeyPrefix ?? '').trim();
         const sig = `${gen}:${cols.join()}:${typed}`;
@@ -412,6 +419,27 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       if (!Number.isInteger(n)) return prev;
       return { ...prev, [key]: { ...c, [b.field]: n } };
     });
+  };
+
+  // CONV-JOIN-NO-DESCRIPTION / CONV-JOIN-RESULTS-ONLY: the person's answer about the samples of a joined results sheet that have no description. It belongs to the JOIN (never to the sheet's own choices),
+  // is kept with the number of samples it was given for, and the converter honours it only while it finds the same number. "Ask again" takes it back, whether it was given here or read from a companion file.
+  const chooseForJoin = (f: Finding, choice: 'resultsOnly' | 'askAgain'): void => {
+    const file = files.find((x) => x.fileName === f.file);
+    if (file === undefined || f.sheet === undefined) return;
+    const mine = (j: JoinChoice): boolean => j.state === 'confirmed' && j.results.fileId === file.fileId && j.results.sheet === f.sheet;
+    setJoins((prev) =>
+      prev.map((j) => {
+        if (!mine(j)) return j;
+        if (choice === 'askAgain') {
+          const { resultsOnly: _r, ...rest } = j;
+          return rest;
+        }
+        const count = Number(f.params.count);
+        if (!Number.isInteger(count) || count < 0) return j;
+        const { fromFile: _f, ...rest } = j;
+        return { ...rest, resultsOnly: count };
+      }),
+    );
   };
 
   /**
@@ -681,7 +709,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setExportError(null);
     setExported(null);
     try {
-      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, joins, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       const acceptedRules = judged.acceptRules.filter(isAccepted);
       const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
       downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
@@ -812,7 +840,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setListBusy(true);
     setListError(null);
     try {
-      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
+      const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, joins, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       const res = await engine.notWritten({ body, metadata: meta });
       downloadFile(res.blob, res.fileName);
     } catch (e) {
@@ -847,10 +875,12 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const realCountsRows = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REAL-COUNTS').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
     const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
     const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
+    // the joins the person confirmed or declined: sheet names, row counts, hashes of the key columns and the numbers the answers were given for; never a sample code or a value
+    const sampleJoins = parsed ? sampleJoinSettingsOf(parsed, joins) : {};
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1373,13 +1403,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
                 <p className="muted">{t('convert.summary.noLand')}</p>
+                <ConvertSampleJoin view={view.sampleJoin} files={files} joins={joins} onChange={setJoins} {...(working || view.ledger === undefined ? {} : { ledger: view.ledger })} />
                 {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={exportBlocked} {...(notWrittenProps === undefined ? {} : { notWritten: notWrittenProps })} />}
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
                   </p>
                 )}
-                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onChoose={chooseForSheet} />
+                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} />
                 {(judged.acceptRules.length > 0 || unconfirmed.length > 0) && (
                   <div className="convert-accept">
                     <HeadingTip tip="convertAccept">
@@ -1398,7 +1429,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                             />
                             <span>{t('convert.accept.rule', { n: group.length, rule })}</span>
                           </label>
-                          <FindingItems findings={group} onChoose={chooseForSheet} onReadAsMeasurement={readAsMeasurement} />
+                          <FindingItems findings={group} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} onReadAsMeasurement={readAsMeasurement} />
                         </div>
                       );
                     })}
@@ -1416,7 +1447,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     )}
                   </div>
                 )}
-                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" onChoose={chooseForSheet} onReadAsMeasurement={readAsMeasurement} />
+                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" onChoose={chooseForSheet} onChooseJoin={chooseForJoin} onReadAsMeasurement={readAsMeasurement} />
                 <p role="status" className={view.ok ? 'notice' : 'notice notice-blocked'}>
                   {view.ok ? t('convert.summary.none') : t('convert.summary.blocked')}
                 </p>
@@ -1522,7 +1553,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1574,6 +1605,22 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose 
               </button>
             </>
           )}
+          {f.ruleId === 'CONV-JOIN-NO-DESCRIPTION' && onChooseJoin !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="results-only" onClick={() => onChooseJoin(f, 'resultsOnly')}>
+                {t('convert.finding.resultsOnly')}
+              </button>
+            </>
+          )}
+          {f.ruleId === 'CONV-JOIN-RESULTS-ONLY' && onChooseJoin !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="ask-again" onClick={() => onChooseJoin(f, 'askAgain')}>
+                {t('convert.finding.askAgain')}
+              </button>
+            </>
+          )}
           {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED') && onChoose !== undefined && (
             <>
               {' '}
@@ -1594,12 +1641,12 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose 
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} />
+      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} {...(onChooseJoin === undefined ? {} : { onChooseJoin })} />
     </div>
   );
 }
