@@ -114,8 +114,10 @@ function canonicalExact(key: string): string | undefined {
 }
 
 const NAME_SETS: Record<string, readonly string[]> = {
-  latitude: ['latitude', 'lat'],
-  longitude: ['longitude', 'lon', 'long', 'lng'],
+  // breitengrad / laengengrad / szerokosc geograficzna / dlugosc geograficzna: whole names the proposer reads as a position by the name alone (LAT_SAFE, LON_SAFE). The bare Breite, Laenge,
+  // Szerokosc and Dlugosc, and the authors' compounds (Latitude_dd, LatStart), are not entries: they stay listed.
+  latitude: ['latitude', 'lat', 'breitengrad', 'szerokosc geograficzna'],
+  longitude: ['longitude', 'lon', 'long', 'lng', 'langengrad', 'laengengrad', 'dlugosc geograficzna'],
   date: ['date'],
   datetime: ['datetime', 'date time'],
   time: ['time'],
@@ -124,6 +126,10 @@ const NAME_SETS: Record<string, readonly string[]> = {
   station: ['station'],
   cruise: ['cruise'],
 };
+/** The scientific name of a taxon, in the four languages of the page. The proposer reads it from the cells (Latin names), so the name states the taxon only where the proposal is a taxon. */
+const SCIENTIFIC_NAMES: ReadonlySet<string> = new Set(['scientific name', 'nom scientifique', 'wissenschaftlicher name', 'nazwa naukowa']);
+/** `Date (UTC)`: the time-zone note in round brackets that the proposer reads (`date utc`); in square brackets the note is already taken as a unit. Nothing else is a note: `Date (GMT)` stays listed. */
+const DATE_UTC_NOTE = /^date\s*\(\s*utc\s*\)$/i;
 const DATE_PART_NAMES: Record<string, 'year' | 'month' | 'day'> = { year: 'year', month: 'month', day: 'day' };
 /** The names that mean something in a PANGAEA table and nowhere else. */
 const PANGAEA_NAMES: Record<string, string> = { event: 'station', 'depth top': 'depth-min', 'depth bot': 'depth-max', campaign: 'cruise' };
@@ -167,6 +173,8 @@ function nameRole(header: string, ctx: StatedContext, facts: SheetFacts): Named 
     if (geocodeOfKey(key) !== undefined) return { meant: ['geocode'], basis: 'geocode' };
   }
   for (const [kind, set] of Object.entries(NAME_SETS)) if (set.includes(key)) return { meant: [kind], basis: 'vocabulary' };
+  if (DATE_UTC_NOTE.test(name.trim()) || DATE_UTC_NOTE.test(header.trim())) return { meant: ['date'], basis: 'vocabulary' };
+  if (SCIENTIFIC_NAMES.has(key)) return dwcTaxon ? undefined : { meant: ['taxon'], basis: 'vocabulary' };
   // a header that has the exact term scientificName beside it states the taxon: a second taxon-like column ("species") is then not stated
   if (TAXON_NAME.test(key)) return dwcTaxon ? undefined : { meant: ['taxon'], basis: 'vocabulary' };
   if (QUANTITY_STANDALONE.test(key) || QUANTITY_PHRASE_COUNT.test(key) || QUANTITY_PHRASE_DENSITY.test(key)) return { meant: ['quantity'], basis: 'vocabulary' };
