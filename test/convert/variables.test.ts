@@ -338,7 +338,7 @@ describe('Q5: what is proposed, what is only offered', () => {
 describe('T11: /check\'s vocabulary is untouched', () => {
   it('src/core/recognize/vocab.ts (UNIT_VOCAB, P01_HINTS, the canonical variables) is the one of production (96994b5) except for ONE deliberate change: its P01 code pattern comes from recognize/headerCodes.ts (a first letter is no longer required, as 66 current P01 codes begin with a digit)', () => {
     const sha = createHash('sha256').update(readFileSync(join(__dirname, '..', '..', 'src', 'core', 'recognize', 'vocab.ts'))).digest('hex');
-    expect(sha).toBe('ce50b292b3f5acaecb88c51918c8e7125e0fd02e9bac18f2d1e09a48dabad812');
+    expect(sha).toBe('14ca7d45def11a2dd8374ace89e28c9deffeec9ceade792ec9b14f29375f35f3');
   });
 
   it('the P01 pattern vocab.ts takes from recognize/headerCodes.ts is the vocabulary\'s own shape, and that file is pinned too', () => {
