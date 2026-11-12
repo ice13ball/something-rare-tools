@@ -37,7 +37,7 @@ describe('a name written with underscores is asked, never rewritten', () => {
     expect(entry(t).doubt).not.toBe('underscore');
   });
 
-  it.each(['Calanus_sp.', 'Oithona_spp.', 'Calanus_cf._glacialis', 'Pseudo-nitzschia_seriata', 'Calanus finmarchicus_CV', 'Calanus_finmarchicus(CV)'])(
+  it.each(['Calanus_sp.', 'Oithona_spp.', 'Calanus_cf._glacialis', 'Pseudo-nitzschia_seriata', 'Calanus finmarchicus_CV', 'Calanus_finmarchicus(CV)', 'Calanus finmarchicus_cv', 'Calanus finmarchicus_civ', 'Calanus finmarchicus_f', 'Calanus finmarchicus_juv', 'Calanus finmarchicus_adult', 'Calanus finmarchicus_sp.', 'Calanus cf._glacialis'])(
     '%s is asked, every word being judged, and keeps its text',
     (t) => {
       const e = entry(t);
@@ -56,6 +56,10 @@ describe('a name written with underscores is asked, never rewritten', () => {
     expect(underscoreSpaceSplit(entry('Oithona_spp.'))).toMatchObject({ scientificName: 'Oithona', identificationQualifier: 'spp.' });
     expect(underscoreSpaceSplit(entry('Calanus finmarchicus_CV'))).toBeUndefined();
     expect(underscoreSpaceSplit(entry('Calanus_finmarchicus(CV)'))).toBeUndefined();
+    for (const t of ['Pseudo-nitzschia spp._Group', 'Calanus finmarchicus_CopV', 'Calanus_finmarchicus.']) {
+      expect(entry(t).doubt, t).toBe('underscore');
+      expect(underscoreSpaceSplit(entry(t)), t).toBeUndefined();
+    }
   });
 
   it('an earlier doubt keeps its reason when a qualifier is glued on too, and underscore stays last', () => {

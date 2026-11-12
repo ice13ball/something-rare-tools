@@ -212,7 +212,7 @@ export function nameDoubt(name: string): NameDoubt | undefined {
  * A word of the name is two or more parts joined by underscores, each part letters only: it may end in a dot ("sp.", "cf.") or hold an inner hyphen
  * ("Pseudo-nitzschia"), and the last part may end in a bracket of letters ("finmarchicus(CV)"). Every word is judged:
  *   - the first word needs a capitalised first part ("Calanus_finmarchicus", "Calanus_sp.", "Pseudo-nitzschia_seriata");
- *   - a later word is asked when its first part is lower case and some part is not ("finmarchicus_CV"); a later word that starts with a capital ("Smith_Jones", an author part) is not asked.
+ *   - a later word is asked whenever it does not start with a capital ("finmarchicus_CV", "finmarchicus_cv", "finmarchicus_f", "cf._glacialis"); a later word that starts with a capital ("Smith_Jones", an author part) is not asked.
  * A code ("SP_01", "sp_1": digits are caught earlier anyway), an all-lower-case word ("genus_species") and an empty part are not a name written with underscores.
  * The name is never rewritten; this only decides whether the person is asked.
  */
@@ -221,7 +221,7 @@ const underscoreName = (word: string, first: boolean): boolean => {
   const parts = word.split('_');
   if (parts.length < 2 || !parts.every((p) => NAME_PART.test(p))) return false;
   if (first) return /^\p{Lu}/u.test(parts[0]);
-  return /^\p{Ll}/u.test(parts[0]) && parts.some((p) => /\p{Lu}/u.test(p));
+  return !/^\p{Lu}/u.test(parts[0]);
 };
 
 /** Did the split take something out of the name (a qualifier or a stage)? Only those need the user's approval. */
@@ -326,6 +326,9 @@ export function underscoreSpaceSplit(s: SplitEntry): TaxonSplit | undefined {
   if (nameDoubt(spaced.scientificName) !== undefined) return undefined;
   // only a name and, at most, a qualifier: a stage, a sex or anything else the list does not show leaves the name to its own row
   if (spaced.lifeStage !== undefined || spaced.sex !== undefined) return undefined;
+  // what is left must be a plain name (a capitalised genus, up to two lower-case words, rank markers allowed): "Pseudo-nitzschia spp. Group", "Calanus finmarchicus CopV" and "Calanus finmarchicus." are not offered
+  const nameWords = spaced.scientificName.split(' ');
+  if (!/^\p{Lu}\p{L}*(?:-\p{L}+)*$/u.test(nameWords[0]) || !nameWords.slice(1).every((w) => /^(?:\p{Ll}[\p{Ll}-]*|(?:f|var|subsp|ssp|forma)\.)$/u.test(w))) return undefined;
   // a bracket left in the name ("Calanus finmarchicus(CV)") is a stage or a remark the converter did not read: that name stays on its own row
   if (/[()]/.test(spaced.scientificName)) return undefined;
   return { ...spaced, verbatimIdentification: s.verbatim };
