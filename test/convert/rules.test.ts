@@ -98,6 +98,15 @@ describe('the CONV-JOIN texts', () => {
     expect(five).toContain('5 próbek nie ma');
     expect(new Set([one, two, five].map((t) => t.replace(/X\d\d(, X\d\d)*/, '')))).toHaveProperty('size', 3);
   });
+  it('Polish many forms stay grammatical where no numeral stands, and CONFLICT hides the internal group key', () => {
+    expect(plain('CONV-JOIN-NO-DESCRIPTION', { count: 5, samples: 'X01', description: 'Samples' }, 'pl')).toContain('dopisz wiersze');
+    expect(plain('CONV-JOIN-DESCRIPTION-ONLY', { count: 5, samples: 'X01', description: 'Samples' }, 'pl')).toContain('Zostaną zapisane jako zdarzenia próbki');
+    const chosen = plain('CONV-JOIN-CONFLICT-CHOSEN', { what: 'data', count: 3, fromDescription: 2, fromResults: 1 }, 'en');
+    expect(chosen).toContain('for 2 samples');
+    expect(chosen).toContain('for 1 sample.');
+    expect(plain('CONV-JOIN-CONFLICT', { what: 'T', group: 'v.3fa9', count: 1, total: 2, examples: 'X01' }, 'en')).not.toContain('v.3fa9');
+    expect(plain('CONV-JOIN-KEY-BLANK', { count: 1, columns: 'Code', side: 'results' }, 'en')).not.toContain('leave');
+  });
   it('CONV-JOIN-KEY-BLANK says it of the description rows on the description side', () => {
     const results = plain('CONV-JOIN-KEY-BLANK', { count: 2, columns: 'Code', side: 'results' }, 'en');
     const description = plain('CONV-JOIN-KEY-BLANK', { count: 2, columns: 'Code', side: 'description' }, 'en');
