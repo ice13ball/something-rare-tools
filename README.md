@@ -3,13 +3,13 @@
 Browser-first tools for marine datasets, served at https://tools.something-rare.com: a data check,
 a licence check, a collection review and a spreadsheet to Darwin Core Archive converter. Drop CSV/Excel
 files (or point at a public record); the tools propose a column mapping, run declarative rules that cite
-the source of every threshold, show a plain-language report and a map, and export a clean CSV, GeoJSON,
+the published source of each threshold taken from one, and name the limits that are the tool's own choices, show a plain-language report and a map, and export a clean CSV, GeoJSON,
 metadata drafts or a Darwin Core Archive for OBIS. Files you drop are read in your browser and are never uploaded; what else can leave the browser is listed in
 [`docs/APPS.md`](docs/APPS.md#2-what-leaves-your-browser).
 
 ## What is in here
 
-Six pages, all public: each is in the sitemap, and the first four tools are in the main menu on the home page.
+Six pages, all public: each is in the sitemap, and the first four tools are in the main menu in the header of every page, not only on `/`.
 None is hidden or unlisted.
 
 | Path | What it is |
@@ -66,6 +66,8 @@ page too.
   (macOS, Windows, Linux) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux).
 
 No database, account or API key is needed.
+
+**Offline.** After `npm ci` (and `npm run dev`, or `npm run build` and `npm start`) the data check and the converter work on dropped files without internet, for example on a research vessel. Without a network the map under the report, the WoRMS and NVS lookups, fetching a record by link or DOI, `/licence` and `/collection` do not work.
 
 ### macOS
 
@@ -282,6 +284,8 @@ The public site is deployed by the maintainers with `scripts/deploy.sh`; you do 
 
 Two Zenodo records are being prepared: an article describing the tools and the source code with its own DOI.
 Until they are published, cite the tools by their URL, https://tools.something-rare.com.
+
+The tools build on Abyssal Claims: its documentation is 10.5281/zenodo.19745884 and the source code of its engine is 10.5281/zenodo.22728476 (the same two records are listed under `references` in `CITATION.cff`).
 
 - Article: DOI to be added on publication
 - Source code: DOI to be added on publication

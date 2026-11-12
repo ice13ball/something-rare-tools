@@ -116,12 +116,18 @@ order, a `?lang=` parameter on arrival (it is then removed from the address), th
 **Dropped files are never uploaded.** This was checked against every `fetch`, `XMLHttpRequest`,
 `sendBeacon`, `WebSocket` and `EventSource` in `src/`: there is no code path that posts the
 content of a dropped file anywhere. That is **not** the same as "nothing derived from them leaves
-the browser". Three things can leave it, two derived from your files and one you type; the table below lists them:
-**taxon names** when you press the WoRMS lookup on `/convert` (`lookupWormsNames`); **a word you
-type** in an NVS search on `/convert` (`searchNvs`); and **the map area of the positions**, as CARTO
-tile requests, automatically after a `/check` report that has positions (`MapPreview`, `fitBounds`).
-Taxon names and search words can reveal unpublished findings (the privacy page says so). The links
-and identifiers you paste are, of course, sent to the record's host. A test fails when a module of
+the browser". Five things can leave it, and the table below lists each with its host:
+(a) **taxon names** to WoRMS (`www.marinespecies.org`) when you press the lookup button on `/convert` (`lookupWormsNames`);
+(b) **a word you type** to NVS (`vocab.nerc.ac.uk`) in an NVS search on `/convert` (`searchNvs`);
+(c) **the map area of the positions**, as tile requests to CARTO (`basemaps.cartocdn.com` and its tile hosts), together with your IP address,
+automatically after a `/check` report that has positions (`MapPreview`, `fitBounds`);
+(d) **after you accept the analytics banner, GA4 events with numbers derived from your files** (counts of errors, warnings, events and occurrences,
+the shape of the sheet, and yes/no flags for the WoRMS and NVS lookups; `src/app/analytics.ts`), sent to the Google hosts `www.googletagmanager.com`,
+`www.google-analytics.com`, `region1.google-analytics.com`, `analytics.google.com`, `region1.analytics.google.com` and `stats.g.doubleclick.net`
+(`GA_HOSTS`, `config/hosts.ts`); and
+(e) **a link or DOI you paste**, which is sent to the host of the record (the allowlisted data hosts, `DATA_HOSTS`: the three hosts
+`opendap.iopan.pl`, `geo.iopan.pl` and `geonetwork.iopan.pl`, Zenodo, PANGAEA, DataCite, the Dataverse installations and the GBIF/OBIS registries and IPT servers; the full list and the CSW catalogues are on `/privacy`).
+Taxon names and search words can reveal unpublished findings (the privacy page says so). A test fails when a module of
 the converter other than the two opt-in files calls `fetch` (`test/convert/no-network.test.ts`).
 
 | What | Where it goes | When | What it carries |
@@ -495,7 +501,7 @@ long environmental sheets (8.4).
 
 **A rule** (`src/core/rules/*.ts`, assembled in `registryCheck.ts` for the pages and workers that raise only /check, /licence and /collection rules, and in `registry.ts` for the full public registry that adds the converter's) has an id, a category (`input`,
 `A` licence and metadata, `B` rows and Darwin Core, `C` across files and chemistry), a severity,
-a plain wording for a non-specialist and a technical wording, in four languages, optional
+a plain wording for a non-specialist in four languages (en, de, fr, pl) and a technical wording in English only, optional
 `thresholds` (a number with its unit and a citation) and `citations`. Every **published**
 limit a check compares against is read with `threshold(ruleId, name)`, which throws on a typo, so it
 cannot drift from the rule that cites it. The tool's **own choices** are named constants in the
@@ -504,8 +510,8 @@ code, not rule thresholds: `SPREAD_KM` (10) and `FAR_KM` (1000) in `checks/rows.
 (10, `checks/constants.ts`), `MIXED_SHARE`, `MIXED_MIN` and `MIN_EVENTS` in `checks/speed.ts`,
 `SIGN_FLIP_KM`, `SIGN_FLIP_MIN_KM` and `SIGN_FLIP_RATIO` in `checks/rows.ts`, `TYPED_DIGIT_MIN_DECIMALS` (2, `checks/rows.ts`), `LAT_EQ_LON_MIN_ROWS` (5) and
 `LAT_EQ_LON_MIN_SHARE` (0.2) in `checks/rows.ts` (agreed with a data specialist, not published), `ON_LAND_MIN_KM` (50),
-`ON_LAND_NEAR_MIN_KM` (10) and `COAST_BUFFER_KM` (5) in `geo/land.ts`, and `DWC_MIN_TERMS` (3) in
-`checks/dwc.ts`. A **finding** is an instance of a rule on a file, sheet,
+`ON_LAND_NEAR_MIN_KM` (10) and `COAST_BUFFER_KM` (5) in `geo/land.ts`, `DWC_MIN_TERMS` (3) in
+`checks/dwc.ts`, and, in the converter, `STATION_FAR_KM` (10, `convert/build.ts`; rule `CONV-PROFILE-STATION-FAR`). A **finding** is an instance of a rule on a file, sheet,
 lines, field and value (`makeFinding`).
 
 **Severities.** `error`, `warning`, `info` (shown as Error, Warning, Note). Severity is a property
@@ -1140,7 +1146,8 @@ the checker does, asks the user to confirm what each column means and what the n
 the event hierarchy, writes the three tables and the EML, runs the same Darwin Core and row checks
 that `/check` runs on archives over its **own output**, and refuses to write while anything blocks.
 It never defaults a licence or a basis of record, never invents an identifier for a sample, and
-never writes a vocabulary identifier the user did not confirm.
+never writes a vocabulary identifier for a measured variable that the user did not confirm, apart from the codes on its short verified list that
+belong to the role the user declared (for example `OCOUNT01` for a count, `VOLWBSMP` for a sampled volume, `MCUB` for cubic metres).
 
 ### Inputs
 
@@ -2045,8 +2052,8 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 ## 13. Rule families
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
-assembles the per-category files) by a throwaway script run outside the commit, as of
-**2026-11-03** (recomputed from `docs/rules.md` after `ROW-KEY-IGNORED` was added; the rows of the table had drifted before). The total, **203 rules**, equals the number of rule rows in
+assembles the per-category files) by a throwaway script run outside the commit, at this release
+(the rule set of commit `7f99a18`, unchanged by the documentation commits after it; recomputed from `docs/rules.md`, which a test keeps equal to the registry). The total, **215 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
 regenerate it when rules change.
@@ -2060,8 +2067,8 @@ regenerate it when rules change.
 | `DWC-` | `B` | 9 | 6 / 3 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 91 | 41 / 36 / 14 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **203** | | | |
+| `CONV-` | `B` | 103 | 43 / 40 / 20 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **215** | | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -2079,7 +2086,7 @@ Each item below is confirmed from code, a test, or a rule text.
 - Several limits are the tool's own choice, kept as code constants rather than cited thresholds
   (listed in 3.5): the 10 km "one place" size of the ship-speed check and `ROW-STATION-SPREAD`, the
   1000 km of `ROW-STATION-SPREAD-FAR` (its technical text says so), the land-mask distances, the
-  number of terms that make a table Darwin Core. Of these, only `ROW-STATION-SPREAD-FAR` says so in its rule text.
+  number of terms that make a table Darwin Core, the 10 km of `CONV-PROFILE-STATION-FAR`. Of these, only `ROW-STATION-SPREAD-FAR` and `ROW-LAT-EQ-LON` say so in their technical text.
 - Roles found by cells stay **proposals**, at low confidence, with their reason shown: a text column of Latin-looking words beside a named count (`Method` = `Visual census ...`, `Mare nostrum`) can be offered as the taxon, and `Dominant species` beside an `Abundance` column reads as a long sheet. The user sees the reason and changes the role; no further rule is added, because it would tune to the examples.
 - Several single specimens of one taxon in one sample, written on the occurrences (`value-per-occurrence`), still need an occurrence ID or a life-stage column: without one `CONV-ID-DUPLICATE` blocks, as it does for any repeated taxon in a sample.
 - The sheets of a finding that lists many are shown up to ten and counted after (`A, B ... (+30)`).

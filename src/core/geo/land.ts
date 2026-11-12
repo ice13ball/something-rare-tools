@@ -7,7 +7,7 @@
  *   0      no claim (the coastal band, uncertain)
  *   1      sea, at least COAST_BUFFER_KM km from land or a lake
  *   2 + i  land or an inland lake, at least bucketKm[i] km from the sea (a marine record in a lake is as misplaced as one on land)
- * The grid ships gzip-compressed (about 0.45 MB) and is loaded only when a dataset has positions.
+ * The grid ships gzip-compressed (about 0.32 MB) and is loaded only when a dataset has positions.
  */
 
 export const LAND_SOURCE = 'Natural Earth 1:10m (public domain)';

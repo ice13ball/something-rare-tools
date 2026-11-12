@@ -37,7 +37,9 @@ text of the finding rather than a paraphrase.
 ## What cannot be accepted
 
 - **No real third-party data in the repository.** Tests use synthetic files; a public record
-  is referred to by its identifier, not copied in.
+  is referred to by its identifier, not copied in. The exceptions are a few fixtures that quote public
+  licence sentences from public catalogues (`test/fixtures/iso-prose-corpus.txt`); the DOI corpus of the
+  licence tests is a list of public identifiers.
 - **No threshold without a source.** Every number a rule compares against is cited, or stated
   in the rule text as the tool's own choice (`docs/research/qc-sources.md`).
 - **No new tool and no new user decision without its ⓘ.** See "Explanations" below.
