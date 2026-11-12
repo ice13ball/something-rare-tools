@@ -6,7 +6,7 @@ abstract: >-
   Data check reads data tables (CSV, TSV, Excel, PANGAEA, Darwin Core) and their
   metadata and reports problems with coordinates, positions on land, stations at
   inconsistent positions, dates, units, value ranges and licences, each explained
-  in plain words with the published source of each threshold taken from one, the limits that are the tool's own choices being named as such. Licence check compares the
+  in plain words; each threshold taken from a publication cites it, and the limits that are the tool's own choices are listed in the documentation (docs/APPS.md, section 3.5, in the repository). Licence check compares the
   licence that the metadata sources of one dataset state (Zenodo, PANGAEA,
   GeoNetwork, DataCite). Collection review reads the metadata of a whole
   collection and produces a fix list of missing, unclear or contradictory

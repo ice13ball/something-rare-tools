@@ -3,7 +3,7 @@
 Browser-first tools for marine datasets, served at https://tools.something-rare.com: a data check,
 a licence check, a collection review and a spreadsheet to Darwin Core Archive converter. Drop CSV/Excel
 files (or point at a public record); the tools propose a column mapping, run declarative rules that cite
-the published source of each threshold taken from one, and name the limits that are the tool's own choices, show a plain-language report and a map, and export a clean CSV, GeoJSON,
+the published source of each threshold that has one (the limits that are the tool's own choices are listed in [`docs/APPS.md`](docs/APPS.md), section 3.5), show a plain-language report and a map, and export a clean CSV, GeoJSON,
 metadata drafts or a Darwin Core Archive for OBIS. Files you drop are read in your browser and are never uploaded; what else can leave the browser is listed in
 [`docs/APPS.md`](docs/APPS.md#2-what-leaves-your-browser).
 

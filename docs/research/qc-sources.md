@@ -366,7 +366,8 @@ Source of the design: `AI-Wall/handoff/HANDOFF-SR-TOOLS-PREDKOSC-STATKU.md` and 
 **Measured (24.10.2026; real data, never in the repository; local folder `ship-speed-2026-10-24`)**
 - OBIS AMT12 and AMT13 (James Clark Ross, `eventDate` intervals) and the AMT13 net hauls, with the declaration: 0 findings.
 - OBIS JERICO / Simon Stevin (day and month swapped in `eventDate`): one ROW-SHIP-SPEED-PAIR, 117 km in at most 0.5 h, at least 126 knots; the second hop of the research (22.6 knots) is below the lone-pair limit and not reported.
-- Tested on many different datasets, with the declaration, 3 rules, classified in the report of the session that wrote the rule: true errors (`lat = lon` rows, a shifted row), copied time stamps, one collateral flag on a correct event between two wrong ones, and CoastDOM as false alarms by construction (a global compilation; the tick does not hold).
+- Tested on many different datasets.
+- CoastDOM under a wrong tick: false alarms by construction (a global compilation; the tick does not hold).
 - ChEssBase (no `eventDate`) without the declaration: not run, reported as not checked.
 
 ## OBIS / Darwin Core basic checks (2026-10-24): ROW-ZERO-COORD, ROW-NO-COORD, ROW-DEPTH-MIN-MAX, ROW-DEPTH-RANGE, ROW-DATE-FUTURE, ROW-INVISIBLE-CHAR, ROW-STATION-SPREAD-FAR, DWC-*

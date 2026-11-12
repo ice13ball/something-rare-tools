@@ -116,17 +116,18 @@ order, a `?lang=` parameter on arrival (it is then removed from the address), th
 **Dropped files are never uploaded.** This was checked against every `fetch`, `XMLHttpRequest`,
 `sendBeacon`, `WebSocket` and `EventSource` in `src/`: there is no code path that posts the
 content of a dropped file anywhere. That is **not** the same as "nothing derived from them leaves
-the browser". Five things can leave it, and the table below lists each with its host:
+the browser". Everything that can leave it is listed in the table below, with its host. In short, these are the cases:
 (a) **taxon names** to WoRMS (`www.marinespecies.org`) when you press the lookup button on `/convert` (`lookupWormsNames`);
 (b) **a word you type** to NVS (`vocab.nerc.ac.uk`) in an NVS search on `/convert` (`searchNvs`);
 (c) **the map area of the positions**, as tile requests to CARTO (`basemaps.cartocdn.com` and its tile hosts), together with your IP address,
-automatically after a `/check` report that has positions (`MapPreview`, `fitBounds`);
-(d) **after you accept the analytics banner, GA4 events with numbers derived from your files** (counts of errors, warnings, events and occurrences,
-the shape of the sheet, and yes/no flags for the WoRMS and NVS lookups; `src/app/analytics.ts`), sent to the Google hosts `www.googletagmanager.com`,
+automatically after a `/check` report that has positions (`MapPreview`, `fitBounds`); if CARTO does not answer, the map is drawn from a land file served by this site (a request to this site only);
+(d) **after you accept the analytics banner, GA4 events with numbers derived from your files**, sent to the Google hosts `www.googletagmanager.com`,
 `www.google-analytics.com`, `region1.google-analytics.com`, `analytics.google.com`, `region1.analytics.google.com` and `stats.g.doubleclick.net`
-(`GA_HOSTS`, `config/hosts.ts`); and
-(e) **a link or DOI you paste**, which is sent to the host of the record (the allowlisted data hosts, `DATA_HOSTS`: the three hosts
-`opendap.iopan.pl`, `geo.iopan.pl` and `geonetwork.iopan.pl`, Zenodo, PANGAEA, DataCite, the Dataverse installations and the GBIF/OBIS registries and IPT servers; the full list and the CSW catalogues are on `/privacy`).
+(`GA_HOSTS`, `config/hosts.ts`). The event parameters are the 13 that `track()` in `src/app/analytics.ts` lets through: `input_type`, `mode`, `shape`, `profile`,
+`meta_source`, `worms`, `nvs` (enumerated words or flags) and the counts `n_errors`, `n_warnings`, `n_info`, `n_events`, `n_occurrences`, `n_measurements`;
+(e) **a link or DOI you paste** on `/check` or `/licence`: in browser mode (the default) it goes to the host of the record (the allowlisted data hosts, `DATA_HOSTS`: the three hosts
+`opendap.iopan.pl`, `geo.iopan.pl` and `geonetwork.iopan.pl`, Zenodo, PANGAEA, DataCite, the Dataverse installations and the GBIF/OBIS registries and IPT servers; the full list and the CSW catalogues are on `/privacy`); in **server mode** (`POST /api/fetch`) it goes to this site's server, which fetches the record for you; and
+(f) **what `/collection` asks for**: a DOI batch, a DataCite client or prefix and a Zenodo community name go to DataCite and Zenodo from your browser, and a catalogue id with the request parameters goes to this site's server through `POST /api/csw`.
 Taxon names and search words can reveal unpublished findings (the privacy page says so). A test fails when a module of
 the converter other than the two opt-in files calls `fetch` (`test/convert/no-network.test.ts`).
 
@@ -1146,8 +1147,8 @@ the checker does, asks the user to confirm what each column means and what the n
 the event hierarchy, writes the three tables and the EML, runs the same Darwin Core and row checks
 that `/check` runs on archives over its **own output**, and refuses to write while anything blocks.
 It never defaults a licence or a basis of record, never invents an identifier for a sample, and
-never writes a vocabulary identifier for a measured variable that the user did not confirm, apart from the codes on its short verified list that
-belong to the role the user declared (for example `OCOUNT01` for a count, `VOLWBSMP` for a sampled volume, `MCUB` for cubic metres).
+never writes a vocabulary identifier for a measured variable that the user did not confirm, apart from the type and unit codes on its short verified list
+that belong to the roles the user declared (for example `OCOUNT01` for a count, `VOLWBSMP` for a sampled volume, the unit `MCUB` for cubic metres).
 
 ### Inputs
 
@@ -2088,7 +2089,7 @@ Each item below is confirmed from code, a test, or a rule text.
 - Several limits are the tool's own choice, kept as code constants rather than cited thresholds
   (listed in 3.5): the 10 km "one place" size of the ship-speed check and `ROW-STATION-SPREAD`, the
   1000 km of `ROW-STATION-SPREAD-FAR` (its technical text says so), the land-mask distances, the
-  number of terms that make a table Darwin Core, the 10 km of `CONV-PROFILE-STATION-FAR`. Of these, only `ROW-STATION-SPREAD-FAR` and `ROW-LAT-EQ-LON` say so in their technical text.
+  number of terms that make a table Darwin Core, the 10 km of `CONV-PROFILE-STATION-FAR`. Of the own-choice limits listed in 3.5, only those of `ROW-STATION-SPREAD-FAR` and `ROW-LAT-EQ-LON` are said to be the tool's own choice in the rule's technical text; the others are named as such only in section 3.5 and in the code comments, not in the report.
 - Roles found by cells stay **proposals**, at low confidence, with their reason shown: a text column of Latin-looking words beside a named count (`Method` = `Visual census ...`, `Mare nostrum`) can be offered as the taxon, and `Dominant species` beside an `Abundance` column reads as a long sheet. The user sees the reason and changes the role; no further rule is added, because it would tune to the examples.
 - Several single specimens of one taxon in one sample, written on the occurrences (`value-per-occurrence`), still need an occurrence ID or a life-stage column: without one `CONV-ID-DUPLICATE` blocks, as it does for any repeated taxon in a sample.
 - The sheets of a finding that lists many are shown up to ten and counted after (`A, B ... (+30)`).
