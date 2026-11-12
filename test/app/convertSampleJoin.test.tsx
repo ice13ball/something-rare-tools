@@ -404,6 +404,12 @@ describe('the panel on its own', () => {
     expect(all.container.textContent).not.toContain('Only the first');
   });
 
+  it('a conflict group names the results and the description columns it compares', () => {
+    const v = { proposals: [], conflicts: [{ group: 'depth', quantity: 'depth', label: 'Depth.ini, Depth', resultsColumns: ['Depth.ini'], descriptionColumns: ['Depth'], count: 2, entries: [entry(1), entry(2)], results: R }] } as never;
+    const { getByTestId } = render(<ConvertSampleJoin view={v} files={files} joins={[join]} onChange={vi.fn()} />);
+    expect(getByTestId('join-group-columns').textContent).toBe('Columns: results Depth.ini; description Depth');
+  });
+
   it('says a confirmed join was not applied when the settled ledger has no description sheet for it', () => {
     const ledger = [{ file: 'results.csv', sheet: 'results.csv', kind: 'wide' }] as never;
     const { container } = render(<ConvertSampleJoin view={{ proposals: [], conflicts: [], resultsSheets: [] }} files={files} joins={[join]} onChange={vi.fn()} ledger={ledger} />);

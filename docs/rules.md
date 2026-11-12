@@ -136,6 +136,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-JOIN-UNIT-DIFFERS | error | B | — | —<a id="CONV-JOIN-UNIT-DIFFERS"></a> |
 | CONV-JOIN-COLUMNS-DIFFER | error | B | — | —<a id="CONV-JOIN-COLUMNS-DIFFER"></a> |
 | CONV-JOIN-NO-DESCRIPTION | error | B | — | —<a id="CONV-JOIN-NO-DESCRIPTION"></a> |
+| CONV-JOIN-NO-MATCH | error | B | — | —<a id="CONV-JOIN-NO-MATCH"></a> |
 | CONV-JOIN-RESULTS-ONLY | info | B | — | —<a id="CONV-JOIN-RESULTS-ONLY"></a> |
 | CONV-JOIN-DESCRIPTION-ONLY | warning | B | — | —<a id="CONV-JOIN-DESCRIPTION-ONLY"></a> |
 | CONV-JOIN-AMBIGUOUS | error | B | — | —<a id="CONV-JOIN-AMBIGUOUS"></a> |

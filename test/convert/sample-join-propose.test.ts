@@ -90,6 +90,17 @@ describe('proposeSampleJoins', () => {
     expect(got).toEqual([]);
   });
 
+  it('a picked key whose own role is ignore is still a key column: paired by the same header, no role guessed from values', () => {
+    const file = xlsxFile('b.xlsx', {
+      Counts: [['Code', 'Taxon', 'Count'], ['X01', ...TAX], ['X02', ...TAX]],
+      Samples: [['Code', 'Station'], ['X01', 'ST-1'], ['X02', 'ST-2'], ['X03', 'ST-3']],
+    });
+    const edit = { Code: { kind: 'ignore' }, Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } };
+    const res = resultsInput(file, 'Counts', { sampleKey: { columns: [0] }, edit } as never);
+    const desc = descriptionInput(file, 'Samples', { edit: { Code: { kind: 'ignore' } } } as never);
+    expect(proposeSampleJoins([res, desc], [])).toEqual([expect.objectContaining({ keys: [{ results: 0, description: 0 }], covered: 2, samples: 2 })]);
+  });
+
   it('a description read through its pivot is shown as long', () => {
     expect(proposeSampleJoins(bookInputs('long-samples'), [])).toEqual([expect.objectContaining({ results: 0, description: 1, long: true })]);
   });

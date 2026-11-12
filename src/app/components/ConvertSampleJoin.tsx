@@ -98,6 +98,11 @@ function GroupPanel({ group, answer: given, undecided, onAnswer }: { group: Grou
   return (
     <div className="convert-join-group" data-testid="join-group" data-group={group.group}>
       <h4>{t('convert.join.conflict.title', { label: group.label, count: group.count })}</h4>
+      {(group.resultsColumns?.length ?? 0) + (group.descriptionColumns?.length ?? 0) > 0 && (
+        <p className="muted" data-testid="join-group-columns">
+          {t('convert.join.conflict.columns', { results: (group.resultsColumns ?? []).join(', '), description: (group.descriptionColumns ?? []).join(', ') })}
+        </p>
+      )}
       <p>
         <button type="button" className="button" aria-pressed={answer?.take === 'description'} onClick={() => setTake(answer?.take === 'description' ? undefined : 'description')}>
           {t('convert.join.conflict.takeDescription')}

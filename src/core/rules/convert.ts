@@ -29,13 +29,14 @@ import type { RuleSpec } from './spec';
  *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
  *   CONV-JOIN-PROPOSED         description, descriptionFile, keys, covered, samples   a sheet seems to describe the samples of this one, linked by keys; covered of samples found; nothing is joined until confirmed (info)
  *   CONV-JOIN-DESCRIPTION-LONG description, descriptionFile, keys   the same, but the description sheet is in the long layout (one row per parameter): not supported yet, both sheets are converted as without a join (info)
- *   CONV-JOIN-CONFLICT         what, group, count, total, examples   what differs between the two sheets in total samples, count of them still undecided; blocks until decided for all, per sample or per pair of values (error)
+ *   CONV-JOIN-CONFLICT         what, group, count, total, examples, resultsColumns, descriptionColumns   what differs between the two sheets in total samples, count of them still undecided, and the headers of the columns it compares on each side; blocks until decided for all, per sample or per pair of values (error)
  *   CONV-JOIN-CONFLICT-CHOSEN  what, count, fromDescription, fromResults   the answer to the above: what was taken from which sheet (info)
  *   CONV-JOIN-UNIT-DIFFERS     what, resultsColumn, resultsUnit, descriptionColumn, descriptionUnit   a quantity both sheets have in two units the merge cannot compare or exchange; blocks until the same unit is stated in both sheets or one of the two columns is set to ignore (error)
  *   CONV-JOIN-COLUMNS-DIFFER   what, resultsColumn, descriptionColumn   a quantity both sheets have in different sets of columns the merge cannot pair; blocks until one side's columns are set to ignore or both sheets use the same columns (error)
- *   CONV-JOIN-NO-DESCRIPTION   count, samples, description   samples of the results sheet with no row in the description sheet; blocks until converted with only what the results sheet says (error)
+ *   CONV-JOIN-NO-DESCRIPTION   count, samples, description, descriptionOnly   samples of the results sheet with no row in the description sheet; descriptionOnly (when there are such) = up to 5 keys of the description sheet with no results; blocks until converted with only what the results sheet says (error)
+ *   CONV-JOIN-NO-MATCH         description, descriptionFile, resultsColumns, descriptionColumns, resultsExamples, descriptionExamples   no key of the results sheet is in the description sheet (up to 5 example keys from each side); blocks, with no "results only" answer (error)
  *   CONV-JOIN-RESULTS-ONLY     count, samples, fromFile   the answer to the above (info, with "Ask again"); fromFile = the answer came from the companion file
- *   CONV-JOIN-DESCRIPTION-ONLY count, samples, description   samples described with no results: written as sample events with no occurrence (warning, accept)
+ *   CONV-JOIN-DESCRIPTION-ONLY count, samples, description, resultsWithout   samples described with no results: written as sample events with no occurrence; resultsWithout (when there are such) = up to 5 keys of the results sheet with no description (warning, accept)
  *   CONV-JOIN-AMBIGUOUS        count, keys, description   file, sheet, lines = the DESCRIPTION rows; a key with several different rows (error)
  *   CONV-JOIN-KEY-BLANK        count, columns, side   side = results: results rows with a blank key part; side = description: file, sheet, lines = the DESCRIPTION rows whose values can be lent to no sample; blocks until the rows are left out or the key is filled (error)
  *   CONV-JOIN-FILLED           count, column, from   one per column: count blank cells filled from sheet from (info)
@@ -358,14 +359,14 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-CONFLICT',
     category: 'B',
     severity: 'error',
-    params: ['what', 'group', 'count', 'total', 'examples'],
+    params: ['what', 'group', 'count', 'total', 'examples', 'resultsColumns', 'descriptionColumns'],
     plain: {
-      pl: `{what} różni się między dwoma arkuszami w {total} {+total:próbce|próbkach|próbkach}, np. (opis / wyniki) {examples}. Do rozstrzygnięcia zostało: {count}. Wybierz wartość dla wszystkich naraz, dla każdej próbki osobno albo dla każdej pary wartości.`,
-      en: `{what} differs between the two sheets in {total} {+total:sample|samples}, e.g. (description / results) {examples}. Still to decide: {count}. Choose a value for all of them at once, for each sample, or for each pair of values.`,
-      de: `{what} unterscheidet sich zwischen den beiden Blättern in {total} {+total:Probe|Proben}, z. B. (Beschreibung / Ergebnisse) {examples}. Noch zu entscheiden: {count}. Wählen Sie einen Wert für alle zugleich, für jede Probe einzeln oder für jedes Wertepaar.`,
-      fr: `{what} diffère entre les deux feuilles pour {total} {+total:échantillon|échantillons}, p. ex. (description / résultats) {examples}. Reste à décider : {count}. Choisissez une valeur pour tous à la fois, pour chaque échantillon, ou pour chaque paire de valeurs.`,
+      pl: `{what} różni się między dwoma arkuszami w {total} {+total:próbce|próbkach|próbkach}, np. (opis / wyniki) {examples}. Do rozstrzygnięcia zostało: {count}. Wybierz wartość dla wszystkich naraz, dla każdej próbki osobno albo dla każdej pary wartości. Kolumny: wyniki {resultsColumns}; opis {descriptionColumns}.`,
+      en: `{what} differs between the two sheets in {total} {+total:sample|samples}, e.g. (description / results) {examples}. Still to decide: {count}. Choose a value for all of them at once, for each sample, or for each pair of values. Columns: results {resultsColumns}; description {descriptionColumns}.`,
+      de: `{what} unterscheidet sich zwischen den beiden Blättern in {total} {+total:Probe|Proben}, z. B. (Beschreibung / Ergebnisse) {examples}. Noch zu entscheiden: {count}. Wählen Sie einen Wert für alle zugleich, für jede Probe einzeln oder für jedes Wertepaar. Spalten: Ergebnisse {resultsColumns}; Beschreibung {descriptionColumns}.`,
+      fr: `{what} diffère entre les deux feuilles pour {total} {+total:échantillon|échantillons}, p. ex. (description / résultats) {examples}. Reste à décider : {count}. Choisissez une valeur pour tous, par échantillon ou par paire de valeurs. Colonnes : résultats {resultsColumns} ; description {descriptionColumns}.`,
     },
-    technical: `{file}, {sheet}: {what} (group {group}) holds a different value in the results sheet and in the description sheet for {total} sample(s), e.g. {examples}; {count} of them are not decided yet. Nothing is chosen for the person: the export is blocked until each is decided for all, per sample or per pair of values.`,
+    technical: `{file}, {sheet}: {what} (group {group}) holds a different value in the results sheet and in the description sheet for {total} sample(s), e.g. {examples}; the columns compared are {resultsColumns} (results) and {descriptionColumns} (description); {count} of them are not decided yet. Nothing is chosen for the person: the export is blocked until each is decided for all, per sample or per pair of values.`,
   },
   {
     id: 'CONV-JOIN-CONFLICT-CHOSEN',
@@ -417,7 +418,31 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Probe hat|Proben haben} keine Zeile im Blatt „{description}“: {samples}. Wandeln Sie {+count:sie|sie} nur mit den Angaben des Ergebnisblatts um oder ergänzen Sie {+count:die Zeile|die Zeilen} im Beschreibungsblatt.`,
       fr: `{count} {+count:échantillon n'a|échantillons n'ont} aucune ligne dans la feuille « {description} » : {samples}. Convertissez-{+count:le|les} à partir de la seule feuille de résultats, ou ajoutez {+count:la ligne|les lignes} à la feuille de description.`,
     },
-    technical: `{file}, {sheet}: {count} sample(s) of the results sheet have no row in the description sheet "{description}": {samples}. Blocks until the person converts them with only what the results sheet says (CONV-JOIN-RESULTS-ONLY) or completes the description sheet.`,
+    plainIf: [
+      {
+        param: 'descriptionOnly',
+        plain: {
+          pl: `Opis ma też próbki bez wyników, np.: {descriptionOnly}. Czy któraś to ta sama próbka zapisana inaczej (np. O zamiast 0)?`,
+          en: `The description also has samples with no results, e.g. {descriptionOnly}. Is one of them the same sample written differently (O for 0, say)?`,
+          de: `Die Beschreibung hat auch Proben ohne Ergebnisse, z. B. {descriptionOnly}. Ist eine davon dieselbe Probe anders geschrieben (etwa O statt 0)?`,
+          fr: `La description a aussi des échantillons sans résultats, p. ex. {descriptionOnly}. L'un est-il le même écrit autrement (O au lieu de 0) ?`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: {count} sample(s) of the results sheet have no row in the description sheet "{description}": {samples}. Blocks until the person converts them with only what the results sheet says (CONV-JOIN-RESULTS-ONLY) or completes the description sheet. When the description sheet also has samples with no results, up to 5 of their keys (param descriptionOnly) are named beside, to show a near-miss.`,
+  },
+  {
+    id: 'CONV-JOIN-NO-MATCH',
+    category: 'B',
+    severity: 'error',
+    params: ['description', 'descriptionFile', 'resultsColumns', 'descriptionColumns', 'resultsExamples', 'descriptionExamples'],
+    plain: {
+      pl: `Żaden klucz arkusza „{sheet}” (kolumny: {resultsColumns}) nie występuje w arkuszu „{description}” (kolumny: {descriptionColumns}): klucze nie pasują. Klucze w wynikach, np.: {resultsExamples}. Klucze w opisie, np.: {descriptionExamples}. Sprawdź kolumny klucza lub zapis kodów (np. O zamiast 0).`,
+      en: `No key of sheet "{sheet}" (columns: {resultsColumns}) is in sheet "{description}" (columns: {descriptionColumns}): the keys do not match. Results, e.g.: {resultsExamples}. Description, e.g.: {descriptionExamples}. Check the key columns or how the codes are written (O for 0, say).`,
+      de: `Kein Schlüssel des Blatts „{sheet}“ (Spalten: {resultsColumns}) steht im Blatt „{description}“ (Spalten: {descriptionColumns}): die Schlüssel passen nicht. Ergebnisse, z. B.: {resultsExamples}. Beschreibung, z. B.: {descriptionExamples}. Prüfen Sie die Schlüsselspalten oder die Schreibweise der Codes (etwa O statt 0).`,
+      fr: `Aucune clé de la feuille « {sheet} » (colonnes : {resultsColumns}) n'est dans la feuille « {description} » (colonnes : {descriptionColumns}) : les clés ne correspondent pas. Résultats, p. ex. : {resultsExamples}. Description, p. ex. : {descriptionExamples}. Vérifiez les colonnes de clé ou l'écriture des codes (O au lieu de 0).`,
+    },
+    technical: `{file}, {sheet}: no key of the results sheet (columns {resultsColumns}) is found in the description sheet "{descriptionFile}" / "{description}" (columns {descriptionColumns}); results keys e.g. {resultsExamples}, description keys e.g. {descriptionExamples}. Blocks: joined like this every description row would become a description-only event and every results sample a results-only one. No "results only" answer is offered; the key columns or the codes must be corrected.`,
   },
   {
     id: 'CONV-JOIN-RESULTS-ONLY',
@@ -454,7 +479,18 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Probe ist|Proben sind} im Blatt „{description}“ beschrieben, {+count:hat|haben} aber keine Ergebnisse: {samples}. {+count:Sie wird als Probenereignis|Sie werden als Probenereignisse} ohne Vorkommen geschrieben.`,
       fr: `{count} {+count:échantillon est décrit|échantillons sont décrits} dans la feuille « {description} » mais {+count:n'a|n'ont} aucun résultat : {samples}. {+count:Il est écrit comme événement|Ils sont écrits comme événements} d'échantillon sans occurrence.`,
     },
-    technical: `{file}, {sheet}: {count} sample(s) have a row in the description sheet "{description}" and none in the results sheet: {samples}. They are written as sample events with no occurrence; the person accepts this once.`,
+    plainIf: [
+      {
+        param: 'resultsWithout',
+        plain: {
+          pl: `Wyniki mają też próbki bez opisu, np.: {resultsWithout}. Czy któraś to ta sama próbka zapisana inaczej (np. O zamiast 0)?`,
+          en: `The results also have samples with no description, e.g. {resultsWithout}. Is one of them the same sample written differently (O for 0, say)?`,
+          de: `Die Ergebnisse haben auch Proben ohne Beschreibung, z. B. {resultsWithout}. Ist eine davon dieselbe Probe anders geschrieben (etwa O statt 0)?`,
+          fr: `Les résultats ont aussi des échantillons sans description, p. ex. {resultsWithout}. L'un est-il le même écrit autrement (O au lieu de 0) ?`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: {count} sample(s) have a row in the description sheet "{description}" and none in the results sheet: {samples}. They are written as sample events with no occurrence; the person accepts this once. When the results sheet also has samples with no description, up to 5 of their keys (param resultsWithout) are named beside, to show a near-miss.`,
   },
   {
     id: 'CONV-JOIN-AMBIGUOUS',

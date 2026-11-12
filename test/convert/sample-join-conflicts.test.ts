@@ -6,6 +6,7 @@ import { shortHash } from '../../src/core/convert/keySetting';
 import { mergeSampleSheets } from '../../src/core/convert/sampleJoin';
 import type { ConflictAnswer, ConflictGroup, MergeResult, SampleJoinDecl } from '../../src/core/convert/sampleJoin';
 import type { ColumnRole, Finding } from '../../src/core/types';
+import { renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { xlsxFile } from '../helpers/files';
 import type { Cell } from '../helpers/files';
 import { COUNTS_HEADER, SAMPLES_HEADER, SAMPLES_ROWS, descriptionInput, resultsInput } from './joinFixtures';
@@ -586,5 +587,25 @@ describe('columns the merge cannot pair, and unmerged quantities on description-
       appendDescriptionOnly: false,
     });
     expect(found(r, 'CONV-JOIN-UNIT-DIFFERS')).toEqual([expect.objectContaining({ params: expect.objectContaining({ resultsUnit: '–', descriptionUnit: 'bar' }) })]);
+  });
+});
+
+describe('conflicts: the group names the columns it compares', () => {
+  const merged = (): MergeResult =>
+    merge({
+      countsHeader: ['Sample', 'Taxon', 'Count', 'Depth.ini'],
+      counts: [['X01', TAX, 5, 39.4], ['X02', TAX, 3, 20]],
+      samples: [['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 52.9], ['X02', 'ST-2', '2021-05-04', 61.3, 4.6, 20]],
+      resultsEdit: { 'Depth.ini': { kind: 'depth', positive: 'down', bound: 'min', unit: 'm' } },
+      descriptionEdit: { Depth: { kind: 'depth', positive: 'down', bound: 'min', unit: 'm' } },
+    });
+
+  it('the group and the finding say which results header and which description header differ', () => {
+    const r = merged();
+    expect(group(r, 'depth')).toMatchObject({ resultsColumns: ['Depth.ini'], descriptionColumns: ['Depth'] });
+    const f = found(r, 'CONV-JOIN-CONFLICT')[0];
+    expect(f.params).toMatchObject({ resultsColumns: 'Depth.ini', descriptionColumns: 'Depth' });
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f, lang), lang).toMatch(/Depth\.ini[^]*Depth/);
+    expect(renderConvertTechnical(f)).toContain('Depth.ini');
   });
 });

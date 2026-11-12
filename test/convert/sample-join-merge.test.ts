@@ -185,7 +185,7 @@ describe('mergeSampleSheets: keys', () => {
     // "1.5" is not "1"
     const other = textFile('o.csv', 'Sample,Taxon,Count\n1.5,Calanus finmarchicus,4\n');
     const c = mergeSampleSheets(decl(resultsInput(other, other.sheets[0].name), descriptionInput(num, 'Samples'), { appendDescriptionOnly: false }));
-    expect(found(c, 'CONV-JOIN-NO-DESCRIPTION')).toHaveLength(1);
+    expect(found(c, 'CONV-JOIN-NO-MATCH')).toHaveLength(1);
   });
 
   it('resultsKeys is the set of the non-blank key values of the results sheet', () => {
@@ -386,5 +386,66 @@ describe('the line of a results row with a blank key, named in a list of samples
       }
     }
     expect(renderConvertTechnical(f)).toContain('(line 5)');
+  });
+});
+
+describe('mergeSampleSheets: a join whose keys match nothing, and near-misses', () => {
+  const sheets = (counts: Cell[][], samples: Cell[][], extra: Partial<SampleJoinDecl> = {}): MergeResult => {
+    const file = xlsxFile('book.xlsx', { Counts: [COUNTS_HEADER, ...counts], Samples: [['Sample', 'Station'], ...samples] });
+    return mergeSampleSheets(decl(resultsInput(file, 'Counts'), descriptionInput(file, 'Samples'), extra));
+  };
+
+  it('no results key in the description (a letter O for a zero) blocks with NO-MATCH and offers no results-only answer', () => {
+    const counts: Cell[][] = [['S02', ...TAX], ['S011', ...TAX]];
+    const samples: Cell[][] = [['SO2', 'ST-1'], ['SO11', 'ST-2']];
+    const r = sheets(counts, samples);
+    const f = found(r, 'CONV-JOIN-NO-MATCH');
+    expect(f).toEqual([expect.objectContaining({ severity: 'error', file: 'book.xlsx', sheet: 'Counts', params: expect.objectContaining({ description: 'Samples', resultsColumns: 'Sample', descriptionColumns: 'Sample', resultsExamples: 'S02, S011', descriptionExamples: 'SO2, SO11' }) })]);
+    for (const id of ['CONV-JOIN-NO-DESCRIPTION', 'CONV-JOIN-DESCRIPTION-ONLY', 'CONV-JOIN-RESULTS-ONLY']) expect(found(r, id), id).toEqual([]);
+    // no description-only sample events are made for a join that matches nothing
+    expect(sheetOf(r).rows).toHaveLength(2);
+    // an answer "only what the results sheet says", even for the same number of samples, does not turn it into a valid join
+    const answered = sheets(counts, samples, { resultsOnly: 2 });
+    expect(found(answered, 'CONV-JOIN-NO-MATCH')).toHaveLength(1);
+    expect(found(answered, 'CONV-JOIN-RESULTS-ONLY')).toEqual([]);
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const text = renderConvertPlain(f[0], lang);
+      expect(text, lang).toContain('S02, S011');
+      expect(text, lang).toContain('SO2, SO11');
+      expect(text, lang).toContain('Samples');
+    }
+  });
+
+  it('gives at most 5 example keys from each side', () => {
+    const many = (p: string): string[] => ['01', '02', '03', '04', '05', '06', '07'].map((n) => p + n);
+    const r = sheets(many('A').map((k) => [k, ...TAX]), many('B').map((k) => [k, 'ST']));
+    expect(found(r, 'CONV-JOIN-NO-MATCH')[0].params).toMatchObject({ resultsExamples: 'A01, A02, A03, A04, A05', descriptionExamples: 'B01, B02, B03, B04, B05' });
+  });
+
+  it('a partial join with near-misses names the description-only keys beside the results-only ones, and the other way round', () => {
+    const r = sheets([['X01', ...TAX], ['X02', ...TAX]], [['X01', 'ST-1'], ['XO2', 'ST-2']]);
+    expect(found(r, 'CONV-JOIN-NO-MATCH')).toEqual([]);
+    const nd = found(r, 'CONV-JOIN-NO-DESCRIPTION')[0];
+    const dOnly = found(r, 'CONV-JOIN-DESCRIPTION-ONLY')[0];
+    expect(nd.params).toMatchObject({ count: 1, samples: 'X02', descriptionOnly: 'XO2' });
+    expect(dOnly.params).toMatchObject({ count: 1, samples: 'XO2', resultsWithout: 'X02' });
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      expect(renderConvertPlain(nd, lang), lang).toContain('XO2');
+      expect(renderConvertPlain(dOnly, lang), lang).toContain('X02');
+    }
+  });
+
+  it('lists at most 5 keys of the other side', () => {
+    const r = sheets([['X01', ...TAX], ['R1', ...TAX]], [['X01', 'ST'], ...['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'].map((k) => [k, 'ST'])]);
+    expect(found(r, 'CONV-JOIN-NO-DESCRIPTION')[0].params.descriptionOnly).toBe('D1, D2, D3, D4, D5');
+  });
+
+  it('an ordinary partial join is unchanged: only one side unmatched adds no list', () => {
+    const counts: Cell[][] = [...COUNTS_ROWS, ['X04', 'Oithona similis', 1]];
+    const r = book({ appendDescriptionOnly: false }, counts);
+    expect(found(r, 'CONV-JOIN-NO-DESCRIPTION')[0].params).toEqual({ count: 1, samples: 'X04', description: 'Samples' });
+    const only = book();
+    expect(found(only, 'CONV-JOIN-DESCRIPTION-ONLY')[0].params).toEqual({ count: 1, samples: 'X03', description: 'Samples' });
+    expect(found(only, 'CONV-JOIN-NO-MATCH')).toEqual([]);
   });
 });

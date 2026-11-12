@@ -178,6 +178,9 @@ export interface ConflictGroup {
   group: string;
   quantity: 'date' | 'position' | 'depth' | 'station' | 'cruise' | 'variable' | 'other';
   label: string;
+  /** the headers of the results columns and of the description columns the group compares: the person sees which columns differ, not only what they are called together */
+  resultsColumns: string[];
+  descriptionColumns: string[];
   count: number;
   entries: ConflictEntry[];
   answer?: ConflictAnswer;
@@ -217,6 +220,8 @@ const QUANTITY_OF: Partial<Record<ColumnRole['kind'], QuantityKind>> = {
 };
 const MAX_LISTED = 10;
 const MAX_EXAMPLES = 3;
+/** Keys of the other sheet named beside a list of samples, and the example keys of a join that matches nothing. */
+const MAX_KEY_EXAMPLES = 5;
 
 const emptyCell = (c: RawCell | undefined): boolean => c === null || c === undefined || (typeof c === 'string' && c.trim() === '');
 const cellText = (c: RawCell | undefined): string => (c === null || c === undefined ? '' : String(c).trim());
@@ -792,7 +797,9 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const held = decl.heldElsewhere ?? new Set<string>();
   const addedKeys: string[] = [];
   const ambiguousAdded = new Set<string>();
-  if (decl.appendDescriptionOnly) {
+  // no key of the results sheet is in the description sheet: the key columns or the codes do not agree (a letter O for a zero ...). Every sample would be results-only and every description row description-only, which would look valid.
+  const noMatch = resultsKeySeen.size > 0 && ![...resultsKeySeen].some((text) => groups.has(text));
+  if (decl.appendDescriptionOnly && !noMatch) {
     for (const [text, g] of groups) {
       if (resultsKeySeen.has(text) || held.has(text)) continue;
       if (ambiguousKeys.has(text)) {
@@ -846,7 +853,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     if (q.entries.size === 0) continue;
     const entries = [...q.entries.values()];
     const count = entries.reduce((n, e) => n + e.samples.length, 0);
-    const g: ConflictGroup = { group: q.group, quantity: q.kind, label: q.label, count, entries };
+    const g: ConflictGroup = { group: q.group, quantity: q.kind, label: q.label, resultsColumns: q.resCols.map((c) => header(resSheet, c)), descriptionColumns: q.desCols.map((c) => header(desSheet, c)), count, entries };
     const answer = decl.conflicts.find((a) => a.group === q.group);
     // F5: an answer holds only for the group it was given for
     if (answer !== undefined && answer.count === count) {
@@ -1010,7 +1017,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   }
   // results samples without a description, and results rows whose key has a blank part (they cannot be looked up, so they are in the same set: the answer "only what the results sheet says" covers both)
   const withoutDescription = unmatched.size + blankKeyRows.length;
-  const answered = withoutDescription > 0 && decl.resultsOnly === withoutDescription;
+  const answered = !noMatch && withoutDescription > 0 && decl.resultsOnly === withoutDescription;
   if (blankKeyRows.length > 0 && !answered) {
     findings.push(
       makeConvertFinding('CONV-JOIN-KEY-BLANK', {
@@ -1021,7 +1028,25 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       }),
     );
   }
-  if (withoutDescription > 0) {
+  if (noMatch) {
+    const resultsExamples = [...unmatched.values()].slice(0, MAX_KEY_EXAMPLES).map((u) => keyShown(u.parts));
+    const descriptionExamples = [...groups.values()].slice(0, MAX_KEY_EXAMPLES).map((g) => keyShown(g.parts));
+    findings.push(
+      makeConvertFinding('CONV-JOIN-NO-MATCH', {
+        file: resFile,
+        sheet: results.sheet,
+        lines: [...unmatched.values()].flatMap((u) => u.lines).sort((a, b) => a - b),
+        params: {
+          description: desSheet.name,
+          descriptionFile: desFile,
+          resultsColumns: resKeyCols.map((c) => header(resSheet, c)).join(' + '),
+          descriptionColumns: desKeyCols.map((c) => header(desSheet, c)).join(' + '),
+          resultsExamples: resultsExamples.join(', '),
+          descriptionExamples: descriptionExamples.join(', '),
+        },
+      }),
+    );
+  } else if (withoutDescription > 0) {
     const names = [...[...unmatched.values()].map((u) => keyShown(u.parts)), ...blankKeyRows.map((l) => `${LINE_TOKEN_OPEN}${l}${LINE_TOKEN_CLOSE}`)];
     const lines = [...[...unmatched.values()].flatMap((u) => u.lines), ...blankKeyRows];
     findings.push(
@@ -1032,11 +1057,24 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
             lines,
             params: { count: withoutDescription, samples: listed(names), ...(decl.resultsOnlyFromFile === true ? { fromFile: 'yes' } : {}) },
           })
-        : makeConvertFinding('CONV-JOIN-NO-DESCRIPTION', { file: resFile, sheet: results.sheet, lines, params: { count: withoutDescription, samples: listed(names), description: desSheet.name } }),
+        : makeConvertFinding('CONV-JOIN-NO-DESCRIPTION', {
+            file: resFile,
+            sheet: results.sheet,
+            lines,
+            // beside the samples with no description: some keys of the samples with no results, when there are any (X02 here and XO2 there is a typing error, not two samples)
+            params: { count: withoutDescription, samples: listed(names), description: desSheet.name, ...(addedKeys.length > 0 ? { descriptionOnly: addedKeys.slice(0, MAX_KEY_EXAMPLES).join(', ') } : {}) },
+          }),
     );
   }
   if (addedKeys.length > 0) {
-    findings.push(makeConvertFinding('CONV-JOIN-DESCRIPTION-ONLY', { file: resFile, sheet: results.sheet, params: { count: addedKeys.length, samples: listed(addedKeys), description: desSheet.name } }));
+    const unmatchedNames = [...unmatched.values()].slice(0, MAX_KEY_EXAMPLES).map((u) => keyShown(u.parts));
+    findings.push(
+      makeConvertFinding('CONV-JOIN-DESCRIPTION-ONLY', {
+        file: resFile,
+        sheet: results.sheet,
+        params: { count: addedKeys.length, samples: listed(addedKeys), description: desSheet.name, ...(unmatchedNames.length > 0 ? { resultsWithout: unmatchedNames.join(', ') } : {}) },
+      }),
+    );
   }
   for (const f of [...filled.values()].sort((a, b) => a.order - b.order)) {
     findings.push(makeConvertFinding('CONV-JOIN-FILLED', { file: resFile, sheet: results.sheet, lines: f.lines, params: { count: f.count, column: f.name, from: desSheet.name } }));
@@ -1067,7 +1105,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       const examples = undecided.slice(0, MAX_EXAMPLES).map((e) => `${e.samples[0]}: ${e.descriptionText} / ${e.resultsText}`).join('; ');
       const lines = undecided.flatMap((e) => e.resultsLines).sort((a, b) => a - b);
       findings.push(
-        makeConvertFinding('CONV-JOIN-CONFLICT', { file: resFile, sheet: results.sheet, lines, params: { what: g.label, group: g.group, count: undecided.reduce((n, e) => n + e.samples.length, 0), total: g.count, examples } }),
+        makeConvertFinding('CONV-JOIN-CONFLICT', { file: resFile, sheet: results.sheet, lines, params: { what: g.label, group: g.group, count: undecided.reduce((n, e) => n + e.samples.length, 0), total: g.count, examples, resultsColumns: g.resultsColumns.join(', '), descriptionColumns: g.descriptionColumns.join(', ') } }),
       );
     } else {
       const tally = (side: JoinSide): number => g.entries.filter((e) => e.take === side).reduce((n, e) => n + e.samples.length, 0);
