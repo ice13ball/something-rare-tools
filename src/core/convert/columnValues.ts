@@ -83,6 +83,21 @@ export function holdsYearOfDate(sheet: RawSheet, index: number, dateCols: readon
   });
 }
 
+/** Every filled cell (at least 3) is a whole number of eight digits that reads as a valid date written YYYYMMDD (year 1800-2100, an existing month and day). Text only: nothing is assigned from it. */
+export function holdsDigitDates(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
+  const cells = cellsOf(sheet, index);
+  if (cells.length < 3) return false;
+  return cells.every((c) => {
+    const p = parseNumber(c, decimalComma);
+    if (p.status !== 'ok' || !Number.isInteger(p.value) || p.value < 18000101 || p.value > 21001231) return false;
+    const y = Math.floor(p.value / 10000);
+    const m = Math.floor(p.value / 100) % 100;
+    const d = p.value % 100;
+    const t = new Date(Date.UTC(y, m - 1, d));
+    return m >= 1 && m <= 12 && t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+  });
+}
+
 const strictlyMonotonic = (v: readonly number[]): boolean => v.length >= 2 && (v.every((x, i) => i === 0 || x > v[i - 1]) || v.every((x, i) => i === 0 || x < v[i - 1]));
 
 /**

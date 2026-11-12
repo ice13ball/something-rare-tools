@@ -12,7 +12,7 @@ import { proposeConvertColumns } from './recognize';
  */
 
 export type VetoReason = 'year' | 'number';
-export interface VetoedColumn { index: number; header: string; reason: VetoReason; role: ColumnRole }
+export interface VetoedColumn { index: number; header: string; reason: VetoReason; dates: boolean; role: ColumnRole }
 
 const SEP = '\u001f';
 const proposed = new WeakMap<RawSheet, { key: string; vetoed: { index: number; header: string; reasonCode: string; role: ColumnRole }[] }>();
@@ -30,8 +30,8 @@ function vetoedOf(file: ParsedFile, sheet: RawSheet): { index: number; header: s
 export function vetoedColumns(file: ParsedFile, sheet: RawSheet, mapping: SheetMapping, handSet: readonly number[] = []): VetoedColumn[] {
   return vetoedOf(file, sheet).flatMap((v) => {
     if (handSet.includes(v.index) || mapping.columns.find((c) => c.index === v.index)?.role.kind !== 'ignore') return [];
-    if (v.reasonCode !== 'year-beside-date' && v.reasonCode !== 'running-number') return [];
-    return [{ index: v.index, header: v.header.trim() === '' ? `#${v.index + 1}` : v.header.trim(), reason: v.reasonCode === 'year-beside-date' ? ('year' as const) : ('number' as const), role: v.role }];
+    if (v.reasonCode !== 'year-beside-date' && v.reasonCode !== 'running-number' && v.reasonCode !== 'running-number-date') return [];
+    return [{ index: v.index, header: v.header.trim() === '' ? `#${v.index + 1}` : v.header.trim(), reason: v.reasonCode === 'year-beside-date' ? ('year' as const) : ('number' as const), dates: v.reasonCode === 'running-number-date', role: v.role }];
   });
 }
 
@@ -39,8 +39,9 @@ export function vetoedColumns(file: ParsedFile, sheet: RawSheet, mapping: SheetM
  * The parameters of one finding: `count`, `columns` (the names, readable), `names` (the full list, for the page's buttons), `indexes` (the column of each, so that two columns with one header are told apart) and `roles` (the role each column had before the veto, as JSON, in the
  * order of `names`: what its button gives back).
  */
-export function vetoedParams(columns: readonly VetoedColumn[]): { count: number; columns: string; names: string; indexes: string; roles: string } {
-  return { count: columns.length, columns: columns.map((c) => c.header).join(', '), names: columns.map((c) => c.header).join(SEP), indexes: columns.map((c) => c.index).join(SEP), roles: columns.map((c) => JSON.stringify(c.role)).join(SEP) };
+export function vetoedParams(columns: readonly VetoedColumn[]): { count: number; columns: string; names: string; indexes: string; roles: string; dates?: string } {
+  const dates = columns.filter((c) => c.dates).map((c) => c.header);
+  return { ...(dates.length > 0 ? { dates: dates.join(', ') } : {}), count: columns.length, columns: columns.map((c) => c.header).join(', '), names: columns.map((c) => c.header).join(SEP), indexes: columns.map((c) => c.index).join(SEP), roles: columns.map((c) => JSON.stringify(c.role)).join(SEP) };
 }
 
 export const VETO_NAME_SEP = SEP;

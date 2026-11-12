@@ -27,7 +27,7 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
   it('are both ignored with their reason, low confidence, and nothing else is assigned', () => {
     const r = roles(HEADER, ROWS);
     expect(r.Year).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'year-beside-date' });
-    expect(r.SampleNo).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'running-number' });
+    expect(r.SampleNo).toMatchObject({ role: { kind: 'ignore' }, confidence: 'low', reasonCode: 'running-number-date' });
     expect(r.Year.vetoed).toMatchObject({ kind: 'variable' });
     expect(r.Date.role.kind).toBe('date');
     expect(r.Count.role.kind).toBe('quantity');
@@ -44,7 +44,7 @@ describe('a Year beside a date and an eight-digit SampleNo on a long sheet', () 
     expect(year).toMatchObject({ severity: 'info', params: { count: 1, columns: 'Year' } });
     expect(num).toMatchObject({ severity: 'warning', params: { count: 1, columns: 'SampleNo' } });
     expect(renderConvertPlain(year!, 'en')).toContain('Looks like a year beside the date');
-    expect(renderConvertPlain(num!, 'en')).toContain('Whole numbers of six or more digits that stay the same within a sample');
+    expect(renderConvertPlain(num!, 'en')).toContain('Whole numbers of six or more digits that rise (or fall) from row to row');
     // the click: the page sets the role carried in `roles`; here the same role through the mapping
     const back = JSON.parse(String(num!.params.roles)) as { kind: string; variable: string };
     expect(back).toMatchObject({ kind: 'variable', variable: 'SampleNo' });
@@ -185,22 +185,47 @@ describe('review round 1: the button restores its own column', () => {
   });
 });
 
-describe('review round 1: exact Darwin Core terms and digit-written dates', () => {
-  it('an exact Darwin Core term is never vetoed, even if its values would match', () => {
-    const r = roles([...LH, 'Count', 'namePublishedInYear', 'year'], longRows((s, i) => [3 + i, 1750 + s * 3 + (i % 2), 2002 + s]));
+describe('review round 2: identifier terms, digit-written dates, both ways of firing', () => {
+  it('namePublishedInYear is not vetoed (publication years are not the event years); year equal to its date is, other years are not', () => {
+    const r = roles([...LH, 'Count', 'namePublishedInYear', 'year'], longRows((s, i) => [3 + i, 1850 + s * 3 + (i % 2), 2002 + s]));
     expect(r.namePublishedInYear.vetoed).toBeUndefined();
-    // `year` is the one term the veto may still reach, and only when it is the year of the date row by row: here it is
     expect(r.year.vetoed).toBeDefined();
-    const off = roles([...LH, 'Count', 'year'], longRows((s, i) => [3 + i, 1990 + s]));
-    expect(off.year.vetoed).toBeUndefined();
-    const ids = roles([...LH, 'Count', 'organismID'], longRows((s, i) => [3 + i, 100000 + i]));
-    expect(ids.organismID.vetoed).toBeUndefined();
+    expect(roles([...LH, 'Count', 'year'], longRows((s, i) => [3 + i, 1990 + s])).year.vetoed).toBeUndefined();
   });
-  it('date_start / date_mid / date_end written as YYYYMMDD per sample are vetoed with the neutral reason, not called a running number', () => {
-    const r = roles([...LH, 'Count', 'date_start', 'date_mid', 'date_end'], longRows((s) => [3 + s, 20020601 + s, 20020615 + s, 20020630 + s]));
+  it('organismID and materialSampleID with running eight-digit numbers are vetoed (they would be measurements)', () => {
+    const r = roles([...LH, 'Count', 'organismID', 'materialSampleID'], longRows((s, i) => [3 + i, 31000000 + i * 7, 41000000 + i * 7]));
+    expect(r.organismID).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number' });
+    expect(r.materialSampleID).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number' });
+  });
+  it('date_start / date_mid / date_end written as YYYYMMDD per sample are vetoed with the date hint, assigned nothing, and not called a running number', async () => {
+    const header = [...LH, 'Count', 'date_start', 'date_mid', 'date_end'];
+    const rows = longRows((s) => [3 + s, 20020601 + s, 20020615 + s, 20020625 + s]);
+    const r = roles(header, rows);
     for (const h of ['date_start', 'date_mid', 'date_end']) {
-      expect(r[h]).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number' });
+      expect(r[h]).toMatchObject({ role: { kind: 'ignore' }, reasonCode: 'running-number-date' });
       expect(r[h].reason).not.toMatch(/running number/);
+      expect(r[h].reason).toContain('give the column the meaning date in the column table');
     }
+    const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, fullList: true });
+    const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
+    expect(f.params.dates).toBe('date_start, date_mid, date_end');
+    for (const [lang, word] of [['en', 'meaning date'], ['pl', 'znaczenie „data”'], ['de', 'Bedeutung Datum'], ['fr', 'sens date']] as const) expect(renderConvertPlain(f, lang)).toContain(word);
+    // numbers that are no valid dates get no hint
+    const plain = await exportSheet([...LH, 'Count', 'Tag'], longRows((s) => [3 + s, 31000000 + s]), { quantity: { kind: 'count' }, fullList: true });
+    const g = plain.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
+    expect(g.params.dates).toBeUndefined();
+    expect(renderConvertPlain(g, 'en')).not.toContain('meaning date');
+  });
+  it('the text covers both ways: values that rise from row to row, and values that stay the same within a sample', async () => {
+    const perRow = await exportSheet([...LH, 'Count', 'Flow'], longRows((s, i) => [3 + i, 500000 + i]), { quantity: { kind: 'count' }, fullList: true });
+    const f = perRow.findings.find((x) => x.ruleId === 'CONV-COLUMN-NUMBER-IGNORED')!;
+    for (const [lang, word] of [['en', 'from row to row'], ['pl', 'z wiersza na wiersz'], ['de', 'von Zeile zu Zeile'], ['fr', 'de ligne en ligne']] as const) {
+      expect(renderConvertPlain(f, lang)).toContain(word);
+      expect(renderConvertPlain(f, lang)).toMatch(lang === 'en' ? /stay the same within a sample/ : lang === 'pl' ? /stałe w próbce/ : lang === 'de' ? /je Probe gleich/ : /identiques dans un échantillon/);
+    }
+  });
+  it('the French plain texts agree in number', () => {
+    const f = { ruleId: 'CONV-COLUMN-NUMBER-IGNORED', severity: 'warning', file: 'a.csv', sheet: 'S', lines: [], params: { count: 2, columns: 'A, B' } } as never;
+    expect(renderConvertPlain(f, 'fr')).toContain('Non écrites comme mesure');
   });
 });

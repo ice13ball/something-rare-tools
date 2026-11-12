@@ -42,7 +42,7 @@ describe('Read it as a measurement', () => {
     expect(select('SampleNo').value).toBe('ignore');
     const button = (column: string): Promise<HTMLElement> => screen.findByRole('button', { name: `Read "${column}" as a measurement` });
     await waitFor(() => expect(document.querySelector('[data-rule="CONV-COLUMN-YEAR-IGNORED"]')?.textContent).toContain('Looks like a year beside the date'));
-    expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')?.textContent).toContain('Whole numbers of six or more digits that stay the same within a sample');
+    expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')?.textContent).toContain('Whole numbers of six or more digits that rise (or fall) from row to row');
     expect(document.querySelector('[data-rule="CONV-COLUMN-IGNORED"]')?.textContent).toContain('Year');
     fireEvent.click(await button('SampleNo'));
     await waitFor(() => expect(select('SampleNo').value).toBe('variable'));
@@ -50,5 +50,26 @@ describe('Read it as a measurement', () => {
     await waitFor(() => expect(document.querySelector('[data-rule="CONV-COLUMN-NUMBER-IGNORED"]')).toBeNull());
     fireEvent.click(await button('Year'));
     await waitFor(() => expect(select('Year').value).toBe('variable'));
+  });
+});
+
+describe('two columns with one header', () => {
+  it('the second button restores the second column, not the first', async () => {
+    const csv = csvOf(
+      ['Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count', 'Code', 'Code'],
+      Array.from({ length: 8 }, (_, i) => [`s${Math.floor(i / 2) + 1}`, `2002-06-0${Math.floor(i / 2) + 1}`, 54.1, 7.2, TAXA[i % 2], 3 + i, 31000000 + i * 7, 41000000 + i * 7]),
+    );
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'dup.csv', text: csv }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    const confirmAll = screen.queryByRole('button', { name: /Confirm all shown/ });
+    if (confirmAll !== null) fireEvent.click(confirmAll);
+    const selects = (): HTMLSelectElement[] => screen.getAllByLabelText('Code: Meaning') as HTMLSelectElement[];
+    await waitFor(() => expect(selects().map((x) => x.value)).toEqual(['ignore', 'ignore']));
+    const buttons = await screen.findAllByRole('button', { name: 'Read "Code" as a measurement' });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]);
+    await waitFor(() => expect(selects().map((x) => x.value)).toEqual(['ignore', 'variable']));
   });
 });
