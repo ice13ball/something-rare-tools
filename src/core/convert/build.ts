@@ -50,6 +50,7 @@ import type { LedgerReason, SheetLedger } from './ledger';
 import { decideRows } from './notWritten';
 import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
 import type { SampleKey, SheetKeyReport } from './sampleKey';
+import type { SampleJoinInfo } from './sampleJoin';
 
 /*
  * The converter's core: confirmed sheets in, records and findings out. Pure: no I/O, no clock, no randomness; the same input gives the same output.
@@ -141,6 +142,11 @@ export interface ConvertSheetInput {
   sampleKey?: SampleKey;
   /** The key was read from a companion file of an earlier run (the message says so and offers "Ask again"). */
   sampleKeyFromFile?: boolean;
+  /**
+   * Set only on the merged results input that mergeSampleSheets (sampleJoin.ts) returns, after the person confirmed that another sheet describes this sheet's samples: where every merged column and
+   * lent cell came from, and the findings of the merge. Absent = the sheet is read exactly as before.
+   */
+  sampleJoin?: SampleJoinInfo;
 }
 
 export interface ProfileDeclaration {
