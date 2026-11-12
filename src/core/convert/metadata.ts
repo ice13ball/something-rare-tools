@@ -162,7 +162,7 @@ export function splitPersonName(line: string): { givenName?: string; surName: st
 
 /**
  * Words that mark a creator or contact line as an ORGANISATION: it is written as an organisation name and never split into a given name and a surname.
- * Whole words, any case, except PAN (the Polish Academy of Sciences, "IO PAN"), which only counts in capitals.
+ * Whole words, any case, except PAN (the Polish Academy of Sciences), which only counts in capitals.
  */
 export const ORGANISATION_WORDS = ['Institute', 'Institut', 'Instytut', 'University', 'Uniwersytet', 'Universität', 'Université', 'Laboratory', 'Laboratorium', 'Laboratoire', 'Centre', 'Center', 'Zentrum', 'Museum', 'Agency', 'Survey', 'Society', 'Academy', 'Akademia', 'PAN'] as const;
 const ORG_WORD = new RegExp(`(?<![\\p{L}\\p{N}])(?:${ORGANISATION_WORDS.filter((w) => w !== 'PAN').join('|')})(?![\\p{L}\\p{N}])`, 'iu');

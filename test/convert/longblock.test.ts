@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-// CONV-LONG-UNSUPPORTED (a long environmental sheet is blocked, never misread), the IO PAN spellings of oxygen saturation, and the Polish number agreement of ROW-RAGGED.
+// CONV-LONG-UNSUPPORTED (a long environmental sheet is blocked, never misread), the underscore spellings of oxygen saturation, and the Polish number agreement of ROW-RAGGED.
 // Synthetic sheets only; the stations are invented.
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -261,7 +261,7 @@ describe('long biology sheets keep the output of origin/main', () => {
   });
 });
 
-describe('oxygen saturation in the IO PAN underscore style', () => {
+describe('oxygen saturation in the underscore style', () => {
   const spellings = ['O2_sat_%', 'O2_sat', 'O2sat_%', 'O2_saturation_%', 'Oxygen_saturation_%', 'O2_sat_pct'];
   const file = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'O2 [%]', ...spellings], [
     ['ZL1', '2023-06-14', 55.5, 2.5, 5, 95, 96, 97, 98, 99, 100, 101],

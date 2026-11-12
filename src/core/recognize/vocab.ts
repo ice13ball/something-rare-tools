@@ -164,7 +164,7 @@ const p01 = (code: string, meaning: string, rest: Omit<P01Hint, 'url' | 'meaning
 ];
 
 /**
- * P01 codes seen in OPeNDAP headers of the IO PAN catalogue plus the common structural ones. Every entry was opened
+ * P01 codes seen in OPeNDAP headers of many different datasets plus the common structural ones. Every entry was opened
  * on https://vocab.nerc.ac.uk/collection/P01/current/<CODE>/ on 2026-10-16; `unit` is only set where the concept
  * carries a skos:related link to a P06 unit. Codes that do not resolve there (e.g. the header SDN:P01::D13CMOP11 of
  * the golden POC file answers 404) are NOT in this table and stay unrecognised.

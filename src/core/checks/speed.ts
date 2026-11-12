@@ -384,7 +384,7 @@ export function checkShipSpeed(datasets: readonly Dataset[], opts: SpeedOptions)
       if (r.lat === undefined || r.lon === undefined) continue;
       positioned++;
       // Positions another rule already calls wrong (ROW-LAT-EQ-LON, ROW-LAT-RANGE, ROW-LON-RANGE) are not part of the track: two of them
-      // around a correct event would make the two-sided test blame the correct one (IO PAN water column, SGD2 between SGD4 rows).
+      // around a correct event would make the two-sided test blame the correct one (a station between two rows of another station).
       if (r.lat === r.lon || Math.abs(r.lat) > 90 || Math.abs(r.lon) > 180) continue;
       if (!r.datetime) continue;
       const start = windowOf(r.datetime);

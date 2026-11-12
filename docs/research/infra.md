@@ -24,11 +24,11 @@ Tested with `Origin: https://tools.something-rare.com`.
 | `geonetwork.iopan.pl/geonetwork/srv/api/records/<uuid>/formatters/xml` | yes (`*`; fetch without credentials) |
 | `opendap.iopan.pl/opendap/data/csv/...`, `geo.iopan.pl/opendap/data/csv/...` | **no CORS headers** → server mode or "download and drop" |
 
-## GeoNetwork (IO PAN)
+## GeoNetwork (geonetwork.iopan.pl)
 
 - Record XML: `https://geonetwork.iopan.pl/geonetwork/srv/api/records/<uuid>/formatters/xml`.
   `xml.metadata.get` redirects to sign-in — do not use.
-- DataCite `attributes.url` for IO PAN DOIs: `https://geonetwork.iopan.pl/geonetwork/srv/resources/records/<uuid>`.
+- DataCite `attributes.url` for DOIs of this catalogue: `https://geonetwork.iopan.pl/geonetwork/srv/resources/records/<uuid>`.
 - An unpublished/restricted record answers **403**.
 - Distribution links: `gmd:distributionInfo/gmd:MD_Distribution/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL`.
   Patterns: `https://opendap.iopan.pl/opendap/data/csv/<Project>/<file>.csv`, `https://geo.iopan.pl/opendap/data/csv/<file>.csv`,

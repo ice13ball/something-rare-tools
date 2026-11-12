@@ -252,7 +252,7 @@ export type OverlayReason = keyof typeof OVERLAY_REASONS;
 type Claim = { role: ColumnRole; confidence: 'high' | 'low'; code: OverlayReason };
 
 /**
- * IO PAN's underscore style glues the unit to the name ("O2_sat_%", "O2_saturation_%", "Oxygen_saturation_%", "O2_sat_pct"): oxygen saturation, a variable of its own with no concentration concept,
+ * An underscore style glues the unit to the name ("O2_sat_%", "O2_saturation_%", "Oxygen_saturation_%", "O2_sat_pct"): oxygen saturation, a variable of its own with no concentration concept,
  * like "O2 [%]". The unit is stated only when the header says it (a percent sign, pct, percent).
  */
 function oxygenSaturationClaim(header: string): Claim | undefined {
