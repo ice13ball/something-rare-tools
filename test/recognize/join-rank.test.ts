@@ -34,17 +34,18 @@ describe('rankJoinKeys: coverage', () => {
     expect(rankJoinKeys(left, [full], { coverage: 'all' })).toMatchObject({ covered: 3, total: 3 });
   });
 
-  it("'measure' ranks coverage before the strength of the key", () => {
+  it("'measure' ranks coverage before uniqueness and fineness", () => {
     const l = side([['Sample', 'sampleId']], [['X01'], ['X02'], ['X03']]);
+    // Code is unique and covers 2/3; Sample repeats X03 but covers 3/3: coverage decides, the unique key would win otherwise
     const r = side(
       [['Code', 'sampleId'], ['Sample', 'ignore']],
-      [['X01', 'X01'], ['X02', 'X02'], ['X09', 'X03']],
+      [['X01', 'X01'], ['X02', 'X02'], ['X09', 'X03'], ['X10', 'X03']],
     );
-    // Code (a strong kind, unique) covers 2/3; Sample (weak, same header) covers 3/3
-    expect(rankJoinKeys(l, [r], { coverage: 'measure' })).toMatchObject({ leftKey: 0, rightKey: 1, covered: 3, total: 3 });
-    // two right sheets: the better covered one is returned by its index
-    const worse = side([['Sample', 'sampleId']], [['X01'], ['X02']]);
-    expect(rankJoinKeys(l, [worse, r], { coverage: 'measure' })).toMatchObject({ right: 1, covered: 3 });
+    expect(rankJoinKeys(l, [r], { coverage: 'measure' })).toMatchObject({ leftKey: 0, rightKey: 1, covered: 3, total: 3, unique: false });
+    // two right sheets: the unique, finer one covers 2/3, the other 3/3 and is returned by its index
+    const finer = side([['Sample', 'sampleId']], [['X01'], ['X02'], ['X07'], ['X08'], ['X09']]);
+    const covering = side([['Sample', 'sampleId']], [['X01'], ['X02'], ['X03'], ['X03']]);
+    expect(rankJoinKeys(l, [finer, covering], { coverage: 'measure' })).toMatchObject({ right: 1, covered: 3, unique: false });
   });
 });
 
