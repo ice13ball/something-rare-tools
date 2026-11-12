@@ -77,7 +77,7 @@ export function isSizeLikeHeader(header: string): boolean {
 }
 
 /** The columns that make a row part of a sample: where and when it was taken. */
-const SAMPLE_KEY_KINDS = new Set(['sampleId', 'station', 'cruise', 'date', 'datetime', 'datePart', 'time', 'depth', 'replicate']);
+export const SAMPLE_KEY_KINDS = new Set(['sampleId', 'station', 'cruise', 'date', 'datetime', 'datePart', 'time', 'depth', 'replicate']);
 
 /**
  * Does a numeric column repeat one value on all the rows of a sample (an all-taxa total) or differ between them? Rows are grouped by the columns that carry a sample role in `base`.

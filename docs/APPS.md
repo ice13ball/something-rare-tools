@@ -1295,6 +1295,14 @@ numbered columns; two such columns are not told apart, the leftmost is offered. 
 unit only counts individuals (`#`, `n`, `ind`) and that no name made a quantity is offered as the quantity
 (`count-unit-quantity`; a descriptor of the sample such as `Hauls [#]` or `Replicates [n]` is never the count). `Calanus`, `Acartia` and every other genus name stay candidates unless the cells show a year column, a constant fraction or a length unit as above.
 
+Two more value vetoes run last and apply to **every sheet shape** (`convert/recognize.ts`, `year-beside-date` and `running-number`; removal only, never another role). A column the proposer made a measured
+variable (a name no vocabulary knows, no unit, no P01 code) becomes `ignore` (low confidence) when every filled cell (at least 3) is a whole year from 1800 to 2100 **and the sheet has a date or date-time
+column**, or when every filled cell is a whole number of six or more digits and the values are all different (two rows may share one only when they are rows of one sample: each sample holds one value that no other
+sample holds, a sample number written on every taxon row). A count of five digits, a six-digit column with a repeated value, a year column on a sheet with no date column, and a wide sheet's taxon candidates are as before.
+Such a column is named by `CONV-COLUMN-IGNORED` and, with the reason, by `CONV-COLUMN-YEAR-IGNORED` ("looks like a year beside the date") or `CONV-COLUMN-NUMBER-IGNORED` ("looks like a running number: whole numbers only,
+all different"), both information once per sheet (`convert/vetoedNumbers.ts`); the finding carries a "Read it as a measurement" button per column that gives back the role the column had (the page's `readAsMeasurement`).
+A column the person has changed is not listed again. /check is unchanged.
+
 Other overlay decisions: a **summary column** (a header starting with or holding Total, Suma,
 Razem, Summe, Gesamt, Somme, Sum, Σ) starts **ignored**, because converting it would count the
 same individuals twice (`Totalia sp.` is a genus and stays). On a **long** sheet the name is not the

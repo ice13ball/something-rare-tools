@@ -60,6 +60,45 @@ export function holdsYears(sheet: RawSheet, index: number, decimalComma: boolean
   return hi - lo <= 120;
 }
 
+/** Every filled cell (at least 3) is a whole year from 1800 to 2100. Blanks are allowed: a Year next to a Date is a year wherever it is filled. */
+export function holdsOnlyYears(sheet: RawSheet, index: number, decimalComma: boolean): boolean {
+  const cells = cellsOf(sheet, index);
+  if (cells.length < 3) return false;
+  return cells.every((c) => {
+    const p = parseNumber(c, decimalComma);
+    return p.status === 'ok' && Number.isInteger(p.value) && p.value >= 1800 && p.value <= 2100;
+  });
+}
+
+/**
+ * Every filled cell (at least 3) is a whole number of 6 or more digits, and the values are all different: a running number or an identifier, not a count or a density, which repeat. Two rows may
+ * share a value only when they are rows of one sample (`sampleCols`: the columns that tell the samples apart): then each sample holds one value and no value stands under two samples (a sample
+ * number written on every taxon row of the sample).
+ */
+export function holdsRunningNumbers(sheet: RawSheet, index: number, decimalComma: boolean, sampleCols: readonly number[] = []): boolean {
+  const rows = sheet.rows.slice(0, MAX_ROWS);
+  const filled = rows.filter((r) => !blank(r.cells[index] ?? null));
+  if (filled.length < 3) return false;
+  const values: number[] = [];
+  for (const r of filled) {
+    const p = parseNumber(r.cells[index] as RawCell, decimalComma);
+    if (p.status !== 'ok' || !Number.isInteger(p.value) || p.value < 100000) return false;
+    values.push(p.value);
+  }
+  if (new Set(values).size === values.length) return true;
+  if (sampleCols.length === 0) return false;
+  const sampleOf = (r: (typeof rows)[number]): string => sampleCols.map((c) => String(r.cells[c] ?? '').trim()).join('\u0000');
+  const valueOfSample = new Map<string, number>();
+  const sampleOfValue = new Map<number, string>();
+  for (const [i, r] of filled.entries()) {
+    const k = sampleOf(r);
+    if ((valueOfSample.get(k) ?? values[i]) !== values[i] || (sampleOfValue.get(values[i]) ?? k) !== k) return false;
+    valueOfSample.set(k, values[i]);
+    sampleOfValue.set(values[i], k);
+  }
+  return valueOfSample.size >= 3;
+}
+
 /**
  * One value, not a whole number, on at least 3 rows (a core diameter of 6.35 on every row): a property of the sampling that is the same for the whole sheet, not the count or the density of a
  * species, whose values vary. A constant whole number (all 0, all 1) is a legitimate species column and does not count.

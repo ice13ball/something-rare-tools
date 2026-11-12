@@ -212,6 +212,11 @@ export interface ColumnProposal {
    * and the cells do not contradict it. Absent = a suggestion only. A mark and nothing else: it changes no role. /check never sets it.
    */
   stated?: true;
+  /**
+   * Converter only (convert/recognize.ts, last pass): the role this column had before a value veto took it away (a year beside a date, a running number). The column is `ignore` and asked; the page
+   * gives this role back with one click. /check never sets it.
+   */
+  vetoed?: ColumnRole;
 }
 export interface SheetMapping { sheet: string; columns: { index: number; header: string; role: ColumnRole }[] }
 export interface TablePlan { sheet: string; long?: { parameterCol: number; unitCol?: number; valueCol: number } }

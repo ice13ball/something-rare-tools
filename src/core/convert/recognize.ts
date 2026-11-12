@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { depthUnitOfHeader } from '../recognize/depthUnit';
-import { biomassNameUnit, distinctnessWithinSamples, isTaxonAttribute, isMassUnitText, isOrganismSizeHeader, isSamplingOrEnvironmentHeader, isSizeLikeHeader, valuesRepeatWithinSample } from './totalColumns';
+import { biomassNameUnit, distinctnessWithinSamples, isTaxonAttribute, isMassUnitText, isOrganismSizeHeader, isSamplingOrEnvironmentHeader, isSizeLikeHeader, SAMPLE_KEY_KINDS, valuesRepeatWithinSample } from './totalColumns';
 import { dwcTermOf, isBlankCell, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
 import type { ProposeContext } from '../recognize/columns';
 import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
@@ -9,7 +9,7 @@ import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDeci
 import { isPercentUnit, verifiedConcept } from './nerc';
 import { hasCentralStatisticToken } from '../summaryLabels';
 import { isMeasurementWord, nameKind } from './measured';
-import { holdsOneFractionalValue, holdsYears, isGeometryUnit, isPlainCountUnit, latinNameShare } from './columnValues';
+import { holdsOneFractionalValue, holdsOnlyYears, holdsRunningNumbers, holdsYears, isGeometryUnit, isPlainCountUnit, latinNameShare } from './columnValues';
 import { isDepthBoundKey } from '../recognize/geocodes';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitFromHeader, seafloorUnitOf } from './seafloor';
 import type { ColumnProposal, ColumnRole, RawSheet, SheetMapping } from '../types';
@@ -216,6 +216,8 @@ export const OVERLAY_REASONS = {
   'unnamed-column': 'column without a name in the header: give it a meaning',
   'values-latin-names': 'the cells are Latin names (a genus and a species): the taxon of each row',
   'year-values': 'every cell is a whole year (1800-2100), so it is not a species and not a measurement: ignored (give it the meaning date if it is the sampling year)',
+  'year-beside-date': 'looks like a year beside the date: whole years only, and the sheet has a date column, so it is not written as a measurement (read it as a measurement with one click if it is one)',
+  'running-number': 'looks like a running number: whole numbers of six or more digits, all different, so it is not written as a measurement (read it as a measurement with one click if it is one)',
   'constant-value': 'one value that is not a whole number on every row (a size or a setting of the sampling, not a count or a density): ignored, give it a meaning if it is one',
   'value-per-occurrence': 'its values differ between the rows of a sample and look like a value of each organism (a size of an organism - a bare length, width, height, size or diameter, or one behind total, fork, standard, body, shell, carapace, prosome or mean, or TL, FL, SL, L1 ... L10 - with a length unit or none, and at least half of the values different inside the samples): a measurement of each occurrence, as a biomass is; if the rows of one sample are casts or typos, untick "of each organism" and fix the sample code; single specimens of one taxon in a sample also need an occurrence ID or a life-stage column, or the export is blocked (CONV-ID-DUPLICATE)',
   'replicate-name': 'the name says replicate and the sample code does not tell the rows of a sample apart: proposed as the replicate number of the sample (each value is an event under it)',
@@ -867,6 +869,20 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
   // elevation or altitude read as a depth: what the converter does with its sign, and why, is said on the column (the shared reason only says "positive up")
   for (const q of base) {
     if (q.role.kind === 'depth' && q.reasonCode === 'name-elevation') why(q, 'elevation-asl');
+  }
+  // Two value vetoes for EVERY sheet shape, removal only: a numeric column the proposer made a measured variable (a name no vocabulary knows, no unit, no code) whose filled cells are all whole years
+  // beside a date column, or all whole numbers of six or more digits that are all different (a running number, an identifier). The column becomes ignore (low), is named by CONV-COLUMN-IGNORED and by
+  // its own finding, and the page gives the measurement back with one click. No other role is ever assigned here.
+  const hasDate = base.some((q) => q.role.kind === 'date' || q.role.kind === 'datetime');
+  const sampleCols = base.filter((q) => SAMPLE_KEY_KINDS.has(q.role.kind)).map((q) => q.index);
+  for (const q of base) {
+    if (q.role.kind !== 'variable' || isCanonicalKey(q.role.variable) || q.role.p01 !== undefined || q.role.unit !== undefined) continue;
+    const code = hasDate && holdsOnlyYears(sheet, q.index, ctx.decimalComma) ? 'year-beside-date' : holdsRunningNumbers(sheet, q.index, ctx.decimalComma, sampleCols) ? 'running-number' : undefined;
+    if (code === undefined) continue;
+    q.vetoed = q.role;
+    q.role = { kind: 'ignore' };
+    q.confidence = 'low';
+    why(q, code);
   }
   return base;
 }

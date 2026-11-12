@@ -22,6 +22,7 @@ import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
 import { roleUnconfirmedParams, unconfirmedRoles } from './roleUnconfirmed';
+import { vetoedColumns, vetoedParams } from './vetoedNumbers';
 import { transposedSheetReason } from './transposed';
 import { firstRowIsUnits } from '../recognize/layout';
 import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
@@ -1575,6 +1576,12 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     if (sh === undefined) continue;
     const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet);
     if (listed.length > 0) findings.push(makeConvertFinding('CONV-ROLE-UNCONFIRMED', { file: sin.file.fileName, sheet: sin.sheet, params: roleUnconfirmedParams(listed) }));
+    // a year beside the date and a running number were not read as measurements (the overlay's value vetoes): said by name with the reason, once per sheet and reason; the page gives the role back
+    const vetoed = vetoedColumns(sin.file, sh, sin.mapping, sin.handSet);
+    for (const [reason, rule] of [['year', 'CONV-COLUMN-YEAR-IGNORED'], ['number', 'CONV-COLUMN-NUMBER-IGNORED']] as const) {
+      const these = vetoed.filter((v) => v.reason === reason);
+      if (these.length > 0) findings.push(makeConvertFinding(rule, { file: sin.file.fileName, sheet: sin.sheet, params: vetoedParams(these) }));
+    }
   }
 
   const splits = listSplits(input);

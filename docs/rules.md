@@ -202,6 +202,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-EMOF-TYPE-EMPTY | error | B | — | —<a id="CONV-EMOF-TYPE-EMPTY"></a> |
 | CONV-COLUMN-NOT-EXPORTED | warning | B | — | —<a id="CONV-COLUMN-NOT-EXPORTED"></a> |
 | CONV-COLUMN-IGNORED | info | B | — | —<a id="CONV-COLUMN-IGNORED"></a> |
+| CONV-COLUMN-YEAR-IGNORED | info | B | — | —<a id="CONV-COLUMN-YEAR-IGNORED"></a> |
+| CONV-COLUMN-NUMBER-IGNORED | info | B | — | —<a id="CONV-COLUMN-NUMBER-IGNORED"></a> |
 | CONV-NAMEID-MISSING | warning | B | — | —<a id="CONV-NAMEID-MISSING"></a> |
 | CONV-WORMS-UNDECIDED | error | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-UNDECIDED"></a> |
 | CONV-WORMS-NO-MATCH | warning | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-NO-MATCH"></a> |

@@ -93,6 +93,8 @@ import type { RuleSpec } from './spec';
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
  *   CONV-COLUMN-IGNORED        count, columns   columns = the headers (first 20) of columns set to ignore that hold at least one value: not written, named so that no column leaves without a word (info)
+ *   CONV-COLUMN-YEAR-IGNORED   count, columns  columns = the headers of numeric columns that hold only whole years on a sheet with a date column: not read as measurements, ignored (info; the page offers "Read it as a measurement")
+ *   CONV-COLUMN-NUMBER-IGNORED count, columns  columns = the headers of numeric columns that hold only different whole numbers of six or more digits (a running number): not read as measurements, ignored (info; same button)
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
  *   CONV-NAMEID-APHIA-LIKE     column           column = the header of a hand-marked taxon ID column that holds bare whole numbers
  *   CONV-NAMEID-INCOMPLETE     count, names     value = an example name; the sheet gives a taxon ID for some rows of the name and not for others (the name is not looked up)
@@ -1366,6 +1368,32 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:colonne contient|colonnes contiennent} des valeurs et {+count:est réglée|sont réglées} sur « ignorer » ; {+count:elle n'est|elles ne sont} donc pas dans l'archive : {columns}. Votre fichier n'est pas modifié. Si l'une porte des données que l'archive doit avoir, donnez-lui un sens.`,
     },
     technical: `{file}, {sheet}: {count} column(s) that hold at least one value and have the role ignore (chosen by the person or proposed by the converter, for example a Cast, Layer or Replicate column that does not separate rows), so none of their cells is written: {columns}. A column with another role that this conversion does not read, a column without a header and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED, which has to be accepted; this finding only names, it blocks nothing and needs no acceptance. The file is not changed.`,
+  },
+  {
+    id: 'CONV-COLUMN-YEAR-IGNORED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Wygląda na rok obok daty: same pełne lata, a arkusz ma kolumnę z datą. {count} {+count:kolumna nie jest zapisywana|kolumny nie są zapisywane|kolumn nie jest zapisywanych} jako {+count:pomiar|pomiary|pomiary}: {columns}. Twój plik się nie zmienia. Jeśli to naprawdę pomiar, przywróć mu tę rolę jednym kliknięciem.`,
+      en: `Looks like a year beside the date: whole years only, and the sheet has a date column. {count} {+count:column is|columns are} not written as {+count:a measurement|measurements}: {columns}. Your file is not changed. If it really is a measurement, give it that role back with one click.`,
+      de: `Sieht wie ein Jahr neben dem Datum aus: nur ganze Jahreszahlen, und das Blatt hat eine Datumsspalte. {count} {+count:Spalte wird|Spalten werden} nicht als {+count:Messwert|Messwerte} geschrieben: {columns}. Ihre Datei bleibt unverändert. Ist es wirklich ein Messwert, geben Sie die Rolle mit einem Klick zurück.`,
+      fr: `Ressemble à une année à côté de la date : des années entières seulement, et la feuille a une colonne de date. {count} {+count:colonne n'est|colonnes ne sont} pas écrite{+count:|s} comme {+count:mesure|mesures} : {columns}. Votre fichier n'est pas modifié. Si c'est vraiment une mesure, rendez-lui ce rôle en un clic.`,
+    },
+    technical: `{file}, {sheet}: {count} numeric column(s) that the proposer would have read as a measured variable (a name no vocabulary knows, no unit, no code) hold only whole years from 1800 to 2100 (at least 3 filled cells) and the sheet has a date or date-time column: {columns}. They are proposed as ignore (low confidence), named here and by CONV-COLUMN-IGNORED; no other role is assigned. The page gives the measurement role back with one click; a column the person has set is not listed. Nothing is written in the archive for them. The file is not changed.`,
+  },
+  {
+    id: 'CONV-COLUMN-NUMBER-IGNORED',
+    category: 'B',
+    severity: 'info',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Wygląda na numer porządkowy: same liczby całkowite, wszystkie różne. {count} {+count:kolumna nie jest zapisywana|kolumny nie są zapisywane|kolumn nie jest zapisywanych} jako {+count:pomiar|pomiary|pomiary}: {columns}. Twój plik się nie zmienia. Jeśli to naprawdę pomiar, przywróć mu tę rolę jednym kliknięciem.`,
+      en: `Looks like a running number: whole numbers only, all different. {count} {+count:column is|columns are} not written as {+count:a measurement|measurements}: {columns}. Your file is not changed. If it really is a measurement, give it that role back with one click.`,
+      de: `Sieht wie eine laufende Nummer aus: nur ganze Zahlen, alle verschieden. {count} {+count:Spalte wird|Spalten werden} nicht als {+count:Messwert|Messwerte} geschrieben: {columns}. Ihre Datei bleibt unverändert. Ist es wirklich ein Messwert, geben Sie die Rolle mit einem Klick zurück.`,
+      fr: `Ressemble à un numéro d'ordre : des nombres entiers seulement, tous différents. {count} {+count:colonne n'est|colonnes ne sont} pas écrite{+count:|s} comme {+count:mesure|mesures} : {columns}. Votre fichier n'est pas modifié. Si c'est vraiment une mesure, rendez-lui ce rôle en un clic.`,
+    },
+    technical: `{file}, {sheet}: {count} numeric column(s) that the proposer would have read as a measured variable (a name no vocabulary knows, no unit, no code) hold only whole numbers of six or more digits, no two equal (at least 3 filled cells), or equal only between rows of one sample, each sample holding one value that no other sample holds (a sample number written on every taxon row): {columns}. They are proposed as ignore (low confidence), named here and by CONV-COLUMN-IGNORED; no other role is assigned. The page gives the measurement role back with one click; a column the person has set is not listed. Nothing is written in the archive for them. The file is not changed.`,
   },
   {
     id: 'CONV-NAMEID-MISSING',

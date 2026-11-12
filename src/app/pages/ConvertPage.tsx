@@ -26,6 +26,7 @@ import { HeadingTip, InfoTip } from '../components/InfoTip';
 import { InputPanel } from '../components/InputPanel';
 import { SampleKeyPicker } from '../components/SampleKeyPicker';
 import { defaultKeyPrefix } from '../../core/convert/sampleKey';
+import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
 import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
@@ -343,6 +344,22 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const column = mapping?.columns.find((c) => c.header.trim() === f.params.column);
     if (file === undefined || mapping === undefined || column === undefined) return;
     changeMapping(file.fileId, { ...mapping, columns: mapping.columns.map((c) => (c.index === column.index ? { ...c, role: { kind: 'replicate' as const } } : c)) });
+  };
+
+  /** CONV-COLUMN-YEAR-IGNORED / CONV-COLUMN-NUMBER-IGNORED: the person reads the column as a measurement after all; it gets back the role it had before the value veto (nothing else is ever assigned). */
+  const readAsMeasurement = (f: Finding, header: string): void => {
+    const file = files.find((x) => x.fileName === f.file);
+    const mapping = file === undefined ? undefined : (mappings[file.fileId] ?? file.mappings).find((m) => m.sheet === f.sheet);
+    const column = mapping?.columns.find((c) => (c.header.trim() === '' ? `#${c.index + 1}` : c.header.trim()) === header);
+    const at = String(f.params.names ?? '').split(VETO_NAME_SEP).indexOf(header);
+    let role: SheetMapping['columns'][number]['role'] | undefined;
+    try {
+      role = at < 0 ? undefined : (JSON.parse(String(f.params.roles ?? '').split(VETO_NAME_SEP)[at] ?? '') as SheetMapping['columns'][number]['role']);
+    } catch {
+      role = undefined;
+    }
+    if (file === undefined || mapping === undefined || column === undefined || role === undefined || role.kind !== 'variable') return;
+    changeMapping(file.fileId, { ...mapping, columns: mapping.columns.map((c) => (c.index === column.index ? { ...c, role } : c)) });
   };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
@@ -1398,7 +1415,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     )}
                   </div>
                 )}
-                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" onChoose={chooseForSheet} />
+                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" onChoose={chooseForSheet} onReadAsMeasurement={readAsMeasurement} />
                 <p role="status" className={view.ok ? 'notice' : 'notice notice-blocked'}>
                   {view.ok ? t('convert.summary.none') : t('convert.summary.blocked')}
                 </p>
@@ -1504,7 +1521,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, header: string) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1520,6 +1537,15 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
               </button>
             </>
           )}
+          {(f.ruleId === 'CONV-COLUMN-YEAR-IGNORED' || f.ruleId === 'CONV-COLUMN-NUMBER-IGNORED') && typeof f.params.names === 'string' && onReadAsMeasurement !== undefined &&
+            f.params.names.split(VETO_NAME_SEP).map((name) => (
+              <React.Fragment key={name}>
+                {' '}
+                <button type="button" className="button" onClick={() => onReadAsMeasurement(f, name)}>
+                  {t('convert.finding.readAsMeasurement', { column: name })}
+                </button>
+              </React.Fragment>
+            ))}
           {f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree !== 'yes' && onChoose !== undefined && (
             <>
               {' '}
@@ -1567,12 +1593,12 @@ function FindingItems({ findings, onUseReplicate, onChoose }: { findings: Findin
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, header: string) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onChoose === undefined ? {} : { onChoose })} />
+      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} />
     </div>
   );
 }
