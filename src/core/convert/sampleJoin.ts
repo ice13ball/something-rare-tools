@@ -330,23 +330,37 @@ function joinFlags(a: boolean[] | undefined, aw: number, b: boolean[] | undefine
   return [...pad(a, aw), ...pad(b, bw)];
 }
 
-/** One value of a quantity as one side reads it. `value` is what is compared (absent = nothing there); `text` is what the person sees; `cells` are the cells a resolved column holds. */
+/**
+ * One value of a quantity as one side reads it, part by part (a date and its time, a latitude and its longitude, the top and the bottom of a depth). `parts` are what is compared ('' = this side gives
+ * nothing for the part; '?text' = it gives a text that could not be read, which is never equal to anything); `text` is what the person sees; `cells` are what a resolved column holds for each part,
+ * `originals` the cell as the side wrote it (the text the archive must keep when the resolved cell differs from it). A trailing part with no cell (the shape of a depth) is compared only.
+ */
 interface Reading {
-  value?: string;
+  parts: string[];
   text: string;
   cells: RawCell[];
+  originals: RawCell[];
 }
 /** `read` = the row whose cells are read (the description row as lent, in the results file's conventions); `show` = the row as its own file holds it. */
 type Reader = (read: RawRow, show: RawRow) => Reading;
 type ReaderKind = 'date' | 'position' | 'depth' | 'trim' | 'number';
 
-/** A slot of a resolved quantity: the value the converter read, or else the cell as written, marked unreadable so that it never passes for an equal or a blank one. */
-function slot(read: number | string | undefined, raw: RawCell | undefined): { part: string; cell: RawCell } {
-  if (read !== undefined) return { part: String(read), cell: read };
-  const t = cellText(raw);
-  return t === '' ? { part: '', cell: null } : { part: `?${t}`, cell: t };
+interface Slot {
+  part: string;
+  cell: RawCell;
+  original: RawCell;
 }
-const reading = (slots: readonly { part: string; cell: RawCell }[], text: string): Reading => ({ ...(slots.some((s) => s.part !== '') ? { value: slots.map((s) => s.part).join('/') } : {}), text, cells: slots.map((s) => s.cell) });
+/** A part: the value the converter read (its `text` is what a resolved cell holds), or else the cell as written, marked unreadable so that it never passes for an equal or a blank one. */
+function slot(read: number | string | undefined, raw: RawCell | undefined, text?: string, original?: RawCell): Slot {
+  const t = cellText(raw);
+  if (read !== undefined) return { part: String(read), cell: text ?? read, original: original ?? (t === '' ? null : raw ?? null) };
+  return t === '' ? { part: '', cell: null, original: null } : { part: `?${t}`, cell: t, original: raw ?? null };
+}
+const reading = (slots: readonly Slot[], text: string, extra: string[] = []): Reading => ({ parts: [...slots.map((x) => x.part), ...extra], text, cells: slots.map((x) => x.cell), originals: slots.map((x) => x.original) });
+/** Does this side give anything for the quantity? */
+const holds = (r: Reading): boolean => r.parts.some((x) => x !== '');
+/** Two sides contradict each other when a part that both give differs; a part only one gives contradicts nothing. */
+const contradicts = (a: Reading, b: Reading): boolean => a.parts.some((x, i) => x !== '' && (b.parts[i] ?? '') !== '' && x !== b.parts[i]);
 
 /**
  * How one side of a quantity is read: with the converter's own readers (the date as `metaParser` reads it, the signed position, the depth in metres as `build.ts` reads it), a variable as a number,
@@ -357,15 +371,40 @@ function makeReader(kind: ReaderKind, columns: readonly number[], mapping: Sheet
   const textOf = (row: RawRow): string => columns.map((c) => shown(row.cells[c] ?? null, showFile, sheet, c)).filter((t) => t !== '').join(' ');
   const rawOf = (row: RawRow): string => columns.map((c) => cellText(row.cells[c])).filter((t) => t !== '').join(' ');
   const collector = new Collector(readFile.fileName);
+  // a number written into a resolved cell as the source wrote its digits, in the results file's decimal separator
+  const local = (t: string | undefined): string | undefined => (t === undefined ? undefined : readFile.decimalComma ? t.replace('.', ',') : t);
   if (kind === 'date' || kind === 'position') {
     const specs = specsOf(own);
     const parse = metaParser(readFile, sheet, specs, collector, { whenUtc: isUtcBySource(utcFile, specs.when?.header) });
-    const lat = own.columns.find((c) => c.role.kind === 'latitude')?.index;
-    const lon = own.columns.find((c) => c.role.kind === 'longitude')?.index;
+    const colOf = (k: string, axis?: string): number | undefined => own.columns.find((c) => c.role.kind === k && (axis === undefined || (c.role.kind === 'hemisphere' && c.role.axis === axis)))?.index;
+    const lat = colOf('latitude');
+    const lon = colOf('longitude');
+    const latHemi = colOf('hemisphere', 'latitude');
+    const lonHemi = colOf('hemisphere', 'longitude');
+    const written = (rd: RawRow, c: number | undefined, hemi: number | undefined): RawCell => {
+      if (c === undefined) return null;
+      const v = cellText(rd.cells[c]);
+      const h = hemi === undefined ? '' : cellText(rd.cells[hemi]);
+      return v === '' ? null : h === '' ? (rd.cells[c] ?? null) : `${v} ${h}`;
+    };
     return (rd, sh) => {
       const meta = parse(rd);
-      if (kind === 'date') return reading([slot(meta.datetime === undefined ? undefined : eventDateText(meta.datetime), rawOf(rd))], textOf(sh));
-      return reading([slot(meta.lat, lat === undefined ? undefined : rd.cells[lat]), slot(meta.lon, lon === undefined ? undefined : rd.cells[lon])], textOf(sh));
+      if (kind === 'date') {
+        const full = meta.datetime === undefined ? undefined : eventDateText(meta.datetime);
+        // a date and its time of day are two parts; a range is one
+        const at = full === undefined || full.includes('/') ? -1 : full.indexOf('T');
+        const day = full === undefined ? undefined : at < 0 ? full : full.slice(0, at);
+        const time = full !== undefined && at >= 0 ? full.slice(at + 1) : undefined;
+        const first = slot(day, rawOf(rd));
+        const second: Slot = time === undefined ? { part: '', cell: null, original: null } : { part: time, cell: time, original: null };
+        return reading([first, second], textOf(sh));
+      }
+      const fixed = (v: number | undefined, d: number | undefined): string | undefined => (v === undefined ? undefined : local(d === undefined ? String(v) : v.toFixed(d)));
+      const slotOf = (v: number | undefined, d: number | undefined, c: number | undefined, hemi: number | undefined): Slot => {
+        const raw = written(rd, c, hemi);
+        return { ...slot(v, raw === null ? undefined : raw, fixed(v, d)), ...(v !== undefined && raw !== null ? { original: raw } : {}) };
+      };
+      return reading([slotOf(meta.lat, meta.latDecimals, lat, latHemi), slotOf(meta.lon, meta.lonDecimals, lon, lonHemi)], textOf(sh));
     };
   }
   if (kind === 'depth') {
@@ -377,19 +416,24 @@ function makeReader(kind: ReaderKind, columns: readonly number[], mapping: Sheet
     const read = depthReader(colsOf(own, sheet.header), readFile.decimalComma, collector, sheet.name);
     return (rd, sh) => {
       const d = read(rd);
-      return reading([slot(d.min, minCol === undefined ? undefined : rd.cells[minCol]), slot(d.max, maxCol === undefined ? undefined : rd.cells[maxCol])], textOf(sh));
+      const slots = [
+        slot(d.min, minCol === undefined ? undefined : rd.cells[minCol], local(d.minText), d.verbatim?.min),
+        slot(d.max, maxCol === undefined ? undefined : rd.cells[maxCol], local(d.maxText), d.verbatim?.max),
+      ];
+      // a single depth and a top and bottom are different things: they are never filled from each other
+      return reading(slots, textOf(sh), slots.some((x) => x.part !== '') ? [plain !== undefined ? 'point' : 'range'] : []);
     };
   }
   if (kind === 'number') {
     const c = columns[0];
     return (rd, sh) => {
       const cell = rd.cells[c] ?? null;
-      return { ...(isBlankCell(cell) ? {} : { value: comparable(cell, readFile, sheet, c) }), text: textOf(sh), cells: [cell] };
+      return { parts: [isBlankCell(cell) ? '' : comparable(cell, readFile, sheet, c)], text: textOf(sh), cells: [cell], originals: [cell] };
     };
   }
   return (rd, sh) => {
     const t = rawOf(rd);
-    return { ...(t === '' ? {} : { value: t }), text: textOf(sh), cells: columns.map((c) => rd.cells[c] ?? null) };
+    return { parts: [t], text: textOf(sh), cells: columns.map((c) => rd.cells[c] ?? null), originals: columns.map((c) => rd.cells[c] ?? null) };
   };
 }
 
@@ -403,7 +447,7 @@ interface Quantity {
   /** the columns that stand for each other (same structure only) */
   pairs: [number, number][];
   /** other structures: the merge writes these columns (F4) when any row takes the description */
-  resolved?: { headers: string[]; roles: ColumnRole[]; slots: number[] };
+  resolved?: { headers: string[]; roles: ColumnRole[]; slots: number[]; /** a date and its time of day make one cell */ pack?: boolean };
   readRes: Reader;
   readDes: Reader;
   entries: Map<string, ConflictEntry>;
@@ -418,7 +462,6 @@ interface QuantityRow {
   lent?: RawRow;
   lentCells?: RawCell[];
   entry?: ConflictEntry;
-  fill?: boolean;
 }
 
 interface Differences {
@@ -434,10 +477,8 @@ const note = (map: Map<string, Differences>, kind: string, what: string, line: n
   map.set(kind, d);
 };
 
-/** Roles of one value per sample that a description can state beside the quantities above; they are compared as text when both sheets have exactly one, in the same unit. */
-const OTHER_SHARED = new Set<string>(['pressure', 'effort', 'depthBelowSeafloor']);
 const roleUnit = (r: ColumnRole): string => ((r as { unit?: string }).unit ?? '').trim();
-const EMPTY: Reading = { text: '', cells: [] };
+const EMPTY: Reading = { parts: [], text: '', cells: [], originals: [] };
 
 /**
  * The merge after the person confirmed the join: the description row of each results row is attached to it by key. The merged sheet keeps the results sheet's NAME (so event IDs and the key prefix
@@ -522,7 +563,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     const either = (kinds: string[]): boolean => hasRole(rc, results.mapping, kinds) || hasRole(dc, description.mapping, kinds);
     const resolved: Quantity['resolved'] =
       kind === 'date'
-        ? { headers: ['Date (merged)'], roles: [{ kind: 'datetime' }], slots: [0] }
+        ? { headers: ['Date (merged)'], roles: [{ kind: 'datetime' }], slots: [0], pack: true }
         : kind === 'depth'
           ? { headers: ['Depth min (merged)', 'Depth max (merged)'], roles: [{ kind: 'depth', positive: 'down', bound: 'min', unit: 'm' }, { kind: 'depth', positive: 'down', bound: 'max', unit: 'm' }], slots: [0, 1] }
           : {
@@ -543,11 +584,17 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   textQuantity('station', 'station', (r) => r.kind === 'station', 'station');
   textQuantity('cruise', 'cruise', (r) => r.kind === 'cruise', 'cruise');
   textQuantity('r.sampleId', 'other', (r) => r.kind === 'sampleId', 'sampleId');
-  for (const kind of OTHER_SHARED) {
-    const rc = columnsOf(results.mapping, resKeySet, (r) => r.kind === kind);
-    const dc = columnsOf(description.mapping, desKeySet, (r) => r.kind === kind);
-    const unit = (m: SheetMapping, c: number): string => roleUnit(m.columns.find((x) => x.index === c)!.role);
-    if (rc.length === 1 && dc.length === 1 && unit(results.mapping, rc[0]) === unit(description.mapping, dc[0])) addQuantity(`r.${kind}`, 'other', 'trim', rc, dc, [[rc[0], dc[0]]]);
+  // every other role the two sheets share is one quantity too (never ignore or keyPart, which say nothing); a unit-carrying role in two units cannot be exchanged as text, so it blocks instead of becoming two columns of one role
+  const taken = new Set<string>(['ignore', 'keyPart', 'variable', ...Object.keys(QUANTITY_OF)]);
+  const otherKinds = new Set(results.mapping.columns.filter((c) => !resKeySet.has(c.index) && !taken.has(c.role.kind)).map((c) => c.role.kind));
+  for (const kind of otherKinds) {
+    const pick = (r: ColumnRole): boolean => r.kind === kind;
+    const rc = columnsOf(results.mapping, resKeySet, pick);
+    const dc = columnsOf(description.mapping, desKeySet, pick);
+    if (dc.length === 0) continue;
+    const units = (m: SheetMapping, cols: number[]): string => [...new Set(cols.map((c) => roleUnit(m.columns.find((x) => x.index === c)!.role)))].sort().join('|');
+    if (units(results.mapping, rc) !== units(description.mapping, dc)) unmerged.push({ kind, description: dc, results: rc });
+    else textQuantity(`r.${kind}`, 'other', pick, kind);
   }
   // a measured variable of the same name and unit is the same quantity; a header alone is not
   const variablesOf = (mapping: SheetMapping, skip: Set<number>): Map<string, number[]> => {
@@ -580,13 +627,15 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const blankKeyColumns = new Set<number>();
   const ambiguousUsed = new Set<string>();
   const filled = new Map<string, { order: number; name: string; count: number; lines: number[] }>();
+  /** `space` keeps the columns of the results sheet and the quantities written by the merge apart */
+  const fillKey = (space: 'c' | 'q', order: number): string => `${space}:${order}`;
   const unmergedDiffers = new Map<string, Differences>();
   let lastLine = resSheet.headerLine;
-  const countFilled = (order: number, name: string, line: number): void => {
-    const f = filled.get(`${order}`) ?? { order, name, count: 0, lines: [] };
+  const countFilled = (space: 'c' | 'q', order: number, name: string, line: number): void => {
+    const f = filled.get(fillKey(space, order)) ?? { order: (space === 'c' ? 0 : 1e9) + order, name, count: 0, lines: [] };
     f.count++;
-    f.lines.push(line);
-    filled.set(`${order}`, f);
+    if (!f.lines.includes(line)) f.lines.push(line);
+    filled.set(fillKey(space, order), f);
   };
 
   const turnsNumeric = new Map<number, { lines: Set<number>; value: string }>();
@@ -644,7 +693,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       const rr = q.readRes(row, row);
       const dr = q.readDes(lentRow, lent);
       const at: QuantityRow = { cells, line: row.line, rr, dr, lent, lentCells };
-      if (rr.value !== undefined && dr.value !== undefined && rr.value !== dr.value) {
+      if (contradicts(rr, dr)) {
         // F6: one entry per (join-key value, results value)
         const id = shortHash(`${k.text}\u0000${rr.text}`);
         const entry = q.entries.get(id) ?? { id, key: k.text, descriptionLine: lent.line, descriptionText: dr.text, resultsText: rr.text, resultsLines: [], samples: [] };
@@ -654,10 +703,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         q.entries.set(id, entry);
         at.entry = entry;
       } else if (q.resolved !== undefined) {
-        if (rr.value === undefined && dr.value !== undefined) {
-          at.fill = true;
-          countFilled(1000 + quantities.indexOf(q), q.label, row.line);
-        }
+        // a part only the description gives (a time beside a date, a longitude beside a latitude) is filled, as a blank cell is
+        if (dr.parts.some((x, i) => i < dr.cells.length && x !== '' && (rr.parts[i] ?? '') === '')) countFilled('q', quantities.indexOf(q), q.label, row.line);
       } else {
         for (const [rc, dc] of q.pairs) {
           const have = cells[rc];
@@ -667,7 +714,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
           takenFromDescription.set(`${row.line}:${rc}`, lent.line);
           const original = rewritten.get(`${row.line}:${rw + dc}`);
           if (original !== undefined) rewritten.set(`${row.line}:${rc}`, original);
-          countFilled(rc, header(resSheet, rc), row.line);
+          countFilled('c', rc, header(resSheet, rc), row.line);
         }
       }
       if (q.resolved !== undefined || at.entry !== undefined) q.rows.push(at);
@@ -708,17 +755,14 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         if (q.resolved !== undefined) {
           const dr = q.readDes(lentRow, row);
           const at: QuantityRow = { cells: full, line, rr: EMPTY, dr, lent: row, lentCells };
-          if (dr.value !== undefined) {
-            at.fill = true;
-            countFilled(1000 + quantities.indexOf(q), q.label, line);
-          }
+          if (holds(dr)) countFilled('q', quantities.indexOf(q), q.label, line);
           q.rows.push(at);
           continue;
         }
         for (const [rc, dc] of q.pairs) {
           if (!emptyCell(cells[rc])) continue;
           cells[rc] = lentCells[dc];
-          if (!emptyCell(row.cells[dc]) && lentCells[dc] !== null) countFilled(rc, header(resSheet, rc), line);
+          if (!emptyCell(row.cells[dc]) && lentCells[dc] !== null) countFilled('c', rc, header(resSheet, rc), line);
         }
       }
       full.push(...cells, ...lentCells);
@@ -760,17 +804,23 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     }
   }
 
-  /* --- the chosen description side is written into the results columns (same structure) --- */
+  /* --- the chosen side is written into the results columns (same structure) --- */
+  // only what is contradicted is replaced: a cell the chosen side leaves blank keeps what the other side gave (a date and its time are one thing: the chosen date takes its own time of day, or none)
   for (const q of quantities) {
     if (q.resolved !== undefined) continue;
     for (const at of q.rows) {
-      if (at.entry?.take !== 'description' || at.lent === undefined || at.lentCells === undefined) continue;
+      if (at.entry === undefined || at.entry.take === undefined || at.lent === undefined || at.lentCells === undefined) continue;
       for (const [rc, dc] of q.pairs) {
-        at.cells[rc] = at.lentCells[dc];
-        takenFromDescription.set(`${at.line}:${rc}`, at.lent.line);
-        const original = rewritten.get(`${at.line}:${rw + dc}`);
-        if (original !== undefined) rewritten.set(`${at.line}:${rc}`, original);
-        else rewritten.delete(`${at.line}:${rc}`);
+        const offered = at.lentCells[dc];
+        const description = at.entry.take === 'description';
+        if (description ? !(emptyCell(offered) && q.kind !== 'date') : emptyCell(at.cells[rc]) && !emptyCell(at.lent.cells[dc]) && offered !== null) {
+          at.cells[rc] = offered;
+          takenFromDescription.set(`${at.line}:${rc}`, at.lent.line);
+          const original = rewritten.get(`${at.line}:${rw + dc}`);
+          if (original !== undefined) rewritten.set(`${at.line}:${rc}`, original);
+          else rewritten.delete(`${at.line}:${rc}`);
+          if (!description) countFilled('c', rc, header(resSheet, rc), at.line);
+        }
       }
     }
   }
@@ -787,8 +837,32 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   for (const q of resolvedQuantities) {
     for (const d of q.desCols) consumed.add(rw + d);
     const spec = q.resolved!;
-    const takesDescription = q.rows.some((at) => at.fill === true || at.entry?.take === 'description');
-    if (!takesDescription) continue; // the results columns keep carrying the quantity: every value of the description is equal to theirs, blank, or kept in notChosen
+    // per row and part: the chosen side's, or the other side's where the chosen side gives nothing (nothing contradicted it); a date and its time of day go together when the dates were contradicted
+    const plans = q.rows.map((at) => {
+      const take = at.entry?.take;
+      const primaryDescription = take === 'description';
+      const coupled = q.kind === 'date' && take !== undefined;
+      const n = at.rr.cells.length > 0 ? at.rr.cells.length : (at.dr?.cells.length ?? 0);
+      const cells: RawCell[] = [];
+      const originals: RawCell[] = [];
+      const fromDescription: boolean[] = [];
+      for (let i = 0; i < n; i++) {
+        const rp = at.rr.parts[i] ?? '';
+        const dp = at.dr?.parts[i] ?? '';
+        const useDescription = at.dr === undefined ? false : coupled ? primaryDescription : primaryDescription ? dp !== '' || rp === '' : rp === '' && dp !== '';
+        const side = useDescription ? at.dr! : at.rr;
+        cells.push(side.cells[i] ?? null);
+        originals.push(side.originals[i] ?? null);
+        fromDescription.push(useDescription && dp !== '');
+      }
+      if (spec.pack === true) {
+        const day = cells[0];
+        const joined = day === null || day === undefined ? (cells[1] ?? null) : cells[1] === null || cells[1] === undefined ? day : `${day}T${cells[1]}`;
+        return { at, cells: [joined], originals: [originals[0] ?? originals[1] ?? null], fromDescription: [fromDescription.some(Boolean)], filledByChoice: take === 'results' && fromDescription.some(Boolean) };
+      }
+      return { at, cells, originals, fromDescription, filledByChoice: take === 'results' && fromDescription.some(Boolean) };
+    });
+    if (!plans.some((x) => x.fromDescription.some(Boolean))) continue; // the results columns keep carrying the quantity: every value of the description is equal to theirs, blank, or kept in notChosen
     const names = uniqueHeaders(spec.headers, mergedHeader);
     const base = mergedHeader.length;
     mergedHeader.push(...names);
@@ -800,13 +874,16 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       consumed.add(c);
       ignoredResults.add(c);
     }
-    for (const at of q.rows) {
-      const fromDescription = at.fill === true || at.entry?.take === 'description';
-      const chosen = fromDescription ? at.dr! : at.rr;
+    for (const plan of plans) {
+      const { at } = plan;
+      if (plan.filledByChoice) countFilled('q', quantities.indexOf(q), q.label, at.line);
       spec.slots.forEach((slotIndex, i) => {
-        const cell = chosen.cells[slotIndex] ?? null;
+        const cell = plan.cells[slotIndex] ?? null;
         at.cells[base + i] = cell;
-        if (fromDescription && cell !== null && at.lent !== undefined) takenFromDescription.set(`${at.line}:${base + i}`, at.lent.line);
+        if (plan.fromDescription[slotIndex] === true && cell !== null && at.lent !== undefined) takenFromDescription.set(`${at.line}:${base + i}`, at.lent.line);
+        // the text the side wrote, when the cell written is not it ("33 ft", "03.05.2021", "61.1" beside an "S")
+        const original = plan.originals[slotIndex] ?? null;
+        if (cell !== null && original !== null && String(original) !== String(cell)) rewritten.set(`${at.line}:${base + i}`, original);
       });
     }
   }

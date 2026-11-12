@@ -169,7 +169,7 @@ describe('conflicts: a quantity in another column structure (C1)', () => {
     expect(r.info.notChosen.length).toBeGreaterThan(0);
   });
 
-  it('the result answer keeps the results date in the resolved column', () => {
+  it('the results answer leaves the results own Year/Month/Day carrying the date and sets the description Date aside', () => {
     const r = merge({ ...ymd(2), extra: { conflicts: [answer('date', 'results', 1)] } });
     // nothing is taken from the description: the results' own Year/Month/Day keep carrying the date, the description's Date is set aside
     expect(roles(r, ['date', 'datetime', 'time'])).toEqual([]);
@@ -231,10 +231,10 @@ describe('conflicts: depth', () => {
     expect(depthCols.map((c) => (c.role as { bound?: string }).bound).sort()).toEqual(['max', 'min']);
     const min = depthCols.find((c) => (c.role as { bound?: string }).bound === 'min')!;
     const max = depthCols.find((c) => (c.role as { bound?: string }).bound === 'max')!;
-    expect(rowAt(r, 2).cells[min.index]).toBe(10);
-    expect(rowAt(r, 2).cells[max.index]).toBe(10);
-    expect(rowAt(r, 3).cells[min.index]).toBe(20);
-    expect(rowAt(r, 3).cells[max.index]).toBe(20);
+    expect(rowAt(r, 2).cells[min.index]).toBe('10');
+    expect(rowAt(r, 2).cells[max.index]).toBe('10');
+    expect(rowAt(r, 3).cells[min.index]).toBe('20');
+    expect(rowAt(r, 3).cells[max.index]).toBe('20');
     expect(r.info.consumed.has(colOf(r, 'Depth [m]'))).toBe(true);
     expect(r.input.mapping.columns.find((c) => c.index === colOf(r, 'Depth [m]'))!.role.kind).toBe('ignore');
     expect(r.input.mapping.columns.find((c) => c.header === 'Depth [km]')!.role.kind).toBe('ignore');
@@ -283,7 +283,7 @@ describe('conflicts: position', () => {
     const r = run(61.2, 'S', [answer('position', 'description', 1)]);
     const lat = roles(r, ['latitude']);
     expect(lat).toHaveLength(1);
-    expect(rowAt(r, 2).cells[lat[0].index]).toBe(-61.1);
+    expect(rowAt(r, 2).cells[lat[0].index]).toBe('-61.1');
     expect(roles(r, ['hemisphere'])).toEqual([]);
     for (const h of ['Hemisphere']) expect(r.info.consumed.has(colOf(r, h))).toBe(true);
     expect(r.info.columns[lat[0].index]).toMatchObject({ side: 'resolved' });
@@ -359,8 +359,116 @@ describe('the open items of the merge', () => {
     const min = roles(r, ['depth']).find((c) => (c.role as { bound?: string }).bound === 'min')!;
     const added = sheetOf(r).rows[1];
     expect(added.cells[0]).toBe('X02');
-    expect(added.cells[min.index]).toBe(20);
-    expect(rowAt(r, 2).cells[min.index]).toBe(10);
+    expect(added.cells[min.index]).toBe('20');
+    expect(rowAt(r, 2).cells[min.index]).toBe('10');
     expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([]);
+  });
+});
+
+
+describe('every other shared role is a quantity (review 1)', () => {
+  const build = (extraRes: Cell[], extraDes: Cell[], resHeader: string, desHeader: string, roleRes: ColumnRole, roleDes: ColumnRole, conflicts: ConflictAnswer[] = []): MergeResult => {
+    const file = xlsxFile('book.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count', resHeader], ['X01', TAX, 1, ...extraRes]],
+      Samples: [['Sample', desHeader], ['X01', ...extraDes]],
+    });
+    return mergeSampleSheets({
+      results: resultsInput(file, 'Counts', { edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' }, [resHeader]: roleRes } } as never),
+      description: descriptionInput(file, 'Samples', { edit: { [desHeader]: roleDes } } as never),
+      keys: [{ results: 0, description: 0 }],
+      conflicts,
+      appendDescriptionOnly: false,
+    });
+  };
+
+  it('a non-numeric role (replicate) forms r.replicate and the description value can be taken', () => {
+    const r = build(['A'], ['B'], 'Rep', 'Rep', { kind: 'replicate' }, { kind: 'replicate' });
+    expect(r.conflicts.map((g) => g.group)).toEqual(['r.replicate']);
+    expect(group(r, 'r.replicate').entries[0]).toMatchObject({ resultsText: 'A', descriptionText: 'B' });
+    const taken = build(['A'], ['B'], 'Rep', 'Rep', { kind: 'replicate' }, { kind: 'replicate' }, [answer('r.replicate', 'description', 1)]);
+    expect(rowAt(taken, 2).cells[colOf(taken, 'Rep')]).toBe('B');
+    expect(roles(taken, ['replicate'])).toHaveLength(1);
+  });
+
+  it('a numeric role in two units blocks instead of becoming two columns of one role', () => {
+    const r = build([5], [500], 'Press', 'Press2', { kind: 'pressure', unit: 'dbar' }, { kind: 'pressure', unit: 'bar' });
+    expect(r.conflicts).toEqual([]);
+    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([expect.objectContaining({ severity: 'error', params: expect.objectContaining({ group: '' }) })]);
+  });
+});
+
+describe('a resolved depth keeps the digits and the original text (review 2)', () => {
+  const run = (resRows: Cell[][], desRows: Cell[][], resHeader: string, desHeader: string, conflicts: ConflictAnswer[] = []): MergeResult => {
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', resHeader], ...resRows], Samples: [['Sample', desHeader], ...desRows] });
+    return mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts, appendDescriptionOnly: false });
+  };
+
+  it('"33 ft" of the results is kept as the original of the resolved cell, also on a row that keeps the results value', () => {
+    const r = run([['X01', TAX, 1, 33], ['X02', TAX, 1, 33]], [['X01', 0.0100584], ['X02', 0.02]], 'Depth [ft]', 'Depth [km]', [answer('depth', 'description', 1)]);
+    const min = roles(r, ['depth']).find((c) => (c.role as { bound?: string }).bound === 'min')!;
+    expect(rowAt(r, 2).cells[min.index]).toBe('10.0584');
+    expect(r.info.rewritten.get(`2:${min.index}`)).toBe("33 ft");
+    expect(rowAt(r, 3).cells[min.index]).toBe('20');
+    expect(r.info.rewritten.get(`3:${min.index}`)).toBe("0.02 km");
+  });
+
+  it('"10.50" keeps its trailing zero in the resolved cell', () => {
+    const r = run([['X01', TAX, 1, '10.50'], ['X02', TAX, 1, '12']], [['X01', 0.0105], ['X02', 0.02]], 'Depth [m]', 'Depth [km]', [answer('depth', 'description', 1)]);
+    const min = roles(r, ['depth']).find((c) => (c.role as { bound?: string }).bound === 'min')!;
+    expect(rowAt(r, 2).cells[min.index]).toBe('10.50');
+    expect(rowAt(r, 3).cells[min.index]).toBe('20');
+  });
+});
+
+describe('a part only one side gives is a fill, not a conflict (review 3)', () => {
+  const dates = (resDate: Cell, desDate: Cell, desTime: Cell | undefined, resTime?: Cell, conflicts: ConflictAnswer[] = []): MergeResult => {
+    const file = xlsxFile('book.xlsx', {
+      Counts: [['Sample', 'Taxon', 'Count', 'Date', ...(resTime === undefined ? [] : ['Time'])], ['X01', TAX, 1, resDate, ...(resTime === undefined ? [] : [resTime])]],
+      Samples: [['Sample', 'Date', ...(desTime === undefined ? [] : ['Time'])], ['X01', desDate, ...(desTime === undefined ? [] : [desTime])]],
+    });
+    return mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts, appendDescriptionOnly: false });
+  };
+
+  it('Date against Date + Time with the same date: no conflict, the time is filled and counted', () => {
+    const r = dates('2021-05-03', '2021-05-03', '10:00');
+    expect(r.conflicts).toEqual([]);
+    const merged = roles(r, ['datetime'])[0];
+    expect(rowAt(r, 2).cells[merged.index]).toBe('2021-05-03T10:00');
+    expect(found(r, 'CONV-JOIN-FILLED')).toEqual([expect.objectContaining({ params: expect.objectContaining({ count: 1 }) })]);
+  });
+
+  it('Date + Time against Date with the same date: no conflict, the results keep their time', () => {
+    const r = dates('2021-05-03', '2021-05-03', undefined, '10:00');
+    expect(r.conflicts).toEqual([]);
+    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([]);
+    expect(rowAt(r, 2).cells[colOf(r, 'Time')]).toBe('10:00');
+  });
+
+  it('different dates conflict as the date with its time; the chosen date takes its own time of day (none here)', () => {
+    const r = dates('2021-05-02', '2021-05-03', undefined, '10:00');
+    expect(group(r, 'date').count).toBe(1);
+    const taken = dates('2021-05-02', '2021-05-03', undefined, '10:00', [answer('date', 'description', 1)]);
+    const merged = roles(taken, ['datetime'])[0];
+    expect(rowAt(taken, 2).cells[merged.index]).toBe('2021-05-03');
+    expect(taken.info.notChosen.length).toBeGreaterThan(0);
+  });
+
+  it('a latitude only the description gives against latitude + longitude: no conflict; a longitude only the results give stays after the description latitude is taken', () => {
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', 'Latitude', 'Longitude'], ['X01', TAX, 1, 61.2, 4.2]], Samples: [['Sample', 'Latitude'], ['X01', 61.1]] });
+    const mk = (conflicts: ConflictAnswer[]) => mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts, appendDescriptionOnly: false });
+    expect(group(mk([]), 'position').count).toBe(1);
+    const r = mk([answer('position', 'description', 1)]);
+    const lat = roles(r, ['latitude'])[0];
+    const lon = roles(r, ['longitude'])[0];
+    expect(rowAt(r, 2).cells[lat.index]).toBe('61.1');
+    expect(rowAt(r, 2).cells[lon.index]).toBe('4.2');
+    const same = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(xlsxFile('b.xlsx', { Samples: [['Sample', 'Latitude'], ['X01', 61.2]] }), 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [], appendDescriptionOnly: false });
+    expect(same.conflicts).toEqual([]);
+  });
+
+  it('a single depth against a top and bottom stays a conflict (different meaning)', () => {
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count', 'Depth top [m]'], ['X01', TAX, 1, 10]], Samples: [['Sample', 'Depth'], ['X01', 10]] });
+    const r = mergeSampleSheets({ results: resultsInput(file, 'Counts'), description: descriptionInput(file, 'Samples'), keys: [{ results: 0, description: 0 }], conflicts: [], appendDescriptionOnly: false });
+    expect(group(r, 'depth').count).toBe(1);
   });
 });
