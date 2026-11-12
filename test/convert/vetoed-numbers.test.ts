@@ -293,3 +293,22 @@ describe('one sample code only (review of the SampleID task)', () => {
     expect(ids).not.toContain('CONV-ID-DUPLICATE');
   });
 });
+
+describe('two columns that both qualify as the sample code (ruling 3)', () => {
+  const H = ['SampleID', 'SampleNo', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];
+  const R: Cell[][] = Array.from({ length: 8 }, (_, i) => [`ID-${Math.floor(i / 4)}`, 100 + i, `2020-06-0${Math.floor(i / 2) + 1}`, 54.1, 7.2, TAXA[i % 2], 3 + i]);
+  it('SampleID and SampleNo together: none is the sample code, each says the two could be, and the block appears', async () => {
+    const r = roles(H, R);
+    for (const h of ['SampleID', 'SampleNo']) {
+      expect(r[h].role.kind, h).toBe('ignore');
+      expect(r[h].reasonCode, h).toBe('sample-ambiguous');
+    }
+    const e = await exportSheet(H, R, { quantity: { kind: 'count' }, fullList: true });
+    expect([...e.result.blocking, ...e.findings].map((f) => f.ruleId)).toContain('CONV-SAMPLE-CODE-MISSING');
+  });
+  it('Sample and SampleNo still pick Sample', () => {
+    const r = roles(['Sample', ...H.slice(1)], R);
+    expect(r.Sample.role.kind).toBe('sampleId');
+    expect(r.SampleNo.reasonCode).toBe('other-sample');
+  });
+});

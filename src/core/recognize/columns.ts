@@ -1036,9 +1036,17 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     const winner = idxs
       .slice()
       .sort((a, b) => Number(entries[a].cand!.empty) - Number(entries[b].cand!.empty) || entries[a].cand!.tier - entries[b].cand!.tier || a - b)[0];
+    // two columns that both qualify as the sample code at the same tier: none is proposed (the missing sample code is then asked for), each says which others could be it
+    const tied = slot === 'sampleId' ? idxs.filter((i) => entries[i].cand!.empty === entries[winner].cand!.empty && entries[i].cand!.tier === entries[winner].cand!.tier) : [];
     for (const i of idxs) {
       const e = entries[i];
       const c = e.cand!;
+      if (tied.length > 1) {
+        e.proposal.role = { kind: 'ignore' };
+        e.proposal.confidence = 'low';
+        applyReason(e.proposal, why('sample-ambiguous', { name: tied.map((k) => `"${entries[k].proposal.cleanHeader}"`).join(', ') }), []);
+        continue;
+      }
       if (i !== winner) {
         const w = entries[winner].proposal.cleanHeader;
         e.proposal.role = { kind: 'ignore' };

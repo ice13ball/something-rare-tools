@@ -70,6 +70,7 @@ export const CHECK_REASONS = {
   'other-station': 'another column ("{name}") is used for station',
   'other-cruise': 'another column ("{name}") is used for cruise',
   'other-sample': 'another column ("{name}") is used for sampleId',
+  'sample-ambiguous': 'two columns could be the sample code: {name}',
   // a lead or a note joined to the main reason with "; "
   'lead-empty': 'column is empty',
   'note-negative-up': 'negative values: depth is positive up',

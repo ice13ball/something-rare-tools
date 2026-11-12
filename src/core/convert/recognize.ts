@@ -494,7 +494,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         // /convert never holds two sample codes: a sample code made by a name alone waits until every claim is made, and stands only when no other column is the sample code (the shared proposal's
         // winner, unless this sheet reads it as something else, e.g. a Darwin Core occurrenceID)
         if (named?.role.kind === 'sampleId' && named.code === 'name-sample-code') {
-          codeByName.set(p.index, named);
+          if (p.reasonCode !== 'sample-ambiguous') codeByName.set(p.index, named);
           continue;
         }
         if (named) {
@@ -505,8 +505,9 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     }
   }
 
+  // two columns that could both be the sample code: none is (the shared proposal's rule, followed here for the converter's own names)
   for (const [index, claim] of codeByName) {
-    const other = base.some((q) => q.index !== index && (claims.get(q.index)?.role.kind ?? q.role.kind) === 'sampleId') || [...codeByName.keys()].some((k) => k < index);
+    const other = base.some((q) => q.index !== index && (claims.get(q.index)?.role.kind ?? q.role.kind) === 'sampleId') || codeByName.size > 1;
     if (!other) claims.set(index, claim);
   }
 
