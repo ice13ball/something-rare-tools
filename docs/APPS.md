@@ -1697,8 +1697,9 @@ nobody judged must not let a bad archive through) and is only shown otherwise.
   nothing of it is written into the archive, the metadata or the companion file (there is nothing to save, and nothing carries it to another file), and a new upload starts unaccepted. The page keeps the tick for a
   SET of columns, each named by what makes it itself (the hash of its header with its occurrence, as the sample key does, and its proposed role; not its position): a column answered by hand leaves the list and the
   tick stands; it reopens when a column joins the list (another sheet switched on, for example) and it is cleared when a sheet is read again (`pivotChoice`). A column named with an exact Darwin Core term or vocabulary
-  entry is not listed; a file whose headers are the author's own words or an inexact spelling (`Latitude_dd`, `Date of sampling`, `Scientific name`, `Breitengrad`, `Abundance (ind)`) lists them, and that is the
-  price of "stated by name": the vocabulary is not widened here (an open question for the owner). The wide sheet's taxon headers keep their own confirmation ("Confirm all shown"); they are not listed here.
+  entry is not listed; since 2026-11-12 (Michał's decision of 2026-11-06) that includes a few whole names in other languages: `Breitengrad`, `Längengrad`, `Szerokość geograficzna`, `Długość geograficzna`,
+  `Scientific name` (and `Nom scientifique`, `Wissenschaftlicher Name`, `Nazwa naukowa`, marked only where the proposal is already a taxon) and `Date (UTC)`. A file whose headers are the author's own words, an
+  inexact spelling or a word with two meanings (`Latitude_dd`, `Date of sampling`, `Breite`, `Data`, `Datum`, `Date (GMT)`, `Abundance (ind)`) lists them, and that is the price of "stated by name". The wide sheet's taxon headers keep their own confirmation ("Confirm all shown"); they are not listed here.
 - **Only shown**, never blocks, never asks: the prefixes `CHEM-`, `ROW-SHIP-SPEED`, `ROW-ON-LAND`,
   `XF-`, `META-`, `LIC-` (`SHOW_ONLY_PREFIXES`) and the note `ROW-STATION-SPREAD` (a transect legitimately
   spans more than 10 km). `ROW-STATION-MOVED` and `ROW-STATION-SPREAD-FAR` need an acceptance.
