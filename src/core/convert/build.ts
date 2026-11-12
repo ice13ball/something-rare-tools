@@ -197,7 +197,7 @@ export interface ConvertInput {
 
 /* ---------- reading one sheet ---------- */
 
-interface Cols {
+export interface Cols {
   sampleId?: Spec;
   taxonHeaders: Spec[];
   taxonCell?: Spec;
@@ -225,7 +225,7 @@ interface Cols {
   variables: (Spec & { name: string; unit?: string; /** the P01 code the header declares (the role's `p01`), if any */ p01?: string })[];
 }
 
-function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): Cols {
+export function colsOf(mapping: SheetMapping, header: readonly string[] | undefined): Cols {
   const c: Cols = { taxonHeaders: [], variables: [], biomass: [], occVars: [] };
   for (const m of mapping.columns) {
     const spec = { index: m.index, header: m.header };
@@ -727,7 +727,7 @@ function columnLetters(index: number): string {
 }
 
 /** The depth of a row: one depth column gives min = max, a pair of bound columns gives both. Text that is not a number is reported (ROW-NON-NUMERIC / ROW-NA-VARIANT). */
-interface DepthRead {
+export interface DepthRead {
   min?: number;
   max?: number;
   decimals?: number;
@@ -748,7 +748,7 @@ const nonMetreDepth = (d: DepthCol | undefined): { unit: string; factor: DepthUn
   d?.unit === undefined || d.unit.trim() === '' || isMetreUnit(d.unit) ? undefined : { unit: d.unit.trim(), factor: depthUnitFactor(d.unit) };
 const negateText = (t: string): string => (t.startsWith('-') ? t.slice(1) : /[1-9]/.test(t) ? `-${t}` : t);
 
-function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: string): (row: RawRow) => DepthRead {
+export function depthReader(cols: Cols, dc: boolean, collector: Collector, sheetName: string): (row: RawRow) => DepthRead {
   // a depth column in a unit with an exact factor is converted to metres and the original is kept in verbatimDepth; every other unit is blocked (CONV-DEPTH-UNIT) before this reads a value
   const converting = usedDepthColumns(cols).some((d) => nonMetreDepth(d)?.factor !== undefined);
   return (row: RawRow): DepthRead => {

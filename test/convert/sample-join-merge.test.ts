@@ -211,21 +211,21 @@ describe('mergeSampleSheets: columns', () => {
     expect(rowAt(r, 2).cells[9]).toBe(10);
   });
 
-  it('a value that differs on both sides blocks, ungrouped, and neither side is overwritten', () => {
+  it('a value that differs on both sides blocks as a group, and neither side is overwritten', () => {
     const r = depthBook([['X01', 10], ['X02', 25]]);
     expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([
-      expect.objectContaining({ severity: 'error', file: 'book.xlsx', sheet: 'Counts', lines: [3], params: expect.objectContaining({ group: '', count: 1, total: 1, what: 'Depth', examples: '20 / 25' }) }),
+      expect.objectContaining({ severity: 'error', file: 'book.xlsx', sheet: 'Counts', lines: [3], params: expect.objectContaining({ group: 'depth', count: 1, total: 1, what: 'Depth', examples: 'X02: 20 / 25' }) }),
     ]);
     expect(rowAt(r, 3).cells[3]).toBe(25);
     expect(rowAt(r, 3).cells[9]).toBe(20);
     expect(found(r, 'CONV-JOIN-FILLED')).toEqual([]);
   });
 
-  it('a quantity whose structure differs between the sides is not merged into one: its description value cannot be written, so it blocks', () => {
+  it('a quantity whose structure differs between the sides is not merged into one: it is compared in its own terms and blocks as a group', () => {
     const file = xlsxFile('book.xlsx', { Counts: [[...COUNTS_HEADER, 'Depth [ft]'], ['X01', 'Calanus finmarchicus', 5, 33]], Samples: [SAMPLES_HEADER, ...SAMPLES_ROWS] });
     const r = mergeSampleSheets(decl(resultsInput(file, 'Counts'), descriptionInput(file, 'Samples'), { appendDescriptionOnly: false }));
-    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([expect.objectContaining({ params: expect.objectContaining({ group: '', count: 1 }) })]);
-    expect(r.info.consumed.has(9)).toBe(false);
+    expect(found(r, 'CONV-JOIN-CONFLICT')).toEqual([expect.objectContaining({ params: expect.objectContaining({ group: 'depth', count: 1 }) })]);
+    expect(r.conflicts.map((g) => g.group)).toEqual(['depth']);
   });
 
   it('sameStructure compares role kinds, bounds, units and date formats', () => {
