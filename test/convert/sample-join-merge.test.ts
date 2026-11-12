@@ -306,4 +306,38 @@ describe('mergeSampleSheets: the results file conventions (F2)', () => {
     expect(lendCell(null, from(csvComma), csvPoint)).toEqual({ cell: null, rewritten: false });
     expect(lendCell(7, from(csvComma), csvPoint)).toEqual({ cell: 7, rewritten: false });
   });
+
+  it('a time of day is lent as it is, not as a date of the other epoch', () => {
+    const res = resultsCsvFile();
+    const rows: Cell[][] = [['X01', 'ST-1', { t: 'n', v: 0.5, z: 'hh:mm' }], ['X02', 'ST-2', { t: 'n', v: 0.25, z: 'hh:mm' }]];
+    const des = xlsxFile('s.xlsx', { Samples: [['Sample', 'Station', 'Time'], ...rows] }, { Workbook: { WBProps: { date1904: true } } } as never);
+    const r = mergeSampleSheets(decl(resultsInput(res, res.sheets[0].name), descriptionInput(des, 'Samples'), { appendDescriptionOnly: false }));
+    expect(rowAt(r, 2).cells[3 + 2]).toBe(0.5);
+    expect(r.info.rewritten.size).toBe(0);
+  });
+
+  it('a column that shows milliseconds keeps them when a date serial is rewritten', () => {
+    const csv = textFile('a.csv', 'a\n1\n');
+    const sheet = { name: 'S', header: ['d'], headerLine: 1, rows: [], dateFormatted: [true], fractionShown: [true] };
+    const from = { file: { ...csv, date1904: true }, sheet, column: 0 };
+    expect(lendCell(42857.5000116, from, csv)).toEqual({ cell: '2021-05-03T12:00:01.002', rewritten: true });
+    expect(lendCell(42857.5000116, { ...from, sheet: { ...sheet, fractionShown: [false] } }, csv).cell).toBe('2021-05-03T12:00:01');
+    expect(lendCell(42857.5, { ...from, sheet: { ...sheet, fractionShown: [false] } }, csv)).toEqual({ cell: '2021-05-03T12:00', rewritten: true });
+  });
+
+  it('a text its own file does not read as a number is lent as it is and reported when the results file would read it as one', () => {
+    const res = textFile('r.csv', 'Sample;Taxon;Count\nX01;Calanus finmarchicus;4\n'); // decimal point, ';' separated
+    const resComma = textFile('rc.csv', 'Sample;Taxon;Count\nX01;Calanus finmarchicus;4,5\n');
+    expect(resComma.decimalComma).toBe(true);
+    const des = textFile('s.csv', 'Sample,Station,Depth\nX01,ST-1,"1,5"\n'); // a point file with the text 1,5
+    expect(des.decimalComma).toBe(false);
+    const r = mergeSampleSheets(decl(resultsInput(resComma, resComma.sheets[0].name), descriptionInput(des, des.sheets[0].name), { appendDescriptionOnly: false }));
+    expect(rowAt(r, 2).cells[3 + 2]).toBe('1,5');
+    expect(r.info.rewritten.size).toBe(0);
+    expect(found(r, 'ROW-NON-NUMERIC')).toEqual([expect.objectContaining({ file: 's.csv', field: 'Depth', lines: [2], value: '1,5' })]);
+    // a number the file reads as one is rewritten, not reported
+    const ok = mergeSampleSheets(decl(resultsInput(res, res.sheets[0].name), descriptionInput(textFile('s2.csv', 'Sample;Station;Depth\nX01;ST-1;1,5\n'), 's2.csv'), { appendDescriptionOnly: false }));
+    expect(found(ok, 'ROW-NON-NUMERIC')).toEqual([]);
+    expect(rowAt(ok, 2).cells[3 + 2]).toBe('1.5');
+  });
 });
