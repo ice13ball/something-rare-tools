@@ -3,10 +3,9 @@
 /**
  * CSW catalogues the collection review may read (server mode: POST /api/csw). The list is closed: the server builds every request
  * from an entry here plus three numbers, so no address, header or XML of the visitor's ever reaches a catalogue. Addresses only.
- * EMODnet and the Marine Institute were checked with GetCapabilities on 22.10.2026. The Institute of Oceanology PAN's GeoNetwork
- * (geonetwork.iopan.pl, the host /check already reads records from) is listed on Michal's decision of 23.10.2026 while its server is
- * in maintenance (every GeoNetwork path answered HTTP 500): the address is the GeoNetwork default, like /check's record path; until the
- * server is back, the estimate and the run say plainly that the catalogue is not answering (see the CSW stop reasons).
+ * EMODnet and the Marine Institute were checked with GetCapabilities on 22.10.2026. The GeoNetwork at geonetwork.iopan.pl (the host
+ * /check already reads records from) is listed on Michal's decision of 23.10.2026 at the GeoNetwork default address, like /check's
+ * record path; whenever a catalogue does not answer, the estimate and the run say so plainly (see the CSW stop reasons).
  */
 export type CswSchema = 'iso19139' | 'iso19115-3';
 
