@@ -1403,7 +1403,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>
                 <p className="muted">{t('convert.summary.noLand')}</p>
-                <ConvertSampleJoin view={view.sampleJoin} files={files} joins={joins} onChange={setJoins} {...(working || view.ledger === undefined ? {} : { ledger: view.ledger })} />
+                <ConvertSampleJoin view={view.sampleJoin} files={files} joins={joins} onChange={setJoins} {...(working || view.ledger === undefined ? {} : { ledger: view.ledger, undecided: view.findings.filter((f) => f.ruleId === 'CONV-JOIN-CONFLICT').flatMap((f) => { const fid = files.find((x) => x.fileName === f.file)?.fileId; return fid === undefined || f.sheet === undefined ? [] : [{ results: { fileId: fid, sheet: f.sheet }, group: String(f.params.group), count: Number(f.params.count) }]; }) })} />
                 {view.ledger !== undefined && <ConvertLedger ledger={view.ledger} blocked={exportBlocked} {...(notWrittenProps === undefined ? {} : { notWritten: notWrittenProps })} />}
                 {unconfirmed.length > 0 && (
                   <p className="notice" role="note">

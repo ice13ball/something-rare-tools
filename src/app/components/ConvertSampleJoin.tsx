@@ -63,7 +63,10 @@ function tidy(a: Answer): Answer | undefined {
   return pairs.length > 0 ? { ...rest, pairs } : rest;
 }
 
-function GroupPanel({ group, answer, onAnswer }: { group: Group; answer: Answer | undefined; onAnswer: (next: Answer | undefined) => void }): React.ReactElement {
+function GroupPanel({ group, answer: given, undecided, onAnswer }: { group: Group; answer: Answer | undefined; undecided: number | undefined; onAnswer: (next: Answer | undefined) => void }): React.ReactElement {
+  // an answer holds only for the number of samples it was given for (the converter ignores it otherwise): a stale one is no answer here either, is never resent, and is said
+  const stale = given !== undefined && given.count !== group.count;
+  const answer = stale ? undefined : given;
   // an answer is always written with the number of samples it is given for today
   const base: Answer = { group: group.group, ...(answer?.take === undefined ? {} : { take: answer.take }), count: group.count, exceptions: answer?.exceptions ?? [], ...(answer?.pairs === undefined ? {} : { pairs: answer.pairs }) };
   const setTake = (take: Side | undefined): void => {
@@ -89,7 +92,8 @@ function GroupPanel({ group, answer, onAnswer }: { group: Group; answer: Answer 
     const sameEntries = new Set(group.entries.filter((x) => samePair(pairOf(x), mine)).map((x) => x.id));
     onAnswer(tidy({ ...base, exceptions: base.exceptions.filter((x) => !sameEntries.has(x.entry)), pairs: [...pairs, { pair: mine, take: now.side }] }));
   };
-  const decided = answer?.take !== undefined ? group.count : group.entries.reduce((n, e) => (effective(answer, e) === undefined ? n : n + e.samples.length), 0);
+  // once the conversion has run, the converter's own count of what is still open is used (a pair covers samples beyond the rows listed)
+  const decided = undecided !== undefined && !stale ? group.count - undecided : answer?.take !== undefined ? group.count : group.entries.reduce((n, e) => (effective(answer, e) === undefined ? n : n + e.samples.length), 0);
   const listed = group.entries.reduce((n, e) => n + e.samples.length, 0);
   return (
     <div className="convert-join-group" data-testid="join-group" data-group={group.group}>
@@ -111,6 +115,7 @@ function GroupPanel({ group, answer, onAnswer }: { group: Group; answer: Answer 
         )}
       </p>
       {answer?.take !== undefined && <p className="muted">{t(answer.take === 'description' ? 'convert.join.conflict.bulkDescription' : 'convert.join.conflict.bulkResults')}</p>}
+      {stale && given !== undefined && <p className="notice" role="note">{t('convert.join.conflict.stale', { old: given.count, count: group.count })}</p>}
       <p className="muted" role="status">
         {t('convert.join.conflict.decided', { decided, count: group.count })}
       </p>
@@ -150,13 +155,14 @@ function GroupPanel({ group, answer, onAnswer }: { group: Group; answer: Answer 
                       </button>{' '}
                     </React.Fragment>
                   ))}
-                  <span className="muted">{now === undefined ? t('convert.join.conflict.undecided') : t(`convert.join.conflict.source.${now.source}` as UiKey)}</span>{' '}
+                  <span className="muted">{now === undefined ? t('convert.join.conflict.undecided') : `${t(`convert.join.conflict.from.${now.side}` as UiKey)} (${t(`convert.join.conflict.source.${now.source}` as UiKey)})`}</span>{' '}
                   <button
                     type="button"
                     className="button"
                     aria-pressed={pairOn}
                     disabled={!pairOn && (now === undefined || now.source === 'all')}
                     aria-label={t('convert.join.conflict.pairLabel', { sample: e.key })}
+                    title={!pairOn && (now === undefined || now.source === 'all') ? t('convert.join.conflict.pairHint') : undefined}
                     onClick={() => setPair(e, !pairOn)}
                   >
                     {t('convert.join.conflict.pair')}
@@ -261,17 +267,21 @@ export interface ConvertSampleJoinProps {
   onChange: (joins: JoinChoice[]) => void;
   /** The ledger of the conversion the view belongs to, once it is settled: a confirmed join with no description ledger in it was not applied, and the panel says so. */
   ledger?: readonly SheetLedger[];
+  /** Once the conversion has settled: how many samples of each group the converter still finds undecided (CONV-JOIN-CONFLICT); a group not listed has none. */
+  undecided?: { results: SheetRef; group: string; count: number }[];
 }
 
-export function ConvertSampleJoin({ view, files, joins, onChange, ledger }: ConvertSampleJoinProps): React.ReactElement | null {
+export function ConvertSampleJoin({ view, files, joins, onChange, ledger, undecided }: ConvertSampleJoinProps): React.ReactElement | null {
   const [editing, setEditing] = useState<Record<string, Draft>>({});
-  const proposals = view?.proposals ?? [];
+  // a results sheet that already has a confirmed join is not proposed again (the view may still be the one from before the confirmation)
+  const proposals = (view?.proposals ?? []).filter((p) => !joins.some((j) => j.state === 'confirmed' && same(j.results, p.results)));
   if (proposals.length === 0 && joins.length === 0) return null;
 
-  const without = (list: readonly JoinChoice[], results: SheetRef, description: SheetRef): JoinChoice[] => list.filter((j) => !(same(j.results, results) && (j.state === 'confirmed' || same(j.description, description))));
+  const without = (list: readonly JoinChoice[], results: SheetRef, description: SheetRef, state: JoinChoice['state']): JoinChoice[] =>
+    list.filter((j) => !(same(j.results, results) && ((state === 'confirmed' && j.state === 'confirmed') || same(j.description, description) && j.state === 'declined')));
   // a results sheet has at most one join; a confirmation replaces what was there for it (and a "No" for that very pair)
   const decide = (results: SheetRef, description: SheetRef, keys: Pair[], state: JoinChoice['state']): void =>
-    onChange([...without(joins, results, description), { results, description, keys, state, conflicts: [] }]);
+    onChange([...without(joins, results, description, state), { results, description, keys, state, conflicts: [] }]);
   const stopEditing = (key: string): void => setEditing(({ [key]: _gone, ...rest }) => rest);
   const proposalKey = (p: Proposal): string => `${refKey(p.results)}\u0001${refKey(p.description)}`;
   const answerFor = (j: JoinChoice, group: string): Answer | undefined => j.conflicts.find((a) => a.group === group);
@@ -364,7 +374,7 @@ export function ConvertSampleJoin({ view, files, joins, onChange, ledger }: Conv
                 <h4>{t('convert.join.differ.title')}</h4>
                 <p className="muted">{t('convert.join.differ.intro', { results, description })}</p>
                 {groups.map((g) => (
-                  <GroupPanel key={g.group} group={g} answer={answerFor(j, g.group)} onAnswer={(next) => setAnswer(j, g.group, next)} />
+                  <GroupPanel key={g.group} group={g} answer={answerFor(j, g.group)} undecided={undecided === undefined ? undefined : (undecided.find((u) => same(u.results, j.results) && u.group === g.group)?.count ?? 0)} onAnswer={(next) => setAnswer(j, g.group, next)} />
                 ))}
               </div>
             )}

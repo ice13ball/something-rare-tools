@@ -423,3 +423,63 @@ describe('the panel on its own', () => {
     expect(container.textContent).toBe('');
   });
 });
+
+describe('review fixes', () => {
+  const FILES = [{ name: 'results.csv', text: dated('2021-05-02') }, { name: 'samples.csv', text: SAMPLES }];
+
+  it('an answer whose count no longer matches is no answer: shown as undecided with a note, and a later click does not carry its side', async () => {
+    const first = await parsedOf(FILES);
+    const r = first.files.find((f) => f.fileName === 'results.csv')!;
+    const d = first.files.find((f) => f.fileName === 'samples.csv')!;
+    const companion = writeConvertSidecar({
+      sampleJoin: [{ results: ['results.csv', 'results.csv'], description: ['samples.csv', 'samples.csv'], resultsRows: r.sheets[0].rowCount, descriptionRows: d.sheets[0].rowCount, resultsHashes: keyHashes(r.sheets[0].header, [0])!, descriptionHashes: keyHashes(d.sheets[0].header, [0])!, conflicts: [{ group: 'date', take: 'description', count: 2 }] }],
+    });
+    const run = await load([...FILES, { name: 'convert-companion.csv', text: companion }]);
+    await settled(run, (b) => b.sampleJoin !== undefined);
+    const g = document.querySelector('[data-testid="join-group"]') as HTMLElement;
+    expect(rule('CONV-JOIN-CONFLICT')).not.toBeNull();
+    expect(g.textContent).toContain('0 of 1 sample decided');
+    expect(g.textContent).toContain('An earlier choice was given for 2 samples; this group now has 1.');
+    expect(within(g).getByRole('button', { name: T['convert.join.conflict.takeDescription'] }).getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(side('X01', 'Results'));
+    await settled(run, (b) => b.sampleJoin?.[0].conflicts[0]?.exceptions.length === 1);
+    expect(last(run).sampleJoin![0].conflicts).toEqual([{ group: 'date', count: 1, exceptions: [{ entry: entryId('X01', '2021-05-02'), take: 'results' }] }]);
+    expect(g.textContent).not.toContain('An earlier choice');
+  });
+
+  it('a per-sample and a per-pair choice say which side was taken, in the row text', async () => {
+    const run = await load([{ name: 'results.csv', text: dated('2021-05-02', '2021-05-02') }, { name: 'samples.csv', text: csvOf(['Sample', 'Station', 'Date'], [['X01', 'ST-1', '2021-05-03'], ['X02', 'ST-2', '2021-05-03']]) }]);
+    await confirm(run);
+    fireEvent.click(side('X01', 'Results'));
+    await settled(run, (b) => (b.sampleJoin?.[0].conflicts.length ?? 0) > 0);
+    expect(row('X01').textContent).toContain('from the results (chosen for this sample)');
+    fireEvent.click(screen.getByRole('button', { name: 'X01: apply to all with the same pair of values' }));
+    await settled(run, (b) => (b.sampleJoin?.[0].conflicts[0]?.pairs?.length ?? 0) > 0);
+    expect(row('X02').textContent).toContain('from the results (chosen for this pair of values)');
+    expect(rule('CONV-JOIN-CONFLICT')).toBeNull();
+    expect(document.querySelector('[data-testid="join-group"]')!.textContent).toContain('2 of 2 samples decided');
+  });
+
+  it('Change to another description sheet: the first proposal is gone, and nothing can drop the confirmed join', async () => {
+    const run = await load([{ name: 'results.csv', text: RESULTS }, { name: 'samples.csv', text: SAMPLES }, { name: 'other.csv', text: csvOf(['Sample', 'Station'], [['X01', 'ST-1'], ['X02', 'ST-2']]) }]);
+    fireEvent.click(within(document.querySelector('[data-testid="join-proposal"]') as HTMLElement).getByRole('button', { name: T['convert.join.change'] }));
+    fireEvent.change(screen.getByLabelText(T['convert.join.changeDescription']), { target: { value: 'c3\u0000other.csv' } });
+    fireEvent.click(button(T['convert.join.changeUse']));
+    await settled(run, (b) => b.sampleJoin !== undefined);
+    expect(last(run).sampleJoin![0].description).toEqual({ fileId: 'c3', sheet: 'other.csv' });
+    await waitFor(() => expect(panel()!.textContent).not.toContain('samples.csv has'));
+    expect(screen.queryByRole('button', { name: T['convert.join.no'] })).toBeNull();
+    expect(last(run).sampleJoinNo).toBeUndefined();
+  });
+
+  it('a proposal for a results sheet that already has a confirmed join is not shown, even from an older view', () => {
+    const files = [
+      { fileId: 'c1', fileName: 'results.csv', sheets: [{ name: 'results.csv', header: ['Sample'], rowCount: 1 }] },
+      { fileId: 'c2', fileName: 'samples.csv', sheets: [{ name: 'samples.csv', header: ['Sample'], rowCount: 1 }] },
+    ] as never;
+    const joins: JoinChoice[] = [{ results: R, description: { fileId: 'c3', sheet: 'x' }, keys: [{ results: 0, description: 0 }], state: 'confirmed', conflicts: [] }];
+    const v = { proposals: [{ results: R, description: D, keys: [{ results: 0, description: 0 }], covered: 1, samples: 1 }], conflicts: [] } as never;
+    render(<ConvertSampleJoin view={v} files={files} joins={joins} onChange={vi.fn()} />);
+    expect(screen.queryByTestId('join-proposal')).toBeNull();
+  });
+});
