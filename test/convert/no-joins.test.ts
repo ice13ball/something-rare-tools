@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-// /convert has no join between sheets: every sheet is read on its own, so a position in one sheet is never lent to another (the layout of /check, recognize/layout.ts, is not used). Every row is invented.
+// /convert reads no join that the person has not confirmed: without a confirmed join (sampleJoin, docs/APPS.md 8.11) every sheet is read on its own, so a position in one sheet is never lent to another
+// (the layout of /check, recognize/layout.ts, is not used). Every row is invented.
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import { proposeConvertMapping } from '../../src/core/convert/recognize';
 import { xlsxFile } from '../helpers/files';
 
-describe('/convert reads no join', () => {
+describe('/convert reads no join that the person has not confirmed', () => {
   it('a Data sheet without positions gets none from a Station sheet of the same workbook: the sheets stand alone', () => {
     const file = xlsxFile('book.xlsx', {
       Station: [['Cruise', 'Station', 'Date', 'Latitude', 'Longitude'], ['C1', 'S1', '2020-06-01', 70.1, 15.2], ['C1', 'S2', '2020-06-02', 60.2, 5.4], ['C1', 'S3', '2020-06-03', 50.3, -5.6]],

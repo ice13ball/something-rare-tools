@@ -200,7 +200,7 @@ export interface ConvertResult {
   ledger: SheetLedger[];
   /** Only for sheets that carry a picked sample key: how many samples the key made and how many rows each has, as the export will have them (sampleKey.ts). */
   keys?: SheetKeyReport[];
-  /** The reasons the user left out, per sheet (`${position of the sheet in the request}\u0000${reason}`): the list of rows not written marks them. */
+  /** The reasons the user left out, per sheet (`leftOutKey` of notWritten.ts: `${position of the sheet in the request}\u0000${reason}`; the description ledger of a joined input has keys of its own): the list of rows not written marks them. */
   leftOut: string[];
   /** Every occurrenceID that CONV-ID-DUPLICATE named as repeated; kept here and not in the finding, so the finding stays small. */
   repeatedOccurrenceIds?: string[];

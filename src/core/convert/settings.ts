@@ -45,6 +45,13 @@ import type { ParsedFile } from '../types';
  *                     shows it with its numbers and "Ask again". A sheet name, hashes and a count, never a value.
  *   sampleKeyPrefix=<sheet>:<hashes>:<rows>:<name>  the name every sample ID of that key starts with (the person's own text, which the page showed and they may have changed; by default the sheet's or the file's name). Tied to the same sheet, hashes
  *                     and row count as the sampleKey line: it is applied only together with it, so a renamed file keeps its IDs.
+ *   sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>  the person confirmed that a results sheet takes its samples' description from another sheet (core/convert/sampleJoin.ts):
+ *                     the rows of both sheets, the hashes of the key columns of each (core/convert/keySetting.ts, as for sampleKey) and the four names as a JSON array, so a `:` in a name is safe.
+ *                     A PRE-CONFIRMATION that holds only when both sheets are found again with the same rows and the key columns are found by their hashes; otherwise the page asks again. No value.
+ *   sampleJoinConflict=<description|results|mixed>:<count>:<group>:<["rFile","rSheet"]>  the answer to one group of differing values of that join, with the number of samples it was given for. `mixed` = answered
+ *                     with exceptions or per pair (those hold values, so they are never written): the page opens the group again. A quantity name, a count and names, never a value.
+ *   sampleJoinResultsOnly=<count>:<["rFile","rSheet"]>  the person accepted <count> results samples without a description. Holds only for the same count.
+ *   sampleJoinNo=<["rFile","rSheet","dFile","dSheet"]>  the person declined the proposal for exactly this pair; no other pair of the results sheet is affected.
  * An unknown name or value is ignored. (`dropCopies=<sheet>` and `totalOnce=<sheet>` of earlier files are still read, and the page does not tick anything from them: they carry no count.)
  */
 export const FULL_LIST_SETTING = 'fullList=yes';
@@ -68,6 +75,10 @@ export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 export const SAMPLE_KEY_SETTING = 'sampleKey=';
 export const SAMPLE_KEY_PREFIX_SETTING = 'sampleKeyPrefix=';
+export const SAMPLE_JOIN_SETTING = 'sampleJoin=';
+export const SAMPLE_JOIN_CONFLICT_SETTING = 'sampleJoinConflict=';
+export const SAMPLE_JOIN_RESULTS_ONLY_SETTING = 'sampleJoinResultsOnly=';
+export const SAMPLE_JOIN_NO_SETTING = 'sampleJoinNo=';
 /** The longest name kept for the front of a sample ID. */
 export const MAX_KEY_PREFIX = 100;
 /** At most this many sheet names are kept from a companion file, each at most this long (a sheet name is short; anything else is not one). */
@@ -109,6 +120,23 @@ export interface ConvertSettings {
   leaveOut?: { sheet: string; reason: string; count: number; rows: number }[];
   /** The sample keys the person picked, by sheet: the hashes of the key columns and the number of rows the pick was made for. Holds only for the same columns and the same number of rows. */
   sampleKey?: { sheet: string; hashes: string; rows: number; prefix?: string }[];
+  /**
+   * The joins of a results sheet to the sheet that describes its samples that the person confirmed: file and sheet names of both, the rows of both sheets and the hashes of the key columns (as
+   * for `sampleKey`), the number of results samples accepted without a description, and the answered conflict groups with the number of samples each was given for. `mixed` = answered with
+   * exceptions or per pair: re-opened by the page. Names, hashes and counts, never a value.
+   */
+  sampleJoin?: {
+    results: [string, string];
+    description: [string, string];
+    resultsRows: number;
+    descriptionRows: number;
+    resultsHashes: string;
+    descriptionHashes: string;
+    resultsOnly?: number;
+    conflicts: { group: string; take: 'description' | 'results' | 'mixed'; count: number }[];
+  }[];
+  /** The pairs the person declined. */
+  sampleJoinNo?: { results: [string, string]; description: [string, string] }[];
   /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
   biomassBasis?: { sheet: string; basis: 'wet' | 'dry' | 'afdw' }[];
   /** The ticks "of each organism" the user set (on) or took back (off), by sheet and column header. Only present when there is at least one. A pre-pick only. */
@@ -149,6 +177,19 @@ export function perOccurrenceOf(
 const COUNT = /^(\d{1,9}):(.+)$/s;
 const SAMPLE_KEY = /^(.+):((?:[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?)(?:\+[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?){0,63}):(\d{1,9})$/s;
 const SAMPLE_KEY_PREFIX = /^(.+?):((?:[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?)(?:\+[0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?){0,63}):(\d{1,9}):(.+)$/s;
+const HASHES = '(?:[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?)(?:\\+[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?){0,63}';
+const SAMPLE_JOIN = new RegExp(`^(\\d{1,9}):(\\d{1,9}):(${HASHES}):(${HASHES}):(\\[.*\\])$`, 's');
+const SAMPLE_JOIN_CONFLICT = /^(description|results|mixed):(\d{1,9}):(.+):(\[.*\])$/s;
+const SAMPLE_JOIN_RESULTS_ONLY = /^(\d{1,9}):(\[.*\])$/s;
+/** A JSON array of exactly `n` short, non-empty strings, or undefined. */
+function names(text: string, n: number): string[] | undefined {
+  try {
+    const a: unknown = JSON.parse(text);
+    return Array.isArray(a) && a.length === n && a.every((x) => typeof x === 'string' && x !== '' && x.length <= MAX_SETTING_NAME) ? (a as string[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
 
 const addName = (list: string[], name: string): void => {
@@ -193,6 +234,26 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const hit = m === null ? undefined : (settings.sampleKey ?? []).find((x) => x.sheet === m[1] && x.hashes === m[2] && x.rows === Number(m[3]));
       const name = m === null ? '' : m[4].trim();
       if (hit !== undefined && name !== '' && name.length <= MAX_KEY_PREFIX && hit.prefix === undefined) hit.prefix = name;
+    } else if (v.startsWith(SAMPLE_JOIN_CONFLICT_SETTING)) {
+      const m = SAMPLE_JOIN_CONFLICT.exec(v.slice(SAMPLE_JOIN_CONFLICT_SETTING.length));
+      const n = m === null ? undefined : names(m[4], 2);
+      const hit = n === undefined ? undefined : (settings.sampleJoin ?? []).find((j) => j.results[0] === n[0] && j.results[1] === n[1]);
+      if (m !== null && hit !== undefined && m[3].length <= MAX_SETTING_NAME && hit.conflicts.length < MAX_SETTING_SHEETS && !hit.conflicts.some((c) => c.group === m[3])) hit.conflicts.push({ group: m[3], take: m[1] as 'description' | 'results' | 'mixed', count: Number(m[2]) });
+    } else if (v.startsWith(SAMPLE_JOIN_RESULTS_ONLY_SETTING)) {
+      const m = SAMPLE_JOIN_RESULTS_ONLY.exec(v.slice(SAMPLE_JOIN_RESULTS_ONLY_SETTING.length));
+      const n = m === null ? undefined : names(m[2], 2);
+      const hit = n === undefined ? undefined : (settings.sampleJoin ?? []).find((j) => j.results[0] === n[0] && j.results[1] === n[1]);
+      if (m !== null && hit !== undefined && hit.resultsOnly === undefined) hit.resultsOnly = Number(m[1]);
+    } else if (v.startsWith(SAMPLE_JOIN_NO_SETTING)) {
+      const n = names(v.slice(SAMPLE_JOIN_NO_SETTING.length), 4);
+      const list = (settings.sampleJoinNo ??= []);
+      if (n !== undefined && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.results[0] === n[0] && x.results[1] === n[1] && x.description[0] === n[2] && x.description[1] === n[3])) list.push({ results: [n[0], n[1]], description: [n[2], n[3]] });
+    } else if (v.startsWith(SAMPLE_JOIN_SETTING)) {
+      const m = SAMPLE_JOIN.exec(v.slice(SAMPLE_JOIN_SETTING.length));
+      const n = m === null ? undefined : names(m[5], 4);
+      const list = (settings.sampleJoin ??= []);
+      if (m !== null && n !== undefined && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.results[0] === n[0] && x.results[1] === n[1]))
+        list.push({ results: [n[0], n[1]], description: [n[2], n[3]], resultsRows: Number(m[1]), descriptionRows: Number(m[2]), resultsHashes: m[3], descriptionHashes: m[4], conflicts: [] });
     } else if (v.startsWith(BIOMASS_BASIS_SETTING)) {
       const rest = v.slice(BIOMASS_BASIS_SETTING.length);
       const basis = rest.slice(0, rest.indexOf(':'));
@@ -203,8 +264,18 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       if (m !== null && m[3].length <= MAX_SETTING_NAME && m[2].length <= MAX_SETTING_NAME && (settings.perOccurrence ??= []).length < MAX_SETTING_SHEETS) settings.perOccurrence.push({ sheet: m[2], header: m[3], on: m[1] === 'on' });
     } else if (v.startsWith(TRANSPOSED_AS_TABLE_SETTING)) addName((settings.transposedAsTable ??= []), v.slice(TRANSPOSED_AS_TABLE_SETTING.length));
   }
+  // a join line that read nothing (every line of the kind was malformed) leaves no empty list behind
+  if (settings.sampleJoin?.length === 0) delete settings.sampleJoin;
+  if (settings.sampleJoinNo?.length === 0) delete settings.sampleJoinNo;
   return settings;
 }
+
+/** What a conflict answer may leave in the companion file: its bulk side only when the answer is nothing but that side. Exceptions and pairs hold values (sample codes, value texts), so such a group is `mixed`. */
+export function savedJoinTake(answer: { take?: 'description' | 'results'; exceptions: readonly unknown[]; pairs?: readonly unknown[] }): 'description' | 'results' | 'mixed' {
+  return answer.take === undefined || answer.exceptions.length > 0 || (answer.pairs?.length ?? 0) > 0 ? 'mixed' : answer.take;
+}
+
+const SHEET_NAMES = (n: readonly string[]): boolean => n.every((x) => x !== '' && x.length <= MAX_SETTING_NAME);
 
 /** The companion file of a conversion: the header and one `(setting)` row per ticked setting. */
 export function writeConvertSidecar(settings: Partial<ConvertSettings>): string {
@@ -230,6 +301,12 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
         line([SETTING_ROW, `${SAMPLE_KEY_SETTING}${k.sheet}:${k.hashes}:${k.rows}`, '', '', '']),
         ...(k.prefix !== undefined && k.prefix.trim() !== '' && k.prefix.trim().length <= MAX_KEY_PREFIX ? [line([SETTING_ROW, `${SAMPLE_KEY_PREFIX_SETTING}${k.sheet}:${k.hashes}:${k.rows}:${k.prefix.trim()}`, '', '', ''])] : []),
       ]),
+      ...(settings.sampleJoin ?? []).filter((j) => SHEET_NAMES([...j.results, ...j.description]) && /^[0-9a-f]{8}/.test(j.resultsHashes) && /^[0-9a-f]{8}/.test(j.descriptionHashes) && Number.isInteger(j.resultsRows) && j.resultsRows >= 0 && Number.isInteger(j.descriptionRows) && j.descriptionRows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((j) => [
+        line([SETTING_ROW, `${SAMPLE_JOIN_SETTING}${j.resultsRows}:${j.descriptionRows}:${j.resultsHashes}:${j.descriptionHashes}:${JSON.stringify([...j.results, ...j.description])}`, '', '', '']),
+        ...j.conflicts.filter((c) => c.group.length <= MAX_SETTING_NAME && Number.isInteger(c.count) && c.count >= 0).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${SAMPLE_JOIN_CONFLICT_SETTING}${c.take}:${c.count}:${c.group}:${JSON.stringify(j.results)}`, '', '', ''])),
+        ...(j.resultsOnly !== undefined && Number.isInteger(j.resultsOnly) && j.resultsOnly >= 0 ? [line([SETTING_ROW, `${SAMPLE_JOIN_RESULTS_ONLY_SETTING}${j.resultsOnly}:${JSON.stringify(j.results)}`, '', '', ''])] : []),
+      ]),
+      ...(settings.sampleJoinNo ?? []).filter((j) => SHEET_NAMES([...j.results, ...j.description])).slice(0, MAX_SETTING_SHEETS).map((j) => line([SETTING_ROW, `${SAMPLE_JOIN_NO_SETTING}${JSON.stringify([...j.results, ...j.description])}`, '', '', ''])),
       ...(settings.realCountsRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${REAL_COUNTS_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.dropCopies ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${DROP_COPIES_SETTING}${n}`, '', '', ''])),
       ...(settings.totalOnce ?? []).filter((n) => n.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((n) => line([SETTING_ROW, `${TOTAL_ONCE_SETTING}${n}`, '', '', ''])),

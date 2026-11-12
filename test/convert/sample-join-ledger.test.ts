@@ -6,7 +6,7 @@ import { convert } from '../../src/core/convert/build';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
 import { combineDescriptionLedgers } from '../../src/core/convert/ledger';
 import type { SheetLedger } from '../../src/core/convert/ledger';
-import { notWrittenCsv, notWrittenRows } from '../../src/core/convert/notWritten';
+import { leftOutKey, notWrittenCsv, notWrittenRows } from '../../src/core/convert/notWritten';
 import { joinInputs } from '../../src/core/convert/sampleJoin';
 import type { SampleJoinRequestCore } from '../../src/core/convert/sampleJoin';
 import type { Finding } from '../../src/core/types';
@@ -254,5 +254,18 @@ describe('the description columns are counted from the description sheet', () =>
     expect(lines.find((l) => l.line === 4)).toMatchObject({ wrote: ['event'] });
     expect(lines.find((l) => l.line === 5)).toMatchObject({ fate: 'written', sameAs: 4 });
     expect(lines.find((l) => l.line === 5)!.wrote).toBeUndefined();
+  });
+});
+
+describe('a reason left out on one side of a join is not left out on the other', () => {
+  it('the results and the description ledger of one input have keys of their own, and the answer of a description line stays on its sheet', () => {
+    const { out, result } = converted(bookInputs());
+    const res = named(result.ledger, 'Counts');
+    const des = named(result.ledger, 'Samples');
+    expect(res.inputIndex).toBe(des.inputIndex);
+    expect(leftOutKey(res, 'sample-no-taxon')).not.toBe(leftOutKey(des, 'sample-no-taxon'));
+    // only the description's key is given: no line of the results ledger can show as left out for it
+    const rows = [...notWrittenRows(result.ledger, out.sheets, [leftOutKey(des, 'no-code')])];
+    expect(rows.filter((r) => r.sheet === 'Counts' && r.status === 'left-out')).toEqual([]);
   });
 });

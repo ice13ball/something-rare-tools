@@ -4117,7 +4117,7 @@ const fr: Record<UiKey, string> = {
   'convert.ledger.reason.taxon-only-in-total': `lignes sans taille ni autre détail propre dans un groupe dont le total est écrit une fois`,
   'convert.ledger.reason.one-specimen-total': `lignes qui répètent un total de 1 de leur échantillon et de leur taxon`,
   'convert.ledger.reason.join-not-chosen': `valeurs écartées au profit de celles de l'autre feuille, listées avec les deux lignes`,
-  'convert.ledger.reason.join-no-key': `lignes de description à clé vide (données à aucun échantillon)`,
+  'convert.ledger.reason.join-no-key': `lignes de description à clé vide (rattachées à aucun échantillon)`,
   'convert.ledger.reason.join-ambiguous': `lignes de description dont la clé figure sur plusieurs lignes différentes`,
   'convert.ledger.reason.join-results-not-written': `valeurs d'une ligne de description dont les lignes de résultats n'ont rien écrit (listée en entier)`,
   'convert.ledger.reason.copy-dropped': `copies exactes, écartées comme choisi (listées)`,

@@ -121,9 +121,15 @@ export interface RowDecision {
   findings: Finding[];
   /** Findings of other rules that the answers take over: dropped by the caller. */
   suppress: { ruleId: string; file: string; sheet: string }[];
-  /** The (sheet, reason) pairs that are left out: `${inputIndex}\u0000${reason}`. */
+  /** The (sheet, reason) pairs that are left out, see `leftOutKey`. */
   leftOut: string[];
 }
+
+/**
+ * The key of a (sheet, reason) pair that is left out: the position of the input and the reason. A joined input has two ledgers (results and description) that share one input index, and a reason
+ * the person answered for one of them must not show as left out on the other, so the description ledger's keys carry its own word.
+ */
+export const leftOutKey = (l: Pick<SheetLedger, 'inputIndex' | 'kind'>, reason: string): string => `${l.inputIndex}\u0000${l.kind === 'description' ? 'description\u0000' : ''}${reason}`;
 
 /** The source rows of a ledger entry: the sheet as the conversion read it, and for a pivot the long sheet its lines belong to. */
 function sourceOf(l: SheetLedger, sheets: readonly ConvertSheetInput[]): RawSheet | undefined {
@@ -214,7 +220,7 @@ export function decideRows(ledger: readonly SheetLedger[], sheets: readonly Conv
       const examples = examplesOf(rowsAt(source, sorted.slice(0, EXAMPLES)), sorted);
       const base = { file: l.file, sheet: l.sheet, lines: sorted.slice(0, MAX_FINDING_LINES) };
       if (left) {
-        out.leftOut.push(`${l.inputIndex}\u0000${reason}`);
+        out.leftOut.push(leftOutKey(l, reason));
         out.findings.push(makeConvertFinding('CONV-ROW-LEFT-OUT', { ...base, params: { reason, count, rows: l.rows.source, ...(file ? { fromFile: 'yes' } : {}), ...(examples === '' ? {} : { examples }) } }));
         const rule = SUPERSEDES[reason as LeaveOutReason];
         if (rule !== undefined) out.suppress.push({ ruleId: rule, file: l.file, sheet: l.sheet });
@@ -267,7 +273,7 @@ export function countNotWritten(ledger: readonly SheetLedger[]): { rows: number;
 }
 
 const statusOf = (reason: string, l: SheetLedger, left: ReadonlySet<string>): NotWrittenStatus =>
-  kindOf(reason) === 'listed' ? 'understood' : left.has(`${l.inputIndex}\u0000${reason}`) ? 'left-out' : 'needs-decision';
+  kindOf(reason) === 'listed' ? 'understood' : left.has(leftOutKey(l, reason)) ? 'left-out' : 'needs-decision';
 
 /**
  * Every row not written, one at a time (the list can be as long as the file: nothing here holds it whole). `leftOut` is `RowDecision.leftOut` of the same conversion.

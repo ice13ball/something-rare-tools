@@ -11,6 +11,7 @@ import type { ConvertSettings } from '../core/convert/settings';
 import type { WormsLookup } from '../core/convert/worms';
 import type { SheetLedger } from '../core/convert/ledger';
 import type { SheetKeyReport } from '../core/convert/sampleKey';
+import type { ConflictGroup } from '../core/convert/sampleJoin';
 import type { Finding, SheetMapping } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -110,6 +111,26 @@ export interface ConvertSheetRequest {
   sampleKeyFromFile?: boolean;
 }
 
+/** A sheet of a dropped file, as the request names it (the join is told by file id and sheet name; the worker maps it to the request's sheets). */
+export interface SheetRef {
+  fileId: string;
+  sheet: string;
+}
+
+/**
+ * A join the person confirmed (core/convert/sampleJoin.ts), by sheet reference. The worker maps the references to the sheets of the request and validates nothing else: `joinInputs` is the only
+ * validator. `conflicts` carries the person's answers (bulk side, per-entry exceptions, same-pair answers); `resultsOnly` the number of results samples without a description the answer was given
+ * for; `fromFile` says the numbers were read from a companion file.
+ */
+export interface SampleJoinRequest {
+  results: SheetRef;
+  description: SheetRef;
+  keys: { results: number; description: number }[];
+  conflicts: { group: string; take?: 'description' | 'results'; count: number; exceptions: { entry: string; take: 'description' | 'results' }[]; pairs?: { pair: [string, string]; take: 'description' | 'results' }[] }[];
+  resultsOnly?: number;
+  fromFile?: boolean;
+}
+
 export interface ConvertRequestBody {
   sheets: ConvertSheetRequest[];
   options: ConvertOptions;
@@ -121,6 +142,10 @@ export interface ConvertRequestBody {
    * basisOfRecord); the page passes the rest empty so that typing a title does not rerun the conversion. Absent = all empty.
    */
   metadata?: DatasetMetadata;
+  /** The joins of a results sheet to a sheet that describes its samples, as the person confirmed them. Nothing joins without one. */
+  sampleJoin?: SampleJoinRequest[];
+  /** The pairs the person declined: no proposal for exactly that pair (another pair of the results sheet is still proposed). */
+  sampleJoinNo?: { results: SheetRef; description: SheetRef }[];
 }
 
 /** What the page sends to export: the same body, the whole description, and what the user accepted. The worker checks everything again. */
@@ -169,6 +194,14 @@ export interface ConvertView {
   ledger: SheetLedger[];
   /** How many rows the list beside the archive holds (a line with no record, a written line that lost cells other than zeros), and how many sheets are left out as a whole: the same function that writes the list counts them. */
   notWritten: { rows: number; sheets: number };
+  /**
+   * The join of results sheets to the sheets that describe their samples: the proposals still open (a long description sheet is shown and never joinable, `long`), and the groups of differing values
+   * (open or answered; the answer itself is the page's, not sent back), each with the results sheet it belongs to. Entries are capped at 500 per group; `count` is the true number of samples.
+   */
+  sampleJoin: {
+    proposals: { results: SheetRef; description: SheetRef; keys: { results: number; description: number }[]; covered: number; samples: number; long?: true }[];
+    conflicts: (Omit<ConflictGroup, 'answer'> & { results: SheetRef })[];
+  };
 }
 
 /** What the page sends to get the list of rows not written: the same body as the export, and the description (the file is named after the archive). */

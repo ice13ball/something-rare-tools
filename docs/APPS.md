@@ -496,7 +496,8 @@ could still read stay in the plan.
   by hand replaces it). A lookup sheet with no measurements of its own is not a table in the plan.
 
 `/convert` does not use this plan: it reads each sheet as one table and has its own handling of
-long environmental sheets (8.4).
+long environmental sheets (8.4). It joins two sheets only when the person confirms a join (8.11);
+the ranking of the join key (`rankJoinKeys`) is the one this plan uses.
 
 ### 3.5 Rules, findings and severities
 
@@ -1398,7 +1399,7 @@ definition is an echo-intensity unit of an instrument, so a count carries no uni
   another key column are read as separate samples with a warning, and the user may mark such a
   column as describing the measurement (`CONV-LONG-KEY-VARIES`). The user can switch any pivot
   off and read the sheet as a normal table (`pivotChoice`, `longAsTable`).
-- **Transposed** sheets: the converter reads each sheet as one table with no joins; a header with
+- **Transposed** sheets: the converter reads each sheet as one table and joins none unless the person confirms a join (8.11); a header with
   no name for a column is `CONV-COLUMN-UNNAMED` (blocks until the variable has a name or the
   column is ignored). A table turned the wrong way is detected by `transposedSheetReason`
   (`convert/transposed.ts`): **variables in rows** is exactly `/check`'s detection
@@ -1488,7 +1489,7 @@ code" (the button above applies it).
   (`ConvertSheetRequest.sampleKey`, `ConvertSheetInput.sampleKey`). The sample's eventID is then a name, then the values of the columns in the order ticked, joined with `|` (a `|`, `\`, tab and line break inside a
   value are written `\|`, `\\`, `\t`, `\n`, so different keys never give one ID): it depends on the values and never on the order of the rows. A value is trimmed and in Unicode form NFC, `1` and `1.0` are one value (a typed number is compared as a number; a text is a number only as an integer with an all-zero fraction: `1.1` and `1.10`, `1e1` and `10` stay two; a text with a leading zero, or with 16 digits or more, stays text), a date cell goes through the date reader (a serial and the same date as text are one sample, a 1904 workbook is read right), an empty cell, NA, nan and a dash are
   empty. An empty part is part of the key: those rows are samples of their own, said in `CONV-KEY-PART-BLANK` (a warning to accept); a row empty in every part has no sample (`CONV-SAMPLE-CODE-MISSING`, blocks); an ID written to the archive (sample, replicate or occurrence) over 255
-  characters blocks (`CONV-KEY-TOO-LONG`, which names the longest). The name in front of every ID is shown at the picker and can be changed; by default it is the sheet's name for a workbook and the file's name without its extension for a table file, and the companion file keeps what was used (`sampleKeyPrefix=<sheet>:<hashes>:<rows>:<name>`, tied to the key line), so a renamed file keeps its IDs. A saved key goes to the sheet of the same name first; a renamed table file (its sheet is called after the file) gets one only when exactly one saved table-file key fits it by columns and rows and no other file of the drop fits that key too, otherwise none is applied and the picker says that several saved keys fit; a workbook entry and a table-file entry never match by columns alone. Sheets with different names never make the same ID and no ID is the ID of a station or a cruise; two sheets with the same name and values are blocked by `CONV-ID-DUPLICATE`, whose advice says to give one of them another name; whether two sheets hold the same samples is not asked. A text is read as a number only with the file's own decimal separator (`1,000` in a file with a decimal point is a thousand and stays text); a key column where a typed number and a text read as the same number but give different codes (typed `1.5`, text `1.50`) raises `CONV-KEY-MIXED-NUMBERS` (accept), naming the pair. The visit and station-prefix guesses are not applied to a key; the repeated-total, exact-copy and statistic-row checks read the key columns (a size-class total repeated on
+  characters blocks (`CONV-KEY-TOO-LONG`, which names the longest). The name in front of every ID is shown at the picker and can be changed; by default it is the sheet's name for a workbook and the file's name without its extension for a table file, and the companion file keeps what was used (`sampleKeyPrefix=<sheet>:<hashes>:<rows>:<name>`, tied to the key line), so a renamed file keeps its IDs. A saved key goes to the sheet of the same name first; a renamed table file (its sheet is called after the file) gets one only when exactly one saved table-file key fits it by columns and rows and no other file of the drop fits that key too, otherwise none is applied and the picker says that several saved keys fit; a workbook entry and a table-file entry never match by columns alone. Sheets with different names never make the same ID and no ID is the ID of a station or a cruise; two sheets with the same name and values are blocked by `CONV-ID-DUPLICATE`, whose advice says to give one of them another name; whether two sheets hold the same samples is asked only as a proposal to join them (8.11); nothing joins until the person confirms. A text is read as a number only with the file's own decimal separator (`1,000` in a file with a decimal point is a thousand and stays text); a key column where a typed number and a text read as the same number but give different codes (typed `1.5`, text `1.50`) raises `CONV-KEY-MIXED-NUMBERS` (accept), naming the pair. The visit and station-prefix guesses are not applied to a key; the repeated-total, exact-copy and statistic-row checks read the key columns (a size-class total repeated on
   a haul's rows is taken once with the key alone). `CONV-KEY-PICKED` (information, with "Ask again") says the key, the samples and the rows. The companion file keeps `sampleKey=<sheet>:<hashes>:<rows>`: one 8-digit hash of the folded header
   per key column (case, spacing and underscores do not matter; `.<n>of<m>` tells equal columns apart) and the number of rows of the sheet the pick was made for, never a header. On a later drop it is applied only when every column is
   found again and the sheet has the same number of rows, and then it is said as read from the companion file, with "Ask again"; otherwise the question is open. The code file stays as the second way. **A wide sheet** gets one code per row
@@ -1892,6 +1893,50 @@ See also section 14.
 None by default. WoRMS and NVS as above; analytics `convert_started` (when files are read),
 `convert_blocked` (when Export is pressed while something blocks; a count) and `convert_exported`
 (shape, flags and counts, 2). The CSP of `/convert` blocks every other host.
+
+### 8.11 Joining a results sheet to its sample description
+
+A workbook (or two files) often has a results sheet (sample, taxon, count) and a second sheet that describes the samples (station, date, position, depth). **Nothing joins by itself**: the converter
+proposes, the person confirms, and an input without a confirmed join converts exactly as before, apart from the information `CONV-JOIN-PROPOSED`.
+
+- **Proposal** (`proposeSampleJoins`). For each results sheet (a taxon column or taxon headers, not a profile sheet) the sheet that describes its samples best, when it has at least half of the results
+  sheet's samples, and the key: columns the person already sees in the role table (sample code, station, cruise, or the parts of a picked sample key, measured together as one key) and equal headers. No
+  role is guessed from values. A results sheet gets one proposal; one description sheet may serve several results sheets; a pair the person declined (`sampleJoinNo`) is skipped for that pair only, and
+  a results sheet with a confirmed join gets no further proposal. The two sheets may be in two files: a sheet is told by file and sheet name.
+- **Confirmation** (`ConvertRequestBody.sampleJoin`, a list). Each join names the two sheets, the key columns of each, the person's answers to the conflicts below, and `resultsOnly`. The worker only maps the
+  sheet references to the request's sheets (a join whose sheet the request does not hold is dropped); `joinInputs` is the one validator (an index out of range, a re-roled column, a profile or long
+  description sheet: the join is dropped without a finding of its own and the proposal shows again). The merged sheet is read as one table by the converter; the description sheet is then a sheet of its
+  own in the ledger, which says which results sheets each of its lines was lent to, and it is never listed as "not used".
+- **P1 (`CONV-JOIN-NO-DESCRIPTION`, blocks)**: results samples with no description row are listed by name. The one way out is "convert these samples with only what the results sheet says about them"
+  (`CONV-JOIN-RESULTS-ONLY`, information), which holds for the number it was given for and covers the samples without a description and the results rows with a blank key; the existing checks then apply
+  to them unchanged (a sample with no date or position still blocks).
+- **P2 (`CONV-JOIN-DESCRIPTION-ONLY`, warning to accept)**: a description row with no results is kept as a sample event without an occurrence, written once however many results sheets share the description.
+- **P3 (`CONV-JOIN-AMBIGUOUS`, blocks)**: a key on several description rows that differ in any column; rows that repeat each other value for value are one row.
+- **P4 (`CONV-JOIN-FILLED`, information)**: blank on one side and a value on the other is no conflict; the value is taken, counted and said once per column.
+- **P5**: values are compared after the converter's own reading (date, number, unit, sign), so `2020-06-01` and `01.06.2020`, or `5` and `5.0`, are equal; the text written is the results sheet's.
+- **P6 (`CONV-JOIN-KEY-BLANK`, blocks)**: a results row with a blank key part is listed. A description row with a blank key cell is asked about (CONV-JOIN-KEY-BLANK); left out, it is listed beside the archive with reason join-no-key.
+- **P7**: the value not chosen in a conflict is not lost: it is listed beside the archive (`join-not-chosen`) with both lines; a description line whose results rows wrote nothing is listed whole
+  (`join-results-not-written`). A reason the person leaves out for the results sheet is not left out for the description sheet, and the other way round (the two share one input but have ledgers and keys of their own).
+- **P8**: this section and `test/convert/no-joins.test.ts` ("/convert reads no join that the person has not confirmed") replace the earlier rule that /convert joins nothing.
+- **C1 Conflicts** (`CONV-JOIN-CONFLICT`, blocks): the same quantity (event date, position, depth range, station, cruise, a measured variable) with different values on the two sheets, judged on the value
+  the converter derives and not on the column role. One group per quantity, with its number of samples; the person takes the description or the results for all, per entry (one join key and one results value),
+  or for all with the same pair of values. The answer holds for the number of samples it was given for, so changed data re-opens it. Two columns in different units that cannot be compared block with
+  `CONV-JOIN-UNIT-DIFFERS`, and columns the merge cannot pair with `CONV-JOIN-COLUMNS-DIFFER`, each with its ways out. What was chosen is said in `CONV-JOIN-CONFLICT-CHOSEN`.
+- **C2 A coarser description**: one description row (a station) may serve many results samples; its values are lent to each of them, conflicts are asked per description row with the results samples listed under it,
+  and "take the results" for the whole group is one click.
+- **C3 Nothing changes without a join**: the archive files and every finding of an input without a confirmed join are as before; the only addition is `CONV-JOIN-PROPOSED`. A description sheet in the long
+  layout (one row per parameter, read through its pivot) is not joined for now: the converter names it (CONV-JOIN-DESCRIPTION-LONG) and converts both sheets as it does without a join.
+- **Protocol** (`convert.protocol.ts`). `SampleJoinRequest` (`results` and `description` as `{ fileId, sheet }`, `keys`, `conflicts`, `resultsOnly`, `fromFile`) in `ConvertRequestBody.sampleJoin`; the declined
+  pairs in `sampleJoinNo`. `ConvertView.sampleJoin` returns the proposals still open (a long description sheet is shown with `long`) and the groups of differing values with the results sheet each belongs to;
+  the entries of a group are capped at 500 and `count` is the true number of samples. `previewKey` finds the results sheet through the merge; a description sheet that was merged away has no preview.
+- **Companion file**: names, hashes and counts, never a data value. `sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>` (the names as a JSON array, so a `:` in a name is safe; the
+  hashes are those of `sampleKey`), `sampleJoinConflict=<description|results|mixed>:<count>:<group>:<["rFile","rSheet"]>`, `sampleJoinResultsOnly=<count>:<["rFile","rSheet"]>` and
+  `sampleJoinNo=<["rFile","rSheet","dFile","dSheet"]>`. Exceptions and pairs hold values (sample codes, value texts), so they are never written: a group answered with exceptions, with pairs or without a bulk side
+  is saved as `mixed` and the page asks it again (`savedJoinTake`). A saved join is applied only when both sheets are found again with the same number of rows and the key columns are found by their hashes;
+  otherwise the question is open. The worker writes nothing of the join; the page writes the companion file, as for `sampleKey`. /check reads a file with these lines as a sidecar and nothing more.
+
+*Code: `src/core/convert/sampleJoin.ts` (`proposeSampleJoins`, `mergeSampleSheets`, `joinInputs`), `src/core/convert/ledger.ts` (`joinLedgers`), `src/core/convert/notWritten.ts`, `src/core/convert/settings.ts`,
+`src/worker/convert.{protocol,handler}.ts`.*
 
 *Code: `src/app/pages/ConvertPage.tsx`, `src/app/convertModel.ts`,
 `src/app/components/Convert{SheetForm,MetadataForm,Worms,Nerc}.tsx`,

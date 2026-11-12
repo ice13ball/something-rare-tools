@@ -8,6 +8,8 @@
 import { licenceDiffersFindings } from '../core/convert/validate';
 import { archiveFileName, archiveFiles, buildEml, buildZip, convert, countNotWritten, judge, notWrittenCsv, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../core/convert';
+import { joinInputs } from '../core/convert/sampleJoin';
+import type { ConflictAnswer, JoinOutcome, SampleJoinRequestCore } from '../core/convert/sampleJoin';
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
 import { transposedSheetReason } from '../core/convert/transposed';
@@ -26,7 +28,7 @@ import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
-import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult } from './convert.protocol';
+import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult, SheetRef } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
 import { MAX_SAMPLES, type InputFile } from './protocol';
 
@@ -155,6 +157,9 @@ export function createConvertHandler(): ConvertHandler {
         for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
         for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
         for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
+        // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
+        for (const j of s.sampleJoin ?? []) if (!(settings.sampleJoin ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1])) settings.sampleJoin.push(j);
+        for (const j of s.sampleJoinNo ?? []) if (!(settings.sampleJoinNo ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1] && x.description[0] === j.description[0] && x.description[1] === j.description[1])) settings.sampleJoinNo.push(j);
         for (const b of s.biomassBasis ?? []) if (!(settings.biomassBasis ??= []).some((x) => x.sheet === b.sheet)) settings.biomassBasis.push(b);
         for (const o of s.perOccurrence ?? []) if (!(settings.perOccurrence ??= []).some((x) => x.sheet === o.sheet && x.header === o.header)) settings.perOccurrence.push(o);
         continue;
@@ -273,8 +278,8 @@ export function createConvertHandler(): ConvertHandler {
     return columns.length === 0 ? {} : { sampleKey: { columns, ...(prefix === undefined ? {} : { prefix }) }, ...(s.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) };
   }
 
-  /** The sheets of a request as the core takes them. */
-  function inputsOf(body: ConvertRequestBody): ConvertSheetInput[] {
+  /** The sheets of a request as the core takes them, before any join. */
+  function rawInputsOf(body: ConvertRequestBody): ConvertSheetInput[] {
     return body.sheets.map((s) => ({
       file: held(s.fileId).parsed,
       sheet: s.sheet,
@@ -311,12 +316,74 @@ export function createConvertHandler(): ConvertHandler {
     }));
   }
 
-  /** The conversion of a request: the records and findings of the core, and the model the writers take. */
+  /** A request's reference to a sheet as the index of that sheet in the request, or undefined when the request holds no such sheet. */
+  const indexOfRef = (body: ConvertRequestBody, ref: SheetRef | undefined): number | undefined => {
+    if (ref === null || typeof ref !== 'object') return undefined;
+    const at = body.sheets.findIndex((s) => s.fileId === ref.fileId && s.sheet === ref.sheet);
+    return at < 0 ? undefined : at;
+  };
+  const refOf = (body: ConvertRequestBody, at: number): SheetRef => ({ fileId: body.sheets[at].fileId, sheet: body.sheets[at].sheet });
+  const wholeCount = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0;
+  const sideOf = (t: unknown): t is 'description' | 'results' => t === 'description' || t === 'results';
+
+  /** The person's answers to the groups of differing values, as far as their shape goes (what a group means is the merge's to judge). */
+  function answersOf(list: unknown): ConflictAnswer[] {
+    if (!Array.isArray(list)) return [];
+    const out: ConflictAnswer[] = [];
+    for (const a of list as unknown[]) {
+      const c = a as Partial<ConflictAnswer> | null;
+      if (c === null || typeof c !== 'object' || typeof c.group !== 'string' || !wholeCount(c.count)) continue;
+      const exceptions = (Array.isArray(c.exceptions) ? c.exceptions : []).filter((x) => x !== null && typeof x === 'object' && typeof x.entry === 'string' && sideOf(x.take)).map((x) => ({ entry: x.entry, take: x.take }));
+      const pairs = (Array.isArray(c.pairs) ? c.pairs : [])
+        .filter((x) => x !== null && typeof x === 'object' && Array.isArray(x.pair) && x.pair.length === 2 && typeof x.pair[0] === 'string' && typeof x.pair[1] === 'string' && sideOf(x.take))
+        .map((x) => ({ pair: [x.pair[0], x.pair[1]] as [string, string], take: x.take }));
+      out.push({ group: c.group, ...(sideOf(c.take) ? { take: c.take } : {}), count: c.count, exceptions, ...(pairs.length > 0 ? { pairs } : {}) });
+    }
+    return out;
+  }
+
+  /**
+   * The sheets of a request as the core takes them, after the joins the person confirmed. This maps references to request indexes and nothing more (a join whose sheet the request does not hold is
+   * dropped): `joinInputs` is the only validator of a join. `outcome.origin` says, for each sheet returned, the request sheet it came from; `outcome.conflicts[].results` and the proposals are request indexes.
+   */
+  function inputsOf(body: ConvertRequestBody): { sheets: ConvertSheetInput[]; outcome: JoinOutcome } {
+    const raw = rawInputsOf(body);
+    const joins: SampleJoinRequestCore[] = [];
+    for (const j of Array.isArray(body.sampleJoin) ? body.sampleJoin : []) {
+      if (j === null || typeof j !== 'object') continue;
+      const results = indexOfRef(body, j.results);
+      const description = indexOfRef(body, j.description);
+      if (results === undefined || description === undefined) continue;
+      joins.push({
+        results,
+        description,
+        keys: j.keys,
+        conflicts: answersOf(j.conflicts),
+        ...(wholeCount(j.resultsOnly) ? { resultsOnly: j.resultsOnly } : {}),
+        ...(j.fromFile === true ? { resultsOnlyFromFile: true } : {}),
+      });
+    }
+    const declined: { results: number; description: number }[] = [];
+    for (const d of Array.isArray(body.sampleJoinNo) ? body.sampleJoinNo : []) {
+      if (d === null || typeof d !== 'object') continue;
+      const results = indexOfRef(body, d.results);
+      const description = indexOfRef(body, d.description);
+      if (results !== undefined && description !== undefined) declined.push({ results, description });
+    }
+    const outcome = joinInputs(raw, joins, declined);
+    return { sheets: outcome.sheets, outcome };
+  }
+
+  /**
+   * The conversion of a request: the records and findings of the core, and the model the writers take. `sheets` are the sheets after the joins, the ones `listSplits`, the ledger's `inputIndex` and
+   * `notWrittenCsv` all speak of. The findings of the proposals come first; a merge's own findings come out of `convert()`.
+   */
   function compute(body: ConvertRequestBody) {
-    const sheets = inputsOf(body);
+    const { sheets, outcome } = inputsOf(body);
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
-    const r = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
-    return { sheets, splits, r };
+    const done = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
+    const r = outcome.findings.length === 0 ? done : { ...done, findings: [...outcome.findings, ...done.findings] };
+    return { sheets, splits, r, outcome };
   }
 
   const today = (): string => new Date().toISOString().slice(0, 10);
@@ -344,7 +411,10 @@ export function createConvertHandler(): ConvertHandler {
     };
   };
 
-  /** The sheets of the dropped files that the request leaves out (the page's "use" unticked): the ledger says they were not used. Told apart by file id AND sheet name. */
+  /**
+   * The sheets of the dropped files that the request leaves out (the page's "use" unticked): the ledger says they were not used. Told apart by file id AND sheet name. A description sheet that a join
+   * merged away IS in the request, so it is never listed here: the merge gives it a ledger of its own.
+   */
   function notUsedLedgers(body: ConvertRequestBody): SheetLedger[] {
     const asked = new Set(body.sheets.map((s) => `${s.fileId}\u0000${s.sheet}`));
     const out: SheetLedger[] = [];
@@ -352,8 +422,19 @@ export function createConvertHandler(): ConvertHandler {
     return out;
   }
 
+  /** Entries of a group the page gets: more than this and the page is told the true count, not the rest (it shows a sample of them). */
+  const MAX_CONFLICT_ENTRIES = 500;
+
+  /** What the page needs to ask about the join: the proposals still open and the groups of differing values, with request indexes mapped back to sheet references. */
+  function joinView(body: ConvertRequestBody, outcome: JoinOutcome): ConvertView['sampleJoin'] {
+    return {
+      proposals: outcome.proposals.map((p) => ({ results: refOf(body, p.results), description: refOf(body, p.description), keys: p.keys, covered: p.covered, samples: p.samples, ...(p.long ? { long: true as const } : {}) })),
+      conflicts: outcome.conflicts.map(({ answer: _answer, entries, results, ...group }) => ({ ...group, entries: entries.slice(0, MAX_CONFLICT_ENTRIES), results: refOf(body, results) })),
+    };
+  }
+
   function run(body: ConvertRequestBody): ConvertView {
-    const { splits, r } = compute(body);
+    const { splits, r, outcome } = compute(body);
     const dataset = toDataset(r, body.metadata ?? EMPTY_METADATA, decisionsOf(body));
     // the checks of the output tables (the description of the dataset is judged by the page: it changes with every keystroke)
     const findings = [...r.findings, ...validateTables(dataset, r.findings, { today: today() })];
@@ -388,6 +469,7 @@ export function createConvertHandler(): ConvertHandler {
       codeCollision: r.findings.some((f) => f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'event'),
       codesMissing: codesMissing.filter((c, i, a) => a.findIndex((x) => x.fileId === c.fileId && x.sheet === c.sheet) === i),
       keys: r.keys ?? [],
+      sampleJoin: joinView(body, outcome),
     };
   }
 
@@ -438,8 +520,9 @@ export function createConvertHandler(): ConvertHandler {
     const typed = typeof req.prefix === 'string' ? req.prefix.trim() : '';
     const previewPrefix = typed !== '' && typed.length <= MAX_KEY_PREFIX ? typed : target.sampleKey?.prefix;
     const body = { ...req.body, sheets: req.body.sheets.map((s) => (s === target ? { ...s, sampleKey: { columns: req.columns, ...(previewPrefix === undefined ? {} : { prefix: previewPrefix }) }, sampleKeyFromFile: false } : s)) };
-    const sheets = inputsOf(body);
-    const at = body.sheets.indexOf(body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet) as (typeof body.sheets)[number]);
+    const { sheets, outcome } = inputsOf(body);
+    // the request sheet's place among the sheets after the joins (a description sheet that was merged away has none, so no preview)
+    const at = outcome.origin.indexOf(body.sheets.indexOf(body.sheets.find((s) => s.fileId === req.fileId && s.sheet === req.sheet) as (typeof body.sheets)[number]));
     const input = sheets[at];
     if (input === undefined) return null;
     return (
