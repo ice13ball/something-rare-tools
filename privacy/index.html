@@ -119,6 +119,15 @@
         <section>
           <h2>Analytics</h2>
           <p>Google Analytics 4 is used only if you accept it in the cookie notice. Until then nothing is sent to Google and no analytics cookies are set. The Atlas and the Tools use the same Google Analytics property.</p>
+          <p>When you have accepted, the browser talks to these Google servers for analytics:</p>
+          <ul class="host-list">
+            <li><code>www.googletagmanager.com</code></li>
+            <li><code>www.google-analytics.com</code></li>
+            <li><code>region1.google-analytics.com</code></li>
+            <li><code>analytics.google.com</code></li>
+            <li><code>region1.analytics.google.com</code></li>
+            <li><code>stats.g.doubleclick.net</code></li>
+          </ul>
           <p>Events carry only counts (how many errors, warnings and notes), the type of input (file, Zenodo, GeoNetwork, DOI, PANGAEA or mixed) and the download mode. They never contain file names, DOIs, links or values from your data. You can change your choice at any time with “Cookie settings” in the footer.</p>
           <p>The Darwin Core converter sends three events of its own: that a conversion was started; that it is blocked, with the number of errors; and that an archive was exported, with the shape of the sheets (wide, long or mixed), whether a profile file, a metadata file, a WoRMS lookup or an NVS search was used (yes or no), and how many events, occurrences and measurement rows the archive has. They never contain taxon names, file names, search words, identifiers or values.</p>
           <p>One choice for both services: your answer is stored in a single cookie, ac_consent (value granted or denied), set for the domain something-rare.com so that the Atlas and the Tools both read it. It lasts 180 days and is used for nothing else. If you have already answered in either service, you are not asked again; “Cookie settings” in the footer changes the answer for both.</p>

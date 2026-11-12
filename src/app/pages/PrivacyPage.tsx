@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React from 'react';
 import { CSW_HOSTS } from '../../../config/catalogues';
-import { DATA_HOSTS, MAP_PRIVACY_URL } from '../../../config/hosts';
+import { DATA_HOSTS, GA_HOSTS, MAP_PRIVACY_URL } from '../../../config/hosts';
 import { IPT_HOSTS } from '../../../config/ipt';
 import { SITE } from '../../../config/site';
 import { Layout } from '../components/Layout';
@@ -82,6 +82,14 @@ export function PrivacyPage(): React.ReactElement {
       <section>
         <h2>{t('privacy.analytics.h')}</h2>
         <p>{t('privacy.analytics.p1')}</p>
+        <p>{t('privacy.analytics.hosts')}</p>
+        <ul className="host-list">
+          {GA_HOSTS.map((h) => (
+            <li key={h}>
+              <code>{h}</code>
+            </li>
+          ))}
+        </ul>
         <p>{t('privacy.analytics.p2')}</p>
         <p>{t('privacy.analytics.p3')}</p>
         <p>{t('privacy.consent.p')}</p>
