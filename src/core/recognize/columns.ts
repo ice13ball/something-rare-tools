@@ -178,6 +178,8 @@ interface Cand {
   elevation?: boolean;
   /** Darwin Core depth: always metres, positive down; never inferred from the values. */
   dwcDepth?: boolean;
+  /** A sample-named column ('Sample', 'Sample ID', 'sample_id', 'SampleNo' ...): only these tie with each other (no tie is made of ID, Core, Specimen, eventID, ...). */
+  sampleNamed?: boolean;
   /** Every sampled value is blank; set after the columns are read. */
   empty?: boolean;
   /** The name alone is ambiguous (data, Zeit, ...): the column's values must back it, see guardPasses. */
@@ -295,11 +297,11 @@ function nameCandidate(key: string, hdr?: NameHeader): Cand | undefined {
     return { slot: 'station', tier: 3, kind: 'station', why: why('name-station-place'), guard: 'place-values' };
   }
   if (/^(sample( id| no| number| name| code| label)?|core( id| name| no| number)?|specimen( id)?|bottle( id| no| number)?|id)$/.test(key)) {
-    return { slot: 'sampleId', tier: 1, kind: 'sampleId', why: why('name-sample') };
+    return { slot: 'sampleId', tier: 1, kind: 'sampleId', why: why('name-sample'), ...(key.startsWith('sample') ? { sampleNamed: true } : {}) };
   }
   // joined words ('SampleID', 'SampleNo': headerKey makes no word break of a capital letter): a lower tier, so a sheet that also has a spaced or bare sample name takes that one whatever the column order
   if (/^(sampleid|samplecode|samplename|samplenumber|sampleno)$/.test(key)) {
-    return { slot: 'sampleId', tier: 2, kind: 'sampleId', why: why('name-sample') };
+    return { slot: 'sampleId', tier: 2.5, kind: 'sampleId', why: why('name-sample'), sampleNamed: true };
   }
   return undefined;
 }
@@ -1036,15 +1038,19 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
     const winner = idxs
       .slice()
       .sort((a, b) => Number(entries[a].cand!.empty) - Number(entries[b].cand!.empty) || entries[a].cand!.tier - entries[b].cand!.tier || a - b)[0];
-    // two columns that both qualify as the sample code at the same tier: none is proposed (the missing sample code is then asked for), each says which others could be it
-    const tied = slot === 'sampleId' ? idxs.filter((i) => entries[i].cand!.empty === entries[winner].cand!.empty && entries[i].cand!.tier === entries[winner].cand!.tier) : [];
+    // two or more sample-named columns at the same tier: none is proposed (the missing sample code is then asked for), each says which others could be it. Other names (ID, Core, Specimen, eventID ...) keep the first-column rule.
+    const tied = slot === 'sampleId' && entries[winner].cand!.sampleNamed === true ? idxs.filter((i) => entries[i].cand!.sampleNamed === true && entries[i].cand!.empty === entries[winner].cand!.empty && entries[i].cand!.tier === entries[winner].cand!.tier) : [];
+    const tiedNames = tied.map((k) => `"${entries[k].proposal.cleanHeader}"`).join(', ');
     for (const i of idxs) {
       const e = entries[i];
       const c = e.cand!;
       if (tied.length > 1) {
         e.proposal.role = { kind: 'ignore' };
         e.proposal.confidence = 'low';
-        applyReason(e.proposal, why('sample-ambiguous', { name: tied.map((k) => `"${entries[k].proposal.cleanHeader}"`).join(', ') }), []);
+        const n = tied.length;
+        const listed = { name: tiedNames, count: String(n) };
+        const w = !tied.includes(i) ? why('sample-ambiguous-other', listed) : n === 2 ? why('sample-ambiguous', listed) : n < 5 ? why('sample-ambiguous-few', listed) : why('sample-ambiguous-many', listed);
+        applyReason(e.proposal, w, []);
         continue;
       }
       if (i !== winner) {

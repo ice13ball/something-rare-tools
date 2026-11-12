@@ -113,6 +113,10 @@ function battery(): { sheet: RawSheet; place?: true; long?: { parameterCol: numb
     S(['when', 'Głębokość do'], [['2020-05-12', 10], ['2020-05-13', 15]]),
     // two columns for the same longitude, time and cruise: the first is used
     S(['Longitude', 'Lon', 'Time', 'Uhrzeit', 'Cruise', 'Expedition'], [[18.5, 18.5, '10:30', '10:30', 'C1', 'C1'], [18.6, 18.6, '11:30', '11:30', 'C1', 'C1']]),
+    // sample-named columns that tie: two, three, five, and a lower-tier one beside them
+    S(['Sample', 'Sample ID', 'SampleNo', 'Station'], [['a', 'b', 1, 'S1'], ['c', 'd', 2, 'S2']]),
+    S(['Sample', 'Sample ID', 'Sample No'], [['a', 'b', 'c'], ['d', 'e', 'f']]),
+    S(['Sample', 'Sample ID', 'Sample No', 'Sample Name', 'Sample Code'], [['a', 'b', 'c', 'd', 'e'], ['f', 'g', 'h', 'i', 'j']]),
     // a German sheet: a depth range with von / bis (the second bound is not read)
     S(['Tiefe von', 'Tiefe bis', 'Probe'], [[0, 10, 'P-1'], [5, 15, 'P-2']]),
     // the start and end of a tow, a hemisphere letter, an identifier and an abundance
