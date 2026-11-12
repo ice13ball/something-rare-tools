@@ -273,6 +273,8 @@ export interface SheetLedgerInput {
   measurements: readonly MofIntent[];
   /** Profile: the rows that became a level event. */
   levelLines?: ReadonlySet<number>;
+  /** A confirmed join: the lines of samples only the description sheet has. They write an event and no occurrence, and that is all they are for: they count as written on a sheet read for taxa as well. */
+  describedLines?: ReadonlySet<number>;
   /** The sheet is the pivot of a long sheet: its ledger is kept in the lines of that sheet. */
   pivot?: PivotInfo;
   /** Position of the sheet in the list handed to convert(). */
@@ -338,7 +340,7 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
   };
   // a line of a long sheet with a taxon is written when it wrote an occurrence: an event or a sample value it opened does not carry its taxon, count and weight
   const occurrenceOnly = inp.kind === 'long' && inp.hasTaxa;
-  const isWrittenAt = (pos: number, line: number): boolean => (inp.kind === 'profile' ? (inp.levelLines?.has(line) ?? false) : occurrenceOnly ? hasOcc(pos) : hasOcc(pos) || measurementAt.has(line) || fate.events.has(line) || (inp.levelLines?.has(line) ?? false));
+  const isWrittenAt = (pos: number, line: number): boolean => (inp.kind === 'profile' ? (inp.levelLines?.has(line) ?? false) : occurrenceOnly ? hasOcc(pos) || (inp.describedLines?.has(line) === true && fate.events.has(line)) : hasOcc(pos) || measurementAt.has(line) || fate.events.has(line) || (inp.levelLines?.has(line) ?? false));
 
   /* the rows */
   const rowCounts = new Map<LedgerReason, number>();

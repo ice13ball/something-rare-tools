@@ -78,7 +78,6 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   // a row the converter could not place (a value with no parameter, a number with no taxon ...): blocks until someone decides to leave it out and list it, or corrects the file
   'CONV-ROW-NOT-UNDERSTOOD',
   // the sample-sheet join: a value that differs between the two sheets and is not decided, a sample with no description row, a key with several different description rows, a blank key part
-  // (shown only, never listed: CONV-JOIN-PROPOSED, CONV-JOIN-DESCRIPTION-LONG, CONV-JOIN-CONFLICT-CHOSEN, CONV-JOIN-RESULTS-ONLY, CONV-JOIN-FILLED)
   'CONV-JOIN-CONFLICT',
   'CONV-JOIN-UNIT-DIFFERS',
   'CONV-JOIN-COLUMNS-DIFFER',

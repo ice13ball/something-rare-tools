@@ -118,7 +118,9 @@ export interface SampleJoinInfo {
   /** `leaveOut`/`leaveOutFile` copied from the description input: the answers to its blank-key question (F14, read by decideRows in Task 7) */
   description: { file: ParsedFile; sheet: RawSheet; mapping: SheetMapping; leaveOut?: ConvertSheetInput['leaveOut']; leaveOutFile?: ConvertSheetInput['leaveOutFile'] };
   /** per merged column: where it came from ('resolved' = written by the merge, Task 5) and its own header */
-  columns: readonly { side: JoinSide | 'resolved'; index: number; header: string }[];
+  columns: readonly { side: JoinSide | 'resolved'; index: number; header: string; /** 'resolved': the description columns the written cell is made of (convert() names them when it moves a finding) */ from?: readonly number[] }[];
+  /** results column → the description column it shares a quantity or the join key with (a cell of it may come from the description: takenFromDescription, a description-only row) */
+  pairs: ReadonlyMap<number, number>;
   /** merged line → the description line lent to it */
   lentFrom: ReadonlyMap<number, number>;
   /** merged lines appended for description-only samples (P2) → description line; numbered after the last results line */
@@ -826,7 +828,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   /* --- the merged header, and the columns written for a quantity of another structure (F4) --- */
   const ownHeaders = Array.from({ length: dw }, (_, i) => header(desSheet, i));
   const mergedHeader = [...resSheet.header, ...uniqueHeaders(ownHeaders, resSheet.header)];
-  const columns: { side: JoinSide | 'resolved'; index: number; header: string }[] = [
+  const columns: { side: JoinSide | 'resolved'; index: number; header: string; from?: readonly number[] }[] = [
     ...resSheet.header.map((h, i) => ({ side: 'results' as const, index: i, header: h })),
     ...ownHeaders.map((h, i) => ({ side: 'description' as const, index: i, header: h })),
   ];
@@ -886,7 +888,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     const base = mergedHeader.length;
     mergedHeader.push(...names);
     names.forEach((name, i) => {
-      columns.push({ side: 'resolved', index: base + i, header: name });
+      columns.push({ side: 'resolved', index: base + i, header: name, from: q.desCols });
       resolvedColumns.push({ index: base + i, header: name, role: spec.roles[i] });
     });
     for (const c of q.resCols) {
@@ -1032,6 +1034,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       ...(description.leaveOutFile === undefined ? {} : { leaveOutFile: description.leaveOutFile }),
     },
     columns,
+    pairs: new Map([...quantities.flatMap((q) => q.pairs), ...keys.map((k) => [k.results, k.description] as [number, number])]),
     lentFrom,
     descriptionOnly,
     takenFromDescription,
@@ -1043,4 +1046,159 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     findings,
   };
   return { input: { ...results, file, mapping, sampleJoin: info }, info, conflicts, descriptionKeys: new Set(groups.keys()) };
+}
+
+/* ---------- joinInputs: what convert() is handed, from the person's confirmed joins ---------- */
+
+/** One confirmed join as the request carries it, by the index of the sheets in the request. */
+export interface SampleJoinRequestCore {
+  results: number;
+  description: number;
+  keys: JoinKeyPair[];
+  conflicts: ConflictAnswer[];
+  resultsOnly?: number;
+  resultsOnlyFromFile?: boolean;
+}
+
+export interface JoinOutcome {
+  sheets: ConvertSheetInput[];
+  /** CONV-JOIN-PROPOSED and CONV-JOIN-DESCRIPTION-LONG only; a merge's own findings travel on SampleJoinInfo.findings (F1) */
+  findings: Finding[];
+  proposals: SampleJoinProposal[];
+  /** `results` = the REQUEST index of the results sheet */
+  conflicts: (ConflictGroup & { results: number })[];
+  /** for each output sheet, the index of the request sheet it came from */
+  origin: number[];
+}
+
+const isIndex = (n: unknown, below: number): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < below;
+
+/**
+ * The ONLY validator of a join (F8). A join that is not valid any more (a column re-roled after the person confirmed, an index out of range, the sheets no longer what the join needs) is dropped
+ * without a finding of its own and is not passed as `skip`, so its proposal shows again.
+ */
+export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly SampleJoinRequestCore[], declined: readonly { results: number; description: number }[]): JoinOutcome {
+  const valid: SampleJoinRequestCore[] = [];
+  const usedAsResults = new Set<number>();
+  for (const j of joins) {
+    if (!isIndex(j.results, sheets.length) || !isIndex(j.description, sheets.length) || j.results === j.description || usedAsResults.has(j.results)) continue;
+    if (!Array.isArray(j.keys) || j.keys.length === 0) continue;
+    const res = sheets[j.results];
+    const des = sheets[j.description];
+    const resSheet = sheetOf(res);
+    const desSheet = sheetOf(des);
+    if (resSheet === undefined || desSheet === undefined) continue;
+    if (res.profile !== undefined || !hasTaxon(res) || des.profile !== undefined || hasTaxon(des) || desSheet.pivot !== undefined) continue;
+    const picked = new Set(res.sampleKey?.columns ?? []);
+    const keysOk = j.keys.every(
+      (k) => k !== null && typeof k === 'object' && isIndex(k.results, resSheet.header.length) && isIndex(k.description, desSheet.header.length) && res.mapping.columns.some((c) => c.index === k.results && (RIGHT_KINDS.has(c.role.kind) || picked.has(c.index))),
+    );
+    if (!keysOk) continue;
+    usedAsResults.add(j.results);
+    valid.push(j);
+  }
+  const proposalFindings = (proposals: readonly SampleJoinProposal[]): Finding[] =>
+    proposals.map((p) => {
+      const res = sheets[p.results];
+      const des = sheets[p.description];
+      const keys = p.keys.map((k) => `${sheetOf(res)?.header[k.results] ?? ''} = ${sheetOf(des)?.header[k.description] ?? ''}`).join(' + ');
+      const base = { file: res.file.fileName, sheet: res.sheet };
+      return p.long
+        ? makeConvertFinding('CONV-JOIN-DESCRIPTION-LONG', { ...base, params: { description: des.sheet, descriptionFile: des.file.fileName, keys } })
+        : makeConvertFinding('CONV-JOIN-PROPOSED', { ...base, params: { description: des.sheet, descriptionFile: des.file.fileName, keys, covered: p.covered, samples: p.samples } });
+    });
+  const proposed = (): SampleJoinProposal[] =>
+    // a results sheet whose join was confirmed gets no proposal for another sheet; a declined pair is skipped for that pair only
+    proposeSampleJoins(sheets, [...valid, ...declined]).filter((p) => !usedAsResults.has(p.results));
+  if (valid.length === 0) {
+    const proposals = proposed();
+    return { sheets: sheets as ConvertSheetInput[], findings: proposalFindings(proposals), proposals, conflicts: [], origin: sheets.map((_, i) => i) };
+  }
+  // decision 6: one description for several results sheets writes each sample once
+  const keysOf = new Map(valid.map((j) => [j, resultsKeys(sheets[j.results], j.keys)] as const));
+  const firstOfDescription = new Map<number, SampleJoinRequestCore>();
+  for (const j of valid) if (!firstOfDescription.has(j.description)) firstOfDescription.set(j.description, j);
+  const mergedAt = new Map<number, ConvertSheetInput>();
+  const conflicts: JoinOutcome['conflicts'] = [];
+  for (const j of valid) {
+    const held = new Set<string>();
+    for (const other of valid) if (other !== j && other.description === j.description) for (const k of keysOf.get(other)!) held.add(k);
+    const merged = mergeSampleSheets({
+      results: sheets[j.results],
+      description: sheets[j.description],
+      keys: j.keys,
+      conflicts: j.conflicts,
+      ...(j.resultsOnly === undefined ? {} : { resultsOnly: j.resultsOnly }),
+      ...(j.resultsOnlyFromFile === undefined ? {} : { resultsOnlyFromFile: j.resultsOnlyFromFile }),
+      heldElsewhere: held,
+      appendDescriptionOnly: firstOfDescription.get(j.description) === j,
+    });
+    mergedAt.set(j.results, merged.input);
+    for (const g of merged.conflicts) conflicts.push({ ...g, results: j.results });
+  }
+  const removed = new Set(valid.map((j) => j.description));
+  const out: ConvertSheetInput[] = [];
+  const origin: number[] = [];
+  sheets.forEach((sin, i) => {
+    if (removed.has(i)) return;
+    out.push(mergedAt.get(i) ?? sin);
+    origin.push(i);
+  });
+  const proposals = proposed();
+  return { sheets: out, findings: proposalFindings(proposals), proposals, conflicts, origin };
+}
+
+/**
+ * A finding convert() raised about the merged sheet, put where the cell is: a description column, a resolved column or a results cell that holds a description value (takenFromDescription), and
+ * every line that is a description-only line, belong to the description sheet, on the line of its own file and under its own header, once (not once per results row that was lent it).
+ * The merge's own findings already name the right sheet and are not passed through here.
+ */
+export function joinLines(findings: readonly Finding[], sin: ConvertSheetInput): Finding[] {
+  const info = sin.sampleJoin;
+  const merged = sheetOf(sin);
+  if (info === undefined || merged === undefined) return [...findings];
+  const rw = info.results.width;
+  const desHeader = info.description.sheet.header;
+  const descriptionLineOf = (line: number): number | undefined => info.lentFrom.get(line) ?? info.descriptionOnly.get(line);
+  const out: Finding[] = [];
+  for (const f of findings) {
+    if (f.file !== info.results.file || f.sheet !== sin.sheet) {
+      out.push(f);
+      continue;
+    }
+    const column = f.field === undefined ? -1 : merged.header.indexOf(f.field);
+    const entry = column >= 0 ? info.columns[column] : undefined;
+    const descriptionField = (): string | undefined => {
+      if (entry === undefined) return f.field;
+      if (entry.side === 'description') return entry.header;
+      if (entry.side === 'resolved') return entry.from !== undefined && entry.from.length > 0 ? [...new Set(entry.from.map((c) => desHeader[c] ?? ''))].join(', ') : f.field;
+      const paired = info.pairs.get(column);
+      return paired === undefined ? f.field : (desHeader[paired] ?? f.field);
+    };
+    const whole = (): Finding => ({ ...f, file: info.description.file.fileName, sheet: info.description.sheet.name, ...(f.field === undefined ? {} : { field: descriptionField() }) });
+    if (f.lines === undefined) {
+      if (entry?.side === 'description') out.push(whole());
+      else out.push(f);
+      continue;
+    }
+    if (f.lines.length > 0 && f.lines.every((l) => info.descriptionOnly.has(l))) {
+      out.push({ ...whole(), lines: [...new Set(f.lines.map((l) => info.descriptionOnly.get(l)!))].sort((a, b) => a - b) });
+      continue;
+    }
+    const staysHere: number[] = [];
+    const goes = new Set<number>();
+    for (const l of f.lines) {
+      const d = descriptionLineOf(l);
+      const fromDescription = entry !== undefined && d !== undefined && (entry.side === 'description' || info.takenFromDescription.has(`${l}:${column}`));
+      if (fromDescription) goes.add(d);
+      else staysHere.push(l);
+    }
+    if (goes.size === 0) {
+      out.push(f);
+      continue;
+    }
+    if (staysHere.length > 0) out.push({ ...f, lines: staysHere });
+    out.push({ ...whole(), lines: [...goes].sort((a, b) => a - b) });
+  }
+  return out;
 }

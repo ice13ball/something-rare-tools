@@ -50,6 +50,7 @@ import type { LedgerReason, SheetLedger } from './ledger';
 import { decideRows } from './notWritten';
 import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
 import type { SampleKey, SheetKeyReport } from './sampleKey';
+import { joinLines } from './sampleJoin';
 import type { SampleJoinInfo } from './sampleJoin';
 
 /*
@@ -376,7 +377,7 @@ function replicateColumn(sheets: readonly ConvertSheetInput[], file: string, she
   for (const c of sin.mapping.columns) {
     // an ignored column, or a numeric one the proposer took for a measured variable without a unit (a numeric Replicate column): for the HINT only, the role itself is the user's to give
     if ((c.role.kind !== 'ignore' && !(c.role.kind === 'variable' && c.role.unit === undefined)) || c.header.trim() === '' || unitFromHeader(c.header).unit !== undefined || isQuantityHeader(c.header)) continue;
-    if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
+    if (isUnnamedColumn(sin, sheet, c.index)) continue;
     let separated = 0;
     for (const rows of usable) {
       const values = rows.map((r) => (isBlankCell(r.cells[c.index] ?? null) ? undefined : String(r.cells[c.index]).trim()));
@@ -479,16 +480,25 @@ function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeo
   return used;
 }
 
+/**
+ * A column the header does not name (IN-HEADER-SHORT: it was added by the tool). The columns a confirmed join appends to the results sheet stand after it and are named by the description sheet's
+ * header, so they are never unnamed.
+ */
+function isUnnamedColumn(sin: ConvertSheetInput, sheet: RawSheet, index: number): boolean {
+  return sheet.unnamedFrom !== undefined && index >= sheet.unnamedFrom && !(sin.sampleJoin !== undefined && index >= sin.sampleJoin.results.width);
+}
+
 function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
   const used = readColumns(sin, cols, specs);
+  const consumed = sin.sampleJoin?.consumed;
   const named = sin.mapping.columns.filter((c) => c.role.kind !== 'ignore' && !used.has(c.index)).map((c) => c.header.trim());
   // two kinds of IGNORED column that hold data are said as well, so that nothing is left out without a word: a column with an empty header (shown by its letter in brackets: "[E]"), and
   // a second quantity column (a "Biomass [g]" next to a count: one quantity column is read per sheet). Columns the short-header detection added (IN-HEADER-SHORT, CONV-COLUMN-UNNAMED) are said by those.
   const sheet = sin.file.sheets.find((s) => s.name === sin.sheet);
   const holdsData = (index: number): boolean => sheet !== undefined && sheet.rows.some((r) => !isBlankCell(r.cells[index] ?? null));
   const left = sin.mapping.columns.flatMap((c) => {
-    if (c.role.kind !== 'ignore' || used.has(c.index)) return [];
-    if (sheet?.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) return [];
+    if (c.role.kind !== 'ignore' || used.has(c.index) || consumed?.has(c.index) === true) return [];
+    if (sheet !== undefined && isUnnamedColumn(sin, sheet, c.index)) return [];
     if (c.header.trim() === '') return holdsData(c.index) ? [`[${columnLetters(c.index)}]`] : [];
     if (sin.profile === undefined && isQuantityHeader(c.header) && holdsData(c.index)) return [c.header.trim()];
     return [];
@@ -508,8 +518,8 @@ function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<ty
   const taken = new Set(unexported);
   const names: string[] = [];
   for (const c of sin.mapping.columns) {
-    if (c.role.kind !== 'ignore' || used.has(c.index)) continue;
-    if (sheet.unnamedFrom !== undefined && c.index >= sheet.unnamedFrom) continue;
+    if (c.role.kind !== 'ignore' || used.has(c.index) || sin.sampleJoin?.consumed.has(c.index) === true) continue;
+    if (isUnnamedColumn(sin, sheet, c.index)) continue;
     const header = c.header.trim();
     if (header === '' || taken.has(header) || !sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null))) continue;
     names.push(header);
@@ -1552,14 +1562,22 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   {
     const used = new Map<ParsedFile, Set<string>>();
     for (const sin of rawInput.sheets) (used.get(sin.file) ?? used.set(sin.file, new Set()).get(sin.file)!).add(sin.sheet);
-    for (const [file, sheets] of used) for (const f of file.findings) if (f.sheet === undefined || sheets.has(f.sheet)) findings.push(f);
+    // the file of a description sheet that a confirmed join took into its results sheet is still a file of this run
+    for (const sin of rawInput.sheets) if (sin.sampleJoin !== undefined) (used.get(sin.sampleJoin.description.file) ?? used.set(sin.sampleJoin.description.file, new Set()).get(sin.sampleJoin.description.file)!).add(sin.sampleJoin.description.sheet.name);
+    const seen = new Set<Finding>();
+    for (const [file, sheets] of used)
+      for (const f of file.findings)
+        if ((f.sheet === undefined || sheets.has(f.sheet)) && !seen.has(f)) {
+          seen.add(f);
+          findings.push(f);
+        }
   }
   // a column the header does not name (IN-HEADER-SHORT) must not give its internal name ("Column 7") to a variable or a taxon of the archive
   for (const sin of input.sheets) {
     const from = sin.file.sheets.find((x) => x.name === sin.sheet)?.unnamedFrom;
     if (from === undefined) continue;
     for (const c of sin.mapping.columns) {
-      if (c.index < from) continue;
+      if (c.index < from || (sin.sampleJoin !== undefined && c.index >= sin.sampleJoin.results.width)) continue;
       const unnamedVariable = c.role.kind === 'variable' && /^column \d+$/i.test(c.role.variable.trim());
       const taxonHeader = c.role.kind === 'taxon' && c.role.header === true;
       if (unnamedVariable || taxonHeader) findings.push(makeConvertFinding('CONV-COLUMN-UNNAMED', { file: sin.file.fileName, sheet: sin.sheet, field: c.header }));
@@ -1901,6 +1919,19 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       }
     }
 
+    // a depth the merge wrote in metres from a cell of another sheet keeps the text that sheet wrote ("33 ft") as verbatimDepth (SampleJoinInfo.rewritten)
+    const joinedDepth = (d: DepthRead, line: number): DepthRead => {
+      const joined = sin.sampleJoin;
+      if (joined === undefined) return d;
+      const written = (c: DepthCol | undefined): string | undefined => {
+        const original = c === undefined || joined.columns[c.index]?.side !== 'resolved' ? undefined : joined.rewritten.get(`${line}:${c.index}`);
+        return original === undefined || original === null ? undefined : String(original).trim();
+      };
+      const min = written(cols.depthMin ?? cols.depthPlain);
+      const max = written(cols.depthMax ?? cols.depthPlain);
+      return min === undefined && max === undefined ? d : { ...d, verbatim: { ...d.verbatim, ...(min === undefined ? {} : { min }), ...(max === undefined ? {} : { max }) } };
+    };
+
     for (const row of sheet.rows) {
       rowPos++;
       if (ragged.has(row.line)) {
@@ -1923,7 +1954,9 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       }
       const quantityBlank = sin.shape === 'long' && !presence && cols.quantity !== undefined && cols.taxonCell !== undefined && taxonCellText !== undefined && !longHasValue;
       const biomassOnly = quantityBlank && rowHasBiomass(row);
-      const relevant = sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly);
+      // a sample the description sheet describes and the results sheet does not have (a confirmed join): an event, no occurrence
+      const descOnly = sin.sampleJoin?.descriptionOnly.has(row.line) === true;
+      const relevant = descOnly || (sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly));
       // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
       // (a label in a part of a picked sample key is the same row: "Total" in the station column of a key of station and cast)
       const summaryLabel = [code, stationText, ...(keyRead?.parts ?? [])].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
@@ -2003,8 +2036,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       if (cols.replicate) checkText(cols.replicate.header, row.line, replicate);
       const eventId = replicate === undefined ? sampleEventId : `${sampleEventId}:${replicate}`;
       noteId(eventId, row.line);
-      if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined) rowsPerEvent.set(sampleEventId, (rowsPerEvent.get(sampleEventId) ?? 0) + 1);
-      const depth = depthOf(row);
+      if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined && !descOnly) rowsPerEvent.set(sampleEventId, (rowsPerEvent.get(sampleEventId) ?? 0) + 1);
+      const depth = joinedDepth(depthOf(row), row.line);
       const sf = seafloorOf.read(row);
       if (sf !== undefined && depth.min === undefined && depth.max === undefined) noSiteDepth.add(fileName, sheet.name, cols.seafloor?.header ?? '', row.line);
       const effort = effortOf(row);
@@ -2162,6 +2195,11 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
         }, v.index));
       }
 
+      // a described sample with no results: the event and what hangs on it are written, no occurrence
+      if (descOnly) {
+        fate.event(row.line);
+        continue;
+      }
       // a repeat of a total taken once, or a copy that is dropped: nothing of the row is an occurrence (the sample above has had what it carries)
       if (notConverted.has(row.line)) {
         fate.row(row.line, repeated !== undefined && takeOnce && repeated.skip.has(row.line) ? 'repeat-total' : repeated !== undefined && takeOnce && repeated.taxonOnly.has(row.line) ? 'taxon-only-in-total' : repeated !== undefined && takeOnce && repeated.oneOnce.has(row.line) ? 'one-specimen-total' : 'copy-dropped');
@@ -2481,6 +2519,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
           measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology && (cols.quantity !== undefined || presence) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
           hasTaxa: cols.taxonHeaders.length > 0 || cols.taxonCell !== undefined,
           presence,
+          ...(sin.sampleJoin === undefined || sin.sampleJoin.descriptionOnly.size === 0 ? {} : { describedLines: new Set(sin.sampleJoin.descriptionOnly.keys()) }),
           occurrences: occurrences.slice(occurrencesBefore),
           measurements: measurements.slice(measurementsBefore),
         }),
@@ -2714,7 +2753,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     // the OUTPUT of a long sheet, whoever wrote the sample codes: a sample event for almost every occurrence, and several of them at one station, date and depth, is one sample split into one event per taxon row
     if (sin.shape === 'long' && sin.profile === undefined && cols.taxonCell !== undefined) {
       const taxaByEvent = new Map<string, string[]>();
-      const sheetSites = [...samples.values()].filter((a) => a.sheetKey === sheetKey).map((a) => a.site);
+      const describedOnly = sin.sampleJoin?.descriptionOnly;
+      const sheetSites = [...samples.values()].filter((a) => a.sheetKey === sheetKey && !(describedOnly?.has(a.source.line) === true)).map((a) => a.site);
       const parentOf = new Map(sheetSites.map((st) => [st.id, st.parentSample?.id ?? st.id]));
       for (const o of occurrences.slice(occurrencesBefore)) {
         const owner = parentOf.get(o.eventId) ?? o.eventId;
@@ -3080,11 +3120,20 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   }
 
   // a finding about a cell of a pivoted sheet names the line of the long sheet that cell came from, not the line of the pivoted row
+  // (a finding about a cell the description sheet gave moves to that sheet first, onto the lines of its own file; the merge's own findings name the right sheet already)
+  for (const sin of input.sheets) {
+    if (sin.sampleJoin === undefined) continue;
+    const moved = joinLines(findings, sin);
+    findings.length = 0;
+    pushAll(findings, moved);
+  }
   for (const p of pivoted) {
     const moved = originalLines(findings, p.file, p.sheet);
     findings.length = 0;
     pushAll(findings, moved);
   }
+  // the judgement of the join itself (conflicts, rows without a description, ambiguous keys ...) goes in with the others, so that decideRows and `ok` see it (F1)
+  for (const sin of input.sheets) if (sin.sampleJoin !== undefined) pushAll(findings, sin.sampleJoin.findings);
 
   // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way
   const once = nameOnce(findings);
