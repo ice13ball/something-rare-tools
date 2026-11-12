@@ -220,6 +220,14 @@ function deriveCentre(points: readonly Point[]): { lat: number; lon: number; unc
   return { lat, lon, ...(uncertainty === undefined ? {} : { uncertainty }) };
 }
 
+/** The one text every child wrote for a coordinate, when there is one for all of them and it reads as exactly the derived number; undefined otherwise (the derived text stays). */
+function sharedText(texts: readonly (string | undefined)[], value: number): string | undefined {
+  const first = texts[0];
+  if (first === undefined || texts.some((t) => t !== first)) return undefined;
+  // a text that is already the plain form of the number (54.5) changes nothing: the record stays as it was and only 54.50 and the like are carried
+  return Number(first) === value && first !== String(value) ? first : undefined;
+}
+
 /* ---------- the tree ---------- */
 
 interface Node {
@@ -246,6 +254,12 @@ function derive(node: Node): void {
     rec.lonDecimals = DERIVED_DECIMALS;
     if (centre.uncertainty !== undefined) rec.coordinateUncertaintyInMeters = centre.uncertainty;
     rec.derived.position = true;
+    // when every child that has a position wrote a coordinate in one and the same text and the midpoint is that very number, the parent is written in that text (54.50, not 54.5)
+    const withPosition = kids.filter((k) => k.rec.lat !== undefined && k.rec.lon !== undefined);
+    const sharedLat = sharedText(withPosition.map((k) => k.rec.latText), centre.lat);
+    const sharedLon = sharedText(withPosition.map((k) => k.rec.lonText), centre.lon);
+    if (sharedLat !== undefined) rec.latText = sharedLat;
+    if (sharedLon !== undefined) rec.lonText = sharedLon;
   }
   let minD: number | undefined;
   let maxD: number | undefined;
