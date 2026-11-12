@@ -8,7 +8,7 @@ import { joinInputs, proposeSampleJoins } from '../../src/core/convert/sampleJoi
 import type { SampleJoinRequestCore } from '../../src/core/convert/sampleJoin';
 import { keyPrefixOf } from '../../src/core/convert/sampleKey';
 import type { Finding } from '../../src/core/types';
-import { textFile, xlsxFile } from '../helpers/files';
+import { dateCell, textFile, xlsxFile } from '../helpers/files';
 import type { Cell } from '../helpers/files';
 import { BOOK, COUNTS_HEADER, COUNTS_ROWS, SAMPLES_HEADER, SAMPLES_ROWS, bookInputs, descriptionInput, resultsInput } from './joinFixtures';
 import { sheetInput } from './helpers';
@@ -293,5 +293,51 @@ describe('a results sheet whose header is shorter than its rows (unnamedFrom)', 
     // only the column the header does not name is said to be unnamed
     const unnamed = rules(result.findings, 'CONV-COLUMN-UNNAMED');
     expect(unnamed.every((f) => f.field === 'Column 4')).toBe(true);
+  });
+});
+
+describe('a date key written differently in the two files is one sample (review 1)', () => {
+  const KEYS = [{ results: 0, description: 0 }, { results: 1, description: 1 }];
+  const key = { columns: [0, 1] };
+  const run = (results: ConvertSheetInput, description: ConvertSheetInput) => converted([results, description], [{ results: 0, description: 1, keys: KEYS, conflicts: [] }]);
+  const check = (result: ReturnType<typeof convert>, prefix: string): void => {
+    const ids = result.events.filter((e) => e.eventType === 'sample').map((e) => e.id).sort();
+    expect(ids).toEqual([`${prefix}|ST-1|2021-05-03`, `${prefix}|ST-4|2021-05-06`]);
+    const st1 = result.events.find((e) => e.id === `${prefix}|ST-1|2021-05-03`)!;
+    expect([st1.eventDate, st1.lat]).toEqual(['2021-05-03', 61.1]);
+    const st4 = result.events.find((e) => e.id === `${prefix}|ST-4|2021-05-06`)!;
+    expect([st4.eventDate, st4.lat]).toEqual(['2021-05-06', 61.9]);
+    for (const id of ['CONV-JOIN-NO-DESCRIPTION', 'ROW-DATE-UNPARSEABLE', 'CONV-SAMPLE-CONFLICT', 'CONV-ID-DUPLICATE']) expect(rules(result.findings, id)).toEqual([]);
+    expect(result.ok).toBe(true);
+  };
+
+  it('results as text, description as a date-formatted serial', () => {
+    const results = textFile('counts.csv', `Station,Day,Taxon,Count\nST-1,2021-05-03,${TAX},4\n`);
+    const samples = xlsxFile('samples.xlsx', { Samples: [['Station', 'Day', 'Latitude', 'Longitude'], ['ST-1', dateCell(44319), 61.1, 4.2], ['ST-4', dateCell(44322), 61.9, 5.0]] });
+    const res = sheetInput(results, { shape: 'long', quantity: { kind: 'count' }, sampleKey: key, edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } } } as never);
+    const { result } = run(res, sheetInput(samples));
+    check(result, keyPrefixOf(key, 'csv', 'counts.csv', 'counts'));
+  });
+
+  it('results as a serial, description as text', () => {
+    const counts = xlsxFile('counts.xlsx', { Counts: [['Station', 'Day', 'Taxon', 'Count'], ['ST-1', dateCell(44319), TAX, 4]] });
+    const samples = textFile('samples.csv', 'Station,Day,Latitude,Longitude\nST-1,2021-05-03,61.1,4.2\nST-4,2021-05-06,61.9,5.0\n');
+    const res = sheetInput(counts, { shape: 'long', quantity: { kind: 'count' }, sampleKey: key, edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } } } as never);
+    const { result } = run(res, sheetInput(samples));
+    check(result, keyPrefixOf(key, 'xlsx', 'counts.xlsx', 'Counts'));
+  });
+});
+
+describe('a finding that covers results lines and description-only lines (review 2)', () => {
+  it('puts the description-only line on the description sheet, whatever the field', () => {
+    const counts: Cell[][] = [['X01', TAX, 5, '2021-13-45']];
+    const samples: Cell[][] = [['X01', 'ST-1', '2021-13-45', 61.1, 4.2, 10], ['X03', 'ST-3', '2021-14-50', 61.5, 4.9, 30]];
+    const { result } = converted(bookOf(counts, samples, [...COUNTS_HEADER, 'Date']));
+    const dates = result.findings.filter((f) => f.ruleId === 'ROW-DATE-UNPARSEABLE');
+    const lines = (sheet: string): number[] => dates.filter((f) => f.sheet === sheet).flatMap((f) => f.lines ?? []);
+    expect(lines('Counts').every((l) => l <= 2)).toBe(true);
+    expect(lines('Samples').sort()).toEqual([3]);
+    // no line number of the merged sheet that exists in neither file
+    for (const f of result.findings) if (f.sheet === 'Counts') expect((f.lines ?? []).every((l) => l <= 2)).toBe(true);
   });
 });

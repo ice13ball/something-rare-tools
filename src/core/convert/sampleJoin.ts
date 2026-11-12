@@ -8,12 +8,13 @@ import type { KeySide } from '../recognize/layout';
 import { makeConvertFinding } from '../rules/convert';
 import { makeFinding } from '../rules/registry';
 import type { ColumnRole, Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
-import { excelSerialToDate } from '../values/dates';
+import { detectDayMonthOrder, excelSerialToDate } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { colsOf, depthReader, isUtcBySource } from './build';
 import type { ConvertSheetInput } from './build';
 import { eventDateText } from './events';
 import { shortHash } from './keySetting';
+import { keyPart } from './sampleKey';
 
 /*
  * The sample-sheet join: a results sheet (counts per taxon) names its samples by a code, and another sheet of the same run describes them (station, date, position, depth). This file PROPOSES
@@ -208,12 +209,25 @@ interface ReadKey {
   /** positions (in the key) of the parts that are blank */
   blank: number[];
 }
-/** The key of a row: each part is `String(cell).trim()` (as the ranking of the keys reads it); a part is blank as the ranking counts a blank. */
-function readKey(row: RawRow, columns: readonly number[]): ReadKey {
-  const cells = columns.map((c) => row.cells[c] ?? null);
-  const parts = cells.map(cellText);
-  const blank = cells.flatMap((c, i) => (isBlankCell(c) ? [i] : []));
-  return { text: keyText(parts), parts, blank };
+type KeyReadFn = (row: RawRow, columns: readonly number[]) => ReadKey;
+/**
+ * The reader of the key of a row of one sheet, the way the converter builds a sample ID from a key (keyPart, in THIS sheet's own context: its date1904, date formatting, decimal mark and the roles of
+ * its columns): a serial and the same date written as text are one value, so are `1` and `1.0`. A part is blank when keyPart reads it as blank (an empty cell, NA ...). The parts are the normalised
+ * values, which is also how they are shown.
+ */
+function keyReaderOf(input: ConvertSheetInput, sheet: RawSheet): KeyReadFn {
+  const picked = new Set(input.sampleKey?.columns ?? []);
+  const roleOf = (i: number): string => {
+    const kind = input.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore';
+    return kind === 'ignore' && picked.has(i) ? 'keyPart' : kind; // (convert() reads a picked ignored column as a key part)
+  };
+  const ctx = { prefix: '', sheet, decimalComma: input.file.decimalComma, date1904: input.file.date1904, roleOf };
+  const order = new Map<number, ReturnType<typeof detectDayMonthOrder>>();
+  return (row, columns) => {
+    const parts = columns.map((c) => keyPart(ctx, row, c, order));
+    const blank = parts.flatMap((p, i) => (p === '' ? [i] : []));
+    return { text: keyText(parts), parts, blank };
+  };
 }
 
 /** The join-key values of a results sheet (decision 6: joinInputs computes them first, F3). Rows with a blank key part have none. */
@@ -222,8 +236,9 @@ export function resultsKeys(results: ConvertSheetInput, keys: readonly JoinKeyPa
   const out = new Set<string>();
   if (sheet === undefined) return out;
   const cols = keys.map((k) => k.results);
+  const read = keyReaderOf(results, sheet);
   for (const row of sheet.rows) {
-    const k = readKey(row, cols);
+    const k = read(row, cols);
     if (k.blank.length === 0) out.add(k.text);
   }
   return out;
@@ -495,13 +510,16 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const desFile = description.file.fileName;
   const header = (sheet: RawSheet, i: number): string => sheet.header[i] ?? '';
 
+  const readDescriptionKey = keyReaderOf(description, desSheet);
+  const readResultsKey = keyReaderOf(results, resSheet);
+
   /* --- the description: its rows by key --- */
   const groups = new Map<string, DescriptionGroup>();
   const noKeyRows: RawRow[] = [];
   const noKeyColumns = new Set<number>();
   for (const row of desSheet.rows) {
     if (row.cells.every(emptyCell)) continue; // nothing in it to lend or to lose
-    const k = readKey(row, desKeyCols);
+    const k = readDescriptionKey(row, desKeyCols);
     if (k.blank.length > 0) {
       noKeyRows.push(row);
       for (const i of k.blank) noKeyColumns.add(desKeyCols[i]);
@@ -632,10 +650,11 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const fillKey = (space: 'c' | 'q', order: number): string => `${space}:${order}`;
   const unitClashLines = new Map<string, Set<number>>();
   let lastLine = resSheet.headerLine;
-  const countFilled = (space: 'c' | 'q', order: number, name: string, line: number): void => {
+  /** A description-only line is counted but not listed: it is a line of neither file (the sample is named by CONV-JOIN-DESCRIPTION-ONLY). */
+  const countFilled = (space: 'c' | 'q', order: number, name: string, line: number, onlyDescribed = false): void => {
     const f = filled.get(fillKey(space, order)) ?? { order: (space === 'c' ? 0 : 1e9) + order, name, count: 0, lines: [] };
     f.count++;
-    if (!f.lines.includes(line)) f.lines.push(line);
+    if (!onlyDescribed && !f.lines.includes(line)) f.lines.push(line);
     filled.set(fillKey(space, order), f);
   };
 
@@ -675,7 +694,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     resultsLines.add(row.line);
     if (row.line > lastLine) lastLine = row.line;
     const cells: RawCell[] = Array.from({ length: rw }, (_, i) => row.cells[i] ?? null);
-    const k = readKey(row, resKeyCols);
+    const k = readResultsKey(row, resKeyCols);
     let lent: RawRow | undefined;
     if (k.blank.length > 0) {
       blankKeyRows.push(row.line);
@@ -749,11 +768,19 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       const row = g.rows[0];
       const cells: RawCell[] = Array.from({ length: rw }, () => null);
       const lentCells = lend(row, line);
-      for (const pair of keys) {
-        cells[pair.results] = lentCells[pair.description];
+      keys.forEach((pair, i) => {
+        // the key cell is written as the key reads it (an ISO date for a serial or a date text), so that the ID of this sample is the one a results row of the same sample would get
+        const lentCell = lentCells[pair.description];
+        const normal = g.parts[i];
+        if (normal !== cellText(lentCell)) {
+          cells[pair.results] = normal;
+          rewritten.set(`${line}:${pair.results}`, rewritten.get(`${line}:${rw + pair.description}`) ?? lentCell);
+          return;
+        }
+        cells[pair.results] = lentCell;
         const original = rewritten.get(`${line}:${rw + pair.description}`);
         if (original !== undefined) rewritten.set(`${line}:${pair.results}`, original);
-      }
+      });
       markUnmerged(line, row);
       const lentRow: RawRow = { line: row.line, cells: lentCells, fieldCount: dw };
       const full: RawCell[] = [];
@@ -761,14 +788,14 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         if (q.resolved !== undefined) {
           const dr = q.readDes(lentRow, row);
           const at: QuantityRow = { cells: full, line, rr: EMPTY, dr, lent: row, lentCells };
-          if (holds(dr)) countFilled('q', quantities.indexOf(q), q.label, line);
+          if (holds(dr)) countFilled('q', quantities.indexOf(q), q.label, line, true);
           q.rows.push(at);
           continue;
         }
         for (const [rc, dc] of q.pairs) {
           if (!emptyCell(cells[rc])) continue;
           cells[rc] = lentCells[dc];
-          if (!emptyCell(row.cells[dc]) && lentCells[dc] !== null) countFilled('c', rc, header(resSheet, rc), line);
+          if (!emptyCell(row.cells[dc]) && lentCells[dc] !== null) countFilled('c', rc, header(resSheet, rc), line, true);
         }
       }
       full.push(...cells, ...lentCells);
@@ -1189,7 +1216,8 @@ export function joinLines(findings: readonly Finding[], sin: ConvertSheetInput):
     const goes = new Set<number>();
     for (const l of f.lines) {
       const d = descriptionLineOf(l);
-      const fromDescription = entry !== undefined && d !== undefined && (entry.side === 'description' || info.takenFromDescription.has(`${l}:${column}`));
+      // a description-only line exists in no results file: whatever the field, it belongs to the description sheet
+      const fromDescription = d !== undefined && (info.descriptionOnly.has(l) || (entry !== undefined && (entry.side === 'description' || info.takenFromDescription.has(`${l}:${column}`))));
       if (fromDescription) goes.add(d);
       else staysHere.push(l);
     }

@@ -169,7 +169,7 @@ describe('mergeSampleSheets: keys', () => {
     expect(rowAt(r, 3).cells.slice(5)).toEqual(['2021-05-03']);
   });
 
-  it('a typed 1 and the text "1" are the same key; the text "1.0" is not the typed 1', () => {
+  it('a typed 1, the text "1" and the text "1.0" are the same key, as the converter makes the sample code of a key (review: Task 6)', () => {
     const typed = xlsxFile('t.xlsx', { Counts: [COUNTS_HEADER, [1, 'Calanus finmarchicus', 4]] });
     const text = textFile('s.csv', 'Sample,Station\n1,ST-1\n');
     const a = mergeSampleSheets(decl(resultsInput(typed, 'Counts'), descriptionInput(text, text.sheets[0].name), { appendDescriptionOnly: false }));
@@ -179,7 +179,12 @@ describe('mergeSampleSheets: keys', () => {
     const dotted = textFile('r.csv', 'Sample,Taxon,Count\n1.0,Calanus finmarchicus,4\n');
     const num = xlsxFile('n.xlsx', { Samples: [['Sample', 'Station'], [1, 'ST-1']] });
     const b = mergeSampleSheets(decl(resultsInput(dotted, dotted.sheets[0].name), descriptionInput(num, 'Samples'), { appendDescriptionOnly: false }));
-    expect(found(b, 'CONV-JOIN-NO-DESCRIPTION')).toEqual([expect.objectContaining({ params: expect.objectContaining({ samples: '1.0' }) })]);
+    expect(found(b, 'CONV-JOIN-NO-DESCRIPTION')).toEqual([]);
+    expect(b.info.lentFrom.get(2)).toBe(2);
+    // "1.5" is not "1"
+    const other = textFile('o.csv', 'Sample,Taxon,Count\n1.5,Calanus finmarchicus,4\n');
+    const c = mergeSampleSheets(decl(resultsInput(other, other.sheets[0].name), descriptionInput(num, 'Samples'), { appendDescriptionOnly: false }));
+    expect(found(c, 'CONV-JOIN-NO-DESCRIPTION')).toHaveLength(1);
   });
 
   it('resultsKeys is the set of the non-blank key values of the results sheet', () => {

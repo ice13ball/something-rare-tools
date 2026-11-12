@@ -1562,15 +1562,12 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   {
     const used = new Map<ParsedFile, Set<string>>();
     for (const sin of rawInput.sheets) (used.get(sin.file) ?? used.set(sin.file, new Set()).get(sin.file)!).add(sin.sheet);
-    // the file of a description sheet that a confirmed join took into its results sheet is still a file of this run
-    for (const sin of rawInput.sheets) if (sin.sampleJoin !== undefined) (used.get(sin.sampleJoin.description.file) ?? used.set(sin.sampleJoin.description.file, new Set()).get(sin.sampleJoin.description.file)!).add(sin.sampleJoin.description.sheet.name);
-    const seen = new Set<Finding>();
-    for (const [file, sheets] of used)
-      for (const f of file.findings)
-        if ((f.sheet === undefined || sheets.has(f.sheet)) && !seen.has(f)) {
-          seen.add(f);
-          findings.push(f);
-        }
+    for (const [file, sheets] of used) for (const f of file.findings) if (f.sheet === undefined || sheets.has(f.sheet)) findings.push(f);
+    // the file of a description sheet that a confirmed join took into its results sheet is still a file of this run (a finding already pushed through the results sheet's file is not pushed again)
+    for (const sin of rawInput.sheets) {
+      const d = sin.sampleJoin?.description;
+      if (d !== undefined) for (const f of d.file.findings) if ((f.sheet === undefined || f.sheet === d.sheet.name) && !findings.includes(f)) findings.push(f);
+    }
   }
   // a column the header does not name (IN-HEADER-SHORT) must not give its internal name ("Column 7") to a variable or a taxon of the archive
   for (const sin of input.sheets) {
