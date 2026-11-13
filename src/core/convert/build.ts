@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { checkStationRows } from '../checks/rows';
-import { detectDayMonthOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate } from '../values/dates';
+import { columnOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate } from '../values/dates';
+import type { DeclaredOrder } from '../values/dates';
+import { dateOrderRead, onceDateOrder } from './dateOrder';
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
 import type { Spec } from '../dataset';
@@ -199,6 +201,14 @@ export interface ConvertSheetInput {
    * lent cell came from, and the findings of the merge. Absent = the sheet is read exactly as before.
    */
   sampleJoin?: SampleJoinInfo;
+  /**
+   * The day/month order the PERSON declared for a date column, by column index (never guessed): for the dates no cell of the column decides (5/4/2023). Absent = such cells block (CONV-DATE-ORDER-UNDECLARED).
+   * Every reader of a date in the converter (the date written, the date inside an ID, the date compared in a join) takes the order from the same helper (values/dates.ts columnOrder).
+   * A merged (joined) input keeps the results sheet's indexes and the description's entries shifted by the results width.
+   */
+  dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>;
+  /** The columns whose declared order came from the companion file (the message says so). */
+  dayMonthOrderFromFile?: readonly number[];
 }
 
 export interface ProfileDeclaration {
@@ -725,12 +735,12 @@ function stationFindingsOf(sheets: readonly StationSheet[], farIds: ReadonlySet<
  * M/D/YYYY when one part decides the order, with or without a time; a year alone is not a date) or when it is a serial number of the 1954-2118 range; the placeholder dates of a spreadsheet
  * or an epoch are times. `count` are the cells that hold a date, `lines` their lines, `filled` all the filled cells. Dates written in a form the parser does not read ("20030117 0830", "Jan 17 2003", "01/17/2003 8:30 AM") are counted too, so that they are not lost in silence ("2003/01/17" is read).
  */
-function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>): { header: string; count: number; filled: number; lines: number[] } | undefined {
+function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>, declared?: DeclaredOrder): { header: string; count: number; filled: number; lines: number[] } | undefined {
   if (specs.time === undefined || specs.when !== undefined || specs.dateParts?.year !== undefined) return undefined;
   const index = specs.time.index;
   const formatted = sheet.dateFormatted?.[index] === true;
   const cells = sheet.rows.map((r) => r.cells[index] ?? null);
-  const order = detectDayMonthOrder(cells);
+  const order = columnOrder(sheet, index, declared);
   const lines: number[] = [];
   let filled = 0;
   sheet.rows.forEach((r, i) => {
@@ -1195,7 +1205,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
   const collector = new Collector(fileName);
   const specs = specsOf(sin.mapping);
-  const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
+  const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
   const base = { file: fileName, sheet: sheet.name };
   const depthOf = depthReader(cols, dc, collector, sheet.name);
   const seafloorOf = seafloorReader(cols, dc, collector, base);
@@ -1207,8 +1217,10 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   ctx.findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
   const noStation = new Lines();
   const stationRows: DataRow[] = [];
-  const timeDates = timeColumnWithDates(sheet, specs);
+  const timeDates = timeColumnWithDates(sheet, specs, specs.time === undefined ? undefined : sin.dayMonthOrder?.[specs.time.index]);
   if (timeDates !== undefined) ctx.findings.push(timeDatesFinding(timeDates, base));
+  const dateOrder = dateOrderRead(sin, sheet, specs, base);
+  ctx.findings.push(...dateOrder.findings);
   const noCode = new Lines();
   const tabs = new Lines();
   const summaries = new Lines();
@@ -1254,7 +1266,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // (the same depth of two visits is not one level). The value comes from the data, never from the order of the rows.
   const datesOf = new Map<string, Set<string>>();
   {
-    const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header) });
+    const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
     for (const row of sheet.rows) {
       const m = scan(row);
       const st = stationOf(row, m);
@@ -1495,7 +1507,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   if (unexported.length > 0) ctx.findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
   const ignored = ignoredColumns(sin, cols, specs, unexported);
   if (ignored !== undefined) ctx.findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored }));
-  pushAll(ctx.findings, collector.findings());
+  pushAll(ctx.findings, dateOrder.trim(collector.findings()));
 }
 
 /* ---------- the conversion ---------- */
@@ -1650,7 +1662,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   for (const sin of input.sheets) {
     const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
     if (sh === undefined) continue;
-    const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet);
+    const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet, sin.dayMonthOrder);
     if (listed.length > 0) findings.push(makeConvertFinding('CONV-ROLE-UNCONFIRMED', { file: sin.file.fileName, sheet: sin.sheet, params: roleUnconfirmedParams(listed) }));
     // a year beside the date and a running number were not read as measurements (the overlay's value vetoes): said by name with the reason, once per sheet and reason; the page gives the role back
     const vetoed = vetoedColumns(sin.file, sh, sin.mapping, sin.handSet);
@@ -1689,7 +1701,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
     const collector = new Collector(fileName);
     const specs = specsOf(sin.mapping);
-    const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header) });
+    const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
     const base = { file: fileName, sheet: sheet.name };
     // where each row and cell of this sheet went, for the ledger (ledger.ts): written beside the `continue`s below, never read by the conversion itself
     const fate = new FateLog(sheet.rows.length);
@@ -1699,7 +1711,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const readKey =
       pickedKey === undefined
         ? undefined
-        : keyReader(pickedKey, { prefix: keyPrefixOf(pickedKey, file.kind, fileName, sheet.name), sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore' });
+        : keyReader(pickedKey, { prefix: keyPrefixOf(pickedKey, file.kind, fileName, sheet.name), sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore', ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
     const keyBlank = new Lines();
     const keyTooLong = new Lines();
     // every ID written for a sheet with a picked key is held to the limit of the archive (sample, replicate and occurrence); the longest is named
@@ -1792,8 +1804,10 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     // a long sheet's rows with a taxon and no quantity: with nothing else they are counted and listed; with a biomass value they stay as an occurrence with no count; a zero with a biomass value is contradictory
     const naRows = new Lines();
     const stationRows: DataRow[] = [];
-    const timeDates = timeColumnWithDates(sheet, specs);
+    const timeDates = timeColumnWithDates(sheet, specs, specs.time === undefined ? undefined : sin.dayMonthOrder?.[specs.time.index]);
     if (timeDates !== undefined) findings.push(timeDatesFinding(timeDates, base));
+    const dateOrder = dateOrderRead(sin, sheet, specs, base);
+    findings.push(...dateOrder.findings);
     const blankKept = new Lines();
     const zeroBiomass = new Lines();
     const noTaxon = new Lines();
@@ -1938,7 +1952,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const visitParts = new Set<string>();
     const visitGroups: { id: string; lines: number[] }[] = [];
     if (readKey === undefined) {
-      const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header) });
+      const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
       const groups = new Map<string, { station: string | undefined; stationId: string | undefined; code: string; rows: { line: number; key: VisitKey }[]; mixed: boolean }>();
       for (const row of sheet.rows) {
         if (ragged.has(row.line) || statRows.skipped.has(row.line)) continue;
@@ -2872,7 +2886,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {
       findings.push(makeConvertFinding('CONV-NAMEID-APHIA-LIKE', { ...base, field: cols.taxonId.header, params: { column: stripTypeSuffix(cols.taxonId.header) } }));
     }
-    pushAll(findings, collector.findings());
+    pushAll(findings, dateOrder.trim(collector.findings()));
   }
 
   /* ---- the profile sheets (stage 6): each row is a level event under its station ---- */
@@ -3281,7 +3295,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   for (const sin of input.sheets) if (sin.sampleJoin !== undefined) pushAll(findings, sin.sampleJoin.findings);
 
   // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way
-  const once = nameOnce(findings);
+  const once = nameOnce(onceDateOrder(findings));
   findings.length = 0;
   pushAll(findings, once);
   if ((rawInput.oldCompanionAnswers ?? 0) > 0) findings.push(makeConvertFinding('CONV-COMPANION-OLD', { params: { count: rawInput.oldCompanionAnswers as number } }));

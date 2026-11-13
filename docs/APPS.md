@@ -1204,6 +1204,18 @@ and `IN-*` findings, and the policy of 8.8 decides what blocks. A PANGAEA `Date/
 be read as UTC by the convention of that source (`whenUtc`), so a time with no zone is written
 with `Z` and `ROW-TZ-UNKNOWN` is not raised; `/check` never does this.
 
+**Day and month order.** `5/4/2023` is 5 April or 4 May and is never guessed. A date column whose
+cells decide no order (no cell has a part above 12) blocks with `CONV-DATE-ORDER-UNDECLARED`, which
+names the cells and asks for the order of the column; the cells are not reported as unreadable. An
+undecided day/month order is asked per column; the answer (`ConvertSheetInput.dayMonthOrder`, by column
+index) applies to the date written, the date in an ID and the date compared in a join, because every
+reader takes the order from one helper (`columnOrder`, `src/core/values/dates.ts`). A declaration only
+decides cells that no date decides: against a column whose own dates say otherwise it is said
+(`CONV-DATE-ORDER-CONTRADICTED`, blocks) and not used. A declared order that was used is said
+(`CONV-DATE-ORDER-DECLARED`, information). A date lent by a description sheet through a join is read
+with the description column's own declared order, and its finding names the description sheet. `/check`
+never passes the option, so its output is unchanged.
+
 ### 8.2 Recognising columns for the converter
 
 `proposeConvertColumns` (`src/core/convert/recognize.ts`) is an **overlay on the shared proposer**

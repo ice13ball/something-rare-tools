@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { detectDayMonthOrder, parseDate, parseTimeCell } from '../values/dates';
+import { columnOrder, parseDate, parseTimeCell, type DayMonthOrder, type DeclaredOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import type { RawRow, RawSheet } from '../types';
 
@@ -55,6 +55,8 @@ export interface KeyContext {
   date1904: boolean;
   /** The kind of the role of a column ('date', 'time', 'station' ...). */
   roleOf: (index: number) => string;
+  /** The day/month order the person declared per column (index), used where a date column's cells decide none (columnOrder). */
+  dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>;
 }
 
 export interface KeyRead {
@@ -132,7 +134,7 @@ export function mixedKeyColumns(sheet: RawSheet, columns: readonly number[], dec
 }
 
 /** One cell of a key column, as the key compares it. '' is blank. */
-export function keyPart(ctx: KeyContext, row: RawRow, index: number, dayOrder: Map<number, ReturnType<typeof detectDayMonthOrder>>): string {
+export function keyPart(ctx: KeyContext, row: RawRow, index: number, dayOrder: Map<number, DayMonthOrder>): string {
   const cell = row.cells[index] ?? null;
   if (cell === null) return '';
   const p = typeof cell === 'string' ? parseNumber(cell, ctx.decimalComma) : undefined;
@@ -142,7 +144,7 @@ export function keyPart(ctx: KeyContext, row: RawRow, index: number, dayOrder: M
   const formatted = ctx.sheet.dateFormatted?.[index] === true;
   if (role === 'date' || role === 'datetime' || (formatted && ctx.sheet.timeFormatted?.[index] !== true)) {
     let order = dayOrder.get(index);
-    if (order === undefined) dayOrder.set(index, (order = detectDayMonthOrder(ctx.sheet.rows.map((r) => r.cells[index] ?? null))));
+    if (order === undefined) dayOrder.set(index, (order = columnOrder(ctx.sheet, index, ctx.dayMonthOrder?.[index])));
     const d = parseDate(cell, { date1904: ctx.date1904, dateFormatted: formatted, datumColumn: true, ...(order === 'unknown' ? {} : { order }) });
     if (!('error' in d)) return (d.end ? `${d.iso}/${d.end.iso}` : d.iso).normalize('NFC');
   } else if (role === 'time') {
@@ -154,7 +156,7 @@ export function keyPart(ctx: KeyContext, row: RawRow, index: number, dayOrder: M
 
 /** The reader of a sheet's sample code under a picked key. */
 export function keyReader(key: SampleKey, ctx: KeyContext): (row: RawRow) => KeyRead {
-  const order = new Map<number, ReturnType<typeof detectDayMonthOrder>>();
+  const order = new Map<number, DayMonthOrder>();
   const cols = key.columns;
   const prefix = ctx.prefix;
   return (row) => {

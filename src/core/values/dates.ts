@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { ParsedDate, RawCell } from '../types';
+import type { ParsedDate, RawCell, RawSheet } from '../types';
 
 export interface TimeOfDay {
   hh: number;
@@ -420,6 +420,43 @@ export function detectDayMonthOrder(cells: readonly RawCell[]): DayMonthOrder {
     else if (b > 12 && a <= 12) mdy = true;
   }
   return dmy && mdy ? 'conflict' : dmy ? 'dmy' : mdy ? 'mdy' : 'unknown';
+}
+
+/** A day/month order the person declared for a column (never guessed from values). */
+export type DeclaredOrder = 'dmy' | 'mdy';
+
+/**
+ * A slash / dash D?M/YYYY cell whose two parts are both 1-12 and differ: 5/4/2023 is 5 April or 4 May, and no part of the cell alone decides it.
+ * (5/5/2023 is one day either way; 13/4/2023 is decided by itself.)
+ */
+export function isAmbiguousDayMonth(cell: RawCell): boolean {
+  if (typeof cell !== 'string') return false;
+  const m = SLASH_RE.exec(cell.trim());
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[3]);
+  return a >= 1 && a <= 12 && b >= 1 && b <= 12 && a !== b;
+}
+
+/**
+ * The day/month order every reader of a column uses: the order its cells decide, and, only when they decide none ('unknown'), the order the person declared.
+ * One helper for every reader, so the date written, the date inside an ID and the date compared in a join cannot disagree.
+ */
+export function columnOrder(sheet: RawSheet, index: number, declared?: DeclaredOrder): DayMonthOrder {
+  const detected = detectDayMonthOrder(sheet.rows.map((r) => r.cells[index] ?? null));
+  return detected === 'unknown' && declared !== undefined ? declared : detected;
+}
+
+/**
+ * What a declaration does to a column: 'applied' (the cells decide nothing and an ambiguous cell is read by it), 'contradicted' (a cell decides another order, or both: not applied),
+ * 'redundant' (the cells decide the same order, or hold nothing it could change).
+ */
+export function declaredOrderStatus(sheet: RawSheet, index: number, declared: DeclaredOrder): 'applied' | 'contradicted' | 'redundant' {
+  const cells = sheet.rows.map((r) => r.cells[index] ?? null);
+  const detected = detectDayMonthOrder(cells);
+  if (detected === declared) return 'redundant';
+  if (detected !== 'unknown') return 'contradicted';
+  return cells.some(isAmbiguousDayMonth) ? 'applied' : 'redundant';
 }
 
 /**

@@ -90,6 +90,9 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-JOIN-AMBIGUOUS',
   'CONV-JOIN-KEY-BLANK',
   'CONV-JOIN-KEY-ROLE-LOST',
+  // a day/month order no cell decides and no one declared, or a declaration the column's own dates contradict: a day and a month are never guessed
+  'CONV-DATE-ORDER-UNDECLARED',
+  'CONV-DATE-ORDER-CONTRADICTED',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */

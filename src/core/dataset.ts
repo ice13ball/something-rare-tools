@@ -31,7 +31,7 @@ import { pairHemisphere, parseCoordinate } from './values/coords';
 import type { KeepMillis } from './values/dates';
 import { columnFractions } from './values/fractionEvidence';
 import { isRealFraction, secondOffsetMs } from './values/dates';
-import { combineDateTime, detectDayMonthOrder, cellsAreYearRanges, fullDatetimeOfTimeCell, isPlausibleSerial, parseDate, parseTimeColumnCell, parseTimeOfDay } from './values/dates';
+import { columnOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isPlausibleSerial, parseDate, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -295,7 +295,7 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
  * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
  * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
  */
-export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean; keepMillis?: boolean } = {}): MetaParser {
+export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean; keepMillis?: boolean; dayMonthOrder?: Readonly<Record<number, DeclaredOrder>> } = {}): MetaParser {
   const dc = file.decimalComma;
   // /check keeps a real fraction of a second of an Excel date or time cell (opts.keepMillis); /convert does not pass it and reads the whole second, as its event IDs need. 'shown': the column's number format shows the fraction.
   const millisOf = (spec: Spec | undefined): KeepMillis => (opts.keepMillis !== true ? false : spec !== undefined && columnFractions(sheet, spec.index, sheet.fractionShown?.[spec.index] === true).shown ? 'shown' : true);
@@ -346,8 +346,9 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
   const whenIndex = specs.when?.index;
   // Darwin Core: where eventDate is empty, the same row's year / month / day columns give the date
   const dwcParts = specs.when && dwcTermOf(specs.when.header) === 'eventdate' ? dwcDateParts(sheet) : undefined;
-  const whenOrder = whenIndex === undefined ? 'unknown' : detectDayMonthOrder(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
-  const timeOrder = specs.time ? detectDayMonthOrder(timeCells) : 'unknown';
+  // the order the person declared for a column is used only where its cells decide none (columnOrder); /check never passes the option
+  const whenOrder = whenIndex === undefined ? 'unknown' : columnOrder(sheet, whenIndex, opts.dayMonthOrder?.[whenIndex]);
+  const timeOrder = specs.time ? columnOrder(sheet, specs.time.index, opts.dayMonthOrder?.[specs.time.index]) : 'unknown';
   const dwcDepth = dwcDepthCols(sheet);
 
   // a hemisphere column signs its coordinate only while their start / end words agree with the CURRENT mapping (a user who moved the latitude from the

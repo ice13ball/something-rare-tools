@@ -4,7 +4,7 @@ import { unitFromHeader } from '../recognize/columns';
 import { geocodeOfKey } from '../recognize/geocodes';
 import { CANONICAL_VARIABLES, foldDiacritics, headerKey, normaliseUnit, unitDimension } from '../recognize/vocab';
 import type { ColumnProposal, ColumnRole, RawSheet } from '../types';
-import { detectDayMonthOrder, parseDate, parseTimeCell } from '../values/dates';
+import { columnOrder, parseDate, parseTimeCell, type DeclaredOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { EFFORT_AREA, EFFORT_VOLUME, PLAIN_AREA, QUANTITY_PHRASE_COUNT, QUANTITY_PHRASE_DENSITY, QUANTITY_STANDALONE, QUANTITY_WORD, SAMPLE_CODE_NAME, STAGE_NAME, TAXON_NAME } from './recognize';
 
@@ -52,6 +52,8 @@ export interface StatedContext {
   date1904?: boolean;
   /** The file is a PANGAEA table: its geocodes and event names are stated facts. */
   pangaea?: boolean;
+  /** The day/month order the person declared per column (index): used where the cells decide none, like every other reader of a date. */
+  dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>;
 }
 
 /** A Darwin Core term is compared after folding case and underscores only: `Decimal_Latitude` is decimalLatitude, `Decimal Latitude` (a space) is not a term. */
@@ -291,7 +293,7 @@ function veto(sheet: RawSheet, index: number, kind: string, ctx: StatedContext):
     return ok / cells.length < SHARE ? 'not-time-of-day' : undefined;
   }
   if (kind === 'date' || kind === 'datetime') {
-    const order = detectDayMonthOrder(sheet.rows.map((r) => r.cells[index] ?? null));
+    const order = columnOrder(sheet, index, ctx.dayMonthOrder?.[index]);
     const opts = { date1904: ctx.date1904 === true, dateFormatted: sheet.dateFormatted?.[index] === true, datumColumn: true, ...(order === 'unknown' ? {} : { order }) };
     const ok = cells.filter((c) => !('error' in parseDate(c, opts))).length;
     return ok / cells.length < SHARE ? 'not-date' : undefined;

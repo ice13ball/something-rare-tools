@@ -61,6 +61,9 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
  *   CONV-TIME-HOLDS-DATES      count            field = the time column, count = its cells that hold a full date, while no column is the date: blocks (the events would have no eventDate)
  *   CONV-TIME-SOME-DATES       count            field = the time column, lines = its cells that hold a full date, fewer than half of the filled ones: those dates would be lost (warning, accept)
+ *   CONV-DATE-ORDER-UNDECLARED count, examples, index, first, second, isoFirst, isoSecond   field = a date / datetime / time column (or a picked date key part), value = the first example, index = its column: it has dates such as 5/4/2023 that can be read either way, no date in it decides, and no order is declared (blocks; the ROW-DATE-UNPARSEABLE of those cells is not said)
+ *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
+ *   CONV-DATE-ORDER-DECLARED   order, index   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -911,6 +914,56 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Dans la colonne d'heure « {field} », {count} {+count:cellule contient|cellules contiennent} une date complète ({+lineCount:ligne|lignes} {lines}), et aucune colonne n'est la date. Ces dates n'iront pas dans eventDate. Si ce sont les dates des événements, donnez à la colonne le sens « Date et heure ».`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} cell(s) of the time column hold a date the date parser reads (fewer than half of the filled cells: with half or more the export is blocked, CONV-TIME-HOLDS-DATES). Placeholder dates of a spreadsheet or an epoch (1899-12-30, 1970-01-01) are times and are not counted.`,
+  },
+  {
+    id: 'CONV-DATE-ORDER-UNDECLARED',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'examples', 'index', 'first', 'second', 'isoFirst', 'isoSecond'],
+    plain: {
+      pl: `Daty takie jak „{value}” można odczytać jako {isoFirst} albo jako {isoSecond}, a żadna data w kolumnie „{field}” tego nie rozstrzyga ({count} {+count:komórka|komórki|komórek}). Powiedz, w jakiej kolejności ta kolumna zapisuje dzień i miesiąc.`,
+      en: `Dates such as "{value}" can be read as {first} or as {second}, and no date in column "{field}" decides it ({count} {+count:cell|cells}). Say which order the column uses.`,
+      de: `Daten wie „{value}“ lassen sich als {isoFirst} oder als {isoSecond} lesen, und kein Datum in der Spalte „{field}“ entscheidet es ({count} {+count:Zelle|Zellen}). Sagen Sie, in welcher Reihenfolge die Spalte Tag und Monat schreibt.`,
+      fr: `Des dates comme « {value} » se lisent {isoFirst} ou {isoSecond}, et aucune date de la colonne « {field} » ne tranche ({count} {+count:cellule|cellules}). Dites dans quel ordre la colonne écrit le jour et le mois.`,
+    },
+    technical: `{file}, {sheet} field {field} (column {index}): {count} cell(s), e.g. '{value}' ({examples}), have two parts of 1-12 that differ, so they read as {isoFirst} (day first, "{first}") or {isoSecond} (month first, "{second}"). No cell of the column has a part above 12 to decide it and no day/month order is declared for it. A day and a month are never guessed, so the export is blocked until the order is declared; the cells are not reported as unreadable.`,
+  },
+  {
+    id: 'CONV-DATE-ORDER-CONTRADICTED',
+    category: 'B',
+    severity: 'error',
+    params: ['declared', 'detected', 'index'],
+    plain: {
+      pl: `Dla kolumny „{field}” podano kolejność „{declared}”, ale jej własne daty wskazują „{detected}” (dmy: najpierw dzień, mdy: najpierw miesiąc, conflict: obie). Podana kolejność nie jest używana. Popraw odpowiedź albo daty.`,
+      en: `For column "{field}" you declared the order "{declared}", but its own dates show "{detected}" (dmy: day first, mdy: month first, conflict: both). The declared order is not used. Correct the answer or the dates.`,
+      de: `Für die Spalte „{field}“ wurde die Reihenfolge „{declared}“ angegeben, ihre eigenen Daten zeigen aber „{detected}“ (dmy: Tag zuerst, mdy: Monat zuerst, conflict: beides). Die Angabe wird nicht verwendet. Korrigieren Sie die Antwort oder die Daten.`,
+      fr: `Pour la colonne « {field} », l'ordre « {declared} » a été indiqué, mais ses propres dates montrent « {detected} » (dmy : jour d'abord, mdy : mois d'abord, conflict : les deux). L'ordre indiqué n'est pas utilisé. Corrigez la réponse ou les dates.`,
+    },
+    technical: `{file}, {sheet} field {field} (column {index}): the day/month order declared for the column is {declared}, but its own unambiguous dates decide {detected}. A declaration only decides cells that no date decides, so it is not applied; the export is blocked until the declaration or the dates are corrected.`,
+  },
+  {
+    id: 'CONV-DATE-ORDER-DECLARED',
+    category: 'B',
+    severity: 'info',
+    params: ['order', 'index'],
+    plain: {
+      pl: `Jak podano, daty w kolumnie „{field}” są odczytywane w kolejności {order} (dmy: najpierw dzień, mdy: najpierw miesiąc): w zapisanej dacie, w identyfikatorze i przy porównaniu w połączeniu arkuszy.`,
+      en: `As you declared, the dates in column "{field}" are read in the order {order} (dmy: day first, mdy: month first): in the date written, in an identifier and when compared in a join.`,
+      de: `Wie angegeben, werden die Daten der Spalte „{field}“ in der Reihenfolge {order} gelesen (dmy: Tag zuerst, mdy: Monat zuerst): im geschriebenen Datum, in einer Kennung und beim Vergleich in einer Verknüpfung.`,
+      fr: `Comme indiqué, les dates de la colonne « {field} » sont lues dans l'ordre {order} (dmy : jour d'abord, mdy : mois d'abord) : dans la date écrite, dans un identifiant et à la comparaison dans une jointure.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta odpowiedź pochodzi z pliku towarzyszącego.`,
+          en: `This answer was read from the companion file.`,
+          de: `Diese Antwort stammt aus der Begleitdatei.`,
+          fr: `Cette réponse vient du fichier d'accompagnement.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet} field {field} (column {index}): the day/month order {order} declared for the column was used for its ambiguous dates. It applies to the date written, the date inside an ID and the date compared in a join alike.`,
   },
   {
     id: 'CONV-ZERO-WITH-BIOMASS',

@@ -8,7 +8,7 @@ import type { KeySide } from '../recognize/layout';
 import { makeConvertFinding } from '../rules/convert';
 import { makeFinding } from '../rules/registry';
 import type { ColumnRole, Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
-import { detectDayMonthOrder, excelSerialToDate } from '../values/dates';
+import { excelSerialToDate, type DayMonthOrder, type DeclaredOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { colsOf, depthReader, isUtcBySource } from './build';
 import type { ConvertSheetInput } from './build';
@@ -252,8 +252,8 @@ function keyReaderOf(input: ConvertSheetInput, sheet: RawSheet): KeyReadFn {
     const kind = input.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore';
     return kind === 'ignore' && picked.has(i) ? 'keyPart' : kind; // (convert() reads a picked ignored column as a key part)
   };
-  const ctx = { prefix: '', sheet, decimalComma: input.file.decimalComma, date1904: input.file.date1904, roleOf };
-  const order = new Map<number, ReturnType<typeof detectDayMonthOrder>>();
+  const ctx = { prefix: '', sheet, decimalComma: input.file.decimalComma, date1904: input.file.date1904, roleOf, ...(input.dayMonthOrder === undefined ? {} : { dayMonthOrder: input.dayMonthOrder }) };
+  const order = new Map<number, DayMonthOrder>();
   return (row, columns) => {
     const parts = columns.map((c) => keyPart(ctx, row, c, order));
     const blank = parts.flatMap((p, i) => (p === '' ? [i] : []));
@@ -416,7 +416,7 @@ const contradicts = (a: Reading, b: Reading): boolean => a.parts.some((x, i) => 
  * How one side of a quantity is read: with the converter's own readers (the date as `metaParser` reads it, the signed position, the depth in metres as `build.ts` reads it), a variable as a number,
  * the rest as trimmed text. The description is read as it is LENT (in the results file's conventions), so that a pair that only differs by a convention is no conflict.
  */
-function makeReader(kind: ReaderKind, columns: readonly number[], mapping: SheetMapping, sheet: RawSheet, readFile: ParsedFile, showFile: ParsedFile, utcFile: ParsedFile): Reader {
+function makeReader(kind: ReaderKind, columns: readonly number[], mapping: SheetMapping, sheet: RawSheet, readFile: ParsedFile, showFile: ParsedFile, utcFile: ParsedFile, dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>): Reader {
   const own: SheetMapping = { sheet: mapping.sheet, columns: mapping.columns.filter((c) => columns.includes(c.index)) };
   const textOf = (row: RawRow): string => columns.map((c) => shown(row.cells[c] ?? null, showFile, sheet, c)).filter((t) => t !== '').join(' ');
   const rawOf = (row: RawRow): string => columns.map((c) => cellText(row.cells[c])).filter((t) => t !== '').join(' ');
@@ -425,7 +425,8 @@ function makeReader(kind: ReaderKind, columns: readonly number[], mapping: Sheet
   const local = (t: string | undefined): string | undefined => (t === undefined ? undefined : readFile.decimalComma ? t.replace('.', ',') : t);
   if (kind === 'date' || kind === 'position') {
     const specs = specsOf(own);
-    const parse = metaParser(readFile, sheet, specs, collector, { whenUtc: isUtcBySource(utcFile, specs.when?.header) });
+    // the date is read with the declaration of the sheet it is in: a description's own column order, not the results sheet's
+    const parse = metaParser(readFile, sheet, specs, collector, { whenUtc: isUtcBySource(utcFile, specs.when?.header), ...(dayMonthOrder === undefined ? {} : { dayMonthOrder }) });
     const colOf = (k: string, axis?: string): number | undefined => own.columns.find((c) => c.role.kind === k && (axis === undefined || (c.role.kind === 'hemisphere' && c.role.axis === axis)))?.index;
     const lat = colOf('latitude');
     const lon = colOf('longitude');
@@ -573,8 +574,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   const sideOf = (input: ConvertSheetInput, sheet: RawSheet, columns: number[]): QuantityColumns => ({ file: input.file, sheet, mapping: input.mapping, columns });
   const readerOf = (kind: ReaderKind, side: JoinSide, columns: number[]): Reader =>
     side === 'results'
-      ? makeReader(kind, columns, results.mapping, resSheet, results.file, results.file, results.file)
-      : makeReader(kind, columns, description.mapping, desSheet, results.file, description.file, description.file);
+      ? makeReader(kind, columns, results.mapping, resSheet, results.file, results.file, results.file, results.dayMonthOrder)
+      : makeReader(kind, columns, description.mapping, desSheet, results.file, description.file, description.file, description.dayMonthOrder);
   const labelOf = (rc: readonly number[], dc: readonly number[]): string => [...new Set([...rc.map((c) => header(resSheet, c)), ...dc.map((c) => header(desSheet, c))])].join(', ');
   const quantities: Quantity[] = [];
   const unmerged: { kind: string; description: readonly number[]; results: readonly number[]; /** the two units that cannot be compared (a quantity in two units) */ units?: { results: string; description: string } }[] = [];
@@ -904,6 +905,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     ...ownHeaders.map((h, i) => ({ side: 'description' as const, index: i, header: h })),
   ];
   const resolvedColumns: { index: number; header: string; role: ColumnRole }[] = [];
+  // a written (resolved) date column takes the results column's declared day/month order, else the description column's it is made of (F1)
+  const resolvedOrder = new Map<number, { order: DeclaredOrder; fromFile: boolean }>();
   const ignoredResults = new Set<number>();
   for (const q of resolvedQuantities) {
     for (const d of q.desCols) consumed.add(rw + d);
@@ -961,6 +964,12 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     names.forEach((name, i) => {
       columns.push({ side: 'resolved', index: base + i, header: name, from: q.desCols });
       resolvedColumns.push({ index: base + i, header: name, role: spec.roles[i] });
+      if (q.kind === 'date') {
+        const r = q.resCols.find((c) => results.dayMonthOrder?.[c] !== undefined);
+        const d = r === undefined ? q.desCols.find((c) => description.dayMonthOrder?.[c] !== undefined) : undefined;
+        if (r !== undefined) resolvedOrder.set(base + i, { order: results.dayMonthOrder![r], fromFile: results.dayMonthOrderFromFile?.includes(r) === true });
+        else if (d !== undefined) resolvedOrder.set(base + i, { order: description.dayMonthOrder![d], fromFile: description.dayMonthOrderFromFile?.includes(d) === true });
+      }
     });
     for (const c of q.resCols) {
       consumed.add(c);
@@ -1150,7 +1159,13 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     noMatch,
     findings,
   };
-  return { input: { ...results, file, mapping, sampleJoin: info }, info, conflicts, descriptionKeys: new Set(groups.keys()) };
+  // the merged sheet keeps the results indexes and places the description's at rw + index: its declarations travel the same way, so a lent date is read with ITS column's order (F1)
+  const orders: Record<number, DeclaredOrder> = { ...(results.dayMonthOrder ?? {}) };
+  for (const [i, o] of Object.entries(description.dayMonthOrder ?? {})) orders[rw + Number(i)] = o;
+  for (const [i, o] of resolvedOrder) orders[i] = o.order;
+  const fromFile = [...(results.dayMonthOrderFromFile ?? []), ...(description.dayMonthOrderFromFile ?? []).map((i) => rw + i), ...[...resolvedOrder].filter(([, o]) => o.fromFile).map(([i]) => i)];
+  const orderFields = { ...(Object.keys(orders).length === 0 ? {} : { dayMonthOrder: orders }), ...(fromFile.length === 0 ? {} : { dayMonthOrderFromFile: fromFile }) };
+  return { input: { ...results, ...orderFields, file, mapping, sampleJoin: info }, info, conflicts, descriptionKeys: new Set(groups.keys()) };
 }
 
 /* ---------- joinInputs: what convert() is handed, from the person's confirmed joins ---------- */
