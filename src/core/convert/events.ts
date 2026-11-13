@@ -246,6 +246,11 @@ function sharedText(texts: readonly string[], value: number, own: string): strin
   return Number(first) === value && first !== own ? first : undefined;
 }
 
+/** Written beside a sample's position that the person declared for all samples of its sheet (event.txt georeferenceRemarks). */
+export const DECLARED_POSITION_REMARK = 'Position declared for all samples of this sheet by the person converting the data; not stated per sample in the source';
+/** Written beside a station or cruise whose centre is derived, wholly or in part, from such declared positions. */
+export const DERIVED_FROM_DECLARED_REMARK = 'Position derived in part from a position declared by the person converting the data';
+
 /* ---------- the tree ---------- */
 
 interface Node {
@@ -272,10 +277,8 @@ function derive(node: Node): void {
     rec.lonDecimals = DERIVED_DECIMALS;
     if (centre.uncertainty !== undefined) rec.coordinateUncertaintyInMeters = centre.uncertainty;
     rec.derived.position = true;
-    // a position made only of declared positions says so too
-    const remarks = new Set(kids.filter((k) => k.rec.lat !== undefined && k.rec.lon !== undefined).map((k) => k.rec.georeferenceRemarks));
-    const only = remarks.size === 1 ? [...remarks][0] : undefined;
-    if (only !== undefined) rec.georeferenceRemarks = only;
+    // a centre made, wholly or in part, of a position the person declared says so (its place and uncertainty are not the file's)
+    if (kids.some((k) => k.rec.lat !== undefined && k.rec.lon !== undefined && k.rec.georeferenceRemarks !== undefined)) rec.georeferenceRemarks = DERIVED_FROM_DECLARED_REMARK;
     // when every child that has a position is written with one and the same text for a coordinate and it reads as exactly the midpoint, the parent is written with it (54.50, not 54.5)
     const withPosition = kids.filter((k) => k.rec.lat !== undefined && k.rec.lon !== undefined);
     const written = (pick: (r: EventRec) => string): string[] => withPosition.map((k) => pick(k.rec));

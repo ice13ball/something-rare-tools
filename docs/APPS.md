@@ -1806,8 +1806,9 @@ BioCheck does not need) are left out.
 declaration never fills gaps) can carry ONE position the person types: latitude (-90 to 90), longitude (-180 to 180)
 and `coordinateUncertaintyInMeters` (a plain number above zero). It is never inferred or prefilled. Every sample of the sheet is
 then written with that position as typed (a comma turned into a point), the uncertainty, and `georeferenceRemarks` = "Position
-declared for the whole dataset by the person converting; not stated per sample in the source"; a station made of such samples
-carries the remark too. `CONV-POSITION-DECLARED` (a warning to accept) says it; a declaration that cannot be used (out of range, an
+declared for all samples of this sheet by the person converting the data; not stated per sample in the source"; a station or cruise whose
+centre is derived, wholly or in part, from such samples carries "Position derived in part from a position declared by the person converting the data". A profile sheet takes
+its positions from its own columns, so a declaration there is refused (reason `profile`). `CONV-POSITION-DECLARED` (a warning to accept) says it; a declaration that cannot be used (out of range, an
 uncertainty that is not a plain number above zero, or a sheet that has a position column) is refused with
 `CONV-POSITION-DECLARED-INVALID`, one message per cause, and nothing is applied. Archives without the declaration keep today's columns.
 **`occurrence.txt`**: `occurrenceID`, `eventID`, `basisOfRecord`, `occurrenceStatus`,

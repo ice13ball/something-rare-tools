@@ -20,6 +20,7 @@ import { parseNumber } from '../values/numbers';
 import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
+import { DECLARED_POSITION_REMARK } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
@@ -67,11 +68,10 @@ import type { SampleJoinInfo } from './sampleJoin';
 /** What the person declared as the one position of a sheet, read: applied, refused (one reason per cause), or not declared. */
 type DeclaredPositionRead =
   | { kind: 'none' }
-  | { kind: 'invalid'; reasons: { reason: 'latitude' | 'longitude' | 'uncertainty' | 'position-role'; value?: string }[] }
+  | { kind: 'invalid'; reasons: { reason: 'latitude' | 'longitude' | 'uncertainty' | 'position-role' | 'profile'; value?: string }[] }
   | { kind: 'ok'; lat: number; lon: number; latText: string; lonText: string; uncertainty: number; typed: { lat: string; lon: string; uncertainty: string } };
 
 /** The remark written beside every position the person declared (event.txt georeferenceRemarks). */
-const DECLARED_POSITION_REMARK = 'Position declared for the whole dataset by the person converting; not stated per sample in the source';
 
 /**
  * One position declared for a sheet (Q5): only for a sheet whose mapping has no latitude / longitude role at all (a blank column is still a role: a declaration never fills gaps), typed
@@ -80,6 +80,8 @@ const DECLARED_POSITION_REMARK = 'Position declared for the whole dataset by the
 function readDeclaredPosition(sin: ConvertSheetInput): DeclaredPositionRead {
   const d = sin.declaredPosition;
   if (d === undefined) return { kind: 'none' };
+  // a profile sheet's levels take their positions from their own columns (or the station): a declaration is refused there, not dropped
+  if (sin.profile !== undefined) return { kind: 'invalid', reasons: [{ reason: 'profile' }] };
   if (sin.mapping.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude')) return { kind: 'invalid', reasons: [{ reason: 'position-role' }] };
   const lat = parseTypedCoordinate(d.lat);
   const lon = parseTypedCoordinate(d.lon);
@@ -3078,9 +3080,11 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   findings.push(...positionNoneFindings(input.sheets, events));
   // one position declared for a sheet, applied: said once per sheet, with the samples it was written on
   for (const sin of input.sheets) {
-    const declared = sin.profile === undefined ? readDeclaredPosition(sin) : undefined;
-    if (declared?.kind !== 'ok') continue;
-    const count = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet && e.georeferenceRemarks === DECLARED_POSITION_REMARK).length;
+    const declared = readDeclaredPosition(sin);
+    // a profile sheet is not read by the loop that refuses the other declarations
+    if (declared.kind === 'invalid' && sin.profile !== undefined) for (const r of declared.reasons) findings.push(makeConvertFinding('CONV-POSITION-DECLARED-INVALID', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: r.reason } }));
+    if (declared.kind !== 'ok') continue;
+    const count = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet && e.georeferenceRemarks !== undefined).length;
     if (count === 0) continue;
     findings.push(makeConvertFinding('CONV-POSITION-DECLARED', { file: sin.file.fileName, sheet: sin.sheet, params: { ...declared.typed, count, ...(sin.declaredPositionFromFile === true ? { fromFile: 'yes' } : {}) } }));
   }

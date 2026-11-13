@@ -25,7 +25,8 @@ const tanks = (declared?: ConvertSheetInput['declaredPosition'], extra: { header
     ...(declared === undefined ? {} : { declaredPosition: declared }),
   });
 const ids = <T extends { ruleId: string }>(fs: readonly T[], id: string): T[] => fs.filter((f) => f.ruleId === id);
-const REMARK = 'Position declared for the whole dataset by the person converting; not stated per sample in the source';
+const REMARK = 'Position declared for all samples of this sheet by the person converting the data; not stated per sample in the source';
+const PARTIAL = 'Position derived in part from a position declared by the person converting the data';
 
 describe('parseTypedCoordinate', () => {
   it('reads a sign, digits and one point or comma, and writes the text with a point', () => {
@@ -84,7 +85,37 @@ describe('a declared position', () => {
     expect(renderConvertPlain(d[0], 'en')).toContain('companion file');
     const st = r.events.find((x) => x.eventType === 'station');
     expect(st?.lat).toBe(54.1);
-    expect(st?.georeferenceRemarks).toBe(REMARK);
+    expect(st?.georeferenceRemarks).toBe(PARTIAL);
+  });
+
+  it('marks a station shared with a sheet of real positions as derived in part from the declaration', () => {
+    const a = { ...tanks({ lat: '54.1', lon: '10.9', uncertaintyM: '500' }, { header: [...TANKS_H, 'Station'], rows: TANKS_R.map((x) => [...x, 'S1']), edit: { Station: { kind: 'station' } } }) };
+    const b = sheetInput(fileOf(['Tank', 'Date', 'Station', 'Latitude', 'Longitude', 'Taxon', 'Count'], [['T9', '2023-04-07', 'S1', 55, 11, 'Oithona similis', 2]], 'Real', { fileName: 'real.csv' }), {
+      shape: 'long',
+      quantity: { kind: 'count' },
+      edit: { ...LONG, Station: { kind: 'station' } },
+    });
+    const r = convert({ sheets: [a, b] });
+    const st = r.events.find((x) => x.eventType === 'station');
+    expect(st?.georeferenceRemarks).toBe(PARTIAL);
+    expect(r.events.filter((x) => x.eventType === 'sample' && x.source?.file === 'real.csv').every((x) => x.georeferenceRemarks === undefined)).toBe(true);
+    expect(ids(r.findings, 'CONV-POSITION-DECLARED')[0].params.count).toBe(2);
+  });
+
+  it('refuses a declaration on a profile sheet, also one that came from a companion file', () => {
+    for (const fromFile of [false, true]) {
+      const sin = sheetInput(fileOf(['Cast', 'Date', 'Depth [m]'], [['C1', '2023-04-05', 5]], 'CTD', { fileName: 'ctd.csv' }), {
+        profile: { depthIds: true },
+        declaredPosition: { lat: '54.1', lon: '10.9', uncertaintyM: '500' },
+        ...(fromFile ? { declaredPositionFromFile: true } : {}),
+      });
+      const r = convert({ sheets: [sin] });
+      const f = ids(r.findings, 'CONV-POSITION-DECLARED-INVALID');
+      expect(f.map((x) => x.params.reason), String(fromFile)).toEqual(['profile']);
+      expect(renderConvertPlain(f[0], 'en')).toContain('profile sheet');
+      expect(ids(r.findings, 'CONV-POSITION-DECLARED')).toEqual([]);
+      expect(r.events.every((x) => x.georeferenceRemarks === undefined)).toBe(true);
+    }
   });
 
   it('accepts 0 / 0 / 10', () => {

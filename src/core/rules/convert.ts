@@ -133,7 +133,7 @@ import type { RuleSpec } from './spec';
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-POSITION-NONE         count, column?   count = the sheet's sample events that have no position on themselves or an ancestor; column = (variant) the header of a latitude / longitude column that is blank in every row; file, sheet = the sheet
  *   CONV-POSITION-DECLARED     lat, lon, uncertainty, count   the one position the person declared for a sheet with no position role, as typed (point as decimal mark); count = the samples it was written on; fromFile = yes when a companion file gave it (warning, to accept)
- *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | position-role (the sheet has a latitude / longitude role, even a blank one); nothing is applied
+ *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | profile (a profile sheet) | position-role (the sheet has a latitude / longitude role, even a blank one); nothing is applied
  *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); lines = the lines
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
@@ -1979,7 +1979,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}, {sheet}: the person declared one position for the sheet (decimalLatitude {lat}, decimalLongitude {lon}, coordinateUncertaintyInMeters {uncertainty}); it is written on {count} sample event(s), with georeferenceRemarks saying it was declared for the whole dataset by the person converting. Never inferred; applied only to a sheet with no latitude / longitude role. A warning to accept.`,
+    technical: `{file}, {sheet}: the person declared one position for the sheet (decimalLatitude {lat}, decimalLongitude {lon}, coordinateUncertaintyInMeters {uncertainty}); it is written on {count} sample event(s), with georeferenceRemarks saying it was declared for all samples of this sheet by the person converting the data (a station or cruise derived in part from such positions says so in its own remark). Never inferred; applied only to a sheet with no latitude / longitude role. A warning to accept.`,
   },
   {
     id: 'CONV-POSITION-DECLARED-INVALID',
@@ -1992,7 +1992,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Die für das Blatt „{sheet}“ festgelegte Position ist nicht verwendbar: {reason}. Daraus wurde nichts geschrieben.`,
       fr: `La position déclarée pour la feuille « {sheet} » est inutilisable : {reason}. Rien n'en a été écrit.`,
     },
-    technical: `{file}, {sheet}: the declared position is refused ({reason}; value {value}) and nothing is applied. latitude = not a number within -90 to 90; longitude = not a number within -180 to 180; uncertainty = not a plain number above zero; position-role = the sheet has a latitude or longitude column (even a blank one), and a declaration never fills gaps. CONV-POSITION-NONE is not repeated.`,
+    technical: `{file}, {sheet}: the declared position is refused ({reason}) and nothing is applied. latitude = not a number within -90 to 90; longitude = not a number within -180 to 180; uncertainty = not a plain number above zero; position-role = the sheet has a latitude or longitude column (even a blank one), and a declaration never fills gaps; profile = a profile sheet takes positions from its own columns. CONV-POSITION-NONE is not repeated.`,
   },
   {
     id: 'CONV-EVENT-DATE-MISSING',
@@ -2851,6 +2851,12 @@ const DECLARED_REASON_WORDS: Record<string, Record<Lang, string>> = {
     pl: 'niepewność w metrach musi być zwykłą liczbą większą od zera (na przykład 500)',
     de: 'die Unsicherheit in Metern muss eine einfache Zahl über null sein (zum Beispiel 500)',
     fr: "l'incertitude en mètres doit être un nombre simple supérieur à zéro (par exemple 500)",
+  },
+  profile: {
+    en: 'a profile sheet takes its positions from its own columns, so a declared position is not used there; mark the position columns instead',
+    pl: 'arkusz profilu bierze pozycje z własnych kolumn, więc zadeklarowana pozycja nie jest tu używana; oznacz zamiast tego kolumny pozycji',
+    de: 'ein Profilblatt nimmt seine Positionen aus eigenen Spalten, daher wird eine festgelegte Position dort nicht verwendet; markieren Sie stattdessen die Positionsspalten',
+    fr: "une feuille de profils prend ses positions dans ses propres colonnes, donc une position déclarée n'y est pas utilisée ; marquez plutôt les colonnes de position",
   },
   'position-role': {
     en: 'the sheet already has a latitude or longitude column, and a declared position never fills gaps',
