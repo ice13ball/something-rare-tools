@@ -196,6 +196,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-TURN-HEADER-BLANK | error | B | — | —<a id="CONV-TURN-HEADER-BLANK"></a> |
 | CONV-TURN-HEADER-REPEATED | error | B | — | —<a id="CONV-TURN-HEADER-REPEATED"></a> |
 | CONV-TURN-NAME-BLANK | error | B | — | —<a id="CONV-TURN-NAME-BLANK"></a> |
+| CONV-TURN-NAME-REPEATED | error | B | — | —<a id="CONV-TURN-NAME-REPEATED"></a> |
 | CONV-SHEET-TURNED | info | B | — | —<a id="CONV-SHEET-TURNED"></a> |
 | CONV-DEPTH-UNIT | error | B | — | [Darwin Core term list (dwc.tdwg.org/terms: minimumDepthInMeters, maximumDepthInMeters, verbatimDepth)](https://dwc.tdwg.org/terms/#dwc:minimumDepthInMeters), "The lesser depth of a range of depth below the local surface, in meters." / verbatimDepth: "The original description of the depth below the local surface."<a id="CONV-DEPTH-UNIT"></a> |
 | CONV-DEPTH-CONVERTED | warning | B | — | [Darwin Core term list (dwc.tdwg.org/terms: minimumDepthInMeters, maximumDepthInMeters, verbatimDepth)](https://dwc.tdwg.org/terms/#dwc:minimumDepthInMeters), "The lesser depth of a range of depth below the local surface, in meters." / verbatimDepth: "The original description of the depth below the local surface."<a id="CONV-DEPTH-CONVERTED"></a> |

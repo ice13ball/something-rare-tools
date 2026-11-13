@@ -3478,7 +3478,12 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     pushAll(findings, moved);
   }
   // the judgement of the join itself (conflicts, rows without a description, ambiguous keys ...) goes in with the others, so that decideRows and `ok` see it (F1)
-  for (const sin of input.sheets) if (sin.sampleJoin !== undefined) pushAll(findings, sin.sampleJoin.findings);
+  // (those about a turned results sheet name turned lines too: the same remap)
+  for (const sin of input.sheets) {
+    if (sin.sampleJoin === undefined) continue;
+    const own = turnedSheets.find((t) => t.file === sin.file.fileName && t.sheet.name === sin.sheet);
+    pushAll(findings, own === undefined ? sin.sampleJoin.findings : turnedLines(sin.sampleJoin.findings, own.file, own.sheet));
+  }
 
   // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way
   const once = nameOnce(onceDateOrder(findings));

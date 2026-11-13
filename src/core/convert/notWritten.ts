@@ -44,6 +44,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'join-no-key': 'blocks',
   // a row of a turned sheet with values and no name: no column can be made of it, so it is asked about (CONV-TURN-NAME-BLANK says it; leaving it out is the person's answer)
   'turn-no-name': 'blocks',
+  // a row of a turned sheet whose name another row has (or a column the turn adds): never renamed, so none is turned; asked about like a row with no name
+  'turn-name-repeated': 'blocks',
   // held back by a rule of its own that blocks
   'no-code': 'covered',
   'no-replicate': 'covered',
@@ -116,6 +118,7 @@ export const SUPERSEDES: Partial<Record<LeaveOutReason, string>> = {
   'no-taxon': 'CONV-TAXON-EMPTY-ROW',
   'join-no-key': 'CONV-JOIN-KEY-BLANK',
   'turn-no-name': 'CONV-TURN-NAME-BLANK',
+  'turn-name-repeated': 'CONV-TURN-NAME-REPEATED',
 };
 
 /** The kind of a reason; a reason that is not known blocks. */

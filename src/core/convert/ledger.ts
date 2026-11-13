@@ -65,14 +65,15 @@ export type LedgerReason =
   | 'join-results-not-written'
   | 'no-event-date'
   | 'turned-label'
-  | 'turn-no-name';
+  | 'turn-no-name'
+  | 'turn-name-repeated';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
   'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match', 'no-event-date',
-  'turned-label', 'turn-no-name',
+  'turned-label', 'turn-no-name', 'turn-name-repeated',
 ];
 // (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last ones belong to whole lines, or to a lost cell named beside its line, never to FateLog.cell)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
@@ -85,7 +86,7 @@ const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code -
  */
 /** Of those, the rows that name a position, a depth, a sample or a date and no taxon or number: the panel says that plainly, not as "a value". */
 export const UNPLACED: readonly LedgerReason[] = ['position-no-taxon', 'sample-no-taxon'];
-export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter', 'join-no-key', 'turn-no-name'];
+export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter', 'join-no-key', 'turn-no-name', 'turn-name-repeated'];
 
 /**
  * The reasons the conversion records while it reads a sheet. Created per sheet; the builder writes into it, the ledger reads it. A cell's reason is kept in one byte per cell and column
@@ -807,10 +808,10 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     for (const r of turn.source.rows) {
       const col = columnOf.get(r.line);
       if (col === undefined) {
-        const reason: LedgerReason = turn.blankNameLines.includes(r.line) ? 'turn-no-name' : 'nothing-to-record';
+        const reason: LedgerReason = turn.blankNameLines.includes(r.line) ? 'turn-no-name' : turn.repeatedNames.some((x) => x.lines.includes(r.line)) ? 'turn-name-repeated' : 'nothing-to-record';
         bump(counts, reason);
         if ((NOT_UNDERSTOOD as readonly string[]).includes(reason)) lostNumbers++;
-        fates.push({ line: r.line, fate: reason, ...(reason === 'turn-no-name' ? { chain: [reason] } : {}) });
+        fates.push({ line: r.line, fate: reason, ...(reason === 'turn-no-name' || reason === 'turn-name-repeated' ? { chain: [reason] } : {}) });
         continue;
       }
       let wrote = false;
@@ -889,10 +890,11 @@ export function notUsedLedger(file: string, sheet: RawSheet): SheetLedger {
 
 function skippedSheet(file: string, sheet: RawSheet, kind: 'not-read' | 'not-used', reason: LedgerReason): SheetLedger {
   // (a long sheet read as its pivot: the rows the file had, not the samples made of them)
-  const n = sheet.pivot?.lines.sourceRows ?? sheet.rows.length;
+  // (a turned sheet: the rows of the sheet as dropped, not the samples made of its columns)
+  const n = sheet.pivot?.lines.sourceRows ?? sheet.turn?.source.rows.length ?? sheet.rows.length;
   const rows: LedgerTally = { source: n, written: 0, skipped: n === 0 ? [] : [{ reason, count: n }], unexplained: 0 };
   // a sheet not read lists its lines (a blocked sheet is the one a decision is made on); a sheet not used is one fate for all of it, said by `rows`
-  const lines: LineFate[] = kind === 'not-read' && sheet.pivot === undefined ? sheet.rows.map((r) => ({ line: r.line, fate: reason })) : [];
+  const lines: LineFate[] = kind === 'not-read' && sheet.pivot === undefined ? (sheet.turn?.source ?? sheet).rows.map((r) => ({ line: r.line, fate: reason })) : [];
   return { file, sheet: sheet.name, kind, unit: 'rows', rows, columns: [], lines, notUnderstood: 0, balanced: true };
 }
 
@@ -1065,11 +1067,16 @@ export function joinLedgers(merged: SheetLedger, info: SampleJoinInfo): { result
     desLost.set(line, addLost(desLost.get(line), [cell]));
   };
   const resLost = new Map<number, LostCell[]>();
+  // (a turned results sheet: a cell is named by its SOURCE line and column; the results cell a description-side loss was compared with is in a source column, so its line is the header's)
+  const turn = info.results.raw.turn;
   for (const n of info.notChosen) {
-    if (n.side === 'results') resLost.set(n.line, addLost(resLost.get(n.line), [{ index: n.column, reason: 'join-not-chosen', taken: n.chosen, other: { sheet: desSheet.name, line: n.otherLine } }]));
-    else {
+    if (n.side === 'results') {
+      const line = turn === undefined ? n.line : (turn.nameLine[n.column] ?? n.line);
+      const index = turn === undefined ? n.column : (turn.sampleColumn[n.line] ?? n.column);
+      resLost.set(line, addLost(resLost.get(line), [{ index, reason: 'join-not-chosen', taken: n.chosen, other: { sheet: desSheet.name, line: n.otherLine } }]));
+    } else {
       const k = desIndexOf(n.column);
-      if (k !== undefined) loseOnDescription(n.line, { index: k, reason: 'join-not-chosen', taken: n.chosen, other: { sheet: info.results.sheet, line: n.otherLine } });
+      if (k !== undefined) loseOnDescription(n.line, { index: k, reason: 'join-not-chosen', taken: n.chosen, other: { sheet: info.results.sheet, line: turn === undefined ? n.otherLine : turn.source.headerLine } });
     }
   }
   // (a text its own file rejects as a number was lent blank: the text is not written)

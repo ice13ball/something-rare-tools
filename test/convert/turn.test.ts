@@ -5,6 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
+import { notUsedLedger } from '../../src/core/convert/ledger';
+import { notWrittenRows } from '../../src/core/convert/notWritten';
 import { ownRecordsEligible } from '../../src/core/convert/ownRecords';
 import { joinInputs, proposeSampleJoins } from '../../src/core/convert/sampleJoin';
 import type { SampleJoinRequestCore } from '../../src/core/convert/sampleJoin';
@@ -62,9 +64,11 @@ describe('turnSheet', () => {
     expect(t.turn?.nameLine).toEqual({ 2: 2, 3: 3 });
   });
 
-  it('makes the names unique as the pivot does', () => {
-    const raw = fileOf(['Taxon', 'S1'], [['Calanus', 1], ['Calanus', 2], ['Sample', 3]], 'Taxa').sheets[0];
-    expect(turnSheet(raw, { nameColumn: 0, notSamples: [] }).header).toEqual(['Sample', 'Calanus', 'Calanus (2)', 'Sample (2)']);
+  it('never renames a row name: a repeated name, or one equal to a column the turn adds, is not turned and is listed', () => {
+    const raw = fileOf(['Taxon', 'S1'], [['Calanus', 1], ['calanus ', 2], ['Sample', 3], ['Oithona', 4]], 'Taxa').sheets[0];
+    const t = turnSheet(raw, { nameColumn: 0, notSamples: [] });
+    expect(t.header).toEqual(['Sample', 'Oithona']);
+    expect(t.turn?.repeatedNames).toEqual([{ name: 'Calanus', lines: [2, 3] }, { name: 'Sample', lines: [4] }]);
   });
 });
 
@@ -152,6 +156,57 @@ describe('a turned sheet is converted', () => {
     expect(rules(again.result.findings, 'CONV-EVENT-DATE-MISSING')).toHaveLength(1);
     expect(again.result.events.some((e) => e.id === 'S2')).toBe(true);
     expect(again.result.leftOut).toEqual([]);
+  });
+
+  it('a repeated row name blocks, names the source rows, and the rows can be left out and listed', () => {
+    const { inputs } = book([['Calanus finmarchicus', 4, 0, 4], ['Calanus finmarchicus', 1, 2, 3], ['Oithona similis', 1, 1, 2]]);
+    const r = convert({ sheets: [inputs[0]] });
+    const f = rules(r.findings, 'CONV-TURN-NAME-REPEATED');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([2, 3]);
+    expect(f[0].params).toMatchObject({ name: 'Calanus finmarchicus', count: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.occurrences.every((o) => !/\(2\)/.test(o.scientificName ?? ''))).toBe(true);
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f[0], lang)).toContain('Calanus finmarchicus');
+    expect(r.ledger[0].lines.filter((l) => l.fate === 'turn-name-repeated').map((l) => l.line)).toEqual([2, 3]);
+    const left = convert({ sheets: [{ ...inputs[0], leaveOut: ['turn-name-repeated'] }] });
+    expect(rules(left.findings, 'CONV-TURN-NAME-REPEATED')).toEqual([]);
+    expect(rules(left.findings, 'CONV-ROW-LEFT-OUT')).toHaveLength(1);
+  });
+
+  it('a turned sheet that is not used counts source rows, not samples', () => {
+    const { file } = book();
+    const l = notUsedLedger('book.xlsx', file.sheets.find((s) => s.name === 'Taxa')!);
+    expect(l.rows.source).toBe(2);
+  });
+
+  it('the join findings of a turned results sheet name the header line and the sample column (NO-MATCH, CONFLICT)', () => {
+    const nomatch = book(TAXA_ROWS(), [['X1', '2023-04-05', 55.1, 2.1]]);
+    const r = joined(nomatch.inputs).result;
+    const nm = rules(r.findings, 'CONV-JOIN-NO-MATCH');
+    expect(nm).toHaveLength(1);
+    expect(nm[0].lines?.every((l) => l < TURNED_LINE_BASE)).toBe(true);
+    expect(nm[0].params.turnedColumn).toBe('B, C');
+    const conflict = book([...TAXA_ROWS(), ['Date', '2023-04-07', '2023-04-06', null]]);
+    const c = joined(conflict.inputs).result;
+    const cf = rules(c.findings, 'CONV-JOIN-CONFLICT');
+    expect(cf).toHaveLength(1);
+    expect(cf[0].lines?.every((l) => l < TURNED_LINE_BASE)).toBe(true);
+    expect(cf[0].params.turnedColumn).toBe('B');
+  });
+
+  it('a value that lost a join conflict is listed at its source line and column', () => {
+    const { inputs } = book([...TAXA_ROWS(), ['Date', '2023-04-07', '2023-04-06', null]]);
+    const out = joinInputs(inputs, [{ ...JOIN, conflicts: [{ group: 'date', take: 'description', count: 1, exceptions: [] }] }], []);
+    const r = convert({ sheets: out.sheets });
+    const taxa = r.ledger.find((l) => l.sheet === 'Taxa')!;
+    expect(taxa.lines.every((l) => l.line < TURNED_LINE_BASE)).toBe(true);
+    const lost = taxa.lines.find((l) => (l.lostCells ?? []).some((c) => c.reason === 'join-not-chosen'));
+    expect(lost?.line).toBe(4);
+    expect(lost?.lostCells?.find((c) => c.reason === 'join-not-chosen')?.index).toBe(1);
+    const listed = [...notWrittenRows(r.ledger, out.sheets, r.leftOut)].find((x) => x.line === 4 && x.kind === 'lost-cells');
+    expect(listed?.detail).toContain('join-not-chosen');
+    expect(listed?.cells[0]).toBe('Date');
   });
 
   it('own records are not offered for a turned sheet', () => {

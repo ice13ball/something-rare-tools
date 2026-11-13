@@ -49,6 +49,8 @@ export interface TurnInfo extends TurnDeclaration {
   repeatedHeaders: { header: string; columns: number[] }[];
   /** Source lines that hold a value and have no row name: no column is made of them, blocking. */
   blankNameLines: number[];
+  /** Row names (trimmed, compared without case) used by more than one row, or equal to a column the turn adds (Sample, Date): none of those rows is turned, blocking. `lines` are source lines. */
+  repeatedNames: { name: string; lines: number[] }[];
 }
 /** What the converter's reader of a long environmental sheet (one row per measured parameter) did: the facts the converter turns into findings and the page into a note. */
 export interface PivotInfo {

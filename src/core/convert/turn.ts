@@ -12,7 +12,7 @@ import { MAX_FINDING_LINES } from './notWritten';
  * roles are proposed on the turned columns (a taxon name is a header, a sample code is a cell).
  *
  * The result is a plain wide sheet that the rest of the converter reads like any other: one row per SAMPLE (the header text of the source column), one column per named source row, headed
- * with the row's name (made unique as pivot.ts does). Every cell is the source cell as written; nothing is summed, parsed or chosen. A turned row has no line of the file: its `line` is
+ * with the row's name as written (a name two rows share is never changed: those rows block). Every cell is the source cell as written; nothing is summed, parsed or chosen. A turned row has no line of the file: its `line` is
  * TURNED_LINE_BASE + the source column, and `turn` on the new sheet says where every row and column came from, so a finding can point back at the source (turnedLines) and the ledger can
  * be kept in the lines of the source (ledger.ts).
  */
@@ -47,23 +47,26 @@ export function turnSheet(sheet: RawSheet, decl: TurnDeclaration): RawSheet {
   const samples = candidates.filter((c) => text(sheet.header[c]) !== '' && !repeated.has(c));
 
   // the named rows become the columns; a row with values and no name becomes none
-  const named: RawRow[] = [];
+  const lead = decl.headerDates === true ? ['Sample', 'Date'] : ['Sample'];
+  const leadKeys = new Set(lead.map((h) => h.toLowerCase()));
+  const byName = new Map<string, RawRow[]>();
   const blankNameLines: number[] = [];
   for (const r of sheet.rows) {
-    if (text(r.cells[decl.nameColumn]) !== '') named.push(r);
+    const n = text(r.cells[decl.nameColumn]);
+    if (n !== '') (byName.get(n.toLowerCase()) ?? byName.set(n.toLowerCase(), []).get(n.toLowerCase())!).push(r);
     else if (r.cells.some((c, i) => i !== decl.nameColumn && !isBlankCell(c ?? null))) blankNameLines.push(r.line);
   }
 
-  // the headers: 'Sample' (and 'Date' when the header gives it too), then the row names, unique among all headers of the new sheet
-  const lead = decl.headerDates === true ? ['Sample', 'Date'] : ['Sample'];
-  const used = new Set(lead.map((h) => h.toLowerCase()));
-  const names = named.map((r) => {
-    const base = text(r.cells[decl.nameColumn]);
-    let h = base;
-    for (let n = 2; used.has(h.toLowerCase()); n++) h = `${base} (${n})`;
-    used.add(h.toLowerCase());
-    return h;
-  });
+  // a name that two rows share, or that is a column the turn adds, is never changed to make it unique (a row name is data): those rows are not turned and block
+  const repeatedNames: { name: string; lines: number[] }[] = [];
+  const named: RawRow[] = [];
+  for (const [key, group] of byName) {
+    if (group.length > 1 || leadKeys.has(key)) repeatedNames.push({ name: text(group[0].cells[decl.nameColumn]), lines: group.map((r) => r.line) });
+    else named.push(group[0]);
+  }
+  named.sort((a, b) => a.line - b.line);
+  // the headers: 'Sample' (and 'Date' when the header gives it too), then the row names as written
+  const names = named.map((r) => text(r.cells[decl.nameColumn]));
   const nameLine: Record<number, number> = Object.create(null) as Record<number, number>;
   named.forEach((r, k) => (nameLine[lead.length + k] = r.line));
 
@@ -82,7 +85,7 @@ export function turnSheet(sheet: RawSheet, decl: TurnDeclaration): RawSheet {
     header: [...lead, ...names],
     headerLine: sheet.headerLine,
     rows,
-    turn: { nameColumn: decl.nameColumn, notSamples: [...decl.notSamples], ...(decl.headerDates === true ? { headerDates: true } : {}), source: sheet, sampleColumn, nameLine, labelColumns, blankHeaders, repeatedHeaders, blankNameLines },
+    turn: { nameColumn: decl.nameColumn, notSamples: [...decl.notSamples], ...(decl.headerDates === true ? { headerDates: true } : {}), source: sheet, sampleColumn, nameLine, labelColumns, blankHeaders, repeatedHeaders, blankNameLines, repeatedNames },
   };
 }
 
@@ -111,7 +114,8 @@ export function turnFindings(file: string, sheet: RawSheet): Finding[] {
   if (t.blankHeaders.length > 0) out.push(makeConvertFinding('CONV-TURN-HEADER-BLANK', { ...base, lines: [t.source.headerLine], params: { count: t.blankHeaders.length, columns: lettersOf(t.blankHeaders) } }));
   for (const r of t.repeatedHeaders) out.push(makeConvertFinding('CONV-TURN-HEADER-REPEATED', { ...base, lines: [t.source.headerLine], params: { header: r.header, count: r.columns.length, columns: lettersOf(r.columns) } }));
   if (t.blankNameLines.length > 0) out.push(makeConvertFinding('CONV-TURN-NAME-BLANK', { ...base, lines: t.blankNameLines.slice(0, MAX_FINDING_LINES), params: { count: t.blankNameLines.length } }));
-  out.push(makeConvertFinding('CONV-SHEET-TURNED', { ...base, params: { rows: Object.keys(t.nameLine).length, samples: sheet.rows.length } }));
+  for (const r of t.repeatedNames) out.push(makeConvertFinding('CONV-TURN-NAME-REPEATED', { ...base, lines: r.lines.slice(0, MAX_FINDING_LINES), params: { name: r.name, count: r.lines.length } }));
+  out.push(makeConvertFinding('CONV-SHEET-TURNED', { ...base, params: { rows: Object.keys(t.nameLine).length, samples: Object.keys(t.sampleColumn).length } }));
   return out;
 }
 

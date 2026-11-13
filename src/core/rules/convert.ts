@@ -93,6 +93,7 @@ import type { RuleSpec } from './spec';
  *   CONV-TURN-HEADER-BLANK     count, columns   columns = letters of the source columns right of the name column that hold values and have a blank header; lines = the source header line (blocks)
  *   CONV-TURN-HEADER-REPEATED  header, count, columns   one finding per header used by several source columns (letters in columns); none of them is turned; lines = the source header line (blocks)
  *   CONV-TURN-NAME-BLANK       count            count = source rows that hold a value and have no name; lines = those source lines (blocks until the names are typed or the rows left out, reason turn-no-name)
+ *   CONV-TURN-NAME-REPEATED    name, count      a row name used by several source rows (compared without case) or equal to a column the turn adds; none of them is turned, never renamed; lines = those source lines (blocks until the names differ or the rows are left out, reason turn-name-repeated)
  *   CONV-SHEET-TURNED          rows, samples    info: the sheet was turned on the person's declaration (core/convert/turn.ts); rows = named source rows (now columns), samples = sample columns (now rows)
  *   CONV-NO-TAXON              shape            shape = wide | long; no taxon column is marked (a long sheet with a taxon column and no quantity column is CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY)
  *   CONV-TAXON-NO-QUANTITY     (none)           a long sheet with a taxon column, other numbers (measured variables) and no quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
@@ -1387,6 +1388,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Dans la feuille « {sheet} » (tournée), {count} {+count:ligne a|lignes ont} des valeurs mais rien dans la colonne des noms ({+lineCount:ligne|lignes} {lines}). Aucune colonne n'en est faite. Saisissez les noms ou laissez ces lignes de côté.`,
     },
     technical: `{file}, {sheet}:{lines}: {count} source row(s) of a turned sheet hold a value and have no name in the name column, so no column can be made of them. They are listed with the reason turn-no-name and the export is blocked until the names are typed or the rows are left out and listed.`,
+  },
+  {
+    id: 'CONV-TURN-NAME-REPEATED',
+    category: 'B',
+    severity: 'error',
+    params: ['name', 'count'],
+    plain: {
+      pl: `W arkuszu „{sheet}” (obracanym) nazwa wiersza „{name}” nie jest jedyna ({+lineCount:wiersz|wiersze|wierszy} {lines}) albo pokrywa się z kolumną dodawaną przy obracaniu. Konwerter nie zmienia nazw. Zrób nazwy różne w pliku albo pomiń te wiersze.`,
+      en: `In sheet "{sheet}" (turned), the row name "{name}" is not unique ({+lineCount:line|lines} {lines}) or equals a column the turn adds. The converter does not change names. Make the names distinct in the file, or leave these rows out.`,
+      de: `Im (gedrehten) Blatt „{sheet}“ ist der Zeilenname „{name}“ nicht eindeutig ({+lineCount:Zeile|Zeilen} {lines}) oder gleicht einer beim Drehen hinzugefügten Spalte. Der Konverter ändert keine Namen. Machen Sie die Namen in der Datei verschieden oder lassen Sie diese Zeilen aus.`,
+      fr: `Dans la feuille « {sheet} » (tournée), le nom de ligne « {name} » n'est pas unique ({+lineCount:ligne|lignes} {lines}) ou égale une colonne ajoutée par la rotation. Le convertisseur ne change pas les noms. Rendez les noms distincts dans le fichier ou laissez ces lignes de côté.`,
+    },
+    technical: `{file}, {sheet}:{lines}: the (trimmed, case-blind) row name "{name}" is used by {count} source row(s), or is the name of a column the turn adds (Sample, Date). A name is data, so it is never renamed to make it unique: none of those rows is turned. They are listed with the reason turn-name-repeated and the export is blocked until the names differ or the rows are left out and listed.`,
   },
   {
     id: 'CONV-SHEET-TURNED',
