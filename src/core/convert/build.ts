@@ -1602,6 +1602,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   let sheetKeyN = 0;
   // a sheet with a taxon and a count column whose quantity kind is not declared yet (CONV-QUANTITY-UNDECLARED says so): its missing occurrences are no "environment-only upload"
   let taxaWaitForQuantity = false;
+  // a long sheet whose quantity column is blank in every one of its taxon rows (CONV-NO-OCCURRENCES then names the column instead of asking for a taxon sheet)
+  const emptyQuantity: { file: string; sheet: string; column: string; rows: number }[] = [];
   // CONV-ENV-ONLY-SHEET already said that no occurrence can come out of such a sheet; sheets that are not that kind keep their own say (a species sheet of zeros next to one
   // has its own CONV-NO-OCCURRENCES text), so the two are counted
   let envOnlySheets = 0;
@@ -2653,6 +2655,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       const wholeColumnEmpty = quantityIndex !== undefined && sheet.rows.every((r) => isBlankCell(r.cells[quantityIndex] ?? null));
       const others = [...naOther].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([h, n]) => `${h} (${n})`).join(', ');
       findings.push(makeConvertFinding('CONV-NA-SKIPPED', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length, rows: 'yes', ...(others === '' ? {} : { columns: others }), ...(wholeColumnEmpty ? { empty: 'yes' } : {}) } }));
+      if (taxonRowCount > 0 && e.lines.length === taxonRowCount && cols.quantity !== undefined) emptyQuantity.push({ file: e.file, sheet: e.sheet, column: cols.quantity.header.trim(), rows: taxonRowCount });
     }
     for (const e of blankKept.entries()) {
       stats.blankKept += e.lines.length;
@@ -3206,7 +3209,16 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   if (occurrences.length === 0 && found !== undefined && !taxaWaitForQuantity && !(envOnlySheets > 0 && otherSheets === 0)) {
     const first = found;
     // taxa that were there but all 0 and skipped (the full species list is not ticked) are another case from an upload with no taxon: its own text says what to tick
-    findings.push(makeConvertFinding('CONV-NO-OCCURRENCES', { file: first.file.fileName, sheet: first.sheet, params: stats.zerosSkipped > 0 && !fullList ? { zeros: 'yes' } : {} }));
+    // (the zeros case keeps its text and its sheet; only otherwise a sheet whose quantity column was blank in every taxon row is named)
+    const zeros = stats.zerosSkipped > 0 && !fullList;
+    const empty = zeros ? undefined : emptyQuantity[0];
+    findings.push(
+      makeConvertFinding('CONV-NO-OCCURRENCES', {
+        file: empty?.file ?? first.file.fileName,
+        sheet: empty?.sheet ?? first.sheet,
+        params: zeros ? { zeros: 'yes' } : empty ? { variant: 'empty-quantity', column: empty.column, rows: empty.rows } : {},
+      }),
+    );
   }
 
   // a finding about a cell of a pivoted sheet names the line of the long sheet that cell came from, not the line of the pivoted row

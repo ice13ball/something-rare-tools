@@ -1274,14 +1274,14 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NO-OCCURRENCES',
     category: 'B',
     severity: 'error',
-    params: [],
+    params: ['column', 'rows'],
     plain: {
       pl: `To archiwum nie zawierałoby ani jednego rekordu występowania. OBIS publikuje rekordy gatunków, więc dodaj arkusz z taksonami (nazwy gatunków z liczebnością lub obecnością). Same dane środowiskowe nie tworzą zbioru danych OBIS.`,
       en: `This archive would contain no occurrences. OBIS publishes species records, so add a sheet with taxa (names of species with their counts or presence). Environmental data alone is not an OBIS dataset.`,
       de: `Dieses Archiv würde keinen einzigen Nachweis (Occurrence) enthalten. OBIS veröffentlicht Artnachweise; fügen Sie daher ein Blatt mit Taxa hinzu (Artnamen mit Anzahl oder Vorkommen). Umweltdaten allein ergeben keinen OBIS-Datensatz.`,
       fr: `Cette archive ne contiendrait aucune occurrence. OBIS publie des enregistrements d'espèces : ajoutez une feuille avec des taxons (noms d'espèces avec leurs effectifs ou leur présence). Des données environnementales seules ne forment pas un jeu de données OBIS.`,
     },
-    technical: `The conversion produced 0 occurrence records. Every OBIS dataset has at least one occurrence record; an Event core with only profile levels and eMoF rows has none. The Occurrence table is empty, so its DWC-TERM-MISSING findings are not raised.`,
+    technical: `The conversion produced 0 occurrence records. Every OBIS dataset has at least one occurrence record; an Event core with only profile levels and eMoF rows has none. The Occurrence table is empty, so its DWC-TERM-MISSING findings are not raised. The :empty-quantity variant (params variant, column, rows) is raised on the sheet whose quantity column {column} is blank in all {rows} taxon rows; the zeros case is kept first.`,
     citations: [OBIS_OCCURRENCE],
   },
   {
@@ -2264,6 +2264,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}: as CONV-ENV-ONLY-SHEET, in an upload where another sheet that is not a profile file has a taxon column: this sheet is probably environmental data of the same cruise and is to be marked as a profile file.`,
   },
+  // CONV-NO-OCCURRENCES where a long sheet's quantity column is blank in every one of its taxon rows
+  'CONV-NO-OCCURRENCES:empty-quantity': {
+    plain: {
+      pl: `Kolumna ilości „{column}” arkusza „{sheet}” jest pusta we wszystkich {rows} wierszach, więc nic nie zapisano. Oznacz jako ilość kolumnę, w której są liczby, albo zaznacz samą obecność.`,
+      en: `The quantity column "{column}" of sheet "{sheet}" is empty in all {rows} rows, so nothing was written. Mark the column that holds the numbers as the quantity, or tick presence only.`,
+      de: `Die Mengenspalte „{column}“ des Blatts „{sheet}“ ist in allen {rows} Zeilen leer, daher wurde nichts geschrieben. Markieren Sie die Spalte mit den Zahlen als Menge oder wählen Sie nur das Vorkommen.`,
+      fr: `La colonne de quantité « {column} » de la feuille « {sheet} » est vide dans les {rows} lignes, donc rien n'a été écrit. Marquez comme quantité la colonne qui contient les nombres, ou cochez la présence seule.`,
+    },
+    technical: `{file}, {sheet}: the conversion produced 0 occurrence records and the quantity column {column} is blank in all {rows} taxon rows of the sheet, so every row was left out (CONV-NA-SKIPPED). Raised on that sheet. Zeros skipped with the full list not ticked keep the :zeros text.`,
+  },
   'CONV-NO-OCCURRENCES:zeros': {
     plain: {
       pl: `To archiwum nie zawierałoby ani jednego rekordu występowania: wszystkie liczebności wynosiły 0 i zostały pominięte, bo lista nie jest zadeklarowana jako pełna. Zaznacz pełną listę gatunków, aby zapisać je jako nieobecności, albo dodaj rekordy obecności.`,
@@ -2337,6 +2347,7 @@ const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: s
   if (f.ruleId === 'CONV-ID-DUPLICATE' && f.params.kind === 'level-other') return PROFILE_VARIANTS['CONV-ID-DUPLICATE:other'];
   if (f.ruleId === 'CONV-JOIN-KEY-BLANK' && f.params.side === 'description') return PROFILE_VARIANTS['CONV-JOIN-KEY-BLANK:description'];
   if (f.ruleId === 'CONV-ENV-ONLY-SHEET' && f.params.other === 'taxa') return PROFILE_VARIANTS['CONV-ENV-ONLY-SHEET:other-taxa'];
+  if (f.ruleId === 'CONV-NO-OCCURRENCES' && f.params.variant === 'empty-quantity') return PROFILE_VARIANTS['CONV-NO-OCCURRENCES:empty-quantity'];
   if (f.ruleId === 'CONV-NO-OCCURRENCES' && f.params.zeros === 'yes') return PROFILE_VARIANTS['CONV-NO-OCCURRENCES:zeros'];
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS' && f.params.tie === 'yes') return PROFILE_VARIANTS['CONV-SEAFLOOR-SIGNS:tie'];
   if (f.ruleId === 'CONV-LONG-UNSUPPORTED' && (f.params.reason === 'one-parameter' || f.params.reason === 'too-many')) return PROFILE_VARIANTS[`CONV-LONG-UNSUPPORTED:${f.params.reason}`];

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { parseEffortUnit, parseRateUnit, resolveQuantity } from '../../src/core/convert/quantity';
+import { biomassUnit, parseEffortUnit, parseRateUnit, resolveQuantity } from '../../src/core/convert/quantity';
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
 import { P01, P06, VERIFIED_CODES } from '../../src/core/convert/vocab';
 import type { Finding } from '../../src/core/types';
@@ -118,8 +118,8 @@ describe('concepts', () => {
 
   it('a unit with no verified P06 is kept as declared, with no id, and an accepted warning; no unit is ever converted', () => {
     const r = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude'], [['A', 'S', 3, 4, 55.1, 3.2]]), { quantity: { kind: 'density', unit: 'ind/L' } })] });
-    // ind/L is not a verified unit: per volume cannot be read from it, so the declaration asks for it
-    expect(find(r.blocking, 'CONV-QUANTITY-UNDECLARED')[0].params.missing).toBe('per volume or per area');
+    // ind/L has no verified P06 concept, but a litre is a volume: per volume is read from it (round 3), so the declaration is complete
+    expect(find(r.blocking, 'CONV-QUANTITY-UNDECLARED')).toEqual([]);
     const ok = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude'], [['A', 'S', 3, 4, 55.1, 3.2]]), { quantity: { kind: 'density', unit: 'ind/L', per: 'volume' } })] });
     expect(ok.blocking).toEqual([]);
     expect(find(ok.findings, 'CONV-UNIT-NO-P06')[0]).toMatchObject({ severity: 'warning', params: { unit: 'ind/L' } });
@@ -236,5 +236,24 @@ describe('a typed sample size (M3)', () => {
       expect(text(l), l).not.toMatch(/\{|\}/);
     }
     for (const reason of ['not-a-number', 'not-positive']) for (const l of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain({ ...f, params: { reason } }, l)).not.toContain(reason);
+  });
+});
+
+describe('litre units (round 3)', () => {
+  it.each(['ind/L', '#/ml', 'cells per litre', 'ind/liter', 'n/millilitres'])('density in %s resolves per volume with no P06', (unit) => {
+    const r = resolveQuantity({ kind: 'density', unit });
+    expect(r).toMatchObject({ ok: true, quantity: { type: P01.densityVolume, unitWithoutP06: unit } });
+    if (r.ok) expect(r.quantity.unitId).toBeUndefined();
+  });
+
+  it('parseRateUnit reads litres only when asked, and the verified m3 and m2 units are unchanged', () => {
+    expect(parseRateUnit('mg/L')).toBeUndefined();
+    expect(parseRateUnit('mg/L', { litre: true })).toMatchObject({ numerator: 'mg', per: 'volume' });
+    expect(parseRateUnit('mg/L', { litre: true })?.p06).toBeUndefined();
+    expect(parseRateUnit('ind/m3', { litre: true })?.p06).toBe(P06.perM3);
+  });
+
+  it('a biomass unit in mg/L is not read as a rate by biomassUnit (ruling 2)', () => {
+    expect(biomassUnit('mg/L')).toEqual({ perUnit: false });
   });
 });

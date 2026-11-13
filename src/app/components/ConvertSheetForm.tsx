@@ -45,7 +45,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
   const id = useId();
   const q = choice.quantity;
   const setQ = (patch: Partial<QuantityForm>): void => onChange({ ...choice, quantity: { ...q, ...patch } });
-  const rate = q.unit.trim() === '' ? undefined : parseRateUnit(q.unit);
+  const rate = q.unit.trim() === '' ? undefined : parseRateUnit(q.unit, { litre: true });
   const perArea = q.per === 'area' || (q.per === '' && rate?.per === 'area');
   const shapeLabel = `${id}-shape`;
   return (

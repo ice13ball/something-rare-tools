@@ -71,11 +71,15 @@ interface ParsedUnit {
 
 const COUNT_WORDS = '#|ind|inds|individuals?|n|no|org|organisms?|specimens?|cells?';
 const RATE = new RegExp(`^(${COUNT_WORDS}|g|mg)(?:/|per)(m3|m2)$`);
+const RATE_LITRE = new RegExp(`^(${COUNT_WORDS}|g|mg)(?:/|per)(l|ml)$`);
 const NEGATIVE_POWER = new RegExp(`^(${COUNT_WORDS}|g|mg)(m-3|m-2)$`);
 
-/** 'ind m-3', '#/m³', 'Individuals per m^2', 'g/m2' -> numerator and denominator; undefined when it is something else. */
-export function parseRateUnit(text: string): ParsedUnit | undefined {
-  const k = text
+/**
+ * 'ind m-3', '#/m³', 'Individuals per m^2', 'g/m2' -> numerator and denominator; undefined when it is something else. With `litre: true` a denominator of litres or
+ * millilitres (l, litre(s), liter(s), ml, millilitre(s), milliliter(s)) reads as per volume with no P06 concept (nothing is converted; the unit stays as written).
+ */
+export function parseRateUnit(text: string, opts: { litre?: boolean } = {}): ParsedUnit | undefined {
+  let k = text
     .toLowerCase()
     .replace(/[\s.·*_]/g, '')
     .replace(/³/g, '3')
@@ -84,6 +88,11 @@ export function parseRateUnit(text: string): ParsedUnit | undefined {
     .replace(/[−–⁻]/g, '-')
     .replace(/cubicmetre?s?|cubicmeters?/g, 'm3')
     .replace(/squaremetre?s?|squaremeters?/g, 'm2');
+  if (opts.litre === true) {
+    k = k.replace(/millilit(?:re|er)s?/g, 'ml').replace(/lit(?:re|er)s?/g, 'l');
+    const litre = RATE_LITRE.exec(k);
+    if (litre) return { numerator: litre[1] === 'g' ? 'g' : litre[1] === 'mg' ? 'mg' : 'count', per: 'volume' };
+  }
   let m = RATE.exec(k);
   let denominator: string | undefined = m?.[2];
   if (!m) {
@@ -206,7 +215,7 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
     out.type = P01.count;
   } else {
     const unit = (decl.unit ?? '').trim();
-    const any = unit === '' ? undefined : parseRateUnit(unit);
+    const any = unit === '' ? undefined : parseRateUnit(unit, { litre: true });
     // the unit must agree with the kind: grams are not a density, individuals are not a biomass
     const parsed = any !== undefined && (decl.kind === 'density' ? any.numerator === 'count' : any.numerator !== 'count') ? any : undefined;
     if (unit === '') missing.push('unit');
