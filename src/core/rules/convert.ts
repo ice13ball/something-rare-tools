@@ -1961,7 +1961,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     severity: 'error',
     params: ['count', 'rows', 'how'],
     plain: {
-      pl: `{count} {+count:próbka arkusza „{sheet}” nie ma|próbki arkusza „{sheet}” nie mają|próbek arkusza „{sheet}” nie ma} daty: komórki z datą są puste. Uzupełnij je albo pomiń te próbki i wypisz je na liście.`,
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą są puste. Uzupełnij je albo pomiń te próbki i wypisz je na liście.`,
       en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells are empty. Fill them in, or leave these samples out and list them.`,
       de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen sind leer. Füllen Sie sie aus oder lassen Sie diese Proben aus und listen Sie sie auf.`,
       fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date sont vides. Remplissez-les, ou laissez ces échantillons de côté et listez-les.`,
@@ -2135,12 +2135,22 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-EVENT-DATE-MISSING on a turned sheet: a turned sample is a source column, so it cannot be left out line by line
   'CONV-EVENT-DATE-MISSING:turned': {
     plain: {
-      pl: `{count} {+count:próbka arkusza „{sheet}” nie ma|próbki arkusza „{sheet}” nie mają|próbek arkusza „{sheet}” nie ma} daty. Uzupełnij wiersz lub kolumnę z datą albo dołącz arkusz opisujący próbki.`,
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty. Uzupełnij wiersz lub kolumnę z datą albo dołącz arkusz opisujący próbki.`,
       en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date. Fill in the date row or column, or join the sheet that describes the samples.`,
       de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum. Füllen Sie die Datumszeile oder -spalte aus oder verbinden Sie das Blatt, das die Proben beschreibt.`,
       fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date. Remplissez la ligne ou la colonne de date, ou joignez la feuille qui décrit les échantillons.`,
     },
     technical: `{file}, {sheet}: {count} sample event(s) of a turned sheet have no eventDate (OBIS requires one), on {rows} source line(s) (how={how}). A turned sample is a source column, so no leave-out is offered. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // CONV-EVENT-DATE-MISSING on a sheet read as one row per sample out of a long one: its lines are not the file's lines, so no leave-out is offered
+  'CONV-EVENT-DATE-MISSING:pivoted': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty. Uzupełnij daty w pliku (kolumna z datą musi mieć wartość w wierszach każdej próbki) albo dołącz arkusz opisujący próbki.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date. Fill in the dates in the file (the date column needs a value in the rows of every sample), or join the sheet that describes the samples.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum. Tragen Sie die Daten in der Datei ein (die Datumsspalte braucht in den Zeilen jeder Probe einen Wert) oder verbinden Sie das Blatt, das die Proben beschreibt.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date. Renseignez les dates dans le fichier (la colonne de date a besoin d'une valeur dans les lignes de chaque échantillon), ou joignez la feuille qui décrit les échantillons.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) of a pivoted sheet have no eventDate (OBIS requires one), on {rows} line(s) of the pivoted sheet (how={how}). No leave-out is offered: the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
   },
   // CONV-POSITION-NONE where a column is marked as a position but is blank in every row
   'CONV-POSITION-NONE:empty-column': {
@@ -2477,6 +2487,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.pivoted === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:pivoted'];
   if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.turned === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:turned'];
   if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'no-date-role') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:no-date-role'];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'missing') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-axis'];

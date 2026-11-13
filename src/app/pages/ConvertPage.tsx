@@ -1625,7 +1625,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
-          {f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'blank-cells' && f.params.turned !== 'yes' && onChoose !== undefined && (
+          {f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'blank-cells' && f.params.turned !== 'yes' && f.params.pivoted !== 'yes' && onChoose !== undefined && (
             <>
               {' '}
               <button type="button" className="button" data-testid="leave-out" data-reason="no-event-date" onClick={() => onChoose(f, 'leaveOut')}>

@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
+import { pivotConvertFile } from '../../src/core/convert/pivot';
 import { toDataset } from '../../src/core/convert/model';
 import { exportAllowed } from '../../src/core/convert/policy';
 import { notWrittenRows } from '../../src/core/convert/notWritten';
@@ -140,5 +141,41 @@ describe('CONV-EVENT-DATE-MISSING', () => {
     const r = run(rows);
     expect(ids(r.findings, 'CONV-DATE-ORDER-UNDECLARED').length).toBeGreaterThan(0);
     expect(ids(r.findings, 'CONV-EVENT-DATE-MISSING')).toEqual([]);
+  });
+
+  it('renders in Polish and German with no template code left in the text', () => {
+    for (const lang of ['pl', 'de', 'fr'] as const) {
+      for (const params of [{ how: 'blank-cells' }, { how: 'no-date-role' }, { how: 'blank-cells', turned: 'yes' }, { how: 'blank-cells', pivoted: 'yes' }] as Record<string, string>[]) {
+        const f = makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'counts.csv', sheet: 'Counts', params: { count: 2, rows: 2, ...params } });
+        const text = renderConvertPlain(f, lang);
+        expect(text, `${lang} ${JSON.stringify(params)}`).not.toMatch(/[{}]/);
+        if (params.how === 'blank-cells' && Object.keys(params).length === 1 && lang === 'pl') expect(text).toContain('2 próbki arkusza „Counts” nie mają daty');
+      }
+    }
+  });
+
+  it('lines left out do not feed the copies check', () => {
+    const copy = row('X05', null);
+    const rows = [row('X01', '2023-04-05'), row('X02', '2023-04-06'), copy, [...copy]];
+    const before = run(rows);
+    expect(before.findings.map((f) => f.ruleId)).toContain('CONV-ROW-COPIES');
+    const left = run(rows, leave(2));
+    expect(left.findings.map((f) => f.ruleId)).not.toContain('CONV-ROW-COPIES');
+    expect(ids(left.findings, 'CONV-ROW-LEFT-OUT')).toHaveLength(1);
+  });
+
+  it('a pivoted sheet offers no leave-out: the finding says to fill in the dates, and an answer is not run', () => {
+    const raw = fileOf(['Station', 'Date', 'Parameter', 'Value'], [['ZL1', '2023-06-14', 'Calanus finmarchicus', 3], ['ZL1', '2023-06-14', 'Oithona similis', 4], ['ZL2', null, 'Calanus finmarchicus', 5], ['ZL2', null, 'Oithona similis', 6]], 'S');
+    const file = pivotConvertFile(raw);
+    const input = sheetInput(file, { shape: 'wide', quantity: { kind: 'count' }, edit: { Station: { kind: 'sampleId' }, 'Calanus finmarchicus': { kind: 'taxon', header: true }, 'Oithona similis': { kind: 'taxon', header: true } } });
+    const r = convert({ sheets: [input] });
+    const f = ids(r.findings, 'CONV-EVENT-DATE-MISSING');
+    expect(f).toHaveLength(1);
+    expect(f[0].params.pivoted).toBe('yes');
+    expect(renderConvertPlain(f[0], 'en')).toContain('Fill in the dates in the file');
+    const answered = convert({ sheets: [{ ...input, leaveOut: [{ reason: 'no-event-date', count: f[0].params.rows as number }] }] });
+    expect(ids(answered.findings, 'CONV-EVENT-DATE-MISSING')).toHaveLength(1);
+    expect(ids(answered.findings, 'CONV-ROW-LEFT-OUT')).toEqual([]);
+    expect(ids(answered.findings, 'CONV-ROW-NOT-UNDERSTOOD')).toEqual([]);
   });
 });

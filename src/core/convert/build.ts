@@ -128,6 +128,8 @@ export interface UndatedSheet {
   /** The lines of those samples (`blank-cells`: the lines whose date cells are empty), sorted. */
   lines: number[];
   eventIds: string[];
+  /** The sheet is the pivot of a long one: its lines are not the file's lines, so no leave-out is offered. */
+  pivoted: boolean;
 }
 
 /**
@@ -167,7 +169,7 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
       lines.push(...named);
     }
     if (eventIds.length === 0) continue;
-    out.push({ inputIndex: rawSheets.indexOf(sin), file: sin.file.fileName, sheet: sin.sheet, how, samples: eventIds.length, lines: [...new Set(lines)].sort((a, b) => a - b), eventIds });
+    out.push({ inputIndex: rawSheets.indexOf(sin), file: sin.file.fileName, sheet: sin.sheet, how, samples: eventIds.length, pivoted: raw?.pivot !== undefined, lines: [...new Set(lines)].sort((a, b) => a - b), eventIds });
   }
   return out;
 }
@@ -1621,7 +1623,7 @@ export function convert(input: ConvertInput): ConvertResult {
   const skip = new Map<number, ReadonlySet<number>>();
   for (const u of first.undated) {
     const sin = input.sheets[u.inputIndex] as ConvertSheetInput | undefined;
-    if (sin === undefined || u.how !== 'blank-cells') continue;
+    if (sin === undefined || u.how !== 'blank-cells' || u.pivoted) continue;
     const sourceRows = first.ledger.find((l) => l.inputIndex === u.inputIndex && l.kind !== 'description' && l.sheet === sin.sheet)?.rows.source ?? -1;
     if (leaveOutHolds(sin, 'no-event-date', u.lines.length, sourceRows) !== undefined) skip.set(u.inputIndex, new Set(u.lines));
   }
@@ -1780,6 +1782,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     // where each row and cell of this sheet went, for the ledger (ledger.ts): written beside the `continue`s below, never read by the conversion itself
     const fate = new FateLog(sheet.rows.length);
     let rowPos = -1;
+    // the lines of samples without a date that the person left out (pass 2 of convert())
+    const noDateLeftOut = undatedLeftOut.get(rawInput.sheets.indexOf(sin));
     // the sample key the person picked (sampleKey.ts): the sample code of a row is made of it, and the guesses about visits and the station prefix are not applied to it
     const pickedKey = sin.profile === undefined && keyColumns(sin.sampleKey).length > 0 ? sin.sampleKey : undefined;
     const readKey =
@@ -1964,7 +1968,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
     const analyse = (drop: boolean, real: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line), quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey) })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line) || noDateLeftOut?.has(r.line) === true, quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey) })
         : {};
     let analysis = analyse(sin.dropCopies === true, sin.realCounts === true);
     // An answer that switches a check off (drop the copies, take a total once, real counts) is honoured only when today's analysis finds the count it was given for
@@ -2081,8 +2085,6 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       return min === undefined && max === undefined ? d : { ...d, verbatim: { ...d.verbatim, ...(min === undefined ? {} : { min }), ...(max === undefined ? {} : { max }) } };
     };
 
-    // the lines of samples without a date that the person left out (pass 2 of convert())
-    const noDateLeftOut = undatedLeftOut.get(rawInput.sheets.indexOf(sin));
     for (const row of sheet.rows) {
       rowPos++;
       if (ragged.has(row.line)) {
@@ -3029,7 +3031,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   settleEventColumns(ledger, events, tree.cruiseText);
   findings.push(...positionNoneFindings(input.sheets, events));
   const undated = undatedSheets(input.sheets, rawInput.sheets, events, samples);
-  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how } }));
+  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}) } }));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
   {
     const parts = new Map<RawSheet, SheetLedger[]>();
