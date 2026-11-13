@@ -125,6 +125,7 @@ import type { RuleSpec } from './spec';
  *   CONV-PROFILE-STATION-CAST-MATCHED count, names  names = "profile station <-> biology station" of every pair matched by ignoring the trailing cast number (info)
  *   CONV-PANGAEA-NAMES-FALLBACK (none)      a PANGAEA file's parameter list was not matched to its columns: the abbreviations of the table header are the names (info)
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
+ *   CONV-POSITION-NONE         count, column?   count = the sheet's sample events that have no position on themselves or an ancestor; column = (variant) the header of a latitude / longitude column that is blank in every row; file, sheet = the sheet
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
  *   CONV-SEAFLOOR-VALUE        count, reason    field = column, value = an example, lines = rows; reason = notation (a number with no exact plain text)
@@ -1846,6 +1847,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: the pressure column {column} has no unit, so its measurement rows carry no measurementUnit and no measurementUnitID, and level IDs cannot be made of it (they need decibars). The warning has to be accepted before the export.`,
   },
   {
+    id: 'CONV-POSITION-NONE',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `Żadna kolumna arkusza „{sheet}” nie jest oznaczona jako szerokość / długość geograficzna i żaden dołączony arkusz nie podaje pozycji ({count} {+count:próbka|próbki|próbek}). Oznacz kolumny szerokości i długości, dołącz arkusz opisujący próbki albo zadeklaruj jedną pozycję dla arkusza.`,
+      en: `No column of sheet "{sheet}" is marked as latitude / longitude, and no joined sheet gives a position ({count} {+count:sample|samples}). Mark the latitude and longitude columns, join the sheet that describes the samples, or declare one position for the sheet.`,
+      de: `Keine Spalte des Blatts „{sheet}“ ist als Breite / Länge markiert, und kein verbundenes Blatt liefert eine Position ({count} {+count:Probe|Proben}). Markieren Sie die Breiten- und Längenspalten, verbinden Sie das Blatt, das die Proben beschreibt, oder legen Sie eine Position für das Blatt fest.`,
+      fr: `Aucune colonne de la feuille « {sheet} » n'est marquée comme latitude / longitude, et aucune feuille jointe ne donne de position ({count} {+count:échantillon|échantillons}). Marquez les colonnes de latitude et de longitude, joignez la feuille qui décrit les échantillons, ou déclarez une position pour la feuille.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no latitude / longitude on themselves or on a parent, and the sheet has no column mapped as latitude or longitude (a mapped column that is blank in every row is the :empty-column variant). The output table's empty decimalLatitude / decimalLongitude column is not repeated.`,
+  },
+  {
     id: 'CONV-PROFILE-NO-STATION',
     category: 'B',
     severity: 'error',
@@ -1993,6 +2007,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
       fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de code de niveau ({+lineCount:ligne|lignes} {lines}). L'identifiant du niveau vient de vous : indiquez comme code d'échantillon une colonne à code unique par station (numéro de bouteille, de scan ou de Niskin), ou cochez l'accord pour la station et la profondeur telle qu'écrite (chaque ligne a besoin d'une profondeur ou d'une pression en décibars).`,
     },
     technical: `{file}, {sheet}:{lines}: {count} profile row(s) have no level code (code column: {column}). The eventID of a level is its station's eventID and the user's own code or, only with the user's approval for this sheet, per row the depth as written when it reads as a number, else the pressure as written with the suffix dbar (only for a pressure column in decibars); a row with neither is not given an ID, and an ID is never derived from the order of the rows. These rows were not converted.`,
+  },
+  // CONV-POSITION-NONE where a column is marked as a position but is blank in every row
+  'CONV-POSITION-NONE:empty-column': {
+    plain: {
+      pl: `Kolumna „{column}” arkusza „{sheet}” jest oznaczona jako pozycja, ale w każdym wierszu jest pusta ({count} {+count:próbka|próbki|próbek}). Oznacz kolumnę, która zawiera pozycje, dołącz arkusz opisujący próbki albo ustaw kolumnę „{column}” na „ignoruj” i zadeklaruj jedną pozycję dla arkusza.`,
+      en: `Column "{column}" of sheet "{sheet}" is marked as a position but is empty in every row ({count} {+count:sample|samples}). Mark the column that holds the positions, join the sheet that describes the samples, or set column "{column}" to ignore and then declare one position for the sheet.`,
+      de: `Die Spalte „{column}“ des Blatts „{sheet}“ ist als Position markiert, aber in jeder Zeile leer ({count} {+count:Probe|Proben}). Markieren Sie die Spalte mit den Positionen, verbinden Sie das Blatt, das die Proben beschreibt, oder stellen Sie die Spalte „{column}“ auf „ignorieren“ und legen Sie dann eine Position für das Blatt fest.`,
+      fr: `La colonne « {column} » de la feuille « {sheet} » est marquée comme position mais vide dans chaque ligne ({count} {+count:échantillon|échantillons}). Marquez la colonne qui contient les positions, joignez la feuille qui décrit les échantillons, ou mettez la colonne « {column} » sur « ignorer », puis déclarez une position pour la feuille.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no latitude / longitude on themselves or on a parent, and the column {column}, mapped as a position, is blank in every row. The output table's empty decimalLatitude / decimalLongitude column is not repeated.`,
   },
   'CONV-ID-DUPLICATE': {
     plain: {
@@ -2268,6 +2292,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-POSITION-NONE' && typeof f.params.column === 'string') return PROFILE_VARIANTS['CONV-POSITION-NONE:empty-column'];
   if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS[f.params.empty === 'yes' && typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-empty' : typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-columns' : 'CONV-NA-SKIPPED:rows'];
   if (f.ruleId === 'CONV-BIOMASS-UNIT-UNCLEAR' && f.params.none === 'yes') return PROFILE_VARIANTS['CONV-BIOMASS-UNIT-UNCLEAR:none'];
   if (f.ruleId === 'CONV-QUANTITY-REPEATED' && f.params.disagree === 'yes') return PROFILE_VARIANTS['CONV-QUANTITY-REPEATED:disagree'];

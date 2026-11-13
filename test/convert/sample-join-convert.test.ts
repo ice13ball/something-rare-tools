@@ -112,7 +112,7 @@ describe('a depth the merge wrote in metres (verbatimDepth)', () => {
   it('keeps the text its sheet wrote', () => {
     const file = xlsxFile('book.xlsx', {
       Counts: [['Sample', 'Taxon', 'Count', 'Depth [ft]'], ['X01', TAX, 1, 33], ['X02', TAX, 1, 33]],
-      Samples: [['Sample', 'Depth [km]'], ['X01', 0.0100584], ['X02', 0.02]],
+      Samples: [['Sample', 'Depth [km]', 'Latitude', 'Longitude'], ['X01', 0.0100584, 61.1, 4.2], ['X02', 0.02, 61.3, 4.6]],
     });
     const answer = [{ group: 'depth', take: 'description' as const, count: 1, exceptions: [] }];
     const { result } = converted([resultsInput(file, 'Counts'), descriptionInput(file, 'Samples')], [{ ...JOIN, conflicts: answer }]);

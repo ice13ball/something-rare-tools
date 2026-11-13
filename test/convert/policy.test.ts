@@ -20,7 +20,7 @@ describe('the 3.4 lists, exactly', () => {
   });
   it('blocking CONV rules', () => {
     expect([...BLOCK_CONV_RULES].sort()).toEqual(
-      ['CONV-COLUMN-UNNAMED', 'CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW', 'CONV-PRESENCE-VALUE', 'CONV-REPLICATE-MISSING', 'CONV-LONG-DUPLICATE', 'CONV-LONG-NO-PARAMETER', 'CONV-QUANTITY-UNDECLARED', 'CONV-COUNT-NOT-INTEGER', 'CONV-NEGATIVE-QUANTITY', 'CONV-SAMPLE-CODE-MISSING', 'CONV-KEY-TOO-LONG', 'CONV-PROFILE-NO-STATION', 'CONV-PROFILE-LEVEL-INCOMPLETE', 'CONV-ID-DUPLICATE', 'CONV-QUANTITY-REPEATED', 'CONV-ROW-COPIES', 'CONV-TAB-IN-VALUE', 'CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY', 'CONV-BASIS-UNSET', 'CONV-LICENCE-UNSET', 'CONV-EML-MISSING', 'CONV-SPLIT-UNDECIDED', 'CONV-MESH-INVALID', 'CONV-WORMS-UNDECIDED', 'CONV-NO-OCCURRENCES', 'CONV-PROFILE-NOTHING-READ', 'CONV-SEAFLOOR-UNIT', 'CONV-SEAFLOOR-VALUE', 'CONV-ROW-NOT-UNDERSTOOD', 'CONV-JOIN-CONFLICT', 'CONV-JOIN-UNIT-DIFFERS', 'CONV-JOIN-COLUMNS-DIFFER', 'CONV-JOIN-NO-DESCRIPTION', 'CONV-JOIN-NO-MATCH', 'CONV-JOIN-AMBIGUOUS', 'CONV-JOIN-KEY-BLANK'].sort(),
+      ['CONV-COLUMN-UNNAMED', 'CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW', 'CONV-PRESENCE-VALUE', 'CONV-REPLICATE-MISSING', 'CONV-LONG-DUPLICATE', 'CONV-LONG-NO-PARAMETER', 'CONV-QUANTITY-UNDECLARED', 'CONV-COUNT-NOT-INTEGER', 'CONV-NEGATIVE-QUANTITY', 'CONV-SAMPLE-CODE-MISSING', 'CONV-KEY-TOO-LONG', 'CONV-PROFILE-NO-STATION', 'CONV-PROFILE-LEVEL-INCOMPLETE', 'CONV-POSITION-NONE', 'CONV-ID-DUPLICATE', 'CONV-QUANTITY-REPEATED', 'CONV-ROW-COPIES', 'CONV-TAB-IN-VALUE', 'CONV-EMOF-ORPHAN', 'CONV-EMOF-EVENT-MISMATCH', 'CONV-EMOF-VALUE-EMPTY', 'CONV-EMOF-TYPE-EMPTY', 'CONV-BASIS-UNSET', 'CONV-LICENCE-UNSET', 'CONV-EML-MISSING', 'CONV-SPLIT-UNDECIDED', 'CONV-MESH-INVALID', 'CONV-WORMS-UNDECIDED', 'CONV-NO-OCCURRENCES', 'CONV-PROFILE-NOTHING-READ', 'CONV-SEAFLOOR-UNIT', 'CONV-SEAFLOOR-VALUE', 'CONV-ROW-NOT-UNDERSTOOD', 'CONV-JOIN-CONFLICT', 'CONV-JOIN-UNIT-DIFFERS', 'CONV-JOIN-COLUMNS-DIFFER', 'CONV-JOIN-NO-DESCRIPTION', 'CONV-JOIN-NO-MATCH', 'CONV-JOIN-AMBIGUOUS', 'CONV-JOIN-KEY-BLANK'].sort(),
     );
   });
   it('to accept, per rule and per run', () => {
@@ -107,8 +107,10 @@ describe('on real conversions', () => {
   it('a sheet with no position or date is blocked by the Event checks; the description and the choices block by their own rules', async () => {
     const e = await exportSheet(['Sample', 'Abra alba'], [['A1', 4]], { quantity: { kind: 'count' }, meta: { title: '', abstract: '', creators: '', contactEmail: 'nope', institutionCode: '', licence: '', basisOfRecord: '' } });
     const ids = judge(e.findings).blocking.map((x) => x.ruleId);
-    expect(ids).toEqual(expect.arrayContaining(['DWC-TERM-EMPTY', 'CONV-EML-MISSING', 'CONV-LICENCE-UNSET', 'CONV-BASIS-UNSET']));
+    expect(ids).toEqual(expect.arrayContaining(['CONV-POSITION-NONE', 'CONV-EML-MISSING', 'CONV-LICENCE-UNSET', 'CONV-BASIS-UNSET']));
     expect(e.files).toEqual([]);
+    // the position is said once, in the sheet's terms (CONV-POSITION-NONE); the Event table's empty decimalLatitude / decimalLongitude column is not repeated
+    expect(e.findings.filter((x) => x.ruleId === 'DWC-TERM-EMPTY' && (x.field === 'decimalLatitude' || x.field === 'decimalLongitude'))).toEqual([]);
     const missing = e.findings.find((x) => x.ruleId === 'CONV-EML-MISSING')!;
     expect(String(missing.params.fields).split(', ')).toEqual(['title', 'abstract', 'creator', 'contact email', 'institution code', 'dataset name']);
     // basisOfRecord unset is reported once, not also as an empty column

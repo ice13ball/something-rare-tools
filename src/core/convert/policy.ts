@@ -55,6 +55,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-KEY-TOO-LONG',
   'CONV-PROFILE-NO-STATION',
   'CONV-PROFILE-LEVEL-INCOMPLETE',
+  // a sheet with sample events and no position anywhere, said in the sheet's terms
+  'CONV-POSITION-NONE',
   'CONV-ID-DUPLICATE',
   // a per-taxon total repeated on the size-class rows of a sample: the export would count it once per size class
   'CONV-QUANTITY-REPEATED',

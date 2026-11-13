@@ -9,7 +9,7 @@ import type { Cell } from './helpers';
 
 const HEADER = ['Sample', 'Station', 'Calanus finmarchicus', 'Oithona similis'];
 const run = (rows: Cell[][], fullList: boolean, kind: 'count' | 'density' = 'count') =>
-  convert({ sheets: [sheetInput(fileOf(HEADER, rows), { quantity: kind === 'count' ? { kind: 'count' } : { kind: 'density', unit: 'ind/m3' } })], options: { fullList } });
+  convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude'], rows.map((r) => [...r, 55.1, 3.2])), { quantity: kind === 'count' ? { kind: 'count' } : { kind: 'density', unit: 'ind/m3' } })], options: { fullList } });
 const find = (fs: Finding[], id: string) => fs.filter((f) => f.ruleId === id);
 
 describe('zeros', () => {

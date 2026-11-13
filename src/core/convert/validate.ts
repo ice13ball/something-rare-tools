@@ -153,7 +153,11 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   const judged: ConvertedDataset = ds.metadata.basisOfRecord === '' ? { ...ds, occurrences: ds.occurrences.map((o) => ({ ...o, basisOfRecord: 'HumanObservation' })) } : ds;
   const tables = buildTables(judged);
   const out: Finding[] = [];
-  pushAll(out, eventFindings(tables.event, opts));
+  // an empty decimalLatitude / decimalLongitude column of the Event table is said once, in the sheet's terms (CONV-POSITION-NONE), when every sheet that wrote an event says it
+  const noPosition = new Set(stage1.filter((f) => f.ruleId === 'CONV-POSITION-NONE').map((f) => `${f.file}\u0000${f.sheet}`));
+  const sources = new Set(ds.events.filter((e) => e.source !== undefined).map((e) => `${e.source!.file}\u0000${e.source!.sheet}`));
+  const positionSaid = noPosition.size > 0 && sources.size > 0 && [...sources].every((k) => noPosition.has(k));
+  pushAll(out, eventFindings(tables.event, opts).filter((f) => !(positionSaid && f.ruleId === 'DWC-TERM-EMPTY' && (f.field === 'decimalLatitude' || f.field === 'decimalLongitude'))));
   // the Occurrence table's own recommended-term finding is only the empty scientificNameID column, which CONV-NAMEID-MISSING says in the converter's words
   // An EMPTY Occurrence table (an upload with no taxon: CONV-NO-OCCURRENCES says so) is not checked: "eventDate, decimalLatitude, decimalLongitude are missing" would send the user to fill a table that
   // has no row. With no occurrence the archive is refused whatever the table holds.

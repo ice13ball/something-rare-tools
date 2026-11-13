@@ -116,7 +116,7 @@ describe('a leftover that is not a plausible Latin name is put to the user (M5)'
   });
 
   it('an edited approval is used as given by convert, doubt or not', () => {
-    const f = fileOf(['Sample', 'Station', 'Microcalanus pusillus/pygmaeus'], [['a', 'S', 3]]);
+    const f = fileOf(['Sample', 'Station', 'Microcalanus pusillus/pygmaeus', 'Latitude', 'Longitude'], [['a', 'S', 3, 55.1, 3.2]]);
     const s = [sheetInput(f, { quantity: { kind: 'count' } })];
     expect(convert({ sheets: s }).blocking.map((x) => x.ruleId)).toEqual(['CONV-SPLIT-UNDECIDED']);
     const r = convert({ sheets: s, approvedSplits: { 'Microcalanus pusillus/pygmaeus': { verbatimIdentification: 'x', scientificName: 'Microcalanus', identificationQualifier: 'sp.' } } });

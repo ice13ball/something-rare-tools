@@ -62,6 +62,40 @@ import type { SampleJoinInfo } from './sampleJoin';
  * the preview next to the list of what has to be fixed; `ok` says whether the records may go to the writer (stage 2).
  */
 
+/**
+ * CONV-POSITION-NONE: a sheet that wrote sample events, none of which has a position on itself or on an ancestor, and whose mapping gives no latitude / longitude
+ * (or only a position column that is blank in every row). Said in the sheet's terms, so the output table's empty decimalLatitude / decimalLongitude column is not
+ * the only message. A profile sheet is not judged here (CONV-PROFILE-LEVEL-INCOMPLETE). A position lent by a confirmed join or declared for the sheet is on the events
+ * already, so the chain test covers it.
+ */
+function positionNoneFindings(sheets: readonly ConvertSheetInput[], events: readonly EventRec[]): Finding[] {
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const positioned = (e: EventRec): boolean => {
+    const seen = new Set<string>();
+    for (let x: EventRec | undefined = e; x !== undefined && !seen.has(x.id); x = x.parentId === undefined ? undefined : byId.get(x.parentId)) {
+      if (x.lat !== undefined || x.lon !== undefined) return true;
+      seen.add(x.id);
+    }
+    return false;
+  };
+  const out: Finding[] = [];
+  for (const sin of sheets) {
+    if (sin.profile !== undefined) continue;
+    const mine = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet);
+    if (mine.length === 0 || mine.some(positioned)) continue;
+    const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
+    const cols = sin.mapping.columns.filter((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude');
+    let column: string | undefined;
+    if (cols.length > 0) {
+      const blank = cols.find((c) => raw !== undefined && raw.rows.every((r) => isBlankCell(r.cells[c.index] ?? null)));
+      if (blank === undefined) continue;
+      column = blank.header;
+    }
+    out.push(makeConvertFinding('CONV-POSITION-NONE', { file: sin.file.fileName, sheet: sin.sheet, params: column === undefined ? { count: mine.length } : { count: mine.length, column } }));
+  }
+  return out;
+}
+
 export interface ConvertSheetInput {
   file: ParsedFile;
   /** The sheet's name inside `file`. */
@@ -2836,6 +2870,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   const events: EventRec[] = tree.events;
   // a column read for the events is "event" in the ledger only where the events that were written carry what it gives
   settleEventColumns(ledger, events, tree.cruiseText);
+  findings.push(...positionNoneFindings(input.sheets, events));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
   {
     const parts = new Map<RawSheet, SheetLedger[]>();

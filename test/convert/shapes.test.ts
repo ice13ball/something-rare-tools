@@ -169,7 +169,7 @@ describe('W2: wide density with life stages and sp. / cf.', () => {
   });
 
   it('two columns that give the same taxon in one sample are kept apart with the accepted warning, never summed', () => {
-    const f = fileOf(['Sample', 'Station', 'Calanus finmarchicus c2', 'Calanus finmarchicus, c2'], [['X1', 'S', 3, 4]]);
+    const f = fileOf(['Sample', 'Station', 'Calanus finmarchicus c2', 'Calanus finmarchicus, c2', 'Latitude', 'Longitude'], [['X1', 'S', 3, 4, 55.1, 3.2]]);
     const s = [sheetInput(f, { quantity: { kind: 'count' } })];
     const res = convert({ sheets: s, approvedSplits: approveAll({ sheets: s }) });
     expect(res.occurrences.map((o) => [o.id, o.individualCount])).toEqual([['X1:Calanus finmarchicus c2', 3], ['X1:Calanus finmarchicus, c2', 4]]);
@@ -274,7 +274,7 @@ describe('L2: long without an occurrenceID, with a lifeStage column', () => {
 
 describe('sex from a ", f" / ", m" suffix', () => {
   it('goes to the sex term, not to lifeStage, and needs the same approval as any split', () => {
-    const f = fileOf(['Sample', 'Station', 'Metridia longa, f', 'Metridia longa, m'], [['a', 'S', 2, 3]]);
+    const f = fileOf(['Sample', 'Station', 'Metridia longa, f', 'Metridia longa, m', 'Latitude', 'Longitude'], [['a', 'S', 2, 3, 55.1, 3.2]]);
     const s = [sheetInput(f, { quantity: { kind: 'count' } })];
     expect(ids(convert({ sheets: s }).blocking)).toEqual(['CONV-SPLIT-UNDECIDED']);
     const r = convert({ sheets: s, approvedSplits: approveAll({ sheets: s }) });

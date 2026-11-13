@@ -1686,6 +1686,8 @@ Severity alone is not the policy. Each finding is **blocking**, **needs an accep
 shown**, decided by lists of rule ids; a rule on no list blocks when its severity is `error` (a rule
 nobody judged must not let a bad archive through) and is only shown otherwise.
 
+A sheet with no position at all is named in its own terms (`CONV-POSITION-NONE`, blocks); the output table's empty-column finding is not repeated.
+
 - **Blocks**: Darwin Core structure of the output tables (`DWC-TERM-MISSING`, empty required terms,
   duplicate or dangling ids, a loop in the event hierarchy, values outside the vocabularies),
   impossible coordinates, `ROW-NO-COORD`, `ROW-DEPTH-MIN-MAX`, `ROW-DATE-UNPARSEABLE` (a warning on
