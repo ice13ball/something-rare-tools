@@ -105,6 +105,13 @@ describe('the mapping table shows the reason in the reader language', () => {
     }
   });
 
+  it('the not-taxon reason shows the word that made it', () => {
+    const p = proposeConvertColumns(rawSheet(['Station', 'Coords N', 'Calanus finmarchicus'], [['S', 55.5, 3], ['T', 55.9, 4]]), CTX).find((x) => x.header === 'Coords N')!;
+    expect(p.reasonCode).toBe('not-taxon-name');
+    render(<MappingEditor sheet="S" proposals={[p]} samples={[['1']]} mapping={{ sheet: 'S', columns: [{ index: p.index, header: p.header, role: p.role }] }} roleKinds={CONVERT_ROLE_CHOICES} rolesTip="convertRoles" onChange={() => {}} />);
+    expect(document.querySelector('.low-note .muted')?.textContent).toContain('the name says "coords"');
+  });
+
   it('/check proposals carry no reason code, so /check shows what it always showed', () => {
     const p = { index: 0, header: 'x', cleanHeader: 'x', role: { kind: 'variable' as const, variable: 'x' }, confidence: 'low' as const, reason: 'numeric column with an unrecognised name' };
     render(<MappingEditor sheet="S" proposals={[p]} samples={[['1']]} mapping={{ sheet: 'S', columns: [{ index: 0, header: 'x', role: p.role }] }} onChange={() => {}} />);

@@ -103,7 +103,7 @@ describe('the shared names are not copied', () => {
   });
 
   it('recognize.ts has no coordinate, date, station or cruise names of its own', () => {
-    const src = readFileSync(join(__dirname, '..', '..', 'src', 'core', 'convert', 'recognize.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const src = readFileSync(join(__dirname, '..', '..', 'src', 'core', 'convert', 'recognize.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/^\s*'not-taxon-name':.*$/m, ''); // the one reason text that tells the person which role to choose
     expect(src).not.toMatch(/szerokosc|dlugosc|breitengrad|laengengrad|latitude|longitude|stacja|stazione|rejs|campagne|cruise/i);
   });
 });

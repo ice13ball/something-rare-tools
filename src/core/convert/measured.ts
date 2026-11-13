@@ -18,7 +18,23 @@ import { foldDiacritics } from '../recognize/vocab';
  *   5. anything else                                                               -> 'unknown' (the caller keeps what it did before)
  */
 
-export type NameKind = 'descriptor' | 'variable' | 'taxon' | 'unknown';
+export type NameKind = 'descriptor' | 'variable' | 'taxon' | 'not-taxon' | 'unknown';
+
+/*
+ * Words that say a header is not a taxon (Task 4, round 3). Header-based only: no role is guessed from values.
+ * WoRMS check 2026-11-13 (AphiaIDByName, marine_only=false): every word below returned 204 (no genus or species of that name).
+ */
+const POSITION_WORDS: ReadonlySet<string> = new Set(['coordinate', 'coordinates', 'coord', 'coords', 'position', 'gps', 'latlon', 'lat', 'lon', 'latitude', 'longitude', 'northing', 'easting', 'utm']);
+const INDEX_WORDS: ReadonlySet<string> = new Set(['index', 'indices', 'shannon', 'simpson', 'evenness', 'richness', 'diversity', 'velocity', 'speed', 'ndvi']);
+
+/**
+ * The first word of the name that says it is no taxon: a position word, an index or speed word, or (in a name of more than one word) a known variable token ("w_PH").
+ * Words are split on spaces, "_" and camel case, never on "-" or "/" ("Pseudo-nitzschia", "Acartia/Centropages" are not split).
+ */
+export function notTaxonWord(header: string): string | undefined {
+  const words = namePart(header).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[\s_]+/).filter((w) => w !== '');
+  return words.find((w) => POSITION_WORDS.has(w) || INDEX_WORDS.has(w) || (words.length > 1 && VARIABLE_TOKENS.has(w)));
+}
 
 /** Columns that tell samples of one station apart (and are no measurement and no species). Compared on the folded name: "Replicate no", "Niskin", "Station no". */
 const DESCRIPTOR = /^(?:(?:replicates?|replikat(?:e|s)?|reps?|casts?|bottles?|niskin|niskin bottles?|runs?|hauls?|tows?|subsamples?|cores?|sections?|slices?|frames?)(?: no| nr| num| number| id| n)?|(?:station|sample|stn)s?(?: no| nr| num| number))$/;
@@ -129,7 +145,7 @@ export function nameKind(header: string, abundance = false): NameKind {
   if (hasCentralStatisticToken(raw) && !abundance && !hasBinomialBeforeStatistic(raw)) return 'variable';
   if (abundance) return 'taxon';
   if (MEASUREMENT_WORDS.has(key) || MEASUREMENT_WORDS.has(lead) || MEASUREMENT_WORDS.has(lead.replace(/[^a-z0-9]/g, ''))) return 'variable';
-  if (hasTaxonShape(asLetters)) return 'taxon';
+  if (hasTaxonShape(asLetters)) return notTaxonWord(header) === undefined ? 'taxon' : 'not-taxon';
   if (/[\d/:]/.test(asLetters)) return 'variable';
   const letters = raw.replace(/[^A-Za-z]/g, '');
   if (letters.length > 0 && letters.length <= 5 && letters === letters.toUpperCase() && !/\s/.test(raw.trim())) return 'variable';

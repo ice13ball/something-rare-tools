@@ -38,7 +38,7 @@ const checkKey = (code: string): UiKey => `check.reason.${code}` as UiKey;
  */
 function reasonText(p: ColumnProposal): string | undefined {
   if (p.reasonCode === undefined) return p.reason;
-  if (!(checkKey(p.reasonCode) in UI.en)) return t(`convert.reason.${p.reasonCode}` as UiKey);
+  if (!(checkKey(p.reasonCode) in UI.en)) return t(`convert.reason.${p.reasonCode}` as UiKey, p.reasonParams);
   const parts = [...(p.reasonLead === undefined ? [] : [p.reasonLead]), p.reasonCode, ...(p.reasonNotes ?? [])];
   return parts.map((c) => t(checkKey(c), p.reasonCode === c ? p.reasonParams : undefined)).join('; ');
 }

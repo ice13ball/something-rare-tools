@@ -8,7 +8,7 @@ import { foldDiacritics, headerKey, isCanonicalKey } from '../recognize/vocab';
 import { CONVERTER_VARIABLES, conceptVariable, foldUnit, isAbundanceUnit, isDecibar } from './vocab';
 import { isPercentUnit, verifiedConcept } from './nerc';
 import { hasCentralStatisticToken } from '../summaryLabels';
-import { isMeasurementWord, nameKind } from './measured';
+import { isMeasurementWord, nameKind, notTaxonWord } from './measured';
 import { holdsDigitDates, holdsOneFractionalValue, holdsYearOfDate, holdsRunningNumbers, holdsYears, isGeometryUnit, isPlainCountUnit, latinNameShare } from './columnValues';
 import { isDepthBoundKey } from '../recognize/geocodes';
 import { SEDIMENT_CONTEXT, isPlainDepthName, isSeafloorName, isSiteDepthName, seafloorUnitFromHeader, seafloorUnitOf } from './seafloor';
@@ -209,6 +209,7 @@ export const OVERLAY_REASONS = {
   'taxon-marks': 'cells are presence marks (+, x) and numbers: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-numeric': 'numeric column with an unrecognised name: its header may be a taxon (confirm all taxon columns at once)',
   'taxon-mean': 'its header reads as the mean of a count of organisms (a species mean): its header may be a taxon; confirm it, or mark the column as a variable if it is a summary column',
+  'not-taxon-name': 'the name says "{word}"; not proposed as a taxon. If it is a latitude/longitude or a measured variable, choose that role',
   'summary-header': 'its header reads as a total or a sum, so it is not proposed as a taxon (mark it as one yourself if it is)',
   'measured-name': 'the name is a measured variable (a nutrient, a pigment, an isotope ratio, a rate), not a species: it stays a variable, and nothing is written for it as a taxon',
   'measured-word': 'the name is a physical or optical measurement word (e.g. temperature, fluorescence, turbidity), not a species: it stays a variable, and nothing is written for it as a taxon',
@@ -364,9 +365,9 @@ const isVerticalProposal = (q: ColumnProposal, exclude: ReadonlySet<number>): bo
  * The unit of a column whose name did not decide: a name that is no taxon shape at all ('unknown': its first word is not genus-like) with any unit that does not count organisms is a
  * measurement. A taxon-shaped name is never made a variable by its unit: a species may carry a biomass or a rate ("[mmol C/m3]", "[kg/h]").
  */
-function isMeasurementUnit(kind: 'taxon' | 'unknown' | 'variable' | 'descriptor', unit: string | undefined, unitText: string | undefined): boolean {
+function isMeasurementUnit(kind: 'taxon' | 'unknown' | 'not-taxon' | 'variable' | 'descriptor', unit: string | undefined, unitText: string | undefined): boolean {
   const text = unitText ?? unit;
-  return kind === 'unknown' && text !== undefined && !isAbundanceUnit(text) && !isAbundanceUnit(unit);
+  return (kind === 'unknown' || kind === 'not-taxon') && text !== undefined && !isAbundanceUnit(text) && !isAbundanceUnit(unit);
 }
 
 /** The header without its unit and bracket text: the name of a variable the converter makes of the column. */
@@ -737,12 +738,12 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
       const squareUnit = /\[[^[\]]+\]/.test(stripTypeSuffix(p.header));
       // a volume or an area unit makes the column the sampling effort only on a name that is no taxon shape at all ('Zostera marina [m2]', 'Posidonia oceanica [ha]' are species with a cover)
       const spaceUnit = /^(?:l|ml|dl|cl|dm3|cm3|m3|m2|cm2|km2|ha)$/.test(unitFolded);
-      const geometry = squareUnit && unitFolded !== '' && isGeometryUnit(unitFolded) && (kind === 'unknown' || unitFolded !== 'm') && (!spaceUnit || kind === 'unknown');
+      const geometry = squareUnit && unitFolded !== '' && isGeometryUnit(unitFolded) && (kind === 'unknown' || kind === 'not-taxon' || unitFolded !== 'm') && (!spaceUnit || kind === 'unknown' || kind === 'not-taxon');
       // what the VALUES and the UNIT rule out (a false variable loses occurrences, so only what no species column can be). Values are read only on a column that is filled on EVERY row, never with
       // an abundance unit, and a one-value rule never on a name that is shaped like a taxon; the years rule on a name that is not, or that says year ('SampleYear', 'Year'). A genus name with
       // none of these stays a candidate, whatever its unit: 'Calanus', 'Acartia', 'Calanus [ind/m3]'.
       const yearName = nameWithComment(p.header).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z]+/).some((w) => w === 'year' || w === 'years' || w === 'yr');
-      if (kind !== 'descriptor' && kind !== 'variable' && !abundance && (kind !== 'taxon' || yearName) && holdsYears(sheet, p.index, ctx.decimalComma)) {
+      if (kind !== 'descriptor' && kind !== 'variable' && kind !== 'not-taxon' && !abundance && (kind !== 'taxon' || yearName) && holdsYears(sheet, p.index, ctx.decimalComma)) {
         p.role = { kind: 'ignore' };
         p.confidence = 'low';
         why(p, 'year-values');
@@ -753,7 +754,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         p.confidence = 'low';
         if (space) why(p, 'unit-effort');
         else why(p, 'unit-variable');
-      } else if (kind !== 'descriptor' && kind !== 'variable' && kind !== 'taxon' && !abundance && holdsOneFractionalValue(sheet, p.index, ctx.decimalComma)) {
+      } else if (kind !== 'descriptor' && kind !== 'variable' && kind !== 'taxon' && kind !== 'not-taxon' && !abundance && holdsOneFractionalValue(sheet, p.index, ctx.decimalComma)) {
         p.role = { kind: 'ignore' };
         p.confidence = 'low';
         why(p, 'constant-value');
@@ -768,6 +769,11 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
         // a plain CTD / optical word gets its own reason: the nutrient, pigment, isotope and rate examples of the other one would be wrong for it
         if (kind === 'variable' && isMeasurementWord(p.header)) why(p, 'measured-word');
         else why(p, 'measured-name');
+      } else if (kind === 'not-taxon') {
+        p.role = { kind: 'ignore' };
+        p.confidence = 'low';
+        why(p, 'not-taxon-name');
+        p.reasonParams = { word: notTaxonWord(p.header) ?? '' };
       } else {
         p.role = { kind: 'taxon', header: true };
         p.confidence = 'low';
