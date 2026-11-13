@@ -191,10 +191,18 @@ export function citationIdentifier(m: Pick<DatasetMetadata, 'citation'>, slug: s
   return doi === undefined ? slug : `https://doi.org/${doi}`;
 }
 
+/** The methods element: the person's text first, then one methodStep per paragraph the converter generated; nothing when there is neither. */
+function methodsXml(text: string, steps: readonly string[]): string[] {
+  const own = text.trim() === '' ? [] : [text];
+  const all = [...own, ...steps];
+  if (all.length === 0) return [];
+  return ['    <methods>', ...all.flatMap((t) => ['      <methodStep>', '        <description>', para(t, '          '), '        </description>', '      </methodStep>']), '    </methods>'];
+}
+
 /**
  * The EML of a dataset. Throws when the licence is not chosen: nothing is defaulted (validate.ts blocks before this is called).
  */
-export function buildEml(ds: Pick<ConvertedDataset, 'events' | 'occurrences' | 'metadata'>, opts: EmlOptions): string {
+export function buildEml(ds: Pick<ConvertedDataset, 'events' | 'occurrences' | 'metadata' | 'methodSteps'>, opts: EmlOptions): string {
   const m = ds.metadata;
   if (m.licence === '') throw new Error('No licence is chosen: the EML intellectualRights element is never defaulted.');
   const lic = LICENCE_ULINK[m.licence];
@@ -262,7 +270,7 @@ export function buildEml(ds: Pick<ConvertedDataset, 'events' | 'occurrences' | '
     '    </intellectualRights>',
     ...(coverage.length > 0 ? ['    <coverage>', ...coverage, '    </coverage>'] : []),
     personXml('contact', contactLine, email, '    ', m.organisations),
-    ...(m.methods.trim() === '' ? [] : ['    <methods>', '      <methodStep>', '        <description>', para(m.methods, '          '), '        </description>', '      </methodStep>', '    </methods>']),
+    ...methodsXml(m.methods, ds.methodSteps ?? []),
     '  </dataset>',
     '  <additionalMetadata>',
     '    <metadata>',

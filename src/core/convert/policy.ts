@@ -49,6 +49,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-LONG-NO-PARAMETER',
   'CONV-QUANTITY-UNDECLARED',
   'CONV-COUNT-NOT-INTEGER',
+  'CONV-COVER-RANGE',
+  'CONV-CLASS-VALUE',
   'CONV-NEGATIVE-QUANTITY',
   'CONV-SAMPLE-CODE-MISSING',
   // a picked sample key that makes an identifier too long for a Darwin Core archive

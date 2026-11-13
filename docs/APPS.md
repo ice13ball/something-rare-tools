@@ -1367,6 +1367,9 @@ The user declares, **per sheet**, the kind of quantity (`resolveQuantity`, `conv
 | count | `individualCount` (a whole number), `organismQuantity` with `organismQuantityType` "individuals", and an eMoF row `OCOUNT01` (no unit id). |
 | density | an eMoF row on the occurrence: `SDBIOL01` (per volume of water) or `SDBIOL02` (per area of the bed) with the declared unit and its P06 unit id when verified. |
 | biomass | an eMoF row on the occurrence by basis (wet, dry or ash-free dry weight) and per volume or area (`SDBIOL03`, `04`, `05`, `07`, `08`, `09`); per area the user **must** say whether water column or bed (there is no default, and only the bed has a verified concept). |
+| biomass per sample | `per: 'sample'`, with a basis and a mass unit **g, mg or kg** (no medium is asked, because no area or volume is claimed): an eMoF row of the S06 concept for the basis (wet `S0600088`, dry `S0600087`, ash-free dry `S0600086`) with the P06 unit (`UGRM`, `MGRM`, `KGXX`); a rate unit (`g/m2`) is missing "unit not per sample". A declared sample size is said in `measurementRemarks`. |
+| cover | percent cover of the area by the taxon, 0 to 100: `organismQuantity` = the value, `organismQuantityType` "percentage coverage" (term `percentageCoverage` of the GBIF Quantity Type Vocabulary, opened 2026-11-13), no `individualCount`, and an eMoF row `PCOV7736` (P01, "Proportion coverage of biological entity specified elsewhere within a given area of the bed"; the deprecated `SDBIOL10` is never written) with unit `%` and P06 `UPCT`. A value outside 0 to 100 blocks (`CONV-COVER-RANGE`); a declared unit that is not a percent is missing "unit not percent". |
+| abundance class | an **ordinal scale** the user types (a name, whole numbers `min` < `max`, optionally the words for each class): `organismQuantity` = the class, `organismQuantityType` "abundance class `<scale>`" (`0–5`, or `Name 0–5`), **never** `individualCount`; an eMoF row `abundance class (<scale>)` with the typed meaning of that class in `measurementRemarks`, no unit and no concept id (there is no verified concept: `CONV-NERC-UNKNOWN` says so). A value that is not a whole number of the scale blocks (`CONV-CLASS-VALUE`). The scale and the typed meanings are also written to the EML methods (8.9). |
 | effort | `sampleSizeValue` and `sampleSizeUnit` on the sample event plus an eMoF row `VOLWBSMP` (volume) or `AREABEDS` (area): one value for every sample, or a column with the `effort` role. |
 
 **Nothing is converted**: the unit is written as declared. The declared unit is read for its
@@ -1813,8 +1816,7 @@ core and the two extensions, with `metadata="eml.xml"`.
 `intellectualRights` (the licence, machine-readable through a `ulink`, only from an explicit
 choice of **CC0-1.0, CC-BY-4.0 or CC-BY-NC-4.0**, the set the IPT supports; there is **no default**),
 coverage (bounding box of the event positions, the temporal range of the event dates, up to
-`MAX_TAXA` (200) distinct scientific names with the total stated), contact, methods (only when
-typed) and the GBIF citation (typed, or built from creators, year and title; with the DOI as an
+`MAX_TAXA` (200) distinct scientific names with the total stated), contact, methods (the person's text, if typed, then one `methodStep` per paragraph the converter generated: for each sheet that declared an abundance class scale, `Sheet <S> of <F>: abundance classes <scale>: <n> = <meaning>; ...`, only the meanings the user typed; with neither, no methods element) and the GBIF citation (typed, or built from creators, year and title; with the DOI as an
 `https://doi.org/` identifier when the citation contains one).
 
 **The zip** (`convert/zip.ts`): a hand-written writer (no dependency), UTF-8 names, a fixed 1980

@@ -556,6 +556,7 @@ Species-specific P01 codes exist in huge numbers (e.g. "Abundance of Chaetoceros
 
 Caveats:
 - BioCheck still lists deprecated P01 SDBIOL10 in its quantity list (`files/workingEnvironment.R`); in NVS SDBIOL10 is deprecated (opened, true, replaced by PCOV7736). Deprecated codes are flagged by BioCheck ("This measurementTypeID is deprecated"), so the converter must resolve `owl:deprecated` at proposal time and at export time.
+- Opened 2026-11-13 (round 3, item 7): P01/PCOV7736 "Proportion coverage of biological entity specified elsewhere within a given area of the bed" (owl:deprecated false; "The proportion of a given area of the seabed covered by an identified biological object described elsewhere in the metadata"; related unit P06/UPCT) is the replacement of SDBIOL10 and is what a percent cover is written with. GBIF Quantity Type Vocabulary (rs.gbif.org/vocabulary/gbif/quantity_type_2023-02-28.xml) term `percentageCoverage`, title "percentage coverage", is the organismQuantityType of a cover. There is no verified NERC concept for an abundance class: it is written without a measurementTypeID.
 - Q01 codes: deprecated, remapped to P01 (manual). BioCheck's `BODCeffort` still accepts the string "Q01" and `Q0100002` (instrument) - legacy.
 
 ---------------------------------------------------------------------------

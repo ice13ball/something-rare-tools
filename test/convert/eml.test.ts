@@ -35,6 +35,17 @@ describe('structure', () => {
     expect(gbif.getElementsByTagName('citation')[0].textContent).toBe('Example, Ada; Sample, Bob (2026). Synthetic zooplankton counts of an invented bay (invented values). Dataset.');
   });
 
+  it('methods: the person\'s text alone is one methodStep as before, neither text nor generated steps writes no methods, generated steps follow the text', async () => {
+    const base = await exportSheet(W2_HEADER, W2_ROWS, { quantity: W2_QUANTITY });
+    expect(base.eml).not.toContain('<methods>');
+    const own = buildEml({ ...base.dataset, metadata: { ...base.dataset.metadata, methods: 'Invented hauls.' } }, { generated: GENERATED });
+    expect(own).toContain('    <methods>\n      <methodStep>\n        <description>\n          <para>Invented hauls.</para>\n        </description>\n      </methodStep>\n    </methods>\n');
+    const stepsOnly = buildEml({ ...base.dataset, methodSteps: ['Sheet A of f.csv: abundance classes 0–5: 3 = common'] }, { generated: GENERATED });
+    expect([...parseXml(stepsOnly, 'eml.xml').getElementsByTagName('methodStep')].map((x) => x.textContent?.trim())).toEqual(['Sheet A of f.csv: abundance classes 0–5: 3 = common']);
+    const both = buildEml({ ...base.dataset, metadata: { ...base.dataset.metadata, methods: 'Invented hauls.' }, methodSteps: ['Step two.'] }, { generated: GENERATED });
+    expect([...parseXml(both, 'eml.xml').getElementsByTagName('methodStep')].map((x) => x.textContent?.trim())).toEqual(['Invented hauls.', 'Step two.']);
+  });
+
   it('creators, contact and metadata provider are written from the form; the contact carries the e-mail', async () => {
     const e = await exportSheet(W2_HEADER, W2_ROWS, { quantity: W2_QUANTITY });
     const doc = parseXml(e.eml, 'eml.xml');

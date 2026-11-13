@@ -50,6 +50,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'no-station': 'covered',
   negative: 'covered',
   'not-integer': 'covered',
+  'cover-range': 'covered',
+  'class-value': 'covered',
   'bad-mark': 'covered',
   'sheet-not-read': 'covered',
   // two description rows of one key that differ: CONV-JOIN-AMBIGUOUS is the one question, found because the merge's findings are convert's own
@@ -91,6 +93,8 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'no-station': ['CONV-PROFILE-NO-STATION'],
   negative: ['CONV-NEGATIVE-QUANTITY'],
   'not-integer': ['CONV-COUNT-NOT-INTEGER'],
+  'cover-range': ['CONV-COVER-RANGE'],
+  'class-value': ['CONV-CLASS-VALUE'],
   'bad-mark': ['CONV-PRESENCE-VALUE'],
   'sheet-not-read': ['CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW'],
   'join-ambiguous': ['CONV-JOIN-AMBIGUOUS'],

@@ -67,6 +67,24 @@ export const P06 = {
   um: p06('UMIC', 'Micrometres (microns)'),
 } as const;
 
+/**
+ * The percent cover of a taxon (item 7; kept apart from P01 above, which is the spike's list). P01/PCOV7736 was opened on 2026-11-13 in the NVS as the JSON-LD profile of the concept page:
+ * HTTP 200, owl:deprecated = false, prefLabel as written here, definition "The proportion of a given area of the seabed covered by an identified biological object described elsewhere in the
+ * metadata", related unit P06/UPCT. It replaces P01/SDBIOL10, which is deprecated (docs/research/qc-sources.md) and is never written.
+ */
+export const P01_COVER = {
+  coverage: p01('PCOV7736', 'Proportion coverage of biological entity specified elsewhere within a given area of the bed'),
+} as const;
+
+/** The unit of a percent cover (P06/UPCT "Percent", the same concept as the percent unit of VARIABLE_UNITS). */
+export const P06_PERCENT = p06('UPCT', 'Percent');
+
+/**
+ * The organismQuantityType of a percent cover: the term "percentage coverage" of the GBIF Quantity Type Vocabulary (concept percentageCoverage, opened 2026-11-13 at
+ * rs.gbif.org/vocabulary/gbif/quantity_type_2023-02-28.xml: "the quantity of a species in a sample is recorded as the percentage coverage of the total area being sampled").
+ */
+export const COVER_TYPE = 'percentage coverage';
+
 /** The plain mass units of a biomass column (P06; opened 2026-10-30 in the NVS, owl:deprecated = false; docs/research/qc-sources.md, "Biomass concepts"). Kept apart from P06 above, which is the spike's list. */
 export const P06_MASS = {
   gram: p06('UGRM', 'Grams'),
@@ -266,7 +284,7 @@ export const VARIABLE_UNITS: readonly VariableUnit[] = [
   vu(p06('UPAA', 'Degrees Celsius'), ['°c', 'ºc', '˚c', 'degc', 'degreec', 'degreesc', 'celsius', 'degreecelsius', 'degreescelsius']),
   vu(p06('UUUU', 'Dimensionless'), ['dimensionless', 'unitless']),
   // opened 2026-10-26: UPCT (Percent). The unit of a saturation and of a percentage of a total.
-  vu(p06('UPCT', 'Percent'), ['%', 'percent', 'percentage', 'pct']),
+  vu(P06_PERCENT, ['%', 'percent', 'percentage', 'pct']),
   vu(p06('PSUX', 'Practical salinity units'), ['psu']),
   vu(p06('UUPH', 'pH units'), ['phunits', 'phunit']),
   vu(p06('UATM', 'Microatmospheres'), ['uatm', 'microatm', 'microatmosphere', 'microatmospheres']),

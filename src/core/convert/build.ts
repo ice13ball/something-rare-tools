@@ -37,7 +37,7 @@ import { isQuantityHeader, proposeConvertMapping } from './recognize';
 import { analyseRepeats } from './repeatedTotal';
 import { biomassNameUnit, isTaxonAttribute, isTotalHeader, valuesRepeatWithinSample } from './totalColumns';
 import type { ConvertShape } from './recognize';
-import { DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
+import { COVER_TYPE, DEVICES, P01, P06, PRESSURE, isDecibar } from './vocab';
 import { SEDIMENT_CONTEXT, seafloorMetres, seafloorUnitOf } from './seafloor';
 import type { SeafloorDirection, SeafloorUnit } from './seafloor';
 import { approvedSplit, distinctSplits, splitTaxon } from './taxon';
@@ -1581,6 +1581,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   const findings: Finding[] = [...longFindings];
   const occurrences: OccRec[] = [];
   const measurements: MofIntent[] = [];
+  // paragraphs of the EML methods generated from the declarations (an abundance class scale)
+  const methodSteps: string[] = [];
   const samples = new Map<string, SampleAcc>();
   const stationSheets: StationSheet[] = [];
   const dups = new Map<string, Places>(); // repeated eventIDs
@@ -1761,6 +1763,11 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       if (quantity.effort && !quantity.effort.unitId) findings.push(makeConvertFinding('CONV-UNIT-NO-P06', { ...base, params: { unit: quantity.effort.unit } }));
     }
     const kind = quantity?.kind;
+    const scale = quantity?.scale;
+    if (scale !== undefined) {
+      const words = Object.entries(scale.meanings).sort((a, b) => Number(a[0]) - Number(b[0])).map(([n, w]) => `${n} = ${w}`);
+      methodSteps.push(`Sheet ${sheet.name} of ${fileName}: abundance classes ${scale.label}${words.length === 0 ? '' : `: ${words.join('; ')}`}`);
+    }
 
     // depth columns: units must be metres
     findings.push(...depthUnitFindings(cols, sheet.rows, dc, base));
@@ -1772,6 +1779,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const texts = new Lines();
     const negatives = new Lines();
     const notInteger = new Lines();
+    const coverRange = new Lines();
+    const classBad = new Lines();
     const effortBad = new Lines();
     const summaries = new Lines();
     const keptStats = new Lines();
@@ -1800,6 +1809,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     const checkText = (field: string, line: number, value: string | undefined): void => {
       if (value !== undefined && hasTabOrNewline(value)) tabs.add(fileName, sheet.name, field, line, shownText(value));
     };
+    // the words typed for an abundance class scale are written into the archive and the EML: a tab or line break there would break the tab-separated file
+    if (scale !== undefined) for (const t of [scale.label, ...Object.values(scale.meanings)]) checkText('abundance class scale', sheet.headerLine, t);
     // a header with a tab or line break (wide taxon headers)
     for (const c of cols.taxonHeaders) checkText(c.header, sheet.headerLine, c.header.trim());
 
@@ -2347,6 +2358,16 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
               cellFate(cell, 'negative');
               continue;
             }
+            if (kind === 'cover' && value > 100) {
+              coverRange.add(fileName, sheet.name, field, row.line, String(raw).trim());
+              cellFate(cell, 'cover-range');
+              continue;
+            }
+            if (scale !== undefined && (!Number.isInteger(value) || value < scale.min || value > scale.max)) {
+              classBad.add(fileName, sheet.name, field, row.line, String(raw).trim());
+              cellFate(cell, 'class-value');
+              continue;
+            }
             if (value === 0) {
               // a count of 0 with a weight is contradictory: it is treated as the zero it says (the weight is not written) and the rows are listed, so that neither is kept silently
               if (sin.shape === 'long' && cols.taxonCell !== undefined && rowHasBiomass(row)) {
@@ -2406,18 +2427,34 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
             occ.organismQuantityType = 'individuals';
           }
         }
+        // a cover and an abundance class are an organismQuantity with their own type, never an individualCount
+        if (status === 'present' && value !== undefined && kind === 'cover') {
+          occ.organismQuantity = value;
+          occ.organismQuantityType = COVER_TYPE;
+        }
+        if (status === 'present' && value !== undefined && scale !== undefined) {
+          occ.organismQuantity = value;
+          occ.organismQuantityType = `abundance class ${scale.label}`;
+        }
         // measurements: absent records have none; a text cell has no number
         if (status === 'present' && value !== undefined && quantity) {
           const t = quantity.type;
           measurements.push({
             target: { kind: 'occurrence', id },
             role: quantity.kind,
-            measurementType: t?.label ?? '',
-            ...(t || quantity.noTypeFor === undefined ? {} : { measurementTypeFallback: quantity.noTypeFor.charAt(0).toUpperCase() + quantity.noTypeFor.slice(1) }),
+            measurementType: scale !== undefined ? `abundance class (${scale.label})` : (t?.label ?? ''),
+            ...(t || scale !== undefined || quantity.noTypeFor === undefined ? {} : { measurementTypeFallback: quantity.noTypeFor.charAt(0).toUpperCase() + quantity.noTypeFor.slice(1) }),
             ...(t ? { measurementTypeId: t.uri } : {}),
             measurementValue: quantity.kind === 'count' ? String(value) : valueText(raw, dc),
-            ...(quantity.kind === 'count' ? {} : { measurementUnit: quantity.unit ?? '' }),
+            ...(quantity.kind === 'count' || scale !== undefined ? {} : { measurementUnit: quantity.unit ?? '' }),
             ...(quantity.unitId ? { measurementUnitId: quantity.unitId.uri } : {}),
+            ...(() => {
+              // an abundance class says what the class means when the person typed it; a mass per sample says the sample size when one is declared
+              const words = scale === undefined ? undefined : scale.meanings[value];
+              const size = quantity.perSample === true && acc.site.sampleSizeValue !== undefined && quantity.effort !== undefined ? `per sample of ${acc.site.sampleSizeValue} ${quantity.effort.unit}` : undefined;
+              const remark = words ?? size;
+              return remark === undefined ? {} : { measurementRemarks: remark };
+            })(),
             source: occSource,
           });
         }
@@ -2644,6 +2681,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     for (const e of texts.entries()) findings.push(makeConvertFinding('CONV-TEXT-IN-TAXON-CELL', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     for (const e of negatives.entries()) findings.push(makeConvertFinding('CONV-NEGATIVE-QUANTITY', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of notInteger.entries()) findings.push(makeConvertFinding('CONV-COUNT-NOT-INTEGER', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const e of coverRange.entries()) findings.push(makeConvertFinding('CONV-COVER-RANGE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
+    for (const e of classBad.entries()) findings.push(makeConvertFinding('CONV-CLASS-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, scale: scale?.label ?? '' } }));
     for (const e of effortBad.entries()) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of summaries.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     for (const e of keptStats.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
@@ -3265,6 +3304,7 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     ledger,
     ...(keyReports.length > 0 ? { keys: keyReports } : {}),
     leftOut: decision.leftOut,
+    methodSteps,
     // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
     ...(repeatedOcc.size > 0 || hiddenIds.length > 0 ? { repeatedOccurrenceIds: [...new Set([...repeatedOcc.keys(), ...hiddenIds])] } : {}),
     profile: {

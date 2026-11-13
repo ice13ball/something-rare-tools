@@ -20,6 +20,8 @@ import type { RuleSpec } from './spec';
  *   CONV-SPLIT-UNDECIDED       count            value = an example name; count = names whose split is not approved
  *   CONV-QUANTITY-UNDECLARED   missing          missing = what the declaration lacks: kind, unit, basis, per, effort
  *   CONV-COUNT-NOT-INTEGER     count            field = column, value = an example, lines = rows
+ *   CONV-COVER-RANGE           count            field = column, value = an example, lines = rows
+ *   CONV-CLASS-VALUE           count, scale     field = column, value = an example, lines = rows
  *   CONV-NEGATIVE-QUANTITY     count            field = column (or the effort column), value = an example, lines = rows
  *   CONV-SAMPLE-CODE-MISSING   count, column    column = the sample-code column ('none' when the sheet has none); lines = the rows without a code
  *   CONV-KEY-PART-BLANK        count, columns   the person picked a sample key (sampleKey.ts); columns = the headers of the key; lines = rows where a part of the key is empty (NA, nan and a dash too)
@@ -230,6 +232,32 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `La colonne « {field} » contient des valeurs négatives {+lineCount:à la ligne|aux lignes} {lines} ({count} au total), p. ex. {value}. Un effectif, une densité, une biomasse ou une taille d'échantillon ne peut pas être négatif.`,
     },
     technical: `{file}:{lines} field {field}: {count} negative value(s) in a quantity or effort column (example {value}). Those cells were not converted.`,
+  },
+  {
+    id: 'CONV-COVER-RANGE',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `Kolumna „{field}” jest zadeklarowana jako pokrycie w procentach, ale {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest wartość poza zakresem od 0 do 100 (razem: {count}), np. {value}. Popraw wartości albo zmień deklarację.`,
+      en: `Column "{field}" is declared as percent cover, but {+lineCount:line|lines} {lines} {+lineCount:has|have} a value outside 0 to 100 ({count} in all), e.g. {value}. Correct the values, or change the declaration.`,
+      de: `Die Spalte „{field}“ gilt als Deckungsgrad in Prozent, hat aber in {+lineCount:der Zeile|den Zeilen} {lines} einen Wert außerhalb von 0 bis 100 (insgesamt {count}), z. B. {value}. Korrigieren Sie die Werte oder ändern Sie die Angabe.`,
+      fr: `La colonne « {field} » est déclarée comme recouvrement en pourcentage, mais {+lineCount:la ligne|les lignes} {lines} {+lineCount:a|ont} une valeur hors de 0 à 100 ({count} au total), p. ex. {value}. Corrigez les valeurs ou changez la déclaration.`,
+    },
+    technical: `{file}:{lines} field {field}: {count} value(s) of a declared percent cover are outside 0 to 100 (example {value}). Those cells were not converted.`,
+  },
+  {
+    id: 'CONV-CLASS-VALUE',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'scale'],
+    plain: {
+      pl: `Kolumna „{field}” jest zadeklarowana jako klasa liczebności ze skali {scale}, ale {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest wartość, która nie jest liczbą całkowitą z tej skali (razem: {count}), np. {value}. Klasa nie jest liczbą osobników. Popraw wartości albo skalę.`,
+      en: `Column "{field}" is declared as an abundance class of the scale {scale}, but {+lineCount:line|lines} {lines} {+lineCount:has|have} a value that is not a whole number of that scale ({count} in all), e.g. {value}. A class is not a number of individuals. Correct the values or the scale.`,
+      de: `Die Spalte „{field}“ gilt als Häufigkeitsklasse der Skala {scale}, hat aber in {+lineCount:der Zeile|den Zeilen} {lines} einen Wert, der keine ganze Zahl dieser Skala ist (insgesamt {count}), z. B. {value}. Eine Klasse ist keine Individuenzahl. Korrigieren Sie die Werte oder die Skala.`,
+      fr: `La colonne « {field} » est déclarée comme classe d'abondance de l'échelle {scale}, mais {+lineCount:la ligne|les lignes} {lines} {+lineCount:a|ont} une valeur qui n'est pas un entier de cette échelle ({count} au total), p. ex. {value}. Une classe n'est pas un nombre d'individus. Corrigez les valeurs ou l'échelle.`,
+    },
+    technical: `{file}:{lines} field {field}: {count} value(s) of a declared abundance class are not whole numbers of the scale {scale} (example {value}). Those cells were not converted; a class is never written as individualCount.`,
   },
   {
     id: 'CONV-SAMPLE-CODE-MISSING',
@@ -2557,6 +2585,18 @@ export const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
     pl: 'z liczebnością, która nie jest liczbą całkowitą',
     de: 'mit einer Anzahl, die keine ganze Zahl ist',
     fr: "avec un effectif qui n'est pas un nombre entier",
+  },
+  'cover-range': {
+    en: 'with a percent cover outside 0 to 100',
+    pl: 'z pokryciem w procentach poza zakresem od 0 do 100',
+    de: 'mit einem Deckungsgrad in Prozent außerhalb von 0 bis 100',
+    fr: 'avec un taux de recouvrement en pourcentage hors de 0 à 100',
+  },
+  'class-value': {
+    en: 'with an abundance class that is not a whole number of the scale',
+    pl: 'z klasą liczebności, która nie jest liczbą całkowitą ze skali',
+    de: 'mit einer Häufigkeitsklasse, die keine ganze Zahl der Skala ist',
+    fr: "avec une classe d'abondance qui n'est pas un entier de l'échelle",
   },
   'bad-mark': {
     en: 'with a presence mark the converter does not know',

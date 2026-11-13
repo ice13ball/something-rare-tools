@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { P01, P06, P06_MASS, S06, type NercTerm } from './vocab';
+import { P01, P01_COVER, P06, P06_MASS, P06_PERCENT, S06, unitConcept, type NercTerm } from './vocab';
 import { pushAll } from '../util/arrays';
 
 /*
@@ -9,12 +9,15 @@ import { pushAll } from '../util/arrays';
  *   count    individualCount (whole number) + organismQuantity / organismQuantityType "individuals" + an eMoF row OCOUNT01 (no unit id)
  *   density  an eMoF row on the occurrence: SDBIOL01 (per volume of water) or SDBIOL02 (per area of the bed) with its P06 unit
  *   biomass  an eMoF row on the occurrence: SDBIOL03/04/05/07/08/09 by basis (wet / dry / ash-free dry) and per volume or area
+ *   biomass  with `per: 'sample'`: a mass per sample (g, mg, kg), an eMoF row S06 by basis, no area or volume claimed
+ *   cover    organismQuantity (0-100) + organismQuantityType "percentage coverage" + an eMoF row PCOV7736 with the unit P06 UPCT
+ *   class    an ordinal scale the person types (0-5): organismQuantity = the class + organismQuantityType "abundance class <scale>" + an eMoF row with no id; NEVER a count
  *   effort   sampleSizeValue / sampleSizeUnit on the sample event + an eMoF row VOLWBSMP (volume) or AREABEDS (area) on that event
  *
  * Nothing is converted: the unit is written as the user declared it, and a P06 id is added only for the units the spike verified.
  * Never P06/UCNT for a count (vocab.ts).
  */
-export type QuantityKind = 'count' | 'density' | 'biomass';
+export type QuantityKind = 'count' | 'density' | 'biomass' | 'cover' | 'class';
 export type EffortDimension = 'volume' | 'area';
 export type BiomassBasis = 'wet' | 'dry' | 'afdw';
 
@@ -35,10 +38,12 @@ export interface QuantityDeclaration {
   unit?: string;
   /** biomass: wet, dry or ash-free dry weight. */
   basis?: BiomassBasis;
-  /** density / biomass: per volume or per area; optional when the unit says it. */
-  per?: EffortDimension;
+  /** density / biomass: per volume or per area; optional when the unit says it. 'sample' (biomass only): a mass of the whole sample, in g, mg or kg. */
+  per?: EffortDimension | 'sample';
   /** density / biomass per area: the water column ('water') or the bed ('bed'). REQUIRED for an area (no default); only a bed has a verified concept. */
   medium?: 'water' | 'bed';
+  /** class only: the scale the person types, as text. `min` and `max` are whole numbers; `meanings` maps a class number to the words for it. */
+  scale?: { name: string; min: string; max: string; meanings?: Record<string, string> };
   effort?: EffortDeclaration;
 }
 
@@ -133,8 +138,21 @@ export interface ResolvedEffort {
   unitId?: NercTerm;
 }
 
+export interface ResolvedScale {
+  /** `${min}–${max}`, or `${name} ${min}–${max}` when the person named the scale. */
+  label: string;
+  min: number;
+  max: number;
+  /** Only the classes the person gave words for. */
+  meanings: Record<number, string>;
+}
+
 export interface ResolvedQuantity {
   kind: QuantityKind;
+  /** biomass: a mass per sample (no area or volume claimed). */
+  perSample?: true;
+  /** class: the scale, as resolved from the typed text. */
+  scale?: ResolvedScale;
   /** density / biomass: the unit as declared. */
   unit?: string;
   /** density / biomass: the concept of the measurementTypeID, or undefined when none is verified (CONV-NERC-UNKNOWN). */
@@ -147,6 +165,25 @@ export interface ResolvedQuantity {
   effort?: ResolvedEffort;
   /** A typed sample size that is not a number above zero: CONV-EFFORT-INVALID, and no effort is written. */
   effortInvalid?: { text: string; reason: EffortReason };
+}
+
+/** The typed scale of an abundance class as numbers: whole numbers, 0 or more, min below max; the words for a class only for a class of the scale. Undefined when the scale is not usable. */
+function resolveScale(scale: QuantityDeclaration['scale']): ResolvedScale | undefined {
+  if (scale === undefined) return undefined;
+  const whole = (t: string): number | undefined => (/^\d+$/.test(t.trim()) ? Number(t.trim()) : undefined);
+  const min = whole(scale.min);
+  const max = whole(scale.max);
+  if (min === undefined || max === undefined || !(min < max)) return undefined;
+  const meanings: Record<number, string> = {};
+  for (const [key, words] of Object.entries(scale.meanings ?? {})) {
+    const text = words.trim();
+    if (text === '') continue;
+    const n = whole(key);
+    if (n === undefined || n < min || n > max) return undefined;
+    meanings[n] = text;
+  }
+  const name = scale.name.trim();
+  return { label: name === '' ? `${min}–${max}` : `${name} ${min}–${max}`, min, max, meanings };
 }
 
 export type QuantityResolution = { ok: true; quantity: ResolvedQuantity } | { ok: false; missing: string[] };
@@ -213,17 +250,44 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
   const out: ResolvedQuantity = { kind: decl.kind };
   if (decl.kind === 'count') {
     out.type = P01.count;
+  } else if (decl.kind === 'cover') {
+    // a percentage of the area: the unit is always percent; a declared unit that is not (a fraction, a count) is not turned into one
+    const unit = (decl.unit ?? '').trim();
+    if (unit !== '' && unitConcept(unit)?.term.code !== P06_PERCENT.code) missing.push('unit not percent');
+    out.unit = '%';
+    out.unitId = P06_PERCENT;
+    out.type = P01_COVER.coverage;
+  } else if (decl.kind === 'class') {
+    const scale = resolveScale(decl.scale);
+    if (scale === undefined) missing.push('scale');
+    else out.scale = scale;
+    out.noTypeFor = 'abundance class';
+  } else if (decl.kind === 'biomass' && decl.per === 'sample') {
+    // a mass of the whole sample: the basis and a plain mass unit; a rate (g/m2) is a biomass per area or volume, which is another declaration
+    const unit = (decl.unit ?? '').trim();
+    if (unit === '') missing.push('unit');
+    else if (parseRateUnit(unit, { litre: true }) !== undefined) missing.push('unit not per sample');
+    else if (biomassUnit(unit).id === undefined) missing.push('mass unit (g, mg or kg)');
+    if (decl.basis === undefined) missing.push('basis');
+    out.perSample = true;
+    if (unit !== '') out.unit = unit;
+    const id = biomassUnit(unit).id;
+    if (id) out.unitId = id;
+    const type = biomassKindConcept(decl.basis);
+    if (type) out.type = type;
   } else {
     const unit = (decl.unit ?? '').trim();
     const any = unit === '' ? undefined : parseRateUnit(unit, { litre: true });
     // the unit must agree with the kind: grams are not a density, individuals are not a biomass
     const parsed = any !== undefined && (decl.kind === 'density' ? any.numerator === 'count' : any.numerator !== 'count') ? any : undefined;
     if (unit === '') missing.push('unit');
-    const per = decl.per ?? parsed?.per;
+    // 'sample' is a biomass-only answer, handled above
+    const declPer = decl.per === 'sample' ? undefined : decl.per;
+    const per = declPer ?? parsed?.per;
     if (unit !== '' && per === undefined) missing.push('per volume or per area');
     if (decl.kind === 'biomass' && decl.basis === undefined) missing.push('basis');
     if (unit !== '') out.unit = unit;
-    if (parsed?.p06 && (decl.per === undefined || decl.per === parsed.per)) out.unitId = parsed.p06;
+    if (parsed?.p06 && (declPer === undefined || declPer === parsed.per)) out.unitId = parsed.p06;
     else if (unit !== '') out.unitWithoutP06 = unit;
     // per area there is NO default: the bed and the water column have different concepts, so the user says which
     if (per === 'area' && decl.medium === undefined) missing.push('medium');

@@ -159,8 +159,9 @@ const bioCases = (): Record<string, unknown> => {
   out['L2'] = convert({ sheets: [sheetInput(fileOf(L2_HEADER, L2_ROWS.map((r) => [...r])), { quantity: { kind: 'count' } })], approvedSplits: {} });
   out['W1'] = convert({ sheets: [sheetInput(fileOf(W1_HEADER, W1_ROWS.map((r) => [...r])), { quantity: W1_QUANTITY })], options: { fullList: true }, approvedSplits: {} });
   // the snapshot is the output of origin/main: the ledger (core/convert/ledger.ts) and the count of rows not written beside it are new, and are tested in ledger.test.ts and notWritten.test.ts
+  // (`methodSteps`, the EML paragraphs of round 3 item 7, is new and empty for these sheets; the archives below, EML included, are what must not move)
   // (CONV-COLUMN-IGNORED, an information line that only names ignored columns holding values, is new too, and so is CONV-ROLE-UNCONFIRMED, a note that asks for one tick and changes no role: the tables and the archives below are what must not move)
-  return JSON.parse(JSON.stringify(out, (k, v) => (k === 'ledger' || k === 'notWritten' || k === 'leftOut' ? undefined : withoutIgnoredNote(v)))) as Record<string, unknown>;
+  return JSON.parse(JSON.stringify(out, (k, v) => (k === 'ledger' || k === 'notWritten' || k === 'leftOut' || k === 'methodSteps' ? undefined : withoutIgnoredNote(v)))) as Record<string, unknown>;
 };
 
 /* The ARCHIVES (every file of the zip as text, and the zip's own hash) of long biology sheets, WoRMS off and on (the test stub, no network), and what the worker makes of each dropped file

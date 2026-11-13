@@ -123,6 +123,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-QUANTITY-UNDECLARED | error | B | — | —<a id="CONV-QUANTITY-UNDECLARED"></a> |
 | CONV-COUNT-NOT-INTEGER | error | B | — | —<a id="CONV-COUNT-NOT-INTEGER"></a> |
 | CONV-NEGATIVE-QUANTITY | error | B | — | —<a id="CONV-NEGATIVE-QUANTITY"></a> |
+| CONV-COVER-RANGE | error | B | — | —<a id="CONV-COVER-RANGE"></a> |
+| CONV-CLASS-VALUE | error | B | — | —<a id="CONV-CLASS-VALUE"></a> |
 | CONV-SAMPLE-CODE-MISSING | error | B | — | —<a id="CONV-SAMPLE-CODE-MISSING"></a> |
 | CONV-KEY-PART-BLANK | warning | B | — | —<a id="CONV-KEY-PART-BLANK"></a> |
 | CONV-ROLE-UNCONFIRMED | warning | B | — | —<a id="CONV-ROLE-UNCONFIRMED"></a> |
