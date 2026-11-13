@@ -30,6 +30,8 @@ const FISH = csvOf(H, [['T1', '2022-03-01', 60.1, 4.2, GM, 310], ['T1', '2022-03
 const FISH4 = csvOf(H, [['T1', '2022-03-01', 60.1, 4.2, GM, 310], ['T1', '2022-03-01', 60.1, 4.2, GM, 295], ['T1', '2022-03-01', 60.1, 4.2, PV, 400], ['T2', '2022-03-02', 60.1, 4.2, PV, 380]]);
 const COPIES = csvOf(H, [['T1', '2022-03-01', 60.1, 4.2, GM, 310], ['T1', '2022-03-01', 60.1, 4.2, GM, 310], ['T1', '2022-03-01', 60.1, 4.2, PV, 400]]);
 const WITH_ID = csvOf(['occurrenceID', ...H], [['o1', 'T1', '2022-03-01', 60.1, 4.2, GM, 310], ['o2', 'T1', '2022-03-01', 60.1, 4.2, GM, 295]]);
+const COUNTED = csvOf([...H, 'Count'], [['T1', '2022-03-01', 60.1, 4.2, GM, 310, 1], ['T1', '2022-03-01', 60.1, 4.2, GM, 295, 1]]);
+const COUNTED_COPIES = csvOf([...H, 'Count'], [['T1', '2022-03-01', 60.1, 4.2, GM, 310, 5], ['T1', '2022-03-01', 60.1, 4.2, GM, 310, 5]]);
 const WIDE = csvOf(['Sample', 'Date', 'Latitude', 'Longitude', GM], [['T1', '2022-03-01', 60.1, 4.2, 3], ['T1', '2022-03-01', 60.1, 4.2, 4]]);
 
 interface Run {
@@ -94,7 +96,17 @@ describe('the button and the tick', () => {
     await load([{ name: 'Fish.csv', text: WITH_ID }]);
     expect(OWN()).toBeNull();
     const no = item('CONV-TAXON-NO-QUANTITY');
-    if (no !== null) expect(within(no).queryByRole('button', { name: T['convert.finding.ownRecords'] })).toBeNull();
+    expect(no).not.toBeNull();
+    expect(within(no!).queryByRole('button', { name: T['convert.finding.ownRecords'] })).toBeNull();
+  });
+
+  it('a long sheet with a quantity column offers the button on its CONV-ID-DUPLICATE', async () => {
+    await load([{ name: 'Fish.csv', text: COUNTED }]);
+    for (const kind of screen.queryAllByLabelText(T['convert.quantity.kind'])) fireEvent.change(kind, { target: { value: 'count' } });
+    await idle();
+    const dup = item('CONV-ID-DUPLICATE');
+    expect(dup).not.toBeNull();
+    expect(within(dup!).getByRole('button', { name: T['convert.finding.ownRecords'] })).toBeDefined();
   });
 
   it('a wide sheet has no tick, and its CONV-ID-DUPLICATE has no button', async () => {
@@ -127,13 +139,39 @@ describe('identical rows under "each row is its own record"', () => {
   });
 
   it('the button is absent while the sheet is not its own records', async () => {
-    await load([{ name: 'Fish.csv', text: COPIES }]);
+    await load([{ name: 'Fish.csv', text: COUNTED_COPIES }]);
+    for (const kind of screen.queryAllByLabelText(T['convert.quantity.kind'])) fireEvent.change(kind, { target: { value: 'count' } });
+    await idle();
     const copies = item('CONV-ROW-COPIES');
-    if (copies !== null) expect(within(copies).queryByRole('button', { name: T['convert.finding.keepCopies'] })).toBeNull();
+    expect(copies).not.toBeNull();
+    expect(within(copies!).queryByRole('button', { name: T['convert.finding.keepCopies'] })).toBeNull();
   });
 });
 
 describe('the companion file', () => {
+  it('a saved copies answer is not applied to a sheet whose own-records answer no longer holds (another row count)', async () => {
+    const run = await load([{ name: 'Fish.csv', text: COPIES }]);
+    fireEvent.click(OWN()!);
+    await waitFor(() => expect(item('CONV-ROW-COPIES')).not.toBeNull());
+    fireEvent.click(within(item('CONV-ROW-COPIES')!).getByRole('button', { name: T['convert.finding.keepCopies'] }));
+    await waitFor(() => expect(item('CONV-ROW-COPIES-KEPT')).not.toBeNull());
+    await idle();
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    const text = run.download.mock.calls[0][0] as string;
+    cleanup();
+    // one more row (a third copy of nothing: a new row), so the saved row count 3 no longer holds and the copies count 1 still would
+    const more = COPIES + '"T2","2022-03-02",60.1,4.2,"Pollachius virens",380\n';
+    const again = await load([{ name: 'Fish.csv', text: more }, { name: 'c.csv', text }]);
+    expect(last(again).ownRecords).toBeUndefined();
+    const tick = OWN();
+    expect(tick?.checked).toBe(false);
+    fireEvent.click(tick!);
+    await waitFor(() => expect(last(again).ownRecords).toBe(true));
+    expect(last(again).keepCopiesCount).toBeUndefined();
+    await waitFor(() => expect(item('CONV-ROW-COPIES')).not.toBeNull());
+    expect(item('CONV-ROW-COPIES-KEPT')).toBeNull();
+  });
+
   it('keeps ownRecords=<rows>:<sheet>; a reload with it pre-ticks, said to come from the file; a 4-row sheet of the same name is not pre-ticked', async () => {
     const run = await load([{ name: 'Fish.csv', text: FISH }]);
     fireEvent.click(OWN()!);

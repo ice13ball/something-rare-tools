@@ -437,6 +437,13 @@ function savedOrders(settings: ConvertParseResult['settings'], sheet: { name: st
   return columns.length === 0 ? {} : { dayMonthOrder: order, dayMonthOrderFile: columns };
 }
 
+/** The answers a companion file recorded for a sheet, with the own-records pair kept together: the copies answer is "under each row is its own record", so it is kept only while that choice holds for this sheet today (the same name and number of rows). */
+function ownAnswers(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): ReturnType<typeof fileAnswers> & ReturnType<typeof savedOwnRecords> {
+  const { keepCopiesFile, ...rest } = fileAnswers(settings, sheet.name);
+  const own = savedOwnRecords(settings, sheet);
+  return { ...rest, ...(own.ownRecords === true && keepCopiesFile !== undefined ? { keepCopiesFile } : {}), ...own };
+}
+
 /** "Each row is its own record" as a companion file recorded it: a pre-tick, only for a sheet of the same name with the same number of rows (the round-2 pattern: the question is open again for another file). */
 function savedOwnRecords(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'ownRecords' | 'ownRecordsFromFile'> {
   return (settings.ownRecords ?? []).some((x) => x.sheet === sheet.name && x.rows === sheet.rowCount) ? { ownRecords: true, ownRecordsFromFile: true } : {};
@@ -467,7 +474,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...savedOwnRecords(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;
