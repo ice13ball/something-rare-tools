@@ -3,7 +3,7 @@
 // CONV-NO-OCCURRENCES names an empty quantity column as the cause (round 3, Task 2).
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { CONVERT_RULE_PARAMS, renderConvertPlain } from '../../src/core/rules/convert';
+import { makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import type { Finding } from '../../src/core/types';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
@@ -44,7 +44,18 @@ describe('CONV-NO-OCCURRENCES with an empty quantity column', () => {
     expect(f[0].sheet).toBe('Fish');
   });
 
-  it('is declared with column and rows', () => {
-    expect(CONVERT_RULE_PARAMS['CONV-NO-OCCURRENCES']).toEqual(['column', 'rows']);
+  it('the generic finding renders with no placeholder left, in every language and in the technical text', () => {
+    const f = makeConvertFinding('CONV-NO-OCCURRENCES', { file: 'f.csv', sheet: 'S', params: {} });
+    expect(renderConvertTechnical(f)).not.toContain('{');
+    for (const l of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(f, l)).not.toContain('{');
+  });
+
+  it('the variant reads in Polish, and for one row in the singular', () => {
+    const f = makeConvertFinding('CONV-NO-OCCURRENCES', { file: 'f.csv', sheet: 'Counts', params: { variant: 'empty-quantity', column: 'Count', rows: 4 } });
+    expect(renderConvertPlain(f, 'pl')).toContain('Kolumna ilości „Count” arkusza „Counts” jest pusta we wszystkich 4 wierszach');
+    const one = makeConvertFinding('CONV-NO-OCCURRENCES', { file: 'f.csv', sheet: 'Counts', params: { variant: 'empty-quantity', column: 'Count', rows: 1 } });
+    expect(renderConvertPlain(one, 'en')).toContain('in all 1 row,');
+    for (const l of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(one, l)).not.toMatch(/[{}]/);
+    expect(renderConvertTechnical(f)).not.toContain('{');
   });
 });

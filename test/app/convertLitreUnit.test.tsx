@@ -41,6 +41,10 @@ describe('a density in ind/L on the page', () => {
     await waitFor(() => expect(bodies.some((b) => b.sheets.some((s) => s.quantity?.unit === 'ind/L'))).toBe(true));
     const last = [...bodies].reverse().find((b) => b.sheets.some((s) => s.quantity?.unit === 'ind/L'))!;
     expect(last.sheets[0].quantity).toMatchObject({ kind: 'density', unit: 'ind/L' });
+    // the summary no longer asks "per volume or per area" (on the base commit it did: ind/L was not read as a rate)
+    const summary = screen.getByRole('region', { name: T['convert.summary.title'] });
+    await waitFor(() => expect(summary.getAttribute('aria-busy')).toBe('false'));
+    expect(summary.textContent).not.toContain('per volume or per area');
     // control: a per-area unit does show the field
     fireEvent.change(screen.getByLabelText(T['convert.quantity.unit']), { target: { value: 'ind/m2' } });
     expect(screen.getByLabelText(T['convert.quantity.medium'])).toBeTruthy();
