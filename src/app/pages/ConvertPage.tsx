@@ -904,7 +904,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
     const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
-    const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices, mappings) : [];
+    const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];
     // the joins the person confirmed or declined: sheet names, row counts, hashes of the key columns and the numbers the answers were given for; never a sample code or a value
     const sampleJoins = parsed ? sampleJoinSettingsOf(parsed, joins) : {};
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));

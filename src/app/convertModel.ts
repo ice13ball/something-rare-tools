@@ -411,12 +411,10 @@ function savedOrders(settings: ConvertParseResult['settings'], sheet: { name: st
   return columns.length === 0 ? {} : { dayMonthOrder: order, dayMonthOrderFile: columns };
 }
 
-/** The position a companion file recorded for a sheet, as a pre-fill: only for a sheet of that name that has no latitude / longitude column in this drop (a blank one counts). Empty fields otherwise. */
-function savedPosition(settings: ConvertParseResult['settings'], mappings: readonly SheetMapping[], sheet: string): Pick<SheetChoice, 'positionLat' | 'positionLon' | 'positionUncertainty' | 'positionFromFile'> {
+/** The position a companion file recorded for a sheet of that name, as a pre-fill. It is filled whatever the roles (they are not in the file and may be proposed differently today); `declaredRequest` holds it back while it does not apply, and the form says so. */
+function savedPosition(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'positionLat' | 'positionLon' | 'positionUncertainty' | 'positionFromFile'> {
   const d = (settings.declaredPosition ?? []).find((x) => x.sheet === sheet);
-  const m = d === undefined ? undefined : mappings.find((x) => x.sheet === sheet);
-  if (d === undefined || m === undefined || hasPositionRole(m)) return { positionLat: '', positionLon: '', positionUncertainty: '' };
-  return { positionLat: d.lat, positionLon: d.lon, positionUncertainty: d.uncertaintyM, positionFromFile: true };
+  return d === undefined ? { positionLat: '', positionLon: '', positionUncertainty: '' } : { positionLat: d.lat, positionLon: d.lon, positionUncertainty: d.uncertaintyM, positionFromFile: true };
 }
 
 /**
@@ -438,7 +436,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, f.mappings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;
@@ -460,14 +458,13 @@ export function dayMonthOrderSettingsOf(parsed: ConvertParseResult, choices: Rec
   return out;
 }
 
-/** The positions declared for sheets in use that have no position column and are not profiles, for the companion file: the person's own typed values (the only values the file holds). All three must be filled. */
-export function declaredPositionSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, mappings: Record<string, SheetMapping[]>): NonNullable<ConvertSettings['declaredPosition']> {
+/** The positions declared for sheets in use (also one held back today by a position column or a profile mark: it is kept for the next drop), for the companion file: the person's own typed values (the only values the file holds). All three must be filled. */
+export function declaredPositionSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['declaredPosition']> {
   const out: NonNullable<ConvertSettings['declaredPosition']> = [];
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const c = choices[sheetKey(f.fileId, sh.name)];
-      const m = (mappings[f.fileId] ?? f.mappings).find((x) => x.sheet === sh.name);
-      if (!c || !c.use || c.profile || m === undefined || hasPositionRole(m)) continue;
+      if (!c || !c.use) continue;
       const [lat, lon, uncertaintyM] = [c.positionLat, c.positionLon, c.positionUncertainty].map((x) => x.trim());
       if (lat !== '' && lon !== '' && uncertaintyM !== '' && !out.some((o) => o.sheet === sh.name)) out.push({ sheet: sh.name, lat, lon, uncertaintyM });
     }

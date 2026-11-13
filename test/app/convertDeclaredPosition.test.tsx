@@ -121,6 +121,24 @@ describe('the declaration on the page', () => {
     const run = await load([{ name: 'tanks.csv', text: BLANK_COLUMNS }, { name: 'c.csv', text: companion }]);
     expect(last(run).declaredPosition).toBeUndefined();
     expect(item('CONV-POSITION-DECLARED-INVALID')).toBeNull();
+    expect(screen.getByTestId('position-held-back').textContent).toContain(T['convert.position.heldBack.column']);
+    expect((screen.getByLabelText(T['convert.position.lat']) as HTMLInputElement).value).toBe('54.1');
+  });
+
+  it('a declaration kept in the form is not hidden when the sheet becomes a profile; it can be cleared', async () => {
+    const run = await load([{ name: 'tanks.csv', text: TANKS }]);
+    type(T['convert.position.lat'], '54.1');
+    type(T['convert.position.lon'], '10.9');
+    type(T['convert.position.uncertainty'], '500');
+    await waitFor(() => expect(last(run).declaredPosition).toBeDefined());
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await waitFor(() => expect(screen.getByTestId('position-held-back').textContent).toContain(T['convert.position.heldBack.profile']));
+    await idle();
+    fireEvent.click(within(screen.getByTestId('position-held-back')).getByRole('button', { name: T['convert.position.clear'] }));
+    await waitFor(() => expect(screen.queryByTestId('position-held-back')).toBeNull());
+    await waitFor(() => expect(last(run).declaredPosition).toBeUndefined());
+    await idle();
+    expect(item('CONV-POSITION-DECLARED-INVALID')).toBeNull();
   });
 });
 
@@ -131,7 +149,7 @@ describe('the companion line', () => {
     expect(read.declaredPosition).toEqual([{ sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500' }]);
   });
 
-  it('pre-fills only a sheet of that name with no position role', async () => {
+  it('pre-fills a sheet of that name whatever its proposed roles', async () => {
     const companion = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500' }] });
     const engine = createDirectConvertEngine();
     const enc = (s: string) => new TextEncoder().encode(s);
@@ -139,6 +157,7 @@ describe('the companion line', () => {
     const c = initialChoices(plain)[`${plain.files[0].fileId}\u0000${SHEET}`];
     expect([c.positionLat, c.positionLon, c.positionUncertainty, c.positionFromFile]).toEqual(['54.1', '10.9', '500', true]);
     const withColumn = await engine.parse([{ name: 'tanks.csv', bytes: enc(BLANK_COLUMNS), source: 'dropped' }, { name: 'c.csv', bytes: enc(companion), source: 'dropped' }]);
-    expect(initialChoices(withColumn)[`${withColumn.files[0].fileId}\u0000${SHEET}`].positionLat).toBe('');
+    // filled whatever the roles (they are not in the file): the request holds it back and the form says so
+    expect(initialChoices(withColumn)[`${withColumn.files[0].fileId}\u0000${SHEET}`].positionLat).toBe('54.1');
   });
 });

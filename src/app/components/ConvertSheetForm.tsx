@@ -367,10 +367,18 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             </>
           )}
 
-          {hasPositionColumn !== true && !choice.profile && (
+          {((hasPositionColumn !== true && !choice.profile) || positionFilled) && (
             <details className="convert-group" ref={positionBox}>
               <summary>{t('convert.position.title')}</summary>
               <p className="muted">{t('convert.position.help')}</p>
+              {(hasPositionColumn === true || choice.profile) && positionFilled && (
+                <p role="note" data-testid="position-held-back">
+                  {t(choice.profile ? 'convert.position.heldBack.profile' : 'convert.position.heldBack.column')}{' '}
+                  <button type="button" className="button" onClick={() => onChange({ ...choice, positionLat: '', positionLon: '', positionUncertainty: '', positionFromFile: undefined })}>
+                    {t('convert.position.clear')}
+                  </button>
+                </p>
+              )}
               <div className="field">
                 <label htmlFor={`${id}-pos-lat`}>{t('convert.position.lat')}</label>
                 <input id={`${id}-pos-lat`} data-position-lat={`${fileName}\u0000${sheet}`} type="text" inputMode="decimal" maxLength={40} value={choice.positionLat} autoComplete="off" spellCheck={false} onChange={(e) => setPosition({ positionLat: e.target.value })} />
