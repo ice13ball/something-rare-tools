@@ -1799,9 +1799,17 @@ nothing blocks on it, it adds no finding, and it is never written into the archi
 (`cruise`, `station`, `sample`, `replicate`, `profile level`: there is no controlled list in the OBIS Manual),
 `eventDate`, `decimalLatitude`, `decimalLongitude` (always written, even when empty, so an empty one
 is reported), `geodeticDatum` (`EPSG:4326` for an event with a position), `coordinateUncertaintyInMeters`,
-`minimum/maximumDepthInMeters`, `minimum/maximumDistanceAboveSurfaceInMeters`, `sampleSizeValue`,
+`georeferenceRemarks` (only for a position the person declared for a whole sheet, below), `minimum/maximumDepthInMeters`, `minimum/maximumDistanceAboveSurfaceInMeters`, `sampleSizeValue`,
 `sampleSizeUnit`, `locality`, `datasetName`, `institutionCode`. Columns that no row fills (and that
 BioCheck does not need) are left out.
+**A declared position.** A sheet with no `latitude` / `longitude` role at all (a blank column is still a role: the
+declaration never fills gaps) can carry ONE position the person types: latitude (-90 to 90), longitude (-180 to 180)
+and `coordinateUncertaintyInMeters` (a plain number above zero). It is never inferred or prefilled. Every sample of the sheet is
+then written with that position as typed (a comma turned into a point), the uncertainty, and `georeferenceRemarks` = "Position
+declared for the whole dataset by the person converting; not stated per sample in the source"; a station made of such samples
+carries the remark too. `CONV-POSITION-DECLARED` (a warning to accept) says it; a declaration that cannot be used (out of range, an
+uncertainty that is not a plain number above zero, or a sheet that has a position column) is refused with
+`CONV-POSITION-DECLARED-INVALID`, one message per cause, and nothing is applied. Archives without the declaration keep today's columns.
 **`occurrence.txt`**: `occurrenceID`, `eventID`, `basisOfRecord`, `occurrenceStatus`,
 `scientificName`, `scientificNameID`, `verbatimIdentification`, `identificationQualifier`,
 `lifeStage`, `sex`, `individualCount`, `organismQuantity`, `organismQuantityType`,

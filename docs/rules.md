@@ -241,5 +241,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-PROFILE-LEVEL-INCOMPLETE | error | B | — | —<a id="CONV-PROFILE-LEVEL-INCOMPLETE"></a> |
 | CONV-PROFILE-PRESSURE-NO-UNIT | warning | B | — | —<a id="CONV-PROFILE-PRESSURE-NO-UNIT"></a> |
 | CONV-POSITION-NONE | error | B | — | —<a id="CONV-POSITION-NONE"></a> |
+| CONV-POSITION-DECLARED | warning | B | — | —<a id="CONV-POSITION-DECLARED"></a> |
+| CONV-POSITION-DECLARED-INVALID | error | B | — | —<a id="CONV-POSITION-DECLARED-INVALID"></a> |
 | CONV-EVENT-DATE-MISSING | error | B | — | —<a id="CONV-EVENT-DATE-MISSING"></a> |
 | CONV-PROFILE-NO-STATION | error | B | — | —<a id="CONV-PROFILE-NO-STATION"></a> |

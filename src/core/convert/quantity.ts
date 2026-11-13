@@ -212,6 +212,19 @@ export function parseTypedNumber(text: string): { ok: true; value: number; text:
   return { ok: true, value, text: body.replace(',', '.') };
 }
 
+/**
+ * A coordinate TYPED in the page (a declared position): an optional sign, digits, at most one point or comma as the decimal mark, written with a point. Unlike `parseTypedNumber`
+ * it accepts a negative number and zero, and a number such as "54,125" is a decimal, never a thousands separator. The range (90, 180) is the caller's.
+ */
+export function parseTypedCoordinate(text: string): { ok: true; value: number; text: string } | { ok: false } {
+  const t = text.trim();
+  const body = t.replace(/^[+-]/, '');
+  if (!/^(\d+[.,]?\d*|[.,]\d+)$/.test(body)) return { ok: false };
+  const written = body.replace(',', '.').replace(/\.$/, '').replace(/^\./, '0.');
+  const value = Number(written);
+  return { ok: true, value: t.startsWith('-') && value !== 0 ? -value : value, text: (t.startsWith('-') && value !== 0 ? '-' : '') + written };
+}
+
 function resolveEffort(e: EffortDeclaration, columnUnit: string | undefined): { effort?: ResolvedEffort; missing: string[]; invalid?: { text: string; reason: EffortReason } } {
   const unit = (e.unit ?? columnUnit ?? '').trim();
   const known = unit === '' ? {} : parseEffortUnit(unit);

@@ -63,6 +63,8 @@ const EVENT_COLUMNS: { col: Column; always: boolean }[] = [
   { col: dwc('decimalLongitude'), always: true },
   { col: dwc('geodeticDatum'), always: false },
   { col: dwc('coordinateUncertaintyInMeters'), always: false },
+  // only where the person declared the position of a sheet
+  { col: dwc('georeferenceRemarks'), always: false },
   { col: dwc('minimumDepthInMeters'), always: false },
   { col: dwc('maximumDepthInMeters'), always: false },
   // the depth as the sheet wrote it, when its unit was converted to metres
@@ -128,6 +130,7 @@ function eventRow(e: ModelEvent, datasetName: string, institutionCode: string): 
     p ? coordText(p.lon, p.lonDecimals, p.lonText, p.derived) : '',
     p ? 'EPSG:4326' : '',
     p ? num(p.uncertaintyM) : '',
+    p?.remarks ?? '',
     depthText(e.depth?.min, e.depth?.decimals, e.depth?.minText),
     depthText(e.depth?.max, e.depth?.decimals, e.depth?.maxText),
     e.depth?.verbatim ?? '',

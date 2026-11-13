@@ -54,6 +54,8 @@ export interface EventRec {
   depthVerbatim?: { min?: string; max?: string };
   /** coordinateUncertaintyInMeters of a derived position: whole metres, rounded up. */
   coordinateUncertaintyInMeters?: number;
+  /** Said where a position was declared by the person for the whole sheet rather than read from the file. */
+  georeferenceRemarks?: string;
   depthMin?: number;
   depthMax?: number;
   depthDecimals?: number;
@@ -252,7 +254,7 @@ export interface ModelEvent {
   parentId?: string;
   type: EventType;
   date?: string;
-  position?: { lat: number; lon: number; latDecimals?: number; lonDecimals?: number; latText?: string; lonText?: string; derived?: boolean; uncertaintyM?: number };
+  position?: { lat: number; lon: number; latDecimals?: number; lonDecimals?: number; latText?: string; lonText?: string; derived?: boolean; uncertaintyM?: number; remarks?: string };
   depth?: { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string; verbatim?: string };
   /** minimum = maximumDistanceAboveSurfaceInMeters (a negative number in metres, as text): the depth below the seafloor of a sediment or porewater sample. */
   distance?: string;
@@ -327,6 +329,7 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
       if (e.lonText !== undefined) m.position.lonText = e.lonText;
       if (e.derived.position) m.position.derived = true;
       if (e.coordinateUncertaintyInMeters !== undefined) m.position.uncertaintyM = e.coordinateUncertaintyInMeters;
+      if (e.georeferenceRemarks !== undefined) m.position.remarks = e.georeferenceRemarks;
     }
     if (e.depthMin !== undefined || e.depthMax !== undefined) {
       m.depth = {};

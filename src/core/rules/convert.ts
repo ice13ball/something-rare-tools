@@ -132,6 +132,8 @@ import type { RuleSpec } from './spec';
  *   CONV-PANGAEA-NAMES-FALLBACK (none)      a PANGAEA file's parameter list was not matched to its columns: the abbreviations of the table header are the names (info)
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-POSITION-NONE         count, column?   count = the sheet's sample events that have no position on themselves or an ancestor; column = (variant) the header of a latitude / longitude column that is blank in every row; file, sheet = the sheet
+ *   CONV-POSITION-DECLARED     lat, lon, uncertainty, count   the one position the person declared for a sheet with no position role, as typed (point as decimal mark); count = the samples it was written on; fromFile = yes when a companion file gave it (warning, to accept)
+ *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | position-role (the sheet has a latitude / longitude role, even a blank one); nothing is applied
  *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); lines = the lines
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
@@ -1956,6 +1958,43 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: {count} sample event(s) have no latitude / longitude on themselves or on a parent, and the sheet has no column mapped as latitude or longitude (a mapped column that is blank in every row is the :empty-column variant). The output table's empty decimalLatitude / decimalLongitude column is not repeated.`,
   },
   {
+    id: 'CONV-POSITION-DECLARED',
+    category: 'B',
+    severity: 'warning',
+    params: ['lat', 'lon', 'uncertainty', 'count'],
+    plain: {
+      pl: `Pozycja {lat}, {lon} (niepewność {uncertainty} m) została zadeklarowana przez Ciebie dla całego arkusza „{sheet}” i zapisana przy {count} {+count:próbce|próbkach|próbkach}; plik jej nie zawiera. Archiwum zaznacza to w georeferenceRemarks.`,
+      en: `The position {lat}, {lon} (uncertainty {uncertainty} m) was declared by you for the whole sheet "{sheet}" and is written on {count} {+count:sample|samples}; the file does not state it. The archive says so in georeferenceRemarks.`,
+      de: `Die Position {lat}, {lon} (Unsicherheit {uncertainty} m) wurde von Ihnen für das ganze Blatt „{sheet}“ festgelegt und bei {count} {+count:Probe|Proben} geschrieben; die Datei enthält sie nicht. Das Archiv vermerkt das in georeferenceRemarks.`,
+      fr: `La position {lat}, {lon} (incertitude {uncertainty} m) a été déclarée par vous pour toute la feuille « {sheet} » et est écrite sur {count} {+count:échantillon|échantillons} ; le fichier ne l'indique pas. L'archive le précise dans georeferenceRemarks.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta pozycja pochodzi z pliku towarzyszącego, a nie z pliku z danymi; zapisano ją dla całego arkusza, bo arkusz nadal nie ma żadnej kolumny pozycji.`,
+          en: `This position was read from the companion file, not from the data file; it is written for the whole sheet because the sheet still has no position column.`,
+          de: `Diese Position stammt aus der Begleitdatei, nicht aus der Datendatei; sie wird für das ganze Blatt geschrieben, weil das Blatt weiterhin keine Positionsspalte hat.`,
+          fr: `Cette position vient du fichier d'accompagnement, pas du fichier de données ; elle est écrite pour toute la feuille parce que la feuille n'a toujours aucune colonne de position.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the person declared one position for the sheet (decimalLatitude {lat}, decimalLongitude {lon}, coordinateUncertaintyInMeters {uncertainty}); it is written on {count} sample event(s), with georeferenceRemarks saying it was declared for the whole dataset by the person converting. Never inferred; applied only to a sheet with no latitude / longitude role. A warning to accept.`,
+  },
+  {
+    id: 'CONV-POSITION-DECLARED-INVALID',
+    category: 'B',
+    severity: 'error',
+    params: ['reason'],
+    plain: {
+      pl: `Pozycji zadeklarowanej dla arkusza „{sheet}” nie można użyć: {reason}. Nic z niej nie zapisano.`,
+      en: `The position declared for sheet "{sheet}" cannot be used: {reason}. Nothing was written from it.`,
+      de: `Die für das Blatt „{sheet}“ festgelegte Position ist nicht verwendbar: {reason}. Daraus wurde nichts geschrieben.`,
+      fr: `La position déclarée pour la feuille « {sheet} » est inutilisable : {reason}. Rien n'en a été écrit.`,
+    },
+    technical: `{file}, {sheet}: the declared position is refused ({reason}; value {value}) and nothing is applied. latitude = not a number within -90 to 90; longitude = not a number within -180 to 180; uncertainty = not a plain number above zero; position-role = the sheet has a latitude or longitude column (even a blank one), and a declaration never fills gaps. CONV-POSITION-NONE is not repeated.`,
+  },
+  {
     id: 'CONV-EVENT-DATE-MISSING',
     category: 'B',
     severity: 'error',
@@ -2804,6 +2843,23 @@ const KEY_CROSS_PLAIN: Record<Lang, string> = {
 const LINE_IN_LIST: Record<Lang, (n: string) => string> = { en: (n) => `(line ${n})`, pl: (n) => `(wiersz ${n})`, de: (n) => `(Zeile ${n})`, fr: (n) => `(ligne ${n})` };
 const lineWordsIn = (text: string, lang: Lang): string => text.replace(/\u27e6line:(\d+)\u27e7/g, (_w, n: string) => LINE_IN_LIST[lang](n));
 
+const DECLARED_REASON_WORDS: Record<string, Record<Lang, string>> = {
+  latitude: { en: 'the latitude must be a number from -90 to 90', pl: 'szerokość geograficzna musi być liczbą od -90 do 90', de: 'die Breite muss eine Zahl von -90 bis 90 sein', fr: 'la latitude doit être un nombre de -90 à 90' },
+  longitude: { en: 'the longitude must be a number from -180 to 180', pl: 'długość geograficzna musi być liczbą od -180 do 180', de: 'die Länge muss eine Zahl von -180 bis 180 sein', fr: 'la longitude doit être un nombre de -180 à 180' },
+  uncertainty: {
+    en: 'the uncertainty in metres must be a plain number above zero (for example 500)',
+    pl: 'niepewność w metrach musi być zwykłą liczbą większą od zera (na przykład 500)',
+    de: 'die Unsicherheit in Metern muss eine einfache Zahl über null sein (zum Beispiel 500)',
+    fr: "l'incertitude en mètres doit être un nombre simple supérieur à zéro (par exemple 500)",
+  },
+  'position-role': {
+    en: 'the sheet already has a latitude or longitude column, and a declared position never fills gaps',
+    pl: 'arkusz ma już kolumnę szerokości lub długości geograficznej, a zadeklarowana pozycja nigdy nie uzupełnia braków',
+    de: 'das Blatt hat bereits eine Breiten- oder Längenspalte, und eine festgelegte Position füllt nie Lücken',
+    fr: 'la feuille a déjà une colonne de latitude ou de longitude, et une position déclarée ne comble jamais des lacunes',
+  },
+};
+
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
@@ -2813,6 +2869,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
+  if (f.ruleId === 'CONV-POSITION-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: DECLARED_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-SEAFLOOR-VALUE' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: SEAFLOOR_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS') f = { ...f, params: { ...f.params, direction: SIGNS_DIRECTION_WORDS[String(f.params.direction)]?.[lang] ?? f.params.direction, side: SIGNS_SIDE_WORDS[String(f.params.side)]?.[lang] ?? f.params.side } };
   if (f.ruleId === 'CONV-SEAFLOOR-UNIT' && f.params.unit === 'none') f = { ...f, params: { ...f.params, unit: NONE_WORDS[lang] } };

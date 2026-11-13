@@ -56,6 +56,9 @@ export interface SampleSite {
   /** The source text of a position or depth that came from one plain number cell (only a decimal comma turned into a point): written as it is. */
   latText?: string;
   lonText?: string;
+  /** A position DECLARED by the person for the whole sheet (never read from the file): its uncertainty in metres and the remark that says so. */
+  coordinateUncertaintyInMeters?: number;
+  georeferenceRemarks?: string;
   depthMinText?: string;
   depthMaxText?: string;
   /** The depth as the sheet wrote it, with its unit, when the column was converted to metres: verbatimDepth. */
@@ -269,6 +272,10 @@ function derive(node: Node): void {
     rec.lonDecimals = DERIVED_DECIMALS;
     if (centre.uncertainty !== undefined) rec.coordinateUncertaintyInMeters = centre.uncertainty;
     rec.derived.position = true;
+    // a position made only of declared positions says so too
+    const remarks = new Set(kids.filter((k) => k.rec.lat !== undefined && k.rec.lon !== undefined).map((k) => k.rec.georeferenceRemarks));
+    const only = remarks.size === 1 ? [...remarks][0] : undefined;
+    if (only !== undefined) rec.georeferenceRemarks = only;
     // when every child that has a position is written with one and the same text for a coordinate and it reads as exactly the midpoint, the parent is written with it (54.50, not 54.5)
     const withPosition = kids.filter((k) => k.rec.lat !== undefined && k.rec.lon !== undefined);
     const written = (pick: (r: EventRec) => string): string[] => withPosition.map((k) => pick(k.rec));
@@ -393,6 +400,8 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
       if (s.lonDecimals !== undefined) rec.lonDecimals = s.lonDecimals;
       if (s.latText !== undefined) rec.latText = s.latText;
       if (s.lonText !== undefined) rec.lonText = s.lonText;
+      if (s.coordinateUncertaintyInMeters !== undefined) rec.coordinateUncertaintyInMeters = s.coordinateUncertaintyInMeters;
+      if (s.georeferenceRemarks !== undefined) rec.georeferenceRemarks = s.georeferenceRemarks;
     }
     if (s.depthMinText !== undefined) rec.depthMinText = s.depthMinText;
     if (s.depthMaxText !== undefined) rec.depthMaxText = s.depthMaxText;

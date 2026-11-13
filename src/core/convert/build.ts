@@ -32,7 +32,7 @@ import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
 import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
 import type { NercDecisions, NercPick } from './nerc';
-import { biomassKindConcept, biomassUnit, parseTypedNumber, resolveQuantity } from './quantity';
+import { biomassKindConcept, biomassUnit, parseTypedCoordinate, parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
@@ -64,6 +64,34 @@ import type { SampleJoinInfo } from './sampleJoin';
  * the preview next to the list of what has to be fixed; `ok` says whether the records may go to the writer (stage 2).
  */
 
+/** What the person declared as the one position of a sheet, read: applied, refused (one reason per cause), or not declared. */
+type DeclaredPositionRead =
+  | { kind: 'none' }
+  | { kind: 'invalid'; reasons: { reason: 'latitude' | 'longitude' | 'uncertainty' | 'position-role'; value?: string }[] }
+  | { kind: 'ok'; lat: number; lon: number; latText: string; lonText: string; uncertainty: number; typed: { lat: string; lon: string; uncertainty: string } };
+
+/** The remark written beside every position the person declared (event.txt georeferenceRemarks). */
+const DECLARED_POSITION_REMARK = 'Position declared for the whole dataset by the person converting; not stated per sample in the source';
+
+/**
+ * One position declared for a sheet (Q5): only for a sheet whose mapping has no latitude / longitude role at all (a blank column is still a role: a declaration never fills gaps), typed
+ * latitude within ±90, longitude within ±180 and an uncertainty above zero. Typed, never inferred; a refusal names each cause once and applies nothing.
+ */
+function readDeclaredPosition(sin: ConvertSheetInput): DeclaredPositionRead {
+  const d = sin.declaredPosition;
+  if (d === undefined) return { kind: 'none' };
+  if (sin.mapping.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude')) return { kind: 'invalid', reasons: [{ reason: 'position-role' }] };
+  const lat = parseTypedCoordinate(d.lat);
+  const lon = parseTypedCoordinate(d.lon);
+  const u = parseTypedNumber(d.uncertaintyM);
+  const reasons: { reason: 'latitude' | 'longitude' | 'uncertainty'; value: string }[] = [];
+  if (!lat.ok || Math.abs(lat.value) > 90) reasons.push({ reason: 'latitude', value: d.lat.trim() });
+  if (!lon.ok || Math.abs(lon.value) > 180) reasons.push({ reason: 'longitude', value: d.lon.trim() });
+  if (!u.ok) reasons.push({ reason: 'uncertainty', value: d.uncertaintyM.trim() });
+  if (reasons.length > 0 || !lat.ok || !lon.ok || !u.ok) return { kind: 'invalid', reasons };
+  return { kind: 'ok', lat: lat.value, lon: lon.value, latText: lat.text, lonText: lon.text, uncertainty: u.value, typed: { lat: lat.text, lon: lon.text, uncertainty: u.text } };
+}
+
 /**
  * CONV-POSITION-NONE: a sheet that wrote sample events, none of which has a position on itself or on an ancestor, and whose mapping gives no latitude / longitude
  * (or only a position column that is blank in every row). Said in the sheet's terms, so the output table's empty decimalLatitude / decimalLongitude column is not
@@ -83,6 +111,8 @@ function positionNoneFindings(sheets: readonly ConvertSheetInput[], events: read
   const out: Finding[] = [];
   for (const sin of sheets) {
     if (sin.profile !== undefined) continue;
+    // a refused declaration is said once, by its own message
+    if (readDeclaredPosition(sin).kind === 'invalid') continue;
     const mine = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet);
     if (mine.length === 0 || mine.some(positioned)) continue;
     const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
@@ -268,6 +298,13 @@ export interface ConvertSheetInput {
   dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>;
   /** The columns whose declared order came from the companion file (the message says so). */
   dayMonthOrderFromFile?: readonly number[];
+  /**
+   * ONE position the PERSON declared for the whole sheet (typed latitude, longitude and uncertainty in metres; never inferred, never prefilled). Applied only to a sheet that has no latitude / longitude
+   * role at all, never to fill gaps; every sample then carries it with its uncertainty and a georeferenceRemarks that says it was declared. Refused otherwise (CONV-POSITION-DECLARED-INVALID).
+   */
+  declaredPosition?: { lat: string; lon: string; uncertaintyM: string };
+  /** The declaration above came from a companion file: said in the finding. */
+  declaredPositionFromFile?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -1920,6 +1957,10 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       else findings.push(makeConvertFinding('CONV-MESH-INVALID', { ...base, value: sin.meshUm.trim(), params: { reason: p.reason } }));
     }
 
+    // the position the person declared for the whole sheet: refused with one message per cause, applied to every sample otherwise
+    const declared = readDeclaredPosition(sin);
+    if (declared.kind === 'invalid') for (const r of declared.reasons) findings.push(makeConvertFinding('CONV-POSITION-DECLARED-INVALID', { ...base, ...(r.value === undefined ? {} : { value: r.value }), params: { reason: r.reason } }));
+
     // the measured-variable columns (stage 5): the identifiers the user confirmed for each, checked here (not believed because the page sent them). A unit identifier
     // counts only for a column that has a unit text. What is written into the file is checked for tabs and line breaks like every other text.
     const varState = cols.variables.map((v) => {
@@ -2095,7 +2136,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
         fate.row(row.line, 'no-event-date');
         continue;
       }
-      const m = parse(row);
+      const parsed = parse(row);
+      const m = declared.kind === 'ok' ? { ...parsed, lat: declared.lat, lon: declared.lon } : parsed;
       const keyRead = readKey?.(row);
       const code = keyRead === undefined ? m.sampleId : keyRead.id;
       const stationText = m.station;
@@ -2242,10 +2284,14 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
           site.lon = m.lon;
           if (m.latDecimals !== undefined) site.latDecimals = m.latDecimals;
           if (m.lonDecimals !== undefined) site.lonDecimals = m.lonDecimals;
-          const latText = specs.lat ? sourceNumberText(row.cells[specs.lat.index], dc, m.lat) : undefined;
-          const lonText = specs.lon ? sourceNumberText(row.cells[specs.lon.index], dc, m.lon) : undefined;
+          const latText = declared.kind === 'ok' ? declared.latText : specs.lat ? sourceNumberText(row.cells[specs.lat.index], dc, m.lat) : undefined;
+          const lonText = declared.kind === 'ok' ? declared.lonText : specs.lon ? sourceNumberText(row.cells[specs.lon.index], dc, m.lon) : undefined;
           if (latText !== undefined) site.latText = latText;
           if (lonText !== undefined) site.lonText = lonText;
+          if (declared.kind === 'ok') {
+            site.coordinateUncertaintyInMeters = declared.uncertainty;
+            site.georeferenceRemarks = DECLARED_POSITION_REMARK;
+          }
         }
         if (depth.min !== undefined) site.depthMin = depth.min;
         if (depth.max !== undefined) site.depthMax = depth.max;
@@ -3030,6 +3076,14 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   // a column read for the events is "event" in the ledger only where the events that were written carry what it gives
   settleEventColumns(ledger, events, tree.cruiseText);
   findings.push(...positionNoneFindings(input.sheets, events));
+  // one position declared for a sheet, applied: said once per sheet, with the samples it was written on
+  for (const sin of input.sheets) {
+    const declared = sin.profile === undefined ? readDeclaredPosition(sin) : undefined;
+    if (declared?.kind !== 'ok') continue;
+    const count = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet && e.georeferenceRemarks === DECLARED_POSITION_REMARK).length;
+    if (count === 0) continue;
+    findings.push(makeConvertFinding('CONV-POSITION-DECLARED', { file: sin.file.fileName, sheet: sin.sheet, params: { ...declared.typed, count, ...(sin.declaredPositionFromFile === true ? { fromFile: 'yes' } : {}) } }));
+  }
   const undated = undatedSheets(input.sheets, rawInput.sheets, events, samples);
   for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}) } }));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
