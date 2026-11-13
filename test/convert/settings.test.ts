@@ -142,3 +142,25 @@ describe('the day/month order in the companion file (round 3, Task 8)', () => {
     expect(readConvertSettings(textFile('c.sidecar.csv', text))?.dayMonthOrder).toEqual([{ sheet: 'Counts', order: 'dmy', hash, rows: 3 }]);
   });
 });
+
+describe('the declared position in the companion file (round 3, Task 11)', () => {
+  const one = { sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500' };
+
+  it('round-trips a negative decimal-comma latitude, whose field is quoted', () => {
+    const text = writeConvertSidecar({ declaredPosition: [one] });
+    expect(text).toContain('"declaredPosition=-54,125:10.9:500:Tanks"');
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.declaredPosition).toEqual([one]);
+  });
+
+  it('keeps a colon in a sheet name, one line per sheet, and skips what it cannot read back', () => {
+    const odd = { sheet: 'A:B', lat: '1', lon: '2', uncertaintyM: '3' };
+    const text = writeConvertSidecar({ declaredPosition: [odd, { ...odd, lat: '9' }, { sheet: 'X', lat: '1:2', lon: '2', uncertaintyM: '3' }, { sheet: 'Y', lat: '', lon: '2', uncertaintyM: '3' }] });
+    const read = readConvertSettings(textFile('c.sidecar.csv', text))?.declaredPosition;
+    expect(read).toEqual([odd]);
+  });
+
+  it('is ignored by /check as every other setting', () => {
+    const text = writeConvertSidecar({ declaredPosition: [one] });
+    expect(readMappingFile(textFile('c.sidecar.csv', text))).toBeDefined();
+  });
+});

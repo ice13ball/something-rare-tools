@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import React, { useId } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { parseRateUnit } from '../../core/convert';
 import type { ConvertShape } from '../../core/convert';
 import type { UiKey } from '../../core/i18n/ui';
@@ -31,6 +31,8 @@ export interface ConvertSheetFormProps {
   hasPressureColumn: boolean;
   /** a column of this sheet is mapped as the station (without one, a profile sheet may take each distinct position for a station) */
   hasStationColumn: boolean;
+  /** a column of this sheet is mapped as latitude or longitude (even one blank in every row): no declared position is offered */
+  hasPositionColumn?: boolean;
   choice: SheetChoice;
   onChange: (choice: SheetChoice) => void;
 }
@@ -41,7 +43,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -51,6 +53,19 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
   const scaleClasses = scaleClassesOf(q);
   const perArea = q.per !== 'sample' && (q.per === 'area' || (q.per === '' && rate?.per === 'area'));
   const shapeLabel = `${id}-shape`;
+  // the declared position (a sheet with no position column, not a profile): a closed section, open from the start when it already holds values
+  const positionBox = useRef<HTMLDetailsElement>(null);
+  const positionFilled = choice.positionLat !== '' || choice.positionLon !== '' || choice.positionUncertainty !== '';
+  useEffect(() => {
+    if (positionFilled && positionBox.current) positionBox.current.open = true;
+    // only at the start: the person may close it afterwards
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // an edit is the person's own: what was read from a companion file is no longer said to come from it
+  const setPosition = (patch: Partial<Pick<SheetChoice, 'positionLat' | 'positionLon' | 'positionUncertainty'>>): void => {
+    const { positionFromFile: _file, ...rest } = choice;
+    onChange({ ...rest, ...patch });
+  };
   return (
     <section className="convert-sheet" aria-label={t('convert.sheet.title', { sheet, file: fileName })}>
       <h3>{t('convert.sheet.title', { sheet, file: fileName })}</h3>
@@ -350,6 +365,25 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             </div>
 
             </>
+          )}
+
+          {hasPositionColumn !== true && !choice.profile && (
+            <details className="convert-group" ref={positionBox}>
+              <summary>{t('convert.position.title')}</summary>
+              <p className="muted">{t('convert.position.help')}</p>
+              <div className="field">
+                <label htmlFor={`${id}-pos-lat`}>{t('convert.position.lat')}</label>
+                <input id={`${id}-pos-lat`} data-position-lat={`${fileName}\u0000${sheet}`} type="text" inputMode="decimal" maxLength={40} value={choice.positionLat} autoComplete="off" spellCheck={false} onChange={(e) => setPosition({ positionLat: e.target.value })} />
+              </div>
+              <div className="field">
+                <label htmlFor={`${id}-pos-lon`}>{t('convert.position.lon')}</label>
+                <input id={`${id}-pos-lon`} type="text" inputMode="decimal" maxLength={40} value={choice.positionLon} autoComplete="off" spellCheck={false} onChange={(e) => setPosition({ positionLon: e.target.value })} />
+              </div>
+              <div className="field">
+                <label htmlFor={`${id}-pos-unc`}>{t('convert.position.uncertainty')}</label>
+                <input id={`${id}-pos-unc`} type="text" inputMode="decimal" maxLength={40} value={choice.positionUncertainty} autoComplete="off" spellCheck={false} onChange={(e) => setPosition({ positionUncertainty: e.target.value })} />
+              </div>
+            </details>
           )}
 
           {!hasCruiseColumn && (

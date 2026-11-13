@@ -115,6 +115,12 @@ export interface ConvertSheetRequest {
    */
   dayMonthOrder?: Record<number, 'dmy' | 'mdy'>;
   dayMonthOrderFromFile?: number[];
+  /**
+   * The one position the PERSON typed for this sheet (latitude, longitude, uncertainty in metres, as typed). Sent only when all three are filled; never guessed. `declaredPositionFromFile` says it was
+   * read from a companion file and has not been edited since.
+   */
+  declaredPosition?: { lat: string; lon: string; uncertaintyM: string };
+  declaredPositionFromFile?: boolean;
 }
 
 /** A sheet of a dropped file, as the request names it (the join is told by file id and sheet name; the worker maps it to the request's sheets). */

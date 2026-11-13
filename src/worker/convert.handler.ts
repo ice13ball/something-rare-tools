@@ -157,6 +157,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
         for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
         for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
+        for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
         for (const d of s.dayMonthOrder ?? []) if (!(settings.dayMonthOrder ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.dayMonthOrder.push(d);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
         for (const j of s.sampleJoin ?? []) if (!(settings.sampleJoin ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1])) settings.sampleJoin.push(j);
@@ -293,6 +294,15 @@ export function createConvertHandler(): ConvertHandler {
     return { dayMonthOrder: kept, ...(fromFile.length === 0 ? {} : { dayMonthOrderFromFile: fromFile }) };
   }
 
+  /** The position a person declared for a request sheet: three non-empty strings, trimmed, each at most 40 characters (the core reads the numbers and refuses what is not one). Nothing otherwise. */
+  function declaredOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'declaredPosition' | 'declaredPositionFromFile'> {
+    const d = s.declaredPosition;
+    if (d === undefined || d === null || typeof d !== 'object') return {};
+    const [lat, lon, uncertaintyM] = [d.lat, d.lon, d.uncertaintyM].map((x) => (typeof x === 'string' ? x.trim() : ''));
+    if ([lat, lon, uncertaintyM].some((x) => x === '' || x.length > 40)) return {};
+    return { declaredPosition: { lat, lon, uncertaintyM }, ...(s.declaredPositionFromFile === true ? { declaredPositionFromFile: true } : {}) };
+  }
+
   /** The sheets of a request as the core takes them, before any join. */
   function rawInputsOf(body: ConvertRequestBody): ConvertSheetInput[] {
     return body.sheets.map((s) => ({
@@ -325,6 +335,8 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.profile === undefined && s.sampleKey !== undefined && s.sampleKey !== null && Array.isArray(s.sampleKey.columns) ? keyOf(s) : {}),
       // the day/month order the person declared, by column: whole-number columns of the sheet and the two orders only
       ...orderOf(s),
+      // the position the person typed for a sheet with none
+      ...declaredOf(s),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
         ? { leaveOutFile: s.leaveOutFile.filter((g) => g !== null && typeof g === 'object' && typeof g.reason === 'string' && Number.isInteger(g.count) && Number.isInteger(g.rows)).map((g) => ({ reason: g.reason, count: g.count, rows: g.rows })) }
         : {}),
