@@ -1167,7 +1167,7 @@ export interface SampleJoinRequestCore {
 
 export interface JoinOutcome {
   sheets: ConvertSheetInput[];
-  /** CONV-JOIN-PROPOSED and CONV-JOIN-DESCRIPTION-LONG only; a merge's own findings travel on SampleJoinInfo.findings (F1) */
+  /** CONV-JOIN-PROPOSED, CONV-JOIN-DESCRIPTION-LONG and CONV-JOIN-KEY-ROLE-LOST; a merge's own findings travel on SampleJoinInfo.findings (F1) */
   findings: Finding[];
   proposals: SampleJoinProposal[];
   /** the REQUEST indexes of the sheets that can be the results sheet of a join (a taxon column or taxon headers, not a profile sheet) and have none confirmed yet: the person may declare a join for them with no proposal (declare-first) */
@@ -1182,10 +1182,11 @@ const isIndex = (n: unknown, below: number): n is number => typeof n === 'number
 
 /**
  * The ONLY validator of a join (F8). A join that is not valid any more (a column re-roled after the person confirmed, an index out of range, the sheets no longer what the join needs) is dropped
- * without a finding of its own and is not passed as `skip`, so its proposal shows again.
+ * without a finding of its own (the one exception: a results key column that has no key role any more is named by CONV-JOIN-KEY-ROLE-LOST) and is not passed as `skip`, so its proposal shows again.
  */
 export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly SampleJoinRequestCore[], declined: readonly { results: number; description: number }[]): JoinOutcome {
   const valid: SampleJoinRequestCore[] = [];
+  const lost: Finding[] = [];
   const usedAsResults = new Set<number>();
   for (const j of joins) {
     if (!isIndex(j.results, sheets.length) || !isIndex(j.description, sheets.length) || j.results === j.description || usedAsResults.has(j.results)) continue;
@@ -1197,10 +1198,13 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
     if (resSheet === undefined || desSheet === undefined) continue;
     if (res.profile !== undefined || !hasTaxon(res) || des.profile !== undefined || hasTaxon(des) || desSheet.pivot !== undefined) continue;
     const picked = new Set(res.sampleKey?.columns ?? []);
-    const keysOk = j.keys.every(
-      (k) => k !== null && typeof k === 'object' && isIndex(k.results, resSheet.header.length) && isIndex(k.description, desSheet.header.length) && res.mapping.columns.some((c) => c.index === k.results && (RIGHT_KINDS.has(c.role.kind) || picked.has(c.index))),
-    );
-    if (!keysOk) continue;
+    const indexesOk = j.keys.every((k) => k !== null && typeof k === 'object' && isIndex(k.results, resSheet.header.length) && isIndex(k.description, desSheet.header.length));
+    if (!indexesOk) continue;
+    const lostKey = j.keys.find((k) => !res.mapping.columns.some((c) => c.index === k.results && (RIGHT_KINDS.has(c.role.kind) || picked.has(c.index))));
+    if (lostKey !== undefined) {
+      lost.push(makeConvertFinding('CONV-JOIN-KEY-ROLE-LOST', { file: res.file.fileName, sheet: res.sheet, params: { description: des.sheet, column: resSheet.header[lostKey.results] } }));
+      continue;
+    }
     usedAsResults.add(j.results);
     valid.push(j);
   }
@@ -1220,7 +1224,7 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
   const openResultsSheets = (): number[] => sheets.flatMap((s, i) => (s.profile === undefined && hasTaxon(s) && !usedAsResults.has(i) ? [i] : []));
   if (valid.length === 0) {
     const proposals = proposed();
-    return { sheets: sheets as ConvertSheetInput[], findings: proposalFindings(proposals), proposals, resultsSheets: openResultsSheets(), conflicts: [], origin: sheets.map((_, i) => i) };
+    return { sheets: sheets as ConvertSheetInput[], findings: [...proposalFindings(proposals), ...lost], proposals, resultsSheets: openResultsSheets(), conflicts: [], origin: sheets.map((_, i) => i) };
   }
   // decision 6: one description for several results sheets writes each sample once
   const keysOf = new Map(valid.map((j) => [j, resultsKeys(sheets[j.results], j.keys)] as const));
@@ -1253,7 +1257,7 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
     origin.push(i);
   });
   const proposals = proposed();
-  return { sheets: out, findings: proposalFindings(proposals), proposals, resultsSheets: openResultsSheets(), conflicts, origin };
+  return { sheets: out, findings: [...proposalFindings(proposals), ...lost], proposals, resultsSheets: openResultsSheets(), conflicts, origin };
 }
 
 /**

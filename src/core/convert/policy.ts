@@ -87,6 +87,7 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-JOIN-NO-MATCH',
   'CONV-JOIN-AMBIGUOUS',
   'CONV-JOIN-KEY-BLANK',
+  'CONV-JOIN-KEY-ROLE-LOST',
 ];
 
 /** Warnings the user must accept (per rule, per run) before exporting. */

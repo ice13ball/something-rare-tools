@@ -39,6 +39,7 @@ import type { RuleSpec } from './spec';
  *   CONV-JOIN-DESCRIPTION-ONLY count, samples, description, resultsWithout   samples described with no results: written as sample events with no occurrence; resultsWithout (when there are such) = up to 5 keys of the results sheet with no description (warning, accept)
  *   CONV-JOIN-AMBIGUOUS        count, keys, description   file, sheet, lines = the DESCRIPTION rows; a key with several different rows (error)
  *   CONV-JOIN-KEY-BLANK        count, columns, side   side = results: results rows with a blank key part; side = description: file, sheet, lines = the DESCRIPTION rows whose values can be lent to no sample; blocks until the rows are left out or the key is filled (error)
+ *   CONV-JOIN-KEY-ROLE-LOST    description, column   a join the person confirmed is not applied because the results sheet's key column no longer has a key role; file, sheet = the results sheet; blocks until the role is given back or the join is confirmed again (error)
  *   CONV-JOIN-FILLED           count, column, from   one per column: count blank cells filled from sheet from (info)
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
@@ -518,6 +519,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Dans la feuille de résultats ({+lineCount:ligne|lignes} {lines}, {count} au total) une partie de la clé ({columns}) est vide : aucune description n'est trouvée pour ces échantillons. Renseignez la clé dans le fichier, ou convertissez ces lignes à partir de la seule feuille de résultats.`,
     },
     technical: `{file}, {sheet}:{lines} ({side} sheet): {count} row(s) have a blank part in the join key (columns: {columns}), so no row of the other sheet can be found for them. Blocks until the key is filled or the person converts these rows with only what the results sheet says (CONV-JOIN-RESULTS-ONLY covers them); on the description side, until the rows are left out and listed.`,
+  },
+  {
+    id: 'CONV-JOIN-KEY-ROLE-LOST',
+    category: 'B',
+    severity: 'error',
+    params: ['description', 'column'],
+    plain: {
+      pl: `Łączenie, które potwierdzono dla „{sheet}”, nie jest zastosowane: kolumna „{column}” nie ma już roli klucza. Przywróć jej rolę albo potwierdź łączenie jeszcze raz.`,
+      en: `The join you confirmed for "{sheet}" is not applied: column "{column}" no longer has a key role. Give it back the role, or confirm the join again.`,
+      de: `Die für „{sheet}“ bestätigte Verbindung wird nicht angewendet: Die Spalte „{column}“ hat keine Schlüsselrolle mehr. Geben Sie ihr die Rolle zurück oder bestätigen Sie die Verbindung erneut.`,
+      fr: `La jointure confirmée pour « {sheet} » n'est pas appliquée : la colonne « {column} » n'a plus de rôle de clé. Rendez-lui son rôle, ou confirmez à nouveau la jointure.`,
+    },
+    technical: `{file}, {sheet}: the person confirmed the join with the sheet "{description}", but the results column "{column}" is a key of it and has no key role any more (it was re-roled after the confirmation), so the join is not applied and both sheets are converted as without it. Blocks until the column gets its key role back or the person confirms the join again.`,
   },
   {
     id: 'CONV-JOIN-FILLED',

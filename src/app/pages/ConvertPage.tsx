@@ -427,6 +427,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const mine = (j: JoinChoice): boolean => j.state === 'confirmed' && j.results.fileId === file.fileId && j.results.sheet === f.sheet;
+    // CONV-JOIN-KEY-ROLE-LOST: the confirmed join itself is taken back (the proposal then shows again); for every other rule "Ask again" takes back the results-only answer only
+    if (choice === 'askAgain' && f.ruleId === 'CONV-JOIN-KEY-ROLE-LOST') {
+      setJoins((prev) => prev.filter((j) => !mine(j)));
+      return;
+    }
     setJoins((prev) =>
       prev.map((j) => {
         if (!mine(j)) return j;
@@ -1613,7 +1618,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
-          {f.ruleId === 'CONV-JOIN-RESULTS-ONLY' && onChooseJoin !== undefined && (
+          {(f.ruleId === 'CONV-JOIN-RESULTS-ONLY' || f.ruleId === 'CONV-JOIN-KEY-ROLE-LOST') && onChooseJoin !== undefined && (
             <>
               {' '}
               <button type="button" className="button" data-testid="ask-again" onClick={() => onChooseJoin(f, 'askAgain')}>

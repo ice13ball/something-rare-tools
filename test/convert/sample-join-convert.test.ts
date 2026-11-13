@@ -217,7 +217,10 @@ describe('joinInputs: the only validator (F8)', () => {
       Samples: [['Sample', 'Station', 'Date'], ['X01', 'ST-1', '2021-05-03'], ['X02', 'ST-2', '2021-05-04']],
     });
     const inputs = [resultsInput(file, 'Counts', { edit: { Sample: { kind: 'ignore' }, Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } } } as never), descriptionInput(file, 'Samples')];
-    proposedAgain(stays(inputs, JOIN));
+    // Task 3: the drop is no longer silent: the proposal shows again and CONV-JOIN-KEY-ROLE-LOST names it
+    const out = stays(inputs, JOIN);
+    expect(out.proposals.map((p) => [p.results, p.description])).toEqual([[0, 1]]);
+    expect(out.findings.map((f) => f.ruleId)).toEqual(['CONV-JOIN-PROPOSED', 'CONV-JOIN-KEY-ROLE-LOST']);
   });
   it('a key index out of range, not a whole number, or a results sheet as the description drops the join', () => {
     for (const bad of [

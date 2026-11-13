@@ -247,6 +247,31 @@ describe('samples without a description (P1)', () => {
   });
 });
 
+describe('a confirmed join whose key column lost its role (round 3, Task 3)', () => {
+  it('names it with CONV-JOIN-KEY-ROLE-LOST; "Ask again" takes the join back and the proposal shows again', async () => {
+    const run = await load([{ name: 'results.csv', text: RESULTS }, { name: 'samples.csv', text: SAMPLES }]);
+    await confirm(run);
+    expect(rule('CONV-JOIN-KEY-ROLE-LOST')).toBeNull();
+    fireEvent.change(screen.getAllByLabelText('Sample: Meaning')[0], { target: { value: 'ignore' } });
+    await waitFor(() => expect(rule('CONV-JOIN-KEY-ROLE-LOST')).not.toBeNull());
+    await idle();
+    fireEvent.click(within(rule('CONV-JOIN-KEY-ROLE-LOST')!).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await settled(run, (b) => b.sampleJoin === undefined);
+    expect(last(run).sampleJoin).toBeUndefined();
+  });
+
+  it('"Ask again" after a results-only answer still removes only that answer; the confirmed join stays (F16)', async () => {
+    const noDescription = csvOf(['Sample', 'Station', 'Date'], [['X01', 'ST-1', '2021-05-03'], ['X03', 'ST-3', '2021-05-05']]);
+    const run = await load([{ name: 'results.csv', text: RESULTS }, { name: 'samples.csv', text: noDescription }]);
+    await confirm(run);
+    fireEvent.click(within(rule('CONV-JOIN-NO-DESCRIPTION')!).getByRole('button', { name: T['convert.finding.resultsOnly'] }));
+    await settled(run, (b) => b.sampleJoin?.[0].resultsOnly !== undefined);
+    fireEvent.click(within(rule('CONV-JOIN-RESULTS-ONLY')!).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await settled(run, (b) => b.sampleJoin !== undefined && b.sampleJoin[0].resultsOnly === undefined);
+    expect(last(run).sampleJoin).toHaveLength(1);
+  });
+});
+
 /** a drop's parse result for the model functions */
 async function parsedOf(files: { name: string; text: string }[], settings?: string): Promise<ConvertParseResult> {
   const all = settings === undefined ? files : [...files, { name: 'convert-companion.csv', text: settings }];
