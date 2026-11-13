@@ -8,6 +8,7 @@ import { resolveQuantity } from '../../src/core/convert/quantity';
 import type { QuantityDeclaration } from '../../src/core/convert/quantity';
 import { COVER_TYPE, P01_COVER, P06_PERCENT } from '../../src/core/convert/vocab';
 import type { Finding } from '../../src/core/types';
+import { renderConvertPlain } from '../../src/core/rules/convert';
 import { exportSheet } from './exportHelpers';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
@@ -161,5 +162,48 @@ describe('the other declarations are unchanged', () => {
     expect(run(rowsOf([3, 1]), { kind: 'count' }).r.methodSteps).toEqual([]);
     const q = resolveQuantity({ kind: 'biomass', basis: 'wet', unit: 'g/m2', medium: 'bed' });
     expect(q).toMatchObject({ ok: true, quantity: { kind: 'biomass', unit: 'g/m2', type: { code: 'SDBIOL05' }, unitId: { code: 'UGMS' } } });
+  });
+});
+
+describe('review fixes (copies warnings, per sample on a density, a class written 3.0)', () => {
+  // a long sheet of identical rows: the copies rules look at it
+  const longRun = (quantity: QuantityDeclaration, value: number, dropCopies = false) => {
+    const header = ['Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Stage', 'Value'];
+    const rows: Cell[][] = [];
+    for (const s of ['A', 'B']) for (const sp of ['Zostera marina', 'Ulva lactuca']) for (let i = 0; i < 2; i++) rows.push([s, '2023-07-01', 55.1, 3.2, sp, 'x', value]);
+    const sheets = [sheetInput(fileOf(header, rows), { shape: 'long', quantity, edit: { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Value: { kind: 'quantity' } }, ...(dropCopies ? { dropCopies: true } : {}) })];
+    return convert({ sheets, options: {} });
+  };
+  const plain = (f: Finding) => renderConvertPlain(f, 'en');
+
+  it.each([['class', { kind: 'class' as const, scale: { name: '', min: '0', max: '5' } }, 4], ['cover', { kind: 'cover' as const }, 40]])('%s: the copies warning is kept and blocks, but shows no sum, and no same-in-sample sum is made', (_n, q, v) => {
+    const r = longRun(q, v);
+    const copies = find(r.findings, 'CONV-ROW-COPIES');
+    expect(copies).toHaveLength(1);
+    expect(r.blocking.some((f) => f.ruleId === 'CONV-ROW-COPIES')).toBe(true);
+    expect(plain(copies[0])).toContain('cannot be added up');
+    expect(plain(copies[0])).not.toMatch(/adds up|\d+ with them/);
+    expect(find(r.findings, 'CONV-QUANTITY-SAME-IN-SAMPLE')).toEqual([]);
+    expect(find(r.findings, 'CONV-ROW-COPIES-SPECIMENS')).toEqual([]);
+    const dropped = longRun(q, v, true);
+    expect(find(dropped.findings, 'CONV-ROW-COPIES-DROPPED')).toHaveLength(1);
+    for (const f of find(dropped.findings, 'CONV-ROW-COPIES-DROPPED')) expect(f.params.withCopies).toBeUndefined();
+  });
+
+  it('a count still shows its sums', () => {
+    const c = find(longRun({ kind: 'count' }, 4).findings, 'CONV-ROW-COPIES')[0];
+    expect(plain(c)).toMatch(/adds up to/);
+  });
+
+  it('per sample on a density (or any kind but biomass) blocks and says so, instead of being ignored', () => {
+    const { r } = run(rowsOf([1, 2]), { kind: 'density', unit: '#/m3', per: 'sample' });
+    expect(find(r.blocking, 'CONV-QUANTITY-UNDECLARED')[0].params.missing).toContain('per sample');
+    expect(resolveQuantity({ kind: 'count', per: 'sample' })).toEqual({ ok: false, missing: ['per sample (only for a biomass)'] });
+  });
+
+  it('a class written 3.0 is 3 in both organismQuantity and the eMoF value', () => {
+    const { r } = run(rowsOf(['3.0', 1]), { kind: 'class', scale: { name: '', min: '0', max: '5' } });
+    expect(r.occurrences[0].organismQuantity).toBe(3);
+    expect(quantityRows(r)[0].measurementValue).toBe('3');
   });
 });

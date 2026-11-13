@@ -248,6 +248,8 @@ export function resolveQuantity(decl: QuantityDeclaration | undefined, opts: { d
   if (!decl || decl.kind === undefined) return { ok: false, missing: ['kind'] };
   const missing: string[] = [];
   const out: ResolvedQuantity = { kind: decl.kind };
+  // 'per sample' is a biomass answer; on any other kind it would be ignored in silence, so it is said
+  if (decl.per === 'sample' && decl.kind !== 'biomass') missing.push('per sample (only for a biomass)');
   if (decl.kind === 'count') {
     out.type = P01.count;
   } else if (decl.kind === 'cover') {

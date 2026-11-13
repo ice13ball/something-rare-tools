@@ -1950,6 +1950,11 @@ const MISSING_WORDS: Record<string, Record<Lang, string>> = {
   'effort unit': { en: 'the unit of the sample size', pl: 'jednostka wielkości próby', de: 'die Einheit der Probengröße', fr: "l'unité de la taille d'échantillon" },
   'effort value': { en: 'the value of the sample size', pl: 'wartość wielkości próby', de: 'der Wert der Probengröße', fr: "la valeur de la taille d'échantillon" },
   'effort volume or area': { en: 'whether the sample size is a volume or an area', pl: 'czy wielkość próby to objętość, czy powierzchnia', de: 'ob die Probengröße ein Volumen oder eine Fläche ist', fr: "si la taille d'échantillon est un volume ou une surface" },
+  scale: { en: 'the abundance class scale (whole numbers, the lowest below the highest)', pl: 'skala klas liczebności (liczby całkowite, najniższa poniżej najwyższej)', de: 'die Skala der Häufigkeitsklassen (ganze Zahlen, die niedrigste unter der höchsten)', fr: "l'échelle des classes d'abondance (entiers, le plus bas sous le plus haut)" },
+  'unit not percent': { en: 'a unit that is a percent (a cover is always in percent)', pl: 'jednostka będąca procentem (pokrycie jest zawsze w procentach)', de: 'eine Einheit in Prozent (eine Deckung ist immer in Prozent)', fr: "une unité en pourcent (un recouvrement est toujours en pourcentage)" },
+  'unit not per sample': { en: 'a unit that is a mass per sample (g, mg or kg), not per area or volume', pl: 'jednostka masy na próbkę (g, mg lub kg), nie na powierzchnię ani objętość', de: 'eine Masseneinheit je Probe (g, mg oder kg), nicht je Fläche oder Volumen', fr: "une unité de masse par échantillon (g, mg ou kg), pas par surface ni par volume" },
+  'mass unit (g, mg or kg)': { en: 'a mass unit (g, mg or kg)', pl: 'jednostka masy (g, mg lub kg)', de: 'eine Masseneinheit (g, mg oder kg)', fr: "une unité de masse (g, mg ou kg)" },
+  'per sample (only for a biomass)': { en: 'per sample is only for a biomass: choose the kind biomass, or per volume or area', pl: '„na próbkę” dotyczy tylko biomasy: wybierz rodzaj biomasa albo na objętość lub powierzchnię', de: '„je Probe“ gilt nur für Biomasse: wählen Sie die Art Biomasse oder je Volumen oder Fläche', fr: "« par échantillon » ne vaut que pour une biomasse : choisissez la biomasse, ou par volume ou surface" },
   'effort column': { en: 'a column marked as sample size', pl: 'kolumna oznaczona jako wielkość próby', de: 'eine als Probengröße markierte Spalte', fr: "une colonne marquée comme taille d'échantillon" },
 };
 
@@ -2352,6 +2357,26 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}:{lines} ({side} sheet): {count} row(s) of the description sheet have a blank part in the join key (columns: {columns}), so their values can be lent to no sample. Blocks until the key is filled or the person leaves these rows out and lists them.`,
   },
+  // CONV-ROW-COPIES of a percent cover or an abundance class: no sums
+  'CONV-ROW-COPIES:nosum': {
+    plain: {
+      pl: `{count} {+count:wiersz jest dokładną kopią|wiersze są dokładnymi kopiami|wierszy jest dokładnymi kopiami} innego wiersza ({+lineCount:wiersz|wiersze|wierszy} {lines}). Pokrycia w procentach i klas liczebności nie da się sumować, więc sum nie podajemy. Pomiń kopie i wypisz je w pliku obok archiwum (przycisk) albo popraw arkusz.`,
+      en: `{count} {+count:row is an exact copy|rows are exact copies} of another row ({+lineCount:line|lines} {lines}). Percent covers and abundance classes cannot be added up, so no sums are shown. Leave the copies out and list them in a file beside the archive (button), or correct the sheet.`,
+      de: `{count} {+count:Zeile ist eine exakte Kopie|Zeilen sind exakte Kopien} einer anderen Zeile ({+lineCount:Zeile|Zeilen} {lines}). Deckungsgrade und Häufigkeitsklassen lassen sich nicht addieren, daher werden keine Summen gezeigt. Kopien auslassen und in einer Datei neben dem Archiv auflisten (Schaltfläche) oder das Blatt korrigieren.`,
+      fr: `{count} {+count:ligne est une copie exacte|lignes sont des copies exactes} d'une autre ligne ({+lineCount:ligne|lignes} {lines}). Des recouvrements en pourcentage et des classes d'abondance ne s'additionnent pas : aucune somme n'est donnée. Écartez les copies et listez-les dans un fichier à côté de l'archive (bouton), ou corrigez la feuille.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier, with a quantity above 1. The quantity is a percent cover or an abundance class, which is never added up, so no sums are given. Blocks until the user leaves the copies out and lists them or corrects the sheet.`,
+  },
+  // CONV-ROW-COPIES-DROPPED of a percent cover or an abundance class: no sums
+  'CONV-ROW-COPIES-DROPPED:nosum': {
+    plain: {
+      pl: `Zgodnie z wyborem pominięto {count} {+count:dokładną kopię|dokładne kopie|dokładnych kopii} wierszy ({+lineCount:wiersz|wiersze|wierszy} {lines}). Sprawdź, że to były kopie.`,
+      en: `As you chose, {count} exact {+count:copy|copies} of rows {+count:was|were} left out ({+lineCount:line|lines} {lines}). Check that they were copies.`,
+      de: `Wie gewählt, {+count:wurde|wurden} {count} exakte {+count:Kopie|Kopien} von Zeilen ausgelassen ({+lineCount:Zeile|Zeilen} {lines}). Prüfen Sie, ob es Kopien waren.`,
+      fr: `Comme choisi, {count} {+count:copie exacte|copies exactes} de lignes {+count:a été écartée|ont été écartées} ({+lineCount:ligne|lignes} {lines}). Vérifiez que c'étaient des copies.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: the user chose to leave out the rows that are exact copies of an earlier row (they are listed in the file beside the archive); {count} row(s) are not converted. The quantity is a percent cover or an abundance class, which is never added up, so no sums are given.`,
+  },
   'CONV-ID-DUPLICATE:other': {
     plain: {
       pl: `Identyfikator poziomu „{value}” {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest też identyfikatorem innego zdarzenia (utworzony z: {used}). Identyfikatory muszą być unikalne: zmień kod wierszy profilu albo kody próbek.`,
@@ -2364,6 +2389,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'missing') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-axis'];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'blank') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-blank'];
   if (f.ruleId === 'CONV-POSITION-NONE' && typeof f.params.column === 'string') return PROFILE_VARIANTS['CONV-POSITION-NONE:empty-column'];

@@ -2445,7 +2445,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
             measurementType: scale !== undefined ? `abundance class (${scale.label})` : (t?.label ?? ''),
             ...(t || scale !== undefined || quantity.noTypeFor === undefined ? {} : { measurementTypeFallback: quantity.noTypeFor.charAt(0).toUpperCase() + quantity.noTypeFor.slice(1) }),
             ...(t ? { measurementTypeId: t.uri } : {}),
-            measurementValue: quantity.kind === 'count' ? String(value) : valueText(raw, dc),
+            // a count and a class are whole numbers: written as the number organismQuantity has ("3.0" is 3 in both)
+            measurementValue: quantity.kind === 'count' || scale !== undefined ? String(value) : valueText(raw, dc),
             ...(quantity.kind === 'count' || scale !== undefined ? {} : { measurementUnit: quantity.unit ?? '' }),
             ...(quantity.unitId ? { measurementUnitId: quantity.unitId.uri } : {}),
             ...(() => {
@@ -2728,13 +2729,16 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     if (realCountsHeld !== undefined) findings.push(makeConvertFinding('CONV-QUANTITY-REAL-COUNTS', { ...base, params: { count: realCountsHeld.count, ...(realCountsHeld.fromFile ? { fromFile: 'yes' } : {}) } }));
     const round = (n: number): number => Math.round(n * 1000) / 1000;
     if (copies !== undefined) {
-      const params = { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
+      // percentages and class numbers are not added up: no sums are shown (variant ':nosum'); the detection and the block are the same
+      const noSum = kind === 'cover' || kind === 'class';
+      const params = noSum ? { count: copies.copyLines.length, nosum: 'yes', ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) } : { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
       findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
     }
     // The sums of the two warnings below are those of the archive: what the occurrences and measurements of THIS sheet really carry after the user's choices (rows taken once or dropped are
     // not there, a row whose quantity or weight is never written adds nothing), never a sum over the source rows.
     // (no sums while the kind of the numbers is not declared: nothing is written then, the declaration is asked first)
-    if (kind !== undefined && (specimenCopies !== undefined || sameValue !== undefined || separated !== undefined)) {
+    // (no sums for a percent cover or an abundance class: adding percentages or classes up means nothing, and a class of 1 is no specimen)
+    if (kind !== undefined && kind !== 'cover' && kind !== 'class' && (specimenCopies !== undefined || sameValue !== undefined || separated !== undefined)) {
       const quantityAt = new Map<number, number>();
       const weightAt = new Map<string, Map<number, number>>();
       for (const o of occurrences.slice(occurrencesBefore)) quantityAt.set(o.source.line, (quantityAt.get(o.source.line) ?? 0) + (kind === 'count' ? (o.individualCount ?? 0) : 0));
