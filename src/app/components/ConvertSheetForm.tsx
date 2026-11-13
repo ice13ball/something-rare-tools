@@ -46,7 +46,14 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
   const q = choice.quantity;
   const setQ = (patch: Partial<QuantityForm>): void => onChange({ ...choice, quantity: { ...q, ...patch } });
   const rate = q.unit.trim() === '' ? undefined : parseRateUnit(q.unit, { litre: true });
-  const perArea = q.per === 'area' || (q.per === '' && rate?.per === 'area');
+  // one meaning field per class, only when the scale is whole numbers with at most 20 classes
+  const scaleClasses: number[] = (() => {
+    if (!/^\d+$/.test(q.scaleMin.trim()) || !/^\d+$/.test(q.scaleMax.trim())) return [];
+    const lo = Number(q.scaleMin.trim());
+    const hi = Number(q.scaleMax.trim());
+    return lo < hi && hi - lo + 1 <= 20 ? Array.from({ length: hi - lo + 1 }, (_, i) => lo + i) : [];
+  })();
+  const perArea = q.per !== 'sample' && (q.per === 'area' || (q.per === '' && rate?.per === 'area'));
   const shapeLabel = `${id}-shape`;
   return (
     <section className="convert-sheet" aria-label={t('convert.sheet.title', { sheet, file: fileName })}>
@@ -187,13 +194,37 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                   <FieldLabel htmlFor={`${id}-kind`} tip="convertQuantityKind">
                     {t('convert.quantity.kind')}
                   </FieldLabel>
-                  <select id={`${id}-kind`} value={q.kind} onChange={(e) => setQ({ kind: e.target.value as QuantityForm['kind'] })}>
+                  <select id={`${id}-kind`} value={q.kind} onChange={(e) => { const kind = e.target.value as QuantityForm['kind']; setQ(kind !== 'biomass' && q.per === 'sample' ? { kind, per: '' } : { kind }); }}>
                     <option value="">{t('convert.kind.none')}</option>
                     <option value="count">{t('convert.kind.count')}</option>
                     <option value="density">{t('convert.kind.density')}</option>
                     <option value="biomass">{t('convert.kind.biomass')}</option>
+                    <option value="cover">{t('convert.kind.cover')}</option>
+                    <option value="class">{t('convert.kind.class')}</option>
                   </select>
                 </div>
+                {q.kind === 'class' && (
+                  <>
+                    <div className="field">
+                      <label htmlFor={`${id}-scale-name`}>{t('convert.scale.name')}</label>
+                      <input id={`${id}-scale-name`} type="text" value={q.scaleName} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ scaleName: e.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`${id}-scale-min`}>{t('convert.scale.min')}</label>
+                      <input id={`${id}-scale-min`} type="text" inputMode="numeric" value={q.scaleMin} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ scaleMin: e.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`${id}-scale-max`}>{t('convert.scale.max')}</label>
+                      <input id={`${id}-scale-max`} type="text" inputMode="numeric" value={q.scaleMax} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ scaleMax: e.target.value })} />
+                    </div>
+                    {scaleClasses.map((n) => (
+                      <div className="field" key={n}>
+                        <label htmlFor={`${id}-scale-meaning-${n}`}>{t('convert.scale.meaning', { n })}</label>
+                        <input id={`${id}-scale-meaning-${n}`} type="text" value={q.scaleMeanings[String(n)] ?? ''} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ scaleMeanings: { ...q.scaleMeanings, [String(n)]: e.target.value } })} />
+                      </div>
+                    ))}
+                  </>
+                )}
                 {(q.kind === 'density' || q.kind === 'biomass') && (
                   <>
                     <div className="field">
@@ -223,6 +254,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                         <option value="">{t('convert.per.auto')}</option>
                         <option value="volume">{t('convert.per.volume')}</option>
                         <option value="area">{t('convert.per.area')}</option>
+                        {q.kind === 'biomass' && <option value="sample">{t('convert.per.sample')}</option>}
                       </select>
                     </div>
                     {perArea && (

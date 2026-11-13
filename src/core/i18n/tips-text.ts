@@ -248,7 +248,10 @@ No findings only means that no problems were found in the checked categories.`,
 • The tool suggests the shape from the meanings of the columns; the choice is yours.`,
   'tip.convertQuantityKind.does': `Says what the numbers in the species cells are.`,
   'tip.convertQuantityKind.logic': `• A count is a number of individuals and must be whole; it is written as individualCount, and as a count measurement ({countConcept}).
-• A density or a biomass is written as a measurement with its unit, never as individualCount.
+• A density is written as a measurement with its unit, never as individualCount.
+• A biomass is a weight per volume, per area or per sample (the whole sample), written as a measurement with its unit.
+• A percent cover is a number from zero to one hundred with the unit %, written as a measurement; it is never a count.
+• An abundance class is a whole number of a scale you declare (for example from none to five); it is written as the class, never as a count.
 • Without this choice the conversion is blocked.
 • Nothing is converted or rescaled.`,
   'tip.convertQuantityUnit.does': `The unit the numbers are written in.`,
@@ -752,7 +755,10 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
 • Narzędzie sugeruje układ na podstawie znaczeń kolumn; wybór należy do Ciebie.`,
   'tip.convertQuantityKind.does': `Mówi, czym są liczby w komórkach gatunków.`,
   'tip.convertQuantityKind.logic': `• Liczebność to liczba osobników i musi być całkowita; zapisuje się ją jako individualCount oraz jako pomiar liczebności ({countConcept}).
-• Zagęszczenie lub biomasa zapisuje się jako pomiar z jednostką, nigdy jako individualCount.
+• Zagęszczenie zapisuje się jako pomiar z jednostką, nigdy jako individualCount.
+• Biomasa to masa na objętość, na powierzchnię lub na próbę (całą próbę), zapisana jako pomiar z jednostką.
+• Pokrycie w procentach to liczba od zera do stu w jednostce %, zapisana jako pomiar; nigdy nie jest liczebnością.
+• Klasa liczebności to liczba całkowita ze skali, którą deklarujesz (na przykład od zera do pięciu); zapisuje się ją jako klasę, nigdy jako liczebność.
 • Bez tego wyboru przekształcenie jest zablokowane.
 • Nic nie jest przeliczane ani przeskalowywane.`,
   'tip.convertQuantityUnit.does': `Jednostka, w której zapisano liczby.`,
@@ -1254,7 +1260,10 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
 • Das Werkzeug schlägt den Aufbau aus den Bedeutungen der Spalten vor; die Wahl liegt bei Ihnen.`,
   'tip.convertQuantityKind.does': `Sagt, was die Zahlen in den Artenzellen sind.`,
   'tip.convertQuantityKind.logic': `• Eine Anzahl ist eine Individuenzahl und muss ganz sein; sie wird als individualCount und als Anzahl-Messung ({countConcept}) geschrieben.
-• Eine Dichte oder Biomasse wird als Messung mit Einheit geschrieben, nie als individualCount.
+• Eine Dichte wird als Messung mit Einheit geschrieben, nie als individualCount.
+• Eine Biomasse ist ein Gewicht je Volumen, je Fläche oder je Probe (die ganze Probe), als Messung mit Einheit geschrieben.
+• Eine prozentuale Bedeckung ist eine Zahl von null bis hundert mit der Einheit %, als Messung geschrieben; sie ist nie eine Anzahl.
+• Eine Häufigkeitsklasse ist eine ganze Zahl einer Skala, die Sie angeben (zum Beispiel von null bis fünf); sie wird als Klasse geschrieben, nie als Anzahl.
 • Ohne diese Wahl ist die Umwandlung blockiert.
 • Nichts wird umgerechnet oder skaliert.`,
   'tip.convertQuantityUnit.does': `Die Einheit, in der die Zahlen geschrieben sind.`,
@@ -1756,7 +1765,10 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
 • L'outil suggère la disposition d'après le sens des colonnes ; le choix vous appartient.`,
   'tip.convertQuantityKind.does': `Dit ce que sont les nombres des cellules d'espèces.`,
   'tip.convertQuantityKind.logic': `• Un effectif est un nombre d'individus et doit être entier ; il est écrit comme individualCount et comme mesure d'effectif ({countConcept}).
-• Une densité ou une biomasse est écrite comme mesure avec son unité, jamais comme individualCount.
+• Une densité est écrite comme mesure avec son unité, jamais comme individualCount.
+• Une biomasse est un poids par volume, par surface ou par échantillon (l'échantillon entier), écrite comme mesure avec son unité.
+• Un pourcentage de recouvrement est un nombre de zéro à cent avec l'unité %, écrit comme mesure ; ce n'est jamais un effectif.
+• Une classe d'abondance est un nombre entier d'une échelle que vous déclarez (par exemple de zéro à cinq) ; elle est écrite comme classe, jamais comme effectif.
 • Sans ce choix, la conversion est bloquée.
 • Rien n'est converti ni remis à l'échelle.`,
   'tip.convertQuantityUnit.does': `L'unité dans laquelle les nombres sont écrits.`,

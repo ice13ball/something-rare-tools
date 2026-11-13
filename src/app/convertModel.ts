@@ -23,15 +23,20 @@ export interface QuantityForm {
   kind: '' | QuantityKind;
   unit: string;
   basis: '' | BiomassBasis;
-  per: '' | 'volume' | 'area';
+  per: '' | 'volume' | 'area' | 'sample';
   medium: '' | 'water' | 'bed';
   effort: 'none' | 'constant' | 'column';
   effortValue: string;
   effortUnit: string;
   effortDimension: '' | 'volume' | 'area';
+  /** An abundance class scale, as typed: its name, lowest and highest class and the words for single classes (by class number). */
+  scaleName: string;
+  scaleMin: string;
+  scaleMax: string;
+  scaleMeanings: Record<string, string>;
 }
 
-export const EMPTY_QUANTITY: QuantityForm = { kind: '', unit: '', basis: '', per: '', medium: '', effort: 'none', effortValue: '', effortUnit: '', effortDimension: '' };
+export const EMPTY_QUANTITY: QuantityForm = { kind: '', unit: '', basis: '', per: '', medium: '', effort: 'none', effortValue: '', effortUnit: '', effortDimension: '', scaleName: '', scaleMin: '', scaleMax: '', scaleMeanings: {} };
 
 /** Everything the user decides about one sheet. */
 export interface SheetChoice {
@@ -101,11 +106,16 @@ export function deviceOf(c: Pick<SheetChoice, 'device' | 'deviceText'>): Samplin
 export function declarationOf(f: QuantityForm): QuantityDeclaration | undefined {
   if (f.kind === '') return undefined;
   const d: QuantityDeclaration = { kind: f.kind };
-  if (f.kind !== 'count') {
+  if (f.kind === 'class') {
+    // a class has no unit, no per and no medium: stale form state from another kind never leaks
+    const meanings: Record<string, string> = {};
+    for (const [n, words] of Object.entries(f.scaleMeanings)) if (words.trim() !== '') meanings[n] = words.trim();
+    d.scale = { name: f.scaleName.trim(), min: f.scaleMin.trim(), max: f.scaleMax.trim(), meanings };
+  } else if (f.kind === 'density' || f.kind === 'biomass') {
     if (f.unit.trim() !== '') d.unit = f.unit.trim();
     if (f.kind === 'biomass' && f.basis !== '') d.basis = f.basis;
-    if (f.per !== '') d.per = f.per;
-    if (f.medium !== '') d.medium = f.medium;
+    if (f.per !== '' && (f.per !== 'sample' || f.kind === 'biomass')) d.per = f.per;
+    if (f.medium !== '' && d.per !== 'sample') d.medium = f.medium;
   }
   if (f.effort === 'constant') {
     d.effort = { source: 'constant', value: f.effortValue, ...(f.effortUnit.trim() === '' ? {} : { unit: f.effortUnit.trim() }), ...(f.effortDimension === '' ? {} : { dimension: f.effortDimension }) };
