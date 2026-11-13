@@ -104,7 +104,7 @@ describe('on real conversions', () => {
     expect(e.findings.some((f) => f.ruleId === 'DWC-RECOMMENDED')).toBe(false);
   });
 
-  it('a sheet with no position or date is blocked by the Event checks; the description and the choices block by their own rules', async () => {
+  it('a sheet with no position or date is blocked (CONV-POSITION-NONE); the description and the choices block by their own rules', async () => {
     const e = await exportSheet(['Sample', 'Abra alba'], [['A1', 4]], { quantity: { kind: 'count' }, meta: { title: '', abstract: '', creators: '', contactEmail: 'nope', institutionCode: '', licence: '', basisOfRecord: '' } });
     const ids = judge(e.findings).blocking.map((x) => x.ruleId);
     expect(ids).toEqual(expect.arrayContaining(['CONV-POSITION-NONE', 'CONV-EML-MISSING', 'CONV-LICENCE-UNSET', 'CONV-BASIS-UNSET']));

@@ -10,7 +10,7 @@ import { toDataset } from '../../src/core/convert/model';
 import { validateTables } from '../../src/core/convert/validate';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import type { ColumnRole } from '../../src/core/types';
-import { BOOK, bookInputs, resultsInput, descriptionInput } from './joinFixtures';
+import { BOOK, bookInputs, resultsInput } from './joinFixtures';
 import { META, exportSheets } from './exportHelpers';
 import type { Cell } from './helpers';
 import { fileOf, sheetInput } from './helpers';
@@ -49,6 +49,38 @@ describe('CONV-POSITION-NONE', () => {
     expect(f).toHaveLength(1);
     expect(f[0].params.column).toBe('Latitude');
     expect(renderConvertPlain(f[0], 'en')).toContain('set column "Latitude" to ignore');
+  });
+
+  const pos = (h: string[], rows: Cell[][]) => convert({ sheets: [sheet([...COUNTS_H, ...h], COUNTS_R.map((x, i) => [...x, ...rows[i]]), 'Counts', 'counts.csv')] });
+  const one = (r: ReturnType<typeof pos>) => ids(r.findings, 'CONV-POSITION-NONE');
+
+  it('says one-axis when only latitude (or only longitude) is marked and it holds values, offering no declaration', () => {
+    for (const h of ['Latitude', 'Longitude']) {
+      const f = one(pos([h], [[55.1], [55.2]]));
+      expect(f, h).toHaveLength(1);
+      expect(f[0].params).toMatchObject({ count: 2, column: h, axis: 'missing' });
+      const text = renderConvertPlain(f[0], 'en');
+      expect(text).toContain('no column is marked as the other coordinate');
+      expect(text).not.toContain('declare');
+    }
+  });
+
+  it('a coordinate blank in every row while the other has values: no ignore-and-declare advice', () => {
+    for (const [h, rows] of [[['Latitude', 'Longitude'], [[55.1, null], [55.2, null]]], [['Latitude', 'Longitude'], [[null, 3.1], [null, 3.2]]]] as const) {
+      const f = one(pos([...h], rows.map((x) => [...x])));
+      expect(f).toHaveLength(1);
+      expect(f[0].params.axis).toBe('blank');
+      expect(f[0].params.column).toBe(rows[0][0] === null ? 'Latitude' : 'Longitude');
+      const text = renderConvertPlain(f[0], 'en');
+      expect(text).not.toContain('ignore');
+      expect(text).not.toContain('declare');
+    }
+  });
+
+  it('only one position column, blank in every row: the empty-column variant (dropping the role then declaring is possible)', () => {
+    const f = one(pos(['Latitude'], [[null], [null]]));
+    expect(f[0].params).toMatchObject({ column: 'Latitude' });
+    expect(f[0].params.axis).toBeUndefined();
   });
 
   it('is not raised when a second sheet gives the stations their position (Review Focus 2)', () => {
@@ -105,7 +137,6 @@ describe('CONV-POSITION-NONE', () => {
     // the same book read WITHOUT the join: the results sheet has none
     const alone = convert({ sheets: [resultsInput(BOOK, 'Counts')] });
     expect(ids(alone.findings, 'CONV-POSITION-NONE')).toHaveLength(1);
-    expect(descriptionInput(BOOK, 'Samples')).toBeDefined();
   });
 
   it('does not judge a profile sheet; its own CONV-PROFILE-LEVEL-INCOMPLETE stays', () => {

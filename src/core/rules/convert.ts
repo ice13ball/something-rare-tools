@@ -2018,6 +2018,26 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet}: {count} sample event(s) have no latitude / longitude on themselves or on a parent, and the column {column}, mapped as a position, is blank in every row. The output table's empty decimalLatitude / decimalLongitude column is not repeated.`,
   },
+  // CONV-POSITION-NONE where only one of latitude / longitude is marked, and that column holds values
+  'CONV-POSITION-NONE:one-axis': {
+    plain: {
+      pl: `Kolumna „{column}” arkusza „{sheet}” jest oznaczona jako szerokość albo długość geograficzna, ale żadna kolumna nie jest oznaczona jako druga współrzędna ({count} {+count:próbka|próbki|próbek}). Oznacz kolumnę, która zawiera drugą współrzędną.`,
+      en: `Column "{column}" of sheet "{sheet}" is marked as latitude or longitude, but no column is marked as the other coordinate ({count} {+count:sample|samples}). Mark the column that holds the other coordinate.`,
+      de: `Die Spalte „{column}“ des Blatts „{sheet}“ ist als Breite oder Länge markiert, aber keine Spalte ist als die andere Koordinate markiert ({count} {+count:Probe|Proben}). Markieren Sie die Spalte mit der anderen Koordinate.`,
+      fr: `La colonne « {column} » de la feuille « {sheet} » est marquée comme latitude ou longitude, mais aucune colonne n'est marquée comme l'autre coordonnée ({count} {+count:échantillon|échantillons}). Marquez la colonne qui contient l'autre coordonnée.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no position: the column {column} is mapped as latitude or longitude and has values, but no column is mapped as the other coordinate, and a position needs both.`,
+  },
+  // CONV-POSITION-NONE where one of latitude / longitude is marked but blank in every row while the other holds values
+  'CONV-POSITION-NONE:one-blank': {
+    plain: {
+      pl: `Kolumna „{column}” arkusza „{sheet}” jest oznaczona jako współrzędna, ale w każdym wierszu jest pusta, choć druga współrzędna ma wartości ({count} {+count:próbka|próbki|próbek}). Uzupełnij kolumnę albo oznacz tę, która zawiera brakującą współrzędną.`,
+      en: `Column "{column}" of sheet "{sheet}" is marked as a coordinate but is empty in every row, while the other coordinate has values ({count} {+count:sample|samples}). Fill the column or mark the one that holds the missing coordinate.`,
+      de: `Die Spalte „{column}“ des Blatts „{sheet}“ ist als Koordinate markiert, aber in jeder Zeile leer, obwohl die andere Koordinate Werte hat ({count} {+count:Probe|Proben}). Füllen Sie die Spalte oder markieren Sie die mit der fehlenden Koordinate.`,
+      fr: `La colonne « {column} » de la feuille « {sheet} » est marquée comme coordonnée mais vide dans chaque ligne, alors que l'autre coordonnée a des valeurs ({count} {+count:échantillon|échantillons}). Remplissez la colonne ou marquez celle qui contient la coordonnée manquante.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no position: the column {column} is mapped as a coordinate and is blank in every row, while the other coordinate has values, and a position needs both.`,
+  },
   'CONV-ID-DUPLICATE': {
     plain: {
       pl: `Ten sam identyfikator poziomu powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (utworzony z: {used}). Dwa wiersze jednej stacji mają ten sam kod, tę samą głębokość lub to samo ciśnienie (tak robią powtórzone rzuty sondy); głębokość i ciśnienie nigdy się nie zgadzają, kod i głębokość mogą. Dodaj kolumnę z kodem unikalnym w obrębie stacji, np. numer rzutu i butelki razem, i wskaż ją jako kod próbki.`,
@@ -2292,6 +2312,8 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'missing') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-axis'];
+  if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'blank') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-blank'];
   if (f.ruleId === 'CONV-POSITION-NONE' && typeof f.params.column === 'string') return PROFILE_VARIANTS['CONV-POSITION-NONE:empty-column'];
   if (f.ruleId === 'CONV-NA-SKIPPED' && f.params.rows === 'yes') return PROFILE_VARIANTS[f.params.empty === 'yes' && typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-empty' : typeof f.params.columns === 'string' ? 'CONV-NA-SKIPPED:rows-columns' : 'CONV-NA-SKIPPED:rows'];
   if (f.ruleId === 'CONV-BIOMASS-UNIT-UNCLEAR' && f.params.none === 'yes') return PROFILE_VARIANTS['CONV-BIOMASS-UNIT-UNCLEAR:none'];

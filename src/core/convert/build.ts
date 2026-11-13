@@ -73,7 +73,7 @@ function positionNoneFindings(sheets: readonly ConvertSheetInput[], events: read
   const positioned = (e: EventRec): boolean => {
     const seen = new Set<string>();
     for (let x: EventRec | undefined = e; x !== undefined && !seen.has(x.id); x = x.parentId === undefined ? undefined : byId.get(x.parentId)) {
-      if (x.lat !== undefined || x.lon !== undefined) return true;
+      if (x.lat !== undefined && x.lon !== undefined) return true;
       seen.add(x.id);
     }
     return false;
@@ -84,14 +84,31 @@ function positionNoneFindings(sheets: readonly ConvertSheetInput[], events: read
     const mine = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet);
     if (mine.length === 0 || mine.some(positioned)) continue;
     const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
-    const cols = sin.mapping.columns.filter((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude');
-    let column: string | undefined;
-    if (cols.length > 0) {
-      const blank = cols.find((c) => raw !== undefined && raw.rows.every((r) => isBlankCell(r.cells[c.index] ?? null)));
-      if (blank === undefined) continue;
-      column = blank.header;
+    const lat = sin.mapping.columns.filter((c) => c.role.kind === 'latitude');
+    const lon = sin.mapping.columns.filter((c) => c.role.kind === 'longitude');
+    const blankCol = (c: { index: number }): boolean => raw !== undefined && raw.rows.every((r) => isBlankCell(r.cells[c.index] ?? null));
+    const withData = (cs: typeof lat): boolean => cs.length > 0 && cs.some((c) => !blankCol(c));
+    const params: { count: number; column?: string; axis?: string } = { count: mine.length };
+    if (lat.length === 0 && lon.length === 0) {
+      // no position column at all: the plain text
+    } else if (lat.length === 0 || lon.length === 0) {
+      // one coordinate only: a position needs both. With data in it, the way out is to mark the other column; blank, the person may drop the role and declare a position
+      const one = lat.length > 0 ? lat : lon;
+      if (withData(one)) {
+        params.column = one[0].header;
+        params.axis = 'missing';
+      } else params.column = one[0].header;
+    } else {
+      const blank = [...lat, ...lon].filter(blankCol);
+      if (!withData(lat) || !withData(lon)) {
+        // a coordinate without a single value; when the other has values, declaring a position is not offered (a position role is still there)
+        const bad = blank.length > 0 ? blank[0] : undefined;
+        if (bad === undefined) continue;
+        params.column = bad.header;
+        if (withData(lat) || withData(lon)) params.axis = 'blank';
+      } else continue;
     }
-    out.push(makeConvertFinding('CONV-POSITION-NONE', { file: sin.file.fileName, sheet: sin.sheet, params: column === undefined ? { count: mine.length } : { count: mine.length, column } }));
+    out.push(makeConvertFinding('CONV-POSITION-NONE', { file: sin.file.fileName, sheet: sin.sheet, params }));
   }
   return out;
 }
