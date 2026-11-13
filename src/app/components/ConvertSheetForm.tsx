@@ -5,6 +5,7 @@ import { parseRateUnit } from '../../core/convert';
 import type { ConvertShape } from '../../core/convert';
 import type { UiKey } from '../../core/i18n/ui';
 import { t, useLang } from '../i18n';
+import { scaleClassesOf } from '../convertModel';
 import type { QuantityForm, SheetChoice } from '../convertModel';
 import { DEVICES } from '../../core/convert/vocab';
 import { FieldLabel, InfoTip } from './InfoTip';
@@ -47,12 +48,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
   const setQ = (patch: Partial<QuantityForm>): void => onChange({ ...choice, quantity: { ...q, ...patch } });
   const rate = q.unit.trim() === '' ? undefined : parseRateUnit(q.unit, { litre: true });
   // one meaning field per class, only when the scale is whole numbers with at most 20 classes
-  const scaleClasses: number[] = (() => {
-    if (!/^\d+$/.test(q.scaleMin.trim()) || !/^\d+$/.test(q.scaleMax.trim())) return [];
-    const lo = Number(q.scaleMin.trim());
-    const hi = Number(q.scaleMax.trim());
-    return lo < hi && hi - lo + 1 <= 20 ? Array.from({ length: hi - lo + 1 }, (_, i) => lo + i) : [];
-  })();
+  const scaleClasses = scaleClassesOf(q);
   const perArea = q.per !== 'sample' && (q.per === 'area' || (q.per === '' && rate?.per === 'area'));
   const shapeLabel = `${id}-shape`;
   return (
@@ -217,6 +213,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
                       <label htmlFor={`${id}-scale-max`}>{t('convert.scale.max')}</label>
                       <input id={`${id}-scale-max`} type="text" inputMode="numeric" value={q.scaleMax} autoComplete="off" spellCheck={false} onChange={(e) => setQ({ scaleMax: e.target.value })} />
                     </div>
+                    {scaleClasses.length === 0 && q.scaleMin.trim() !== '' && q.scaleMax.trim() !== '' && <p className="muted">{t('convert.scale.nomeanings')}</p>}
                     {scaleClasses.map((n) => (
                       <div className="field" key={n}>
                         <label htmlFor={`${id}-scale-meaning-${n}`}>{t('convert.scale.meaning', { n })}</label>

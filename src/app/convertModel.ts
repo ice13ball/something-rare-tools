@@ -99,6 +99,14 @@ export function deviceOf(c: Pick<SheetChoice, 'device' | 'deviceText'>): Samplin
   return c.device in DEVICES ? { kind: 'known', key: c.device as keyof typeof DEVICES } : undefined;
 }
 
+/** The class numbers the form shows a meaning field for: whole min below max, at most 20 classes. Empty otherwise. */
+export function scaleClassesOf(f: Pick<QuantityForm, 'scaleMin' | 'scaleMax'>): number[] {
+  if (!/^\d+$/.test(f.scaleMin.trim()) || !/^\d+$/.test(f.scaleMax.trim())) return [];
+  const lo = Number(f.scaleMin.trim());
+  const hi = Number(f.scaleMax.trim());
+  return lo < hi && hi - lo + 1 <= 20 ? Array.from({ length: hi - lo + 1 }, (_, i) => lo + i) : [];
+}
+
 /**
  * The form as the core's declaration. No kind chosen = no declaration at all, which the core reports as CONV-QUANTITY-UNDECLARED: nothing is
  * guessed. Only what the user filled in is passed on; the core says what is still missing.
@@ -109,7 +117,8 @@ export function declarationOf(f: QuantityForm): QuantityDeclaration | undefined 
   if (f.kind === 'class') {
     // a class has no unit, no per and no medium: stale form state from another kind never leaks
     const meanings: Record<string, string> = {};
-    for (const [n, words] of Object.entries(f.scaleMeanings)) if (words.trim() !== '') meanings[n] = words.trim();
+    // only the meanings of classes the form shows: a stored one outside the range would make the core reject the whole scale
+    for (const n of scaleClassesOf(f)) { const words = (f.scaleMeanings[String(n)] ?? '').trim(); if (words !== '') meanings[String(n)] = words; }
     d.scale = { name: f.scaleName.trim(), min: f.scaleMin.trim(), max: f.scaleMax.trim(), meanings };
   } else if (f.kind === 'density' || f.kind === 'biomass') {
     if (f.unit.trim() !== '') d.unit = f.unit.trim();

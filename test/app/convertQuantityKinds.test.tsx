@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // @vitest-environment jsdom
 // The sheet form offers biomass per sample, percent cover and an abundance class scale (round 3, Task 6): each is the person's explicit choice and the request carries exactly it.
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
@@ -54,6 +54,20 @@ describe('the new quantity kinds on the page', () => {
     expect(lastQuantity(bodies, (q) => q.kind === 'class' && q.scale?.max === '5' && q.scale.meanings?.['3'] === 'common')).toEqual({ kind: 'class', scale: { name: '', min: '0', max: '5', meanings: { '3': 'common' } } });
   });
 
+  it('a meaning typed for a class outside the shown range is not sent, and the hint says why the fields are hidden', async () => {
+    const bodies = await open();
+    fireEvent.change(kind(), { target: { value: 'class' } });
+    fireEvent.change(screen.getByLabelText(T['convert.scale.min']), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(T['convert.scale.max']), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText(T['convert.scale.meaning'].replace('{n}', '3')), { target: { value: 'common' } });
+    fireEvent.change(screen.getByLabelText(T['convert.scale.max']), { target: { value: '2' } });
+    await waitFor(() => expect(lastQuantity(bodies, (q) => q.kind === 'class' && q.scale?.max === '2')).toBeDefined());
+    expect(lastQuantity(bodies, (q) => q.kind === 'class' && q.scale?.max === '2')).toEqual({ kind: 'class', scale: { name: '', min: '0', max: '2', meanings: {} } });
+    expect(screen.queryByText(T['convert.scale.nomeanings'])).toBeNull();
+    fireEvent.change(screen.getByLabelText(T['convert.scale.max']), { target: { value: '2.5' } });
+    expect(screen.getByText(T['convert.scale.nomeanings'])).toBeTruthy();
+  });
+
   it('a biomass per sample sends per sample and shows no medium', async () => {
     const bodies = await open();
     fireEvent.change(kind(), { target: { value: 'biomass' } });
@@ -84,11 +98,15 @@ describe('the new quantity kinds on the page', () => {
   it('the count option says it is a number of individuals, in English and Polish', async () => {
     await open();
     const label = UI.en['convert.kind.count'];
-    expect(label).toContain('number of individuals'.replace(/^n/, 'N'));
+    expect(label).toContain('Number of individuals');
     expect(label).toContain('abundance class');
     expect([...kind().options].map((o) => o.textContent)).toContain(label);
+    expect(kind().querySelector('option[value="count"]')!.textContent).toBe(label);
+    expect(kind().querySelector('option[value="cover"]')!.textContent).toBe(T['convert.kind.cover']);
+    act(() => setLang('pl'));
+    expect((screen.getByLabelText(UI.pl['convert.quantity.kind']) as HTMLSelectElement).querySelector('option[value="count"]')!.textContent).toBe(UI.pl['convert.kind.count']);
     expect(UI.pl['convert.kind.count']).toContain('klasę liczebności');
-    expect(UI.pl['convert.kind.cover']).toBe('Pokrycie w procentach');
+    expect(UI.pl['convert.kind.cover']).toBe('Pokrycie w procentach (0 do 100)');
   });
 
   it('stale unit and per never leak into a class or a cover after a density', async () => {
