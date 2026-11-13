@@ -312,3 +312,45 @@ describe('sample join', () => {
     expect(JSON.stringify(v)).not.toContain('sampleJoin=');
   });
 });
+
+describe('the day/month order of the request (round 3, Task 8)', () => {
+  const CSV = 'Sample,Date,Latitude,Longitude,Calanus finmarchicus\nk1,5/4/2023,55,3,4\nk2,6/7/2023,56,3,5\n';
+  async function run(extra: Record<string, unknown>) {
+    const e = createDirectConvertEngine();
+    const p = await e.parse([file('hauls.csv', CSV)]);
+    const f = p.files[0];
+    const date = f.mappings[0].columns.find((c) => c.header === 'Date')!.index;
+    const sheet = { fileId: f.fileId, sheet: 'hauls.csv', mapping: f.mappings[0], shape: 'wide' as const, quantity: { kind: 'count' as const }, ...extra };
+    const v = await e.convert({ sheets: [sheet as ConvertRequestBody['sheets'][number]], options: {}, approvedSplits: {} });
+    return { date, v, rule: (id: string) => v.findings.filter((x) => x.ruleId === id) };
+  }
+
+  it('without an order the column is asked about', async () => {
+    const { rule, date } = await run({});
+    expect(rule('CONV-DATE-ORDER-UNDECLARED')[0]?.params.index).toBe(date);
+    expect(rule('CONV-DATE-ORDER-DECLARED')).toHaveLength(0);
+  });
+
+  it('a whole-number key within the sheet and a dmy / mdy value is used; fromFile is said', async () => {
+    const probe = await run({});
+    const { rule } = await run({ dayMonthOrder: { [probe.date]: 'dmy' }, dayMonthOrderFromFile: [probe.date] });
+    expect(rule('CONV-DATE-ORDER-UNDECLARED')).toHaveLength(0);
+    expect(rule('CONV-DATE-ORDER-DECLARED')[0]?.params).toMatchObject({ order: 'dmy', fromFile: 'yes' });
+    const own = await run({ dayMonthOrder: { [probe.date]: 'mdy' } });
+    expect(own.rule('CONV-DATE-ORDER-DECLARED')[0]?.params.fromFile).toBeUndefined();
+  });
+
+  it('a key "x" or 99, a value that is no order, and a fromFile index without a kept order are dropped', async () => {
+    const probe = await run({});
+    for (const extra of [
+      { dayMonthOrder: { x: 'dmy', 99: 'dmy', [probe.date]: 'sideways' } },
+      { dayMonthOrder: { '1.5': 'dmy', '-1': 'mdy' } },
+      { dayMonthOrderFromFile: [probe.date] },
+      { dayMonthOrder: { 99: 'dmy' }, dayMonthOrderFromFile: [probe.date, 99] },
+    ]) {
+      const { rule } = await run(extra);
+      expect(rule('CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+      expect(rule('CONV-DATE-ORDER-DECLARED')).toHaveLength(0);
+    }
+  });
+});

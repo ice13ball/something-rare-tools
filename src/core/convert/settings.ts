@@ -45,6 +45,9 @@ import type { ParsedFile } from '../types';
  *                     shows it with its numbers and "Ask again". A sheet name, hashes and a count, never a value.
  *   sampleKeyPrefix=<sheet>:<hashes>:<rows>:<name>  the name every sample ID of that key starts with (the person's own text, which the page showed and they may have changed; by default the sheet's or the file's name). Tied to the same sheet, hashes
  *                     and row count as the sampleKey line: it is applied only together with it, so a renamed file keeps its IDs.
+ *   dayMonthOrder=<dmy|mdy>:<sheet>:<hash>:<rows>  the person declared that the date column with that header hash (core/convert/keySetting.ts) of the sheet of that name writes the day first (dmy) or
+ *                     the month first (mdy), for a sheet of <rows> rows. A PRE-PICK that holds only when the column is found again by its hash and the sheet has the same number of rows; the page then
+ *                     says the answer came from the file, with "Ask again". A sheet name, a hash and a count, never a date.
  *   sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>  the person confirmed that a results sheet takes its samples' description from another sheet (core/convert/sampleJoin.ts):
  *                     the rows of both sheets, the hashes of the key columns of each (core/convert/keySetting.ts, as for sampleKey) and the four names as a JSON array, so a `:` in a name is safe.
  *                     A PRE-CONFIRMATION that holds only when both sheets are found again with the same rows and the key columns are found by their hashes; otherwise the page asks again. No value.
@@ -75,6 +78,7 @@ export const BIOMASS_BASIS_SETTING = 'biomassBasis=';
 export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 export const SAMPLE_KEY_SETTING = 'sampleKey=';
 export const SAMPLE_KEY_PREFIX_SETTING = 'sampleKeyPrefix=';
+export const DAY_MONTH_ORDER_SETTING = 'dayMonthOrder=';
 export const SAMPLE_JOIN_SETTING = 'sampleJoin=';
 export const SAMPLE_JOIN_CONFLICT_SETTING = 'sampleJoinConflict=';
 export const SAMPLE_JOIN_RESULTS_ONLY_SETTING = 'sampleJoinResultsOnly=';
@@ -120,6 +124,8 @@ export interface ConvertSettings {
   leaveOut?: { sheet: string; reason: string; count: number; rows: number }[];
   /** The sample keys the person picked, by sheet: the hashes of the key columns and the number of rows the pick was made for. Holds only for the same columns and the same number of rows. */
   sampleKey?: { sheet: string; hashes: string; rows: number; prefix?: string }[];
+  /** The day/month order the person declared for a date column, by sheet, the column's header hash and the number of rows the answer was given for. Holds only for the same column and the same number of rows. */
+  dayMonthOrder?: { sheet: string; order: 'dmy' | 'mdy'; hash: string; rows: number }[];
   /**
    * The joins of a results sheet to the sheet that describes its samples that the person confirmed: file and sheet names of both, the rows of both sheets and the hashes of the key columns (as
    * for `sampleKey`), the number of results samples accepted without a description, and the answered conflict groups with the number of samples each was given for. `mixed` = answered with
@@ -190,6 +196,7 @@ function names(text: string, n: number): string[] | undefined {
     return undefined;
   }
 }
+const DAY_MONTH_ORDER = /^(dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
 
 const addName = (list: string[], name: string): void => {
@@ -229,6 +236,10 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = SAMPLE_KEY.exec(v.slice(SAMPLE_KEY_SETTING.length));
       const list = (settings.sampleKey ??= []);
       if (m !== null && m[1].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[1])) list.push({ sheet: m[1], hashes: m[2], rows: Number(m[3]) });
+    } else if (v.startsWith(DAY_MONTH_ORDER_SETTING)) {
+      const m = DAY_MONTH_ORDER.exec(v.slice(DAY_MONTH_ORDER_SETTING.length));
+      const list = (settings.dayMonthOrder ??= []);
+      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ order: m[1] as 'dmy' | 'mdy', sheet: m[2], hash: m[3], rows: Number(m[4]) });
     } else if (v.startsWith(SAMPLE_KEY_PREFIX_SETTING)) {
       const m = SAMPLE_KEY_PREFIX.exec(v.slice(SAMPLE_KEY_PREFIX_SETTING.length));
       const hit = m === null ? undefined : (settings.sampleKey ?? []).find((x) => x.sheet === m[1] && x.hashes === m[2] && x.rows === Number(m[3]));
@@ -301,6 +312,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
         line([SETTING_ROW, `${SAMPLE_KEY_SETTING}${k.sheet}:${k.hashes}:${k.rows}`, '', '', '']),
         ...(k.prefix !== undefined && k.prefix.trim() !== '' && k.prefix.trim().length <= MAX_KEY_PREFIX ? [line([SETTING_ROW, `${SAMPLE_KEY_PREFIX_SETTING}${k.sheet}:${k.hashes}:${k.rows}:${k.prefix.trim()}`, '', '', ''])] : []),
       ]),
+      ...(settings.dayMonthOrder ?? []).filter((d) => (d.order === 'dmy' || d.order === 'mdy') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DAY_MONTH_ORDER_SETTING}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.sampleJoin ?? []).filter((j) => SHEET_NAMES([...j.results, ...j.description]) && /^[0-9a-f]{8}/.test(j.resultsHashes) && /^[0-9a-f]{8}/.test(j.descriptionHashes) && Number.isInteger(j.resultsRows) && j.resultsRows >= 0 && Number.isInteger(j.descriptionRows) && j.descriptionRows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((j) => [
         line([SETTING_ROW, `${SAMPLE_JOIN_SETTING}${j.resultsRows}:${j.descriptionRows}:${j.resultsHashes}:${j.descriptionHashes}:${JSON.stringify([...j.results, ...j.description])}`, '', '', '']),
         ...j.conflicts.filter((c) => c.group.length <= MAX_SETTING_NAME && Number.isInteger(c.count) && c.count >= 0).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${SAMPLE_JOIN_CONFLICT_SETTING}${c.take}:${c.count}:${c.group}:${JSON.stringify(j.results)}`, '', '', ''])),

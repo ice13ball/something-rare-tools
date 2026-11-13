@@ -91,6 +91,10 @@ export interface SheetChoice {
   sampleKeyPrefix?: string;
   /** The companion file has saved keys that fit this sheet more than once (several keys, or one key for several sheets): none was applied and the picker says so. */
   sampleKeyAmbiguous?: true;
+  /** The day/month order the person declared for date columns of this sheet, by column index (`dmy` = day first, `mdy` = month first). Never prefilled except by a companion file that still holds; never guessed. */
+  dayMonthOrder?: Record<number, 'dmy' | 'mdy'>;
+  /** The columns whose order above was read from a companion file and has not been changed since (the converter then says the answer came from the file). */
+  dayMonthOrderFile?: number[];
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -315,7 +319,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...(c.dayMonthOrder !== undefined && Object.keys(c.dayMonthOrder).length > 0 ? { dayMonthOrder: c.dayMonthOrder, ...((c.dayMonthOrderFile ?? []).some((i) => c.dayMonthOrder?.[i] !== undefined) ? { dayMonthOrderFromFile: (c.dayMonthOrderFile ?? []).filter((i) => c.dayMonthOrder?.[i] !== undefined) } : {}) } : {}), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
@@ -367,6 +371,18 @@ function savedKeyFor(parsed: ConvertParseResult, file: ConvertParseResult['files
   return rivals.length === 0 ? { kind: 'found', entry: mine[0] } : { kind: 'ambiguous' };
 }
 
+/** The day/month orders a companion file recorded for a sheet, as a pre-pick: only for a column found again by its header hash, in a sheet with the same number of rows (declare-first: nothing else is picked). */
+function savedOrders(settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, 'dayMonthOrder' | 'dayMonthOrderFile'> {
+  const order: Record<number, 'dmy' | 'mdy'> = {};
+  for (const d of settings.dayMonthOrder ?? []) {
+    if (d.sheet !== sheet.name || d.rows !== sheet.rowCount) continue;
+    const at = resolveKeyHashes(sheet.header, d.hash);
+    if (at?.length === 1 && order[at[0]] === undefined) order[at[0]] = d.order;
+  }
+  const columns = Object.keys(order).map(Number);
+  return columns.length === 0 ? {} : { dayMonthOrder: order, dayMonthOrderFile: columns };
+}
+
 /**
  * The initial choices: every sheet used (except one that looks like a data dictionary: it starts unticked, with a note), the shape the overlay suggests (wide when it cannot tell), nothing declared. The profile mark and the approval of depth-based level
  * IDs start OFF; only a companion file of THIS drop that names the sheet pre-ticks them (the approval only on a sheet that is marked), and the suggestion of the overlay
@@ -386,7 +402,23 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...savedOrders(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+    }
+  }
+  return out;
+}
+
+/** The day/month orders in use (the person's or a companion file's that still holds), for the companion file: the sheet, the column's header hash and the number of rows (no header text, no date). */
+export function dayMonthOrderSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['dayMonthOrder']> {
+  const out: NonNullable<ConvertSettings['dayMonthOrder']> = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (!c || !c.use || c.dayMonthOrder === undefined) continue;
+      for (const [k, order] of Object.entries(c.dayMonthOrder)) {
+        const hash = keyHashes(sh.header, [Number(k)]);
+        if (hash !== undefined && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, order, hash, rows: sh.rowCount });
+      }
     }
   }
   return out;

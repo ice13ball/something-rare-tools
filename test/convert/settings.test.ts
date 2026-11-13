@@ -124,3 +124,21 @@ describe('the converter sidecar', () => {
     expect(r.files).toHaveLength(1);
   });
 });
+
+describe('the day/month order in the companion file (round 3, Task 8)', () => {
+  const hash = keyHashes(['Sample', 'Date'], [1]) as string;
+
+  it('round trips the order of a column by sheet, header hash and rows, and holds no header text', () => {
+    const settings = { dayMonthOrder: [{ sheet: 'Counts', order: 'dmy' as const, hash, rows: 3 }, { sheet: 'a:b.csv', order: 'mdy' as const, hash, rows: 12 }] };
+    const text = writeConvertSidecar(settings);
+    expect(text).toContain(`dayMonthOrder=dmy:Counts:${hash}:3`);
+    expect(text).not.toMatch(/Date/);
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.dayMonthOrder).toEqual(settings.dayMonthOrder);
+  });
+
+  it('a malformed line, an unknown order and a repeated column are not kept', () => {
+    const lines = [`dayMonthOrder=xyz:Counts:${hash}:3`, 'dayMonthOrder=dmy:Counts:nothex:3', `dayMonthOrder=dmy:Counts:${hash}:3`, `dayMonthOrder=mdy:Counts:${hash}:3`];
+    const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.dayMonthOrder).toEqual([{ sheet: 'Counts', order: 'dmy', hash, rows: 3 }]);
+  });
+});

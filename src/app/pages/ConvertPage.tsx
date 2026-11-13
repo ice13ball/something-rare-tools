@@ -30,7 +30,7 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, dayMonthOrderSettingsOf, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -371,7 +371,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
@@ -386,8 +386,20 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         const rest = (c.leaveOut ?? []).filter((a) => a.reason !== reason);
         return { ...prev, [key]: { ...c, leaveOut: [...rest, { reason, count }] } };
       }
+      // "Day first" / "Month first": the person's own answer for the date column the finding names, by that column's own index on the sheet the finding names (a date lent by a description sheet is answered there)
+      if (choice === 'dayFirst' || choice === 'monthFirst') {
+        const index = Number(f.params.index);
+        if (!Number.isInteger(index) || index < 0) return prev;
+        return { ...prev, [key]: { ...c, dayMonthOrder: { ...(c.dayMonthOrder ?? {}), [index]: choice === 'dayFirst' ? 'dmy' : 'mdy' }, dayMonthOrderFile: (c.dayMonthOrderFile ?? []).filter((i) => i !== index) } };
+      }
       // "Ask again": takes back an answer, whether it was given here or read from the companion file (the question and the acceptance start again)
       if (choice === 'askAgain') {
+        if (f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED') {
+          const index = Number(f.params.index);
+          const { [index]: _gone, ...left } = c.dayMonthOrder ?? {};
+          const { dayMonthOrder: _o, dayMonthOrderFile: _of, ...rest } = c;
+          return { ...prev, [key]: { ...rest, ...(Object.keys(left).length === 0 ? {} : { dayMonthOrder: left as Record<number, 'dmy' | 'mdy'>, dayMonthOrderFile: (c.dayMonthOrderFile ?? []).filter((i) => i !== index) }) } };
+        }
         if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((a) => a.reason !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
         if (f.ruleId === 'CONV-KEY-PICKED') {
           const { sampleKey: _k, sampleKeyFromFile: _f, sampleKeyPrefix: _p, ...rest } = c;
@@ -880,12 +892,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const realCountsRows = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REAL-COUNTS').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
     const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
     const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
+    const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices) : [];
     // the joins the person confirmed or declined: sheet names, row counts, hashes of the key columns and the numbers the answers were given for; never a sample code or a value
     const sampleJoins = parsed ? sampleJoinSettingsOf(parsed, joins) : {};
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1558,7 +1571,7 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
   );
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin }: { findings: Finding[]; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1626,7 +1639,18 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
-          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED') && onChoose !== undefined && (
+          {f.ruleId === 'CONV-DATE-ORDER-UNDECLARED' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="day-first" onClick={() => onChoose(f, 'dayFirst')}>
+                {t('convert.finding.dayFirst')}
+              </button>{' '}
+              <button type="button" className="button" data-testid="month-first" onClick={() => onChoose(f, 'monthFirst')}>
+                {t('convert.finding.monthFirst')}
+              </button>
+            </>
+          )}
+          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED') && onChoose !== undefined && (
             <>
               {' '}
               <button type="button" className="button" data-testid="ask-again" onClick={() => onChoose(f, 'askAgain')}>
@@ -1646,7 +1670,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'askAgain') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin }: { titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

@@ -109,6 +109,12 @@ export interface ConvertSheetRequest {
    */
   sampleKey?: { columns: number[]; /** The name every sample ID starts with, as the person saw and may have changed it. */ prefix?: string };
   sampleKeyFromFile?: boolean;
+  /**
+   * The day/month order the PERSON declared for date columns of this sheet, by column index (`dmy` = day first, `mdy` = month first). Never set without the person's answer or a companion file that still holds.
+   * `dayMonthOrderFromFile` lists the indexes among them that were read from a companion file (it holds only for the same header and the same number of rows: the page checks both before it sends it).
+   */
+  dayMonthOrder?: Record<number, 'dmy' | 'mdy'>;
+  dayMonthOrderFromFile?: number[];
 }
 
 /** A sheet of a dropped file, as the request names it (the join is told by file id and sheet name; the worker maps it to the request's sheets). */

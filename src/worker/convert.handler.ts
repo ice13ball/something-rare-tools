@@ -157,6 +157,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
         for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
         for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
+        for (const d of s.dayMonthOrder ?? []) if (!(settings.dayMonthOrder ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.dayMonthOrder.push(d);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
         for (const j of s.sampleJoin ?? []) if (!(settings.sampleJoin ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1])) settings.sampleJoin.push(j);
         for (const j of s.sampleJoinNo ?? []) if (!(settings.sampleJoinNo ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1] && x.description[0] === j.description[0] && x.description[1] === j.description[1])) settings.sampleJoinNo.push(j);
@@ -278,6 +279,20 @@ export function createConvertHandler(): ConvertHandler {
     return columns.length === 0 ? {} : { sampleKey: { columns, ...(prefix === undefined ? {} : { prefix }) }, ...(s.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) };
   }
 
+  /** The day/month orders of a request sheet, checked: whole-number column indexes within the sheet, `dmy` or `mdy`; a from-file mark only for an index whose order is kept. Nothing, when nothing is left. */
+  function orderOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'dayMonthOrder' | 'dayMonthOrderFromFile'> {
+    if (s.dayMonthOrder === undefined || s.dayMonthOrder === null || typeof s.dayMonthOrder !== 'object') return {};
+    const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
+    const kept: Record<number, 'dmy' | 'mdy'> = {};
+    for (const [k, v] of Object.entries(s.dayMonthOrder)) {
+      const i = Number(k);
+      if (/^\d+$/.test(k) && Number.isInteger(i) && i < width && (v === 'dmy' || v === 'mdy')) kept[i] = v;
+    }
+    if (Object.keys(kept).length === 0) return {};
+    const fromFile = Array.isArray(s.dayMonthOrderFromFile) ? [...new Set(s.dayMonthOrderFromFile.filter((i) => Number.isInteger(i) && kept[i] !== undefined))] : [];
+    return { dayMonthOrder: kept, ...(fromFile.length === 0 ? {} : { dayMonthOrderFromFile: fromFile }) };
+  }
+
   /** The sheets of a request as the core takes them, before any join. */
   function rawInputsOf(body: ConvertRequestBody): ConvertSheetInput[] {
     return body.sheets.map((s) => ({
@@ -308,6 +323,8 @@ export function createConvertHandler(): ConvertHandler {
         : {}),
       // the columns the person picked as the sample key: whole numbers only, each column once, in the order picked (the core reads nothing else; a profile sheet takes no key)
       ...(s.profile === undefined && s.sampleKey !== undefined && s.sampleKey !== null && Array.isArray(s.sampleKey.columns) ? keyOf(s) : {}),
+      // the day/month order the person declared, by column: whole-number columns of the sheet and the two orders only
+      ...orderOf(s),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
         ? { leaveOutFile: s.leaveOutFile.filter((g) => g !== null && typeof g === 'object' && typeof g.reason === 'string' && Number.isInteger(g.count) && Number.isInteger(g.rows)).map((g) => ({ reason: g.reason, count: g.count, rows: g.rows })) }
         : {}),
