@@ -2544,6 +2544,16 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     technical: `{file}, {sheet}:{lines} ({side} sheet): {count} row(s) of the description sheet have a blank part in the join key (columns: {columns}), so their values can be lent to no sample. Blocks until the key is filled or the person leaves these rows out and lists them.`,
   },
   // CONV-ROW-COPIES of a percent cover or an abundance class: no sums
+  // CONV-ROW-COPIES of a sheet declared "each row is its own record" with no quantity column: each row would be one individual, so there is no quantity to add up
+  'CONV-ROW-COPIES:own': {
+    plain: {
+      pl: `{count} {+count:wiersz jest dokładną kopią|wiersze są dokładnymi kopiami|wierszy jest dokładnymi kopiami} innego wiersza ({+lineCount:wiersz|wiersze|wierszy} {lines}). Każdy wiersz to osobny rekord, więc kopie dałyby osobne osobniki. Zachowaj je jako osobne rekordy albo pomiń je i wypisz w pliku obok archiwum (przyciski).`,
+      en: `{count} {+count:row is an exact copy|rows are exact copies} of another row ({+lineCount:line|lines} {lines}). Each row is its own record, so the copies would be separate individuals. Keep them as separate records, or leave them out and list them in a file beside the archive (buttons).`,
+      de: `{count} {+count:Zeile ist eine exakte Kopie|Zeilen sind exakte Kopien} einer anderen Zeile ({+lineCount:Zeile|Zeilen} {lines}). Jede Zeile ist ein eigener Datensatz, die Kopien wären also getrennte Individuen. Als getrennte Datensätze behalten oder auslassen und in einer Datei neben dem Archiv auflisten (Schaltflächen).`,
+      fr: `{count} {+count:ligne est une copie exacte|lignes sont des copies exactes} d'une autre ligne ({+lineCount:ligne|lignes} {lines}). Chaque ligne est un enregistrement distinct : les copies seraient des individus distincts. Conservez-les comme enregistrements distincts, ou écartez-les et listez-les dans un fichier à côté de l'archive (boutons).`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier. The sheet is declared "each row is its own record" and has no quantity column, so each row is one individual and there is no quantity to add up (no sums are shown). Blocks until the person keeps the copies as separate records (kept in the companion file with the number of copies) or leaves them out and lists them.`,
+  },
   'CONV-ROW-COPIES:nosum': {
     plain: {
       pl: `{count} {+count:wiersz jest dokładną kopią|wiersze są dokładnymi kopiami|wierszy jest dokładnymi kopiami} innego wiersza ({+lineCount:wiersz|wiersze|wierszy} {lines}). Pokrycia w procentach i klas liczebności nie da się sumować, więc sum nie podajemy. Pomiń kopie i wypisz je w pliku obok archiwum (przycisk) albo popraw arkusz.`,
@@ -2575,6 +2585,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
   if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.pivoted === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:pivoted'];
   if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.turned === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:turned'];

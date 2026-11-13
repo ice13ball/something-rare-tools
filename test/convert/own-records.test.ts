@@ -10,6 +10,7 @@ import { joinInputs } from '../../src/core/convert/sampleJoin';
 import type { SampleJoinRequestCore } from '../../src/core/convert/sampleJoin';
 import type { ColumnRole, Finding } from '../../src/core/types';
 import { xlsxFile } from '../helpers/files';
+import { renderConvertPlain } from '../../src/core/rules/convert';
 import { exportAllowed, judge } from '../../src/core/convert/policy';
 import { descriptionInput, resultsInput, SAMPLES_HEADER } from './joinFixtures';
 import { fileOf, sheetInput } from './helpers';
@@ -116,20 +117,50 @@ describe('each row is its own record', () => {
     expect(rules(r.findings, 'CONV-OWN-RECORDS')).toEqual([]);
   });
 
-  it('through a confirmed join the ID is the line of the results sheet, not the merged row', () => {
+  it('through a confirmed join the ID is the line of the results sheet, not the merged row position', () => {
     const file = xlsxFile('book.xlsx', {
-      Fish: [['Sample', 'Taxon', 'Count'], ['X01', GM, 1], ['X01', GM, 1], ['X02', PV, 1]],
+      // line 3 holds no taxon and no count: it writes nothing, so the lines of the records (2, 4, 5) differ from their positions (2, 3, 4)
+      Fish: [['Sample', 'Taxon', 'Count'], ['X01', GM, 1], ['X01', null, null], ['X01', PV, 1], ['X02', GM, 1]],
       Samples: [SAMPLES_HEADER, ['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 10], ['X02', 'ST-2', '2021-05-04', 61.3, 4.6, 20]],
     });
     const join: SampleJoinRequestCore = { results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [] };
     const out = joinInputs([resultsInput(file, 'Fish', { ownRecords: true }), descriptionInput(file, 'Samples')], [join], []);
     const r = convert({ sheets: out.sheets });
-    expect(ids(r)).toEqual(['X01:L2', 'X01:L3', 'X02:L4']);
+    expect(ids(r)).toEqual(['X01:L2', 'X01:L4', 'X02:L5']);
     expect(rules(r.findings, 'CONV-ID-DUPLICATE')).toEqual([]);
   });
 });
 
 describe('identical rows under own records (Q2)', () => {
+  describe('with no quantity column', () => {
+    const SAME: Cell[][] = [['T1', '2022-03-01', 60.1, 4.2, GM, 310], ['T1', '2022-03-01', 60.1, 4.2, GM, 310], ['T1', '2022-03-01', 60.1, 4.2, PV, 400]];
+    const go = (extra: Partial<ConvertSheetInput>) => convert({ sheets: [fish({ ownRecords: true, ...extra }, FISH_H, SAME)] });
+    it('two identical specimen rows ask CONV-ROW-COPIES (no sums) and block', () => {
+      const r = go({});
+      const f = rules(r.blocking, 'CONV-ROW-COPIES');
+      expect(f).toHaveLength(1);
+      expect(f[0].params.own).toBe('yes');
+      expect(f[0].lines).toEqual([3]);
+      expect(renderConvertPlain(f[0], 'en')).toContain('separate individuals');
+    });
+    it('after keep, T1:L2 and T1:L3 are written and CONV-ROW-COPIES-KEPT says so', () => {
+      const r = go({ keepCopiesCount: 1 });
+      expect(rules(r.findings, 'CONV-ROW-COPIES')).toEqual([]);
+      expect(rules(r.findings, 'CONV-ROW-COPIES-KEPT')).toHaveLength(1);
+      expect(ids(r)).toEqual(['T1:L2', 'T1:L3', 'T1:L4']);
+    });
+    it('after drop, one record is written and the copy is listed', () => {
+      const r = go({ dropCopies: true });
+      expect(ids(r)).toEqual(['T1:L2', 'T1:L4']);
+      const d = rules(r.findings, 'CONV-ROW-COPIES-DROPPED');
+      expect(d).toHaveLength(1);
+      expect(d[0].lines).toEqual([3]);
+    });
+    it('rows that differ are not copies', () => {
+      expect(rules(convert({ sheets: [fish({ ownRecords: true })] }).findings, 'CONV-ROW-COPIES')).toEqual([]);
+    });
+  });
+
   const rowsOf = (): Cell[][] => [
     ['T1', '2022-03-01', 60.1, 4.2, GM, 310, 2],
     ['T1', '2022-03-01', 60.1, 4.2, GM, 310, 2],

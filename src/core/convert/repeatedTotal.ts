@@ -159,6 +159,8 @@ export function analyseRepeats(args: {
   dropCopies?: boolean;
   /** The columns of a picked sample key: they say which sample a row is of whatever role they have, and none of them is an identifier of the row. */
   keyColumns?: readonly number[];
+  /** "Each row is its own record" (ownRecords.ts): identical rows are asked about whatever the quantity columns, even with none; nothing else is looked for then. */
+  ownRows?: boolean;
 }): RepeatAnalysis {
   if (args.realCounts === true) return {};
   const { sheet, mapping, decimalComma: dc } = args;
@@ -170,7 +172,7 @@ export function analyseRepeats(args: {
     ...(quantity === undefined ? [] : [{ index: quantity.index, header: quantity.header.trim(), kind: 'quantity' as const }]),
     ...roles.filter((c) => c.role.kind === 'biomass').map((c) => ({ index: c.index, header: c.header.trim(), kind: 'biomass' as const })),
   ];
-  if (candidates.length === 0) return {};
+  if (candidates.length === 0 && args.ownRows !== true) return {};
   const STRICT_KEY = new Set(['keyPart', 'sampleId', 'station', 'cruise', 'replicate', 'date', 'datetime', 'datePart', 'time', 'latitude', 'longitude', 'depth', 'pressure', 'hemisphere', 'taxon', 'lifeStage', 'qualifier', 'taxonId']);
   const LOOSE_KEY = new Set([...STRICT_KEY].filter((k) => !['replicate', 'lifeStage', 'qualifier', 'taxonId'].includes(k)));
   // one sample column: the one the events are built on (the first), as build.ts reads it
@@ -219,7 +221,7 @@ export function analyseRepeats(args: {
   const copyLines: number[] = [];
   const copyClassLines: number[] = [];
   for (const g of classes.values()) {
-    if (g.length < 2 || !hasValue(g[0])) continue;
+    if (g.length < 2 || !(args.ownRows === true || hasValue(g[0]))) continue;
     for (const r of g) copyClassLines.push(r.line);
     for (const r of g.slice(1)) copyLines.push(r.line);
   }
@@ -234,8 +236,9 @@ export function analyseRepeats(args: {
       withCopies += v;
       if (!copySet.has(r.line)) withoutCopies += v;
     }
-    copies = { copyLines: copyLines.sort((a, b) => a - b), lines: copyClassLines.sort((a, b) => a - b), withCopies, withoutCopies, column: quantity?.header.trim() ?? candidates[0].header };
+    copies = { copyLines: copyLines.sort((a, b) => a - b), lines: copyClassLines.sort((a, b) => a - b), withCopies, withoutCopies, column: quantity?.header.trim() ?? candidates[0]?.header ?? taxon.header.trim() };
   }
+  if (args.ownRows === true && candidates.length === 0) return copies === undefined ? {} : { copies };
   // identical rows with a count of 1: a specimen table looks exactly like this, so they are said (both sums), never blocked
   const isSpecimen = (row: RawRow): boolean => {
     const v = qIndex === undefined ? undefined : value(row, qIndex);
@@ -250,7 +253,7 @@ export function analyseRepeats(args: {
       for (const r of g) smallClass.push(r.line);
       for (const r of g.slice(1)) small.push(r.line);
     }
-    if (small.length > 0 && qIndex !== undefined) {
+    if (small.length > 0 && qIndex !== undefined && args.ownRows !== true) {
       const set = new Set(small);
       let withCopies = 0;
       let withoutCopies = 0;

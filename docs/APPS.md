@@ -1499,7 +1499,7 @@ code" (the button above applies it).
   person may declare every row a record of its own. The `occurrenceID` is then `<eventID>:L<line>`, the line number of the row in the SOURCE file (for a joined sheet, the line of the results
   sheet), never the order of the rows after sorting or merging; the archive says so in its methods. **The cost** (`CONV-OWN-RECORDS`, accept): the IDs change if rows are inserted or deleted in the
   source before a new version; keep the row order, or add an occurrenceID column. A row of such a sheet with no quantity column is one individual (`individualCount` 1, OCOUNT01) unless
-  presence only is ticked. Identical rows are kept as separate records only by a second explicit answer to `CONV-ROW-COPIES` (`keepCopiesCount`, said by `CONV-ROW-COPIES-KEPT`). The
+  presence only is ticked. Identical rows (asked even when the sheet has no quantity column, then without sums) are kept as separate records only by a second explicit answer to `CONV-ROW-COPIES` (`keepCopiesCount`, said by `CONV-ROW-COPIES-KEPT`). The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
   new code column last, for the user to check and drop again). **The first way, on the page: the person picks the columns that make a sample**
   (`SampleKeyPicker`, `core/convert/sampleKey.ts`; shown under the heading of the sample codes for a sheet that has rows without a code, and kept while a key is in use). Nothing is ticked, proposed or changed for

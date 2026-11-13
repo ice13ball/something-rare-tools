@@ -2038,7 +2038,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
     const analyse = (drop: boolean, real: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line) || noDateLeftOut?.has(r.line) === true, quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey) })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line) || noDateLeftOut?.has(r.line) === true, quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey), ...(ownRows ? { ownRows: true } : {}) })
         : {};
     let analysis = analyse(sin.dropCopies === true, sin.realCounts === true);
     // An answer that switches a check off (drop the copies, take a total once, real counts) is honoured only when today's analysis finds the count it was given for
@@ -2904,8 +2904,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     const round = (n: number): number => Math.round(n * 1000) / 1000;
     if (copies !== undefined) {
       // percentages and class numbers are not added up: no sums are shown (variant ':nosum'); the detection and the block are the same
-      const noSum = kind === 'cover' || kind === 'class';
-      const params = noSum ? { count: copies.copyLines.length, nosum: 'yes', ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) } : { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
+      const noSum = kind === 'cover' || kind === 'class' || ownCount;
+      const params = noSum ? { count: copies.copyLines.length, nosum: 'yes', ...(ownCount ? { own: 'yes' } : {}), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) } : { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
       if (keptCopies) findings.push(makeConvertFinding('CONV-ROW-COPIES-KEPT', { ...base, field: copies.column, lines: copies.copyLines, params: { count: copies.copyLines.length, ...(sin.keepCopies !== true && sin.keepCopiesFromFile === true ? { fromFile: 'yes' } : {}) } }));
       else findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
     }
