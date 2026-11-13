@@ -204,6 +204,8 @@ export interface ConvertResult {
   leftOut: string[];
   /** Every occurrenceID that CONV-ID-DUPLICATE named as repeated; kept here and not in the finding, so the finding stays small. */
   repeatedOccurrenceIds?: string[];
+  /** The eventIDs of the sample events that have no date (CONV-EVENT-DATE-MISSING names them in the sheet's terms): the Event table's own missing-date checks say nothing more about them and about their parents. */
+  undatedEventIds?: string[];
   /** Paragraphs the EML methods get from the declarations: one per sheet that declared an abundance class scale (`Sheet <S> of <F>: abundance classes <label>: <min> = <meaning>; ...`). */
   methodSteps: string[];
   stats: ConvertStats;
@@ -294,6 +296,8 @@ export interface ConvertedDataset {
   decisions: ConvertSettings;
   /** Every occurrenceID the conversion reported as repeated (CONV-ID-DUPLICATE): the output table's own duplicate check says nothing more about them. */
   repeatedOccurrenceIds?: string[];
+  /** Same list as ConvertResult.undatedEventIds, read by validateTables. */
+  undatedEventIds?: string[];
   /** Paragraphs the converter writes into the EML methods from the person's declarations (an abundance class scale and the words typed for its classes). */
   methodSteps?: string[];
 }
@@ -310,7 +314,7 @@ export function verbatimDepthText(v: { min?: string; max?: string } | undefined)
   return v.min ?? v.max;
 }
 
-export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements' | 'repeatedOccurrenceIds' | 'methodSteps'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
+export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements' | 'repeatedOccurrenceIds' | 'methodSteps' | 'undatedEventIds'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
   const events: ModelEvent[] = result.events.map((e) => {
     const m: ModelEvent = { id: e.id, type: e.eventType };
     if (e.parentId !== undefined) m.parentId = e.parentId;
@@ -373,5 +377,5 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
     if (x.measurementRemarks !== undefined) m.remarks = x.measurementRemarks;
     return m;
   });
-  return { events, occurrences, measurements, metadata, decisions, ...(result.repeatedOccurrenceIds === undefined ? {} : { repeatedOccurrenceIds: result.repeatedOccurrenceIds }), ...(result.methodSteps.length === 0 ? {} : { methodSteps: result.methodSteps }) };
+  return { events, occurrences, measurements, metadata, decisions, ...(result.repeatedOccurrenceIds === undefined ? {} : { repeatedOccurrenceIds: result.repeatedOccurrenceIds }), ...(result.methodSteps.length === 0 ? {} : { methodSteps: result.methodSteps }), ...(result.undatedEventIds === undefined || result.undatedEventIds.length === 0 ? {} : { undatedEventIds: result.undatedEventIds }) };
 }

@@ -375,13 +375,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
-    const reason = typeof f.params.reason === 'string' ? f.params.reason : undefined;
+    // (a sample without a date is left out by its blank date cells: the reason is fixed and the number is that of the lines, not of the samples)
+    const undated = f.ruleId === 'CONV-EVENT-DATE-MISSING';
+    const reason = undated ? 'no-event-date' : typeof f.params.reason === 'string' ? f.params.reason : undefined;
     setChoices((prev) => {
       const c = prev[key];
       if (c === undefined) return prev;
       // "Leave these rows out and list them": the answer of the person, for this reason in this sheet, for the number of rows the button named. Never given by the page itself.
       if (choice === 'leaveOut') {
-        const count = Number(f.params.count);
+        const count = Number(undated ? f.params.rows : f.params.count);
         if (reason === undefined || !Number.isInteger(count)) return prev;
         const rest = (c.leaveOut ?? []).filter((a) => a.reason !== reason);
         return { ...prev, [key]: { ...c, leaveOut: [...rest, { reason, count }] } };
@@ -1620,6 +1622,14 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               {' '}
               <button type="button" className="button" data-testid="leave-out" data-reason={String(f.params.reason)} onClick={() => onChoose(f, 'leaveOut')}>
                 {t('convert.finding.leaveOut', { count: Number(f.params.count) })}
+              </button>
+            </>
+          )}
+          {f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'blank-cells' && f.params.turned !== 'yes' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="leave-out" data-reason="no-event-date" onClick={() => onChoose(f, 'leaveOut')}>
+                {t('convert.finding.leaveOutSamples')}
               </button>
             </>
           )}

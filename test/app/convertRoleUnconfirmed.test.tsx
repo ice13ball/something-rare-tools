@@ -136,7 +136,8 @@ describe('the page asks once', () => {
     await waitFor(() => expect(group()!.textContent).not.toContain('"Date of sampling"'));
     expect(group()!.textContent).toContain('"Latitude_dd"');
     expect(boxOf(RULE).checked).toBe(true);
-    expect(off()).toBe(false);
+    // (with the only date column ignored the samples have no date, which blocks the export, round 3 Task 9)
+    expect(off()).toBe(true);
     // and back to the proposed role: the person touched it, so it is theirs and stays out; the tick stands
     pick('Date of sampling: Meaning', 'date');
     await idle();

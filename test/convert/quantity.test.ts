@@ -65,8 +65,8 @@ describe('blocking', () => {
   });
 
   it('a negative or zero effort blocks', () => {
-    const header = [...HEADER, 'Volume filtered [m3]', 'Latitude', 'Longitude'];
-    const mk = (v: Cell) => convert({ sheets: [sheetInput(fileOf(header, [['A', 'S', 3, 4, v, 55.1, 3.2]]), { quantity: { kind: 'count', effort: { source: 'column' } } })] });
+    const header = [...HEADER, 'Volume filtered [m3]', 'Latitude', 'Longitude', 'Date'];
+    const mk = (v: Cell) => convert({ sheets: [sheetInput(fileOf(header, [['A', 'S', 3, 4, v, 55.1, 3.2, '2023-04-05']]), { quantity: { kind: 'count', effort: { source: 'column' } } })] });
     expect(find(mk(-2).blocking, 'CONV-NEGATIVE-QUANTITY')[0].field).toBe('Volume filtered [m3]');
     expect(find(mk(0).blocking, 'CONV-EFFORT-INVALID')).toHaveLength(1);
     expect(find(mk('n/a').blocking, 'CONV-EFFORT-INVALID')).toHaveLength(1);
@@ -117,10 +117,10 @@ describe('concepts', () => {
   });
 
   it('a unit with no verified P06 is kept as declared, with no id, and an accepted warning; no unit is ever converted', () => {
-    const r = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude'], [['A', 'S', 3, 4, 55.1, 3.2]]), { quantity: { kind: 'density', unit: 'ind/L' } })] });
+    const r = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude', 'Date'], [['A', 'S', 3, 4, 55.1, 3.2, '2023-04-05']]), { quantity: { kind: 'density', unit: 'ind/L' } })] });
     // ind/L has no verified P06 concept, but a litre is a volume: per volume is read from it (round 3), so the declaration is complete
     expect(find(r.blocking, 'CONV-QUANTITY-UNDECLARED')).toEqual([]);
-    const ok = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude'], [['A', 'S', 3, 4, 55.1, 3.2]]), { quantity: { kind: 'density', unit: 'ind/L', per: 'volume' } })] });
+    const ok = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude', 'Date'], [['A', 'S', 3, 4, 55.1, 3.2, '2023-04-05']]), { quantity: { kind: 'density', unit: 'ind/L', per: 'volume' } })] });
     expect(ok.blocking).toEqual([]);
     expect(find(ok.findings, 'CONV-UNIT-NO-P06')[0]).toMatchObject({ severity: 'warning', params: { unit: 'ind/L' } });
     expect(ok.measurements[0]).toMatchObject({ measurementUnit: 'ind/L', measurementTypeId: P01.densityVolume.uri, measurementValue: '3' });
@@ -128,7 +128,7 @@ describe('concepts', () => {
   });
 
   it('a density per area of the water column has no verified concept: the id stays empty with an accepted warning', () => {
-    const r = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude'], [['A', 'S', 3, 4, 55.1, 3.2]]), { quantity: { kind: 'density', unit: '#/m2', medium: 'water' } })] });
+    const r = convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude', 'Date'], [['A', 'S', 3, 4, 55.1, 3.2, '2023-04-05']]), { quantity: { kind: 'density', unit: '#/m2', medium: 'water' } })] });
     expect(r.blocking).toEqual([]);
     expect(find(r.findings, 'CONV-NERC-UNKNOWN')).toHaveLength(1);
     expect(r.measurements[0].measurementTypeId).toBeUndefined();
@@ -187,9 +187,9 @@ describe('per area needs an explicit medium (no default)', () => {
 });
 
 describe('a typed sample size (M3)', () => {
-  const header = ['Sample', 'Station', 'Calanus finmarchicus', 'Latitude', 'Longitude'];
+  const header = ['Sample', 'Station', 'Calanus finmarchicus', 'Latitude', 'Longitude', 'Date'];
   const run2 = (value: string, decimalComma: boolean) =>
-    convert({ sheets: [sheetInput(fileOf(header, [['A', 'S', 3, 55.1, 3.2]], 'S', { decimalComma }), { quantity: { kind: 'count', effort: { source: 'constant', value, unit: 'm3' } } })] });
+    convert({ sheets: [sheetInput(fileOf(header, [['A', 'S', 3, 55.1, 3.2, '2023-04-05']], 'S', { decimalComma }), { quantity: { kind: 'count', effort: { source: 'constant', value, unit: 'm3' } } })] });
 
   it('accepts a point or a comma as the decimal mark whatever the sheet uses (it is typed, not read from the file), and writes a point', () => {
     for (const [v, comma] of [['12,5', true], ['12,5', false], ['12.5', false], ['12.5', true]] as const) {

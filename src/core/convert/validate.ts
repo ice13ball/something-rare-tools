@@ -157,7 +157,22 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
   const noPosition = new Set(stage1.filter((f) => f.ruleId === 'CONV-POSITION-NONE').map((f) => `${f.file}\u0000${f.sheet}`));
   const sources = new Set(ds.events.filter((e) => e.source !== undefined).map((e) => `${e.source!.file}\u0000${e.source!.sheet}`));
   const positionSaid = noPosition.size > 0 && sources.size > 0 && [...sources].every((k) => noPosition.has(k));
-  pushAll(out, eventFindings(tables.event, opts).filter((f) => !(positionSaid && f.ruleId === 'DWC-TERM-EMPTY' && (f.field === 'decimalLatitude' || f.field === 'decimalLongitude'))));
+  // a missing eventDate is said once, in the sheet's terms (CONV-EVENT-DATE-MISSING): the Event table's "no dates at all" and "some rows have no date" are not repeated for the samples it names and their parents
+  const dateSaid = stage1.some((f) => f.ruleId === 'CONV-EVENT-DATE-MISSING');
+  const namedUndated = new Set<string>();
+  if (dateSaid) {
+    const parentOf = new Map(ds.events.map((e) => [e.id, e.parentId]));
+    for (const id of ds.undatedEventIds ?? []) for (let x: string | undefined = id; x !== undefined && !namedUndated.has(x); x = parentOf.get(x)) namedUndated.add(x);
+  }
+  const eventIdColumn = tables.event.columns.findIndex((c) => c.header === 'eventID');
+  const sayDateAlready = (f: Finding): boolean => {
+    if (!dateSaid) return false;
+    if (f.ruleId === 'META-NO-DATES') return true;
+    const lines = f.lines ?? [];
+    if (f.ruleId !== 'ROW-DATE-MISSING' || lines.length === 0 || eventIdColumn < 0) return false;
+    return lines.every((line) => namedUndated.has(tables.event.rows[line - FIRST_DATA_LINE]?.[eventIdColumn] ?? ''));
+  };
+  pushAll(out, eventFindings(tables.event, opts).filter((f) => !sayDateAlready(f) && !(positionSaid && f.ruleId === 'DWC-TERM-EMPTY' && (f.field === 'decimalLatitude' || f.field === 'decimalLongitude'))));
   // the Occurrence table's own recommended-term finding is only the empty scientificNameID column, which CONV-NAMEID-MISSING says in the converter's words
   // An EMPTY Occurrence table (an upload with no taxon: CONV-NO-OCCURRENCES says so) is not checked: "eventDate, decimalLatitude, decimalLongitude are missing" would send the user to fill a table that
   // has no row. With no occurrence the archive is refused whatever the table holds.

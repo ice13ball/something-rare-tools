@@ -132,6 +132,7 @@ import type { RuleSpec } from './spec';
  *   CONV-PANGAEA-NAMES-FALLBACK (none)      a PANGAEA file's parameter list was not matched to its columns: the abbreviations of the table header are the names (info)
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-POSITION-NONE         count, column?   count = the sheet's sample events that have no position on themselves or an ancestor; column = (variant) the header of a latitude / longitude column that is blank in every row; file, sheet = the sheet
+ *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); lines = the lines
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
  *   CONV-SEAFLOOR-VALUE        count, reason    field = column, value = an example, lines = rows; reason = notation (a number with no exact plain text)
@@ -1955,6 +1956,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: {count} sample event(s) have no latitude / longitude on themselves or on a parent, and the sheet has no column mapped as latitude or longitude (a mapped column that is blank in every row is the :empty-column variant). The output table's empty decimalLatitude / decimalLongitude column is not repeated.`,
   },
   {
+    id: 'CONV-EVENT-DATE-MISSING',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'rows', 'how'],
+    plain: {
+      pl: `{count} {+count:próbka arkusza „{sheet}” nie ma|próbki arkusza „{sheet}” nie mają|próbek arkusza „{sheet}” nie ma} daty: komórki z datą są puste. Uzupełnij je albo pomiń te próbki i wypisz je na liście.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells are empty. Fill them in, or leave these samples out and list them.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen sind leer. Füllen Sie sie aus oder lassen Sie diese Proben aus und listen Sie sie auf.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date sont vides. Remplissez-les, ou laissez ces échantillons de côté et listez-les.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one), on {rows} source line(s). how={how}: blank-cells = a date column exists and these samples' cells are empty (they can be left out and listed with the reason no-event-date); no-date-role = nothing on the sheet is marked as a date. A station never gives its date to a sample; a replicate takes the date of its sample. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  {
     id: 'CONV-PROFILE-NO-STATION',
     category: 'B',
     severity: 'error',
@@ -2107,6 +2121,26 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
       fr: `{count} {+count:ligne de profil n'a|lignes de profil n'ont} pas de code de niveau ({+lineCount:ligne|lignes} {lines}). L'identifiant du niveau vient de vous : indiquez comme code d'échantillon une colonne à code unique par station (numéro de bouteille, de scan ou de Niskin), ou cochez l'accord pour la station et la profondeur telle qu'écrite (chaque ligne a besoin d'une profondeur ou d'une pression en décibars).`,
     },
     technical: `{file}, {sheet}:{lines}: {count} profile row(s) have no level code (code column: {column}). The eventID of a level is its station's eventID and the user's own code or, only with the user's approval for this sheet, per row the depth as written when it reads as a number, else the pressure as written with the suffix dbar (only for a pressure column in decibars); a row with neither is not given an ID, and an ID is never derived from the order of the rows. These rows were not converted.`,
+  },
+  // CONV-EVENT-DATE-MISSING where no column of the sheet is marked as a date
+  'CONV-EVENT-DATE-MISSING:no-date-role': {
+    plain: {
+      pl: `Żadna kolumna arkusza „{sheet}” nie jest oznaczona jako data ({count} {+count:próbka|próbki|próbek}). Oznacz kolumnę z datą albo kolumny roku, miesiąca i dnia, albo dołącz arkusz opisujący próbki.`,
+      en: `No column of sheet "{sheet}" is marked as the date ({count} {+count:sample|samples}). Mark the date column, or the Year / Month / Day columns, or join the sheet that describes the samples.`,
+      de: `Keine Spalte des Blatts „{sheet}“ ist als Datum markiert ({count} {+count:Probe|Proben}). Markieren Sie die Datumsspalte oder die Spalten Jahr / Monat / Tag, oder verbinden Sie das Blatt, das die Proben beschreibt.`,
+      fr: `Aucune colonne de la feuille « {sheet} » n'est marquée comme date ({count} {+count:échantillon|échantillons}). Marquez la colonne de date, ou les colonnes Année / Mois / Jour, ou joignez la feuille qui décrit les échantillons.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one), on {rows} source line(s), and no column of the sheet is marked as a date or as year / month / day (how={how}). The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // CONV-EVENT-DATE-MISSING on a turned sheet: a turned sample is a source column, so it cannot be left out line by line
+  'CONV-EVENT-DATE-MISSING:turned': {
+    plain: {
+      pl: `{count} {+count:próbka arkusza „{sheet}” nie ma|próbki arkusza „{sheet}” nie mają|próbek arkusza „{sheet}” nie ma} daty. Uzupełnij wiersz lub kolumnę z datą albo dołącz arkusz opisujący próbki.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date. Fill in the date row or column, or join the sheet that describes the samples.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum. Füllen Sie die Datumszeile oder -spalte aus oder verbinden Sie das Blatt, das die Proben beschreibt.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date. Remplissez la ligne ou la colonne de date, ou joignez la feuille qui décrit les échantillons.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) of a turned sheet have no eventDate (OBIS requires one), on {rows} source line(s) (how={how}). A turned sample is a source column, so no leave-out is offered. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
   },
   // CONV-POSITION-NONE where a column is marked as a position but is blank in every row
   'CONV-POSITION-NONE:empty-column': {
@@ -2443,6 +2477,8 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.turned === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:turned'];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'no-date-role') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:no-date-role'];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'missing') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-axis'];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'blank') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-blank'];
   if (f.ruleId === 'CONV-POSITION-NONE' && typeof f.params.column === 'string') return PROFILE_VARIANTS['CONV-POSITION-NONE:empty-column'];

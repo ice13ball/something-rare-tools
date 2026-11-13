@@ -49,7 +49,7 @@ import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
 import { FateLog, buildSheetLedger, combineDescriptionLedgers, joinLedgers, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
-import { decideRows } from './notWritten';
+import { MAX_FINDING_LINES, decideRows, leaveOutHolds } from './notWritten';
 import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
 import type { SampleKey, SheetKeyReport } from './sampleKey';
 import { joinLines } from './sampleJoin';
@@ -111,6 +111,63 @@ function positionNoneFindings(sheets: readonly ConvertSheetInput[], events: read
       } else continue;
     }
     out.push(makeConvertFinding('CONV-POSITION-NONE', { file: sin.file.fileName, sheet: sin.sheet, params }));
+  }
+  return out;
+}
+
+/** A sheet whose sample events have no eventDate (OBIS requires one): what blocks, and which lines a "leave these samples out and list them" would take out. */
+export interface UndatedSheet {
+  /** Position of the sheet among the sheets handed to `convert()`. */
+  inputIndex: number;
+  file: string;
+  sheet: string;
+  /** `no-date-role`: nothing on the sheet is marked as a date. `blank-cells`: a date column exists and the samples' cells are empty. */
+  how: 'no-date-role' | 'blank-cells';
+  /** Samples named (a sample whose undated lines are all filled but unreadable is no part of it: ROW-DATE-UNPARSEABLE / CONV-DATE-ORDER-UNDECLARED speak for it). */
+  samples: number;
+  /** The lines of those samples (`blank-cells`: the lines whose date cells are empty), sorted. */
+  lines: number[];
+  eventIds: string[];
+}
+
+/**
+ * The sample events that have no eventDate of their own (a sample made of replicates takes the span of its replicates, a station never gives its date to a sample), by sheet. A replicate whose sample
+ * is dated is dated by it; a replicate whose sample is not is part of that sample.
+ */
+function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly ConvertSheetInput[], events: readonly EventRec[], samples: ReadonlyMap<string, SampleAcc>): UndatedSheet[] {
+  const undated = events.filter((e) => e.eventType === 'sample' && e.eventDate === undefined && e.source !== undefined);
+  if (undated.length === 0) return [];
+  // the lines of a sample: its own, and those of its replicates
+  const linesOf = new Map<string, number[]>();
+  for (const a of samples.values()) {
+    const owner = a.site.parentSample?.id ?? a.site.id;
+    const list = linesOf.get(owner);
+    if (list === undefined) linesOf.set(owner, [...a.lines]);
+    else list.push(...a.lines);
+  }
+  const out: UndatedSheet[] = [];
+  for (const sin of sheets) {
+    if (sin.profile !== undefined) continue;
+    const mine = undated.filter((e) => e.source!.file === sin.file.fileName && e.source!.sheet === sin.sheet);
+    if (mine.length === 0) continue;
+    const specs = specsOf(sin.mapping);
+    const dateCells = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day].filter((x) => x !== undefined);
+    const how = dateCells.length === 0 ? 'no-date-role' : 'blank-cells';
+    const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
+    const rowAt = new Map((raw?.rows ?? []).map((r) => [r.line, r]));
+    // a date cell with something in it that could not be read is not "no date"
+    const filled = (line: number): boolean => dateCells.some((c) => !isBlankCell(rowAt.get(line)?.cells[c.index] ?? null));
+    const lines: number[] = [];
+    const eventIds: string[] = [];
+    for (const e of mine) {
+      const own = linesOf.get(e.id) ?? [];
+      const named = how === 'no-date-role' ? own : own.filter((l) => !filled(l));
+      if (named.length === 0) continue;
+      eventIds.push(e.id);
+      lines.push(...named);
+    }
+    if (eventIds.length === 0) continue;
+    out.push({ inputIndex: rawSheets.indexOf(sin), file: sin.file.fileName, sheet: sin.sheet, how, samples: eventIds.length, lines: [...new Set(lines)].sort((a, b) => a - b), eventIds });
   }
   return out;
 }
@@ -1555,7 +1612,24 @@ function withKeyParts(sin: ConvertSheetInput): ConvertSheetInput {
   return { ...sin, mapping: { ...sin.mapping, columns: sin.mapping.columns.map((c) => (cols.includes(c.index) && c.role.kind === 'ignore' ? { ...c, role: { kind: 'keyPart' as const } } : c)) } };
 }
 
-export function convert(rawInputGiven: ConvertInput): ConvertResult {
+/**
+ * The conversion. A sample without a date blocks (CONV-EVENT-DATE-MISSING); when the person has answered "leave these samples out and list them" for the blank date cells of a sheet, for the number
+ * of rows it was given for, the conversion is made again with those lines skipped (pass 2: they are in the not-written list with the reason `no-event-date`).
+ */
+export function convert(input: ConvertInput): ConvertResult {
+  const first = convertPass(input, new Map());
+  const skip = new Map<number, ReadonlySet<number>>();
+  for (const u of first.undated) {
+    const sin = input.sheets[u.inputIndex] as ConvertSheetInput | undefined;
+    if (sin === undefined || u.how !== 'blank-cells') continue;
+    const sourceRows = first.ledger.find((l) => l.inputIndex === u.inputIndex && l.kind !== 'description' && l.sheet === sin.sheet)?.rows.source ?? -1;
+    if (leaveOutHolds(sin, 'no-event-date', u.lines.length, sourceRows) !== undefined) skip.set(u.inputIndex, new Set(u.lines));
+  }
+  const { undated: _undated, ...result } = skip.size === 0 ? first : convertPass(input, skip);
+  return result;
+}
+
+function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<number, ReadonlySet<number>>): ConvertResult & { undated: UndatedSheet[] } {
   const rawInput: ConvertInput = { ...rawInputGiven, sheets: rawInputGiven.sheets.map(withKeyParts) };
   // a sheet in the long environmental layout is not read at all: nothing of it is written, and the finding blocks the export
   const longFindings: Finding[] = [];
@@ -2007,10 +2081,16 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
       return min === undefined && max === undefined ? d : { ...d, verbatim: { ...d.verbatim, ...(min === undefined ? {} : { min }), ...(max === undefined ? {} : { max }) } };
     };
 
+    // the lines of samples without a date that the person left out (pass 2 of convert())
+    const noDateLeftOut = undatedLeftOut.get(rawInput.sheets.indexOf(sin));
     for (const row of sheet.rows) {
       rowPos++;
       if (ragged.has(row.line)) {
         fate.row(row.line, 'ragged');
+        continue;
+      }
+      if (noDateLeftOut?.has(row.line) === true) {
+        fate.row(row.line, 'no-event-date');
         continue;
       }
       const m = parse(row);
@@ -2948,6 +3028,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
   // a column read for the events is "event" in the ledger only where the events that were written carry what it gives
   settleEventColumns(ledger, events, tree.cruiseText);
   findings.push(...positionNoneFindings(input.sheets, events));
+  const undated = undatedSheets(input.sheets, rawInput.sheets, events, samples);
+  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how } }));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
   {
     const parts = new Map<RawSheet, SheetLedger[]>();
@@ -3323,6 +3405,8 @@ export function convert(rawInputGiven: ConvertInput): ConvertResult {
     ...(keyReports.length > 0 ? { keys: keyReports } : {}),
     leftOut: decision.leftOut,
     methodSteps,
+    ...(undated.length === 0 ? {} : { undatedEventIds: undated.flatMap((u) => u.eventIds) }),
+    undated,
     // every repeated occurrenceID the report above named (the finding itself carries only one example), so the output table's check can tell whether it says more (validate.ts)
     ...(repeatedOcc.size > 0 || hiddenIds.length > 0 ? { repeatedOccurrenceIds: [...new Set([...repeatedOcc.keys(), ...hiddenIds])] } : {}),
     profile: {

@@ -1703,6 +1703,8 @@ nobody judged must not let a bad archive through) and is only shown otherwise.
 
 A sheet with no position at all is named in its own terms (`CONV-POSITION-NONE`, blocks); the output table's empty-column finding is not repeated.
 
+A sample without a date blocks (OBIS requires eventDate); blank date cells can be left out and listed. It is named in the sheet's terms (`CONV-EVENT-DATE-MISSING`, blocks; `no-date-role`: nothing is marked as the date, `blank-cells`: the cells are empty); a replicate takes the date of its sample, a sample never takes one from a sibling through its station, and a sample whose date cells are filled but unreadable is spoken for by `ROW-DATE-UNPARSEABLE` / `CONV-DATE-ORDER-UNDECLARED`, not by this rule. The answer "leave these samples out and list them" is the reason `no-event-date`, given for the number of source lines named; `convert()` then reads the sheet again with those lines skipped. The Event table's `META-NO-DATES` and `ROW-DATE-MISSING` for those samples and their parents are not repeated; `/check` is unchanged.
+
 - **Blocks**: Darwin Core structure of the output tables (`DWC-TERM-MISSING`, empty required terms,
   duplicate or dangling ids, a loop in the event hierarchy, values outside the vocabularies),
   impossible coordinates, `ROW-NO-COORD`, `ROW-DEPTH-MIN-MAX`, `ROW-DATE-UNPARSEABLE` (a warning on

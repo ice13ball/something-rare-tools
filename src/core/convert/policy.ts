@@ -59,6 +59,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-PROFILE-LEVEL-INCOMPLETE',
   // a sheet with sample events and no position anywhere, said in the sheet's terms
   'CONV-POSITION-NONE',
+  // a sample with no eventDate (OBIS requires one): blank cells can be left out and listed
+  'CONV-EVENT-DATE-MISSING',
   'CONV-ID-DUPLICATE',
   // a per-taxon total repeated on the size-class rows of a sample: the export would count it once per size class
   'CONV-QUANTITY-REPEATED',

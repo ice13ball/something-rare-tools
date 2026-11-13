@@ -16,7 +16,7 @@ describe('reading cells', () => {
   });
 
   it('a depth that is positive upwards is written positive down; a unit-less depth is metres', () => {
-    const f = fileOf(['Sample', 'Station', 'Elevation [m]', 'Calanus finmarchicus', 'Latitude', 'Longitude'], [['a', 'S', -25, 3, 55.1, 3.2]]);
+    const f = fileOf(['Sample', 'Station', 'Elevation [m]', 'Calanus finmarchicus', 'Latitude', 'Longitude', 'Date'], [['a', 'S', -25, 3, 55.1, 3.2, '2023-04-05']]);
     const input = sheetInput(f, { quantity: { kind: 'count' }, edit: { 'Elevation [m]': { kind: 'depth', positive: 'up', unit: 'm' } } });
     const r = convert({ sheets: [input] });
     expect(r.blocking).toEqual([]);
@@ -66,7 +66,7 @@ describe('the whole archive', () => {
   });
 
   it('long sheets: rows of one sample that disagree on the effort block as a conflict', () => {
-    const f = fileOf(['Sample', 'Species', 'Count', 'Volume [m3]', 'Latitude', 'Longitude'], [['a', 'Calanus finmarchicus', 3, 10, 55.1, 3.2], ['a', 'Oithona similis', 4, 11, 55.1, 3.2]]);
+    const f = fileOf(['Sample', 'Species', 'Count', 'Volume [m3]', 'Latitude', 'Longitude', 'Date'], [['a', 'Calanus finmarchicus', 3, 10, 55.1, 3.2, '2023-04-05'], ['a', 'Oithona similis', 4, 11, 55.1, 3.2, '2023-04-05']]);
     const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count', effort: { source: 'column' } } })] });
     expect(r.blocking.map((x) => x.ruleId)).toEqual(['CONV-SAMPLE-CONFLICT']);
   });

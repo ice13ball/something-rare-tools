@@ -58,6 +58,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'join-ambiguous': 'covered',
   // no key of the results sheet is in the description sheet: CONV-JOIN-NO-MATCH is the one question; the description cells are listed while it blocks
   'join-no-match': 'covered',
+  // a sample with no date: CONV-EVENT-DATE-MISSING is the one question (OBIS requires eventDate); the lines it no longer names are the ones the person left out
+  'no-event-date': 'covered',
   // understood and not written: listed, no block
   'summary-row': 'listed',
   zero: 'listed',
@@ -99,6 +101,7 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'sheet-not-read': ['CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW'],
   'join-ambiguous': ['CONV-JOIN-AMBIGUOUS'],
   'join-no-match': ['CONV-JOIN-NO-MATCH'],
+  'no-event-date': ['CONV-EVENT-DATE-MISSING'],
 };
 
 /** The rule that blocked on its own for a reason that can be left out, and goes when the user leaves the reason out (the new finding takes over its question). */
@@ -117,6 +120,15 @@ export function kindOf(reason: string): ReasonKind {
 
 /** Can a decision "leave these rows out" be given for the reason? (the ones that block, and the ones whose own rule does not name the line) */
 export const canLeaveOut = (reason: string): boolean => kindOf(reason) !== 'listed';
+
+/**
+ * Does an answer "leave these rows out" hold for this reason now? An answer given on the page holds for the number of rows it was given for (a bare reason, from a caller that is not the page,
+ * holds whatever the number); an answer of a companion file also holds only for a sheet of the same number of rows. `'you'` = given in this session, `'file'` = from the companion file.
+ */
+export function leaveOutHolds(answers: Pick<ConvertSheetInput, 'leaveOut' | 'leaveOutFile'>, reason: string, count: number, sourceRows: number): 'you' | 'file' | undefined {
+  if ((answers.leaveOut ?? []).some((a) => (typeof a === 'string' ? a === reason : a.reason === reason && a.count === count))) return 'you';
+  return (answers.leaveOutFile ?? []).some((g) => g.reason === reason && g.count === count && g.rows === sourceRows) ? 'file' : undefined;
+}
 
 /** The most lines one finding names (the count in its text is the true one; the list beside the archive has them all). */
 export const MAX_FINDING_LINES = 2000;
@@ -220,10 +232,10 @@ export function decideRows(ledger: readonly SheetLedger[], sheets: readonly Conv
       // also holds only for a sheet of the same number of rows
       // (the description sheet of a join has no input of its own: the page stores its answers on the description input, which the merge copied)
       const answers = l.kind === 'description' && sin.sampleJoin !== undefined ? sin.sampleJoin.description : sin;
-      const you = (answers.leaveOut ?? []).some((a) => (typeof a === 'string' ? a === reason : a.reason === reason && a.count === count));
-      const file = !you && (answers.leaveOutFile ?? []).some((g) => g.reason === reason && g.count === count && g.rows === l.rows.source);
+      const holds = leaveOutHolds(answers, reason, count, l.rows.source);
+      const file = holds === 'file';
       const sorted = [...lines].sort((a, b) => a - b);
-      const left = you || file;
+      const left = holds !== undefined;
       const examples = examplesOf(rowsAt(source, sorted.slice(0, EXAMPLES)), sorted);
       const base = { file: l.file, sheet: l.sheet, lines: sorted.slice(0, MAX_FINDING_LINES) };
       if (left) {
