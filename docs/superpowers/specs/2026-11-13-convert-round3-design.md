@@ -357,3 +357,12 @@ turned from the form.
 - **B3 / Q7. Item 5 changes only the taxon proposal.** A header in the new "not a taxon" class behaves like "unknown" for every other caller. Today's header-unit rules still apply: a stated unit is a stated fact, e.g. `Current velocity [m/s]` → a variable. A header with no unit, such as `w_PH`, is ignored with a note and never proposed from its values (Michał's rule of 02.11).
 - **B4. Decision 3 scope.** An event needs a date at its own level or at an ancestor level: a profile level or replicate may take the station's or sample's date, as `CONV-PROFILE-LEVEL-INCOMPLETE` already accepts. So profile uploads that export today keep exporting. The block lists every event with no date in its chain.
 - **B5. Turned headers that are dates.** The person may declare that the turned header gives both the sample code and the date. The date is never guessed from the header text, and the declaration is explicit.
+
+## 12b. Michał's answers of 13.11 ("wszystko jak rekomendujesz")
+
+- **Q1.** Under own records, a specimen row with no quantity column gets count 1 per row (individualCount 1), not presence only.
+- **Q2.** Under own records, CONV-ROW-COPIES gets the answer "keep identical rows as separate records". It is an explicit choice, and the IDs differ by source line.
+- **Q3.** Samples without a date block, with the answer "leave out and list": they go to the not-written file with a reason.
+- **Q4.** No declared date for a whole sheet in this round.
+- **Q5.** A declared position is allowed only for a sheet with no position at all, never to fill gaps.
+- **Q6.** The declared position (and its uncertainty) is kept in the companion file. It is the person's own declaration, not a value read from the data.
