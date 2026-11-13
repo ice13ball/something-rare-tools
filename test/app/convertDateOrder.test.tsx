@@ -88,6 +88,20 @@ describe('the buttons', () => {
   });
 });
 
+describe('a sheet marked as a profile', () => {
+  it('is asked about its dates too and its answer reaches the converter', async () => {
+    const run = await load([{ name: 'hauls.csv', text: HAULS }]);
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await waitFor(() => expect(run.bodies[run.bodies.length - 1].sheets[0].profile).toBeDefined());
+    await idle();
+    fireEvent.click(button(item('CONV-DATE-ORDER-UNDECLARED')!, T['convert.finding.dayFirst']));
+    await settled(run, (b) => b.sheets[0].dayMonthOrder !== undefined);
+    expect(run.bodies[run.bodies.length - 1].sheets[0].dayMonthOrder).toEqual({ [DATE]: 'dmy' });
+    await waitFor(() => expect(item('CONV-DATE-ORDER-DECLARED')).not.toBeNull());
+    expect(item('CONV-DATE-ORDER-UNDECLARED')).toBeNull();
+  });
+});
+
 describe('the companion file', () => {
   async function parsed(text = HAULS, companion?: string): Promise<ConvertParseResult> {
     return createDirectConvertEngine().parse([{ name: 'hauls.csv', bytes: new TextEncoder().encode(text), source: 'dropped' }, ...(companion === undefined ? [] : [{ name: 'c.csv', bytes: new TextEncoder().encode(companion), source: 'dropped' as const }])]);
