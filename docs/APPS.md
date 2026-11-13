@@ -1494,7 +1494,12 @@ code" (the button above applies it).
   `convert/headers.ts`); of a long sheet the
   user's occurrence-id column, else `<sample eventID>:<exact taxon cell>` plus the life-stage column
   when there is one. **A sample's id is never derived from depth, row order or a WoRMS name** (one exception below: a
-  code reused on every visit of a station). The
+  code reused on every visit of a station). **Second exception, only by the person's choice (`ownRecords`, "each row is its own record", `convert/ownRecords.ts`):
+  occurrenceIDs from source lines.** On a long sheet with a taxon column and no occurrenceID column (not a profile, pivoted or turned sheet; decided in one function, `ownRecordsEligible`) the
+  person may declare every row a record of its own. The `occurrenceID` is then `<eventID>:L<line>`, the line number of the row in the SOURCE file (for a joined sheet, the line of the results
+  sheet), never the order of the rows after sorting or merging; the archive says so in its methods. **The cost** (`CONV-OWN-RECORDS`, accept): the IDs change if rows are inserted or deleted in the
+  source before a new version; keep the row order, or add an occurrenceID column. A row of such a sheet with no quantity column is one individual (`individualCount` 1, OCOUNT01) unless
+  presence only is ticked. Identical rows are kept as separate records only by a second explicit answer to `CONV-ROW-COPIES` (`keepCopiesCount`, said by `CONV-ROW-COPIES-KEPT`). The
   only generated codes are a **one-time proposal** (`proposeSampleCodes`: the sheet as a CSV with a
   new code column last, for the user to check and drop again). **The first way, on the page: the person picks the columns that make a sample**
   (`SampleKeyPicker`, `core/convert/sampleKey.ts`; shown under the heading of the sample codes for a sheet that has rows without a code, and kept while a key is in use). Nothing is ticked, proposed or changed for

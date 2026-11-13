@@ -3,7 +3,7 @@
 // IDs (plan 2.8, Q1): the user's codes, duplicates, the station prefix, tabs, a missing code and the one-time code proposal.
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
-import { proposeSampleCodes } from '../../src/core/convert/ids';
+import { occurrenceIdLong, occurrenceIdOwnRow, proposeSampleCodes } from '../../src/core/convert/ids';
 import { RULES } from '../../src/core/rules/registry';
 import { toDataset } from '../../src/core/convert/model';
 import { validateTables } from '../../src/core/convert/validate';
@@ -432,5 +432,13 @@ describe('a repeated occurrenceID is reported once: only when every repeated ID 
   it('when the report named only some of the repeated IDs, the output check still says the rest', () => {
     const partialDs = { ...ds, repeatedOccurrenceIds: ['o1'] };
     expect(find(validateTables(partialDs, r.findings, { today: TODAY }), 'DWC-OCCURRENCEID-DUPLICATE')).toHaveLength(1);
+  });
+});
+
+describe('occurrenceIdOwnRow', () => {
+  it('is the eventID and the source line, and is not the long-sheet ID', () => {
+    expect(occurrenceIdOwnRow('T1', 4)).toBe('T1:L4');
+    expect(occurrenceIdOwnRow('T1:2', 12)).toBe('T1:2:L12');
+    expect(occurrenceIdOwnRow('T1', 4)).not.toBe(occurrenceIdLong('T1', 'Gadus morhua'));
   });
 });

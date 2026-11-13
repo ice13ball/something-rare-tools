@@ -54,6 +54,8 @@ import type { RuleSpec } from './spec';
  *   CONV-ROW-COPIES            count, withCopies, withoutCopies   rows that are exact copies of an earlier row (all columns but a per-row identifier), quantity above 1; lines = the copies; blocks until left out and listed (error)
  *   CONV-ROW-COPIES-SPECIMENS  count, withCopies, withoutCopies   identical rows with a count of 1 (a specimen table looks the same): both sums, a warning to accept, never a block
  *   CONV-ROW-COPIES-DROPPED    count, withCopies, withoutCopies   the user left them out and listed them (warning, accept)
+ *   CONV-ROW-COPIES-KEPT       count   under "each row is its own record": the user keeps the identical rows as separate records; lines = the copies (warning, accept; fromFile = the answer came from the companion file)
+ *   CONV-OWN-RECORDS           rows   the user declared each row of the sheet its own record: every occurrenceID is the sample's eventID and the line number in the source file, and the IDs change if rows are inserted or deleted (warning, accept; fromFile = from the companion file)
  *   CONV-ROW-NOT-UNDERSTOOD    reason, count, rows, what   rows the converter could not place (notWritten.ts: a value with no parameter, a number with no taxon, a ragged row ...): lines = the first rows, examples = 'line: cells'; one per sheet and reason; blocks until the user leaves them out and lists them, or corrects the file (error)
  *   CONV-ROW-LEFT-OUT          reason, count, rows, what   the user's answer to the above: those rows are out of the archive and in the file beside it (info; fromFile = the answer came from the companion file)
  *   CONV-QUANTITY-SAME-IN-SAMPLE groups, records, written, asTotal   rows of one sample and taxon with the same quantity above 1 that differ in anything: written as records / as the species' total (warning, accept)
@@ -817,6 +819,54 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:ligne est identique|lignes sont identiques} à une autre, avec un effectif de 1 ({+lineCount:ligne|lignes} {lines}). Comme individus distincts la quantité fait {withCopies} ; si ce sont des copies, ce serait {withoutCopies}. Un tableau d'individus a exactement cet aspect : rien n'est bloqué, vérifiez ce que c'est.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: {count} row(s) are identical to an earlier row in every column but a per-row identifier, with a count of 1. Written as separate records the sum of the quantity is {withCopies}; if they are copies of one record it would be {withoutCopies}. A specimen table looks the same, so this is a warning to accept and never a block.`,
+  },
+  {
+    id: 'CONV-ROW-COPIES-KEPT',
+    category: 'B',
+    severity: 'warning',
+    params: ['count'],
+    plain: {
+      pl: `Zgodnie z wyborem zachowano {count} {+count:wiersz identyczny|wiersze identyczne|wierszy identycznych} z innym ({+lineCount:wiersz|wiersze|wierszy} {lines}) jako osobne rekordy. Sprawdź, że to nie są kopie.`,
+      en: `As you chose, {count} {+count:row identical|rows identical} to another row ({+lineCount:line|lines} {lines}) {+count:is|are} kept as separate records. Check that they are not copies.`,
+      de: `Wie gewählt, {+count:wird|werden} {count} {+count:Zeile|Zeilen} identisch mit einer anderen ({+lineCount:Zeile|Zeilen} {lines}) als getrennte Datensätze behalten. Prüfen Sie, dass es keine Kopien sind.`,
+      fr: `Comme choisi, {count} {+count:ligne identique|lignes identiques} à une autre ({+lineCount:ligne|lignes} {lines}) {+count:est conservée|sont conservées} comme enregistrements distincts. Vérifiez que ce ne sont pas des copies.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego; obowiązuje, bo tyle samo wierszy jest dokładnymi kopiami.`,
+          en: `This answer was read from the companion file; it holds because the same number of rows are exact copies.`,
+          de: `Diese Antwort stammt aus der Begleitdatei; sie gilt, weil gleich viele Zeilen exakte Kopien sind.`,
+          fr: `Cette réponse vient du fichier d'accompagnement ; elle vaut parce que le même nombre de lignes sont des copies exactes.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines} field {field}: the sheet is declared "each row is its own record" and the person chose to keep the rows that are identical to an earlier row in every column but a per-row identifier as separate records; {count} row(s) are written, each with its own occurrenceID made of its source line. Honoured only while the same number of copies is found. A warning to accept.`,
+  },
+  {
+    id: 'CONV-OWN-RECORDS',
+    category: 'B',
+    severity: 'warning',
+    params: ['rows'],
+    plain: {
+      pl: `Arkusz „{sheet}”: każdy z {rows} {+rows:wiersza|wierszy|wierszy} to osobny rekord; occurrenceID to kod próbki i numer wiersza w pliku. Numery się zmienią, gdy przed nową wersją wstawisz lub usuniesz wiersze: zachowaj kolejność albo dodaj kolumnę occurrenceID.`,
+      en: `Sheet "{sheet}": each of the {rows} {+rows:row is|rows is} its own record; the occurrenceID is the sample code and the line number in the file. The IDs change if rows are inserted or deleted in the source before a new version; keep the row order, or add an occurrenceID column.`,
+      de: `Blatt „{sheet}“: jede der {rows} {+rows:Zeile ist|Zeilen ist} ein eigener Datensatz; die occurrenceID ist der Probencode und die Zeilennummer in der Datei. Die IDs ändern sich, wenn vor einer neuen Version Zeilen eingefügt oder gelöscht werden; Zeilenfolge beibehalten oder eine occurrenceID-Spalte hinzufügen.`,
+      fr: `Feuille « {sheet} » : chacune des {rows} {+rows:ligne est|lignes est} un enregistrement distinct ; l'occurrenceID est le code de l'échantillon et le numéro de ligne du fichier. Les ID changent si des lignes sont insérées ou supprimées avant une nouvelle version ; gardez l'ordre des lignes ou ajoutez une colonne occurrenceID.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ten wybór pochodzi z pliku towarzyszącego.`,
+          en: `This choice was read from the companion file.`,
+          de: `Diese Wahl stammt aus der Begleitdatei.`,
+          fr: `Ce choix vient du fichier d'accompagnement.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the person declared each row of this long sheet its own record; {rows} occurrence(s) are written with occurrenceID = the eventID of the sample the occurrence hangs under + ':L' + the line number of the row in the source file (never the order of the rows after sorting or merging; a joined sheet uses the results line). A row with no quantity column and no presence-only tick is one individual (individualCount 1). The IDs change if rows are inserted or deleted in the source before a new version. A warning to accept.`,
   },
   {
     id: 'CONV-ROW-NOT-UNDERSTOOD',

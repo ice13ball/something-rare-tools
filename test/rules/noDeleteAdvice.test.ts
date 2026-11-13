@@ -39,6 +39,7 @@ const ALLOWED: Allowed[] = [
   // the promises of this task
   { key: 'convert.join.changeRemoveKey', phrase: 'Remove key', why: 'takes one key column out of the join form on the page; no data row' },
   { id: 'CONV-ROW-NOT-UNDERSTOOD', phrase: 'nothing is deleted', why: 'a promise, not advice' },
+  { id: 'CONV-OWN-RECORDS', phrase: 'inserted or deleted', why: 'the cost of line-number IDs: the IDs shift when the person edits the source, not an instruction to delete' },
   { id: 'CONV-ROW-NOT-UNDERSTOOD', phrase: 'nothing is deleted from the file the user gave', why: 'a promise, not advice' },
   { id: 'CONV-ROW-LEFT-OUT', phrase: 'Nothing was deleted', why: 'a promise, not advice' },
   { key: 'convert.notWritten.help', phrase: 'Nothing is deleted', why: 'a promise, not advice' },

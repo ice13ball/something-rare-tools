@@ -159,6 +159,9 @@ export const ACCEPT_RULES: readonly string[] = [
   // the same quantity above 1 on rows of one sample and taxon that differ in something; the copies the user dropped
   'CONV-QUANTITY-SAME-IN-SAMPLE',
   'CONV-ROW-COPIES-DROPPED',
+  // the person keeps identical rows as separate records, and declared each row of a long sheet its own record (the cost: the IDs follow the source lines)
+  'CONV-ROW-COPIES-KEPT',
+  'CONV-OWN-RECORDS',
   // identical rows with a count of 1: copies, or specimens that look the same; both sums are shown
   'CONV-ROW-COPIES-SPECIMENS',
   // a picked sample key with an empty part: those rows are samples of their own

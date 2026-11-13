@@ -24,11 +24,12 @@ import { DECLARED_POSITION_REMARK } from './events';
 import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
+import { ownRecordsEligible } from './ownRecords';
 import { roleUnconfirmedParams, unconfirmedRoles } from './roleUnconfirmed';
 import { vetoedColumns, vetoedParams } from './vetoedNumbers';
 import { transposedSheetReason } from './transposed';
 import { firstRowIsUnits } from '../recognize/layout';
-import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
+import { SUMMARY_LABEL, VISIT_PARTS, scanStatisticRows, visitLevel, visitQualifier, hasTabOrNewline, occurrenceIdLong, occurrenceIdOwnRow, occurrenceIdWide, shownText, stationPrefixedId } from './ids';
 import { UNMATCHED_SHOWN } from './model';
 import type { ConvertResult, EventRec, MofIntent, OccRec, ProfileSummary, SourceRef } from './model';
 import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, unitPickFor } from './nerc';
@@ -244,6 +245,22 @@ export interface ConvertSheetInput {
    * occurrence per taxon row, occurrenceStatus present; a wide sheet reads its cells as marks (presence.ts). No organismQuantity is written and no quantity declaration is asked.
    */
   presenceOnly?: boolean;
+  /**
+   * The person's explicit choice for this sheet: "each row is its own record". Honoured only on a sheet `ownRecordsEligible` accepts (a long sheet with a taxon column and no occurrenceID column; no
+   * profile, pivot or turn); anywhere else it is ignored. Every occurrenceID is then the sample's eventID and the line number of the row in the SOURCE file (`occurrenceIdOwnRow`), a row with no
+   * quantity column is one individual (unless `presenceOnly`), and the cost is said by CONV-OWN-RECORDS. The page holds the guard on the number of rows; core takes a bare boolean.
+   */
+  ownRecords?: boolean;
+  /** The same choice as a companion file of an earlier run recorded it: said in the finding. */
+  ownRecordsFromFile?: boolean;
+  /**
+   * With `ownRecords`: the answer "keep identical rows as separate records" to CONV-ROW-COPIES. A bare `keepCopies: true` mirrors `dropCopies: true` for tests; the page sends `keepCopiesCount`
+   * (the number of copies the answer was given for), honoured only when today's analysis finds exactly that many. Without `ownRecords` both are ignored; `dropCopies` wins over them.
+   */
+  keepCopies?: boolean;
+  keepCopiesCount?: number;
+  /** The count above came from a companion file: said in the finding. */
+  keepCopiesFromFile?: boolean;
   /**
    * The user's choice for a long sheet whose quantity (or weight) is a per-taxon TOTAL repeated on the rows of its size classes (CONV-QUANTITY-REPEATED): write one occurrence per sample and taxon, with that
    * total taken once. Rows of a group that disagree stay blocked. Never automatic; a sheet without that pattern ignores it.
@@ -614,7 +631,7 @@ const sameNumber = (a: number | undefined, b: number | undefined): boolean => a 
  * profile file is dropped silently.
  */
 /** The columns this conversion reads (any role): the same set CONV-COLUMN-NOT-EXPORTED is computed from, so the ledger and that finding cannot disagree about which column is written. */
-function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): Set<number> {
+function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, ownCount = false): Set<number> {
   const used = new Set<number>();
   const use = (s: { index: number } | undefined): void => void (s && used.add(s.index));
   for (const s of [specs.lat, specs.lon, specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day, specs.time, specs.station, specs.cruise, specs.sampleId]) use(s);
@@ -629,7 +646,7 @@ function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeo
   if (sin.profile === undefined) for (const i of keyColumns(sin.sampleKey)) use({ index: i });
   use(cols.replicate);
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
-  if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
+  if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true || ownCount) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
   use(cols.seafloor);
   if (cols.depthMin && cols.depthMax) {
     use(cols.depthMin);
@@ -647,8 +664,8 @@ function isUnnamedColumn(sin: ConvertSheetInput, sheet: RawSheet, index: number)
   return sheet.unnamedFrom !== undefined && index >= sheet.unnamedFrom && !(sin.sampleJoin !== undefined && index >= sin.sampleJoin.results.width);
 }
 
-function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>): string[] {
-  const used = readColumns(sin, cols, specs);
+function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, ownCount = false): string[] {
+  const used = readColumns(sin, cols, specs, ownCount);
   const consumed = sin.sampleJoin?.consumed;
   const named = sin.mapping.columns.filter((c) => c.role.kind !== 'ignore' && !used.has(c.index)).map((c) => c.header.trim());
   // two kinds of IGNORED column that hold data are said as well, so that nothing is left out without a word: a column with an empty header (shown by its letter in brackets: "[E]"), and
@@ -670,8 +687,8 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
  * A column without a header, one past the short-header detection and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED already, and are not named twice.
  */
 export const IGNORED_NAMED_MAX = 20;
-function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, unexported: readonly string[]): { count: number; columns: string } | undefined {
-  const used = readColumns(sin, cols, specs);
+function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, unexported: readonly string[], ownCount = false): { count: number; columns: string } | undefined {
+  const used = readColumns(sin, cols, specs, ownCount);
   const sheet = sin.file.sheets.find((s) => s.name === sin.sheet);
   if (sheet === undefined) return undefined;
   const taken = new Set(unexported);
@@ -1849,6 +1866,11 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     const speciesList = taxonNoQuantity && !sin.mapping.columns.some((c) => c.role.kind === 'variable');
     // the user's tick: this sheet lists the species found and nobody counted them (OBIS needs occurrenceStatus, not a quantity); it needs a taxon, and for a long sheet no quantity column
     const presence = sin.presenceOnly === true && (sin.shape === 'wide' ? cols.taxonHeaders.length > 0 : cols.taxonCell !== undefined && cols.quantity === undefined);
+    // "each row is its own record" (the person's tick, on a sheet ownRecordsEligible accepts): the occurrenceID is the sample and the source line; with no quantity column each row is one individual
+    // (the tick says the rows are specimens), unless the person also ticked presence only, which wins
+    const ownRows = sin.ownRecords === true && ownRecordsEligible(sin, sheet);
+    const ownCount = ownRows && cols.quantity === undefined && !presence;
+    let ownRowsWritten = 0;
     const missingTaxon = sin.shape === 'wide' ? cols.taxonHeaders.length === 0 : cols.taxonCell === undefined || cols.quantity === undefined;
     // a sheet with measured variables and NO taxon column (wide: no taxon header; long: no taxon cell column), NO quantity column and no unconfirmed taxon candidate (the user may still confirm one)
     // is environmental data only: one message instead of "no taxon", "kind of number" and "no occurrences". A mixed sheet keeps the messages above.
@@ -1860,7 +1882,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       // another sheet of the upload (not a profile file) that has a taxon column: the fix is to mark THIS sheet as a profile file, not to add species
       const taxaElsewhere = input.sheets.some((o) => o !== sin && o.profile === undefined && o.mapping.columns.some((c) => c.role.kind === 'taxon'));
       findings.push(makeConvertFinding('CONV-ENV-ONLY-SHEET', { ...base, ...(taxaElsewhere ? { params: { other: 'taxa' } } : {}) }));
-    } else if (presence) {
+    } else if (presence || ownCount) {
       /* the user said so: no count to declare and nothing to block */
     } else if (speciesList) findings.push(makeConvertFinding('CONV-SPECIES-LIST-NO-COUNTS', { ...base }));
     else if (taxonNoQuantity) findings.push(makeConvertFinding('CONV-TAXON-NO-QUANTITY', { ...base }));
@@ -1871,13 +1893,18 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     let quantity: ResolvedQuantity | undefined;
     let missing: string[] = resolution.ok ? [] : [...resolution.missing];
     if (resolution.ok) quantity = resolution.quantity;
-    if (taxonNoQuantity && !presence) taxaWaitForQuantity = true; // its missing occurrences are no "environment-only upload" either
+    if (taxonNoQuantity && !presence && !ownCount) taxaWaitForQuantity = true; // its missing occurrences are no "environment-only upload" either
     if (sin.quantity?.effort?.source === 'column' && cols.effort === undefined) {
       missing = [...missing, 'effort column'];
       quantity = undefined;
     }
     if (presence) {
       quantity = undefined;
+    } else if (ownCount) {
+      // one individual per row: a count (OCOUNT01, no unit), nothing else is asked
+      const own = resolveQuantity({ kind: 'count' });
+      quantity = own.ok ? own.quantity : undefined;
+      missing = [];
     } else if (!quantity || missing.length > 0) {
       if (missing.length === 0) missing = ['kind'];
       // a species list has no numbers to declare: CONV-SPECIES-LIST-NO-COUNTS already said what is missing
@@ -2038,6 +2065,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     const specimenCopies = analysis.specimenCopies;
     const takeOnce = repeated !== undefined && (sin.totalOnce === true || (sin.totalOnceCount !== undefined && repeated.collapsedGroups === sin.totalOnceCount));
     const dropCopies = copies !== undefined && (sin.dropCopies === true || copiesFromFile);
+    // Q2 (own records only): "keep identical rows as separate records", honoured while today's analysis finds the number of copies it was given for; dropping wins when both were given
+    const keptCopies = copies !== undefined && ownRows && !dropCopies && (sin.keepCopies === true || (sin.keepCopiesCount !== undefined && copies.copyLines.length === sin.keepCopiesCount));
     // the rows that are not converted: the repeats of a taken total, and the copies that are dropped. They still count for the sample (its code, its variables), not for an occurrence.
     const notConverted = new Set<number>([...(takeOnce ? repeated.skip : []), ...(takeOnce ? repeated.taxonOnly : []), ...(takeOnce ? repeated.oneOnce : []), ...(dropCopies ? copies.copyLines : [])]);
     {
@@ -2082,7 +2111,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
         if (code === undefined || [code, m.station].some((v) => v !== undefined && SUMMARY_LABEL.test(v))) continue;
         if (cols.replicate && text(row.cells[cols.replicate.index]) === undefined) continue;
         const stationText = m.station;
-        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && (presence || (cols.quantity !== undefined && (!isBlankCell(row.cells[cols.quantity.index] ?? null) || rowHasBiomass(row))));
+        const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && (presence || ownCount || (cols.quantity !== undefined && (!isBlankCell(row.cells[cols.quantity.index] ?? null) || rowHasBiomass(row))));
         if (!filled) continue;
         const cruiseText = m.cruise ?? sin.cruise?.trim();
         const stationId = stationText === undefined ? undefined : stationEventId(cruiseText === '' ? undefined : cruiseText, stationText);
@@ -2146,7 +2175,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       const wideHasValue = cols.taxonHeaders.some((c) => !isBlankCell(row.cells[c.index] ?? null));
       const taxonCellText = cols.taxonCell ? text(row.cells[cols.taxonCell.index]) : undefined;
       // long: a row is a record when it has a taxon and a value (an empty value is "no record"); wide: a row with any species cell or a sample code
-      const longHasValue = presence ? true : cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
+      const longHasValue = presence || ownCount ? true : cols.quantity ? !isBlankCell(row.cells[cols.quantity.index] ?? null) : false;
       // a long row with a taxon and a blank / NA quantity: a real (positive) biomass value is a measurement of that taxon, so the row stays as an occurrence with no count; nothing else is evidence of the taxon
       // (a measured variable is written once per sample, not per taxon, and says nothing about this one)
       if (sin.shape === 'long' && !presence && cols.taxonCell !== undefined && taxonCellText !== undefined) {
@@ -2417,7 +2446,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
           const n = taxonNames.get(c.index);
           cells.push({ index: c.index, verbatim: n?.verbatim ?? c.header.trim(), raw: row.cells[c.index] ?? null, column: c.header.trim(), ...(n === undefined ? {} : { idText: n.idText }), ...(n?.remark === undefined ? {} : { columnRemark: n.remark }) });
         }
-      } else if (cols.taxonCell && (cols.quantity || presence) && taxonCellText !== undefined) {
+      } else if (cols.taxonCell && (cols.quantity || presence || ownCount) && taxonCellText !== undefined) {
         const lifeStageCol = cols.lifeStage ? text(row.cells[cols.lifeStage.index]) : undefined;
         const qualifierCol = cols.qualifier ? text(row.cells[cols.qualifier.index]) : undefined;
         const userId = cols.occurrenceId ? text(row.cells[cols.occurrenceId.index]) : undefined;
@@ -2433,7 +2462,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
           ...(cols.quantity === undefined ? {} : { index: cols.quantity.index }),
           verbatim: taxonCellText,
           // a presence list has no quantity: every taxon row is a mark
-          raw: cols.quantity ? (row.cells[cols.quantity.index] ?? null) : 'x',
+          raw: cols.quantity ? (row.cells[cols.quantity.index] ?? null) : ownCount ? 1 : 'x',
           column: cols.taxonCell.header,
           ...(userId === undefined ? {} : { userId }),
           ...(nameId === undefined ? {} : { nameId }),
@@ -2543,8 +2572,9 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
         checkText(cell.column, row.line, sp.scientificName);
         checkText(cell.column, row.line, sp.identificationQualifier);
         checkText(cell.column, row.line, sp.lifeStage);
-        const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.idText ?? cell.verbatim) : (cell.userId ?? occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol));
+        const id = sin.shape === 'wide' ? occurrenceIdWide(eventId, cell.idText ?? cell.verbatim) : (cell.userId ?? (ownRows ? occurrenceIdOwnRow(eventId, row.line) : occurrenceIdLong(eventId, cell.verbatim, cell.lifeStageCol)));
         noteId(id, row.line);
+        if (ownRows) ownRowsWritten++;
         const occSource: SourceRef = { ...source, column: cell.column };
         const occ: OccRec = {
           id,
@@ -2744,11 +2774,11 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
           mapping: sin.mapping,
           decimalComma: dc,
           fate,
-          eventColumns: [...readColumns(sin, cols, specs)],
+          eventColumns: [...readColumns(sin, cols, specs, ownCount)],
           ...(sheet.pivot === undefined ? {} : { pivot: sheet.pivot }),
           taxonColumns: wide ? cols.taxonHeaders.map((c) => c.index) : [],
           occurrenceColumns: wide ? cols.taxonHeaders.map((c) => c.index) : longBiology && cols.quantity !== undefined ? [cols.quantity.index] : [],
-          measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology && (cols.quantity !== undefined || presence) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
+          measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology && (cols.quantity !== undefined || presence || ownCount) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
           hasTaxa: cols.taxonHeaders.length > 0 || cols.taxonCell !== undefined,
           presence,
           ...(sin.sampleJoin === undefined || sin.sampleJoin.descriptionOnly.size === 0 ? {} : { describedLines: new Set(sin.sampleJoin.descriptionOnly.keys()) }),
@@ -2876,7 +2906,12 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       // percentages and class numbers are not added up: no sums are shown (variant ':nosum'); the detection and the block are the same
       const noSum = kind === 'cover' || kind === 'class';
       const params = noSum ? { count: copies.copyLines.length, nosum: 'yes', ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) } : { count: copies.copyLines.length, withCopies: round(copies.withCopies), withoutCopies: round(copies.withoutCopies), ...(dropCopies && copiesFromFile && sin.dropCopiesFromFile === true ? { fromFile: 'yes' } : {}) };
-      findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
+      if (keptCopies) findings.push(makeConvertFinding('CONV-ROW-COPIES-KEPT', { ...base, field: copies.column, lines: copies.copyLines, params: { count: copies.copyLines.length, ...(sin.keepCopies !== true && sin.keepCopiesFromFile === true ? { fromFile: 'yes' } : {}) } }));
+      else findings.push(makeConvertFinding(dropCopies ? 'CONV-ROW-COPIES-DROPPED' : 'CONV-ROW-COPIES', { ...base, field: copies.column, lines: copies.copyLines, params }));
+    }
+    if (ownRows && ownRowsWritten > 0) {
+      findings.push(makeConvertFinding('CONV-OWN-RECORDS', { ...base, params: { rows: ownRowsWritten, ...(sin.ownRecordsFromFile === true ? { fromFile: 'yes' } : {}) } }));
+      methodSteps.push(`Sheet ${sheet.name} of ${fileName}: one occurrence per source row; occurrenceID = sample eventID + ':L' + line number in the source file`);
     }
     // The sums of the two warnings below are those of the archive: what the occurrences and measurements of THIS sheet really carry after the user's choices (rows taken once or dropped are
     // not there, a row whose quantity or weight is never written adds nothing), never a sum over the source rows.
@@ -3006,11 +3041,11 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     }
     if (!device && [...samples.values()].some((a) => a.sheetKey === sheetKey)) findings.push(makeConvertFinding('CONV-DEVICE-MISSING', { ...base }));
     // every column the user gave a meaning that this conversion does not read, in this configuration, is said and has to be accepted: nothing is dropped silently
-    const unexported = unreadColumns(sin, cols, specs);
+    const unexported = unreadColumns(sin, cols, specs, ownCount);
     if (unexported.length > 0) {
       findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
     }
-    const ignored = ignoredColumns(sin, cols, specs, unexported);
+    const ignored = ignoredColumns(sin, cols, specs, unexported, ownCount);
     if (ignored !== undefined) findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored }));
     // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said
     if (cols.taxonId && !cols.taxonId.aphia && sin.shape === 'long' && looksLikeAphiaIds(sheet, cols.taxonId.index)) {

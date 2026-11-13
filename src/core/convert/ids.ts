@@ -159,6 +159,12 @@ export const occurrenceIdWide = (sampleEventId: string, header: string): string 
 export const occurrenceIdLong = (sampleEventId: string, taxonCell: string, lifeStageColumn?: string): string =>
   lifeStageColumn === undefined || lifeStageColumn === '' ? `${sampleEventId}:${taxonCell}` : `${sampleEventId}:${taxonCell}:${lifeStageColumn}`;
 
+/**
+ * The occurrenceID of a row declared to be its own record (the person's explicit choice for the sheet): the eventID of the sample the occurrence hangs under and the line number of the row
+ * in the SOURCE file. Made of the line, never of the order the rows are read in. The cost is said in CONV-OWN-RECORDS: the IDs change if rows are inserted or deleted in the source.
+ */
+export const occurrenceIdOwnRow = (eventId: string, line: number): string => `${eventId}:L${line}`;
+
 /* ---------- the one-time code proposal (Q1) ---------- */
 
 export interface SampleCodeProposal {
