@@ -24,6 +24,31 @@ export interface RawSheet {
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
   /** Set only by the converter's long-sheet reader (core/convert/pivot.ts): this sheet is a PIVOT of a long environmental sheet, with where each cell came from. Never set for /check. */
   pivot?: PivotInfo;
+  /** Set only by the converter's turn (core/convert/turn.ts), on the person's declaration that the columns of this sheet are samples: the sheet was turned, rows to columns. Never set for /check. */
+  turn?: TurnInfo;
+}
+/** The person's declaration that a sheet's columns are samples: which column names the rows (the left-hand labels), which columns right of it are not samples, and whether the header gives the date as well as the sample code. */
+export interface TurnDeclaration {
+  nameColumn: number;
+  notSamples: number[];
+  headerDates?: boolean;
+}
+/** What the turn did, for the findings, the ledger and the list of rows not written: where each turned line and column came from in the sheet as dropped. */
+export interface TurnInfo extends TurnDeclaration {
+  /** The sheet as dropped (a reference, not a copy). */
+  source: RawSheet;
+  /** Turned row line -> the source column of its sample. */
+  sampleColumn: Record<number, number>;
+  /** Turned column index -> the source line of its row name. */
+  nameLine: Record<number, number>;
+  /** The source columns left of the name column and the columns that are not samples: their cells are listed, not written. */
+  labelColumns: number[];
+  /** Source columns right of the name column with a blank header and a value: not turned, blocking. */
+  blankHeaders: number[];
+  /** Sample headers (trimmed) used by more than one column: those columns are not turned, blocking. */
+  repeatedHeaders: { header: string; columns: number[] }[];
+  /** Source lines that hold a value and have no row name: no column is made of them, blocking. */
+  blankNameLines: number[];
 }
 /** What the converter's reader of a long environmental sheet (one row per measured parameter) did: the facts the converter turns into findings and the page into a note. */
 export interface PivotInfo {

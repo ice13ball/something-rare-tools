@@ -36,6 +36,7 @@ import { measurementTypeText, pickLabel, readDecision, unitContradictsConcept, u
 import type { NercDecisions, NercPick } from './nerc';
 import { biomassKindConcept, biomassUnit, parseTypedCoordinate, parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
+import { columnLetters } from './columnLetters';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
 import { analyseRepeats } from './repeatedTotal';
@@ -55,6 +56,7 @@ import { MAX_FINDING_LINES, decideRows, leaveOutHolds } from './notWritten';
 import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } from './sampleKey';
 import type { SampleKey, SheetKeyReport } from './sampleKey';
 import { joinLines } from './sampleJoin';
+import { turnFindings, turnedLines } from './turn';
 import type { SampleJoinInfo } from './sampleJoin';
 
 /*
@@ -163,6 +165,8 @@ export interface UndatedSheet {
   eventIds: string[];
   /** The sheet is the pivot of a long one: its lines are not the file's lines, so no leave-out is offered. */
   pivoted: boolean;
+  /** The sheet was turned (its samples are the source columns): a sample is a column, not a line, so no leave-out is offered. */
+  turned: boolean;
 }
 
 /**
@@ -202,7 +206,7 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
       lines.push(...named);
     }
     if (eventIds.length === 0) continue;
-    out.push({ inputIndex: rawSheets.indexOf(sin), file: sin.file.fileName, sheet: sin.sheet, how, samples: eventIds.length, pivoted: raw?.pivot !== undefined, lines: [...new Set(lines)].sort((a, b) => a - b), eventIds });
+    out.push({ inputIndex: rawSheets.indexOf(sin), file: sin.file.fileName, sheet: sin.sheet, how, samples: eventIds.length, pivoted: raw?.pivot !== undefined, turned: raw?.turn !== undefined, lines: [...new Set(lines)].sort((a, b) => a - b), eventIds });
   }
   return out;
 }
@@ -899,17 +903,6 @@ function stationRowOf(file: string, sheet: string, line: number, m: Meta, statio
     ...(m.datetime === undefined ? {} : { datetime: m.datetime }),
     values: {},
   };
-}
-
-/** The spreadsheet letters of a zero-based column index (0 -> A, 26 -> AA). */
-function columnLetters(index: number): string {
-  let n = index;
-  let out = '';
-  do {
-    out = String.fromCharCode(65 + (n % 26)) + out;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
-  return out;
 }
 
 /** The depth of a row: one depth column gives min = max, a pair of bound columns gives both. Text that is not a number is reported (ROW-NON-NUMERIC / ROW-NA-VARIANT). */
@@ -1634,7 +1627,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
  * that was NOT read: fewer than two parameters, too many parameter and unit pairs, or a mapping that differs from the proposal.
  */
 function longEnvironmentalHeaders(sin: ConvertSheetInput, header: readonly string[]): { parameter: string; value: string; reason?: { reason: string; count: number } } | undefined {
-  if (sin.file.sheets.find((x) => x.name === sin.sheet)?.pivot !== undefined) return undefined;
+  const read = sin.file.sheets.find((x) => x.name === sin.sheet);
+  if (read?.pivot !== undefined || read?.turn !== undefined) return undefined;
   const long = longColumnsOf(header);
   if (long === undefined) return undefined;
   const { parameterAt, valueAt } = long;
@@ -1679,7 +1673,7 @@ export function convert(input: ConvertInput): ConvertResult {
   const skip = new Map<number, ReadonlySet<number>>();
   for (const u of first.undated) {
     const sin = input.sheets[u.inputIndex] as ConvertSheetInput | undefined;
-    if (sin === undefined || u.how !== 'blank-cells' || u.pivoted) continue;
+    if (sin === undefined || u.how !== 'blank-cells' || u.pivoted || u.turned) continue;
     const sourceRows = first.ledger.find((l) => l.inputIndex === u.inputIndex && l.kind !== 'description' && l.sheet === sin.sheet)?.rows.source ?? -1;
     if (leaveOutHolds(sin, 'no-event-date', u.lines.length, sourceRows) !== undefined) skip.set(u.inputIndex, new Set(u.lines));
   }
@@ -1701,14 +1695,14 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       if (long === undefined) {
         // a table that looks turned (species or variables in rows) is not read as it stands unless the user says so; not a profile sheet, not a pivot (transposedSheetReason)
         const sheet = sin.file.sheets.find((x) => x.name === sin.sheet);
-        const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true ? undefined : transposedSheetReason(sheet, sin.file, sin.mapping.columns);
+        const turned = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true || sheet.turn !== undefined ? undefined : transposedSheetReason(sheet, sin.file, sin.mapping.columns);
         if (turned !== undefined) {
           longFindings.push(makeConvertFinding('CONV-SHEET-TRANSPOSED', { file: sin.file.fileName, sheet: sin.sheet, params: { reason: turned } }));
           if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet, rawInput.sheets.indexOf(sin)));
           return false;
         }
         // a row of units under the header that the parser could not fold (an unknown word or text under some of the units; the very row /check refuses as a header over several rows) is said as what it is, not read as a data row (CONV-TEXT-IN-TAXON-CELL lists)
-        const unitsRow = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true || sheet.pivot !== undefined ? undefined : firstRowIsUnits(sheet, sin.file.decimalComma);
+        const unitsRow = sheet === undefined || sin.profile !== undefined || sin.readAsTable === true || sheet.pivot !== undefined || sheet.turn !== undefined ? undefined : firstRowIsUnits(sheet, sin.file.decimalComma);
         if (unitsRow === undefined) return true;
         longFindings.push(makeConvertFinding('CONV-SHEET-UNITS-ROW', { file: sin.file.fileName, sheet: sin.sheet, lines: [unitsRow.line], params: { line: unitsRow.line } }));
         if (sheet !== undefined) ledger.push(notReadLedger(sin.file.fileName, sheet, rawInput.sheets.indexOf(sin)));
@@ -1788,6 +1782,15 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     pivoted.push({ file: sin.file.fileName, sheet: sh });
     pushAll(findings, pivotNoteFindings(sin.file.fileName, sh.name, sh.pivot));
     pushAll(findings, pivotBlockFindings(sin.file.fileName, sh.name, sh.pivot));
+  }
+
+  // a sheet turned on the person's declaration (turn.ts): what it could not turn (blocking) and that it was turned
+  const turnedSheets: { file: string; sheet: RawSheet }[] = [];
+  for (const sin of input.sheets) {
+    const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
+    if (sh?.turn === undefined) continue;
+    turnedSheets.push({ file: sin.file.fileName, sheet: sh });
+    pushAll(findings, turnFindings(sin.file.fileName, sh));
   }
 
   // a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: said once per sheet, to be accepted; nothing is re-roled (roleUnconfirmed.ts)
@@ -3124,7 +3127,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     findings.push(makeConvertFinding('CONV-POSITION-DECLARED', { file: sin.file.fileName, sheet: sin.sheet, params: { ...declared.typed, count, ...(sin.declaredPositionFromFile === true ? { fromFile: 'yes' } : {}) } }));
   }
   const undated = undatedSheets(input.sheets, rawInput.sheets, events, samples);
-  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}) } }));
+  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}), ...(u.turned ? { turned: 'yes' } : {}) } }));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
   {
     const parts = new Map<RawSheet, SheetLedger[]>();
@@ -3465,6 +3468,12 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   }
   for (const p of pivoted) {
     const moved = originalLines(findings, p.file, p.sheet);
+    findings.length = 0;
+    pushAll(findings, moved);
+  }
+  // a finding about a cell of a turned sheet names the line of its row name in the source (or the header line), and the source column of its sample
+  for (const t of turnedSheets) {
+    const moved = turnedLines(findings, t.file, t.sheet);
     findings.length = 0;
     pushAll(findings, moved);
   }

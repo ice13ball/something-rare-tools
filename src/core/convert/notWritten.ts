@@ -42,6 +42,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'one-specimen-total': 'blocks',
   // a row of the description sheet of a join whose key has a blank part: its values can be lent to no sample, so it is asked about (like a ragged row), never dropped by itself
   'join-no-key': 'blocks',
+  // a row of a turned sheet with values and no name: no column can be made of it, so it is asked about (CONV-TURN-NAME-BLANK says it; leaving it out is the person's answer)
+  'turn-no-name': 'blocks',
   // held back by a rule of its own that blocks
   'no-code': 'covered',
   'no-replicate': 'covered',
@@ -78,6 +80,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'text-cell': 'listed',
   'position-no-taxon': 'listed',
   'sample-no-taxon': 'listed',
+  // the cells of a turned sheet's label columns (left of the name column, or declared not samples): listed with the line, never written
+  'turned-label': 'listed',
   // a value of one sheet that lost a conflict to the other sheet's: the person chose, the value is listed with both lines
   'join-not-chosen': 'listed',
   // a description row whose results rows wrote nothing (blank counts, rows left out ...): its values reach no sample, so the row is listed whole; the results rows carry the question
@@ -111,6 +115,7 @@ export const SUPERSEDES: Partial<Record<LeaveOutReason, string>> = {
   'repeated-parameter': 'CONV-LONG-DUPLICATE',
   'no-taxon': 'CONV-TAXON-EMPTY-ROW',
   'join-no-key': 'CONV-JOIN-KEY-BLANK',
+  'turn-no-name': 'CONV-TURN-NAME-BLANK',
 };
 
 /** The kind of a reason; a reason that is not known blocks. */
@@ -150,7 +155,7 @@ export interface RowDecision {
  */
 export const leftOutKey = (l: Pick<SheetLedger, 'inputIndex' | 'kind'>, reason: string): string => `${l.inputIndex}\u0000${l.kind === 'description' ? 'description\u0000' : ''}${reason}`;
 
-/** The source rows of a ledger entry: the sheet as the conversion read it, and for a pivot the long sheet its lines belong to. */
+/** The source rows of a ledger entry: the sheet as the conversion read it, and for a pivot the long sheet its lines belong to, for a turned sheet the sheet as dropped. */
 function sourceOf(l: SheetLedger, sheets: readonly ConvertSheetInput[]): RawSheet | undefined {
   if (l.inputIndex === undefined) return undefined;
   const sin = sheets[l.inputIndex];
@@ -158,10 +163,10 @@ function sourceOf(l: SheetLedger, sheets: readonly ConvertSheetInput[]): RawShee
   // a joined input: the description's lines are those of its own sheet, the results' those of the ORIGINAL results sheet (not the merged one)
   if (join !== undefined) {
     if (l.kind === 'description' || (l.kind === 'not-read' && l.sheet !== sin.sheet)) return join.description.sheet;
-    if (l.sheet === sin.sheet) return join.results.raw;
+    if (l.sheet === sin.sheet) return join.results.raw.turn?.source ?? join.results.raw;
   }
   const sheet = sin?.file.sheets.find((x) => x.name === l.sheet);
-  return sheet?.pivot?.source ?? sheet;
+  return sheet?.pivot?.source ?? sheet?.turn?.source ?? sheet;
 }
 
 const cellShown = (c: RawCell | undefined): string => {

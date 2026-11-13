@@ -193,6 +193,10 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-LONG-KEY-VARIES | warning | B | — | —<a id="CONV-LONG-KEY-VARIES"></a> |
 | CONV-LONG-DUPLICATE | error | B | — | —<a id="CONV-LONG-DUPLICATE"></a> |
 | CONV-LONG-NO-PARAMETER | error | B | — | —<a id="CONV-LONG-NO-PARAMETER"></a> |
+| CONV-TURN-HEADER-BLANK | error | B | — | —<a id="CONV-TURN-HEADER-BLANK"></a> |
+| CONV-TURN-HEADER-REPEATED | error | B | — | —<a id="CONV-TURN-HEADER-REPEATED"></a> |
+| CONV-TURN-NAME-BLANK | error | B | — | —<a id="CONV-TURN-NAME-BLANK"></a> |
+| CONV-SHEET-TURNED | info | B | — | —<a id="CONV-SHEET-TURNED"></a> |
 | CONV-DEPTH-UNIT | error | B | — | [Darwin Core term list (dwc.tdwg.org/terms: minimumDepthInMeters, maximumDepthInMeters, verbatimDepth)](https://dwc.tdwg.org/terms/#dwc:minimumDepthInMeters), "The lesser depth of a range of depth below the local surface, in meters." / verbatimDepth: "The original description of the depth below the local surface."<a id="CONV-DEPTH-UNIT"></a> |
 | CONV-DEPTH-CONVERTED | warning | B | — | [Darwin Core term list (dwc.tdwg.org/terms: minimumDepthInMeters, maximumDepthInMeters, verbatimDepth)](https://dwc.tdwg.org/terms/#dwc:minimumDepthInMeters), "The lesser depth of a range of depth below the local surface, in meters." / verbatimDepth: "The original description of the depth below the local surface."<a id="CONV-DEPTH-CONVERTED"></a> |
 | CONV-SEAFLOOR-UNIT | error | B | — | [OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)](https://manual.obis.org/darwin_core.html), "This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."<a id="CONV-SEAFLOOR-UNIT"></a> |

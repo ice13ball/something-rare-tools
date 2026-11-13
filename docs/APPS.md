@@ -1434,6 +1434,16 @@ definition is an echo-intensity unit of an instrument, so a count carries no uni
   headers) is the standard input and is never flagged. A sample column whose header the tool takes
   for a column name (`Station A`) hides a transposed species table from the test: it is then read as
   it stands.
+- **The samples are the columns** (declared turn, `convert/turn.ts`): a sheet is turned only when the person declares which column names the rows and which columns right of it are not samples
+  (`TurnDeclaration`: `nameColumn`, `notSamples`, optionally `headerDates`: the header gives the date as well as the sample code, never guessed). Nothing is turned by a guess from values. The sheet is
+  turned per file before the roles are proposed (`turnConvertFile`), so the roles are proposed on the turned columns: one row per sample (the header text of the source column), one column per named
+  row (made unique as the pivot does), every cell as written. A blank or repeated sample header is not turned and blocks (`CONV-TURN-HEADER-BLANK`, `-REPEATED`); a row with values and no name makes no
+  column, blocks (`CONV-TURN-NAME-BLANK`, the ledger reason `turn-no-name`) until it is left out and listed; `CONV-SHEET-TURNED` says that the sheet was turned. A turned row has the line
+  `TURNED_LINE_BASE + source column`, never a real line: a finding about a row-name column names the line of that name in the source, any other finding the header line, and both carry
+  `params.turnedColumn` (every source column of the samples concerned, `B, C`; an annotation the page appends, not a declared rule parameter). The ledger is kept in the lines of the source: a line is written
+  when one of its sample cells wrote, and the cells of the label columns (left of the name column, or declared not samples) are listed with the reason `turned-label`. A turned description sheet is shown and
+  not joined in this round (`CONV-JOIN-DESCRIPTION-LONG`, also when a join is declared with no proposal); a sample with no date on a turned sheet has its own text and no leave-out (a sample is a column, not a
+  line); a turned sheet is never offered "each row is its own record".
 
 ### 8.5 Taxon names, splits and WoRMS
 

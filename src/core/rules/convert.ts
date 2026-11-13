@@ -30,7 +30,7 @@ import type { RuleSpec } from './spec';
  *   CONV-KEY-TOO-LONG          count, max, longest, prefix, prefixLength   (prefixBig = the name is a fifth of the longest or more: the advice names it) an ID written to the archive (sample, replicate or occurrence) is longer than max characters; longest = the length of the longest; value = its first 60 characters; lines = rows
  *   CONV-KEY-PICKED            samples, rows, columns   the key the person picked (or a companion file gave: fromFile) and what it made; info, with "Ask again"
  *   CONV-JOIN-PROPOSED         description, descriptionFile, keys, covered, samples   a sheet seems to describe the samples of this one, linked by keys; covered of samples found; nothing is joined until confirmed (info)
- *   CONV-JOIN-DESCRIPTION-LONG description, descriptionFile, keys   the same, but the description sheet is in the long layout (one row per parameter): not supported yet, both sheets are converted as without a join (info)
+ *   CONV-JOIN-DESCRIPTION-LONG description, descriptionFile, keys   the same, but the description sheet is in the long layout (one row per parameter) or was turned by the person (turned = yes, one more sentence): not supported yet, both sheets are converted as without a join (info)
  *   CONV-JOIN-CONFLICT         what, group, count, total, examples, resultsColumns, descriptionColumns   what differs between the two sheets in total samples, count of them still undecided, and the headers of the columns it compares on each side; blocks until decided for all, per sample or per pair of values (error)
  *   CONV-JOIN-CONFLICT-CHOSEN  what, count, fromDescription, fromResults   the answer to the above: what was taken from which sheet (info)
  *   CONV-JOIN-UNIT-DIFFERS     what, resultsColumn, resultsUnit, descriptionColumn, descriptionUnit   a quantity both sheets have in two units the merge cannot compare or exchange; blocks until the same unit is stated in both sheets or one of the two columns is set to ignore (error)
@@ -90,6 +90,10 @@ import type { RuleSpec } from './spec';
  *   CONV-LONG-KEY-VARIES       count, columns   warning: rows that share every position / identity column differ in these columns (count = such samples), so each difference is read as another sample
  *   CONV-LONG-DUPLICATE        (none)           field = the parameter column (header with unit), lines = the original lines of the repeated rows of ONE sample
  *   CONV-LONG-NO-PARAMETER     count            lines = the original lines that have a value and no parameter name
+ *   CONV-TURN-HEADER-BLANK     count, columns   columns = letters of the source columns right of the name column that hold values and have a blank header; lines = the source header line (blocks)
+ *   CONV-TURN-HEADER-REPEATED  header, count, columns   one finding per header used by several source columns (letters in columns); none of them is turned; lines = the source header line (blocks)
+ *   CONV-TURN-NAME-BLANK       count            count = source rows that hold a value and have no name; lines = those source lines (blocks until the names are typed or the rows left out, reason turn-no-name)
+ *   CONV-SHEET-TURNED          rows, samples    info: the sheet was turned on the person's declaration (core/convert/turn.ts); rows = named source rows (now columns), samples = sample columns (now rows)
  *   CONV-NO-TAXON              shape            shape = wide | long; no taxon column is marked (a long sheet with a taxon column and no quantity column is CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY)
  *   CONV-TAXON-NO-QUANTITY     (none)           a long sheet with a taxon column, other numbers (measured variables) and no quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: offers the tick "list of species found" (presence only), else a quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
@@ -391,7 +395,18 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Das Blatt „{description}“ scheint diese Proben zu beschreiben (verbunden über: {keys}), hat aber das lange Layout: eine Zeile je Parameter. Ein solches Blatt zu verbinden wird noch nicht unterstützt; beide Blätter werden wie ohne Verbindung umgewandelt.`,
       fr: `La feuille « {description} » semble décrire ces échantillons (lien : {keys}), mais elle est en format long : une ligne par paramètre. Joindre une telle feuille n'est pas encore possible ; les deux feuilles sont converties comme sans jointure.`,
     },
-    technical: `{file}, {sheet}: the sheet "{description}" (file {descriptionFile}) looks like the description of the samples of this sheet, linked by {keys}, but it is in the long layout (one row per parameter). Joining a long description sheet is not supported yet: both sheets are converted exactly as without a join. Information only.`,
+    plainIf: [
+      {
+        param: 'turned',
+        plain: {
+          pl: `Ten arkusz opisu został obrócony na Twoje polecenie (próbki były kolumnami); obróconego arkusza też nie da się jeszcze połączyć.`,
+          en: `That description sheet was turned at your request (its samples were columns); a turned sheet cannot be joined yet either.`,
+          de: `Dieses Beschreibungsblatt wurde auf Ihren Wunsch gedreht (die Proben waren Spalten); auch ein gedrehtes Blatt lässt sich noch nicht verbinden.`,
+          fr: `Cette feuille de description a été tournée à votre demande (ses échantillons étaient des colonnes) ; une feuille tournée ne peut pas encore être jointe non plus.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the sheet "{description}" (file {descriptionFile}) looks like the description of the samples of this sheet, linked by {keys}, but it is in the long layout (one row per parameter), or the person turned it (its samples were columns; the finding then carries turned=yes, an optional parameter that adds one sentence). Joining a long or turned description sheet is not supported yet: both sheets are converted exactly as without a join. Information only.`,
   },
   {
     id: 'CONV-JOIN-CONFLICT',
@@ -1333,6 +1348,58 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       fr: `Dans la feuille « {sheet} », {count} {+count:ligne a|lignes ont} une valeur mais pas de nom dans la colonne du paramètre ({+lineCount:ligne|lignes} {lines}). Le convertisseur ne sait pas ce qui a été mesuré : saisissez le paramètre ou écartez {+count:la ligne|les lignes} et {+count:listez-la|listez-les} (message suivant).`,
     },
     technical: `{file}, {sheet}:{lines}: {count} row(s) of a long sheet have a value and no name in the parameter column; nothing can be named for them, so they are not read and the export is blocked.`,
+  },
+  {
+    id: 'CONV-TURN-HEADER-BLANK',
+    category: 'B',
+    severity: 'error',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `Arkusz „{sheet}” jest obracany (próbki to kolumny), ale {count} {+count:kolumna ma|kolumny mają|kolumn ma} wartości i puste nagłówki: {columns}. Z nagłówka powstaje kod próbki. Wpisz go w arkuszu albo wskaż kolumnę jako „nie próbka”.`,
+      en: `Sheet "{sheet}" is being turned (its samples are the columns), but {count} {+count:column has|columns have} values and an empty header: {columns}. The header becomes the sample code. Type it in the sheet, or mark the column as "not a sample".`,
+      de: `Das Blatt „{sheet}“ wird gedreht (die Proben sind die Spalten), aber {count} {+count:Spalte hat|Spalten haben} Werte und eine leere Kopfzeile: {columns}. Die Kopfzeile wird zum Probencode. Tragen Sie ihn im Blatt ein oder markieren Sie die Spalte als „keine Probe“.`,
+      fr: `La feuille « {sheet} » est tournée (les échantillons sont les colonnes), mais {count} {+count:colonne a|colonnes ont} des valeurs et un en-tête vide : {columns}. L'en-tête devient le code d'échantillon. Saisissez-le dans la feuille ou marquez la colonne « pas un échantillon ».`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} column(s) right of the name column hold values and have a blank header ({columns}), so no sample code can be made of them. They are not turned and the export is blocked until the header is typed or the column is declared not a sample.`,
+  },
+  {
+    id: 'CONV-TURN-HEADER-REPEATED',
+    category: 'B',
+    severity: 'error',
+    params: ['header', 'count', 'columns'],
+    plain: {
+      pl: `Arkusz „{sheet}” jest obracany (próbki to kolumny), ale nagłówek „{header}” ma {count} {+count:kolumna|kolumny|kolumn}: {columns}. Kod próbki musi być jeden. Zmień nagłówki w arkuszu albo wskaż nadmiarowe kolumny jako „nie próbki”.`,
+      en: `Sheet "{sheet}" is being turned (its samples are the columns), but the header "{header}" is on {count} columns: {columns}. A sample code must be one. Rename the headers in the sheet, or mark the extra columns as "not samples".`,
+      de: `Das Blatt „{sheet}“ wird gedreht (die Proben sind die Spalten), aber die Kopfzeile „{header}“ steht in {count} Spalten: {columns}. Ein Probencode muss eindeutig sein. Benennen Sie die Spalten im Blatt um oder markieren Sie die überzähligen als „keine Proben“.`,
+      fr: `La feuille « {sheet} » est tournée (les échantillons sont les colonnes), mais l'en-tête « {header} » figure sur {count} colonnes : {columns}. Un code d'échantillon doit être unique. Renommez les en-têtes ou marquez les colonnes en trop « pas des échantillons ».`,
+    },
+    technical: `{file}, {sheet}:{lines}: the (trimmed) header "{header}" is used by {count} columns right of the name column ({columns}). Nothing chooses between them: none of them is turned and the export is blocked until the headers differ or the extra columns are declared not samples.`,
+  },
+  {
+    id: 'CONV-TURN-NAME-BLANK',
+    category: 'B',
+    severity: 'error',
+    params: ['count'],
+    plain: {
+      pl: `W arkuszu „{sheet}” (obracanym) {count} {+count:wiersz ma|wiersze mają|wierszy ma} wartości, ale puste miejsce w kolumnie nazw ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie powstanie z nich kolumna. Wpisz nazwy albo pomiń te wiersze.`,
+      en: `In sheet "{sheet}" (turned), {count} {+count:row has|rows have} values but nothing in the name column ({+lineCount:line|lines} {lines}). No column can be made of {+count:it|them}. Type the names, or leave these rows out.`,
+      de: `Im (gedrehten) Blatt „{sheet}“ {+count:hat|haben} {count} {+count:Zeile|Zeilen} Werte, aber nichts in der Namensspalte ({+lineCount:Zeile|Zeilen} {lines}). Daraus entsteht keine Spalte. Tragen Sie die Namen ein oder lassen Sie diese Zeilen aus.`,
+      fr: `Dans la feuille « {sheet} » (tournée), {count} {+count:ligne a|lignes ont} des valeurs mais rien dans la colonne des noms ({+lineCount:ligne|lignes} {lines}). Aucune colonne n'en est faite. Saisissez les noms ou laissez ces lignes de côté.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} source row(s) of a turned sheet hold a value and have no name in the name column, so no column can be made of them. They are listed with the reason turn-no-name and the export is blocked until the names are typed or the rows are left out and listed.`,
+  },
+  {
+    id: 'CONV-SHEET-TURNED',
+    category: 'B',
+    severity: 'info',
+    params: ['rows', 'samples'],
+    plain: {
+      pl: `Arkusz „{sheet}” obrócono, jak zdecydowałeś: z {rows} {+rows:wiersza|wierszy|wierszy} powstało {rows} {+rows:kolumna|kolumny|kolumn}, a {samples} {+samples:kolumna próbki stała się wierszem|kolumny próbek stały się wierszami|kolumn próbek stało się wierszami}. Komórki są bez zmian.`,
+      en: `Sheet "{sheet}" was turned, as you declared: its {rows} {+rows:row became a column|rows became columns}, and its {samples} sample {+samples:column became a row|columns became rows}. The cells are unchanged.`,
+      de: `Das Blatt „{sheet}“ wurde wie von Ihnen festgelegt gedreht: aus {rows} {+rows:Zeile wurde eine Spalte|Zeilen wurden Spalten}, aus {samples} {+samples:Probenspalte wurde eine Zeile|Probenspalten wurden Zeilen}. Die Zellen sind unverändert.`,
+      fr: `La feuille « {sheet} » a été tournée, comme vous l'avez déclaré : {rows} {+rows:ligne est devenue une colonne|lignes sont devenues des colonnes}, {samples} {+samples:colonne d'échantillon est devenue une ligne|colonnes d'échantillons sont devenues des lignes}. Les cellules sont inchangées.`,
+    },
+    technical: `{file}, {sheet}: the person declared that the samples are the columns: {rows} named source row(s) became columns and {samples} sample column(s) became rows. Every cell is the source cell as written; a finding about a turned cell names the line of its row name in the source and, as turnedColumn, the source column of its sample. Information only.`,
   },
   {
     id: 'CONV-DEPTH-UNIT',

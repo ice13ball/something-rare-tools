@@ -43,8 +43,10 @@ export interface SampleJoinProposal {
   samples: number;
   /** The key identifies one row of the description sheet. */
   unique: boolean;
-  /** The description sheet is a long sheet read through its pivot (`RawSheet.pivot !== undefined`): shown, never joinable for now. */
+  /** The description sheet is a long sheet read through its pivot (`RawSheet.pivot !== undefined`) or a sheet the person turned (`RawSheet.turn`): shown, never joinable for now. */
   long: boolean;
+  /** Set (true) only when the description sheet is a turned one: the finding then says so. */
+  turned?: boolean;
 }
 
 const cleanHeader = (h: string): string => stripTypeSuffix(h).toLowerCase();
@@ -98,7 +100,8 @@ export function proposeSampleJoins(sheets: readonly ConvertSheetInput[], skip: r
     if (j === undefined || j.covered * 2 < j.total) return;
     const keys: JoinKeyPair[] = [{ results: j.leftKey, description: j.rightKey }, ...(j.extraKeys ?? []).map((k) => ({ results: k.leftKey, description: k.rightKey }))];
     const di = candidates[j.right].index;
-    out.push({ results: ri, description: di, keys, covered: j.covered, samples: j.total, unique: j.unique, long: sheetOf(sheets[di])?.pivot !== undefined });
+    const dSheet = sheetOf(sheets[di]);
+    out.push({ results: ri, description: di, keys, covered: j.covered, samples: j.total, unique: j.unique, long: dSheet?.pivot !== undefined || dSheet?.turn !== undefined, ...(dSheet?.turn !== undefined ? { turned: true } : {}) });
   });
   return out;
 }
@@ -1211,7 +1214,7 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
     const resSheet = sheetOf(res);
     const desSheet = sheetOf(des);
     if (resSheet === undefined || desSheet === undefined) continue;
-    if (res.profile !== undefined || !hasTaxon(res) || des.profile !== undefined || hasTaxon(des) || desSheet.pivot !== undefined) continue;
+    if (res.profile !== undefined || !hasTaxon(res) || des.profile !== undefined || hasTaxon(des) || desSheet.pivot !== undefined || desSheet.turn !== undefined) continue;
     const picked = new Set(res.sampleKey?.columns ?? []);
     const indexesOk = j.keys.every((k) => k !== null && typeof k === 'object' && isIndex(k.results, resSheet.header.length) && isIndex(k.description, desSheet.header.length));
     if (!indexesOk) continue;
@@ -1230,7 +1233,7 @@ export function joinInputs(sheets: readonly ConvertSheetInput[], joins: readonly
       const keys = p.keys.map((k) => `${sheetOf(res)?.header[k.results] ?? ''} = ${sheetOf(des)?.header[k.description] ?? ''}`).join(' + ');
       const base = { file: res.file.fileName, sheet: res.sheet };
       return p.long
-        ? makeConvertFinding('CONV-JOIN-DESCRIPTION-LONG', { ...base, params: { description: des.sheet, descriptionFile: des.file.fileName, keys } })
+        ? makeConvertFinding('CONV-JOIN-DESCRIPTION-LONG', { ...base, params: { description: des.sheet, descriptionFile: des.file.fileName, keys, ...(p.turned === true ? { turned: 'yes' } : {}) } })
         : makeConvertFinding('CONV-JOIN-PROPOSED', { ...base, params: { description: des.sheet, descriptionFile: des.file.fileName, keys, covered: p.covered, samples: p.samples } });
     });
   const proposed = (): SampleJoinProposal[] =>

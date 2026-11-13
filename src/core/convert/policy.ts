@@ -47,6 +47,10 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-REPLICATE-MISSING',
   'CONV-LONG-DUPLICATE',
   'CONV-LONG-NO-PARAMETER',
+  // a turned sheet: a sample column with no header or the same header as another, a row with values and no name
+  'CONV-TURN-HEADER-BLANK',
+  'CONV-TURN-HEADER-REPEATED',
+  'CONV-TURN-NAME-BLANK',
   'CONV-QUANTITY-UNDECLARED',
   'CONV-COUNT-NOT-INTEGER',
   'CONV-COVER-RANGE',

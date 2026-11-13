@@ -63,13 +63,16 @@ export type LedgerReason =
   | 'join-ambiguous'
   | 'join-no-match'
   | 'join-results-not-written'
-  | 'no-event-date';
+  | 'no-event-date'
+  | 'turned-label'
+  | 'turn-no-name';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
   'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match', 'no-event-date',
+  'turned-label', 'turn-no-name',
 ];
 // (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last ones belong to whole lines, or to a lost cell named beside its line, never to FateLog.cell)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
@@ -82,7 +85,7 @@ const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code -
  */
 /** Of those, the rows that name a position, a depth, a sample or a date and no taxon or number: the panel says that plainly, not as "a value". */
 export const UNPLACED: readonly LedgerReason[] = ['position-no-taxon', 'sample-no-taxon'];
-export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter', 'join-no-key'];
+export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter', 'join-no-key', 'turn-no-name'];
 
 /**
  * The reasons the conversion records while it reads a sheet. Created per sheet; the builder writes into it, the ledger reads it. A cell's reason is kept in one byte per cell and column
@@ -756,10 +759,117 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
     out.rows = { source: L.sourceRows, written: writtenLines, skipped: LEDGER_REASONS.filter((r) => counts.has(r)).map((reason) => ({ reason, count: counts.get(reason)! })), unexplained: unexplainedLines };
     judge();
   };
+
+  /*
+   * A turned sheet (turn.ts): the ledger is kept in the lines of the SOURCE sheet, one fate for each source line, as the rows of the source are the columns of the sheet that was read. A source line is
+   * written when one of its sample cells wrote (an occurrence, a measurement, or the event of its sample); otherwise it has the reason of its cells. The cells of the label columns (left of the name
+   * column, or declared not samples) are never written: a written line lists them as lost cells `turned-label`. A row with values and no name is `turn-no-name`. Rows the merge appended for samples only the
+   * description has are not turned rows; they keep the fate they have. Run again once the event columns are settled, like the pivot.
+   */
+  const turn = sheet.turn;
+  const turnPass = (settled?: { events: readonly EventRec[]; cruiseText: readonly string[] }): void => {
+    if (turn === undefined) return;
+    const eventsAt = new Map<number, EventRec[]>();
+    if (settled !== undefined) for (const e of settled.events) if (e.source?.file === inp.file && e.source.sheet === sheet.name) (eventsAt.get(e.source.line) ?? eventsAt.set(e.source.line, []).get(e.source.line)!).push(e);
+    const eventKinds = new Set(out.columns.filter((c) => c.to === 'event').map((c) => c.role));
+    if (out.columns.some((c) => c.to === 'event' && c.role === 'datePart' && c.part === 'year')) eventKinds.add('datePartYear');
+    const toNow = new Map(out.columns.map((c) => [c.index, c.to] as const));
+    const turnedAt: number[] = [];
+    const appendedAt: number[] = [];
+    rows.forEach((r, pos) => (turn.sampleColumn[r.line] === undefined ? appendedAt : turnedAt).push(pos));
+    const columnOf = new Map(Object.entries(turn.nameLine).map(([j, line]) => [line, Number(j)] as const));
+    /** What became of one turned cell: 'written', the reason it was not, or undefined when nothing explains it. */
+    const cellVerdict = (pos: number, col: number, raw: unknown): 'written' | LedgerReason | undefined => {
+      const to = toNow.get(col) ?? initialTo(col);
+      if (to === 'not-written') return 'column-not-read';
+      const own = rowCode[pos] || fate.column(col)?.[pos] || 0;
+      const ownReason = own === 0 ? undefined : LEDGER_REASONS[own - 1];
+      if (to === 'event') {
+        if (!(fate.events.has(rows[pos].line) || inp.levelLines?.has(rows[pos].line) === true)) return ownReason ?? rowReason[pos];
+        if (settled !== undefined) {
+          const role = out.columns.find((c) => c.index === col)?.role ?? roleKindOf(inp.mapping, col);
+          if (eventTrace(role, eventsAt.get(rows[pos].line) ?? [], eventKinds, { events: settled.events, cruiseText: settled.cruiseText }) === false) return 'not-in-event';
+        }
+        return 'written';
+      }
+      const flag = to === 'occurrence' ? occFlag.get(col) : meaFlag.get(col);
+      if (flag?.[pos] === 1) return 'written';
+      if (ownReason !== undefined) return ownReason;
+      const p = typeof raw === 'number' ? ({ status: Number.isFinite(raw) ? 'ok' : 'non-numeric' } as const) : parseNumber(raw as string, inp.decimalComma);
+      if (p.status === 'ok') return rowReason[pos];
+      return p.status === 'non-numeric' ? 'text-cell' : 'na-cell';
+    };
+    const counts = new Map<LedgerReason, number>();
+    const fates: LineFate[] = [];
+    let writtenLines = 0;
+    let unexplainedLines = 0;
+    let lostNumbers = 0;
+    for (const r of turn.source.rows) {
+      const col = columnOf.get(r.line);
+      if (col === undefined) {
+        const reason: LedgerReason = turn.blankNameLines.includes(r.line) ? 'turn-no-name' : 'nothing-to-record';
+        bump(counts, reason);
+        if ((NOT_UNDERSTOOD as readonly string[]).includes(reason)) lostNumbers++;
+        fates.push({ line: r.line, fate: reason, ...(reason === 'turn-no-name' ? { chain: [reason] } : {}) });
+        continue;
+      }
+      let wrote = false;
+      let unexplained = false;
+      const why: LedgerReason[] = [];
+      for (const pos of turnedAt) {
+        const raw = rows[pos].cells[col];
+        if (isBlank(raw)) continue;
+        const v = cellVerdict(pos, col, raw);
+        if (v === 'written') wrote = true;
+        else if (v === undefined) unexplained = true;
+        else if (!why.includes(v)) why.push(v);
+      }
+      const labels: LostCell[] = turn.labelColumns.filter((c) => !isBlank(r.cells[c])).map((index) => ({ index, reason: 'turned-label' }));
+      if (wrote) {
+        writtenLines++;
+        if (labels.length > 0) fates.push({ line: r.line, fate: 'written', lostCells: labels });
+        continue;
+      }
+      if (unexplained) {
+        unexplainedLines++;
+        fates.push({ line: r.line, fate: 'unexplained', ...(why.length > 0 ? { chain: why } : {}) });
+        continue;
+      }
+      // (a zero is the least of the reasons: a row that also has a bad cell is named by the bad cell)
+      const first = why.find((w) => w !== 'zero' && w !== 'zero-with-biomass') ?? why[0] ?? 'nothing-to-record';
+      bump(counts, first);
+      if ((NOT_UNDERSTOOD as readonly string[]).includes(first)) lostNumbers++;
+      const others = why.filter((w) => w !== first);
+      fates.push({ line: r.line, fate: first, ...(others.length > 0 ? { chain: others } : {}) });
+    }
+    // the rows the merge appended for samples only the description has: not turned, they keep the fate they have
+    let appended = 0;
+    for (const pos of appendedAt) {
+      appended++;
+      if (isWrittenAt(pos, rows[pos].line)) writtenLines++;
+      else {
+        const reason = rowReason[pos];
+        if (reason === undefined) unexplainedLines++;
+        else {
+          bump(counts, reason);
+          if ((NOT_UNDERSTOOD as readonly string[]).includes(reason)) lostNumbers++;
+        }
+      }
+    }
+    const appendedFates = lines.filter((l) => turn.sampleColumn[l.line] === undefined);
+    out.lines = [...fates, ...appendedFates].sort((a, b) => a.line - b.line);
+    out.notUnderstood = lostNumbers;
+    out.rows = { source: turn.source.rows.length + appended, written: writtenLines, skipped: LEDGER_REASONS.filter((r) => counts.has(r)).map((reason) => ({ reason, count: counts.get(reason)! })), unexplained: unexplainedLines };
+    judge();
+  };
   judge();
   if (pivot !== undefined) {
     pivotPass();
     PENDING.set(out, pivotPass);
+  }
+  if (turn !== undefined) {
+    turnPass();
+    PENDING.set(out, turnPass);
   }
   return out;
 }
@@ -977,8 +1087,9 @@ export function joinLedgers(merged: SheetLedger, info: SampleJoinInfo): { result
       moved.push(l);
       continue;
     }
-    const mine = (l.lostCells ?? []).filter((c) => c.index < rw);
-    for (const c of (l.lostCells ?? []).filter((x) => x.index >= rw)) {
+    // (a label cell of a turned sheet is a column of the SOURCE sheet: it is the results sheet's whatever its number)
+    const mine = (l.lostCells ?? []).filter((c) => c.index < rw || c.reason === 'turned-label');
+    for (const c of (l.lostCells ?? []).filter((x) => x.index >= rw && x.reason !== 'turned-label')) {
       const k = desIndexOf(c.index);
       if (k !== undefined) loseOnDescription(descriptionOf(l.line), { ...c, index: k });
     }
