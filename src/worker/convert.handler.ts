@@ -154,6 +154,8 @@ export function createConvertHandler(): ConvertHandler {
         for (const n of s.dropCopies ?? []) if (!(settings.dropCopies ??= []).includes(n)) settings.dropCopies.push(n);
         // the answers of an earlier run to the questions about rows: kept with their numbers, and the converter uses them only where the numbers are the same today
         for (const c of s.dropCopiesRows ?? []) if (!(settings.dropCopiesRows ??= []).some((x) => x.sheet === c.sheet)) settings.dropCopiesRows.push(c);
+        for (const c of s.ownRecords ?? []) if (!(settings.ownRecords ??= []).some((x) => x.sheet === c.sheet)) settings.ownRecords.push(c);
+        for (const c of s.keepCopiesRows ?? []) if (!(settings.keepCopiesRows ??= []).some((x) => x.sheet === c.sheet)) settings.keepCopiesRows.push(c);
         for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
         for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
         for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
@@ -324,6 +326,10 @@ export function createConvertHandler(): ConvertHandler {
       ...(Number.isInteger(s.dropCopiesCount) && (s.dropCopiesCount as number) >= 0 ? { dropCopiesCount: s.dropCopiesCount as number } : {}),
       ...(Number.isInteger(s.totalOnceCount) && (s.totalOnceCount as number) >= 0 ? { totalOnceCount: s.totalOnceCount as number } : {}),
       ...(s.dropCopiesFromFile === true ? { dropCopiesFromFile: true } : {}),
+      // "each row is its own record": only the boolean true; the copies answer only with its number (no bare keepCopies is forwarded, as for dropCopies)
+      ...(s.ownRecords === true ? { ownRecords: true, ...(s.ownRecordsFromFile === true ? { ownRecordsFromFile: true } : {}) } : {}),
+      ...(Number.isInteger(s.keepCopiesCount) && (s.keepCopiesCount as number) >= 0 ? { keepCopiesCount: s.keepCopiesCount as number } : {}),
+      ...(s.keepCopiesFromFile === true ? { keepCopiesFromFile: true } : {}),
       ...(s.totalOnceFromFile === true ? { totalOnceFromFile: true } : {}),
       ...(Number.isInteger(s.realCountsRows) && (s.realCountsRows as number) >= 0 ? { realCountsRows: s.realCountsRows as number } : {}),
       ...(Number.isInteger(s.realCountsRowsFile) && (s.realCountsRowsFile as number) >= 0 ? { realCountsRowsFile: s.realCountsRowsFile as number } : {}),

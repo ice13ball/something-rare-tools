@@ -17,6 +17,7 @@ import type { WormsLookup } from '../core/convert';
 import type { NercColumnDecision, NercDecisions, NercPick } from '../core/convert/nerc';
 import { keyHashes, resolveKeyHashes } from '../core/convert/keySetting';
 import { defaultKeyPrefix } from '../core/convert/sampleKey';
+import { ownRecordsEligible } from '../core/convert/ownRecords';
 
 /** What the user typed and chose for the quantity of one sheet. Empty strings mean "not chosen". */
 export interface QuantityForm {
@@ -71,6 +72,15 @@ export interface SheetChoice {
   dropCopiesFile?: number;
   /** The same number as the page recorded it when the person answered here (so the finding does not say "from the companion file"). */
   dropCopiesAnswer?: number;
+  /**
+   * The user's choice "each row is its own record" (a tick on the sheet's form, or a button on CONV-ID-DUPLICATE / CONV-TAXON-NO-QUANTITY). Shown and sent only where core's `ownRecordsEligible` holds. Never automatic;
+   * a companion file pre-ticks it (`ownRecordsFromFile`) only for a sheet with the same number of rows.
+   */
+  ownRecords?: boolean;
+  ownRecordsFromFile?: boolean;
+  /** Under ownRecords, the user's answer "keep identical rows as separate records" to CONV-ROW-COPIES, with the number of copies it was given for; and the same as a companion file recorded it (checked by the converter against today's analysis). */
+  keepCopiesAnswer?: number;
+  keepCopiesFile?: number;
   /** The same for "one occurrence per sample and taxon": the number of groups the companion file recorded. */
   totalOnceFile?: number;
   /** The same as the page recorded it. */
@@ -315,6 +325,21 @@ function declaredRequest(c: SheetChoice, m: Pick<SheetMapping, 'columns'>): Pick
   return { declaredPosition: { lat, lon, uncertaintyM }, ...(c.positionFromFile === true ? { declaredPositionFromFile: true } : {}) };
 }
 
+/**
+ * Whether "each row is its own record" means anything for a sheet of this drop: core's own test (`ownRecordsEligible`, the one place), fed with the sheet's choice (shape, profile mark), its roles and the
+ * summary's pivot mark. The page's tick, both buttons and the request all ask this and nothing else.
+ */
+export function ownRecordsAllowed(f: Pick<ConvertParseResult['files'][number], 'pivots'>, m: Pick<SheetMapping, 'sheet' | 'columns'>, c: Pick<SheetChoice, 'shape' | 'profile'>): boolean {
+  return ownRecordsEligible({ shape: c.shape, ...(c.profile ? { profile: {} } : {}), mapping: m as SheetMapping }, { pivot: f.pivots?.[m.sheet] });
+}
+
+/** What a sheet's own-records choice sends: the tick (only where it applies) and, under it, the copies answer with its number. A bare copies tick is never sent. */
+function ownRequest(c: SheetChoice, allowed: boolean): Pick<ConvertRequestBody['sheets'][number], 'ownRecords' | 'ownRecordsFromFile' | 'keepCopiesCount' | 'keepCopiesFromFile'> {
+  if (!allowed || c.ownRecords !== true) return {};
+  const keep = c.keepCopiesAnswer ?? c.keepCopiesFile;
+  return { ownRecords: true, ...(c.ownRecordsFromFile === true ? { ownRecordsFromFile: true } : {}), ...(keep === undefined || c.dropCopies ? {} : { keepCopiesCount: keep, ...(c.keepCopiesAnswer === undefined ? { keepCopiesFromFile: true } : {}) }) };
+}
+
 /** The request for the worker: the sheets the user kept, with their confirmed roles, shape and declaration. */
 export function requestOf(s: ConvertState): ConvertRequestBody {
   const sheets: ConvertRequestBody['sheets'] = [];
@@ -347,7 +372,7 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...declaredRequest(c, m), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...declaredRequest(c, m), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
@@ -364,12 +389,13 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
 }
 
 /** What a companion file recorded for a sheet that the converter checks against today's numbers (never a tick): copies, repeated totals and the reasons left out. */
-function fileAnswers(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'dropCopiesFile' | 'totalOnceFile' | 'leaveOutFile' | 'realCountsFile'> {
+function fileAnswers(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'dropCopiesFile' | 'keepCopiesFile' | 'totalOnceFile' | 'leaveOutFile' | 'realCountsFile'> {
   const real = settings.realCountsRows?.find((x) => x.sheet === sheet);
   const copies = settings.dropCopiesRows?.find((x) => x.sheet === sheet);
+  const kept = settings.keepCopiesRows?.find((x) => x.sheet === sheet);
   const once = settings.totalOnceGroups?.find((x) => x.sheet === sheet);
   const left = (settings.leaveOut ?? []).filter((x) => x.sheet === sheet).map((x) => ({ reason: x.reason, count: x.count, rows: x.rows }));
-  return { ...(copies === undefined ? {} : { dropCopiesFile: copies.count }), ...(once === undefined ? {} : { totalOnceFile: once.count }), ...(left.length === 0 ? {} : { leaveOutFile: left }), ...(real === undefined ? {} : { realCountsFile: real.count }) };
+  return { ...(copies === undefined ? {} : { dropCopiesFile: copies.count }), ...(kept === undefined ? {} : { keepCopiesFile: kept.count }), ...(once === undefined ? {} : { totalOnceFile: once.count }), ...(left.length === 0 ? {} : { leaveOutFile: left }), ...(real === undefined ? {} : { realCountsFile: real.count }) };
 }
 
 type SavedKey = NonNullable<ConvertParseResult['settings']['sampleKey']>[number];
@@ -411,6 +437,11 @@ function savedOrders(settings: ConvertParseResult['settings'], sheet: { name: st
   return columns.length === 0 ? {} : { dayMonthOrder: order, dayMonthOrderFile: columns };
 }
 
+/** "Each row is its own record" as a companion file recorded it: a pre-tick, only for a sheet of the same name with the same number of rows (the round-2 pattern: the question is open again for another file). */
+function savedOwnRecords(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'ownRecords' | 'ownRecordsFromFile'> {
+  return (settings.ownRecords ?? []).some((x) => x.sheet === sheet.name && x.rows === sheet.rowCount) ? { ownRecords: true, ownRecordsFromFile: true } : {};
+}
+
 /** The position a companion file recorded for a sheet of that name, as a pre-fill. It is filled whatever the roles (they are not in the file and may be proposed differently today); `declaredRequest` holds it back while it does not apply, and the form says so. */
 function savedPosition(settings: ConvertParseResult['settings'], sheet: string): Pick<SheetChoice, 'positionLat' | 'positionLon' | 'positionUncertainty' | 'positionFromFile'> {
   const d = (settings.declaredPosition ?? []).find((x) => x.sheet === sheet);
@@ -436,7 +467,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...fileAnswers(parsed.settings, sh.name), ...savedOwnRecords(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh.name), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;
@@ -453,6 +484,19 @@ export function dayMonthOrderSettingsOf(parsed: ConvertParseResult, choices: Rec
         const hash = keyHashes(sh.header, [Number(k)]);
         if (hash !== undefined && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, order, hash, rows: sh.rowCount });
       }
+    }
+  }
+  return out;
+}
+
+/** The sheets in use declared "each row is its own record" (where that applies), with the number of rows of the sheet: what the companion file keeps (a name and a count). */
+export function ownRecordsSettingsOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['ownRecords']> {
+  const out: NonNullable<ConvertSettings['ownRecords']> = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      const m = (mappings[f.fileId] ?? f.mappings).find((x) => x.sheet === sh.name);
+      if (c?.use === true && c.ownRecords === true && m !== undefined && ownRecordsAllowed(f, m, c) && !out.some((o) => o.sheet === sh.name)) out.push({ sheet: sh.name, rows: sh.rowCount });
     }
   }
   return out;

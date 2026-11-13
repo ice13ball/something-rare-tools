@@ -94,6 +94,12 @@ export interface ConvertSheetRequest {
   dropCopiesCount?: number;
   /** The count above was read from a companion file (not given on the page). */
   dropCopiesFromFile?: boolean;
+  /** The user's choice "each row is its own record" for a long sheet (only the boolean true counts; the core honours it only where `ownRecordsEligible` holds). `ownRecordsFromFile`: it was pre-ticked from a companion file. */
+  ownRecords?: boolean;
+  ownRecordsFromFile?: boolean;
+  /** Under ownRecords: the number of identical rows the answer "keep them as separate records" was given for (the core honours it only when today's analysis finds that many). A bare tick is never sent. */
+  keepCopiesCount?: number;
+  keepCopiesFromFile?: boolean;
   totalOnceFromFile?: boolean;
   totalOnceCount?: number;
   /** The number of rows the tick "these are real counts" covered; the core honours it only when today's analysis finds the same number. */

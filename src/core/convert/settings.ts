@@ -37,6 +37,9 @@ import type { ParsedFile } from '../types';
  *                     sets the tick on the column of that header in a sheet of the same name (a sheet name has no colon; the header is the rest of the line), and the user can change it on the page.
  *   dropCopiesRows=<count>:<sheet>  the user chose, on CONV-ROW-COPIES, to leave out the rows that are exact copies of an earlier row, and the analysis found <count> copies. Read as a PRE-TICK that holds only
  *                     when today's analysis of the sheet finds the same number of copies (core/convert/build.ts): for another file the question is open again. A count and a sheet name, never a value.
+ *   ownRecords=<rows>:<sheet>  (round 3) the person declared each row of the long sheet of that name its own record, for a sheet of <rows> rows. A PRE-TICK that holds only when the sheet has the same number of rows
+ *                     and still qualifies; the page says the choice came from the file, with "Ask again". A count and a sheet name, never a value.
+ *   keepCopiesRows=<count>:<sheet>  (round 3) under ownRecords, the person kept the identical rows as separate records, and the analysis found <count> copies. Holds only while today's analysis finds the same number.
  *   totalOnceGroups=<count>:<sheet>  the same for "one occurrence per sample and taxon" (CONV-QUANTITY-REPEATED): <count> is the number of groups of rows that repeat a total.
  *   leaveOut=<reason>:<count>:<rows>:<sheet>  the user answered "leave these rows out and list them" (CONV-ROW-NOT-UNDERSTOOD) for <count> rows of <reason> in a sheet of <rows> rows. Holds only while
  *                     today's sheet has the same number of rows and finds the same number of rows of that reason; otherwise the question is open again. Counts, a reason word and a sheet name, never a value.
@@ -75,6 +78,8 @@ export const TOTAL_ONCE_SETTING = 'totalOnce=';
 export const REAL_COUNTS_SETTING = 'realCounts=';
 export const DROP_COPIES_SETTING = 'dropCopies=';
 export const DROP_COPIES_ROWS_SETTING = 'dropCopiesRows=';
+export const OWN_RECORDS_SETTING = 'ownRecords=';
+export const KEEP_COPIES_ROWS_SETTING = 'keepCopiesRows=';
 export const TOTAL_ONCE_GROUPS_SETTING = 'totalOnceGroups=';
 export const REAL_COUNTS_ROWS_SETTING = 'realCountsRows=';
 export const LEAVE_OUT_SETTING = 'leaveOut=';
@@ -123,6 +128,10 @@ export interface ConvertSettings {
   dropCopies?: string[];
   /** The sheets whose copies the user left out, with the number of copies the analysis found. A pre-tick that holds only for the same count. */
   dropCopiesRows?: { sheet: string; count: number }[];
+  /** The long sheets the person declared "each row is its own record", with the number of rows of the sheet. A pre-tick that holds only for the same number of rows. */
+  ownRecords?: { sheet: string; rows: number }[];
+  /** Under ownRecords: the sheets whose identical rows the person kept as separate records, with the number of copies the analysis found. Holds only for the same count. */
+  keepCopiesRows?: { sheet: string; count: number }[];
   /** The sheets whose repeated totals the user took once, with the number of groups found. A pre-tick that holds only for the same count. */
   totalOnceGroups?: { sheet: string; count: number }[];
   /** The reasons the user left out and listed, by sheet, with the rows of that reason and the rows of the sheet. Holds only for the same two numbers. */
@@ -230,11 +239,16 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     else if (v.startsWith(TOTAL_ONCE_SETTING)) addName((settings.totalOnce ??= []), v.slice(TOTAL_ONCE_SETTING.length));
     else if (v.startsWith(REAL_COUNTS_SETTING)) addName((settings.realCounts ??= []), v.slice(REAL_COUNTS_SETTING.length));
     else if (v.startsWith(DROP_COPIES_SETTING)) addName((settings.dropCopies ??= []), v.slice(DROP_COPIES_SETTING.length));
-    else if (v.startsWith(DROP_COPIES_ROWS_SETTING) || v.startsWith(TOTAL_ONCE_GROUPS_SETTING) || v.startsWith(REAL_COUNTS_ROWS_SETTING)) {
+    else if (v.startsWith(OWN_RECORDS_SETTING)) {
+      const m = COUNT.exec(v.slice(OWN_RECORDS_SETTING.length));
+      const list = (settings.ownRecords ??= []);
+      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[2])) list.push({ sheet: m[2], rows: Number(m[1]) });
+    } else if (v.startsWith(KEEP_COPIES_ROWS_SETTING) || v.startsWith(DROP_COPIES_ROWS_SETTING) || v.startsWith(TOTAL_ONCE_GROUPS_SETTING) || v.startsWith(REAL_COUNTS_ROWS_SETTING)) {
+      const keep = v.startsWith(KEEP_COPIES_ROWS_SETTING);
       const copies = v.startsWith(DROP_COPIES_ROWS_SETTING);
       const real = v.startsWith(REAL_COUNTS_ROWS_SETTING);
-      const m = COUNT.exec(v.slice((copies ? DROP_COPIES_ROWS_SETTING : real ? REAL_COUNTS_ROWS_SETTING : TOTAL_ONCE_GROUPS_SETTING).length));
-      const list = copies ? (settings.dropCopiesRows ??= []) : real ? (settings.realCountsRows ??= []) : (settings.totalOnceGroups ??= []);
+      const m = COUNT.exec(v.slice((keep ? KEEP_COPIES_ROWS_SETTING : copies ? DROP_COPIES_ROWS_SETTING : real ? REAL_COUNTS_ROWS_SETTING : TOTAL_ONCE_GROUPS_SETTING).length));
+      const list = keep ? (settings.keepCopiesRows ??= []) : copies ? (settings.dropCopiesRows ??= []) : real ? (settings.realCountsRows ??= []) : (settings.totalOnceGroups ??= []);
       if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[2])) list.push({ sheet: m[2], count: Number(m[1]) });
     } else if (v.startsWith(LEAVE_OUT_SETTING)) {
       const m = LEAVE_OUT.exec(v.slice(LEAVE_OUT_SETTING.length));
@@ -320,6 +334,8 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.biomassBasis ?? []).filter((b) => b.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((b) => line([SETTING_ROW, `${BIOMASS_BASIS_SETTING}${b.basis}:${b.sheet}`, '', '', ''])),
       ...(settings.perOccurrence ?? []).filter((o) => o.header.length <= MAX_SETTING_NAME && o.sheet.length <= MAX_SETTING_NAME && !o.sheet.includes(':')).slice(0, MAX_SETTING_SHEETS).map((o) => line([SETTING_ROW, `${PER_OCCURRENCE_SETTING}${o.on ? 'on' : 'off'}:${o.sheet}:${o.header}`, '', '', ''])),
       ...(settings.dropCopiesRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${DROP_COPIES_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
+      ...(settings.ownRecords ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME && Number.isInteger(c.rows) && c.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${OWN_RECORDS_SETTING}${c.rows}:${c.sheet}`, '', '', ''])),
+      ...(settings.keepCopiesRows ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME && Number.isInteger(c.count) && c.count >= 0).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${KEEP_COPIES_ROWS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.totalOnceGroups ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${TOTAL_ONCE_GROUPS_SETTING}${c.count}:${c.sheet}`, '', '', ''])),
       ...(settings.leaveOut ?? []).filter((c) => c.sheet.length <= MAX_SETTING_NAME && /^[a-z][a-z-]{0,40}$/.test(c.reason)).slice(0, MAX_SETTING_SHEETS * 8).map((c) => line([SETTING_ROW, `${LEAVE_OUT_SETTING}${c.reason}:${c.count}:${c.rows}:${c.sheet}`, '', '', ''])),
       ...(settings.sampleKey ?? []).filter((k) => k.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(k.hashes) && Number.isInteger(k.rows) && k.rows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((k) => [

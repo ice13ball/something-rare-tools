@@ -164,3 +164,24 @@ describe('the declared position in the companion file (round 3, Task 11)', () =>
     expect(readMappingFile(textFile('c.sidecar.csv', text))).toBeDefined();
   });
 });
+
+describe('"each row is its own record" in the companion file (round 3, Task 13)', () => {
+  it('round-trips the tick with the rows it was given for, and the kept copies with their count; the file holds no value', () => {
+    const settings = { ownRecords: [{ sheet: 'Fish', rows: 3 }, { sheet: 'a:b.csv', rows: 12 }], keepCopiesRows: [{ sheet: 'Fish', count: 1 }] };
+    const text = writeConvertSidecar(settings);
+    expect(text).toContain('ownRecords=3:Fish');
+    expect(text).toContain('keepCopiesRows=1:Fish');
+    const read = readConvertSettings(textFile('c.sidecar.csv', text));
+    expect(read?.ownRecords).toEqual(settings.ownRecords);
+    expect(read?.keepCopiesRows).toEqual(settings.keepCopiesRows);
+  });
+
+  it('a line with no number, a repeated sheet and a fractional count are not kept; /check ignores the lines', () => {
+    const lines = ['ownRecords=Fish', 'ownRecords=x:Fish', 'ownRecords=3:Fish', 'ownRecords=4:Fish', 'keepCopiesRows=1.5:Fish', 'keepCopiesRows=2:Fish'];
+    const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
+    const read = readConvertSettings(textFile('c.sidecar.csv', text));
+    expect(read?.ownRecords).toEqual([{ sheet: 'Fish', rows: 3 }]);
+    expect(read?.keepCopiesRows).toEqual([{ sheet: 'Fish', count: 2 }]);
+    expect(readMappingFile(textFile('c.sidecar.csv', text))).toBeDefined();
+  });
+});

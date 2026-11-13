@@ -33,6 +33,8 @@ export interface ConvertSheetFormProps {
   hasStationColumn: boolean;
   /** a column of this sheet is mapped as latitude or longitude (even one blank in every row): no declared position is offered */
   hasPositionColumn?: boolean;
+  /** core's ownRecordsEligible holds for this sheet (a long sheet with a taxon column and no occurrenceID column): the tick "each row is its own record" is shown */
+  ownRecordsOffered?: boolean;
   choice: SheetChoice;
   onChange: (choice: SheetChoice) => void;
 }
@@ -43,7 +45,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, ownRecordsOffered, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -193,6 +195,29 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
               </div>
               <p id={`${id}-presence-help`} className="muted">
                 {t('convert.sheet.presence.help')}
+              </p>
+            </div>
+            )}
+
+            {ownRecordsOffered === true && (
+            <div className="convert-group">
+              <div className="choice-line">
+                <label className="inline-choice">
+                  <input
+                    type="checkbox"
+                    checked={choice.ownRecords === true}
+                    onChange={(e) => {
+                      // ticking is the person's own; unticking takes back the copies answer too (it belongs to this choice) and any pre-tick from a file
+                      const { ownRecords: _o, ownRecordsFromFile: _of, keepCopiesAnswer: _ka, keepCopiesFile: _kf, ...rest } = choice;
+                      onChange(e.target.checked ? { ...rest, ownRecords: true } : rest);
+                    }}
+                    aria-describedby={`${id}-own-help`}
+                  />
+                  <span>{t('convert.sheet.ownRecords')}</span>
+                </label>
+              </div>
+              <p id={`${id}-own-help`} className="muted">
+                {t('convert.sheet.ownRecords.help')}
               </p>
             </div>
             )}
