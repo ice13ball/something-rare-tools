@@ -3,6 +3,7 @@
 import type { Specs } from '../dataset';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, RawSheet } from '../types';
+import type { DeclaredOrder } from '../values/dates';
 import { columnOrder, declaredOrderStatus, detectDayMonthOrder, isAmbiguousDayMonth } from '../values/dates';
 import type { ConvertSheetInput } from './build';
 
@@ -59,20 +60,17 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
   const findings: Finding[] = [];
   // field header (in this sheet) -> the lines of its ambiguous cells that CONV-DATE-ORDER-UNDECLARED now names
   const named = new Map<string, Set<number>>();
-  for (const [index, header] of [...columns].sort((x, y) => x[0] - y[0])) {
-    const declared = sin.dayMonthOrder?.[index];
-    const entry = info?.columns[index];
-    // a lent column is the description's: its file, sheet, header and own index; a written (resolved) column holds dates already read
-    const where = entry?.side === 'description' ? { file: info!.description.file.fileName, sheet: info!.description.sheet.name, field: entry.header, index: entry.index } : { ...base, field: header, index };
+  type Where = { file: string; sheet: string; field: string; index: number };
+  // one column: the finding its cells and its declaration call for (UNDECLARED, CONTRADICTED or DECLARED), asked of the sheet the cells are in
+  const judgeColumn = (of: RawSheet, index: number, declared: DeclaredOrder | undefined, fromFile: boolean, where: Where): Ambiguous[] | undefined => {
     const cells: Ambiguous[] = [];
-    for (const r of sheet.rows) {
+    for (const r of of.rows) {
       const c = r.cells[index] ?? null;
       if (isAmbiguousDayMonth(c)) cells.push({ line: r.line, text: String(c).trim() });
     }
     if (declared === undefined) {
-      if (cells.length === 0 || detectDayMonthOrder(sheet.rows.map((r) => r.cells[index] ?? null)) !== 'unknown') continue;
+      if (cells.length === 0 || detectDayMonthOrder(of.rows.map((r) => r.cells[index] ?? null)) !== 'unknown') return undefined;
       const examples = [...new Set(cells.map((x) => x.text))].slice(0, 2);
-      named.set(header, new Set(cells.map((x) => x.line)));
       findings.push(
         makeConvertFinding('CONV-DATE-ORDER-UNDECLARED', {
           file: where.file,
@@ -82,14 +80,40 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
           params: { count: cells.length, examples: examples.join(', '), index: where.index, ...readings(examples[0]) },
         }),
       );
+      return cells;
+    }
+    const status = declaredOrderStatus(of, index, declared);
+    if (status === 'contradicted') {
+      findings.push(makeConvertFinding('CONV-DATE-ORDER-CONTRADICTED', { file: where.file, sheet: where.sheet, field: where.field, params: { declared, detected: columnOrder(of, index), index: where.index } }));
+    } else if (status === 'applied') {
+      findings.push(makeConvertFinding('CONV-DATE-ORDER-DECLARED', { file: where.file, sheet: where.sheet, field: where.field, params: { order: declared, index: where.index, ...(fromFile ? { fromFile: 'yes' } : {}) } }));
+    }
+    return undefined;
+  };
+  for (const [index, header] of [...columns].sort((x, y) => x[0] - y[0])) {
+    const entry = info?.columns[index];
+    if (entry?.side === 'description') {
+      // a lent column is the description's own: it is judged below, on the description sheet; here only its unreadable lines are taken out of ROW-DATE-UNPARSEABLE
+      // (when the description's own cells leave the order open)
+      const own = info!.description.sheet;
+      const mine = own.rows.map((r) => r.cells[entry.index] ?? null);
+      if (sin.dayMonthOrder?.[index] === undefined && detectDayMonthOrder(mine) === 'unknown') {
+        const lines = sheet.rows.filter((r) => isAmbiguousDayMonth(r.cells[index] ?? null)).map((r) => r.line);
+        if (lines.length > 0) named.set(header, new Set(lines));
+      }
       continue;
     }
-    const status = declaredOrderStatus(sheet, index, declared);
-    if (status === 'contradicted') {
-      findings.push(makeConvertFinding('CONV-DATE-ORDER-CONTRADICTED', { file: where.file, sheet: where.sheet, field: where.field, params: { declared, detected: columnOrder(sheet, index), index: where.index } }));
-    } else if (status === 'applied') {
-      const fromFile = sin.dayMonthOrderFromFile?.includes(index) === true;
-      findings.push(makeConvertFinding('CONV-DATE-ORDER-DECLARED', { file: where.file, sheet: where.sheet, field: where.field, params: { order: declared, index: where.index, ...(fromFile ? { fromFile: 'yes' } : {}) } }));
+    const cells = judgeColumn(sheet, index, sin.dayMonthOrder?.[index], sin.dayMonthOrderFromFile?.includes(index) === true, { ...base, field: header, index });
+    if (cells !== undefined) named.set(header, new Set(cells.map((x) => x.line)));
+  }
+  // the description's own date, datetime and time columns (lent as the date, compared with the results' own, or part of the join key): asked about and said on the description sheet,
+  // with their own index, whatever the merged sheet carries
+  if (info !== undefined) {
+    const rw = info.results.width;
+    const own = info.description.sheet;
+    for (const c of [...info.description.mapping.columns].sort((x, y) => x.index - y.index)) {
+      if (c.role.kind !== 'date' && c.role.kind !== 'datetime' && c.role.kind !== 'time') continue;
+      judgeColumn(own, c.index, sin.dayMonthOrder?.[rw + c.index], sin.dayMonthOrderFromFile?.includes(rw + c.index) === true, { file: info.description.file.fileName, sheet: own.name, field: own.header[c.index] ?? c.header, index: c.index });
     }
   }
   const trim = (collected: Finding[]): Finding[] => {

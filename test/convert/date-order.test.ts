@@ -157,6 +157,39 @@ describe('the join', () => {
     expect(rule(fromFile, 'CONV-DATE-ORDER-DECLARED')[0].params.fromFile).toBe('yes');
   });
 
+  it('a description date that is compared with the results sheet\'s own date is asked about on the description (count: its own cells)', () => {
+    const counts: Cell[][] = [['X01', TAX, 3, '2023-04-05'], ['X01', TAX, 4, '2023-04-05'], ['X02', TAX, 5, '2023-07-06']];
+    const samples: Cell[][] = [['X01', '5/4/2023', 61.1, 4.2], ['X02', '6/7/2023', 61.3, 4.6]];
+    const header: Cell[] = ['Sample', 'Taxon', 'Count', 'Date'];
+    const r = run(counts, samples, {}, {}, undefined, header);
+    const f = rule(r, 'CONV-DATE-ORDER-UNDECLARED');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ file: 'book.xlsx', sheet: 'Samples', field: 'Date', params: { count: 2, index: 1 } });
+    const declared = run(counts, samples, {}, { dayMonthOrder: { 1: 'dmy' } }, undefined, header);
+    expect(rule(declared, 'CONV-JOIN-CONFLICT')).toEqual([]);
+    expect(rule(declared, 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
+    const d = rule(declared, 'CONV-DATE-ORDER-DECLARED');
+    expect(d).toHaveLength(1);
+    expect(d[0]).toMatchObject({ sheet: 'Samples', params: { order: 'dmy', index: 1 } });
+  });
+
+  it('a description date that is part of the join key is asked about on the description', () => {
+    const counts: Cell[][] = [['X01', TAX, 3, '2023-04-05'], ['X02', TAX, 5, '2023-07-06']];
+    const samples: Cell[][] = [['X01', '5/4/2023', 61.1, 4.2], ['X02', '6/7/2023', 61.3, 4.6]];
+    const header: Cell[] = ['Sample', 'Taxon', 'Count', 'Date'];
+    const keyed = (descExtra: Partial<ConvertSheetInput>) => {
+      const file = xlsxFile('book.xlsx', { Counts: [header, ...counts], Samples: [['Sample', 'Date', 'Latitude', 'Longitude'], ...samples] });
+      const join: SampleJoinRequestCore = { results: 0, description: 1, keys: [{ results: 0, description: 0 }, { results: 3, description: 1 }], conflicts: [] };
+      return convert({ sheets: joinInputs([resultsInput(file, 'Counts'), descriptionInput(file, 'Samples', descExtra)], [join], []).sheets });
+    };
+    const f = rule(keyed({}), 'CONV-DATE-ORDER-UNDECLARED');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ sheet: 'Samples', params: { count: 2, index: 1 } });
+    const declared = keyed({ dayMonthOrder: { 1: 'dmy' } });
+    expect(rule(declared, 'CONV-JOIN-NO-MATCH')).toEqual([]);
+    expect(rule(declared, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(1);
+  });
+
   it('the results sheet and the description have each their own order', () => {
     const r = run([['X01', TAX, 3, '5/4/2023']], [['X01', '4/5/2023', 61.1, 4.2]], { dayMonthOrder: { 3: 'dmy' } }, { dayMonthOrder: { 1: 'mdy' } }, undefined, ['Sample', 'Taxon', 'Count', 'Date']);
     expect(rule(r, 'CONV-JOIN-CONFLICT')).toEqual([]);
