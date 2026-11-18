@@ -578,14 +578,28 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
 
   /**
    * "Decimal comma" or "Thousands separator" (or taking it back) for one column IN-DECIMAL-AMBIGUOUS asked about: the worker reads the file again with that column's cells read that way (before any pivot or turn).
-   * No column index changes, so only the file's summary and its proposals are replaced: the person's roles (mappings), choices, confirmations, acceptances, NERC picks and code proposals all stay. The worker keeps
+   * No column index changes, so only the file's summary and its proposals are replaced: the person's roles (mappings; a column still on the old proposal takes the new one), choices, confirmations, acceptances, NERC picks and code proposals all stay. The worker keeps
    * the answer only for a column the reader asked about; a stale answer is never applied.
    */
   const decimalChoice = async (fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<boolean> => {
     if (!parsed || pivotBusy) return false;
     setPivotBusy(true);
     try {
+      const old = parsed.files.find((x) => x.fileId === fileId);
       const f = await engine.decimalChoice(fileId, sheet, index, reading);
+      // a column whose role is still the OLD proposal (the person never changed it) takes the new proposal, since its cells now read differently (1,250,000 is a number, not text); a role the person set stays
+      if (old !== undefined) {
+        const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+        setMappings((prev) => ({
+          ...prev,
+          [fileId]: (prev[fileId] ?? old.mappings).map((m) => {
+            const was = old.proposals[m.sheet];
+            const now = f.proposals[m.sheet];
+            if (was === undefined || now === undefined) return m;
+            return { ...m, columns: m.columns.map((c) => { const o = was.find((p) => p.index === c.index); const n = now.find((p) => p.index === c.index); return o !== undefined && n !== undefined && same(c.role, o.role) && !same(n.role, o.role) ? { ...c, role: n.role } : c; }) };
+          }),
+        }));
+      }
       setParsed((p) => (p ? { ...p, files: p.files.map((x) => (x.fileId === fileId ? f : x)) } : p));
       return true;
     } catch (e) {

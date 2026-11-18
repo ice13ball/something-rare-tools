@@ -114,6 +114,32 @@ describe('answering does not reset the sheet', () => {
   });
 });
 
+describe('a column the answer makes readable', () => {
+  const COLS = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Calanus finmarchicus', 'Oithona similis'];
+  const TEXT = [COLS.join(';'), 'S1;k1;2023-06-14;55,5;3,5;1,250,000;1,250,000', 'S2;k2;2023-06-14;56,5;3,5;2,000,000;2,000,000', 'S3;k3;2023-06-14;57,5;3,5;1,250;1,250'].join('\n') + '\n';
+  const roleOf = (h: string) => (screen.getByLabelText(`${h}: Meaning`) as HTMLSelectElement).value;
+
+  it('takes the new proposal where the person never changed the role, and keeps the role the person set', async () => {
+    await load([{ name: 'hauls.csv', text: TEXT }]);
+    const before = roleOf('Calanus finmarchicus');
+    expect(before).toBe('ignore');
+    expect(roleOf('Oithona similis')).toBe('ignore');
+    fireEvent.change(screen.getByLabelText('Oithona similis: Meaning'), { target: { value: 'variable' } });
+    await idle();
+    // both columns are asked about: answer each one
+    for (let i = 0; i < 2; i++) {
+      const asked = item('IN-DECIMAL-AMBIGUOUS');
+      if (asked === null) break;
+      fireEvent.click(button(asked, T['convert.finding.thousandsSeparator']));
+      await waitFor(() => expect(document.querySelectorAll('li[data-rule="CONV-DECIMAL-DECLARED"]').length).toBe(i + 1));
+      await idle();
+    }
+    expect(item('IN-DECIMAL-AMBIGUOUS')).toBeNull();
+    expect(roleOf('Calanus finmarchicus')).toBe('taxonHeader');
+    expect(roleOf('Oithona similis')).toBe('variable');
+  });
+});
+
 describe('the companion file', () => {
   const line = (rows: number, reading: 'decimal' | 'thousands' = 'thousands', header = HEADER) => writeConvertSidecar({ decimalReading: [{ sheet: 'hauls.csv', reading, hash: keyHashes(header, [CHL])!, rows }] });
   const parsed = (text: string, companion?: string): Promise<ConvertParseResult> =>
