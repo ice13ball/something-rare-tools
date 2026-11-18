@@ -93,7 +93,7 @@ describe('decodeText', () => {
   });
 
   it('at most three differing words, each at most 30 characters', () => {
-    const r = decodeText(bytes(0xf8, ...ascii(' a;'), 0xf8, ...ascii(',b\t'), 0xf8, ...ascii(' c '), 0xf8, ...ascii(' d'), ...Array(40).fill(0xf8)));
+    const r = decodeText(bytes(0xf8, ...ascii('a;'), 0xf8, ...ascii('b,'), 0xf8, ...ascii('c\t'), 0xf8, ...ascii('d '), ...Array(40).fill(0xf8)));
     expect(r.readings?.[1].words.split(', ')).toHaveLength(3);
     const long = decodeText(bytes(...Array(40).fill(0xf8)));
     expect(long.readings?.every((x) => x.words.length <= 30)).toBe(true); // one long word, once
@@ -109,5 +109,27 @@ describe('decodeText', () => {
   it('NULs in a UTF-8 or 8-bit file are not UTF-16', () => {
     expect(decodeText(bytes(0x41, 0x42, 0, 0x43, 0x44, 0x45, 0x46, 0x47)).encoding).toBe('utf-8');
     expect(decodeText(bytes(0x41, 0, 0x42, 0x43, 0xf3, 0x45, 0x46, 0x47)).fallback).toBe(true);
+  });
+
+  it('windows-1252 reads 0x80-0x9F as its own letters in Node as in a browser', () => {
+    const r = decodeText(bytes(...ascii('don'), 0x92, ...ascii('t;'), 0x80), 'windows-1252');
+    expect(r.text).toBe('don’t;€');
+  });
+
+  it('every example slot holds a different word', () => {
+    const row = [...ascii('S'), 0xe8, ...ascii('vre;')];
+    const r = decodeText(bytes(...row, ...row, ...row, ...ascii('Kr'), 0xf8, ...ascii('yer;')));
+    expect(r.readings?.[1].words).toBe('Sèvre, Krøyer');
+  });
+
+  it('a control character in an example word is shown as U+00XX', () => {
+    const r = decodeText(bytes(...ascii('don'), 0x92, ...ascii('t')));
+    expect(r.readings?.[0].words).toBe('donU+0092t');
+    expect(r.readings?.[1].words).toBe('don’t');
+  });
+
+  it('quotes and | cut words', () => {
+    const r = decodeText(bytes(...ascii('"Kr'), 0xf8, ...ascii('yer"|"S'), 0xe8, ...ascii('vre"')));
+    expect(r.readings?.[1].words).toBe('Krøyer, Sèvre');
   });
 });

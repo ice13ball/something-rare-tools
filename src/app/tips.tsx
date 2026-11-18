@@ -159,7 +159,7 @@ const DEFS = {
   layout: { label: 'layout.title', rule: 'IN-LAYOUT-UNSUPPORTED' },
   roles: { label: 'mapping.role', values: { roles: rolesList } },
   hemisphere: { label: 'role.hemisphere', rule: 'ROW-HEMISPHERE-CONFLICT' },
-  encoding: { label: 'tip.encoding.label', rule: 'IN-ENCODING-FALLBACK' },
+  encoding: { label: 'tip.encoding.label', rule: 'IN-ENCODING-AMBIGUOUS' },
   singleCruise: {
     label: 'confirm.singleCruise',
     rule: 'ROW-SHIP-SPEED',

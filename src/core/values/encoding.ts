@@ -34,7 +34,20 @@ function strictUtf8(bytes: Uint8Array): string | null {
   }
 }
 
-const WORD_CUT = /[\s;,\t]/;
+const WORD_CUT = /[\s;,\t"'|]/;
+// windows-1252 0x80-0x9F as the WHATWG standard (and every browser) reads it; Node's own decoder returns C1 controls there
+const CP1252_80 = '\u20AC\u0081\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u008D\u017D\u008F\u0090\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u009D\u017E\u0178';
+function decode1252(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 4096) {
+    const chunk = bytes.subarray(i, i + 4096);
+    out += String.fromCharCode(...Array.from(chunk, (b) => (b >= 0x80 && b <= 0x9f ? CP1252_80.charCodeAt(b - 0x80) : b)));
+  }
+  return out;
+}
+const decodeLegacy = (bytes: Uint8Array, enc: LegacyEncoding): string => (enc === 'windows-1252' ? decode1252(bytes) : new TextDecoder(enc).decode(bytes));
+/** A control character is shown as its code point, never as an empty-looking gap. */
+const visible = (w: string): string => w.replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`);
 const MAX_WORD = 30;
 const MAX_WORDS = 3;
 
@@ -80,6 +93,7 @@ function strictUtf16(bytes: Uint8Array, kind: 'le' | 'be'): string | null {
 function differingWords(texts: readonly string[], pick: number): string {
   const ref = texts[0];
   const ranges: [number, number][] = [];
+  const taken = new Set<string>();
   let next = 0; // the first position after the whole word the last range came from
   for (let i = 0; i < ref.length && ranges.length < MAX_WORDS; i++) {
     if (i < next || texts.every((t) => t[i] === ref[i])) continue;
@@ -89,9 +103,12 @@ function differingWords(texts: readonly string[], pick: number): string {
     while (a > 0 && i - a < MAX_WORD && !WORD_CUT.test(ref[a - 1])) a--;
     let b = i + 1;
     while (b < ref.length && b - a < MAX_WORD && !WORD_CUT.test(ref[b])) b++;
+    const w = ref.slice(a, b);
+    if (taken.has(w)) continue;
+    taken.add(w);
     ranges.push([a, b]);
   }
-  return ranges.map(([a, b]) => texts[pick].slice(a, b)).join(', ');
+  return ranges.map(([a, b]) => visible(texts[pick].slice(a, b))).join(', ');
 }
 
 /**
@@ -116,7 +133,7 @@ export function decodeText(bytes: Uint8Array, forced?: LegacyEncoding): DecodedT
     if (t !== null) return { text: t, encoding: 'utf-8', fallback: false };
   }
   const body = hasBom ? bytes.subarray(3) : bytes;
-  if (forced) return { text: new TextDecoder(forced).decode(body), encoding: forced, fallback: false };
+  if (forced) return { text: decodeLegacy(body, forced), encoding: forced, fallback: false };
   let win = false;
   for (const b of body) {
     if (WIN1250_ONLY.has(b)) {
@@ -128,7 +145,7 @@ export function decodeText(bytes: Uint8Array, forced?: LegacyEncoding): DecodedT
   const pickText = new TextDecoder(encoding).decode(body);
   const groups: { encodings: LegacyEncoding[]; text: string }[] = [];
   for (const enc of LEGACY_ENCODINGS) {
-    const text = enc === encoding ? pickText : new TextDecoder(enc).decode(body);
+    const text = enc === encoding ? pickText : decodeLegacy(body, enc);
     const g = groups.find((x) => x.text === text);
     if (g) g.encodings.push(enc);
     else groups.push({ encodings: [enc], text });

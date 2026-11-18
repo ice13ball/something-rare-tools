@@ -65,8 +65,9 @@ const en = {
   'tip.roles.logic': `The tool never guesses a unit: a column with no stated unit stays without one.
 {roles}`,
   'tip.encoding.does': `Shows which character encoding the file was read in; it decides whether accented letters and other special characters come out right.`,
-  'tip.encoding.logic': `• UTF-8 is tried first (with or without a BOM).
-• If the file is not valid UTF-8, the tool guesses an older encoding (windows-1250 or ISO-8859-2) and reports that it did.
+  'tip.encoding.logic': `• A file saved as UTF-16 (with a BOM, or letters stored as byte pairs with a zero) is read as UTF-16.
+• Otherwise UTF-8 is tried (with or without a BOM).
+• If the file is not valid UTF-8, the tool reads its bytes as windows-1250, ISO-8859-2 and windows-1252 and compares them: it uses windows-1250 or ISO-8859-2 and says so; when the readings differ it shows the differing words of each and blocks the export of a converted file until you say which one is right.
 • If characters look wrong, save the file as UTF-8 and load it again.`,
   'tip.singleCruise.does': `Switches on a test of whether the ship could have sailed between consecutive stations.`,
   'tip.singleCruise.logic': `• warning when the ship would have to sail faster than {extreme}, on both sides of a station ({extremeSrc})
@@ -572,8 +573,9 @@ const pl: Record<TipKey, string> = {
   'tip.roles.logic': `Narzędzie nigdy nie zgaduje jednostki: kolumna bez podanej jednostki pozostaje bez jednostki.
 {roles}`,
   'tip.encoding.does': `Pokazuje, w jakim kodowaniu znaków odczytano plik; od tego zależy, czy polskie litery i inne znaki specjalne wyświetlą się poprawnie.`,
-  'tip.encoding.logic': `• Najpierw sprawdzane jest UTF-8 (z BOM lub bez).
-• Jeśli plik nie jest poprawnym UTF-8, narzędzie próbuje odgadnąć starsze kodowanie (windows-1250 lub ISO-8859-2) i informuje o tym.
+  'tip.encoding.logic': `• Plik zapisany jako UTF-16 (z BOM albo z literami zapisanymi jako pary bajtów z zerem) jest czytany jako UTF-16.
+• W przeciwnym razie sprawdzane jest UTF-8 (z BOM lub bez).
+• Jeśli plik nie jest poprawnym UTF-8, narzędzie czyta jego bajty jako windows-1250, ISO-8859-2 i windows-1252 i porównuje je: używa windows-1250 lub ISO-8859-2 i informuje o tym; gdy odczyty się różnią, pokazuje różniące się słowa w każdym i blokuje eksport przekonwertowanego pliku, dopóki nie powiesz, który jest właściwy.
 • Jeśli znaki wyglądają źle, zapisz plik jako UTF-8 i wczytaj go jeszcze raz.`,
   'tip.singleCruise.does': `Włącza test, czy statek mógł w zapisanym czasie przepłynąć z jednej stacji do następnej.`,
   'tip.singleCruise.logic': `• ostrzeżenie, gdy statek musiałby płynąć szybciej niż {extreme}, zarówno na odcinku do stacji, jak i od niej ({extremeSrc})
@@ -1077,8 +1079,9 @@ const de: Record<TipKey, string> = {
   'tip.roles.logic': `Eine Einheit wird nie geraten: Eine Spalte ohne angegebene Einheit bleibt ohne Einheit.
 {roles}`,
   'tip.encoding.does': `Zeigt, in welcher Zeichenkodierung die Datei gelesen wurde; davon hängt ab, ob Umlaute und andere Sonderzeichen stimmen.`,
-  'tip.encoding.logic': `• Zuerst wird UTF-8 versucht (mit oder ohne BOM).
-• Ist die Datei kein gültiges UTF-8, rät das Werkzeug eine ältere Kodierung (windows-1250 oder ISO-8859-2) und meldet das.
+  'tip.encoding.logic': `• Eine als UTF-16 gespeicherte Datei (mit BOM oder mit Buchstaben als Bytepaare mit einer Null) wird als UTF-16 gelesen.
+• Sonst wird UTF-8 versucht (mit oder ohne BOM).
+• Ist die Datei kein gültiges UTF-8, liest das Werkzeug ihre Bytes als windows-1250, ISO-8859-2 und windows-1252 und vergleicht sie: Es verwendet windows-1250 oder ISO-8859-2 und meldet das; unterscheiden sich die Lesarten, zeigt es die abweichenden Wörter jeder Lesart und sperrt den Export einer konvertierten Datei, bis Sie sagen, welche stimmt.
 • Sehen Zeichen falsch aus, speichern Sie die Datei als UTF-8 und laden Sie sie erneut.`,
   'tip.singleCruise.does': `Schaltet eine Prüfung ein, ob das Schiff zwischen aufeinanderfolgenden Stationen hätte fahren können.`,
   'tip.singleCruise.logic': `• Warnung, wenn das Schiff auf beiden Seiten einer Station schneller als {extreme} fahren müsste ({extremeSrc})
@@ -1582,8 +1585,9 @@ const fr: Record<TipKey, string> = {
   'tip.roles.logic': `Une unité n'est jamais devinée : une colonne sans unité indiquée reste sans unité.
 {roles}`,
   'tip.encoding.does': `Indique l'encodage de caractères avec lequel le fichier a été lu ; il décide si les lettres accentuées et les autres caractères spéciaux sortent correctement.`,
-  'tip.encoding.logic': `• UTF-8 est essayé en premier (avec ou sans BOM).
-• Si le fichier n'est pas de l'UTF-8 valide, l'outil devine un encodage plus ancien (windows-1250 ou ISO-8859-2) et le signale.
+  'tip.encoding.logic': `• Un fichier enregistré en UTF-16 (avec BOM, ou avec des lettres stockées en paires d'octets avec un zéro) est lu en UTF-16.
+• Sinon, UTF-8 est essayé (avec ou sans BOM).
+• Si le fichier n'est pas de l'UTF-8 valide, l'outil lit ses octets en windows-1250, ISO-8859-2 et windows-1252 et les compare : il utilise windows-1250 ou ISO-8859-2 et le signale ; quand les lectures diffèrent, il montre les mots qui diffèrent dans chacune et bloque l'export d'un fichier converti jusqu'à ce que vous disiez laquelle est la bonne.
 • Si des caractères semblent faux, enregistrez le fichier en UTF-8 et rechargez-le.`,
   'tip.singleCruise.does': `Active un test : le navire a-t-il pu naviguer entre des stations consécutives ?`,
   'tip.singleCruise.logic': `• avertissement si le navire devrait filer à plus de {extreme} des deux côtés d'une station ({extremeSrc})

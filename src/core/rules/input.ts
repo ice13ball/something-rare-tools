@@ -344,12 +344,12 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     exportPolicy: 'block',
     params: ['encoding', 'readings', 'count'],
     plain: {
-      pl: `Plik nie jest zapisany w UTF-8, a jego litery czytają się inaczej w {count} kodowaniach: {readings}. Odczytano go jako {encoding}. Powiedz, którego kodowania używa plik.`,
-      en: `This file is not UTF-8, and its letters read differently in {count} encodings: {readings}. It was read as {encoding}. Say which one the file uses.`,
-      de: `Diese Datei ist nicht UTF-8, und ihre Buchstaben werden in {count} Kodierungen unterschiedlich gelesen: {readings}. Sie wurde als {encoding} gelesen. Sagen Sie, welche Kodierung die Datei verwendet.`,
-      fr: `Ce fichier n'est pas en UTF-8, et ses lettres se lisent différemment dans {count} encodages : {readings}. Il a été lu en {encoding}. Dites quel encodage le fichier utilise.`,
+      pl: `Plik nie jest zapisany w UTF-8, a jego litery czytają się na {count} różne sposoby: {readings}. Odczytano go jako {encoding}. Sprawdź, który odczyt jest poprawny, i zapisz plik ponownie jako UTF-8.`,
+      en: `This file is not UTF-8, and its letters read {count} different ways: {readings}. It was read as {encoding}. Check which reading is right and save the file again as UTF-8.`,
+      de: `Diese Datei ist nicht UTF-8, und ihre Buchstaben lassen sich auf {count} verschiedene Arten lesen: {readings}. Sie wurde als {encoding} gelesen. Prüfen Sie, welche Lesart stimmt, und speichern Sie die Datei erneut als UTF-8.`,
+      fr: `Ce fichier n'est pas en UTF-8, et ses lettres se lisent de {count} façons différentes : {readings}. Il a été lu en {encoding}. Vérifiez quelle lecture est la bonne et enregistrez de nouveau le fichier en UTF-8.`,
     },
-    technical: `{file}: bytes are not valid UTF-8 and read differently in {count} of windows-1250, ISO-8859-2 and windows-1252 ({readings}); decoded as {encoding}. Code pages that decode the bytes alike count as one reading, so a file all three read alike raises IN-ENCODING-FALLBACK instead. The checker reports and keeps its pick; the converter blocks until the person names the encoding.`,
+    technical: `{file}: bytes are not valid UTF-8 and read {count} different ways across windows-1250, ISO-8859-2 and windows-1252 ({readings}); decoded as {encoding}. Code pages that decode the bytes alike count as one reading, so a file all three read alike raises IN-ENCODING-FALLBACK instead. The checker reports and keeps its pick; the converter blocks until the person names the encoding.`,
   },
   {
     id: 'IN-DECIMAL-COMMA',
