@@ -25,7 +25,7 @@ import type { RuleSpec } from './spec';
  *   IN-LAYOUT-UNSUPPORTED   reason, reasons   English phrase from LayoutPlan.unsupported; JSON of LayoutPlan.unsupportedReasons (codes, rendered per language by renderPlain)
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
- *   IN-DECIMAL-AMBIGUOUS    column, index, count, asDecimal, asThousands   a column of a decimal-comma file whose every comma value has exactly three digits after the comma; value = the first such cell; lines = every comma cell of the column (the cells count counts)
+ *   IN-DECIMAL-AMBIGUOUS    column, index, count, asDecimal, asThousands (+ optional thousandsSeen = the first cell of the column written with comma thousands groups, e.g. 1,250,000; it does not settle the column)   a column of a decimal-comma file whose every comma value has exactly three digits after the comma; value = the first such cell; lines = every comma cell of the column (the cells count counts)
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
  *   IN-HEADER-UNITS-READ    count, example    columns that got a unit from the row under the header (at least 1; the row's line is in `lines`), and the first of them as it now reads ('a [h]'); file + sheet
  *   IN-HEADER-UNITS-NAMED   (none)   a row of units under a header whose names all carry their units already: not a data row (the row's line is in `lines`); file + sheet
@@ -363,6 +363,17 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       de: `In der Spalte „{column}“ hat jede Zahl mit Komma drei Ziffern danach ({count} {+count:Zelle|Zellen}), daher kann „{value}“ {asDecimal} oder {asThousands} bedeuten. Sie wurden mit Dezimalkomma gelesen ({asDecimal}). Prüfen Sie, was die Datei meint.`,
       fr: `Dans la colonne « {column} », chaque nombre avec une virgule a trois chiffres après elle ({count} {+count:cellule|cellules}), donc « {value} » peut valoir {asDecimal} ou {asThousands}. Ils ont été lus avec une virgule décimale ({asDecimal}). Vérifiez ce que veut dire le fichier.`,
     },
+    plainIf: [
+      {
+        param: 'thousandsSeen',
+        plain: {
+          pl: `Kolumna ma też wartość „{thousandsSeen}” z przecinkami jako separatorami tysięcy, więc przecinek może tu oznaczać tysiące; pozostałe liczby odczytano jako dziesiętne.`,
+          en: `The column also holds "{thousandsSeen}", written with commas as thousands separators, so these numbers may be thousands; the tool still read the others as decimals.`,
+          de: `Die Spalte enthält auch „{thousandsSeen}“, mit Kommas als Tausendertrennzeichen geschrieben, daher könnten diese Zahlen Tausender sein; das Werkzeug hat die übrigen dennoch als Dezimalzahlen gelesen.`,
+          fr: `La colonne contient aussi « {thousandsSeen} », écrit avec des virgules comme séparateurs de milliers, donc ces nombres peuvent être des milliers ; l'outil a pourtant lu les autres comme des décimales.`,
+        },
+      },
+    ],
     technical: `{file} sheet {sheet}: column {index} "{column}": every cell with a comma ({count}) has exactly three digits after it, so the comma may be a decimal comma ({asDecimal}) or a thousands separator ({asThousands}) for "{value}". Read as decimal; the file does not say which. Judged per column over all rows: one value with 1, 2 or 4 or more decimals settles it.`,
   },
   {

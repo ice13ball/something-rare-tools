@@ -70,8 +70,13 @@ describe('parseCsvText', () => {
       expect(amb('S;D;T\nA;1,250;1,5\nB;1.250,5;2,5\nC;2,500;2,5\n').filter((x) => x.params?.column === 'D')).toEqual([]);
     });
 
-    it('does not ask when a cell in the column is written with comma groups (1,250,000)', () => {
-      expect(amb('S;D;T\nA;1,250;1,5\nB;1,250,000;2,5\nC;2,500;2,5\n').filter((x) => x.params?.column === 'D')).toEqual([]);
+    it('still asks when a cell in the column is written with comma groups (1,250,000), and says so', () => {
+      const a = amb('S;D;T\nA;1,250;1,5\nB;1,250,000;2,5\nC;2,500;2,5\n').filter((x) => x.params?.column === 'D');
+      expect(a).toHaveLength(1);
+      expect(a[0].params).toMatchObject({ thousandsSeen: '1,250,000', count: 2, asDecimal: '1.25', asThousands: '1250' });
+      expect(renderPlain(a[0], 'pl')).toContain('1,250,000');
+      expect(renderPlain(a[0], 'en')).toContain('1,250,000');
+      expect(amb('S;D\nA;1,250\nB;2,500\n')[0].params).not.toHaveProperty('thousandsSeen');
     });
 
     it('judges the whole column: a settling value past row 50 settles it, and a long column of three-digit values is asked once', () => {
