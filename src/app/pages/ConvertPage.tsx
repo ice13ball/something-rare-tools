@@ -7,7 +7,7 @@ import type { WormsChoice, WormsRecord } from '../../core/convert';
 import { EMPTY_METADATA, refreshPrefill } from '../../core/convert/metadata';
 import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { UiKey } from '../../core/i18n/ui';
-import type { Finding, SheetMapping } from '../../core/types';
+import type { Finding, SheetMapping, TurnDeclaration } from '../../core/types';
 import { track } from '../analytics';
 import { getConvertEngine } from '../../worker/convert.client';
 import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
@@ -30,7 +30,7 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -381,7 +381,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const own: OwnRecordsView = { offered: (f) => ownSheetOf(f).allowed, on: (f) => ownSheetOf(f).on };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'ownRecords' | 'keepCopies'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'openTurn' | 'ownRecords' | 'keepCopies'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
@@ -391,6 +391,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       const box = lat?.closest('details');
       if (box) box.open = true;
       lat?.focus();
+      return;
+    }
+    // "The samples are the columns…": opens that sheet's declaration and puts the cursor in its first field. Nothing is answered here: the person picks the column.
+    if (choice === 'openTurn') {
+      const select = [...document.querySelectorAll<HTMLSelectElement>('select[data-turn-name]')].find((el) => el.dataset.turnName === `${file.fileName}\u0000${f.sheet}`);
+      const box = select?.closest('details');
+      if (box) box.open = true;
+      select?.focus();
       return;
     }
     // (a sample without a date is left out by its blank date cells: the reason is fixed and the number is that of the lines, not of the samples)
@@ -505,11 +513,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
    * The user's choice about a long environmental sheet (read it as a normal table; key columns that describe the measurement). The worker reads the sheet again; its columns may change, so the
    * roles, the sheet's decisions and everything keyed by its column indexes start again for that sheet. Nothing else is touched.
    */
-  const pivotChoice = async (fileId: string, sheet: string, off: boolean, describes: number[]): Promise<void> => {
+  const reread = async (fileId: string, sheet: string, ask: () => Promise<ConvertFileSummary>): Promise<void> => {
     if (!parsed || pivotBusy) return;
     setPivotBusy(true);
     try {
-      const f = await engine.pivotChoice(fileId, sheet, off, describes);
+      const f = await ask();
       const mapping = f.mappings.find((m) => m.sheet === sheet);
       if (!mapping) return;
       const prefix = `${fileId}\u0000${sheet}\u0000`;
@@ -534,6 +542,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     } finally {
       setPivotBusy(false);
     }
+  };
+  const pivotChoice = (fileId: string, sheet: string, off: boolean, describes: number[]): Promise<void> => reread(fileId, sheet, () => engine.pivotChoice(fileId, sheet, off, describes));
+  /** "The samples are the columns" (or taking it back): the worker turns the sheet before the roles are proposed, so the roles, the sheet's decisions and everything keyed by its columns start again. */
+  const turnChoice = async (fileId: string, sheet: string, turn: TurnDeclaration | null): Promise<void> => {
+    await reread(fileId, sheet, () => engine.turnChoice(fileId, sheet, turn));
+    // a join names columns of the sheet by number, and the numbers are other ones now: the person is asked about the pair again
+    setJoins((prev) => prev.filter((j) => !([j.results, j.description] as { fileId: string; sheet: string }[]).some((r) => r.fileId === fileId && r.sheet === sheet)));
   };
 
   /** What a code proposal was made for: the shape and the roles. A proposal shown for other roles is stale and not shown. */
@@ -920,6 +935,16 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     return out;
   })();
 
+  /** The declaration "the samples are the columns" for a sheet: the sheet as dropped (to pick its columns) and what was declared for it. Not offered where the sheet was read through its pivot. */
+  const turnPropsOf = (f: ConvertFileSummary, sheet: string): { turn?: NonNullable<React.ComponentProps<typeof ConvertSheetForm>['turn']> } => {
+    if (f.pivots?.[sheet] !== undefined) return {};
+    const source = f.turnSource?.[sheet];
+    const header = source?.header ?? f.sheets.find((x) => x.name === sheet)?.header;
+    if (header === undefined) return {};
+    const declared = f.turned?.[sheet];
+    return { turn: { header, busy: pivotBusy, ...(declared === undefined ? {} : { turned: declared }), onTurn: (turn) => void turnChoice(f.fileId, sheet, turn) } };
+  };
+
   const downloadCompanion = (): void => {
     // the profile mark and the approval of depth-based level IDs are kept by sheet name (a pre-tick when the file is dropped again, nothing more)
     const profile = parsed ? profileSettingsOf(parsed, choices) : { profileSheets: [], profileDepthIds: [], profileIgnoreCast: [] };
@@ -936,6 +961,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const realCountsRows = said.filter((f) => f.ruleId === 'CONV-QUANTITY-REAL-COUNTS').map((f) => ({ sheet: f.sheet as string, count: Number(f.params.count) }));
     const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
     const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
+    const turned = parsed ? turnedSettingsOf(parsed, choices) : [];
     const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
     const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];
@@ -944,7 +970,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1139,6 +1165,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     hasStationColumn={m.columns.some((c) => c.role.kind === 'station')}
                     hasPositionColumn={m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude')}
                     ownRecordsOffered={ownRecordsAllowed(f, m, choice)}
+                    {...turnPropsOf(f, m.sheet)}
                     choice={choice}
                     onChange={(c) => setChoices((prev) => ({ ...prev, [key]: c }))}
                   />
@@ -1625,7 +1652,7 @@ interface OwnRecordsView {
   on: (f: Finding) => boolean;
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { findings: Finding[]; own?: OwnRecordsView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { findings: Finding[]; own?: OwnRecordsView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1633,6 +1660,15 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
         <li key={`${f.ruleId}:${i}`} data-rule={f.ruleId}>
           {f.file !== undefined && f.sheet !== undefined && f.file !== '' && <span className="muted">{f.sheet === f.file ? f.file : t('convert.finding.where', { file: f.file, sheet: f.sheet })}: </span>}
           {sentenceWithList(plainOf(f, lang), formatLines(f.lines, MAX_LINE_RANGES), { lines: new Set(f.lines).size })}
+          {typeof f.params.turnedColumn === 'string' && f.params.turnedColumn !== '' && <> {t(f.params.turnedColumn.includes(', ') ? 'convert.turn.columnMany' : 'convert.turn.columnOne', { columns: f.params.turnedColumn })}</>}
+          {f.ruleId === 'CONV-SHEET-TRANSPOSED' && f.params.reason !== 'header-units' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="turn-open" onClick={() => onChoose(f, 'openTurn')}>
+                {t('convert.finding.turn')}
+              </button>
+            </>
+          )}
           {f.ruleId === 'CONV-ID-DUPLICATE' && typeof f.params.column === 'string' && f.params.column !== '' && onUseReplicate !== undefined && (
             <>
               {' '}
@@ -1756,7 +1792,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { own?: OwnRecordsView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { own?: OwnRecordsView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

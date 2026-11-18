@@ -12,7 +12,7 @@ import type { WormsLookup } from '../core/convert/worms';
 import type { SheetLedger } from '../core/convert/ledger';
 import type { SheetKeyReport } from '../core/convert/sampleKey';
 import type { ConflictGroup } from '../core/convert/sampleJoin';
-import type { Finding, SheetMapping } from '../core/types';
+import type { Finding, SheetMapping, TurnDeclaration } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
 /** A file of the converter's drop: /check's file summary (sheets, layout, mappings, proposals, samples) with the converter overlay's proposals. */
@@ -36,6 +36,13 @@ export interface ConvertFileSummary extends FileSummary {
   pivots?: Record<string, PivotNote>;
   /** The long sheets the user chose to read as normal tables (their names), so that the page can offer the way back. */
   pivotOff?: string[];
+  /**
+   * by sheet name, only for a sheet the person declared "the samples are the columns" and that was TURNED (core/convert/turn.ts): the declaration, and `fromFile` when it was pre-ticked from a companion file.
+   * The sheet in `sheets`, `mappings`, `proposals` and `samples` is the turned one. The source sheet itself is never sent (no message carries a sheet twice): `turnSource` has what the page needs of it.
+   */
+  turned?: Record<string, TurnDeclaration & { fromFile?: true }>;
+  /** by sheet name, for each turned sheet: the header and the number of rows of the sheet as dropped (to show the declaration, to offer its columns again and to write the companion file). */
+  turnSource?: Record<string, { header: string[]; rows: number }>;
   /** by sheet name, only for a sheet that looks transposed (species or variables in rows; core/convert/transposed.ts): the page offers "read as a normal table" next to the blocking message. */
   transposedSheets?: Record<string, 'transposed' | 'transposed-taxa' | 'header-units'>;
 }
@@ -217,7 +224,7 @@ export interface ConvertView {
    * (open or answered; the answer itself is the page's, not sent back), each with the results sheet it belongs to. Entries are capped at 500 per group; `count` is the true number of samples.
    */
   sampleJoin: {
-    proposals: { results: SheetRef; description: SheetRef; keys: { results: number; description: number }[]; covered: number; samples: number; long?: true }[];
+    proposals: { results: SheetRef; description: SheetRef; keys: { results: number; description: number }[]; covered: number; samples: number; long?: true; turned?: true }[];
     conflicts: (Omit<ConflictGroup, 'answer'> & { results: SheetRef })[];
     /** The sheets that can be the results sheet of a join and have none confirmed: the person may declare a join for them even where no proposal appears (declare-first, no role guessed from values). */
     resultsSheets: SheetRef[];
@@ -268,6 +275,8 @@ export interface ConvertProtocol {
   proposeCodes: { req: { fileId: string; sheet: string; mapping: SheetMapping; shape?: ConvertShape; extra?: number[] }; res: CodeProposalView | null };
   /** The user's choice about a long environmental sheet: read it as a normal table (`off`), and which key columns describe the measurement, not the sample. The file is read again; the answer is its new summary. */
   pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
+  /** The person's declaration "the samples are the columns" for a sheet (`turn`), or taking it back (`null`). The file is read again (long pivot, then turn) and the answer is its new summary. An index outside the sheet, or a name column that is also declared not a sample, is ignored: the summary comes back unchanged. */
+  turnChoice: { req: { fileId: string; sheet: string; turn: TurnDeclaration | null }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
   notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
   /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
@@ -290,6 +299,7 @@ export interface ConvertEngine {
   convert(body: ConvertRequestBody): Promise<ConvertView>;
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping, shape?: ConvertShape, extra?: number[]): Promise<CodeProposalView | null>;
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
+  turnChoice(fileId: string, sheet: string, turn: TurnDeclaration | null): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
   notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
   previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[], prefix?: string): Promise<SheetKeyReport | null>;

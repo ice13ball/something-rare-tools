@@ -12,6 +12,8 @@ import { joinInputs } from '../core/convert/sampleJoin';
 import type { ConflictAnswer, JoinOutcome, SampleJoinRequestCore } from '../core/convert/sampleJoin';
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
+import { turnConvertFile } from '../core/convert/turn';
+import { resolveKeyHashes } from '../core/convert/keySetting';
 import { transposedSheetReason } from '../core/convert/transposed';
 import { firstRowIsUnits } from '../core/recognize/layout';
 import { EMPTY_METADATA } from '../core/convert/metadata';
@@ -27,7 +29,7 @@ import type { SheetLedger } from '../core/convert/ledger';
 import { parseFile } from '../core/parse';
 import { decodeText } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
-import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping } from '../core/types';
+import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping, TurnDeclaration } from '../core/types';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult, SheetRef } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
 import { MAX_SAMPLES, type InputFile } from './protocol';
@@ -40,6 +42,12 @@ interface Held {
   original: ParsedFile;
   /** The user's choices about the long sheets of the file, by sheet name (read as a normal table; key columns that describe the measurement). */
   choices: Record<string, PivotChoice>;
+  /** The file after the long sheets are pivoted and before any turn: what the person's declarations "the samples are the columns" turn. */
+  pivoted: ParsedFile;
+  /** The person's declarations "the samples are the columns", by sheet name (checked against the sheet as dropped). Applied to a sheet that is not a long sheet read through its pivot. */
+  turns: Record<string, TurnDeclaration>;
+  /** The sheets whose declaration was pre-ticked from a companion file and not changed since. */
+  turnsFromFile: Set<string>;
 }
 
 const isTable = (f: ParsedFile): boolean => (f.kind === 'csv' || f.kind === 'xlsx' || f.kind === 'pangaea') && f.sheets.length > 0;
@@ -113,12 +121,14 @@ export function createConvertHandler(): ConvertHandler {
     const settings: ConvertSettings = result.settings;
     // the sheets a companion file of this drop says are read as normal tables (a pre-tick, by sheet name): known before any file is pivoted, whatever the order of the files
     const asTable = new Set<string>();
+    const turnPick = new Map<string, NonNullable<ConvertSettings['turned']>[number]>();
     biomassPick = new Map();
     occurrencePick = new Map();
     for (const parsed of parsedAll) {
       if (parsed.kind === 'metadata') continue;
       const cs = readConvertSettings(parsed);
       for (const n of cs?.longAsTable ?? []) asTable.add(n);
+      for (const t of cs?.turned ?? []) if (!turnPick.has(t.sheet)) turnPick.set(t.sheet, t);
       for (const b of cs?.biomassBasis ?? []) if (!biomassPick.has(b.sheet)) biomassPick.set(b.sheet, b.basis);
       for (const o of cs?.perOccurrence ?? []) {
         const m = occurrencePick.get(o.sheet) ?? new Map<string, boolean>();
@@ -159,6 +169,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const c of s.totalOnceGroups ?? []) if (!(settings.totalOnceGroups ??= []).some((x) => x.sheet === c.sheet)) settings.totalOnceGroups.push(c);
         for (const c of s.leaveOut ?? []) if (!(settings.leaveOut ??= []).some((x) => x.sheet === c.sheet && x.reason === c.reason)) settings.leaveOut.push(c);
         for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
+        for (const t of s.turned ?? []) if (!(settings.turned ??= []).some((x) => x.sheet === t.sheet)) settings.turned.push(t);
         for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
         for (const d of s.dayMonthOrder ?? []) if (!(settings.dayMonthOrder ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.dayMonthOrder.push(d);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
@@ -176,7 +187,16 @@ export function createConvertHandler(): ConvertHandler {
       // metadata file, with its file name as the source; the sheet itself is still a data table
       if (parsed.kind === 'pangaea' && parsed.embeddedMetadata) records.push(pangaeaHeaderRecord(parsed.embeddedMetadata));
       const fileId = `c${++seq}`;
-      const h: Held = { fileId, original: parsed, parsed, choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
+      const h: Held = { fileId, original: parsed, parsed, pivoted: parsed, turns: Object.create(null) as Record<string, TurnDeclaration>, turnsFromFile: new Set(), choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
+      // the turns of a companion file: a pre-tick that holds only when the columns are found again by their hashes and the sheet has the same number of rows
+      for (const sheet of parsed.sheets) {
+        const t = turnPick.get(sheet.name);
+        const decl = t === undefined ? undefined : declarationOf(sheet, t);
+        if (decl !== undefined) {
+          h.turns[sheet.name] = decl;
+          h.turnsFromFile.add(sheet.name);
+        }
+      }
       repivot(h);
       files.set(fileId, h);
       result.files.push(summaryOf(h));
@@ -193,7 +213,19 @@ export function createConvertHandler(): ConvertHandler {
    * see the same columns and the same indexes (core/convert/pivot.ts). The user's choices for the sheet (read it as a normal table; key columns that describe the measurement) are applied.
    */
   function repivot(h: Held): void {
-    h.parsed = pivotConvertFile(h.original, h.choices);
+    h.pivoted = pivotConvertFile(h.original, h.choices);
+    // a sheet that is read through its pivot is never turned; the turn of any other sheet is applied BEFORE the roles are proposed
+    const live = Object.fromEntries(Object.entries(h.turns).filter(([name]) => h.pivoted.sheets.some((s) => s.name === name && s.pivot === undefined)));
+    h.parsed = turnConvertFile(h.pivoted, live);
+  }
+
+  /** The declaration a saved turn stands for in this sheet, or undefined when a column is not found again by its hash, the name column is also a column that is not a sample, or the sheet has other rows. */
+  function declarationOf(sheet: ParsedFile['sheets'][number], t: NonNullable<ConvertSettings['turned']>[number]): TurnDeclaration | undefined {
+    if (sheet.rows.length !== t.rows) return undefined;
+    const name = resolveKeyHashes(sheet.header, t.nameHash);
+    const not = t.notSampleHashes === '' ? [] : resolveKeyHashes(sheet.header, t.notSampleHashes);
+    if (name === undefined || name.length !== 1 || not === undefined || not.includes(name[0])) return undefined;
+    return { nameColumn: name[0], notSamples: [...not].sort((a, b) => a - b), ...(t.headerDates === true ? { headerDates: true } : {}) };
   }
 
   /** What the page gets of one file: its sheets (the pivoted ones as they are read), proposals, mappings and suggestions, and what was done to its long sheets. */
@@ -209,7 +241,14 @@ export function createConvertHandler(): ConvertHandler {
       const transposed: Record<string, 'transposed' | 'transposed-taxa' | 'header-units'> = Object.create(null) as Record<string, 'transposed' | 'transposed-taxa' | 'header-units'>;
       // the long sheets the user chose to read as normal tables: listed, so that the page can offer the way back
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
+      const turned: NonNullable<ConvertFileSummary['turned']> = Object.create(null) as NonNullable<ConvertFileSummary['turned']>;
+      const turnSource: NonNullable<ConvertFileSummary['turnSource']> = Object.create(null) as NonNullable<ConvertFileSummary['turnSource']>;
       for (const sheet of parsed.sheets) {
+        if (sheet.turn !== undefined) {
+          // the declaration only: the source sheet (and the maps back to it) stay in the worker, no message carries a sheet twice
+          turned[sheet.name] = { nameColumn: sheet.turn.nameColumn, notSamples: [...sheet.turn.notSamples], ...(sheet.turn.headerDates === true ? { headerDates: true } : {}), ...(h.turnsFromFile.has(sheet.name) ? { fromFile: true as const } : {}) };
+          turnSource[sheet.name] = { header: [...sheet.turn.source.header], rows: sheet.turn.source.rows.length };
+        }
         if (sheet.pivot !== undefined) {
           const { cellLines: _lines, lines: _sourceLines, source: _source, ...note } = sheet.pivot;
           pivots[sheet.name] = note;
@@ -235,10 +274,10 @@ export function createConvertHandler(): ConvertHandler {
         const dict = dictionaryReason(sheet, p, parsed.decimalComma);
         if (dict !== undefined) dictionary[sheet.name] = dict;
         // a data dictionary is not tested (its rows are words); a pivoted sheet is skipped inside the test
-        const turned = dict === undefined ? transposedSheetReason(sheet, parsed, p) : undefined;
-        if (turned === 'transposed' || turned === 'transposed-taxa') transposed[sheet.name] = turned;
+        const looks = dict === undefined && sheet.turn === undefined ? transposedSheetReason(sheet, parsed, p) : undefined;
+        if (looks === 'transposed' || looks === 'transposed-taxa') transposed[sheet.name] = looks;
         // a first row that looks like units and was not folded (CONV-SHEET-UNITS-ROW): the same tick lets the user read the sheet as it stands when the call is wrong
-        else if (turned === undefined && dict === undefined && firstRowIsUnits(sheet, parsed.decimalComma) !== undefined) transposed[sheet.name] = 'header-units';
+        else if (looks === undefined && dict === undefined && sheet.turn === undefined && firstRowIsUnits(sheet, parsed.decimalComma) !== undefined) transposed[sheet.name] = 'header-units';
       }
       return {
         fileId,
@@ -254,6 +293,7 @@ export function createConvertHandler(): ConvertHandler {
         suggestedProfiles: profiles,
         ...(Object.keys(dictionary).length > 0 ? { dictionarySheets: dictionary } : {}),
         ...(Object.keys(pivots).length > 0 ? { pivots } : {}),
+        ...(Object.keys(turned).length > 0 ? { turned, turnSource } : {}),
         ...(pivotOff.length > 0 ? { pivotOff } : {}),
         ...(Object.keys(transposed).length > 0 ? { transposedSheets: transposed } : {}),
       };
@@ -268,6 +308,30 @@ export function createConvertHandler(): ConvertHandler {
     const choice: PivotChoice = { ...(req.off === true ? { off: true } : {}), ...(describes.length > 0 ? { describes } : {}) };
     if (choice.off === true || choice.describes !== undefined) h.choices[req.sheet] = choice;
     else delete h.choices[req.sheet];
+    repivot(h);
+    return summaryOf(h);
+  }
+
+  /**
+   * The person's declaration "the samples are the columns" for one sheet, or taking it back. The page's word is checked against the sheet as dropped: whole numbers inside its width, the name column
+   * not also a column that is not a sample; anything else is ignored and the summary comes back unchanged. A sheet read through its pivot is never turned. The file is read again (pivot, then turn).
+   */
+  function turnChoice(req: Extract<ConvertRequest, { type: 'turnChoice' }>): ConvertFileSummary {
+    const h = held(req.fileId);
+    const sheet = h.pivoted.sheets.find((s) => s.name === req.sheet);
+    if (sheet === undefined || sheet.pivot !== undefined) return summaryOf(h);
+    if (req.turn === null) {
+      delete h.turns[req.sheet];
+      h.turnsFromFile.delete(req.sheet);
+      repivot(h);
+      return summaryOf(h);
+    }
+    const t = req.turn;
+    const width = sheet.header.length;
+    const whole = (i: unknown): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < width;
+    if (t === undefined || typeof t !== 'object' || !whole(t.nameColumn) || !Array.isArray(t.notSamples) || !t.notSamples.every(whole) || t.notSamples.includes(t.nameColumn)) return summaryOf(h);
+    h.turns[req.sheet] = { nameColumn: t.nameColumn, notSamples: [...new Set(t.notSamples)].sort((a, b) => a - b), ...(t.headerDates === true ? { headerDates: true } : {}) };
+    h.turnsFromFile.delete(req.sheet);
     repivot(h);
     return summaryOf(h);
   }
@@ -463,7 +527,7 @@ export function createConvertHandler(): ConvertHandler {
   /** What the page needs to ask about the join: the proposals still open and the groups of differing values, with request indexes mapped back to sheet references. */
   function joinView(body: ConvertRequestBody, outcome: JoinOutcome): ConvertView['sampleJoin'] {
     return {
-      proposals: outcome.proposals.map((p) => ({ results: refOf(body, p.results), description: refOf(body, p.description), keys: p.keys, covered: p.covered, samples: p.samples, ...(p.long ? { long: true as const } : {}) })),
+      proposals: outcome.proposals.map((p) => ({ results: refOf(body, p.results), description: refOf(body, p.description), keys: p.keys, covered: p.covered, samples: p.samples, ...(p.long ? { long: true as const } : {}), ...(p.turned === true ? { turned: true as const } : {}) })),
       resultsSheets: outcome.resultsSheets.map((i) => refOf(body, i)),
       conflicts: outcome.conflicts.map(({ answer: _answer, entries, results, ...group }) => ({ ...group, entries: entries.slice(0, MAX_CONFLICT_ENTRIES), results: refOf(body, results) })),
     };
@@ -599,6 +663,8 @@ export function createConvertHandler(): ConvertHandler {
           return proposeCodes(req);
         case 'pivotChoice':
           return pivotChoice(req);
+        case 'turnChoice':
+          return turnChoice(req);
         case 'export':
           return exportArchive(req.export);
         case 'notWritten':

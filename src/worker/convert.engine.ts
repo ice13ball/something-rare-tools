@@ -10,6 +10,7 @@ export function makeConvertEngine(send: <K extends ConvertRequestType>(req: Extr
     convert: (body) => send({ type: 'convert', body }),
     proposeCodes: (fileId, sheet, mapping, shape, extra) => send({ type: 'proposeCodes', fileId, sheet, mapping, ...(shape === undefined ? {} : { shape }), ...(extra === undefined ? {} : { extra }) }),
     pivotChoice: (fileId, sheet, off, describes) => send({ type: 'pivotChoice', fileId, sheet, off, describes }),
+    turnChoice: (fileId, sheet, turn) => send({ type: 'turnChoice', fileId, sheet, turn }),
     export: (body) => send({ type: 'export', export: body }),
     notWritten: (body) => send({ type: 'notWritten', notWritten: body }),
     previewKey: (body, fileId, sheet, columns, prefix) => send({ type: 'previewKey', body, fileId, sheet, columns, ...(prefix === undefined ? {} : { prefix }) }),

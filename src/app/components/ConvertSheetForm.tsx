@@ -9,6 +9,8 @@ import { scaleClassesOf } from '../convertModel';
 import type { QuantityForm, SheetChoice } from '../convertModel';
 import { DEVICES } from '../../core/convert/vocab';
 import { FieldLabel, InfoTip } from './InfoTip';
+import { ConvertTurn } from './ConvertTurn';
+import type { ConvertTurnProps } from './ConvertTurn';
 
 export interface ConvertSheetFormProps {
   fileName: string;
@@ -35,6 +37,8 @@ export interface ConvertSheetFormProps {
   hasPositionColumn?: boolean;
   /** core's ownRecordsEligible holds for this sheet (a long sheet with a taxon column and no occurrenceID column): the tick "each row is its own record" is shown */
   ownRecordsOffered?: boolean;
+  /** "The samples are the columns": the sheet as dropped and what was declared for it (see ConvertTurn). Absent: no declaration is offered. */
+  turn?: Omit<ConvertTurnProps, 'fileName' | 'sheet'>;
   choice: SheetChoice;
   onChange: (choice: SheetChoice) => void;
 }
@@ -45,7 +49,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, ownRecordsOffered, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, ownRecordsOffered, turn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -91,6 +95,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
           </label>
         </div>
       )}
+      {turn !== undefined && choice.use && <ConvertTurn fileName={fileName} sheet={sheet} {...turn} />}
       {choice.use && (
         <>
           <div className="convert-group">

@@ -327,10 +327,10 @@ function declaredRequest(c: SheetChoice, m: Pick<SheetMapping, 'columns'>): Pick
 
 /**
  * Whether "each row is its own record" means anything for a sheet of this drop: core's own test (`ownRecordsEligible`, the one place), fed with the sheet's choice (shape, profile mark), its roles and the
- * summary's pivot mark. The page's tick, both buttons and the request all ask this and nothing else.
+ * summary's pivot and turn marks. The page's tick, both buttons and the request all ask this and nothing else.
  */
-export function ownRecordsAllowed(f: Pick<ConvertParseResult['files'][number], 'pivots'>, m: Pick<SheetMapping, 'sheet' | 'columns'>, c: Pick<SheetChoice, 'shape' | 'profile'>): boolean {
-  return ownRecordsEligible({ shape: c.shape, ...(c.profile ? { profile: {} } : {}), mapping: m as SheetMapping }, { pivot: f.pivots?.[m.sheet] });
+export function ownRecordsAllowed(f: Pick<ConvertParseResult['files'][number], 'pivots' | 'turned'>, m: Pick<SheetMapping, 'sheet' | 'columns'>, c: Pick<SheetChoice, 'shape' | 'profile'>): boolean {
+  return ownRecordsEligible({ shape: c.shape, ...(c.profile ? { profile: {} } : {}), mapping: m as SheetMapping }, { pivot: f.pivots?.[m.sheet], turn: f.turned?.[m.sheet] });
 }
 
 /** What a sheet's own-records choice sends: the tick (only where it applies) and, under it, the copies answer with its number. A bare copies tick is never sent. */
@@ -536,6 +536,24 @@ export function sampleKeySettingsOf(parsed: ConvertParseResult, choices: Record<
       const hashes = keyHashes(sh.header, c.sampleKey);
       // the name in front of the IDs is kept as it was used (the default too), so that the same file under another name keeps its IDs
       if (hashes !== undefined) out.push({ sheet: sh.name, hashes, rows: sh.rowCount, prefix: c.sampleKeyPrefix ?? defaultKeyPrefix(f.kind, f.fileName, sh.name) });
+    }
+  }
+  return out;
+}
+
+/**
+ * The sheets the person turned ("the samples are the columns") that are in use: the hash of the name column and of the columns that are not samples, taken from the sheet AS DROPPED, and the
+ * number of its rows: what the companion file keeps. Hashes and counts, never a header text or a value.
+ */
+export function turnedSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['turned']> {
+  const out: NonNullable<ConvertSettings['turned']> = [];
+  for (const f of parsed.files) {
+    for (const [sheet, decl] of Object.entries(f.turned ?? {})) {
+      const source = f.turnSource?.[sheet];
+      if (source === undefined || choices[sheetKey(f.fileId, sheet)]?.use !== true || out.some((o) => o.sheet === sheet)) continue;
+      const nameHash = keyHashes(source.header, [decl.nameColumn]);
+      const notSampleHashes = decl.notSamples.length === 0 ? '' : keyHashes(source.header, decl.notSamples);
+      if (nameHash !== undefined && notSampleHashes !== undefined) out.push({ sheet, nameHash, notSampleHashes, rows: source.rows, ...(decl.headerDates === true ? { headerDates: true as const } : {}) });
     }
   }
   return out;

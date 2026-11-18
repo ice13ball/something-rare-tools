@@ -327,7 +327,7 @@ export function ConvertSampleJoin({ view, files, joins, onChange, ledger, undeci
             <p>{t('convert.join.proposal', { results, description, keys: keysText(files, p.results, p.description, p.keys) })}</p>
             {p.long === true ? (
               <p className="notice" role="note">
-                {t('convert.join.long', { description })}
+                {t(p.turned === true ? 'convert.join.longTurned' : 'convert.join.long', { description })}
               </p>
             ) : (
               <>

@@ -185,3 +185,32 @@ describe('"each row is its own record" in the companion file (round 3, Task 13)'
     expect(readMappingFile(textFile('c.sidecar.csv', text))).toBeDefined();
   });
 });
+
+describe('the turn in the companion file', () => {
+  const nameHash = keyHashes(['Taxon', 'S1', 'S2', 'Total'], [0]) as string;
+  const notSampleHashes = keyHashes(['Taxon', 'S1', 'S2', 'Total'], [3]) as string;
+  const roundTrip = (turned: NonNullable<ReturnType<typeof readConvertSettings>>['turned']) => {
+    const text = writeConvertSidecar({ turned });
+    return { text, read: readConvertSettings(textFile('run.sidecar.csv', text) as never) };
+  };
+
+  it('round trips a turn with its hashes and rows, with and without the header dates and with no column that is not a sample', () => {
+    const { text, read } = roundTrip([
+      { sheet: 'Taxa', nameHash, notSampleHashes, rows: 2 },
+      { sheet: 'Fish: 2023', nameHash, notSampleHashes: '', rows: 7, headerDates: true },
+    ]);
+    expect(text).toContain(`turned=Taxa:${nameHash}:2:${notSampleHashes}`);
+    expect(read?.turned).toEqual([
+      { sheet: 'Taxa', nameHash, notSampleHashes, rows: 2 },
+      { sheet: 'Fish: 2023', nameHash, notSampleHashes: '', rows: 7, headerDates: true },
+    ]);
+  });
+
+  it('holds no header text, and a malformed line reads as nothing', () => {
+    const { text } = roundTrip([{ sheet: 'Taxa', nameHash, notSampleHashes, rows: 2 }]);
+    expect(text).not.toContain('Taxon');
+    const bad = `${text}(setting),turned=Taxa:nothash:2:\n(setting),turned=Taxa:${nameHash}:x:\n`;
+    expect(readConvertSettings(textFile('run.sidecar.csv', bad) as never)?.turned).toHaveLength(1);
+    expect(writeConvertSidecar({ turned: [{ sheet: 'Taxa', nameHash: 'Taxon', notSampleHashes: '', rows: 2 }] })).not.toContain('turned=');
+  });
+});

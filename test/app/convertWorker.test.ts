@@ -10,7 +10,8 @@ import { createConvertHandler, createDirectConvertEngine } from '../../src/worke
 import type { ConvertRequestBody, ConvertWireRequest } from '../../src/worker/convert.protocol';
 import type { InputFile } from '../../src/worker/protocol';
 import { RESULTS_CSV, SAMPLES_CSV } from '../convert/joinFixtures';
-import { COLLISION_CSV, L1_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV } from './convertHelpers';
+import { COLLISION_CSV, L1_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV, csvOf } from './convertHelpers';
+import { keyHashes } from '../../src/core/convert/keySetting';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const file = (name: string, text: string): InputFile => ({ name, bytes: enc(text), source: 'dropped' });
@@ -352,5 +353,104 @@ describe('the day/month order of the request (round 3, Task 8)', () => {
       expect(rule('CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
       expect(rule('CONV-DATE-ORDER-DECLARED')).toHaveLength(0);
     }
+  });
+});
+
+describe('turnChoice: the samples are the columns', () => {
+  const TAXA_HEADER = ['Taxon', 'S1', 'S2', 'Total'];
+  const TAXA = csvOf(TAXA_HEADER, [['Calanus finmarchicus', 4, 0, 4], ['Oithona similis', 1, 2, 3]]);
+  const open = async () => {
+    const e = createDirectConvertEngine();
+    const r = await e.parse([file('Taxa.csv', TAXA)]);
+    return { e, f: r.files[0] };
+  };
+
+  it('turns the sheet before the roles are proposed: the samples become the rows, the taxa the headers, and the source sheet is not sent', async () => {
+    const { e, f } = await open();
+    const sheet = f.sheets[0].name;
+    expect(f.turned).toBeUndefined();
+    const t = await e.turnChoice(f.fileId, sheet, { nameColumn: 0, notSamples: [3] });
+    expect(t.sheets[0].header).toEqual(['Sample', 'Calanus finmarchicus', 'Oithona similis']);
+    expect(t.sheets[0].rowCount).toBe(2);
+    expect(t.turned).toEqual({ [sheet]: { nameColumn: 0, notSamples: [3] } });
+    expect(t.turnSource).toEqual({ [sheet]: { header: TAXA_HEADER, rows: 2 } });
+    expect(t.proposals[sheet].find((p) => p.header === 'Sample')?.role.kind).toBe('sampleId');
+    expect(t.mappings[0].columns.find((c) => c.header === 'Calanus finmarchicus')?.role).toEqual({ kind: 'taxon', header: true });
+    // F13: the sheet the person dropped is in the worker only; the summary does not carry it twice
+    const text = JSON.stringify(t);
+    expect(text).not.toContain('"source"');
+    // the source header is there once (turnSource), not once more in the sheets, the mappings or the samples
+    expect(text.match(/"Total"/g)).toHaveLength(1);
+    expect(Object.keys(t.turned?.[sheet] ?? {}).sort()).toEqual(['nameColumn', 'notSamples']);
+  });
+
+  it('turn null takes the declaration back: the original columns again', async () => {
+    const { e, f } = await open();
+    const sheet = f.sheets[0].name;
+    await e.turnChoice(f.fileId, sheet, { nameColumn: 0, notSamples: [3] });
+    const back = await e.turnChoice(f.fileId, sheet, null);
+    expect(back.sheets[0].header).toEqual(TAXA_HEADER);
+    expect(back.turned).toBeUndefined();
+    expect(back.turnSource).toBeUndefined();
+  });
+
+  it('an index outside the sheet, a fraction or a name column that is also not a sample is ignored: the summary is unchanged', async () => {
+    const { e, f } = await open();
+    const sheet = f.sheets[0].name;
+    const before = JSON.stringify(await e.turnChoice(f.fileId, sheet, null));
+    for (const bad of [{ nameColumn: 9, notSamples: [] }, { nameColumn: 0, notSamples: [9] }, { nameColumn: 0.5, notSamples: [] }, { nameColumn: 0, notSamples: [0] }, { nameColumn: -1, notSamples: [] }]) {
+      expect(JSON.stringify(await e.turnChoice(f.fileId, sheet, bad))).toBe(before);
+    }
+  });
+
+  it('a long environmental sheet read through its pivot is never turned', async () => {
+    const e = createDirectConvertEngine();
+    const long = csvOf(['Station', 'Bottle', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'], [
+      ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Temperature', 'degC', 4.1],
+      ['ZL1', 'B1', '2020-05-01', 70.1, 20.2, 5, 'Salinity', 'PSU', 33.1],
+      ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Temperature', 'degC', 3.9],
+      ['ZL1', 'B2', '2020-05-01', 70.1, 20.2, 10, 'Salinity', 'PSU', 33.4],
+    ]);
+    const f = (await e.parse([file('piv.csv', long)])).files[0];
+    expect(f.pivots).toBeDefined();
+    const before = JSON.stringify(f);
+    const t = await e.turnChoice(f.fileId, f.sheets[0].name, { nameColumn: 0, notSamples: [] });
+    expect(JSON.stringify(t)).toBe(before);
+  });
+
+  it('a companion file turns a sheet of the same shape and says so (fromFile); other rows, or a column that is not found, turn nothing', async () => {
+    const hashes = (cols: number[]) => keyHashes(TAXA_HEADER, cols) as string;
+    const sidecar = (rows: number, name = hashes([0])) => writeConvertSidecar({ turned: [{ sheet: 'Taxa.csv', nameHash: name, notSampleHashes: hashes([3]), rows, headerDates: true }] });
+    const e = createDirectConvertEngine();
+    const same = (await e.parse([file('Taxa.csv', TAXA), file('run.sidecar.csv', sidecar(2))])).files[0];
+    expect(same.sheets[0].header).toEqual(['Sample', 'Date', 'Calanus finmarchicus', 'Oithona similis']);
+    expect(same.turned).toEqual({ 'Taxa.csv': { nameColumn: 0, notSamples: [3], headerDates: true, fromFile: true } });
+    // a third taxon row: the answer was given for another sheet
+    const more = csvOf(TAXA_HEADER, [['Calanus finmarchicus', 4, 0, 4], ['Oithona similis', 1, 2, 3], ['Pseudocalanus sp.', 3, 0, 3]]);
+    expect((await e.parse([file('Taxa.csv', more), file('run.sidecar.csv', sidecar(2))])).files[0].sheets[0].header).toEqual(TAXA_HEADER);
+    // the name column is no longer found
+    expect((await e.parse([file('Taxa.csv', TAXA), file('run.sidecar.csv', sidecar(2, keyHashes(['Other'], [0]) as string))])).files[0].sheets[0].header).toEqual(TAXA_HEADER);
+    // the person changes it: it is theirs now, not the file's
+    const f = same;
+    const changed = await e.turnChoice(f.fileId, 'Taxa.csv', { nameColumn: 0, notSamples: [] });
+    expect(changed.turned?.['Taxa.csv']).toEqual({ nameColumn: 0, notSamples: [] });
+  });
+
+  it('a turned description sheet is shown for a join and never joinable: the proposal says it was turned', async () => {
+    const e = createDirectConvertEngine();
+    const env = csvOf(['Variable', 'X01', 'X02', 'X03'], [['Station', 'ST-1', 'ST-2', 'ST-3'], ['Date', '2021-05-03', '2021-05-04', '2021-05-05'], ['Latitude', 61.1, 61.3, 61.5], ['Longitude', 4.2, 4.6, 4.9]]);
+    const p = await e.parse([file('results.csv', RESULTS_CSV), file('env.csv', env)]);
+    const [rf, ef] = p.files;
+    const t = await e.turnChoice(ef.fileId, 'env.csv', { nameColumn: 0, notSamples: [] });
+    expect(t.sheets[0].header).toEqual(['Sample', 'Station', 'Date', 'Latitude', 'Longitude']);
+    const v = await e.convert({
+      sheets: [
+        { fileId: rf.fileId, sheet: 'results.csv', mapping: rf.mappings[0], shape: 'long', quantity: { kind: 'count' } },
+        { fileId: t.fileId, sheet: 'env.csv', mapping: t.mappings[0], shape: 'wide' },
+      ],
+      options: {},
+      approvedSplits: {},
+    });
+    expect(v.sampleJoin.proposals.map((x) => ({ long: x.long, turned: x.turned }))).toEqual([{ long: true, turned: true }]);
   });
 });
