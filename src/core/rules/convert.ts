@@ -2796,6 +2796,18 @@ export const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
     de: ['des Beschreibungsblatts, dessen Schlüssel einen leeren Teil hat, daher kann der Wert keiner Probe zugeordnet werden', 'des Beschreibungsblatts, deren Schlüssel einen leeren Teil hat, daher können die Werte keiner Probe zugeordnet werden'],
     fr: ["de la feuille de description dont la clé a une partie vide : ses valeurs ne peuvent être données à aucun échantillon", "de la feuille de description dont la clé a une partie vide : leurs valeurs ne peuvent être données à aucun échantillon"],
   },
+  'turn-no-name': {
+    en: ['of the turned sheet with values and no name, so no column can be made of it', 'of the turned sheet with values and no name, so no column can be made of them'],
+    pl: ['obróconego arkusza z wartościami i bez nazwy, więc nie można z niego zrobić kolumny', 'obróconego arkusza z wartościami i bez nazwy, więc nie można z nich zrobić kolumn', 'obróconego arkusza z wartościami i bez nazwy, więc nie można z nich zrobić kolumn'],
+    de: ['des gedrehten Blatts mit Werten und ohne Namen, daraus kann keine Spalte werden', 'des gedrehten Blatts mit Werten und ohne Namen, daraus können keine Spalten werden'],
+    fr: ["de la feuille retournée avec des valeurs et sans nom : on n'en peut faire aucune colonne", "de la feuille retournée avec des valeurs et sans nom : on n'en peut faire aucune colonne"],
+  },
+  'turn-name-repeated': {
+    en: ['of the turned sheet whose name another row has, so no column is made of it', 'of the turned sheet whose name another row has, so no column is made of them'],
+    pl: ['obróconego arkusza, którego nazwę ma inny wiersz, więc nie powstaje z niego kolumna', 'obróconego arkusza, których nazwę ma inny wiersz, więc nie powstają z nich kolumny', 'obróconego arkusza, których nazwę ma inny wiersz, więc nie powstaje z nich kolumna'],
+    de: ['des gedrehten Blatts, dessen Namen eine andere Zeile hat, daher wird keine Spalte daraus', 'des gedrehten Blatts, deren Namen eine andere Zeile hat, daher wird keine Spalte daraus'],
+    fr: ["de la feuille retournée dont une autre ligne a le même nom : aucune colonne n'en est faite", "de la feuille retournée dont une autre ligne a le même nom : aucune colonne n'en est faite"],
+  },
   'not-in-event': {
     en: "whose value (a depth, a position or a date) the sample's event did not take",
     pl: [

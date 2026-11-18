@@ -11,6 +11,8 @@ import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { UI } from '../../src/core/i18n/ui';
 import { createDirectConvertEngine } from '../../src/worker/convert.handler';
 import { ownRecordsAllowed } from '../../src/app/convertModel';
+import { RESULTS_CSV, SAMPLES_CSV } from '../convert/joinFixtures';
+import type { ConvertEngine } from '../../src/worker/convert.protocol';
 import { chooseFiles, csvOf } from './convertHelpers';
 
 const item = (rule: string): HTMLElement | null => document.querySelector(`li[data-rule="${rule}"]`);
@@ -30,12 +32,12 @@ const TAXA = csvOf(HEADER, [['Calanus finmarchicus', 10, 4, 14], ['Oithona simil
 const idle = (): Promise<void> => waitFor(() => expect(document.querySelector('.convert-summary')?.getAttribute('aria-busy')).toBe('false'));
 const sheetBox = (name: string): HTMLElement => screen.getByRole('region', { name: T['convert.sheet.title'].replace('{sheet}', name).replace('{file}', name) });
 
-async function load(files: { name: string; text: string }[]) {
+async function load(files: { name: string; text: string }[], U: Record<string, string> = T) {
   const download = vi.fn();
   const view = render(<ConvertPage engine={createDirectConvertEngine()} download={download} downloadFile={vi.fn()} />);
   chooseFiles(view.container, files);
-  fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
-  await screen.findByRole('heading', { name: T['convert.columns.title'] });
+  fireEvent.click(screen.getByRole('button', { name: U['convert.read'] }));
+  await screen.findByRole('heading', { name: U['convert.columns.title'] });
   await idle();
   return { download };
 }
@@ -140,5 +142,90 @@ describe('own records', () => {
     const m = { sheet: 's', columns: [{ index: 0, header: 'Taxon', role: { kind: 'taxon' } }] } as never;
     expect(ownRecordsAllowed({}, m, { shape: 'long', profile: false })).toBe(true);
     expect(ownRecordsAllowed({ turned: { s: { nameColumn: 0, notSamples: [] } } }, m, { shape: 'long', profile: false })).toBe(false);
+  });
+});
+
+describe('turned rows that cannot become columns', () => {
+  const REPEATED = csvOf(HEADER, [['Calanus finmarchicus', 10, 4, 14], ['Oithona similis', 5, 8, 13], ['calanus finmarchicus', 1, 1, 2]]);
+  const BLANK = csvOf(HEADER, [['Calanus finmarchicus', 10, 4, 14], ['', 5, 8, 13], ['Oithona similis', 1, 1, 2]]);
+
+  it('a repeated row name is asked about in words that say so, and leaving the rows out is listed with their lines', async () => {
+    await load([{ name: 'Taxa.csv', text: REPEATED }]);
+    await turn('Taxa.csv', 'Taxon', ['Total']);
+    await waitFor(() => expect(item('CONV-ROW-NOT-UNDERSTOOD')).not.toBeNull());
+    const ask = item('CONV-ROW-NOT-UNDERSTOOD')!.textContent ?? '';
+    expect(ask).toMatch(/name another row has/);
+    expect(ask).not.toMatch(/not written/);
+    fireEvent.click(within(item('CONV-ROW-NOT-UNDERSTOOD')!).getByTestId('leave-out'));
+    await idle();
+    await waitFor(() => expect(item('CONV-ROW-LEFT-OUT')).not.toBeNull());
+    const left = item('CONV-ROW-LEFT-OUT')!.textContent ?? '';
+    expect(left).toMatch(/name another row has/);
+    expect(left).toMatch(/lines? 1, 3|lines? 1.3|lines? 2, 4/);
+    expect(item('CONV-TURN-NAME-REPEATED')).toBeNull();
+  });
+
+  it('a row with values and no name is asked about in words that say so', async () => {
+    await load([{ name: 'Taxa.csv', text: BLANK }]);
+    await turn('Taxa.csv', 'Taxon', ['Total']);
+    await waitFor(() => expect(item('CONV-ROW-NOT-UNDERSTOOD')).not.toBeNull());
+    expect(item('CONV-ROW-NOT-UNDERSTOOD')!.textContent).toMatch(/no name/);
+    expect(item('CONV-ROW-NOT-UNDERSTOOD')!.textContent).not.toMatch(/not written/);
+  });
+});
+
+describe('the joins of a sheet whose declaration did not change it', () => {
+  it('a declaration the engine refuses leaves a confirmed join in place', async () => {
+    const base = createDirectConvertEngine();
+    const engine: ConvertEngine = { ...base, turnChoice: () => Promise.reject(new Error('refused')) };
+    const view = render(<ConvertPage engine={engine} download={vi.fn()} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'results.csv', text: RESULTS_CSV }, { name: 'samples.csv', text: SAMPLES_CSV }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    await idle();
+    const proposal = await screen.findByTestId('join-proposal');
+    fireEvent.click(within(proposal).getByRole('button', { name: T['convert.join.confirm'] }));
+    await screen.findByTestId('join-confirmed');
+    await idle();
+    const box = sheetBox('samples.csv');
+    const select = box.querySelector('select[data-turn-name]') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: '0' } });
+    fireEvent.click(within(box).getByTestId('turn-apply'));
+    await screen.findByText(/refused/);
+    await idle();
+    expect(screen.queryByTestId('join-confirmed')).not.toBeNull();
+    expect(screen.queryByTestId('join-proposal')).toBeNull();
+  });
+});
+
+describe('own records and other languages', () => {
+  const FIELDS = (rows: (string | number)[][]) => csvOf(['Field', 'S1', 'S2'], rows);
+  it('the own-records tick is not on the page for a turned sheet, and is for the same columns unturned', async () => {
+    const OWN = (): HTMLElement | null => screen.queryByLabelText(T['convert.sheet.ownRecords']);
+    await load([{ name: 'Same.csv', text: csvOf(['Sample', 'Species', 'Count'], [['S1', 'Calanus finmarchicus', 4], ['S2', 'Oithona similis', 1]]) }]);
+    fireEvent.click(screen.getAllByLabelText(T['convert.shape.long'])[0]);
+    await idle();
+    expect(OWN()).not.toBeNull();
+    cleanup();
+    await load([{ name: 'Turned.csv', text: FIELDS([['Species', 'Calanus finmarchicus', 'Oithona similis'], ['Count', 4, 1]]) }]);
+    await turn('Turned.csv', 'Field');
+    fireEvent.click(screen.getAllByLabelText(T['convert.shape.long'])[0]);
+    await idle();
+    expect(OWN()).toBeNull();
+  });
+
+  it('the declaration is in the reader\'s language', async () => {
+    setLang('pl');
+    const P = UI.pl;
+    await load([{ name: 'Taxa.csv', text: TAXA }], P);
+    const box = screen.getByRole('region', { name: P['convert.sheet.title'].replace('{sheet}', 'Taxa.csv').replace('{file}', 'Taxa.csv') });
+    expect(within(box).getByText(P['convert.turn.open'])).toBeTruthy();
+    expect(within(box).getByText(P['convert.turn.help'])).toBeTruthy();
+    const select = box.querySelector('select[data-turn-name]') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: '0' } });
+    fireEvent.click(within(box).getByTestId('turn-apply'));
+    await within(box).findByTestId('turn-done');
+    expect(within(box).getByTestId('turn-done').textContent).toContain('Taxon (kolumna A)');
+    expect(within(box).getByTestId('turn-undo').textContent).toBe(P['convert.turn.undo']);
   });
 });

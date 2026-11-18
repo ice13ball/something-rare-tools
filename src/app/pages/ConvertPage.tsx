@@ -513,13 +513,13 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
    * The user's choice about a long environmental sheet (read it as a normal table; key columns that describe the measurement). The worker reads the sheet again; its columns may change, so the
    * roles, the sheet's decisions and everything keyed by its column indexes start again for that sheet. Nothing else is touched.
    */
-  const reread = async (fileId: string, sheet: string, ask: () => Promise<ConvertFileSummary>): Promise<void> => {
-    if (!parsed || pivotBusy) return;
+  const reread = async (fileId: string, sheet: string, ask: () => Promise<ConvertFileSummary>): Promise<boolean> => {
+    if (!parsed || pivotBusy) return false;
     setPivotBusy(true);
     try {
       const f = await ask();
       const mapping = f.mappings.find((m) => m.sheet === sheet);
-      if (!mapping) return;
+      if (!mapping) return false;
       const prefix = `${fileId}\u0000${sheet}\u0000`;
       const fresh = initialChoices({ ...parsed, files: [f] })[sheetKey(fileId, sheet)];
       setParsed((p) => (p ? { ...p, files: p.files.map((x) => (x.fileId === fileId ? f : x)) } : p));
@@ -537,17 +537,27 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       setCodesExtra({});
       setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
       setKeyPreview({});
+      return true;
     } catch (e) {
       setConvertError(messageOf(e));
+      return false;
     } finally {
       setPivotBusy(false);
     }
   };
-  const pivotChoice = (fileId: string, sheet: string, off: boolean, describes: number[]): Promise<void> => reread(fileId, sheet, () => engine.pivotChoice(fileId, sheet, off, describes));
+  const pivotChoice = (fileId: string, sheet: string, off: boolean, describes: number[]): Promise<void> => reread(fileId, sheet, () => engine.pivotChoice(fileId, sheet, off, describes)).then(() => undefined);
   /** "The samples are the columns" (or taking it back): the worker turns the sheet before the roles are proposed, so the roles, the sheet's decisions and everything keyed by its columns start again. */
   const turnChoice = async (fileId: string, sheet: string, turn: TurnDeclaration | null): Promise<void> => {
-    await reread(fileId, sheet, () => engine.turnChoice(fileId, sheet, turn));
-    // a join names columns of the sheet by number, and the numbers are other ones now: the person is asked about the pair again
+    const before = JSON.stringify(parsed?.files.find((x) => x.fileId === fileId)?.turned?.[sheet] ?? null);
+    let after = before;
+    const applied = await reread(fileId, sheet, async () => {
+      const f = await engine.turnChoice(fileId, sheet, turn);
+      after = JSON.stringify(f.turned?.[sheet] ?? null);
+      return f;
+    });
+    // a join names columns of the sheet by number, and the numbers are other ones once the sheet was turned or taken back: the person is asked about the pair again.
+    // Nothing is dropped when the sheet was not read again (a request in flight, an error) or the worker left the declaration as it was.
+    if (!applied || after === before) return;
     setJoins((prev) => prev.filter((j) => !([j.results, j.description] as { fileId: string; sheet: string }[]).some((r) => r.fileId === fileId && r.sheet === sheet)));
   };
 
