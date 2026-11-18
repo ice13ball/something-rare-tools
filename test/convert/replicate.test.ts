@@ -84,12 +84,12 @@ describe('a replicate column puts a level under the sample', () => {
 });
 
 describe('a colliding ignored column is named once (Task 8)', () => {
-  it('the duplicate names Frame; CONV-COLUMN-IGNORED does not name it again, and still names an ignored column that tells nothing apart', () => {
+  it('the duplicate names Frame; CONV-COLUMN-IGNORED-PROPOSED does not name it again, and still names an ignored column that tells nothing apart', () => {
     const header = [...HEADER, 'Remarks'];
     const rows = ROWS.map((r) => [...r, "see sheet"]);
     const r = convert({ sheets: [sheetInput(fileOf(header, rows), { quantity: { kind: 'count' }, shape: 'long', edit: { Frame: { kind: 'ignore' } } })] });
     expect(find(r.blocking, 'CONV-ID-DUPLICATE')[0]?.params.column).toBe('Frame');
-    const named = find(r.findings, 'CONV-COLUMN-IGNORED');
+    const named = find(r.findings, 'CONV-COLUMN-IGNORED-PROPOSED');
     expect(named).toHaveLength(1);
     expect(String(named[0].params.columns)).toBe('Remarks');
     expect(named[0].params.count).toBe(1);

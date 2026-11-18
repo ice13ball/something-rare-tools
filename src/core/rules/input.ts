@@ -325,7 +325,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-ENCODING-FALLBACK',
     category: 'input',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['encoding'],
     plain: {
       pl: `Plik nie jest zapisany w UTF-8, więc odczytano go jako {encoding}. Sprawdź, czy polskie i inne znaki specjalne wyglądają poprawnie.`,
@@ -333,13 +333,13 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       de: `Die Datei ist nicht als UTF-8 gespeichert und wurde daher als {encoding} gelesen. Prüfen Sie, ob Umlaute und Sonderzeichen richtig aussehen.`,
       fr: `Le fichier n'est pas enregistré en UTF-8 ; il a été lu en {encoding}. Vérifiez que les lettres accentuées s'affichent correctement.`,
     },
-    technical: `{file}: bytes are not valid UTF-8; decoded as {encoding}.`,
+    technical: `{file}: bytes are not valid UTF-8; decoded as {encoding}. The 8-bit pick is the reader's decision when the bytes are not UTF-8, so the outcome is accepted once before the export.`,
   },
   {
     id: 'IN-DECIMAL-COMMA',
     category: 'input',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: [],
     plain: {
       pl: `W tym pliku liczby mają przecinek dziesiętny (3,14). Odczytano je poprawnie; przy publikacji użyj kropki dziesiętnej.`,
@@ -347,7 +347,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       de: `Diese Datei schreibt Zahlen mit Dezimalkomma (3,14). Sie wurden richtig gelesen; verwenden Sie bei der Veröffentlichung einen Dezimalpunkt.`,
       fr: `Ce fichier écrit les nombres avec une virgule décimale (3,14). Ils ont été lus correctement ; utilisez un point décimal lors de la publication.`,
     },
-    technical: `{file}: decimal comma detected (semicolon or tab delimiter, most numeric cells look like 3,14); values parsed with ',' as the decimal separator.`,
+    technical: `{file}: decimal comma detected (semicolon or tab delimiter, most numeric cells look like 3,14); values parsed with ',' as the decimal separator. The decimal comma is the reader's decision (50 rows, 80 %), so the outcome is accepted once before the export.`,
   },
   {
     id: 'IN-HEADER-SHORT',

@@ -64,7 +64,7 @@ const QUANTITIES: { name: string; q: QuantityDeclaration }[] = [
 const withX = (shape: Shape, values: [Cell, Cell]): { header: string[]; rows: Cell[][] } => ({ header: BASE[shape].header, rows: BASE[shape].rows.map((r, i) => [...r.slice(0, -1), values[i]]) });
 const written = async (shape: Shape, role: ColumnRole, values: [Cell, Cell], q: QuantityDeclaration): Promise<{ tables: string; named: string[]; ignoredNamed: string[] }> => {
   const { header, rows } = withX(shape, values);
-  const e = await exportSheet(header, rows, { quantity: q, fullList: true, edit: { X: role }, shape });
+  const e = await exportSheet(header, rows, { quantity: q, fullList: true, edit: { X: role }, shape, ...(role.kind === 'ignore' ? { ignoreChosen: [header.length - 1] } : {}) });
   const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-NOT-EXPORTED');
   const g = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-IGNORED');
   return { tables: JSON.stringify(buildTables(e.dataset)), named: f ? String(f.params.columns).split(', ') : [], ignoredNamed: g ? String(g.params.columns).split(', ') : [] };
@@ -177,7 +177,7 @@ describe('a key column that is ignored and separates no rows (Task 8: nothing le
   };
 
   it('names each ignored column that holds a value, once, as information that blocks nothing; a column with no value in any row is not named', async () => {
-    const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Cast: { kind: 'ignore' }, Layer: { kind: 'ignore' }, Replicate: { kind: 'ignore' } } });
+    const e = await exportSheet(header, rows, { quantity: { kind: 'count' }, edit: { Cast: { kind: 'ignore' }, Layer: { kind: 'ignore' }, Replicate: { kind: 'ignore' } }, ignoreChosen: [6, 7, 8] });
     expect(e.findings.filter((x) => x.ruleId === 'CONV-COLUMN-IGNORED')).toHaveLength(1);
     expect(named(e)).toEqual(['Cast', 'Layer', 'Replicate']);
     expect(e.findings.find((x) => x.ruleId === 'CONV-COLUMN-IGNORED')).toMatchObject({ severity: 'info', params: { count: 3 } });

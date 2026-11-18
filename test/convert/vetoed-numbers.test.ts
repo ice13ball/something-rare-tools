@@ -33,11 +33,11 @@ describe('a Year beside a date and an eight-digit LotNo on a long sheet', () => 
     expect(r.Count.role.kind).toBe('quantity');
   });
 
-  it('are not in the archive, are named by CONV-COLUMN-IGNORED and by their own finding, and one click gives the measurement back', async () => {
+  it('are not in the archive, are named by CONV-COLUMN-IGNORED-PROPOSED and by their own finding, and one click gives the measurement back', async () => {
     const e = await exportSheet(HEADER, ROWS, { quantity: { kind: 'count' }, fullList: true });
     expect(tablesOf(e)).not.toContain('LotNo');
     expect(tablesOf(e)).not.toContain('20200101');
-    const ignored = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-IGNORED');
+    const ignored = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-IGNORED-PROPOSED');
     expect(String(ignored?.params.columns).split(', ').sort()).toEqual(['LotNo', 'Year']);
     const year = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-YEAR-IGNORED');
     const num = e.findings.find((f) => f.ruleId === 'CONV-COLUMN-NUMBER-IGNORED');

@@ -24,8 +24,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | IN-DATAVERSE-FILES | info | show | input | — | —<a id="IN-DATAVERSE-FILES"></a> |
 | IN-FILE-UNREADABLE | error | block | input | — | —<a id="IN-FILE-UNREADABLE"></a> |
 | IN-LAYOUT-UNSUPPORTED | error | block | input | — | —<a id="IN-LAYOUT-UNSUPPORTED"></a> |
-| IN-ENCODING-FALLBACK | info | show | input | — | —<a id="IN-ENCODING-FALLBACK"></a> |
-| IN-DECIMAL-COMMA | info | show | input | — | —<a id="IN-DECIMAL-COMMA"></a> |
+| IN-ENCODING-FALLBACK | info | accept | input | — | —<a id="IN-ENCODING-FALLBACK"></a> |
+| IN-DECIMAL-COMMA | info | accept | input | — | —<a id="IN-DECIMAL-COMMA"></a> |
 | IN-HEADER-SHORT | warning | accept | input | — | —<a id="IN-HEADER-SHORT"></a> |
 | IN-HEADER-UNITS-READ | info | show | input | — | —<a id="IN-HEADER-UNITS-READ"></a> |
 | IN-HEADER-UNITS-NAMED | info | show | input | — | —<a id="IN-HEADER-UNITS-NAMED"></a> |
@@ -84,7 +84,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-LONG-KEY-EXTENDED | info | show | B | — | —<a id="ROW-LONG-KEY-EXTENDED"></a> |
 | ROW-KEY-IGNORED | info | show | B | — | —<a id="ROW-KEY-IGNORED"></a> |
 | ROW-JOIN-KEY-BLANK | warning | show | B | — | —<a id="ROW-JOIN-KEY-BLANK"></a> |
-| ROW-DATE-YYMMDD | info | show | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
+| ROW-DATE-YYMMDD | info | accept | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
 | ROW-TZ-UNKNOWN | info | show | B | — | —<a id="ROW-TZ-UNKNOWN"></a> |
 | ROW-UNIT-MISSING | warning | show | B | — | —<a id="ROW-UNIT-MISSING"></a> |
 | ROW-HEADER-CODE-SHAPE | warning | show | B | — | [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.<a id="ROW-HEADER-CODE-SHAPE"></a> |
@@ -172,10 +172,10 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-DATE-ORDER-DECLARED | info | show | B | — | —<a id="CONV-DATE-ORDER-DECLARED"></a> |
 | CONV-ZERO-WITH-BIOMASS | warning | accept | B | — | —<a id="CONV-ZERO-WITH-BIOMASS"></a> |
 | CONV-SAMPLE-PER-ROW | warning | accept | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)](https://manual.obis.org/format_occurrence.html), "(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"<a id="CONV-SAMPLE-PER-ROW"></a> |
-| CONV-ZERO-SKIPPED | info | show | B | — | [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")<a id="CONV-ZERO-SKIPPED"></a> |
+| CONV-ZERO-SKIPPED | info | accept | B | — | [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")<a id="CONV-ZERO-SKIPPED"></a> |
 | CONV-SAMPLE-CONFLICT | error | block | B | — | —<a id="CONV-SAMPLE-CONFLICT"></a> |
 | CONV-REPLICATE-EVENTS | info | show | B | — | —<a id="CONV-REPLICATE-EVENTS"></a> |
-| CONV-TAXON-ATTRIBUTE-IGNORED | info | show | B | — | —<a id="CONV-TAXON-ATTRIBUTE-IGNORED"></a> |
+| CONV-TAXON-ATTRIBUTE-IGNORED | info | accept | B | — | —<a id="CONV-TAXON-ATTRIBUTE-IGNORED"></a> |
 | CONV-VALUE-PER-OCCURRENCE | info | show | B | — | —<a id="CONV-VALUE-PER-OCCURRENCE"></a> |
 | CONV-NERC-UNKNOWN | warning | accept | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-NERC-UNKNOWN"></a> |
 | CONV-NERC-UNIT-MISMATCH | warning | accept | B | — | [OBIS Manual, "Extended Measurement Or Fact" (manual.obis.org/format_emof.html; read 2026-10-25)](https://manual.obis.org/format_emof.html), "For measurementTypeID, measurementUnitID, and measurementValueID you must use controlled vocabulary terms."<a id="CONV-NERC-UNIT-MISMATCH"></a> |
@@ -186,11 +186,11 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-SHEET-TRANSPOSED | error | block | B | — | —<a id="CONV-SHEET-TRANSPOSED"></a> |
 | CONV-SHEET-UNITS-ROW | error | block | B | — | —<a id="CONV-SHEET-UNITS-ROW"></a> |
 | CONV-LONG-READ | info | show | B | — | —<a id="CONV-LONG-READ"></a> |
-| CONV-LONG-FLAG-COLUMNS | info | show | B | — | —<a id="CONV-LONG-FLAG-COLUMNS"></a> |
-| CONV-LONG-FLAG-PARAMETERS | info | show | B | — | —<a id="CONV-LONG-FLAG-PARAMETERS"></a> |
+| CONV-LONG-FLAG-COLUMNS | info | accept | B | — | —<a id="CONV-LONG-FLAG-COLUMNS"></a> |
+| CONV-LONG-FLAG-PARAMETERS | info | accept | B | — | —<a id="CONV-LONG-FLAG-PARAMETERS"></a> |
 | CONV-LONG-RENAMED | info | show | B | — | —<a id="CONV-LONG-RENAMED"></a> |
 | CONV-LONG-DROPPED | info | show | B | — | —<a id="CONV-LONG-DROPPED"></a> |
-| CONV-LONG-KEY-VARIES | warning | show | B | — | —<a id="CONV-LONG-KEY-VARIES"></a> |
+| CONV-LONG-KEY-VARIES | warning | accept | B | — | —<a id="CONV-LONG-KEY-VARIES"></a> |
 | CONV-LONG-DUPLICATE | error | block | B | — | —<a id="CONV-LONG-DUPLICATE"></a> |
 | CONV-LONG-NO-PARAMETER | error | block | B | — | —<a id="CONV-LONG-NO-PARAMETER"></a> |
 | CONV-TURN-HEADER-BLANK | error | block | B | — | —<a id="CONV-TURN-HEADER-BLANK"></a> |
@@ -202,7 +202,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-DEPTH-CONVERTED | warning | accept | B | — | [Darwin Core term list (dwc.tdwg.org/terms: minimumDepthInMeters, maximumDepthInMeters, verbatimDepth)](https://dwc.tdwg.org/terms/#dwc:minimumDepthInMeters), "The lesser depth of a range of depth below the local surface, in meters." / verbatimDepth: "The original description of the depth below the local surface."<a id="CONV-DEPTH-CONVERTED"></a> |
 | CONV-SEAFLOOR-UNIT | error | block | B | — | [OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)](https://manual.obis.org/darwin_core.html), "This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."<a id="CONV-SEAFLOOR-UNIT"></a> |
 | CONV-SEAFLOOR-VALUE | error | block | B | — | [OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)](https://manual.obis.org/darwin_core.html), "This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."<a id="CONV-SEAFLOOR-VALUE"></a> |
-| CONV-SEAFLOOR-SIGNS | warning | show | B | — | [OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)](https://manual.obis.org/darwin_core.html), "This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."<a id="CONV-SEAFLOOR-SIGNS"></a> |
+| CONV-SEAFLOOR-SIGNS | warning | accept | B | — | [OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)](https://manual.obis.org/darwin_core.html), "This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."<a id="CONV-SEAFLOOR-SIGNS"></a> |
 | CONV-SEAFLOOR-NO-SITE-DEPTH | warning | accept | B | — | [OBIS Manual, "Darwin Core" (manual.obis.org/darwin_core.html; read 2026-10-26) and the Darwin Core term list (dwc.tdwg.org/terms; minimumDistanceAboveSurfaceInMeters)](https://manual.obis.org/darwin_core.html), "This can be especially useful for sediment cores taken from the sea bottom ... In these cases the minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters would be a negative value."<br>[PANGAEA Wiki, "Geocode" (page version oldid=17007, last edited 2026-06-11; read 2026-11-02)](https://wiki.pangaea.de/wiki/Geocode), section "Third spatial dimension (Depth/Height) (z)": "DEPTH, sediment/rock [m] for geological, geochemistry, biogeochemisty, paleontological, geophysical measurements and samples. Describing the specific sampling depth in the sediment core"; "DEPTH, water [m] ... This GEOCODE describes the water depth in which the measurement or sample was collected"<a id="CONV-SEAFLOOR-NO-SITE-DEPTH"></a> |
 | CONV-NO-OCCURRENCES | error | block | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)](https://manual.obis.org/format_occurrence.html), "(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"<a id="CONV-NO-OCCURRENCES"></a> |
 | CONV-PROFILE-NOTHING-READ | error | block | B | — | —<a id="CONV-PROFILE-NOTHING-READ"></a> |
@@ -228,7 +228,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-EMOF-TYPE-EMPTY | error | block | B | — | —<a id="CONV-EMOF-TYPE-EMPTY"></a> |
 | CONV-COLUMN-NOT-EXPORTED | warning | accept | B | — | —<a id="CONV-COLUMN-NOT-EXPORTED"></a> |
 | CONV-COLUMN-IGNORED | info | show | B | — | —<a id="CONV-COLUMN-IGNORED"></a> |
-| CONV-COLUMN-YEAR-IGNORED | info | show | B | — | —<a id="CONV-COLUMN-YEAR-IGNORED"></a> |
+| CONV-COLUMN-IGNORED-PROPOSED | info | accept | B | — | —<a id="CONV-COLUMN-IGNORED-PROPOSED"></a> |
+| CONV-COLUMN-YEAR-IGNORED | info | accept | B | — | —<a id="CONV-COLUMN-YEAR-IGNORED"></a> |
 | CONV-COLUMN-NUMBER-IGNORED | warning | accept | B | — | —<a id="CONV-COLUMN-NUMBER-IGNORED"></a> |
 | CONV-NAMEID-MISSING | warning | accept | B | — | —<a id="CONV-NAMEID-MISSING"></a> |
 | CONV-WORMS-UNDECIDED | error | block | B | — | [OBIS Manual, "Match Taxonomic Names" (manual.obis.org/name_matching.html; read 2026-10-25)](https://manual.obis.org/name_matching.html), "WoRMS also identifies ambiguous matches, indicating that several potential matching options are available (e.g. homonyms). You can check these ambiguous matches and select the correct one"<a id="CONV-WORMS-UNDECIDED"></a> |

@@ -110,6 +110,41 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'no-event-date': ['CONV-EVENT-DATE-MISSING'],
 };
 
+/**
+ * The rules raised where a `listed` reason is recorded (traced from each `fate.row` / `cellFate` / `fate.cell` / `put` site to the finding raised beside it). The coverage test (test/convert/policy-coverage.test.ts)
+ * reads this map: a rule here that is only shown, whose outcome is a tool default and not the person's own answer, fails it. `[]` = the reason has no finding of its own (the list beside the archive and the ledger say it).
+ */
+export const LISTED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
+  'summary-row': ['CONV-SUMMARY-ROW-SKIPPED'],
+  zero: ['CONV-ZERO-SKIPPED'],
+  'zero-with-biomass': ['CONV-ZERO-WITH-BIOMASS'],
+  // no count: a blank cell, which has nothing to account for (CONV-NA-SKIPPED names the cells that say NA)
+  'quantity-blank': [],
+  // a row with nothing in any column that is read: no finding, the list beside the archive has it
+  'nothing-to-record': [],
+  'copy-dropped': ['CONV-ROW-COPIES-DROPPED'],
+  'repeat-total': ['CONV-QUANTITY-REPEATED-ONCE'],
+  'repeat-in-sample': ['CONV-QUANTITY-SAME-IN-SAMPLE'],
+  'na-cell': ['CONV-NA-SKIPPED', 'ROW-NA-VARIANT'],
+  // an absence mark of a presence-only sheet, left out because the full-list tick is off: said by the zero finding (marks=yes variant)
+  'absent-mark': ['CONV-ZERO-SKIPPED'],
+  // an absence that IS written (status absent): a record, not a leave-out, so nothing of its own
+  'absent-record': [],
+  'column-not-read': ['CONV-COLUMN-IGNORED', 'CONV-COLUMN-IGNORED-PROPOSED', 'CONV-COLUMN-NOT-EXPORTED', 'CONV-COLUMN-NUMBER-IGNORED', 'CONV-COLUMN-YEAR-IGNORED', 'CONV-TAXON-ATTRIBUTE-IGNORED', 'CONV-LONG-FLAG-COLUMNS', 'CONV-LONG-DROPPED'],
+  // a sheet no sample or taxon column reads from: the ledger lists the sheet, no finding names it
+  'sheet-not-used': [],
+  'quality-flag': ['CONV-LONG-FLAG-PARAMETERS'],
+  // a text in a count cell: the text goes to the occurrence's remarks and is listed by CONV-TEXT-IN-TAXON-CELL
+  'text-cell': ['CONV-TEXT-IN-TAXON-CELL'],
+  // wide-sheet rows with only a position or only a sample code: understood as spacers or headers and listed in the ledger (ConvertLedger "unplaced"); no finding is raised
+  'position-no-taxon': [],
+  'sample-no-taxon': [],
+  'turned-label': ['CONV-SHEET-TURNED'],
+  'join-not-chosen': ['CONV-JOIN-CONFLICT-CHOSEN'],
+  // a description row whose results rows wrote nothing: the results rows carry the question
+  'join-results-not-written': [],
+};
+
 /** The rule that blocked on its own for a reason that can be left out, and goes when the user leaves the reason out (the new finding takes over its question). */
 export const SUPERSEDES: Partial<Record<LeaveOutReason, string>> = {
   ragged: 'ROW-RAGGED',

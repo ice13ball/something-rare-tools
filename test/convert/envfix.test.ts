@@ -93,7 +93,7 @@ describe('1. parse-level findings reach /convert (f1: a ragged row)', () => {
     const r = convert({ sheets: [f8.input({ profile: PROFILE })] });
     const inF = r.findings.filter((f) => f.ruleId.startsWith('IN-'));
     expect(inF.map((f) => f.ruleId)).toEqual(['IN-DECIMAL-COMMA']);
-    expect(policyOf(inF[0])).toBe('show');
+    expect(policyOf(inF[0])).toBe('accept');
   });
 
   it('a clean file raises nothing at parse level', async () => {
@@ -276,7 +276,7 @@ describe('3. depth of the sediment and of the porewater (f3)', () => {
     const s = r.findings.find((f) => f.ruleId === 'CONV-SEAFLOOR-SIGNS')!;
     expect(s.params).toEqual({ count: 2, direction: 'up', side: 'above' });
     expect(s.lines).toEqual([22, 23]);
-    expect(policyOf(s)).toBe('show');
+    expect(policyOf(s)).toBe('accept');
     expect(r.ok === false || judge(r.findings).blocking.every((f) => f.ruleId !== 'CONV-SEAFLOOR-SIGNS')).toBe(true);
   });
 

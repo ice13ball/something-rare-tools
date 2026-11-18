@@ -292,7 +292,7 @@ describe('a results sheet whose header is shorter than its rows (unnamedFrom)', 
     expect(result.events.some((e) => e.id === 'ST-1')).toBe(true);
     expect(result.measurements.some((m) => m.target.id === 'X01' && m.measurementType.toLowerCase().includes('temp'))).toBe(true);
     // a column of the description sheet that holds data and is not read is named like any other; it is not one of the columns the header failed to name
-    expect(rules(result.findings, 'CONV-COLUMN-IGNORED').some((f) => String(f.params.columns).includes('Remark'))).toBe(true);
+    expect(rules(result.findings, 'CONV-COLUMN-IGNORED-PROPOSED').some((f) => String(f.params.columns).includes('Remark'))).toBe(true);
     // only the column the header does not name is said to be unnamed
     const unnamed = rules(result.findings, 'CONV-COLUMN-UNNAMED');
     expect(unnamed.every((f) => f.field === 'Column 4')).toBe(true);

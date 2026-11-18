@@ -7,7 +7,8 @@ import { RULES } from '../../src/core/rules/registry';
 /*
  * What /convert does with a finding of each rule, pinned. A rule's policy changes only by editing its line here, in the same commit as the rule (round 4 Task 2 and Task 16 name theirs);
  * a new rule adds a line. Generated from the policy.ts lists at 668ae00 (round 4, Task 1 Step 1) for every registered rule of every rule file, severity and prefix fallbacks included.
- * The count is 248, not the plan's 245: round 3 added CONV-DATE-DECLARED, CONV-DATE-DECLARED-INVALID and CONV-DATE-DECLARED-HELD after the plan was written.
+ * Round 4 Task 2 changed ten lines (show to accept: a tool default or a reader decision needs an acceptance) and added CONV-COLUMN-IGNORED-PROPOSED: 249 rules.
+ * The count was 248, not the plan's 245: round 3 added CONV-DATE-DECLARED, CONV-DATE-DECLARED-INVALID and CONV-DATE-DECLARED-HELD after the plan was written.
  */
 const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'IN-NO-DATA-FILE': 'block',
@@ -27,8 +28,8 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'IN-DATAVERSE-FILES': 'show',
   'IN-FILE-UNREADABLE': 'block',
   'IN-LAYOUT-UNSUPPORTED': 'block',
-  'IN-ENCODING-FALLBACK': 'show',
-  'IN-DECIMAL-COMMA': 'show',
+  'IN-ENCODING-FALLBACK': 'accept',
+  'IN-DECIMAL-COMMA': 'accept',
   'IN-HEADER-SHORT': 'accept',
   'IN-HEADER-UNITS-READ': 'show',
   'IN-HEADER-UNITS-NAMED': 'show',
@@ -87,7 +88,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'ROW-LONG-KEY-EXTENDED': 'show',
   'ROW-KEY-IGNORED': 'show',
   'ROW-JOIN-KEY-BLANK': 'show',
-  'ROW-DATE-YYMMDD': 'show',
+  'ROW-DATE-YYMMDD': 'accept',
   'ROW-TZ-UNKNOWN': 'show',
   'ROW-UNIT-MISSING': 'show',
   'ROW-HEADER-CODE-SHAPE': 'show',
@@ -175,10 +176,10 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-DATE-ORDER-DECLARED': 'show',
   'CONV-ZERO-WITH-BIOMASS': 'accept',
   'CONV-SAMPLE-PER-ROW': 'accept',
-  'CONV-ZERO-SKIPPED': 'show',
+  'CONV-ZERO-SKIPPED': 'accept',
   'CONV-SAMPLE-CONFLICT': 'block',
   'CONV-REPLICATE-EVENTS': 'show',
-  'CONV-TAXON-ATTRIBUTE-IGNORED': 'show',
+  'CONV-TAXON-ATTRIBUTE-IGNORED': 'accept',
   'CONV-VALUE-PER-OCCURRENCE': 'show',
   'CONV-NERC-UNKNOWN': 'accept',
   'CONV-NERC-UNIT-MISMATCH': 'accept',
@@ -189,11 +190,11 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-SHEET-TRANSPOSED': 'block',
   'CONV-SHEET-UNITS-ROW': 'block',
   'CONV-LONG-READ': 'show',
-  'CONV-LONG-FLAG-COLUMNS': 'show',
-  'CONV-LONG-FLAG-PARAMETERS': 'show',
+  'CONV-LONG-FLAG-COLUMNS': 'accept',
+  'CONV-LONG-FLAG-PARAMETERS': 'accept',
   'CONV-LONG-RENAMED': 'show',
   'CONV-LONG-DROPPED': 'show',
-  'CONV-LONG-KEY-VARIES': 'show',
+  'CONV-LONG-KEY-VARIES': 'accept',
   'CONV-LONG-DUPLICATE': 'block',
   'CONV-LONG-NO-PARAMETER': 'block',
   'CONV-TURN-HEADER-BLANK': 'block',
@@ -205,7 +206,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-DEPTH-CONVERTED': 'accept',
   'CONV-SEAFLOOR-UNIT': 'block',
   'CONV-SEAFLOOR-VALUE': 'block',
-  'CONV-SEAFLOOR-SIGNS': 'show',
+  'CONV-SEAFLOOR-SIGNS': 'accept',
   'CONV-SEAFLOOR-NO-SITE-DEPTH': 'accept',
   'CONV-NO-OCCURRENCES': 'block',
   'CONV-PROFILE-NOTHING-READ': 'block',
@@ -231,7 +232,8 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-EMOF-TYPE-EMPTY': 'block',
   'CONV-COLUMN-NOT-EXPORTED': 'accept',
   'CONV-COLUMN-IGNORED': 'show',
-  'CONV-COLUMN-YEAR-IGNORED': 'show',
+  'CONV-COLUMN-IGNORED-PROPOSED': 'accept',
+  'CONV-COLUMN-YEAR-IGNORED': 'accept',
   'CONV-COLUMN-NUMBER-IGNORED': 'accept',
   'CONV-NAMEID-MISSING': 'accept',
   'CONV-WORMS-UNDECIDED': 'block',
@@ -264,7 +266,7 @@ describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(248);
+    expect(Object.keys(BASELINE).length).toBe(249);
   });
 
   it('the field of each rule definition is its baseline policy', () => {

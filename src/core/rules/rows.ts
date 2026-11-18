@@ -601,7 +601,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DATE-YYMMDD',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['interpreted'],
     plain: {
       pl: `Daty w kolumnie „{field}” mają dwucyfrowy rok i dopisano do niego stulecie; np. „{value}” odczytano jako {interpreted}. Używaj czterocyfrowego roku.`,
@@ -609,7 +609,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Daten in der Spalte „{field}“ haben eine zweistellige Jahreszahl, das Jahrhundert wurde ergänzt; z. B. wurde „{value}“ als {interpreted} gelesen. Verwenden Sie eine vierstellige Jahreszahl.`,
       fr: `Les dates de la colonne « {field} » ont une année à deux chiffres et un siècle a été ajouté ; par ex. « {value} » a été lu comme {interpreted}. Utilisez une année à quatre chiffres.`,
     },
-    technical: `{file} field {field} value '{value}': YY-MM-DD read as {interpreted} (century inferred; ambiguous).`,
+    technical: `{file} field {field} value '{value}': YY-MM-DD read as {interpreted} (century inferred; ambiguous). The century of a two-digit year is the reader's decision, accepted once per column before the export.`,
   },
   {
     id: 'ROW-TZ-UNKNOWN',

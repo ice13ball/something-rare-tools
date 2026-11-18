@@ -140,7 +140,7 @@ describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
 
 /* The converted output of long biology sheets is the output of origin/main: the snapshot was generated at origin/main (2b2d854) by running this file there with LB_WRITE set (the archives and the worker part included). */
 const SNAP = new URL('./longblock.snap.json', import.meta.url);
-const withoutIgnoredNote = (v: unknown): unknown => (Array.isArray(v) ? v.filter((f) => !['CONV-COLUMN-IGNORED', 'CONV-ROLE-UNCONFIRMED'].includes(String((f as { ruleId?: string } | null)?.ruleId))) : v);
+const withoutIgnoredNote = (v: unknown): unknown => (Array.isArray(v) ? v.filter((f) => !['CONV-COLUMN-IGNORED', 'CONV-COLUMN-IGNORED-PROPOSED', 'CONV-ROLE-UNCONFIRMED'].includes(String((f as { ruleId?: string } | null)?.ruleId))) : v);
 const bioCases = (): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   const taxonCount = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count'], [

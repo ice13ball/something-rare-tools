@@ -118,7 +118,8 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-ATTRIBUTE-IGNORED count, columns  columns of a long sheet whose value is the same for every row of one taxon (a code, an id, a serial number, a trophic level): ignored, not written (info)
  *   CONV-VALUE-PER-OCCURRENCE  count, columns   measured-variable columns written on the occurrence of each row of a long sheet (values that differ inside a sample like those of single organisms): shown, never blocks (info)
  *   CONV-COLUMN-NOT-EXPORTED   count, columns   columns = the headers whose role (variable, pressure, a taxon ID of a wide sheet) this version does not write
- *   CONV-COLUMN-IGNORED        count, columns   columns = the headers (first 20) of columns set to ignore that hold at least one value: not written, named so that no column leaves without a word (info)
+ *   CONV-COLUMN-IGNORED        count, columns   columns = the headers (first 20) of columns the PERSON set to ignore that hold at least one value: not written, named so that no column leaves without a word (info, shown)
+ *   CONV-COLUMN-IGNORED-PROPOSED count, columns columns = the same for columns the converter proposed as ignore and the person did not touch (info, accepted once)
  *   CONV-COLUMN-YEAR-IGNORED   count, columns  columns = the headers of numeric columns that hold only whole years on a sheet with a date column: not read as measurements, ignored (info; the page offers "Read it as a measurement")
  *   CONV-COLUMN-NUMBER-IGNORED count, columns  columns = the headers of numeric columns that hold only different whole numbers of six or more digits (a running number): not read as measurements, ignored (warning, accepted once; same button)
  *   CONV-NAMEID-MISSING        count            count = occurrences without a scientificNameID
@@ -1140,7 +1141,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ZERO-SKIPPED',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `Pominięto {count} {+count:komórkę|komórki|komórek} z zerem, bo nie zaznaczono, że lista gatunków jest pełna. Zero oznacza „brak” tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
@@ -1148,7 +1149,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Zelle mit einer Null wurde|Zellen mit einer Null wurden} ausgelassen, da die Artenliste nicht als vollständig angegeben wurde. Eine Null bedeutet nur dann „fehlt“, wenn in der Probe nach allen Arten der Liste gesucht wurde.`,
       fr: `{count} {+count:cellule à zéro a été ignorée|cellules à zéro ont été ignorées}, car la liste d'espèces n'a pas été déclarée complète. Un zéro signifie « absent » seulement si toutes les espèces de la liste ont été recherchées dans l'échantillon.`,
     },
-    technical: `{file}, {sheet}: {count} zero cell(s) not converted (full species list not ticked). With the tick a zero becomes occurrenceStatus absent (individualCount 0 for counts only); an empty or NA cell never becomes a record.`,
+    technical: `{file}, {sheet}: {count} zero cell(s) not converted (full species list not ticked). With the tick a zero becomes occurrenceStatus absent (individualCount 0 for counts only); an empty or NA cell never becomes a record. The zeros are left out because the full-list tick is off by default, not because the person said so, so the outcome is accepted once before the export.`,
     citations: [CITE.obisOccurrenceStatus],
   },
   {
@@ -1194,7 +1195,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAXON-ATTRIBUTE-IGNORED',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} dla każdego taksonu zawsze tę samą wartość, więc to cechy taksonu (np. kod gatunku), a nie pomiary, i nie zostały zapisane: {columns}. Jeśli któraś jest pomiarem, nadaj jej znaczenie.`,
@@ -1202,7 +1203,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Spalte hat|Spalten haben} für jede Zeile eines Taxons denselben Wert, {+count:ist also eine Eigenschaft|sind also Eigenschaften} des Taxons (z. B. Artcode), {+count:keine Messung|keine Messungen}, und {+count:wurde|wurden} nicht geschrieben: {columns}. Ist eine davon eine Messung, geben Sie ihr eine Bedeutung.`,
       fr: `{count} {+count:colonne a|colonnes ont} la même valeur pour chaque ligne d'un taxon : {+count:un attribut du taxon|des attributs du taxon} (un code d'espèce, par ex.), {+count:pas une mesure|pas des mesures}, donc non {+count:écrit|écrits} : {columns}. Si l'une est une mesure, donnez-lui un sens.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) ignored because their value is a function of the taxon column (name says code, id, tsn, key, serial or trophic, or most taxa are listed more than once; no unit): {columns}.`,
+    technical: `{file}, {sheet}: {count} column(s) ignored because their value is a function of the taxon column (name says code, id, tsn, key, serial or trophic, or most taxa are listed more than once; no unit): {columns}. A column the person set to ignore is not listed (CONV-COLUMN-IGNORED names it); these are the converter's own proposals, so the finding is accepted once before the export.`,
   },
   {
     id: 'CONV-VALUE-PER-OCCURRENCE',
@@ -1353,7 +1354,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-FLAG-COLUMNS',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `Pominięto {count} {+count:kolumnę flagi jakości|kolumny flag jakości|kolumn flag jakości} arkusza „{sheet}”: {columns}. Flaga nie odróżnia próbek, więc nie wchodzi do klucza, którym wiersze są grupowane w próbki, i nie jest zapisywana.`,
@@ -1361,13 +1362,13 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Übergangen: {count} {+count:Qualitätsflaggen-Spalte|Qualitätsflaggen-Spalten} des Blatts „{sheet}“: {columns}. Eine Flagge unterscheidet keine Proben, gehört also nicht zum Schlüssel, der die Zeilen zu Proben gruppiert, und wird nicht geschrieben.`,
       fr: `Ignoré : {count} {+count:colonne d'indicateur de qualité|colonnes d'indicateurs de qualité} de la feuille « {sheet} » : {columns}. Un indicateur ne distingue pas les échantillons : il n'entre pas dans la clé qui regroupe les lignes en échantillons et n'est pas écrit.`,
     },
-    technical: `{file}, {sheet}: {count} quality-flag column(s) of a long sheet are not part of the sample key and are not written: {columns}.`,
+    technical: `{file}, {sheet}: {count} quality-flag column(s) of a long sheet are not part of the sample key and are not written: {columns}. The converter leaves these columns out by their name, not by the person's answer, so the outcome is accepted once before the export.`,
   },
   {
     id: 'CONV-LONG-FLAG-PARAMETERS',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'names', 'rows'],
     plain: {
       pl: `Z „{sheet}” pominięto: {names} ({rows} {+rows:wiersz|wiersze|wierszy}). {+count:To flaga jakości, nie pomiar|To flagi jakości, nie pomiary|To flagi jakości, nie pomiary}: {+count:nie powstaje z niej kolumna i nie jest zapisywana|nie powstają z nich kolumny i nie są zapisywane|nie powstają z nich kolumny i nie są zapisywane}.`,
@@ -1375,7 +1376,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Im Blatt „{sheet}“ nicht gelesen: {names} ({rows} {+rows:Zeile|Zeilen}). {+count:Dieser Parameter ist eine Qualitätsflagge|Diese Parameter sind Qualitätsflaggen}, {+count:keine Messung|keine Messungen}: Es entsteht keine Spalte, und nichts wird geschrieben.`,
       fr: `Ignoré dans la feuille « {sheet} » : {names} ({rows} {+rows:ligne|lignes}). {+count:Ce paramètre est un indicateur|Ces paramètres sont des indicateurs} de qualité, pas {+count:une mesure|des mesures} : aucune colonne n'est créée et rien n'est écrit.`,
     },
-    technical: `{file}, {sheet}: {count} parameter name(s) of a long sheet are quality flags ({names}); their {rows} row(s) are skipped: no column is made and nothing is written.`,
+    technical: `{file}, {sheet}: {count} parameter name(s) of a long sheet are quality flags ({names}); their {rows} row(s) are skipped: no column is made and nothing is written. The converter leaves these rows out because the parameter name reads as a flag, not by the person's answer, so the outcome is accepted once before the export.`,
   },
   {
     id: 'CONV-LONG-RENAMED',
@@ -1409,7 +1410,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-KEY-VARIES',
     category: 'B',
     severity: 'warning',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `W arkuszu „{sheet}” wiersze o tej samej stacji, dacie i głębokości różnią się w: {columns} (takich próbek: {count}), więc każda różnica jest czytana jako osobna próbka. Jeśli te kolumny opisują pomiar (komentarz, analityk, metoda), zaznacz je wyżej jako opisujące pomiar.`,
@@ -1417,7 +1418,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Im Blatt „{sheet}“ unterscheiden sich Zeilen mit gleicher Station, gleichem Datum und gleicher Tiefe in: {columns} (betroffene Proben: {count}); jeder Unterschied gilt daher als eigene Probe. Beschreiben sie die Messung (Kommentar, Analyst, Methode), markieren Sie sie oben entsprechend.`,
       fr: `Dans la feuille « {sheet} », des lignes de même station, date et profondeur diffèrent par : {columns} (échantillons concernés : {count}) ; chaque différence est donc lue comme un autre échantillon. Si elles décrivent la mesure (commentaire, analyste, méthode), marquez-les plus haut en ce sens.`,
     },
-    technical: `{file}, {sheet}: rows of a long sheet that share every position and identity column (station, cruise, sample, date, time, depth, pressure, position) differ in {columns}, in {count} sample(s); each combination is read as a separate sample. A column that describes the measurement can be marked as such: it then leaves the sample key and its values are not written.`,
+    technical: `{file}, {sheet}: rows of a long sheet that share every position and identity column (station, cruise, sample, date, time, depth, pressure, position) differ in {columns}, in {count} sample(s); each combination is read as a separate sample. A column that describes the measurement can be marked as such: it then leaves the sample key and its values are not written. The converter splits these rows into separate samples by default, so the outcome is accepted once before the export.`,
   },
   {
     id: 'CONV-LONG-DUPLICATE',
@@ -1583,7 +1584,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SEAFLOOR-SIGNS',
     category: 'B',
     severity: 'warning',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'direction', 'side'],
     plain: {
       pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny do większości kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
@@ -1591,7 +1592,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `In der Spalte „{field}“ ist bei {count} {+count:Zahl|Zahlen} das Vorzeichen entgegengesetzt zu dem der meisten Zahlen ({+lineCount:Zeile|Zeilen} {lines}). Bei der Richtung „{direction}“ wird eine solche Zahl als Lage {side} dem Meeresboden geschrieben. Prüfen Sie, ob die Richtung stimmt.`,
       fr: `Dans la colonne « {field} », {count} {+count:nombre a|nombres ont} le signe opposé à celui de la plupart des nombres ({+lineCount:ligne|lignes} {lines}). Avec le sens « {direction} », un tel nombre est écrit comme une position {side} fond. Vérifiez que le sens est le bon.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: {count} depth-below-seafloor cell(s) have the sign that most cells do not have. Direction {direction}: they are written as a distance {side} the seafloor (minimumDistanceAboveSurfaceInMeters = maximumDistanceAboveSurfaceInMeters; positive above, negative below). Not blocking: the direction is the user's to confirm.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} depth-below-seafloor cell(s) have the sign that most cells do not have. Direction {direction}: they are written as a distance {side} the seafloor (minimumDistanceAboveSurfaceInMeters = maximumDistanceAboveSurfaceInMeters; positive above, negative below). Not blocking: the direction is the user's to confirm. The direction is taken from the majority of signs, a tool default, so the outcome is accepted once before the export.`,
     citations: [OBIS_DARWIN_CORE],
   },
   {
@@ -1935,7 +1936,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Nicht ins Archiv geschrieben: {count} {+count:Spalte|Spalten}: {columns}. Grund: eine hier nicht geschriebene Bedeutung (z. B. Druck außerhalb einer Profildatei), kein Kopf (als [Buchstabe] gezeigt) oder eine zweite Mengenspalte. Akzeptieren Sie das, um ohne sie zu exportieren.`,
       fr: `Non écrit dans l'archive : {count} {+count:colonne|colonnes} : {columns}. Raison : un sens qu'on n'écrit pas ici (par ex. pression hors fichier de profils), pas d'en-tête (indiquée par [lettre]) ou une deuxième colonne de quantité. Acceptez-le pour exporter {+count:sans elle|sans elles}.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure of a sheet that is not a profile file (a measured variable is written as an eMoF row on the sample event, or on the level event of a profile sheet, where the first pressure column is written as well), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column; and two kinds of column with the role ignore that hold data: a column with an empty header (shown as its letter in brackets) and a second quantity column (a count next to a biomass). Nothing from them is written. The warning has to be accepted before the export.`,
+    technical: `{file}, {sheet}: {count} column(s) with a role other than ignore that this conversion does not read as the sheet is set up ({columns}): a pressure of a sheet that is not a profile file (a measured variable is written as an eMoF row on the sample event, or on the level event of a profile sheet, where the first pressure column is written as well), a second column of a role that is read once, a role of the other shape (a life stage, qualifier, occurrenceID, taxon ID or quantity column in a wide sheet, a taxon header column in a long one), the quantity type, or a sample-size column when the sample size is not set to a column; and two kinds of column with the role ignore that hold data and that the person did not set: a column with an empty header (shown as its letter in brackets; one the person set to ignore is named by CONV-COLUMN-IGNORED instead) and a second quantity column (a count next to a biomass). Nothing from them is written. The warning has to be accepted before the export.`,
   },
   {
     id: 'CONV-COLUMN-IGNORED',
@@ -1949,13 +1950,27 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Spalte enthält|Spalten enthalten} Werte und {+count:ist|sind} auf „ignorieren“ gestellt, daher nicht im Archiv: {columns}. Ihre Datei bleibt unverändert. Trägt eine davon Daten, die das Archiv haben soll, geben Sie ihr eine Bedeutung.`,
       fr: `{count} {+count:colonne contient|colonnes contiennent} des valeurs et {+count:est réglée|sont réglées} sur « ignorer » ; {+count:elle n'est|elles ne sont} donc pas dans l'archive : {columns}. Votre fichier n'est pas modifié. Si l'une porte des données que l'archive doit avoir, donnez-lui un sens.`,
     },
-    technical: `{file}, {sheet}: {count} column(s) that hold at least one value and have the role ignore (chosen by the person or proposed by the converter, for example a Cast, Layer or Replicate column that does not separate rows), so none of their cells is written: {columns}. A column with another role that this conversion does not read, a column without a header and a second quantity column are named by CONV-COLUMN-NOT-EXPORTED, which has to be accepted; this finding only names, it blocks nothing and needs no acceptance. The file is not changed.`,
+    technical: `{file}, {sheet}: {count} column(s) that hold at least one value and that the person set to ignore (the role ignore where the converter proposed another, or an empty-header column the person set to ignore, shown as its letter in brackets), so none of their cells is written: {columns}. A column the converter proposed as ignore and the person left is named by CONV-COLUMN-IGNORED-PROPOSED instead. This finding only names the person's own choice, it blocks nothing and needs no acceptance. The file is not changed.`,
+  },
+  {
+    id: 'CONV-COLUMN-IGNORED-PROPOSED',
+    category: 'B',
+    severity: 'info',
+    exportPolicy: 'accept',
+    params: ['count', 'columns'],
+    plain: {
+      pl: `{count} {+count:kolumna zawiera|kolumny zawierają|kolumn zawiera} wartości, a konwerter {+count:zaproponował|zaproponowały|zaproponował} dla {+count:niej|nich|nich} „ignoruj”, więc nic z {+count:niej|nich|nich} nie trafi do archiwum: {columns}. Nadaj {+count:jej|im|im} znaczenie, ustaw „ignoruj” sam albo zaakceptuj to raz.`,
+      en: `{count} {+count:column holds|columns hold} data and {+count:was|were} proposed as "ignore" by the converter, so nothing of {+count:it|them} is written: {columns}. Give {+count:it|them} a meaning, set "ignore" yourself, or accept this once.`,
+      de: `{count} {+count:Spalte enthält|Spalten enthalten} Daten, und der Konverter hat sie als „ignorieren“ vorgeschlagen, daher wird nichts davon geschrieben: {columns}. Geben Sie {+count:ihr|ihnen} eine Bedeutung, stellen Sie selbst „ignorieren“ ein oder akzeptieren Sie das einmal.`,
+      fr: `{count} {+count:colonne contient|colonnes contiennent} des données et le convertisseur {+count:l'a proposée|les a proposées} comme « ignorer », donc rien n'en est écrit : {columns}. Donnez-{+count:lui|leur} un sens, réglez « ignorer » vous-même ou acceptez-le une fois.`,
+    },
+    technical: `{file}, {sheet}: {count} column(s) that hold at least one value and have the role ignore because the converter proposed it (for example a Cast, Layer or Replicate column that does not separate rows) and the person did not change it, so none of their cells is written: {columns}. A column the person set to ignore is named by CONV-COLUMN-IGNORED. The outcome follows from a tool default, not from the person's answer, so it is accepted once before the export; give the column a meaning, or set ignore yourself, and no acceptance is asked. A column with an empty header, a second quantity column and a column with another role that is not read are named by CONV-COLUMN-NOT-EXPORTED. The file is not changed.`,
   },
   {
     id: 'CONV-COLUMN-YEAR-IGNORED',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `Wygląda na rok obok daty: w każdym wierszu to rok daty z tego wiersza. Nie zapisano jako pomiar {count} {+count:kolumny|kolumn|kolumn}: {columns}. Jeśli któraś jest pomiarem, przywróć jej rolę jednym kliknięciem; jeśli to rok pobrania wierszy bez daty, nadaj znaczenie „data”.`,
@@ -1963,7 +1978,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Sieht wie ein Jahr neben dem Datum aus: in jeder Zeile das Jahr des Datums dieser Zeile. Nicht als Messwert geschrieben, {count} {+count:Spalte|Spalten}: {columns}. Ist eine davon ein Messwert, geben Sie ihr die Rolle mit einem Klick zurück; ist es das Probenjahr von Zeilen ohne Datum, geben Sie die Bedeutung Datum.`,
       fr: `Ressemble à une année à côté de la date : sur chaque ligne, l'année de la date de la ligne. Non écrite{+count:|s} comme mesure, {count} {+count:colonne|colonnes} : {columns}. Si l'une est une mesure, rendez-lui ce rôle en un clic ; si c'est l'année de prélèvement de lignes sans date, donnez-lui le sens date.`,
     },
-    technical: `{file}, {sheet}: {count} numeric column(s) that the proposer would have read as a measured variable (a name no vocabulary knows, no unit, no code) hold whole years from 1800 to 2100 that equal the year of the date of the same row, on every row where both are filled (at least 3 such rows, the first 500 rows of the sheet are read), and the sheet has a date or date-time column that matches: {columns}. They are proposed as ignore (low confidence), named here and by CONV-COLUMN-IGNORED; no other role is assigned. The page gives the measurement role back with one click; a column the person has set is not listed. Nothing is written in the archive for them. The file is not changed.`,
+    technical: `{file}, {sheet}: {count} numeric column(s) that the proposer would have read as a measured variable (a name no vocabulary knows, no unit, no code) hold whole years from 1800 to 2100 that equal the year of the date of the same row, on every row where both are filled (at least 3 such rows, the first 500 rows of the sheet are read), and the sheet has a date or date-time column that matches: {columns}. They are proposed as ignore (low confidence), named here and by CONV-COLUMN-IGNORED; no other role is assigned. The page gives the measurement role back with one click; a column the person has set is not listed. Nothing is written in the archive for them. The file is not changed. The ignore is the converter's proposal, not the person's answer, so it is accepted once before the export.`,
   },
   {
     id: 'CONV-COLUMN-NUMBER-IGNORED',

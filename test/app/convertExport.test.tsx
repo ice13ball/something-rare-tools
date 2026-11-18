@@ -155,8 +155,11 @@ describe('the export button', () => {
     await idle();
     expect(box('CONV-NAMEID-MISSING').checked).toBe(false);
     expect(box('CONV-DEVICE-MISSING').checked).toBe(true);
+    // the zeros left out by the default (accepted once since round 4) change with the same tick: that kind has to be ticked again too
+    expect(box('CONV-ZERO-SKIPPED').checked).toBe(false);
     expect(off()).toBe(true);
     fireEvent.click(box('CONV-NAMEID-MISSING'));
+    fireEvent.click(box('CONV-ZERO-SKIPPED'));
     await waitFor(() => expect(off()).toBe(false));
   });
 

@@ -386,6 +386,8 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.nerc ? { nerc: s.nerc } : {}),
       ...(Array.isArray(s.unconfirmedTaxa) ? { unconfirmedTaxa: s.unconfirmedTaxa.filter((i) => Number.isInteger(i)) } : {}),
       ...(Array.isArray(s.handSet) ? { handSet: s.handSet.filter((i) => Number.isInteger(i)) } : {}),
+      // the columns the person set to ignore, computed here from the worker's own proposals (never from a flag of the page)
+      ignoreChosen: ignoreChosenOf(s),
       ...(s.readAsTable === true ? { readAsTable: true } : {}),
       ...(s.presenceOnly === true ? { presenceOnly: true } : {}),
       // (a bare tick for totalOnce, realCounts or dropCopies is not forwarded: an answer that switches a check off or takes rows out reaches the converter only with the number it was given for)
@@ -416,6 +418,20 @@ export function createConvertHandler(): ConvertHandler {
       // the page's word is not taken for more than a boolean: a profile mark and the approval of depth-based level IDs
       ...(s.profile !== undefined && s.profile !== null && typeof s.profile === 'object' ? { profile: { depthIds: s.profile.depthIds === true, ignoreCast: s.profile.ignoreCast === true, positionStation: s.profile.positionStation === true } } : {}),
     }));
+  }
+
+  /**
+   * The columns of a requested sheet that the person set to ignore: the requested role is `ignore` and the converter's own proposal for the column (proposed again here from the held file, the way the
+   * page was given it) is another role. A requested `ignore` equal to the proposal counts as the proposal; so does a taxon candidate the page sent as `ignore` because it was never confirmed.
+   * The proposal is the worker's, so a page that is reloaded with a companion file keeps the person's own ignore: it still differs from the proposal.
+   */
+  function ignoreChosenOf(s: ConvertRequestBody['sheets'][number]): number[] {
+    const sheet = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet);
+    if (sheet === undefined || !Array.isArray(s.mapping?.columns)) return [];
+    const parsed = held(s.fileId).parsed;
+    const proposal = proposeConvertColumns(sheet, { decimalComma: parsed.decimalComma, date1904: parsed.date1904 });
+    const unconfirmed = new Set(Array.isArray(s.unconfirmedTaxa) ? s.unconfirmedTaxa : []);
+    return s.mapping.columns.filter((c) => c.role.kind === 'ignore' && !unconfirmed.has(c.index) && proposal.find((p) => p.index === c.index)?.role.kind !== 'ignore').map((c) => c.index);
   }
 
   /** A request's reference to a sheet as the index of that sheet in the request, or undefined when the request holds no such sheet. */

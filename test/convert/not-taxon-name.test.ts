@@ -54,10 +54,10 @@ describe('wide sheet proposals', () => {
 });
 
 describe('convert of the confirmed sheet', () => {
-  it('lists w_PH in CONV-COLUMN-IGNORED', () => {
+  it('lists w_PH in CONV-COLUMN-IGNORED-PROPOSED', () => {
     const file = fileOf(['Station', 'Date', 'Latitude', 'Longitude', 'w_PH', 'Calanus finmarchicus', 'Oithona'], [['S1', '2023-06-14', 55.5, 2.5, 7.9, 10, 5], ['S2', '2023-06-14', 55.9, 3.1, 8.1, 7, 4]]);
     const r = convert({ sheets: [sheetInput(file, { shape: 'wide', quantity: { kind: 'count' } })] });
-    const f = r.findings.filter((x) => x.ruleId === 'CONV-COLUMN-IGNORED');
+    const f = r.findings.filter((x) => x.ruleId === 'CONV-COLUMN-IGNORED-PROPOSED');
     expect(JSON.stringify(f.map((x) => x.params))).toContain('w_PH');
   });
 });

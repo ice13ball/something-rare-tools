@@ -11,6 +11,7 @@ import { RULES } from '../rules/registry';
  *   accept  a warning the user accepts, once per rule and per run, before the export button works (nothing is stored)
  *   show    shown, never blocks and never needs an answer
  *
+ * A registered rule's policy follows the rule, not the severity a finding carries.
  * An id that is in no registry (a test's invented id) is `block` when its severity is error (a rule nobody has judged must not let a bad archive through) and `show` otherwise.
  * ROW-NO-COORD (policy block) is raised by the Event checks only for an event whose own position is blank AND that has no ancestor with a position (the dataset
  * builder lets a child inherit a parent's position), so every ROW-NO-COORD finding of this tool is "an event with no positioned ancestor".
