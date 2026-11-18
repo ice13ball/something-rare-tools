@@ -31,7 +31,7 @@ import { pairHemisphere, parseCoordinate } from './values/coords';
 import type { KeepMillis } from './values/dates';
 import { columnFractions } from './values/fractionEvidence';
 import { isRealFraction, secondOffsetMs } from './values/dates';
-import { columnOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder } from './values/dates';
+import { columnOrder, columnYYOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -291,22 +291,20 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
   return filled >= 2;
 }
 
-const READING_WORDS: Record<'ymd' | 'dmy' | 'mdy', string> = { ymd: 'year-month-day', dmy: 'day-month-year', mdy: 'month-day-year' };
-/** The other dates a NN-NN-NN cell can be, each with its order in words ("2021-06-05 (day-month-year)"), joined with " or "; the dates differ from the one read and from each other. */
 function otherReadings(text: string, readings: readonly ('ymd' | 'dmy' | 'mdy')[], read: string): string {
   const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec(text);
   if (!m) return '';
   const seen = new Set([read]);
   const out: string[] = [];
   for (const o of readings) {
-    const d = parseDate(text, { date1904: false, dateFormatted: false, order: o });
+    const d = parseDate(text, { date1904: false, dateFormatted: false, yyOrder: o });
     if ('error' in d) continue;
     const iso = d.iso.slice(0, 10);
     if (seen.has(iso)) continue;
     seen.add(iso);
-    out.push(`${iso} (${READING_WORDS[o]})`);
+    out.push(`${iso} (${o})`);
   }
-  return out.join(' or ');
+  return out.join('; ');
 }
 
 /**
@@ -367,9 +365,13 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
   // the order the person declared for a column is used only where its cells decide none (columnOrder); /check never passes the option
   const whenOrder = whenIndex === undefined ? 'unknown' : columnOrder(sheet, whenIndex, opts.dayMonthOrder?.[whenIndex]);
   // NN-NN-NN cells: the readings every cell of the column allows; when the column's order is still open and several fit, a cell whose date differs between them is ROW-DATE-YY-AMBIGUOUS
-  const yyReadings = whenIndex === undefined || whenOrder !== 'unknown' ? [] : twoDigitReadings(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
+  // (decided from those cells alone: a slash date in the column rules out no reading of 05-06-21)
+  const yyReadings = whenIndex === undefined ? [] : twoDigitReadings(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
+  const whenYY = whenIndex === undefined ? 'unknown' : columnYYOrder(sheet, whenIndex, opts.dayMonthOrder?.[whenIndex]);
+  // an open column is read in its first fitting reading so that no cell is called unreadable for want of the order; the warning (and /convert's question) is what names the choice
+  const yyRead = whenYY !== 'unknown' ? whenYY : yyReadings[0];
   // such a column is named once, by ROW-DATE-YY-AMBIGUOUS, on its cells that differ; a cell that reads the same in every order (22-08-22) adds no second finding to it
-  const yyColumnOpen = whenIndex !== undefined && yyReadings.length > 1 && sheet.rows.some((r) => isAmbiguousTwoDigit(r.cells[whenIndex] ?? null, yyReadings));
+  const yyColumnOpen = whenIndex !== undefined && whenYY === 'unknown' && yyReadings.length > 1 && sheet.rows.some((r) => isAmbiguousTwoDigit(r.cells[whenIndex] ?? null, yyReadings));
   const timeOrder = specs.time ? columnOrder(sheet, specs.time.index, opts.dayMonthOrder?.[specs.time.index]) : 'unknown';
   const dwcDepth = dwcDepthCols(sheet);
 
@@ -455,6 +457,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             datumColumn: true,
             keepMillis: millisOf(specs.when),
             ...(whenOrder === 'unknown' ? {} : { order: whenOrder }),
+            ...(yyRead === undefined ? {} : { yyOrder: yyRead }),
           });
           dateCache.set(cacheKey, d);
         }
@@ -468,7 +471,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           let tzField = specs.when.header;
           if (date.ambiguity === 'yy-mm-dd') {
             const text = String(cell).trim();
-            if (!yyColumnOpen) c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), order: whenOrder === 'dmy' || whenOrder === 'mdy' ? whenOrder : 'ymd' });
+            if (!yyColumnOpen) c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), order: whenYY !== 'unknown' ? whenYY : yyReadings.join(', ') });
             else if (isAmbiguousTwoDigit(cell, yyReadings)) c.add('ROW-DATE-YY-AMBIGUOUS', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), readings: otherReadings(text, yyReadings, date.iso.slice(0, 10)) });
           }
           let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;

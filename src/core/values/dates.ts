@@ -30,9 +30,11 @@ export interface ParseDateOptions {
    * Column-level order for slash / dash D?M/YYYY dates whose two parts are both <= 12. 'dmy' / 'mdy' read them in
    * that order; 'conflict' (the column mixes unambiguous DD/MM and MM/DD cells) leaves EVERY such date with differing
    * parts unparseable, ambiguous or not. Absent: an ambiguous cell is unparseable.
-   * For a NN-NN-NN cell: 'dmy' reads DD-MM-YY, 'mdy' MM-DD-YY, 'ymd' / 'conflict' / absent YY-MM-DD. Slash cells treat 'ymd' as absent.
+   * Slash cells treat 'ymd' as absent. A NN-NN-NN cell is never read by it: a slash date rules out no reading of 05-06-21 (see yyOrder).
    */
   order?: Exclude<DayMonthOrder, 'unknown'>;
+  /** The order of a NN-NN-NN cell (two-digit year): 'dmy' reads DD-MM-YY, 'mdy' MM-DD-YY, 'ymd' / absent YY-MM-DD. Decided from the column's NN-NN-NN cells alone (columnYYOrder). */
+  yyOrder?: TwoDigitOrder;
   /** full year used for the YY-MM-DD pivot; defaults to the current UTC year (tests pin it) */
   currentYear?: number;
   /**
@@ -414,7 +416,7 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
 
   m = YY_RE.exec(s);
   if (m) {
-    const r = readYY(m, opts.order === 'dmy' || opts.order === 'mdy' ? opts.order : 'ymd');
+    const r = readYY(m, opts.yyOrder ?? 'ymd');
     const cur = opts.currentYear ?? new Date().getUTCFullYear();
     const y = r.yy <= (cur % 100) + 1 ? 2000 + r.yy : 1900 + r.yy;
     if (!validYmd(y, r.mo, r.d)) return fail(raw);
@@ -482,32 +484,52 @@ export function isAmbiguousDayMonth(cell: RawCell): boolean {
 }
 
 /**
- * The day/month order every reader of a column uses: the order its cells decide, and, only when they decide none ('unknown'), the order the person declared.
- * One helper for every reader, so the date written, the date inside an ID and the date compared in a join cannot disagree.
+ * The day/month order every reader of a column uses for its slash dates: the order its cells decide, and, only when they decide none ('unknown'), the order the person declared
+ * (dmy or mdy; `ymd` answers a column of NN-NN-NN dates only). One helper for every reader, so the date written, the date inside an ID and the date compared in a join cannot disagree.
  */
 export function columnOrder(sheet: RawSheet, index: number, declared?: DeclaredOrder): DayMonthOrder {
-  const cells = sheet.rows.map((r) => r.cells[index] ?? null);
-  const detected = detectDayMonthOrder(cells);
+  const detected = detectDayMonthOrder(sheet.rows.map((r) => r.cells[index] ?? null));
   if (detected !== 'unknown') return detected;
-  // NN-NN-NN cells: the one reading that fits them all; of several, the declared one (never guessed)
-  const yy = twoDigitReadings(cells);
-  if (yy.length === 1) return yy[0];
-  if (yy.length > 1) return declared !== undefined && yy.includes(declared) ? declared : 'unknown';
   return declared !== undefined && declared !== 'ymd' ? declared : 'unknown';
 }
 
 /**
+ * The order of a column's NN-NN-NN cells, decided from those cells alone (a slash date says nothing about them): the one reading that fits them all; of several, the declared one when it
+ * is among them (never guessed); else 'unknown'. 'unknown' too when the column has no such cell.
+ */
+export function columnYYOrder(sheet: RawSheet, index: number, declared?: DeclaredOrder): TwoDigitOrder | 'unknown' {
+  const yy = twoDigitReadings(sheet.rows.map((r) => r.cells[index] ?? null));
+  if (yy.length === 1) return yy[0];
+  return yy.length > 1 && declared !== undefined && yy.includes(declared) ? declared : 'unknown';
+}
+
+/**
+ * The orders parseDate needs for one date column, for every reader that reads a column's dates: the slash order and the NN-NN-NN order, each decided on its own. A column whose NN-NN-NN
+ * cells stay open is read in the first reading that fits every cell (year-month-day when it does): the question about it is asked and blocks elsewhere, this only keeps the cell a date.
+ */
+export function dateReadOptions(sheet: RawSheet, index: number, declared?: DeclaredOrder): { order?: Exclude<DayMonthOrder, 'unknown'>; yyOrder?: TwoDigitOrder } {
+  const order = columnOrder(sheet, index, declared);
+  const decided = columnYYOrder(sheet, index, declared);
+  const yy = decided !== 'unknown' ? decided : twoDigitReadings(sheet.rows.map((r) => r.cells[index] ?? null))[0];
+  return { ...(order === 'unknown' ? {} : { order }), ...(yy === undefined ? {} : { yyOrder: yy }) };
+}
+
+/**
  * What a declaration does to a column: 'applied' (the cells decide nothing and an ambiguous cell is read by it), 'contradicted' (a cell decides another order, or both: not applied),
- * 'redundant' (the cells decide the same order, or hold nothing it could change).
+ * 'redundant' (the cells decide the same order, or hold nothing it could change). A column of NN-NN-NN dates and no slash date is judged by its NN-NN-NN readings: declared among two or
+ * more -> applied, the only reading -> redundant, not a reading -> contradicted. With slash dates in the column the slash order is what a declaration is judged by (`ymd` changes nothing there).
  */
 export function declaredOrderStatus(sheet: RawSheet, index: number, declared: DeclaredOrder): 'applied' | 'contradicted' | 'redundant' {
   const cells = sheet.rows.map((r) => r.cells[index] ?? null);
   const detected = detectDayMonthOrder(cells);
+  const slashInPlay = detected !== 'unknown' || cells.some(isAmbiguousDayMonth);
+  if (!slashInPlay) {
+    const yy = twoDigitReadings(cells);
+    if (yy.length > 0) return !yy.includes(declared) ? 'contradicted' : yy.length > 1 ? 'applied' : 'redundant';
+  }
+  if (declared === 'ymd') return 'redundant';
   if (detected === declared) return 'redundant';
   if (detected !== 'unknown') return 'contradicted';
-  const yy = twoDigitReadings(cells);
-  if (yy.length > 0) return !yy.includes(declared) ? 'contradicted' : yy.length > 1 ? 'applied' : 'redundant';
-  if (declared === 'ymd') return 'redundant';
   return cells.some(isAmbiguousDayMonth) ? 'applied' : 'redundant';
 }
 

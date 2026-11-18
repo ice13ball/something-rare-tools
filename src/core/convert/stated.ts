@@ -4,7 +4,7 @@ import { unitFromHeader } from '../recognize/columns';
 import { geocodeOfKey } from '../recognize/geocodes';
 import { CANONICAL_VARIABLES, foldDiacritics, headerKey, normaliseUnit, unitDimension } from '../recognize/vocab';
 import type { ColumnProposal, ColumnRole, RawSheet } from '../types';
-import { columnOrder, parseDate, parseTimeCell, type DeclaredOrder } from '../values/dates';
+import { dateReadOptions, parseDate, parseTimeCell, type DeclaredOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { EFFORT_AREA, EFFORT_VOLUME, PLAIN_AREA, QUANTITY_PHRASE_COUNT, QUANTITY_PHRASE_DENSITY, QUANTITY_STANDALONE, QUANTITY_WORD, SAMPLE_CODE_NAME, STAGE_NAME, TAXON_NAME } from './recognize';
 
@@ -293,8 +293,7 @@ function veto(sheet: RawSheet, index: number, kind: string, ctx: StatedContext):
     return ok / cells.length < SHARE ? 'not-time-of-day' : undefined;
   }
   if (kind === 'date' || kind === 'datetime') {
-    const order = columnOrder(sheet, index, ctx.dayMonthOrder?.[index]);
-    const opts = { date1904: ctx.date1904 === true, dateFormatted: sheet.dateFormatted?.[index] === true, datumColumn: true, ...(order === 'unknown' ? {} : { order }) };
+    const opts = { date1904: ctx.date1904 === true, dateFormatted: sheet.dateFormatted?.[index] === true, datumColumn: true, ...dateReadOptions(sheet, index, ctx.dayMonthOrder?.[index]) };
     const ok = cells.filter((c) => !('error' in parseDate(c, opts))).length;
     return ok / cells.length < SHARE ? 'not-date' : undefined;
   }

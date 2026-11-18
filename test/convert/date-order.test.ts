@@ -9,7 +9,7 @@ import { joinInputs } from '../../src/core/convert/sampleJoin';
 import type { SampleJoinRequestCore } from '../../src/core/convert/sampleJoin';
 import { Collector, metaParser, specsOf } from '../../src/core/dataset';
 import { renderConvertPlain } from '../../src/core/rules/convert';
-import { columnOrder, declaredOrderStatus, isAmbiguousDayMonth } from '../../src/core/values/dates';
+import { columnOrder, columnYYOrder, declaredOrderStatus, isAmbiguousDayMonth } from '../../src/core/values/dates';
 import type { ColumnRole } from '../../src/core/types';
 import { xlsxFile } from '../helpers/files';
 import { descriptionInput, resultsInput } from './joinFixtures';
@@ -218,11 +218,16 @@ describe('NN-NN-NN dates (two-digit year)', () => {
   const OPEN = ['05-06-21', '25-06-21', '30-06-21']; // year-month-day or day-month-year: no value decides
   it('helpers: columnOrder and declaredOrderStatus on NN-NN-NN cells', () => {
     const sheet = (cells: Cell[]) => fileOf(['D'], cells.map((c) => [c])).sheets[0];
-    expect(columnOrder(sheet(OPEN), 0)).toBe('unknown');
+    expect(columnYYOrder(sheet(OPEN), 0)).toBe('unknown');
+    expect(columnYYOrder(sheet(OPEN), 0, 'dmy')).toBe('dmy');
+    expect(columnYYOrder(sheet(OPEN), 0, 'mdy')).toBe('unknown');
+    expect(columnYYOrder(sheet(['98-06-21']), 0)).toBe('ymd');
+    expect(columnYYOrder(sheet(['05-13-21']), 0, 'dmy')).toBe('mdy');
+    // the slash order and the two-digit order are separate: a slash date rules out no reading of a NN-NN-NN cell
+    expect(columnOrder(sheet(['25/06/2021', '05-06-21']), 0)).toBe('dmy');
+    expect(columnYYOrder(sheet(['25/06/2021', '05-06-21']), 0)).toBe('unknown');
+    expect(columnYYOrder(sheet(['25/06/2021', '98-06-21']), 0)).toBe('ymd');
     expect(columnOrder(sheet(OPEN), 0, 'dmy')).toBe('dmy');
-    expect(columnOrder(sheet(OPEN), 0, 'mdy')).toBe('unknown');
-    expect(columnOrder(sheet(['98-06-21']), 0)).toBe('ymd');
-    expect(columnOrder(sheet(['05-13-21']), 0, 'dmy')).toBe('mdy');
     expect(declaredOrderStatus(sheet(OPEN), 0, 'dmy')).toBe('applied');
     expect(declaredOrderStatus(sheet(OPEN), 0, 'ymd')).toBe('applied');
     expect(declaredOrderStatus(sheet(OPEN), 0, 'mdy')).toBe('contradicted');
@@ -240,8 +245,9 @@ describe('NN-NN-NN dates (two-digit year)', () => {
     expect(rule(r, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
     expect(r.ok).toBe(false);
     const text = renderConvertPlain(f[0], 'en');
-    expect(text).toContain('2005-06-21 (year-month-day, YY-MM-DD)');
-    expect(text).toContain('2021-06-05 (day-month-year, DD-MM-YY)');
+    expect(text).toContain('2005-06-21 (ymd); 2021-06-05 (dmy)');
+    expect(text).toContain('Choose the order of this column: ymd, dmy.');
+    expect(text).not.toMatch(/day-month-year|year-month-day/);
     expect(text).not.toContain('{');
   });
 
@@ -282,5 +288,29 @@ describe('NN-NN-NN dates (two-digit year)', () => {
     const y = convert({ sheets: [input(AMBIGUOUS, { dayMonthOrder: { 1: 'ymd' } })] });
     expect(rule(y, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
     expect(rule(y, 'CONV-DATE-ORDER-DECLARED')).toEqual([]);
+  });
+
+  it('a mixed column: the slash order is declared on its own and the two-digit cells are asked on their own', () => {
+    const mixed = ['5/4/2023', '05-06-21', '25-06-21'];
+    const r = convert({ sheets: [input(mixed, { dayMonthOrder: { 1: 'mdy' } })] });
+    // mdy answers the slash cell (round 3) and is not an order the two-digit cells fit: they are asked, not called contradicted
+    expect(rule(r, 'CONV-DATE-ORDER-CONTRADICTED')).toEqual([]);
+    expect(rule(r, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(1);
+    expect(rule(r, 'CONV-DATE-ORDER-UNDECLARED').map((f) => f.params.variant)).toEqual(['two-digit-year']);
+    expect(dateOf(r, 'S1')).toBe('2023-05-04');
+  });
+
+  it('a NN-NN-NN date lent by the description is asked about on the description, once, with its own index', () => {
+    const JOIN2: SampleJoinRequestCore = { results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [] };
+    const file = xlsxFile('book.xlsx', { Counts: [['Sample', 'Taxon', 'Count'], ['X01', TAX, 3], ['X02', TAX, 4], ['X03', TAX, 5]], Samples: [['Sample', 'Date', 'Latitude', 'Longitude'], ['X01', OPEN[0], 61.1, 4.2], ['X02', OPEN[1], 61.3, 4.6], ['X03', OPEN[2], 61.4, 4.7]] });
+    const run2 = (descExtra: Partial<ConvertSheetInput> = {}) => convert({ sheets: joinInputs([resultsInput(file, 'Counts'), descriptionInput(file, 'Samples', descExtra)], [JOIN2], []).sheets });
+    const r = run2();
+    const f = rule(r, 'CONV-DATE-ORDER-UNDECLARED');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ sheet: 'Samples', field: 'Date', params: { variant: 'two-digit-year', readings: 'ymd,dmy', count: 3, index: 1 } });
+    expect(rule(r, 'ROW-DATE-YY-AMBIGUOUS')).toEqual([]);
+    const d = run2({ dayMonthOrder: { 1: 'dmy' } });
+    expect([dateOf(d, 'X01'), dateOf(d, 'X03')]).toEqual(['2021-06-05', '2021-06-30']);
+    expect(rule(d, 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
   });
 });

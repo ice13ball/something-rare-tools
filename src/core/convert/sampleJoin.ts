@@ -8,13 +8,13 @@ import type { KeySide } from '../recognize/layout';
 import { makeConvertFinding } from '../rules/convert';
 import { makeFinding } from '../rules/registry';
 import type { ColumnRole, Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
-import { excelSerialToDate, type DayMonthOrder, type DeclaredOrder } from '../values/dates';
+import { excelSerialToDate, type DeclaredOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { colsOf, depthReader, isUtcBySource } from './build';
 import type { ConvertSheetInput } from './build';
 import { eventDateText } from './events';
 import { shortHash } from './keySetting';
-import { keyPart } from './sampleKey';
+import { keyPart, type ReadOpts } from './sampleKey';
 
 /*
  * The sample-sheet join: a results sheet (counts per taxon) names its samples by a code, and another sheet of the same run describes them (station, date, position, depth). This file PROPOSES
@@ -256,7 +256,7 @@ function keyReaderOf(input: ConvertSheetInput, sheet: RawSheet): KeyReadFn {
     return kind === 'ignore' && picked.has(i) ? 'keyPart' : kind; // (convert() reads a picked ignored column as a key part)
   };
   const ctx = { prefix: '', sheet, decimalComma: input.file.decimalComma, date1904: input.file.date1904, roleOf, ...(input.dayMonthOrder === undefined ? {} : { dayMonthOrder: input.dayMonthOrder }) };
-  const order = new Map<number, DayMonthOrder>();
+  const order = new Map<number, ReadOpts>();
   return (row, columns) => {
     const parts = columns.map((c) => keyPart(ctx, row, c, order));
     const blank = parts.flatMap((p, i) => (p === '' ? [i] : []));

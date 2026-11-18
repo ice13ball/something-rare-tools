@@ -88,8 +88,8 @@ describe('buildDataset: dates and positions', () => {
     expect(byRule(open.findings, 'ROW-DATE-YYMMDD')).toEqual([]);
     const amb = byRule(open.findings, 'ROW-DATE-YY-AMBIGUOUS');
     expect(amb).toHaveLength(1);
-    expect(amb[0]).toMatchObject({ field: 'Date', value: '05-06-21', severity: 'warning', params: { interpreted: '2005-06-21', readings: '2021-06-05 (day-month-year)' } });
-    expect(renderPlain(amb[0], 'en')).toContain('Dates such as "05-06-21" can be year-month-day or another order, and no date in this column decides it. Read as 2005-06-21; it could also be 2021-06-05 (day-month-year).');
+    expect(amb[0]).toMatchObject({ field: 'Date', value: '05-06-21', severity: 'warning', params: { interpreted: '2005-06-21', readings: '2021-06-05 (dmy)' } });
+    expect(renderPlain(amb[0], 'en')).toContain('Dates such as "05-06-21" can be read in more than one order (ymd: year first, dmy: day first, mdy: month first), and no date in column "Date" decides it. Read as 2005-06-21; it could also be 2021-06-05 (dmy).');
     const ymd = build(csv(['98-06-21', '99-07-22']));
     expect(ymd.dataset.rows[0].datetime?.iso).toBe('1998-06-21');
     expect(byRule(ymd.findings, 'ROW-DATE-YYMMDD')[0].params).toEqual({ interpreted: '1998-06-21', order: 'ymd' });
@@ -99,6 +99,50 @@ describe('buildDataset: dates and positions', () => {
     expect(byRule(mdy.findings, 'ROW-DATE-YYMMDD')[0].params).toEqual({ interpreted: '2021-05-13', order: 'mdy' });
     // the same day in every order is not ambiguous
     expect(byRule(build(csv(['05-05-05', '06-06-06'])).findings, 'ROW-DATE-YY-AMBIGUOUS')).toEqual([]);
+  });
+
+  it('NN-NN-NN in a column that also holds slash dates: the slash order never reads them', () => {
+    const csv = (dates: string[]) => textFile('y.csv', `Site_ID,Latitude,Longitude,Date,Na_mg_l\n${dates.map((d, i) => `S${i},70,10,${d},1${i}`).join('\n')}\n`);
+    const a = build(csv(['25/06/2021', '98-06-21']));
+    expect(a.dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2021-06-25', '1998-06-21']);
+    expect(byRule(a.findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    const b = build(csv(['25/06/2021', '05-06-21']));
+    expect(byRule(b.findings, 'ROW-DATE-YY-AMBIGUOUS')).toHaveLength(1);
+    expect(b.dataset.rows[1].datetime?.iso).toBe('2005-06-21');
+  });
+
+  it('NN-NN-NN with only day-month-year and month-day-year fitting is a warning with both readings, not unparseable', () => {
+    const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,05-06-45,1\nS2,71,11,07-08-98,2\n');
+    const { dataset, findings } = build(f);
+    expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
+    const [amb] = byRule(findings, 'ROW-DATE-YY-AMBIGUOUS');
+    expect(amb.params).toEqual({ interpreted: '1945-06-05', readings: '1945-05-06 (mdy)' });
+    expect(dataset.rows[0].datetime?.iso).toBe('1945-06-05');
+  });
+
+  it('the readings carry codes only and the text gives the legend, in every language', () => {
+    const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,05-06-07,1\nS2,71,11,08-09-10,2\n');
+    const [amb] = byRule(build(f).findings, 'ROW-DATE-YY-AMBIGUOUS');
+    expect(amb.params.readings).toBe('2007-06-05 (dmy); 2007-05-06 (mdy)');
+    for (const lang of LANGS) {
+      const text = renderPlain(amb, lang);
+      expect(text, lang).not.toMatch(/day-month-year|month-day-year|year-month-day/);
+      expect(text, lang).not.toContain(' or ');
+      expect(text, lang).toContain('dmy');
+      expect(text, lang).not.toContain('{');
+    }
+    expect(renderPlain(amb, 'pl')).not.toContain(' or ');
+  });
+
+  it('an open column states no order on its symmetric dates, and a decided one states it with a legend', () => {
+    const csv = (dates: string[]) => textFile('y.csv', `Site_ID,Latitude,Longitude,Date,Na_mg_l\n${dates.map((d, i) => `S${i},70,10,${d},1${i}`).join('\n')}\n`);
+    const open = build(csv(['21-06-21', '22-07-22']));
+    const [y] = byRule(open.findings, 'ROW-DATE-YYMMDD');
+    expect(y.params.order).toBe('ymd, dmy');
+    const decided = build(csv(['98-06-21']));
+    const text = renderPlain(byRule(decided.findings, 'ROW-DATE-YYMMDD')[0], 'en');
+    expect(text).toContain('ymd');
+    expect(text).toMatch(/year/);
   });
 
   it('the YY-MM-DD message states the century it chose, in every language', () => {
