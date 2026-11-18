@@ -2800,11 +2800,11 @@ export const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
     en: ['of the turned sheet with values and no name, so no column can be made of it', 'of the turned sheet with values and no name, so no column can be made of them'],
     pl: ['obróconego arkusza z wartościami i bez nazwy, więc nie można z niego zrobić kolumny', 'obróconego arkusza z wartościami i bez nazwy, więc nie można z nich zrobić kolumn', 'obróconego arkusza z wartościami i bez nazwy, więc nie można z nich zrobić kolumn'],
     de: ['des gedrehten Blatts mit Werten und ohne Namen, daraus kann keine Spalte werden', 'des gedrehten Blatts mit Werten und ohne Namen, daraus können keine Spalten werden'],
-    fr: ["de la feuille retournée avec des valeurs et sans nom : on n'en peut faire aucune colonne", "de la feuille retournée avec des valeurs et sans nom : on n'en peut faire aucune colonne"],
+    fr: ["de la feuille retournée avec des valeurs et sans nom : on ne peut en faire aucune colonne", "de la feuille retournée avec des valeurs et sans nom : on ne peut en faire aucune colonne"],
   },
   'turn-name-repeated': {
     en: ['of the turned sheet whose name another row has, so no column is made of it', 'of the turned sheet whose name another row has, so no column is made of them'],
-    pl: ['obróconego arkusza, którego nazwę ma inny wiersz, więc nie powstaje z niego kolumna', 'obróconego arkusza, których nazwę ma inny wiersz, więc nie powstają z nich kolumny', 'obróconego arkusza, których nazwę ma inny wiersz, więc nie powstaje z nich kolumna'],
+    pl: ['obróconego arkusza, którego nazwę ma inny wiersz, więc nie powstaje z niego kolumna', 'obróconego arkusza, których nazwę ma inny wiersz, więc nie powstają z nich kolumny', 'obróconego arkusza, których nazwę ma inny wiersz, więc nie powstają z nich kolumny'],
     de: ['des gedrehten Blatts, dessen Namen eine andere Zeile hat, daher wird keine Spalte daraus', 'des gedrehten Blatts, deren Namen eine andere Zeile hat, daher wird keine Spalte daraus'],
     fr: ["de la feuille retournée dont une autre ligne a le même nom : aucune colonne n'en est faite", "de la feuille retournée dont une autre ligne a le même nom : aucune colonne n'en est faite"],
   },

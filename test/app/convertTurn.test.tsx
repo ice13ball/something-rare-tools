@@ -161,7 +161,7 @@ describe('turned rows that cannot become columns', () => {
     await waitFor(() => expect(item('CONV-ROW-LEFT-OUT')).not.toBeNull());
     const left = item('CONV-ROW-LEFT-OUT')!.textContent ?? '';
     expect(left).toMatch(/name another row has/);
-    expect(left).toMatch(/lines? 1, 3|lines? 1.3|lines? 2, 4/);
+    expect(left).toContain('(lines 2, 4)');
     expect(item('CONV-TURN-NAME-REPEATED')).toBeNull();
   });
 
@@ -195,6 +195,21 @@ describe('the joins of a sheet whose declaration did not change it', () => {
     await idle();
     expect(screen.queryByTestId('join-confirmed')).not.toBeNull();
     expect(screen.queryByTestId('join-proposal')).toBeNull();
+  });
+});
+
+describe('a declaration that changes the sheet', () => {
+  it('drops the sheet\'s confirmed join: the numbers of its columns are other ones now', async () => {
+    const view = render(<ConvertPage engine={createDirectConvertEngine()} download={vi.fn()} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'results.csv', text: RESULTS_CSV }, { name: 'samples.csv', text: SAMPLES_CSV }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    await idle();
+    fireEvent.click(within(await screen.findByTestId('join-proposal')).getByRole('button', { name: T['convert.join.confirm'] }));
+    await screen.findByTestId('join-confirmed');
+    await idle();
+    await turn('samples.csv', 'Sample');
+    await waitFor(() => expect(screen.queryByTestId('join-confirmed')).toBeNull());
   });
 });
 
