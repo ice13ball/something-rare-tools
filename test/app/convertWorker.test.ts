@@ -543,3 +543,21 @@ describe('decimalChoice: a comma that may be a thousands separator (round 4, Tas
     expect(changed.decimal).toEqual({ 'depth.csv': { 1: { reading: 'decimal' } } });
   });
 });
+
+describe('decimalChoice on a long (pivoted) sheet', () => {
+  const LONG = ['Station;Bottle;Date;Latitude;Longitude;Depth_m;Parameter;Unit;Value', 'ZL1;B1;2020-05-01;70,1;20,2;5;Temperature;degC;4,100', 'ZL1;B1;2020-05-01;70,1;20,2;5;Salinity;PSU;33,100', 'ZL1;B2;2020-05-01;70,1;20,2;10;Temperature;degC;3,900', 'ZL1;B2;2020-05-01;70,1;20,2;10;Salinity;PSU;33,400'].join('\n') + '\n';
+  it('the answer is applied before the pivot: the pivoted cells are 4100, 33100 ...', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([file('piv.csv', LONG)])).files[0];
+    expect(f.pivots).toBeDefined();
+    const value = 8;
+    const g = await e.decimalChoice(f.fileId, 'piv.csv', value, 'thousands');
+    expect(g.decimal).toEqual({ 'piv.csv': { [value]: { reading: 'thousands' } } });
+    expect(g.decimalSource?.['piv.csv'].header).toHaveLength(9);
+    expect(g.pivots).toBeDefined();
+    const v = await e.convert({ sheets: [{ fileId: g.fileId, sheet: 'piv.csv', mapping: g.mappings[0], shape: 'wide' }], options: {}, approvedSplits: {} });
+    expect(v.findings.filter((x) => x.ruleId === 'IN-DECIMAL-AMBIGUOUS')).toEqual([]);
+    expect(JSON.stringify(g.samples)).toContain('4100');
+  });
+});
+

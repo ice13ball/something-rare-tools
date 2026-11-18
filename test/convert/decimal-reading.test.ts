@@ -27,6 +27,8 @@ describe('applyDecimalReading', () => {
     expect(d[0]).toMatchObject({ severity: 'info', file: 'a.csv', sheet: 'a.csv', params: { column: 'Depth [m]', index: 1, reading: 'thousands' } });
     expect(d[0].params.fromFile).toBeUndefined();
     expect(renderConvertPlain(d[0], 'en')).toContain('"Depth [m]"');
+    expect(renderConvertPlain(d[0], 'en')).toContain('thousands separator: 1,250 is 1250');
+    expect(renderConvertPlain(d[0], 'pl')).toContain('separatorem tysięcy');
     // the input is not changed
     expect(cells(f, 1)).toEqual(['1,250', '2,000']);
     expect(asked(f)).toEqual([1, 2]);
@@ -83,5 +85,38 @@ describe('the converter with a declared reading', () => {
   it('answered decimal: the depth stays 1.25', () => {
     const r = run({ 1: 'decimal', 2: 'decimal' });
     expect(r.events.map((e) => e.depthMin)).toEqual(expect.arrayContaining([1.25, 2]));
+  });
+});
+
+describe('every use of the answered column', () => {
+  const CSV = 'Sample;Date;Latitude;Longitude;Chlorophyll;Calanus finmarchicus\nA;2023-06-14;55,5;2,5;12,500;1,250\nB;2023-06-14;55,5;2,5;3,750;2,000\n';
+  const runOf = (reading: Record<number, 'decimal' | 'thousands'>) =>
+    convert({ sheets: [sheetInput(applyDecimalReading(parseCsvText(CSV, 'a.csv'), 'a.csv', reading), { shape: 'wide', quantity: { kind: 'count' }, device: { kind: 'known', key: 'multinet' } })] });
+  it('thousands reaches the count of an occurrence and the value of a measured variable', () => {
+    const r = runOf({ 4: 'thousands', 5: 'thousands' });
+    expect(r.occurrences.map((o) => o.individualCount)).toEqual([1250, 2000]);
+    const values = r.measurements.filter((m) => m.role === 'variable').map((m) => m.measurementValue);
+    expect(values).toEqual(expect.arrayContaining(['12500', '3750']));
+  });
+  it('decimal keeps the variable as 12.5 and 3.75', () => {
+    const values = runOf({ 4: 'decimal', 5: 'decimal' }).measurements.filter((m) => m.role === 'variable').map((m) => m.measurementValue);
+    expect(values).toEqual(expect.arrayContaining(['12.500', '3.750']));
+    expect(values).not.toContain('12500');
+  });
+});
+
+describe('a cell written with comma groups and decimals', () => {
+  it('1,250,000.5 reads as 1250000.5 under thousands (the same pattern the question rests on)', () => {
+    const f = parseCsvText('S;D;T\nA;1,250;1,5\nB;1,250,000.5;2,5\n', 'a.csv');
+    expect(asked(f)).toEqual([1]);
+    expect(cells(applyDecimalReading(f, 'a.csv', { 1: 'thousands' }), 1)).toEqual([1250, 1250000.5]);
+  });
+});
+
+describe('the list of rows not written', () => {
+  it('keeps the source sheet with the cells as written', () => {
+    const g = applyDecimalReading(parseCsvText('S;D;T\nA;1,250;1,5\nB;2,000;2,5\n', 'a.csv'), 'a.csv', { 1: 'thousands' });
+    expect(g.sheets[0].decimalSource?.rows.map((r) => r.cells[1])).toEqual(['1,250', '2,000']);
+    expect(cells(g, 1)).toEqual([1250, 2000]);
   });
 });

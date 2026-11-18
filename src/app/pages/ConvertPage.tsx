@@ -577,10 +577,24 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
 
   /**
-   * "Decimal comma" or "Thousands separator" (or taking it back) for one column IN-DECIMAL-AMBIGUOUS asked about: the worker reads the file again with that column's cells read that way (before any pivot or turn),
-   * so the roles and the sheet's decisions start again for that sheet, as for a turn. The worker keeps the answer only for a column the reader asked about; a stale answer is never applied.
+   * "Decimal comma" or "Thousands separator" (or taking it back) for one column IN-DECIMAL-AMBIGUOUS asked about: the worker reads the file again with that column's cells read that way (before any pivot or turn).
+   * No column index changes, so only the file's summary and its proposals are replaced: the person's roles (mappings), choices, confirmations, acceptances, NERC picks and code proposals all stay. The worker keeps
+   * the answer only for a column the reader asked about; a stale answer is never applied.
    */
-  const decimalChoice = (fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<boolean> => reread(fileId, sheet, () => engine.decimalChoice(fileId, sheet, index, reading));
+  const decimalChoice = async (fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<boolean> => {
+    if (!parsed || pivotBusy) return false;
+    setPivotBusy(true);
+    try {
+      const f = await engine.decimalChoice(fileId, sheet, index, reading);
+      setParsed((p) => (p ? { ...p, files: p.files.map((x) => (x.fileId === fileId ? f : x)) } : p));
+      return true;
+    } catch (e) {
+      setConvertError(messageOf(e));
+      return false;
+    } finally {
+      setPivotBusy(false);
+    }
+  };
 
   /** What a code proposal was made for: the shape and the roles. A proposal shown for other roles is stale and not shown. */
   const codesSig = (fileId: string, sheet: string): string => {

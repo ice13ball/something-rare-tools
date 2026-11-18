@@ -89,6 +89,31 @@ describe('the buttons', () => {
   });
 });
 
+describe('answering does not reset the sheet', () => {
+  it('a role the person changed, the export gate and the confirmations survive the answer', async () => {
+    await load([{ name: 'hauls.csv', text: HAULS }]);
+    const exportButton = () => screen.getByRole('button', { name: T['convert.export.button'] });
+    expect(exportButton().getAttribute('aria-disabled')).toBe('true');
+    const role = screen.getByLabelText('Station: Meaning') as HTMLSelectElement;
+    fireEvent.change(role, { target: { value: 'ignore' } });
+    await idle();
+    expect((screen.getByLabelText('Station: Meaning') as HTMLSelectElement).value).toBe('ignore');
+    fireEvent.click(button(item('IN-DECIMAL-AMBIGUOUS')!, T['convert.finding.thousandsSeparator']));
+    await waitFor(() => expect(item('CONV-DECIMAL-DECLARED')).not.toBeNull());
+    await idle();
+    expect((screen.getByLabelText('Station: Meaning') as HTMLSelectElement).value).toBe('ignore');
+    expect(item('IN-DECIMAL-AMBIGUOUS')).toBeNull();
+    // the decimal question no longer blocks (other findings may still, so this is the one finding's own list)
+    expect(item('CONV-DECIMAL-DECLARED')?.closest('.convert-findings')?.getAttribute('data-kind')).toBe('info');
+    // taking the answer back keeps it too
+    fireEvent.click(button(item('CONV-DECIMAL-DECLARED')!, T['convert.finding.askAgain']));
+    await waitFor(() => expect(item('IN-DECIMAL-AMBIGUOUS')).not.toBeNull());
+    await idle();
+    expect((screen.getByLabelText('Station: Meaning') as HTMLSelectElement).value).toBe('ignore');
+    expect(exportButton().getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
 describe('the companion file', () => {
   const line = (rows: number, reading: 'decimal' | 'thousands' = 'thousands', header = HEADER) => writeConvertSidecar({ decimalReading: [{ sheet: 'hauls.csv', reading, hash: keyHashes(header, [CHL])!, rows }] });
   const parsed = (text: string, companion?: string): Promise<ConvertParseResult> =>

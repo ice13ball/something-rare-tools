@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
+import { COMMA_GROUPS, THOUSANDS_LIKE } from '../parse/csv';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, ParsedFile, RawRow } from '../types';
 
@@ -13,8 +14,8 @@ import type { Finding, ParsedFile, RawRow } from '../types';
 
 export type DecimalReading = 'decimal' | 'thousands';
 
-/** A cell written with comma groups of three digits after one to three leading digits: 1,250 or 1,250,000 (an optional sign). */
-const COMMA_GROUPED = /^-?\d{1,3}(?:,\d{3})+$/;
+/** A cell the reader's question rests on (parse/csv.ts): written 1,250 or with comma groups (1,250,000, also 1,250,000.5). */
+const isCommaGrouped = (text: string): boolean => THOUSANDS_LIKE.test(text) || COMMA_GROUPS.test(text);
 
 /** The column indexes of a sheet that IN-DECIMAL-AMBIGUOUS names in the findings of the file. */
 export function askedDecimalColumns(file: ParsedFile, sheet: string): number[] {
@@ -44,13 +45,13 @@ export function applyDecimalReading(file: ParsedFile, sheet: string, reading: Re
         const cell = cells[c];
         if (typeof cell !== 'string') continue;
         const text = cell.trim();
-        if (!COMMA_GROUPED.test(text)) continue;
+        if (!isCommaGrouped(text)) continue;
         if (cells === r.cells) cells = [...r.cells];
         cells[c] = Number(text.replace(/,/g, ''));
       }
       return cells === r.cells ? r : { ...r, cells };
     });
-    return { ...s, rows };
+    return { ...s, rows, decimalSource: s };
   });
   const findings: Finding[] = file.findings.map((f) => {
     if (f.ruleId !== 'IN-DECIMAL-AMBIGUOUS' || (f.sheet !== undefined && f.sheet !== sheet)) return f;
@@ -60,7 +61,7 @@ export function applyDecimalReading(file: ParsedFile, sheet: string, reading: Re
     return makeConvertFinding('CONV-DECIMAL-DECLARED', {
       file: f.file,
       sheet: f.sheet ?? sheet,
-      params: { column: f.params.column ?? '', index, reading: answer, ...(fromFile.includes(index) ? { fromFile: 'yes' } : {}) },
+      params: { column: f.params.column ?? '', index, reading: answer, ...(answer === 'thousands' ? { asThousands: 'yes' } : { asDecimalComma: 'yes' }), ...(fromFile.includes(index) ? { fromFile: 'yes' } : {}) },
     });
   });
   return { ...file, sheets, findings };

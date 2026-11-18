@@ -26,6 +26,8 @@ export interface RawSheet {
   pivot?: PivotInfo;
   /** Set only by the converter's turn (core/convert/turn.ts), on the person's declaration that the columns of this sheet are samples: the sheet was turned, rows to columns. Never set for /check. */
   turn?: TurnInfo;
+  /** Set only by the converter's decimal reading (core/convert/decimalReading.ts): the sheet as it was read before the person's answer turned the cells of a thousands column into numbers (the list of rows not written shows these cells). */
+  decimalSource?: RawSheet;
 }
 /** The person's declaration that a sheet's columns are samples: which column names the rows (the left-hand labels), which columns right of it are not samples, and whether the header gives the date as well as the sample code. */
 export interface TurnDeclaration {

@@ -204,7 +204,7 @@ function sourceOf(l: SheetLedger, sheets: readonly ConvertSheetInput[]): RawShee
     if (l.sheet === sin.sheet) return join.results.raw.turn?.source ?? join.results.raw;
   }
   const sheet = sin?.file.sheets.find((x) => x.name === l.sheet);
-  return sheet?.pivot?.source ?? sheet?.turn?.source ?? sheet;
+  return sheet?.pivot?.source ?? sheet?.turn?.source ?? sheet?.decimalSource ?? sheet;
 }
 
 const cellShown = (c: RawCell | undefined): string => {

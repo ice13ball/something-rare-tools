@@ -130,7 +130,7 @@ const DEC_COMMA = /^-?\d+,\d+$/;
 /** A cell that settles the column as decimal comma: '1.250,5' (point thousands groups, a decimal comma). */
 const SETTLES_DECIMAL = /^-?\d{1,3}(?:\.\d{3})+,\d+$/;
 /** A cell written with comma thousands groups ('1,250,000'): the column writes thousands with commas, yet the reader still reads its 'n,nnn' cells as decimals, so the question stays and names it. */
-const COMMA_GROUPS = /^-?\d{1,3}(?:,\d{3}){2,}(?:\.\d+)?$/;
+export const COMMA_GROUPS = /^-?\d{1,3}(?:,\d{3}){2,}(?:\.\d+)?$/;
 /** A comma value whose comma may be a thousands separator: one to three digits (no leading zero), a comma, exactly three digits. */
 export const THOUSANDS_LIKE = /^-?[1-9]\d{0,2},\d{3}$/;
 

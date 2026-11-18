@@ -1115,12 +1115,30 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     exportPolicy: 'show',
     params: ['column', 'index', 'reading'],
     plain: {
-      pl: `Jak podano, przecinek w liczbach kolumny „{column}” jest odczytywany jako: {reading} (decimal: przecinek dziesiętny, 1,250 to 1,25; thousands: separator tysięcy, 1,250 to 1250). Dotyczy to tej kolumny w całym zapisie: w archiwum, w pomiarach, w sumach i w uwagach.`,
-      en: `As you declared, the comma in the numbers of column "{column}" is read as: {reading} (decimal: a decimal comma, 1,250 is 1.25; thousands: a thousands separator, 1,250 is 1250). It applies to this column everywhere it is used: the archive, the measurements, the sums and the findings.`,
-      de: `Wie angegeben, wird das Komma in den Zahlen der Spalte „{column}“ gelesen als: {reading} (decimal: Dezimalkomma, 1,250 ist 1,25; thousands: Tausendertrennzeichen, 1,250 ist 1250). Das gilt für diese Spalte überall: im Archiv, in den Messwerten, in den Summen und in den Hinweisen.`,
-      fr: `Comme indiqué, la virgule dans les nombres de la colonne « {column} » est lue comme : {reading} (decimal : virgule décimale, 1,250 vaut 1,25 ; thousands : séparateur de milliers, 1,250 vaut 1250). Cela vaut pour cette colonne partout : dans l'archive, dans les mesures, dans les sommes et dans les remarques.`,
+      pl: `Jak podano, przecinek w liczbach kolumny „{column}” jest odczytywany w ten sposób, w całym zapisie: w archiwum, w pomiarach, w sumach i w uwagach.`,
+      en: `As you declared, the comma in the numbers of column "{column}" is read the way you said, everywhere the column is used: the archive, the measurements, the sums and the findings.`,
+      de: `Wie angegeben, wird das Komma in den Zahlen der Spalte „{column}“ so gelesen, überall wo die Spalte verwendet wird: im Archiv, in den Messwerten, in den Summen und in den Hinweisen.`,
+      fr: `Comme indiqué, la virgule dans les nombres de la colonne « {column} » est lue ainsi, partout où la colonne est utilisée : dans l'archive, dans les mesures, dans les sommes et dans les remarques.`,
     },
     plainIf: [
+      {
+        param: 'asDecimalComma',
+        plain: {
+          pl: `Przecinek jest przecinkiem dziesiętnym: 1,250 to 1,25.`,
+          en: `The comma is a decimal comma: 1,250 is 1.25.`,
+          de: `Das Komma ist ein Dezimalkomma: 1,250 ist 1,25.`,
+          fr: `La virgule est une virgule décimale : 1,250 vaut 1,25.`,
+        },
+      },
+      {
+        param: 'asThousands',
+        plain: {
+          pl: `Przecinek jest separatorem tysięcy: 1,250 to 1250.`,
+          en: `The comma is a thousands separator: 1,250 is 1250.`,
+          de: `Das Komma ist ein Tausendertrennzeichen: 1,250 ist 1250.`,
+          fr: `La virgule est un séparateur de milliers : 1,250 vaut 1250.`,
+        },
+      },
       {
         param: 'fromFile',
         plain: {
