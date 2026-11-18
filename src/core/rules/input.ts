@@ -23,7 +23,8 @@ import type { RuleSpec } from './spec';
  *   IN-DATAVERSE-FILES      host, version   which version of a Dataverse dataset was read; optional none = 'yes' when no data file is read; optional original / converted (names) say in which form its converted tables were read; value = the same in English
  *   IN-FILE-UNREADABLE      files    no input file could be read at all (a damaged workbook, ...): the names, comma-separated
  *   IN-LAYOUT-UNSUPPORTED   reason, reasons   English phrase from LayoutPlan.unsupported; JSON of LayoutPlan.unsupportedReasons (codes, rendered per language by renderPlain)
- *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
+ *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'   raised only when the 8-bit readings all agree (the bytes read alike in windows-1250, ISO-8859-2 and windows-1252)
+ *   IN-ENCODING-AMBIGUOUS   encoding, readings, count   the bytes are not UTF-8 and read differently in 2 or more of windows-1250, ISO-8859-2, windows-1252; encoding = the one used (windows-1250 | iso-8859-2), readings = 'windows-1250, ISO-8859-2: Krřyer, Sčvre; windows-1252: Krøyer, Sèvre' (code pages that read alike share a reading; up to three differing words each), count = number of readings
  *   IN-DECIMAL-COMMA        (none)
  *   IN-DECIMAL-AMBIGUOUS    column, index, count, asDecimal, asThousands (+ optional thousandsSeen = the first cell of the column written with comma thousands groups, e.g. 1,250,000; it does not settle the column)   a column of a decimal-comma file whose every comma value has exactly three digits after the comma; value = the first such cell; lines = every comma cell of the column (the cells count counts)
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
@@ -335,6 +336,20 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `Le fichier n'est pas enregistré en UTF-8 ; il a été lu en {encoding}. Vérifiez que les lettres accentuées s'affichent correctement.`,
     },
     technical: `{file}: bytes are not valid UTF-8; decoded as {encoding}. The 8-bit pick is the reader's decision when the bytes are not UTF-8, so the outcome is accepted once before the export.`,
+  },
+  {
+    id: 'IN-ENCODING-AMBIGUOUS',
+    category: 'input',
+    severity: 'warning',
+    exportPolicy: 'block',
+    params: ['encoding', 'readings', 'count'],
+    plain: {
+      pl: `Plik nie jest zapisany w UTF-8, a jego litery czytają się inaczej w {count} kodowaniach: {readings}. Odczytano go jako {encoding}. Powiedz, którego kodowania używa plik.`,
+      en: `This file is not UTF-8, and its letters read differently in {count} encodings: {readings}. It was read as {encoding}. Say which one the file uses.`,
+      de: `Diese Datei ist nicht UTF-8, und ihre Buchstaben werden in {count} Kodierungen unterschiedlich gelesen: {readings}. Sie wurde als {encoding} gelesen. Sagen Sie, welche Kodierung die Datei verwendet.`,
+      fr: `Ce fichier n'est pas en UTF-8, et ses lettres se lisent différemment dans {count} encodages : {readings}. Il a été lu en {encoding}. Dites quel encodage le fichier utilise.`,
+    },
+    technical: `{file}: bytes are not valid UTF-8 and read differently in {count} of windows-1250, ISO-8859-2 and windows-1252 ({readings}); decoded as {encoding}. Code pages that decode the bytes alike count as one reading, so a file all three read alike raises IN-ENCODING-FALLBACK instead. The checker reports and keeps its pick; the converter blocks until the person names the encoding.`,
   },
   {
     id: 'IN-DECIMAL-COMMA',

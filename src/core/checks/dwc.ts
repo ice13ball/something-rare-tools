@@ -459,9 +459,9 @@ function eventDateIso(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
 const MOJIBAKE_PAIR = /[\u00C2\u00C3][\u0080-\u00BF]/;
 const MAX_MOJIBAKE_COLUMNS = 10;
 function mojibake(file: ParsedFile, sheet: RawSheet, out: Finding[]): void {
-  // a file that was not UTF-8 and was decoded by a fallback (one stray byte is enough; the parser says so in IN-ENCODING-FALLBACK) shows the pair for a sign that is not in the file: the rule says nothing
+  // a file that was not UTF-8 and was decoded by a fallback (one stray byte is enough; the parser says so in IN-ENCODING-FALLBACK, or IN-ENCODING-AMBIGUOUS when the code pages read the bytes differently) shows the pair for a sign that is not in the file: the rule says nothing
   // there. An encoding the file declared itself (a Darwin Core Archive that says ISO-8859-2) is no fallback and is read.
-  if (file.findings.some((f) => f.ruleId === 'IN-ENCODING-FALLBACK')) return;
+  if (file.findings.some((f) => f.ruleId === 'IN-ENCODING-FALLBACK' || f.ruleId === 'IN-ENCODING-AMBIGUOUS')) return;
   const cols = new Map<number, { cells: number; example: string }>();
   const lines = new Set<number>();
   const look = (c: RawCell | undefined, index: number, line: number): void => {

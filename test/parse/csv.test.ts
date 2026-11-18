@@ -226,14 +226,64 @@ describe('parseFile on CSV bytes', () => {
     expect(f.findings).toEqual([]);
   });
 
-  it('decodes Windows-1250 and emits IN-ENCODING-FALLBACK with the encoding name', () => {
+  it('decodes Windows-1250 and, when the code pages read it differently, emits IN-ENCODING-AMBIGUOUS with the encoding used', () => {
     // 'Zażółć' in windows-1250: Z a 0xBF 0xF3 0xB3 0xE6 ; plus 0x8C (Ś) so it is windows-1250, not iso-8859-2
     const bytes = new Uint8Array([...enc('name,v\n'), 0x5a, 0x61, 0xbf, 0xf3, 0xb3, 0xe6, 0x8c, ...enc(',1\n')]);
     const f = parseFile('w.csv', bytes);
     expect(f.encoding).toBe('windows-1250');
     expect(f.sheets[0].rows[0].cells[0]).toBe('ZażółćŚ');
-    const e = f.findings.filter((x) => x.ruleId === 'IN-ENCODING-FALLBACK');
+    expect(f.findings.filter((x) => x.ruleId === 'IN-ENCODING-FALLBACK')).toHaveLength(0);
+    const e = f.findings.filter((x) => x.ruleId === 'IN-ENCODING-AMBIGUOUS');
     expect(e).toHaveLength(1);
-    expect(e[0].params).toEqual({ encoding: 'windows-1250' });
+    expect(e[0].params).toMatchObject({ encoding: 'windows-1250', count: 3 });
+  });
+
+  it('emits only IN-ENCODING-FALLBACK when windows-1250, ISO-8859-2 and windows-1252 read the bytes alike', () => {
+    // Müller;Café;Bóbr in windows-1252 (ü é ó = 0xFC 0xE9 0xF3 are the same letters in all three)
+    const bytes = new Uint8Array([...enc('a;b;c\nM'), 0xfc, ...enc('ller;Caf'), 0xe9, ...enc(';B'), 0xf3, ...enc('br\n')]);
+    const f = parseFile('m.csv', bytes);
+    expect(f.sheets[0].rows[0].cells).toEqual(['Müller', 'Café', 'Bóbr']);
+    expect(f.findings.map((x) => x.ruleId)).toEqual(['IN-ENCODING-FALLBACK']);
+  });
+
+  it('windows-1252 bytes of Krøyer;Sèvre are reported as two readings and read as before', () => {
+    const bytes = new Uint8Array([...enc('a;b\nKr'), 0xf8, ...enc('yer;S'), 0xe8, ...enc('vre\n')]);
+    const f = parseFile('k.csv', bytes);
+    expect(f.encoding).toBe('iso-8859-2');
+    expect(f.sheets[0].rows[0].cells).toEqual(['Krřyer', 'Sčvre']);
+    expect(f.findings.map((x) => x.ruleId)).toEqual(['IN-ENCODING-AMBIGUOUS']);
+    expect(f.findings[0].params).toEqual({
+      encoding: 'iso-8859-2',
+      readings: 'windows-1250, ISO-8859-2: Krřyer, Sčvre; windows-1252: Krøyer, Sèvre',
+      count: 2,
+    });
+  });
+
+  it('a code page the person names is used and nothing is reported', () => {
+    const bytes = new Uint8Array([...enc('a;b\nKr'), 0xf8, ...enc('yer;S'), 0xe8, ...enc('vre\n')]);
+    const f = parseFile('k.csv', bytes, { encoding: 'windows-1252' });
+    expect(f.encoding).toBe('windows-1252');
+    expect(f.sheets[0].rows[0].cells).toEqual(['Krøyer', 'Sèvre']);
+    expect(f.findings).toEqual([]);
+  });
+
+  it('reads UTF-16 files (BOM or not) as text with no finding', () => {
+    const le = (s: string, bom: boolean) => {
+      const o: number[] = bom ? [0xff, 0xfe] : [];
+      for (const ch of s) o.push(ch.charCodeAt(0) & 0xff, ch.charCodeAt(0) >> 8);
+      return new Uint8Array(o);
+    };
+    const be = (s: string) => {
+      const o: number[] = [0xfe, 0xff];
+      for (const ch of s) o.push(ch.charCodeAt(0) >> 8, ch.charCodeAt(0) & 0xff);
+      return new Uint8Array(o);
+    };
+    const src = 'Station\tDepth\r\nA\t5';
+    for (const [bytes, name] of [[le(src, true), 'utf-16le'], [le(src, false), 'utf-16le'], [be(src), 'utf-16be']] as const) {
+      const f = parseFile('u.txt', bytes);
+      expect(f.sheets[0].header).toEqual(['Station', 'Depth']);
+      expect(f.encoding).toBe(name);
+      expect(f.findings.filter((x) => x.ruleId.startsWith('IN-ENCODING'))).toEqual([]);
+    }
   });
 });

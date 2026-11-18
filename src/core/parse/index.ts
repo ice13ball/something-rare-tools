@@ -4,7 +4,7 @@ import type { MetadataRecord, ParsedFile } from '../types';
 import { parseDataciteJson, parseDataciteXml } from '../metadata/datacite';
 import { parseIsoRecord } from '../metadata/iso19115-3';
 import { parseZenodoRecord } from '../metadata/zenodo';
-import { decodeText } from '../values/encoding';
+import { decodeText, type LegacyEncoding } from '../values/encoding';
 import { parseCsvText } from './csv';
 import { parseDwca, type DwcaOptions } from './dwca';
 import { parsePangaeaText } from './pangaea';
@@ -62,7 +62,8 @@ function metadataFile(fileName: string, bytesText: ReturnType<typeof decodeText>
 /** Only the zip structure is checked before SheetJS reads a workbook: no size or ratio limit applies to a workbook here. */
 const WORKBOOK_ZIP: ZipLimits = { maxArchiveBytes: Infinity, maxTotalBytes: Infinity, maxEntryBytes: Infinity, maxEntries: 100_000, maxRatio: Infinity, ratioFloorBytes: Infinity };
 
-export function parseFile(fileName: string, bytes: Uint8Array): ParsedFile {
+/** `opts.encoding` is the code page the person named for a file that is not UTF-8 (the checker itself never passes one: it reports and reads as before). */
+export function parseFile(fileName: string, bytes: Uint8Array, opts?: { encoding?: LegacyEncoding }): ParsedFile {
   if (startsWith(bytes, ZIP)) {
     // SheetJS never returns on some damaged zips (a local header without a central directory): read the directory first
     try {
@@ -78,7 +79,7 @@ export function parseFile(fileName: string, bytes: Uint8Array): ParsedFile {
     return { fileName, kind: 'pdf', sheets: [], date1904: false, decimalComma: false, encoding: 'utf-8', findings: [] };
   }
 
-  const decoded = decodeText(bytes);
+  const decoded = decodeText(bytes, opts?.encoding);
   const head = decoded.text.replace(/^﻿/, '').trimStart();
 
   if (head.startsWith('/* DATA DESCRIPTION:')) return parsePangaeaText(decoded.text, fileName, decoded);

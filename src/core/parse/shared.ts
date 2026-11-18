@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { Finding, RawCell, RawRow } from '../types';
 import { makeFinding } from '../rules/registryCheck';
-import type { DecodedText } from '../values/encoding';
+import type { DecodedText, LegacyEncoding } from '../values/encoding';
 import { parseNumber } from '../values/numbers';
 import { parseDate, parseTimeCell } from '../values/dates';
 import { unitFromHeader } from '../recognize/columns';
@@ -43,7 +43,20 @@ export function raggedFinding(fileName: string, sheet: string, headerLength: num
   });
 }
 
-export function encodingFinding(fileName: string, d: Pick<DecodedText, 'encoding' | 'fallback'>): Finding | undefined {
+const READING_NAME: Record<LegacyEncoding, string> = { 'windows-1250': 'windows-1250', 'iso-8859-2': 'ISO-8859-2', 'windows-1252': 'windows-1252' };
+
+/** The readings as the rule text shows them: `windows-1250, ISO-8859-2: Krřyer, Sčvre; windows-1252: Krøyer, Sèvre`. */
+export const renderReadings = (readings: NonNullable<DecodedText['readings']>): string =>
+  readings.map((r) => `${r.encodings.map((e) => READING_NAME[e]).join(', ')}: ${r.words}`).join('; ');
+
+/** IN-ENCODING-AMBIGUOUS when the 8-bit code pages read the bytes differently, else IN-ENCODING-FALLBACK for any non-UTF-8 pick; nothing for UTF-8/UTF-16 or a code page the person named. */
+export function encodingFinding(fileName: string, d: Pick<DecodedText, 'encoding' | 'fallback' | 'readings'>): Finding | undefined {
+  if (d.readings) {
+    return makeFinding('IN-ENCODING-AMBIGUOUS', {
+      file: fileName,
+      params: { encoding: d.encoding, readings: renderReadings(d.readings), count: d.readings.length },
+    });
+  }
   return d.fallback ? makeFinding('IN-ENCODING-FALLBACK', { file: fileName, params: { encoding: d.encoding } }) : undefined;
 }
 

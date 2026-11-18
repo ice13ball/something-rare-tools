@@ -25,6 +25,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | IN-FILE-UNREADABLE | error | block | input | — | —<a id="IN-FILE-UNREADABLE"></a> |
 | IN-LAYOUT-UNSUPPORTED | error | block | input | — | —<a id="IN-LAYOUT-UNSUPPORTED"></a> |
 | IN-ENCODING-FALLBACK | info | accept | input | — | —<a id="IN-ENCODING-FALLBACK"></a> |
+| IN-ENCODING-AMBIGUOUS | warning | block | input | — | —<a id="IN-ENCODING-AMBIGUOUS"></a> |
 | IN-DECIMAL-COMMA | info | accept | input | — | —<a id="IN-DECIMAL-COMMA"></a> |
 | IN-DECIMAL-AMBIGUOUS | warning | block | input | — | —<a id="IN-DECIMAL-AMBIGUOUS"></a> |
 | IN-HEADER-SHORT | warning | accept | input | — | —<a id="IN-HEADER-SHORT"></a> |

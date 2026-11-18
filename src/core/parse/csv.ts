@@ -206,7 +206,7 @@ function thousandsReadings(example: string): { asDecimal: string; asThousands: s
  * Parses CSV/TSV text. `decoded` carries what decodeText found when the caller had bytes; without it the text is
  * assumed UTF-8 (a leading U+FEFF is still stripped and reported as 'utf-8-bom').
  */
-export function parseCsvText(text: string, fileName: string, decoded?: Pick<DecodedText, 'encoding' | 'fallback'>): ParsedFile {
+export function parseCsvText(text: string, fileName: string, decoded?: Pick<DecodedText, 'encoding' | 'fallback' | 'readings'>): ParsedFile {
   let encoding: string = decoded?.encoding ?? 'utf-8';
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1);

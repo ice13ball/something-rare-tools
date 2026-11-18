@@ -114,7 +114,7 @@ function metadataOf(block: Map<string, string[]>, fileName: string): MetadataRec
  * after it is the table header, and every later line is a data row. Line numbers are physical file lines, the
  * header block included. Parameter(s) lines are listed in column order so they match the table header by position.
  */
-export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<DecodedText, 'encoding' | 'fallback'>): ParsedFile {
+export function parsePangaeaText(text: string, fileName: string, decoded?: Pick<DecodedText, 'encoding' | 'fallback' | 'readings'>): ParsedFile {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
   const lines = splitPhysicalLines(text);
   const findings: Finding[] = [];

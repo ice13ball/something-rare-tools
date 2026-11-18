@@ -106,7 +106,7 @@ export interface ParsedFile {
   sheets: RawSheet[];
   date1904: boolean;
   decimalComma: boolean;
-  encoding: string;             // 'utf-8' | 'utf-8-bom' | 'windows-1250' | 'iso-8859-2'
+  encoding: string;             // 'utf-8' | 'utf-8-bom' | 'utf-16le' | 'utf-16be' | 'windows-1250' | 'iso-8859-2' | 'windows-1252'
   embeddedMetadata?: MetadataRecord;   // PANGAEA header, or the record itself for kind 'metadata'
   findings: Finding[];          // parse-level findings (ragged rows, encoding fallback, …)
   /** Set only by the converter's reading path (core/convert/read.ts), never by the shared parsers: the parameters of a PANGAEA header block with their abbreviations and comments. */
