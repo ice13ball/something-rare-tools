@@ -30,7 +30,7 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -1174,6 +1174,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     hasPressureColumn={m.columns.some((c) => c.role.kind === 'pressure')}
                     hasStationColumn={m.columns.some((c) => c.role.kind === 'station')}
                     hasPositionColumn={m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude')}
+                    positionJoinedFrom={positionJoinedFrom({ parsed, mappings, joins }, f.fileId, m.sheet)}
                     ownRecordsOffered={ownRecordsAllowed(f, m, choice)}
                     {...turnPropsOf(f, m.sheet)}
                     choice={choice}

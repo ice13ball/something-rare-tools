@@ -14,6 +14,9 @@ import type { ColumnRole } from '../../src/core/types';
 import { META } from './exportHelpers';
 import type { Cell } from './helpers';
 import { fileOf, sheetInput } from './helpers';
+import { joinInputs } from '../../src/core/convert/sampleJoin';
+import { xlsxFile } from '../helpers/files';
+import { descriptionInput, resultsInput } from './joinFixtures';
 
 const BASE: Record<string, ColumnRole> = { Sample: { kind: 'sampleId' }, Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } };
 const sheet = (header: string[], rows: Cell[][], extra: Partial<ConvertSheetInput> = {}, edit: Record<string, ColumnRole> = {}): ConvertSheetInput =>
@@ -177,5 +180,53 @@ describe('CONV-EVENT-DATE-MISSING', () => {
     expect(ids(answered.findings, 'CONV-EVENT-DATE-MISSING')).toHaveLength(1);
     expect(ids(answered.findings, 'CONV-ROW-LEFT-OUT')).toEqual([]);
     expect(ids(answered.findings, 'CONV-ROW-NOT-UNDERSTOOD')).toEqual([]);
+  });
+});
+
+describe('CONV-EVENT-DATE-MISSING when the date is lent by a joined description sheet (final review I1)', () => {
+  const fishFile = xlsxFile('book.xlsx', {
+    Fish: [['Sample', 'Taxon', 'Count'], ['T1', 'Gadus morhua', 2], ['T1', 'Clupea harengus', 1], ['T2', 'Gadus morhua', 4]],
+    Samples: [['Sample', 'Date', 'Latitude', 'Longitude'], ['T1', '2021-05-03', 61.1, 4.2], ['T2', null, 61.3, 4.6]],
+  });
+  const joined = (extra: Partial<ConvertSheetInput> = {}) => {
+    const out = joinInputs([resultsInput(fishFile, 'Fish', extra), descriptionInput(fishFile, 'Samples')], [{ results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [] }], []);
+    return convert({ sheets: out.sheets });
+  };
+
+  it('names the description sheet and its own line, not the results sheet and its lines', () => {
+    const f = ids(joined().findings, 'CONV-EVENT-DATE-MISSING');
+    expect(f).toHaveLength(1);
+    expect(f[0].lines).toEqual([3]);
+    expect(f[0].params).toMatchObject({ count: 1, rows: 1, how: 'blank-cells', description: 'Samples', joined: 'yes', described: 'yes' });
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const text = renderConvertPlain(f[0], lang);
+      expect(text).toContain('Samples');
+      expect(text).not.toMatch(/\{|\}/);
+    }
+    expect(renderConvertPlain(f[0], 'en')).toBe('1 sample of sheet "Fish" has no date: the date cells of sheet "Samples" are empty. Fill them in there, or leave these samples out and list them.');
+  });
+
+  it('the leave-out still takes the results lines of those samples out (the answer is counted in results lines)', () => {
+    const left = joined({ leaveOut: [{ reason: 'no-event-date', count: 1 }] });
+    expect(ids(left.findings, 'CONV-EVENT-DATE-MISSING')).toEqual([]);
+    expect(ids(left.findings, 'CONV-ROW-LEFT-OUT')[0].params).toMatchObject({ reason: 'no-event-date', count: 1 });
+  });
+
+  it('a joined sheet never advises to join: every variant, four languages, Polish plural tokens kept', () => {
+    const base = { count: 3, rows: 3, how: 'blank-cells', joined: 'yes', description: 'Samples' } as const;
+    const cases: Record<string, string | number>[] = [{ ...base, described: 'yes' }, { ...base, described: 'yes', turned: 'yes' }, { ...base, described: 'yes', pivoted: 'yes' }, { ...base, turned: 'yes' }, { ...base, pivoted: 'yes' }, { ...base, how: 'no-date-role' }];
+    for (const params of cases) {
+      const f = makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', params });
+      for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+        const text = renderConvertPlain(f, lang);
+        expect(text, `${JSON.stringify(params)} ${lang}`).toContain('Samples');
+        expect(text).not.toMatch(/\{|\}/);
+      }
+      expect(renderConvertPlain(f, 'en')).not.toMatch(/join the sheet/i);
+      if (params.turned === 'yes' || params.pivoted === 'yes') expect(renderConvertPlain(f, 'en')).not.toMatch(/leave these samples out/);
+    }
+    const pl = renderConvertPlain(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', params: { ...base, count: 2 } }), 'pl');
+    expect(pl).toContain('2 próbki');
+    expect(renderConvertPlain(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', params: { ...base, count: 5 } }), 'pl')).toContain('5 próbek');
   });
 });

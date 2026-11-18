@@ -58,9 +58,9 @@ import type { ParsedFile } from '../types';
  *                     with exceptions or per pair (those hold values, so they are never written): the page opens the group again. A quantity name, a count and names, never a value.
  *   sampleJoinResultsOnly=<count>:<["rFile","rSheet"]>  the person accepted <count> results samples without a description. Holds only for the same count.
  *   sampleJoinNo=<["rFile","rSheet","dFile","dSheet"]>  the person declined the proposal for exactly this pair; no other pair of the results sheet is affected.
- *   declaredPosition=<lat>:<lon>:<uncertainty>:<sheet>  (round 3, Q6) the one position the PERSON typed for the sheet of that name, which has no latitude / longitude column, with its uncertainty in metres, as
+ *   declaredPosition=<lat>:<lon>:<uncertainty>:<rows>:<sheet>  (round 3, Q6) the one position the PERSON typed for the sheet of that name, which has no latitude / longitude column, with its uncertainty in metres, as
  *                     typed (a decimal comma is kept; the field is quoted). The one setting that holds typed values, and the only one: it is the person's own declaration, not a value read from the data. A
- *                     PRE-FILL only: it fills the three fields of the sheet of that name when that sheet has no position column in this drop, the page then says the position came from the file until a
+ *                     PRE-FILL only, for a sheet of that name with the same number of rows <rows> (as every other saved answer; for another number the page says it was not applied): it fills the three fields when that sheet has no position column in this drop, the page then says the position came from the file until a
  *                     field is edited, and the converter refuses it where it does not apply.
  *   turned=<sheet>:<nameHash>:<rows>:<notSampleHashes>[:dates]  (round 3) the person declared that the samples of the sheet of that name are its columns (core/convert/turn.ts): the hash of the column that names the
  *                     rows, the number of rows of the sheet as dropped, the hashes of the columns that are not samples joined with "+" (empty when none) and, last, `dates` when the header gives the date too (hashes as for
@@ -163,7 +163,7 @@ export interface ConvertSettings {
   /** The pairs the person declined. */
   sampleJoinNo?: { results: [string, string]; description: [string, string] }[];
   /** The one position the person typed for a sheet without a position column (latitude, longitude, uncertainty in metres, as typed). A pre-fill only. The only typed values the file holds: the person's own declaration. */
-  declaredPosition?: { sheet: string; lat: string; lon: string; uncertaintyM: string }[];
+  declaredPosition?: { sheet: string; lat: string; lon: string; uncertaintyM: string; rows: number }[];
   /** The sheets the person declared "the samples are the columns", by sheet: the hash of the name column, the hashes of the columns that are not samples (empty when none), the number of rows of the sheet as dropped, and whether the header gives the date too. Holds only while the columns are found again and the rows are the same. */
   turned?: { sheet: string; nameHash: string; notSampleHashes: string; rows: number; headerDates?: true }[];
   /** The kind of mass the user gave the biomass columns of a sheet, by sheet name. Only present when there is at least one. A pre-pick only. */
@@ -222,7 +222,7 @@ function names(text: string, n: number): string[] | undefined {
 const ONE_HASH = '[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?';
 const TURNED = new RegExp(`^(.+):(${ONE_HASH}):(\\d{1,9}):(${HASHES})?(?::(dates))?$`, 's');
 const DAY_MONTH_ORDER = /^(dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
-const DECLARED_POSITION = /^([^:]{1,40}):([^:]{1,40}):([^:]{1,40}):(.+)$/s;
+const DECLARED_POSITION = /^([^:]{1,40}):([^:]{1,40}):([^:]{1,40}):(\d{1,9}):(.+)$/s;
 const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
 
 const addName = (list: string[], name: string): void => {
@@ -275,7 +275,7 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = DECLARED_POSITION.exec(v.slice(DECLARED_POSITION_SETTING.length));
       const list = (settings.declaredPosition ??= []);
       const [lat, lon, uncertaintyM] = m === null ? ['', '', ''] : [m[1].trim(), m[2].trim(), m[3].trim()];
-      if (m !== null && lat !== '' && lon !== '' && uncertaintyM !== '' && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[4])) list.push({ sheet: m[4], lat, lon, uncertaintyM });
+      if (m !== null && lat !== '' && lon !== '' && uncertaintyM !== '' && m[5].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[5])) list.push({ sheet: m[5], lat, lon, uncertaintyM, rows: Number(m[4]) });
     } else if (v.startsWith(TURNED_SETTING)) {
       const m = TURNED.exec(v.slice(TURNED_SETTING.length));
       const list = (settings.turned ??= []);
@@ -358,7 +358,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ]),
       ...(settings.turned ?? []).filter((t) => t.sheet !== '' && t.sheet.length <= MAX_SETTING_NAME && new RegExp(`^${ONE_HASH}$`).test(t.nameHash) && (t.notSampleHashes === '' || new RegExp(`^${HASHES}$`).test(t.notSampleHashes)) && Number.isInteger(t.rows) && t.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((t) => line([SETTING_ROW, `${TURNED_SETTING}${t.sheet}:${t.nameHash}:${t.rows}:${t.notSampleHashes}${t.headerDates === true ? ':dates' : ''}`, '', '', ''])),
       ...(settings.dayMonthOrder ?? []).filter((d) => (d.order === 'dmy' || d.order === 'mdy') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DAY_MONTH_ORDER_SETTING}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
-      ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${d.sheet}`, '', '', ''])),
+      ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),
       ...(settings.sampleJoin ?? []).filter((j) => SHEET_NAMES([...j.results, ...j.description]) && /^[0-9a-f]{8}/.test(j.resultsHashes) && /^[0-9a-f]{8}/.test(j.descriptionHashes) && Number.isInteger(j.resultsRows) && j.resultsRows >= 0 && Number.isInteger(j.descriptionRows) && j.descriptionRows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((j) => [
         line([SETTING_ROW, `${SAMPLE_JOIN_SETTING}${j.resultsRows}:${j.descriptionRows}:${j.resultsHashes}:${j.descriptionHashes}:${JSON.stringify([...j.results, ...j.description])}`, '', '', '']),
         ...j.conflicts.filter((c) => c.group.length <= MAX_SETTING_NAME && Number.isInteger(c.count) && c.count >= 0).slice(0, MAX_SETTING_SHEETS).map((c) => line([SETTING_ROW, `${SAMPLE_JOIN_CONFLICT_SETTING}${c.take}:${c.count}:${c.group}:${JSON.stringify(j.results)}`, '', '', ''])),

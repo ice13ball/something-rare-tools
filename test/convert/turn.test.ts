@@ -149,9 +149,12 @@ describe('a turned sheet is converted', () => {
     const { result } = joined(inputs);
     const f = rules(result.findings, 'CONV-EVENT-DATE-MISSING');
     expect(f).toHaveLength(1);
-    expect(f[0].params).toMatchObject({ turned: 'yes', turnedColumn: 'C' });
-    expect(f[0].lines).toEqual([1]);
-    expect(renderConvertPlain(f[0], 'en')).not.toMatch(/leave/i);
+    // the date is lent by the joined description sheet: the blank cell is on its line 3, and the text names that sheet (final review I1), not the turned column and not "join the sheet"
+    expect(f[0].params).toMatchObject({ turned: 'yes', joined: 'yes', described: 'yes' });
+    expect(f[0].params.turnedColumn).toBeUndefined();
+    expect(f[0].lines).toEqual([3]);
+    expect(renderConvertPlain(f[0], 'en')).not.toMatch(/leave|join the sheet/i);
+    expect(renderConvertPlain(f[0], 'en')).toContain(`"${String(f[0].params.description)}"`);
     const again = joined(inputs.map((i) => ({ ...i, leaveOut: [{ reason: 'no-event-date', count: 1 }] })));
     expect(rules(again.result.findings, 'CONV-EVENT-DATE-MISSING')).toHaveLength(1);
     expect(again.result.events.some((e) => e.id === 'S2')).toBe(true);

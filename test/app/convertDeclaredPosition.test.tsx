@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
 import { initialChoices } from '../../src/app/convertModel';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
+import { keyHashes } from '../../src/core/convert/keySetting';
 import { readConvertSettings, writeConvertSidecar } from '../../src/core/convert/settings';
 import { textFile } from '../helpers/files';
 import { UI } from '../../src/core/i18n/ui';
@@ -96,7 +97,7 @@ describe('the declaration on the page', () => {
     await idle();
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     const text = run.download.mock.calls[0][0] as string;
-    expect(text).toContain(`declaredPosition=54.1:10.9:500:${SHEET}`);
+    expect(text).toContain(`declaredPosition=54.1:10.9:500:2:${SHEET}`);
     cleanup();
     const again = await load([{ name: 'tanks.csv', text: TANKS }, { name: 'c.csv', text }]);
     expect(last(again).declaredPosition).toEqual({ lat: '54.1', lon: '10.9', uncertaintyM: '500' });
@@ -117,7 +118,7 @@ describe('the declaration on the page', () => {
   });
 
   it('a declaration read from a file is not sent for a sheet that has a position column', async () => {
-    const companion = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500' }] });
+    const companion = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500', rows: 2 }] });
     const run = await load([{ name: 'tanks.csv', text: BLANK_COLUMNS }, { name: 'c.csv', text: companion }]);
     expect(last(run).declaredPosition).toBeUndefined();
     expect(item('CONV-POSITION-DECLARED-INVALID')).toBeNull();
@@ -142,15 +143,81 @@ describe('the declaration on the page', () => {
   });
 });
 
+describe('a saved position is tied to the sheet it was typed for (final review M2)', () => {
+  it('a companion file of a sheet of the same name with another number of rows is not applied, and the form says so', async () => {
+    const stale = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500', rows: 5 }] });
+    const run = await load([{ name: 'tanks.csv', text: TANKS }, { name: 'c.csv', text: stale }]);
+    expect(last(run).declaredPosition).toBeUndefined();
+    expect((screen.getByLabelText(T['convert.position.lat']) as HTMLInputElement).value).toBe('');
+    expect(screen.getByTestId('position-stale').textContent).toBe(T['convert.position.staleFile']);
+    expect(item('CONV-POSITION-DECLARED')).toBeNull();
+    // typing the person's own position takes the note away
+    type(T['convert.position.lat'], '54.1');
+    await waitFor(() => expect(screen.queryByTestId('position-stale')).toBeNull());
+  });
+
+  it('the same companion for the same number of rows still pre-fills', async () => {
+    const same = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500', rows: 2 }] });
+    const run = await load([{ name: 'tanks.csv', text: TANKS }, { name: 'c.csv', text: same }]);
+    expect(last(run).declaredPosition).toEqual({ lat: '54.1', lon: '10.9', uncertaintyM: '500' });
+    expect(screen.queryByTestId('position-stale')).toBeNull();
+  });
+});
+
+describe('a sheet whose positions come from a joined sheet (final review M1)', () => {
+  const RESULTS = csvOf(['Sample', 'Taxon', 'Count'], [['X01', 'Calanus finmarchicus', 12], ['X01', 'Oithona similis', 3], ['X02', 'Calanus finmarchicus', 7]]);
+  const SAMPLES = csvOf(['Sample', 'Date', 'Latitude', 'Longitude'], [['X01', '2021-05-03', 61.1, 4.2], ['X02', '2021-05-04', 61.3, 4.6]]);
+  const FILES = [{ name: 'results.csv', text: RESULTS }, { name: 'samples.csv', text: SAMPLES }];
+  async function companionOf(position: boolean): Promise<string> {
+    const parsed = await createDirectConvertEngine().parse(FILES.map((f) => ({ name: f.name, bytes: new TextEncoder().encode(f.text), source: 'dropped' as const })));
+    const r = parsed.files.find((f) => f.fileName === 'results.csv')!;
+    const d = parsed.files.find((f) => f.fileName === 'samples.csv')!;
+    return writeConvertSidecar({
+      sampleJoin: [{ results: ['results.csv', 'results.csv'], description: ['samples.csv', 'samples.csv'], resultsRows: r.sheets[0].rowCount, descriptionRows: d.sheets[0].rowCount, resultsHashes: keyHashes(r.sheets[0].header, [0])!, descriptionHashes: keyHashes(d.sheets[0].header, [0])!, conflicts: [] }],
+      ...(position ? { declaredPosition: [{ sheet: 'results.csv', lat: '54.1', lon: '10.9', uncertaintyM: '500', rows: r.sheets[0].rowCount }] } : {}),
+    });
+  }
+  const resultsBody = (r: Run): ConvertRequestBody['sheets'][number] => r.bodies[r.bodies.length - 1].sheets.find((s) => s.sheet === 'results.csv')!;
+
+  it('a position restored from the companion file is not sent, is shown as not applied with the joined sheet named, and does not block', async () => {
+    const companion = await companionOf(true);
+    const run = await load([...FILES, { name: 'c.csv', text: companion }]);
+    await waitFor(() => expect(run.bodies[run.bodies.length - 1].sampleJoin).toBeDefined());
+    await idle();
+    expect(resultsBody(run).declaredPosition).toBeUndefined();
+    expect(item('CONV-POSITION-DECLARED-INVALID')).toBeNull();
+    expect(item('CONV-POSITION-NONE')).toBeNull();
+    const note = screen.getByTestId('position-held-back').textContent!;
+    expect(note).toContain('samples.csv');
+    expect(note).not.toContain(T['convert.position.heldBack.column']);
+  });
+
+  it('a position the person typed before the join is sent, and the refusal says the position comes from the joined sheet', async () => {
+    const run = await load(FILES);
+    type(T['convert.position.lat'], '54.1');
+    type(T['convert.position.lon'], '10.9');
+    type(T['convert.position.uncertainty'], '500');
+    await waitFor(() => expect(resultsBody(run).declaredPosition).toBeDefined());
+    await idle();
+    fireEvent.click(screen.getByRole('button', { name: T['convert.join.confirm'] }));
+    await waitFor(() => expect(run.bodies[run.bodies.length - 1].sampleJoin).toBeDefined());
+    await idle();
+    expect(resultsBody(run).declaredPosition).toEqual({ lat: '54.1', lon: '10.9', uncertaintyM: '500' });
+    const refused = item('CONV-POSITION-DECLARED-INVALID')!;
+    expect(refused.textContent).toContain('joined sheet "samples.csv"');
+    expect(refused.textContent).not.toContain('already has a latitude or longitude column');
+  });
+});
+
 describe('the companion line', () => {
   it('round-trips a negative decimal-comma latitude (the field is quoted)', () => {
-    const text = writeConvertSidecar({ declaredPosition: [{ sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500' }] });
+    const text = writeConvertSidecar({ declaredPosition: [{ sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500', rows: 4 }] });
     const read = readConvertSettings(textFile('c.csv', text))!;
-    expect(read.declaredPosition).toEqual([{ sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500' }]);
+    expect(read.declaredPosition).toEqual([{ sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500', rows: 4 }]);
   });
 
   it('pre-fills a sheet of that name whatever its proposed roles', async () => {
-    const companion = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500' }] });
+    const companion = writeConvertSidecar({ declaredPosition: [{ sheet: SHEET, lat: '54.1', lon: '10.9', uncertaintyM: '500', rows: 2 }] });
     const engine = createDirectConvertEngine();
     const enc = (s: string) => new TextEncoder().encode(s);
     const plain = await engine.parse([{ name: 'tanks.csv', bytes: enc(TANKS), source: 'dropped' }, { name: 'c.csv', bytes: enc(companion), source: 'dropped' }]);

@@ -71,7 +71,7 @@ import type { SampleJoinInfo } from './sampleJoin';
 /** What the person declared as the one position of a sheet, read: applied, refused (one reason per cause), or not declared. */
 type DeclaredPositionRead =
   | { kind: 'none' }
-  | { kind: 'invalid'; reasons: { reason: 'latitude' | 'longitude' | 'uncertainty' | 'position-role' | 'profile'; value?: string }[] }
+  | { kind: 'invalid'; reasons: { reason: 'latitude' | 'longitude' | 'uncertainty' | 'position-role' | 'position-joined' | 'profile'; value?: string; description?: string }[] }
   | { kind: 'ok'; lat: number; lon: number; latText: string; lonText: string; uncertainty: number; typed: { lat: string; lon: string; uncertainty: string } };
 
 /** The remark written beside every position the person declared (event.txt georeferenceRemarks). */
@@ -85,7 +85,11 @@ function readDeclaredPosition(sin: ConvertSheetInput): DeclaredPositionRead {
   if (d === undefined) return { kind: 'none' };
   // a profile sheet's levels take their positions from their own columns (or the station): a declaration is refused there, not dropped
   if (sin.profile !== undefined) return { kind: 'invalid', reasons: [{ reason: 'profile' }] };
-  if (sin.mapping.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude')) return { kind: 'invalid', reasons: [{ reason: 'position-role' }] };
+  const join = sin.sampleJoin;
+  // a position role on a column the results sheet itself has, or on one the joined description sheet lends: the person looks at the results sheet, so the reason names where the positions are
+  const own = sin.mapping.columns.some((c) => (c.role.kind === 'latitude' || c.role.kind === 'longitude') && (join === undefined || c.index < join.results.width));
+  if (own) return { kind: 'invalid', reasons: [{ reason: 'position-role' }] };
+  if (join !== undefined && sin.mapping.columns.some((c) => (c.role.kind === 'latitude' || c.role.kind === 'longitude') && c.index >= join.results.width)) return { kind: 'invalid', reasons: [{ reason: 'position-joined', description: join.description.sheet.name }] };
   const lat = parseTypedCoordinate(d.lat);
   const lon = parseTypedCoordinate(d.lon);
   const u = parseTypedNumber(d.uncertaintyM);
@@ -167,6 +171,10 @@ export interface UndatedSheet {
   pivoted: boolean;
   /** The sheet was turned (its samples are the source columns): a sample is a column, not a line, so no leave-out is offered. */
   turned: boolean;
+  /** The sheet is the results sheet of a confirmed join: the advice never says "join the sheet that describes the samples", and the lines of `describedLines` are the description's own. */
+  joined?: { file: string; sheet: string };
+  /** `blank-cells` where every date cell is a column of the joined description sheet: the blank cells are there, on these lines of the description (`lines` stays the results lines the leave-out takes out). */
+  describedLines?: number[];
 }
 
 /**
@@ -206,7 +214,27 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
       lines.push(...named);
     }
     if (eventIds.length === 0) continue;
-    out.push({ inputIndex: rawSheets.indexOf(sin), file: sin.file.fileName, sheet: sin.sheet, how, samples: eventIds.length, pivoted: raw?.pivot !== undefined, turned: raw?.turn !== undefined, lines: [...new Set(lines)].sort((a, b) => a - b), eventIds });
+    const sorted = [...new Set(lines)].sort((a, b) => a - b);
+    const info = sin.sampleJoin;
+    // a date lent by the description is blank in the description sheet: the person fills it there, on the description's own lines
+    let describedLines: number[] | undefined;
+    if (info !== undefined && how === 'blank-cells' && dateCells.every((c) => info.columns[c.index]?.side === 'description')) {
+      const own = [...new Set(sorted.map((l) => info.lentFrom.get(l) ?? info.descriptionOnly.get(l)))];
+      if (own.length > 0 && own.every((l) => l !== undefined)) describedLines = (own as number[]).sort((a, b) => a - b);
+    }
+    out.push({
+      inputIndex: rawSheets.indexOf(sin),
+      file: sin.file.fileName,
+      sheet: sin.sheet,
+      how,
+      samples: eventIds.length,
+      pivoted: raw?.pivot !== undefined,
+      turned: raw?.turn !== undefined,
+      lines: sorted,
+      eventIds,
+      ...(info === undefined ? {} : { joined: { file: info.description.file.fileName, sheet: info.description.sheet.name } }),
+      ...(describedLines === undefined ? {} : { describedLines }),
+    });
   }
   return out;
 }
@@ -1991,7 +2019,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
 
     // the position the person declared for the whole sheet: refused with one message per cause, applied to every sample otherwise
     const declared = readDeclaredPosition(sin);
-    if (declared.kind === 'invalid') for (const r of declared.reasons) findings.push(makeConvertFinding('CONV-POSITION-DECLARED-INVALID', { ...base, ...(r.value === undefined ? {} : { value: r.value }), params: { reason: r.reason } }));
+    if (declared.kind === 'invalid') for (const r of declared.reasons) findings.push(makeConvertFinding('CONV-POSITION-DECLARED-INVALID', { ...base, ...(r.value === undefined ? {} : { value: r.value }), params: { reason: r.reason, ...(r.description === undefined ? {} : { description: r.description }) } }));
 
     // the measured-variable columns (stage 5): the identifiers the user confirmed for each, checked here (not believed because the page sent them). A unit identifier
     // counts only for a column that has a unit text. What is written into the file is checked for tabs and line breaks like every other text.
@@ -3127,7 +3155,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     findings.push(makeConvertFinding('CONV-POSITION-DECLARED', { file: sin.file.fileName, sheet: sin.sheet, params: { ...declared.typed, count, ...(sin.declaredPositionFromFile === true ? { fromFile: 'yes' } : {}) } }));
   }
   const undated = undatedSheets(input.sheets, rawInput.sheets, events, samples);
-  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: u.lines.slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}), ...(u.turned ? { turned: 'yes' } : {}) } }));
+  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: (u.describedLines ?? u.lines).slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}), ...(u.turned ? { turned: 'yes' } : {}), ...(u.joined === undefined ? {} : { joined: 'yes', description: u.joined.sheet, ...(u.describedLines === undefined ? {} : { described: 'yes' }) }) } }));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
   {
     const parts = new Map<RawSheet, SheetLedger[]>();

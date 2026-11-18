@@ -1292,7 +1292,8 @@ export function joinLines(findings: readonly Finding[], sin: ConvertSheetInput):
   const descriptionLineOf = (line: number): number | undefined => info.lentFrom.get(line) ?? info.descriptionOnly.get(line);
   const out: Finding[] = [];
   for (const f of findings) {
-    if (f.file !== info.results.file || f.sheet !== sin.sheet) {
+    // (an undated sample's finding already names the description's own lines: they must not be read as merged lines again)
+    if (f.file !== info.results.file || f.sheet !== sin.sheet || (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.described === 'yes')) {
       out.push(f);
       continue;
     }

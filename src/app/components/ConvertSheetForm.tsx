@@ -35,6 +35,8 @@ export interface ConvertSheetFormProps {
   hasStationColumn: boolean;
   /** a column of this sheet is mapped as latitude or longitude (even one blank in every row): no declared position is offered */
   hasPositionColumn?: boolean;
+  /** the name of the joined sheet that gives this sheet's positions (a confirmed join to a description sheet with a latitude or longitude column): no declared position is used */
+  positionJoinedFrom?: string;
   /** core's ownRecordsEligible holds for this sheet (a long sheet with a taxon column and no occurrenceID column): the tick "each row is its own record" is shown */
   ownRecordsOffered?: boolean;
   /** "The samples are the columns": the sheet as dropped and what was declared for it (see ConvertTurn). Absent: no declaration is offered. */
@@ -49,7 +51,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, ownRecordsOffered, turn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, positionJoinedFrom, ownRecordsOffered, turn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -62,14 +64,15 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
   // the declared position (a sheet with no position column, not a profile): a closed section, open from the start when it already holds values
   const positionBox = useRef<HTMLDetailsElement>(null);
   const positionFilled = choice.positionLat !== '' || choice.positionLon !== '' || choice.positionUncertainty !== '';
+  const positionHeld = hasPositionColumn === true || choice.profile || positionJoinedFrom !== undefined;
   useEffect(() => {
-    if (positionFilled && positionBox.current) positionBox.current.open = true;
+    if ((positionFilled || choice.positionStale === true) && positionBox.current) positionBox.current.open = true;
     // only at the start: the person may close it afterwards
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // an edit is the person's own: what was read from a companion file is no longer said to come from it
   const setPosition = (patch: Partial<Pick<SheetChoice, 'positionLat' | 'positionLon' | 'positionUncertainty'>>): void => {
-    const { positionFromFile: _file, ...rest } = choice;
+    const { positionFromFile: _file, positionStale: _stale, ...rest } = choice;
     onChange({ ...rest, ...patch });
   };
   return (
@@ -397,14 +400,19 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
             </>
           )}
 
-          {((hasPositionColumn !== true && !choice.profile) || positionFilled) && (
+          {(!positionHeld || positionFilled || choice.positionStale === true) && (
             <details className="convert-group" ref={positionBox}>
               <summary>{t('convert.position.title')}</summary>
               <p className="muted">{t('convert.position.help')}</p>
-              {(hasPositionColumn === true || choice.profile) && positionFilled && (
+              {choice.positionStale === true && (
+                <p role="note" data-testid="position-stale">
+                  {t('convert.position.staleFile')}
+                </p>
+              )}
+              {positionHeld && positionFilled && (
                 <p role="note" data-testid="position-held-back">
-                  {t(choice.profile ? 'convert.position.heldBack.profile' : 'convert.position.heldBack.column')}{' '}
-                  <button type="button" className="button" onClick={() => onChange({ ...choice, positionLat: '', positionLon: '', positionUncertainty: '', positionFromFile: undefined })}>
+                  {choice.profile ? t('convert.position.heldBack.profile') : hasPositionColumn === true ? t('convert.position.heldBack.column') : t('convert.position.heldBack.join', { description: positionJoinedFrom ?? '' })}{' '}
+                  <button type="button" className="button" onClick={() => onChange({ ...choice, positionLat: '', positionLon: '', positionUncertainty: '', positionFromFile: undefined, positionStale: undefined })}>
                     {t('convert.position.clear')}
                   </button>
                 </p>

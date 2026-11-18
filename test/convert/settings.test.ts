@@ -144,19 +144,24 @@ describe('the day/month order in the companion file (round 3, Task 8)', () => {
 });
 
 describe('the declared position in the companion file (round 3, Task 11)', () => {
-  const one = { sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500' };
+  const one = { sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500', rows: 12 };
 
   it('round-trips a negative decimal-comma latitude, whose field is quoted', () => {
     const text = writeConvertSidecar({ declaredPosition: [one] });
-    expect(text).toContain('"declaredPosition=-54,125:10.9:500:Tanks"');
+    expect(text).toContain('"declaredPosition=-54,125:10.9:500:12:Tanks"');
     expect(readConvertSettings(textFile('c.sidecar.csv', text))?.declaredPosition).toEqual([one]);
   });
 
   it('keeps a colon in a sheet name, one line per sheet, and skips what it cannot read back', () => {
-    const odd = { sheet: 'A:B', lat: '1', lon: '2', uncertaintyM: '3' };
-    const text = writeConvertSidecar({ declaredPosition: [odd, { ...odd, lat: '9' }, { sheet: 'X', lat: '1:2', lon: '2', uncertaintyM: '3' }, { sheet: 'Y', lat: '', lon: '2', uncertaintyM: '3' }] });
+    const odd = { sheet: 'A:B', lat: '1', lon: '2', uncertaintyM: '3', rows: 7 };
+    const text = writeConvertSidecar({ declaredPosition: [odd, { ...odd, lat: '9' }, { sheet: 'X', lat: '1:2', lon: '2', uncertaintyM: '3', rows: 1 }, { sheet: 'Y', lat: '', lon: '2', uncertaintyM: '3', rows: 1 }] });
     const read = readConvertSettings(textFile('c.sidecar.csv', text))?.declaredPosition;
     expect(read).toEqual([odd]);
+  });
+
+  it('a line without the number of rows of its sheet is not read (the position holds only for the sheet it was typed for)', () => {
+    const text = ['original_column,output_column,unit,unit_source,p01', '(setting),declaredPosition=54.1:10.9:500:Tanks,,,'].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.declaredPosition ?? []).toEqual([]);
   });
 
   it('is ignored by /check as every other setting', () => {

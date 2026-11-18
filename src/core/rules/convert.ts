@@ -140,7 +140,7 @@ import type { RuleSpec } from './spec';
  *   CONV-PROFILE-LEVEL-INCOMPLETE count, what   what = date | position | date and position: missing on a level and on the parent that could give it (none when the station level is flattened); lines = the profile rows
  *   CONV-POSITION-NONE         count, column?   count = the sheet's sample events that have no position on themselves or an ancestor; column = (variant) the header of a latitude / longitude column that is blank in every row; file, sheet = the sheet
  *   CONV-POSITION-DECLARED     lat, lon, uncertainty, count   the one position the person declared for a sheet with no position role, as typed (point as decimal mark); count = the samples it was written on; fromFile = yes when a companion file gave it (warning, to accept)
- *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | profile (a profile sheet) | position-role (the sheet has a latitude / longitude role, even a blank one); nothing is applied
+ *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | profile (a profile sheet) | position-role (the sheet has a latitude / longitude role, even a blank one); position-joined (the joined description sheet {description} gives the positions); nothing is applied
  *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); lines = the lines
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
@@ -2123,7 +2123,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `Die für das Blatt „{sheet}“ festgelegte Position ist nicht verwendbar: {reason}. Daraus wurde nichts geschrieben.`,
       fr: `La position déclarée pour la feuille « {sheet} » est inutilisable : {reason}. Rien n'en a été écrit.`,
     },
-    technical: `{file}, {sheet}: the declared position is refused ({reason}) and nothing is applied. latitude = not a number within -90 to 90; longitude = not a number within -180 to 180; uncertainty = not a plain number above zero; position-role = the sheet has a latitude or longitude column (even a blank one), and a declaration never fills gaps; profile = a profile sheet takes positions from its own columns. CONV-POSITION-NONE is not repeated.`,
+    technical: `{file}, {sheet}: the declared position is refused ({reason}) and nothing is applied. latitude = not a number within -90 to 90; longitude = not a number within -180 to 180; uncertainty = not a plain number above zero; position-role = the sheet has a latitude or longitude column (even a blank one), and a declaration never fills gaps; position-joined = the joined description sheet gives the positions; profile = a profile sheet takes positions from its own columns. CONV-POSITION-NONE is not repeated.`,
   },
   {
     id: 'CONV-EVENT-DATE-MISSING',
@@ -2321,6 +2321,54 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
       fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date. Renseignez les dates dans le fichier (la colonne de date a besoin d'une valeur dans les lignes de chaque échantillon), ou joignez la feuille qui décrit les échantillons.`,
     },
     technical: `{file}, {sheet}: {count} sample event(s) of a pivoted sheet have no eventDate (OBIS requires one), on {rows} line(s) of the pivoted sheet (how={how}). No leave-out is offered: the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // CONV-EVENT-DATE-MISSING where the date is lent by the joined description sheet: the empty cells are there, on its own lines
+  'CONV-EVENT-DATE-MISSING:described': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą w arkuszu „{description}” są puste. Uzupełnij je tam albo pomiń te próbki i wypisz je na liście.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells of sheet "{description}" are empty. Fill them in there, or leave these samples out and list them.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen des Blatts „{description}“ sind leer. Füllen Sie sie dort aus oder lassen Sie diese Proben aus und listen Sie sie auf.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date de la feuille « {description} » sont vides. Remplissez-les là, ou laissez ces échantillons de côté et listez-les.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description} and its cells are empty on the lines named (its own lines, not those of {sheet}); {rows} line(s) of {sheet} are affected (how={how}) and can be left out and listed with the reason no-event-date. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // the same where no leave-out is offered (a turned sheet, or one read as one row per sample out of a long one)
+  'CONV-EVENT-DATE-MISSING:described-fixed': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą w arkuszu „{description}” są puste. Uzupełnij je tam.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells of sheet "{description}" are empty. Fill them in there.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen des Blatts „{description}“ sind leer. Füllen Sie sie dort aus.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date de la feuille « {description} » sont vides. Remplissez-les là.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description} and its cells are empty on the lines named (its own lines); {rows} line(s) of {sheet} are affected (how={how}). No leave-out is offered: a turned sample is a source column, and the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // CONV-EVENT-DATE-MISSING on a joined sheet where no column of the results sheet is marked as a date (the joined sheet is already joined: no advice to join)
+  'CONV-EVENT-DATE-MISSING:no-date-role:joined': {
+    plain: {
+      pl: `Żadna kolumna arkusza „{sheet}” ani dołączonego arkusza „{description}” nie jest oznaczona jako data ({count} {+count:próbka|próbki|próbek}). Oznacz kolumnę z datą albo kolumny roku, miesiąca i dnia.`,
+      en: `No column of sheet "{sheet}" or of the joined sheet "{description}" is marked as the date ({count} {+count:sample|samples}). Mark the date column, or the Year / Month / Day columns.`,
+      de: `Keine Spalte des Blatts „{sheet}“ oder des verbundenen Blatts „{description}“ ist als Datum markiert ({count} {+count:Probe|Proben}). Markieren Sie die Datumsspalte oder die Spalten Jahr / Monat / Tag.`,
+      fr: `Aucune colonne de la feuille « {sheet} » ni de la feuille jointe « {description} » n'est marquée comme date ({count} {+count:échantillon|échantillons}). Marquez la colonne de date, ou les colonnes Année / Mois / Jour.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one), on {rows} source line(s), and no column of the sheet or of the joined sheet {description} is marked as a date or as year / month / day (how={how}). The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  'CONV-EVENT-DATE-MISSING:turned:joined': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty. Uzupełnij wiersz lub kolumnę z datą albo datę w dołączonym arkuszu „{description}”.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date. Fill in the date row or column, or the date in the joined sheet "{description}".`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum. Füllen Sie die Datumszeile oder -spalte aus oder das Datum im verbundenen Blatt „{description}“.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date. Remplissez la ligne ou la colonne de date, ou la date dans la feuille jointe « {description} ».`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) of a turned sheet that is joined to {description} have no eventDate (OBIS requires one), on {rows} source line(s) (how={how}). A turned sample is a source column, so no leave-out is offered. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  'CONV-EVENT-DATE-MISSING:pivoted:joined': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty. Uzupełnij daty w pliku (kolumna z datą musi mieć wartość w wierszach każdej próbki) albo w dołączonym arkuszu „{description}”.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date. Fill in the dates in the file (the date column needs a value in the rows of every sample), or in the joined sheet "{description}".`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum. Tragen Sie die Daten in der Datei ein (die Datumsspalte braucht in den Zeilen jeder Probe einen Wert) oder im verbundenen Blatt „{description}“.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date. Renseignez les dates dans le fichier (la colonne de date a besoin d'une valeur dans les lignes de chaque échantillon), ou dans la feuille jointe « {description} ».`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) of a pivoted sheet that is joined to {description} have no eventDate (OBIS requires one), on {rows} line(s) of the pivoted sheet (how={how}). No leave-out is offered: the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
   },
   // CONV-POSITION-NONE where a column is marked as a position but is blank in every row
   'CONV-POSITION-NONE:empty-column': {
@@ -2668,9 +2716,12 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
-  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.pivoted === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:pivoted'];
-  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.turned === 'yes') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:turned'];
-  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'no-date-role') return PROFILE_VARIANTS['CONV-EVENT-DATE-MISSING:no-date-role'];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.described === 'yes') return PROFILE_VARIANTS[f.params.pivoted === 'yes' || f.params.turned === 'yes' ? 'CONV-EVENT-DATE-MISSING:described-fixed' : 'CONV-EVENT-DATE-MISSING:described'];
+  // a sheet that is already joined is never told to join (the date of the description sheet is where to look)
+  const joined = f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.joined === 'yes' && typeof f.params.description === 'string' ? ':joined' : '';
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.pivoted === 'yes') return PROFILE_VARIANTS[`CONV-EVENT-DATE-MISSING:pivoted${joined}`];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.turned === 'yes') return PROFILE_VARIANTS[`CONV-EVENT-DATE-MISSING:turned${joined}`];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'no-date-role') return PROFILE_VARIANTS[`CONV-EVENT-DATE-MISSING:no-date-role${joined}`];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'missing') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-axis'];
   if (f.ruleId === 'CONV-POSITION-NONE' && f.params.axis === 'blank') return PROFILE_VARIANTS['CONV-POSITION-NONE:one-blank'];
   if (f.ruleId === 'CONV-POSITION-NONE' && typeof f.params.column === 'string') return PROFILE_VARIANTS['CONV-POSITION-NONE:empty-column'];
@@ -3012,6 +3063,12 @@ const DECLARED_REASON_WORDS: Record<string, Record<Lang, string>> = {
     de: 'ein Profilblatt nimmt seine Positionen aus eigenen Spalten, daher wird eine festgelegte Position dort nicht verwendet; markieren Sie stattdessen die Positionsspalten',
     fr: "une feuille de profils prend ses positions dans ses propres colonnes, donc une position déclarée n'y est pas utilisée ; marquez plutôt les colonnes de position",
   },
+  'position-joined': {
+    en: 'the positions come from the joined sheet "{description}", and a declared position never fills gaps',
+    pl: 'pozycje pochodzą z dołączonego arkusza „{description}”, a zadeklarowana pozycja nigdy nie uzupełnia braków',
+    de: 'die Positionen kommen aus dem verbundenen Blatt „{description}“, und eine festgelegte Position füllt nie Lücken',
+    fr: 'les positions viennent de la feuille jointe « {description} », et une position déclarée ne comble jamais des lacunes',
+  },
   'position-role': {
     en: 'the sheet already has a latitude or longitude column, and a declared position never fills gaps',
     pl: 'arkusz ma już kolumnę szerokości lub długości geograficznej, a zadeklarowana pozycja nigdy nie uzupełnia braków',
@@ -3029,7 +3086,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
     f = { ...f, params: { ...f.params, ...(typeof f.params.names === 'string' && f.ruleId !== 'CONV-PROFILE-STATION-UNMATCHED' && f.ruleId !== 'CONV-PROFILE-STATION-FAR' && f.ruleId !== 'CONV-PROFILE-STATION-CAST-MATCHED' ? { names: shortList(f.params.names) } : {}), ...(typeof f.params.columns === 'string' ? { columns: shortList(f.params.columns) } : {}) } };
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
-  if (f.ruleId === 'CONV-POSITION-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: DECLARED_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
+  if (f.ruleId === 'CONV-POSITION-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: (DECLARED_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason).replace('{description}', String(f.params.description ?? '')) } };
   if (f.ruleId === 'CONV-SEAFLOOR-VALUE' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: SEAFLOOR_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS') f = { ...f, params: { ...f.params, direction: SIGNS_DIRECTION_WORDS[String(f.params.direction)]?.[lang] ?? f.params.direction, side: SIGNS_SIDE_WORDS[String(f.params.side)]?.[lang] ?? f.params.side } };
   if (f.ruleId === 'CONV-SEAFLOOR-UNIT' && f.params.unit === 'none') f = { ...f, params: { ...f.params, unit: NONE_WORDS[lang] } };

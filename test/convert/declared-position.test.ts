@@ -10,6 +10,9 @@ import type { ColumnRole } from '../../src/core/types';
 import { exportSheets, objects, readBack } from './exportHelpers';
 import type { Cell } from './helpers';
 import { fileOf, sheetInput } from './helpers';
+import { joinInputs } from '../../src/core/convert/sampleJoin';
+import { xlsxFile } from '../helpers/files';
+import { descriptionInput, resultsInput } from './joinFixtures';
 
 const LONG: Record<string, ColumnRole> = { Tank: { kind: 'sampleId' }, Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } };
 const TANKS_H = ['Tank', 'Date', 'Taxon', 'Count'];
@@ -172,5 +175,35 @@ describe('a declared position', () => {
     const b = await readBack(e.zip);
     expect(b.tables['event.txt'].header).not.toContain('georeferenceRemarks');
     expect(b.tables['event.txt'].header).not.toContain('coordinateUncertaintyInMeters');
+  });
+});
+
+describe('a declared position on a sheet whose joined description sheet gives the positions (final review M1)', () => {
+  const file = xlsxFile('book.xlsx', {
+    Fish: [['Sample', 'Taxon', 'Count'], ['T1', 'Gadus morhua', 2], ['T2', 'Gadus morhua', 4]],
+    Samples: [['Sample', 'Date', 'Latitude', 'Longitude'], ['T1', '2021-05-03', 61.1, 4.2], ['T2', '2021-05-04', 61.3, 4.6]],
+  });
+  const run = () => {
+    const out = joinInputs([resultsInput(file, 'Fish', { declaredPosition: { lat: '54.1', lon: '10.9', uncertaintyM: '500' } }), descriptionInput(file, 'Samples')], [{ results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [] }], []);
+    return convert({ sheets: out.sheets });
+  };
+
+  it('is refused with the reason that the positions come from the joined sheet, not that "the sheet" has a position column', () => {
+    const r = run();
+    const f = ids(r.findings, 'CONV-POSITION-DECLARED-INVALID');
+    expect(f).toHaveLength(1);
+    expect(f[0].params).toMatchObject({ reason: 'position-joined', description: 'Samples' });
+    expect(f[0].sheet).toBe('Fish');
+    const en = renderConvertPlain(f[0], 'en');
+    expect(en).toContain('the positions come from the joined sheet "Samples"');
+    expect(en).not.toContain('already has a latitude');
+    for (const lang of ['pl', 'de', 'fr'] as const) {
+      const text = renderConvertPlain(f[0], lang);
+      expect(text).toContain('Samples');
+      expect(text).not.toMatch(/\{|\}/);
+    }
+    // nothing is applied: the events carry the lent positions only
+    expect(ids(r.findings, 'CONV-POSITION-DECLARED')).toEqual([]);
+    expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.lat)).toEqual([61.1, 61.3]);
   });
 });
