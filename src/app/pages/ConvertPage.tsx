@@ -107,6 +107,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
   // what the person decided about the sheets that describe the samples of another (the join): nothing joins without a confirmed entry here
   const [joins, setJoins] = useState<JoinChoice[]>([]);
+  /** The sheets (file: sheet) a re-read gave another number of columns: they started again, and the page says so. */
+  const [resetSheets, setResetSheets] = useState<string[]>([]);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [view, setView] = useState<ConvertView | null>(null);
   const [working, setWorking] = useState(false);
@@ -213,6 +215,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     setConvertError(null);
     setFlattenStation(false);
     setFlattenCruise(false);
+    setResetSheets([]);
     setAccepted({});
     setExported(null);
     setExportError(null);
@@ -526,6 +529,23 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     );
   };
 
+  /** Everything the page keeps for a sheet by its column numbers, taken away: the sheet was read again and its columns may be others. */
+  const forgetSheet = (fileId: string, sheet: string): void => {
+    const prefix = `${fileId}\u0000${sheet}\u0000`;
+    setConfirmed((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+    // the sheet was read again: its columns may be others, so the tick of the list of proposed roles the file does not state is given again
+    setAccepted((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== ROLE_RULE)));
+    setNercPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+    // what was typed or found for a column of the sheet belongs to the column it was typed for, which may be another one now
+    setNvsWords((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+    setNvsSearches((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+    setCodesDone({});
+    setCodesPreview({});
+    setCodesExtra({});
+    setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
+    setKeyPreview({});
+  };
+
   /**
    * The user's choice about a long environmental sheet (read it as a normal table; key columns that describe the measurement). The worker reads the sheet again; its columns may change, so the
    * roles, the sheet's decisions and everything keyed by its column indexes start again for that sheet. Nothing else is touched.
@@ -537,23 +557,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       const f = await ask();
       const mapping = f.mappings.find((m) => m.sheet === sheet);
       if (!mapping) return false;
-      const prefix = `${fileId}\u0000${sheet}\u0000`;
       const fresh = initialChoices({ ...parsed, files: [f] })[sheetKey(fileId, sheet)];
       setParsed((p) => (p ? { ...p, files: p.files.map((x) => (x.fileId === fileId ? f : x)) } : p));
       setMappings((prev) => ({ ...prev, [fileId]: (prev[fileId] ?? []).map((m) => (m.sheet === sheet ? mapping : m)) }));
       if (fresh) setChoices((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: fresh }));
-      setConfirmed((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
-      // the sheet was read again: its columns may be others, so the tick of the list of proposed roles the file does not state is given again
-      setAccepted((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== ROLE_RULE)));
-      setNercPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
-      // what was typed or found for a column of the sheet belongs to the column it was typed for, which may be another one now
-      setNvsWords((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
-      setNvsSearches((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
-      setCodesDone({});
-      setCodesPreview({});
-      setCodesExtra({});
-      setKeyDraft((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(prefix))));
-      setKeyPreview({});
+      forgetSheet(fileId, sheet);
       return true;
     } catch (e) {
       setConvertError(messageOf(e));
@@ -605,18 +613,76 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     try {
       const old = parsed.files.find((x) => x.fileId === fileId);
       const f = await run();
-      // a column whose role is still the OLD proposal (the person never changed it) takes the new proposal, since its cells now read differently (1,250,000 is a number, not text); a role the person set stays
+      setResetSheets([]);
       if (old !== undefined) {
         const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+        const headerOf = (file: ConvertFileSummary, sheet: string): string[] => file.sheets.find((x) => x.name === sheet)?.header ?? [];
+        // a sheet with another number of columns than before: what is kept by column number may name other columns, so the sheet starts again (roles, decisions, joins) and the page says so
+        const widthChanged = f.sheets.filter((x) => headerOf(old, x.name).length !== x.header.length && old.sheets.some((o) => o.name === x.name)).map((x) => x.name);
+        // the columns whose header text is not the one first read (the file's letters now read another way), by sheet
+        const textChanged = (sheet: string): number[] => headerOf(f, sheet).flatMap((h, i) => (headerOf(old, sheet)[i] !== h ? [i] : []));
         setMappings((prev) => ({
           ...prev,
           [fileId]: (prev[fileId] ?? old.mappings).map((m) => {
+            const fresh = f.mappings.find((x) => x.sheet === m.sheet);
+            if (widthChanged.includes(m.sheet) && fresh !== undefined) return fresh;
             const was = old.proposals[m.sheet];
             const now = f.proposals[m.sheet];
             if (was === undefined || now === undefined) return m;
-            return { ...m, columns: m.columns.map((c) => { const o = was.find((p) => p.index === c.index); const n = now.find((p) => p.index === c.index); const header = f.sheets.find((x) => x.name === m.sheet)?.header[c.index] ?? c.header; const named = { ...c, header }; return o !== undefined && n !== undefined && same(c.role, o.role) && !same(n.role, o.role) ? { ...named, role: n.role } : named; }) };
+            // a column whose role is still the OLD proposal (the person never changed it) takes the new proposal, since its cells now read differently (1,250,000 is a number, not text); a role the person set stays,
+            // except that a variable name still equal to the old header text is that header text (it was filled from it) and follows it, while a name the person typed stays; the column shows the new header text
+            return {
+              ...m,
+              columns: m.columns.map((c) => {
+                const o = was.find((p) => p.index === c.index);
+                const n = now.find((p) => p.index === c.index);
+                const named = { ...c, header: headerOf(f, m.sheet)[c.index] ?? c.header };
+                if (o === undefined || n === undefined) return named;
+                if (same(c.role, o.role) && !same(n.role, o.role)) return { ...named, role: n.role };
+                if (c.role.kind === 'variable' && c.role.variable === o.cleanHeader && n.cleanHeader !== o.cleanHeader) return { ...named, role: { ...c.role, variable: n.cleanHeader } };
+                return named;
+              }),
+            };
           }),
         }));
+        for (const sheet of widthChanged) {
+          const fresh = initialChoices({ ...parsed, files: [f] })[sheetKey(fileId, sheet)];
+          if (fresh) setChoices((prev) => ({ ...prev, [sheetKey(fileId, sheet)]: fresh }));
+          forgetSheet(fileId, sheet);
+        }
+        // a pick that came from the companion file by a header hash holds for the header as first read: where that header text changed it is the person's now, not the file's
+        setChoices((prev) =>
+          Object.fromEntries(
+            Object.entries(prev).map(([k, c]) => {
+              const sheet = k.startsWith(`${fileId}\u0000`) ? k.split('\u0000')[1] : undefined;
+              if (sheet === undefined || widthChanged.includes(sheet)) return [k, c];
+              const moved = textChanged(sheet);
+              if (moved.length === 0) return [k, c];
+              const { dayMonthOrderFile, sampleKey, sampleKeyFromFile, ...rest } = c;
+              return [
+                k,
+                {
+                  ...rest,
+                  ...(sampleKey === undefined ? {} : { sampleKey }),
+                  ...(sampleKeyFromFile === true && !(sampleKey ?? []).some((i) => moved.includes(i)) ? { sampleKeyFromFile } : {}),
+                  ...(dayMonthOrderFile === undefined ? {} : { dayMonthOrderFile: dayMonthOrderFile.filter((i) => !moved.includes(i)) }),
+                },
+              ];
+            }),
+          ),
+        );
+        setJoins((prev) =>
+          prev
+            .filter((j) => !([j.results, j.description] as { fileId: string; sheet: string }[]).some((r) => r.fileId === fileId && widthChanged.includes(r.sheet)))
+            .map((j) => {
+              if (j.fromFile !== true) return j;
+              const touched = j.keys.some((k) => (j.results.fileId === fileId && textChanged(j.results.sheet).includes(k.results)) || (j.description.fileId === fileId && textChanged(j.description.sheet).includes(k.description)));
+              if (!touched) return j;
+              const { fromFile: _f, ...rest } = j;
+              return rest;
+            }),
+        );
+        if (widthChanged.length > 0) setResetSheets(widthChanged.map((n) => `${old.fileName}: ${n}`));
       }
       setParsed((p) => (p ? { ...p, files: p.files.map((x) => (x.fileId === fileId ? f : x)) } : p));
       return true;
@@ -1575,6 +1641,11 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           <section className="convert-summary" aria-labelledby="convert-summary-title" aria-busy={working}>
             <h2 id="convert-summary-title">{t('convert.summary.title')}</h2>
             {working && !view && <p className="muted">{t('convert.working')}</p>}
+            {resetSheets.length > 0 && (
+              <p className="notice" role="note" data-testid="encoding-sheet-reset">
+                {t('convert.encoding.sheetReset', { sheets: resetSheets.join(', ') })}
+              </p>
+            )}
             {view && (
               <>
                 <p>{t('convert.summary.counts', { events: view.tree.events, occurrences: view.stats.occurrences, present: view.stats.present, absent: view.stats.absent, measurements: view.stats.measurements })}</p>

@@ -712,4 +712,43 @@ describe('encodingChoice: letters that read differently in the 8-bit code pages 
     expect(both.declaredEncoding?.fromFile).toBe(true);
     expect(both.decimal).toEqual({ 'k.csv': { 2: { reading: 'thousands', fromFile: true } } });
   });
+
+  it('a PANGAEA file is read with the picked code page too: its long parameter names follow the pick', async () => {
+    const pangaea = [
+      '/* DATA DESCRIPTION:',
+      'Citation:\tInvented, Ann (2099): Synthetic counts. PANGAEA, https://doi.org/10.1594/PANGAEA.000000',
+      'Parameter(s):\tEvent (Event) * PI: Invented, Ann * GEOCODE',
+      '\tDATE/TIME (Date/Time) * PI: Invented, Ann * GEOCODE',
+      '\tLATITUDE (Latitude) * PI: Invented, Ann * GEOCODE',
+      '\tLONGITUDE (Longitude) * PI: Invented, Ann * GEOCODE',
+      '\tKr\xf8yer count [#] (Cnt)',
+      'License:\tCreative Commons Attribution 4.0 International (CC-BY-4.0) (URI: https://creativecommons.org/licenses/by/4.0/)',
+      '*/',
+      'Event\tDate/Time\tLatitude\tLongitude\tCnt [#]',
+      'ST1\t2099-01-02\t70.1\t10.1\t4',
+      'ST2\t2099-01-03\t70.9\t10.4\t5',
+      '',
+    ].join('\n');
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('p.tab', pangaea)])).files[0];
+    expect(f.kind).toBe('pangaea');
+    expect(f.encodingReadings).toHaveLength(2);
+    const names = async (g: typeof f) => JSON.stringify((await run(e, g)).v);
+    expect(await names(f)).toContain('Krřyer count');
+    const g = await e.encodingChoice(f.fileId, 'windows-1252');
+    const after = await names(g);
+    expect(after).toContain('Krøyer count');
+    expect(after).not.toContain('Krřyer count');
+  });
+
+  it('a turn from the companion file whose name column now reads differently under the pick no longer applies', async () => {
+    const header = ['Species\xf8', 'S1', 'S2'];
+    const text = [header.join(';'), 'Calanus finmarchicus;3;4', 'Oithona similis;1;2'].join('\n') + '\n';
+    const nameHash = keyHashes(header.map((h) => h.replace('\xf8', 'ř')), [0]) as string;
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('t.csv', text), sidecar({ turned: [{ sheet: 't.csv', nameHash, notSampleHashes: '', rows: 2 }] })])).files[0];
+    expect(f.turned?.['t.csv']).toMatchObject({ nameColumn: 0, fromFile: true });
+    const g = await e.encodingChoice(f.fileId, 'windows-1252');
+    expect(g.turned).toBeUndefined();
+  });
 });

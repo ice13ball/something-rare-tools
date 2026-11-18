@@ -1160,7 +1160,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     params: ['encoding'],
     plain: {
       pl: `Jak podano, plik został odczytany jako {encoding}: tak czytane są jego litery w całym zapisie (w archiwum, w pomiarach i w uwagach).`,
-      en: `As you declared, the file was read as {encoding}: its letters are read that way everywhere (the archive, the measurements and the findings).`,
+      en: `As you declared, the file was read as {encoding}: its letters are read that way everywhere (the archive, the measurements and the remarks).`,
       de: `Wie angegeben, wurde die Datei als {encoding} gelesen: ihre Buchstaben werden überall so gelesen (im Archiv, in den Messwerten und in den Hinweisen).`,
       fr: `Comme indiqué, le fichier a été lu en {encoding} : ses lettres sont lues ainsi partout (dans l'archive, dans les mesures et dans les remarques).`,
     },

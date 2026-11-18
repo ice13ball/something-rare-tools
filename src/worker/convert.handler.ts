@@ -447,7 +447,7 @@ export function createConvertHandler(): ConvertHandler {
     h.original = fresh;
     if (pick === null) delete h.encoding;
     else h.encoding = { encoding: pick, fromFile: false };
-    // nothing in the structure changes (an 8-bit code page never makes a delimiter or a quote), only the letters: the person's other answers stay while they still mean the same column
+    // an 8-bit code page never makes a delimiter or a quote, so the file's own columns stay the same and only the letters change: the person's other answers stay while they still mean the same column
     for (const [sheet, answers] of Object.entries(h.decimal)) {
       const asked = askedDecimalColumns(fresh, sheet);
       const was = before.sheets.find((x) => x.name === sheet)?.header ?? [];
@@ -469,7 +469,25 @@ export function createConvertHandler(): ConvertHandler {
         h.turnsFromFile.delete(name);
       }
     }
+    const widths = (f: ParsedFile): Map<string, number> => new Map(f.sheets.map((x) => [x.name, x.header.length]));
+    const wasWidth = widths(h.parsed);
     repivot(h);
+    // a text-based step (the pivot's flag columns) may read another set of columns from other letters: for a sheet whose width changed, the answers keyed by its column numbers no longer name the same columns
+    const changed = [...widths(h.parsed)].filter(([name, w]) => wasWidth.get(name) !== w).map(([name]) => name);
+    if (changed.length > 0) {
+      for (const name of changed) {
+        delete h.turns[name];
+        h.turnsFromFile.delete(name);
+        delete h.decimal[name];
+        for (const k of [...h.decimalFromFile]) if (k.startsWith(`${name}\0`)) h.decimalFromFile.delete(k);
+        const c = h.choices[name];
+        if (c?.describes !== undefined) {
+          if (c.off === true) h.choices[name] = { off: true };
+          else delete h.choices[name];
+        }
+      }
+      repivot(h);
+    }
     return summaryOf(h);
   }
 

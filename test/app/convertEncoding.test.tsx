@@ -8,7 +8,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
-import { bytesHash } from '../../src/core/convert/keySetting';
+import { bytesHash, keyHashes } from '../../src/core/convert/keySetting';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
 import { UI } from '../../src/core/i18n/ui';
 import { createDirectConvertEngine } from '../../src/worker/convert.handler';
@@ -56,7 +56,7 @@ const readings = (): HTMLElement[] => within(item('IN-ENCODING-AMBIGUOUS')!).get
 const roleOf = (h: string) => (screen.getByLabelText(`${h}: Meaning`) as HTMLSelectElement).value;
 
 describe('the question', () => {
-  it('one button per reading, each showing its encodings and its words, none picked, and it blocks the export', async () => {
+  it('one button per reading, each showing its encodings and its words, none picked; the finding is in the blocking list until a reading is picked', async () => {
     await load([{ name: 'hauls.csv', bytes: latin(CSV) }]);
     const b = readings();
     expect(b).toHaveLength(2);
@@ -65,7 +65,12 @@ describe('the question', () => {
     expect(b.every((x) => !x.hasAttribute('aria-pressed') && !x.hasAttribute('disabled'))).toBe(true);
     expect(item('CONV-ENCODING-DECLARED')).toBeNull();
     expect(item('IN-ENCODING-AMBIGUOUS')?.closest('.convert-findings')?.getAttribute('data-kind')).toBe('error');
-    expect(screen.getByRole('button', { name: T['convert.export.button'] }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(b[1]);
+    await waitFor(() => expect(item('CONV-ENCODING-DECLARED')).not.toBeNull());
+    await idle();
+    expect(item('IN-ENCODING-AMBIGUOUS')).toBeNull();
+    expect(document.querySelectorAll('.convert-findings[data-kind="error"] li[data-rule="IN-ENCODING-AMBIGUOUS"]')).toHaveLength(0);
+    expect(item('CONV-ENCODING-DECLARED')?.closest('.convert-findings')?.getAttribute('data-kind')).toBe('info');
   });
 
   it('a file all the code pages read alike is not asked', async () => {
@@ -144,5 +149,85 @@ describe('the companion file', () => {
     await load([{ name: 'hauls.csv', bytes: latin(CSV.replace('S1;', 'S9;')) }, { name: 'c.csv', bytes: sidecar() }]);
     expect(item('IN-ENCODING-AMBIGUOUS')).not.toBeNull();
     expect(item('CONV-ENCODING-DECLARED')).toBeNull();
+  });
+});
+
+describe('a name that came from the header follows it; a name the person typed stays', () => {
+  const nameInput = (): HTMLInputElement => screen.getByLabelText(T['mapping.variable']) as HTMLInputElement;
+
+  it('the variable name of a column set to variable takes the header the pick reads, and goes back with "Ask again"', async () => {
+    await load([{ name: 'hauls.csv', bytes: latin(CSV) }]);
+    fireEvent.change(screen.getByLabelText('Krřyer: Meaning'), { target: { value: 'variable' } });
+    await idle();
+    expect(nameInput().value).toBe('Krřyer');
+    fireEvent.click(readings()[1]);
+    await waitFor(() => expect(item('CONV-ENCODING-DECLARED')).not.toBeNull());
+    await idle();
+    expect(roleOf('Krøyer')).toBe('variable');
+    expect(nameInput().value).toBe('Krøyer');
+    fireEvent.click(within(item('CONV-ENCODING-DECLARED')!).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await waitFor(() => expect(item('IN-ENCODING-AMBIGUOUS')).not.toBeNull());
+    await idle();
+    expect(nameInput().value).toBe('Krřyer');
+  });
+
+  it('a name the person typed stays', async () => {
+    await load([{ name: 'hauls.csv', bytes: latin(CSV) }]);
+    fireEvent.change(screen.getByLabelText('Krřyer: Meaning'), { target: { value: 'variable' } });
+    await idle();
+    fireEvent.change(nameInput(), { target: { value: 'Water clarity' } });
+    fireEvent.click(readings()[1]);
+    await waitFor(() => expect(item('CONV-ENCODING-DECLARED')).not.toBeNull());
+    await idle();
+    expect(nameInput().value).toBe('Water clarity');
+  });
+});
+
+describe('what the re-read changes in the answers keyed by the header text or the column number', () => {
+  const DATES = [HEADER.join(';'), 'S1;k1;03/04/2023;55,5;3,5;Calanus finmarchicus;4;S\xe8vre', 'S2;k2;05/06/2023;56,5;3,5;Calanus finmarchicus;5;S\xe8vre'].join('\n') + '\n';
+
+  async function loadWith(files: { name: string; bytes: Uint8Array }[], change: (f: Awaited<ReturnType<ConvertEngine['encodingChoice']>>) => Awaited<ReturnType<ConvertEngine['encodingChoice']>>): Promise<void> {
+    const base = createDirectConvertEngine();
+    const engine: ConvertEngine = { ...base, encodingChoice: async (fileId, encoding) => change(await base.encodingChoice(fileId, encoding)) };
+    const view = render(<ConvertPage engine={engine} download={vi.fn()} downloadFile={vi.fn()} />);
+    fireEvent.change(view.container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: files.map((f) => new File([f.bytes as BlobPart], f.name)) } });
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    await idle();
+  }
+
+  it('a day/month order the companion file gave for a header hash loses its label when the pick changes the text of that header', async () => {
+    const asRead = HEADER.map((h) => h.replace('\xf8', 'ř'));
+    const sidecar = latin(writeConvertSidecar({ dayMonthOrder: [{ sheet: 'hauls.csv', order: 'dmy', hash: keyHashes(asRead, [2]) as string, rows: 2 }] }));
+    // the date column is only recognised under its plain name, so the pick is made to read that header another way in the summary the worker returns
+    await loadWith([{ name: 'hauls.csv', bytes: latin(DATES) }, { name: 'c.csv', bytes: sidecar }], (f) => ({ ...f, sheets: [{ ...f.sheets[0], header: f.sheets[0].header.map((h, i) => (i === 2 ? `${h}.` : h)) }] }));
+    await waitFor(() => expect(item('CONV-DATE-ORDER-DECLARED')?.textContent).toContain('companion file'));
+    fireEvent.click(readings()[1]);
+    await waitFor(() => expect(item('CONV-ENCODING-DECLARED')).not.toBeNull());
+    await idle();
+    await waitFor(() => expect(item('CONV-DATE-ORDER-DECLARED')?.textContent).not.toContain('companion file'));
+    expect(item('CONV-DATE-ORDER-DECLARED')).not.toBeNull();
+  });
+
+  it('a sheet whose number of columns changed under the pick starts again and the page says so', async () => {
+    await loadWith([{ name: 'hauls.csv', bytes: latin(CSV) }], (f) => {
+      const sheet = f.sheets[0].name;
+      const index = f.sheets[0].header.length;
+      return {
+        ...f,
+        sheets: [{ ...f.sheets[0], header: [...f.sheets[0].header, 'Extra'] }],
+        mappings: [{ sheet, columns: [...f.mappings[0].columns, { index, header: 'Extra', role: { kind: 'ignore' } }] }],
+        proposals: { [sheet]: [...f.proposals[sheet], { index, header: 'Extra', cleanHeader: 'Extra', role: { kind: 'ignore' }, confidence: 'high', reason: 'x', reasonCode: 'text-column' } as never] },
+        samples: { [sheet]: [...f.samples[sheet], []] },
+      };
+    });
+    fireEvent.change(screen.getByLabelText('Station: Meaning'), { target: { value: 'ignore' } });
+    await idle();
+    expect(screen.queryByTestId('encoding-sheet-reset')).toBeNull();
+    fireEvent.click(readings()[1]);
+    await waitFor(() => expect(item('CONV-ENCODING-DECLARED')).not.toBeNull());
+    await idle();
+    expect(screen.getByTestId('encoding-sheet-reset').textContent).toContain('hauls.csv: hauls.csv');
+    expect(roleOf('Station')).not.toBe('ignore');
   });
 });
