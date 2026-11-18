@@ -143,6 +143,29 @@ describe('the day/month order in the companion file (round 3, Task 8)', () => {
   });
 });
 
+describe('the decimal reading in the companion file (round 4, Task 4)', () => {
+  const hash = keyHashes(['Sample', 'Depth [m]'], [1]) as string;
+
+  it('round trips the reading of a column by sheet, header hash and rows, and holds no header text and no number', () => {
+    const settings = { decimalReading: [{ sheet: 'Depth', reading: 'thousands' as const, hash, rows: 3 }, { sheet: 'a:b.csv', reading: 'decimal' as const, hash, rows: 12 }] };
+    const text = writeConvertSidecar(settings);
+    expect(text).toContain(`decimalReading=thousands:Depth:${hash}:3`);
+    expect(text).not.toMatch(/Depth \[m\]/);
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.decimalReading).toEqual(settings.decimalReading);
+  });
+
+  it('a malformed line, an unknown reading and a repeated column are not kept', () => {
+    const lines = [`decimalReading=xyz:Depth:${hash}:3`, 'decimalReading=thousands:Depth:nothex:3', `decimalReading=thousands:Depth:${hash}:x`, `decimalReading=thousands:Depth:${hash}:3`, `decimalReading=decimal:Depth:${hash}:3`];
+    const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.decimalReading).toEqual([{ sheet: 'Depth', reading: 'thousands', hash, rows: 3 }]);
+  });
+
+  it('is not written for a reading that is no answer', () => {
+    const text = writeConvertSidecar({ decimalReading: [{ sheet: 'Depth', reading: 'sideways' as never, hash, rows: 3 }] });
+    expect(text).not.toContain('decimalReading=');
+  });
+});
+
 describe('the declared position in the companion file (round 3, Task 11)', () => {
   const one = { sheet: 'Tanks', lat: '-54,125', lon: '10.9', uncertaintyM: '500', rows: 12 };
 

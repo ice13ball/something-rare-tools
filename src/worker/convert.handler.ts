@@ -13,6 +13,7 @@ import type { ConflictAnswer, JoinOutcome, SampleJoinRequestCore } from '../core
 import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
 import { turnConvertFile } from '../core/convert/turn';
+import { applyDecimalReading, askedDecimalColumns, type DecimalReading } from '../core/convert/decimalReading';
 import { resolveKeyHashes } from '../core/convert/keySetting';
 import { transposedSheetReason } from '../core/convert/transposed';
 import { firstRowIsUnits } from '../core/recognize/layout';
@@ -48,6 +49,10 @@ interface Held {
   turns: Record<string, TurnDeclaration>;
   /** The sheets whose declaration was pre-ticked from a companion file and not changed since. */
   turnsFromFile: Set<string>;
+  /** The person's answers "decimal comma" or "thousands separator", by sheet name and column index of the sheet as dropped; only a column IN-DECIMAL-AMBIGUOUS of that sheet names. Applied to the file as read, before any pivot or turn. */
+  decimal: Record<string, Record<number, DecimalReading>>;
+  /** The answers read from a companion file and not changed since: `<sheet>\0<index>`. */
+  decimalFromFile: Set<string>;
 }
 
 const isTable = (f: ParsedFile): boolean => (f.kind === 'csv' || f.kind === 'xlsx' || f.kind === 'pangaea') && f.sheets.length > 0;
@@ -122,6 +127,7 @@ export function createConvertHandler(): ConvertHandler {
     // the sheets a companion file of this drop says are read as normal tables (a pre-tick, by sheet name): known before any file is pivoted, whatever the order of the files
     const asTable = new Set<string>();
     const turnPick = new Map<string, NonNullable<ConvertSettings['turned']>[number]>();
+    const decimalPick: NonNullable<ConvertSettings['decimalReading']> = [];
     biomassPick = new Map();
     occurrencePick = new Map();
     for (const parsed of parsedAll) {
@@ -129,6 +135,7 @@ export function createConvertHandler(): ConvertHandler {
       const cs = readConvertSettings(parsed);
       for (const n of cs?.longAsTable ?? []) asTable.add(n);
       for (const t of cs?.turned ?? []) if (!turnPick.has(t.sheet)) turnPick.set(t.sheet, t);
+      for (const d of cs?.decimalReading ?? []) if (!decimalPick.some((x) => x.sheet === d.sheet && x.hash === d.hash)) decimalPick.push(d);
       for (const b of cs?.biomassBasis ?? []) if (!biomassPick.has(b.sheet)) biomassPick.set(b.sheet, b.basis);
       for (const o of cs?.perOccurrence ?? []) {
         const m = occurrencePick.get(o.sheet) ?? new Map<string, boolean>();
@@ -188,7 +195,7 @@ export function createConvertHandler(): ConvertHandler {
       // metadata file, with its file name as the source; the sheet itself is still a data table
       if (parsed.kind === 'pangaea' && parsed.embeddedMetadata) records.push(pangaeaHeaderRecord(parsed.embeddedMetadata));
       const fileId = `c${++seq}`;
-      const h: Held = { fileId, original: parsed, parsed, pivoted: parsed, turns: Object.create(null) as Record<string, TurnDeclaration>, turnsFromFile: new Set(), choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
+      const h: Held = { fileId, original: parsed, parsed, pivoted: parsed, turns: Object.create(null) as Record<string, TurnDeclaration>, turnsFromFile: new Set(), decimal: Object.create(null) as Record<string, Record<number, DecimalReading>>, decimalFromFile: new Set(), choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
       // the turns of a companion file: a pre-tick that holds only when the columns are found again by their hashes and the sheet has the same number of rows
       for (const sheet of parsed.sheets) {
         const t = turnPick.get(sheet.name);
@@ -196,6 +203,19 @@ export function createConvertHandler(): ConvertHandler {
         if (decl !== undefined) {
           h.turns[sheet.name] = decl;
           h.turnsFromFile.add(sheet.name);
+        }
+      }
+      // the decimal readings of a companion file: a pre-pick that holds only when the column is found again by its hash, the sheet has the same number of rows and the reader still asks about that column
+      for (const sheet of parsed.sheets) {
+        const asked = askedDecimalColumns(parsed, sheet.name);
+        for (const d of decimalPick) {
+          if (d.sheet !== sheet.name || d.rows !== sheet.rows.length) continue;
+          const at = resolveKeyHashes(sheet.header, d.hash);
+          if (at?.length !== 1 || !asked.includes(at[0])) continue;
+          const mine = (h.decimal[sheet.name] ??= Object.create(null) as Record<number, DecimalReading>);
+          if (mine[at[0]] !== undefined) continue;
+          mine[at[0]] = d.reading;
+          h.decimalFromFile.add(`${sheet.name}\0${at[0]}`);
         }
       }
       repivot(h);
@@ -214,7 +234,10 @@ export function createConvertHandler(): ConvertHandler {
    * see the same columns and the same indexes (core/convert/pivot.ts). The user's choices for the sheet (read it as a normal table; key columns that describe the measurement) are applied.
    */
   function repivot(h: Held): void {
-    h.pivoted = pivotConvertFile(h.original, h.choices);
+    // the person's answer about a comma is applied to the file as read, before the pivot and the turn: every later step sees the same numbers
+    let read = h.original;
+    for (const [sheet, answers] of Object.entries(h.decimal)) read = applyDecimalReading(read, sheet, answers, Object.keys(answers).map(Number).filter((i) => h.decimalFromFile.has(`${sheet}\0${i}`)));
+    h.pivoted = pivotConvertFile(read, h.choices);
     // a sheet that is read through its pivot is never turned; the turn of any other sheet is applied BEFORE the roles are proposed
     const live = Object.fromEntries(Object.entries(h.turns).filter(([name]) => h.pivoted.sheets.some((s) => s.name === name && s.pivot === undefined)));
     h.parsed = turnConvertFile(h.pivoted, live);
@@ -244,6 +267,17 @@ export function createConvertHandler(): ConvertHandler {
       const pivotOff = h.original.sheets.filter((s) => h.choices[s.name]?.off === true && readLongSheet(h.original, s).kind === 'pivot').map((s) => s.name);
       const turned: NonNullable<ConvertFileSummary['turned']> = Object.create(null) as NonNullable<ConvertFileSummary['turned']>;
       const turnSource: NonNullable<ConvertFileSummary['turnSource']> = Object.create(null) as NonNullable<ConvertFileSummary['turnSource']>;
+      // the readings the person declared for a comma, only for the columns the reader asked about (the sheet in `sheets` may be a pivoted one: its source header and rows are listed too)
+      const decimal: NonNullable<ConvertFileSummary['decimal']> = Object.create(null) as NonNullable<ConvertFileSummary['decimal']>;
+      const decimalSource: NonNullable<ConvertFileSummary['decimalSource']> = Object.create(null) as NonNullable<ConvertFileSummary['decimalSource']>;
+      for (const [name, answers] of Object.entries(h.decimal)) {
+        const src = h.original.sheets.find((x) => x.name === name);
+        const asked = askedDecimalColumns(h.original, name);
+        const kept = Object.entries(answers).filter(([i]) => asked.includes(Number(i)));
+        if (src === undefined || kept.length === 0) continue;
+        decimal[name] = Object.fromEntries(kept.map(([i, reading]) => [i, { reading, ...(h.decimalFromFile.has(`${name}\0${i}`) ? { fromFile: true as const } : {}) }]));
+        decimalSource[name] = { header: [...src.header], rows: src.rows.length };
+      }
       for (const sheet of parsed.sheets) {
         if (sheet.turn !== undefined) {
           // the declaration only: the source sheet (and the maps back to it) stay in the worker, no message carries a sheet twice
@@ -295,6 +329,7 @@ export function createConvertHandler(): ConvertHandler {
         ...(Object.keys(dictionary).length > 0 ? { dictionarySheets: dictionary } : {}),
         ...(Object.keys(pivots).length > 0 ? { pivots } : {}),
         ...(Object.keys(turned).length > 0 ? { turned, turnSource } : {}),
+        ...(Object.keys(decimal).length > 0 ? { decimal, decimalSource } : {}),
         ...(pivotOff.length > 0 ? { pivotOff } : {}),
         ...(Object.keys(transposed).length > 0 ? { transposedSheets: transposed } : {}),
       };
@@ -333,6 +368,29 @@ export function createConvertHandler(): ConvertHandler {
     if (t === undefined || typeof t !== 'object' || !whole(t.nameColumn) || !Array.isArray(t.notSamples) || !t.notSamples.every(whole) || t.notSamples.includes(t.nameColumn)) return summaryOf(h);
     h.turns[req.sheet] = { nameColumn: t.nameColumn, notSamples: [...new Set(t.notSamples)].sort((a, b) => a - b), ...(t.headerDates === true ? { headerDates: true } : {}) };
     h.turnsFromFile.delete(req.sheet);
+    repivot(h);
+    return summaryOf(h);
+  }
+
+  /**
+   * The person's answer about the comma of one column ("decimal comma" or "thousands separator"), or taking it back. Only a column that IN-DECIMAL-AMBIGUOUS of that sheet names is kept; anything else (a column the reader
+   * did not ask about, an index outside the sheet, a word that is not an answer) leaves the summary unchanged. The answer belongs to that column of that file alone. The file is read again (decimal, pivot, turn).
+   */
+  function decimalChoice(req: Extract<ConvertRequest, { type: 'decimalChoice' }>): ConvertFileSummary {
+    const h = held(req.fileId);
+    const key = `${req.sheet}\0${req.index}`;
+    if (req.reading === null) {
+      const mine = h.decimal[req.sheet];
+      if (mine === undefined || mine[req.index] === undefined) return summaryOf(h);
+      delete mine[req.index];
+      if (Object.keys(mine).length === 0) delete h.decimal[req.sheet];
+      h.decimalFromFile.delete(key);
+      repivot(h);
+      return summaryOf(h);
+    }
+    if ((req.reading !== 'decimal' && req.reading !== 'thousands') || !Number.isInteger(req.index) || !askedDecimalColumns(h.original, req.sheet).includes(req.index)) return summaryOf(h);
+    (h.decimal[req.sheet] ??= Object.create(null) as Record<number, DecimalReading>)[req.index] = req.reading;
+    h.decimalFromFile.delete(key);
     repivot(h);
     return summaryOf(h);
   }
@@ -684,6 +742,8 @@ export function createConvertHandler(): ConvertHandler {
           return pivotChoice(req);
         case 'turnChoice':
           return turnChoice(req);
+        case 'decimalChoice':
+          return decimalChoice(req);
         case 'export':
           return exportArchive(req.export);
         case 'notWritten':

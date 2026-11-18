@@ -66,6 +66,7 @@ import type { RuleSpec } from './spec';
  *   CONV-DATE-ORDER-UNDECLARED count, examples, index, first, second, isoFirst, isoSecond   field = a date / datetime / time column (or a picked date key part), value = the first example, index = its column: it has dates such as 5/4/2023 that can be read either way, no date in it decides, and no order is declared (blocks; the ROW-DATE-UNPARSEABLE of those cells is not said)
  *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
  *   CONV-DATE-ORDER-DECLARED   order, index   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
+ *   CONV-DECIMAL-DECLARED      column, index, reading   info: the person declared what the comma is in a column that IN-DECIMAL-AMBIGUOUS asked about (reading = decimal | thousands); under thousands the column's cells written 1,250 or 1,250,000 are read as 1250 and 1250000 (optional fromFile = yes: the answer came from the companion file)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -1106,6 +1107,31 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       },
     ],
     technical: `{file}, {sheet} field {field} (column {index}): the day/month order {order} declared for the column was used for its ambiguous dates. It applies to the date written, the date inside an ID and the date compared in a join alike.`,
+  },
+  {
+    id: 'CONV-DECIMAL-DECLARED',
+    category: 'B',
+    severity: 'info',
+    exportPolicy: 'show',
+    params: ['column', 'index', 'reading'],
+    plain: {
+      pl: `Jak podano, przecinek w liczbach kolumny „{column}” jest odczytywany jako: {reading} (decimal: przecinek dziesiętny, 1,250 to 1,25; thousands: separator tysięcy, 1,250 to 1250). Dotyczy to tej kolumny w całym zapisie: w archiwum, w pomiarach, w sumach i w uwagach.`,
+      en: `As you declared, the comma in the numbers of column "{column}" is read as: {reading} (decimal: a decimal comma, 1,250 is 1.25; thousands: a thousands separator, 1,250 is 1250). It applies to this column everywhere it is used: the archive, the measurements, the sums and the findings.`,
+      de: `Wie angegeben, wird das Komma in den Zahlen der Spalte „{column}“ gelesen als: {reading} (decimal: Dezimalkomma, 1,250 ist 1,25; thousands: Tausendertrennzeichen, 1,250 ist 1250). Das gilt für diese Spalte überall: im Archiv, in den Messwerten, in den Summen und in den Hinweisen.`,
+      fr: `Comme indiqué, la virgule dans les nombres de la colonne « {column} » est lue comme : {reading} (decimal : virgule décimale, 1,250 vaut 1,25 ; thousands : séparateur de milliers, 1,250 vaut 1250). Cela vaut pour cette colonne partout : dans l'archive, dans les mesures, dans les sommes et dans les remarques.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta odpowiedź pochodzi z pliku towarzyszącego.`,
+          en: `This answer was read from the companion file.`,
+          de: `Diese Antwort stammt aus der Begleitdatei.`,
+          fr: `Cette réponse vient du fichier d'accompagnement.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet} column {index} "{column}": the comma was declared {reading} for the column (IN-DECIMAL-AMBIGUOUS asked). Under thousands every cell of the column written n,nnn[,nnn...] is read as the number written without its commas, before any other step; under decimal the column is read as it was. Other columns are not affected.`,
   },
   {
     id: 'CONV-ZERO-WITH-BIOMASS',

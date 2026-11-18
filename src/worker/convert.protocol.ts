@@ -12,6 +12,7 @@ import type { WormsLookup } from '../core/convert/worms';
 import type { SheetLedger } from '../core/convert/ledger';
 import type { SheetKeyReport } from '../core/convert/sampleKey';
 import type { ConflictGroup } from '../core/convert/sampleJoin';
+import type { DecimalReading } from '../core/convert/decimalReading';
 import type { Finding, SheetMapping, TurnDeclaration } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -43,6 +44,13 @@ export interface ConvertFileSummary extends FileSummary {
   turned?: Record<string, TurnDeclaration & { fromFile?: true }>;
   /** by sheet name, for each turned sheet: the header and the number of rows of the sheet as dropped (to show the declaration, to offer its columns again and to write the companion file). */
   turnSource?: Record<string, { header: string[]; rows: number }>;
+  /**
+   * by sheet name, then by column index of the sheet as dropped: what the person declared a comma to be in a column IN-DECIMAL-AMBIGUOUS asked about (core/convert/decimalReading.ts), and `fromFile` when the answer was
+   * read from a companion file (it holds only for the same header hash and the same number of rows). Only columns the reader asked about are listed.
+   */
+  decimal?: Record<string, Record<number, { reading: DecimalReading; fromFile?: true }>>;
+  /** by sheet name, for each sheet with a declared decimal reading: the header and the number of rows of the sheet as dropped (to write the companion line: the sheet in `sheets` may be a pivoted one). */
+  decimalSource?: Record<string, { header: string[]; rows: number }>;
   /** by sheet name, only for a sheet that looks transposed (species or variables in rows; core/convert/transposed.ts): the page offers "read as a normal table" next to the blocking message. */
   transposedSheets?: Record<string, 'transposed' | 'transposed-taxa' | 'header-units'>;
 }
@@ -283,6 +291,8 @@ export interface ConvertProtocol {
   pivotChoice: { req: { fileId: string; sheet: string; off: boolean; describes: number[] }; res: ConvertFileSummary };
   /** The person's declaration "the samples are the columns" for a sheet (`turn`), or taking it back (`null`). The file is read again (long pivot, then turn) and the answer is its new summary. An index outside the sheet, or a name column that is also declared not a sample, is ignored: the summary comes back unchanged. */
   turnChoice: { req: { fileId: string; sheet: string; turn: TurnDeclaration | null }; res: ConvertFileSummary };
+  /** The person's declaration of what the comma is in one column of a sheet (`decimal` = a decimal comma, `thousands` = a thousands separator), or taking it back (`null`). Only an `index` that IN-DECIMAL-AMBIGUOUS of that sheet names is kept; anything else leaves the summary unchanged. The file is read again and the answer is its new summary. */
+  decimalChoice: { req: { fileId: string; sheet: string; index: number; reading: DecimalReading | null }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
   notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
   /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
@@ -306,6 +316,7 @@ export interface ConvertEngine {
   proposeCodes(fileId: string, sheet: string, mapping: SheetMapping, shape?: ConvertShape, extra?: number[]): Promise<CodeProposalView | null>;
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   turnChoice(fileId: string, sheet: string, turn: TurnDeclaration | null): Promise<ConvertFileSummary>;
+  decimalChoice(fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
   notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
   previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[], prefix?: string): Promise<SheetKeyReport | null>;

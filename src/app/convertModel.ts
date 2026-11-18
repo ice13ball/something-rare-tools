@@ -547,6 +547,23 @@ export function dayMonthOrderSettingsOf(parsed: ConvertParseResult, choices: Rec
   return out;
 }
 
+/** The readings of a comma the person gave (or a companion file gave and still holds) for the columns in use: the sheet, the column's header hash and the number of rows of the sheet AS DROPPED (no header text, no number). */
+export function decimalReadingSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['decimalReading']> {
+  const out: NonNullable<ConvertSettings['decimalReading']> = [];
+  for (const f of parsed.files) {
+    for (const [sheet, answers] of Object.entries(f.decimal ?? {})) {
+      const src = f.decimalSource?.[sheet];
+      const c = choices[sheetKey(f.fileId, sheet)];
+      if (src === undefined || (c !== undefined && !c.use)) continue;
+      for (const [k, a] of Object.entries(answers)) {
+        const hash = keyHashes(src.header, [Number(k)]);
+        if (hash !== undefined && !out.some((o) => o.sheet === sheet && o.hash === hash)) out.push({ sheet, reading: a.reading, hash, rows: src.rows });
+      }
+    }
+  }
+  return out;
+}
+
 /** The sheets in use declared "each row is its own record" (where that applies), with the number of rows of the sheet: what the companion file keeps (a name and a count). */
 export function ownRecordsSettingsOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['ownRecords']> {
   const out: NonNullable<ConvertSettings['ownRecords']> = [];

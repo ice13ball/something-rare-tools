@@ -454,3 +454,92 @@ describe('turnChoice: the samples are the columns', () => {
     expect(v.sampleJoin.proposals.map((x) => ({ long: x.long, turned: x.turned }))).toEqual([{ long: true, turned: true }]);
   });
 });
+
+describe('decimalChoice: a comma that may be a thousands separator (round 4, Task 4)', () => {
+  const HEADER = 'Sample;Depth [m];Chlorophyll;Calanus finmarchicus;Date;Latitude;Longitude';
+  const ROWS = ['A;1,250;12,500;3;2023-06-14;55,5;2,5', 'B;2,000;3,750;4;2023-06-14;55,5;2,5'];
+  const CSV = [HEADER, ...ROWS].join('\n') + '\n';
+  const header = HEADER.split(';');
+  const sidecar = (reading: 'decimal' | 'thousands', rows: number, hash = keyHashes(header, [1]) as string, sheet = 'depth.csv') => file('run.sidecar.csv', writeConvertSidecar({ decimalReading: [{ sheet, reading, hash, rows }] }));
+  const run = async (e: ReturnType<typeof createDirectConvertEngine>, f: Awaited<ReturnType<typeof e.parse>>['files'][number]) => {
+    const v = await e.convert({ sheets: [{ fileId: f.fileId, sheet: f.sheets[0].name, mapping: f.mappings[0], shape: 'wide', quantity: { kind: 'count' } }], options: {}, approvedSplits: {} });
+    return { v, rule: (id: string) => v.findings.filter((x) => x.ruleId === id) };
+  };
+
+  it('the reader asks about both columns; "thousands" for one reads it as 1250 everywhere and leaves the other asked', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([file('depth.csv', CSV)])).files[0];
+    expect(f.decimal).toBeUndefined();
+    expect((await run(e, f)).rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([1, 2]);
+    const g = await e.decimalChoice(f.fileId, 'depth.csv', 1, 'thousands');
+    expect(g.decimal).toEqual({ 'depth.csv': { 1: { reading: 'thousands' } } });
+    expect(g.decimalSource).toEqual({ 'depth.csv': { header, rows: 2 } });
+    const { v, rule } = await run(e, g);
+    expect(rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([2]);
+    expect(rule('CONV-DECIMAL-DECLARED')[0]?.params).toMatchObject({ index: 1, reading: 'thousands' });
+    expect(v.examples.sample.map((x) => x.depthMin)).toEqual(expect.arrayContaining([1250, 2000]));
+  });
+
+  it('"decimal" keeps the values; taking the answer back asks again', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([file('depth.csv', CSV)])).files[0];
+    const g = await e.decimalChoice(f.fileId, 'depth.csv', 1, 'decimal');
+    const a = await run(e, g);
+    expect(a.rule('CONV-DECIMAL-DECLARED')).toHaveLength(1);
+    expect(a.v.examples.sample.map((x) => x.depthMin)).toEqual(expect.arrayContaining([1.25, 2]));
+    const back = await e.decimalChoice(f.fileId, 'depth.csv', 1, null);
+    expect(back.decimal).toBeUndefined();
+    expect((await run(e, back)).rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([1, 2]);
+  });
+
+  it('a column the reader did not ask about, an index outside the sheet, another sheet and a word that is no answer leave the summary unchanged', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([file('depth.csv', CSV)])).files[0];
+    const before = JSON.stringify(await e.decimalChoice(f.fileId, 'depth.csv', 1, null));
+    for (const [sheet, index, reading] of [['depth.csv', 0, 'thousands'], ['depth.csv', 3, 'thousands'], ['depth.csv', 99, 'thousands'], ['depth.csv', -1, 'thousands'], ['depth.csv', 1.5, 'thousands'], ['other.csv', 1, 'thousands'], ['depth.csv', 1, 'sideways']] as const) {
+      expect(JSON.stringify(await e.decimalChoice(f.fileId, sheet, index, reading as never))).toBe(before);
+    }
+  });
+
+  it('the answer belongs to its file: a second file of the same shape is still asked', async () => {
+    const e = createDirectConvertEngine();
+    const [a, b] = (await e.parse([file('depth.csv', CSV), file('depth2.csv', CSV)])).files;
+    await e.decimalChoice(a.fileId, 'depth.csv', 1, 'thousands');
+    const second = await run(e, b);
+    expect(second.rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([1, 2]);
+    expect(second.rule('CONV-DECIMAL-DECLARED')).toEqual([]);
+  });
+
+  it('a companion file answers for the same column and the same number of rows (fromFile) and for nothing else', async () => {
+    const e = createDirectConvertEngine();
+    const same = (await e.parse([file('depth.csv', CSV), sidecar('thousands', 2)])).files[0];
+    expect(same.decimal).toEqual({ 'depth.csv': { 1: { reading: 'thousands', fromFile: true } } });
+    const { v, rule } = await run(e, same);
+    expect(rule('CONV-DECIMAL-DECLARED')[0]?.params).toMatchObject({ index: 1, reading: 'thousands', fromFile: 'yes' });
+    expect(v.examples.sample.map((x) => x.depthMin)).toEqual(expect.arrayContaining([1250, 2000]));
+    // one row more: the answer was given for another sheet
+    const more = CSV + 'C;3,000;1,500;5;2023-06-14;55,5;2,5\n';
+    const moreFile = (await e.parse([file('depth.csv', more), sidecar('thousands', 2)])).files[0];
+    expect(moreFile.decimal).toBeUndefined();
+    expect((await run(e, moreFile)).rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([1, 2]);
+    // the header is renamed: the column is not found by its hash
+    const renamed = CSV.replace('Depth [m]', 'Depth');
+    const renamedFile = (await e.parse([file('depth.csv', renamed), sidecar('thousands', 2)])).files[0];
+    expect(renamedFile.decimal).toBeUndefined();
+    expect((await run(e, renamedFile)).rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([1, 2]);
+    // another sheet name
+    expect((await e.parse([file('other.csv', CSV), sidecar('thousands', 2)])).files[0].decimal).toBeUndefined();
+    // a column the reader no longer asks about (the cells now say the separator): nothing is applied
+    const settled = CSV.replace('1,250', '1,25');
+    const settledFile = (await e.parse([file('depth.csv', settled), sidecar('thousands', 2)])).files[0];
+    expect(settledFile.decimal).toBeUndefined();
+    const settledRun = await run(e, settledFile);
+    expect(settledRun.rule('CONV-DECIMAL-DECLARED')).toEqual([]);
+    expect(settledRun.v.examples.sample.map((x) => x.depthMin)).toEqual(expect.arrayContaining([1.25]));
+    // the person changes it: it is theirs now, not the file's
+    const e2 = createDirectConvertEngine();
+    const again = (await e2.parse([file('depth.csv', CSV), sidecar('thousands', 2)])).files[0];
+    const changed = await e2.decimalChoice(again.fileId, 'depth.csv', 1, 'decimal');
+    expect(changed.decimal).toEqual({ 'depth.csv': { 1: { reading: 'decimal' } } });
+  });
+});
