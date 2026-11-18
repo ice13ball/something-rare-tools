@@ -375,3 +375,28 @@ The real-data acceptance (Task 16) showed CONV-EVENT-DATE-MISSING leaves several
 - **Where it applies.** It works only on a sheet where no sample has a readable date. It is refused on a mixed sheet, which keeps Q3's "leave out and list", on a sheet whose dates come from a joined description sheet, and on a turned header date (B5).
 - **What the archive says.** Every event carries eventRemarks saying the date was declared for N samples and is not in the source. The methods text gets a line, as for the declared position. CONV-DATE-DECLARED is an accept-level finding, with extra wording for an interval longer than one year, and CONV-DATE-DECLARED-INVALID blocks.
 - **Companion file.** The line is `declaredDate=<value>:<rows>:<sheet>`. It is restored only when the sheet name and row count match; otherwise the page shows it as not applied. This extends the Q6 data-value exception.
+
+## 13. Rulings made while executing (from the SDD ledger)
+
+Each line: what was decided, why, and what it costs if wrong.
+
+- B4 applies only to replicate and profile levels (they take the date of their sample/station); a sample never inherits a date from a sibling via the derived station date — Q3 (Michał) says undated samples block; the literal B4 would let them through — cost if wrong: some samples block that the person thinks dated (they can fill or leave out and list).
+- plan's code-forced adjustments accepted (own coordinate parser; litre reading only for declarations; turn per file before role proposal; CONV-POSITION-NONE only when no event gets a position via station/cruise; listed side effects on fixtures/rules) — they keep existing archives unchanged — cost: small extra code.
+- F1–F18 accepted as proposed in preflight.md — each fixes a producer/consumer mismatch, a dead-end answer, a missing test file, or a missing intended-change line; none changes a decision of Michał — cost if wrong: extra code paths, reviewer churn.
+- fix now with a one-axis variant; no declare route where a position role remains — cost: one more variant. Fix round 1 sent (base 594c64e).
+- also fix per:'sample' density silently ignored, and class 3.0 consistency. Fix round 1 sent (base 02472f7).
+- no leave-out on pivoted sheets (fill dates) — cost: pivoted-sheet users must fill dates. Fix round 1 sent (base ec8928d).
+- new reason 'profile' on CONV-POSITION-DECLARED-INVALID; parent remark 'derived in part from a declared position'; remark wording 'for all samples of this sheet' instead of 'whole dataset' — accuracy — cost: none. Fix round 1 sent (base 8ffd4c5).
+- option A — CONV-ROW-COPIES blocks under own records whatever the quantity columns (literal Q2 of Michał) — cost: one more answer for such sheets. Fix round 1 sent (base 21cfab3).
+- repeated row name on a turned sheet BLOCKS (no silent rename) — principle 5 — cost: person edits names. Fix round 1 sent (base 681cc8d).
+- M4 (companion shape = hashes + row count, width not kept) parked — re-turn is shown "from the file" with Undo, matches brief — cost if wrong: one extra Undo click.
+- M5 (CONV-SHEET-TRANSPOSED names two answers) parked — spec keeps text unchanged — cost: text lags one button.
+- M7 (companion turn inert on pivoted sheet, switches on after "normal table") parked — visible with Undo, not silent — cost: one Undo.
+- Task 16 may run beside another session's basemap pipeline on the VPS (abm-vps-runner since 17.11, batch 333/384, ~1.5 GB, load 2 on 8 cores, MemAvailable 6.9 GB, swap half free) — it runs for hours more and our unit is capped (MemoryMax=3G, CPUWeight=10, IOWeight=10, nice 15, ionice idle); start only if MemAvailable ≥ 4.5 GB, and stop our unit at once if MemAvailable < 1.5 GB during the run — cost if wrong: the basemap batch slows; OOM falls on our capped unit first.
+- the 5 "downstream" labels (dvnl-macro-ind, ird-senilia, elbe, n3k, n3L) are consequences of intended items 6/7 — controller read each first differing key: non-taxon columns (pH, TIC, velocity, coordinates, Station_lat/lon, Ending lat/lon) no longer taxa, ind/L resolves; archives identical where written — cost if wrong: a hidden change in those 5 files' ledgers.
+- no declaredPosition for elbe / inv-sf — the sources state no single place — consistent with spec Q5.
+- fix wave = I1 + M1 (message names the description sheet; a saved declared position that cannot apply is shown as not applied, not a block) + M2 (saved declared position keyed by sheet name + row count, like other saved answers) — cost: small.
+- M3 (turn resets typed declarations, visible), M4 (one re-click), M5 (double conversion, small files) parked.
+- build the declared date as Task 17; deploy only on Michał's own word (a peer message is not his approval; it also reverses his 13.11 Q4).
+- N1 + N2 carried into Task 17 (it reworks CONV-EVENT-DATE-MISSING texts anyway) — cost: none extra.
+- (superseded 18.11) Michał then said directly that the AI-Wall session holds his authorization for deploys; round 3 ships on its acceptance once the gates are green.
