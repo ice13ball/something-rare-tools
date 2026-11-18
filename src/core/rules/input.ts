@@ -25,7 +25,7 @@ import type { RuleSpec } from './spec';
  *   IN-LAYOUT-UNSUPPORTED   reason, reasons   English phrase from LayoutPlan.unsupported; JSON of LayoutPlan.unsupportedReasons (codes, rendered per language by renderPlain)
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
- *   IN-DECIMAL-AMBIGUOUS    column, index, count, asDecimal, asThousands   a column of a decimal-comma file whose every comma value has exactly three digits after the comma; value = the first such cell; lines = the cells written like it
+ *   IN-DECIMAL-AMBIGUOUS    column, index, count, asDecimal, asThousands   a column of a decimal-comma file whose every comma value has exactly three digits after the comma; value = the first such cell; lines = every comma cell of the column (the cells count counts)
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
  *   IN-HEADER-UNITS-READ    count, example    columns that got a unit from the row under the header (at least 1; the row's line is in `lines`), and the first of them as it now reads ('a [h]'); file + sheet
  *   IN-HEADER-UNITS-NAMED   (none)   a row of units under a header whose names all carry their units already: not a data row (the row's line is in `lines`); file + sheet

@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCsvText } from '../../src/core/parse/csv';
 import { parseFile } from '../../src/core/parse';
+import { renderPlain } from '../../src/core/report';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const ragged = (f: ReturnType<typeof parseCsvText>) => f.findings.filter((x) => x.ruleId === 'ROW-RAGGED');
@@ -42,7 +43,7 @@ describe('parseCsvText', () => {
       expect(a).toHaveLength(2);
       expect(a[0].params).toMatchObject({ column: 'Depth [m]', index: 1, count: 2, asDecimal: '1.25', asThousands: '1250' });
       expect(a[0].value).toBe('1,250');
-      expect(a[0].lines).toEqual([2]);
+      expect(a[0].lines).toEqual([2, 3]);
       expect(a[1].params).toMatchObject({ column: 'Chlorophyll', index: 2, count: 2 });
       expect(f.sheets[0].rows[0].cells).toEqual(['A', '1,250', '12,500']);
     });
@@ -63,6 +64,36 @@ describe('parseCsvText', () => {
 
     it('does not ask for a column that has one settling value among three-digit ones', () => {
       expect(amb('S;D;T\nA;1,250;1,5\nB;2,500;2,5\nC;3,75;2,5\n')).toEqual([]);
+    });
+
+    it('does not ask when a cell in the column is written with point thousands and a decimal comma (1.250,5)', () => {
+      expect(amb('S;D;T\nA;1,250;1,5\nB;1.250,5;2,5\nC;2,500;2,5\n').filter((x) => x.params?.column === 'D')).toEqual([]);
+    });
+
+    it('does not ask when a cell in the column is written with comma groups (1,250,000)', () => {
+      expect(amb('S;D;T\nA;1,250;1,5\nB;1,250,000;2,5\nC;2,500;2,5\n').filter((x) => x.params?.column === 'D')).toEqual([]);
+    });
+
+    it('judges the whole column: a settling value past row 50 settles it, and a long column of three-digit values is asked once', () => {
+      const rows = (n: number, last?: string) => Array.from({ length: n }, (_, i) => `R${i};${1 + (i % 9)},${String(250 + i).padStart(3, '0')}`).concat(last ? [`Z;${last}`] : []);
+      const withT = (rs: string[]) => 'S;D\n' + rs.join('\n') + '\n';
+      expect(amb(withT(rows(61, '1,5'))).filter((x) => x.params?.column === 'D')).toEqual([]);
+      const long = amb(withT(rows(61)));
+      expect(long).toHaveLength(1);
+      expect(long[0].params?.count).toBe(61);
+    });
+
+    it('names the same cells in count and lines', () => {
+      const a = amb('S;D\nA;1,250\nB;2,500\nC;3,750\n');
+      expect(a[0].params?.count).toBe(3);
+      expect(a[0].lines).toEqual([2, 3, 4]);
+    });
+
+    it('renders the Polish text with the right plural for 1, 3 and 5 cells', () => {
+      const text = (n: number) => renderPlain(amb(['S;D', ...Array.from({ length: n }, (_, i) => `R${i};${i + 1},250`)].join('\n') + '\n')[0], 'pl');
+      expect(text(1)).toContain('(1 komórka)');
+      expect(text(3)).toContain('(3 komórki)');
+      expect(text(5)).toContain('(5 komórek)');
     });
 
     it('does not ask in a comma-delimited file with quoted values', () => {

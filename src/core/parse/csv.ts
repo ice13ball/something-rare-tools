@@ -127,6 +127,8 @@ export function detectDelimiter(text: string): string {
 
 const DEC_POINT = /^-?\d+\.\d+(?:[eE][+-]?\d+)?$/;
 const DEC_COMMA = /^-?\d+,\d+$/;
+/** A cell that says which separator the file uses: '1.250,5' (point thousands, decimal comma) or '1,250,000' (comma groups, thousands). */
+const SETTLES_SEPARATOR = /^-?\d{1,3}(?:\.\d{3})+,\d+$|^-?\d{1,3}(?:,\d{3}){2,}(?:\.\d+)?$/;
 /** A comma value whose comma may be a thousands separator: one to three digits (no leading zero), a comma, exactly three digits. */
 export const THOUSANDS_LIKE = /^-?[1-9]\d{0,2},\d{3}$/;
 
@@ -158,7 +160,8 @@ const cellText = (v: string | number | boolean | null | undefined): string => (t
  * cell has exactly three digits after the comma (and one to three before it). One value with 1, 2 or 4+ decimals, a leading
  * zero or more than three integer digits settles the column (not ambiguous). Judged per column, over all rows; cells without a
  * comma (integers, 'n.n') do not decide anything. `example` is the first such cell as written; `lines` are the file lines of
- * the cells that read exactly like it.
+ * every cell of the column written 'n,n' (the same cells `count` counts). A cell written '1.250,5' or '1,250,000' names the
+ * separator and settles the column too.
  */
 export function thousandsAmbiguity(sheet: RawSheet): { index: number; lines: number[]; example: string }[] {
   const out: { index: number; lines: number[]; example: string }[] = [];
@@ -167,6 +170,10 @@ export function thousandsAmbiguity(sheet: RawSheet): { index: number; lines: num
     let ambiguous = true;
     for (const r of sheet.rows) {
       const t = cellText(r.cells[c]);
+      if (SETTLES_SEPARATOR.test(t)) {
+        ambiguous = false;
+        break;
+      }
       if (!DEC_COMMA.test(t)) continue;
       if (!THOUSANDS_LIKE.test(t)) {
         ambiguous = false;
@@ -175,7 +182,7 @@ export function thousandsAmbiguity(sheet: RawSheet): { index: number; lines: num
       example ??= t;
     }
     if (!ambiguous || example === undefined) continue;
-    const lines = sheet.rows.filter((r) => cellText(r.cells[c]) === example).map((r) => r.line);
+    const lines = sheet.rows.filter((r) => DEC_COMMA.test(cellText(r.cells[c]))).map((r) => r.line);
     out.push({ index: c, lines, example });
   }
   return out;
