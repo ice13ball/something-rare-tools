@@ -53,3 +53,16 @@ This breaks Michał's first principle: these are scientific data; nothing is dro
 - Both corpora on the VPS, base (main after round 3) vs new, no new declarations: every difference is one of section 4, per file.
 - Golden on the Mac with GOLDEN_DIR: diffs only from section 4, listed.
 - Report to Michał before deploy.
+
+## 7. Rulings after the plan was written (18.11)
+
+The plan writer checked the spec against this branch's code and SheetJS 0.20.3. Rulings:
+
+- **R4 confirmed**: SheetJS keeps 0.95 in `.v`; `.w` is ×100 and rounded. Read `.v` and move the decimal point; never use `.w`.
+- **K1 on /convert already holds** (round 3 blocks a long row with no parameter name, with leave-out). Only /check and the merged parameter cell remain.
+- **R6 changed**: in a workbook, cells right of the last named header cell are an **unnamed column** ("column G, no header"), not a ragged row. /check reports it with lines; on /convert it is not exported until the person gives it a role or says ignore, and it is listed like any column not exported. Nothing in the row is lost.
+- **R2 widened**: compare every 8-bit candidate the reader uses (windows-1250, ISO-8859-2, windows-1252). Ask only when they decode the bytes present differently; then show the differing words in each.
+- **V2/V8 principle for "accept" vs "show"**: an outcome that follows from the person's own explicit answer (a column they set to ignore, rows they chose to leave out) is `show`; an outcome that follows from a tool default or a reader decision (a proposed ignore not touched, zeros skipped by default, a decimal comma read by the reader) is `accept`. The plan's list of rules moving from show to accept is ruled per this line; the list goes to Michał in the round's report.
+- **V3 widened**: every distinct text in a count column is listed, grouped by text, and answered per text: "absence", "leave out" or "presence, text to remarks". No text is preselected; absence words are not a guess the tool makes.
+- **V4**: the IDs do not change. The note on how a repeated code's ID is built goes where round 3 states the own-records ID rule, and the tips text is corrected.
+- **R3**: the century of a two-digit year stays a one-time acceptance per column.
