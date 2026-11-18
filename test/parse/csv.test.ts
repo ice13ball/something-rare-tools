@@ -33,6 +33,49 @@ describe('parseCsvText', () => {
     expect(f.findings.map((x) => x.ruleId)).toEqual(['IN-DECIMAL-COMMA']);
   });
 
+  describe('IN-DECIMAL-AMBIGUOUS (a comma that may be a thousands separator)', () => {
+    const amb = (text: string) => parseCsvText(text, 'a.csv').findings.filter((x) => x.ruleId === 'IN-DECIMAL-AMBIGUOUS');
+
+    it('asks once per column whose every comma value has three decimals, and still reads them as decimals', () => {
+      const f = parseCsvText('Station;Depth [m];Chlorophyll\nA;1,250;12,500\nB;2,000;3,750\n', 'a.csv');
+      const a = f.findings.filter((x) => x.ruleId === 'IN-DECIMAL-AMBIGUOUS');
+      expect(a).toHaveLength(2);
+      expect(a[0].params).toMatchObject({ column: 'Depth [m]', index: 1, count: 2, asDecimal: '1.25', asThousands: '1250' });
+      expect(a[0].value).toBe('1,250');
+      expect(a[0].lines).toEqual([2]);
+      expect(a[1].params).toMatchObject({ column: 'Chlorophyll', index: 2, count: 2 });
+      expect(f.sheets[0].rows[0].cells).toEqual(['A', '1,250', '12,500']);
+    });
+
+    it('asks about a negative value together with a positive one', () => {
+      expect(amb('Station;Depth\nA;-1,250\nB;2,500\n')).toHaveLength(1);
+    });
+
+    it.each([
+      ['1,250 with 1,25', 'S;D;T\nA;1,250;1,5\nB;1,25;2,5\n'],
+      ['one decimal', 'S;D;T\nA;12,5;1,5\nB;13,5;2,5\n'],
+      ['four decimals', 'S;D;T\nA;1,2500;1,5\nB;1,2500;2,5\n'],
+      ['leading zero', 'S;D;T\nA;0,125;1,5\nB;0,250;2,5\n'],
+      ['four integer digits', 'S;D;T\nA;1234,567;1,5\nB;1234,567;2,5\n'],
+    ])('does not ask: %s', (_n, text) => {
+      expect(amb(text)).toEqual([]);
+    });
+
+    it('does not ask for a column that has one settling value among three-digit ones', () => {
+      expect(amb('S;D;T\nA;1,250;1,5\nB;2,500;2,5\nC;3,75;2,5\n')).toEqual([]);
+    });
+
+    it('does not ask in a comma-delimited file with quoted values', () => {
+      expect(amb('a,b\n"1,250","2,500"\n"3,750","4,500"\n')).toEqual([]);
+    });
+
+    it('does not ask when the decimal cells are mostly written with a point', () => {
+      const f = parseCsvText('S;D;T\nA;1,250;1.5\nB;2,500;2.5\nC;3,500;3.5\n', 'a.csv');
+      expect(f.decimalComma).toBe(false);
+      expect(f.findings).toEqual([]);
+    });
+  });
+
   it('does not report a decimal comma for a comma-delimited file', () => {
     const f = parseCsvText('a,b\n"1,5","2,5"\n"3,5","4,5"\n', 'q.csv');
     expect(f.decimalComma).toBe(false);

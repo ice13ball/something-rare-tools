@@ -127,6 +127,8 @@ export function detectDelimiter(text: string): string {
 
 const DEC_POINT = /^-?\d+\.\d+(?:[eE][+-]?\d+)?$/;
 const DEC_COMMA = /^-?\d+,\d+$/;
+/** A comma value whose comma may be a thousands separator: one to three digits (no leading zero), a comma, exactly three digits. */
+export const THOUSANDS_LIKE = /^-?[1-9]\d{0,2},\d{3}$/;
 
 /**
  * Decimal-comma heuristic (a parsing heuristic, not a QC threshold): the delimiter is ';' or tab, and at least
@@ -147,6 +149,43 @@ export function looksDecimalComma(delim: string, rows: readonly (readonly string
     }
   }
   return total > 0 && comma / total >= 0.8;
+}
+
+const cellText = (v: string | number | boolean | null | undefined): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * Columns of a decimal-comma sheet whose comma may be a thousands separator: at least one cell written 'n,n' and EVERY such
+ * cell has exactly three digits after the comma (and one to three before it). One value with 1, 2 or 4+ decimals, a leading
+ * zero or more than three integer digits settles the column (not ambiguous). Judged per column, over all rows; cells without a
+ * comma (integers, 'n.n') do not decide anything. `example` is the first such cell as written; `lines` are the file lines of
+ * the cells that read exactly like it.
+ */
+export function thousandsAmbiguity(sheet: RawSheet): { index: number; lines: number[]; example: string }[] {
+  const out: { index: number; lines: number[]; example: string }[] = [];
+  for (let c = 0; c < sheet.header.length; c++) {
+    let example: string | undefined;
+    let ambiguous = true;
+    for (const r of sheet.rows) {
+      const t = cellText(r.cells[c]);
+      if (!DEC_COMMA.test(t)) continue;
+      if (!THOUSANDS_LIKE.test(t)) {
+        ambiguous = false;
+        break;
+      }
+      example ??= t;
+    }
+    if (!ambiguous || example === undefined) continue;
+    const lines = sheet.rows.filter((r) => cellText(r.cells[c]) === example).map((r) => r.line);
+    out.push({ index: c, lines, example });
+  }
+  return out;
+}
+
+/** The two readings of an ambiguous cell, built from its text by moving the comma: '1,250' reads 1.25 or 1250. */
+function thousandsReadings(example: string): { asDecimal: string; asThousands: string } {
+  const asThousands = example.replace(',', '');
+  const asDecimal = example.replace(',', '.').replace(/0+$/, '').replace(/\.$/, '');
+  return { asDecimal, asThousands };
 }
 
 /**
@@ -217,5 +256,19 @@ export function parseCsvText(text: string, fileName: string, decoded?: Pick<Deco
   file.sheets.push(sheet);
   const rag = raggedFinding(fileName, fileName, sheet.header.length, sheet.rows);
   if (rag) findings.push(rag);
+  if (file.decimalComma) {
+    for (const col of thousandsAmbiguity(sheet)) {
+      const count = sheet.rows.filter((r) => DEC_COMMA.test(cellText(r.cells[col.index]))).length;
+      findings.push(
+        makeFinding('IN-DECIMAL-AMBIGUOUS', {
+          file: fileName,
+          sheet: fileName,
+          lines: col.lines,
+          value: col.example,
+          params: { column: sheet.header[col.index] || `Column ${col.index + 1}`, index: col.index, count, ...thousandsReadings(col.example) },
+        }),
+      );
+    }
+  }
   return file;
 }

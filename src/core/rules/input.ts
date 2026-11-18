@@ -25,6 +25,7 @@ import type { RuleSpec } from './spec';
  *   IN-LAYOUT-UNSUPPORTED   reason, reasons   English phrase from LayoutPlan.unsupported; JSON of LayoutPlan.unsupportedReasons (codes, rendered per language by renderPlain)
  *   IN-ENCODING-FALLBACK    encoding 'windows-1250' | 'iso-8859-2'
  *   IN-DECIMAL-COMMA        (none)
+ *   IN-DECIMAL-AMBIGUOUS    column, index, count, asDecimal, asThousands   a column of a decimal-comma file whose every comma value has exactly three digits after the comma; value = the first such cell; lines = the cells written like it
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
  *   IN-HEADER-UNITS-READ    count, example    columns that got a unit from the row under the header (at least 1; the row's line is in `lines`), and the first of them as it now reads ('a [h]'); file + sheet
  *   IN-HEADER-UNITS-NAMED   (none)   a row of units under a header whose names all carry their units already: not a data row (the row's line is in `lines`); file + sheet
@@ -342,12 +343,27 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     exportPolicy: 'accept',
     params: [],
     plain: {
-      pl: `W tym pliku liczby mają przecinek dziesiętny (3,14). Odczytano je poprawnie; przy publikacji użyj kropki dziesiętnej.`,
-      en: `This file writes numbers with a decimal comma (3,14). They were read correctly; use a decimal point when you publish.`,
-      de: `Diese Datei schreibt Zahlen mit Dezimalkomma (3,14). Sie wurden richtig gelesen; verwenden Sie bei der Veröffentlichung einen Dezimalpunkt.`,
-      fr: `Ce fichier écrit les nombres avec une virgule décimale (3,14). Ils ont été lus correctement ; utilisez un point décimal lors de la publication.`,
+      pl: `W tym pliku liczby mają przecinek dziesiętny (3,14). Odczytano je w ten sposób; przy publikacji użyj kropki dziesiętnej.`,
+      en: `This file writes numbers with a decimal comma (3,14). They were read that way; use a decimal point when you publish.`,
+      de: `Diese Datei schreibt Zahlen mit Dezimalkomma (3,14). Sie wurden so gelesen; verwenden Sie bei der Veröffentlichung einen Dezimalpunkt.`,
+      fr: `Ce fichier écrit les nombres avec une virgule décimale (3,14). Ils ont été lus ainsi ; utilisez un point décimal lors de la publication.`,
     },
     technical: `{file}: decimal comma detected (semicolon or tab delimiter, most numeric cells look like 3,14); values parsed with ',' as the decimal separator. The decimal comma is the reader's decision (50 rows, 80 %), so the outcome is accepted once before the export.`,
+  },
+  {
+    id: 'IN-DECIMAL-AMBIGUOUS',
+    category: 'input',
+    severity: 'warning',
+    // export (/convert): the reader chose the decimal reading of a comma that may be a thousands separator; only the person knows which the file means
+    exportPolicy: 'block',
+    params: ['column', 'index', 'count', 'asDecimal', 'asThousands'],
+    plain: {
+      pl: `W kolumnie „{column}” każda liczba z przecinkiem ma po nim trzy cyfry ({count} {+count:komórka|komórki|komórek}), więc „{value}” może znaczyć {asDecimal} albo {asThousands}. Odczytano je z przecinkiem dziesiętnym ({asDecimal}). Sprawdź, które znaczenie ma plik.`,
+      en: `In column "{column}" every number with a comma has three digits after it ({count} {+count:cell|cells}), so "{value}" can be {asDecimal} or {asThousands}. They were read with a decimal comma ({asDecimal}). Check which one the file means.`,
+      de: `In der Spalte „{column}“ hat jede Zahl mit Komma drei Ziffern danach ({count} {+count:Zelle|Zellen}), daher kann „{value}“ {asDecimal} oder {asThousands} bedeuten. Sie wurden mit Dezimalkomma gelesen ({asDecimal}). Prüfen Sie, was die Datei meint.`,
+      fr: `Dans la colonne « {column} », chaque nombre avec une virgule a trois chiffres après elle ({count} {+count:cellule|cellules}), donc « {value} » peut valoir {asDecimal} ou {asThousands}. Ils ont été lus avec une virgule décimale ({asDecimal}). Vérifiez ce que veut dire le fichier.`,
+    },
+    technical: `{file} sheet {sheet}: column {index} "{column}": every cell with a comma ({count}) has exactly three digits after it, so the comma may be a decimal comma ({asDecimal}) or a thousands separator ({asThousands}) for "{value}". Read as decimal; the file does not say which. Judged per column over all rows: one value with 1, 2 or 4 or more decimals settles it.`,
   },
   {
     id: 'IN-HEADER-SHORT',

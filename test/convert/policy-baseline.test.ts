@@ -8,6 +8,7 @@ import { RULES } from '../../src/core/rules/registry';
  * What /convert does with a finding of each rule, pinned. A rule's policy changes only by editing its line here, in the same commit as the rule (round 4 Task 2 and Task 16 name theirs);
  * a new rule adds a line. Generated from the policy.ts lists at 668ae00 (round 4, Task 1 Step 1) for every registered rule of every rule file, severity and prefix fallbacks included.
  * Round 4 Task 2 changed ten lines (show to accept: a tool default or a reader decision needs an acceptance) and added CONV-COLUMN-IGNORED-PROPOSED: 249 rules.
+ * Round 4 Task 3 added IN-DECIMAL-AMBIGUOUS (block): 250 rules.
  * The count was 248, not the plan's 245: round 3 added CONV-DATE-DECLARED, CONV-DATE-DECLARED-INVALID and CONV-DATE-DECLARED-HELD after the plan was written.
  */
 const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
@@ -30,6 +31,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'IN-LAYOUT-UNSUPPORTED': 'block',
   'IN-ENCODING-FALLBACK': 'accept',
   'IN-DECIMAL-COMMA': 'accept',
+  'IN-DECIMAL-AMBIGUOUS': 'block',
   'IN-HEADER-SHORT': 'accept',
   'IN-HEADER-UNITS-READ': 'show',
   'IN-HEADER-UNITS-NAMED': 'show',
@@ -266,7 +268,7 @@ describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(249);
+    expect(Object.keys(BASELINE).length).toBe(250);
   });
 
   it('the field of each rule definition is its baseline policy', () => {
