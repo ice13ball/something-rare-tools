@@ -134,6 +134,12 @@ export interface ConvertSheetRequest {
    */
   declaredPosition?: { lat: string; lon: string; uncertaintyM: string };
   declaredPositionFromFile?: boolean;
+  /**
+   * The one date or interval (ISO 8601) the PERSON typed for this sheet, as typed. Sent only when filled; never guessed, never prefilled from a name or a value. The core refuses it where a sample already has a date.
+   * `declaredDateFromFile` says it was read from a companion file and has not been edited since.
+   */
+  declaredDate?: string;
+  declaredDateFromFile?: boolean;
 }
 
 /** A sheet of a dropped file, as the request names it (the join is told by file id and sheet name; the worker maps it to the request's sheets). */

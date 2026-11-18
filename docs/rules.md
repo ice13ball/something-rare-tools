@@ -250,5 +250,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-POSITION-NONE | error | B | — | —<a id="CONV-POSITION-NONE"></a> |
 | CONV-POSITION-DECLARED | warning | B | — | —<a id="CONV-POSITION-DECLARED"></a> |
 | CONV-POSITION-DECLARED-INVALID | error | B | — | —<a id="CONV-POSITION-DECLARED-INVALID"></a> |
+| CONV-DATE-DECLARED | warning | B | — | —<a id="CONV-DATE-DECLARED"></a> |
+| CONV-DATE-DECLARED-INVALID | error | B | — | —<a id="CONV-DATE-DECLARED-INVALID"></a> |
 | CONV-EVENT-DATE-MISSING | error | B | — | —<a id="CONV-EVENT-DATE-MISSING"></a> |
 | CONV-PROFILE-NO-STATION | error | B | — | —<a id="CONV-PROFILE-NO-STATION"></a> |

@@ -170,6 +170,29 @@ describe('the declared position in the companion file (round 3, Task 11)', () =>
   });
 });
 
+describe('the declared date in the companion file (round 3, Task 17)', () => {
+  const one = { sheet: 'Tanks', value: '2021-05', rows: 12 };
+
+  it('round-trips a month and an interval, one line per sheet, sheet last', () => {
+    const interval = { sheet: 'A:B', value: '2020-01-01/2021-12-31', rows: 7 };
+    const text = writeConvertSidecar({ declaredDate: [one, interval] });
+    expect(text).toContain('declaredDate=2021-05:12:Tanks');
+    expect(text).toContain('declaredDate=2020-01-01/2021-12-31:7:A:B');
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.declaredDate).toEqual([one, interval]);
+  });
+
+  it('skips what it cannot read back: text that is no date shape, a repeated sheet, a missing row count', () => {
+    const text = writeConvertSidecar({ declaredDate: [one, { ...one, value: '2020' }, { sheet: 'X', value: 'May 2021', rows: 1 }, { sheet: 'Y', value: '2021:05', rows: 1 }, { sheet: '', value: '2021', rows: 1 }] });
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.declaredDate).toEqual([one]);
+    const old = ['original_column,output_column,unit,unit_source,p01', '(setting),declaredDate=2021-05:Tanks,,,', '(setting),declaredDate=soon:3:Tanks,,,'].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', old))?.declaredDate ?? []).toEqual([]);
+  });
+
+  it('is ignored by /check as every other setting', () => {
+    expect(readMappingFile(textFile('c.sidecar.csv', writeConvertSidecar({ declaredDate: [one] })))).toBeDefined();
+  });
+});
+
 describe('"each row is its own record" in the companion file (round 3, Task 13)', () => {
   it('round-trips the tick with the rows it was given for, and the kept copies with their count; the file holds no value', () => {
     const settings = { ownRecords: [{ sheet: 'Fish', rows: 3 }, { sheet: 'a:b.csv', rows: 12 }], keepCopiesRows: [{ sheet: 'Fish', count: 1 }] };

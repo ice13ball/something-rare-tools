@@ -366,3 +366,12 @@ turned from the form.
 - **Q4.** No declared date for a whole sheet in this round.
 - **Q5.** A declared position is allowed only for a sheet with no position at all, never to fill gaps.
 - **Q6.** The declared position (and its uncertainty) is kept in the companion file. It is the person's own declaration, not a value read from the data.
+
+## 12c. Change of 18.11: a declared date for a sheet with no dates (reverses Q4)
+
+The real-data acceptance (Task 16) showed CONV-EVENT-DATE-MISSING leaves several files with no way out: tunu ×2, which wrote archives before round 3, plus enggano and the inv-* files. On 18.11 Michał delegated the decision to the AI-Wall session, saying "podejmij decyzje", and confirmed its authority directly in this session. The answer is yes, and round 3 ships together with it.
+
+- **Who sets it.** Only the person's typed declaration counts: one ISO 8601 date (`YYYY`, `YYYY-MM`, `YYYY-MM-DD`) or an interval `A/B`, with A ≤ B and nothing in the future. It is never prefilled from a file name, a sheet name, metadata or values.
+- **Where it applies.** It works only on a sheet where no sample has a readable date. It is refused on a mixed sheet, which keeps Q3's "leave out and list", on a sheet whose dates come from a joined description sheet, and on a turned header date (B5).
+- **What the archive says.** Every event carries eventRemarks saying the date was declared for N samples and is not in the source. The methods text gets a line, as for the declared position. CONV-DATE-DECLARED is an accept-level finding, with extra wording for an interval longer than one year, and CONV-DATE-DECLARED-INVALID blocks.
+- **Companion file.** The line is `declaredDate=<value>:<rows>:<sheet>`. It is restored only when the sheet name and row count match; otherwise the page shows it as not applied. This extends the Q6 data-value exception.

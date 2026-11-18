@@ -171,6 +171,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const k of s.sampleKey ?? []) if (!(settings.sampleKey ??= []).some((x) => x.sheet === k.sheet)) settings.sampleKey.push(k);
         for (const t of s.turned ?? []) if (!(settings.turned ??= []).some((x) => x.sheet === t.sheet)) settings.turned.push(t);
         for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
+        for (const d of s.declaredDate ?? []) if (!(settings.declaredDate ??= []).some((x) => x.sheet === d.sheet)) settings.declaredDate.push(d);
         for (const d of s.dayMonthOrder ?? []) if (!(settings.dayMonthOrder ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.dayMonthOrder.push(d);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
         for (const j of s.sampleJoin ?? []) if (!(settings.sampleJoin ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1])) settings.sampleJoin.push(j);
@@ -361,12 +362,14 @@ export function createConvertHandler(): ConvertHandler {
   }
 
   /** The position a person declared for a request sheet: three non-empty strings, trimmed, each at most 40 characters (the core reads the numbers and refuses what is not one). Nothing otherwise. */
-  function declaredOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'declaredPosition' | 'declaredPositionFromFile'> {
+  function declaredOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'declaredPosition' | 'declaredPositionFromFile' | 'declaredDate' | 'declaredDateFromFile'> {
+    const date = typeof s.declaredDate === 'string' ? s.declaredDate.trim() : '';
+    const dateOut = date === '' || date.length > 40 ? {} : { declaredDate: date, ...(s.declaredDateFromFile === true ? { declaredDateFromFile: true } : {}) };
     const d = s.declaredPosition;
-    if (d === undefined || d === null || typeof d !== 'object') return {};
+    if (d === undefined || d === null || typeof d !== 'object') return dateOut;
     const [lat, lon, uncertaintyM] = [d.lat, d.lon, d.uncertaintyM].map((x) => (typeof x === 'string' ? x.trim() : ''));
-    if ([lat, lon, uncertaintyM].some((x) => x === '' || x.length > 40)) return {};
-    return { declaredPosition: { lat, lon, uncertaintyM }, ...(s.declaredPositionFromFile === true ? { declaredPositionFromFile: true } : {}) };
+    if ([lat, lon, uncertaintyM].some((x) => x === '' || x.length > 40)) return dateOut;
+    return { declaredPosition: { lat, lon, uncertaintyM }, ...(s.declaredPositionFromFile === true ? { declaredPositionFromFile: true } : {}), ...dateOut };
   }
 
   /** The sheets of a request as the core takes them, before any join. */
@@ -480,7 +483,7 @@ export function createConvertHandler(): ConvertHandler {
   function compute(body: ConvertRequestBody) {
     const { sheets, outcome } = inputsOf(body);
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
-    const done = convert({ sheets, options: body.options, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
+    const done = convert({ sheets, options: { ...body.options, today: today() }, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
     const r = outcome.findings.length === 0 ? done : { ...done, findings: [...outcome.findings, ...done.findings] };
     return { sheets, splits, r, outcome };
   }
@@ -628,7 +631,7 @@ export function createConvertHandler(): ConvertHandler {
     return (
       previewSampleKey(input, {
         sheets,
-        options: body.options,
+        options: { ...body.options, today: today() },
         approvedSplits: body.approvedSplits,
         ...(body.worms ? { worms: body.worms } : {}),
         ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}),

@@ -10,7 +10,7 @@ import { EMPTY_METADATA, datasetNameOf } from '../core/convert/metadata';
 import type { DatasetMetadata } from '../core/convert/metadata';
 import type { ConvertParseResult, ConvertRequestBody, SampleJoinRequest, SheetRef } from '../worker/convert.protocol';
 import type { ConvertSettings } from '../core/convert/settings';
-import { savedJoinTake } from '../core/convert/settings';
+import { DECLARED_DATE_SHAPE, savedJoinTake } from '../core/convert/settings';
 import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
@@ -114,6 +114,15 @@ export interface SheetChoice {
   positionFromFile?: boolean;
   /** A companion file holds a declared position for a sheet of this name, but for another number of rows: it was not applied, and the form says so until the person types their own. */
   positionStale?: true;
+  /**
+   * The one date or interval (ISO 8601) the person typed for every sample of this sheet, which has no date at all, as typed. Never prefilled except by a companion file that still holds (same sheet name and
+   * number of rows); never proposed from a file name, a sheet name, metadata or a value. Empty or absent = none.
+   */
+  declaredDate?: string;
+  /** The date above was read from a companion file and has not been edited since (the converter then says so). */
+  dateFromFile?: boolean;
+  /** A companion file holds a declared date for a sheet of this name, but for another number of rows: it was not applied, and the form says so until the person types their own. */
+  dateStale?: true;
 }
 
 /** The device of the form as the core's declaration. Nothing is guessed: an unknown value or an empty "other" is no device. */
@@ -334,6 +343,12 @@ export function positionJoinedFrom(s: Pick<ConvertState, 'parsed' | 'mappings' |
  * The position the person declared, as the request carries it: all three fields filled, else nothing. One read from a companion file is sent only for a sheet that still has no position column,
  * is not a profile and is not joined to a sheet that gives the positions (a pre-fill that no longer fits is not offered, and the form says why); one the person typed is always sent, so the converter says why it is refused.
  */
+/** The date the person declared, as the request carries it: the typed text, else nothing. One from a companion file is marked as such. */
+function declaredDateRequest(c: Pick<SheetChoice, 'declaredDate' | 'dateFromFile'>): Pick<ConvertRequestBody['sheets'][number], 'declaredDate' | 'declaredDateFromFile'> {
+  const v = (c.declaredDate ?? '').trim();
+  return v === '' ? {} : { declaredDate: v, ...(c.dateFromFile === true ? { declaredDateFromFile: true } : {}) };
+}
+
 function declaredRequest(c: SheetChoice, m: Pick<SheetMapping, 'columns'>, joinedFrom?: string): Pick<ConvertRequestBody['sheets'][number], 'declaredPosition' | 'declaredPositionFromFile'> {
   const [lat, lon, uncertaintyM] = [c.positionLat, c.positionLon, c.positionUncertainty].map((x) => x.trim());
   if (lat === '' || lon === '' || uncertaintyM === '') return {};
@@ -383,12 +398,12 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
@@ -476,6 +491,14 @@ function savedPosition(settings: ConvertParseResult['settings'], sheet: { name: 
   return { positionLat: d.lat, positionLon: d.lon, positionUncertainty: d.uncertaintyM, positionFromFile: true };
 }
 
+/** The date a companion file recorded for a sheet of that name, as a pre-fill: only for the same number of rows. For another number nothing is filled and the form says so. */
+function savedDate(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'declaredDate' | 'dateFromFile' | 'dateStale'> {
+  const d = (settings.declaredDate ?? []).find((x) => x.sheet === sheet.name);
+  if (d === undefined) return {};
+  if (d.rows !== sheet.rowCount) return { dateStale: true };
+  return { declaredDate: d.value, dateFromFile: true };
+}
+
 /**
  * The initial choices: every sheet used (except one that looks like a data dictionary: it starts unticked, with a note), the shape the overlay suggests (wide when it cannot tell), nothing declared. The profile mark and the approval of depth-based level
  * IDs start OFF; only a companion file of THIS drop that names the sheet pre-ticks them (the approval only on a sheet that is marked), and the suggestion of the overlay
@@ -495,7 +518,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;
@@ -539,6 +562,20 @@ export function declaredPositionSettingsOf(parsed: ConvertParseResult, choices: 
       if (!c || !c.use) continue;
       const [lat, lon, uncertaintyM] = [c.positionLat, c.positionLon, c.positionUncertainty].map((x) => x.trim());
       if (lat !== '' && lon !== '' && uncertaintyM !== '' && !out.some((o) => o.sheet === sh.name)) out.push({ sheet: sh.name, lat, lon, uncertaintyM, rows: sh.rowCount });
+    }
+  }
+  return out;
+}
+
+/** The dates declared for sheets in use, for the companion file: the person's own typed text, only when it has the shape of a date (the converter judges the rest). */
+export function declaredDateSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['declaredDate']> {
+  const out: NonNullable<ConvertSettings['declaredDate']> = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (!c || !c.use) continue;
+      const value = (c.declaredDate ?? '').trim();
+      if (value !== '' && DECLARED_DATE_SHAPE.test(value) && !out.some((o) => o.sheet === sh.name)) out.push({ sheet: sh.name, value, rows: sh.rowCount });
     }
   }
   return out;

@@ -56,6 +56,8 @@ export interface EventRec {
   coordinateUncertaintyInMeters?: number;
   /** Said where a position was declared by the person for the whole sheet rather than read from the file. */
   georeferenceRemarks?: string;
+  /** Said where the person declared the date of every sample of the sheet. */
+  eventRemarks?: string;
   depthMin?: number;
   depthMax?: number;
   depthDecimals?: number;
@@ -254,6 +256,8 @@ export interface ModelEvent {
   parentId?: string;
   type: EventType;
   date?: string;
+  /** eventRemarks: said where the person declared the date. */
+  dateRemarks?: string;
   position?: { lat: number; lon: number; latDecimals?: number; lonDecimals?: number; latText?: string; lonText?: string; derived?: boolean; uncertaintyM?: number; remarks?: string };
   depth?: { min?: number; max?: number; decimals?: number; minText?: string; maxText?: string; verbatim?: string };
   /** minimum = maximumDistanceAboveSurfaceInMeters (a negative number in metres, as text): the depth below the seafloor of a sediment or porewater sample. */
@@ -321,6 +325,7 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
     const m: ModelEvent = { id: e.id, type: e.eventType };
     if (e.parentId !== undefined) m.parentId = e.parentId;
     if (e.eventDate !== undefined) m.date = e.eventDate;
+    if (e.eventRemarks !== undefined) m.dateRemarks = e.eventRemarks;
     if (e.lat !== undefined && e.lon !== undefined) {
       m.position = { lat: e.lat, lon: e.lon };
       if (e.latDecimals !== undefined) m.position.latDecimals = e.latDecimals;

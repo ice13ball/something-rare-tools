@@ -37,6 +37,8 @@ export interface ConvertSheetFormProps {
   hasPositionColumn?: boolean;
   /** the name of the joined sheet that gives this sheet's positions (a confirmed join to a description sheet with a latitude or longitude column): no declared position is used */
   positionJoinedFrom?: string;
+  /** CONV-EVENT-DATE-MISSING says no sample of this sheet has a date (and none could come from elsewhere): the field for one declared date is offered. It stays once filled. */
+  dateOffered?: boolean;
   /** core's ownRecordsEligible holds for this sheet (a long sheet with a taxon column and no occurrenceID column): the tick "each row is its own record" is shown */
   ownRecordsOffered?: boolean;
   /** "The samples are the columns": the sheet as dropped and what was declared for it (see ConvertTurn). Absent: no declaration is offered. */
@@ -51,7 +53,7 @@ export interface ConvertSheetFormProps {
  * sampled, the sample size) and, without a cruise column, the cruise code. Every one carries its ⓘ. Nothing here is guessed: the form starts with the
  * shape the column meanings suggest and with NO declaration of the quantity, which blocks until the user makes it.
  */
-export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, positionJoinedFrom, ownRecordsOffered, turn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
+export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortColumn, suggestedProfile, dictionary, hasQuantityColumn, transposed, hasCodeColumn, hasPressureColumn, hasStationColumn, hasPositionColumn, positionJoinedFrom, dateOffered, ownRecordsOffered, turn, choice, onChange }: ConvertSheetFormProps): React.ReactElement {
   useLang();
   const id = useId();
   const q = choice.quantity;
@@ -74,6 +76,18 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
   const setPosition = (patch: Partial<Pick<SheetChoice, 'positionLat' | 'positionLon' | 'positionUncertainty'>>): void => {
     const { positionFromFile: _file, positionStale: _stale, ...rest } = choice;
     onChange({ ...rest, ...patch });
+  };
+  // the declared date (a sheet on which no sample has a date): a closed section, open from the start when it already holds a value
+  const dateBox = useRef<HTMLDetailsElement>(null);
+  const dateFilled = (choice.declaredDate ?? '') !== '';
+  useEffect(() => {
+    if ((dateFilled || choice.dateStale === true) && dateBox.current) dateBox.current.open = true;
+    // only at the start: the person may close it afterwards
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const setDate = (value: string): void => {
+    const { dateFromFile: _file, dateStale: _stale, ...rest } = choice;
+    onChange({ ...rest, declaredDate: value });
   };
   return (
     <section className="convert-sheet" aria-label={t('convert.sheet.title', { sheet, file: fileName })}>
@@ -428,6 +442,30 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
               <div className="field">
                 <label htmlFor={`${id}-pos-unc`}>{t('convert.position.uncertainty')}</label>
                 <input id={`${id}-pos-unc`} type="text" inputMode="decimal" maxLength={40} value={choice.positionUncertainty} autoComplete="off" spellCheck={false} onChange={(e) => setPosition({ positionUncertainty: e.target.value })} />
+              </div>
+            </details>
+          )}
+
+          {(dateOffered === true || dateFilled || choice.dateStale === true) && (
+            <details className="convert-group" ref={dateBox}>
+              <summary>{t('convert.date.title')}</summary>
+              <p className="muted">{t('convert.date.help')}</p>
+              {choice.dateStale === true && (
+                <p role="note" data-testid="date-stale">
+                  {t('convert.date.staleFile')}
+                </p>
+              )}
+              {choice.dateFromFile === true && (
+                <p role="note" data-testid="date-from-file">
+                  {t('convert.date.fromFile')}{' '}
+                  <button type="button" className="button" onClick={() => onChange({ ...choice, declaredDate: '', dateFromFile: undefined, dateStale: undefined })}>
+                    {t('convert.date.undo')}
+                  </button>
+                </p>
+              )}
+              <div className="field">
+                <label htmlFor={`${id}-date`}>{t('convert.date.label')}</label>
+                <input id={`${id}-date`} data-declared-date={`${fileName}\u0000${sheet}`} type="text" maxLength={40} placeholder="2021-05" value={choice.declaredDate ?? ''} autoComplete="off" spellCheck={false} onChange={(e) => setDate(e.target.value)} />
               </div>
             </details>
           )}

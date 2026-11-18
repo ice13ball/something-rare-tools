@@ -59,6 +59,8 @@ export interface SampleSite {
   /** A position DECLARED by the person for the whole sheet (never read from the file): its uncertainty in metres and the remark that says so. */
   coordinateUncertaintyInMeters?: number;
   georeferenceRemarks?: string;
+  /** Said where the date was DECLARED by the person for all samples of the sheet (never read from the file): event.txt eventRemarks. */
+  eventRemarks?: string;
   depthMinText?: string;
   depthMaxText?: string;
   /** The depth as the sheet wrote it, with its unit, when the column was converted to metres: verbatimDepth. */
@@ -248,6 +250,10 @@ function sharedText(texts: readonly string[], value: number, own: string): strin
 
 /** Written beside a sample's position that the person declared for all samples of its sheet (event.txt georeferenceRemarks). */
 export const DECLARED_POSITION_REMARK = 'Position declared for all samples of this sheet by the person converting the data; not stated per sample in the source';
+/** The remark written on every sample whose date the person declared for all samples of its sheet (event.txt eventRemarks). */
+export const declaredDateRemark = (count: number, sheet: string): string => `eventDate declared by the person for all ${count} samples of sheet ${sheet}; not in the source file`;
+/** Written beside a replicate's sample, a station or a cruise whose date is derived, wholly or in part, from such declared dates. */
+export const DERIVED_FROM_DECLARED_DATE_REMARK = 'eventDate derived in part from a date declared by the person converting the data';
 /** Written beside a station or cruise whose centre is derived, wholly or in part, from such declared positions. */
 export const DERIVED_FROM_DECLARED_REMARK = 'Position derived in part from a position declared by the person converting the data';
 
@@ -268,6 +274,7 @@ function derive(node: Node): void {
     node.span = span;
     rec.eventDate = spanText(span);
     rec.derived.date = true;
+    if (kids.some((k) => k.rec.eventRemarks !== undefined)) rec.eventRemarks = DERIVED_FROM_DECLARED_DATE_REMARK;
   }
   const centre = deriveCentre(kids.flatMap((k) => (k.rec.lat !== undefined && k.rec.lon !== undefined ? [{ lat: k.rec.lat, lon: k.rec.lon, u: k.rec.coordinateUncertaintyInMeters ?? 0 }] : [])));
   if (centre) {
@@ -396,6 +403,7 @@ export function buildEventTree(samples: readonly SampleSite[], opts: TreeOptions
     if (leaves.has(s.id)) continue;
     const rec: EventRec = { id: s.id, eventType: s.eventType ?? 'sample', code: s.code, derived: { date: false, position: false, depth: false } };
     if (s.date) rec.eventDate = eventDateText(s.date);
+    if (s.eventRemarks !== undefined) rec.eventRemarks = s.eventRemarks;
     if (s.lat !== undefined && s.lon !== undefined) {
       rec.lat = s.lat;
       rec.lon = s.lon;

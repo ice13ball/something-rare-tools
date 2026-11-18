@@ -141,6 +141,8 @@ import type { RuleSpec } from './spec';
  *   CONV-POSITION-NONE         count, column?   count = the sheet's sample events that have no position on themselves or an ancestor; column = (variant) the header of a latitude / longitude column that is blank in every row; file, sheet = the sheet
  *   CONV-POSITION-DECLARED     lat, lon, uncertainty, count   the one position the person declared for a sheet with no position role, as typed (point as decimal mark); count = the samples it was written on; fromFile = yes when a companion file gave it (warning, to accept)
  *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | profile (a profile sheet) | position-role (the sheet has a latitude / longitude role, even a blank one); position-joined (the joined description sheet {description} gives the positions); nothing is applied
+ *   CONV-DATE-DECLARED         value, count     the one date or interval the person declared for a sheet on which no sample has a date, as typed (ISO 8601); count = the samples it was written on; long = yes when an interval is longer than a year; fromFile = yes when a companion file gave it (warning, to accept)
+ *   CONV-DATE-DECLARED-INVALID reason           value = the typed text; reason = format | order | future | some-dated (a sample of the sheet has a date, or a date cell holds something) | date-joined (the joined description sheet {description} gives the dates) | date-turned | profile; nothing is applied
  *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); lines = the lines
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
@@ -2126,6 +2128,52 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: the declared position is refused ({reason}) and nothing is applied. latitude = not a number within -90 to 90; longitude = not a number within -180 to 180; uncertainty = not a plain number above zero; position-role = the sheet has a latitude or longitude column (even a blank one), and a declaration never fills gaps; position-joined = the joined description sheet gives the positions; profile = a profile sheet takes positions from its own columns. CONV-POSITION-NONE is not repeated.`,
   },
   {
+    id: 'CONV-DATE-DECLARED',
+    category: 'B',
+    severity: 'warning',
+    params: ['value', 'count'],
+    plain: {
+      pl: `Data {value} została zadeklarowana przez Ciebie dla całego arkusza „{sheet}” i zapisana przy {count} {+count:próbce|próbkach|próbkach}; plik jej nie zawiera. Archiwum zaznacza to w eventRemarks i w opisie metod.`,
+      en: `The date {value} was declared by you for the whole sheet "{sheet}" and is written on {count} {+count:sample|samples}; the file does not state it. The archive says so in eventRemarks and in the methods.`,
+      de: `Das Datum {value} wurde von Ihnen für das ganze Blatt „{sheet}“ festgelegt und bei {count} {+count:Probe|Proben} geschrieben; die Datei enthält es nicht. Das Archiv vermerkt das in eventRemarks und in den Methoden.`,
+      fr: `La date {value} a été déclarée par vous pour toute la feuille « {sheet} » et est écrite sur {count} {+count:échantillon|échantillons} ; le fichier ne l'indique pas. L'archive le précise dans eventRemarks et dans les méthodes.`,
+    },
+    plainIf: [
+      {
+        param: 'long',
+        plain: {
+          pl: `Ten okres jest dłuższy niż rok: każda próbka dostaje cały okres, a nie dzień pobrania.`,
+          en: `This period is longer than a year: every sample is written with the whole period, not with the day it was taken.`,
+          de: `Dieser Zeitraum ist länger als ein Jahr: Jede Probe wird mit dem ganzen Zeitraum geschrieben, nicht mit dem Tag der Entnahme.`,
+          fr: `Cette période dépasse un an : chaque échantillon est écrit avec toute la période, et non avec le jour du prélèvement.`,
+        },
+      },
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta data pochodzi z pliku towarzyszącego, a nie z pliku z danymi; zapisano ją, bo arkusz nadal nie ma żadnej daty ani w jednej próbce.`,
+          en: `This date was read from the companion file, not from the data file; it is written because no sample of the sheet has a date.`,
+          de: `Dieses Datum stammt aus der Begleitdatei, nicht aus der Datendatei; es wird geschrieben, weil keine Probe des Blatts ein Datum hat.`,
+          fr: `Cette date vient du fichier d'accompagnement, pas du fichier de données ; elle est écrite parce qu'aucun échantillon de la feuille n'a de date.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}: the person declared one date or interval ({value}, ISO 8601) for every sample of the sheet; it is written as eventDate on {count} sample event(s), with eventRemarks saying it was declared for all samples of this sheet and not stated in the source file, and one line in the EML methods (a station or cruise whose date is derived from such dates says so in its own remark). Never inferred; applied only to a sheet on which no sample has a date. long = an interval over one year. A warning to accept.`,
+  },
+  {
+    id: 'CONV-DATE-DECLARED-INVALID',
+    category: 'B',
+    severity: 'error',
+    params: ['reason'],
+    plain: {
+      pl: `Daty zadeklarowanej dla arkusza „{sheet}” ({value}) nie można użyć: {reason}. Nic z niej nie zapisano.`,
+      en: `The date declared for sheet "{sheet}" ({value}) cannot be used: {reason}. Nothing was written from it.`,
+      de: `Das für das Blatt „{sheet}“ festgelegte Datum ({value}) ist nicht verwendbar: {reason}. Daraus wurde nichts geschrieben.`,
+      fr: `La date déclarée pour la feuille « {sheet} » ({value}) est inutilisable : {reason}. Rien n'en a été écrit.`,
+    },
+    technical: `{file}, {sheet}: the declared date "{value}" is refused ({reason}) and nothing is applied. format = not YYYY, YYYY-MM, YYYY-MM-DD or two of them joined by a slash; order = the interval ends before it starts; future = later than today; some-dated = a sample of the sheet has a date or a date cell holds something, and a declaration never fills gaps; date-joined = the joined description sheet gives the dates; date-turned = a turned sheet's dates are in its source rows or columns; profile = a profile sheet takes dates from its own columns. CONV-EVENT-DATE-MISSING keeps its own answer.`,
+  },
+  {
     id: 'CONV-EVENT-DATE-MISSING',
     category: 'B',
     severity: 'error',
@@ -2325,22 +2373,60 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-EVENT-DATE-MISSING where the date is lent by the joined description sheet: the empty cells are there, on its own lines
   'CONV-EVENT-DATE-MISSING:described': {
     plain: {
-      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą w arkuszu „{description}” są puste. Uzupełnij je tam albo pomiń te próbki i wypisz je na liście.`,
-      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells of sheet "{description}" are empty. Fill them in there, or leave these samples out and list them.`,
-      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen des Blatts „{description}“ sind leer. Füllen Sie sie dort aus oder lassen Sie diese Proben aus und listen Sie sie auf.`,
-      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date de la feuille « {description} » sont vides. Remplissez-les là, ou laissez ces échantillons de côté et listez-les.`,
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą w arkuszu „{description}” są puste ({+lineCount:wiersz|wiersze|wierszy} {lines}). Uzupełnij je tam albo pomiń te próbki i wypisz je na liście.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells of sheet "{description}" are empty ({+lineCount:line|lines} {lines}). Fill them in there, or leave these samples out and list them.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen des Blatts „{description}“ sind leer ({+lineCount:Zeile|Zeilen} {lines}). Füllen Sie sie dort aus oder lassen Sie diese Proben aus und listen Sie sie auf.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date de la feuille « {description} » sont vides ({+lineCount:ligne|lignes} {lines}). Remplissez-les là, ou laissez ces échantillons de côté et listez-les.`,
     },
     technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description} and its cells are empty on the lines named (its own lines, not those of {sheet}); {rows} line(s) of {sheet} are affected (how={how}) and can be left out and listed with the reason no-event-date. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
   },
   // the same where no leave-out is offered (a turned sheet, or one read as one row per sample out of a long one)
   'CONV-EVENT-DATE-MISSING:described-fixed': {
     plain: {
-      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą w arkuszu „{description}” są puste. Uzupełnij je tam.`,
-      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells of sheet "{description}" are empty. Fill them in there.`,
-      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen des Blatts „{description}“ sind leer. Füllen Sie sie dort aus.`,
-      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date de la feuille « {description} » sont vides. Remplissez-les là.`,
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą w arkuszu „{description}” są puste ({+lineCount:wiersz|wiersze|wierszy} {lines}). Uzupełnij je tam.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date cells of sheet "{description}" are empty ({+lineCount:line|lines} {lines}). Fill them in there.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Die Datumszellen des Blatts „{description}“ sind leer ({+lineCount:Zeile|Zeilen} {lines}). Füllen Sie sie dort aus.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : les cellules de date de la feuille « {description} » sont vides ({+lineCount:ligne|lignes} {lines}). Remplissez-les là.`,
     },
     technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description} and its cells are empty on the lines named (its own lines); {rows} line(s) of {sheet} are affected (how={how}). No leave-out is offered: a turned sample is a source column, and the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // N1: some undated samples have a description row (its date cell is blank there) and some have no row in the description sheet at all: both are named, each on its own lines
+  'CONV-EVENT-DATE-MISSING:described-mixed': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: w arkuszu „{description}” komórki z datą są puste ({+lineCount:wiersz|wiersze|wierszy} {lines}), a {resultsOnly} {+resultsOnly:próbka nie ma|próbki nie mają|próbek nie ma} tam wiersza ({+resultsLineCount:wiersz|wiersze|wierszy} {resultsLines} arkusza „{sheet}”). Uzupełnij daty albo pomiń te próbki i wypisz je na liście.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: in sheet "{description}" the date cells are empty ({+lineCount:line|lines} {lines}), and {resultsOnly} {+resultsOnly:sample has|samples have} no row there at all ({+resultsLineCount:line|lines} {resultsLines} of "{sheet}"). Fill the dates in, or leave these samples out and list them.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Im Blatt „{description}“ sind die Datumszellen leer ({+lineCount:Zeile|Zeilen} {lines}), und {resultsOnly} {+resultsOnly:Probe hat|Proben haben} dort gar keine Zeile ({+resultsLineCount:Zeile|Zeilen} {resultsLines} von „{sheet}“). Tragen Sie die Daten ein oder lassen Sie diese Proben aus und listen Sie sie auf.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : dans la feuille « {description} » les cellules de date sont vides ({+lineCount:ligne|lignes} {lines}), et {resultsOnly} {+resultsOnly:échantillon n'y a|échantillons n'y ont} aucune ligne ({+resultsLineCount:ligne|lignes} {resultsLines} de « {sheet} »). Renseignez les dates, ou laissez ces échantillons de côté et listez-les.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description}: its cells are empty on the lines named (its own lines), and {resultsOnly} sample(s) have no row there at all (accepted as results-only; lines {resultsLines} of {sheet}). {rows} line(s) of {sheet} are affected (how={how}) and can be left out and listed with the reason no-event-date. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  'CONV-EVENT-DATE-MISSING:described-mixed-fixed': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: w arkuszu „{description}” komórki z datą są puste ({+lineCount:wiersz|wiersze|wierszy} {lines}), a {resultsOnly} {+resultsOnly:próbka nie ma|próbki nie mają|próbek nie ma} tam wiersza ({+resultsLineCount:wiersz|wiersze|wierszy} {resultsLines} arkusza „{sheet}”). Uzupełnij daty i dodaj brakujące wiersze.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: in sheet "{description}" the date cells are empty ({+lineCount:line|lines} {lines}), and {resultsOnly} {+resultsOnly:sample has|samples have} no row there at all ({+resultsLineCount:line|lines} {resultsLines} of "{sheet}"). Fill the dates in and add the missing rows.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Im Blatt „{description}“ sind die Datumszellen leer ({+lineCount:Zeile|Zeilen} {lines}), und {resultsOnly} {+resultsOnly:Probe hat|Proben haben} dort gar keine Zeile ({+resultsLineCount:Zeile|Zeilen} {resultsLines} von „{sheet}“). Tragen Sie die Daten ein und fügen Sie die fehlenden Zeilen hinzu.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : dans la feuille « {description} » les cellules de date sont vides ({+lineCount:ligne|lignes} {lines}), et {resultsOnly} {+resultsOnly:échantillon n'y a|échantillons n'y ont} aucune ligne ({+resultsLineCount:ligne|lignes} {resultsLines} de « {sheet} »). Renseignez les dates et ajoutez les lignes manquantes.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description}: its cells are empty on the lines named (its own lines), and {resultsOnly} sample(s) have no row there at all (lines {resultsLines} of {sheet}); {rows} line(s) of {sheet} are affected (how={how}). No leave-out is offered: a turned sample is a source column, and the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  // N1: every undated sample is results-only (no row in the description sheet, where the date is kept)
+  'CONV-EVENT-DATE-MISSING:no-description-row': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: data jest w arkuszu „{description}”, który nie ma wiersza {+count:dla niej|dla nich|dla nich} ({+lineCount:wiersz|wiersze|wierszy} {lines} arkusza „{sheet}”). Dodaj tam wiersze z datami albo pomiń te próbki i wypisz je na liście.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date is kept in sheet "{description}", which has no row for {+count:it|them} ({+lineCount:line|lines} {lines} of "{sheet}"). Add the rows there with their dates, or leave these samples out and list them.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Das Datum steht im Blatt „{description}“, das dafür keine Zeile hat ({+lineCount:Zeile|Zeilen} {lines} von „{sheet}“). Fügen Sie dort die Zeilen mit ihren Daten hinzu oder lassen Sie diese Proben aus und listen Sie sie auf.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : la date est dans la feuille « {description} », qui n'a aucune ligne pour {+count:lui|eux} ({+lineCount:ligne|lignes} {lines} de « {sheet} »). Ajoutez-y les lignes avec leurs dates, ou laissez ces échantillons de côté et listez-les.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description}, which has no row for these samples (accepted as results-only), on {rows} line(s) of {sheet} (how={how}); they can be left out and listed with the reason no-event-date. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
+  },
+  'CONV-EVENT-DATE-MISSING:no-description-row-fixed': {
+    plain: {
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: data jest w arkuszu „{description}”, który nie ma wiersza {+count:dla niej|dla nich|dla nich} ({+lineCount:wiersz|wiersze|wierszy} {lines} arkusza „{sheet}”). Dodaj tam wiersze z datami.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: the date is kept in sheet "{description}", which has no row for {+count:it|them} ({+lineCount:line|lines} {lines} of "{sheet}"). Add the rows there with their dates.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Das Datum steht im Blatt „{description}“, das dafür keine Zeile hat ({+lineCount:Zeile|Zeilen} {lines} von „{sheet}“). Fügen Sie dort die Zeilen mit ihren Daten hinzu.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : la date est dans la feuille « {description} », qui n'a aucune ligne pour {+count:lui|eux} ({+lineCount:ligne|lignes} {lines} de « {sheet} »). Ajoutez-y les lignes avec leurs dates.`,
+    },
+    technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description}, which has no row for these samples (accepted as results-only), on {rows} line(s) of {sheet} (how={how}). No leave-out is offered: a turned sample is a source column, and the ledger of a pivoted sheet counts the lines of the long file. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
   },
   // CONV-EVENT-DATE-MISSING on a joined sheet where no column of the results sheet is marked as a date (the joined sheet is already joined: no advice to join)
   'CONV-EVENT-DATE-MISSING:no-date-role:joined': {
@@ -2716,6 +2802,9 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
+  const fixedDate = f.params.pivoted === 'yes' || f.params.turned === 'yes' ? '-fixed' : '';
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.described === 'yes' && f.params.resultsOnly !== undefined) return PROFILE_VARIANTS[`CONV-EVENT-DATE-MISSING:described-mixed${fixedDate}`];
+  if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.noRow === 'yes') return PROFILE_VARIANTS[`CONV-EVENT-DATE-MISSING:no-description-row${fixedDate}`];
   if (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.described === 'yes') return PROFILE_VARIANTS[f.params.pivoted === 'yes' || f.params.turned === 'yes' ? 'CONV-EVENT-DATE-MISSING:described-fixed' : 'CONV-EVENT-DATE-MISSING:described'];
   // a sheet that is already joined is never told to join (the date of the description sheet is where to look)
   const joined = f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.joined === 'yes' && typeof f.params.description === 'string' ? ':joined' : '';
@@ -3077,6 +3166,51 @@ const DECLARED_REASON_WORDS: Record<string, Record<Lang, string>> = {
   },
 };
 
+const DATE_REASON_WORDS: Record<string, Record<Lang, string>> = {
+  format: {
+    en: 'write it as YYYY, YYYY-MM or YYYY-MM-DD, or two of these joined by a slash (for example 2021-05 or 2021-05-01/2021-05-30)',
+    pl: 'zapisz ją jako RRRR, RRRR-MM lub RRRR-MM-DD albo dwie takie daty rozdzielone ukośnikiem (na przykład 2021-05 lub 2021-05-01/2021-05-30)',
+    de: 'schreiben Sie es als JJJJ, JJJJ-MM oder JJJJ-MM-TT oder zwei davon mit Schrägstrich getrennt (zum Beispiel 2021-05 oder 2021-05-01/2021-05-30)',
+    fr: 'écrivez-la AAAA, AAAA-MM ou AAAA-MM-JJ, ou deux dates séparées par une barre oblique (par exemple 2021-05 ou 2021-05-01/2021-05-30)',
+  },
+  order: {
+    en: 'the period ends before it starts; write the earlier date first',
+    pl: 'okres kończy się przed początkiem; wpisz najpierw wcześniejszą datę',
+    de: 'der Zeitraum endet vor seinem Beginn; schreiben Sie das frühere Datum zuerst',
+    fr: 'la période se termine avant de commencer ; écrivez d\'abord la date la plus ancienne',
+  },
+  future: {
+    en: 'the date is in the future',
+    pl: 'ta data jest w przyszłości',
+    de: 'das Datum liegt in der Zukunft',
+    fr: 'la date est dans le futur',
+  },
+  'some-dated': {
+    en: 'some samples of this sheet already have a date, or a date cell holds something, and a declared date never fills gaps; leave the samples without a date out and list them, or fill the dates in',
+    pl: 'niektóre próbki tego arkusza mają już datę albo komórka z datą coś zawiera, a zadeklarowana data nigdy nie uzupełnia braków; pomiń próbki bez daty i wypisz je na liście albo uzupełnij daty',
+    de: 'einige Proben dieses Blatts haben bereits ein Datum, oder eine Datumszelle enthält etwas, und ein festgelegtes Datum füllt nie Lücken; lassen Sie die Proben ohne Datum aus und listen Sie sie auf, oder tragen Sie die Daten ein',
+    fr: 'certains échantillons de cette feuille ont déjà une date, ou une cellule de date contient quelque chose, et une date déclarée ne comble jamais des lacunes ; laissez de côté les échantillons sans date et listez-les, ou renseignez les dates',
+  },
+  'date-joined': {
+    en: 'the dates come from the joined sheet "{description}", and a declared date never fills gaps',
+    pl: 'daty pochodzą z dołączonego arkusza „{description}”, a zadeklarowana data nigdy nie uzupełnia braków',
+    de: 'die Daten kommen aus dem verbundenen Blatt „{description}“, und ein festgelegtes Datum füllt nie Lücken',
+    fr: 'les dates viennent de la feuille jointe « {description} », et une date déclarée ne comble jamais des lacunes',
+  },
+  'date-turned': {
+    en: 'the dates of a turned sheet are in its source rows or columns, and a declared date never fills gaps',
+    pl: 'daty obróconego arkusza są w jego wierszach lub kolumnach źródłowych, a zadeklarowana data nigdy nie uzupełnia braków',
+    de: 'die Daten eines gedrehten Blatts stehen in seinen Quellzeilen oder -spalten, und ein festgelegtes Datum füllt nie Lücken',
+    fr: 'les dates d\'une feuille tournée sont dans ses lignes ou colonnes source, et une date déclarée ne comble jamais des lacunes',
+  },
+  profile: {
+    en: 'a profile sheet takes its dates from its own columns, so a declared date is not used there',
+    pl: 'arkusz profilu bierze daty z własnych kolumn, więc zadeklarowana data nie jest tu używana',
+    de: 'ein Profilblatt nimmt seine Daten aus eigenen Spalten, daher wird ein festgelegtes Datum dort nicht verwendet',
+    fr: 'une feuille de profils prend ses dates dans ses propres colonnes, donc une date déclarée n\'y est pas utilisée',
+  },
+};
+
 export function renderConvertPlain(f: Finding, lang: Lang): string {
   f = withDefaults(f);
   const rule = getConvertRule(f.ruleId);
@@ -3087,6 +3221,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-POSITION-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: (DECLARED_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason).replace('{description}', String(f.params.description ?? '')) } };
+  if (f.ruleId === 'CONV-DATE-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: (DATE_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason).replace('{description}', String(f.params.description ?? '')) } };
   if (f.ruleId === 'CONV-SEAFLOOR-VALUE' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: SEAFLOOR_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS') f = { ...f, params: { ...f.params, direction: SIGNS_DIRECTION_WORDS[String(f.params.direction)]?.[lang] ?? f.params.direction, side: SIGNS_SIDE_WORDS[String(f.params.side)]?.[lang] ?? f.params.side } };
   if (f.ruleId === 'CONV-SEAFLOOR-UNIT' && f.params.unit === 'none') f = { ...f, params: { ...f.params, unit: NONE_WORDS[lang] } };

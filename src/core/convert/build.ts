@@ -20,7 +20,9 @@ import { parseNumber } from '../values/numbers';
 import { pangaeaNamesUsed, taxonColumnNames } from './headers';
 import type { TaxonColumnName } from './headers';
 import { buildEventTree, eventDateText, greatCircleM, stationEventId } from './events';
-import { DECLARED_POSITION_REMARK } from './events';
+import { DECLARED_POSITION_REMARK, declaredDateRemark } from './events';
+import { readDeclaredDate } from './declaredDate';
+import type { DeclaredDateReason } from './declaredDate';
 import type { SampleSite, TreeOptions } from './events';
 import type { VisitKey } from './ids';
 import { presenceMark } from './presence';
@@ -37,6 +39,7 @@ import type { NercDecisions, NercPick } from './nerc';
 import { biomassKindConcept, biomassUnit, parseTypedCoordinate, parseTypedNumber, resolveQuantity } from './quantity';
 import type { QuantityDeclaration, ResolvedQuantity } from './quantity';
 import { columnLetters } from './columnLetters';
+import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { MAX_PAIRS, longColumnsOf, longReasonOf, originalLines, pivotBlockFindings, pivotNoteFindings } from './pivot';
 import { isQuantityHeader, proposeConvertMapping } from './recognize';
 import { analyseRepeats } from './repeatedTotal';
@@ -175,6 +178,10 @@ export interface UndatedSheet {
   joined?: { file: string; sheet: string };
   /** `blank-cells` where every date cell is a column of the joined description sheet: the blank cells are there, on these lines of the description (`lines` stays the results lines the leave-out takes out). */
   describedLines?: number[];
+  /** With a lent date: the samples that have no row in the description sheet at all (accepted as results-only), with their results lines. Said apart from the description's own lines. */
+  resultsOnly?: { samples: number; lines: number[] };
+  /** No sample of the sheet has a date, a date cell nowhere holds anything, and no date is lent or turned: the person may declare one date for the whole sheet. */
+  whole: boolean;
 }
 
 /**
@@ -206,22 +213,36 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
     const filled = (line: number): boolean => dateCells.some((c) => !isBlankCell(rowAt.get(line)?.cells[c.index] ?? null));
     const lines: number[] = [];
     const eventIds: string[] = [];
+    const info = sin.sampleJoin;
+    // a date lent by the description is blank in the description sheet: the person fills it there, on the description's own lines. A sample with no row there at all (a results-only sample, accepted by the person)
+    // has no cell to fill in: it is named on its own, with its results lines
+    const lent = info !== undefined && how === 'blank-cells' && dateCells.every((c) => info.columns[c.index]?.side === 'description');
+    const described = new Set<number>();
+    let describedSamples = 0;
+    const bare = { samples: 0, lines: [] as number[] };
     for (const e of mine) {
       const own = linesOf.get(e.id) ?? [];
       const named = how === 'no-date-role' ? own : own.filter((l) => !filled(l));
       if (named.length === 0) continue;
       eventIds.push(e.id);
       lines.push(...named);
+      if (!lent) continue;
+      const theirs = named.map((l) => info.lentFrom.get(l) ?? info.descriptionOnly.get(l)).filter((l) => l !== undefined);
+      if (theirs.length > 0) {
+        describedSamples++;
+        for (const l of theirs) described.add(l);
+      } else {
+        bare.samples++;
+        bare.lines.push(...named);
+      }
     }
     if (eventIds.length === 0) continue;
+    // no sample of the sheet has a date and none could come from anywhere else (a date cell holding something, a date lent by the description sheet, a turned date row): the person may declare one for the whole sheet
+    const everySample = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet).length;
+    const anyDateCell = (raw?.rows ?? []).some((r) => dateCells.some((c) => !isBlankCell(r.cells[c.index] ?? null)));
+    const whole = eventIds.length === everySample && !anyDateCell && !lent && !(raw?.turn !== undefined && dateCells.length > 0);
     const sorted = [...new Set(lines)].sort((a, b) => a - b);
-    const info = sin.sampleJoin;
-    // a date lent by the description is blank in the description sheet: the person fills it there, on the description's own lines
-    let describedLines: number[] | undefined;
-    if (info !== undefined && how === 'blank-cells' && dateCells.every((c) => info.columns[c.index]?.side === 'description')) {
-      const own = [...new Set(sorted.map((l) => info.lentFrom.get(l) ?? info.descriptionOnly.get(l)))];
-      if (own.length > 0 && own.every((l) => l !== undefined)) describedLines = (own as number[]).sort((a, b) => a - b);
-    }
+    const describedLines = describedSamples > 0 ? [...described].sort((a, b) => a - b) : undefined;
     out.push({
       inputIndex: rawSheets.indexOf(sin),
       file: sin.file.fileName,
@@ -234,9 +255,69 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
       eventIds,
       ...(info === undefined ? {} : { joined: { file: info.description.file.fileName, sheet: info.description.sheet.name } }),
       ...(describedLines === undefined ? {} : { describedLines }),
+      whole,
+      ...(bare.samples === 0 ? {} : { resultsOnly: { samples: bare.samples, lines: [...new Set(bare.lines)].sort((a, b) => a - b) } }),
     });
   }
   return out;
+}
+
+/** One date declared for a sheet and applied: said once per sheet, with the number of samples it was written on. */
+interface DeclaredDateApplied {
+  sin: ConvertSheetInput;
+  text: string;
+  count: number;
+  long: boolean;
+}
+
+/**
+ * The date or interval the PERSON declared for a sheet on which no sample has a date (round 3, Task 17). Typed, never read from a file name, a sheet name, a header or a value. Applied to every sample of the sheet
+ * (with the eventRemarks that says so) only when the text is ISO 8601, in order and not in the future, and the sheet has no date at all: a sample with a date, a date cell holding something unreadable, a date lent by
+ * the joined description sheet or a date row of a turned sheet refuses the declaration (it never fills gaps). Refusals are findings; nothing is applied then. Must run before the event tree is built.
+ */
+function applyDeclaredDates(sheets: readonly ConvertSheetInput[], samples: ReadonlyMap<string, SampleAcc>, today: string | undefined, methodSteps: string[], findings: Finding[]): DeclaredDateApplied[] {
+  const applied: DeclaredDateApplied[] = [];
+  for (const sin of sheets) {
+    if (sin.declaredDate === undefined) continue;
+    const base = { file: sin.file.fileName, sheet: sin.sheet, value: sin.declaredDate.trim() };
+    const refuse = (reason: DeclaredDateReason | 'profile' | 'some-dated' | 'date-joined' | 'date-turned', extra: Record<string, string> = {}): void => void findings.push(makeConvertFinding('CONV-DATE-DECLARED-INVALID', { ...base, params: { reason, ...extra } }));
+    if (sin.profile !== undefined) {
+      refuse('profile');
+      continue;
+    }
+    const read = readDeclaredDate(sin.declaredDate, today);
+    if (!read.ok) {
+      refuse(read.reason);
+      continue;
+    }
+    const specs = specsOf(sin.mapping);
+    const dateCells = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day].filter((x) => x !== undefined);
+    const info = sin.sampleJoin;
+    if (info !== undefined && dateCells.some((c) => info.columns[c.index]?.side === 'description')) {
+      refuse('date-joined', { description: info.description.sheet.name });
+      continue;
+    }
+    const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
+    if (raw?.turn !== undefined && dateCells.length > 0) {
+      refuse('date-turned');
+      continue;
+    }
+    const mine = [...samples.values()].filter((a) => a.source.file === sin.file.fileName && a.source.sheet === sin.sheet);
+    if (mine.length === 0) continue;
+    const anyCell = (raw?.rows ?? []).some((r) => dateCells.some((c) => !isBlankCell(r.cells[c.index] ?? null)));
+    if (anyCell || mine.some((a) => a.site.date !== undefined)) {
+      refuse('some-dated');
+      continue;
+    }
+    const count = new Set(mine.map((a) => a.site.parentSample?.id ?? a.site.id)).size;
+    for (const a of mine) {
+      a.site.date = read.date;
+      a.site.eventRemarks = declaredDateRemark(count, sin.sheet);
+    }
+    methodSteps.push(`Sheet ${sin.sheet} of ${sin.file.fileName}: eventDate ${read.text} declared by the person for all ${count} samples; not in the source file`);
+    applied.push({ sin, text: read.text, count, long: read.long });
+  }
+  return applied;
 }
 
 export interface ConvertSheetInput {
@@ -356,6 +437,13 @@ export interface ConvertSheetInput {
   declaredPosition?: { lat: string; lon: string; uncertaintyM: string };
   /** The declaration above came from a companion file: said in the finding. */
   declaredPositionFromFile?: boolean;
+  /**
+   * ONE date or interval (ISO 8601: YYYY, YYYY-MM, YYYY-MM-DD or A/B of those) the PERSON typed for every sample of this sheet. Applied only to a sheet on which no sample has a date; the archive says it in
+   * eventRemarks and in the methods. Never inferred, never prefilled. Refused otherwise (CONV-DATE-DECLARED-INVALID).
+   */
+  declaredDate?: string;
+  /** The declaration above came from a companion file: said in the finding. */
+  declaredDateFromFile?: boolean;
 }
 
 export interface ProfileDeclaration {
@@ -388,6 +476,8 @@ export interface ConvertOptions {
   prefixStation?: boolean;
   /** Drop the station and/or cruise level. */
   flatten?: TreeOptions['flatten'];
+  /** Today as a UTC calendar day (YYYY-MM-DD), handed in by the caller (the core never reads the clock). Without it a declared date is not judged to be in the future. */
+  today?: string;
 }
 
 export interface ConvertInput {
@@ -3135,6 +3225,9 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     for (const e of far.values()) findings.push(makeConvertFinding('CONV-PROFILE-STATION-FAR', { file: e.file, sheet: e.sheet, value: e.names[0], params: { count: e.names.length, names: e.names.join('; '), limit: STATION_FAR_KM } }));
   }
 
+  // the date the person declared for a sheet with no date at all, set on its samples before the tree takes their dates
+  const declaredDates = applyDeclaredDates(input.sheets, samples, opts.today, methodSteps, findings);
+
   /* ---- identifiers across the whole archive ---- */
   const tree = buildEventTree(
     [...[...samples.values()].map((a) => a.site), ...profile.sites],
@@ -3154,8 +3247,9 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     if (count === 0) continue;
     findings.push(makeConvertFinding('CONV-POSITION-DECLARED', { file: sin.file.fileName, sheet: sin.sheet, params: { ...declared.typed, count, ...(sin.declaredPositionFromFile === true ? { fromFile: 'yes' } : {}) } }));
   }
+  for (const d of declaredDates) findings.push(makeConvertFinding('CONV-DATE-DECLARED', { file: d.sin.file.fileName, sheet: d.sin.sheet, params: { value: d.text, count: d.count, ...(d.long ? { long: 'yes' } : {}), ...(d.sin.declaredDateFromFile === true ? { fromFile: 'yes' } : {}) } }));
   const undated = undatedSheets(input.sheets, rawInput.sheets, events, samples);
-  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: (u.describedLines ?? u.lines).slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.pivoted ? { pivoted: 'yes' } : {}), ...(u.turned ? { turned: 'yes' } : {}), ...(u.joined === undefined ? {} : { joined: 'yes', description: u.joined.sheet, ...(u.describedLines === undefined ? {} : { described: 'yes' }) }) } }));
+  for (const u of undated) findings.push(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: u.file, sheet: u.sheet, lines: (u.describedLines ?? (u.resultsOnly?.lines ?? u.lines)).slice(0, MAX_FINDING_LINES), params: { count: u.samples, rows: u.lines.length, how: u.how, ...(u.whole ? { whole: 'yes' } : {}), ...(u.pivoted ? { pivoted: 'yes' } : {}), ...(u.turned ? { turned: 'yes' } : {}), ...(u.joined === undefined ? {} : { joined: 'yes', description: u.joined.sheet, ...(u.describedLines === undefined ? {} : { described: 'yes' }), ...(u.resultsOnly === undefined ? {} : u.describedLines === undefined ? { noRow: 'yes' } : { resultsOnly: u.resultsOnly.samples, resultsLineCount: u.resultsOnly.lines.length, resultsLines: formatLines(u.resultsOnly.lines.slice(0, MAX_FINDING_LINES), MAX_LINE_RANGES) }) }) } }));
   // a merged sheet is two sheets in the person's files: the ledger of the results sheet, and one for the description sheet that says which results sheets its lines were lent to
   {
     const parts = new Map<RawSheet, SheetLedger[]>();

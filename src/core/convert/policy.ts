@@ -66,6 +66,8 @@ export const BLOCK_CONV_RULES: readonly string[] = [
   'CONV-POSITION-NONE',
   // a declared position that cannot be used (out of range, an uncertainty not above zero, or a sheet that has a position column): nothing is applied
   'CONV-POSITION-DECLARED-INVALID',
+  // a declared date that cannot be used (not ISO, out of order, in the future, or a sheet where a sample already has a date): nothing is applied
+  'CONV-DATE-DECLARED-INVALID',
   // a sample with no eventDate (OBIS requires one): blank cells can be left out and listed
   'CONV-EVENT-DATE-MISSING',
   'CONV-ID-DUPLICATE',
@@ -144,6 +146,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-DEVICE-MISSING',
   // one position the person declared for the whole sheet, written on every sample and marked in georeferenceRemarks: looked at once
   'CONV-POSITION-DECLARED',
+  // one date or interval the person declared for a sheet with no date at all, written on every sample and marked in eventRemarks: looked at once
+  'CONV-DATE-DECLARED',
   'CONV-PROFILE-STATION-UNMATCHED',
   'CONV-PROFILE-STATION-FAR',
   'CONV-PROFILE-PRESSURE-NO-UNIT',

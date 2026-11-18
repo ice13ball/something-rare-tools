@@ -30,7 +30,7 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import { useLeaveWarning } from '../leaveWarning';
@@ -381,7 +381,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const own: OwnRecordsView = { offered: (f) => ownSheetOf(f).allowed, on: (f) => ownSheetOf(f).on };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'openTurn' | 'ownRecords' | 'keepCopies'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
@@ -391,6 +391,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       const box = lat?.closest('details');
       if (box) box.open = true;
       lat?.focus();
+      return;
+    }
+    // "Declare one date for the sheet": opens that sheet's date field and puts the cursor in it. Nothing is answered here: the person types the date.
+    if (choice === 'declareDate') {
+      const input = [...document.querySelectorAll<HTMLInputElement>('input[data-declared-date]')].find((el) => el.dataset.declaredDate === `${file.fileName}\u0000${f.sheet}`);
+      const box = input?.closest('details');
+      if (box) box.open = true;
+      input?.focus();
       return;
     }
     // "The samples are the columns…": opens that sheet's declaration and puts the cursor in its first field. Nothing is answered here: the person picks the column.
@@ -975,12 +983,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
     const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];
+    // the one date or interval the person typed for a sheet with no date at all: their own typed text, never read from a name or a value
+    const declaredDate = parsed ? declaredDateSettingsOf(parsed, choices) : [];
     // the joins the person confirmed or declined: sheet names, row counts, hashes of the key columns and the numbers the answers were given for; never a sample code or a value
     const sampleJoins = parsed ? sampleJoinSettingsOf(parsed, joins) : {};
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1175,6 +1185,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     hasStationColumn={m.columns.some((c) => c.role.kind === 'station')}
                     hasPositionColumn={m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude')}
                     positionJoinedFrom={positionJoinedFrom({ parsed, mappings, joins }, f.fileId, m.sheet)}
+                    dateOffered={blocking.some((x) => x.ruleId === 'CONV-EVENT-DATE-MISSING' && x.params.whole === 'yes' && x.file === f.fileName && x.sheet === m.sheet)}
                     ownRecordsOffered={ownRecordsAllowed(f, m, choice)}
                     {...turnPropsOf(f, m.sheet)}
                     choice={choice}
@@ -1663,7 +1674,7 @@ interface OwnRecordsView {
   on: (f: Finding) => boolean;
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { findings: Finding[]; own?: OwnRecordsView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { findings: Finding[]; own?: OwnRecordsView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1748,6 +1759,14 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
+          {f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.whole === 'yes' && onChoose !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="declare-date" onClick={() => onChoose(f, 'declareDate')}>
+                {t('convert.finding.declareDate')}
+              </button>
+            </>
+          )}
           {f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.how === 'blank-cells' && f.params.turned !== 'yes' && f.params.pivoted !== 'yes' && onChoose !== undefined && (
             <>
               {' '}
@@ -1803,7 +1822,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { own?: OwnRecordsView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { own?: OwnRecordsView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

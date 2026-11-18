@@ -59,6 +59,8 @@ const EVENT_COLUMNS: { col: Column; always: boolean }[] = [
   { col: dwc('parentEventID'), always: true },
   { col: dwc('eventType'), always: true },
   { col: dwc('eventDate'), always: true },
+  // only where the person declared the date of a sheet
+  { col: dwc('eventRemarks'), always: false },
   { col: dwc('decimalLatitude'), always: true },
   { col: dwc('decimalLongitude'), always: true },
   { col: dwc('geodeticDatum'), always: false },
@@ -126,6 +128,7 @@ function eventRow(e: ModelEvent, datasetName: string, institutionCode: string): 
     e.parentId ?? '',
     e.type,
     e.date ?? '',
+    e.dateRemarks ?? '',
     p ? coordText(p.lat, p.latDecimals, p.latText, p.derived) : '',
     p ? coordText(p.lon, p.lonDecimals, p.lonText, p.derived) : '',
     p ? 'EPSG:4326' : '',

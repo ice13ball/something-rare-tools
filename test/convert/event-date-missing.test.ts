@@ -203,7 +203,18 @@ describe('CONV-EVENT-DATE-MISSING when the date is lent by a joined description 
       expect(text).toContain('Samples');
       expect(text).not.toMatch(/\{|\}/);
     }
-    expect(renderConvertPlain(f[0], 'en')).toBe('1 sample of sheet "Fish" has no date: the date cells of sheet "Samples" are empty. Fill them in there, or leave these samples out and list them.');
+    expect(renderConvertPlain(f[0], 'en')).toBe('1 sample of sheet "Fish" has no date: the date cells of sheet "Samples" are empty (line 3). Fill them in there, or leave these samples out and list them.');
+  });
+
+  it('names the description sheet\'s lines in four languages, with the Polish three forms (N2)', () => {
+    const base = { count: 3, rows: 3, how: 'blank-cells', joined: 'yes', description: 'Samples', described: 'yes' } as const;
+    const f = (lines: number[], extra: Record<string, string | number> = {}) => makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', lines, params: { ...base, ...extra } });
+    expect(renderConvertPlain(f([3]), 'pl')).toContain('(wiersz 3)');
+    expect(renderConvertPlain(f([3, 4]), 'pl')).toContain('(wiersze 3–4)');
+    expect(renderConvertPlain(f([3, 5, 7, 9, 11]), 'pl')).toContain('wierszy');
+    expect(renderConvertPlain(f([3, 4]), 'de')).toContain('Zeilen');
+    expect(renderConvertPlain(f([3, 4]), 'fr')).toContain('lignes');
+    expect(renderConvertPlain(f([3], { turned: 'yes' }), 'en')).toContain('(line 3)');
   });
 
   it('the leave-out still takes the results lines of those samples out (the answer is counted in results lines)', () => {
@@ -228,5 +239,64 @@ describe('CONV-EVENT-DATE-MISSING when the date is lent by a joined description 
     const pl = renderConvertPlain(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', params: { ...base, count: 2 } }), 'pl');
     expect(pl).toContain('2 próbki');
     expect(renderConvertPlain(makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', params: { ...base, count: 5 } }), 'pl')).toContain('5 próbek');
+  });
+
+  describe('N1: undated samples with a description row and results-only samples are both named', () => {
+    const mixedFile = (samplesRows: Cell[][]) =>
+      xlsxFile('book.xlsx', {
+        Fish: [['Sample', 'Taxon', 'Count'], ['T1', 'Gadus morhua', 2], ['T2', 'Gadus morhua', 4], ['T3', 'Gadus morhua', 1]],
+        Samples: [['Sample', 'Date', 'Latitude', 'Longitude'], ...samplesRows],
+      });
+    const run = (file: ReturnType<typeof mixedFile>, extra: Partial<ConvertSheetInput> = {}) => {
+      const out = joinInputs([resultsInput(file, 'Fish', extra), descriptionInput(file, 'Samples')], [{ results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [], resultsOnly: 1 }], []);
+      return convert({ sheets: out.sheets });
+    };
+
+    it('T2 blank in Samples and T3 with no Samples row: one finding names the description line and the results-only line, with no advice to fill in cells of Fish', () => {
+      const r = run(mixedFile([['T1', '2021-05-03', 61.1, 4.2], ['T2', null, 61.3, 4.6]]));
+      const f = ids(r.findings, 'CONV-EVENT-DATE-MISSING');
+      expect(f).toHaveLength(1);
+      expect(f[0].lines).toEqual([3]);
+      expect(f[0].params).toMatchObject({ count: 2, rows: 2, described: 'yes', description: 'Samples', resultsOnly: 1, resultsLines: '4' });
+      for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+        const text = renderConvertPlain(f[0], lang);
+        expect(text, lang).toContain('Samples');
+        expect(text, lang).toMatch(/3/);
+        expect(text, lang).toMatch(/4/);
+        expect(text, lang).not.toMatch(/\{|\}/);
+      }
+      const en = renderConvertPlain(f[0], 'en');
+      expect(en).toContain('(line 3)');
+      expect(en).toContain('1 sample has no row there at all (line 4 of "Fish")');
+      expect(en).not.toMatch(/fill (them )?in\b.*cells/i);
+      expect(en).not.toContain('The date cells are empty');
+      // the leave-out still takes both samples' results lines out
+      const left = run(mixedFile([['T1', '2021-05-03', 61.1, 4.2], ['T2', null, 61.3, 4.6]]), { leaveOut: [{ reason: 'no-event-date', count: 2 }] });
+      expect(ids(left.findings, 'CONV-EVENT-DATE-MISSING')).toEqual([]);
+    });
+
+    it('only results-only samples are undated: the finding says the description sheet has no row for them, not "fill in the date cells"', () => {
+      const r = run(mixedFile([['T1', '2021-05-03', 61.1, 4.2], ['T2', '2021-05-04', 61.3, 4.6]]));
+      const f = ids(r.findings, 'CONV-EVENT-DATE-MISSING');
+      expect(f).toHaveLength(1);
+      expect(f[0].lines).toEqual([4]);
+      expect(f[0].params).toMatchObject({ count: 1, noRow: 'yes', description: 'Samples' });
+      const en = renderConvertPlain(f[0], 'en');
+      expect(en).toContain('has no row for it');
+      expect(en).toContain('(line 4 of "Fish")');
+      expect(en).not.toMatch(/fill them in|date cells are empty/i);
+      for (const lang of ['pl', 'de', 'fr'] as const) expect(renderConvertPlain(f[0], lang), lang).not.toMatch(/\{|\}/);
+    });
+
+    it('the fixed variants (a turned or pivoted sheet) never offer a leave-out, and Polish keeps its three forms', () => {
+      const p = (extra: Record<string, string | number>, lines: number[] = [3]) => makeConvertFinding('CONV-EVENT-DATE-MISSING', { file: 'book.xlsx', sheet: 'Fish', lines, params: { count: 2, rows: 2, how: 'blank-cells', joined: 'yes', description: 'Samples', ...extra } });
+      const mixed = p({ described: 'yes', resultsOnly: 2, resultsLineCount: 2, resultsLines: '4, 6', turned: 'yes' });
+      expect(renderConvertPlain(mixed, 'en')).not.toMatch(/leave these samples out/);
+      expect(renderConvertPlain(mixed, 'pl')).toContain('2 próbki nie mają');
+      expect(renderConvertPlain(mixed, 'pl')).toContain('(wiersze 4, 6');
+      const none = p({ noRow: 'yes', pivoted: 'yes' }, [4]);
+      expect(renderConvertPlain(none, 'en')).not.toMatch(/leave these samples out/);
+      expect(renderConvertPlain(p({ noRow: 'yes', count: 5 }, [4, 5, 6, 8, 9]), 'pl')).toContain('5 próbek');
+    });
   });
 });
