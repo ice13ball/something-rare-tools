@@ -43,7 +43,7 @@ export function raggedFinding(fileName: string, sheet: string, headerLength: num
   });
 }
 
-const READING_NAME: Record<LegacyEncoding, string> = { 'windows-1250': 'windows-1250', 'iso-8859-2': 'ISO-8859-2', 'windows-1252': 'windows-1252' };
+export const READING_NAME: Record<LegacyEncoding, string> = { 'windows-1250': 'windows-1250', 'iso-8859-2': 'ISO-8859-2', 'windows-1252': 'windows-1252' };
 
 /** The readings as the rule text shows them: `windows-1250, ISO-8859-2: Krřyer, Sčvre; windows-1252: Krøyer, Sèvre`. */
 export const renderReadings = (readings: NonNullable<DecodedText['readings']>): string =>

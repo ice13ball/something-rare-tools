@@ -13,6 +13,7 @@ import type { SheetLedger } from '../core/convert/ledger';
 import type { SheetKeyReport } from '../core/convert/sampleKey';
 import type { ConflictGroup } from '../core/convert/sampleJoin';
 import type { DecimalReading } from '../core/convert/decimalReading';
+import type { LegacyEncoding } from '../core/values/encoding';
 import type { Finding, SheetMapping, TurnDeclaration } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -51,6 +52,10 @@ export interface ConvertFileSummary extends FileSummary {
   decimal?: Record<string, Record<number, { reading: DecimalReading; fromFile?: true }>>;
   /** by sheet name, for each sheet with a declared decimal reading: the header and the number of rows of the sheet as dropped (to write the companion line: the sheet in `sheets` may be a pivoted one). */
   decimalSource?: Record<string, { header: string[]; rows: number }>;
+  /** Only for a file whose 8-bit letters read differently in windows-1250, ISO-8859-2 and windows-1252 (IN-ENCODING-AMBIGUOUS): the readings, each with the code pages that read the bytes that way and the few words where they differ. The page's buttons, one per reading. */
+  encodingReadings?: { encodings: LegacyEncoding[]; words: string }[];
+  /** The code page the person picked for that file (or a companion file gave: `fromFile`), with the hash of the file's bytes the pick holds for (for the companion line). */
+  declaredEncoding?: { encoding: LegacyEncoding; hash: string; fromFile?: true };
   /** by sheet name, only for a sheet that looks transposed (species or variables in rows; core/convert/transposed.ts): the page offers "read as a normal table" next to the blocking message. */
   transposedSheets?: Record<string, 'transposed' | 'transposed-taxa' | 'header-units'>;
 }
@@ -293,6 +298,8 @@ export interface ConvertProtocol {
   turnChoice: { req: { fileId: string; sheet: string; turn: TurnDeclaration | null }; res: ConvertFileSummary };
   /** The person's declaration of what the comma is in one column of a sheet (`decimal` = a decimal comma, `thousands` = a thousands separator), or taking it back (`null`). Only an `index` that IN-DECIMAL-AMBIGUOUS of that sheet names is kept; anything else leaves the summary unchanged. The file is read again and the answer is its new summary. */
   decimalChoice: { req: { fileId: string; sheet: string; index: number; reading: DecimalReading | null }; res: ConvertFileSummary };
+  /** The person's pick of the code page of a file whose 8-bit letters read differently (IN-ENCODING-AMBIGUOUS), or taking it back (`null`). Only an encoding of one of the file's readings is kept; anything else leaves the summary unchanged. The file is read again (encoding, decimal, pivot, turn). */
+  encodingChoice: { req: { fileId: string; encoding: LegacyEncoding | null }; res: ConvertFileSummary };
   export: { req: { export: ExportBody }; res: ExportResult };
   notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
   /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
@@ -317,6 +324,7 @@ export interface ConvertEngine {
   pivotChoice(fileId: string, sheet: string, off: boolean, describes: number[]): Promise<ConvertFileSummary>;
   turnChoice(fileId: string, sheet: string, turn: TurnDeclaration | null): Promise<ConvertFileSummary>;
   decimalChoice(fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<ConvertFileSummary>;
+  encodingChoice(fileId: string, encoding: LegacyEncoding | null): Promise<ConvertFileSummary>;
   export(body: ExportBody): Promise<ExportResult>;
   notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
   previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[], prefix?: string): Promise<SheetKeyReport | null>;

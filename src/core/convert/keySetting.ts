@@ -23,6 +23,13 @@ export function shortHash(text: string): string {
   return h.toString(16).padStart(8, '0');
 }
 
+/** The same hash over the BYTES of a file (8 hex digits): it ties an answer about how the file is read (its encoding) to that file alone. It keeps the file out of the companion file; it is not a secret. */
+export function bytesHash(bytes: Uint8Array): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 0x01000193) >>> 0;
+  return h.toString(16).padStart(8, '0');
+}
+
 const hashOf = (header: string): string => shortHash(`f${foldHeader(header)}`);
 
 /** The hashes of the columns `columns` of a header row, in the order given. A column outside the header gives nothing (the whole key is then not kept). */

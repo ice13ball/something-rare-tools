@@ -564,6 +564,18 @@ export function decimalReadingSettingsOf(parsed: ConvertParseResult, choices: Re
   return out;
 }
 
+/** The code page the person picked for a file whose 8-bit letters read differently (or a companion file gave and still holds), with the hash of the file's bytes: a name and a hash, for a file with at least one sheet in use. */
+export function encodingSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['encoding']> {
+  const out: NonNullable<ConvertSettings['encoding']> = [];
+  for (const f of parsed.files) {
+    const d = f.declaredEncoding;
+    if (d === undefined || out.some((o) => o.hash === d.hash)) continue;
+    if (f.sheets.length > 0 && !f.sheets.some((sh) => choices[sheetKey(f.fileId, sh.name)]?.use !== false)) continue;
+    out.push({ encoding: d.encoding, hash: d.hash });
+  }
+  return out;
+}
+
 /** The sheets in use declared "each row is its own record" (where that applies), with the number of rows of the sheet: what the companion file keeps (a name and a count). */
 export function ownRecordsSettingsOf(parsed: ConvertParseResult, mappings: Record<string, SheetMapping[]>, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['ownRecords']> {
   const out: NonNullable<ConvertSettings['ownRecords']> = [];

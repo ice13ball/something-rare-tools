@@ -265,3 +265,19 @@ describe('the turn in the companion file', () => {
     expect(writeConvertSidecar({ turned: [{ sheet: 'Taxa', nameHash: 'Taxon', notSampleHashes: '', rows: 2 }] })).not.toContain('turned=');
   });
 });
+
+describe('the encoding pick in the companion file (round 4, Task 6)', () => {
+  it('round trips the code page by the hash of the file bytes and holds nothing else', () => {
+    const settings = { encoding: [{ encoding: 'windows-1252' as const, hash: '0a1b2c3d' }, { encoding: 'iso-8859-2' as const, hash: 'deadbeef' }] };
+    const text = writeConvertSidecar(settings);
+    expect(text).toContain('encoding=windows-1252:0a1b2c3d');
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.encoding).toEqual(settings.encoding);
+  });
+
+  it('a malformed line, an unknown code page, a bad hash and a repeated hash are not kept; a pick that is no answer is not written', () => {
+    const lines = ['encoding=utf-8:0a1b2c3d', 'encoding=windows-1252:nothex', 'encoding=windows-1252:0a1b2c3', 'encoding=windows-1252:0a1b2c3d', 'encoding=iso-8859-2:0a1b2c3d'];
+    const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.encoding).toEqual([{ encoding: 'windows-1252', hash: '0a1b2c3d' }]);
+    expect(writeConvertSidecar({ encoding: [{ encoding: 'utf-8' as never, hash: '0a1b2c3d' }, { encoding: 'windows-1252', hash: 'xyz' }] })).not.toContain('encoding=');
+  });
+});

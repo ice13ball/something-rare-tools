@@ -67,6 +67,7 @@ import type { RuleSpec } from './spec';
  *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
  *   CONV-DATE-ORDER-DECLARED   order, index   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
  *   CONV-DECIMAL-DECLARED      column, index, reading   info: the person declared what the comma is in a column that IN-DECIMAL-AMBIGUOUS asked about (reading = decimal | thousands); under thousands the column's cells written 1,250 or 1,250,000 are read as 1250 and 1250000 (optional fromFile = yes: the answer came from the companion file)
+ *   CONV-ENCODING-DECLARED     encoding         info: the person picked how the 8-bit letters of the file are read (IN-ENCODING-AMBIGUOUS asked); encoding = windows-1250 | iso-8859-2 | windows-1252 (optional fromFile = yes: the answer came from the companion file)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
  *   CONV-ZERO-WITH-BIOMASS     count            field = the quantity column, lines = rows of a long sheet with a quantity of 0 and a biomass value above zero: handled as the zero, the weight is not written (warning, accept)
  *   CONV-ZERO-SKIPPED          count            count = zero cells left out (the list was not declared complete)
@@ -1150,6 +1151,31 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       },
     ],
     technical: `{file}, {sheet} column {index} "{column}": the comma was declared {reading} for the column (IN-DECIMAL-AMBIGUOUS asked). Under thousands every cell of the column written n,nnn[,nnn...] is read as the number written without its commas, before any other step; under decimal the column is read as it was. Other columns are not affected.`,
+  },
+  {
+    id: 'CONV-ENCODING-DECLARED',
+    category: 'B',
+    severity: 'info',
+    exportPolicy: 'show',
+    params: ['encoding'],
+    plain: {
+      pl: `Jak podano, plik został odczytany jako {encoding}: tak czytane są jego litery w całym zapisie (w archiwum, w pomiarach i w uwagach).`,
+      en: `As you declared, the file was read as {encoding}: its letters are read that way everywhere (the archive, the measurements and the findings).`,
+      de: `Wie angegeben, wurde die Datei als {encoding} gelesen: ihre Buchstaben werden überall so gelesen (im Archiv, in den Messwerten und in den Hinweisen).`,
+      fr: `Comme indiqué, le fichier a été lu en {encoding} : ses lettres sont lues ainsi partout (dans l'archive, dans les mesures et dans les remarques).`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta odpowiedź pochodzi z pliku towarzyszącego.`,
+          en: `This answer was read from the companion file.`,
+          de: `Diese Antwort stammt aus der Begleitdatei.`,
+          fr: `Cette réponse vient du fichier d'accompagnement.`,
+        },
+      },
+    ],
+    technical: `{file}: the bytes are not UTF-8 and read differently in windows-1250, ISO-8859-2 and windows-1252 (IN-ENCODING-AMBIGUOUS asked); the person picked {encoding}, so the whole file is read with that code page before any other step. The pick is kept in the companion file under the hash of the file's bytes and applies to a file with the same bytes only.`,
   },
   {
     id: 'CONV-ZERO-WITH-BIOMASS',

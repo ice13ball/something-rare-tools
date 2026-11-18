@@ -31,9 +31,11 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { decimalReadingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { decimalReadingSettingsOf, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
+import type { LegacyEncoding } from '../../core/values/encoding';
+import { READING_NAME } from '../../core/parse/shared';
 import { useLeaveWarning } from '../leaveWarning';
 import { CONVERT_ROLE_CHOICES } from '../mappingModel';
 import { searchNvs } from '../optins/nvs';
@@ -581,12 +583,28 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
    * No column index changes, so only the file's summary and its proposals are replaced: the person's roles (mappings; a column still on the old proposal takes the new one), choices, confirmations, acceptances, NERC picks and code proposals all stay. The worker keeps
    * the answer only for a column the reader asked about; a stale answer is never applied.
    */
-  const decimalChoice = async (fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<boolean> => {
+  const decimalChoice = (fileId: string, sheet: string, index: number, reading: DecimalReading | null): Promise<boolean> => refreshFile(fileId, () => engine.decimalChoice(fileId, sheet, index, reading));
+
+  /**
+   * "Read as <code page>" (or taking it back) for a file whose 8-bit letters read differently (IN-ENCODING-AMBIGUOUS): the same light refresh as the comma answer (no column index changes). The names of the columns
+   * are read again too (Krřyer / Krøyer), so a mapping keeps the person's role and takes the file's new header.
+   */
+  const encodingChoice = (fileId: string, encoding: LegacyEncoding | null): Promise<boolean> => refreshFile(fileId, () => engine.encodingChoice(fileId, encoding));
+  const enc: EncodingView = {
+    readings: (f) => files.find((x) => x.fileName === f.file)?.encodingReadings,
+    pick: (f, encoding) => {
+      const file = files.find((x) => x.fileName === f.file);
+      if (file !== undefined) void encodingChoice(file.fileId, encoding);
+    },
+  };
+
+  /** Replaces the file's summary and proposals with the worker's new reading of it and keeps the person's roles, choices and confirmations; a column still on the old proposal takes the new one. */
+  const refreshFile = async (fileId: string, run: () => Promise<ConvertFileSummary>): Promise<boolean> => {
     if (!parsed || pivotBusy) return false;
     setPivotBusy(true);
     try {
       const old = parsed.files.find((x) => x.fileId === fileId);
-      const f = await engine.decimalChoice(fileId, sheet, index, reading);
+      const f = await run();
       // a column whose role is still the OLD proposal (the person never changed it) takes the new proposal, since its cells now read differently (1,250,000 is a number, not text); a role the person set stays
       if (old !== undefined) {
         const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -596,7 +614,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
             const was = old.proposals[m.sheet];
             const now = f.proposals[m.sheet];
             if (was === undefined || now === undefined) return m;
-            return { ...m, columns: m.columns.map((c) => { const o = was.find((p) => p.index === c.index); const n = now.find((p) => p.index === c.index); return o !== undefined && n !== undefined && same(c.role, o.role) && !same(n.role, o.role) ? { ...c, role: n.role } : c; }) };
+            return { ...m, columns: m.columns.map((c) => { const o = was.find((p) => p.index === c.index); const n = now.find((p) => p.index === c.index); const header = f.sheets.find((x) => x.name === m.sheet)?.header[c.index] ?? c.header; const named = { ...c, header }; return o !== undefined && n !== undefined && same(c.role, o.role) && !same(n.role, o.role) ? { ...named, role: n.role } : named; }) };
           }),
         }));
       }
@@ -1023,6 +1041,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const turned = parsed ? turnedSettingsOf(parsed, choices) : [];
     const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices) : [];
     const decimalReading = parsed ? decimalReadingSettingsOf(parsed, choices) : [];
+    const encoding = parsed ? encodingSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
     const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];
     // the one date or interval the person typed for a sheet with no date at all: their own typed text, never read from a name or a value
@@ -1032,7 +1051,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(decimalReading.length > 0 ? { decimalReading } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(decimalReading.length > 0 ? { decimalReading } : {}), ...(encoding.length > 0 ? { encoding } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1567,7 +1586,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
                   </p>
                 )}
-                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} own={own} />
+                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} own={own} enc={enc} />
                 {(judged.acceptRules.length > 0 || unconfirmed.length > 0) && (
                   <div className="convert-accept">
                     <HeadingTip tip="convertAccept">
@@ -1586,7 +1605,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                             />
                             <span>{t('convert.accept.rule', { n: group.length, rule })}</span>
                           </label>
-                          <FindingItems findings={group} own={own} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} onReadAsMeasurement={readAsMeasurement} />
+                          <FindingItems findings={group} own={own} enc={enc} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} onReadAsMeasurement={readAsMeasurement} />
                         </div>
                       );
                     })}
@@ -1604,7 +1623,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     )}
                   </div>
                 )}
-                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" own={own} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} onReadAsMeasurement={readAsMeasurement} />
+                <FindingList titleKey="convert.summary.info" findings={infos} kind="info" own={own} enc={enc} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} onReadAsMeasurement={readAsMeasurement} />
                 <p role="status" className={view.ok ? 'notice' : 'notice notice-blocked'}>
                   {view.ok ? t('convert.summary.none') : t('convert.summary.blocked')}
                 </p>
@@ -1711,12 +1730,17 @@ function CodesPreview({ p, onDownload, onPick, onClear }: { p: CodeProposalView;
 }
 
 /** What the findings need to know about "each row is its own record": whether it applies to the sheet a finding names (core's test), and whether the person chose it for that sheet. */
+/** The code page of a file whose 8-bit letters read differently: the readings the worker listed for the file of a finding, and the person's pick (or taking it back). */
+interface EncodingView {
+  readings: (f: Finding) => { encodings: LegacyEncoding[]; words: string }[] | undefined;
+  pick: (f: Finding, encoding: LegacyEncoding | null) => void;
+}
 interface OwnRecordsView {
   offered: (f: Finding) => boolean;
   on: (f: Finding) => boolean;
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { findings: Finding[]; own?: OwnRecordsView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'decimal' | 'thousands' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { findings: Finding[]; own?: OwnRecordsView; enc?: EncodingView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'decimal' | 'thousands' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -1833,6 +1857,24 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
+          {f.ruleId === 'IN-ENCODING-AMBIGUOUS' && enc !== undefined && (enc.readings(f)?.length ?? 0) > 0 && (
+            <div className="encoding-readings" role="group" aria-label={t('convert.finding.encodingPick')}>
+              <span className="muted">{t('convert.finding.encodingPick')} </span>
+              {(enc.readings(f) ?? []).map((r) => (
+                <button key={r.encodings.join('+')} type="button" className="button" data-testid="encoding-reading" data-encoding={r.encodings[0]} onClick={() => enc.pick(f, r.encodings[0])}>
+                  {t('convert.finding.encodingReading', { encodings: r.encodings.map((e) => READING_NAME[e]).join(', '), words: r.words })}
+                </button>
+              ))}
+            </div>
+          )}
+          {f.ruleId === 'CONV-ENCODING-DECLARED' && enc !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="ask-again" onClick={() => enc.pick(f, null)}>
+                {t('convert.finding.askAgain')}
+              </button>
+            </>
+          )}
           {f.ruleId === 'IN-DECIMAL-AMBIGUOUS' && onChoose !== undefined && (
             <>
               {' '}
@@ -1875,12 +1917,12 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own }: { own?: OwnRecordsView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'decimal' | 'thousands' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { own?: OwnRecordsView; enc?: EncodingView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'decimal' | 'thousands' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} {...(onChooseJoin === undefined ? {} : { onChooseJoin })} {...(own === undefined ? {} : { own })} />
+      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} {...(onChooseJoin === undefined ? {} : { onChooseJoin })} {...(own === undefined ? {} : { own })} {...(enc === undefined ? {} : { enc })} />
     </div>
   );
 }

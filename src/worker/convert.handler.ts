@@ -14,7 +14,8 @@ import { dictionaryReason } from '../core/convert/dictionary';
 import { readLongSheet } from '../core/convert/pivot';
 import { turnConvertFile } from '../core/convert/turn';
 import { applyDecimalReading, askedDecimalColumns, type DecimalReading } from '../core/convert/decimalReading';
-import { resolveKeyHashes } from '../core/convert/keySetting';
+import { bytesHash, resolveKeyHashes } from '../core/convert/keySetting';
+import { declareEncoding } from '../core/convert/encodingReading';
 import { transposedSheetReason } from '../core/convert/transposed';
 import { firstRowIsUnits } from '../core/recognize/layout';
 import { EMPTY_METADATA } from '../core/convert/metadata';
@@ -28,7 +29,7 @@ import type { SheetKeyReport } from '../core/convert/sampleKey';
 import { previewSampleKey } from '../core/convert/keyPreview';
 import type { SheetLedger } from '../core/convert/ledger';
 import { parseFile } from '../core/parse';
-import { decodeText } from '../core/values/encoding';
+import { decodeText, type EncodingReading, type LegacyEncoding } from '../core/values/encoding';
 import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping, TurnDeclaration } from '../core/types';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult, SheetRef } from './convert.protocol';
@@ -53,6 +54,16 @@ interface Held {
   decimal: Record<string, Record<number, DecimalReading>>;
   /** The answers read from a companion file and not changed since: `<sheet>\0<index>`. */
   decimalFromFile: Set<string>;
+  /** Only for a file whose 8-bit letters read differently in the code pages (IN-ENCODING-AMBIGUOUS): its bytes (kept for no other file), the readings of the first decode, the hash of the bytes and the file as first read, to which "Ask again" returns. */
+  source?: { name: string; bytes: Uint8Array; readings: readonly EncodingReading[]; hash: string; initial: ParsedFile };
+  /** The code page the person picked (or the companion file gave: `fromFile`) for that file. */
+  encoding?: { encoding: LegacyEncoding; fromFile: boolean };
+}
+
+/** The file as the converter reads it: its bytes decoded (with the code page the person named, if any), the formula guard off, a PANGAEA file with its parameter block read from the same text. */
+function readBytes(name: string, bytes: Uint8Array, encoding?: LegacyEncoding): ParsedFile {
+  const read = parseFile(name, bytes, encoding === undefined ? undefined : { encoding });
+  return readConvertFile(read, read.kind === 'pangaea' ? decodeText(bytes, encoding).text : undefined);
 }
 
 const isTable = (f: ParsedFile): boolean => (f.kind === 'csv' || f.kind === 'xlsx' || f.kind === 'pangaea') && f.sheets.length > 0;
@@ -108,6 +119,9 @@ export function createConvertHandler(): ConvertHandler {
     const result: ConvertParseResult = { files: [], problems: [], metadataFiles: [], archiveFiles: [], notRead: [], mappingFiles: [], settings: { fullList: false, prefixStation: false, worms: false, nvs: false }, prefill: {}, prefillInfo: null };
     const records: MetadataRecord[] = [];
     const parsedAll: ParsedFile[] = [];
+    // the files whose 8-bit letters read differently (IN-ENCODING-AMBIGUOUS): their bytes, until the person has picked (or a companion file of this drop has)
+    const ambiguous = new Map<ParsedFile, { name: string; bytes: Uint8Array; readings: readonly EncodingReading[] }>();
+    const encodingPick = new Map<string, LegacyEncoding>();
     for (const f of req.files as InputFile[]) {
       const archiveKind = archiveDescriptorKind(f.bytes);
       if (archiveKind) {
@@ -117,8 +131,12 @@ export function createConvertHandler(): ConvertHandler {
       }
       try {
         // the converter's own reading path: the formula guard of its code-proposal CSV comes off every text cell and header (core/convert/read.ts)
-        const read = parseFile(f.name, f.bytes);
-        parsedAll.push(readConvertFile(read, read.kind === 'pangaea' ? decodeText(f.bytes).text : undefined));
+        const parsed = readBytes(f.name, f.bytes);
+        parsedAll.push(parsed);
+        if ((parsed.kind === 'csv' || parsed.kind === 'pangaea') && parsed.findings.some((x) => x.ruleId === 'IN-ENCODING-AMBIGUOUS')) {
+          const readings = decodeText(f.bytes).readings;
+          if (readings !== undefined) ambiguous.set(parsed, { name: f.name, bytes: f.bytes, readings });
+        }
       } catch (e) {
         result.problems.push({ fileName: f.name, message: e instanceof Error ? e.message : String(e) });
       }
@@ -135,6 +153,7 @@ export function createConvertHandler(): ConvertHandler {
       const cs = readConvertSettings(parsed);
       for (const n of cs?.longAsTable ?? []) asTable.add(n);
       for (const t of cs?.turned ?? []) if (!turnPick.has(t.sheet)) turnPick.set(t.sheet, t);
+      for (const e of cs?.encoding ?? []) if (!encodingPick.has(e.hash)) encodingPick.set(e.hash, e.encoding);
       for (const d of cs?.decimalReading ?? []) if (!decimalPick.some((x) => x.sheet === d.sheet && x.hash === d.hash)) decimalPick.push(d);
       for (const b of cs?.biomassBasis ?? []) if (!biomassPick.has(b.sheet)) biomassPick.set(b.sheet, b.basis);
       for (const o of cs?.perOccurrence ?? []) {
@@ -143,7 +162,8 @@ export function createConvertHandler(): ConvertHandler {
         occurrencePick.set(o.sheet, m);
       }
     }
-    for (const parsed of parsedAll) {
+    for (const first of parsedAll) {
+      let parsed = first;
       if (parsed.kind === 'metadata') {
         // never a data sheet: its record goes to the description of the dataset (core/convert/prefill.ts), read by the shared metadata parsers
         result.metadataFiles.push(parsed.fileName);
@@ -191,11 +211,24 @@ export function createConvertHandler(): ConvertHandler {
         result.notRead.push({ fileName: parsed.fileName, kind: parsed.kind });
         continue;
       }
+      // a file whose 8-bit letters read differently: a companion file's pick holds only for these very bytes (their hash) and a reading it still names; the file is then read with that code page
+      const amb = ambiguous.get(first);
+      let source: Held['source'];
+      let encoding: Held['encoding'];
+      if (amb !== undefined) {
+        const hash = bytesHash(amb.bytes);
+        source = { ...amb, hash, initial: first };
+        const pick = encodingPick.get(hash);
+        if (pick !== undefined && amb.readings.some((r) => r.encodings.includes(pick))) {
+          parsed = declareEncoding(readBytes(amb.name, amb.bytes, pick), pick, true);
+          encoding = { encoding: pick, fromFile: true };
+        }
+      }
       // a PANGAEA file carries its own description (citation, title, authors, licence, DOI, coverage, abstract when it has one): it goes to the description of the dataset like a dropped
       // metadata file, with its file name as the source; the sheet itself is still a data table
       if (parsed.kind === 'pangaea' && parsed.embeddedMetadata) records.push(pangaeaHeaderRecord(parsed.embeddedMetadata));
       const fileId = `c${++seq}`;
-      const h: Held = { fileId, original: parsed, parsed, pivoted: parsed, turns: Object.create(null) as Record<string, TurnDeclaration>, turnsFromFile: new Set(), decimal: Object.create(null) as Record<string, Record<number, DecimalReading>>, decimalFromFile: new Set(), choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
+      const h: Held = { fileId, original: parsed, parsed, pivoted: parsed, turns: Object.create(null) as Record<string, TurnDeclaration>, turnsFromFile: new Set(), decimal: Object.create(null) as Record<string, Record<number, DecimalReading>>, decimalFromFile: new Set(), ...(source === undefined ? {} : { source }), ...(encoding === undefined ? {} : { encoding }), choices: Object.assign(Object.create(null) as Record<string, PivotChoice>, Object.fromEntries(parsed.sheets.filter((s) => asTable.has(s.name)).map((s) => [s.name, { off: true }]))) };
       // the turns of a companion file: a pre-tick that holds only when the columns are found again by their hashes and the sheet has the same number of rows
       for (const sheet of parsed.sheets) {
         const t = turnPick.get(sheet.name);
@@ -330,6 +363,8 @@ export function createConvertHandler(): ConvertHandler {
         ...(Object.keys(pivots).length > 0 ? { pivots } : {}),
         ...(Object.keys(turned).length > 0 ? { turned, turnSource } : {}),
         ...(Object.keys(decimal).length > 0 ? { decimal, decimalSource } : {}),
+        ...(h.source === undefined ? {} : { encodingReadings: h.source.readings.map((r) => ({ encodings: [...r.encodings], words: r.words })) }),
+        ...(h.source === undefined || h.encoding === undefined ? {} : { declaredEncoding: { encoding: h.encoding.encoding, hash: h.source.hash, ...(h.encoding.fromFile ? { fromFile: true as const } : {}) } }),
         ...(pivotOff.length > 0 ? { pivotOff } : {}),
         ...(Object.keys(transposed).length > 0 ? { transposedSheets: transposed } : {}),
       };
@@ -391,6 +426,49 @@ export function createConvertHandler(): ConvertHandler {
     if ((req.reading !== 'decimal' && req.reading !== 'thousands') || !Number.isInteger(req.index) || !askedDecimalColumns(h.original, req.sheet).includes(req.index)) return summaryOf(h);
     (h.decimal[req.sheet] ??= Object.create(null) as Record<number, DecimalReading>)[req.index] = req.reading;
     h.decimalFromFile.delete(key);
+    repivot(h);
+    return summaryOf(h);
+  }
+
+  /**
+   * The person's pick of the code page of a file whose 8-bit letters read differently (IN-ENCODING-AMBIGUOUS), or taking it back (`null`). Only an encoding that is one of the file's own readings is kept; anything else
+   * (a file that was not asked about, UTF-8, a word that is no code page) leaves the summary unchanged. The bytes are read again with that code page, then the decimal answers are checked against the new reading
+   * (an answer for a column the reader no longer asks about, or one that came from the companion file for a header that now reads differently, is dropped: the question is open again), then pivot and turn.
+   */
+  function encodingChoice(req: Extract<ConvertRequest, { type: 'encodingChoice' }>): ConvertFileSummary {
+    const h = held(req.fileId);
+    const src = h.source;
+    if (src === undefined) return summaryOf(h);
+    const pick = req.encoding;
+    if (pick !== null && !src.readings.some((r) => (r.encodings as readonly unknown[]).includes(pick))) return summaryOf(h);
+    if (pick === null && h.encoding === undefined) return summaryOf(h);
+    const fresh = pick === null ? src.initial : declareEncoding(readBytes(src.name, src.bytes, pick), pick, false);
+    const before = h.original;
+    h.original = fresh;
+    if (pick === null) delete h.encoding;
+    else h.encoding = { encoding: pick, fromFile: false };
+    // nothing in the structure changes (an 8-bit code page never makes a delimiter or a quote), only the letters: the person's other answers stay while they still mean the same column
+    for (const [sheet, answers] of Object.entries(h.decimal)) {
+      const asked = askedDecimalColumns(fresh, sheet);
+      const was = before.sheets.find((x) => x.name === sheet)?.header ?? [];
+      const now = fresh.sheets.find((x) => x.name === sheet)?.header ?? [];
+      for (const k of Object.keys(answers)) {
+        const i = Number(k);
+        const key = `${sheet}\0${i}`;
+        if (asked.includes(i) && !(h.decimalFromFile.has(key) && was[i] !== now[i])) continue;
+        delete answers[i];
+        h.decimalFromFile.delete(key);
+      }
+      if (Object.keys(answers).length === 0) delete h.decimal[sheet];
+    }
+    for (const name of [...h.turnsFromFile]) {
+      const a = before.sheets.find((x) => x.name === name)?.header ?? [];
+      const b = fresh.sheets.find((x) => x.name === name)?.header ?? [];
+      if (a.length !== b.length || a.some((x, i) => x !== b[i])) {
+        delete h.turns[name];
+        h.turnsFromFile.delete(name);
+      }
+    }
     repivot(h);
     return summaryOf(h);
   }
@@ -744,6 +822,8 @@ export function createConvertHandler(): ConvertHandler {
           return turnChoice(req);
         case 'decimalChoice':
           return decimalChoice(req);
+        case 'encodingChoice':
+          return encodingChoice(req);
         case 'export':
           return exportArchive(req.export);
         case 'notWritten':

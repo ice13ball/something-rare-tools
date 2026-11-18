@@ -9,7 +9,7 @@ import { RULES } from '../../src/core/rules/registry';
  * a new rule adds a line. Generated from the policy.ts lists at 668ae00 (round 4, Task 1 Step 1) for every registered rule of every rule file, severity and prefix fallbacks included.
  * Round 4 Task 2 changed ten lines (show to accept: a tool default or a reader decision needs an acceptance) and added CONV-COLUMN-IGNORED-PROPOSED: 249 rules.
  * Round 4 Task 3 added IN-DECIMAL-AMBIGUOUS (block): 250 rules.
- * Round 4 Task 4 added CONV-DECIMAL-DECLARED (show; in no enumerated set, so no exemption line): 251 rules; Task 5 added IN-ENCODING-AMBIGUOUS (block): 252.
+ * Round 4 Task 4 added CONV-DECIMAL-DECLARED (show; in no enumerated set, so no exemption line): 251 rules; Task 5 added IN-ENCODING-AMBIGUOUS (block): 252; Task 6 added CONV-ENCODING-DECLARED (show): 253.
  * The count was 248, not the plan's 245: round 3 added CONV-DATE-DECLARED, CONV-DATE-DECLARED-INVALID and CONV-DATE-DECLARED-HELD after the plan was written.
  */
 const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
@@ -179,6 +179,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-DATE-ORDER-CONTRADICTED': 'block',
   'CONV-DATE-ORDER-DECLARED': 'show',
   'CONV-DECIMAL-DECLARED': 'show',
+  'CONV-ENCODING-DECLARED': 'show',
   'CONV-ZERO-WITH-BIOMASS': 'accept',
   'CONV-SAMPLE-PER-ROW': 'accept',
   'CONV-ZERO-SKIPPED': 'accept',
@@ -271,7 +272,7 @@ describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(252);
+    expect(Object.keys(BASELINE).length).toBe(253);
   });
 
   it('the field of each rule definition is its baseline policy', () => {

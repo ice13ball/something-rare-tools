@@ -12,6 +12,7 @@ export function makeConvertEngine(send: <K extends ConvertRequestType>(req: Extr
     pivotChoice: (fileId, sheet, off, describes) => send({ type: 'pivotChoice', fileId, sheet, off, describes }),
     turnChoice: (fileId, sheet, turn) => send({ type: 'turnChoice', fileId, sheet, turn }),
     decimalChoice: (fileId, sheet, index, reading) => send({ type: 'decimalChoice', fileId, sheet, index, reading }),
+    encodingChoice: (fileId, encoding) => send({ type: 'encodingChoice', fileId, encoding }),
     export: (body) => send({ type: 'export', export: body }),
     notWritten: (body) => send({ type: 'notWritten', notWritten: body }),
     previewKey: (body, fileId, sheet, columns, prefix) => send({ type: 'previewKey', body, fileId, sheet, columns, ...(prefix === undefined ? {} : { prefix }) }),

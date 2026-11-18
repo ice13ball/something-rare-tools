@@ -11,7 +11,7 @@ import type { ConvertRequestBody, ConvertWireRequest } from '../../src/worker/co
 import type { InputFile } from '../../src/worker/protocol';
 import { RESULTS_CSV, SAMPLES_CSV } from '../convert/joinFixtures';
 import { COLLISION_CSV, L1_CSV, NO_CODE_CSV, SIDECAR_CSV, W1_CSV, csvOf } from './convertHelpers';
-import { keyHashes } from '../../src/core/convert/keySetting';
+import { bytesHash, keyHashes } from '../../src/core/convert/keySetting';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const file = (name: string, text: string): InputFile => ({ name, bytes: enc(text), source: 'dropped' });
@@ -561,3 +561,155 @@ describe('decimalChoice on a long (pivoted) sheet', () => {
   });
 });
 
+
+describe('encodingChoice: letters that read differently in the 8-bit code pages (round 4, Task 6)', () => {
+  // bytes of a windows-1252 file: \xf8 is ø there, ř in windows-1250 and ISO-8859-2; \xe8 is è, č, č
+  const latin = (s: string): Uint8Array => Uint8Array.from(s, (c) => c.charCodeAt(0));
+  const bytesFile = (name: string, text: string): InputFile => ({ name, bytes: latin(text), source: 'dropped' });
+  const HEADER = 'Sample;Kr\xf8yer;Depth [m];Date;Latitude;Longitude;Calanus finmarchicus';
+  const ROWS = ['A;S\xe8vre;1,250;2023-06-14;55,5;2,5;3', 'B;S\xe8vre;2,000;2023-06-14;55,5;2,5;4'];
+  const CSV = [HEADER, ...ROWS].join('\n') + '\n';
+  const depthHash = (header: string[]) => keyHashes(header, [2]) as string;
+  const sidecar = (settings: Parameters<typeof writeConvertSidecar>[0]) => file('run.sidecar.csv', writeConvertSidecar(settings));
+  const run = async (e: ReturnType<typeof createDirectConvertEngine>, f: Awaited<ReturnType<typeof e.parse>>['files'][number]) => {
+    const v = await e.convert({ sheets: [{ fileId: f.fileId, sheet: f.sheets[0].name, mapping: f.mappings[0], shape: 'wide', quantity: { kind: 'count' } }], options: {}, approvedSplits: {} });
+    return { v, rule: (id: string) => v.findings.filter((x) => x.ruleId === id) };
+  };
+
+  it('a file the code pages read differently is asked about: two readings with their words, none picked, the finding blocks', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('k.csv', CSV)])).files[0];
+    expect(f.sheets[0].header[1]).toBe('Krřyer');
+    expect(f.encodingReadings).toEqual([
+      { encodings: ['windows-1250', 'iso-8859-2'], words: expect.stringContaining('Krřyer') },
+      { encodings: ['windows-1252'], words: expect.stringContaining('Krøyer') },
+    ]);
+    expect(f.declaredEncoding).toBeUndefined();
+    const { rule } = await run(e, f);
+    expect(rule('IN-ENCODING-AMBIGUOUS')).toHaveLength(1);
+    expect(rule('CONV-ENCODING-DECLARED')).toEqual([]);
+  });
+
+  it('three readings: Gdańsk bytes give three, each with its words', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('g.csv', 'Gda\xf1sk;\xb9\x9c;Sample\nx;y;z\n')])).files[0];
+    expect(f.encodingReadings?.map((r) => r.encodings)).toEqual([['windows-1250'], ['iso-8859-2'], ['windows-1252']]);
+    expect(f.encodingReadings?.every((r) => r.words.length > 0)).toBe(true);
+  });
+
+  it('a file all the code pages read alike and a UTF-8 file are not asked, and a pick for them changes nothing', async () => {
+    const alike = HEADER.replace('Kr\xf8yer', 'M\xfcller') + '\n' + ROWS.join('\n').replace(/S\xe8vre/g, 'Caf\xe9') + '\n';
+    for (const f0 of [bytesFile('m.csv', alike), file('u.csv', CSV.replace(/[\xf8\xe8]/g, 'o'))]) {
+      const e = createDirectConvertEngine();
+      const f = (await e.parse([f0])).files[0];
+      expect(f.encodingReadings).toBeUndefined();
+      const before = JSON.stringify(f);
+      expect(JSON.stringify(await e.encodingChoice(f.fileId, 'windows-1252'))).toBe(before);
+    }
+  });
+
+  it('"windows-1252" reads the whole file that way, the question becomes CONV-ENCODING-DECLARED and the hash is of the file bytes', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('k.csv', CSV)])).files[0];
+    const g = await e.encodingChoice(f.fileId, 'windows-1252');
+    expect(g.sheets[0].header[1]).toBe('Krøyer');
+    expect(g.encoding).toBe('windows-1252');
+    expect(g.declaredEncoding).toEqual({ encoding: 'windows-1252', hash: bytesHash(latin(CSV)) });
+    expect(g.encodingReadings).toEqual(f.encodingReadings);
+    const { rule } = await run(e, g);
+    expect(rule('IN-ENCODING-AMBIGUOUS')).toEqual([]);
+    expect(rule('CONV-ENCODING-DECLARED')[0]?.params).toEqual({ encoding: 'windows-1252' });
+    // another reading is the person's call as well
+    const h = await e.encodingChoice(f.fileId, 'iso-8859-2');
+    expect(h.sheets[0].header[1]).toBe('Krřyer');
+    expect(h.declaredEncoding?.encoding).toBe('iso-8859-2');
+  });
+
+  it('a word that is no reading of the file (utf-8, a made-up page) is refused and the summary is unchanged; null takes the pick back', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('k.csv', CSV)])).files[0];
+    const before = JSON.stringify(await e.encodingChoice(f.fileId, null));
+    for (const word of ['utf-8', 'latin1', '', undefined]) expect(JSON.stringify(await e.encodingChoice(f.fileId, word as never))).toBe(before);
+    const g = await e.encodingChoice(f.fileId, 'windows-1252');
+    expect(JSON.stringify(g)).not.toBe(before);
+    expect(JSON.stringify(await e.encodingChoice(f.fileId, null))).toBe(before);
+    expect((await run(e, await e.encodingChoice(f.fileId, null))).rule('IN-ENCODING-AMBIGUOUS')).toHaveLength(1);
+  });
+
+  it('the pick belongs to its file: a second file with the same bytes is still asked', async () => {
+    const e = createDirectConvertEngine();
+    const [a, b] = (await e.parse([bytesFile('k.csv', CSV), bytesFile('k2.csv', CSV)])).files;
+    await e.encodingChoice(a.fileId, 'windows-1252');
+    const second = await run(e, b);
+    expect(second.rule('IN-ENCODING-AMBIGUOUS')).toHaveLength(1);
+    expect(second.rule('CONV-ENCODING-DECLARED')).toEqual([]);
+  });
+
+  it('a companion file answers for the very same bytes (fromFile) and for nothing else', async () => {
+    const e = createDirectConvertEngine();
+    const pick = { encoding: [{ encoding: 'windows-1252' as const, hash: bytesHash(latin(CSV)) }] };
+    const same = (await e.parse([bytesFile('k.csv', CSV), sidecar(pick)])).files[0];
+    expect(same.sheets[0].header[1]).toBe('Krøyer');
+    expect(same.declaredEncoding).toEqual({ encoding: 'windows-1252', hash: bytesHash(latin(CSV)), fromFile: true });
+    const r = await run(e, same);
+    expect(r.rule('CONV-ENCODING-DECLARED')[0]?.params).toEqual({ encoding: 'windows-1252', fromFile: 'yes' });
+    expect(r.rule('IN-ENCODING-AMBIGUOUS')).toEqual([]);
+    // one byte of the file changed: another file, the question is open again
+    const changed = (await e.parse([bytesFile('k.csv', CSV.replace('A;', 'Z;')), sidecar(pick)])).files[0];
+    expect(changed.declaredEncoding).toBeUndefined();
+    expect(changed.sheets[0].header[1]).toBe('Krřyer');
+    expect((await run(e, changed)).rule('IN-ENCODING-AMBIGUOUS')).toHaveLength(1);
+    // the person takes it back, then it is theirs when they pick again
+    const e2 = createDirectConvertEngine();
+    const loaded = (await e2.parse([bytesFile('k.csv', CSV), sidecar(pick)])).files[0];
+    expect((await e2.encodingChoice(loaded.fileId, null)).declaredEncoding).toBeUndefined();
+    expect((await e2.encodingChoice(loaded.fileId, 'windows-1252')).declaredEncoding?.fromFile).toBeUndefined();
+  });
+
+  it('a file whose decode had no readings ignores the companion line', async () => {
+    const e = createDirectConvertEngine();
+    const text = HEADER.replace('Kr\xf8yer', 'M\xfcller') + '\n' + ROWS.join('\n').replace(/S\xe8vre/g, 'Caf\xe9') + '\n';
+    const f = (await e.parse([bytesFile('m.csv', text), sidecar({ encoding: [{ encoding: 'windows-1252', hash: bytesHash(latin(text)) }] })])).files[0];
+    expect(f.declaredEncoding).toBeUndefined();
+    expect(f.encodingReadings).toBeUndefined();
+    expect(f.encoding).not.toBe('windows-1252');
+    expect((await run(e, f)).rule('CONV-ENCODING-DECLARED')).toEqual([]);
+  });
+
+  it('the comma answer and the encoding pick do not interfere: a still-valid answer of the person stays, the sheet is read with both', async () => {
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('k.csv', CSV)])).files[0];
+    const a = await e.decimalChoice(f.fileId, 'k.csv', 2, 'thousands');
+    expect(a.decimal).toEqual({ 'k.csv': { 2: { reading: 'thousands' } } });
+    const b = await e.encodingChoice(f.fileId, 'windows-1252');
+    expect(b.decimal).toEqual({ 'k.csv': { 2: { reading: 'thousands' } } });
+    const { v, rule } = await run(e, b);
+    expect(rule('CONV-DECIMAL-DECLARED')).toHaveLength(1);
+    expect(rule('CONV-ENCODING-DECLARED')).toHaveLength(1);
+    expect(rule('IN-DECIMAL-AMBIGUOUS')).toEqual([]);
+    expect(v.examples.sample.map((x) => x.depthMin)).toEqual(expect.arrayContaining([1250, 2000]));
+    // taking the pick back keeps the comma answer too
+    const c = await e.encodingChoice(f.fileId, null);
+    expect(c.decimal).toEqual({ 'k.csv': { 2: { reading: 'thousands' } } });
+    expect(c.sheets[0].header[1]).toBe('Krřyer');
+  });
+
+  it('a comma answer from the companion file for a header that reads differently under the new code page no longer applies; the question is open again', async () => {
+    const header = ['Sample', 'Kr\xf8yer', 'Depth \xf8', 'Date', 'Latitude', 'Longitude', 'Calanus finmarchicus'];
+    const text = [header.join(';'), ...ROWS].join('\n') + '\n';
+    const asRead = (c: string) => header.map((h) => h.replace(/\xf8/g, c));
+    const e = createDirectConvertEngine();
+    // the line was written for the windows-1250 reading of the header (ř)
+    const ok = (await e.parse([bytesFile('k.csv', text), sidecar({ decimalReading: [{ sheet: 'k.csv', reading: 'thousands', hash: depthHash(asRead('ř')), rows: 2 }] })])).files[0];
+    expect(ok.decimal).toEqual({ 'k.csv': { 2: { reading: 'thousands', fromFile: true } } });
+    const g = await e.encodingChoice(ok.fileId, 'windows-1252');
+    expect(g.sheets[0].header[2]).toBe('Depth ø');
+    expect(g.decimal).toBeUndefined();
+    expect((await run(e, g)).rule('IN-DECIMAL-AMBIGUOUS').map((x) => x.params.index)).toEqual([2]);
+    // both lines in the companion file, written for the windows-1252 reading: both apply, the comma line against the header as the pick reads it
+    const e2 = createDirectConvertEngine();
+    const both = (await e2.parse([bytesFile('k.csv', text), sidecar({ encoding: [{ encoding: 'windows-1252', hash: bytesHash(latin(text)) }], decimalReading: [{ sheet: 'k.csv', reading: 'thousands', hash: depthHash(asRead('ø')), rows: 2 }] })])).files[0];
+    expect(both.declaredEncoding?.fromFile).toBe(true);
+    expect(both.decimal).toEqual({ 'k.csv': { 2: { reading: 'thousands', fromFile: true } } });
+  });
+});
