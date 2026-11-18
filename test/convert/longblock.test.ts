@@ -13,7 +13,7 @@ import type { ConvertParseResult } from '../../src/worker/convert.protocol';
 import { csvOf } from '../app/convertHelpers';
 import { RECORDED, wormsRecord } from '../helpers/wormsFixtures';
 import { exportSheet } from './exportHelpers';
-import { BLOCK_CONV_RULES, judge } from '../../src/core/convert/policy';
+import { judge, policyOf } from '../../src/core/convert/policy';
 import { VARIABLE_CONCEPTS } from '../../src/core/convert/vocab';
 import { renderPlain } from '../../src/core/report';
 import { makeFinding } from '../../src/core/rules/registry';
@@ -65,7 +65,7 @@ describe('CONV-LONG-UNSUPPORTED: a long environmental sheet is blocked', () => {
   });
 
   it('is a registered blocking rule, in four languages, that names both columns and says what to do', () => {
-    expect(BLOCK_CONV_RULES).toContain('CONV-LONG-UNSUPPORTED');
+    expect(policyOf({ ruleId: 'CONV-LONG-UNSUPPORTED', severity: 'error' })).toBe('block');
     const f = makeConvertFinding('CONV-LONG-UNSUPPORTED', { file: 'a.csv', sheet: 'S', params: { parameterColumn: 'parametr', valueColumn: 'wartość' } });
     for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
       const t = renderConvertPlain(f, lang);

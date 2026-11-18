@@ -44,6 +44,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-NO-DATA-FILE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['files'],
     plain: {
       pl: `Ten rekord nie zawiera pliku z danymi, tylko inne pliki (np. PDF). Dodaj tabelę jako CSV lub Excel albo przeciągnij tutaj własny plik.`,
@@ -57,6 +58,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-RECORD-INACCESSIBLE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['status', 'host'],
     plain: {
       pl: `Nie udało się otworzyć rekordu na {host} (błąd {status}); może być prywatny lub niepublikowany. Pobierz jego pliki lub metadane i przeciągnij je tutaj.`,
@@ -84,6 +86,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-HOST-NOT-ALLOWED',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['host'],
     plain: {
       pl: `Link prowadzi do {host}, a to narzędzie nie może otwierać tej strony. Pobierz plik samodzielnie i przeciągnij go tutaj.`,
@@ -97,6 +100,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FETCH-BLOCKED',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['host'],
     plain: {
       pl: `Przeglądarka nie mogła pobrać pliku z {host}. Pobierz plik samodzielnie i przeciągnij go tutaj.`,
@@ -110,6 +114,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FETCH-TIMEOUT',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['host'],
     plain: {
       pl: `{host} nie zaczął odpowiadać w ciągu 30 sekund, więc przeglądarka przestała czekać. Spróbuj ponownie później albo przełącz na tryb serwera.`,
@@ -123,6 +128,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FETCH-INTERRUPTED',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['host'],
     plain: {
       pl: `Pobieranie z {host} przerwało się albo trwało zbyt długo, więc archiwum nie zostało sprawdzone. Takie serwery bywają wolne: spróbuj ponownie za kilka minut albo pobierz archiwum (.zip) samodzielnie i przeciągnij je tutaj.`,
@@ -136,6 +142,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-ARCHIVE-TOO-LARGE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['host', 'mb'],
     plain: {
       pl: `Archiwum z {host} jest większe niż {mb} MB, więc serwer nie przekazał go do sprawdzenia. Pobierz je samodzielnie, rozpakuj i przeciągnij tutaj sam plik główny (np. occurrence.txt); przeciągnięte archiwum ma ten sam limit.`,
@@ -149,6 +156,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-ARCHIVE-DAILY-BUDGET',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['host'],
     plain: {
       pl: `Dzienny limit pobierania archiwów przez serwer (z {host}) dla tego adresu IP został wykorzystany, więc archiwum nie zostało sprawdzone. Limit odnawia się w ciągu 24 godzin; możesz też pobrać archiwum (.zip) samodzielnie i przeciągnąć je tutaj.`,
@@ -162,6 +170,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-ARCHIVE-BUSY',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['host'],
     plain: {
       pl: `Z tego adresu IP trwają dwa pobierania archiwów przez serwer, więc archiwum z {host} nie zostało sprawdzone. Poczekaj, aż się skończą, i sprawdź ponownie (po jednym archiwum naraz).`,
@@ -175,6 +184,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-IPT-HOST-NOT-LISTED',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['host'],
     plain: {
       pl: `Archiwum tego zbioru leży na serwerze {host}, którego to narzędzie jeszcze nie odczytuje (zna tylko stałą listę serwerów IPT). Pobierz archiwum (.zip) samodzielnie i przeciągnij je tutaj.`,
@@ -188,6 +198,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-NO-DWC-ARCHIVE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['registry'],
     plain: {
       pl: `{registry} zna ten zbiór danych, ale nie podaje dla niego archiwum Darwin Core (.zip) do pobrania, więc nie ma czego sprawdzić. Pobierz dane od wydawcy i przeciągnij je tutaj.`,
@@ -201,6 +212,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FILE-HELD-BACK',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['host'],
     plain: {
       pl: `Tego pliku nie sprawdzono: {host} wstrzymuje do niego dostęp (ograniczony dostęp lub embargo). To nie jest błąd w danych, ale brak uwag nic o nim nie mówi. Poproś właściciela danych o dostęp i przeciągnij plik tutaj.`,
@@ -214,6 +226,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FILE-TOO-LARGE',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['mb'],
     plain: {
       pl: `Tego pliku nie odczytano: jest większy niż {mb} MB, czyli najwięcej, ile pobiera się z linku. Nie został sprawdzony, więc brak uwag nic o nim nie mówi. Pobierz go i przeciągnij tutaj.`,
@@ -227,6 +240,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FILES-NOT-READ',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['files'],
     plain: {
       pl: `Tych plików zbioru nie sprawdzono, bo narzędzie nie czyta ich formatu (np. zip, NetCDF): {files}. Brak uwag nic o nich nie mówi. Jeśli są w nich dane, rozpakuj je lub zapisz jako CSV albo Excel i przeciągnij tutaj.`,
@@ -240,6 +254,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DATAVERSE-FILES',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['host', 'version'],
     plain: {
       pl: `Odczytano wersję {version} tego zbioru, najnowszą opublikowaną, z {host}.`,
@@ -282,6 +297,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-FILE-UNREADABLE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['files'],
     plain: {
       pl: `Nie udało się odczytać żadnego z podanych plików ({files}); może być uszkodzony lub w nieobsługiwanym formacie. Niczego nie sprawdzono, więc brak uwag nie oznacza, że dane są w porządku. Zapisz plik ponownie (np. jako CSV lub Excel) i dodaj go jeszcze raz.`,
@@ -295,6 +311,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-LAYOUT-UNSUPPORTED',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Narzędzie nie potrafi odczytać układu tej tabeli ({reason}). Zmień ją tak, by miała jeden wiersz nagłówka i jeden wiersz na próbkę, i spróbuj ponownie.`,
@@ -308,6 +325,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-ENCODING-FALLBACK',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['encoding'],
     plain: {
       pl: `Plik nie jest zapisany w UTF-8, więc odczytano go jako {encoding}. Sprawdź, czy polskie i inne znaki specjalne wyglądają poprawnie.`,
@@ -321,6 +339,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DECIMAL-COMMA',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `W tym pliku liczby mają przecinek dziesiętny (3,14). Odczytano je poprawnie; przy publikacji użyj kropki dziesiętnej.`,
@@ -334,6 +353,8 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-HEADER-SHORT',
     category: 'input',
     severity: 'warning',
+    // export (/convert): the header had fewer names than the rows have values: the tool cannot know where names are missing, so values may sit under another column's name (/check: a warning)
+    exportPolicy: 'accept',
     params: ['header', 'count', 'rows', 'width', 'extra', 'range'],
     plain: {
       pl: `Nagłówek ma {header} {+header:nazwę|nazwy|nazw}, ale {count} z {rows} wierszy ma {width} {+width:wartość|wartości|wartości}, więc brakuje {extra} {+extra:nazwy|nazw|nazw}. Narzędzie nie wie, gdzie: dodatkowe wartości na końcu pokazuje jako {+extra:Kolumna|Kolumny|Kolumny} {range}. Jeśli nazw brakuje wcześniej w nagłówku, kolumny od tego miejsca niosą wartości sąsiedniej kolumny: sprawdź też pierwsze wartości ostatnich nazwanych kolumn i nadaj każdej kolumnie znaczenie jej wartości.`,
@@ -347,6 +368,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-HEADER-UNITS-READ',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'example'],
     plain: {
       pl: `Wiersz {lines} zawiera jednostki, a nie dane: {count} {+count:kolumna dostała|kolumny dostały|kolumn dostało} jednostkę w nazwie (na przykład „{example}”). Ten wiersz nie jest liczony jako wiersz danych, a numery wierszy w raporcie pozostają numerami wierszy pliku.`,
@@ -360,6 +382,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-HEADER-UNITS-NAMED',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Wiersz {lines} zawiera jednostki, a nie dane: nazwy kolumn też je zawierają. Ten wiersz nie jest liczony jako wiersz danych, a numery wierszy w raporcie pozostają numerami wierszy pliku.`,
@@ -373,6 +396,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DATE1904',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     citations: [CITE.excelDateSystems],
     plain: {
@@ -387,6 +411,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-PANGAEA-EVENT-USED',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['columns', 'events', 'count'],
     plain: {
       pl: `Tabela nie ma własnej pozycji ani daty dla tych wierszy, więc użyto bloku Event(s) z nagłówka pliku: dodano kolumny {columns} ({count} {+count:wiersz|wiersze|wierszy}). Jedno zdarzenie dotyczy każdego wiersza; przy kilku wiersz bierze zdarzenie z kolumny Event. Sprawdź wartości.`,
@@ -400,6 +425,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-PANGAEA-EVENT-NOT-USED',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['events'],
     plain: {
       pl: `Blok Event(s) w nagłówku pliku podaje pozycję lub datę, ale nie skopiowano ich do tabeli, a tabela nie ma własnych.`,
@@ -433,6 +459,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-PANGAEA-EVENT-UNMATCHED',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz nie ma|wiersze nie mają|wierszy nie ma} zdarzenia w bloku Event(s) z nagłówka pliku: komórka Event jest pusta, wskazuje zdarzenie, którego tam nie ma, albo zdarzenie nie ma pozycji ani daty. Nic stamtąd nie wzięto dla tych wierszy. Uzupełnij je w tabeli.`,
@@ -446,6 +473,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DWCA-NOT-ARCHIVE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `Ten plik .zip nie jest archiwum Darwin Core (brak pliku meta.xml; może to w ogóle nie być ZIP, np. zapisana strona z błędem), więc niczego nie sprawdzono. Dodaj archiwum DwC-A pobrane z IPT, OBIS lub GBIF albo samą tabelę jako CSV lub Excel.`,
@@ -459,6 +487,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DWCA-UNSUPPORTED-CORE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['core'],
     plain: {
       pl: `To archiwum Darwin Core, którego tabela główna to {core}. Narzędzie sprawdza tylko archiwa typu Occurrence lub Event, więc tego archiwum nie sprawdzono. To nie znaczy, że jest w porządku.`,
@@ -472,6 +501,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DWCA-UNREADABLE',
     category: 'input',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Nie udało się bezpiecznie odczytać tego archiwum ({reason}), więc niczego nie sprawdzono. Plik może być uszkodzony, zaszyfrowany lub zbyt duży. Pobierz go ponownie albo dodaj samą tabelę (np. occurrence.txt).`,
@@ -485,6 +515,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DWCA-PARTIAL',
     category: 'input',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['read', 'total'],
     plain: {
       pl: `CZĘŚCIOWE SPRAWDZENIE: tabela w archiwum jest duża, więc odczytano tylko pierwsze {read} z {total} wierszy. Pozostałych wierszy nie sprawdzono; brak uwag nie dotyczy całego pliku.`,
@@ -498,6 +529,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DWCA-VERSION',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['title', 'version', 'core'],
     plain: {
       pl: `Odczytano archiwum Darwin Core „{title}”, wersja: {version}. Sprawdzono jego tabelę główną ({core}). Jeśli archiwum zostało od tego czasu zaktualizowane, wynik dotyczy starej wersji.`,
@@ -511,6 +543,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
     id: 'IN-DWCA-EVENT-CORE',
     category: 'input',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['occurrences'],
     plain: {
       pl: `Rdzeniem archiwum są zdarzenia (Event); rozszerzenie Occurrence ma {occurrences} {+occurrences:wiersz|wiersze|wierszy}. Pozycje i daty pochodzą ze zdarzeń, więc sprawdzono tabelę zdarzeń, a nie osobne wiersze występowań.`,

@@ -152,6 +152,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LAT-RANGE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     thresholds: [
       th('latitude.min', -90, 'degrees', CITE.argoLocation),
@@ -170,6 +171,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LON-RANGE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     thresholds: [
       th('longitude.min', -180, 'degrees', CITE.argoLocation),
@@ -188,6 +190,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LON-360',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     citations: [CITE.gtsppLocation],
     plain: {
@@ -202,6 +205,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LAT-EQ-LON',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `W wierszach {lines} szerokość i długość geograficzna są identyczne ({value}). Prawdopodobnie jedna kolumna została skopiowana do drugiej; wpisz właściwe wartości.`,
@@ -235,6 +239,8 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LAT-EQ-LON-ISOLATED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): latitude = longitude on a small share of the rows: the user decides that it is a coincidence (the error, a copied column, blocks)
+    exportPolicy: 'accept',
     params: [],
     plain: {
       pl: `W {+lines:wierszu|wierszach} {lines} szerokość i długość geograficzna są identyczne ({value}). To niewielki odsetek wierszy z pozycją, więc może to być zbieg okoliczności, ale wpisanie tej samej liczby w obie kolumny to też częsta pomyłka. Sprawdź tę pozycję.`,
@@ -248,6 +254,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LAT-EQ-LON-COARSE',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `W {+lines:wierszu|wierszach} {lines} szerokość i długość geograficzna są identyczne ({value}). To pozycja zaokrąglona do całego lub pół stopnia, częsta w danych historycznych, więc może być prawidłowa (np. -65 i -65 to Półwysep Antarktyczny). Sprawdź tylko, czy liczba nie została wpisana dwa razy.`,
@@ -261,6 +268,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-RAGGED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['expected', 'found'],
     plain: {
       pl: `{+lines:Wiersz|Wiersze} {lines} {+lines:ma|mają} inną liczbę wartości niż nagłówek (oczekiwano {expected}, {+lines:jest|np.} {found}{+lines:| w pierwszym z nich}). Kolumny mogły się przesunąć; popraw {+lines:ten wiersz|te wiersze} w pliku źródłowym, narzędzie {+lines:go|ich} nie zmieniło.`,
@@ -274,6 +282,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-NON-NUMERIC',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: [],
     plain: {
       pl: `Kolumna „{field}” powinna zawierać liczby, ale {+lines:w wierszu|w wierszach|w wierszach} {lines} jest tekst, np. „{value}”. Zastąp go liczbą albo zostaw pustą komórkę.`,
@@ -287,6 +296,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-NA-VARIANT',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Kolumna „{field}” oznacza brak danych w nietypowy sposób (np. „{value}”) {+lines:w wierszu|w wierszach|w wierszach} {lines}. Użyj jednego, spójnego oznaczenia albo pustej komórki.`,
@@ -300,6 +310,9 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-STATION-MOVED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a station whose positions differ by a typed digit, exchanged axes or a flipped sign, or that spans more than 1000 km: made on the input rows, so a parent station of the archive is not written with a position and an uncertainty that no one has seen
+    // (the plain ROW-STATION-SPREAD, 10 km, is a note: a transect legitimately spans more, and it is only shown)
+    exportPolicy: 'accept',
     params: ['station', 'positions'],
     plain: {
       pl: `Stacja {station} występuje w różnych miejscach ({positions}). Sprawdź, które jest właściwe — mogła zostać błędnie wpisana cyfra albo zamienione współrzędne.`,
@@ -333,6 +346,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-STATION-SPREAD',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['station', 'km', 'positions'],
     plain: {
       pl: `Stacja {station} ma pozycje odległe od siebie nawet o {km} km ({positions}). Jedna stacja to zwykle jedno miejsce, a 10 km to znacznie więcej niż błąd pozycji statku na stacji. Jeśli ta nazwa oznacza obszar, transekt lub rejs, pomiń tę uwagę.`,
@@ -346,6 +360,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-STATION-SPREAD-FAR',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['station', 'km', 'positions'],
     plain: {
       pl: `Stacja {station} ma pozycje odległe od siebie nawet o {km} km, czyli ponad 1000 km ({positions}). Jedna stacja to zwykle jedno miejsce, więc to niemal na pewno błąd jednej z pozycji (znak, cyfra, zamienione osie), a nie obszar. Sprawdź, która pozycja jest właściwa.`,
@@ -359,6 +374,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-ON-LAND-NEAR',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'places'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
@@ -373,6 +389,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-ON-LAND',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count', 'places'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
@@ -398,6 +415,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-SHIP-SPEED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count', 'cases'],
     thresholds: [th('speed.extreme', SHIP_SPEED_EXTREME_KN, 'knots', CITE.marineQcExtremeSpeed)],
     citations: [CITE.marineQcExtremeSpeed, CITE.medatlasShipVelocity, CITE.gtsppImpossibleSpeed, CITE.wodSpeedCheck],
@@ -414,6 +432,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-SHIP-SPEED-UNUSUAL',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'cases'],
     thresholds: [th('speed.unusual', SHIP_SPEED_UNUSUAL_KN, 'knots', CITE.medatlasShipVelocity), th('speed.extreme', SHIP_SPEED_EXTREME_KN, 'knots', CITE.marineQcExtremeSpeed)],
     citations: [CITE.medatlasShipVelocity, CITE.marineQcExtremeSpeed, CITE.wodSpeedCheck],
@@ -430,6 +449,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-SHIP-SPEED-PAIR',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'cases'],
     thresholds: [th('speed.extreme', SHIP_SPEED_EXTREME_KN, 'knots', CITE.marineQcExtremeSpeed)],
     citations: [CITE.marineQcExtremeSpeed, CITE.wodSpeedCheck, CITE.medatlasShipVelocity],
@@ -446,6 +466,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DATE-UNPARSEABLE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'block',
     params: [],
     citations: [CITE.w3cDatetime, CITE.dataciteDate],
     plain: {
@@ -467,6 +488,8 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-TIME-OTHER-DAY',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a time column cell that names another day than the date of its row: the time cannot be cut out of it, so the event would be written with a wrong time
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `W wierszach {lines} kolumna godziny (np. „{value}”) podaje pełną datę z godziną z innego dnia niż kolumna daty (bez strefy czasowej każdy inny dzień, ze strefą ponad dobę różnicy). Godziny nie da się z tego wziąć: sprawdź, która data jest dobra, albo wpisz godzinę samą.`,
@@ -480,6 +503,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DATE-MISSING',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'percent'],
     plain: {
       pl: `{count} {+count:wiersz|wiersze|wierszy} ({percent} %) {+count:nie ma|nie mają|nie ma} daty, choć pozostałe mają. Uzupełnij brakujące daty.`,
@@ -493,6 +517,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-YEAR-OUTLIER',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['years', 'declared'],
     plain: {
       pl: `Wiersze {lines} mają rok {years}, a tytuł, nazwa pliku lub zakres czasu mówią o {declared}. Któryś rok jest prawdopodobnie błędnie wpisany.`,
@@ -506,6 +531,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-JOIN-AMBIGUOUS',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['right'],
     plain: {
       pl: `Wiersze arkusza „{sheet}” (wiersze: {lines}) nie dostały pozycji ani daty z arkusza „{right}”: klucz „{field}” (np. {value}) pasuje tam do kilku wierszy o różnych pozycjach lub datach, więc żaden nie został wzięty (pierwszego nie zgadujemy).`,
@@ -519,6 +545,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LONG-VALUE-SKIPPED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `Nieodczytane wartości w „{sheet}”: {count} ({+lines:wiersz|wiersze|wierszy} {lines}). Inny wiersz ma ten sam klucz i parametr (np. „{field}”) z inną wartością, a żadnej kolumny arkusza nie dało się bezpiecznie użyć do rozróżnienia tych wierszy; zachowano i sprawdzono jedną wartość.`,
@@ -532,6 +559,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LONG-KEY-EXTENDED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['columns', 'count'],
     plain: {
       pl: `W „{sheet}” wiersze o tym samym kluczu i parametrze miały różne wartości. {+count:Kolumna|Kolumny|Kolumny} ({columns}) {+count:stała|stały|stały} się częścią klucza, więc wartości rozdzielonych wierszy (np. {+lines:wiersz|wiersze|wierszy} {lines}) są odczytywane i sprawdzane. Czysty CSV zapisuje {+count:ją|je|je} też, chyba że sam ustawiłeś kolumnę jako pomijaną.`,
@@ -545,6 +573,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-KEY-IGNORED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['columns', 'count'],
     plain: {
       pl: `W „{sheet}” te wiersze (np. {+lines:wiersz|wiersze|wierszy} {lines}) wyglądają w czystym CSV tak samo w kolumnach identyfikujących. {+count:Kolumna ustawiona|Kolumny ustawione|Kolumny ustawione} na „ignoruj” ({columns}) {+count:różni|różnią|różnią} je i {+count:nie jest zapisywana|nie są zapisywane|nie są zapisywane}. Ich pozostałe zmierzone wartości są w pliku i w czystym CSV.`,
@@ -558,6 +587,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-JOIN-KEY-BLANK',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['right'],
     plain: {
       pl: `W arkuszu „{sheet}” (wiersze: {lines}) klucz „{field}” jest pusty, więc z arkusza „{right}” nie można było wziąć pozycji ani daty. Uzupełnij klucz w tych wierszach.`,
@@ -571,6 +601,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DATE-YYMMDD',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['interpreted'],
     plain: {
       pl: `Daty w kolumnie „{field}” mają dwucyfrowy rok i dopisano do niego stulecie; np. „{value}” odczytano jako {interpreted}. Używaj czterocyfrowego roku.`,
@@ -584,6 +615,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-TZ-UNKNOWN',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Nie podano strefy czasowej dla godzin w kolumnie „{field}”. Napisz, czy to UTC, czy czas lokalny.`,
@@ -597,6 +629,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-UNIT-MISSING',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['headers'],
     plain: {
       pl: `Brak jednostki dla: {headers}. Dopisz jednostkę w nagłówku każdej kolumny, np. „DIC [µmol/kg]”.`,
@@ -610,6 +643,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-HEADER-CODE-SHAPE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['column', 'code', 'collection', 'length'],
     plain: {
       pl: `Nagłówek „{column}”: kod {code} po „SDN:{collection}::” nie jest kodem {collection}, który ma dokładnie {length} wielkich liter i cyfr. W NVS nie ma takiego pojęcia (odpowiedź 404). Sprawdź kod: literówka albo dodatkowy znak.`,
@@ -624,6 +658,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DEPTH-SIGN',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['header'],
     plain: {
       pl: `Nie wiadomo, czy głębokość w kolumnie „{header}” liczona jest w dół (wartości dodatnie), czy w górę. Opisz przyjętą konwencję w nagłówku lub w opisie.`,
@@ -637,6 +672,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DM-COORDS',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Współrzędne w kolumnie „{field}” są zapisane w stopniach i minutach (np. „{value}”). Przeliczono je na stopnie dziesiętne; sprawdź kilka z nich.`,
@@ -650,6 +686,8 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-HEMISPHERE-CONFLICT',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a coordinate and its hemisphere letter disagree or the letter is missing: the value is written as it stands, the user has seen it
+    exportPolicy: 'accept',
     params: ['hemisphere'],
     plain: {
       pl: `W wierszach {lines} wartość w kolumnie „{field}” (np. „{value}”) nie zgadza się z literą półkuli z kolumny „{hemisphere}”: ma własny minus lub własną literę albo litera dotyczy drugiej osi. Zostawiono ją bez zmian, bez ponownej zmiany znaku; popraw te wiersze.`,
@@ -663,6 +701,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-HEMISPHERE-UNPAIRED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['hemisphere'],
     plain: {
       pl: `Kolumna „{hemisphere}” jest ustawiona jako litera półkuli, ale należy do innego położenia niż „{field}” (słowa początek/koniec się nie zgadzają), więc nie została zastosowana. Sprawdź, którą kolumnę wybrano jako współrzędną.`,
@@ -676,6 +715,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-HEMISPHERE-MISSING',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['hemisphere'],
     plain: {
       pl: `W wierszach {lines} kolumna „{field}” ma wartość (np. „{value}”), ale kolumna półkuli „{hemisphere}” jest pusta albo nie zawiera N, S, E, W. Wartość zostawiono bez zmian, więc dla półkuli południowej lub zachodniej może mieć zły znak; uzupełnij literę.`,
@@ -689,6 +729,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-ZERO-COORD',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     citations: [CITE.obisZeroCoord, CITE.biocheckZeroCoord],
     plain: {
@@ -703,6 +744,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-NO-COORD',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'block',
     params: ['count'],
     citations: [CITE.obisNoCoord],
     plain: {
@@ -717,6 +759,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DEPTH-MIN-MAX',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     citations: [CITE.obisDepthMinMax, CITE.obistoolsDepthMinMax],
     plain: {
@@ -731,6 +774,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DEPTH-RANGE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: [],
     thresholds: [
       th('depth.min', -100000, 'm', CITE.obisDepthRange),
@@ -749,6 +793,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DATE-FUTURE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: [],
     citations: [CITE.obisDateFuture],
     plain: {
@@ -763,6 +808,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-INVISIBLE-CHAR',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['chars'],
     citations: [CITE.obisHiddenChars],
     plain: {
@@ -777,6 +823,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-YEAR-DATE-MISMATCH',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count', 'date', 'year'],
     plain: {
       pl: `W kolumnie „{field}” rok w wierszach {lines} (razem: {count}) nie jest rokiem daty z kolumny „{date}”, np. data „{value}” obok roku {year}. Jedna z tych wartości jest błędna, albo dotyczą różnych zdarzeń, albo kolumna znaczy coś innego, na przykład rejs lub sezon. Nic nie zmieniono; sprawdź, która jest właściwa.`,
@@ -790,6 +837,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-TEXT-MOJIBAKE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `Tekst w kolumnach {columns} (wiersze {lines}; {count} {+count:komórka|komórki|komórek} z tym wzorcem) wygląda na zapisany dwukrotnie w złym kodowaniu, np. „{value}”: plik w UTF-8 został gdzieś odczytany jako Windows-1252 lub Latin-1. Tekstu nie zmieniono. Zapisz oryginał ponownie w UTF-8 i porównaj te wartości.`,

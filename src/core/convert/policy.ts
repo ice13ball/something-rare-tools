@@ -1,215 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { Finding } from '../types';
+import type { ExportPolicy, Finding } from '../types';
+import { RULES } from '../rules/registry';
 
 /*
  * What a finding does to the export (plan 3.4). Severity alone is not the policy: ROW-DATE-UNPARSEABLE is a warning on /check and blocks here (T7),
- * ROW-NON-NUMERIC is a warning that the user may accept, and a check about a ship's speed never stops an export. The policy is these lists, by rule id.
+ * ROW-NON-NUMERIC is a warning that the user may accept, and a check about a ship's speed never stops an export. The policy is the `exportPolicy` field of each rule definition (src/core/rules/*.ts), the comments of the old lists moved there.
  *
  *   block   the export is impossible until the cause is removed
  *   accept  a warning the user accepts, once per rule and per run, before the export button works (nothing is stored)
  *   show    shown, never blocks and never needs an answer
  *
- * A rule that is on no list is `block` when its severity is error (a rule nobody has judged must not let a bad archive through) and `show` otherwise.
- * ROW-NO-COORD is raised by the Event checks only for an event whose own position is blank AND that has no ancestor with a position (the dataset
+ * An id that is in no registry (a test's invented id) is `block` when its severity is error (a rule nobody has judged must not let a bad archive through) and `show` otherwise.
+ * ROW-NO-COORD (policy block) is raised by the Event checks only for an event whose own position is blank AND that has no ancestor with a position (the dataset
  * builder lets a child inherit a parent's position), so every ROW-NO-COORD finding of this tool is "an event with no positioned ancestor".
  */
 
-/** Blocking: findings of the OUTPUT tables (Event through buildDatasets + runChecks, Occurrence through checkRawTable). */
-export const BLOCK_OUTPUT_RULES: readonly string[] = [
-  'DWC-TERM-MISSING',
-  'DWC-TERM-EMPTY',
-  'DWC-EVENTID-DUPLICATE',
-  'DWC-PARENT-DANGLING',
-  'DWC-PARENT-LOOP',
-  'DWC-OCCURRENCEID-DUPLICATE',
-  'DWC-VOCAB-VALUE',
-  'ROW-ZERO-COORD',
-  'ROW-LAT-RANGE',
-  'ROW-LON-RANGE',
-  'ROW-DEPTH-MIN-MAX',
-  'ROW-DATE-UNPARSEABLE',
-  // a time column cell that names another day than the date of its row: the time cannot be cut out of it, so the event would be written with a wrong time
-  'ROW-TIME-OTHER-DAY',
-  'ROW-NO-COORD',
-];
+export type Policy = ExportPolicy;
 
-/** Blocking: findings of the INPUT, for a sheet chosen for conversion. */
-export const BLOCK_INPUT_RULES: readonly string[] = ['IN-LAYOUT-UNSUPPORTED', 'IN-FILE-UNREADABLE', 'ROW-RAGGED'];
+const POLICY_BY_ID: ReadonlyMap<string, Policy> = new Map(RULES.map((r) => [r.id, r.exportPolicy]));
 
-/** Blocking: the converter's own rules. (CONV-WORMS-UNDECIDED is raised from stage 4 on, after a WoRMS lookup.) */
-export const BLOCK_CONV_RULES: readonly string[] = [
-  'CONV-COLUMN-UNNAMED',
-  'CONV-LONG-UNSUPPORTED',
-  'CONV-SHEET-TRANSPOSED',
-  'CONV-SHEET-UNITS-ROW',
-  'CONV-PRESENCE-VALUE',
-  'CONV-REPLICATE-MISSING',
-  'CONV-LONG-DUPLICATE',
-  'CONV-LONG-NO-PARAMETER',
-  // a turned sheet: a sample column with no header or the same header as another, a row with values and no name
-  'CONV-TURN-HEADER-BLANK',
-  'CONV-TURN-HEADER-REPEATED',
-  'CONV-TURN-NAME-BLANK',
-  'CONV-TURN-NAME-REPEATED',
-  'CONV-QUANTITY-UNDECLARED',
-  'CONV-COUNT-NOT-INTEGER',
-  'CONV-COVER-RANGE',
-  'CONV-CLASS-VALUE',
-  'CONV-NEGATIVE-QUANTITY',
-  'CONV-SAMPLE-CODE-MISSING',
-  // a picked sample key that makes an identifier too long for a Darwin Core archive
-  'CONV-KEY-TOO-LONG',
-  'CONV-PROFILE-NO-STATION',
-  'CONV-PROFILE-LEVEL-INCOMPLETE',
-  // a sheet with sample events and no position anywhere, said in the sheet's terms
-  'CONV-POSITION-NONE',
-  // a declared position that cannot be used (out of range, an uncertainty not above zero, or a sheet that has a position column): nothing is applied
-  'CONV-POSITION-DECLARED-INVALID',
-  // a declared date that cannot be used (not ISO, out of order, in the future, or a sheet where a sample already has a date): nothing is applied
-  'CONV-DATE-DECLARED-INVALID',
-  // a sample with no eventDate (OBIS requires one): blank cells can be left out and listed
-  'CONV-EVENT-DATE-MISSING',
-  'CONV-ID-DUPLICATE',
-  // a per-taxon total repeated on the size-class rows of a sample: the export would count it once per size class
-  'CONV-QUANTITY-REPEATED',
-  // rows that are exact copies of another row: the sum counts each copy
-  'CONV-ROW-COPIES',
-  'CONV-TAB-IN-VALUE',
-  'CONV-EMOF-ORPHAN',
-  'CONV-EMOF-EVENT-MISMATCH',
-  'CONV-EMOF-VALUE-EMPTY',
-  'CONV-EMOF-TYPE-EMPTY',
-  'CONV-BASIS-UNSET',
-  'CONV-LICENCE-UNSET',
-  'CONV-EML-MISSING',
-  'CONV-SPLIT-UNDECIDED',
-  'CONV-MESH-INVALID',
-  'CONV-WORMS-UNDECIDED',
-  'CONV-NO-OCCURRENCES',
-  'CONV-PROFILE-NOTHING-READ',
-  'CONV-SEAFLOOR-UNIT',
-  'CONV-SEAFLOOR-VALUE',
-  // a row the converter could not place (a value with no parameter, a number with no taxon ...): blocks until someone decides to leave it out and list it, or corrects the file
-  'CONV-ROW-NOT-UNDERSTOOD',
-  // the sample-sheet join: a value that differs between the two sheets and is not decided, a sample with no description row, a key with several different description rows, a blank key part
-  'CONV-JOIN-CONFLICT',
-  'CONV-JOIN-UNIT-DIFFERS',
-  'CONV-JOIN-COLUMNS-DIFFER',
-  'CONV-JOIN-NO-DESCRIPTION',
-  'CONV-JOIN-NO-MATCH',
-  'CONV-JOIN-AMBIGUOUS',
-  'CONV-JOIN-KEY-BLANK',
-  'CONV-JOIN-KEY-ROLE-LOST',
-  // a day/month order no cell decides and no one declared, or a declaration the column's own dates contradict: a day and a month are never guessed
-  'CONV-DATE-ORDER-UNDECLARED',
-  'CONV-DATE-ORDER-CONTRADICTED',
-];
-
-/** Warnings the user must accept (per rule, per run) before exporting. */
-export const ACCEPT_RULES: readonly string[] = [
-  // the header had fewer names than the rows have values: the tool cannot know where names are missing, so values may sit under another column's name (/check: a warning)
-  'IN-HEADER-SHORT',
-  'ROW-NON-NUMERIC',
-  // latitude = longitude on a small share of the rows: the user decides that it is a coincidence (the error, a copied column, blocks)
-  'ROW-LAT-EQ-LON-ISOLATED',
-  'ROW-INVISIBLE-CHAR',
-  'ROW-DATE-FUTURE',
-  'ROW-DEPTH-RANGE',
-  // a coordinate and its hemisphere letter disagree or the letter is missing: the value is written as it stands, the user has seen it
-  'ROW-HEMISPHERE-CONFLICT',
-  'ROW-HEMISPHERE-MISSING',
-  'ROW-HEMISPHERE-UNPAIRED',
-  'DWC-RECOMMENDED',
-  'CONV-TEXT-IN-TAXON-CELL',
-  'CONV-TAXON-SAME-EVENT',
-  'CONV-WORMS-NO-MATCH',
-  'CONV-WORMS-NOT-MARINE',
-  'CONV-NERC-UNKNOWN',
-  'CONV-NERC-UNIT-MISMATCH',
-  // the header names a code of a shape the vocabulary does not have: the column is kept as a measured variable and nothing is written from the code
-  'CONV-NERC-CODE-MALFORMED',
-  'CONV-UNIT-NO-P06',
-  'CONV-COLUMN-NOT-EXPORTED',
-  // a numeric column that looks like a running number was not read as a measurement: it carries data, so leaving it out is accepted once (the page can give the role back)
-  'CONV-COLUMN-NUMBER-IGNORED',
-  // a biomass column whose kind (wet, dry, ash-free dry) is open: the rows are written with no measurementTypeID; no default is invented
-  'CONV-BIOMASS-KIND-UNSET',
-  // a row labelled like a statistic (Max, N) in the middle of the sheet, kept as a sample: the user says it is a station
-  'CONV-SUMMARY-ROW-KEPT',
-  // a code repeated at one station on different dates: each visit got the date in its ID, made of the data
-  'CONV-ID-REVISIT',
-  'CONV-NAMEID-MISSING',
-  'CONV-NAMEID-APHIA-LIKE',
-  'CONV-NAMEID-INCOMPLETE',
-  'CONV-NAMEID-CONFLICT',
-  'CONV-DEVICE-MISSING',
-  // one position the person declared for the whole sheet, written on every sample and marked in georeferenceRemarks: looked at once
-  'CONV-POSITION-DECLARED',
-  // one date or interval the person declared for a sheet with no date at all, written on every sample and marked in eventRemarks: looked at once
-  'CONV-DATE-DECLARED',
-  // a date a companion file saved that no longer fits the sheet: not applied, said, never a block
-  'CONV-DATE-DECLARED-HELD',
-  'CONV-PROFILE-STATION-UNMATCHED',
-  'CONV-PROFILE-STATION-FAR',
-  'CONV-PROFILE-PRESSURE-NO-UNIT',
-  'CONV-LICENCE-DIFFERS',
-  'CONV-NO-SAMPLING-DESCRIPTOR',
-  'CONV-SEAFLOOR-NO-SITE-DEPTH',
-  // a depth column in fathoms, feet, km or cm was converted to metres with an exact factor; the original is in verbatimDepth
-  'CONV-DEPTH-CONVERTED',
-  // a long row with a taxon, no count and a biomass value: kept as present with no count; a quantity of 0 next to a weight above zero: read as the zero
-  'CONV-QUANTITY-BLANK-KEPT',
-  'CONV-ZERO-WITH-BIOMASS',
-  // a long sheet with an event for almost every row: one sample probably split by a code that names the row
-  'CONV-SAMPLE-PER-ROW',
-  // the unit in the name of a biomass column is not understood in full, or the header has none: measurementUnit is left empty
-  'CONV-BIOMASS-UNIT-UNCLEAR',
-  // the user chose one occurrence per sample and taxon for a repeated total: the later rows of the groups are not converted
-  'CONV-QUANTITY-REPEATED-ONCE',
-  // the same quantity above 1 on rows of one sample and taxon that differ in something; the copies the user dropped
-  'CONV-QUANTITY-SAME-IN-SAMPLE',
-  'CONV-ROW-COPIES-DROPPED',
-  // the person keeps identical rows as separate records, and declared each row of a long sheet its own record (the cost: the IDs follow the source lines)
-  'CONV-ROW-COPIES-KEPT',
-  'CONV-OWN-RECORDS',
-  // identical rows with a count of 1: copies, or specimens that look the same; both sums are shown
-  'CONV-ROW-COPIES-SPECIMENS',
-  // a picked sample key with an empty part: those rows are samples of their own
-  'CONV-KEY-PART-BLANK',
-  // a key column that mixes typed numbers and number-like text: one sample may be split
-  'CONV-KEY-MIXED-NUMBERS',
-  // a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: the person looks at the list once; nothing is re-roled
-  'CONV-ROLE-UNCONFIRMED',
-  // a number or a weight with no taxon name on a long sheet
-  'CONV-TAXON-EMPTY-ROW',
-  // a few cells of a time column hold a date that will not be written
-  'CONV-TIME-SOME-DATES',
-  // samples described in the description sheet with no results: written as sample events with no occurrence
-  'CONV-JOIN-DESCRIPTION-ONLY',
-  // a station whose positions differ by a typed digit, exchanged axes or a flipped sign, or that spans more than 1000 km: made on the input rows, so a parent station of the archive is not written with a position and an uncertainty that no one has seen
-  // (the plain ROW-STATION-SPREAD, 10 km, is a note: a transect legitimately spans more, and it is only shown)
-  'ROW-STATION-MOVED',
-  'ROW-STATION-SPREAD-FAR',
-];
-
-/** Never blocks, never asks: shown only. Prefixes of rule ids. */
-export const SHOW_ONLY_PREFIXES: readonly string[] = ['CHEM-', 'ROW-SHIP-SPEED', 'ROW-ON-LAND', 'XF-', 'META-', 'LIC-'];
-
-/** Rules the plan lists but a later stage raises: in the lists above so the policy is complete, not yet in the registry. Each is registered with its stage. (The WoRMS rules came with stage 4, the profile rules with stage 6: none is left.) */
-export const LATER_STAGE_RULES: readonly string[] = [];
-
-export type Policy = 'block' | 'accept' | 'show';
-
-const BLOCK = new Set<string>([...BLOCK_OUTPUT_RULES, ...BLOCK_INPUT_RULES, ...BLOCK_CONV_RULES]);
-const ACCEPT = new Set<string>(ACCEPT_RULES);
-
-/** The policy of one finding. */
+/** The policy of one finding: the field of its rule; an id no registry knows is `block` for an error and `show` otherwise. */
 export function policyOf(f: Pick<Finding, 'ruleId' | 'severity'>): Policy {
-  if (SHOW_ONLY_PREFIXES.some((p) => f.ruleId.startsWith(p))) return 'show';
-  if (BLOCK.has(f.ruleId)) return 'block';
-  if (ACCEPT.has(f.ruleId)) return 'accept';
-  return f.severity === 'error' ? 'block' : 'show';
+  return POLICY_BY_ID.get(f.ruleId) ?? (f.severity === 'error' ? 'block' : 'show');
+}
+
+/** The ids of the rules with this policy, in registry order. */
+export function rulesWithPolicy(p: Policy): string[] {
+  return RULES.filter((r) => r.exportPolicy === p).map((r) => r.id);
 }
 
 export interface Judged {

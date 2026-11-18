@@ -201,6 +201,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SPLIT-UNDECIDED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `{count} {+count:nazwa taksonu ma|nazwy taksonów mają|nazw taksonów ma} dopisek (cf., sp., ?) albo stadium rozwojowe (c2, juv). Zatwierdź każdy podział na nazwę, dopisek i stadium; pierwszy to „{value}”.`,
@@ -214,6 +215,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-QUANTITY-UNDECLARED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['missing'],
     plain: {
       pl: `Nie wiadomo, co oznaczają liczby w tym arkuszu. Wskaż, czy to liczebność (sztuki), zagęszczenie czy biomasa, z jednostką, a jeśli znasz wielkość próby (objętość lub powierzchnię), podaj ją w całości. Brakuje: {missing}.`,
@@ -227,6 +229,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COUNT-NOT-INTEGER',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `W kolumnie „{field}” liczebność ma części dziesiętne {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. {value}. Liczba osobników musi być całkowita. Zadeklaruj zagęszczenie albo popraw wartości.`,
@@ -240,6 +243,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NEGATIVE-QUANTITY',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `W kolumnie „{field}” są wartości ujemne {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. {value}. Liczebność, zagęszczenie, biomasa i wielkość próby nie mogą być ujemne.`,
@@ -253,6 +257,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COVER-RANGE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `Kolumna „{field}” jest zadeklarowana jako pokrycie w procentach, ale {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest wartość poza zakresem od 0 do 100 (razem: {count}), np. {value}. Popraw wartości albo zmień deklarację.`,
@@ -266,6 +271,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-CLASS-VALUE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'scale'],
     plain: {
       pl: `Kolumna „{field}” jest zadeklarowana jako klasa liczebności ze skali {scale}, ale {+lineCount:w wierszu|w wierszach|w wierszach} {lines} jest wartość, która nie jest liczbą całkowitą z tej skali (razem: {count}), np. {value}. Klasa nie jest liczbą osobników. Popraw wartości albo skalę.`,
@@ -279,6 +285,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SAMPLE-CODE-MISSING',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'column'],
     plain: {
       pl: `Brakuje kodu próbki {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Kod próbki staje się identyfikatorem w archiwum, więc musi pochodzić od Ciebie: wskaż kolumny, które razem tworzą próbkę (pod listą), albo pobierz arkusz z proponowanymi kodami, sprawdź je i wgraj ponownie.`,
@@ -292,6 +299,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-KEY-PART-BLANK',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a picked sample key with an empty part: those rows are samples of their own
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `Jedna z kolumn klucza próbki ({columns}) jest pusta {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); „NA”, „nan” i myślnik też są puste. Takie wiersze tworzą własne próbki i nie łączą się z wierszami, które mają tam wartość. Jeśli tak ma być, zaakceptuj; jeśli to luka w danych, popraw ją w pliku.`,
@@ -305,6 +314,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROLE-UNCONFIRMED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a taxon, quantity, date, latitude or longitude the converter proposed and the file does not state by name: the person looks at the list once; nothing is re-roled
+    exportPolicy: 'accept',
     params: ['count', 'columns', 'keys'],
     plain: {
       pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} rolę zaproponowaną przez konwerter, której plik nie podaje: {columns}. Nic nie zostało zmienione. Sprawdź {+count:ją|je|je}, popraw złą rolę w tabeli kolumn i zaakceptuj raz.`,
@@ -318,6 +329,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-KEY-MIXED-NUMBERS',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a key column that mixes typed numbers and number-like text: one sample may be split
+    exportPolicy: 'accept',
     params: ['examples'],
     plain: {
       pl: `Kolumna klucza „{field}” miesza liczby wpisane jako liczby i tekst wyglądający jak liczba (np. {examples}). Są porównywane inaczej, więc jedna próbka może się rozdzielić na dwie. Sprawdź kolumnę w pliku; zaakceptuj, jeśli próbki są dobre.`,
@@ -331,6 +344,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-KEY-TOO-LONG',
     category: 'B',
     severity: 'error',
+    // export (/convert): a picked sample key that makes an identifier too long for a Darwin Core archive
+    exportPolicy: 'block',
     params: ['count', 'max', 'longest', 'prefix', 'prefixLength'],
     plain: {
       pl: `Identyfikator z wybranego klucza (próbki, powtórzenia lub wystąpienia) ma ponad {max} znaków {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}); najdłuższy ma {longest}: „{value}…”. Archiwum Darwin Core nie przyjmuje takich identyfikatorów. Wybierz mniej kolumn albo kolumny o krótszych wartościach.`,
@@ -355,6 +370,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-KEY-PICKED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['samples', 'rows', 'columns', 'prefix'],
     plain: {
       pl: `Jak wybrano, próbkę wyznaczają kolumny: {columns}. Próbek: {samples}, wierszy w nich: {rows}. Każdy kod próbki w archiwum zaczyna się od „{prefix}” (nazwa do zmiany przy wyborze klucza), a dalej są wartości tych kolumn. „Zapytaj ponownie” cofa wybór.`,
@@ -379,6 +395,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-PROPOSED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['description', 'descriptionFile', 'keys', 'covered', 'samples'],
     plain: {
       pl: `Arkusz „{description}” wygląda na opis próbek z tego arkusza; łączy je: {keys}. Znaleziono w nim {covered} z {samples} {+samples:próbki|próbek|próbek}. Nic nie jest łączone, dopóki tego nie potwierdzisz.`,
@@ -392,6 +409,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-DESCRIPTION-LONG',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['description', 'descriptionFile', 'keys'],
     plain: {
       pl: `Arkusz „{description}” wygląda na opis tych próbek (łączy je: {keys}), ale ma układ długi: jeden wiersz na parametr. Łączenia takiego arkusza jeszcze nie ma; oba arkusze są przekształcane tak, jakby nie było łączenia.`,
@@ -416,6 +434,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-CONFLICT',
     category: 'B',
     severity: 'error',
+    // export (/convert): the sample-sheet join: a value that differs between the two sheets and is not decided, a sample with no description row, a key with several different description rows, a blank key part
+    exportPolicy: 'block',
     params: ['what', 'group', 'count', 'total', 'examples', 'resultsColumns', 'descriptionColumns'],
     plain: {
       pl: `{what} różni się między dwoma arkuszami w {total} {+total:próbce|próbkach|próbkach}, np. (opis / wyniki) {examples}. Do rozstrzygnięcia zostało: {count}. Wybierz wartość dla wszystkich naraz, dla każdej próbki osobno albo dla każdej pary wartości. Kolumny: wyniki {resultsColumns}; opis {descriptionColumns}.`,
@@ -429,6 +449,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-CONFLICT-CHOSEN',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['what', 'count', 'fromDescription', 'fromResults'],
     plain: {
       pl: `Wartości „{what}” różniły się w {count} {+count:próbce|próbkach|próbkach}. Zgodnie z Twoim wyborem wzięto je z arkusza opisu dla {fromDescription} {+fromDescription:próbki|próbek|próbek}, a z arkusza wyników dla {fromResults} {+fromResults:próbki|próbek|próbek}.`,
@@ -442,6 +463,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-UNIT-DIFFERS',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['what', 'resultsColumn', 'resultsUnit', 'descriptionColumn', 'descriptionUnit'],
     plain: {
       pl: `{what} jest w obu arkuszach w różnych jednostkach: „{resultsColumn}” w arkuszu wyników ({resultsUnit}) i „{descriptionColumn}” w arkuszu opisu ({descriptionUnit}). Tych wartości nie da się porównać ani zamienić. Wpisz tę samą jednostkę w obu arkuszach albo ustaw jedną z tych dwóch kolumn na „pomiń”.`,
@@ -455,6 +477,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-COLUMNS-DIFFER',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['what', 'resultsColumn', 'descriptionColumn'],
     plain: {
       pl: `{what} jest w obu arkuszach w innych kolumnach: w arkuszu wyników {resultsColumn}, w arkuszu opisu {descriptionColumn}. Tych kolumn nie da się sparować. Użyj w obu arkuszach tych samych kolumn albo ustaw kolumny jednego z arkuszy na „pomiń”.`,
@@ -468,6 +491,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-NO-DESCRIPTION',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'samples', 'description'],
     plain: {
       pl: `{count} {+count:próbka nie ma|próbki nie mają|próbek nie ma} wiersza w arkuszu „{description}”: {samples}. Przekształć {+count:ją|je|je} tylko na podstawie arkusza wyników albo dopisz {+count:wiersz|wiersze|wiersze} w arkuszu opisu.`,
@@ -492,6 +516,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-NO-MATCH',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['description', 'descriptionFile', 'resultsColumns', 'descriptionColumns', 'resultsExamples', 'descriptionExamples'],
     plain: {
       pl: `Żaden klucz arkusza „{sheet}” (kolumny: {resultsColumns}) nie występuje w arkuszu „{description}” (kolumny: {descriptionColumns}): klucze nie pasują. Klucze w wynikach, np.: {resultsExamples}. Klucze w opisie, np.: {descriptionExamples}. Sprawdź kolumny klucza lub zapis kodów (np. O zamiast 0).`,
@@ -505,6 +530,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-RESULTS-ONLY',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'samples'],
     plain: {
       pl: `Zgodnie z Twoim wyborem {count} {+count:próbka bez opisu jest przekształcana|próbki bez opisu są przekształcane|próbek bez opisu jest przekształcanych} tylko na podstawie arkusza wyników: {samples}. „Zapytaj ponownie” cofa wybór.`,
@@ -529,6 +555,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-DESCRIPTION-ONLY',
     category: 'B',
     severity: 'warning',
+    // export (/convert): samples described in the description sheet with no results: written as sample events with no occurrence
+    exportPolicy: 'accept',
     params: ['count', 'samples', 'description'],
     plain: {
       pl: `{count} {+count:próbka jest opisana|próbki są opisane|próbek jest opisanych} w arkuszu „{description}”, ale nie ma dla {+count:niej|nich|nich} wyników: {samples}. {+count:Zostanie zapisana jako zdarzenie próbki|Zostaną zapisane jako zdarzenia próbki|Zostaną zapisane jako zdarzenia próbki} bez wystąpień.`,
@@ -553,6 +581,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-AMBIGUOUS',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'keys', 'description'],
     plain: {
       pl: `W arkuszu opisu „{description}” {count} {+count:klucz występuje|klucze występują|kluczy występuje} w kilku wierszach o różnych wartościach ({+lineCount:wiersz|wiersze|wierszy} {lines}): {keys}. Zostaw jeden wiersz na wartość klucza albo ujednolij ich wartości.`,
@@ -566,6 +595,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-KEY-BLANK',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'columns', 'side'],
     plain: {
       pl: `W arkuszu wyników ({+lineCount:wiersz|wiersze|wierszy} {lines}, razem: {count}) część klucza ({columns}) jest pusta, więc nie da się znaleźć opisu tych próbek. Uzupełnij klucz w pliku albo przekształć te wiersze tylko na podstawie arkusza wyników.`,
@@ -579,6 +609,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-KEY-ROLE-LOST',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['description', 'column'],
     plain: {
       pl: `Łączenie, które potwierdzono dla „{sheet}”, nie jest zastosowane: kolumna „{column}” nie ma już roli klucza. Przywróć jej rolę albo potwierdź łączenie jeszcze raz.`,
@@ -592,6 +623,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-JOIN-FILLED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'column', 'from'],
     plain: {
       pl: `{count} {+count:pusta komórka w kolumnie „{column}” została uzupełniona|puste komórki w kolumnie „{column}” zostały uzupełnione|pustych komórek w kolumnie „{column}” zostało uzupełnionych} z arkusza „{from}”.`,
@@ -605,6 +637,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ID-DUPLICATE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['kind', 'count', 'hint'],
     plain: {
       pl: `Ten sam identyfikator powstaje więcej niż raz, np. „{value}”, {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (powtórzone: {count}). Identyfikatory muszą być unikalne: zmień powtórzony kod lub nagłówek albo, gdy kody powtarzają się między stacjami, zaznacz poprzedzanie kodem stacji.`,
@@ -639,6 +672,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAB-IN-VALUE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `W kolumnie „{field}” wartość ma tabulator albo podział wiersza {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}”. Pliki archiwum są rozdzielane tabulatorami, więc taka wartość je rozbije. Zamień znak w arkuszu na spację.`,
@@ -653,6 +687,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TEXT-IN-TAXON-CELL',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `W kolumnie „{field}” zamiast liczby jest tekst ({value}) {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Zapisano obecność taksonu bez ilości, a tekst trafił do uwag. Jeśli to nie znaczy „obecny”, popraw arkusz.`,
@@ -666,6 +701,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAXON-SAME-EVENT',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'columns', 'names'],
     plain: {
       pl: `Ten sam takson „{value}” (ta sama nazwa albo ten sam identyfikator z WoRMS, to samo stadium i dopisek) występuje {count} {+count:raz|razy|razy} w jednej próbce: {columns}. W arkuszu zapisano go jako: {names}. Każdy zapis zostaje osobno, nic nie jest sumowane. Sprawdź, czy to nie powinien być jeden zapis.`,
@@ -679,6 +715,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NA-SKIPPED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `Pominięto {count} {+count:komórkę|komórki|komórek} z oznaczeniem „NA” (brak danych) w kolumnach taksonów lub ilości. Taka komórka nie tworzy rekordu, tak samo jak pusta: brak danych nie jest zerem ani obecnością.`,
@@ -692,6 +729,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-QUANTITY-BLANK-KEPT',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a long row with a taxon, no count and a biomass value: kept as present with no count; a quantity of 0 next to a weight above zero: read as the zero
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} wagę, ale pustą lub „NA” ilość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisano {+count:go|je|je} jako obecność bez liczebności; liczby nie wymyślono. Jeśli „NA” znaczy „nie analizowano”, takson nie musiał być obecny: popraw te komórki przed eksportem.`,
@@ -706,6 +745,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-BIOMASS-UNIT-UNCLEAR',
     category: 'B',
     severity: 'warning',
+    // export (/convert): the unit in the name of a biomass column is not understood in full, or the header has none: measurementUnit is left empty
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `Nazwa kolumny wagi „{field}” zawiera jednostkę masy, ale reszta („{value}”) nie jest zrozumiała, więc jednostka pozostaje pusta ({+lineCount:wiersz|wiersze|wierszy} {lines}). Wpisz jednostkę w nawiasie w nagłówku, np. [kg/km2].`,
@@ -719,6 +760,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-QUANTITY-REPEATED',
     category: 'B',
     severity: 'error',
+    // export (/convert): a per-taxon total repeated on the size-class rows of a sample: the export would count it once per size class
+    exportPolicy: 'block',
     params: ['columns', 'differs', 'count', 'of'],
     plain: {
       pl: `„{columns}” to chyba suma dla gatunku w próbce, powtórzona w wierszach klas wielkości ({count} z {of} grup, różnice w „{differs}”; {+lineCount:wiersz|wiersze|wierszy} {lines}). Policzona tak jak jest, byłaby zawyżona. Zapisz jedno występowanie na próbkę i takson (przycisk) albo wskaż jako ilość kolumnę z liczbą każdej klasy.`,
@@ -732,6 +775,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-QUANTITY-REPEATED-ONCE',
     category: 'B',
     severity: 'warning',
+    // export (/convert): the user chose one occurrence per sample and taxon for a repeated total: the later rows of the groups are not converted
+    exportPolicy: 'accept',
     params: ['columns', 'differs', 'count', 'groups', 'lost'],
     plain: {
       pl: `Jak wybrano, suma w „{columns}” jest zapisana raz na próbkę i takson ({groups} {+groups:grupa|grupy|grup}); pominięto {count} {+count:powtórzony wiersz|powtórzone wiersze|powtórzonych wierszy} ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy tym występowaniu nie zapisano: {lost} (różnią się między wierszami). Sprawdź sumę.`,
@@ -756,6 +801,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-QUANTITY-REAL-COUNTS',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `Jak wybrano, równe ilości w {count} {+count:wierszu|wierszach|wierszach} są prawdziwymi liczebnościami: dla tego arkusza nie szuka się powtórzonych sum ani dokładnych kopii wierszy. Przycisk „Zapytaj ponownie” włącza oba sprawdzenia z powrotem.`,
@@ -780,6 +826,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COMPANION-OLD',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `Plik towarzyszący jest starszy: {count} {+count:zapisana odpowiedź nie ma|zapisane odpowiedzi nie mają|zapisanych odpowiedzi nie ma} liczby wierszy, dla której {+count:ją|je|je} dano, więc {+count:nie została zastosowana|nie zostały zastosowane|nie zostało zastosowanych}; tam, gdzie mają zastosowanie, pytania padają ponownie.`,
@@ -793,6 +840,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROW-COPIES',
     category: 'B',
     severity: 'error',
+    // export (/convert): rows that are exact copies of another row: the sum counts each copy
+    exportPolicy: 'block',
     params: ['count', 'withCopies', 'withoutCopies'],
     plain: {
       pl: `{count} {+count:wiersz jest dokładną kopią|wiersze są dokładnymi kopiami|wierszy jest dokładnymi kopiami} innego wiersza ({+lineCount:wiersz|wiersze|wierszy} {lines}). Ilość: {withCopies} z kopiami, {withoutCopies} bez nich. Pomiń kopie i wypisz je w pliku obok archiwum (przycisk) albo popraw arkusz.`,
@@ -806,6 +855,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROW-COPIES-DROPPED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'withCopies', 'withoutCopies'],
     plain: {
       pl: `Zgodnie z wyborem pominięto {count} {+count:dokładną kopię|dokładne kopie|dokładnych kopii} wierszy ({+lineCount:wiersz|wiersze|wierszy} {lines}). Sprawdź, że to były kopie.`,
@@ -830,6 +880,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROW-COPIES-SPECIMENS',
     category: 'B',
     severity: 'warning',
+    // export (/convert): identical rows with a count of 1: copies, or specimens that look the same; both sums are shown
+    exportPolicy: 'accept',
     params: ['count', 'withCopies', 'withoutCopies'],
     plain: {
       pl: `{count} {+count:wiersz jest identyczny|wiersze są identyczne|wierszy jest identycznych} z innym, z liczebnością 1 ({+lineCount:wiersz|wiersze|wierszy} {lines}). Jako osobne osobniki dają {withCopies}; jeśli to kopie, byłoby {withoutCopies}. Tabela osobników wygląda tak samo, więc nic nie blokuje: sprawdź, co to jest.`,
@@ -843,6 +895,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROW-COPIES-KEPT',
     category: 'B',
     severity: 'warning',
+    // export (/convert): the person keeps identical rows as separate records, and declared each row of a long sheet its own record (the cost: the IDs follow the source lines)
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `Zgodnie z wyborem zachowano {count} {+count:wiersz identyczny|wiersze identyczne|wierszy identycznych} z innym ({+lineCount:wiersz|wiersze|wierszy} {lines}) jako osobne rekordy. Sprawdź, że to nie są kopie.`,
@@ -867,6 +921,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-OWN-RECORDS',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['rows'],
     plain: {
       pl: `Arkusz „{sheet}”: każdy z {rows} {+rows:wiersza|wierszy|wierszy} to osobny rekord; occurrenceID to kod próbki i numer wiersza w pliku. Numery się zmienią, gdy przed nową wersją wstawisz lub usuniesz wiersze: zachowaj kolejność albo dodaj kolumnę occurrenceID.`,
@@ -891,6 +946,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROW-NOT-UNDERSTOOD',
     category: 'B',
     severity: 'error',
+    // export (/convert): a row the converter could not place (a value with no parameter, a number with no taxon ...): blocks until someone decides to leave it out and list it, or corrects the file
+    exportPolicy: 'block',
     params: ['reason', 'count', 'rows', 'what'],
     plain: {
       pl: `{count} {+count:wiersz|wiersze|wierszy} {what} ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nic z tego nie trafiło do archiwum i nic nie jest usuwane: zostaje w Twoim pliku. Pomiń {+count:go|je|je} i wypisz w pliku obok archiwum (przycisk) albo popraw plik. Eksport czeka na Twoją decyzję.`,
@@ -915,6 +972,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ROW-LEFT-OUT',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['reason', 'count', 'rows', 'what'],
     plain: {
       pl: `Zgodnie z Twoim wyborem {count} {+count:wiersz|wiersze|wierszy} {what} ({+lineCount:wiersz|wiersze|wierszy} {lines}) pominięto w archiwum i wypisano w pliku obok niego. Nic nie zostało usunięte z Twojego pliku.`,
@@ -939,6 +997,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-QUANTITY-SAME-IN-SAMPLE',
     category: 'B',
     severity: 'warning',
+    // export (/convert): the same quantity above 1 on rows of one sample and taxon that differ in something; the copies the user dropped
+    exportPolicy: 'accept',
     params: ['groups', 'records', 'written', 'asTotal'],
     plain: {
       pl: `{records} {+records:wiersz|wiersze|wierszy} tej samej próbki i tego samego gatunku ({groups} {+groups:grupa|grupy|grup}) ma tę samą ilość ({+lineCount:wiersz|wiersze|wierszy} {lines}). Zapisane jako {records} {+records:rekord|rekordy|rekordów} dają {written}; jeśli to suma gatunku, byłoby {asTotal}. Sprawdź to.`,
@@ -952,6 +1012,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAXON-EMPTY-ROW',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a number or a weight with no taxon name on a long sheet
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} liczbę lub wagę, ale pustą nazwę taksonu w „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie ma do czego jej przypisać, więc nie jest przekształcana. Jeśli znasz nazwę taksonu, wpisz ją w arkuszu; wiersze są wypisane w pliku obok archiwum.`,
@@ -965,6 +1027,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TIME-HOLDS-DATES',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `Kolumna „{field}” jest czytana jako godzina, ale {count} {+count:komórka zawiera|komórki zawierają|komórek zawiera} pełną datę, a żadna kolumna nie jest datą. Zdarzenia nie miałyby eventDate i data z pliku przepadłaby. Wybierz dla niej znaczenie „Data i godzina”.`,
@@ -978,6 +1041,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TIME-SOME-DATES',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a few cells of a time column hold a date that will not be written
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `W kolumnie godziny „{field}” {count} {+count:komórka zawiera|komórki zawierają|komórek zawiera} pełną datę ({+lineCount:wiersz|wiersze|wierszy} {lines}), a żadna kolumna nie jest datą. Te daty nie trafią do eventDate. Jeśli to daty zdarzeń, nadaj kolumnie znaczenie „Data i godzina”.`,
@@ -991,6 +1056,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DATE-ORDER-UNDECLARED',
     category: 'B',
     severity: 'error',
+    // export (/convert): a day/month order no cell decides and no one declared, or a declaration the column's own dates contradict: a day and a month are never guessed
+    exportPolicy: 'block',
     params: ['count', 'examples', 'index', 'first', 'second', 'isoFirst', 'isoSecond'],
     plain: {
       pl: `Daty takie jak „{value}” można odczytać jako {isoFirst} albo jako {isoSecond}, a żadna data w kolumnie „{field}” tego nie rozstrzyga ({count} {+count:komórka|komórki|komórek}). Powiedz, w jakiej kolejności ta kolumna zapisuje dzień i miesiąc.`,
@@ -1004,6 +1071,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DATE-ORDER-CONTRADICTED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['declared', 'detected', 'index'],
     plain: {
       pl: `Dla kolumny „{field}” podano kolejność „{declared}”, ale jej własne daty wskazują „{detected}” (dmy: najpierw dzień, mdy: najpierw miesiąc, conflict: obie). Podana kolejność nie jest używana. Popraw odpowiedź albo daty.`,
@@ -1017,6 +1085,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DATE-ORDER-DECLARED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['order', 'index'],
     plain: {
       pl: `Jak podano, daty w kolumnie „{field}” są odczytywane w kolejności {order} (dmy: najpierw dzień, mdy: najpierw miesiąc): w zapisanej dacie, w identyfikatorze i przy porównaniu w połączeniu arkuszy.`,
@@ -1041,6 +1110,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ZERO-WITH-BIOMASS',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} ilość 0 i wagę większą od zera ({+lineCount:wiersz|wiersze|wierszy} {lines}). To się wyklucza. Pominięto je: ani obecne, ani nieobecne (także przy pełnej liście gatunków). Sprawdź, która wartość jest błędna.`,
@@ -1054,6 +1124,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SAMPLE-PER-ROW',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a long sheet with an event for almost every row: one sample probably split by a code that names the row
+    exportPolicy: 'accept',
     params: ['events', 'occurrences', 'ratio', 'shared'],
     plain: {
       pl: `Arkusz „{sheet}”: {events} {+events:zdarzenie próbki|zdarzenia próbek|zdarzeń próbek} na {occurrences} {+occurrences:wystąpienie|wystąpienia|wystąpień} ({ratio}), prawie po wierszu; {shared} dzieli stację, datę i głębokość. Jeśli to prawdziwe powtórzenia, zaakceptuj. Jeśli próbkę rozbito na wiersze, użyj kodu próbki.`,
@@ -1068,6 +1140,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ZERO-SKIPPED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `Pominięto {count} {+count:komórkę|komórki|komórek} z zerem, bo nie zaznaczono, że lista gatunków jest pełna. Zero oznacza „brak” tylko wtedy, gdy w próbce szukano wszystkich gatunków z listy.`,
@@ -1082,6 +1155,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SAMPLE-CONFLICT',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['what', 'count'],
     plain: {
       pl: `Wiersze próbki „{value}” ({+lineCount:wiersz|wiersze|wierszy} {lines}) różnią się: {what}. Próbka to jedno zdarzenie, więc te wartości muszą być takie same we wszystkich jej wierszach.`,
@@ -1106,6 +1180,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-REPLICATE-EVENTS',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['column', 'count'],
     plain: {
       pl: `Kolumna „{column}” jest odczytana jako numer replikatu: {count} {+count:zdarzenie|zdarzenia|zdarzeń} replikatu {+count:powstaje|powstają|powstaje} pod próbami. Jeśli to nie replikaty, zmień jej znaczenie.`,
@@ -1119,6 +1194,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAXON-ATTRIBUTE-IGNORED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `{count} {+count:kolumna ma|kolumny mają|kolumn ma} dla każdego taksonu zawsze tę samą wartość, więc to cechy taksonu (np. kod gatunku), a nie pomiary, i nie zostały zapisane: {columns}. Jeśli któraś jest pomiarem, nadaj jej znaczenie.`,
@@ -1132,6 +1208,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-VALUE-PER-OCCURRENCE',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `{count} {+count:kolumna jest zapisana|kolumny są zapisane|kolumn jest zapisanych} przy wystąpieniach wierszy, a nie przy próbce: {columns}. Ich wartości różnią się w próbce jak wartości pojedynczych osobników. Jeśli to dwie próbki pod jednym kodem, odznacz „każdego osobnika” przy kolumnie i popraw kod.`,
@@ -1145,6 +1222,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NERC-UNKNOWN',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['what'],
     plain: {
       pl: `Dla {what} nie ma potwierdzonego pojęcia NERC, więc measurementTypeID zostanie pusty, a OBIS go wymaga. Potwierdź albo wybierz pojęcie w tabeli pod kolumnami; opcjonalne wyszukiwanie w NVS działa po angielsku, np. „temperature”, „salinity”, „chlorophyll”. W innych przypadkach dobierz je ręcznie przed publikacją.`,
@@ -1159,6 +1237,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NERC-UNIT-MISMATCH',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['column', 'code', 'unit'],
     plain: {
       pl: `Kolumna „{column}”: pojęcie {code} odnosi się do innej podstawy (na jednostkę masy albo objętości) niż jednostka „{unit}”. Sprawdź, czy pojęcie i jednostka do siebie pasują. Konwerter niczego nie przelicza ani nie zmienia.`,
@@ -1173,6 +1252,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NERC-CODE-MALFORMED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): the header names a code of a shape the vocabulary does not have: the column is kept as a measured variable and nothing is written from the code
+    exportPolicy: 'accept',
     params: ['column', 'code', 'collection', 'length'],
     plain: {
       pl: `Nagłówek „{column}”: kod {code} po „SDN:{collection}::” nie jest kodem {collection}, który ma dokładnie {length} wielkich liter i cyfr. W NVS nie ma takiego pojęcia. Sprawdź kod: literówka albo dodatkowy znak. Żaden identyfikator z niego nie jest zapisywany; kolumna zostaje mierzoną zmienną.`,
@@ -1187,6 +1268,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-UNIT-NO-P06',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['unit'],
     plain: {
       pl: `Dla jednostki „{unit}” nie ma potwierdzonego pojęcia NERC (P06), więc measurementUnitID zostanie pusty. Jednostka nie jest przeliczana; wpisana zostaje tak, jak ją podano. Dla kolumny ze zmierzoną wielkością możesz potwierdzić albo wybrać jednostkę w tabeli pod kolumnami.`,
@@ -1201,6 +1283,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COLUMN-UNNAMED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `Kolumna „{field}” nie ma nazwy w nagłówku pliku, a jej nazwa miałaby trafić do archiwum jako nazwa zmiennej lub taksonu. Wpisz nazwę zmiennej albo wybierz dla niej inne znaczenie (np. „Pomiń”).`,
@@ -1214,6 +1297,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-UNSUPPORTED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['parameterColumn', 'valueColumn', 'reason', 'count', 'max'],
     plain: {
       pl: `Arkusz „{sheet}” ma układ długi: wiersz na parametr (kolumny „{parameterColumn}” i „{valueColumn}”), którego konwerter nie czyta. Zrób kolumnę na parametr, z jednostką w nagłówku (np. „Temp [°C]”), wiersz na próbkę i wczytaj ponownie. Jeśli arkusz zawiera gatunki, zaznacz powyżej kolumnę taksonu i liczebności.`,
@@ -1227,6 +1311,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SHEET-TRANSPOSED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Arkusz „{sheet}” nie został wczytany: {reason}. Wiersz 1 byłby czytany jako nagłówek. Obróć tabelę w arkuszu kalkulacyjnym (próbki w wierszach, gatunki lub zmienne w kolumnach) i wczytaj ją ponownie albo zaznacz przy tym arkuszu „Czytaj jako zwykłą tabelę”.`,
@@ -1240,6 +1325,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SHEET-UNITS-ROW',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['line'],
     plain: {
       pl: `Arkusz „{sheet}” nie został wczytany: wiersz {line} pod nagłówkiem wygląda na jednostki (np. m, degrees_north), a nie dane. Jeśli to jednostki, wpisz je w nazwach kolumn („depth [m]”) i wczytaj plik ponownie. Jeśli to dane, zaznacz „Czytaj jako zwykłą tabelę”.`,
@@ -1253,6 +1339,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-READ',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['parameterColumn', 'valueColumn', 'rows', 'samples', 'columns'],
     plain: {
       pl: `Arkusz „{sheet}” ma wiersz na pomiar („{parameterColumn}”, „{valueColumn}”). Odczytano go jako {samples} {+samples:próbkę|próbki|próbek}; kolumn parametrów: {columns} (po jednej na parametr i jednostkę, nagłówek „nazwa [jednostka]”). Wiersze są tylko zgrupowane: żadna wartość nie jest sumowana, uśredniana ani zaokrąglana.`,
@@ -1266,6 +1353,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-FLAG-COLUMNS',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `Pominięto {count} {+count:kolumnę flagi jakości|kolumny flag jakości|kolumn flag jakości} arkusza „{sheet}”: {columns}. Flaga nie odróżnia próbek, więc nie wchodzi do klucza, którym wiersze są grupowane w próbki, i nie jest zapisywana.`,
@@ -1279,6 +1367,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-FLAG-PARAMETERS',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'names', 'rows'],
     plain: {
       pl: `Z „{sheet}” pominięto: {names} ({rows} {+rows:wiersz|wiersze|wierszy}). {+count:To flaga jakości, nie pomiar|To flagi jakości, nie pomiary|To flagi jakości, nie pomiary}: {+count:nie powstaje z niej kolumna i nie jest zapisywana|nie powstają z nich kolumny i nie są zapisywane|nie powstają z nich kolumny i nie są zapisywane}.`,
@@ -1292,6 +1381,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-RENAMED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'names'],
     plain: {
       pl: `Nagłówki zmienione w arkuszu „{sheet}”: {names} (razem: {count}). Nagłówek musi być unikalny, a ten był taki sam jak nagłówek innej kolumny, więc dopisano numer w nawiasie.`,
@@ -1305,6 +1395,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-DROPPED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `Pominięto kolumny oznaczone jako opisujące pomiar, a nie próbkę: {columns} (arkusz „{sheet}”, razem: {count}). Archiwum nie ma miejsca na wartość przypisaną do pomiaru, więc te wartości nie są zapisywane.`,
@@ -1318,6 +1409,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-KEY-VARIES',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `W arkuszu „{sheet}” wiersze o tej samej stacji, dacie i głębokości różnią się w: {columns} (takich próbek: {count}), więc każda różnica jest czytana jako osobna próbka. Jeśli te kolumny opisują pomiar (komentarz, analityk, metoda), zaznacz je wyżej jako opisujące pomiar.`,
@@ -1331,6 +1423,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-DUPLICATE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `W arkuszu „{sheet}” jedna próbka ma parametr „{field}” więcej niż raz ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter ich nie sumuje: rozróżnij próbki w innej kolumnie (rzut, powtórzenie, głębokość) albo pomiń powtórzone wiersze i wypisz je (zapisana zostaje pierwsza wartość; zob. następny komunikat).`,
@@ -1344,6 +1437,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LONG-NO-PARAMETER',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `W arkuszu „{sheet}” {count} {+count:wiersz ma|wiersze mają|wierszy ma} wartość, ale kolumna parametru jest pusta ({+lineCount:wiersz|wiersze|wierszy} {lines}). Konwerter nie wie, co zmierzono: wpisz nazwę parametru w arkuszu albo pomiń {+count:ten wiersz|te wiersze|te wiersze} i wypisz (zob. następny komunikat).`,
@@ -1357,6 +1451,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TURN-HEADER-BLANK',
     category: 'B',
     severity: 'error',
+    // export (/convert): a turned sheet: a sample column with no header or the same header as another, a row with values and no name
+    exportPolicy: 'block',
     params: ['count', 'columns'],
     plain: {
       pl: `Arkusz „{sheet}” jest obracany (próbki to kolumny), ale {count} {+count:kolumna ma|kolumny mają|kolumn ma} wartości i puste nagłówki: {columns}. Z nagłówka powstaje kod próbki. Wpisz go w arkuszu albo wskaż kolumnę jako „nie próbka”.`,
@@ -1370,6 +1466,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TURN-HEADER-REPEATED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['header', 'count', 'columns'],
     plain: {
       pl: `Arkusz „{sheet}” jest obracany (próbki to kolumny), ale nagłówek „{header}” ma {count} {+count:kolumna|kolumny|kolumn}: {columns}. Kod próbki musi być jeden. Zmień nagłówki w arkuszu albo wskaż nadmiarowe kolumny jako „nie próbki”.`,
@@ -1383,6 +1480,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TURN-NAME-BLANK',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `W arkuszu „{sheet}” (obracanym) {count} {+count:wiersz ma|wiersze mają|wierszy ma} wartości, ale puste miejsce w kolumnie nazw ({+lineCount:wiersz|wiersze|wierszy} {lines}). Nie powstanie z nich kolumna. Wpisz nazwy albo pomiń te wiersze.`,
@@ -1396,6 +1494,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TURN-NAME-REPEATED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['name', 'count'],
     plain: {
       pl: `W arkuszu „{sheet}” (obracanym) nazwa wiersza „{name}” nie jest jedyna ({+lineCount:wiersz|wiersze|wierszy} {lines}) albo pokrywa się z kolumną dodawaną przy obracaniu. Konwerter nie zmienia nazw. Zrób nazwy różne w pliku albo pomiń te wiersze.`,
@@ -1409,6 +1508,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SHEET-TURNED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['rows', 'samples'],
     plain: {
       pl: `Arkusz „{sheet}” obrócono, jak zdecydowałeś: z {rows} {+rows:wiersza|wierszy|wierszy} powstało {rows} {+rows:kolumna|kolumny|kolumn}, a {samples} {+samples:kolumna próbki stała się wierszem|kolumny próbek stały się wierszami|kolumn próbek stało się wierszami}. Komórki są bez zmian.`,
@@ -1422,6 +1522,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DEPTH-UNIT',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['unit'],
     plain: {
       pl: `Kolumna głębokości „{field}” ma jednostkę „{unit}”. Darwin Core wymaga metrów, a konwerter przelicza tylko sążnie (fm), stopy (ft) i km. Podaj metry albo popraw jednostkę kolumny w tabeli ról. Głębokość w osadzie (często w cm): wybierz znaczenie „Głębokość w osadzie”.`,
@@ -1436,6 +1537,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DEPTH-CONVERTED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a depth column in fathoms, feet, km or cm was converted to metres with an exact factor; the original is in verbatimDepth
+    exportPolicy: 'accept',
     params: ['unit', 'symbol', 'factor', 'example'],
     plain: {
       pl: `Kolumna głębokości „{field}” jest w jednostce „{unit}”, więc konwerter przeliczył ją na metry (1 {symbol} = {factor} m, współczynnik dokładny), np. {example}. Oryginalny zapis jest w kolumnie verbatimDepth. Sprawdź, czy jednostka z nagłówka jest właściwa, i potwierdź przeliczenie.`,
@@ -1450,6 +1553,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SEAFLOOR-UNIT',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['unit'],
     plain: {
       pl: `Kolumna „{field}” (głębokość w osadzie) ma jednostkę: {unit}. Konwerter przyjmuje tylko centymetry (cm) albo metry (m). Wpisz jednostkę kolumny w tabeli ról: cm albo m. Niczego innego nie przelicza.`,
@@ -1464,6 +1568,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SEAFLOOR-VALUE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'reason'],
     plain: {
       pl: `W kolumnie „{field}” (głębokość w osadzie) {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}) wartości nie da się zapisać: {reason}, np. „{value}”. Te komórki nie zostały zapisane.`,
@@ -1478,6 +1583,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SEAFLOOR-SIGNS',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count', 'direction', 'side'],
     plain: {
       pl: `W kolumnie „{field}” {count} {+count:liczba ma|liczby mają|liczb ma} znak przeciwny do większości kolumny ({+lineCount:wiersz|wiersze|wierszy} {lines}). Przy kierunku „{direction}” taka liczba jest zapisywana jako położenie {side} dnem. Sprawdź, czy kierunek jest właściwy.`,
@@ -1492,6 +1598,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SEAFLOOR-NO-SITE-DEPTH',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `Głębokość w osadzie z kolumny „{field}” jest {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}) bez głębokości stanowiska (wody nad dnem). Darwin Core liczy wtedy odległość od poziomu odniesienia wysokości, nie od dna. Dodaj głębokość stanowiska w metrach (znaczenie „Głębokość”).`,
@@ -1506,6 +1613,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NO-OCCURRENCES',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `To archiwum nie zawierałoby ani jednego rekordu występowania. OBIS publikuje rekordy gatunków, więc dodaj arkusz z taksonami (nazwy gatunków z liczebnością lub obecnością). Same dane środowiskowe nie tworzą zbioru danych OBIS.`,
@@ -1520,6 +1628,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-NOTHING-READ',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['rows'],
     plain: {
       pl: `Z arkusza „{sheet}”, oznaczonego jako plik profili, nie odczytano żadnego poziomu ({rows} {+rows:wiersz danych|wiersze danych|wierszy danych}). Potrzebna jest kolumna stacji, kolumny głębokości lub pomiarów i wiersze z wartościami. Jeśli arkusz tylko opisuje kolumny albo nie ma pomiarów, nie oznaczaj go jako pliku profili.`,
@@ -1533,6 +1642,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-STATION-FROM-POSITION',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `W arkuszu „{sheet}” każde różne położenie (szerokość i długość geograficzna tak, jak zapisano) jest stacją, według Twojego wyboru: {count} {+count:stacja|stacje|stacji}, np. „{value}”. Identyfikator stacji składa się z kodu rejsu i położenia.`,
@@ -1546,6 +1656,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EFFORT-INVALID',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `W kolumnie „{field}” (wielkość próby) nie ma dodatniej liczby {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}), np. „{value}”. Bez niej nie da się zapisać wielkości próby.`,
@@ -1559,6 +1670,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EFFORT-VALUE-INVALID',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Wpisana wielkość próby „{value}” jest nieprawidłowa: {reason}. Wpisz liczbę większą od zera, z kropką lub przecinkiem jako znakiem dziesiętnym.`,
@@ -1572,6 +1684,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NO-TAXON',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['shape'],
     plain: {
       pl: `W tym arkuszu nie wskazano kolumny z taksonami. Konwerter potrzebuje taksonu (w arkuszu szerokim nagłówków kolumn z liczebnością, w długim kolumny z nazwą) i ilości (liczebność, zagęszczenie albo biomasa).`,
@@ -1585,6 +1698,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SPECIES-LIST-NO-COUNTS',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `Ten arkusz wymienia gatunki bez liczebności. Jeśli to lista znalezionych gatunków (sama obecność, nic nie liczono), zaznacz przy arkuszu „To jest lista znalezionych gatunków (sama obecność, bez liczebności)”. W przeciwnym razie dodaj kolumnę z liczebnością, zagęszczeniem albo biomasą i powiedz, czym są liczby.`,
@@ -1599,6 +1713,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PRESENCE-VALUE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `Kolumna „{field}” ma {value} {+lineCount:w wierszu|w wierszach|w wierszach} {lines}, a na liście znalezionych gatunków komórka to znak (x, +, ✓, 1, tak) albo jest pusta. Wartość nie jest zgadywana. Jeśli to liczebności, odznacz „To jest lista znalezionych gatunków” i powiedz, czym są liczby; w przeciwnym razie popraw je.`,
@@ -1613,6 +1728,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TAXON-NO-QUANTITY',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `W tym arkuszu zaznaczono kolumnę z taksonami, ale nie ma kolumny z ilością. Zaznacz kolumnę z liczebnością, zagęszczeniem albo biomasą albo dodaj ją; list samej obecności gatunków konwerter na razie nie zapisuje.`,
@@ -1626,6 +1742,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ENV-ONLY-SHEET',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `W tym arkuszu nie zaznaczono kolumny z taksonami ani z liczebnością, a pozostałe kolumny to mierzone wielkości. OBIS potrzebuje rekordów gatunków. Jeśli któraś kolumna zawiera nazwy gatunków, zaznacz ją jako takson; w przeciwnym razie dodaj arkusz z gatunkami albo sprawdź ten plik w /check pod kątem innych repozytoriów.`,
@@ -1639,6 +1756,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SUMMARY-ROW-SKIPPED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `Pominięto {count} {+count:wiersz podsumowania|wiersze podsumowania|wierszy podsumowania} ({value}) w {+count:wierszu|wierszach|wierszach} {lines}. {+count:To nie jest próbka|To nie są próbki|To nie są próbki}. Prawdziwą stację o takiej nazwie przemianuj w arkuszu.`,
@@ -1652,6 +1770,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-SUMMARY-ROW-KEPT',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a row labelled like a statistic (Max, N) in the middle of the sheet, kept as a sample: the user says it is a station
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} wygląda{+count:|ją|} jak statystyki, ale {+count:nie stoi|nie stoją|nie stoi} w bloku, więc zostawiono {+count:go|je|je}. Jeśli {+count:to nie próbka|to nie próbki|to nie próbki}, popraw arkusz; jeśli tak, potwierdź.`,
@@ -1665,6 +1785,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-ID-REVISIT',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a code repeated at one station on different dates: each visit got the date in its ID, made of the data
+    exportPolicy: 'accept',
     params: ['count', 'by'],
     plain: {
       pl: `{count} {+count:kod próbki jest użyty|kody próbek są użyte|kodów próbek jest użytych} dla więcej niż jednej wizyty na stacji (np. {value}). Każda wizyta to osobne zdarzenie, a jej identyfikator zawiera: {by}. Sprawdź, czy te wiersze to naprawdę różne wizyty, a nie literówka.`,
@@ -1678,6 +1800,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-REPLICATE-MISSING',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz nie ma|wiersze nie mają|wierszy nie ma} wartości w kolumnie powtórzeń „{field}” ({+lineCount:wiersz|wiersze|wierszy} {lines}). Każdy wiersz należy do jakiegoś powtórzenia próbki: uzupełnij kolumnę albo nadaj jej inną rolę (np. „Pomiń”), jeśli nie numeruje powtórzeń.`,
@@ -1691,6 +1814,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-BIOMASS-KIND-UNSET',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a biomass column whose kind (wet, dry, ash-free dry) is open: the rows are written with no measurementTypeID; no default is invented
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `{count} {+count:wartość|wartości|wartości} z {columns} zapisano jako biomasę bez measurementTypeID: nie wiadomo, czy to masa mokra, sucha czy sucha bez popiołu, a NERC ma osobne pojęcie dla każdej. Wybierz rodzaj w liście ról kolumny albo zaakceptuj brak identyfikatora.`,
@@ -1704,6 +1829,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EML-MISSING',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['fields'],
     plain: {
       pl: `Opis zbioru danych jest niepełny albo nieużyteczny: {fields}. Archiwum potrzebuje tych informacji (tytuł, streszczenie, autorzy, kontakt, kod instytucji, nazwa zbioru); uzupełnij je w formularzu.`,
@@ -1717,6 +1843,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LICENCE-UNSET',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `Nie wybrano licencji. Wybierz jedną z trzech (CC0, CC-BY, CC-BY-NC); decyzję podejmuje posiadacz praw do danych, a narzędzie niczego nie zakłada.`,
@@ -1730,6 +1857,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-BASIS-UNSET',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: [],
     plain: {
       pl: `Nie wybrano rodzaju zapisu (basisOfRecord), np. obserwacja człowieka, okaz konserwowany albo próbka materiału. Zależy od tego, co faktycznie zebrano, więc nie ma wartości domyślnej.`,
@@ -1743,6 +1871,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EMOF-ORPHAN',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'kind'],
     plain: {
       pl: `{count} {+count:wiersz pomiarów wskazuje|wiersze pomiarów wskazują|wierszy pomiarów wskazuje} na {kind} (np. „{value}”), którego nie ma w tabeli. Pomiar bez swojego zdarzenia lub wystąpienia zostałby odrzucony.`,
@@ -1756,6 +1885,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EMOF-EVENT-MISMATCH',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `{count} {+count:pomiar jest przypisany|pomiary są przypisane|pomiarów jest przypisanych} do innego zdarzenia niż jego wystąpienie (np. „{value}”). Pomiar wystąpienia musi leżeć w zdarzeniu tego wystąpienia.`,
@@ -1769,6 +1899,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EMOF-VALUE-EMPTY',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz pomiarów nie ma|wiersze pomiarów nie mają|wierszy pomiarów nie ma} wartości (measurementValue). Pomiar bez wartości nic nie mówi, a archiwum zostałoby odrzucone.`,
@@ -1782,6 +1913,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EMOF-TYPE-EMPTY',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wiersz pomiarów nie ma|wiersze pomiarów nie mają|wierszy pomiarów nie ma} rodzaju pomiaru (measurementType), więc nie wiadomo, co zmierzono. Zadeklaruj, co oznaczają liczby w arkuszu.`,
@@ -1795,6 +1927,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COLUMN-NOT-EXPORTED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'columns'],
     plain: {
       pl: `Do archiwum {+count:nie trafi|nie trafią|nie trafi} {count} {+count:kolumna|kolumny|kolumn}: {columns}. Powód: znaczenie, którego się tu nie zapisuje (np. ciśnienie poza plikiem profilowym), brak nagłówka (podana jako [litera]) albo druga kolumna z ilością. Zaakceptuj to, aby eksportować {+count:bez niej|bez nich|bez nich}.`,
@@ -1808,6 +1941,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COLUMN-IGNORED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `{count} {+count:kolumna zawiera|kolumny zawierają|kolumn zawiera} wartości, a w ustawieniach {+count:jest ignorowana|są ignorowane|jest ignorowanych}, więc nie {+count:trafi|trafią|trafi} do archiwum: {columns}. Twój plik się nie zmienia. Jeśli któraś niesie dane, które archiwum powinno mieć, nadaj jej znaczenie.`,
@@ -1821,6 +1955,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COLUMN-YEAR-IGNORED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'columns'],
     plain: {
       pl: `Wygląda na rok obok daty: w każdym wierszu to rok daty z tego wiersza. Nie zapisano jako pomiar {count} {+count:kolumny|kolumn|kolumn}: {columns}. Jeśli któraś jest pomiarem, przywróć jej rolę jednym kliknięciem; jeśli to rok pobrania wierszy bez daty, nadaj znaczenie „data”.`,
@@ -1834,6 +1969,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-COLUMN-NUMBER-IGNORED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a numeric column that looks like a running number was not read as a measurement: it carries data, so leaving it out is accepted once (the page can give the role back)
+    exportPolicy: 'accept',
     params: ['count', 'columns', 'dateCount'],
     plain: {
       pl: `Liczby całkowite o 6 lub więcej cyfrach, rosnące (albo malejące) z wiersza na wiersz, albo stałe w próbce i rosnące (albo malejące) z próbki na próbkę, bez powtórzeń. Nie zapisano jako pomiar {count} {+count:kolumny|kolumn|kolumn}: {columns}. Jeśli któraś jest pomiarem, przywróć jej rolę jednym kliknięciem; inaczej zaakceptuj.`,
@@ -1858,6 +1995,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NAMEID-MISSING',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `{count} {+count:wystąpienie nie ma|wystąpienia nie mają|wystąpień nie ma} scientificNameID; BioCheck i OBIS zgłaszają to jako błąd. W arkuszu szerokim identyfikatory dają teraz nazwy sprawdzone w WoRMS (opcja na tej stronie, domyślnie wyłączona); arkusz długi może wskazać kolumnę z nimi. Potwierdzone nazwy nie są liczone.`,
@@ -1871,6 +2009,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-WORMS-UNDECIDED',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'names'],
     plain: {
       pl: `{count} {+count:nazwa z wyszukiwania w WoRMS czeka|nazwy z wyszukiwania w WoRMS czekają|nazw z wyszukiwania w WoRMS czeka} na Twój wybór: {names}. Dla każdej wybierz jeden z wyników albo „bez identyfikatora”; nic niepewnego nie jest przyjmowane automatycznie.`,
@@ -1885,6 +2024,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-WORMS-NO-MATCH',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'names'],
     plain: {
       pl: `WoRMS nie ma wyniku dla {count} {+count:nazwy|nazw|nazw}: {names}. Ich scientificNameID zostaje puste; OBIS i BioCheck zgłaszają to jako brak. Sprawdź pisownię albo napisz do WoRMS, jeśli takson jest nowy.`,
@@ -1899,6 +2039,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-WORMS-NOT-MARINE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'names'],
     plain: {
       pl: `WoRMS oznacza {count} {+count:potwierdzoną nazwę|potwierdzone nazwy|potwierdzonych nazw} jako słodkowodne lub lądowe, nie morskie ani słonawowodne: {names}. Sprawdź, czy to na pewno właściwe taksony; identyfikator jest zapisywany tak, jak go potwierdzono.`,
@@ -1912,6 +2053,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NAMEID-INCOMPLETE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'names'],
     plain: {
       pl: `Arkusz podaje identyfikator taksonu dla części wierszy {count} {+count:nazwy|nazw|nazw}, ale nie dla innych: {names}. Wiersze bez niego zostają bez identyfikatora, a nazwa nie jest wyszukiwana w WoRMS. Uzupełnij arkusz albo zaakceptuj to.`,
@@ -1925,6 +2067,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NAMEID-CONFLICT',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'names'],
     plain: {
       pl: `Arkusz podaje więcej niż jeden identyfikator taksonu dla {count} {+count:nazwy|nazw|nazw}: {names}. Każdy wiersz zachowuje swój identyfikator. Sprawdź, czy to różne taksony o tej samej nazwie; jeśli nie, popraw arkusz. Zaakceptuj to, aby eksportować bez zmian.`,
@@ -1938,6 +2081,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NO-SAMPLING-DESCRIPTOR',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: [],
     plain: {
       pl: `W tabeli pomiarów archiwum nie ma żadnego opisu próbkowania ani wysiłku (wielkości próby lub oczka sieci). BioCheck zgłosi „No sampling descriptors/effort present”. Podaj wielkość próby lub oczko sieci, jeśli je znasz, albo zaakceptuj ostrzeżenie.`,
@@ -1952,6 +2096,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DEVICE-MISSING',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: [],
     plain: {
       pl: `Dla tego arkusza nie podano narzędzia próbkowania. BioCheck zgłasza „No sampling instrument present” dla archiwum bez pomiaru nazwy narzędzia próbkowania. Wybierz narzędzie w formularzu arkusza albo zaakceptuj jego brak.`,
@@ -1965,6 +2110,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-MESH-INVALID',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Rozmiaru oczka „{value}” nie można użyć: {reason}. Wpisz rozmiar w mikrometrach jako zwykłą liczbę albo zostaw pole puste.`,
@@ -1978,6 +2124,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-NAMEID-APHIA-LIKE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['column'],
     plain: {
       pl: `Kolumna „{column}” ma same liczby całkowite i została ręcznie oznaczona jako identyfikator taksonu, ale jej nagłówek nie brzmi AphiaID. Wyglądają na AphiaID z WoRMS; są zapisywane bez zmian. Zmień nagłówek na AphiaID, aby zapisać je jako LSID z WoRMS.`,
@@ -1991,6 +2138,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-LICENCE-DIFFERS',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['chosen', 'source'],
     plain: {
       pl: `Wybrana licencja ({chosen}) różni się od tej, którą podają Twoje metadane ({source}). O tym, która licencja obowiązuje, decyduje posiadacz praw; zaakceptuj to tylko wtedy, gdy posiadacz praw tak zdecydował.`,
@@ -2004,6 +2152,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-STATION-UNMATCHED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'names'],
     plain: {
       pl: `{count} {+count:stacja pliku profilowego nie pasuje|stacje pliku profilowego nie pasują|stacji pliku profilowego nie pasuje} do stacji z arkuszy biologicznych (tekst stacji i rejs, gdy podany, muszą być identyczne): {names}. Każda staje się osobnym zdarzeniem stacji. Zaakceptuj, jeśli nie było tam biologii, albo popraw pisownię.`,
@@ -2017,6 +2166,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-STATION-FAR',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['count', 'names', 'limit'],
     plain: {
       pl: `{count} {+count:dopasowana stacja profilu leży|dopasowane stacje profilu leżą|dopasowanych stacji profilu leży} dalej niż {limit} km od stacji biologicznej: {names}. Dwa pomiary na jednej stacji są blisko siebie, więc sprawdź, czy to ta sama stacja. Zaakceptuj, jeśli tak, albo popraw dopasowanie.`,
@@ -2030,6 +2180,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-STATION-CAST-MATCHED',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['count', 'names'],
     plain: {
       pl: `{count} {+count:stacja pliku profilowego została dopasowana|stacje pliku profilowego zostały dopasowane|stacji pliku profilowego zostało dopasowanych} do stacji biologicznej z pominięciem numeru operacji na końcu, na co pozwoliłeś: {names}. Sprawdź, czy każda para to jedna stacja.`,
@@ -2043,6 +2194,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PANGAEA-NAMES-FALLBACK',
     category: 'B',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Lista parametrów w nagłówku pliku PANGAEA nie pasuje do jego kolumn, więc jako nazw taksonów użyto skrótów z nagłówka tabeli. Skróty mogą oznaczać dwa różne taksony, więc sprawdź nazwy na liście poniżej.`,
@@ -2056,6 +2208,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-LEVEL-INCOMPLETE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'what'],
     plain: {
       pl: `{count} {+count:poziom profilu nie ma|poziomy profilu nie mają|poziomów profilu nie ma} {what}, a stacja też jej nie ma ({+lineCount:wiersz|wiersze|wierszy} {lines}). OBIS i BioCheck wymagają daty i pozycji przy każdym zdarzeniu bez dzieci. Dodaj kolumnę z datą lub pozycją albo dodaj tę stację do arkuszy biologicznych.`,
@@ -2069,6 +2222,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-PRESSURE-NO-UNIT',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['column'],
     plain: {
       pl: `Kolumna ciśnienia „{column}” nie podaje jednostki, więc jej wartości są zapisywane bez jednostki. Podaj jednostkę, np. dbar w nazwie kolumny lub w polu jednostki powyżej, aby można było zapisać jednostkę i jej identyfikator, albo zaakceptuj eksport bez jednostki.`,
@@ -2082,6 +2236,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-POSITION-NONE',
     category: 'B',
     severity: 'error',
+    // export (/convert): a sheet with sample events and no position anywhere, said in the sheet's terms
+    exportPolicy: 'block',
     params: ['count'],
     plain: {
       pl: `Żadna kolumna arkusza „{sheet}” nie jest oznaczona jako szerokość / długość geograficzna i żaden dołączony arkusz nie podaje pozycji ({count} {+count:próbka|próbki|próbek}). Oznacz kolumny szerokości i długości, dołącz arkusz opisujący próbki albo zadeklaruj jedną pozycję dla arkusza.`,
@@ -2095,6 +2251,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-POSITION-DECLARED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): one position the person declared for the whole sheet, written on every sample and marked in georeferenceRemarks: looked at once
+    exportPolicy: 'accept',
     params: ['lat', 'lon', 'uncertainty', 'count'],
     plain: {
       pl: `Pozycja {lat}, {lon} (niepewność {uncertainty} m) została zadeklarowana przez Ciebie dla całego arkusza „{sheet}” i zapisana przy {count} {+count:próbce|próbkach|próbkach}; plik jej nie zawiera. Archiwum zaznacza to w georeferenceRemarks.`,
@@ -2119,6 +2277,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-POSITION-DECLARED-INVALID',
     category: 'B',
     severity: 'error',
+    // export (/convert): a declared position that cannot be used (out of range, an uncertainty not above zero, or a sheet that has a position column): nothing is applied
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Pozycji zadeklarowanej dla arkusza „{sheet}” nie można użyć: {reason}. Nic z niej nie zapisano.`,
@@ -2132,6 +2292,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DATE-DECLARED',
     category: 'B',
     severity: 'warning',
+    // export (/convert): one date or interval the person declared for a sheet with no date at all, written on every sample and marked in eventRemarks: looked at once
+    exportPolicy: 'accept',
     params: ['value', 'count'],
     plain: {
       pl: `Data {value} została zadeklarowana przez Ciebie dla całego arkusza „{sheet}” i zapisana przy {count} {+count:próbce|próbkach|próbkach}; plik jej nie zawiera. Archiwum zaznacza to w eventRemarks i w opisie metod.`,
@@ -2165,6 +2327,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DATE-DECLARED-HELD',
     category: 'B',
     severity: 'warning',
+    // export (/convert): a date a companion file saved that no longer fits the sheet: not applied, said, never a block
+    exportPolicy: 'accept',
     params: ['reason'],
     plain: {
       pl: `Data {value} zapisana w pliku towarzyszącym dla arkusza „{sheet}” nie została zastosowana: {reason}. Nic z niej nie zapisano. Możesz ją cofnąć w formularzu arkusza.`,
@@ -2178,6 +2342,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-DATE-DECLARED-INVALID',
     category: 'B',
     severity: 'error',
+    // export (/convert): a declared date that cannot be used (not ISO, out of order, in the future, or a sheet where a sample already has a date): nothing is applied
+    exportPolicy: 'block',
     params: ['reason'],
     plain: {
       pl: `Daty zadeklarowanej dla arkusza „{sheet}” ({value}) nie można użyć: {reason}. Nic z niej nie zapisano.`,
@@ -2191,6 +2357,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-EVENT-DATE-MISSING',
     category: 'B',
     severity: 'error',
+    // export (/convert): a sample with no eventDate (OBIS requires one): blank cells can be left out and listed
+    exportPolicy: 'block',
     params: ['count', 'rows', 'how'],
     plain: {
       pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: komórki z datą są puste. Uzupełnij je albo pomiń te próbki i wypisz je na liście.`,
@@ -2204,6 +2372,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-PROFILE-NO-STATION',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count', 'column'],
     plain: {
       pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} stacji ({+lineCount:wiersz|wiersze|wierszy} {lines}). Poziom profilu trafia pod swoją stację, więc każdy wiersz musi ją mieć. Wskaż kolumnę stacji, zaznacz „Każde różne położenie to stacja” albo uzupełnij puste komórki.`,

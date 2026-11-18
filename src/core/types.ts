@@ -341,10 +341,17 @@ export interface Finding {
 }
 export interface Citation { label: string; url: string; locator?: string }
 export interface Threshold { name: string; value: number; unit: string; citation: Citation }
+/** What /convert does with a finding of a rule: `block` stops the export, `accept` needs one tick per rule and run, `show` is only shown. */
+export type ExportPolicy = 'block' | 'accept' | 'show';
 export interface RuleDef {
   id: string;
   category: 'input' | 'A' | 'B' | 'C';
   severity: Severity;
+  /**
+   * /convert's effect of the finding (/check ignores it). Severity alone is not the policy: ROW-DATE-UNPARSEABLE is a warning on /check and blocks in /convert. Required, so a new rule
+   * cannot be written without someone judging it; test/convert/policy-baseline.test.ts pins every rule's value.
+   */
+  exportPolicy: ExportPolicy;
   plain: Record<Lang, string>;   // template with {param} placeholders
   /** Wordings for other classes of the `status` param (IN-RECORD-INACCESSIBLE): `plain` stays the 403/404 one. */
   plainByStatus?: { server: Record<Lang, string>; other: Record<Lang, string> };

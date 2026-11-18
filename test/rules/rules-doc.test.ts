@@ -22,6 +22,7 @@ describe('docs/rules.md', () => {
       const row = doc.split('\n').find((l) => l.startsWith(`| ${r.id} |`));
       expect(row, r.id).toBeDefined();
       expect(row).toContain(`| ${r.severity} |`);
+      expect(row).toContain(`| ${r.exportPolicy} |`);
       expect(row).toContain(`| ${r.category} |`);
       for (const t of r.thresholds ?? []) {
         expect(row, `${r.id} ${t.name}`).toContain(`${t.name} = ${t.value} ${t.unit}`);

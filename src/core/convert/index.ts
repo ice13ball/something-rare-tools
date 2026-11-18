@@ -54,7 +54,7 @@ export type { ArchiveFile, ArchiveTables, Table } from './dwca';
 export { LICENCE_ULINK, buildEml, coverageOf } from './eml';
 export { ZipWriteError, buildZip, crc32, streamDeflate } from './zip';
 export type { Deflate } from './zip';
-export { ACCEPT_RULES, BLOCK_CONV_RULES, BLOCK_INPUT_RULES, BLOCK_OUTPUT_RULES, SHOW_ONLY_PREFIXES, exportAllowed, judge, policyOf } from './policy';
+export { exportAllowed, judge, policyOf, rulesWithPolicy } from './policy';
 export type { Judged, Policy } from './policy';
 export { licenceDiffersFindings, metadataFindings, validateDataset, validateTables } from './validate';
 export { CONVERT_RULES, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../rules/convert';

@@ -23,6 +23,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-TERM-MISSING',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['core', 'terms'],
     citations: [CITE.obistoolsRequired, CITE.obisManualRequired],
     plain: {
@@ -37,6 +38,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-TERM-EMPTY',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     citations: [CITE.obistoolsRequired, CITE.obisManualRequired],
     plain: {
@@ -51,6 +53,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-RECOMMENDED',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'accept',
     params: ['core', 'terms'],
     citations: [CITE.obistoolsRecommended, CITE.obisManualRequired],
     plain: {
@@ -65,6 +68,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-VOCAB-VALUE',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'block',
     params: ['allowed'],
     citations: [CITE.obisBasisOfRecord, CITE.gbifBasisOfRecord, CITE.biocheckBasisOfRecord, CITE.obisOccurrenceStatus],
     plain: {
@@ -79,6 +83,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-EVENTID-DUPLICATE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     citations: [CITE.obistoolsEventIds],
     plain: {
@@ -93,6 +98,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-PARENT-DANGLING',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     citations: [CITE.obistoolsEventIds, CITE.biocheckParentEvent],
     plain: {
@@ -107,6 +113,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-PARENT-LOOP',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     citations: [CITE.gbifParentLineage],
     plain: {
@@ -121,6 +128,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-OCCURRENCEID-DUPLICATE',
     category: 'B',
     severity: 'error',
+    exportPolicy: 'block',
     params: ['count'],
     citations: [CITE.biocheckOccurrenceId],
     plain: {
@@ -135,6 +143,7 @@ export const DWC_RULES: readonly RuleSpec[] = [
     id: 'DWC-EVENTDATE-NOT-ISO',
     category: 'B',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `W kolumnie „{field}” daty w wierszach {lines} (razem: {count}) nie są zapisane w ISO 8601, np. „{value}”. Darwin Core przyjmuje 2011-06-14, 2011-06, 2011, czas jak 2011-06-14T10:00Z albo przedział z ukośnikiem (2011-06-14/2011-06-20). Nic nie zmieniono; zapisz daty w tej postaci.`,

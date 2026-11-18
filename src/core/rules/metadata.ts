@@ -23,6 +23,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-EMPTY-LINK',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['count'],
     plain: {
       pl: `W metadanych {+count:jest|są|jest} {count} {+count:odnośnik|odnośniki|odnośników} do pobrania z pustym adresem. Uzupełnij adres albo usuń odnośnik.`,
@@ -36,6 +37,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-NO-VERSION',
     category: 'A',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Nie podano wersji. Dodaj numer wersji, aby było wiadomo, którą edycję danych ktoś ma.`,
@@ -49,6 +51,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-NO-EXTENT',
     category: 'A',
     severity: 'info',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Metadane nie podają ani zakresu czasu, ani obszaru geograficznego danych, więc nie dało się ich porównać z tabelą. Uzupełnij oba.`,
@@ -70,6 +73,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-DATE-OUTSIDE-EXTENT',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['start', 'end', 'count'],
     plain: {
       pl: `{count} {+count:wiersz ma|wiersze mają|wierszy ma} datę spoza zakresu czasu podanego w metadanych ({start} – {end}), np. {value}. Popraw daty lub zakres czasu.`,
@@ -83,6 +87,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-POINT-OUTSIDE-BBOX',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['west', 'east', 'south', 'north', 'count'],
     plain: {
       pl: `{count} {+count:wiersz leży|wiersze leżą|wierszy leży} poza obszarem podanym w metadanych. Popraw współrzędne albo powiększ obszar w metadanych.`,
@@ -96,6 +101,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-VARIABLE-MISSING',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['term'],
     plain: {
       pl: `Opis wspomina „{term}”, ale w danych nie znaleziono pasującej kolumny. Dodaj kolumnę albo popraw opis.`,
@@ -109,6 +115,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-NO-DATES',
     category: 'A',
     severity: 'error',
+    exportPolicy: 'show',
     params: [],
     plain: {
       pl: `Ani dane, ani metadane nie zawierają żadnej daty. Dodaj datę pobrania próbek do tabeli albo zakres czasu do metadanych.`,
@@ -151,6 +158,7 @@ export const METADATA_RULES: readonly RuleSpec[] = [
     id: 'META-NO-POSITIONS',
     category: 'A',
     severity: 'error',
+    exportPolicy: 'show',
     params: [],
     citations: [CITE.obisManualLocation],
     plain: {

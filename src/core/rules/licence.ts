@@ -43,6 +43,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-MISSING',
     category: 'A',
     severity: 'error',
+    exportPolicy: 'show',
     citations: [CITE.inspireValues, CITE.inspireNoConditions, CITE.fairLicence, CITE.openaireRecommends],
     // `dataciteCompared` ('no') is an optional marker read by renderPlain (plainDataciteNotCompared) and is deliberately not a declared
     // template param: /check never sets it, and the technical line has no place for it.
@@ -65,6 +66,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-FREE-TEXT',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.fairFindable, CITE.dataciteTitle, CITE.dataciteIdentifier, CITE.dataciteUri, CITE.inspireLink, CITE.spdxList],
     params: ['text', 'versionMissing', 'hint'],
     plain: {
@@ -79,6 +81,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-TEXT-URI-CONFLICT',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.dataciteTitle, CITE.dataciteUri, CITE.ccNameAndLink],
     params: ['text', 'uri', 'textLicence', 'uriLicence'],
     plain: {
@@ -93,6 +96,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-ADDED-CONDITIONS',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.ccModified],
     params: ['text', 'textLicence', 'rest'],
     plain: {
@@ -108,6 +112,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-EXTRA-TEXT',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.ccModified],
     params: ['text', 'rest'],
     plain: {
@@ -123,6 +128,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-OTHER-RIGHTS-ENTRY',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.ccModified],
     params: ['licence', 'text'],
     plain: {
@@ -137,6 +143,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-AMBIGUOUS',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.dataciteTitle, CITE.dataciteIdentifier],
     params: ['text', 'readings'],
     plain: {
@@ -151,6 +158,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-RESTRICTION-CONFLICT',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.inspireOtherRestrictions, CITE.inspireOtherConstraints, CITE.isoRestricted, CITE.ccCopyright],
     params: ['codes', 'licence'],
     plain: {
@@ -165,6 +173,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-FILES-HELD-BACK',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['files'],
     plain: {
       pl: `Część plików tego zbioru ma ograniczony dostęp lub jest objęta embargiem: {files}. O dostępie do nich decyduje repozytorium, nie licencja z metadanych, więc ocena licencji dotyczy tylko plików otwartych. Jeśli to dane, napisz w opisie, na jakich warunkach można je dostać.`,
@@ -178,6 +187,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-DATACITE-EMPTY',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.openaireRecommends, CITE.openaireMandatory],
     params: ['licence'],
     plain: {
@@ -192,6 +202,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     id: 'LIC-MISMATCH',
     category: 'A',
     severity: 'warning',
+    exportPolicy: 'show',
     citations: [CITE.dataciteRepeat, CITE.ccDualLicensing, CITE.ccDualChoice, CITE.fairDifferent],
     params: ['licenceA', 'licenceB'],
     plain: {

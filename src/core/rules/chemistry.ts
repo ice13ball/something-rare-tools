@@ -22,6 +22,7 @@ export const CHEMISTRY_RULES: readonly RuleSpec[] = [
     id: 'CHEM-UNIT-PAIR',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['variable', 'unitA', 'unitB'],
     thresholds: [
       th('molarMass.C', 12.011, 'g/mol', CITE.ciaawAtomicWeight('6 C', 'carbon', '12.011 ± 0.002')),
@@ -41,6 +42,7 @@ export const CHEMISTRY_RULES: readonly RuleSpec[] = [
     id: 'CHEM-DIC-GT-TA',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['group', 'count', 'total', 'medianDiff'],
     citations: [CITE.teos10StandardSeawater, CITE.dicksonDic, CITE.dicksonTa],
     plain: {
@@ -55,6 +57,7 @@ export const CHEMISTRY_RULES: readonly RuleSpec[] = [
     id: 'CHEM-RANGE',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['variable', 'min', 'max', 'unit', 'count'],
     thresholds: [
       th('temperature.min', -2.5, '°C', CITE.argoCtdRange),

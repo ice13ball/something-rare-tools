@@ -4,7 +4,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LATER_STAGE_RULES } from '../../src/core/convert/policy';
 import { CONVERT_RULES, CONVERT_RULE_PARAMS, getConvertRule, isConvertRuleId, makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
 import { RULES, getRule, makeFinding } from '../../src/core/rules/registry';
 import { GENERIC_PARAMS } from '../../src/core/rules/spec';
@@ -80,8 +79,7 @@ describe('registry conventions', () => {
     const dir = join(ROOT, 'src', 'core', 'convert');
     const used = new Set<string>();
     for (const f of readdirSync(dir)) for (const m of readFileSync(join(dir, f), 'utf8').matchAll(/CONV-[A-Z0-9]+(?:-[A-Z0-9]+)*/g)) used.add(m[0]);
-    // the policy lists the rules of later stages (WoRMS, profiles) before they exist; every other id must be registered
-    for (const id of used) if (!LATER_STAGE_RULES.includes(id)) expect(isConvertRuleId(id), id).toBe(true);
+    for (const id of used) expect(isConvertRuleId(id), id).toBe(true);
     for (const r of CONVERT_RULES) expect(used.has(r.id), `${r.id} is never raised`).toBe(true);
   });
 });
@@ -146,7 +144,7 @@ describe('in the public registry since the reveal, and still out of /check', () 
 
   it('docs/rules.md (generated from RULES) lists every CONV-* rule, with its anchor', () => {
     const doc = read('docs', 'rules.md');
-    for (const r of CONVERT_RULES) expect(doc, r.id).toContain(`| ${r.id} | ${r.severity} | ${r.category} |`);
+    for (const r of CONVERT_RULES) expect(doc, r.id).toContain(`| ${r.id} | ${r.severity} | ${r.exportPolicy} | ${r.category} |`);
     expect(doc).toContain('<a id="CONV-ID-DUPLICATE"></a>');
   });
 

@@ -4,7 +4,7 @@ import { RULES } from '../src/core/rules/registry';
 import type { Citation, RuleDef } from '../src/core/types';
 
 /**
- * Markdown table of every rule: id, severity, category, thresholds (value + unit) and citations.
+ * Markdown table of every rule: id, severity, export policy of /convert, category, thresholds (value + unit) and citations.
  * docs/rules.md must equal this output; test/rules/rules-doc.test.ts compares them and, with
  * UPDATE_RULES_DOC=1, rewrites the file.
  */
@@ -39,9 +39,9 @@ export function rulesDoc(): string {
     'Every number a rule compares against is listed here with its source (`docs/research/qc-sources.md`).',
     'Each row ends with an invisible anchor named after the rule id: the ⓘ explanations link to `docs/rules.md#<RULE-ID>`.',
     '',
-    '| id | severity | category | thresholds | citations |',
-    '|---|---|---|---|---|',
-    ...RULES.map((r) => `| ${r.id} | ${r.severity} | ${r.category} | ${thresholdCell(r)} | ${citationCell(r)}<a id="${r.id}"></a> |`),
+    '| id | severity | export (/convert) | category | thresholds | citations |',
+    '|---|---|---|---|---|---|',
+    ...RULES.map((r) => `| ${r.id} | ${r.severity} | ${r.exportPolicy} | ${r.category} | ${thresholdCell(r)} | ${citationCell(r)}<a id="${r.id}"></a> |`),
     '',
   ];
   return lines.join('\n');

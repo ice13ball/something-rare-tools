@@ -23,6 +23,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     id: 'XF-DUPLICATE-SAMPLES',
     category: 'C',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['fileA', 'fileB', 'count'],
     plain: {
       pl: `Pliki {fileA} i {fileB} zawierają {count} {+count:tę samą próbkę|te same próbki|tych samych próbek}. Upewnij się, że {+count:nie jest liczona|nie są liczone|nie są liczone} dwa razy.`,
@@ -36,6 +37,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     id: 'XF-DATE-CONFLICT',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['station', 'fileA', 'fileB', 'dateA', 'dateB', 'lineA', 'lineB'],
     plain: {
       pl: `Stacja {station} ma te same wartości w plikach {fileA} i {fileB}, ale różne daty ({dateA} i {dateB}). Jedna z dat jest prawdopodobnie błędna.`,
@@ -49,6 +51,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     id: 'XF-STATION-ALIAS',
     category: 'C',
     severity: 'info',
+    exportPolicy: 'show',
     params: ['nameA', 'nameB'],
     plain: {
       pl: `„{nameA}” i „{nameB}” wyglądają na tę samą stację zapisaną na dwa sposoby. Używaj wszędzie jednej nazwy.`,
@@ -62,6 +65,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     id: 'XF-UNIT-CONFLICT',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['variable', 'unitA', 'unitB', 'matched', 'equal', 'fileA', 'fileB'],
     citations: [CITE.glodapUnitConversion, CITE.unescoDensity],
     plain: {
@@ -76,6 +80,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     id: 'XF-POSITION-SWAP',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['stationA', 'stationB', 'fileA', 'fileB'],
     plain: {
       pl: `Pozycje stacji {stationA} i {stationB} są zamienione miejscami między plikami {fileA} i {fileB}. W jednym z plików prawdopodobnie pomylono nazwy stacji.`,
@@ -89,6 +94,7 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     id: 'XF-POSITION-CONFLICT',
     category: 'C',
     severity: 'warning',
+    exportPolicy: 'show',
     params: ['station', 'files', 'positions'],
     plain: {
       pl: `Stacja {station} leży w innym miejscu w {files} niż w pozostałych plikach ({positions}). Sprawdź, które współrzędne są prawidłowe.`,

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import { MAX_PAIRS, pivotConvertFile } from '../../src/core/convert/pivot';
-import { BLOCK_CONV_RULES, judge } from '../../src/core/convert/policy';
+import { judge, rulesWithPolicy } from '../../src/core/convert/policy';
 import { makeConvertFinding, renderConvertPlain } from '../../src/core/rules/convert';
 import { LANGS } from '../../src/core/types';
 import { fileOf, sheetInput } from './helpers';
@@ -394,7 +394,7 @@ describe('CONV-NO-OCCURRENCES is not said while the kind of number is still unde
 
 describe('texts', () => {
   it('the new rules are registered, in four languages; the blocking ones block', () => {
-    expect(BLOCK_CONV_RULES).toEqual(expect.arrayContaining(['CONV-LONG-DUPLICATE', 'CONV-LONG-NO-PARAMETER']));
+    expect(rulesWithPolicy('block')).toEqual(expect.arrayContaining(['CONV-LONG-DUPLICATE', 'CONV-LONG-NO-PARAMETER']));
     const params = { parameterColumn: 'parametr', valueColumn: 'wartość', rows: 40, samples: 2, columns: 3, count: 2, names: 'A, B' };
     for (const id of ['CONV-LONG-READ', 'CONV-LONG-FLAG-COLUMNS', 'CONV-LONG-FLAG-PARAMETERS', 'CONV-LONG-RENAMED', 'CONV-LONG-DUPLICATE', 'CONV-LONG-NO-PARAMETER']) {
       const f = makeConvertFinding(id, { file: 'a.csv', sheet: 'S', field: 'TEMP [degC]', lines: [3, 9], params: { ...params, columns: id === 'CONV-LONG-FLAG-COLUMNS' ? 'X_QC' : 3 } });
