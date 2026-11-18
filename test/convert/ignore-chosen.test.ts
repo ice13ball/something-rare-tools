@@ -60,6 +60,31 @@ describe('the core: who set the ignore', () => {
   });
 });
 
+describe('a second quantity column', () => {
+  const header = ['Sample', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count', 'Biomass [g]'];
+  const rows: Cell[][] = ROWS.map((r) => [...r.slice(0, 6), 2.5]);
+  const go = (extra: { ignoreChosen?: number[] }) => convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit: { 'Biomass [g]': ignore }, ...extra })], approvedSplits: {} }).findings;
+
+  it('set to ignore by the person it is named by CONV-COLUMN-IGNORED and needs no acceptance; proposed it stays in CONV-COLUMN-NOT-EXPORTED', () => {
+    const mine = go({ ignoreChosen: [6] });
+    expect(named(mine, 'CONV-COLUMN-IGNORED')).toEqual(['Biomass [g]']);
+    expect(named(mine, 'CONV-COLUMN-NOT-EXPORTED')).toEqual([]);
+    const proposed = go({});
+    expect(named(proposed, 'CONV-COLUMN-IGNORED')).toEqual([]);
+    expect(named(proposed, 'CONV-COLUMN-NOT-EXPORTED')).toEqual(['Biomass [g]']);
+  });
+});
+
+describe('a column named by a more specific finding is named once', () => {
+  it('a year beside the date is in CONV-COLUMN-YEAR-IGNORED and not again in CONV-COLUMN-IGNORED-PROPOSED', () => {
+    const header = ['Sample', 'Year', 'Date', 'Latitude', 'Longitude', 'Taxon', 'Count', 'Cast'];
+    const rows: Cell[][] = ROWS.map((r, i) => [r[0], 2020, `2020-0${i + 1}-01`, r[2], r[3], r[4], r[5], i + 1]);
+    const f = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' } })], approvedSplits: {} }).findings;
+    expect(named(f, 'CONV-COLUMN-YEAR-IGNORED')).toEqual(['Year']);
+    expect(named(f, 'CONV-COLUMN-IGNORED-PROPOSED').join(',')).not.toContain('Year');
+  });
+});
+
 describe('the worker: ignoreChosen comes from its own proposals', () => {
   const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
   const file = (name: string, text: string): InputFile => ({ name, bytes: enc(text), source: 'dropped' });
@@ -89,7 +114,7 @@ describe('the worker: ignoreChosen comes from its own proposals', () => {
     expect(named(v.findings, 'CONV-COLUMN-IGNORED-PROPOSED')).toEqual(['Cast']);
   });
 
-  it('after a page reload with a companion file the person\'s saved ignore still counts as the person\'s', async () => {
+  it('the same request in a drop that also holds a companion file gives the same answer (a companion keeps no column roles, so the person\'s ignore still differs from the proposal)', async () => {
     const { v } = await convertWith(['Notes', 'Cast'], {}, true);
     expect(named(v.findings, 'CONV-COLUMN-IGNORED')).toEqual(['Notes']);
     expect(named(v.findings, 'CONV-COLUMN-IGNORED-PROPOSED')).toEqual(['Cast']);

@@ -819,7 +819,7 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
     if (c.role.kind !== 'ignore' || used.has(c.index) || consumed?.has(c.index) === true) return [];
     if (sheet !== undefined && isUnnamedColumn(sin, sheet, c.index)) return [];
     if (c.header.trim() === '') return holdsData(c.index) && !chosenIgnore(sin, c.index) ? [`[${columnLetters(c.index)}]`] : [];
-    if (sin.profile === undefined && isQuantityHeader(c.header) && holdsData(c.index)) return [c.header.trim()];
+    if (sin.profile === undefined && isQuantityHeader(c.header) && holdsData(c.index) && !chosenIgnore(sin, c.index)) return [c.header.trim()];
     return [];
   });
   return [...named, ...left];
@@ -832,11 +832,12 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
 export const IGNORED_NAMED_MAX = 20;
 /** A column the person set to ignore (see ConvertSheetInput.ignoreChosen); with no list, every ignore is the converter's proposal. */
 const chosenIgnore = (sin: ConvertSheetInput, index: number): boolean => sin.ignoreChosen?.includes(index) === true;
-function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, unexported: readonly string[], ownCount = false): { chosen?: ReturnType<typeof ignoredParams>; proposed?: ReturnType<typeof ignoredParams> } {
+function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, unexported: readonly string[], ownCount = false, namedElsewhere: readonly string[] = []): { chosen?: ReturnType<typeof ignoredParams>; proposed?: ReturnType<typeof ignoredParams> } {
   const used = readColumns(sin, cols, specs, ownCount);
   const sheet = sin.file.sheets.find((s) => s.name === sin.sheet);
   if (sheet === undefined) return {};
-  const taken = new Set(unexported);
+  // a column that CONV-COLUMN-YEAR-IGNORED, CONV-COLUMN-NUMBER-IGNORED or CONV-TAXON-ATTRIBUTE-IGNORED names is named by that finding only, so it needs one acceptance, not two
+  const taken = new Set([...unexported, ...namedElsewhere]);
   const chosen: string[] = [];
   const proposed: string[] = [];
   for (const c of sin.mapping.columns) {
@@ -1761,7 +1762,8 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // every column of the sheet that has a meaning this conversion does not read as a profile (a taxon or quantity column, a second pressure): said, nothing is dropped silently
   const unexported = unreadColumns(sin, cols, specs);
   if (unexported.length > 0) ctx.findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
-  const ignored = ignoredColumns(sin, cols, specs, unexported);
+  const sheetOfIgnored = sin.file.sheets.find((s) => s.name === sin.sheet);
+  const ignored = ignoredColumns(sin, cols, specs, unexported, false, sheetOfIgnored === undefined ? [] : vetoedColumns(sin.file, sheetOfIgnored, sin.mapping, sin.handSet).map((v) => v.header.trim()));
   if (ignored.chosen !== undefined) ctx.findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored.chosen }));
   if (ignored.proposed !== undefined) ctx.findings.push(makeConvertFinding('CONV-COLUMN-IGNORED-PROPOSED', { ...base, params: ignored.proposed }));
   pushAll(ctx.findings, dateOrder.trim(collector.findings()));
@@ -2942,6 +2944,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     pushAll(findings, reportVariables([...varState, ...occState], base, [], nercStats));
     // the columns that were written on the occurrences of the rows, said once (the user can undo it by the tick "of each organism" on the column's role)
     // the columns of a long sheet that are a function of the taxon and were left out (a species code, a trophic level): said once, so that nothing is dropped in silence
+    let attrNames: string[] = [];
     if (sin.shape === 'long' && cols.taxonCell !== undefined) {
       const asProposals = sin.mapping.columns.map((c) => ({ ...c, cleanHeader: c.header, confidence: 'high' as const, reason: '' }));
       const taxonAt = cols.taxonCell.index;
@@ -2955,6 +2958,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
         })
         .filter((c) => isTaxonAttribute(sheet, taxonAt, c.index, c.header, valuesRepeatWithinSample(sheet, asProposals, c.index, dc)))
         .map((c) => c.header.trim());
+      attrNames = attrs;
       if (attrs.length > 0) findings.push(makeConvertFinding('CONV-TAXON-ATTRIBUTE-IGNORED', { ...base, params: { count: attrs.length, columns: attrs.join(', ') } }));
     }
     // the replicate column makes events under the samples: its column and their number are said (a replicate role is the user's, or the tool's low-confidence proposal; both are shown)
@@ -3198,7 +3202,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     if (unexported.length > 0) {
       findings.push(makeConvertFinding('CONV-COLUMN-NOT-EXPORTED', { ...base, params: { count: unexported.length, columns: unexported.join(', ') } }));
     }
-    const ignored = ignoredColumns(sin, cols, specs, unexported, ownCount);
+    const vetoedHere = vetoedColumns(sin.file, sheet, sin.mapping, sin.handSet).map((v) => v.header.trim());
+    const ignored = ignoredColumns(sin, cols, specs, unexported, ownCount, [...vetoedHere, ...attrNames]);
     if (ignored.chosen !== undefined) findings.push(makeConvertFinding('CONV-COLUMN-IGNORED', { ...base, params: ignored.chosen }));
     if (ignored.proposed !== undefined) findings.push(makeConvertFinding('CONV-COLUMN-IGNORED-PROPOSED', { ...base, params: ignored.proposed }));
     // a taxon ID chosen by hand on bare whole numbers under a header that is not an AphiaID header: written as given, and said

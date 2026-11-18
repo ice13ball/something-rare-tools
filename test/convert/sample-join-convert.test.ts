@@ -297,6 +297,17 @@ describe('a results sheet whose header is shorter than its rows (unnamedFrom)', 
     const unnamed = rules(result.findings, 'CONV-COLUMN-UNNAMED');
     expect(unnamed.every((f) => f.field === 'Column 4')).toBe(true);
   });
+
+  it('a description column the person set to ignore stays the person\'s after the join (its index moves, ignoreChosen moves with it)', () => {
+    const results = textFile('counts.csv', 'Sample,Taxon,Count\nX01,Calanus finmarchicus,12\nX02,Oithona similis,3\n');
+    const samples = textFile('samples.csv', 'Sample,Station,Date,Remark\nX01,ST-1,2021-05-03,calm\nX02,ST-2,2021-05-04,rough\n');
+    const res = sheetInput(results, { shape: 'long', quantity: { kind: 'count' }, edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } } } as never);
+    const des = sheetInput(samples, { edit: { Remark: { kind: 'ignore' } }, ignoreChosen: [3] } as never);
+    const { out, result } = converted([res, des]);
+    expect(out.sheets[0].ignoreChosen).toEqual([results.sheets[0].header.length + 3]);
+    expect(rules(result.findings, 'CONV-COLUMN-IGNORED').map((f) => f.params.columns)).toEqual(['Remark']);
+    expect(rules(result.findings, 'CONV-COLUMN-IGNORED-PROPOSED')).toEqual([]);
+  });
 });
 
 describe('a date key written differently in the two files is one sample (review 1)', () => {

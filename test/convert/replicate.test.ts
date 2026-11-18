@@ -99,6 +99,7 @@ describe('a colliding ignored column is named once (Task 8)', () => {
     const r = run(HEADER, ROWS, {});
     expect(find(r.blocking, 'CONV-ID-DUPLICATE')).toHaveLength(1);
     expect(find(r.findings, 'CONV-COLUMN-IGNORED')).toEqual([]);
+    expect(find(r.findings, 'CONV-COLUMN-IGNORED-PROPOSED')).toEqual([]);
   });
 });
 

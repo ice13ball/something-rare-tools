@@ -23,6 +23,7 @@ export function readerIds(): Set<string> {
   for (const f of [...tsFiles('src/core/parse'), ...tsFiles('src/core/values')]) for (const m of src(f).matchAll(/'((?:IN|ROW)-[A-Z0-9-]+)'/g)) out.add(m[1]);
   const text = src('src/core/dataset.ts');
   const from = text.indexOf('export function metaParser');
+  expect(from, 'metaParser must still be in src/core/dataset.ts').toBeGreaterThanOrEqual(0);
   const rest = text.slice(from + 1);
   const next = rest.search(/\n(?:export )?function /);
   const body = next < 0 ? rest : rest.slice(0, next);

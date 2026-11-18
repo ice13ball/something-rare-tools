@@ -172,8 +172,7 @@ describe('a key column that is ignored and separates no rows (Task 8: nothing le
     ['A2', 'Oithona similis', 9, 55.6, 2.6, '2023-06-15', 'C2', 'L2', 2, null],
   ];
   const named = (e: Awaited<ReturnType<typeof exportSheet>>): string[] => {
-    const f = e.findings.find((x) => x.ruleId === 'CONV-COLUMN-IGNORED');
-    return f ? String(f.params.columns).split(', ') : [];
+    return e.findings.filter((x) => x.ruleId === 'CONV-COLUMN-IGNORED' || x.ruleId === 'CONV-COLUMN-IGNORED-PROPOSED').flatMap((f) => String(f.params.columns).split(', '));
   };
 
   it('names each ignored column that holds a value, once, as information that blocks nothing; a column with no value in any row is not named', async () => {

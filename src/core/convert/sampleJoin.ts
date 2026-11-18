@@ -1167,7 +1167,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
   for (const [i, o] of Object.entries(description.dayMonthOrder ?? {})) orders[rw + Number(i)] = o;
   for (const [i, o] of resolvedOrder) orders[i] = o.order;
   const fromFile = [...(results.dayMonthOrderFromFile ?? []), ...(description.dayMonthOrderFromFile ?? []).map((i) => rw + i), ...[...resolvedOrder].filter(([, o]) => o.fromFile).map(([i]) => i)];
-  const orderFields = { ...(Object.keys(orders).length === 0 ? {} : { dayMonthOrder: orders }), ...(fromFile.length === 0 ? {} : { dayMonthOrderFromFile: fromFile }) };
+  const chosenIgnores = [...(results.ignoreChosen ?? []), ...(description.ignoreChosen ?? []).map((i) => rw + i)];
+  const orderFields = { ...(chosenIgnores.length === 0 ? {} : { ignoreChosen: chosenIgnores }), ...(Object.keys(orders).length === 0 ? {} : { dayMonthOrder: orders }), ...(fromFile.length === 0 ? {} : { dayMonthOrderFromFile: fromFile }) };
   return { input: { ...results, ...orderFields, file, mapping, sampleJoin: info }, info, conflicts, descriptionKeys: new Set(groups.keys()) };
 }
 

@@ -236,7 +236,7 @@ describe('a picked key in the converter (the b08 shape)', () => {
     expect(cast.role).toBe('keyPart');
     expect(r.ledger[0].balanced).toBe(true);
     // a key column is not reported as an ignored column
-    expect(ids(r, 'CONV-COLUMN-IGNORED').flatMap((f) => String(f.params.names ?? '').split(', '))).not.toContain('cast');
+    for (const rule of ['CONV-COLUMN-IGNORED', 'CONV-COLUMN-IGNORED-PROPOSED']) expect(ids(r, rule).flatMap((f) => String(f.params.columns ?? '').split(', '))).not.toContain('cast');
     const said = ids(r, 'CONV-KEY-PICKED');
     expect(said).toHaveLength(1);
     expect(said[0].params).toMatchObject({ samples: 12, rows: 60, columns: 'station, time, cast' });
