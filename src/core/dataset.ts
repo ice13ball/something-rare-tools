@@ -31,7 +31,7 @@ import { pairHemisphere, parseCoordinate } from './values/coords';
 import type { KeepMillis } from './values/dates';
 import { columnFractions } from './values/fractionEvidence';
 import { isRealFraction, secondOffsetMs } from './values/dates';
-import { columnOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isPlausibleSerial, parseDate, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder } from './values/dates';
+import { columnOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -39,7 +39,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-DATE-YY-AMBIGUOUS' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -291,6 +291,24 @@ function holdsRecord(row: RawRow, skip: readonly number[]): boolean {
   return filled >= 2;
 }
 
+const READING_WORDS: Record<'ymd' | 'dmy' | 'mdy', string> = { ymd: 'year-month-day', dmy: 'day-month-year', mdy: 'month-day-year' };
+/** The other dates a NN-NN-NN cell can be, each with its order in words ("2021-06-05 (day-month-year)"), joined with " or "; the dates differ from the one read and from each other. */
+function otherReadings(text: string, readings: readonly ('ymd' | 'dmy' | 'mdy')[], read: string): string {
+  const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec(text);
+  if (!m) return '';
+  const seen = new Set([read]);
+  const out: string[] = [];
+  for (const o of readings) {
+    const d = parseDate(text, { date1904: false, dateFormatted: false, order: o });
+    if ('error' in d) continue;
+    const iso = d.iso.slice(0, 10);
+    if (seen.has(iso)) continue;
+    seen.add(iso);
+    out.push(`${iso} (${READING_WORDS[o]})`);
+  }
+  return out.join(' or ');
+}
+
 /**
  * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
  * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
@@ -348,6 +366,10 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
   const dwcParts = specs.when && dwcTermOf(specs.when.header) === 'eventdate' ? dwcDateParts(sheet) : undefined;
   // the order the person declared for a column is used only where its cells decide none (columnOrder); /check never passes the option
   const whenOrder = whenIndex === undefined ? 'unknown' : columnOrder(sheet, whenIndex, opts.dayMonthOrder?.[whenIndex]);
+  // NN-NN-NN cells: the readings every cell of the column allows; when the column's order is still open and several fit, a cell whose date differs between them is ROW-DATE-YY-AMBIGUOUS
+  const yyReadings = whenIndex === undefined || whenOrder !== 'unknown' ? [] : twoDigitReadings(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
+  // such a column is named once, by ROW-DATE-YY-AMBIGUOUS, on its cells that differ; a cell that reads the same in every order (22-08-22) adds no second finding to it
+  const yyColumnOpen = whenIndex !== undefined && yyReadings.length > 1 && sheet.rows.some((r) => isAmbiguousTwoDigit(r.cells[whenIndex] ?? null, yyReadings));
   const timeOrder = specs.time ? columnOrder(sheet, specs.time.index, opts.dayMonthOrder?.[specs.time.index]) : 'unknown';
   const dwcDepth = dwcDepthCols(sheet);
 
@@ -444,7 +466,11 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           let whenKept = true;
           let timeReplaced = false;
           let tzField = specs.when.header;
-          if (date.ambiguity === 'yy-mm-dd') c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, String(cell).trim(), false, { interpreted: date.iso.slice(0, 10) });
+          if (date.ambiguity === 'yy-mm-dd') {
+            const text = String(cell).trim();
+            if (!yyColumnOpen) c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), order: whenOrder === 'dmy' || whenOrder === 'mdy' ? whenOrder : 'ymd' });
+            else if (isAmbiguousTwoDigit(cell, yyReadings)) c.add('ROW-DATE-YY-AMBIGUOUS', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), readings: otherReadings(text, yyReadings, date.iso.slice(0, 10)) });
+          }
           let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           const origTime = timeCell;
           if (specs.time && !isBlankCell(timeCell)) {

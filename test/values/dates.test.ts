@@ -2,15 +2,15 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import type { ParsedDate } from '../../src/core/types';
-import { combineDateTime, detectDayMonthOrder, excelSerialToDate, parseDate, cellsAreYearRanges, parseTimeCell, parseTimeOfDay } from '../../src/core/values/dates';
+import { combineDateTime, detectDayMonthOrder, isAmbiguousTwoDigit, twoDigitReadings, excelSerialToDate, parseDate, cellsAreYearRanges, parseTimeCell, parseTimeOfDay } from '../../src/core/values/dates';
 
 const OPTS = { date1904: false, dateFormatted: false };
-const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number; order?: 'dmy' | 'mdy' | 'conflict' } = {}): ParsedDate => {
+const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number; order?: 'dmy' | 'mdy' | 'ymd' | 'conflict' } = {}): ParsedDate => {
   const r = parseDate(raw, { ...OPTS, ...opts });
   if ('error' in r) throw new Error(`expected a date for ${String(raw)}`);
   return r;
 };
-const bad = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; order?: 'dmy' | 'mdy' | 'conflict' } = {}) => {
+const bad = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; order?: 'dmy' | 'mdy' | 'ymd' | 'conflict' } = {}) => {
   const r = parseDate(raw, { ...OPTS, ...opts });
   if (!('error' in r)) throw new Error(`expected error for ${String(raw)}, got ${r.iso}`);
   return r;
@@ -366,5 +366,33 @@ describe('parseTimeRange / parseTimeCell', () => {
 
   it('combineDateTime takes the start of a range', () => {
     expect(combineDateTime({ iso: '2021-07-25', year: 2021, precision: 'day', tz: 'unknown' }, '1600-1730')).toMatchObject({ iso: '2021-07-25T16:00', precision: 'minute' });
+  });
+});
+
+describe('NN-NN-NN dates: the readings the cells allow', () => {
+  it('lists every order under which every cell is a date, ymd first', () => {
+    expect(twoDigitReadings(['05-06-21', '25-06-21', '30-06-21'])).toEqual(['ymd', 'dmy']);
+    expect(twoDigitReadings(['98-06-21'])).toEqual(['ymd']);
+    expect(twoDigitReadings(['05-13-21'])).toEqual(['mdy']);
+    expect(twoDigitReadings(['31-12-99'])).toEqual(['dmy']);
+    expect(twoDigitReadings(['05-05-05'])).toEqual(['ymd', 'dmy', 'mdy']);
+    expect(twoDigitReadings(['2021-06-05', '5/4/2023', null, 7])).toEqual([]);
+  });
+  it('a cell is ambiguous only when its date differs between the readings', () => {
+    const all = twoDigitReadings(['05-05-05']);
+    expect(isAmbiguousTwoDigit('05-05-05', all)).toBe(false);
+    expect(isAmbiguousTwoDigit('05-06-21', ['ymd', 'dmy'])).toBe(true);
+    expect(isAmbiguousTwoDigit('05-06-21', ['ymd'])).toBe(false);
+    expect(isAmbiguousTwoDigit('2021-06-05', all)).toBe(false);
+  });
+  it('parseDate reads the cell in the order it is given; ymd, conflict and absent are YY-MM-DD, and ymd leaves slash cells alone', () => {
+    const o = { currentYear: 2026 };
+    expect(ok('05-06-21', o).iso).toBe('2005-06-21');
+    expect(ok('05-06-21', { ...o, order: 'ymd' }).iso).toBe('2005-06-21');
+    expect(ok('05-06-21', { ...o, order: 'conflict' }).iso).toBe('2005-06-21');
+    expect(ok('05-06-21', { ...o, order: 'dmy' })).toMatchObject({ iso: '2021-06-05', ambiguity: 'yy-mm-dd' });
+    expect(ok('05-06-21', { ...o, order: 'mdy' }).iso).toBe('2021-05-06');
+    expect(bad('5/4/2023', { order: 'ymd' }).error).toBeDefined();
+    expect(ok('13/4/2023', { order: 'ymd' }).iso).toBe('2023-04-13');
   });
 });

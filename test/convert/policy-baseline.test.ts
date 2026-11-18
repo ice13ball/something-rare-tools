@@ -93,6 +93,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'ROW-KEY-IGNORED': 'show',
   'ROW-JOIN-KEY-BLANK': 'show',
   'ROW-DATE-YYMMDD': 'accept',
+  'ROW-DATE-YY-AMBIGUOUS': 'block',
   'ROW-TZ-UNKNOWN': 'show',
   'ROW-UNIT-MISSING': 'show',
   'ROW-HEADER-CODE-SHAPE': 'show',
@@ -272,7 +273,7 @@ describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(253);
+    expect(Object.keys(BASELINE).length).toBe(254);
   });
 
   it('the field of each rule definition is its baseline policy', () => {

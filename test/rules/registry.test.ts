@@ -83,6 +83,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'ROW-DATE-MISSING': ['info', 'B'],
   'ROW-YEAR-OUTLIER': ['warning', 'B'],
   'ROW-DATE-YYMMDD': ['info', 'B'],
+  'ROW-DATE-YY-AMBIGUOUS': ['warning', 'B'],
   'ROW-JOIN-AMBIGUOUS': ['warning', 'B'],
   'ROW-JOIN-KEY-BLANK': ['warning', 'B'],
   'ROW-LONG-VALUE-SKIPPED': ['warning', 'B'],
@@ -130,9 +131,9 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // the 114 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
-    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(114);
-    expect(ids.length).toBe(114 + CONVERT_RULES.length);
+    // the 115 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
+    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(115);
+    expect(ids.length).toBe(115 + CONVERT_RULES.length);
     expect([...ids.filter((id) => !id.startsWith('CONV-'))].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES.filter((x) => !x.id.startsWith('CONV-'))) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -215,7 +216,8 @@ describe('messages', () => {
   }
 
   it('ROW-DATE-YYMMDD declares the interpreted date as a param', () => {
-    expect(RULE_PARAMS['ROW-DATE-YYMMDD']).toEqual(['interpreted']);
+    expect(RULE_PARAMS['ROW-DATE-YYMMDD']).toEqual(['interpreted', 'order']);
+    expect(RULE_PARAMS['ROW-DATE-YY-AMBIGUOUS']).toEqual(['interpreted', 'readings']);
   });
 
   it('Polish messages carry diacritics (no ASCII-fied text)', () => {

@@ -425,7 +425,7 @@ describe('ROW-DEPTH-SIGN', () => {
 
 describe('rules owned by the dataset builder', () => {
   it('checkRows never emits them', () => {
-    const own = ['ROW-DM-COORDS', 'ROW-LON-360', 'ROW-DATE-UNPARSEABLE', 'ROW-DATE-YYMMDD', 'ROW-TZ-UNKNOWN', 'ROW-NON-NUMERIC', 'ROW-NA-VARIANT', 'ROW-RAGGED'];
+    const own = ['ROW-DM-COORDS', 'ROW-LON-360', 'ROW-DATE-UNPARSEABLE', 'ROW-DATE-YYMMDD', 'ROW-DATE-YY-AMBIGUOUS', 'ROW-TZ-UNKNOWN', 'ROW-NON-NUMERIC', 'ROW-NA-VARIANT', 'ROW-RAGGED'];
     const fs = checkRows(dataset([row({ line: 2, lat: 95, lon: 95, station: 'S', date: '2021-01-01' })]));
     expect(fs.filter((f) => own.includes(f.ruleId))).toEqual([]);
   });

@@ -4,14 +4,16 @@ import type { Specs } from '../dataset';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, RawSheet } from '../types';
 import type { DeclaredOrder } from '../values/dates';
-import { columnOrder, declaredOrderStatus, detectDayMonthOrder, isAmbiguousDayMonth } from '../values/dates';
+import { columnOrder, declaredOrderStatus, detectDayMonthOrder, isAmbiguousDayMonth, isAmbiguousTwoDigit, parseDate, twoDigitReadings } from '../values/dates';
+import type { TwoDigitOrder } from '../values/dates';
 import type { ConvertSheetInput } from './build';
 
 /*
  * The day/month order of a date column. 5/4/2023 is 5 April or 4 May and no cell of the value decides it: it is never guessed. Until the person declares the order of the column
  * (ConvertSheetInput.dayMonthOrder, by column index), the cells that no other cell of the column decides block with a clear choice (CONV-DATE-ORDER-UNDECLARED) instead of being
  * called unreadable; once declared, every reader of a date in the converter takes the order from `columnOrder` (values/dates.ts), so the date written, the date inside an ID and the
- * date compared in a join cannot disagree. A declaration only decides cells that no date decides: against a column whose own dates say otherwise it is said and not used.
+ * date compared in a join cannot disagree. A NN-NN-NN date (two-digit year) is asked the same way when two or more of year-month-day, day-month-year and month-day-year fit every cell of the column and
+ * no cell rules one out (CONV-DATE-ORDER-UNDECLARED, variant two-digit-year); the answer `ymd` exists only for such a column. A declaration only decides cells that no date decides: against a column whose own dates say otherwise it is said and not used.
  */
 
 const MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -26,7 +28,7 @@ interface Ambiguous {
 export interface DateOrderRead {
   /** The findings of the sheet's date columns, in column order. */
   findings: Finding[];
-  /** Takes the findings the collector made and removes the cells CONV-DATE-ORDER-UNDECLARED names from ROW-DATE-UNPARSEABLE (recomputing its count and value, dropping it when none is left). */
+  /** Takes the findings the collector made and removes the cells CONV-DATE-ORDER-UNDECLARED names from ROW-DATE-UNPARSEABLE (recomputing its count and value, dropping it when none is left), and the ROW-DATE-YY-AMBIGUOUS of a column it asks about. */
   trim: (collected: Finding[]) => Finding[];
 }
 
@@ -47,6 +49,25 @@ function readings(text: string): { first: string; second: string; isoFirst: stri
   return { first: `${a} ${MONTH[b - 1]}`, second: `${b} ${MONTH[a - 1]}`, isoFirst: `${m[3]}-${two(b)}-${two(a)}`, isoSecond: `${m[3]}-${two(a)}-${two(b)}` };
 }
 
+const YY_WORDS: Record<TwoDigitOrder, string> = { ymd: 'year-month-day', dmy: 'day-month-year', mdy: 'month-day-year' };
+const YY_PATTERN: Record<TwoDigitOrder, string> = { ymd: 'YY-MM-DD', dmy: 'DD-MM-YY', mdy: 'MM-DD-YY' };
+
+/** The dates of one NN-NN-NN example in each reading, as "2005-06-21 (year-month-day), 2021-06-05 (day-month-year)": only readings that give a date the earlier ones did not. */
+function shownReadings(text: string, readings: readonly TwoDigitOrder[]): { shown: string; isoFirst: string; isoSecond: string } {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const o of readings) {
+    const d = parseDate(text, { date1904: false, dateFormatted: false, order: o });
+    if ('error' in d) continue;
+    const iso = d.iso.slice(0, 10);
+    if (seen.has(iso)) continue;
+    seen.add(iso);
+    parts.push(`${iso} (${YY_WORDS[o]}, ${YY_PATTERN[o]})`);
+  }
+  const isos = [...seen];
+  return { shown: parts.join('; '), isoFirst: isos[0] ?? text, isoSecond: isos[1] ?? text };
+}
+
 /**
  * The findings about the day/month order of one sheet: per date, datetime or time column (and per picked date key part), once. A column lent by a description sheet through a join is the
  * description's own column: its finding names the description's file, sheet and column (`params.index` is that column's own index), so the answer is given on the description.
@@ -64,12 +85,39 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
   // one column: the finding its cells and its declaration call for (UNDECLARED, CONTRADICTED or DECLARED), asked of the sheet the cells are in
   const judgeColumn = (of: RawSheet, index: number, declared: DeclaredOrder | undefined, fromFile: boolean, where: Where): Ambiguous[] | undefined => {
     const cells: Ambiguous[] = [];
+    const column = of.rows.map((r) => r.cells[index] ?? null);
+    const slash = detectDayMonthOrder(column);
     for (const r of of.rows) {
       const c = r.cells[index] ?? null;
       if (isAmbiguousDayMonth(c)) cells.push({ line: r.line, text: String(c).trim() });
     }
+    // NN-NN-NN cells, only where no slash date decides and no value of the column rules the readings down to one
+    const yyReadings = slash === 'unknown' ? twoDigitReadings(column) : [];
+    const yyCells: Ambiguous[] = [];
+    if (yyReadings.length > 1) {
+      for (const r of of.rows) {
+        const c = r.cells[index] ?? null;
+        if (isAmbiguousTwoDigit(c, yyReadings)) yyCells.push({ line: r.line, text: String(c).trim() });
+      }
+    }
+    // `ymd` answers only a column of NN-NN-NN dates: on any other column it decides nothing, and the order is still asked
+    if (declared === 'ymd' && yyReadings.length === 0) declared = undefined;
     if (declared === undefined) {
-      if (cells.length === 0 || detectDayMonthOrder(of.rows.map((r) => r.cells[index] ?? null)) !== 'unknown') return undefined;
+      if (slash !== 'unknown' || (cells.length === 0 && yyCells.length === 0)) return undefined;
+      if (cells.length === 0) {
+        const examples = [...new Set(yyCells.map((x) => x.text))].slice(0, 2);
+        const { shown, isoFirst, isoSecond } = shownReadings(examples[0], yyReadings);
+        findings.push(
+          makeConvertFinding('CONV-DATE-ORDER-UNDECLARED', {
+            file: where.file,
+            sheet: where.sheet,
+            field: where.field,
+            value: examples[0],
+            params: { variant: 'two-digit-year', count: yyCells.length, examples: examples.join(', '), index: where.index, readings: yyReadings.join(','), shown, first: examples[0], second: examples[0], isoFirst, isoSecond },
+          }),
+        );
+        return yyCells;
+      }
       const examples = [...new Set(cells.map((x) => x.text))].slice(0, 2);
       findings.push(
         makeConvertFinding('CONV-DATE-ORDER-UNDECLARED', {
@@ -98,7 +146,8 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
       const own = info!.description.sheet;
       const mine = own.rows.map((r) => r.cells[entry.index] ?? null);
       if (sin.dayMonthOrder?.[index] === undefined && detectDayMonthOrder(mine) === 'unknown') {
-        const lines = sheet.rows.filter((r) => isAmbiguousDayMonth(r.cells[index] ?? null)).map((r) => r.line);
+        const yy = twoDigitReadings(mine);
+        const lines = sheet.rows.filter((r) => isAmbiguousDayMonth(r.cells[index] ?? null) || (yy.length > 1 && isAmbiguousTwoDigit(r.cells[index] ?? null, yy))).map((r) => r.line);
         if (lines.length > 0) named.set(header, new Set(lines));
       }
       continue;
@@ -121,6 +170,8 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
     const byLine = new Map(sheet.rows.map((r) => [r.line, r] as const));
     const indexOf = new Map([...columns].map(([i, h]) => [h, i] as const));
     return collected.flatMap((f) => {
+      // the question is asked: the warning that says the same of the same cells is not said twice
+      if (f.ruleId === 'ROW-DATE-YY-AMBIGUOUS' && f.sheet === sheet.name && f.field !== undefined && named.has(f.field)) return [];
       const drop = f.ruleId === 'ROW-DATE-UNPARSEABLE' && f.sheet === sheet.name && f.field !== undefined ? named.get(f.field) : undefined;
       if (drop === undefined || f.lines === undefined) return [f];
       const left = f.lines.filter((l) => !drop.has(l));

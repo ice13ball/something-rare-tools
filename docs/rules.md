@@ -87,6 +87,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-KEY-IGNORED | info | show | B | — | —<a id="ROW-KEY-IGNORED"></a> |
 | ROW-JOIN-KEY-BLANK | warning | show | B | — | —<a id="ROW-JOIN-KEY-BLANK"></a> |
 | ROW-DATE-YYMMDD | info | accept | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
+| ROW-DATE-YY-AMBIGUOUS | warning | block | B | — | —<a id="ROW-DATE-YY-AMBIGUOUS"></a> |
 | ROW-TZ-UNKNOWN | info | show | B | — | —<a id="ROW-TZ-UNKNOWN"></a> |
 | ROW-UNIT-MISSING | warning | show | B | — | —<a id="ROW-UNIT-MISSING"></a> |
 | ROW-HEADER-CODE-SHAPE | warning | show | B | — | [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.<a id="ROW-HEADER-CODE-SHAPE"></a> |

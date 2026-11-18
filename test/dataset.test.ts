@@ -74,16 +74,37 @@ describe('buildDataset: dates and positions', () => {
   });
 
   it('YY-MM-DD dates are read as 20YY and reported once, with an example', () => {
-    const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,21-07-25,100\nS2,71,11,21-08-24,110\n');
+    const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,21-07-25,100\nS2,71,11,21-08-24,110\nS3,72,12,35-09-01,120\n');
+    // 35 cannot be a day, so the column is year-month-day: it is decided, not asked (21-07-25 alone could also be 21 July 2025)
     const { dataset, findings } = build(f);
     expect(dataset.rows[0].datetime).toMatchObject({ iso: '2021-07-25', ambiguity: 'yy-mm-dd' });
-    expect(byRule(findings, 'ROW-DATE-YYMMDD')).toEqual([expect.objectContaining({ field: 'Date', value: '21-07-25', params: { interpreted: '2021-07-25' } })]);
+    expect(byRule(findings, 'ROW-DATE-YYMMDD')).toEqual([expect.objectContaining({ field: 'Date', value: '21-07-25', params: { interpreted: '2021-07-25', order: 'ymd' } })]);
+  });
+
+ it('NN-NN-NN: a column no value decides is warned with both readings, one a value decides is read so', () => {
+    const csv = (dates: string[]) => textFile('y.csv', `Site_ID,Latitude,Longitude,Date,Na_mg_l\n${dates.map((d, i) => `S${i},70,10,${d},1${i}`).join('\n')}\n`);
+    const open = build(csv(['05-06-21', '25-06-21', '30-06-21']));
+    expect(open.dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2005-06-21', '2025-06-21', '1930-06-21']);
+    expect(byRule(open.findings, 'ROW-DATE-YYMMDD')).toEqual([]);
+    const amb = byRule(open.findings, 'ROW-DATE-YY-AMBIGUOUS');
+    expect(amb).toHaveLength(1);
+    expect(amb[0]).toMatchObject({ field: 'Date', value: '05-06-21', severity: 'warning', params: { interpreted: '2005-06-21', readings: '2021-06-05 (day-month-year)' } });
+    expect(renderPlain(amb[0], 'en')).toContain('Dates such as "05-06-21" can be year-month-day or another order, and no date in this column decides it. Read as 2005-06-21; it could also be 2021-06-05 (day-month-year).');
+    const ymd = build(csv(['98-06-21', '99-07-22']));
+    expect(ymd.dataset.rows[0].datetime?.iso).toBe('1998-06-21');
+    expect(byRule(ymd.findings, 'ROW-DATE-YYMMDD')[0].params).toEqual({ interpreted: '1998-06-21', order: 'ymd' });
+    expect(byRule(ymd.findings, 'ROW-DATE-YY-AMBIGUOUS')).toEqual([]);
+    const mdy = build(csv(['05-13-21', '06-14-21']));
+    expect(mdy.dataset.rows.map((r) => r.datetime?.iso)).toEqual(['2021-05-13', '2021-06-14']);
+    expect(byRule(mdy.findings, 'ROW-DATE-YYMMDD')[0].params).toEqual({ interpreted: '2021-05-13', order: 'mdy' });
+    // the same day in every order is not ambiguous
+    expect(byRule(build(csv(['05-05-05', '06-06-06'])).findings, 'ROW-DATE-YY-AMBIGUOUS')).toEqual([]);
   });
 
   it('the YY-MM-DD message states the century it chose, in every language', () => {
     const f = textFile('y.csv', 'Site_ID,Latitude,Longitude,Date,Na_mg_l\nS1,70,10,99-07-25,100\nS2,71,11,98-08-24,110\n');
     const [finding] = byRule(build(f).findings, 'ROW-DATE-YYMMDD');
-    expect(finding.params).toEqual({ interpreted: '1999-07-25' });
+    expect(finding.params).toEqual({ interpreted: '1999-07-25', order: 'ymd' });
     for (const lang of LANGS) {
       const text = renderPlain(finding, lang);
       expect(text, lang).toContain('99-07-25');

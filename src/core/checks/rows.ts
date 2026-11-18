@@ -15,7 +15,7 @@ import { minOf, pushAll } from '../util/arrays';
 /*
  * Category B — row checks.
  *
- * The dataset builder already raises ROW-DM-COORDS, ROW-LON-360, ROW-DATE-UNPARSEABLE, ROW-DATE-YYMMDD, ROW-TZ-UNKNOWN,
+ * The dataset builder already raises ROW-DM-COORDS, ROW-LON-360, ROW-DATE-UNPARSEABLE, ROW-DATE-YYMMDD, ROW-DATE-YY-AMBIGUOUS, ROW-TZ-UNKNOWN,
  * ROW-NON-NUMERIC and ROW-NA-VARIANT (and the parser ROW-RAGGED); this file never repeats them.
  * Row-level findings are produced per sheet, because physical line numbers only mean something within one sheet.
  */
@@ -789,7 +789,8 @@ const dateHeader = (ds: Dataset, sheet: string): string | undefined => headerOf(
  * the future only when it can have begun nowhere yet: earliestUtcDayOf takes a date-only value (a year or month by its first day) to its
  * start in the latest zone, UTC+14, a time without a zone as possibly that zone's wall clock, and a time with a zone as the instant it is.
  * So a user east of UTC is never told that his own today is in the future; a date a day after today in UTC is not reported, two days are.
- * A YY-MM-DD date is left to ROW-DATE-YYMMDD, which already names the century it guessed.
+ * A NN-NN-NN date (two-digit year, flagged ambiguity 'yy-mm-dd', in whatever order it was read) is left to ROW-DATE-YYMMDD or ROW-DATE-YY-AMBIGUOUS, which already name the century and the order it
+ * took: the pivot puts it at most one year ahead, and its order or century is the person's to settle first.
  */
 function futureRows(rows: DataRow[], today: string): DataRow[] {
   return rows.filter((r) => r.datetime !== undefined && r.datetime.ambiguity === undefined && earliestUtcDayOf(r.datetime.end ?? r.datetime) > today);

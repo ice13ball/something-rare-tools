@@ -131,7 +131,8 @@ const SHIP_DECLARED = {
  *   ROW-LONG-KEY-EXTENDED columns, count   lines = some of the rows the columns separate (at most 20); columns = the headers (comma-separated) added; count = how many (info; field is empty)
  *   ROW-KEY-IGNORED  columns, count   lines = some of the rows of the clean CSV that look alike (at most 20); columns = the headers (comma-separated) of the columns the person set to ignore that differ between them (long or wide sheet); count = how many (field is empty)
  *   ROW-JOIN-KEY-BLANK    right   field = the key (columns joined with " + "), lines = the rows whose key has a blank part and that have no position of their own; right = the sheet that would give it
- *   ROW-DATE-YYMMDD       interpreted field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen)
+ *   ROW-DATE-YYMMDD       interpreted, order   field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen); order = ymd | dmy | mdy, the order the column was read in (from its cells, or declared in /convert)
+ *   ROW-DATE-YY-AMBIGUOUS interpreted, readings   field = column, value = example as written (once per column): a NN-NN-NN date whose order no value of the column decides; interpreted = the example read year-month-day, readings = its other dates each with the order in words, joined with " or "
  *   ROW-TZ-UNKNOWN        (none)      field = column (once per column)
  *   ROW-UNIT-MISSING      headers     column headers without a unit, comma-separated
  *   ROW-HEADER-CODE-SHAPE column, code, collection, length   column = the header; code = what follows `SDN:<collection>::`; collection = P01 or P06; length = characters such a code has (8 or 4)
@@ -602,14 +603,29 @@ export const ROW_RULES: readonly RuleSpec[] = [
     category: 'B',
     severity: 'info',
     exportPolicy: 'accept',
-    params: ['interpreted'],
+    params: ['interpreted', 'order'],
     plain: {
-      pl: `Daty w kolumnie „{field}” mają dwucyfrowy rok i dopisano do niego stulecie; np. „{value}” odczytano jako {interpreted}. Używaj czterocyfrowego roku.`,
-      en: `Dates in column "{field}" have a two-digit year and a century was added; e.g. "{value}" was read as {interpreted}. Use a four-digit year.`,
-      de: `Daten in der Spalte „{field}“ haben eine zweistellige Jahreszahl, das Jahrhundert wurde ergänzt; z. B. wurde „{value}“ als {interpreted} gelesen. Verwenden Sie eine vierstellige Jahreszahl.`,
-      fr: `Les dates de la colonne « {field} » ont une année à deux chiffres et un siècle a été ajouté ; par ex. « {value} » a été lu comme {interpreted}. Utilisez une année à quatre chiffres.`,
+      pl: `Daty w kolumnie „{field}” mają dwucyfrowy rok i dopisano do niego stulecie; np. „{value}” odczytano jako {interpreted} (kolejność {order}). Jedna zgoda obejmuje stulecie w każdej kolumnie, którą ta uwaga nazywa. Używaj czterocyfrowego roku.`,
+      en: `Dates in column "{field}" have a two-digit year and a century was added; e.g. "{value}" was read as {interpreted} (order {order}). One acceptance covers the century in every column this note names, each by name. Use a four-digit year.`,
+      de: `Daten in der Spalte „{field}“ haben eine zweistellige Jahreszahl, das Jahrhundert wurde ergänzt; z. B. wurde „{value}“ als {interpreted} gelesen (Reihenfolge {order}). Eine Zustimmung deckt das Jahrhundert in jeder Spalte ab, die dieser Hinweis nennt, jede mit Namen. Verwenden Sie eine vierstellige Jahreszahl.`,
+      fr: `Les dates de la colonne « {field} » ont une année à deux chiffres et un siècle a été ajouté ; par ex. « {value} » a été lu comme {interpreted} (ordre {order}). Un seul accord couvre le siècle de chaque colonne que cette remarque nomme, chacune par son nom. Utilisez une année à quatre chiffres.`,
     },
-    technical: `{file} field {field} value '{value}': YY-MM-DD read as {interpreted} (century inferred; ambiguous). The century of a two-digit year is the reader's decision, accepted once per column before the export.`,
+    technical: `{file} field {field} value '{value}': NN-NN-NN read as {interpreted} in the order {order} (century inferred; ambiguous). The century of a two-digit year is the reader's decision. The export gate accepts per rule, not per column: one acceptance of ROW-DATE-YYMMDD covers the century in every column it names, each named in its own finding.`,
+  },
+  {
+    id: 'ROW-DATE-YY-AMBIGUOUS',
+    category: 'B',
+    severity: 'warning',
+    // export (/convert): the order of a NN-NN-NN date no value decides is the person's to declare, as the day/month order of a slash date is
+    exportPolicy: 'block',
+    params: ['interpreted', 'readings'],
+    plain: {
+      pl: `Daty takie jak „{value}” mogą być zapisane rok-miesiąc-dzień albo w innej kolejności, a żadna data w kolumnie „{field}” tego nie rozstrzyga. Odczytano jako {interpreted}; może to być także {readings}.`,
+      en: `Dates such as "{value}" can be year-month-day or another order, and no date in this column decides it. Read as {interpreted}; it could also be {readings}.`,
+      de: `Daten wie „{value}“ können Jahr-Monat-Tag oder in einer anderen Reihenfolge geschrieben sein, und kein Datum der Spalte „{field}“ entscheidet es. Gelesen als {interpreted}; es könnte auch {readings} sein.`,
+      fr: `Des dates comme « {value} » peuvent être écrites année-mois-jour ou dans un autre ordre, et aucune date de la colonne « {field} » ne tranche. Lu comme {interpreted} ; ce pourrait aussi être {readings}.`,
+    },
+    technical: `{file} field {field} value '{value}': NN-NN-NN with two or more readings that fit every NN-NN-NN cell of the column (no part above 31, none above 12 in a month place rules them out) and a date that differs between them. Read as {interpreted} (year-month-day, century inferred); it could also be {readings}. Reported once per column. In /convert the export is blocked until the person declares the order of the column.`,
   },
   {
     id: 'ROW-TZ-UNKNOWN',

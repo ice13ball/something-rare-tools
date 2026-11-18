@@ -63,7 +63,7 @@ import type { RuleSpec } from './spec';
  *   CONV-TAXON-EMPTY-ROW       count            field = the taxon column, lines = rows of a long sheet with a quantity or a weight and an empty taxon cell: not converted, said (warning, accept)
  *   CONV-TIME-HOLDS-DATES      count            field = the time column, count = its cells that hold a full date, while no column is the date: blocks (the events would have no eventDate)
  *   CONV-TIME-SOME-DATES       count            field = the time column, lines = its cells that hold a full date, fewer than half of the filled ones: those dates would be lost (warning, accept)
- *   CONV-DATE-ORDER-UNDECLARED count, examples, index, first, second, isoFirst, isoSecond   field = a date / datetime / time column (or a picked date key part), value = the first example, index = its column: it has dates such as 5/4/2023 that can be read either way, no date in it decides, and no order is declared (blocks; the ROW-DATE-UNPARSEABLE of those cells is not said)
+ *   CONV-DATE-ORDER-UNDECLARED count, examples, index, first, second, isoFirst, isoSecond (+ variant 'two-digit-year': readings = the orders that fit, machine list 'ymd,dmy'; shown = the dates of the first example in each, in words; the cells are NN-NN-NN and the ROW-DATE-YY-AMBIGUOUS of the column is not said)   field = a date / datetime / time column (or a picked date key part), value = the first example, index = its column: it has dates such as 5/4/2023 that can be read either way, no date in it decides, and no order is declared (blocks; the ROW-DATE-UNPARSEABLE of those cells is not said)
  *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
  *   CONV-DATE-ORDER-DECLARED   order, index   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
  *   CONV-DECIMAL-DECLARED      column, index, reading   info: the person declared what the comma is in a column that IN-DECIMAL-AMBIGUOUS asked about (reading = decimal | thousands); under thousands the column's cells written 1,250 or 1,250,000 are read as 1250 and 1250000 (optional fromFile = yes: the answer came from the companion file)
@@ -1077,10 +1077,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     exportPolicy: 'block',
     params: ['declared', 'detected', 'index'],
     plain: {
-      pl: `Dla kolumny „{field}” podano kolejność „{declared}”, ale jej własne daty wskazują „{detected}” (dmy: najpierw dzień, mdy: najpierw miesiąc, conflict: obie). Podana kolejność nie jest używana. Popraw odpowiedź albo daty.`,
-      en: `For column "{field}" you declared the order "{declared}", but its own dates show "{detected}" (dmy: day first, mdy: month first, conflict: both). The declared order is not used. Correct the answer or the dates.`,
-      de: `Für die Spalte „{field}“ wurde die Reihenfolge „{declared}“ angegeben, ihre eigenen Daten zeigen aber „{detected}“ (dmy: Tag zuerst, mdy: Monat zuerst, conflict: beides). Die Angabe wird nicht verwendet. Korrigieren Sie die Antwort oder die Daten.`,
-      fr: `Pour la colonne « {field} », l'ordre « {declared} » a été indiqué, mais ses propres dates montrent « {detected} » (dmy : jour d'abord, mdy : mois d'abord, conflict : les deux). L'ordre indiqué n'est pas utilisé. Corrigez la réponse ou les dates.`,
+      pl: `Dla kolumny „{field}” podano kolejność „{declared}”, ale jej własne daty wskazują „{detected}” (dmy: najpierw dzień, mdy: najpierw miesiąc, ymd: najpierw rok, conflict: obie). Podana kolejność nie jest używana. Popraw odpowiedź albo daty.`,
+      en: `For column "{field}" you declared the order "{declared}", but its own dates show "{detected}" (dmy: day first, mdy: month first, ymd: year first, conflict: both). The declared order is not used. Correct the answer or the dates.`,
+      de: `Für die Spalte „{field}“ wurde die Reihenfolge „{declared}“ angegeben, ihre eigenen Daten zeigen aber „{detected}“ (dmy: Tag zuerst, mdy: Monat zuerst, ymd: Jahr zuerst, conflict: beides). Die Angabe wird nicht verwendet. Korrigieren Sie die Antwort oder die Daten.`,
+      fr: `Pour la colonne « {field} », l'ordre « {declared} » a été indiqué, mais ses propres dates montrent « {detected} » (dmy : jour d'abord, mdy : mois d'abord, ymd : année d'abord, conflict : les deux). L'ordre indiqué n'est pas utilisé. Corrigez la réponse ou les dates.`,
     },
     technical: `{file}, {sheet} field {field} (column {index}): the day/month order declared for the column is {declared}, but its own unambiguous dates decide {detected}. A declaration only decides cells that no date decides, so it is not applied; the export is blocked until the declaration or the dates are corrected.`,
   },
@@ -1091,10 +1091,10 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     exportPolicy: 'show',
     params: ['order', 'index'],
     plain: {
-      pl: `Jak podano, daty w kolumnie „{field}” są odczytywane w kolejności {order} (dmy: najpierw dzień, mdy: najpierw miesiąc): w zapisanej dacie, w identyfikatorze i przy porównaniu w połączeniu arkuszy.`,
-      en: `As you declared, the dates in column "{field}" are read in the order {order} (dmy: day first, mdy: month first): in the date written, in an identifier and when compared in a join.`,
-      de: `Wie angegeben, werden die Daten der Spalte „{field}“ in der Reihenfolge {order} gelesen (dmy: Tag zuerst, mdy: Monat zuerst): im geschriebenen Datum, in einer Kennung und beim Vergleich in einer Verknüpfung.`,
-      fr: `Comme indiqué, les dates de la colonne « {field} » sont lues dans l'ordre {order} (dmy : jour d'abord, mdy : mois d'abord) : dans la date écrite, dans un identifiant et à la comparaison dans une jointure.`,
+      pl: `Jak podano, daty w kolumnie „{field}” są odczytywane w kolejności {order} (dmy: najpierw dzień, mdy: najpierw miesiąc, ymd: najpierw rok): w zapisanej dacie, w identyfikatorze i przy porównaniu w połączeniu arkuszy.`,
+      en: `As you declared, the dates in column "{field}" are read in the order {order} (dmy: day first, mdy: month first, ymd: year first): in the date written, in an identifier and when compared in a join.`,
+      de: `Wie angegeben, werden die Daten der Spalte „{field}“ in der Reihenfolge {order} gelesen (dmy: Tag zuerst, mdy: Monat zuerst, ymd: Jahr zuerst): im geschriebenen Datum, in einer Kennung und beim Vergleich in einer Verknüpfung.`,
+      fr: `Comme indiqué, les dates de la colonne « {field} » sont lues dans l'ordre {order} (dmy : jour d'abord, mdy : mois d'abord, ymd : année d'abord) : dans la date écrite, dans un identifiant et à la comparaison dans une jointure.`,
     },
     plainIf: [
       {
@@ -2599,6 +2599,16 @@ const quantityWhat = (what: string, lang: Lang): string => {
  * and renderConvertTechnical from the finding's own params; the registry keeps one rule per id.
  */
 export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, string>; technical: string }>> = {
+  // CONV-DATE-ORDER-UNDECLARED for NN-NN-NN dates (a two-digit year): year-month-day, day-month-year or month-day-year
+  'CONV-DATE-ORDER-UNDECLARED:two-digit-year': {
+    plain: {
+      pl: `Daty takie jak „{value}” można odczytać na kilka sposobów: {shown}, a żadna data w kolumnie „{field}” tego nie rozstrzyga ({count} {+count:komórka|komórki|komórek}). Powiedz, w jakiej kolejności ta kolumna zapisuje rok, miesiąc i dzień (ymd: rok-miesiąc-dzień, dmy: dzień-miesiąc-rok, mdy: miesiąc-dzień-rok; wybierz jedną z: {readings}). Stulecie dwucyfrowego roku przyjmujesz osobno.`,
+      en: `Dates such as "{value}" can be read in more than one way: {shown}, and no date in column "{field}" decides it ({count} {+count:cell|cells}). Say which order the column writes the year, month and day in (ymd: year-month-day, dmy: day-month-year, mdy: month-day-year; one of: {readings}). The century of a two-digit year you accept separately.`,
+      de: `Daten wie „{value}“ lassen sich auf mehrere Arten lesen: {shown}, und kein Datum in der Spalte „{field}“ entscheidet es ({count} {+count:Zelle|Zellen}). Sagen Sie, in welcher Reihenfolge die Spalte Jahr, Monat und Tag schreibt (ymd: Jahr-Monat-Tag, dmy: Tag-Monat-Jahr, mdy: Monat-Tag-Jahr; eine von: {readings}). Das Jahrhundert einer zweistelligen Jahreszahl akzeptieren Sie gesondert.`,
+      fr: `Des dates comme « {value} » se lisent de plusieurs façons : {shown}, et aucune date de la colonne « {field} » ne tranche ({count} {+count:cellule|cellules}). Dites dans quel ordre la colonne écrit l'année, le mois et le jour (ymd : année-mois-jour, dmy : jour-mois-année, mdy : mois-jour-année ; l'un de : {readings}). Le siècle d'une année à deux chiffres s'accepte à part.`,
+    },
+    technical: `{file}, {sheet} field {field} (column {index}): {count} cell(s) written NN-NN-NN, e.g. '{value}' ({examples}), read as {shown}. Every NN-NN-NN cell of the column fits more than one order ({readings}; a part above 31, or above 12 in a month place, would have ruled one out), no other date decides it and no order is declared for it. An order is never guessed, so the export is blocked until it is declared; the century of the two-digit year is accepted separately (ROW-DATE-YYMMDD).`,
+  },
   'CONV-SAMPLE-CODE-MISSING': {
     plain: {
       pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} kodu poziomu ({+lineCount:wiersz|wiersze|wierszy} {lines}). Identyfikator poziomu pochodzi od Ciebie: wskaż jako kod próbki kolumnę z kodem unikalnym w obrębie stacji (numer butelki, skanu lub Niskina) albo zaznacz zgodę na stację i głębokość zapisaną w arkuszu (w każdym wierszu potrzebna głębokość albo ciśnienie w decybarach).`,
@@ -3068,6 +3078,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if (f.ruleId === 'CONV-DATE-ORDER-UNDECLARED' && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS['CONV-DATE-ORDER-UNDECLARED:two-digit-year'];
   if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
   const fixedDate = f.params.pivoted === 'yes' || f.params.turned === 'yes' ? '-fixed' : '';

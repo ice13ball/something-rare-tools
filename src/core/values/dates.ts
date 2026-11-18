@@ -20,7 +20,9 @@ export type DateError = { error: 'unparseable'; raw: string };
  */
 export type KeepMillis = boolean | 'shown';
 /** Day/month order of a column of D/M/YYYY dates, as decided from all its cells by detectDayMonthOrder. */
-export type DayMonthOrder = 'dmy' | 'mdy' | 'conflict' | 'unknown';
+export type DayMonthOrder = 'dmy' | 'mdy' | 'ymd' | 'conflict' | 'unknown';
+/** The orders a cell written NN-NN-NN can be read in: year-month-day, day-month-year, month-day-year. */
+export type TwoDigitOrder = 'ymd' | 'dmy' | 'mdy';
 export interface ParseDateOptions {
   date1904: boolean;
   dateFormatted: boolean;
@@ -28,6 +30,7 @@ export interface ParseDateOptions {
    * Column-level order for slash / dash D?M/YYYY dates whose two parts are both <= 12. 'dmy' / 'mdy' read them in
    * that order; 'conflict' (the column mixes unambiguous DD/MM and MM/DD cells) leaves EVERY such date with differing
    * parts unparseable, ambiguous or not. Absent: an ambiguous cell is unparseable.
+   * For a NN-NN-NN cell: 'dmy' reads DD-MM-YY, 'mdy' MM-DD-YY, 'ymd' / 'conflict' / absent YY-MM-DD. Slash cells treat 'ymd' as absent.
    */
   order?: Exclude<DayMonthOrder, 'unknown'>;
   /** full year used for the YY-MM-DD pivot; defaults to the current UTC year (tests pin it) */
@@ -282,6 +285,48 @@ function withTime(y: number, mo: number, d: number, timePart: string | undefined
 
 const ISO_RE = /^(\d{4})-(\d{2})(?:-(\d{2})(?:[Tt ](.+))?)?$/;
 const YY_RE = /^(\d{2})-(\d{2})-(\d{2})$/;
+/** The two-digit year, month and day of a NN-NN-NN cell read in `order`. */
+function readYY(m: RegExpExecArray, order: TwoDigitOrder): { yy: number; mo: number; d: number } {
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  const c = Number(m[3]);
+  return order === 'ymd' ? { yy: a, mo: b, d: c } : order === 'dmy' ? { yy: c, mo: b, d: a } : { yy: c, mo: a, d: b };
+}
+const TWO_DIGIT_ORDERS: readonly TwoDigitOrder[] = ['ymd', 'dmy', 'mdy'];
+const trimmedText = (c: RawCell): string | undefined => (typeof c === 'string' ? c.trim() : undefined);
+
+/**
+ * Every reading under which every NN-NN-NN cell of the column is a date that exists, in the order ymd, dmy, mdy; [] when no cell has that shape.
+ * (The century cannot decide: 00 is read 2000 for the leap day.) A part above 31, or above 12 in a month place, rules a reading out; nothing else does.
+ */
+export function twoDigitReadings(cells: readonly RawCell[]): TwoDigitOrder[] {
+  const found: RegExpExecArray[] = [];
+  for (const c of cells) {
+    const t = trimmedText(c);
+    const m = t === undefined ? null : YY_RE.exec(t);
+    if (m) found.push(m);
+  }
+  if (found.length === 0) return [];
+  return TWO_DIGIT_ORDERS.filter((o) =>
+    found.every((m) => {
+      const r = readYY(m, o);
+      return validYmd(2000 + r.yy, r.mo, r.d);
+    }),
+  );
+}
+
+/** A NN-NN-NN cell whose date differs between two of `readings` (05-06-21 is 2005-06-21 or 2021-06-05; 05-05-05 is one day in every order). */
+export function isAmbiguousTwoDigit(cell: RawCell, readings: readonly TwoDigitOrder[]): boolean {
+  const t = trimmedText(cell);
+  const m = t === undefined ? null : YY_RE.exec(t);
+  if (!m) return false;
+  const seen = new Set(readings.map((o) => {
+    const r = readYY(m, o);
+    return `${r.yy}-${r.mo}-${r.d}`;
+  }));
+  return seen.size > 1;
+}
+
 const DOT_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(.+))?$/;
 const SLASH_RE = /^(\d{1,2})([/-])(\d{1,2})\2(\d{4})(?:\s+(.+))?$/;
 const YEAR_RE = /^\d{4}$/;
@@ -369,13 +414,11 @@ export function parseDate(raw: RawCell, opts: ParseDateOptions): ParsedDate | Da
 
   m = YY_RE.exec(s);
   if (m) {
-    const yy = Number(m[1]);
+    const r = readYY(m, opts.order === 'dmy' || opts.order === 'mdy' ? opts.order : 'ymd');
     const cur = opts.currentYear ?? new Date().getUTCFullYear();
-    const y = yy <= (cur % 100) + 1 ? 2000 + yy : 1900 + yy;
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
-    if (!validYmd(y, mo, d)) return fail(raw);
-    return build(y, mo, d, undefined, 'yy-mm-dd');
+    const y = r.yy <= (cur % 100) + 1 ? 2000 + r.yy : 1900 + r.yy;
+    if (!validYmd(y, r.mo, r.d)) return fail(raw);
+    return build(y, r.mo, r.d, undefined, 'yy-mm-dd');
   }
 
   m = DOT_RE.exec(s);
@@ -423,7 +466,7 @@ export function detectDayMonthOrder(cells: readonly RawCell[]): DayMonthOrder {
 }
 
 /** A day/month order the person declared for a column (never guessed from values). */
-export type DeclaredOrder = 'dmy' | 'mdy';
+export type DeclaredOrder = 'dmy' | 'mdy' | 'ymd'; // ymd only for NN-NN-NN (two-digit year) columns
 
 /**
  * A slash / dash D?M/YYYY cell whose two parts are both 1-12 and differ: 5/4/2023 is 5 April or 4 May, and no part of the cell alone decides it.
@@ -443,8 +486,14 @@ export function isAmbiguousDayMonth(cell: RawCell): boolean {
  * One helper for every reader, so the date written, the date inside an ID and the date compared in a join cannot disagree.
  */
 export function columnOrder(sheet: RawSheet, index: number, declared?: DeclaredOrder): DayMonthOrder {
-  const detected = detectDayMonthOrder(sheet.rows.map((r) => r.cells[index] ?? null));
-  return detected === 'unknown' && declared !== undefined ? declared : detected;
+  const cells = sheet.rows.map((r) => r.cells[index] ?? null);
+  const detected = detectDayMonthOrder(cells);
+  if (detected !== 'unknown') return detected;
+  // NN-NN-NN cells: the one reading that fits them all; of several, the declared one (never guessed)
+  const yy = twoDigitReadings(cells);
+  if (yy.length === 1) return yy[0];
+  if (yy.length > 1) return declared !== undefined && yy.includes(declared) ? declared : 'unknown';
+  return declared !== undefined && declared !== 'ymd' ? declared : 'unknown';
 }
 
 /**
@@ -456,6 +505,9 @@ export function declaredOrderStatus(sheet: RawSheet, index: number, declared: De
   const detected = detectDayMonthOrder(cells);
   if (detected === declared) return 'redundant';
   if (detected !== 'unknown') return 'contradicted';
+  const yy = twoDigitReadings(cells);
+  if (yy.length > 0) return !yy.includes(declared) ? 'contradicted' : yy.length > 1 ? 'applied' : 'redundant';
+  if (declared === 'ymd') return 'redundant';
   return cells.some(isAmbiguousDayMonth) ? 'applied' : 'redundant';
 }
 
