@@ -444,6 +444,7 @@ export function createConvertHandler(): ConvertHandler {
     if (pick === null && h.encoding === undefined) return summaryOf(h);
     const fresh = pick === null ? src.initial : declareEncoding(readBytes(src.name, src.bytes, pick), pick, false);
     const before = h.original;
+    const wasWidth = new Map(before.sheets.map((x) => [x.name, x.header.length] as const));
     h.original = fresh;
     if (pick === null) delete h.encoding;
     else h.encoding = { encoding: pick, fromFile: false };
@@ -469,11 +470,11 @@ export function createConvertHandler(): ConvertHandler {
         h.turnsFromFile.delete(name);
       }
     }
-    const widths = (f: ParsedFile): Map<string, number> => new Map(f.sheets.map((x) => [x.name, x.header.length]));
-    const wasWidth = widths(h.parsed);
     repivot(h);
-    // a text-based step (the pivot's flag columns) may read another set of columns from other letters: for a sheet whose width changed, the answers keyed by its column numbers no longer name the same columns
-    const changed = [...widths(h.parsed)].filter(([name, w]) => wasWidth.get(name) !== w).map(([name]) => name);
+    // the answers kept by column number (the person's comma answers, `describes`) name columns of the file as read: for a sheet whose width there changed they no longer name the same columns. A pivot reads `describes` as a set of numbers, so the stale ones cannot throw
+    const widths = (f: ParsedFile): Map<string, number> => new Map(f.sheets.map((x) => [x.name, x.header.length]));
+    const nowWidth = widths(h.original);
+    const changed = [...nowWidth].filter(([name, w]) => wasWidth.get(name) !== w).map(([name]) => name);
     if (changed.length > 0) {
       for (const name of changed) {
         delete h.turns[name];

@@ -751,4 +751,18 @@ describe('encodingChoice: letters that read differently in the 8-bit code pages 
     const g = await e.encodingChoice(f.fileId, 'windows-1252');
     expect(g.turned).toBeUndefined();
   });
+
+  it('a companion turn that is dropped by the pick does not take the person\'s comma answer with it (the columns as read did not change)', async () => {
+    const header = ['Species\xf8', 'Depth [m]', 'S2'];
+    const text = [header.join(';'), 'Calanus finmarchicus;1,250;4', 'Oithona similis;2,000;2', 'Acartia longiremis;3,000;1', 'Temora longicornis;4,000;5'].join('\n') + '\n';
+    const nameHash = keyHashes(header.map((h) => h.replace('\xf8', 'ř')), [0]) as string;
+    const e = createDirectConvertEngine();
+    const f = (await e.parse([bytesFile('t.csv', text), sidecar({ turned: [{ sheet: 't.csv', nameHash, notSampleHashes: '', rows: 4 }] })])).files[0];
+    expect(f.turned?.['t.csv']?.fromFile).toBe(true);
+    const a = await e.decimalChoice(f.fileId, 't.csv', 1, 'thousands');
+    expect(a.decimal?.['t.csv']?.[1]?.reading).toBe('thousands');
+    const g = await e.encodingChoice(f.fileId, 'windows-1252');
+    expect(g.turned).toBeUndefined();
+    expect(g.decimal).toEqual({ 't.csv': { 1: { reading: 'thousands' } } });
+  });
 });
