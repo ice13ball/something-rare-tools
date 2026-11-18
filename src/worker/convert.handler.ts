@@ -483,7 +483,7 @@ export function createConvertHandler(): ConvertHandler {
   function compute(body: ConvertRequestBody) {
     const { sheets, outcome } = inputsOf(body);
     const splits = listSplits({ sheets, approvedSplits: body.approvedSplits });
-    const done = convert({ sheets, options: { ...body.options, today: today() }, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
+    const done = convert({ sheets, options: { ...body.options, today: body.options.today ?? today() }, approvedSplits: body.approvedSplits, ...(body.worms ? { worms: body.worms } : {}), ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}) });
     const r = outcome.findings.length === 0 ? done : { ...done, findings: [...outcome.findings, ...done.findings] };
     return { sheets, splits, r, outcome };
   }
@@ -631,7 +631,7 @@ export function createConvertHandler(): ConvertHandler {
     return (
       previewSampleKey(input, {
         sheets,
-        options: { ...body.options, today: today() },
+        options: { ...body.options, today: body.options.today ?? today() },
         approvedSplits: body.approvedSplits,
         ...(body.worms ? { worms: body.worms } : {}),
         ...(oldAnswers > 0 ? { oldCompanionAnswers: oldAnswers } : {}),

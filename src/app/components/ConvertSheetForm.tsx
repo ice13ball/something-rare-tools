@@ -465,7 +465,7 @@ export function ConvertSheetForm({ fileName, sheet, hasCruiseColumn, hasEffortCo
               )}
               <div className="field">
                 <label htmlFor={`${id}-date`}>{t('convert.date.label')}</label>
-                <input id={`${id}-date`} data-declared-date={`${fileName}\u0000${sheet}`} type="text" maxLength={40} placeholder="2021-05" value={choice.declaredDate ?? ''} autoComplete="off" spellCheck={false} onChange={(e) => setDate(e.target.value)} />
+                <input id={`${id}-date`} data-declared-date={`${fileName}\u0000${sheet}`} type="text" maxLength={40} placeholder={t('convert.date.placeholder')} value={choice.declaredDate ?? ''} autoComplete="off" spellCheck={false} onChange={(e) => setDate(e.target.value)} />
               </div>
             </details>
           )}

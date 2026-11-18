@@ -77,6 +77,8 @@ describe('the declared date on the page', () => {
     await waitFor(() => expect(item('CONV-DATE-DECLARED-INVALID')).not.toBeNull());
     await idle();
     expect(item('CONV-DATE-DECLARED-INVALID')!.textContent).toContain('2021-13');
+    expect(item('CONV-DATE-DECLARED-INVALID')!.textContent).toContain('write it as YYYY, YYYY-MM or YYYY-MM-DD');
+    expect((screen.getByLabelText(T['convert.date.label']) as HTMLInputElement).placeholder).toBe(T['convert.date.placeholder']);
     expect(last(run).declaredDate).toBe('2021-13');
   });
 
@@ -121,5 +123,25 @@ describe('the declared date on the page', () => {
     expect(screen.getByTestId('date-stale')).toBeTruthy();
     expect((screen.getByLabelText(T['convert.date.label']) as HTMLInputElement).value).toBe('');
     expect(item('CONV-EVENT-DATE-MISSING')).not.toBeNull();
+  });
+
+  it('declared, then the real dates filled in, then reloaded with the companion file: the date is held back and said, nothing blocks', async () => {
+    const run = await load([{ name: SHEET, text: NO_DATE }]);
+    fireEvent.click(within(item('CONV-EVENT-DATE-MISSING')!).getByRole('button', { name: T['convert.finding.declareDate'] }));
+    typeDate('2021-05');
+    await waitFor(() => expect(last(run).declaredDate).toBe('2021-05'));
+    await idle();
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    const text = run.download.mock.calls[0][0] as string;
+    cleanup();
+    const FILLED = csvOf([...H, 'Date'], [['T1', 55.1, 3.2, 'Calanus finmarchicus', 4, '2023-04-05'], ['T2', 55.2, 3.3, 'Calanus finmarchicus', 5, '2023-04-06']]);
+    const again = await load([{ name: SHEET, text: FILLED }, { name: 'c.csv', text }]);
+    expect(last(again).declaredDateFromFile).toBe(true);
+    await waitFor(() => expect(item('CONV-DATE-DECLARED-HELD')).not.toBeNull());
+    expect(item('CONV-DATE-DECLARED-INVALID')).toBeNull();
+    expect(item('CONV-DATE-DECLARED-HELD')!.textContent).toContain('companion file');
+    expect(screen.getByTestId('date-from-file')).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId('date-from-file')).getByRole('button', { name: T['convert.date.undo'] }));
+    await waitFor(() => expect(item('CONV-DATE-DECLARED-HELD')).toBeNull());
   });
 });

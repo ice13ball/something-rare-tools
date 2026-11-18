@@ -91,7 +91,7 @@ export async function exportSheet(header: string[], rows: Cell[][], o: ExportOpt
 /** Several prepared sheets (a biology sheet and profile sheets, say) through convert, validation and the writers, as the export does it. Splits are approved as proposed. */
 export async function exportSheets(sheets: ConvertSheetInput[], o: { meta?: Partial<DatasetMetadata>; fullList?: boolean; prefixStation?: boolean; flatten?: { station?: boolean; cruise?: boolean } } = {}): Promise<Exported> {
   const approvedSplits = Object.fromEntries(listSplits({ sheets }).filter((x) => x.needsDecision).map((x) => [x.verbatim, x.proposed]));
-  const input: ConvertInput = { sheets, options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true, ...(o.flatten ? { flatten: o.flatten } : {}) }, approvedSplits };
+  const input: ConvertInput = { sheets, options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true, today: TODAY, ...(o.flatten ? { flatten: o.flatten } : {}) }, approvedSplits };
   const result = convert(input);
   const meta: DatasetMetadata = { ...META, ...(o.meta ?? {}) };
   const dataset = toDataset(result, meta, { fullList: o.fullList === true, prefixStation: o.prefixStation === true, worms: false, nvs: false });

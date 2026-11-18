@@ -343,6 +343,12 @@ export function positionJoinedFrom(s: Pick<ConvertState, 'parsed' | 'mappings' |
  * The position the person declared, as the request carries it: all three fields filled, else nothing. One read from a companion file is sent only for a sheet that still has no position column,
  * is not a profile and is not joined to a sheet that gives the positions (a pre-fill that no longer fits is not offered, and the form says why); one the person typed is always sent, so the converter says why it is refused.
  */
+/** The person's local calendar day, YYYY-MM-DD. */
+function localToday(): string {
+  const d = new Date();
+  return `${String(d.getFullYear()).padStart(4, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** The date the person declared, as the request carries it: the typed text, else nothing. One from a companion file is marked as such. */
 function declaredDateRequest(c: Pick<SheetChoice, 'declaredDate' | 'dateFromFile'>): Pick<ConvertRequestBody['sheets'][number], 'declaredDate' | 'declaredDateFromFile'> {
   const v = (c.declaredDate ?? '').trim();
@@ -410,7 +416,8 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
   const declined = (s.joins ?? []).filter((j) => j.state === 'declined');
   return {
     sheets,
-    options: s.options,
+    // the person's own calendar day (not UTC's): a date typed for today is not "in the future" a few hours before UTC midnight
+    options: { ...s.options, today: s.options.today ?? localToday() },
     approvedSplits: s.approved,
     ...(s.worms ? { worms: s.worms } : {}),
     ...(s.metadata ? { metadata: tableMetadataOf(s.metadata) } : {}),

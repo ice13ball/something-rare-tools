@@ -142,8 +142,9 @@ import type { RuleSpec } from './spec';
  *   CONV-POSITION-DECLARED     lat, lon, uncertainty, count   the one position the person declared for a sheet with no position role, as typed (point as decimal mark); count = the samples it was written on; fromFile = yes when a companion file gave it (warning, to accept)
  *   CONV-POSITION-DECLARED-INVALID reason  value = the typed text; reason = latitude | longitude | uncertainty | profile (a profile sheet) | position-role (the sheet has a latitude / longitude role, even a blank one); position-joined (the joined description sheet {description} gives the positions); nothing is applied
  *   CONV-DATE-DECLARED         value, count     the one date or interval the person declared for a sheet on which no sample has a date, as typed (ISO 8601); count = the samples it was written on; long = yes when an interval is longer than a year; fromFile = yes when a companion file gave it (warning, to accept)
- *   CONV-DATE-DECLARED-INVALID reason           value = the typed text; reason = format | order | future | some-dated (a sample of the sheet has a date, or a date cell holds something) | date-joined (the joined description sheet {description} gives the dates) | date-turned | profile; nothing is applied
- *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); lines = the lines
+ *   CONV-DATE-DECLARED-HELD    reason           value = the date a companion file saved; reason = some-dated | date-joined | date-turned | profile: the saved date no longer fits the sheet, so it was not applied (warning, to accept; never blocks)
+ *   CONV-DATE-DECLARED-INVALID reason           value = the typed text; reason = format | order | future | no-today (the caller gave no today) | some-dated (a sample of the sheet has a date, or a date cell holds something) | date-joined (the joined description sheet {description} gives the dates) | date-turned | profile; nothing is applied
+ *   CONV-EVENT-DATE-MISSING    count, rows, how  count = the sheet's sample events with no eventDate (OBIS requires one; a sample whose undated lines are all filled but unreadable is not counted); rows = the source lines of those samples; how = no-date-role | blank-cells (variants); turned = yes (variant: a turned sheet, no leave-out); whole = yes (no sample of the sheet has a date and none is lent or turned: one date may be declared); described / noRow / resultsOnly (samples), resultsLineCount, resultsLines = the lines lent by the description sheet and the samples with no row there (variants); lines = the lines
  *   CONV-PROFILE-PRESSURE-NO-UNIT column        column = the header of a pressure column of a profile sheet that was written with no unit
  *   CONV-SEAFLOOR-UNIT         unit             field = the depth-below-seafloor column, unit = its unit ('none' when it has none): not cm or m
  *   CONV-SEAFLOOR-VALUE        count, reason    field = column, value = an example, lines = rows; reason = notation (a number with no exact plain text)
@@ -2161,6 +2162,19 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: the person declared one date or interval ({value}, ISO 8601) for every sample of the sheet; it is written as eventDate on {count} sample event(s), with eventRemarks saying it was declared for all samples of this sheet and not stated in the source file, and one line in the EML methods (a station or cruise whose date is derived from such dates says so in its own remark). Never inferred; applied only to a sheet on which no sample has a date. long = an interval over one year. A warning to accept.`,
   },
   {
+    id: 'CONV-DATE-DECLARED-HELD',
+    category: 'B',
+    severity: 'warning',
+    params: ['reason'],
+    plain: {
+      pl: `Data {value} zapisana w pliku towarzyszącym dla arkusza „{sheet}” nie została zastosowana: {reason}. Nic z niej nie zapisano. Możesz ją cofnąć w formularzu arkusza.`,
+      en: `The date {value} saved in the companion file for sheet "{sheet}" was not applied: {reason}. Nothing was written from it. You can undo it in the sheet's form.`,
+      de: `Das in der Begleitdatei für das Blatt „{sheet}“ gespeicherte Datum {value} wurde nicht angewendet: {reason}. Daraus wurde nichts geschrieben. Sie können es im Formular des Blatts rückgängig machen.`,
+      fr: `La date {value} enregistrée dans le fichier d'accompagnement pour la feuille « {sheet} » n'a pas été appliquée : {reason}. Rien n'en a été écrit. Vous pouvez l'annuler dans le formulaire de la feuille.`,
+    },
+    technical: `{file}, {sheet}: the declared date "{value}" came from the companion file and no longer fits the sheet ({reason}); it is not applied and does not block. some-dated = a sample of the sheet now has a date or a date cell holds something; date-joined = the joined description sheet gives the dates; date-turned = a turned sheet's dates are in its source rows or columns; profile = a profile sheet takes dates from its own columns. A warning to accept.`,
+  },
+  {
     id: 'CONV-DATE-DECLARED-INVALID',
     category: 'B',
     severity: 'error',
@@ -2393,10 +2407,10 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // N1: some undated samples have a description row (its date cell is blank there) and some have no row in the description sheet at all: both are named, each on its own lines
   'CONV-EVENT-DATE-MISSING:described-mixed': {
     plain: {
-      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: w arkuszu „{description}” komórki z datą są puste ({+lineCount:wiersz|wiersze|wierszy} {lines}), a {resultsOnly} {+resultsOnly:próbka nie ma|próbki nie mają|próbek nie ma} tam wiersza ({+resultsLineCount:wiersz|wiersze|wierszy} {resultsLines} arkusza „{sheet}”). Uzupełnij daty albo pomiń te próbki i wypisz je na liście.`,
-      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: in sheet "{description}" the date cells are empty ({+lineCount:line|lines} {lines}), and {resultsOnly} {+resultsOnly:sample has|samples have} no row there at all ({+resultsLineCount:line|lines} {resultsLines} of "{sheet}"). Fill the dates in, or leave these samples out and list them.`,
-      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Im Blatt „{description}“ sind die Datumszellen leer ({+lineCount:Zeile|Zeilen} {lines}), und {resultsOnly} {+resultsOnly:Probe hat|Proben haben} dort gar keine Zeile ({+resultsLineCount:Zeile|Zeilen} {resultsLines} von „{sheet}“). Tragen Sie die Daten ein oder lassen Sie diese Proben aus und listen Sie sie auf.`,
-      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : dans la feuille « {description} » les cellules de date sont vides ({+lineCount:ligne|lignes} {lines}), et {resultsOnly} {+resultsOnly:échantillon n'y a|échantillons n'y ont} aucune ligne ({+resultsLineCount:ligne|lignes} {resultsLines} de « {sheet} »). Renseignez les dates, ou laissez ces échantillons de côté et listez-les.`,
+      pl: `{count} {+count:próbka|próbki|próbek} arkusza „{sheet}” {+count:nie ma|nie mają|nie ma} daty: w arkuszu „{description}” komórki z datą są puste ({+lineCount:wiersz|wiersze|wierszy} {lines}), a {resultsOnly} {+resultsOnly:próbka nie ma|próbki nie mają|próbek nie ma} tam wiersza ({+resultsLineCount:wiersz|wiersze|wierszy} {resultsLines} arkusza „{sheet}”). Uzupełnij daty i dodaj brakujące wiersze albo pomiń te próbki i wypisz je na liście.`,
+      en: `{count} {+count:sample|samples} of sheet "{sheet}" {+count:has|have} no date: in sheet "{description}" the date cells are empty ({+lineCount:line|lines} {lines}), and {resultsOnly} {+resultsOnly:sample has|samples have} no row there at all ({+resultsLineCount:line|lines} {resultsLines} of "{sheet}"). Fill the dates in and add the missing rows, or leave these samples out and list them.`,
+      de: `Bei {count} {+count:Probe|Proben} des Blatts „{sheet}“ fehlt das Datum: Im Blatt „{description}“ sind die Datumszellen leer ({+lineCount:Zeile|Zeilen} {lines}), und {resultsOnly} {+resultsOnly:Probe hat|Proben haben} dort gar keine Zeile ({+resultsLineCount:Zeile|Zeilen} {resultsLines} von „{sheet}“). Tragen Sie die Daten ein und fügen Sie die fehlenden Zeilen hinzu, oder lassen Sie diese Proben aus und listen Sie sie auf.`,
+      fr: `{count} {+count:échantillon|échantillons} de la feuille « {sheet} » {+count:n'a|n'ont} pas de date : dans la feuille « {description} » les cellules de date sont vides ({+lineCount:ligne|lignes} {lines}), et {resultsOnly} {+resultsOnly:échantillon n'y a|échantillons n'y ont} aucune ligne ({+resultsLineCount:ligne|lignes} {resultsLines} de « {sheet} »). Renseignez les dates et ajoutez les lignes manquantes, ou laissez ces échantillons de côté et listez-les.`,
     },
     technical: `{file}, {sheet}: {count} sample event(s) have no eventDate (OBIS requires one). The date comes from the joined sheet {description}: its cells are empty on the lines named (its own lines), and {resultsOnly} sample(s) have no row there at all (accepted as results-only; lines {resultsLines} of {sheet}). {rows} line(s) of {sheet} are affected (how={how}) and can be left out and listed with the reason no-event-date. The Event table's META-NO-DATES / ROW-DATE-MISSING are not repeated.`,
   },
@@ -3185,6 +3199,12 @@ const DATE_REASON_WORDS: Record<string, Record<Lang, string>> = {
     de: 'das Datum liegt in der Zukunft',
     fr: 'la date est dans le futur',
   },
+  'no-today': {
+    en: 'the converter was not told today\'s date, so it cannot check that the date is not in the future',
+    pl: 'konwerter nie dostał dzisiejszej daty, więc nie może sprawdzić, czy data nie jest z przyszłości',
+    de: 'dem Konverter wurde das heutige Datum nicht mitgeteilt, daher kann er nicht prüfen, ob das Datum in der Zukunft liegt',
+    fr: 'le convertisseur ne connaît pas la date du jour et ne peut donc pas vérifier que la date n\'est pas dans le futur',
+  },
   'some-dated': {
     en: 'some samples of this sheet already have a date, or a date cell holds something, and a declared date never fills gaps; leave the samples without a date out and list them, or fill the dates in',
     pl: 'niektóre próbki tego arkusza mają już datę albo komórka z datą coś zawiera, a zadeklarowana data nigdy nie uzupełnia braków; pomiń próbki bez daty i wypisz je na liście albo uzupełnij daty',
@@ -3221,7 +3241,7 @@ export function renderConvertPlain(f: Finding, lang: Lang): string {
   }
   if ((f.ruleId === 'CONV-EFFORT-VALUE-INVALID' || f.ruleId === 'CONV-MESH-INVALID') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-POSITION-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: (DECLARED_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason).replace('{description}', String(f.params.description ?? '')) } };
-  if (f.ruleId === 'CONV-DATE-DECLARED-INVALID' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: (DATE_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason).replace('{description}', String(f.params.description ?? '')) } };
+  if ((f.ruleId === 'CONV-DATE-DECLARED-INVALID' || f.ruleId === 'CONV-DATE-DECLARED-HELD') && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: (DATE_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason).replace('{description}', String(f.params.description ?? '')) } };
   if (f.ruleId === 'CONV-SEAFLOOR-VALUE' && typeof f.params.reason === 'string') f = { ...f, params: { ...f.params, reason: SEAFLOOR_REASON_WORDS[f.params.reason]?.[lang] ?? f.params.reason } };
   if (f.ruleId === 'CONV-SEAFLOOR-SIGNS') f = { ...f, params: { ...f.params, direction: SIGNS_DIRECTION_WORDS[String(f.params.direction)]?.[lang] ?? f.params.direction, side: SIGNS_SIDE_WORDS[String(f.params.side)]?.[lang] ?? f.params.side } };
   if (f.ruleId === 'CONV-SEAFLOOR-UNIT' && f.params.unit === 'none') f = { ...f, params: { ...f.params, unit: NONE_WORDS[lang] } };

@@ -274,7 +274,11 @@ function derive(node: Node): void {
     node.span = span;
     rec.eventDate = spanText(span);
     rec.derived.date = true;
-    if (kids.some((k) => k.rec.eventRemarks !== undefined)) rec.eventRemarks = DERIVED_FROM_DECLARED_DATE_REMARK;
+    if (kids.some((k) => k.rec.eventRemarks !== undefined)) {
+      // a sample whose replicates all carry the same declared remark is itself wholly declared; a station, a cruise or a mixed sample is derived in part
+      const first = kids[0].rec.eventRemarks;
+      rec.eventRemarks = rec.eventType === 'sample' && first !== undefined && first !== DERIVED_FROM_DECLARED_DATE_REMARK && kids.every((k) => k.rec.eventRemarks === first) ? first : DERIVED_FROM_DECLARED_DATE_REMARK;
+    }
   }
   const centre = deriveCentre(kids.flatMap((k) => (k.rec.lat !== undefined && k.rec.lon !== undefined ? [{ lat: k.rec.lat, lon: k.rec.lon, u: k.rec.coordinateUncertaintyInMeters ?? 0 }] : [])));
   if (centre) {

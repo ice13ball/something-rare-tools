@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
 import type { ConvertSheetInput } from '../../src/core/convert/build';
 import { joinInputs } from '../../src/core/convert/sampleJoin';
+import { turnConvertFile } from '../../src/core/convert/turn';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import type { ColumnRole } from '../../src/core/types';
 import { exportSheets, objects, readBack } from './exportHelpers';
@@ -195,5 +196,72 @@ describe('a declared date', () => {
     });
     const out = joinInputs([resultsInput(file, 'Fish'), descriptionInput(file, 'Samples')], [{ results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [] }], []);
     expect(whole(convert({ sheets: out.sheets, options: OPTIONS }))).toEqual([undefined]);
+  });
+
+  describe('fix round 1', () => {
+    const dated = (extra: Partial<ConvertSheetInput> = {}) => tanks('2021-05', { header: [...H, 'Date'], rows: R.map((x) => [...x, '2023-04-05']), input: extra });
+
+    it('I1: a companion date on a sheet that now has dates is held back, said to come from the file, and does not block', () => {
+      const r = convert({ sheets: [dated({ declaredDateFromFile: true })], options: OPTIONS });
+      expect(ids(r.findings, 'CONV-DATE-DECLARED-INVALID')).toEqual([]);
+      const held = ids(r.findings, 'CONV-DATE-DECLARED-HELD');
+      expect(held).toHaveLength(1);
+      expect(held[0].params).toMatchObject({ reason: 'some-dated' });
+      expect(renderConvertPlain(held[0], 'en')).toContain('companion file');
+      expect(samples(r).every((e) => e.eventDate === '2023-04-05' && e.eventRemarks === undefined)).toBe(true);
+      expect(r.ok).toBe(true);
+      // the same refusal for a typed date still blocks
+      expect(convert({ sheets: [dated()], options: OPTIONS }).ok).toBe(false);
+      // a companion date that is not a date still blocks: the person must look at it
+      const bad = convert({ sheets: [tanks('2021-13', { input: { declaredDateFromFile: true } })], options: OPTIONS });
+      expect(ids(bad.findings, 'CONV-DATE-DECLARED-INVALID')).toHaveLength(1);
+    });
+
+    it('M1: the sample event of replicates carries the declared remark, not "in part"', () => {
+      const rows: Cell[][] = [['X01', 'a', 'Calanus finmarchicus', 3], ['X01', 'b', 'Calanus finmarchicus', 2], ['X02', 'a', 'Calanus finmarchicus', 1]];
+      const sin = sheetInput(fileOf(['Sample', 'Frame', 'Taxon', 'Count'], rows, 'Counts', { fileName: 'counts.csv' }), { shape: 'long', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' }, Frame: { kind: 'replicate' }, Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' } }, declaredDate: '2021' });
+      const r = convert({ sheets: [sin], options: OPTIONS });
+      const ev = r.events.filter((e) => e.eventType === 'sample' || e.eventType === 'replicate');
+      expect(ev.length).toBeGreaterThanOrEqual(5);
+      expect(ev.every((e) => e.eventDate === '2021' && e.eventRemarks === remark(2, 'Counts'))).toBe(true);
+    });
+
+    it('M2: a turned sheet with header dates refuses the declaration even when its Date column is ignored', () => {
+      const raw = fileOf(['Taxon', '2023-04-05', '2023-04-06'], [['Calanus finmarchicus', 4, 0], ['Oithona similis', 1, 2]], 'Taxa', { fileName: 'taxa.csv' });
+      const turned = turnConvertFile(raw, { Taxa: { nameColumn: 0, notSamples: [], headerDates: true } });
+      const sin = sheetInput(turned, { shape: 'wide', quantity: { kind: 'count' }, edit: { Date: { kind: 'ignore' } }, declaredDate: '2021-05' });
+      const r = convert({ sheets: [sin], options: OPTIONS });
+      expect(ids(r.findings, 'CONV-DATE-DECLARED-INVALID').map((f) => f.params.reason)).toEqual(['date-turned']);
+      expect(samples(r).every((e) => e.eventRemarks === undefined)).toBe(true);
+      // a turned sheet with no header dates may declare one
+      const plain = turnConvertFile(fileOf(['Taxon', 'S1', 'S2'], [['Calanus finmarchicus', 4, 0]], 'Taxa', { fileName: 'taxa.csv' }), { Taxa: { nameColumn: 0, notSamples: [] } });
+      const ok = convert({ sheets: [sheetInput(plain, { shape: 'wide', quantity: { kind: 'count' }, declaredDate: '2021-05' })], options: OPTIONS });
+      expect(ids(ok.findings, 'CONV-DATE-DECLARED')).toHaveLength(1);
+      expect(ids(ok.findings, 'CONV-EVENT-DATE-MISSING')).toEqual([]);
+    });
+
+    it('M3: the offer and the refusal are one predicate (a description-sheet date: neither offered nor applied; a description date the merge ignores: both)', () => {
+      const book = (resultsEdit: Record<string, ColumnRole>, declaredDate?: string) => {
+        const file = xlsxFile('book.xlsx', {
+          Fish: [['Sample', 'Taxon', 'Count', 'Year'], ['T1', 'Gadus morhua', 2, null]],
+          Samples: [['Sample', 'Date', 'Latitude', 'Longitude'], ['T1', null, 61.1, 4.2]],
+        });
+        const out = joinInputs([resultsInput(file, 'Fish', { edit: { Taxon: { kind: 'taxon' }, Count: { kind: 'quantity' }, ...resultsEdit }, ...(declaredDate === undefined ? {} : { declaredDate }) } as never), descriptionInput(file, 'Samples')], [{ results: 0, description: 1, keys: [{ results: 0, description: 0 }], conflicts: [] }], []);
+        return convert({ sheets: out.sheets, options: OPTIONS });
+      };
+      for (const edit of [{} as Record<string, ColumnRole>, { Year: { kind: 'datePart', part: 'year' } as ColumnRole }]) {
+        const offered = ids(book(edit).findings, 'CONV-EVENT-DATE-MISSING').some((f) => f.params.whole === 'yes');
+        const r = book(edit, '2021-05');
+        const applied = ids(r.findings, 'CONV-DATE-DECLARED').length > 0;
+        expect(offered, JSON.stringify(edit)).toBe(applied);
+        expect(applied, JSON.stringify(edit)).toBe(ids(r.findings, 'CONV-DATE-DECLARED-INVALID').length === 0);
+      }
+    });
+
+    it('M4: without today a declared date is refused, never accepted unchecked', () => {
+      const r = convert({ sheets: [tanks('2030')] });
+      expect(ids(r.findings, 'CONV-DATE-DECLARED-INVALID').map((f) => f.params.reason)).toEqual(['no-today']);
+      expect(samples(r).every((e) => e.eventDate === undefined)).toBe(true);
+    });
   });
 });

@@ -107,7 +107,7 @@ describe('a finding about a turned cell', () => {
     // no date in the header: both samples have none
     await load([{ name: 'Taxa.csv', text: TAXA }]);
     await turn('Taxa.csv', 'Taxon', ['Total']);
-    expect(item('CONV-EVENT-DATE-MISSING')?.textContent).toMatch(/\(columns B, C\)/);
+    expect(item('CONV-EVENT-DATE-MISSING')?.textContent).toMatch(new RegExp(`\\(columns B, C\\) ?${T['convert.finding.declareDate']}$`));
     expect(SUFFIX()).not.toContain('(column D)');
   });
 });

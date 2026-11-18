@@ -270,6 +270,7 @@ describe('CONV-EVENT-DATE-MISSING when the date is lent by a joined description 
       expect(en).toContain('1 sample has no row there at all (line 4 of "Fish")');
       expect(en).not.toMatch(/fill (them )?in\b.*cells/i);
       expect(en).not.toContain('The date cells are empty');
+      expect(en).toMatch(/add the missing rows/);
       // the leave-out still takes both samples' results lines out
       const left = run(mixedFile([['T1', '2021-05-03', 61.1, 4.2], ['T2', null, 61.3, 4.6]]), { leaveOut: [{ reason: 'no-event-date', count: 2 }] });
       expect(ids(left.findings, 'CONV-EVENT-DATE-MISSING')).toEqual([]);

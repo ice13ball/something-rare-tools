@@ -148,6 +148,8 @@ export const ACCEPT_RULES: readonly string[] = [
   'CONV-POSITION-DECLARED',
   // one date or interval the person declared for a sheet with no date at all, written on every sample and marked in eventRemarks: looked at once
   'CONV-DATE-DECLARED',
+  // a date a companion file saved that no longer fits the sheet: not applied, said, never a block
+  'CONV-DATE-DECLARED-HELD',
   'CONV-PROFILE-STATION-UNMATCHED',
   'CONV-PROFILE-STATION-FAR',
   'CONV-PROFILE-PRESSURE-NO-UNIT',

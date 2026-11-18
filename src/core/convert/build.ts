@@ -240,7 +240,7 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
     // no sample of the sheet has a date and none could come from anywhere else (a date cell holding something, a date lent by the description sheet, a turned date row): the person may declare one for the whole sheet
     const everySample = events.filter((e) => e.eventType === 'sample' && e.source !== undefined && e.source.file === sin.file.fileName && e.source.sheet === sin.sheet).length;
     const anyDateCell = (raw?.rows ?? []).some((r) => dateCells.some((c) => !isBlankCell(r.cells[c.index] ?? null)));
-    const whole = eventIds.length === everySample && !anyDateCell && !lent && !(raw?.turn !== undefined && dateCells.length > 0);
+    const whole = eventIds.length === everySample && !anyDateCell && declaredDateRefusal(sin, raw, dateCells) === undefined;
     const sorted = [...new Set(lines)].sort((a, b) => a - b);
     const describedLines = describedSamples > 0 ? [...described].sort((a, b) => a - b) : undefined;
     out.push({
@@ -262,6 +262,18 @@ function undatedSheets(sheets: readonly ConvertSheetInput[], rawSheets: readonly
   return out;
 }
 
+/**
+ * Why a sheet cannot take a declared date, from its structure alone (the one predicate the page's offer and the converter's refusal share): a profile sheet, a date (or a part of one) lent by the joined description
+ * sheet, a turned sheet whose header gives the dates or that has a date column.
+ */
+function declaredDateRefusal(sin: ConvertSheetInput, raw: RawSheet | undefined, dateCells: readonly { index: number }[]): 'profile' | 'date-joined' | 'date-turned' | undefined {
+  if (sin.profile !== undefined) return 'profile';
+  const info = sin.sampleJoin;
+  if (info !== undefined && dateCells.some((c) => info.columns[c.index]?.side === 'description')) return 'date-joined';
+  if (raw?.turn !== undefined && (raw.turn.headerDates === true || dateCells.length > 0)) return 'date-turned';
+  return undefined;
+}
+
 /** One date declared for a sheet and applied: said once per sheet, with the number of samples it was written on. */
 interface DeclaredDateApplied {
   sin: ConvertSheetInput;
@@ -280,8 +292,20 @@ function applyDeclaredDates(sheets: readonly ConvertSheetInput[], samples: Reado
   for (const sin of sheets) {
     if (sin.declaredDate === undefined) continue;
     const base = { file: sin.file.fileName, sheet: sin.sheet, value: sin.declaredDate.trim() };
-    const refuse = (reason: DeclaredDateReason | 'profile' | 'some-dated' | 'date-joined' | 'date-turned', extra: Record<string, string> = {}): void => void findings.push(makeConvertFinding('CONV-DATE-DECLARED-INVALID', { ...base, params: { reason, ...extra } }));
-    if (sin.profile !== undefined) {
+    // a date read from a companion file that no longer fits the sheet is held back and said, never a block (the person did not type it this time); a typed one, or one that is not a date, is refused
+    const refuse = (reason: DeclaredDateReason | 'profile' | 'some-dated' | 'date-joined' | 'date-turned' | 'no-today', extra: Record<string, string> = {}): void => {
+      const held = sin.declaredDateFromFile === true && (reason === 'profile' || reason === 'some-dated' || reason === 'date-joined' || reason === 'date-turned');
+      findings.push(makeConvertFinding(held ? 'CONV-DATE-DECLARED-HELD' : 'CONV-DATE-DECLARED-INVALID', { ...base, params: { reason, ...extra } }));
+    };
+    if (today === undefined) {
+      refuse('no-today');
+      continue;
+    }
+    const specs = specsOf(sin.mapping);
+    const dateCells = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day].filter((x) => x !== undefined);
+    const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
+    const structural = declaredDateRefusal(sin, raw, dateCells);
+    if (structural === 'profile') {
       refuse('profile');
       continue;
     }
@@ -290,16 +314,8 @@ function applyDeclaredDates(sheets: readonly ConvertSheetInput[], samples: Reado
       refuse(read.reason);
       continue;
     }
-    const specs = specsOf(sin.mapping);
-    const dateCells = [specs.when, specs.dateParts?.year, specs.dateParts?.month, specs.dateParts?.day].filter((x) => x !== undefined);
-    const info = sin.sampleJoin;
-    if (info !== undefined && dateCells.some((c) => info.columns[c.index]?.side === 'description')) {
-      refuse('date-joined', { description: info.description.sheet.name });
-      continue;
-    }
-    const raw = sin.file.sheets.find((x) => x.name === sin.sheet);
-    if (raw?.turn !== undefined && dateCells.length > 0) {
-      refuse('date-turned');
+    if (structural !== undefined) {
+      refuse(structural, structural === 'date-joined' ? { description: sin.sampleJoin!.description.sheet.name } : {});
       continue;
     }
     const mine = [...samples.values()].filter((a) => a.source.file === sin.file.fileName && a.source.sheet === sin.sheet);
@@ -476,7 +492,7 @@ export interface ConvertOptions {
   prefixStation?: boolean;
   /** Drop the station and/or cruise level. */
   flatten?: TreeOptions['flatten'];
-  /** Today as a UTC calendar day (YYYY-MM-DD), handed in by the caller (the core never reads the clock). Without it a declared date is not judged to be in the future. */
+  /** Today as a UTC calendar day (YYYY-MM-DD), handed in by the caller (the core never reads the clock). Without it a declared date is refused (no-today), never accepted unchecked. Callers: the page (the person's local day) and the worker (UTC day when the page sent none). */
   today?: string;
 }
 
