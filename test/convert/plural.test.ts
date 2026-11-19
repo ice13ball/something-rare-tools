@@ -57,12 +57,16 @@ describe('every rule and page text that counts something', () => {
   });
 
   it('the other counted rules agree in number in every language (one row / name: singular; several: plural)', () => {
-    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'en', 1)).toMatch(/^1 summary row \(v\) in line 3 was left out\. It is not a sample/);
-    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'en', 5)).toMatch(/^5 summary rows \(v\) in lines 3 were left out\. They are not samples/);
-    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 1)).toMatch(/^Pominięto 1 wiersz podsumowania \(v\) w wierszu 3\. To nie jest próbka/);
-    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 2)).toMatch(/^Pominięto 2 wiersze podsumowania/);
-    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 12)).toMatch(/^Pominięto 12 wierszy podsumowania/);
-    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 22)).toMatch(/^Pominięto 22 wiersze podsumowania/);
+    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'en', 1)).toMatch(/^As you chose, 1 row \(v\) in line 3 was left out as summary rows\. It is not a sample/);
+    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'en', 5)).toMatch(/^As you chose, 5 rows \(v\) in lines 3 were left out as summary rows\. They are not samples/);
+    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 1)).toMatch(/^Jak wybrano, pominięto 1 wiersz podsumowania \(v\) w wierszu 3\. To nie próbka/);
+    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 2)).toMatch(/^Jak wybrano, pominięto 2 wiersze podsumowania/);
+    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 12)).toMatch(/^Jak wybrano, pominięto 12 wierszy podsumowania/);
+    expect(render('CONV-SUMMARY-ROW-SKIPPED', 'pl', 22)).toMatch(/^Jak wybrano, pominięto 22 wiersze podsumowania/);
+    expect(render('CONV-SUMMARY-ROW-UNDECIDED', 'en', 1)).toMatch(/^1 row \(v\) in line 3 reads like a total or a statistic, not a sample\. Leave it out \(summary rows\), or keep it/);
+    expect(render('CONV-SUMMARY-ROW-UNDECIDED', 'en', 2)).toMatch(/^2 rows \(v\) in lines 3 read like a total.*Leave them out \(summary rows\), or keep them/);
+    expect(render('CONV-SUMMARY-ROW-UNDECIDED', 'pl', 1)).toMatch(/^1 wiersz \(v\) w wierszu 3 wygląda jak suma.*Pomiń go .*zostaw go /);
+    expect(render('CONV-SUMMARY-ROW-UNDECIDED', 'pl', 2)).toMatch(/^2 wiersze \(v\) w wierszach 3 wyglądają jak suma.*Pomiń je .*zostaw je /);
     expect(render('CONV-SPLIT-UNDECIDED', 'pl', 1)).toMatch(/^1 nazwa taksonu ma /);
     expect(render('CONV-SPLIT-UNDECIDED', 'pl', 3)).toMatch(/^3 nazwy taksonów mają /);
     expect(render('CONV-SPLIT-UNDECIDED', 'pl', 12)).toMatch(/^12 nazw taksonów ma /);

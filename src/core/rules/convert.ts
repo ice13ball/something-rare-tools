@@ -103,7 +103,8 @@ import type { RuleSpec } from './spec';
  *   CONV-SPECIES-LIST-NO-COUNTS (none)          a long sheet with a taxon column and no quantity column: offers the tick "list of species found" (presence only), else a quantity column (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-ENV-ONLY-SHEET        (none)           a sheet with measured variables and no taxon column, no quantity column and no unconfirmed taxon candidate: environmental data only (blocking; replaces NO-TAXON, QUANTITY-UNDECLARED and NO-OCCURRENCES for that sheet)
  *   CONV-PRESENCE-VALUE        (none)           field = the column, value = the values, lines = rows: a cell of a presence-only wide sheet that is no mark (blocking)
- *   CONV-SUMMARY-ROW-SKIPPED   count            value = the labels, lines = rows; a Total word, or a statistics label (Mean, SD, Min, Max, n, ...) in the trailing block with no date or position of its own
+ *   CONV-SUMMARY-ROW-UNDECIDED count, held      held = the rows the converted sheet holds back (the number an answer is given for; count = those named by this finding); value = the labels, lines = rows; a Total word as the whole cell, or a statistics label (Mean, SD, ...) in a block with no date or position of its own: held back, the export blocks until the person answers (warning, block)
+ *   CONV-SUMMARY-ROW-SKIPPED   count, held, answer   the person's answer to the above (info, show; "Ask again"): leave-out = left out as summary rows; keep (variant CONV-SUMMARY-ROW-SKIPPED:keep) = converted as real stations or samples; optional fromFile = yes
  *   CONV-SUMMARY-ROW-KEPT      count            value = the labels, lines = rows: a statistics label in the middle of a sheet, with no date or position of its own, kept as a sample (warning, accept)
  *   CONV-ID-REVISIT            count, by        value = an example ID, lines = the rows; by = date | date, time | date, time, depth: a code repeated at one station on different visits got the visit in its ID (warning, accept)
  *   CONV-REPLICATE-MISSING     count            field = the replicate column, lines = the rows with no value in it (blocking; the rows are not converted)
@@ -1868,18 +1869,44 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}: the sheet has measured-variable columns and no taxon column, no quantity column and no unconfirmed taxon candidate (typically environmental data only; a column of species names the converter did not recognise is the other possibility, and the text says so). This one finding replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for the sheet; a sheet with a taxon column is CONV-SPECIES-LIST-NO-COUNTS, CONV-TAXON-NO-QUANTITY or normal, and a sheet marked as a profile file keeps CONV-NO-OCCURRENCES.`,
   },
   {
+    id: 'CONV-SUMMARY-ROW-UNDECIDED',
+    category: 'B',
+    severity: 'warning',
+    // export (/convert): a row named like a total or a statistic is held back and nothing is written for it until the person answers: leave it out (a summary row) or keep it (a real station or sample)
+    exportPolicy: 'block',
+    params: ['count', 'held'],
+    plain: {
+      pl: `{count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} {+count:wygląda|wyglądają|wyglądają} jak suma albo statystyka, a nie jak próbka. Pomiń {+count:go|je|je} (wiersze podsumowania) albo zostaw {+count:go|je|je} (prawdziwa stacja lub próbka). Eksport czeka na odpowiedź.`,
+      en: `{count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:reads|read} like a total or a statistic, not a sample. Leave {+count:it|them} out (summary rows), or keep {+count:it|them} (a real station or sample). The export waits for the answer.`,
+      de: `{count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:liest|lesen} sich wie eine Summe oder eine Statistik, nicht wie eine Probe. Lassen Sie {+count:sie|sie} weg (Zusammenfassungszeilen) oder behalten Sie {+count:sie|sie} (eine echte Station oder Probe). Der Export wartet auf die Antwort.`,
+      fr: `{count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:se lit|se lisent} comme un total ou une statistique, pas comme un échantillon. Laissez-{+count:la|les} de côté (lignes de synthèse) ou conservez-{+count:la|les} (une vraie station ou un vrai échantillon). L'export attend la réponse.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} of the {held} row(s) the sheet holds back ({value}) whose sample code or station is exactly a total word (total, suma, razem, summe, gesamt, somme), or whose label is a statistic (mean, average, median, sd, sum, ... ; summaryLabels.ts) in a block of two or more label rows with no date or position of its own, are held back: nothing is written for them and each is in the list of rows not written with the reason summary-undecided. The export is blocked until the person answers for the sheet "leave them out (summary rows)" or "keep (a real station or sample)"; a station really named Somme or Total is a real station, which only the person can say. The answer holds for this number of rows; a different number asks again. A lone short ambiguous label (n, se, cv, min, max, count) is not asked: it is CONV-SUMMARY-ROW-KEPT.`,
+  },
+  {
     id: 'CONV-SUMMARY-ROW-SKIPPED',
     category: 'B',
     severity: 'info',
     exportPolicy: 'show',
-    params: ['count'],
+    params: ['count', 'held', 'answer'],
     plain: {
-      pl: `Pominięto {count} {+count:wiersz podsumowania|wiersze podsumowania|wierszy podsumowania} ({value}) w {+count:wierszu|wierszach|wierszach} {lines}. {+count:To nie jest próbka|To nie są próbki|To nie są próbki}. Prawdziwą stację o takiej nazwie przemianuj w arkuszu.`,
-      en: `{count} summary {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:was|were} left out. {+count:It is not a sample|They are not samples}. A real station with such a name: rename it in the sheet.`,
-      de: `{count} {+count:Zusammenfassungszeile|Zusammenfassungszeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:wurde|wurden} ausgelassen. {+count:Sie ist keine Probe|Sie sind keine Proben}. Eine echte Station mit so einem Namen benennen Sie im Blatt um.`,
-      fr: `{count} {+count:ligne de synthèse|lignes de synthèse} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:a été ignorée|ont été ignorées}. {+count:Ce n'est pas un échantillon|Ce ne sont pas des échantillons}. Renommez dans la feuille une vraie station portant un tel nom.`,
+      pl: `Jak wybrano, pominięto {count} {+count:wiersz podsumowania|wiersze podsumowania|wierszy podsumowania} ({value}) w {+count:wierszu|wierszach|wierszach} {lines}. {+count:To nie próbka|To nie próbki|To nie próbki}; {+count:jest|są|są} na liście wierszy niezapisanych. „Zapytaj ponownie” cofa odpowiedź.`,
+      en: `As you chose, {count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:was|were} left out as summary rows. {+count:It is not a sample|They are not samples}; {+count:it is|they are} in the list of rows not written. "Ask again" takes the answer back.`,
+      de: `Wie gewählt, {+count:wurde|wurden} {count} {+count:Zusammenfassungszeile|Zusammenfassungszeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} ausgelassen. {+count:Sie ist keine Probe|Sie sind keine Proben}; {+count:sie steht|sie stehen} in der Liste der nicht geschriebenen Zeilen. „Erneut fragen“ nimmt die Antwort zurück.`,
+      fr: `Comme choisi, {count} {+count:ligne de synthèse|lignes de synthèse} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:a été laissée|ont été laissées} de côté et {+count:figure|figurent} dans la liste des lignes non écrites. « Demander à nouveau » reprend la réponse.`,
     },
-    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were not converted. A total word (total, suma, razem, summe, gesamt, somme) always counts; a statistics label (mean, average, median, sd, sum, ... and their pl / de / fr words; one definition with /check, summaryLabels.ts) counts when the row has no date and no position of its own and the label is unambiguous or stands in a block of two or more label rows; the short ambiguous ones (n, se, cv, min, max, count) alone are CONV-SUMMARY-ROW-KEPT. The label may be in the sample-code column under a real station (a station subtotal).`,
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta odpowiedź pochodzi z pliku towarzyszącego.`,
+          en: `This answer was read from the companion file.`,
+          de: `Diese Antwort stammt aus der Begleitdatei.`,
+          fr: `Cette réponse vient du fichier d'accompagnement.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines}: {count} of the {held} row(s) the sheet holds back, whose sample code or station reads as a summary label ({value}), were answered "{answer}" (CONV-SUMMARY-ROW-UNDECIDED asked). leave-out: they are not converted and each is in the list of rows not written with the reason summary-row. keep: they are real stations or samples and are read like any other row (CONV-SUMMARY-ROW-SKIPPED:keep). The answer holds for this number of rows only. A total word (total, suma, razem, summe, gesamt, somme) as the whole cell, and a statistics label (mean, average, median, sd, sum, ... and their pl / de / fr words; one definition with /check, summaryLabels.ts) in a block of two or more label rows, are asked; the short ambiguous ones (n, se, cv, min, max, count) alone are CONV-SUMMARY-ROW-KEPT.`,
   },
   {
     id: 'CONV-SUMMARY-ROW-KEPT',
@@ -2643,6 +2670,16 @@ const quantityWhat = (what: string, lang: Lang): string => {
  * and renderConvertTechnical from the finding's own params; the registry keeps one rule per id.
  */
 export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, string>; technical: string }>> = {
+  // CONV-SUMMARY-ROW-SKIPPED when the person answered "keep": the rows are real stations or samples and are converted
+  'CONV-SUMMARY-ROW-SKIPPED:keep': {
+    plain: {
+      pl: `Jak powiedziano, {count} {+count:wiersz|wiersze|wierszy} ({value}) w {+count:wierszu|wierszach|wierszach} {lines} {+count:to prawdziwa stacja lub próbka|to prawdziwe stacje lub próbki|to prawdziwe stacje lub próbki} i {+count:jest|są|są} przekonwertowane. „Zapytaj ponownie” cofa odpowiedź.`,
+      en: `As you said, {count} {+count:row|rows} ({value}) in {+count:line|lines} {lines} {+count:is a real station or sample|are real stations or samples} and {+count:is|are} converted. "Ask again" takes the answer back.`,
+      de: `Wie angegeben, {+count:ist|sind} {count} {+count:Zeile|Zeilen} ({value}) in {+count:Zeile|den Zeilen} {lines} {+count:eine echte Station oder Probe|echte Stationen oder Proben} und {+count:wird|werden} umgewandelt. „Erneut fragen“ nimmt die Antwort zurück.`,
+      fr: `Comme indiqué, {count} {+count:ligne|lignes} ({value}) {+count:à la ligne|aux lignes} {lines} {+count:est une vraie station ou un vrai échantillon|sont de vraies stations ou de vrais échantillons} et {+count:est convertie|sont converties}. « Demander à nouveau » reprend la réponse.`,
+    },
+    technical: `{file}, {sheet}:{lines}: {count} row(s) whose sample code or station reads as a summary label ({value}) were answered "keep" (CONV-SUMMARY-ROW-UNDECIDED asked): they are read like any other row, as stations or samples. Nothing special is done for them (no left-out line, no exclusion from repeats, visits or sums). The answer holds for this number of rows only.`,
+  },
   // CONV-DATE-ORDER-UNDECLARED for NN-NN-NN dates (a two-digit year): year-month-day, day-month-year or month-day-year
   'CONV-DATE-ORDER-UNDECLARED:two-digit-year': {
     plain: {
@@ -3143,6 +3180,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if ((f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED') && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS[`${f.ruleId}:two-digit-year`];
   if (f.ruleId === 'CONV-DATE-ORDER-UNDECLARED' && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS['CONV-DATE-ORDER-UNDECLARED:two-digit-year'];
+  if (f.ruleId === 'CONV-SUMMARY-ROW-SKIPPED' && f.params.answer === 'keep') return PROFILE_VARIANTS['CONV-SUMMARY-ROW-SKIPPED:keep'];
   if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];
   const fixedDate = f.params.pivoted === 'yes' || f.params.turned === 'yes' ? '-fixed' : '';

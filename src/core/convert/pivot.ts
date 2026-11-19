@@ -361,6 +361,9 @@ export function pivotBlockFindings(file: string, sheet: string, p: PivotNote): F
 
 const OWN_LINES: ReadonlySet<string> = new Set(['CONV-LONG-DUPLICATE', 'CONV-LONG-NO-PARAMETER']);
 
+/** The findings about a whole pivoted row (a summary row held back or answered): every original line of the row's group, not only its first. */
+const WHOLE_ROW: ReadonlySet<string> = new Set(['CONV-SUMMARY-ROW-UNDECIDED', 'CONV-SUMMARY-ROW-SKIPPED', 'CONV-SUMMARY-ROW-KEPT']);
+
 /**
  * The findings of the pivot's cells name the line of the PIVOTED row (the first original line of its sample): a finding about a pivoted column is moved to the line the cell came from.
  * A finding about a key column keeps that line, which is a line of the sample.
@@ -371,6 +374,9 @@ export function originalLines(findings: readonly Finding[], file: string, sheet:
   const position = new Map(p.pivoted.map((c, i) => [sheet.header[c.index], i] as const));
   return findings.map((f) => {
     // the findings of the pivot itself already carry original lines
+    if (f.file === file && f.sheet === sheet.name && f.lines !== undefined && WHOLE_ROW.has(f.ruleId)) {
+      return { ...f, lines: [...new Set(f.lines.flatMap((l) => [l, ...(p.cellLines[l] ?? [])]))].sort((a, b) => a - b) };
+    }
     if (f.file !== file || f.sheet !== sheet.name || f.field === undefined || f.lines === undefined || OWN_LINES.has(f.ruleId)) return f;
     const at = position.get(f.field);
     if (at === undefined) return f;

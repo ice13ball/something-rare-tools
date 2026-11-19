@@ -329,14 +329,18 @@ describe('a picked key in the converter (the n3 shape: a haul, size classes, a t
 describe('the key contract: a key column is a column that says which sample, whatever role it has', () => {
   const H = ['Station', 'Cast', 'Latitude', 'Longitude', 'Date', 'Species', 'Quantity'];
   const edit: Record<string, ColumnRole> = { Station: { kind: 'ignore' }, Cast: { kind: 'ignore' }, Species: { kind: 'taxon' }, Quantity: { kind: 'quantity' } };
-  const run = (rs: Cell[][], k: SampleKey, e: Record<string, ColumnRole> = edit) => convert({ sheets: [sheetInput(fileOf(H, rs), { shape: 'long', quantity: { kind: 'count' }, edit: e, sampleKey: k, device: { kind: 'known', key: 'multinet' } })], options: {} });
+  const run = (rs: Cell[][], k: SampleKey, e: Record<string, ColumnRole> = edit, extra: Partial<ConvertSheetInput> = {}) => convert({ sheets: [sheetInput(fileOf(H, rs), { shape: 'long', quantity: { kind: 'count' }, edit: e, sampleKey: k, device: { kind: 'known', key: 'multinet' }, ...extra })], options: {} });
 
   it('a statistics row in a key column is not a sample (Total, Mean, SD)', () => {
     const rs: Cell[][] = [['A', 1, 49.4, 0.2, '2020-06-01', 'Solea solea', 3], ['A', 2, 49.4, 0.2, '2020-06-01', 'Solea solea', 4], ['B', 1, 49.5, 0.3, '2020-06-02', 'Solea solea', 6], ['Total', 1, null, null, null, 'Solea solea', 7], ['Mean', 2, null, null, null, 'Solea solea', 3.5]];
-    const r = run(rs, key(0, 1));
+    const r = run(rs, key(0, 1), edit, { summaryRows: { answer: 'leave-out', count: 2 } });
     expect(r.occurrences).toHaveLength(3);
     expect(sampleIds(r)).toEqual([idOf('A', '1'), idOf('A', '2'), idOf('B', '1')]);
     expect(ids(r, 'CONV-SUMMARY-ROW-SKIPPED')).toHaveLength(1);
+    // with no answer the same rows are held and asked about
+    const asked = run(rs, key(0, 1));
+    expect(ids(asked, 'CONV-SUMMARY-ROW-UNDECIDED')).toHaveLength(1);
+    expect(asked.occurrences).toHaveLength(3);
   });
 
   it('a key of one column that is the station gets an ID of its own (the sheet comes first), so the obvious answer is not a duplicate-ID block', () => {

@@ -209,7 +209,7 @@ describe('what is understood and not written is listed, and blocks nothing', () 
   it('a statistics row in a summary block is listed with its cells and its reason', () => {
     const header = ['Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];
     const rows: Cell[][] = [['a', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['Total', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['b', '2020-06-01', 49.4, 0.2, 'Gadus morhua', 2]];
-    const sheets = [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } } })];
+    const sheets = [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit: { Sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } }, summaryRows: { answer: 'leave-out', count: 1 } })];
     const r = convert({ sheets, options: {} });
     expect(ofRule(r, 'CONV-ROW-NOT-UNDERSTOOD')).toHaveLength(0);
     const list = listOf(csvOfRun(r, sheets));

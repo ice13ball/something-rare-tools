@@ -226,6 +226,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-PRESENCE-VALUE | error | block | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not](https://manual.obis.org/format_occurrence.html), "These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"<a id="CONV-PRESENCE-VALUE"></a> |
 | CONV-TAXON-NO-QUANTITY | error | block | B | — | —<a id="CONV-TAXON-NO-QUANTITY"></a> |
 | CONV-ENV-ONLY-SHEET | error | block | B | — | —<a id="CONV-ENV-ONLY-SHEET"></a> |
+| CONV-SUMMARY-ROW-UNDECIDED | warning | block | B | — | —<a id="CONV-SUMMARY-ROW-UNDECIDED"></a> |
 | CONV-SUMMARY-ROW-SKIPPED | info | show | B | — | —<a id="CONV-SUMMARY-ROW-SKIPPED"></a> |
 | CONV-SUMMARY-ROW-KEPT | warning | accept | B | — | —<a id="CONV-SUMMARY-ROW-KEPT"></a> |
 | CONV-ID-REVISIT | warning | accept | B | — | —<a id="CONV-ID-REVISIT"></a> |

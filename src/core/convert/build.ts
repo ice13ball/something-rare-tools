@@ -381,6 +381,12 @@ export interface ConvertSheetInput {
   missingCodes?: Readonly<Record<number, 'missing' | 'real'>>;
   /** The indexes among `missingCodes` that a companion file gave (it holds only for the same header and the same number of rows): said in the finding. */
   missingCodesFromFile?: readonly number[];
+  /**
+   * The person's answer for the rows of this sheet whose station or sample cell is a total word (Total, Suma, Razem, Summe, Gesamt, Somme) or whose label is a statistic in a block (Mean, SD ...):
+   * `leave-out` = they are summary rows, left out and listed (reason summary-row); `keep` = they are real stations or samples and are read like any other row. It holds only while `count` equals the number of
+   * rows the sheet holds back today (CONV-SUMMARY-ROW-UNDECIDED names them); otherwise the question is asked again. `fromFile` = a companion file gave it (it holds only for the same header and the same number of rows).
+   */
+  summaryRows?: { answer: 'leave-out' | 'keep'; count: number; fromFile?: boolean };
   /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
   readAsTable?: boolean;
   /**
@@ -744,6 +750,37 @@ class Lines {
   get size(): number {
     return this.map.size;
   }
+}
+
+/**
+ * The rows a sheet holds back as summary rows (a total word as the whole sample or station cell, or a statistic label of a block) and the person's answer for them. The answer holds only for the number of
+ * rows it was given for; with no answer (or one for another number) the rows are held and the export is blocked (CONV-SUMMARY-ROW-UNDECIDED). `keep` makes them ordinary rows.
+ */
+interface SummaryHold {
+  /** line -> the label that holds the row back */
+  readonly held: ReadonlyMap<number, string>;
+  readonly answer: 'leave-out' | 'keep' | undefined;
+  readonly fromFile: boolean;
+  /** this line is not read as a sample or a station: held, and not answered `keep` */
+  out(line: number): boolean;
+}
+function summaryHoldOf(sin: ConvertSheetInput, held: ReadonlyMap<number, string>): SummaryHold {
+  const given = sin.summaryRows;
+  const answer = given !== undefined && held.size > 0 && given.count === held.size ? given.answer : undefined;
+  return { held, answer, fromFile: answer !== undefined && given?.fromFile === true, out: (line) => held.has(line) && answer !== 'keep' };
+}
+
+/**
+ * The one finding of a sheet's held rows: the question until the person answers, then the note of the answer. `count` = the rows this finding names; `held` = all the rows the converted sheet holds back, the number an
+ * answer must be given for (a joined sheet's question can be split in two, one for the results and one for the description sheet: both carry the same `held`).
+ */
+function summaryFindings(lines: ReturnType<Lines['entries']>, hold: SummaryHold): Finding[] {
+  return lines.map((e) => {
+    const base = { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', ') };
+    return hold.answer === undefined
+      ? makeConvertFinding('CONV-SUMMARY-ROW-UNDECIDED', { ...base, params: { count: e.lines.length, held: hold.held.size } })
+      : makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { ...base, params: { count: e.lines.length, held: hold.held.size, answer: hold.answer, ...(hold.fromFile ? { fromFile: 'yes' } : {}) } });
+  });
 }
 
 interface SampleAcc {
@@ -1576,6 +1613,19 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   };
 
   const ragged = raggedLines(file, sheet.name);
+  // the rows held back as summary rows, read before any row is written: the person's answer holds for their number
+  const summaryHold = (() => {
+    const held = new Map<number, string>();
+    const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
+    for (const row of sheet.rows) {
+      if (ragged.has(row.line)) continue;
+      const m = scan(row);
+      // conservative, as on a biology sheet: only the exact word as the WHOLE station or code cell
+      const label = [m.sampleId, stationOf(row, m)].find((v) => v !== undefined && SUMMARY_LABEL.test(v)) ?? statRows.skipped.get(row.line);
+      if (label !== undefined) held.set(row.line, label);
+    }
+    return summaryHoldOf(sin, held);
+  })();
   for (const row of sheet.rows) {
     if (ragged.has(row.line)) {
       fate.row(row.line, 'ragged');
@@ -1583,17 +1633,9 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     }
     const m = parse(row);
     const stationText = stationOf(row, m);
-    // conservative, as on a biology sheet: only the exact word as the WHOLE station or code cell
-    const summaryLabel = [m.sampleId, stationText].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
-    if (summaryLabel !== undefined) {
-      summaries.add(fileName, sheet.name, 'station', row.line, summaryLabel);
-      fate.row(row.line, 'summary-row');
-      continue;
-    }
-    const statLabel = statRows.skipped.get(row.line);
-    if (statLabel !== undefined) {
-      summaries.add(fileName, sheet.name, 'station', row.line, statLabel);
-      fate.row(row.line, 'summary-row');
+    if (summaryHold.held.has(row.line)) summaries.add(fileName, sheet.name, 'station', row.line, summaryHold.held.get(row.line));
+    if (summaryHold.out(row.line)) {
+      fate.row(row.line, summaryHold.answer === undefined ? 'summary-undecided' : 'summary-row');
       continue;
     }
     const keptLabel = statRows.kept.get(row.line);
@@ -1776,7 +1818,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
     ctx.findings.push(makeConvertFinding('CONV-SAMPLE-CODE-MISSING', { file: e.file, sheet: e.sheet, lines: e.lines, params: { count: e.lines.length, column: e.field === '' ? 'none' : e.field, profile: 'yes' } }));
   }
   for (const e of tabs.entries()) ctx.findings.push(makeConvertFinding('CONV-TAB-IN-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
-  for (const e of summaries.entries()) ctx.findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+  ctx.findings.push(...summaryFindings(summaries.entries(), summaryHold));
   for (const e of keptStats.entries()) ctx.findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
   if (sheetUnmatched.size > 0) {
     const names = [...sheetUnmatched];
@@ -2223,10 +2265,24 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     };
 
     const ragged = raggedLines(file, sheet.name);
+    // the rows held back as summary rows (a total word as the whole sample or station cell, or a part of a picked key; a statistic label of a block), read before any row is written: the person's answer holds for their number
+    const summaryHold = (() => {
+      const held = new Map<number, string>();
+      const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
+      for (const row of sheet.rows) {
+        if (ragged.has(row.line) || noDateLeftOut?.has(row.line) === true) continue;
+        const m = scan(row);
+        const keyRead = readKey?.(row);
+        const code = keyRead === undefined ? m.sampleId : keyRead.id;
+        const label = [code, m.station, ...(keyRead?.parts ?? [])].find((v) => v !== undefined && SUMMARY_LABEL.test(v)) ?? statRows.skipped.get(row.line);
+        if (label !== undefined) held.set(row.line, label);
+      }
+      return summaryHoldOf(sin, held);
+    })();
     // a quantity or a weight written again on rows that are not new animals (repeatedTotal.ts): read from the values before any row is written
     const analyse = (drop: boolean, real: boolean) =>
       sin.shape === 'long' && !presence && cols.taxonCell !== undefined
-        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || statRows.skipped.has(r.line) || noDateLeftOut?.has(r.line) === true, quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey), ...(ownRows ? { ownRows: true } : {}) })
+        ? analyseRepeats({ sheet, mapping: sin.mapping, decimalComma: dc, skipLines: (r) => ragged.has(r.line) || summaryHold.out(r.line) || noDateLeftOut?.has(r.line) === true, quantityKind: quantity?.kind ?? sin.quantity?.kind, realCounts: real, dropCopies: drop, keyColumns: keyColumns(pickedKey), ...(ownRows ? { ownRows: true } : {}) })
         : {};
     let analysis = analyse(sin.dropCopies === true, sin.realCounts === true);
     // An answer that switches a check off (drop the copies, take a total once, real counts) is honoured only when today's analysis finds the count it was given for
@@ -2293,10 +2349,10 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
       const groups = new Map<string, { station: string | undefined; stationId: string | undefined; code: string; rows: { line: number; key: VisitKey }[]; mixed: boolean }>();
       for (const row of sheet.rows) {
-        if (ragged.has(row.line) || statRows.skipped.has(row.line)) continue;
+        if (ragged.has(row.line) || summaryHold.out(row.line)) continue;
         const m = scan(row);
         const code = m.sampleId;
-        if (code === undefined || [code, m.station].some((v) => v !== undefined && SUMMARY_LABEL.test(v))) continue;
+        if (code === undefined) continue;
         if (cols.replicate && text(row.cells[cols.replicate.index]) === undefined) continue;
         const stationText = m.station;
         const filled = sin.shape === 'wide' ? true : text(row.cells[cols.taxonCell?.index ?? -1]) !== undefined && (presence || ownCount || (cols.quantity !== undefined && (!isBlankCell(row.cells[cols.quantity.index] ?? null) || rowHasBiomass(row))));
@@ -2377,16 +2433,9 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       const relevant = descOnly || (sin.shape === 'wide' ? wideHasValue || code !== undefined : taxonCellText !== undefined && (longHasValue || biomassOnly));
       // conservative: only the exact word as the WHOLE sample or station cell ("Total Bay" is a station)
       // (a label in a part of a picked sample key is the same row: "Total" in the station column of a key of station and cast)
-      const summaryLabel = [code, stationText, ...(keyRead?.parts ?? [])].find((v) => v !== undefined && SUMMARY_LABEL.test(v));
-      if (summaryLabel !== undefined) {
-        summaries.add(fileName, sheet.name, 'sample', row.line, summaryLabel);
-        fate.row(row.line, 'summary-row');
-        continue;
-      }
-      const statLabel = statRows.skipped.get(row.line);
-      if (statLabel !== undefined) {
-        summaries.add(fileName, sheet.name, 'sample', row.line, statLabel);
-        fate.row(row.line, 'summary-row');
+      if (summaryHold.held.has(row.line)) summaries.add(fileName, sheet.name, 'sample', row.line, summaryHold.held.get(row.line));
+      if (summaryHold.out(row.line)) {
+        fate.row(row.line, summaryHold.answer === undefined ? 'summary-undecided' : 'summary-row');
         continue;
       }
       const keptLabel = statRows.kept.get(row.line);
@@ -3050,7 +3099,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     for (const e of coverRange.entries()) findings.push(makeConvertFinding('CONV-COVER-RANGE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of classBad.entries()) findings.push(makeConvertFinding('CONV-CLASS-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length, scale: scale?.label ?? '' } }));
     for (const e of effortBad.entries()) findings.push(makeConvertFinding('CONV-EFFORT-INVALID', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
-    for (const e of summaries.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-SKIPPED', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
+    findings.push(...summaryFindings(summaries.entries(), summaryHold));
     for (const e of keptStats.entries()) findings.push(makeConvertFinding('CONV-SUMMARY-ROW-KEPT', { file: e.file, sheet: e.sheet, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     for (const e of presenceBad.entries()) findings.push(makeConvertFinding('CONV-PRESENCE-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples.join(', '), params: { count: e.lines.length } }));
     if (naCells > 0) findings.push(makeConvertFinding('CONV-NA-SKIPPED', { ...base, params: { count: naCells } }));

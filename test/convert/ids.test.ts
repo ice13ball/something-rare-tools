@@ -126,11 +126,11 @@ describe('a missing sample code', () => {
   });
 
   it('a Total row is a summary, not a sample', () => {
-    const r = convert({ sheets: [wide([['CR', 'S1', 'a', 1, 2, '2020-01-01', 4, 5], ['', '', 'Total', null, null, null, 4, 5]])] });
+    const r = convert({ sheets: [wide([['CR', 'S1', 'a', 1, 2, '2020-01-01', 4, 5], ['', '', 'Total', null, null, null, 4, 5]], { summaryRows: { answer: 'leave-out', count: 1 } })] });
     expect(r.events.filter((e) => e.eventType === 'sample').map((e) => e.id)).toEqual(['a']);
     const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
     expect(s).toHaveLength(1);
-    expect(s[0]).toMatchObject({ severity: 'info', lines: [3], value: 'Total' });
+    expect(s[0]).toMatchObject({ severity: 'info', lines: [3], value: 'Total', params: { answer: 'leave-out' } });
   });
 });
 
@@ -146,7 +146,7 @@ describe('summary rows are matched conservatively', () => {
     for (const w of ['Total', 'SUMA', 'razem', 'Summe', 'Gesamt', 'Somme']) rows.push(['CR', '', w, null, null, null, 1, 1]);
     rows.push(['CR', 'Summe', 'x', null, null, null, 1, 1]);
     rows.push(['CR', 'Mean', 'mean', null, null, null, 1, 1]);
-    const r = convert({ sheets: [wide(rows)] });
+    const r = convert({ sheets: [wide(rows, { summaryRows: { answer: 'leave-out', count: 8 } })] });
     const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
     expect(s).toHaveLength(1);
     expect(s[0].lines).toEqual([3, 4, 5, 6, 7, 8, 9, 10]);
@@ -164,7 +164,7 @@ describe('statistics rows at the foot of a sheet', () => {
     const rows: Cell[][] = [['CR', 'S1', 'a', 1, 2, '2020-01-01', 4, 5], ['CR', 'S2', 'b', 1, 2, '2020-01-02', 6, 7]];
     const words = ['Mean', 'SD', 'Median', 'Min', 'Max', 'Average', 'StDev', 'SE', 'CV', 'n', 'N', 'Count', 'Średnia', 'Odchylenie (standardowe)', 'Mittelwert', 'Standardabweichung', 'Moyenne', 'Écart-type'];
     for (const w of words) rows.push(stat(w, 1, 1));
-    const r = convert({ sheets: [wide(rows)] });
+    const r = convert({ sheets: [wide(rows, { summaryRows: { answer: 'leave-out', count: words.length } })] });
     expect(sampleIds(r)).toEqual(['a', 'b']);
     const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
     expect(s).toHaveLength(1);
@@ -202,7 +202,7 @@ describe('statistics rows at the foot of a sheet', () => {
       ['Mean', 'Calanus finmarchicus', 4, null, null, null],
       ['SD', 'Calanus finmarchicus', 1.4, null, null, null],
     ]);
-    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long' })] });
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, shape: 'long', summaryRows: { answer: 'leave-out', count: 2 } })] });
     expect(sampleIds(r)).toEqual(['a', 'b']);
     expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5], value: 'Mean, SD' });
   });
@@ -221,14 +221,14 @@ describe('statistics rows at the foot of a sheet', () => {
 
   it('label rows in a row that hold an unambiguous one are a block: n and SE under a Mean are skipped', () => {
     const f = fileOf(['Sample', 'Calanus finmarchicus', 'Oithona similis'], [['a', 1, 2], ['b', 3, 4], ['Mean', 2, 2], ['n', 2, 2], ['SE', 1, 1]]);
-    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] });
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, summaryRows: { answer: 'leave-out', count: 3 } })] });
     expect(sampleIds(r)).toEqual(['a', 'b']);
     expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5, 6] });
   });
 
   it('a statistic in the sample-code column under a real station ("St1 | Mean") is skipped, a subtotal in the middle of the sheet too', () => {
     const f = fileOf(['Station', 'Sample', 'Calanus finmarchicus', 'Oithona similis'], [['St1', 'a', 1, 2], ['St1', 'b', 3, 4], ['St1', 'Mean', 2, 3], ['St2', 'c', 5, 6], ['St2', 'Mean', 5, 6]]);
-    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] });
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, summaryRows: { answer: 'leave-out', count: 2 } })] });
     expect(sampleIds(r)).toEqual(['a', 'b', 'c']);
     expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 6], value: 'Mean' });
     // a single ambiguous one in that place is a warning
@@ -255,14 +255,14 @@ describe('statistics rows at the foot of a sheet', () => {
 
   it('a Mean, SD, n foot is still skipped, and an unambiguous statistic with a copied-down date is asked about or skipped in a block', () => {
     const f = fileOf(['Sample', 'Calanus finmarchicus', 'Oithona similis'], [['a', 1, 2], ['b', 3, 4], ['Mean', 2, 3], ['SD', 1, 1], ['n', 2, 2]]);
-    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' } })] });
+    const r = convert({ sheets: [sheetInput(f, { quantity: { kind: 'count' }, summaryRows: { answer: 'leave-out', count: 3 } })] });
     expect(sampleIds(r)).toEqual(['a', 'b']);
     expect(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [4, 5, 6] });
     const H = ['Station', 'Sample', 'Date', 'Calanus finmarchicus'];
     const one = convert({ sheets: [sheetInput(fileOf(H, [['St1', 'a', '2020-01-01', 1], ['St1', 'Mean', '2020-01-01', 2]]), { quantity: { kind: 'count' } })] });
     expect(sampleIds(one)).toEqual(['a', 'Mean']);
     expect(find(one.findings, 'CONV-SUMMARY-ROW-KEPT')[0]).toMatchObject({ lines: [3], value: 'Mean' });
-    const two = convert({ sheets: [sheetInput(fileOf(H, [['St1', 'a', '2020-01-01', 1], ['St1', 'Mean', '2020-01-01', 2], ['St1', 'SD', '2020-01-01', 1]]), { quantity: { kind: 'count' } })] });
+    const two = convert({ sheets: [sheetInput(fileOf(H, [['St1', 'a', '2020-01-01', 1], ['St1', 'Mean', '2020-01-01', 2], ['St1', 'SD', '2020-01-01', 1]]), { quantity: { kind: 'count' }, summaryRows: { answer: 'leave-out', count: 2 } })] });
     expect(sampleIds(two)).toEqual(['a']);
     expect(find(two.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0]).toMatchObject({ lines: [3, 4] });
     // a short code with a date is a station

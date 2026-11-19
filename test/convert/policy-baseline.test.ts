@@ -11,7 +11,7 @@ import { RULES } from '../../src/core/rules/registry';
  * Round 4 Task 3 added IN-DECIMAL-AMBIGUOUS (block): 250 rules.
  * Round 4 Task 4 added CONV-DECIMAL-DECLARED (show; in no enumerated set, so no exemption line): 251 rules; Task 5 added IN-ENCODING-AMBIGUOUS (block): 252; Task 6 added CONV-ENCODING-DECLARED (show): 253.
  * Round 4 Task 9 added IN-PERCENT-READ (show): 255 rules.
- * Round 4 Task 11 added IN-COLUMN-NO-HEADER (show): 256 rules. Task 12 added ROW-LONG-NO-PARAMETER (block) and ROW-LONG-PARAMETER-MERGED (show): 258. Task 13 added ROW-DEPTH-MIXED-SIGN (accept) and ROW-MISSING-CODE (accept; made block in fix round 1, the converter asks per column before anything is written): 260; fix round 1 added CONV-MISSING-CODE-DECLARED (show): 261.
+ * Round 4 Task 11 added IN-COLUMN-NO-HEADER (show): 256 rules. Task 12 added ROW-LONG-NO-PARAMETER (block) and ROW-LONG-PARAMETER-MERGED (show): 258. Task 13 added ROW-DEPTH-MIXED-SIGN (accept) and ROW-MISSING-CODE (accept; made block in fix round 1, the converter asks per column before anything is written): 260; fix round 1 added CONV-MISSING-CODE-DECLARED (show): 261. Task 14 added CONV-SUMMARY-ROW-UNDECIDED (block): 262.
  * The count was 248, not the plan's 245: round 3 added CONV-DATE-DECLARED, CONV-DATE-DECLARED-INVALID and CONV-DATE-DECLARED-HELD after the plan was written.
  */
 const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
@@ -234,6 +234,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-PRESENCE-VALUE': 'block',
   'CONV-TAXON-NO-QUANTITY': 'block',
   'CONV-ENV-ONLY-SHEET': 'block',
+  'CONV-SUMMARY-ROW-UNDECIDED': 'block',
   'CONV-SUMMARY-ROW-SKIPPED': 'show',
   'CONV-SUMMARY-ROW-KEPT': 'accept',
   'CONV-ID-REVISIT': 'accept',
@@ -282,7 +283,7 @@ describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(261);
+    expect(Object.keys(BASELINE).length).toBe(262);
   });
 
   it('the field of each rule definition is its baseline policy', () => {

@@ -99,7 +99,7 @@ describe('ledger: long sheets', () => {
 
   it('L2: zeros, NA, a summary row and a row with no taxon each have their own reason; the totals add up', () => {
     const rows: Cell[][] = [...L2_ROWS, ['B', 'B1', 'Oithona similis', null, 0, 70.5, 20.9, '2021-08-02', 10], ['B', 'B1', 'Calanus finmarchicus', 'C3', 'NA', 70.5, 20.9, '2021-08-02', 10], ['B', 'B2', null, null, 5, 70.5, 20.9, '2021-08-02', 10], ['Total', 'Total', 'Calanus finmarchicus', null, 99, null, null, null, null]];
-    const r = convert({ sheets: [sheetInput(fileOf(L2_HEADER, rows), { quantity: { kind: 'count' }, device: { kind: 'known', key: 'multinet' } })], options: {} });
+    const r = convert({ sheets: [sheetInput(fileOf(L2_HEADER, rows), { quantity: { kind: 'count' }, device: { kind: 'known', key: 'multinet' }, summaryRows: { answer: 'leave-out', count: 1 } })], options: {} });
     const l = r.ledger[0];
     expectRowsAgree(l, r, rows.length);
     expect(skippedOf(l.rows, 'zero')).toBe(1);
@@ -177,7 +177,7 @@ describe('ledger: profile sheets and sheets not read', () => {
   it('a profile sheet: rows become levels, the unmatched summary row and the empty row have reasons', () => {
     const header = ['Cruise', 'Station', 'Latitude', 'Longitude', 'Date', 'Depth [m]', 'Temperature [°C]'];
     const rows: Cell[][] = [['CR1', 'S1', 55.5, 2.5, '2023-06-14', 0, 11.2], ['CR1', 'S1', 55.5, 2.5, '2023-06-14', 10, 10.9], ['CR1', 'Total', null, null, null, null, 22.1], [null, null, null, null, null, null, null]];
-    const r = convert({ sheets: [sheetInput(fileOf(header, rows, 'CTD'), { profile: { depthIds: true } })], options: {} });
+    const r = convert({ sheets: [sheetInput(fileOf(header, rows, 'CTD'), { profile: { depthIds: true }, summaryRows: { answer: 'leave-out', count: 1 } })], options: {} });
     const l = r.ledger[0];
     expect(l.kind).toBe('profile');
     expect(l.rows.written).toBe(r.events.filter((e) => e.eventType === 'profile level').length);
@@ -482,7 +482,7 @@ describe('ledger: the fate of every line, as data (what the list of rows not wri
     const header = ['sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count'];
     const edit: Record<string, ColumnRole> = { sample: { kind: 'sampleId' }, Species: { kind: 'taxon' }, Count: { kind: 'quantity' } };
     const rows: Cell[][] = [['a', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['Total', '2020-06-01', 49.4, 0.2, 'Solea solea', 3], ['a', '2020-06-01', 49.4, 0.2, 'Gadus morhua', -2], ['b', '2020-06-01', 49.4, 0.2, null, null]];
-    const l = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit })], options: {} }).ledger[0];
+    const l = convert({ sheets: [sheetInput(fileOf(header, rows), { shape: 'long', quantity: { kind: 'count' }, edit, summaryRows: { answer: 'leave-out', count: 1 } })], options: {} }).ledger[0];
     const unwritten = l.lines.filter((x) => x.fate !== 'written');
     expect(unwritten.map((x) => [x.line, x.fate])).toEqual([[3, 'summary-row'], [4, 'negative'], [5, 'position-no-taxon']]);
     expect(unwritten.length).toBe(l.rows.skipped.reduce((n, s) => n + s.count, 0) + l.rows.unexplained);

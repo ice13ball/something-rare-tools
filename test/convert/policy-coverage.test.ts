@@ -59,6 +59,7 @@ const EXEMPT: Record<string, string> = {
   'CONV-LONG-DROPPED': '(b) it lists only columns the person marked',
   'CONV-SHEET-TURNED': '(b) the person declared that the samples are the columns',
   'CONV-JOIN-CONFLICT-CHOSEN': '(b) the person chose which value of the two sheets is written',
+  'CONV-SUMMARY-ROW-SKIPPED': '(b) the person answered "leave them out (summary rows)" or "keep"; the question that blocks is CONV-SUMMARY-ROW-UNDECIDED',
   'CONV-MISSING-CODE-DECLARED': '(b) the person answered "treat as missing" for the column; the question that blocks is ROW-MISSING-CODE',
   'IN-DATE1904': '(c) the workbook states its own date system; the reader only follows it',
   'IN-HEADER-UNITS-READ': '(c) a row of units under the header; a row with a number is never folded (parse/shared.ts foldUnitsRow)',
@@ -77,9 +78,7 @@ const EXEMPT: Record<string, string> = {
 };
 
 /** A rule that is `show` now and has a task that changes it. */
-const PENDING: Record<string, string> = {
-  'CONV-SUMMARY-ROW-SKIPPED': "Task 14 makes it the note after the person's answer",
-};
+const PENDING: Record<string, string> = {};
 
 /** The ids the test looks at, with where each came from. */
 export function judged(): Map<string, string> {

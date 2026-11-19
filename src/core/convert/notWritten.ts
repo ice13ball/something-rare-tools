@@ -90,6 +90,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'join-results-not-written': 'listed',
   // a cell the person answered "treat as missing" for (-99, -999, -9999 in a depth or measurement column): left empty, listed with the cell as written
   'missing-code': 'listed',
+  // a row whose station or sample cell is a total word, or whose label is a statistic in a block: held until the person answers "leave them out (summary rows)" or "keep (a real station)"; CONV-SUMMARY-ROW-UNDECIDED is the one question
+  'summary-undecided': 'covered',
 };
 
 /** The rules that already block the export for a `covered` reason. */
@@ -110,6 +112,7 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'join-ambiguous': ['CONV-JOIN-AMBIGUOUS'],
   'join-no-match': ['CONV-JOIN-NO-MATCH'],
   'no-event-date': ['CONV-EVENT-DATE-MISSING'],
+  'summary-undecided': ['CONV-SUMMARY-ROW-UNDECIDED'],
 };
 
 /**
