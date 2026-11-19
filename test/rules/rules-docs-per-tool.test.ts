@@ -5,8 +5,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RUNTIME_BUILT, TOOLS, docFile, membership, perToolDocs, type Tool } from '../../scripts/rules-docs-per-tool';
+import { EXCLUDED, RUNTIME_BUILT, TOOL_ENTRIES, TOOLS, docFile, membership, perToolDocs, type Tool } from '../../scripts/rules-docs-per-tool';
 import { RULES } from '../../src/core/rules/registry';
+import { emittedBy, scanProject } from '../../scripts/rules-scan';
 
 const ROOT = join(__dirname, '..', '..');
 const ids = new Set(RULES.map((r) => r.id));
@@ -70,3 +71,19 @@ describe('docs/rules/<tool>.md', () => {
     }
   });
 }, 60000);
+
+describe('per-tool exclusions', () => {
+  it('every excluded id is in the registry, carries evidence, and is otherwise placed by the scan', () => {
+    const registry = new Set(RULES.map((r) => r.id));
+    const scan = scanProject(registry);
+    for (const tool of TOOLS) {
+      const placed = emittedBy(scan, TOOL_ENTRIES[tool]);
+      for (const [id, why] of Object.entries(EXCLUDED[tool])) {
+        expect(registry.has(id), `${tool}: ${id} is not a rule`).toBe(true);
+        expect(why, `${tool}: ${id} needs evidence`).toMatch(/\.ts/);
+        expect(placed.has(id), `${tool}: ${id} is not placed by the scan, drop the exclusion`).toBe(true);
+        expect(membership()[tool].ids, `${tool}: ${id} still listed`).not.toContain(id);
+      }
+    }
+  }, 120000);
+});

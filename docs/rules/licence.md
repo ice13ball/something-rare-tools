@@ -113,7 +113,7 @@ Severity: warning
 
 **What it checks.** A repeated rights entry that is no recognised licence stands next to a licence the same record does recognise. The other entry may restrict or change the licence.
 
-**When it fires.** Once per record, only for the repeated entries of DataCite rightsList and Zenodo rights (never for the fields of an ISO record), when the record has a recognised licence and another repeated entry that is no recognised licence, has no conflict of its own and is not a neutral value: a plain access word, or a notice that only names the creators, the organisations or the publisher of the record. Repeated recognised licences are read as dual licensing and do not fire it. The finding quotes the entry, or its link, and names the recognised licence.
+**When it fires.** Once per source of the record, only for repeated entries (DataCite rightsList, Zenodo rights, the licences a Dataverse states per file), never for the fields of an ISO record, when the record has a recognised licence and another repeated entry that is no recognised licence, has no conflict of its own and is not a neutral value: a plain access word, or a notice that only names the creators, the organisations or the publisher of the record. Repeated recognised licences are read as dual licensing and do not fire it. The finding quotes the entry, or its link, and names the recognised licence.
 
 **Example.** A rights list holds CC BY 4.0 and a second entry, Data may not be redistributed without consent.
 
@@ -150,7 +150,7 @@ Severity: warning
 
 **Example.** A record states CC BY 4.0 in otherConstraints and the code copyright in its restriction code.
 
-**What you can do.** Replace the code with license, or with otherRestrictions and a description of the conditions as INSPIRE expects, if the data are in fact restricted, state the restriction instead of the open licence.
+**What you can do.** If the licence is the true statement, replace the code with license, or with otherRestrictions plus a description of the conditions, as INSPIRE expects. If the data are in fact restricted, state the restriction instead of the open licence.
 
 **Citations.**
 

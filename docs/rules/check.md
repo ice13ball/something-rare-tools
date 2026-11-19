@@ -451,7 +451,7 @@ Severity: error
 
 **What it checks.** No licence is stated anywhere in the record. Without a licence nobody knows whether the data may be reused, so by default they may not.
 
-**When it fires.** Once per record, when the record (or all the records read for it) holds no statement about the data in any licence field (ISO useLimitation and otherConstraints, DataCite rightsList, Zenodo license and the like; statements about the metadata record itself do not count), and no source of the record failed to load. A record that could not be read says nothing about a licence, and IN-RECORD-INACCESSIBLE reports it instead. When the DataCite record could not be compared, the finding says it rests on the catalogue record alone.
+**When it fires.** Once per record, when the record (or all the records read for it) holds no statement about the data in any licence field (ISO useLimitation and otherConstraints, DataCite rightsList, Zenodo license and the like; statements about the metadata record itself do not count), and no source of the record failed to load. A record that could not be read says nothing about a licence, and IN-RECORD-INACCESSIBLE reports it instead. In the collection review, when the DataCite record could not be compared, the finding says it rests on the catalogue record alone.
 
 **Example.** A catalogue record has title, abstract and contact, but its rights and constraints sections are empty.
 
@@ -470,7 +470,7 @@ Severity: warning
 
 **What it checks.** The licence is written only as free text that a program cannot read. A person understands it, but a harvester cannot tell whether the data are open.
 
-**When it fires.** Once per record, when the record has licence statements, none of them is machine-readable (a recognised identifier, a link to a recognised licence, or the identifier itself as the text) and none is flagged by another licence rule. The finding quotes the first statement with text and says whether the text carries no version number. The suggested identifier is the licence the tool recognised in the record, or the example CC BY 4.0 when it recognised none.
+**When it fires.** Once per record, when the record has licence statements, none of them is machine-readable (an identifier field, a link to a recognised licence, or a text that is itself the identifier) and none carries a conflict (LIC-TEXT-URI-CONFLICT, LIC-ADDED-CONDITIONS, LIC-EXTRA-TEXT or LIC-AMBIGUOUS). Prose such as CC BY 4.0 without a link is free text. The finding quotes the first statement with text and says whether the text carries no version number. The suggested identifier is the licence the tool recognised in the record, or the example CC BY 4.0 when it recognised none.
 
 **Example.** The rights field reads: Creative Commons Attribution licence, with no version and no link.
 
@@ -541,7 +541,7 @@ Severity: warning
 
 **What it checks.** A repeated rights entry that is no recognised licence stands next to a licence the same record does recognise. The other entry may restrict or change the licence.
 
-**When it fires.** Once per record, only for the repeated entries of DataCite rightsList and Zenodo rights (never for the fields of an ISO record), when the record has a recognised licence and another repeated entry that is no recognised licence, has no conflict of its own and is not a neutral value: a plain access word, or a notice that only names the creators, the organisations or the publisher of the record. Repeated recognised licences are read as dual licensing and do not fire it. The finding quotes the entry, or its link, and names the recognised licence.
+**When it fires.** Once per source of the record, only for repeated entries (DataCite rightsList, Zenodo rights, the licences a Dataverse states per file), never for the fields of an ISO record, when the record has a recognised licence and another repeated entry that is no recognised licence, has no conflict of its own and is not a neutral value: a plain access word, or a notice that only names the creators, the organisations or the publisher of the record. Repeated recognised licences are read as dual licensing and do not fire it. The finding quotes the entry, or its link, and names the recognised licence.
 
 **Example.** A rights list holds CC BY 4.0 and a second entry, Data may not be redistributed without consent.
 
@@ -578,7 +578,7 @@ Severity: warning
 
 **Example.** A record states CC BY 4.0 in otherConstraints and the code copyright in its restriction code.
 
-**What you can do.** Replace the code with license, or with otherRestrictions and a description of the conditions as INSPIRE expects, if the data are in fact restricted, state the restriction instead of the open licence.
+**What you can do.** If the licence is the true statement, replace the code with license, or with otherRestrictions plus a description of the conditions, as INSPIRE expects. If the data are in fact restricted, state the restriction instead of the open licence.
 
 **Citations.**
 
@@ -641,7 +641,7 @@ Severity: warning
 
 **What it checks.** A download link of the record has an empty address. A link that goes nowhere cannot be followed by a person or by a harvester, and it suggests that a file was left out of the record.
 
-**When it fires.** Once per record, when at least one distribution link (a CI_OnlineResource linkage in an ISO record, or the same kind of link in the other record types) is present with an empty address. The finding counts the empty links of all the sources read for the record. A record that could not be read is not judged.
+**When it fires.** Once per record, when at least one distribution link (a CI_OnlineResource linkage in an ISO 19139 or ISO 19115-3 record; the other record types carry no such links) is present with an empty address. The finding counts the empty links of all the sources read for the record. A record that could not be read is not judged.
 
 **Example.** A metadata record lists three download links, one of which has the address field present but blank.
 
@@ -729,7 +729,7 @@ Severity: error
 
 **Example.** A table of nutrient concentrations by sample number with no latitude and no longitude column, and a record without a bounding box.
 
-**What you can do.** Add latitude and longitude columns in decimal degrees to the table. In /convert the finding is only shown and never stops the export.
+**What you can do.** Add latitude and longitude columns in decimal degrees to the table.
 
 **Citations.**
 
@@ -1033,9 +1033,9 @@ Severity: error
 
 **What it checks.** A Darwin Core table has no column for a term that OBIS requires. Without the required terms the records cannot be published in OBIS, so the file is not ready however good its other columns are.
 
-**When it fires.** Only on Darwin Core input. It fires once per table and lists every missing term. Required for every core: eventDate, decimalLatitude and decimalLongitude, plus an identifier (eventID for an Event core; occurrenceID or eventID for an Occurrence core; in a Darwin Core Archive the core id column may stand for it). An Occurrence core also requires scientificName, occurrenceStatus and basisOfRecord. An occurrence table that carries a filled eventID column is read as the occurrence side of an event and occurrence pair, and then eventDate and the two coordinates are not required of it. scientificNameID is only recommended (DWC-RECOMMENDED). Sources: obistools check_fields and the OBIS Manual.
+**When it fires.** Only on Darwin Core input: an Archive, or a table with at least three distinct Darwin Core terms in its header (spelled exactly, capitals count) plus one of occurrenceID, eventID, parentEventID, scientificName, scientificNameID, taxonID, basisOfRecord or occurrenceStatus. With eventID or parentEventID and no occurrence term it is an Event core, otherwise an Occurrence core. Always required: eventDate, decimalLatitude, decimalLongitude and an identifier (eventID for Event; occurrenceID or eventID for Occurrence; an Archive core id may stand for it). Occurrence also needs scientificName, occurrenceStatus and basisOfRecord. An occurrence table with an eventID column not blank in every row is the occurrence side of an event and occurrence pair, and then the date and coordinates are not required of it. Sources: obistools check_fields, OBIS Manual.
 
-**Example.** A table with the columns occurrenceID, scientificName, eventDate, decimalLatitude and decimalLongitude but no basisOfRecord column is reported as missing basisOfRecord.
+**Example.** A table with the columns occurrenceID, scientificName, eventDate, decimalLatitude and decimalLongitude but no occurrenceStatus and no basisOfRecord column is reported as missing occurrenceStatus and basisOfRecord.
 
 **What you can do.** Add a column for each listed term and fill it. In /convert this rule is applied to the Event and Occurrence tables the converter writes, so the remedy is in the declarations that feed those tables, not in a column you add by hand. In /convert this finding blocks the export.
 
@@ -1071,7 +1071,7 @@ Severity: warning
 
 **Example.** An occurrence table with all required columns but no scientificNameID column and no depth columns is told that scientificNameID, minimumDepthInMeters and maximumDepthInMeters are recommended.
 
-**What you can do.** Add the columns, for example the persistent identifier of each name from a taxon register, and the depth range of the sample. In /convert a lacking scientificNameID on the Occurrence table is not raised by this rule but by CONV-NAMEID-MISSING; the depth terms are still judged. In /convert this finding is accepted and does not stop the export.
+**What you can do.** Add the columns, for example the persistent identifier of each name from a taxon register, and the depth range of the sample. In /convert a lacking scientificNameID on the Occurrence table is not raised by this rule but by CONV-NAMEID-MISSING; the depth terms are still judged. In /convert this finding does not block the export, but it needs your acceptance (one tick for the rule) before the export works.
 
 **Citations.**
 
@@ -1084,7 +1084,7 @@ Severity: warning
 
 **What it checks.** A basisOfRecord or occurrenceStatus value is not on the list OBIS accepts. OBIS compares these values with a fixed vocabulary, so a misspelt value can make the record fail the quality control of OBIS.
 
-**When it fires.** Only on Darwin Core input, for the columns basisOfRecord and occurrenceStatus. A value is compared in lower case after its ends are trimmed, so capitalisation does not matter but spelling and inner spaces do. basisOfRecord accepts PreservedSpecimen, FossilSpecimen, LivingSpecimen, HumanObservation, MachineObservation, MaterialSample, Occurrence and MaterialCitation (the GBIF vocabulary of 2022-02-02, the file the OBIS quality control reads). occurrenceStatus accepts absent, present, notDetected and detected. Empty cells are DWC-TERM-EMPTY. One finding per distinct wrong value, with its lines; beyond ten distinct values the rest share one finding. Sources: GBIF vocabulary, OBIS Manual, Biocheck.
+**When it fires.** Only on Darwin Core input, for the columns basisOfRecord and occurrenceStatus. A value is compared in lower case after its ends are trimmed, so capitalisation does not matter but spelling and inner spaces do. basisOfRecord accepts PreservedSpecimen, FossilSpecimen, LivingSpecimen, HumanObservation, MachineObservation, MaterialSample, Occurrence and MaterialCitation (the GBIF vocabulary of 2022-02-02, the file the OBIS quality control reads). occurrenceStatus accepts absent, present, notDetected and detected. In an Occurrence core empty cells are DWC-TERM-EMPTY. One finding per distinct wrong value, with its lines; beyond ten distinct values the rest share one finding. Sources: GBIF vocabulary, OBIS Manual, Biocheck.
 
 **Example.** A basisOfRecord cell that reads Human Observation, with a space, is not on the list; HumanObservation is.
 
@@ -1103,7 +1103,7 @@ Severity: error
 
 **What it checks.** In an Event core the same eventID names more than one event. The eventID is the key of an event, and records that point at it cannot say which event they belong to when it repeats.
 
-**When it fires.** Only on Darwin Core input read as an Event core. In a Darwin Core Archive every repeated eventID fires, since the archive has one row per event. In any other table (a flattened sheet repeats the eventID on every depth level) an eventID fires only when its rows disagree on the date or on a coordinate; dates are compared by their parsed value and coordinates as numbers, so 60.5 and 60.50 agree. A repeated eventID whose rows agree is not reported. The finding lists every row of every repeated eventID and counts the ids. It does not run on an Occurrence core, where one eventID may repeat. Source: obistools check_eventids.
+**When it fires.** Only on Darwin Core input read as an Event core; outside an archive only when the table has at least one of the columns eventDate, decimalLatitude and decimalLongitude. In a Darwin Core Archive every repeated eventID fires, since the archive has one row per event. In any other table (a flattened sheet repeats the eventID on every depth level) an eventID fires only when its rows disagree on the date or on a coordinate; dates are compared by their parsed value and coordinates as numbers, so 60.5 and 60.50 agree. A repeated eventID whose rows agree is not reported. The finding lists every row of every repeated eventID and counts the ids. It does not run on an Occurrence core, where one eventID may repeat. Source: obistools check_eventids.
 
 **Example.** An event table in which eventID S-12 appears on two lines with two different dates is reported, with both lines.
 
@@ -1136,7 +1136,7 @@ Severity: error
 
 **What it checks.** The eventID and parentEventID columns form a circle: an event is its own ancestor. A hierarchy that never reaches a top event cannot be read, and GBIF flags it as an infinite lineage.
 
-**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL). Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
 
 **Example.** Event A has parent B, B has parent C and C has parent A: all three rows are reported.
 

@@ -12,7 +12,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A download link of the record has an empty address. A link that goes nowhere cannot be followed by a person or by a harvester, and it suggests that a file was left out of the record.',
     fires:
-      'Once per record, when at least one distribution link (a CI_OnlineResource linkage in an ISO record, or the same kind of link in the other record types) is present with an empty address. The finding counts the empty links of all the sources read for the record. A record that could not be read is not judged.',
+      'Once per record, when at least one distribution link (a CI_OnlineResource linkage in an ISO 19139 or ISO 19115-3 record; the other record types carry no such links) is present with an empty address. The finding counts the empty links of all the sources read for the record. A record that could not be read is not judged.',
     example:
       'A metadata record lists three download links, one of which has the address field present but blank.',
     action:
@@ -86,6 +86,6 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'A table of nutrient concentrations by sample number with no latitude and no longitude column, and a record without a bounding box.',
     action:
-      'Add latitude and longitude columns in decimal degrees to the table. In /convert the finding is only shown and never stops the export.',
+      'Add latitude and longitude columns in decimal degrees to the table.',
   },
 };

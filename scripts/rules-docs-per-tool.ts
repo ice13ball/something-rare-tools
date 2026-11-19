@@ -44,6 +44,45 @@ export const TOOL_ENTRIES: Record<Tool, readonly string[]> = {
 /** Ids a scan cannot see (built at run time), per tool. Empty today. Each must exist in the registry (tested). */
 export const RUNTIME_BUILT: Record<Tool, readonly string[]> = { check: [], licence: [], collection: [], convert: [] };
 
+const LIC_IDS = ['LIC-MISSING', 'LIC-FREE-TEXT', 'LIC-TEXT-URI-CONFLICT', 'LIC-ADDED-CONDITIONS', 'LIC-EXTRA-TEXT', 'LIC-OTHER-RIGHTS-ENTRY', 'LIC-AMBIGUOUS', 'LIC-RESTRICTION-CONFLICT', 'LIC-FILES-HELD-BACK', 'LIC-DATACITE-EMPTY', 'LIC-MISMATCH'] as const;
+const RECORDLESS = 'convert/validate.ts:77 calls runChecks with records: [] and no ds.metadata; checks/run.ts:57-66 runs checkLicence only per session record';
+
+/**
+ * Rules the scan places in a tool but the tool cannot raise, each with the evidence (file:line). The scan works per top-level unit, so reaching
+ * runChecks counts every rule of the units it imports; these entries correct that, one proven path at a time. Doubtful cases are NOT listed here.
+ * Each id must exist in the registry and must otherwise be placed by the scan (tested), so a stale entry fails the test.
+ */
+export const EXCLUDED: Record<Tool, Readonly<Record<string, string>>> = {
+  check: {},
+  licence: {},
+  collection: {},
+  convert: {
+    ...Object.fromEntries(LIC_IDS.map((id) => [id, RECORDLESS])),
+    'META-EMPTY-LINK': `${RECORDLESS}; raised only inside checkLicence (checks/licence.ts)`,
+    'META-NO-VERSION': `${RECORDLESS}; raised only inside checkLicence (checks/licence.ts)`,
+    'META-NO-EXTENT': `${RECORDLESS}; raised only inside checkLicence (checks/licence.ts)`,
+    'META-DATE-OUTSIDE-EXTENT': 'needs an extent from a metadata record; the Event table carries no ds.metadata (convert/validate.ts:77, checks/run.ts:71-73)',
+    'META-POINT-OUTSIDE-BBOX': 'needs a bounding box from a metadata record; none exists in /convert (convert/validate.ts:77, checks/run.ts:71-73)',
+    'META-VARIABLE-MISSING': 'needs the abstract of a metadata record; none exists in /convert (convert/validate.ts:77, checks/run.ts:71-73)',
+    'META-NO-POSITIONS': 'the Event table always maps decimalLatitude and decimalLongitude (convert/dwca.ts:64 always: true), so checks/metadata.ts:214 never sees "no positions"',
+    'XF-DUPLICATE-SAMPLES': 'checkCrossFile runs only for more than one dataset (checks/run.ts:89); /convert validates one synthetic dataset (convert/validate.ts:77)',
+    'XF-DATE-CONFLICT': 'checks/run.ts:89 (more than one dataset); /convert has one (convert/validate.ts:77)',
+    'XF-STATION-ALIAS': 'checks/run.ts:89 (more than one dataset); /convert has one (convert/validate.ts:77)',
+    'XF-UNIT-CONFLICT': 'checks/run.ts:89 (more than one dataset); /convert has one (convert/validate.ts:77)',
+    'XF-POSITION-SWAP': 'checks/run.ts:89 (more than one dataset); /convert has one (convert/validate.ts:77)',
+    'XF-POSITION-CONFLICT': 'checks/run.ts:89 (more than one dataset); /convert has one (convert/validate.ts:77)',
+    'IN-RECORD-INACCESSIBLE': 'raised only by the record loaders (licence/load.ts, sources/*); /convert fetches nothing and passes records: [] (convert/validate.ts:77)',
+    'IN-HOST-NOT-ALLOWED': 'raised only by the record loaders (licence/load.ts, sources/*); /convert fetches nothing (convert/validate.ts:77)',
+    'IN-FETCH-BLOCKED': 'raised only through fetchErrorFinding (sources/fetcher.ts:266), called by loaders /convert does not use',
+    'IN-FETCH-TIMEOUT': 'raised only through fetchErrorFinding (sources/fetcher.ts:266), called by loaders /convert does not use',
+    'ROW-SHIP-SPEED': 'checkShipSpeed groups by a cruise column or the singleCruise tick (checks/speed.ts:381-396); the Event table has no cruise column (convert/dwca.ts:57-80) and validate.ts:77 passes no singleCruise',
+    'ROW-SHIP-SPEED-UNUSUAL': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
+    'ROW-SHIP-SPEED-PAIR': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
+    'ROW-ON-LAND': 'runs only with a land mask (checks/rows.ts:890 "if (ctx.land)"); convert/validate.ts:77 passes none',
+    'ROW-ON-LAND-NEAR': 'runs only with a land mask (checks/rows.ts:890 "if (ctx.land)"); convert/validate.ts:77 passes none',
+  },
+};
+
 const FILE_NAME: Record<Tool, string> = { check: 'check.md', licence: 'licence.md', collection: 'collection.md', convert: 'convert.md' };
 export const docFile = (tool: Tool): string => `docs/rules/${FILE_NAME[tool]}`;
 
@@ -103,6 +142,7 @@ export function membership(): Record<Tool, { ids: string[]; sites: Map<string, s
         }
       }
     }
+    for (const id of Object.keys(EXCLUDED[tool])) sites.delete(id);
     out[tool] = { ids: RULES.map((r) => r.id).filter((id) => sites.has(id)), sites, filtered };
   }
   return out;
