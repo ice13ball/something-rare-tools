@@ -287,7 +287,7 @@ Please cite the source code record and the article describing the tools (both on
 The tools build on Abyssal Claims: its documentation is 10.5281/zenodo.19745884 and the source code of its engine is 10.5281/zenodo.22728476 (the same two records are listed under `references` in `CITATION.cff`).
 
 - Article: [10.5281/zenodo.24159769](https://doi.org/10.5281/zenodo.24159769)
-- Source code (version 1.0.0): [10.5281/zenodo.24159771](https://doi.org/10.5281/zenodo.24159771)
+- Source code (version 1.1.0): 10.5281/zenodo.PLACEHOLDER-CODE-DOI (placeholder: the DOI is assigned when the 1.1.0 record is published; version 1.0.0 is 10.5281/zenodo.24159771)
 
 [`CITATION.cff`](CITATION.cff) carries the same identifiers.
 
