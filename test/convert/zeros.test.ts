@@ -66,11 +66,9 @@ describe('text in a taxon cell ("+", "x")', () => {
     expect(w.map((f) => [f.severity, f.field, f.value, f.lines])).toEqual([
       ['warning', 'Calanus finmarchicus', '+', [2]],
       ['warning', 'Calanus finmarchicus', 'x', [3]],
-      ['warning', 'Oithona similis', 'x', [3]],
     ]);
-    // the same text in two columns is two questions, each with its own cells
-    expect(w[1].params).toMatchObject({ count: 1, held: 1 });
-    expect(w[2].params).toMatchObject({ count: 1, held: 1 });
+    // the same text in two columns is ONE question that lists both columns, each with its own cells
+    expect(w[1].params).toMatchObject({ count: 2, held: 2, heldAt: '2:1,3:1' });
     expect(r.occurrences.filter((o) => o.occurrenceRemarks !== undefined)).toEqual([]);
     expect(w.every((f) => policyOf(f) === 'block')).toBe(true);
   });

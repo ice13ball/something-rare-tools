@@ -38,10 +38,11 @@ describe('a text in a count column is asked, text by text', () => {
     const sin = wide();
     const r = run(sin);
     const q = find(r.findings, 'CONV-TEXT-IN-TAXON-CELL');
-    // the same text in two columns (absent) is two questions, one per column; Absent is another text; NA and nd are NA cells, not asked
-    expect(q.map((f) => [f.value, f.field, f.params.count, f.params.held])).toEqual([['absent', 'Oithona similis', 1, 1], ['nie stwierdzono', 'Oithona similis', 1, 1], ['absent', 'Calanus finmarchicus', 1, 1], ['Absent', 'Calanus finmarchicus', 1, 1]]);
-    expect(q[0]).toMatchObject({ severity: 'warning', field: 'Oithona similis', lines: [3] });
-    expect(q[0].params.columns).toBe('Oithona similis');
+    // the same text in two columns (absent) is ONE question listing both columns (the answer is still stored per column); Absent is another text; NA and nd are NA cells, not asked
+    expect(q.map((f) => [f.value, f.field, f.params.count, f.params.held])).toEqual([['absent', 'Oithona similis', 2, 2], ['nie stwierdzono', 'Oithona similis', 1, 1], ['Absent', 'Calanus finmarchicus', 1, 1]]);
+    expect(q[0]).toMatchObject({ severity: 'warning', field: 'Oithona similis', lines: [3, 4] });
+    expect(q[0].params.columns).toBe('Oithona similis, Calanus finmarchicus');
+    expect(q[0].params.heldAt).toBe('6:1,7:1');
     expect(policyOf(q[0])).toBe('block');
     expect(judge(r.findings).blocking.map((f) => f.ruleId)).toContain('CONV-TEXT-IN-TAXON-CELL');
     expect(find(r.findings, 'CONV-COUNT-TEXT-DECIDED')).toEqual([]);
@@ -59,7 +60,7 @@ describe('a text in a count column is asked, text by text', () => {
 
   it('the question says what it asks, in four languages, and no answer is preselected', () => {
     const q = find(run(wide()).findings, 'CONV-TEXT-IN-TAXON-CELL')[0];
-    expect(renderConvertPlain(q, 'en')).toContain('1 cell of Oithona similis holds the text "absent" where a number is expected. Say what it means: absence, leave it out, or present with the text in the remarks.');
+    expect(renderConvertPlain(q, 'en')).toContain('2 cells of Oithona similis, Calanus finmarchicus hold the text "absent" where a number is expected. Say what it means: absence, leave them out, or present with the text in the remarks.');
     for (const lang of ['pl', 'de', 'fr'] as const) expect(renderConvertPlain(q, lang)).toContain('absent');
   });
 });
@@ -75,7 +76,7 @@ describe('the answers', () => {
     expect(policyOf(d[0])).toBe('show');
     expect(r.occurrences.filter((o) => o.verbatimIdentification === 'Oithona similis' && o.eventId.includes('c'))).toEqual([]);
     expect(countOf(lost(sin, r), 'zero')).toBe(1);
-    expect(find(r.findings, 'CONV-TEXT-IN-TAXON-CELL').map((f) => f.value)).toEqual(['absent', 'absent', 'Absent']);
+    expect(find(r.findings, 'CONV-TEXT-IN-TAXON-CELL').map((f) => f.value)).toEqual(['absent', 'Absent']);
   });
 
   it('absence with the full-list tick: an absent occurrence with a count of 0', () => {
@@ -89,7 +90,7 @@ describe('the answers', () => {
   it('leave out: the cells are not written, listed with the reason text-left-out, and the ledger balances', () => {
     const sin = wide({ countTexts: both('absent', 'leave-out') });
     const r = run(sin);
-    expect(find(r.findings, 'CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'leave-out', count: 1, held: 1 });
+    expect(find(r.findings, 'CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'leave-out', count: 2, held: 2 });
     expect(countOf(lost(sin, r), 'text-left-out')).toBe(2);
     expect(r.occurrences.filter((o) => o.occurrenceRemarks === 'absent')).toEqual([]);
     expect(r.ledger.every((l) => (l.cells?.unexplained ?? 0) === 0 && l.rows.unexplained === 0)).toBe(true);
@@ -151,7 +152,7 @@ describe('the same answer for every text of a column', () => {
 
   it('the page can read the number a column answer is given for from the findings, and a changed number asks again', () => {
     const asked = find(run(wide()).findings, 'CONV-TEXT-IN-TAXON-CELL');
-    expect(asked.map((f) => f.params.columnTexts)).toEqual(['6:2', '6:2', '7:2', '7:2']);
+    expect(asked.map((f) => f.params.columnTexts)).toEqual(['6:2,7:2', '6:2', '7:2']);
     const stale = run(wide({ countTextColumns: { 6: { answer: 'present', count: 3 } } }));
     expect(find(stale.findings, 'CONV-COUNT-TEXT-DECIDED')).toEqual([]);
   });
@@ -263,9 +264,22 @@ describe('an answer applies only to its own column', () => {
   ];
   const key = (index: number, text: string) => `${index}\u001f${text}`;
 
-  it('the same text in two columns is two questions, each with the cells of its own column', () => {
+  it('the same text in two columns is ONE question that lists both columns, each with the cells of its own column', () => {
     const q = find(run(wide({}, plus)).findings, 'CONV-TEXT-IN-TAXON-CELL');
-    expect(q.map((f) => [f.value, f.field, f.params.indexes, f.params.held])).toEqual([['+', 'Oithona similis', '6', 1], ['+', 'Calanus finmarchicus', '7', 1]]);
+    expect(q.map((f) => [f.value, f.field, f.params.indexes, f.params.held, f.params.heldAt, f.params.count])).toEqual([['+', 'Oithona similis', '6,7', 2, '6:1,7:1', 2]]);
+  });
+
+  it('a text in 13 columns is one question, not 13 (the answer is still stored per column)', () => {
+    const header = ['Cruise', 'Station', 'Sample', 'Latitude', 'Longitude', 'Date', ...Array.from({ length: 13 }, (_, i) => `Taxon ${String.fromCharCode(65 + i)}`)];
+    const rows: Cell[][] = [
+      ['CR', 'S1', 'a', 50.2, 1.6, '2020-05-01', ...Array.from({ length: 13 }, () => '+')],
+      ['CR', 'S2', 'b', 50.3, 1.5, '2020-05-02', ...Array.from({ length: 13 }, () => 4)],
+    ];
+    const sin = sheetInput(fileOf(header, rows), { quantity: { kind: 'count' } });
+    const q = find(run(sin).findings, 'CONV-TEXT-IN-TAXON-CELL');
+    expect(q).toHaveLength(1);
+    expect(String(q[0].params.indexes).split(',')).toHaveLength(13);
+    expect(q[0].params.held).toBe(13);
   });
 
   it('"+" answered present in column A and absence in column B: each column keeps its own answer', () => {

@@ -340,29 +340,66 @@ describe('the companion file', () => {
     expect(countTextSettingsOf(p, [])).toEqual([]);
   });
 
-  it('I1: the same text in two columns is answered per column and each answer comes back to its own column', async () => {
+  it('I1: the same text in two columns is ONE question; one click answers both columns, each stored and kept in the companion file on its own', async () => {
     const two = csvOf(HEADER, rowsOf([5, 6, 7, '+'], [3, 4, 5, '+']));
     const run = await load([{ name: 'hauls.csv', text: two }]);
-    expect(asked()).toHaveLength(2);
-    const [inA, inB] = asked();
-    fireEvent.click(button(inA, T['convert.finding.countPresent']));
+    expect(asked()).toHaveLength(1);
+    fireEvent.click(button(asked()[0], T['convert.finding.countPresent']));
     await waitFor(() => expect(decided()).toHaveLength(1));
-    fireEvent.click(button(asked()[0], T['convert.finding.countAbsence']));
-    await waitFor(() => expect(decided()).toHaveLength(2));
-    expect(inB).toBeDefined();
     await idle();
-    expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1 }, '7\u001f+': { answer: 'absence', count: 1 } });
+    expect(asked()).toHaveLength(0);
+    expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1 }, '7\u001f+': { answer: 'present', count: 1 } });
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     const text = run.download.mock.calls[0][0] as string;
     expect(text).toContain(`countTextAt=present:1:4:hauls.csv:6:${shortHash('t+')}`);
-    expect(text).toContain(`countTextAt=absence:1:4:hauls.csv:7:${shortHash('t+')}`);
-    expect(text).not.toContain('+,');
+    expect(text).toContain(`countTextAt=present:1:4:hauls.csv:7:${shortHash('t+')}`);
     cleanup();
     await load([{ name: 'hauls.csv', text: two }, { name: 'c.csv', text }]);
-    await waitFor(() => expect(decided()).toHaveLength(2));
+    await waitFor(() => expect(decided()).toHaveLength(1));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1, fromFile: true }, '7\u001f+': { answer: 'absence', count: 1, fromFile: true } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1, fromFile: true }, '7\u001f+': { answer: 'present', count: 1, fromFile: true } });
     expect(asked()).toHaveLength(0);
+  });
+
+  it('I1: A answered present and B absence (the column control) is kept per column on reload; only a column with no answer is asked again', async () => {
+    // two texts in each column, so each column has its control
+    const two = csvOf(HEADER, rowsOf([5, 6, 7, '+', 'n/f'], [3, 4, 5, '+', 'n/f']));
+    const run = await load([{ name: 'hauls.csv', text: two }]);
+    expect(asked()).toHaveLength(2);
+    const controls = [...document.querySelectorAll<HTMLElement>('[data-testid="count-text-column"]')];
+    expect(controls).toHaveLength(2);
+    fireEvent.click(within(controls[0]).getByRole('button', { name: T['convert.finding.countPresent'] }));
+    await idle();
+    // column A's answer settled both of its texts; column B still has both asked (one question per text, listing only B now)
+    expect(asked()).toHaveLength(2);
+    expect(asked().every((q) => /Calanus finmarchicus/.test(q.textContent ?? '') && !/Oithona/.test(q.textContent ?? ''))).toBe(true);
+    fireEvent.click(within(document.querySelector<HTMLElement>('[data-testid="count-text-column"]')!).getByRole('button', { name: T['convert.finding.countAbsence'] }));
+    await waitFor(() => expect(asked()).toHaveLength(0));
+    await idle();
+    expect(lastSheet().countTextColumns).toEqual({ 6: { answer: 'present', count: 2 }, 7: { answer: 'absence', count: 2 } });
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    const text = run.download.mock.calls[0][0] as string;
+    cleanup();
+    await load([{ name: 'hauls.csv', text: two }, { name: 'c.csv', text }]);
+    await waitFor(() => expect(asked()).toHaveLength(0));
+    await idle();
+    expect(lastSheet().countTextColumns).toEqual({ 6: { answer: 'present', count: 2, fromFile: true }, 7: { answer: 'absence', count: 2, fromFile: true } });
+  });
+
+  it('I1: a text of 13 columns is one question and one click answers all of them', async () => {
+    const names = Array.from({ length: 13 }, (_, i) => `Taxon ${String.fromCharCode(65 + i)}`);
+    const header = ['Cruise', 'Station', 'Sample', 'Latitude', 'Longitude', 'Date', ...names];
+    const rows = [
+      ['CR', 'S1', 's1', 50, 1.5, '2020-05-01', ...names.map(() => '+')],
+      ['CR', 'S2', 's2', 50.1, 1.5, '2020-05-02', ...names.map(() => 4)],
+    ];
+    await load([{ name: 'hauls.csv', text: csvOf(header, rows) }]);
+    expect(asked()).toHaveLength(1);
+    fireEvent.click(button(asked()[0], T['convert.finding.countAbsence']));
+    await waitFor(() => expect(asked()).toHaveLength(0));
+    await idle();
+    expect(Object.keys(lastSheet().countTexts ?? {})).toHaveLength(13);
+    expect(Object.values(lastSheet().countTexts ?? {}).every((a) => a.answer === 'absence' && a.count === 1)).toBe(true);
   });
 
   it('I1: a line of the old format (no column) is not applied and the text is asked again, visibly', async () => {

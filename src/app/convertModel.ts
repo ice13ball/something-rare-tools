@@ -543,15 +543,27 @@ function columnTextCount(f: Finding, index: number): number | undefined {
 }
 
 /**
- * The saved count-text answers that hold today, each for ITS OWN column only. For each CONV-TEXT-IN-TAXON-CELL the converter asks (one per text and column): a saved answer with that column index, the hash of
+ * The question about one text is ONE finding for all the columns that hold it (`indexes`, `columns`, `heldAt` = `index:n`), while every answer is stored per column. This is the finding seen from one column:
+ * the same text with that column's index, name and `held` only. A finding with no column list comes back whole.
+ */
+export function countTextFindingColumns(f: Finding): Finding[] {
+  const indexes = String(f.params.indexes ?? '').split(',').filter((x) => x !== '').map(Number);
+  if (indexes.length === 0 || indexes.some((i) => !Number.isInteger(i))) return [];
+  const names = String(f.params.columns ?? '').split(', ');
+  const heldAt = new Map(String(f.params.heldAt ?? '').split(',').filter((x) => x !== '').map((p) => p.split(':').map(Number) as [number, number]));
+  return indexes.map((index, i) => ({ ...f, params: { ...f.params, indexes: String(index), columns: names.length === indexes.length ? names[i] : String(f.params.columns ?? ''), held: heldAt.get(index) ?? (indexes.length === 1 ? Number(f.params.held) : 0) } }));
+}
+
+/**
+ * The saved count-text answers that hold today, each for ITS OWN column only. For each CONV-TEXT-IN-TAXON-CELL the converter asks (one per text, listing its columns; read here column by column): a saved answer with that column index, the hash of
  * 't' + that text and the cells the question names (`held`) becomes the sheet's answer for that text in that column (`fromFile`); a saved whole-column answer for that index whose count equals the text cells of
  * the column (`columnTexts`) becomes the column's answer. Each saved answer is used once, so "Ask again" asks again. A line of the old format (no column index) was never read. The text is only ever compared by
  * its hash. Returns the same object when nothing applies.
  */
 export function applySavedCountTexts(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, findings: readonly Finding[]): Record<string, SheetChoice> {
   let out = choices;
-  for (const f of findings) {
-    if (f.ruleId !== 'CONV-TEXT-IN-TAXON-CELL' || f.sheet === undefined || f.value === undefined) continue;
+  for (const f of findings.filter((g) => g.ruleId === 'CONV-TEXT-IN-TAXON-CELL').flatMap(countTextFindingColumns)) {
+    if (f.sheet === undefined || f.value === undefined) continue;
     const file = parsed.files.find((x) => x.fileName === f.file);
     if (file === undefined) continue;
     const key = sheetKey(file.fileId, f.sheet);
@@ -587,8 +599,8 @@ export function applySavedCountTexts(parsed: ConvertParseResult, choices: Record
  */
 export function dropStaleCountTexts(choices: Record<string, SheetChoice>, sent: Record<string, SheetChoice>, findings: readonly Finding[], parsed: ConvertParseResult): Record<string, SheetChoice> {
   let out = choices;
-  for (const f of findings) {
-    if (f.ruleId !== 'CONV-TEXT-IN-TAXON-CELL' || f.sheet === undefined || f.value === undefined) continue;
+  for (const f of findings.filter((g) => g.ruleId === 'CONV-TEXT-IN-TAXON-CELL').flatMap(countTextFindingColumns)) {
+    if (f.sheet === undefined || f.value === undefined) continue;
     const file = parsed.files.find((x) => x.fileName === f.file);
     const index = Number(f.params.indexes);
     if (file === undefined || !Number.isInteger(index)) continue;
@@ -620,8 +632,8 @@ export const countTextKeyOf = (index: number, text: string): string => `${index}
  */
 export function countTextSettingsOf(parsed: ConvertParseResult, said: readonly Finding[]): NonNullable<ConvertSettings['countText']> {
   const out: NonNullable<ConvertSettings['countText']> = [];
-  for (const f of said) {
-    if (f.ruleId !== 'CONV-COUNT-TEXT-DECIDED' || f.sheet === undefined || f.value === undefined || f.params.via === 'column') continue;
+  for (const f of said.filter((g) => g.ruleId === 'CONV-COUNT-TEXT-DECIDED').flatMap(countTextFindingColumns)) {
+    if (f.sheet === undefined || f.value === undefined || f.params.via === 'column') continue;
     const answer = f.params.answer;
     const held = Number(f.params.held);
     const index = Number(f.params.indexes);
@@ -636,8 +648,8 @@ export function countTextSettingsOf(parsed: ConvertParseResult, said: readonly F
 /** The whole-column count-text answers a companion file records: one line per column a CONV-COUNT-TEXT-DECIDED said was settled by the column's answer (`via` column), with the cells of that column that hold a text. */
 export function countTextColumnSettingsOf(parsed: ConvertParseResult, said: readonly Finding[]): NonNullable<ConvertSettings['countTextColumn']> {
   const out: NonNullable<ConvertSettings['countTextColumn']> = [];
-  for (const f of said) {
-    if (f.ruleId !== 'CONV-COUNT-TEXT-DECIDED' || f.sheet === undefined || f.params.via !== 'column') continue;
+  for (const f of said.filter((g) => g.ruleId === 'CONV-COUNT-TEXT-DECIDED').flatMap(countTextFindingColumns)) {
+    if (f.sheet === undefined || f.params.via !== 'column') continue;
     const answer = f.params.answer;
     const index = Number(f.params.indexes);
     const sh = parsed.files.find((x) => x.fileName === f.file)?.sheets.find((x) => x.name === f.sheet);

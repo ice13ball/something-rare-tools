@@ -32,7 +32,7 @@ import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
 import { shortHash } from '../../core/convert/keySetting';
-import { yyOrderSettingsOf, decimalReadingSettingsOf, missingCodeSettingsOf, summaryOwnerOf, summaryRowsSettingsOf, countTextSettingsOf, countTextColumnSettingsOf, countTextKeyOf, dropStaleCountTexts, applySavedCountTexts, type CountTextAnswer, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { yyOrderSettingsOf, decimalReadingSettingsOf, missingCodeSettingsOf, summaryOwnerOf, summaryRowsSettingsOf, countTextSettingsOf, countTextFindingColumns, countTextColumnSettingsOf, countTextKeyOf, dropStaleCountTexts, applySavedCountTexts, type CountTextAnswer, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import type { LegacyEncoding } from '../../core/values/encoding';
@@ -469,30 +469,34 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     // "again" while a whole-column answer covers its column falls back to that answer (it is shown as decided by the column, with its own "Ask again").
     if (choice === 'countAbsence' || choice === 'countLeaveOut' || choice === 'countPresent' || (choice === 'askAgain' && f.ruleId === 'CONV-COUNT-TEXT-DECIDED')) {
       const text = f.value;
-      const held = Number(f.params.held);
       if (text === undefined || text === '') return;
       const answer: CountTextAnswer | undefined = choice === 'countAbsence' ? 'absence' : choice === 'countLeaveOut' ? 'leave-out' : choice === 'countPresent' ? 'present' : undefined;
-      if (answer !== undefined && (!Number.isInteger(held) || held < 1)) return;
-      const index = Number(f.params.indexes);
-      if (!Number.isInteger(index)) return;
-      const textKey = countTextKeyOf(index, text);
+      // the question is one finding for every column that holds the text; the answer is stored for each of those columns on its own, with that column's cell count
+      const perColumn = countTextFindingColumns(f).map((g) => ({ index: Number(g.params.indexes), held: Number(g.params.held), via: g.params.via }));
+      if (perColumn.length === 0 || (answer !== undefined && perColumn.some((c) => !Number.isInteger(c.held) || c.held < 1))) return;
+      const hash = shortHash('t' + text);
       setChoices((prev) => {
         const c = prev[key];
         if (c === undefined) return prev;
-        const hash = shortHash('t' + text);
-        const saved = c.countTextsSaved?.filter((d) => !(d.hash === hash && d.index === index));
+        const indexes = new Set(perColumn.map((x) => x.index));
+        const saved = c.countTextsSaved?.filter((d) => !(d.hash === hash && indexes.has(d.index)));
         const { countTexts: own, countTextColumns: cols, countTextsSaved: _saved, ...rest } = c;
         const next: SheetChoice = { ...rest, ...(saved !== undefined && saved.length > 0 ? { countTextsSaved: saved } : {}) };
-        if (answer !== undefined) return { ...prev, [key]: { ...next, ...(cols === undefined ? {} : { countTextColumns: cols }), countTexts: { ...(own ?? {}), [textKey]: { answer, count: held } } } };
-        // "Ask again": a text the whole column's answer settled takes back that column's answer (the column of this text, when it holds the answer shown), and a text of its own is removed; answers the person gave
-        // other texts, or other columns, stay
+        if (answer !== undefined) {
+          const texts = { ...(own ?? {}) };
+          for (const x of perColumn) texts[countTextKeyOf(x.index, text)] = { answer, count: x.held };
+          return { ...prev, [key]: { ...next, ...(cols === undefined ? {} : { countTextColumns: cols }), countTexts: texts } };
+        }
+        // "Ask again": a text the whole column's answer settled takes back that column's answer (each column of this question, when it holds the answer shown), and a text of its own is removed; answers
+        // the person gave other texts, or other columns, stay
         if (f.params.via === 'column') {
-          const left = Object.fromEntries(Object.entries(cols ?? {}).filter(([i, a]) => !(Number(i) === index && a.answer === f.params.answer)));
+          const left = Object.fromEntries(Object.entries(cols ?? {}).filter(([i, a]) => !(indexes.has(Number(i)) && a.answer === f.params.answer)));
           return { ...prev, [key]: { ...next, ...(own === undefined ? {} : { countTexts: own }), ...(Object.keys(left).length === 0 ? {} : { countTextColumns: left as never }) } };
         }
         // a text of its own: it is removed, and the answer for the whole column of this text goes too, or the column would settle it again without being asked; the other texts it covered come back as questions
-        const { [textKey]: _gone, ...others } = own ?? {};
-        const kept = Object.fromEntries(Object.entries(cols ?? {}).filter(([i]) => Number(i) !== index));
+        const others = { ...(own ?? {}) };
+        for (const x of perColumn) delete others[countTextKeyOf(x.index, text)];
+        const kept = Object.fromEntries(Object.entries(cols ?? {}).filter(([i]) => !indexes.has(Number(i))));
         return { ...prev, [key]: { ...next, ...(Object.keys(others).length === 0 ? {} : { countTexts: others }), ...(Object.keys(kept).length === 0 ? {} : { countTextColumns: kept as never }) } };
       });
       return;

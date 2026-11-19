@@ -797,11 +797,17 @@ export const passCounter = { count: 0 };
 /** The `index:count` list of the columns a text is in, for the page (each count = the text cells of that whole column). */
 const columnTextsParam = (indexes: Iterable<number>, tally: CountTextTally): string => [...new Set(indexes)].sort((a, b) => a - b).map((i) => `${i}:${tally.columns.get(i) ?? 0}`).join(',');
 
-/** The cells of one text in the count columns of a sheet (or of the part of them that has one answer): where they are. */
+/** The cells that hold this text in all the listed columns (the number the person's answer is given for: the sum of the per-column counts). */
+const heldParam = (indexes: readonly number[], text: string, tally: CountTextTally, fallback: number): number => indexes.reduce((n, i) => n + (tally.texts.get(countTextKey(i, text)) ?? 0), 0) || fallback;
+
+/** The `index:n` list of the cells that hold this text in each listed column: each column's answer is stored with its own count. */
+const heldAtParam = (indexes: readonly number[], text: string, tally: CountTextTally): string => [...indexes].sort((a, b) => a - b).map((i) => `${i}:${tally.texts.get(countTextKey(i, text)) ?? 0}`).join(',');
+
+/** The cells of one text in the count columns of a sheet (or of the part of them that has one answer, whatever their column): where they are. One entry per text and answer state, so a text found in 13 columns is ONE question. */
 class TextCells {
   private readonly map = new Map<string, { text: string; answer?: CountTextAnswer; fromColumn: boolean; fromFile: boolean; file: string; sheet: string; lines: Set<number>; cells: number; columns: string[]; indexes: number[] }>();
   add(file: string, sheet: string, text: string, line: number, column: string, index: number, given?: { answer: CountTextAnswer; fromColumn: boolean; fromFile: boolean }): void {
-    const key = `${file}\u0000${sheet}\u0000${index}\u0000${text}\u0000${given?.answer ?? ''}\u0000${given?.fromColumn === true}\u0000${given?.fromFile === true}`;
+    const key = `${file}\u0000${sheet}\u0000${text}\u0000${given?.answer ?? ''}\u0000${given?.fromColumn === true}\u0000${given?.fromFile === true}`;
     let e = this.map.get(key);
     if (e === undefined) this.map.set(key, (e = { text, ...(given === undefined ? {} : { answer: given.answer }), fromColumn: given?.fromColumn === true, fromFile: given?.fromFile === true, file, sheet, lines: new Set(), cells: 0, columns: [], indexes: [] }));
     e.lines.add(line);
@@ -3201,10 +3207,10 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     }
     for (const e of tabs.entries()) findings.push(makeConvertFinding('CONV-TAB-IN-VALUE', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of textsAsked.entries()) {
-      findings.push(makeConvertFinding('CONV-TEXT-IN-TAXON-CELL', { file: e.file, sheet: e.sheet, field: e.columns[0] ?? '', lines: e.lines, value: e.text, params: { count: e.cells, held: textTally.texts.get(countTextKey(e.indexes[0] ?? -1, e.text)) ?? e.cells, columns: e.columns.join(', '), indexes: e.indexes.join(','), columnTexts: columnTextsParam(e.indexes, textTally) } }));
+      findings.push(makeConvertFinding('CONV-TEXT-IN-TAXON-CELL', { file: e.file, sheet: e.sheet, field: e.columns[0] ?? '', lines: e.lines, value: e.text, params: { count: e.cells, held: heldParam(e.indexes, e.text, textTally, e.cells), columns: e.columns.join(', '), indexes: e.indexes.join(','), columnTexts: columnTextsParam(e.indexes, textTally), heldAt: heldAtParam(e.indexes, e.text, textTally) } }));
     }
     for (const e of textsDecided.entries()) {
-      findings.push(makeConvertFinding('CONV-COUNT-TEXT-DECIDED', { file: e.file, sheet: e.sheet, field: e.columns[0] ?? '', lines: e.lines, value: e.text, params: { count: e.cells, held: textTally.texts.get(countTextKey(e.indexes[0] ?? -1, e.text)) ?? e.cells, answer: e.answer ?? 'present', columns: e.columns.join(', '), indexes: e.indexes.join(','), columnTexts: columnTextsParam(e.indexes, textTally), ...(e.fromColumn ? { via: 'column' } : {}), ...(e.fromFile ? { fromFile: 'yes' } : {}) } }));
+      findings.push(makeConvertFinding('CONV-COUNT-TEXT-DECIDED', { file: e.file, sheet: e.sheet, field: e.columns[0] ?? '', lines: e.lines, value: e.text, params: { count: e.cells, held: heldParam(e.indexes, e.text, textTally, e.cells), answer: e.answer ?? 'present', columns: e.columns.join(', '), indexes: e.indexes.join(','), columnTexts: columnTextsParam(e.indexes, textTally), heldAt: heldAtParam(e.indexes, e.text, textTally), ...(e.fromColumn ? { via: 'column' } : {}), ...(e.fromFile ? { fromFile: 'yes' } : {}) } }));
     }
     for (const e of negatives.entries()) findings.push(makeConvertFinding('CONV-NEGATIVE-QUANTITY', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
     for (const e of notInteger.entries()) findings.push(makeConvertFinding('CONV-COUNT-NOT-INTEGER', { file: e.file, sheet: e.sheet, field: e.field, lines: e.lines, value: e.examples[0] ?? '', params: { count: e.lines.length } }));
