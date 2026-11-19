@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/index.js",
-    "test": "vitest run && npm run typecheck",
+    "test": "npm run typecheck && vitest run",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "convert:record": "export CONVERT_RECORD=\"${CONVERT_RECORD:-convert-recordings/head}\" && nice -n 15 vitest run --config vitest.convert-record.config.ts --maxWorkers=2 && CONVERT_REPLAY_MARK=\"$CONVERT_RECORD\" vitest run --config vitest.convert-replay.config.ts",
     "convert:replay": "CONVERT_REPLAY_BASE=\"${CONVERT_REPLAY_BASE:-convert-recordings/base}\" vitest run --config vitest.convert-replay.config.ts",
