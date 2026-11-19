@@ -392,6 +392,8 @@ export interface RuleDef {
   /** Sentences appended, in order, when the finding has the named param (set and non-empty). */
   plainIf?: readonly { param: string; plain: Record<Lang, string> }[];
   technical: string;             // English, template with {param}
+  /** LIC-FREE-TEXT: the technical line for a kind that reads something from the text ('id', 'family'), chosen by the param `kind`; `technical` is the one for the others. */
+  technicalVariants?: Record<string, string>;
   thresholds?: Threshold[];
   citations?: Citation[];
 }

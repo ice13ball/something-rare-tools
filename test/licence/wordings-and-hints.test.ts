@@ -4,9 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { checkLicence } from '../../src/core/checks/licence';
 import { fixListRow } from '../../src/core/collection/fixlist';
-import { buildStatement, classifyStatement, toSpdx } from '../../src/core/metadata/licence';
+import { buildStatement, classifyStatement, familyNamed, isAllRightsReserved, toSpdx } from '../../src/core/metadata/licence';
 import { parseDataciteJson } from '../../src/core/metadata/datacite';
-import { renderPlain } from '../../src/core/report';
+import { renderPlain, renderTechnical } from '../../src/core/report';
 import { LANGS, type Finding, type Lang } from '../../src/core/types';
 
 const BY = 'https://creativecommons.org/licenses/by/4.0/';
@@ -187,5 +187,118 @@ describe('Decision 2: "All rights reserved" and a bare "Open Access" have their 
   it('All rights reserved next to a real licence keeps the existing behaviour (no free-text finding)', () => {
     const r = run([{ rights: 'All rights reserved' }, { rights: 'Creative Commons Attribution 4.0 International', rightsUri: BY }]);
     expect(r.map((f) => f.ruleId)).not.toContain('LIC-FREE-TEXT');
+  });
+});
+
+describe('T3 fix round: the quoted text, its kind and its hint come from the same entry', () => {
+  const order1 = [{ rights: 'All rights reserved' }, { rights: 'CC BY 4.0' }];
+  const order2 = [{ rights: 'CC BY 4.0' }, { rights: 'All rights reserved' }];
+
+  it.each([
+    ['ARR first', order1],
+    ['ARR second', order2],
+  ])('%s: quote, kind and hint belong together', (_n, rights) => {
+    const f = freeText2(rights);
+    const quoted = String(f.params.text);
+    if (f.params.kind === 'id') {
+      expect(quoted).toMatch(/CC BY 4\.0/);
+      expect(f.params.hint).toBe('CC-BY-4.0');
+    } else {
+      expect(quoted).toBe('All rights reserved');
+      expect(f.params.kind).toBe('arr');
+      expect(hintOf(f)).toBe('');
+      expect(renderPlain(f, 'en')).not.toMatch(/CC-BY-4\.0/);
+    }
+  });
+
+  it('the result does not depend on the order of the entries, and the CSV row agrees with the sentence', () => {
+    const a = freeText2(order1);
+    const b = freeText2(order2);
+    expect(a.params).toEqual(b.params);
+    for (const f of [a, b]) {
+      const row = fixListRow('rec-1', f, 'en', 'doi-list');
+      if (f.params.kind === 'id') expect(row).toContain('CC-BY-4.0');
+      else expect(row).not.toContain('CC-BY-4.0');
+      // the quoted text in the sentence is the entry the hint was read from
+      const t = renderPlain(f, 'en');
+      if (f.params.kind === 'id') expect(t).toContain('"CC BY 4.0"');
+      else expect(t).toContain('"All rights reserved"');
+    }
+  });
+});
+
+function freeText2(rights: { rights?: string; rightsUri?: string }[]): Finding {
+  const f = run(rights).find((x) => x.ruleId === 'LIC-FREE-TEXT');
+  expect(f).toBeDefined();
+  return f!;
+}
+
+describe('T3 fix round: "All rights reserved" in its usual wordings', () => {
+  it.each([
+    '© 2021 Institute. All rights reserved.',
+    'Copyright Institute, all rights reserved',
+    'Copyright 2021 Institute. All rights reserved.',
+    '(c) 2021 The Institute, All Rights Reserved',
+    '© Institute — All rights reserved',
+    'Copyright (c) 2020-2021 Institute of Things. All rights reserved',
+    '© 2021 Institut. Alle Rechte vorbehalten.',
+    'Copyright 2021 Institut, alle Rechte vorbehalten',
+    '© 2021 Institut. Tous droits réservés.',
+    'Copyright Institut, tous droits réservés',
+    '© 2021 Instytut. Wszelkie prawa zastrzeżone.',
+    'Copyright Instytut, wszelkie prawa zastrzeżone',
+    'Copyright 2021 Instytut. Wszystkie prawa zastrzeżone',
+  ])('"%s" is read as All rights reserved', (text) => {
+    expect(isAllRightsReserved(text)).toBe(true);
+    const f = freeText2([{ rights: text }]);
+    expect(f.params.kind).toBe('arr');
+    expect(renderPlain(f, 'en')).toMatch(/deliberate/i);
+  });
+
+  it.each([
+    'Some rights reserved',
+    'All rights reserved, except for research use',
+    'All rights reserved. Contact the PI for licensing: CC BY 4.0 for teaching',
+    '© 2021 Institute. Data may be reused with permission',
+    '© 2021 Institute',
+    'Copyright Institute',
+  ])('"%s" is not read as All rights reserved', (text) => {
+    expect(isAllRightsReserved(text)).toBe(false);
+  });
+});
+
+describe('T3 fix round: the technical line', () => {
+  it.each(['All rights reserved', 'Open Access', 'Some rights reserved by the institute'])('"%s": no empty "Identifier read from the text: ."', (text) => {
+    const t = renderTechnical(freeText2([{ rights: text }]));
+    expect(t).not.toMatch(/read from the text:\s*\./);
+    expect(t).not.toMatch(/Identifier read/);
+  });
+  it('an id is called an identifier, a versionless result a family', () => {
+    expect(renderTechnical(freeText2([{ rights: 'CC BY-NC' }]))).toMatch(/Family read from the text \(no version\): CC BY-NC\./);
+    expect(renderTechnical(freeText2([{ rights: 'CC BY 4.0' }]))).toMatch(/Identifier read from the text: CC-BY-4\.0\./);
+  });
+});
+
+describe('T3 fix round: underscores between licence name parts', () => {
+  it.each([
+    ['CC_BY_NC_4.0', 'CC-BY-NC-4.0'],
+    ['CC_BY_SA_4.0', 'CC-BY-SA-4.0'],
+    ['CC_BY_ND_4.0', 'CC-BY-ND-4.0'],
+    ['CC_BY_NC_SA_4.0', 'CC-BY-NC-SA-4.0'],
+    ['CC_BY_NC_ND_4.0', 'CC-BY-NC-ND-4.0'],
+    ['cc_by_nc_4.0', 'CC-BY-NC-4.0'],
+    ['CC-BY_NC-4.0', 'CC-BY-NC-4.0'],
+    ['CC_BY_4.0', 'CC-BY-4.0'],
+  ])('"%s" is %s', (text, id) => {
+    expect(toSpdx(text, undefined)).toBe(id);
+  });
+  it.each(['CC_BY_NC', 'CC_BY_SA', 'CC_BY_ND', 'CC_BY_NC_SA', 'CC_BY_NC_ND', 'cc_by_nc'])('"%s" (no version) never reads as a plain CC BY', (text) => {
+    expect(familyNamed(text)).not.toBe('CC BY');
+    const f = freeText2([{ rights: text }]);
+    expect(f.params.hint).not.toBe('CC BY');
+    expect(String(f.params.hint)).not.toBe('CC-BY-4.0');
+  });
+  it('"CC_BY_NC_4.0" next to the NC link raises nothing ambiguous', () => {
+    expect(ids([{ rights: 'CC_BY_NC_4.0', rightsUri: NC }])).not.toContain('LIC-AMBIGUOUS');
   });
 });

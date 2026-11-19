@@ -178,7 +178,8 @@ describe('messages', () => {
 
   for (const r of RULES) {
     it(`${r.id}: four languages, placeholders consistent`, () => {
-      const tech = placeholders(r.technical);
+      // the kind-specific technical lines (technicalVariants) are part of the technical line
+      const tech = new Set([r.technical, ...Object.values(r.technicalVariants ?? {})].flatMap((t) => [...placeholders(t)]));
       for (const lang of LANGS) {
         expect(r.plain[lang], `${r.id} ${lang}`).toBeTruthy();
         expect(r.plain[lang].trim().length).toBeGreaterThan(20);

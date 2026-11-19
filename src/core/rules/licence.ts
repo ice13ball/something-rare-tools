@@ -107,7 +107,11 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
         fr: `La mention « {text} » dit comment accéder aux données, et non à quelles conditions on peut les utiliser. Indiquez la licence choisie par les auteurs, par son identifiant et un lien vers son texte officiel.`,
       },
     },
-    technical: `{file} field {field}: licence given as free text '{text}' (version missing: {versionMissing}; kind: {kind}); no recognised SPDX id or licence URI. Identifier read from the text: {hint}.`,
+    technical: `{file} field {field}: licence given as free text '{text}' (version missing: {versionMissing}; kind: {kind}); no recognised SPDX id or licence URI.`,
+    technicalVariants: {
+      id: `{file} field {field}: licence given as free text '{text}' (version missing: {versionMissing}; kind: {kind}); no recognised SPDX id or licence URI. Identifier read from the text: {hint}.`,
+      family: `{file} field {field}: licence given as free text '{text}' (version missing: {versionMissing}; kind: {kind}); no recognised SPDX id or licence URI. Family read from the text (no version): {hint}.`,
+    },
   },
   {
     id: 'LIC-TEXT-URI-CONFLICT',

@@ -358,7 +358,7 @@ const PATTERNS: Pattern[] = [
   },
   {
     // "CC BY" / "CC-BY-NC" without a version: not an id, but its family is compared with the URI.
-    re: new RegExp(`(?<![a-z0-9])cc${SEP}*(by(?:${SEP}*(?:nc|sa|nd))*)(?!${SEP}*(?:${VERSION_WORD}?\\d|nc\\b|sa\\b|nd\\b))(?![a-z0-9])`, 'gi'),
+    re: new RegExp(`(?<![a-z0-9])cc${SEP}*(by(?:${SEP}*(?:nc|sa|nd))*)(?!${SEP}*(?:${VERSION_WORD}?\\d|(?:nc|sa|nd)(?![a-z0-9])))(?![a-z0-9])`, 'gi'),
     read: (m) => ({ family: ccVariant(m[1]) }),
   },
   {
@@ -776,8 +776,13 @@ export function familyNamed(text: string): string | undefined {
   return `CC ${r.families[0]}`;
 }
 
-/** "All rights reserved" and its en / de / fr / pl forms, as the whole text (an author's own choice, not a licence). */
-const ALL_RIGHTS_RESERVED = /^(?:all\s+rights\s+reserved|alle\s+rechte\s+vorbehalten|tous\s+droits\s+réservés|wszelkie\s+prawa\s+zastrzeżone|wszystkie\s+prawa\s+zastrzeżone)[\s.,;!]*$/iu;
+/**
+ * "All rights reserved" and its en / de / fr / pl forms (an author's own choice, not a licence): alone, or after the usual copyright notice
+ * ("© 2021 Institute. All rights reserved.", "Copyright Institute, all rights reserved", "(c) 2020-2021 The Institute, ..."). Anything else in the
+ * text ("All rights reserved, except for research use") is not it.
+ */
+const ARR_PHRASE = '(?:all\\s+rights\\s+reserved|alle\\s+rechte\\s+vorbehalten|tous\\s+droits\\s+réservés|wszelkie\\s+prawa\\s+zastrzeżone|wszystkie\\s+prawa\\s+zastrzeżone)';
+const ALL_RIGHTS_RESERVED = new RegExp(`^(?:(?:©|\\(c\\)|copyright)[^.;:!?]*?[\\s.,;:—–-]+)?${ARR_PHRASE}[\\s.,;!]*$`, 'iu');
 export const isAllRightsReserved = (text: string): boolean => ALL_RIGHTS_RESERVED.test(text.normalize('NFKC').replace(/\s+/g, ' ').trim());
 
 /** A text that says only that the data is open access (any case; "Open-Access"; the eu-repo and COAR access values): how it is reached, not its terms. */

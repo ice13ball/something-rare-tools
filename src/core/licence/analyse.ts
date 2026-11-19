@@ -355,11 +355,14 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
   };
 
   if (statements.length > 0 && !statements.some((a) => a.machineReadable) && !statements.some((a) => a.conflict)) {
-    const source = sources.find((s) => s.statements.some((a) => a.statement.text)) ?? sources.find((s) => s.statements.length > 0)!;
-    const first = source.statements.find((a) => a.statement.text) ?? source.statements[0];
+    // The record's OWN licence (a text that names one, without a link) is what the finding is about: the quoted text, the kind and the hint all
+    // come from that one entry, so the result does not depend on the order of the entries. Otherwise the first statement with a text.
+    const ownStatement = statements.find((a) => a.classification.kind === 'spdx');
+    const source = (ownStatement && sources.find((s) => s.statements.includes(ownStatement))) ?? sources.find((s) => s.statements.some((a) => a.statement.text)) ?? sources.find((s) => s.statements.length > 0)!;
+    const first = ownStatement ?? source.statements.find((a) => a.statement.text) ?? source.statements[0];
     const text = first.statement.text ?? shownOf(first);
     // The hint is the publisher's OWN licence (or its family without a version); it is never an example of another licence.
-    const own = statements.find((a) => a.classification.kind === 'spdx');
+    const own = ownStatement;
     const family = text ? familyNamed(text) : undefined;
     const kind: FreeTextKind = own ? 'id' : text && isAllRightsReserved(text) ? 'arr' : text && isBareOpenAccess(text) ? 'oa' : family ? 'family' : 'none';
     result.freeText = {
